@@ -9,6 +9,15 @@
 | Code-Lens | **MCP server** (`packages/code-lens/`) | Standalone, reusable process. Architect connects as a regular MCP client. |
 | External integrations | **MCP** (GitHub / JIRA / etc.) | Same machinery as Code-Lens; soul declares `mcp:<server>:<glob>` to import the relevant tools. |
 
-In v1 the only external entry point is a direct user prompt to the DM. Cron, webhooks, and backlog polling are deferred (see Open Items).
+### Prompt Ingress
 
-No agent exposes a direct call surface. Multiple teams may share the same NATS bus, separated by topic namespace (`session.{session_id}.*`). Per-team artifact storage is local (one SQLite file per team).
+User prompts arrive on NATS subjects under `team.{team_id}.`:
+
+| Subject | Listener | Purpose |
+|---|---|---|
+| `team.{team_id}.prompt` | DM | Default ingress — any prompt without an explicit agent target |
+| `team.{team_id}.{agent_id}.prompt` | That agent | Targeted ingress — a specific agent receives the prompt directly |
+
+The TUI publishes to these subjects when the user enters a prompt. A headless CLI (`jie prompt`) may also publish to them. For v1, only the DM listens to `team.{team_id}.prompt`; per-agent prompt handling for other roles is deferred. Cron, webhooks, and backlog polling are deferred (see Open Items).
+
+No agent exposes a direct call surface. Multiple teams may share the same NATS bus, separated by topic namespace. Per-team artifact storage is local (one SQLite file per team).

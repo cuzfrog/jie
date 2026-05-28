@@ -24,7 +24,7 @@ This file tracks the review of `specs/` for problems and gaps. It is designed to
 |---|---|---|
 | A | Event protocol & emission | complete |
 | B | Task & session lifecycle | complete |
-| C | Boundary & external integrations | pending |
+| C | Boundary & external integrations | complete |
 | D | Code & module discipline | pending |
 | E | Roles & pipeline shape | pending |
 | F | Observability & debugging | pending |
@@ -48,12 +48,7 @@ This file tracks the review of `specs/` for problems and gaps. It is designed to
 
 ## Group C — Boundary & external integrations
 
-**Theme.** How the system meets the world.
-
-| # | Severity | Spec | Issue | Status | Decision | Edits |
-|---|---|---|---|---|---|---|
-| 6 | significant | 02, 08 | How does the user prompt actually reach the DM? CLI? Input MCP server? Unspecified. | pending | | |
-| 28 | minor | 08 | DM behavior on terminal events for JIRA-origin tasks (post back? close?). | pending | | |
+**Status: complete.** All items resolved; rows removed. Decisions are persisted in the spec files (`02`, `03`, `08`, `11-ui/tui.md`).
 
 ---
 

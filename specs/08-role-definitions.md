@@ -36,7 +36,7 @@ Terminal phases for the in-flight gate are `done` and `failed`. `done` is perman
 ## DM (Delivery Manager)
 
 ```
-subscriptions: ['task.review_passed', 'task.failed']
+subscriptions: ['team.{team_id}.prompt', 'task.review_passed', 'task.failed']
 publishes:     ['task.recorded', 'task.rejected', 'task.done', 'task.failed']
 tools:
   - write_artifact
@@ -46,7 +46,7 @@ tools:
   - mcp:jira:*             // entire JIRA MCP server, auto-discovered at startup
 ```
 
-The DM is the only agent with an external-facing entry point. In v1 the sole supported trigger is a direct user prompt to the DM. (Backlog/cron/webhook integration is deferred.)
+The DM is the only agent with an external-facing entry point. The sole v1 trigger is a user prompt arriving on NATS subject `team.{team_id}.prompt`, published by the TUI or a headless CLI. The DM's prompt subscription is the first entry in its `subscriptions` list above. (Backlog/cron/webhook integration is deferred.)
 
 ### Single-Task-In-Flight Invariant
 
@@ -63,9 +63,10 @@ Multi-task coordination policy (parallelism, priorities, preemption, sub-teams) 
 
 ### On Trigger
 
-1. The DM uses its tools to gather full task content (e.g., fetches the referenced issue, or accepts the prompt body directly).
-2. The DM mints a new `session_id` and writes the canonical `task` artifact via `write_artifact`. **The DM is the sole writer of `task` artifacts.**
-3. The DM calls `notify('task.recorded', { task_artifact_id })` with `iteration = 1`. The body's task-status guard runs the compare-and-append (legal from `(no entry)` or from `failed`) and the event is published on `session.{session_id}.task.recorded`.
+1. The DM receives a prompt on `team.{team_id}.prompt`. Payload: `{ prompt: string, task_id?: string }`. The `task_id` field, if present, is a user-supplied identifier; if absent, the DM derives one (see On Pre-Record Failure).
+2. The DM uses its tools to gather full task content (e.g., fetches the referenced issue via JIRA MCP if a ticket key is detected, or accepts the prompt body directly).
+3. The DM mints a new `session_id` and writes the canonical `task` artifact via `write_artifact`. **The DM is the sole writer of `task` artifacts.**
+4. The DM calls `notify('task.recorded', { task_artifact_id })` with `iteration = 1`. The body's task-status guard runs the compare-and-append (legal from `(no entry)` or from `failed`) and the event is published on `session.{session_id}.task.recorded`.
 
 ### On Pre-Record Failure
 
@@ -83,15 +84,15 @@ If the DM cannot produce a task artifact at all — e.g. the JIRA fetch fails, t
 On `task.review_passed`, the DM:
 
 - Reads the iteration's artifacts.
-- Performs external finalization (e.g. closing the JIRA issue, posting a summary back).
-- Synthesizes a user-facing result and surfaces it.
+- Synthesizes a user-facing result.
+- If the task originated from an external issue (JIRA or GitHub), posts a comment summarizing the result and closes/transitions the issue. The DM's system prompt instructs it to detect external origins and use its MCP tools (`mcp:jira:*`, `mcp:github:*`) to perform this finalization.
 - Calls `notify('task.done', { review_artifact_id })`. The body appends a `task_status` row advancing phase from `review_passed` to `done` and publishes `task.done`. The in-flight slot frees on `done`.
 - If finalization fails irrecoverably, the DM calls `notify('task.failed', { error, phase: 'dm' })` instead. The slot frees on `failed`; the task may be re-entered later.
 
 On `task.failed`, the DM:
 
 - Reads available artifacts.
-- Synthesizes a user-facing failure summary.
+- Synthesizes a user-facing failure summary (logged and surfaced in the TUI; no external ticket update).
 - Does **not** emit a follow-up event. The slot is already free.
 
 In both cases, the DM dequeues the next pending prompt, if any.

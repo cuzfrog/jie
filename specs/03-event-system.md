@@ -4,10 +4,14 @@
 
 ```
 session.{session_id}.{event_type}
+team.{team_id}.prompt
+team.{team_id}.{agent_id}.prompt
 ```
 
 - `session_id` — 16-char lowercase hex (uint64). Derived statelessly as `hash64(timestamp_ns || team_id || nonce)`. Not persisted: a collision is astronomically unlikely at this width and is treated as "should not happen". If the DM observes a JetStream rejection consistent with subject reuse on publish of `task.recorded`, it logs and retries `notify('task.recorded', ...)` once with a fresh nonce; further failure → `notify('task.rejected', { reason: 'session_collision' })`. The DM mints `session_id` when it records (or rejects) a task.
 - `event_type` — dotted name from the table below. Agents subscribe to specific subjects (e.g. `session.*.task.recorded`); no wildcard fan-out + client-side filtering.
+- `team.{team_id}.prompt` — prompt ingress subject. The DM subscribes to `team.{team_id}.prompt` to receive user prompts from the TUI or CLI. Payload: `{ prompt: string, task_id?: string }`.
+- `team.{team_id}.{agent_id}.prompt` — per-agent prompt ingress. An agent subscribes to its own id-specific subject if it accepts direct user input. This subject pattern is reserved but per-agent prompt handling for non-DM roles is deferred.
 
 ## Identifiers
 
@@ -96,6 +100,7 @@ Tunables (`64 chars`, `200 ms`) are configurable per team in `core` config.
 |---|---|---|
 | `session.*.task.*` | **Durable** | Required for replay and post-mortem. |
 | `session.*.agent.stream.*` | **Ephemeral** | High volume; loss is acceptable. |
+| `team.*.prompt` | **Ephemeral** | Prompt ingestion is best-effort; the user can resend. |
 
 > NATS JetStream is included in the open-source `nats-server` (Apache 2.0). No paid tier required.
 
@@ -109,7 +114,7 @@ architect soul:   session.*.task.researched
 planner soul:     session.*.task.designed, session.*.task.review_failed
 implementer soul: session.*.task.planned
 reviewer soul:    session.*.task.implemented
-dm soul:          session.*.task.review_passed, session.*.task.failed
+dm soul:          team.{team_id}.prompt, session.*.task.review_passed, session.*.task.failed
 ```
 
 No central router. No agent is aware of other agents by identity. How any observer (e.g. TUI) consumes these events is its own concern.

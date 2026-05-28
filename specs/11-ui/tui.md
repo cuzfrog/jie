@@ -1,6 +1,6 @@
 # TUI
 
-Lives in `packages/tui/`. The TUI is one *observer* of the team. Layout, theme, keybindings, and interaction patterns are its own concern and intentionally unspecified here. This chapter documents only the **information surface** the TUI consumes and the **invariants** it must hold.
+Lives in `packages/tui/`. The TUI is the team's user-facing cockpit: it observes all agent activity and sends user prompts to agents. Layout, theme, keybindings, and interaction patterns are its own concern and intentionally unspecified here. This chapter documents only the **information surface** the TUI consumes/generates and the **invariants** it must hold.
 
 ## Inputs
 
@@ -17,9 +17,20 @@ The TUI obtains everything it needs from two existing surfaces:
 
 The TUI gets nothing else. It does not have a private channel to agents and does not call `core` directly.
 
+## Prompt Sending
+
+The TUI publishes user prompts to NATS. This is the TUI's sole write path:
+
+- Prompts without an explicit agent target go to `team.{team_id}.prompt` — the DM receives these and creates a new task.
+- Prompts targeting a specific agent (when the user is viewing that agent's tab) go to `team.{team_id}.{agent_id}.prompt`.
+
+Payload for both: `{ prompt: string, task_id?: string }`.
+
+The TUI discovers active agents from the bus (e.g. `agent.stream.chunk` metadata, or a reserved `team.{team_id}.agent.online` event TBD) and creates one tab per agent. `agent_id` is available via stream metadata (`agent_id` field in the `agent.stream.*` envelope) or a dedicated agent lifecycle event.
+
 ## Invariants
 
-- **Read-only.** The TUI MUST NOT publish to NATS. No `task.*` emission, no signals, no fake events, ever.
+- **Read-only on pipeline subjects.** The TUI MUST NOT publish to `session.*` or any `task.*` subject on NATS. Prompt ingress (`team.{team_id}.prompt`, `team.{team_id}.{agent_id}.prompt`) is the sole write the TUI performs.
 - **No state of its own beyond UI state.** All authoritative state lives on the bus and in the Artifact Store. The TUI is a pure projection.
 - **Replay-tolerant.** On reconnect to NATS, the TUI replays durable subjects (`session.*.task.*`) and accepts the loss of ephemeral stream chunks since disconnect.
 - **Out-of-band oblivious.** Internal agent operations (compaction, memory loads) are not on the bus and so the TUI does not display them.
