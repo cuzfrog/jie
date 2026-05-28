@@ -1,8 +1,8 @@
 # Code-Lens Service
 
-A standalone process in `packages/code-lens/`. **Exposes an MCP server.** Provides AST-only views of a codebase to the team's Architect (and to any other MCP client — IDE plugins, CI tooling, future agent frameworks).
+A standalone process in `packages/code-lens/`. **Exposes an MCP server.** Provides AST-only views of a codebase to any MCP client — IDE plugins, CI tooling, agent frameworks.
 
-> Code-Lens is reusable. It is not coupled to Jie. Within Jie, the Architect connects to it like any other MCP server, and its tools are auto-promoted to first-class entries in the Architect's tool list (see `07-agent-model.md`).
+> Code-Lens is reusable. It is not coupled to Jie's team layer. Within Jie, an agent connects to it like any other MCP server, and its tools are auto-promoted to first-class entries in the agent's tool list (see `05-agent-model.md`).
 
 ## Architecture
 
@@ -41,14 +41,12 @@ get_import_graph(root: string)
   → { from: string, to: string }[]
 ```
 
-Both tools dispatch to the appropriate language adapter based on file extension. Function and method bodies are stripped before returning. The Architect receives only names, signatures, and graph edges — no implementation detail.
-
-This is the concrete enforcement mechanism for the Architect knowing the codebase only down to function-signature level.
+Both tools dispatch to the appropriate language adapter based on file extension. Function and method bodies are stripped before returning. Callers receive only names, signatures, and graph edges — no implementation detail.
 
 ## Why MCP (and Why Standalone)
 
 - **Reuse.** MCP is the standard agent-tooling protocol. A standalone Code-Lens MCP server can serve any MCP client — IDE plugins, CI scripts, other agent frameworks — not just Jie. In-process coupling would prevent that.
-- **Tool visibility for the Architect.** Although Code-Lens speaks MCP, the Architect's soul declares `mcp:code-lens:get_module_exports` and `mcp:code-lens:get_import_graph` explicitly. At soul-load time the body fetches their schemas and registers them as first-class `Tool` instances. The LLM sees them with full schemas. There is no `use_mcp` indirection.
+- **Tool visibility for the agent.** Although Code-Lens speaks MCP, the agent's soul declares `mcp:code-lens:get_module_exports` and `mcp:code-lens:get_import_graph` explicitly. At soul-load time the body fetches their schemas and registers them as first-class `Tool` instances. The LLM sees them with full schemas. There is no `use_mcp` indirection.
 - **Memory isolation.** A TypeScript AST for a large project is hundreds of MB. Keeping that out of every team process is a feature.
 - **Lifecycle independence.** Code-Lens can outlive a team session, hold warm AST state across runs, and be restarted without restarting the team.
 
@@ -56,9 +54,9 @@ This is the concrete enforcement mechanism for the Architect knowing the codebas
 
 Code-Lens is deployed **per team**: one instance per workspace codebase, started by the supervisor alongside the team processes. It is not a global singleton.
 
-- **Discovery.** The team configuration specifies the Code-Lens connection address (e.g. `localhost:PORT` or a unix socket path). The Architect's soul declares `mcp:code-lens:get_module_exports` and `mcp:code-lens:get_import_graph` with this address. At soul-load time the body connects to the configured server; connection failure prevents agent start.
+- **Discovery.** The team configuration specifies the Code-Lens connection address (e.g. `localhost:PORT` or a unix socket path). At soul-load time the body connects to the configured server; connection failure prevents agent start.
 - **Startup.** The supervisor launches Code-Lens before any agent body. Code-Lens reads the workspace root from config and initializes its language adapters. It holds warm AST state for the lifetime of the team process.
-- **Crash recovery.** Code-Lens follows the standard MCP crash policy (see `07-agent-model.md` "Failure Handling"): mid-session disconnect → the next Code-Lens MCP call returns `mcp_server_unreachable` → body force-publishes `task.failed` and exits. The supervisor restarts the full team. Warm AST state is lost on crash; the next startup re-indexes from scratch.
+- **Crash recovery.** Code-Lens follows the standard MCP crash policy (see `05-agent-model.md` "Failure Handling"): mid-session disconnect → the next Code-Lens MCP call returns `mcp_server_unreachable` → body force-publishes a terminal event and exits. The supervisor restarts the full team. Warm AST state is lost on crash; the next startup re-indexes from scratch.
 - **Per-team rationale.** v1 assumes one team = one workspace. A per-team Code-Lens avoids multi-tenant root disambiguation and isolates failure to one team. Cross-team AST sharing adds complexity with no v1 payoff.
 
 ## Why Not Run LSP Inline
