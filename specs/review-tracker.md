@@ -29,8 +29,8 @@ This file tracks the review of `specs/` for problems and gaps. It is designed to
 | E | Roles & pipeline shape | complete |
 | F | Observability & debugging | complete |
 | G | Process & deployment topology | complete |
-| H | Identifier & path conventions | pending |
-| I | Glossary / TBD dependencies | pending |
+| H | Identifier & path conventions | complete |
+| I | Glossary / TBD dependencies | complete |
 
 ---
 
@@ -78,23 +78,29 @@ This file tracks the review of `specs/` for problems and gaps. It is designed to
 
 ## Group H — Identifier & path conventions
 
-**Theme.** Cross-cutting naming hygiene.
+**Status: complete.** All items resolved; rows removed. Decisions are persisted in the spec files (`00`, `03`, `04`, `05`, `06`, `08`, `09`, `13`).
 
-| # | Severity | Spec | Issue | Status | Decision | Edits |
-|---|---|---|---|---|---|---|
-| 17 | minor | 04 | `ArtifactId = number` (SQLite autoincrement). Why not opaque string (ULID)? | pending | | |
-| 23 | minor | 03, 08 | `task.designed` payload `descriptor_paths` — relative to what root? | pending | | |
-| 24 | minor | (cross-cutting) | Project / workspace / repo root concept missing. | pending | | |
+### Decision summary
+
+- **#17 — `ArtifactId` is now a ULID string**, not SQLite auto-increment. Storage-agnostic, timestamp-sortable. The `id` column in the `artifacts` table is TEXT. Updated `04-artifact-store.md` (type + implementation) and `03-event-system.md` (type reference).
+- **#23 — `descriptor_paths` are workspace-root-relative.** All file paths across Jie (tool arguments, event payloads, config references) resolve relative to `workspace_root`. Clarified in `03-event-system.md` payload comment.
+- **#24 — Workspace root formally defined.** Added "Workspace Root" to glossary in `00-overview.md`. Path resolution convention stated: tool args, event payloads, and config-relative paths all anchor to workspace root.
+- **Bonus — Renamed `read/write_module_descriptor` to `read/write_module_contract`.** "Module Descriptor" now means the whole `CONTEXT.md` file (frontmatter + prose); "Module Contract" is the YAML frontmatter portion. Updated glossary entries and all role tool lists across `05`, `06`, `08`, `09`.
+- **Bonus — Artifact store is workspace-scoped**, not team-scoped. `13-deployment.md` updated: one SQLite file per workspace.
+
+
 
 ---
 
 ## Group I — Glossary / TBD dependencies
 
-**Theme.** Forward references and glossary mismatches.
+**Status: complete.** All items resolved; rows removed. Decisions are persisted in the new `12-memory.md` and updated cross-references.
 
-| # | Severity | Spec | Issue | Status | Decision | Edits |
-|---|---|---|---|---|---|---|
-| 27 | minor | 00, 07, 09 | Glossary "Compaction" assumes a non-existent Memory chapter. | pending | | |
+### Decision summary
+
+- **#27 — Memory chapter written as `12-memory.md`.** Covers: MemoryStore interface, compaction trigger (0.7x context-window threshold) and policy (summarize oldest turns, preserve originals on disk), context lifecycle (session start, turn loop, agent restart), persistence (SQLite `memory_turns` table, auto-flush every 10 turns), DM working memory (prompt queue, in-flight awareness), and LLM library integration point. All TBD references across `00`, `03`, `07`, `08`, `09` updated to point at the new chapter. Backlog item #6 closed.
+
+
 
 ---
 
@@ -103,7 +109,7 @@ This file tracks the review of `specs/` for problems and gaps. It is designed to
 | # | Severity | Spec | Issue | Decision | Edits |
 |---|---|---|---|---|---|
 | 1 | critical | 03, 08, 09 | Iteration semantics: who initially sets `iteration=1`. | DM inits to 1; everyone copies inbound; planner is the only role allowed to increment, only on `task.review_failed`. | 09 (added "Iteration Ownership" section), 08 (clarified planner block) |
-| 2 | critical | 08 | Researcher vs Architect role boundary. | Researcher = world + project docs (prose). Architect = sole authority on code structure & contracts; owns full `CONTEXT.md`. Planner = sole authority on implementation strategy. Split tools: `read_module_doc` (prose), `read_module_descriptor` (frontmatter), `write_module_doc` (architect-only). | 05, 08, 09 |
+| 2 | critical | 08 | Researcher vs Architect role boundary. | Researcher = world + project docs (prose). Architect = sole authority on code structure & contracts; owns full `CONTEXT.md`. Planner = sole authority on implementation strategy. Split tools: `read_module_doc` (prose), `read_module_contract` (frontmatter), `write_module_doc` (architect-only). | 05, 08, 09 |
 
 ---
 

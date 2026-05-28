@@ -9,7 +9,7 @@ Persistent, content-addressed store for agent work products. Indexed by `task_id
 ```typescript
 type ArtifactType = 'task' | 'task_status' | 'research' | 'plan' | 'review';
 
-type ArtifactId = number;  // opaque, store-assigned
+type ArtifactId = string;  // opaque, store-assigned (ULID)
 
 type TaskPhase =
   | 'recorded' | 'researched' | 'designed' | 'planned'
@@ -54,7 +54,7 @@ The interface is the only dependency visible to `core` and `agents`. The backing
 
 ## Default Implementation
 
-`SqliteArtifactStore` in `packages/storage/`. Local file, no external service required. Writes are serialized by SQLite; the store is the single source of truth for artifact bytes and for task status.
+`SqliteArtifactStore` in `packages/storage/`. Local file, no external service required. Writes are serialized by SQLite; the store is the single source of truth for artifact bytes and for task status. The store generates ULIDs as primary keys for artifact rows — timestamp-prefixed, sortable, 26-character strings (`01ARZ3NDEKTSV4RRFFQ69G5FAV`). The `id` column in the `artifacts` table is TEXT, not an auto-increment integer.
 
 `task_status` rows are stored in the same `artifacts` table as other types. The latest `task_status` per `task_id` (by `created_at`) is canonical. An index on `(task_id, type, created_at DESC)` makes `read_task_status` O(log N). `cas_append_task_status` is a single SQLite transaction that re-reads the latest row inside the transaction, validates the expected phase, and inserts the new row; conflicting writers see `phase_changed` and may retry.
 

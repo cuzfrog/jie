@@ -53,7 +53,7 @@ The DM is the only agent with an external-facing entry point. The sole v1 trigge
 The DM accepts only one in-flight task at a time per team. The invariant is enforced by the DM's own reasoning, backed by `read_task_status` and the body's per-task compare-and-append guard:
 
 - On prompt arrival, the DM calls `read_task_status(task_id)` to check whether this specific `task_id` is in a non-terminal phase (anything other than `done` or `failed`). If so, the DM queues the prompt (in memory) and defers.
-- Across distinct `task_id`s, the DM relies on its working memory (managed by the Memory subsystem, TBD) to know whether a different task is currently in flight. There is no team-wide lock; the Memory module is responsible for restart-recovery of this context.
+- Across distinct `task_id`s, the DM relies on its working memory (managed by the Memory subsystem, see `12-memory.md`) to know whether a different task is currently in flight. There is no team-wide lock; the Memory module is responsible for restart-recovery of this context.
 - `task.rejected` is pre-record and writes no `task_status` row; it does not occupy the in-flight slot.
 - On observing `task.review_passed`, the DM finalizes (external ticket update, user-facing summary) and emits `task.done`. The slot frees on `done`.
 - On observing `task.failed`, the slot frees immediately. The DM then dequeues the next pending prompt.
@@ -119,9 +119,9 @@ Gathers external context (web, prior artifacts) and project documentation (modul
 subscriptions: ['task.researched']
 publishes:     ['task.designed']
 tools:
-  - read_module_descriptor
+  - read_module_contract
   - read_module_doc
-  - write_module_descriptor                  // sole writer of module contracts
+  - write_module_contract                    // sole writer of module contracts
   - write_module_doc                         // sole writer of module prose
   - read_artifact
   - mcp:code-lens:get_module_exports
@@ -137,7 +137,7 @@ subscriptions: ['task.designed', 'task.review_failed']
 publishes:     ['task.planned', 'task.failed']
 tools:
   - read_artifact
-  - read_module_descriptor
+  - read_module_contract
   - read_module_doc
   - write_artifact
 ```
@@ -157,7 +157,7 @@ tools:
   - read_file
   - write_file                // module-boundary-enforced
   - read_artifact
-  - read_module_descriptor
+  - read_module_contract
   - bash
 ```
 
@@ -171,7 +171,7 @@ publishes:     ['task.review_passed', 'task.review_failed']
 tools:
   - read_file
   - read_artifact
-  - read_module_descriptor
+  - read_module_contract
   - write_artifact            // writes review artifact
 ```
 

@@ -29,7 +29,7 @@ Researcher reacts to task.recorded
 Architect reacts to task.researched
   → reads research artifact
   → queries code-lens for current structure
-  → updates CONTEXT.md via write_module_descriptor
+  → updates CONTEXT.md via write_module_contract
   → publishes session.{id}.task.designed   { descriptor_paths }
 
 Planner reacts to task.designed
@@ -102,4 +102,4 @@ Every event in the envelope carries `iteration: number`. Subscribers know their 
 
 ## Compaction
 
-Compaction is an internal Memory-subsystem operation; it is not published on the event bus. Triggers, signals, and behavior are specified in the Memory chapter (TBD).
+Compaction is an internal Memory-subsystem operation; it is not published on the event bus. Triggers, signals, and behavior are specified in `12-memory.md`.

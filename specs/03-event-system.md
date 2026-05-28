@@ -49,7 +49,7 @@ type EventPayload<T extends EventType> =
   T extends 'task.recorded'       ? { task_artifact_id: ArtifactId } :
   T extends 'task.rejected'       ? { reason: string } :
   T extends 'task.researched'     ? { research_artifact_id: ArtifactId } :
-  T extends 'task.designed'       ? { descriptor_paths: string[] } :
+  T extends 'task.designed'       ? { descriptor_paths: string[] } :     // workspace-root-relative paths
   T extends 'task.planned'        ? { plan_artifact_id: ArtifactId } :
   T extends 'task.implemented'    ? { result_artifact_ids: ArtifactId[] } :
   T extends 'task.review_passed'  ? { review_artifact_id: ArtifactId } :
@@ -63,7 +63,7 @@ type EventPayload<T extends EventType> =
   never;
 ```
 
-`ArtifactId` is `number` (see `04-artifact-store.md`).
+`ArtifactId` is `string` (ULID; see `04-artifact-store.md`).
 
 ## Event Types
 
@@ -85,7 +85,7 @@ type EventType =
   | 'agent.tool.result';   // Tool execution completed (see Tool Telemetry)
 ```
 
-> Internal agent state transitions (e.g. context compaction) are **not** published on the event bus. They belong to the Memory subsystem (see its dedicated chapter, TBD).
+> Internal agent state transitions (e.g. context compaction) are **not** published on the event bus. They belong to the Memory subsystem (see `12-memory.md`).
 
 ## Streaming
 

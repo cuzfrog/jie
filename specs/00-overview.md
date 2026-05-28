@@ -17,14 +17,15 @@ Jie (界) is an orchestration framework engineered to enforce structural boundar
 | Term | Definition |
 |---|---|
 | **Frozen** | A frozen module boundary cannot be altered by any agent except the Architect. In a directory **with** a Module Descriptor: any public/exported symbol not listed in `exports` is frozen — the agent must not change it. Symbols listed in `exports` may be changed only to match the listed signature exactly. In a directory **without** a Module Descriptor: the entire directory is frozen — no public symbol change is allowed until the Architect creates a descriptor authorizing specific contracts. |
-| **Module Contract** | The set of exported/public type and function signatures of a source file, as declared in the Module Descriptor. |
-| **Module Descriptor** | The YAML frontmatter of a `CONTEXT.md` file (configurable) located in a source directory. It declares the module contract for that directory. Owned by the Architect or the user. |
+| **Module Contract** | The YAML frontmatter portion of the Module Descriptor. Machine-readable set of exported/public type and function signatures per file. Manipulated exclusively through `read_module_contract` and `write_module_contract`. |
+| **Module Descriptor** | A `CONTEXT.md` file (filename configurable) located in a source directory. Contains a YAML frontmatter (the **contract**) and markdown prose (the **doc**). Owned by the Architect or the user. A directory may have at most one descriptor. |
 | **Artifact** | A persisted work product: a task, research note, or plan. Stored in the Artifact Store, indexed by `task_id`. Referenced on the event bus only by `artifact_id`. |
-| **Compaction** | The clearing or summarizing of an agent's LLM context window. An internal operation of the Memory subsystem (see the Memory chapter, TBD). Effectively makes a long-lived agent behave as if freshly started. |
+| **Compaction** | The clearing or summarizing of an agent's LLM context window. An internal operation of the Memory subsystem (see `12-memory.md`). Effectively makes a long-lived agent behave as if freshly started. |
 | **Role** | The combination of an `AgentBody` (runtime container) and an `AgentSoul` (behavioral definition). A role is immutable once assigned — the soul cannot be swapped at runtime. |
 | **Soul** | Declares an agent's responsibilities, tool budget, and event subscriptions. Carries no mutable runtime state. |
 | **Body** | The concrete runtime process. Holds a soul, an EventBus client, and an ArtifactStore client. Executes tool calls on behalf of the soul. No inheritance. |
 | **Team** | A named group of agent processes (one per role) sharing the same NATS bus, separated from other teams by topic namespace. |
+| **Workspace Root** | The root directory of the user's codebase under Jie management. Defined in team config as `workspace_root`. All file paths throughout Jie — tool arguments (`read_file`, `write_file`, `read_module_contract`, `bash` workdir, Code-Lens tool paths), event payloads (e.g. `descriptor_paths`), and config-relative paths — resolve relative to the workspace root. |
 | **Task** | A unit of work with a durable `task_id` (e.g. a JIRA key or DM-minted prompt id). A task can span multiple sessions. Artifacts accumulate under the task across sessions. |
 | **Session** | A single sequential workflow run for a task. All events in a session share the same `session_id` embedded in the NATS subject. Sessions are transient. |
 | **Iteration** | One pass through the planner→implementer→reviewer loop within a session. Iteration starts at 1; the reviewer can kick back to the planner to start iteration N+1. Bounded by `max_iterations` per task (default 5). |

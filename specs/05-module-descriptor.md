@@ -33,11 +33,11 @@ exports:
 - No `last_updated`. History is managed by `git`.
 - No `description` or `constraints` on entries. Authoritative descriptions live in code comments and docstrings, readable by agents via `read_file`.
 - The architect is the sole author of the `CONTEXT.md` file — both halves. Two write tools, available only to the Architect soul:
-  - `write_module_descriptor(path, frontmatter)` — writes only the YAML frontmatter.
+  - `write_module_contract(path, frontmatter)` — writes only the YAML frontmatter.
   - `write_module_doc(path, prose)` — writes only the markdown prose body.
 - Two read tools, scoped by purpose:
-  - `read_module_descriptor(path)` — returns only the frontmatter (the **contract**). Available to roles that reason about contracts (architect, planner, implementer, reviewer).
-  - `read_module_doc(path)` — returns only the prose (the **project documentation** for that module). Available to roles that consume documentation (researcher, and anyone with `read_module_descriptor`).
+  - `read_module_contract(path)` — returns only the frontmatter (the **contract**). Available to roles that reason about contracts (architect, planner, implementer, reviewer).
+  - `read_module_doc(path)` — returns only the prose (the **project documentation** for that module). Available to roles that consume documentation (researcher, and anyone with `read_module_contract`).
 
 ## Scope and Inheritance
 
@@ -50,8 +50,8 @@ The interpretation of "directory has no descriptor" — fully frozen, unrestrict
 ## User vs Architect Edits
 
 - The user may hand-edit `CONTEXT.md` (both frontmatter and prose) at any time.
-- The Architect's write tools (`write_module_descriptor`, `write_module_doc`) each touch only their respective half of the file; the other half is preserved verbatim.
-- **User-wins conflict detection**: the body internally caches the last `read_module_descriptor` result per path. When the architect calls `write_module_descriptor`, the body re-reads the file, compares the frontmatter against the cached version, and if they differ, returns a tool error (e.g. "descriptor changed since last read") — the architect must call `read_module_descriptor` again to accommodate the user's edit before retrying the write. The same mechanism applies to `write_module_doc` using the last `read_module_doc` result. If the architect's last read was before session start (no cache), the write proceeds and overwrites — the body only detects conflicts when a prior read-by-this-agent exists.
+- The Architect's write tools (`write_module_contract`, `write_module_doc`) each touch only their respective half of the file; the other half is preserved verbatim.
+- **User-wins conflict detection**: the body internally caches the last `read_module_contract` result per path. When the architect calls `write_module_contract`, the body re-reads the file, compares the frontmatter against the cached version, and if they differ, returns a tool error (e.g. "descriptor changed since last read") — the architect must call `read_module_contract` again to accommodate the user's edit before retrying the write. The same mechanism applies to `write_module_doc` using the last `read_module_doc` result. If the architect's last read was before session start (no cache), the write proceeds and overwrites — the body only detects conflicts when a prior read-by-this-agent exists.
 - Pure prose edits by the user do not block the architect's descriptor writes; conversely, pure frontmatter edits by the user do not block prose updates. The body compares only the relevant half on each write tool.
 
 ## Language Agnosticism

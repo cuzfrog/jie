@@ -135,7 +135,7 @@ class AgentBody {
 
   private bus:        EventBus;
   private artifacts:  ArtifactStore;   // backs task_status; see Task Status below
-  private memory:     MemoryStore;     // see Memory chapter (TBD)
+  private memory:     MemoryStore;     // see 12-memory.md
 
   start(): void {}    // subscribes to soul.subscriptions on bus, begins event loop
   stop(): void {}     // unsubscribes, shuts down cleanly
@@ -144,7 +144,7 @@ class AgentBody {
 
 - No inheritance. `AgentBody` is the only concrete class.
 - Soul is immutable. An agent's role cannot change at runtime.
-- Compaction is owned by the `MemoryStore`, not by the body.
+- Compaction is owned by the `MemoryStore`, not by the body. See `12-memory.md` for triggers and policy.
 - The body is the **only** publisher of events on the bus. The LLM expresses publication intent through the `notify` tool; the body validates and executes the publish.
 
 ### Event Loop and Explicit Emission
@@ -191,7 +191,7 @@ When the LLM calls `notify`, the body performs an atomic compare-and-append on `
 
 `task.rejected` is the one event that does **not** mutate `task_status`. It is a pre-record signal published by the DM when no task artifact could be produced (no `task_id` to key state on, or DM choosing to decline the prompt). The body publishes the event and skips the CAS. See `08-role-definitions.md` "On Pre-Record Failure". Every other event type pairs with a `task_status` transition.
 
-The DM's single-task-in-flight gate is enforced by DM behavior, not by a global lock. The DM uses the `read_task_status(task_id)` tool on prompt arrival to check whether the referenced `task_id` is currently in flight (any phase other than `done` or `failed`) and decides accordingly. Across distinct `task_id`s, the DM relies on its own working memory (managed by the Memory subsystem; see Memory chapter, TBD) to know whether a task is currently in flight; the body's CAS provides per-task correctness but does not enforce the global "at most one in flight" property.
+The DM's single-task-in-flight gate is enforced by DM behavior, not by a global lock. The DM uses the `read_task_status(task_id)` tool on prompt arrival to check whether the referenced `task_id` is currently in flight (any phase other than `done` or `failed`) and decides accordingly. Across distinct `task_id`s, the DM relies on its own working memory (managed by the Memory subsystem; see `12-memory.md`) to know whether a task is currently in flight; the body's CAS provides per-task correctness but does not enforce the global "at most one in flight" property.
 
 The body's CAS still gives strong per-task guarantees: the DM cannot publish a second `task.recorded` for the same `task_id` while it is in any non-terminal phase. Terminal phases for the in-flight gate are `done` and `failed`. (`review_passed` is **not** terminal: it is the reviewer's verdict; the DM is required to advance it to `done` after finalization.) Re-entry of a `failed` task is permitted: DM may emit `task.recorded` for a `task_id` whose current phase is `failed`, starting a new session at `iteration = 1`. `done` is permanent for that `task_id`; once a task reaches `done` it cannot be re-entered.
 

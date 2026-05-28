@@ -27,7 +27,7 @@ A Jie team runs as a set of OS processes orchestrated by a supervisor:
 | Code-Lens | 1 per team | Standalone MCP server for AST queries. Started by supervisor before agent bodies. |
 | TUI | 1 | Terminal UI. Subscribes to team events on NATS, publishes prompts. |
 | NATS Server | 1 (shared) | Message bus. External process — may be shared across teams (soft isolation, see `02-protocol-stack.md`). |
-| Artifact Store | 0 (SQLite file) | Not a process. One SQLite database file per team, accessed by agent bodies via `packages/storage/`. |
+| Artifact Store | 0 (SQLite file) | Not a process. One SQLite database file per workspace, accessed by agent bodies via `packages/storage/`. |
 
 ## Supervisor
 
