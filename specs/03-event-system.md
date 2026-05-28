@@ -20,7 +20,9 @@ team.{team_id}.{agent_id}.prompt
 | `session_id` | 16-hex (uint64) | Stateless hash of `(timestamp_ns, team_id, nonce)`. Minted by DM. |
 | `task_id` | string, charset `[A-Za-z0-9_-]`, max 64 chars | User-supplied (e.g. `PROJ-123`, `gh-issue-42`) when available, otherwise `prompt-{hash8}` minted by DM. Embedded in the task artifact. **Not** in the subject — kept in the envelope only. **Normalization**: the DM trims leading/trailing whitespace from user input, then validates the charset and length; any violation causes `task.rejected`. Case is preserved — `PROJ-123` and `proj-123` are distinct. DM-minted ids (`prompt-{hash8}`, `unparseable-{hash8}`) are already canonical. |
 | `event_id` | 8-hex (uint32) | Stateless hash of `(session_id, agent_id, in-memory counter, hr_time_ns)`. The counter is process-local and lost on restart; that is acceptable because events are transient. |
+| `agent_id` | string, `{role}-{8-hex}`, e.g. `researcher-a1b2c3d4` | Minted fresh on every process start. 8 hex chars from a random uint32. Collision is not a practical concern within a single team (4B values per role). An agent that restarts gets a new `agent_id`. |
 | `stream_id` | uint32 | Per-agent monotonic counter, in-memory. Tags one LLM invocation. Resets on agent restart. uint32 is wide enough that wraparound is not a practical concern within an agent's lifetime; consumers nevertheless demux on the composite key `(agent_id, stream_id)` because `stream_id` is not unique across agents. |
+| `tool_call_id` | uint32 | Per-agent monotonic counter, in-memory, starting at 0. Assigns a unique id to each tool call within the agent's lifetime. Tags both `agent.tool.call` and its matching `agent.tool.result`. Resets on agent restart. |
 
 No identifier is persisted in the artifact store. The artifact store keys are `ArtifactId` (its own concern, see `04-artifact-store.md`).
 
@@ -34,7 +36,7 @@ interface AgentEvent<T extends EventType = EventType> {
   iteration:   number;     // current iteration of the task; starts at 1
   event_type:  T;
   agent_role:  AgentRole;  // 'dm' | 'architect' | 'researcher' | 'planner' | 'implementer' | 'reviewer'
-  agent_id:    string;     // process instance id, e.g. 'researcher-7f3a'
+  agent_id:    string;     // process instance id, e.g. 'researcher-a1b2c3d4' (see Identifiers table)
   timestamp:   string;     // ISO 8601
   payload:     EventPayload<T>;
 }
@@ -56,6 +58,8 @@ type EventPayload<T extends EventType> =
   T extends 'task.failed'         ? { error: string; phase: AgentRole } :
   T extends 'agent.stream.chunk'  ? { stream_id: number; seq: number; text: string } :
   T extends 'agent.stream.end'    ? { stream_id: number; total_chunks: number } :
+  T extends 'agent.tool.call'     ? { tool_call_id: number; name: string; input: string; input_truncated: boolean } :
+  T extends 'agent.tool.result'   ? { tool_call_id: number; name: string; output: string; output_truncated: boolean; duration_ms: number; error: string | null } :
   never;
 ```
 
@@ -76,7 +80,9 @@ type EventType =
   | 'task.done'            // DM finalized a review_passed task (external ticket updated, etc.); terminal
   | 'task.failed'          // Any non-DM role signals unrecoverable failure (terminal)
   | 'agent.stream.chunk'   // Batched LLM output (see Streaming below)
-  | 'agent.stream.end';    // LLM response complete
+  | 'agent.stream.end'     // LLM response complete
+  | 'agent.tool.call'     // Tool invocation about to execute (see Tool Telemetry)
+  | 'agent.tool.result';   // Tool execution completed (see Tool Telemetry)
 ```
 
 > Internal agent state transitions (e.g. context compaction) are **not** published on the event bus. They belong to the Memory subsystem (see its dedicated chapter, TBD).
@@ -100,6 +106,7 @@ Tunables (`64 chars`, `200 ms`) are configurable per team in `core` config.
 |---|---|---|
 | `session.*.task.*` | **Durable** | Required for replay and post-mortem. |
 | `session.*.agent.stream.*` | **Ephemeral** | High volume; loss is acceptable. |
+| `session.*.agent.tool.*` | **Ephemeral** | Diagnostic; loss is acceptable. |
 | `team.*.prompt` | **Ephemeral** | Prompt ingestion is best-effort; the user can resend. |
 
 > NATS JetStream is included in the open-source `nats-server` (Apache 2.0). No paid tier required.
@@ -118,3 +125,5 @@ dm soul:          team.{team_id}.prompt, session.*.task.review_passed, session.*
 ```
 
 No central router. No agent is aware of other agents by identity. How any observer (e.g. TUI) consumes these events is its own concern.
+
+Tool telemetry events (`agent.tool.call`, `agent.tool.result`) are **observer-only**: no agent role subscribes to them. They exist for diagnostics, debugging, and TUI tool panels.

@@ -111,11 +111,24 @@ Rules:
 - Output (`stdout` + `stderr` combined) is truncated to 64 KiB; the tool returns a note when truncation occurred.
 - Consecutive `bash` calls that consistently return non-zero exit codes are tool-result errors that decrement `error_turn_budget`. The implementer is expected to reason about and fix test/lint failures, not blindly retry.
 
+## Tool Telemetry
+
+Every tool call is observable on the event bus. The body emits two events per tool invocation:
+
+- **`agent.tool.call`** — emitted **before** `tool.execute()`. Payload: `tool_call_id`, `name`, JSON-serialized `input`, `input_truncated`.
+- **`agent.tool.result`** — emitted **after** `tool.execute()` returns (or throws). Payload: `tool_call_id`, `name`, JSON-serialized `output` (or `null` on throw), `output_truncated`, `duration_ms`, `error` (error message string or `null`).
+
+`tool_call_id` is a per-agent uint32 monotonic counter starting at 0. It links each `call` to its `result`. Resets on agent restart (consumers key on `(agent_id, tool_call_id)`).
+
+Input and output are JSON-serialized from the tool's actual arguments and return value. If the serialized string exceeds **4 KiB**, it is middle-truncated: the first `(4096 - MARKER_LEN) / 2` chars and last `(4096 - MARKER_LEN) / 2` chars are preserved, with a marker `...[N chars truncated]...` in between. The corresponding `*_truncated` flag is set to `true`.
+
+Both events are **ephemeral** on JetStream. They are **observer-only** — no agent role subscribes to them. The TUI and diagnostic tooling consume them.
+
 ## AgentBody
 
 ```typescript
 class AgentBody {
-  readonly id:                 string;          // process instance id, e.g. 'researcher-7f3a'
+  readonly id:                 string;          // process instance id: {role}-{8-hex} minted fresh on every process start (see 03-event-system.md Identifiers)
   readonly soul:               AgentSoul;       // immutable after construction
   readonly error_turn_budget:  number;          // per-loop error tolerance; default 30
   readonly total_turn_budget:  number;          // per-loop hard turn cap; default 200

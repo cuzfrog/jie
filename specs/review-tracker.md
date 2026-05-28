@@ -27,7 +27,7 @@ This file tracks the review of `specs/` for problems and gaps. It is designed to
 | C | Boundary & external integrations | complete |
 | D | Code & module discipline | complete |
 | E | Roles & pipeline shape | complete |
-| F | Observability & debugging | pending |
+| F | Observability & debugging | complete |
 | G | Process & deployment topology | pending |
 | H | Identifier & path conventions | pending |
 | I | Glossary / TBD dependencies | pending |
@@ -66,12 +66,7 @@ This file tracks the review of `specs/` for problems and gaps. It is designed to
 
 ## Group F — Observability & debugging
 
-**Theme.** Tool telemetry, agent identity, logs.
-
-| # | Severity | Spec | Issue | Status | Decision | Edits |
-|---|---|---|---|---|---|---|
-| 7 | significant | 03, 07 | `agent_id` format / generation / uniqueness across restarts. | pending | | |
-| 9 | significant | 07 | Tool observability: no logging/telemetry hook; tool runs opaque. | pending | | |
+**Status: complete.** All items resolved; rows removed. Decisions: `agent_id` uses `{role}-{8-hex}` random format, minted fresh on every process start. Tool telemetry via new ephemeral event types `agent.tool.call` and `agent.tool.result` (metadata + middle-truncated I/O at 4 KiB, observer-only, on by default). Persisted in `03-event-system.md` (identifiers, event types, payloads, durability, subscriptions) and `07-agent-model.md` (Tool Telemetry section).
 
 ---
 

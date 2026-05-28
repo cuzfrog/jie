@@ -1,6 +1,6 @@
-# Handoff — Groups A through E complete and pruned, pick next group
+# Handoff — Groups A through F complete and pruned, pick next group
 
-You are picking up an in-progress spec review for the **Jie (界)** project at `/Volumes/workspace/epam/designs/jie`. Groups A, B, C, D, and E are **complete** and their rows have been pruned from the tracker. Pick the next pending group from `specs/review-tracker.md`. Each group is largely self-contained; you can address it in a fresh agent context.
+You are picking up an in-progress spec review for the **Jie (界)** project at `/Volumes/workspace/epam/designs/jie`. Groups A, B, C, D, E, and F are **complete** and their rows have been pruned from the tracker. Pick the next pending group from `specs/review-tracker.md`. Each group is largely self-contained; you can address it in a fresh agent context.
 
 ## Your job
 
@@ -22,17 +22,17 @@ Drive the user through the next group's items one at a time, interview-style. Fo
 - **Group C — Boundary & external integrations.** Complete. Rows pruned. Decisions are persisted in the spec files; key load-bearing items are summarized below.
 - **Group D — Code & module discipline.** Complete. Rows pruned. Decisions are persisted in the spec files; key load-bearing items are summarized below.
 - **Group E — Roles & pipeline shape.** Complete. Rows pruned. Decisions are persisted in the spec files; key load-bearing items are summarized below.
+- **Group F — Observability & debugging.** Complete. Rows pruned. Decisions are persisted in the spec files; key load-bearing items are summarized below.
 
 ### Pending groups (pick one)
 
 | Group | Theme |
 |---|---|
-| F | Observability & debugging (#7, #9) |
 | G | Process & deployment topology (#8, #14, #16, #29, #30) |
 | H | Identifier & path conventions (#17, #23, #24) |
 | I | Glossary / TBD dependencies (#27) |
 
-Suggested next: **F** (observability & debugging — agent_id format, tool telemetry). But follow the user's preference.
+Suggested next: **G** (process & deployment topology — MCP crash policy, Code-Lens lifecycle, multi-team isolation, package naming, deployment model). But follow the user's preference.
 
 ## Group A decisions you must respect (do NOT relitigate)
 
@@ -56,6 +56,12 @@ Suggested next: **F** (observability & debugging — agent_id format, tool telem
 - **Researcher is mandatory for all tasks in v1.** No skip path. Trivial-task fast-path deferred to a new TBD chapter (`trivial-task-handling`, open item #13). See `12-open-items.md`.
 - **`error_turn_budget` and `total_turn_budget` moved from `AgentSoul` to `AgentBody`.** Budgets are runtime body-level concerns, not soul identity. Defaults remain 30 and 200 for all roles. Per-role tuning deferred. See `07-agent-model.md`.
 - **`run_tests` replaced by `bash` built-in on the Implementer.** The Implementer LLM discovers and runs the project's test/lint/build commands via `bash`. Reviewer no longer has `run_tests` (reviewer inspects code, doesn't execute). See `07-agent-model.md` "The `bash` Tool", `08-role-definitions.md` implementer and reviewer tool lists.
+
+## Group F decisions you must respect (do NOT relitigate)
+
+- **`agent_id` format is `{role}-{8-hex}`**, e.g. `researcher-a1b2c3d4`. 8 hex chars from a random uint32, minted fresh on every process start. Collision is not a practical concern (4B values per role). See `03-event-system.md` Identifiers table and `07-agent-model.md` AgentBody.
+- **Tool telemetry on the event bus**: two new ephemeral event types — `agent.tool.call` (before execution) and `agent.tool.result` (after). Payload carries metadata + middle-truncated input/output at a 4 KiB limit. Linked by `tool_call_id` (per-agent uint32 counter). Observer-only (no agent subscribes). On by default. See `03-event-system.md` (event types, payloads, durability, identifiers, subscriptions note) and `07-agent-model.md` "Tool Telemetry".
+- **Open item #15 — CLI chapter**: new TBD chapter for the headless CLI (`jie prompt`, `jie status`, etc.), part of the UI family alongside TUI. See `12-open-items.md`.
 
 ## Group B decisions you must respect (do NOT relitigate)
 
@@ -94,7 +100,6 @@ Suggested next: **F** (observability & debugging — agent_id format, tool telem
 
 - Anything that changes emission mechanics or `task_status` semantics needs to stay consistent with Groups A, B, and C decisions above. The `notify`-tool path, the task-status compare-and-append guard, the `task_status` artifact substrate, and the NATS prompt ingress subjects are all settled.
 - Group G (#8, #14, #16, #29, #30) should preserve the `team.{team_id}.prompt` subject pattern established in Group C when designing deployment topology and multi-team isolation.
-- Group F (#7, #9) cares about logged failure modes. Group A added several: `not_in_publishes`, `invalid_payload`, `illegal_transition`, `missing_emission`, `error_budget_exhausted`, `turn_budget_exhausted`, plus the queue-overflow assert. All loggable.
 - Group E #21 (reviewer-specific budget defaults) is a values question now that naming is settled.
 - `read_task_status` is now a built-in tool auto-registered on all roles. Any group that modifies role tool lists should preserve this.
 
