@@ -68,13 +68,11 @@ Agent bodies do not communicate directly with each other. All coordination is th
   src/                   # User's codebase (the workspace root)
 ```
 
-The `.jie/` directory is the team's scratch space. It is discovered by the supervisor via:
-1. An explicit `--config` flag.
-2. Walking up from the current working directory to find `.jie/config.yaml`.
+The `.jie/` directory is the team's scratch space. It is discovered by the supervisor via walking up from the current working directory to find `.jie/config.yaml`.
 
 ## CLI Entry Points
 
-Defined in `11-ui/cli.md`. The headless CLI (`jie`) provides `jie start`, `jie prompt`, `jie status`, `jie stop`.
+Defined in `11-ui/cli.md`. The headless CLI (`jie`) provides `jie`, `jie start`, `jie ui`, `jie prompt`, `jie doctor`, `jie query-task`, `jie stop`.
 
 ## Configuration
 

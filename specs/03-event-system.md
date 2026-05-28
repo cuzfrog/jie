@@ -6,12 +6,18 @@
 session.{session_id}.{event_type}
 team.{team_id}.prompt
 team.{team_id}.{agent_id}.prompt
+team.{team_id}.response.{reply_id}
+supervisor.{team_id}.heartbeat
+agent.{team_id}.{role}.{agent_id}.heartbeat
 ```
 
 - `session_id` — 16-char lowercase hex (uint64). Derived statelessly as `hash64(timestamp_ns || team_id || nonce)`. Not persisted: a collision is astronomically unlikely at this width and is treated as "should not happen". If the DM observes a JetStream rejection consistent with subject reuse on publish of `task.recorded`, it logs and retries `notify('task.recorded', ...)` once with a fresh nonce; further failure → `notify('task.rejected', { reason: 'session_collision' })`. The DM mints `session_id` when it records (or rejects) a task.
 - `event_type` — dotted name from the table below. Agents subscribe to specific subjects (e.g. `session.*.task.recorded`); no wildcard fan-out + client-side filtering.
-- `team.{team_id}.prompt` — prompt ingress subject. The DM subscribes to `team.{team_id}.prompt` to receive user prompts from the TUI or CLI. Payload: `{ prompt: string, task_id?: string }`.
+- `team.{team_id}.prompt` — prompt ingress subject. The DM subscribes to `team.{team_id}.prompt` to receive user prompts from the TUI or CLI. Payload: `{ prompt: string }`.
 - `team.{team_id}.{agent_id}.prompt` — per-agent prompt ingress. An agent subscribes to its own id-specific subject if it accepts direct user input. This subject pattern is reserved but per-agent prompt handling for non-DM roles is deferred.
+- `team.{team_id}.response.{reply_id}` — DM response channel for the `jie prompt` request-response pattern (see `11-ui/messaging-protocol.md`).
+- `supervisor.{team_id}.heartbeat` — supervisor liveness heartbeat (see `15-monitoring.md`).
+- `agent.{team_id}.{role}.{agent_id}.heartbeat` — per-agent liveness and status heartbeat (see `15-monitoring.md`).
 
 ## Identifiers
 

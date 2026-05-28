@@ -17,6 +17,7 @@ User prompts arrive on NATS subjects under `team.{team_id}.`:
 |---|---|---|
 | `team.{team_id}.prompt` | DM | Default ingress — any prompt without an explicit agent target |
 | `team.{team_id}.{agent_id}.prompt` | That agent | Targeted ingress — a specific agent receives the prompt directly |
+| `team.{team_id}.response.{reply_id}` | CLI | DM response channel for `jie prompt` request-response (see `11-ui/messaging-protocol.md`) |
 
 The TUI publishes to these subjects when the user enters a prompt. A headless CLI (`jie prompt`) may also publish to them. For v1, only the DM listens to `team.{team_id}.prompt`; per-agent prompt handling for other roles is deferred. Cron, webhooks, and backlog polling are deferred (see Open Items).
 

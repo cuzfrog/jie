@@ -8,7 +8,7 @@ Each role subscribes to the event the previous role emits, so under normal opera
 
 The DM enforces a **single-task-in-flight** invariant: it does not emit `task.recorded` for a new task while a previous task is still in flight. A task is in flight from `task.recorded` until the DM emits `task.done` (after a `task.review_passed` finalization) or `task.failed`. Additional user prompts queue in the DM's local FIFO until the active task terminates. A task that has reached `failed` may be re-entered (the DM emits `task.recorded` again for the same `task_id`); a task that has reached `done` is permanent. See `08-role-definitions.md` for details.
 
-Multi-task coordination policy (parallelism, priorities, preemption, sub-teams) is deferred to a dedicated chapter (TBD).
+Multi-task coordination policy (parallelism, priorities, preemption, sub-teams) is deferred to a dedicated chapter (backlog #10).
 
 ## Session Flow (single iteration)
 
@@ -77,7 +77,7 @@ Planner reacts to task.review_failed
 The pipeline re-enters at Implementer → Reviewer for the new iteration. Loop continues until either:
 
 - Reviewer publishes `task.review_passed` → DM finalizes.
-- `iteration` reaches `max_iterations` (default 5, configurable per task). The next agent that observes the cap exhaustion (typically the planner when about to start iteration N+1) emits `task.failed` instead. DM finalizes failure.
+- `iteration` reaches `max_iterations` (v1: team-level config, default 5; per-task override is Day 2). The next agent that observes the cap exhaustion (typically the planner when about to start iteration N+1) emits `task.failed` instead. DM finalizes failure.
 
 ## Iteration Ownership
 

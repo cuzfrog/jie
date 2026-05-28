@@ -24,7 +24,7 @@ exports:
 
 - `file` — relative to the directory the descriptor lives in.
 - `entries[].name` — the public symbol name as the language understands it. For language constructs without a name (e.g. TypeScript `export default`), the language adapter assigns a synthetic name (e.g. `default`).
-- `entries[].signature` — **opaque, language-defined canonical text**. The descriptor does not prescribe a grammar; the language adapter (in Code-Lens) owns extraction, canonicalization, and equality. See `module-boundary-enforcement.md` (TBD).
+- `entries[].signature` — **opaque, language-defined canonical text**. The descriptor does not prescribe a grammar; the language adapter (in Code-Lens) owns extraction, canonicalization, and equality. See `10-code-lens-service.md` for the `LanguageAdapter` interface. Enforcement (the `write_file` gate that uses the adapter to compare signatures) belongs to the Module Boundary Enforcement chapter (backlog #8).
 
 ## Rules
 
@@ -45,7 +45,7 @@ exports:
 
 ## Behavior When Descriptor is Missing
 
-The interpretation of "directory has no descriptor" — fully frozen, unrestricted, or somewhere in between — is the concern of **`module-boundary-enforcement.md`** (TBD), not of this schema.
+The interpretation of "directory has no descriptor" — fully frozen, unrestricted, or somewhere in between — is the concern of the **Module Boundary Enforcement** chapter (backlog #8), not of this schema.
 
 ## User vs Architect Edits
 

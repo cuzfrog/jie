@@ -26,7 +26,7 @@ The TUI publishes user prompts to NATS. This is the TUI's sole write path:
 
 Payload for both: `{ prompt: string, task_id?: string }`.
 
-The TUI discovers active agents from the bus (e.g. `agent.stream.chunk` metadata, or a reserved `team.{team_id}.agent.online` event TBD) and creates one tab per agent. `agent_id` is available via stream metadata (`agent_id` field in the `agent.stream.*` envelope) or a dedicated agent lifecycle event.
+The TUI discovers active agents via heartbeat traffic on `agent.{team_id}.>.heartbeat` (see `15-monitoring.md`). Each unique `(role, agent_id)` becomes a tab. `agent_id` is available in the heartbeat envelope and in stream metadata (`agent_id` field in the `agent.stream.*` envelope).
 
 ## Invariants
 
