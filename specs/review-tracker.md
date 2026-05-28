@@ -28,7 +28,7 @@ This file tracks the review of `specs/` for problems and gaps. It is designed to
 | D | Code & module discipline | complete |
 | E | Roles & pipeline shape | complete |
 | F | Observability & debugging | complete |
-| G | Process & deployment topology | pending |
+| G | Process & deployment topology | complete |
 | H | Identifier & path conventions | pending |
 | I | Glossary / TBD dependencies | pending |
 
@@ -72,15 +72,7 @@ This file tracks the review of `specs/` for problems and gaps. It is designed to
 
 ## Group G — Process & deployment topology
 
-**Theme.** How the system is packaged and run.
-
-| # | Severity | Spec | Issue | Status | Decision | Edits |
-|---|---|---|---|---|---|---|
-| 8 | significant | 02, 07 | MCP server mid-session crash: reconnect policy. | pending | | |
-| 14 | significant | 02, 10 | Code-Lens lifecycle: per-team or singleton, discovery, startup, crash recovery. | pending | | |
-| 16 | significant | 02, 03 | Multi-team isolation on NATS: `session.*.task.*` is global; auth/namespace policy. | pending | | |
-| 29 | minor | 01, 07, 08 | `packages/agents/` is misleading — built-in role meat lives in `core`. | pending | | |
-| 30 | minor | (cross-cutting) | Deployment / process model: how many processes, who orchestrates. | pending | | |
+**Status: complete.** All items resolved; rows removed. Decisions are persisted in the spec files (`02`, `07`, `10`, `01`, `08`, `12`, new `13-deployment.md`).
 
 ---
 
@@ -119,4 +111,4 @@ This file tracks the review of `specs/` for problems and gaps. It is designed to
 
 - Groups are largely independent. A fresh agent context can pick up any pending group; reading this file is sufficient to resume.
 - Items marked `conditional` carry an explicit dependency note in their **Decision** column. Resolve the dependency, then either confirm or revise the conditional decision.
-- TBD chapters live in `12-open-items.md`; resolved items here may surface new TBD entries.
+- TBD chapters live in `backlog.md`; resolved items here may surface new TBD entries.

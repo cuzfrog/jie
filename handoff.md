@@ -11,7 +11,7 @@ Drive the user through the next group's items one at a time, interview-style. Fo
 1. `specs/review-tracker.md` — the master tracker. Group status table tells you which group is `pending`. Within a group, walk items top-to-bottom.
 2. `specs/00-overview.md` — glossary.
 3. The numbered spec files referenced in your group's rows (the **Spec** column).
-4. `specs/12-open-items.md` — open items list.
+4. `specs/backlog.md` — open items / backlog.
 
 ## Current state
 
@@ -53,7 +53,7 @@ Suggested next: **G** (process & deployment topology — MCP crash policy, Code-
 
 ## Group E decisions you must respect (do NOT relitigate)
 
-- **Researcher is mandatory for all tasks in v1.** No skip path. Trivial-task fast-path deferred to a new TBD chapter (`trivial-task-handling`, open item #13). See `12-open-items.md`.
+- **Researcher is mandatory for all tasks in v1.** No skip path. Trivial-task fast-path deferred to a new TBD chapter (`trivial-task-handling`, open item #13). See `backlog.md`.
 - **`error_turn_budget` and `total_turn_budget` moved from `AgentSoul` to `AgentBody`.** Budgets are runtime body-level concerns, not soul identity. Defaults remain 30 and 200 for all roles. Per-role tuning deferred. See `07-agent-model.md`.
 - **`run_tests` replaced by `bash` built-in on the Implementer.** The Implementer LLM discovers and runs the project's test/lint/build commands via `bash`. Reviewer no longer has `run_tests` (reviewer inspects code, doesn't execute). See `07-agent-model.md` "The `bash` Tool", `08-role-definitions.md` implementer and reviewer tool lists.
 
@@ -61,7 +61,7 @@ Suggested next: **G** (process & deployment topology — MCP crash policy, Code-
 
 - **`agent_id` format is `{role}-{8-hex}`**, e.g. `researcher-a1b2c3d4`. 8 hex chars from a random uint32, minted fresh on every process start. Collision is not a practical concern (4B values per role). See `03-event-system.md` Identifiers table and `07-agent-model.md` AgentBody.
 - **Tool telemetry on the event bus**: two new ephemeral event types — `agent.tool.call` (before execution) and `agent.tool.result` (after). Payload carries metadata + middle-truncated input/output at a 4 KiB limit. Linked by `tool_call_id` (per-agent uint32 counter). Observer-only (no agent subscribes). On by default. See `03-event-system.md` (event types, payloads, durability, identifiers, subscriptions note) and `07-agent-model.md` "Tool Telemetry".
-- **Open item #15 — CLI chapter**: new TBD chapter for the headless CLI (`jie prompt`, `jie status`, etc.), part of the UI family alongside TUI. See `12-open-items.md`.
+- **Open item #15 — CLI chapter**: new TBD chapter for the headless CLI (`jie prompt`, `jie status`, etc.), part of the UI family alongside TUI. See `backlog.md`.
 
 ## Group B decisions you must respect (do NOT relitigate)
 

@@ -1,6 +1,6 @@
 # Role Definitions
 
-Built-in roles. Their `tools`, `subscriptions`, `publishes`, and the structured parts of the system prompt are fixed in `core`. Agent `.md` files only override `model` / `error_turn_budget` / `total_turn_budget` and supply prose.
+Built-in roles. Their `tools`, `subscriptions`, `publishes`, and the structured parts of the system prompt are defined in `packages/agents/`. Agent `.md` files only override `model` / `error_turn_budget` / `total_turn_budget` and supply prose.
 
 `tools` entries follow the notation defined in `07-agent-model.md`:
 - `read_file` — built-in

@@ -4,16 +4,16 @@
 
 A soul declares an agent's behavioral profile. Built-in role souls live in `packages/agents/{role}.md` as plain markdown with YAML frontmatter. The frontmatter holds a small number of tunables; the markdown body is the agent's prose system prompt.
 
-For built-in roles, `tools`, `subscriptions`, `publishes`, and the structured parts of `system_prompt` (identity, tools_guide, constraints) are **derived from the role** in `core` — they are not declared per-agent. Frontmatter does not override them. Turn budgets (`error_turn_budget`, `total_turn_budget`) are body-level concerns (see `AgentBody`), not soul-level.
+For built-in roles, `tools`, `subscriptions`, `publishes`, and the structured parts of `system_prompt` (identity, tools_guide, constraints) are **defined in `packages/agents/`** — they are not hardcoded in `core`. Frontmatter does not override them. Turn budgets (`error_turn_budget`, `total_turn_budget`) are body-level concerns (see `AgentBody`), not soul-level.
 
 ```typescript
 interface AgentSoul {
   role:                AgentRole;     // 'dm' | 'architect' | 'researcher' | 'planner' | 'implementer' | 'reviewer'
   model:               string;        // '<provider>/<model>', e.g. 'anthropic/claude-sonnet-4'
   system_prompt:       SystemPrompt;  // assembled at load time
-  tools:               ToolSpec[];    // resolved from `role` registry in core
-  subscriptions:       EventType[];   // resolved from `role` registry in core
-  publishes:           EventType[];   // resolved from `role` registry in core
+  tools:               ToolSpec[];    // loaded from role definition in packages/agents/
+  subscriptions:       EventType[];   // loaded from role definition in packages/agents/
+  publishes:           EventType[];   // loaded from role definition in packages/agents/
 }
 
 interface SystemPrompt {
@@ -48,9 +48,9 @@ User-defined custom agents follow a different schema; see the **Custom Agents** 
 
 For a built-in role:
 
-1. `core` looks up the role's static profile (`tools`, `subscriptions`, `publishes`, prompt fragments).
-2. If `agents/{role}.md` exists, parse YAML frontmatter for `model`. Read the markdown body as `system_prompt.prose`.
-3. Otherwise, use defaults defined in `core`.
+1. Load the role's static profile (`tools`, `subscriptions`, `publishes`, prompt fragments) from `packages/agents/{role}/`.
+2. Parse `agents/{role}.md` for YAML frontmatter (`model`) and markdown body (`system_prompt.prose`).
+3. If `agents/{role}.md` does not exist, use defaults defined in the role profile.
 4. Resolve every entry in `tools`:
    - Built-in name → look up in registry.
    - `mcp:<server>:<method-or-glob>` → connect to `<server>` over MCP, fetch tool catalog, register matching tools.
@@ -208,7 +208,11 @@ Agents resolve errors using LLM reasoning; they are not crash-and-restart compon
 - **`error_turn_budget`** (default 30, per-body). Decrements by one on every turn that consumes at least one tool-result error. Pure-thinking turns (no tool calls) do not decrement it. All-success turns do not decrement it. When it hits zero, the body force-publishes `task.failed` with `error = "error_budget_exhausted"`.
 - **`total_turn_budget`** (default 200, per-body). Decrements by one on every LLM turn unconditionally — error turns, success turns, pure-thinking turns, and the missing-emission grace turn. Safety net against pathological loops. When it hits zero, the body force-publishes `task.failed` with `error = "turn_budget_exhausted"`.
 
-Tool errors are returned to the LLM as tool-result messages in the same conversation; the LLM may try a different approach. Truly fatal errors (e.g. NATS disconnect, MCP server crash) escalate to the supervisor, not to `task.failed`.
+Tool errors are returned to the LLM as tool-result messages in the same conversation; the LLM may try a different approach.
+
+**MCP server crash mid-session.** If an MCP server becomes unreachable while a tool call is in flight, the tool returns a fatal error (`mcp_server_unreachable`). The body treats this as an unrecoverable error: it logs the server and tool name, force-publishes `task.failed` with `error = "mcp_server_unreachable:{server}"` and `phase = soul.role`, and exits. No retry, no reconnect. The supervisor restarts the agent; the DM may re-enter the task from `failed`. The same policy applies if the MCP server goes down between tool calls and the next MCP-backed tool call fails immediately.
+
+**NATS disconnect** is handled the same way: the body force-publishes `task.failed` with `error = "nats_disconnect"` and exits. The supervisor restarts the process.
 
 ## ExecutionContext
 
