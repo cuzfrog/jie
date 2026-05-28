@@ -74,22 +74,8 @@ The `.jie/` directory is the team's scratch space. It is discovered by the super
 
 ## CLI Entry Points
 
-The headless CLI (`jie`) provides entry points for common operations. The full CLI surface is defined in the CLI chapter (TBD, open item #15). Key v1 entry points:
-
-| Command | Behavior |
-|---|---|
-| `jie start` | Start a full team (supervisor + all agent processes + Code-Lens + TUI). |
-| `jie prompt <text>` | Publish a user prompt to `team.{team_id}.prompt` for the DM. |
-| `jie status [task_id]` | Read and display current task status from the artifact store. |
-| `jie stop` | Send SIGTERM to the supervisor, which cascades to all child processes. |
+Defined in `11-ui/cli.md`. The headless CLI (`jie`) provides `jie start`, `jie prompt`, `jie status`, `jie stop`.
 
 ## Configuration
 
-The team configuration surface is defined in the Configuration chapter (TBD, open item #14). Minimum v1 `config.yaml`:
-
-```yaml
-team_id: "default"
-nats_url: "nats://localhost:4222"
-code_lens_url: "http://localhost:9001"   # or unix socket path
-workspace_root: "."
-```
+Defined in `14-configuration.md`. Minimum v1 surface: `.jie/config.yaml` with `team_id`, `nats_url`, `code_lens_url`, and `workspace_root`. See that chapter for the full config surface, budget overrides, and discovery rules.

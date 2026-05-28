@@ -113,6 +113,8 @@ tools:
 
 Gathers external context (web, prior artifacts) and project documentation (module prose). Presents facts and required information in the `research` artifact; **does not decide**. Has no access to source files, descriptors (contracts), or code-lens. Calls `notify('task.researched', { research_artifact_id })` to terminate.
 
+The researcher is **mandatory for all tasks in v1**. No skip path exists; the pipeline always runs the researcher phase. Trivial-task fast-path handling is deferred to a dedicated chapter (TBD; open item #13).
+
 ## Architect
 
 ```
