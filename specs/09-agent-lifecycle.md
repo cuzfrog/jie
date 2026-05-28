@@ -39,12 +39,12 @@ Planner reacts to task.designed
 
 Implementer reacts to task.planned
   → reads plan artifact and module descriptors
-  → write_file (boundary-enforced), run_tests
+  → write_file (boundary-enforced), bash (run tests, linters, build tools)
   → publishes session.{id}.task.implemented   { result_artifact_ids }
     (or session.{id}.task.failed on hard violation)
 
 Reviewer reacts to task.implemented
-  → reads plan + result artifacts, may run tests, may inspect files
+  → reads plan + result artifacts, inspects diffs
   → writes review artifact (iteration = N)
   → publishes:
        session.{id}.task.review_passed   { review_artifact_id }

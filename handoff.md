@@ -1,6 +1,6 @@
-# Handoff — Groups A and B complete and pruned, pick next group
+# Handoff — Groups A through E complete and pruned, pick next group
 
-You are picking up an in-progress spec review for the **Jie (界)** project at `/Volumes/workspace/epam/designs/jie`. Groups A and B are **complete** and their rows have been pruned from the tracker. Pick the next pending group from `specs/review-tracker.md`. Each group is largely self-contained; you can address it in a fresh agent context.
+You are picking up an in-progress spec review for the **Jie (界)** project at `/Volumes/workspace/epam/designs/jie`. Groups A, B, C, D, and E are **complete** and their rows have been pruned from the tracker. Pick the next pending group from `specs/review-tracker.md`. Each group is largely self-contained; you can address it in a fresh agent context.
 
 ## Your job
 
@@ -19,20 +19,20 @@ Drive the user through the next group's items one at a time, interview-style. Fo
 
 - **Group A — Event protocol & emission.** Complete. Rows pruned. Decisions are persisted in the spec files; key load-bearing items are summarized below.
 - **Group B — Task & session lifecycle.** Complete. Rows pruned. Decisions are persisted in the spec files; key load-bearing items are summarized below.
+- **Group C — Boundary & external integrations.** Complete. Rows pruned. Decisions are persisted in the spec files; key load-bearing items are summarized below.
+- **Group D — Code & module discipline.** Complete. Rows pruned. Decisions are persisted in the spec files; key load-bearing items are summarized below.
+- **Group E — Roles & pipeline shape.** Complete. Rows pruned. Decisions are persisted in the spec files; key load-bearing items are summarized below.
 
 ### Pending groups (pick one)
 
 | Group | Theme |
 |---|---|
-| C | Boundary & external integrations (#6, #28) |
-| D | Code & module discipline (#13, #26) |
-| E | Roles & pipeline shape (#12, #21, #25) |
 | F | Observability & debugging (#7, #9) |
 | G | Process & deployment topology (#8, #14, #16, #29, #30) |
 | H | Identifier & path conventions (#17, #23, #24) |
 | I | Glossary / TBD dependencies (#27) |
 
-Suggested next: **C** (foundational boundary question — how prompts reach the DM — has downstream bearing on the DM FIFO and deployment topology). But follow the user's preference.
+Suggested next: **F** (observability & debugging — agent_id format, tool telemetry). But follow the user's preference.
 
 ## Group A decisions you must respect (do NOT relitigate)
 
@@ -46,6 +46,17 @@ Suggested next: **C** (foundational boundary question — how prompts reach the 
 - **Iteration ownership:** DM inits to 1; everyone copies inbound; planner is the only role allowed to increment, only on `task.review_failed`. See `09-agent-lifecycle.md` "Iteration Ownership".
 - **Researcher vs Architect boundary:** split tool surface (`read_module_doc` vs `read_module_descriptor`; `write_module_doc` is architect-only). See `08-role-definitions.md`.
 
+## Group D decisions you must respect (do NOT relitigate)
+
+- **User-wins conflict detection for `write_module_descriptor` / `write_module_doc`**: the body internally caches the last `read_module_descriptor` and `read_module_doc` results per path. On write, the body re-reads the file and compares the relevant half against the cached version. Mismatch → tool error telling the architect to re-read and accommodate. No new tool parameters. See `05-module-descriptor.md` "User vs Architect Edits".
+- **"Frozen" glossary entry covers both cases**: WITH descriptor (public symbols not in `exports` are frozen) and WITHOUT descriptor (entire directory frozen until Architect creates a descriptor). See `00-overview.md` glossary.
+
+## Group E decisions you must respect (do NOT relitigate)
+
+- **Researcher is mandatory for all tasks in v1.** No skip path. Trivial-task fast-path deferred to a new TBD chapter (`trivial-task-handling`, open item #13). See `12-open-items.md`.
+- **`error_turn_budget` and `total_turn_budget` moved from `AgentSoul` to `AgentBody`.** Budgets are runtime body-level concerns, not soul identity. Defaults remain 30 and 200 for all roles. Per-role tuning deferred. See `07-agent-model.md`.
+- **`run_tests` replaced by `bash` built-in on the Implementer.** The Implementer LLM discovers and runs the project's test/lint/build commands via `bash`. Reviewer no longer has `run_tests` (reviewer inspects code, doesn't execute). See `07-agent-model.md` "The `bash` Tool", `08-role-definitions.md` implementer and reviewer tool lists.
+
 ## Group B decisions you must respect (do NOT relitigate)
 
 - **`task.done` is the canonical terminal for a successfully completed task.** Introduced as a new DM-emitted event (`publishes` and payload in `03-event-system.md`). DM emits it after finalizing the external ticket on observing `task.review_passed`. `review_passed` is a pipeline phase, not a terminal. `done` is permanent — no re-entry from `done`. See `08-role-definitions.md` "Allowed Transition Table" and "On Terminal Event".
@@ -55,6 +66,13 @@ Suggested next: **C** (foundational boundary question — how prompts reach the 
 - **Single-task-in-flight is a DM behavior, not a global lock.** DM uses `read_task_status(task_id)` per prompt; cross-task in-flight knowledge is the Memory module's responsibility (TBD). Per-task CAS remains the correctness floor. See `08-role-definitions.md` "Single-Task-In-Flight Invariant".
 - **v1 keeps all artifacts and `task_status` rows indefinitely.** GC and compaction deferred to Storage Maintenance chapter (TBD). Open item #2 notes expected Day 2 JetStream stream TTL. Open item #3 closed (KV bucket gone). Open item #7 updated to include `task_status` chain compaction.
 - **`task_id` normalization:** trim whitespace, validate charset `[A-Za-z0-9_-]`, max 64 chars, preserve case. Violation → `task.rejected`. See `03-event-system.md` Identifiers table.
+
+## Group C decisions you must respect (do NOT relitigate)
+
+- **Prompt ingress is via NATS subjects `team.{team_id}.prompt` and `team.{team_id}.{agent_id}.prompt`.** The DM subscribes to `team.{team_id}.prompt` to receive user prompts. Per-agent prompt handling for non-DM roles is deferred but the subject namespace accommodates it. The TUI publishes prompts to these subjects. The TUI's read-only invariant is scoped to `session.*.task.*` only — it CAN publish to prompt subjects. A headless CLI (`jie prompt`) may also publish. See `02-protocol-stack.md` "Prompt Ingress", `03-event-system.md` subject schema, `08-role-definitions.md` DM subscriptions and "On Trigger".
+- **Prompt subject durability:** `team.*.prompt` is ephemeral on JetStream (best-effort; user can resend). See `03-event-system.md` durability table.
+- **DM finalization on success only.** On `task.done`: DM posts a comment + closes the external issue (JIRA/GitHub) if one exists, driven by the DM's system prompt detecting external origins. On `task.failed`: no external ticket update — summary stays internal (log + TUI). See `08-role-definitions.md` "On Terminal Event".
+- **TUI is now the team's user-facing cockpit** (not just an observer). It sends prompts to agents and observes activity. See `11-ui/tui.md`.
 
 ## How to drive the interview
 
@@ -74,8 +92,8 @@ Suggested next: **C** (foundational boundary question — how prompts reach the 
 
 ## Cross-group dependencies you may hit
 
-- Anything that changes emission mechanics or `task_status` semantics needs to stay consistent with Groups A and B decisions above. The `notify`-tool path, the task-status compare-and-append guard, and the `task_status` artifact substrate are all settled.
-- Group C #6 (how the user prompt reaches the DM) has downstream bearing on the DM's FIFO mechanics and on Group G's deployment topology. Resolve it before Group G if possible.
+- Anything that changes emission mechanics or `task_status` semantics needs to stay consistent with Groups A, B, and C decisions above. The `notify`-tool path, the task-status compare-and-append guard, the `task_status` artifact substrate, and the NATS prompt ingress subjects are all settled.
+- Group G (#8, #14, #16, #29, #30) should preserve the `team.{team_id}.prompt` subject pattern established in Group C when designing deployment topology and multi-team isolation.
 - Group F (#7, #9) cares about logged failure modes. Group A added several: `not_in_publishes`, `invalid_payload`, `illegal_transition`, `missing_emission`, `error_budget_exhausted`, `turn_budget_exhausted`, plus the queue-overflow assert. All loggable.
 - Group E #21 (reviewer-specific budget defaults) is a values question now that naming is settled.
 - `read_task_status` is now a built-in tool auto-registered on all roles. Any group that modifies role tool lists should preserve this.

@@ -51,8 +51,8 @@ The interpretation of "directory has no descriptor" — fully frozen, unrestrict
 
 - The user may hand-edit `CONTEXT.md` (both frontmatter and prose) at any time.
 - The Architect's write tools (`write_module_descriptor`, `write_module_doc`) each touch only their respective half of the file; the other half is preserved verbatim.
-- If the architect detects an inconsistency between the descriptor it expected and what it reads (e.g. the user changed an entry between architect runs), **the user's version wins**. The architect must accommodate the user's edit on the next pass.
-- Pure prose edits by the user do not block the architect; conversely, pure frontmatter edits by the user do not block prose updates.
+- **User-wins conflict detection**: the body internally caches the last `read_module_descriptor` result per path. When the architect calls `write_module_descriptor`, the body re-reads the file, compares the frontmatter against the cached version, and if they differ, returns a tool error (e.g. "descriptor changed since last read") — the architect must call `read_module_descriptor` again to accommodate the user's edit before retrying the write. The same mechanism applies to `write_module_doc` using the last `read_module_doc` result. If the architect's last read was before session start (no cache), the write proceeds and overwrites — the body only detects conflicts when a prior read-by-this-agent exists.
+- Pure prose edits by the user do not block the architect's descriptor writes; conversely, pure frontmatter edits by the user do not block prose updates. The body compares only the relevant half on each write tool.
 
 ## Language Agnosticism
 

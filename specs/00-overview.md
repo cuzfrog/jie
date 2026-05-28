@@ -16,7 +16,7 @@ Jie (界) is an orchestration framework engineered to enforce structural boundar
 
 | Term | Definition |
 |---|---|
-| **Frozen** | The module contract of a file is frozen. Any public or exported type or function signature that exists in the file cannot be changed by an agent unless it is explicitly listed in `exports` and the result matches the listed signature exactly. If a public symbol is not listed in `exports`, it is a violation. |
+| **Frozen** | A frozen module boundary cannot be altered by any agent except the Architect. In a directory **with** a Module Descriptor: any public/exported symbol not listed in `exports` is frozen — the agent must not change it. Symbols listed in `exports` may be changed only to match the listed signature exactly. In a directory **without** a Module Descriptor: the entire directory is frozen — no public symbol change is allowed until the Architect creates a descriptor authorizing specific contracts. |
 | **Module Contract** | The set of exported/public type and function signatures of a source file, as declared in the Module Descriptor. |
 | **Module Descriptor** | The YAML frontmatter of a `CONTEXT.md` file (configurable) located in a source directory. It declares the module contract for that directory. Owned by the Architect or the user. |
 | **Artifact** | A persisted work product: a task, research note, or plan. Stored in the Artifact Store, indexed by `task_id`. Referenced on the event bus only by `artifact_id`. |

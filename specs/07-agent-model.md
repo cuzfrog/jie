@@ -4,14 +4,12 @@
 
 A soul declares an agent's behavioral profile. Built-in role souls live in `packages/agents/{role}.md` as plain markdown with YAML frontmatter. The frontmatter holds a small number of tunables; the markdown body is the agent's prose system prompt.
 
-For built-in roles, `tools`, `subscriptions`, `publishes`, and the structured parts of `system_prompt` (identity, tools_guide, constraints) are **derived from the role** in `core` — they are not declared per-agent. Frontmatter does not override them.
+For built-in roles, `tools`, `subscriptions`, `publishes`, and the structured parts of `system_prompt` (identity, tools_guide, constraints) are **derived from the role** in `core` — they are not declared per-agent. Frontmatter does not override them. Turn budgets (`error_turn_budget`, `total_turn_budget`) are body-level concerns (see `AgentBody`), not soul-level.
 
 ```typescript
 interface AgentSoul {
   role:                AgentRole;     // 'dm' | 'architect' | 'researcher' | 'planner' | 'implementer' | 'reviewer'
   model:               string;        // '<provider>/<model>', e.g. 'anthropic/claude-sonnet-4'
-  error_turn_budget:   number;        // see Failure Handling; default 30
-  total_turn_budget:   number;        // see Failure Handling; default 200
   system_prompt:       SystemPrompt;  // assembled at load time
   tools:               ToolSpec[];    // resolved from `role` registry in core
   subscriptions:       EventType[];   // resolved from `role` registry in core
@@ -51,7 +49,7 @@ User-defined custom agents follow a different schema; see the **Custom Agents** 
 For a built-in role:
 
 1. `core` looks up the role's static profile (`tools`, `subscriptions`, `publishes`, prompt fragments).
-2. If `agents/{role}.md` exists, parse YAML frontmatter for `model`, `error_turn_budget`, `total_turn_budget`. Read the markdown body as `system_prompt.prose`.
+2. If `agents/{role}.md` exists, parse YAML frontmatter for `model`. Read the markdown body as `system_prompt.prose`.
 3. Otherwise, use defaults defined in `core`.
 4. Resolve every entry in `tools`:
    - Built-in name → look up in registry.
@@ -90,12 +88,37 @@ Behavior inside the body:
 
 `notify` is the only tool whose `execute` touches the bus, and even then only via the body that owns it. The LLM is unaware of this; it sees `notify` as a normal tool with a JSON schema.
 
+### The `bash` Tool
+
+`bash` is a built-in tool that executes shell commands within the workspace root. It is the implementer's mechanism for running tests, linters, build tools, and any project-specific tooling.
+
+```typescript
+bash(input: { command: string; workdir?: string }): BashResult
+
+interface BashResult {
+  exit_code: number;
+  stdout:    string;
+  stderr:    string;
+}
+```
+
+Rules:
+
+- The command execs in the team's workspace root by default. `workdir`, if provided, is resolved relative to the workspace root — it cannot escape via `..` traversal.
+- A fixed timeout (default 300s per invocation) kills the process and returns `exit_code = -1` with stderr: `"command timed out"`. This is a tool-result error; the body does not fail the task on timeout alone.
+- The command runs with the workspace's environment (inherited from the agent process). No isolation sandbox beyond the workspace-root constraint in v1.
+- Shell is `/bin/sh` (POSIX).
+- Output (`stdout` + `stderr` combined) is truncated to 64 KiB; the tool returns a note when truncation occurred.
+- Consecutive `bash` calls that consistently return non-zero exit codes are tool-result errors that decrement `error_turn_budget`. The implementer is expected to reason about and fix test/lint failures, not blindly retry.
+
 ## AgentBody
 
 ```typescript
 class AgentBody {
-  readonly id:   string;          // process instance id, e.g. 'researcher-7f3a'
-  readonly soul: AgentSoul;       // immutable after construction
+  readonly id:                 string;          // process instance id, e.g. 'researcher-7f3a'
+  readonly soul:               AgentSoul;       // immutable after construction
+  readonly error_turn_budget:  number;          // per-loop error tolerance; default 30
+  readonly total_turn_budget:  number;          // per-loop hard turn cap; default 200
 
   private bus:        EventBus;
   private artifacts:  ArtifactStore;   // backs task_status; see Task Status below
@@ -167,10 +190,10 @@ Pipeline seriality: each role's subscription is downstream of the previous role'
 
 ### Failure Handling
 
-Agents resolve errors using LLM reasoning; they are not crash-and-restart components. Two **fixed budgets**, scoped to one event-handling loop (one inbound event = one body run of the LLM loop), bound runaway behavior. Both initialize from `soul` at the start of the loop and decrement only; neither resets.
+Agents resolve errors using LLM reasoning; they are not crash-and-restart components. Two **fixed budgets**, scoped to one event-handling loop (one inbound event = one body run of the LLM loop), bound runaway behavior. Both initialize from `AgentBody` at construction and decrement only; neither resets.
 
-- **`error_turn_budget`** (default 30, configurable). Decrements by one on every turn that consumes at least one tool-result error. Pure-thinking turns (no tool calls) do not decrement it. All-success turns do not decrement it. When it hits zero, the body force-publishes `task.failed` with `error = "error_budget_exhausted"`. Reviewer typically does not error-recover and rarely consumes this budget.
-- **`total_turn_budget`** (default 200, configurable). Decrements by one on every LLM turn unconditionally — error turns, success turns, pure-thinking turns, and the missing-emission grace turn. Safety net against pathological loops. When it hits zero, the body force-publishes `task.failed` with `error = "turn_budget_exhausted"`.
+- **`error_turn_budget`** (default 30, per-body). Decrements by one on every turn that consumes at least one tool-result error. Pure-thinking turns (no tool calls) do not decrement it. All-success turns do not decrement it. When it hits zero, the body force-publishes `task.failed` with `error = "error_budget_exhausted"`.
+- **`total_turn_budget`** (default 200, per-body). Decrements by one on every LLM turn unconditionally — error turns, success turns, pure-thinking turns, and the missing-emission grace turn. Safety net against pathological loops. When it hits zero, the body force-publishes `task.failed` with `error = "turn_budget_exhausted"`.
 
 Tool errors are returned to the LLM as tool-result messages in the same conversation; the LLM may try a different approach. Truly fatal errors (e.g. NATS disconnect, MCP server crash) escalate to the supervisor, not to `task.failed`.
 

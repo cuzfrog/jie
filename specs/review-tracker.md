@@ -25,8 +25,8 @@ This file tracks the review of `specs/` for problems and gaps. It is designed to
 | A | Event protocol & emission | complete |
 | B | Task & session lifecycle | complete |
 | C | Boundary & external integrations | complete |
-| D | Code & module discipline | pending |
-| E | Roles & pipeline shape | pending |
+| D | Code & module discipline | complete |
+| E | Roles & pipeline shape | complete |
 | F | Observability & debugging | pending |
 | G | Process & deployment topology | pending |
 | H | Identifier & path conventions | pending |
@@ -54,24 +54,13 @@ This file tracks the review of `specs/` for problems and gaps. It is designed to
 
 ## Group D — Code & module discipline
 
-**Theme.** Architect mechanics and descriptor edge cases.
-
-| # | Severity | Spec | Issue | Status | Decision | Edits |
-|---|---|---|---|---|---|---|
-| 13 | significant | 05, 08 | `write_module_descriptor` "user wins" on conflict — how is mid-session user edit detected? | pending | | |
-| 26 | minor | 00, 06 | Glossary "Frozen" definition contradicts deferred Module Boundary chapter on no-descriptor case. | pending | | |
+**Status: complete.** All items resolved; rows removed. Decisions are persisted in `05-module-descriptor.md` (user-wins conflict detection via body-tracked read cache) and `00-overview.md` (expanded "Frozen" glossary entry covering both with-descriptor and without-descriptor cases).
 
 ---
 
 ## Group E — Roles & pipeline shape
 
-**Theme.** Pipeline structure and per-role tunables.
-
-| # | Severity | Spec | Issue | Status | Decision | Edits |
-|---|---|---|---|---|---|---|
-| 12 | significant | 08, 09 | Researcher is not optional. Skip path for trivial tasks? | pending | | |
-| 21 | minor | 07, 12 | Reviewer-specific `error_turn_budget` default? | pending | | |
-| 25 | minor | 08, 12 | `run_tests` tool contract — open item #1 — blocks reviewer & implementer behavior. | pending | | |
+**Status: complete.** All items resolved; rows removed. Decisions are persisted in the spec files: pipeline stays mandatory for v1 with trivial-task fast-path deferred to a new chapter (open item #13); budgets moved from `AgentSoul` to `AgentBody`; `run_tests` replaced by `bash` built-in on Implementer, removed from Reviewer.
 
 ---
 

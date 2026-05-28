@@ -158,10 +158,10 @@ tools:
   - write_file                // module-boundary-enforced
   - read_artifact
   - read_module_descriptor
-  - run_tests
+  - bash
 ```
 
-Follows the plan and module descriptors. Calls `notify('task.implemented', { result_artifact_ids })` on success or `notify('task.failed', { error, phase: 'implementer' })` on a hard violation (e.g. boundary block, fatal test runner error). Soft test failures are part of the implementer's reasoning loop, not a final-state failure.
+Follows the plan and module descriptors. Calls `notify('task.implemented', { result_artifact_ids })` on success or `notify('task.failed', { error, phase: 'implementer' })` on a hard violation (e.g. boundary block, fatal shell error). Soft test failures are part of the implementer's reasoning loop, not a final-state failure.
 
 ## Reviewer
 
@@ -172,7 +172,6 @@ tools:
   - read_file
   - read_artifact
   - read_module_descriptor
-  - run_tests
   - write_artifact            // writes review artifact
 ```
 
