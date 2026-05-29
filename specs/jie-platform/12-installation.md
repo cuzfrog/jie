@@ -6,10 +6,10 @@ How Jie and its runtime dependencies are installed and bootstrapped. Jie has no 
 
 | Dependency | Required? | Role |
 |---|---|---|
-| **bun** ≥ 1.3.14 | Yes | Runtime for supervisor, agent bodies, TUI, Code-Lens, and CLI. Runs TypeScript natively — no compilation step. |
-| **nats-server** (pinned) | Yes | Message bus. All inter-process communication. JetStream included in the open-source binary (Apache 2.0). Installed by the setup script. |
+| **bun** ≥ 1.3.14 | Yes | Runtime for supervisor, agent bodies, TUI, and CLI. Runs TypeScript natively — no compilation step. |
+| **nats-server** (pinned) | Yes | Message bus. All inter-process communication. Installed by the setup script. |
 | Git | Optional | Used only if the user's workflow involves git; Jie itself has no git integration in v1. |
-| TypeScript / tsconfig | Optional | Only required if the workspace under Jie management is TypeScript. Code-Lens bootstraps from tsconfig when present. |
+| TypeScript / tsconfig | Optional | Only required if the workspace under Jie management is TypeScript. |
 
 No Docker required. No cloud account, no API key, no license server.
 
@@ -47,8 +47,8 @@ The script is idempotent — re-running it upgrades to the pinned versions or no
 | Component | Version | Rationale |
 |---|---|---|
 | bun | ≥ 1.3.14 | Minimum runtime for native TypeScript execution and package management. |
-| nats-server | 2.10.x (latest patch) | JetStream stable. In-memory store default. |
-| @cuzfrog/jie | latest stable | CLI, supervisor, agent bodies, TUI, Code-Lens all in one package. |
+| nats-server | 2.10.x (latest patch) | Core pub/sub. |
+| @cuzfrog/jie | latest stable | CLI, supervisor, agent bodies, TUI — all in one package. |
 
 The install script pins exact versions; the spec records the floor and rationale.
 
@@ -76,7 +76,7 @@ bun link --global
 
 ## Runtime Dependencies (Shipped with Jie)
 
-All Jie-internal packages (`core`, `jie-platform`, `jie-team`, `storage`, `code-lens`, `tui`) are bundled in `@cuzfrog/jie`. The user does not install them separately. The supervisor discovers package entry points relative to the Jie installation root.
+All Jie-internal packages (`core`, `jie-platform`, `storage`, `tui`) are bundled in `@cuzfrog/jie`. The user does not install them separately. The supervisor discovers package entry points relative to the Jie installation root.
 
 External tool dependencies (linters, formatters, test runners) are **not** installed by Jie. Each agent role may invoke tools like `eslint` or `vitest` via the `bash` tool; these must be present in the workspace's `node_modules` or system `PATH`. Jie does not manage them.
 
@@ -95,8 +95,6 @@ The CLI prompts the user with defaults, accepting Enter to keep each default:
    - Accepts any valid `nats://` or `tls://` URL.
    - If NATS is reachable on the default port, `nats_url` defaults to `"nats://localhost:4222"` without asking.
 
-`code_lens_url` is not prompted — it defaults to `"http://localhost:9001"` and is written to the config as-is. Users can edit the config file directly if a different port is needed.
-
 The CLI then writes `.jie/config.yaml` in the CWD and proceeds with the original command.
 
 ### Resulting Config
@@ -104,11 +102,10 @@ The CLI then writes `.jie/config.yaml` in the CWD and proceeds with the original
 ```yaml
 team_id: "my-project"
 nats_url: "nats://localhost:4222"
-code_lens_url: "http://localhost:9001"
 workspace_root: "."
 ```
 
-Full field semantics in `14-configuration.md`.
+Full field semantics in `10-configuration.md`.
 
 ## NATS Connectivity
 
@@ -117,7 +114,7 @@ Full field semantics in `14-configuration.md`.
 Before executing any command that requires NATS (`jie start`, `jie ui`, `jie prompt`, `jie query-task`, `jie doctor`), the CLI performs an internal connectivity check against `nats_url` from config. If NATS is unreachable, the CLI:
 
 1. Prints: `Error: NATS is not reachable at <nats_url>. Ensure nats-server is running.`
-2. Suggests: `Run 'nats-server -js &' to start it.`
+2. Suggests: `Run 'nats-server &' to start it.`
 3. Exits with code 2.
 
 Commands that do not require NATS (e.g. `jie --version`, `jie --help`) skip this check.
@@ -127,10 +124,8 @@ Commands that do not require NATS (e.g. `jie --version`, `jie --help`) skip this
 After installation, start NATS before using Jie:
 
 ```bash
-nats-server -js &
+nats-server &
 ```
-
-The `-js` flag enables JetStream, which Jie requires for event replay. v2.10+ enables JetStream by default with an in-memory store; the flag is explicit for clarity.
 
 ## Verification
 
@@ -139,7 +134,7 @@ jie --version         # Confirm CLI is callable
 jie doctor            # Team health check (starts backend if not running)
 ```
 
-`jie doctor` subscribes to `supervisor.{team_id}.heartbeat` and `agent.{team_id}.>.heartbeat`, collects for 2 seconds, and reports agent status (see `15-monitoring.md`). Exit code 0 means all heartbeats received; exit code 1 means some agents are missing, stale, or in error state.
+`jie doctor` subscribes to `supervisor.{team_id}.heartbeat` and `agent.{team_id}.>.heartbeat`, collects for 2 seconds, and reports agent status (see `11-monitoring.md`). Exit code 0 means all heartbeats received; exit code 1 means some agents are missing, stale, or in error state.
 
 ## Startup
 
@@ -148,7 +143,7 @@ cd /path/to/project
 jie
 ```
 
-`jie` is idempotent. If the backend (supervisor + agents) is already running, it attaches the TUI only. If fresh, it starts the supervisor, which launches Code-Lens, agent bodies, and the TUI.
+`jie` is idempotent. If the backend (supervisor + agents) is already running, it attaches the TUI only. If fresh, it starts the supervisor, which launches agent bodies and the TUI.
 
 Headless mode (backend only, no TUI):
 
@@ -159,22 +154,6 @@ jie query-task PROJ-001
 ```
 
 ## NATS Configuration
-
-### JetStream Storage
-
-v1 uses in-memory JetStream storage (no persistent volume). All event history is lost on NATS restart. This is acceptable for v1 — tasks are re-entrant; the artifact store (SQLite) is the durable record. A persistent JetStream store with TTL/size caps is a Day 2 concern (see backlog #2).
-
-### Minimal nats-server Config (Optional)
-
-```conf
-# nats.conf
-jetstream {
-  store_dir: "/tmp/nats/jie"
-  max_memory_store: 256MB
-}
-```
-
-Pass with `nats-server -c nats.conf -js`. The `store_dir` enables persistence across NATS restarts.
 
 ### Port
 
@@ -204,7 +183,5 @@ Teams share the NATS transport but are subject-isolated via `team_id` prefix. v1
 |---|---|
 | Install script fails on bun check | `bun --version`. Must be ≥ 1.3.14. Upgrade: `bun upgrade` or see bun.sh. |
 | Install script fails on platform | Native Windows is unsupported. Use WSL2. |
-| `jie` exits with code 2 | NATS unreachable. Run `nats-server -js &`. |
-| `jie doctor` shows missing agents | NATS may not be running or JetStream disabled. Restart NATS with `-js`. |
-| Architect fails to start | Code-Lens port (9001) may be in use. Free the port or edit `code_lens_url` in config. |
-| Agents can't publish events | JetStream may be disabled. Start NATS with `-js` flag. |
+| `jie` exits with code 2 | NATS unreachable. Run `nats-server &`. |
+| `jie doctor` shows missing agents | NATS may not be running. Check `nats-server`. |

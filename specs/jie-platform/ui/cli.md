@@ -17,7 +17,6 @@ When no `.jie/config.yaml` is found, the CLI prompts the user:
 3. **NATS probe.** CLI attempts a connectivity check to `nats://localhost:4222`. If unreachable:
    - Prompts for `nats_url` — accepts any valid `nats://` or `tls://` URL.
    - If reachable, `nats_url` defaults to `"nats://localhost:4222"` without asking.
-4. `code_lens_url` is supervisor-managed — not prompted. Supervisor auto-picks a free port on first boot (see `10-configuration.md`).
 
 The CLI writes `.jie/config.yaml` and proceeds with the original command.
 
@@ -35,7 +34,7 @@ Global flags must appear before the subcommand.
 |---|---|
 | 0 | Success. |
 | 1 | Usage error (bad args, team already running, init cancelled by user). |
-| 2 | Infrastructure error (NATS unreachable, artifact store locked, Code-Lens unreachable, connection lost). |
+| 2 | Infrastructure error (NATS unreachable, artifact store locked, connection lost). |
 | 3 | Timeout (prompt response timed out, graceful stop timed out). |
 
 ## NATS Connectivity Pre-Check
@@ -60,23 +59,22 @@ jie
 
 ### Behavior
 
-1. Load config (or init if missing). Run NATS connectivity pre-check. If `code_lens_url` fails a connectivity check, exit code 2.
+1. Load config (or init if missing). Run NATS connectivity pre-check.
 2. Check `.jie/supervisor.pid`:
-   - **No PID file, or PID file exists but process is dead**: start the backend (supervisor + agents + Code-Lens) as described in `jie start`. Then launch the TUI process. The `jie` process tracks that it owns the backend and forwards SIGINT/SIGTERM to both children. When the TUI exits, `jie` stops the backend and exits.
+   - **No PID file, or PID file exists but process is dead**: start the backend (supervisor + agents) as described in `jie start`. Then launch the TUI process. The `jie` process tracks that it owns the backend and forwards SIGINT/SIGTERM to both children. When the TUI exits, `jie` stops the backend and exits.
    - **Live supervisor at PID**: do not start the backend. Launch the TUI only. `jie` does not own the backend; on exit, only the TUI is stopped. The backend continues running.
 3. If `.jie/` directory is not writable → exit 1, message: `"cannot write to .jie/: {reason}"`.
 
 ### Errors
 
 - NATS unreachable → exit 2.
-- Code-Lens unreachable → exit 2.
 - `.jie/` not writable → exit 1.
 
 ---
 
 ## `jie start`
 
-Start the backend only (supervisor + agent processes + Code-Lens). Runs in the foreground, logging major events to stdout.
+Start the backend only (supervisor + agent processes). Runs in the foreground, logging major events to stdout.
 
 ```
 jie start [--json]
@@ -90,12 +88,12 @@ jie start [--json]
 
 ### Behavior
 
-1. Load config (or init if missing). Run NATS connectivity pre-check. Connectivity check for `code_lens_url`. Fail → exit 2.
+1. Load config (or init if missing). Run NATS connectivity pre-check. Fail → exit 2.
 2. Check `.jie/supervisor.pid`:
    - **Live supervisor at PID** → exit 1, message: `"team already running (pid {n})"`.
    - **No PID file or stale PID file** → remove stale file if present, proceed.
 3. Write supervisor PID to `.jie/supervisor.pid`.
-4. Spawn the supervisor process as a child. The supervisor spawns agent bodies and Code-Lens (per `09-deployment.md`).
+4. Spawn the supervisor process as a child. The supervisor spawns agent bodies (per `09-deployment.md`).
 5. The `jie start` process blocks until the supervisor exits, forwarding SIGINT/SIGTERM to the supervisor.
 6. While running, subscribe to domain events on NATS and log major lifecycle events to stdout. The exact events logged are derived from the team blueprint.
 
@@ -108,7 +106,6 @@ jie start [--json]
 ### Errors
 
 - NATS unreachable → exit 2.
-- Code-Lens unreachable → exit 2.
 - Supervisor already running → exit 1.
 - `.jie/` not writable → exit 1.
 

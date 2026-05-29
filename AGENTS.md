@@ -3,6 +3,10 @@
 - Current stage is design Day 1 features.
 - Our goal is to hammer our specs to build a runnable, deployable, usable application.
 
+## Design Principles
+- Constraints liberate, liberties constrain.
+- LLM(agents) only talk to tools and receive prompts
+
 ## Architecture
 - @specs/monorepo-structure.md
 - read `00-overview.md` in the dir you will work with.
@@ -10,7 +14,7 @@
 ### jie-platform
 - agents do not directly know each other, they talk via events on an event bus.
 - a CLI and a TUI
-- provide an interface for `team-blueprint`
+- provide an interface for `team-blueprint`, but agnostic of `jie-team` or any other team shape
 - allow for configuring MCP servers; pluggable tool implementations; provide tool resolution
 - storage interface for: context and memory management ; generic business agnostic artifacts
 
@@ -29,10 +33,12 @@
 - Do not record what you've done if the information is not helpful to make subsequent decisions.
 
 ## Conversation style
+- When I ask a question, answer it before any actions.
+- When I make a decision, reason it thoroughly, then express your opinion. Only when we both agree, we move on.
 - Stick to fact. Our purpose is to build a good software, don't fluff, challenge me if my idea is weak or problematic.
 
 ## Review Actions
 
 - After each group review is done, write a `./handoff.md` for a fresh start with another agent.
-- Review items 1 by 1 with the me, discuss with me for assumptions and consequential decisions. Ask me questions and make decisions together with me. Ensure we are on the same page.
+- Review items 1 by 1 with the me, discuss with me for assumptions and consequential decisions. Ask me questions and make decisions together with me. Before asking me you need to do thorough analysis of the architecture, find out sound options and give a recommendation. Ensure we are on the same page.
 - Update `./review-tracker.md` for the progress. Compact information that has been resolved, we should shift focus on outstanding items.

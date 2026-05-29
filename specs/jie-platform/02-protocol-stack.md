@@ -2,12 +2,12 @@
 
 | Concern | Technology | Notes |
 |---|---|---|
-| Inter-agent messaging | **NATS** (with JetStream) | Events, streaming chunks, observability. JetStream is OSS-included. |
+| Agent loop (LLM thinking + tool use) | **`@earendil-works/pi-agent-core`** | Agent loop, streaming, tool execution, turn management. Model resolution via `@earendil-works/pi-ai`'s `getModel()`. |
+| Inter-agent messaging | **NATS** (core pub/sub) | Events, streaming chunks, observability. |
 | Status tracking | **Artifact store** (SQLite-backed) | Append-only status records per work unit. Latest row is canonical state. Body validates transitions internally before appending. See `04-artifact-store.md`. |
 | Agent → Tool | Direct function call | Tools are plain typed functions. Most tools have no awareness of the bus. The sole exception is the built-in `notify` tool, which is the LLM's only way to publish an event; the body mediates the actual publish. See `05-agent-model.md`. |
-| Tool backing | **MCP** (transparent) | MCP-backed tools are auto-promoted to first-class entries in the soul's tool list at startup. The LLM sees real schemas; MCP-ness is invisible to the soul author and the LLM. |
-| Code-Lens | **MCP server** (`packages/code-lens/`) | Per-team instance, started by supervisor alongside team processes. See `06-code-lens/service.md`. |
-| External integrations | **MCP** (GitHub / JIRA / etc.) | Same machinery as Code-Lens; soul declares `mcp:<server>:<glob>` to import the relevant tools. |
+| Tool backing | **MCP** (transparent) | MCP-backed tools are registered into `ToolRegistry` at startup — the LLM sees real schemas; MCP-ness is invisible. |
+| External integrations | **MCP** (any configured server) | Configured in `.jie/mcp.yaml`. Same machinery for all servers — the platform has no awareness of specific servers. |
 
 ## Prompt Ingress
 

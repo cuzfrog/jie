@@ -11,7 +11,7 @@ supervisor.{team_id}.heartbeat
 agent.{team_id}.{role}.{agent_id}.heartbeat
 ```
 
-- `session_id` — 16-char lowercase hex (uint64). Derived statelessly as `hash64(timestamp_ns || team_id || nonce)`. Not persisted: a collision is astronomically unlikely at this width and is treated as "should not happen". If the leader observes a JetStream rejection consistent with subject reuse, it logs and retries once with a fresh nonce; further failure → the leader publishes a rejection event. The leader mints `session_id` when it records (or rejects) a work unit.
+- `session_id` — 16-char lowercase hex (uint64). Derived statelessly as `hash64(timestamp_ns || team_id || nonce)`. Not persisted: a collision is astronomically unlikely at this width and is treated as "should not happen". On publish collision (identical subject), the leader retries once with a fresh nonce; further failure → the leader publishes a rejection event. The leader mints `session_id` when it records (or rejects) a work unit.
 - `event_type` — dotted name defined by the team blueprint. Agents subscribe to specific subjects (e.g. `session.*.task.recorded`); no wildcard fan-out + client-side filtering.
 - `team.{team_id}.prompt` — prompt ingress subject. The leader agent subscribes to receive user prompts from the TUI or CLI.
 - `team.{team_id}.{agent_id}.prompt` — per-agent prompt ingress. An agent subscribes to its own id-specific subject if it accepts direct user input.
@@ -19,7 +19,30 @@ agent.{team_id}.{role}.{agent_id}.heartbeat
 - `supervisor.{team_id}.heartbeat` — supervisor liveness heartbeat (see `11-monitoring.md`).
 - `agent.{team_id}.{role}.{agent_id}.heartbeat` — per-agent liveness and status heartbeat (see `11-monitoring.md`).
 
-**Event types are not defined by the platform.** The team blueprint specifies what domain events exist, their payloads, and the subscription graph. The platform provides the event bus, envelope, identifier generation, streaming, and durability — the team provides the semantics.
+**Event types are not defined by the platform.** The team blueprint specifies what domain events exist, their payloads, and the subscription graph. The platform provides the event bus, envelope, identifier generation, and streaming — the team provides the semantics.
+
+## EventBus Interface
+
+The transport layer. Implemented over NATS core in v1 (pub/sub only, no JetStream). The interface is generic — `EventBus` does not leak NATS semantics.
+
+```typescript
+interface EventBus {
+  publish(subject: string, payload: object): Promise<void>;
+  subscribe(subject: string, callback: (subject: string, payload: object) => void): Promise<Subscription>;
+}
+
+interface Subscription {
+  unsubscribe(): Promise<void>;
+}
+```
+
+- `publish` — fire-and-forget. Returns a promise that resolves when NATS buffers the message; errors surface asynchronously via the subscription mechanism (body detects disconnect as a missing heartbeat or NATS close event, force-publishes a terminal event, and exits).
+- `subscribe` — push-based callback. Each subscription maps to a NATS subscription. `callback` receives the string subject and the parsed JSON payload (not raw bytes).
+- `unsubscribe` — drains the NATS subscription. Returns when the server acknowledges drain.
+
+All events in v1 are **ephemeral**. No durable streams, no replay, no JetStream. Recovery on agent restart is handled by the supervisor: it restarts the full team, and the leader re-discovers in-flight work units from the artifact store.
+
+Request-reply (e.g. `jie prompt`) is handled at the application layer: the CLI subscribes to `team.{team_id}.response.{reply_id}`, publishes to `team.{team_id}.prompt`, and waits. `EventBus` does not expose a `request` method — it provides only primitives.
 
 ## Identifiers
 
@@ -86,16 +109,9 @@ Each chunk carries the agent's `stream_id` (identifies the LLM invocation) and a
 
 Tunables (`64 chars`, `200 ms`) are configurable per team in platform config.
 
-## Durability
+## Durability (v1)
 
-| Subject pattern | JetStream | Rationale |
-|---|---|---|
-| `session.*.{domain_events}` | **Durable** | Required for replay and post-mortem. Domain events are team-defined; the team blueprint tags which events are durable. |
-| `session.*.agent.stream.*` | **Ephemeral** | High volume; loss is acceptable. |
-| `session.*.agent.tool.*` | **Ephemeral** | Diagnostic; loss is acceptable. |
-| `team.*.prompt` | **Ephemeral** | Prompt ingestion is best-effort; the user can resend. |
-
-> NATS JetStream is included in the open-source `nats-server` (Apache 2.0). No paid tier required.
+All events are ephemeral (NATS core pub/sub). Durable streams and replay are deferred to a later chapter. See `EventBus Interface` above.
 
 ## Subscriptions
 

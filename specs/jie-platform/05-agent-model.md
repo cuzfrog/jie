@@ -2,25 +2,22 @@
 
 ## AgentSoul
 
-A soul declares an agent's behavioral profile. Souls are defined by the team blueprint — the platform does not hardcode any specific roles.
+A soul declares an agent's behavioral profile. Souls are derived from the team blueprint at startup — the platform parses declarative config and constructs souls from it. No roles are hardcoded.
 
 ```typescript
 interface AgentSoul {
-  role:                string;          // team-defined role identifier
-  model:               string;          // '<provider>/<model>', e.g. 'anthropic/claude-sonnet-4'
-  system_prompt:       SystemPrompt;    // assembled at load time
-  tools:               ToolSpec[];      // defined by team blueprint
-  subscriptions:       string[];        // event type strings the agent listens for
-  publishes:           string[];        // event type strings the agent may emit via notify
-}
-
-interface SystemPrompt {
-  identity:    string;          // who you are; from team blueprint
-  tools_guide: string;          // how to use tools; from team blueprint
-  constraints: string;          // hard rules; from team blueprint
-  prose:       string;          // optional free-form system prompt extension
+  role:            string;      // agent identifier (filename stem from TEAM.md directory)
+  model:           string;      // '<provider>/<model>', resolved via @earendil-works/pi-ai's getModel()
+  system_prompt:   string;      // prose body of the agent's .md file
+  tools:           ToolSpec[];  // from frontmatter `tools`, resolved through ToolRegistry
+  notify:          string[];    // from frontmatter `notify` — event_type values this agent may emit
+  subscriptions:   string[];    // auto-computed by platform (agent does not declare this)
 }
 ```
+
+Agents have no knowledge of the event bus and no domain-event subscriptions. They receive prompts and use tools. The leader agent is the sole exception — the platform auto-subscribes it to `session.*.>` and `team.{team_id}.prompt` so it can track pipeline progress and accept user input. Non-leader agents subscribe only to `team.{team_id}.prompt.{role}` for ingress via `delegate`.
+
+The `system_prompt` is the markdown prose from the agent's `.md` file, verbatim. No fragmentation into identity/tools_guide/constraints/prose — it's one block the LLM sees as its system message.
 
 `ToolSpec` is a string in one of three shapes:
 
@@ -40,14 +37,86 @@ interface SystemPrompt {
 
 The LLM sees every tool — built-in or MCP-backed — with its real schema in its tool list. There is no `use_mcp` meta-tool.
 
-## Soul Loading
+### ToolRegistry
 
-1. Load the team blueprint's static profile (`tools`, `subscriptions`, `publishes`, prompt fragments) for this role.
-2. Resolve every entry in `tools`:
-   - Built-in name → look up in registry.
-   - `mcp:<server>:<method-or-glob>` → connect to `<server>` over MCP, fetch tool catalog, register matching tools.
-3. **If any MCP server in the tool list is unreachable, the agent fails to start.** No degraded mode.
-4. Schemas are not cached across team restarts; they are re-fetched every time.
+Central catalog of all tools available to agents. The platform feeds it — built-in tools at startup, MCP server tools on connection. The registry is storage-agnostic: a `Tool` is a `Tool`, regardless of whether its `execute` implementation delegates over MCP or does local work.
+
+```typescript
+interface ToolRegistry {
+  register(name: string, tool: Tool): void;
+  resolve(spec: string): Tool[];    // glob-expands mcp:server:*; specific spec returns one
+  list(): Tool[];
+}
+```
+
+- `register` — adds a tool. Duplicate names replace the prior entry (last writer wins).
+- `resolve` — matches the spec string against registered tool names using anchored shell-style glob (`*`, `?`). Returns matched `Tool` instances. A specific name returns `[Tool]`. A glob returns zero-or-more; zero matches signals "nothing resolved" (the caller decides whether that is a startup failure).
+- `list` — returns all registered tools for introspection.
+
+## Blueprint Loading
+
+The team blueprint lives at `.jie/teams/<team_name>/`:
+
+```
+.jie/teams/default/
+  TEAM.md              # frontmatter: leader
+  dm.md                # agent files — filename is role name
+  researcher.md
+  architect.md
+  planner.md
+  implementer.md
+  reviewer.md
+```
+
+### TEAM.md
+
+Minimal wiring — just declares the leader role:
+
+```yaml
+---
+leader: dm
+---
+```
+
+All `.md` files in the directory besides `TEAM.md` are agent definitions. Filename (stem) is the role identifier.
+
+### Agent .md
+
+Frontmatter declares the mechanical surface; prose body is the system prompt:
+
+```yaml
+---
+model: anthropic/claude-sonnet-4
+tools:
+  - web_search
+  - web_fetch
+  - write_artifact
+  - read_artifact
+notify:
+  - task.researched
+---
+```
+
+**Frontmatter fields:**
+
+| Field | Required | Description |
+|---|---|---|
+| `model` | yes | `<provider>/<model>` string, resolved via `@earendil-works/pi-ai` |
+| `tools` | yes | list of tool spec strings. Resolved through `ToolRegistry` at load time. |
+| `notify` | yes | list of `event_type` values this agent is permitted to emit via `notify`. May be empty. |
+
+**Prose body** → `AgentSoul.system_prompt`. Provided to the LLM as the system message.
+
+### Platform Auto-Wiring
+
+After parsing, the platform constructs `AgentSoul` instances with the following subscriptions determined by role, not declared in config:
+
+| Agent | Auto-subscriptions |
+|---|---|
+| Leader | `team.{team_id}.prompt`, `session.*.>` |
+| All other agents | `team.{team_id}.prompt.{role}` |
+
+The leader is the only agent subscribed to domain events. Pipeline progress tracking is the leader's responsibility, driven by its system prompt prose (which describes the workflow). Other agents wake up only when the leader delegates to them.
 
 ## Tool
 
@@ -64,24 +133,31 @@ Tools are plain typed functions. With one exception (the built-in `notify` tool,
 
 ### Built-in Tool: `notify`
 
-`notify` is a built-in tool registered automatically on every body. It is the LLM's sole means of publishing an event and is how an agent signals that its turn is complete.
+`notify` is auto-registered on every agent body. It is the LLM's sole means of publishing an event and is how an agent signals that its turn is complete.
 
 ```typescript
-// Schema seen by the LLM — body enriches with context fields before publishing.
 notify(input: { event_type: string; payload: Record<string, unknown> }): { ok: true }
 ```
 
 Behavior inside the body:
 
-1. Validate `event_type ∈ soul.publishes`. Otherwise return a tool-error: `not_in_publishes`.
-2. Enrich the LLM-supplied payload with context fields (from `ExecutionContext`):
-   - `work_id` — the current work-unit identifier.
-   - Other team-defined context fields (e.g. `iteration`) as specified by the team blueprint.
-3. Validate the enriched payload against the team-provided schema for `event_type`. Otherwise return a tool-error: `invalid_payload`.
-4. Run the status guard (see Status Tracking below). On illegal transition, return a tool-error: `illegal_transition`.
-5. On success, the body appends a new status row, publishes `session.{session_id}.{event_type}`, returns `{ ok: true }` to the LLM, and **ends the turn loop** for the current inbound event. Any subsequent LLM tool calls in the same response are dropped with a warning log.
+1. Validate `event_type ∈ soul.notify`. Otherwise return a tool-error: `not_in_notify_list`.
+2. Enrich the LLM-supplied payload with context fields (from `ExecutionContext`): `work_id`, `session_id`.
+3. Append a status row via `artifact_store.append_status(work_id, event_type, payload)`.
+4. Publish `session.{session_id}.{event_type}` on the event bus.
+5. Return `{ ok: true }` to the LLM and **end the turn loop** for the current inbound event. Any subsequent LLM tool calls in the same response are dropped with a warning log.
 
-`notify` is the only tool whose `execute` touches the bus, and even then only via the body that owns it.
+No transition validation in v1 — status rows are append-only with the latest row per `work_id` as canonical state. The leader agent interprets status progression (via its system prompt).
+
+### Built-in Tool: `delegate`
+
+Auto-registered on the **leader only**. The leader uses `delegate` to hand work to another agent.
+
+```typescript
+delegate(input: { prompt: string; role: string; work_id?: string }): void
+```
+
+The body publishes a `PromptMessage` envelope to `team.{team_id}.prompt.{role}`. The target agent's body receives it, injects it as a prompt turn into the LLM context, and begins its event loop. `delegate` is fire-and-forget — it does not block on the target agent's completion. The leader tracks completion by receiving the target agent's `notify` event via its `session.*.>` subscription.
 
 ### Built-in Tool: `bash`
 
@@ -126,7 +202,7 @@ Every tool call is observable on the event bus. The body emits two events per to
 
 Input and output are JSON-serialized. If the serialized string exceeds **4 KiB**, it is middle-truncated: the first and last `(4096 - MARKER_LEN) / 2` chars are preserved, with a marker `...[N chars truncated]...` in between.
 
-Both events are **ephemeral** on JetStream. They are **observer-only** — no agent role subscribes to them. The TUI and diagnostic tooling consume them.
+Both events are **ephemeral** (NATS core pub/sub). They are **observer-only** — no agent subscribes to them. The TUI and diagnostic tooling consume them.
 
 ## AgentBody
 
@@ -134,6 +210,7 @@ Both events are **ephemeral** on JetStream. They are **observer-only** — no ag
 class AgentBody {
   readonly id:                 string;          // process instance id: {role}-{8-hex}
   readonly soul:               AgentSoul;       // immutable after construction
+  readonly is_leader:          boolean;         // true if this role is the TEAM.md leader
   readonly error_turn_budget:  number;          // per-loop error tolerance; default 30
   readonly total_turn_budget:  number;          // per-loop hard turn cap; default 200
 
@@ -151,36 +228,23 @@ class AgentBody {
 - Compaction is owned by the `MemoryStore`, not by the body. See `08-memory.md`.
 - The body is the **only** publisher of events on the bus. The LLM expresses publication intent through `notify`; the body validates and executes the publish.
 
-### Event Loop and Explicit Emission
+### Event Loop
+
+Agents wake up on a prompt — either a user prompt (leader only) or a delegated prompt from the leader (non-leader agents).
 
 While running:
 
-1. Receive event matching one of `soul.subscriptions` from NATS.
-2. If currently processing a prior event, append to a bounded FIFO queue (cap 8). On overflow, the body **asserts and exits**: under a serial pipeline the queue should hold at most one event, so overflow is a bug. The supervisor restarts the body; durable domain events replay via JetStream. Drop-oldest is **not** an option.
-3. When idle, dequeue the next event and process it.
+1. Receive a `PromptMessage` from the agent's prompt ingress subject (`team.{team_id}.prompt` or `team.{team_id}.prompt.{role}`).
+2. If currently processing a prior prompt, append to a bounded FIFO queue (cap 8). On overflow, the body **asserts and exits**. The supervisor restarts the body.
+3. When idle, dequeue the next prompt and process it.
 
-Processing an event = one LLM-driven loop of (think → optionally call tools → think → ...) bounded by the budgets below. The LLM signals completion by calling `notify(event_type, payload)`. On a successful `notify`, the body publishes the event and the loop ends.
+Processing a prompt = one LLM-driven loop of (think → optionally call tools → think → ...) bounded by the budgets below. The LLM signals completion by calling `notify(event_type, payload)`. On a successful `notify`, the body publishes the event and the loop ends.
 
 If the LLM ends its response (no further tool calls, no `notify`), the body grants exactly **one grace turn**: it sends a system-level reminder to the LLM ("your turn ended without calling `notify`; emit now or explain why you cannot") and resumes the loop. If the next response also ends without a successful `notify`, the body force-publishes a terminal event with `error = "missing_emission"`. The grace turn does not decrement `error_turn_budget` but does decrement `total_turn_budget` by one.
 
-### Status Tracking
-
-Per-work-unit progress is recorded in the artifact store via `append_status` and `read_status`. The team blueprint defines the status schema, the allowed transitions, and which role is permitted to advance to which status.
-
-The artifact store exposes status rows as an append-only log. The latest row per `work_id` (by `created_at`) is canonical.
-
-When the LLM calls `notify`, the body:
-
-- Reads the current status via `read_status(work_id)`.
-- Validates the requested transition against the team-provided transition table.
-- On legal transition: appends a new status row via `append_status` and publishes the event.
-- On illegal transition: the append is **not** performed and `notify` returns a tool-error (`illegal_transition`). The LLM may retry with a different `event_type`.
-
-The team blueprint defines which statuses are terminal (work unit complete, no re-entry) and which are re-enterable.
-
 ### Concurrency Model
 
-Pipeline seriality is defined by the team blueprint's subscription graph. Under a linear pipeline (each role subscribes to the previous role's emission), only one agent is processing at a time per work unit. There is no team-wide distributed latch.
+Pipeline seriality is enforced by the leader: it delegates one agent at a time and waits for that agent's `notify` event before delegating the next. There is no distributed latch — the leader's own event loop is the gate. The leader's system prompt describes the pipeline order.
 
 ### Failure Handling
 
