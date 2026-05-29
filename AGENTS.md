@@ -10,6 +10,7 @@
 ## Architecture
 - @specs/monorepo-structure.md
 - read `00-overview.md` in the dir you will work with.
+- architectural decision records are in `./addrs/`
 
 ### jie-platform
 - agents do not directly know each other, they talk via events on an event bus.
@@ -39,6 +40,20 @@
 
 ## Review Actions
 
-- After each group review is done, write a `./handoff.md` for a fresh start with another agent.
+- After each group review is done, write a simple and conscise `./handoff.md` for a fresh start with another agent. 
+- When an important decision is done, write our architectural design decision to dir `./addrs/<N>-<name>.md`, only record those that are consequential to software architecture, keep simple and conscise.
 - Review items 1 by 1 with the me, discuss with me for assumptions and consequential decisions. Ask me questions and make decisions together with me. Before asking me you need to do thorough analysis of the architecture, find out sound options and give a recommendation. Ensure we are on the same page.
 - Update `./review-tracker.md` for the progress. Compact information that has been resolved, we should shift focus on outstanding items.
+
+### Handoff format
+```
+# Handoff
+
+## Status
+
+## Next
+
+## Your role
+
+## User conversation style
+```
