@@ -1,122 +1,126 @@
 # Event System
 
-## Subject Schema
+Jie's EventBus is the in-process pub/sub backbone. pi-agent's internal events (see `pi-agent-api-reference.md`) are bridged to these subjects by `AgentBody`.
 
-```
-session.{session_id}.{event_type}
-team.{team_id}.prompt
-team.{team_id}.{agent_id}.prompt
-team.{team_id}.response.{reply_id}
-supervisor.{team_id}.heartbeat
-agent.{team_id}.{role}.{agent_id}.heartbeat
-```
+## Transport
 
-- `session_id` — 16-char lowercase hex (uint64). Derived statelessly as `hash64(timestamp_ns || team_id || nonce)`. Not persisted: a collision is astronomically unlikely at this width and is treated as "should not happen". On publish collision (identical subject), the leader retries once with a fresh nonce; further failure → the leader publishes a rejection event. The leader mints `session_id` when it records (or rejects) a work unit.
-- `event_type` — dotted name defined by the team blueprint. Agents subscribe to specific subjects (e.g. `session.*.task.recorded`); no wildcard fan-out + client-side filtering.
-- `team.{team_id}.prompt` — prompt ingress subject. The leader agent subscribes to receive user prompts from the TUI or CLI.
-- `team.{team_id}.{agent_id}.prompt` — per-agent prompt ingress. An agent subscribes to its own id-specific subject if it accepts direct user input.
-- `team.{team_id}.response.{reply_id}` — leader response channel for the `jie prompt` request-response pattern (see `07-ui/messaging-protocol.md`).
-- `supervisor.{team_id}.heartbeat` — supervisor liveness heartbeat (see `11-monitoring.md`).
-- `agent.{team_id}.{role}.{agent_id}.heartbeat` — per-agent liveness and status heartbeat (see `11-monitoring.md`).
+The `EventBus` interface has two implementations:
 
-**Event types are not defined by the platform.** The team blueprint specifies what domain events exist, their payloads, and the subscription graph. The platform provides the event bus, envelope, identifier generation, and streaming — the team provides the semantics.
+| Impl | Used when | Characteristics |
+|---|---|---|
+| **In-process** (v1 default) | Default — agents and TUI share one OS process | Synchronous callback dispatch, no serialization overhead, no network dependency. |
+| **NATS** (future) | Multi-process deployments, distributed agents | Network transport, durable streams (JetStream), multi-team isolation. |
+
+The in-process implementation is the v1 default. NATS is a pluggable transport for Day 2 — the `EventBus` interface is the same, only the constructor changes.
 
 ## EventBus Interface
 
-The transport layer. Implemented over NATS core in v1 (pub/sub only, no JetStream). The interface is generic — `EventBus` does not leak NATS semantics.
-
 ```typescript
 interface EventBus {
-  publish(subject: string, payload: object): Promise<void>;
-  subscribe(subject: string, callback: (subject: string, payload: object) => void): Promise<Subscription>;
-}
-
-interface Subscription {
-  unsubscribe(): Promise<void>;
+  publish(subject: string, payload: object): void;
+  subscribe(subject: string, callback: (subject: string, payload: object) => void): () => void;
 }
 ```
 
-- `publish` — fire-and-forget. Returns a promise that resolves when NATS buffers the message; errors surface asynchronously via the subscription mechanism (body detects disconnect as a missing heartbeat or NATS close event, force-publishes a terminal event, and exits).
-- `subscribe` — push-based callback. Each subscription maps to a NATS subscription. `callback` receives the string subject and the parsed JSON payload (not raw bytes).
-- `unsubscribe` — drains the NATS subscription. Returns when the server acknowledges drain.
+- `publish` — fire-and-forget. Synchronous callback dispatch in-process; async flush in NATS mode.
+- `subscribe` — returns an unsubscribe function. Callbacks are invoked in publish order within a subject.
+- No `request` method — request-reply is an application-layer concern built on pub/sub.
 
-All events in v1 are **ephemeral**. No durable streams, no replay, no JetStream. Recovery on agent restart is handled by the supervisor: it restarts the full team, and the leader re-discovers in-flight work units from the artifact store.
+## Subject Schema
 
-Request-reply (e.g. `jie prompt`) is handled at the application layer: the CLI subscribes to `team.{team_id}.response.{reply_id}`, publishes to `team.{team_id}.prompt`, and waits. `EventBus` does not expose a `request` method — it provides only primitives.
+```
+leader.prompt                        — prompt ingress from TUI or -p mode
+{agent_key}                          — direct-addressing channel (every agent auto-subscribes to its own)
+{domain_topic}                       — team-defined domain events (e.g. task.recorded, task.researched)
+agent.stream.chunk                   — batched LLM output (all agents)
+agent.stream.end                     — LLM response complete
+agent.tool.call                      — tool invocation about to execute
+agent.tool.result                    — tool execution completed
+agent.idle                           — agent entered idle state (replaces heartbeat)
+```
 
-## Identifiers
+- `agent_key` — persistent agent identity: `{role}-{N}` (e.g. `leader-1`, `researcher-1`). Every agent auto-subscribes to its own `agent_key` at startup. Used for direct inter-agent addressing via `notify`.
+- `domain_topic` — dotted string defined by the team blueprint (e.g. `task.recorded`, `work.researched`, `task.completed`). Agents subscribe via `subscribe:` in their `.md` frontmatter. The platform is agnostic of topic semantics.
+- The leader additionally auto-subscribes to `leader.prompt` for user input ingress.
 
-| Field | Type | Generation |
-|---|---|---|
-| `session_id` | 16-hex (uint64) | Stateless hash of `(timestamp_ns, team_id, nonce)`. Minted by the leader agent. |
-| `event_id` | 8-hex (uint32) | Stateless hash of `(session_id, agent_id, in-memory counter, hr_time_ns)`. The counter is process-local and lost on restart; that is acceptable because events are transient. |
-| `agent_id` | string, `{role}-{8-hex}`, e.g. `researcher-a1b2c3d4` | Minted fresh on every process start. 8 hex chars from a random uint32. Collision is not a practical concern within a single team (4B values per role). An agent that restarts gets a new `agent_id`. |
-| `stream_id` | uint32 | Per-agent monotonic counter, in-memory. Tags one LLM invocation. Resets on agent restart. uint32 is wide enough that wraparound is not a practical concern within an agent's lifetime; consumers nevertheless demux on the composite key `(agent_id, stream_id)` because `stream_id` is not unique across agents. |
-| `tool_call_id` | uint32 | Per-agent monotonic counter, in-memory, starting at 0. Assigns a unique id to each tool call within the agent's lifetime. Tags both `agent.tool.call` and its matching `agent.tool.result`. Resets on agent restart. |
+No `team_id` prefix — one process runs one team. Multi-team isolation is a Day 2 concern.
 
-No identifier is persisted in the artifact store. The artifact store keys are its own concern (see `04-artifact-store.md`).
+No `session_id` in subjects — one process run is one session. `session_id` is internal to AgentBody and the Memory subsystem (see `08-memory.md`) where it partitions durable conversation history per process run. It is not published on the event bus.
 
 ## Event Envelope
 
 ```typescript
 interface AgentEvent<T extends string = string> {
-  event_id:    string;     // 8-hex
-  session_id:  string;     // 16-hex
+  version:     1;           // envelope format version
   event_type:  T;
-  agent_role:  string;     // team-defined role identifier
-  agent_id:    string;     // process instance id (see Identifiers table)
-  timestamp:   string;     // ISO 8601
+  agent_role:  string;      // team-defined role identifier
+  agent_key:   string;      // persistent slot identity: {role}-{N}
+  timestamp:   string;      // ISO 8601
   payload:     Record<string, unknown>;
 }
 ```
 
-`payload` is a discriminated union keyed on `event_type`, defined by the team blueprint. The platform does not prescribe the shape of domain events. The body validates the payload against the team-provided schema for the event type.
+`payload` is a discriminated union keyed on `event_type`. The platform defines infrastructure event payloads; the team blueprint defines domain event payloads.
 
-The platform defines only infrastructure event types:
-
-```typescript
-// Platform-level event types — always available
-type PlatformEventType =
-  | 'agent.stream.chunk'   // Batched LLM output (see Streaming below)
-  | 'agent.stream.end'     // LLM response complete
-  | 'agent.tool.call'      // Tool invocation about to execute (see Tool Telemetry)
-  | 'agent.tool.result';   // Tool execution completed (see Tool Telemetry)
-```
-
-Platform event payloads:
+### Platform Event Payloads
 
 ```typescript
 type PlatformEventPayload<T extends PlatformEventType> =
-  T extends 'agent.stream.chunk'  ? { stream_id: number; seq: number; text: string } :
-  T extends 'agent.stream.end'    ? { stream_id: number; total_chunks: number } :
-  T extends 'agent.tool.call'     ? { tool_call_id: number; name: string; input: string; input_truncated: boolean } :
-  T extends 'agent.tool.result'   ? { tool_call_id: number; name: string; output: string; output_truncated: boolean; duration_ms: number; error: string | null } :
+  T extends 'leader.prompt'        ? { prompt: string } :
+  T extends 'agent.stream.chunk'   ? { stream_id: number; seq: number; text: string } :
+  T extends 'agent.stream.end'     ? { stream_id: number; total_chunks: number } :
+  T extends 'agent.tool.call'      ? { tool_call_id: number; name: string; input: string; input_truncated: boolean } :
+  T extends 'agent.tool.result'    ? { tool_call_id: number; name: string; output: string | null; output_truncated: boolean; duration_ms: number; error: string | null } :
+  T extends 'agent.idle'           ? { } :
+  // Topic-published events carry domain-defined payloads:
+  T extends string                 ? { prompt: string; source: string } :
   never;
+
+type PlatformEventType =
+  | 'leader.prompt'
+  | 'agent.stream.chunk'
+  | 'agent.stream.end'
+  | 'agent.tool.call'
+  | 'agent.tool.result'
+  | 'agent.idle';
 ```
 
-> Domain event types (e.g. `task.recorded`, `task.review_passed`) are defined by the team blueprint — see `jie-team/05-event-types.md`.
+> Domain event types and payloads are defined by the team blueprint. For the built-in dev team, see `jie-team/05-event-types.md`.
 
 ## Streaming
 
-LLM output is **batched**, not per-token, to keep bus throughput sane.
+LLM output originates from pi-agent's `message_update` events (per-token deltas). Jie buffers and publishes `agent.stream.chunk` on its EventBus:
 
-`AgentBody` accumulates tokens from the LLM stream into a buffer and flushes an `agent.stream.chunk` event when **either** condition fires first:
+- **Source**: pi-agent's `agent.subscribe(listener)` receives `message_update` events. Each carries an `assistantMessageEvent` with text/thinking/tool_call delta content.
+- **Buffering**: Jie accumulates delta text. Flush when buffer reaches **64 characters** or **200 ms** elapsed since first buffered token.
+- **Publish**: `agent.stream.chunk` — `{ stream_id, seq, text }`. `stream_id` is a per-LLM-invocation counter; `seq` is the chunk ordinal within that stream.
+- **Completion**: On `message_end` (assistant response finalized), flush remaining buffer, publish final chunk, then publish `agent.stream.end` with `{ stream_id, total_chunks }`.
 
-- buffer reaches **64 characters**, or
-- **200 ms** has elapsed since the first token in the current buffer.
+Tunables (`stream_chunk_size`, `stream_flush_ms`) are in `10-configuration.md`. The TUI and `-p` mode consume these events. See `05-agent-model.md` pi-agent Integration Contract for the full event bridging table.
 
-Each chunk carries the agent's `stream_id` (identifies the LLM invocation) and a per-stream `seq` number (chunk ordinal). `agent.stream.end` marks completion and reports `total_chunks` for integrity checking.
+## Tool Telemetry
 
-Tunables (`64 chars`, `200 ms`) are configurable per team in platform config.
+Every tool call emits two events:
 
-## Durability (v1)
+- `agent.tool.call` — before execution. `input` is JSON-serialized; truncated at 4 KiB with marker.
+- `agent.tool.result` — after execution. `output` is JSON-serialized; truncated at 4 KiB. `error` is null on success.
 
-All events are ephemeral (NATS core pub/sub). Durable streams and replay are deferred to a later chapter. See `EventBus Interface` above.
+`tool_call_id` is a per-agent uint32 monotonic counter starting at 0.
 
-## Subscriptions
+## Agent Idle
 
-Agents subscribe to **specific** subjects derived from `soul.subscriptions`. The team blueprint defines the subscription graph — which roles subscribe to which events.
+When an agent transitions from `busy` to `idle` (work unit complete, terminal event published, or error recovery complete), it publishes `agent.idle`. This is the signal for observers (TUI, `-p` mode) that the agent is ready for new work. Replaces the heartbeat-based discovery model.
 
-No central router. No agent is aware of other agents by identity. How any observer (e.g. TUI) consumes these events is its own concern.
+## Inter-Agent Messaging
 
-Tool telemetry events (`agent.tool.call`, `agent.tool.result`) are **observer-only**: no agent role subscribes to them. They exist for diagnostics, debugging, and TUI tool panels.
+The `notify` tool (see `05-agent-model.md`) is the sole inter-agent communication channel. It publishes `{ topic, prompt, source }` on the bus to `{topic}`. Every agent auto-subscribes to its own `{agent_key}`, enabling direct addressing. Domain topic subscriptions are declared in the agent's `.md` frontmatter `subscribe:` field.
+
+The event bus filters self-receipt: an agent does not receive events it published on topics it subscribes to. This prevents notification loops.
+
+The `notify` tool does not end the LLM's turn — the LLM decides when the turn is complete.
+
+## In-Process Implementation
+
+The default `InProcessEventBus` is a `Map<string, Set<Callback>>`. No serialization, no network. Callbacks are invoked synchronously in subscription order. Unsubscribe removes the callback from the set.
+
+A future `NatsEventBus` implements the same interface over NATS core pub/sub with JSON serialization. No JetStream in v1. Agent restart and replay are Day 2 concerns.

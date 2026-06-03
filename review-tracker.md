@@ -1,104 +1,134 @@
-# Review Tracker — jie-platform Specs
+# Review Tracker — jie-platform Implementer Gaps
 
-## Group A: Missing Core Interfaces (Blockers)
-
-Interfaces referenced throughout the specs but never defined. These must exist before implementation can start.
-
-| # | Issue | Evidence | Status |
-|---|---|---|---|
-| A1 | **EventBus interface undefined.** `AgentBody`, TUI, CLI, and Supervisor all depend on it. What methods: `publish(subject, data)`, `subscribe(subject, callback)`, `request(subject, data, timeout)`? How does it wrap NATS vs JetStream? What is the error model? | `05-agent-model.md:140`, `03-event-system.md`, `ui/tui.md`, `ui/messaging-protocol.md` | resolved |
-| A2 | **ToolRegistry interface undefined.** Glossary defines "Tool Registry" as the resolver for `ToolSpec` strings into `Tool` instances. No interface or implementation spec exists. What does `resolve(spec: string): Tool` look like? How are MCP-backed tools registered into it? | `00-overview.md:20`, `05-agent-model.md:46` | resolved |
-| A3 | **LLM Provider abstraction undefined.** Agents declare `model: 'anthropic/claude-sonnet-4'`. How is the provider string parsed and dispatched? Where are API keys configured? What is the retry/rate-limit model? The LLM call site in the event loop is a black box. | `05-agent-model.md:10,75-82`, `08-memory.md:125` | resolved |
-| A4 | **Team Blueprint loading/discovery unspecified.** This is THE boundary between platform and team. The platform "runs the blueprint" but how? Does the supervisor load a TypeScript module from `packages/jie-team/`? Does config point to a blueprint path? What is the TypeScript interface a blueprint must export? | `09-deployment.md:41`, `jie-team/00-overview.md:14` | resolved |
-| A5 | **MCP Client connection management unspecified.** `mcp:<server>:<method>` syntax is described, but how does the platform connect to MCP servers? stdio subprocess? HTTP/SSE? Where are server addresses configured? Only Code-Lens has a URL; GitHub, JIRA, and other servers have no connection config. | `05-agent-model.md:48`, `02-protocol-stack.md:8-10`, `10-configuration.md` | resolved |
+> Goal: Identify every gap that would block an implementer from writing working code.
+> Status: `open` = unresolved; `resolved` = decided and reflected in specs.
 
 ---
 
-## Group B: Configuration and Environment Gaps
+## Group A: Spec Conflicts — RESOLVED
 
-| # | Issue | Evidence | Status |
+Direct contradictions between files or within the same file that would crash at implement time.
+
+| # | Files | Issue | Status |
 |---|---|---|---|
-| B1 | **LLM API keys / secret management not specified.** Models need API keys. Where do they come from? Environment variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`)? A `.env` file? A secrets section in config? No spec addresses this. | Entire model spec | open |
-| B2 | **Non-Code-Lens MCP servers not configurable.** `jie-team/01-role-definitions.md` declares `mcp:github:*` and `mcp:jira:*` tools. The platform config only has `code_lens_url`. Where are GitHub and JIRA MCP server addresses and credentials configured? | `10-configuration.md`, `jie-team/01-role-definitions.md:23-24` | open |
-| B3 | **Memory auto-flush interval not in config schema.** `08-memory.md:108` says "every 10 turns (configurable)." `10-configuration.md` has no such field. | `08-memory.md:108`, `10-configuration.md` | open |
-| B4 | **Team blueprint selection mechanism missing.** If multiple blueprints exist (built-in dev team, custom teams), how does the platform know which to load? Is there a `team_blueprint` field in config? Or does `team_id` map to a blueprint? | `09-deployment.md`, `10-configuration.md` | open |
-| B5 | **Process environment and shell inheritance unspecified.** Agent bodies exec `bash` with "the workspace's environment." What environment variables are set on agent processes? Are they inherited from the supervisor? What about `PATH` for finding tools? | `05-agent-model.md:104`, `09-deployment.md` | open |
+| A1 | `04-artifact-store.md:13` vs `ui/tui.md:26,62` | `ArtifactStore.list(prefix: string)` vs TUI calls `list({ work_id })` — signature mismatch | resolved — TUI fixed to call `list(prefix)` per store interface |
+| A2 | `03-event-system.md:72` vs `05-agent-model.md:229` | `agent.tool.result.output`: one says always `string`, the other says `null` on throw | resolved — changed event system to `string | null` (tool throws → null output) |
+| A3 | `05-agent-model.md:179` vs examples lines 105,191-192 | `notify(input: { topic, prompt })` defined as object param, but all usage examples pass positional args | resolved — added note: examples use shorthand; actual LLM call uses object per TypeBox schema |
+| A4 | `05-agent-model.md:321` vs `05-agent-model.md:388` | Compaction `enabled`: integration table says `true`, prose says `false` for v1 | resolved — table fixed to `enabled: false` (Group K decision) |
+| A5 | `00-overview.md:13` vs `ui/tui.md:71-72` | `agent_key` described as "persistent" but TUI says "gets a new `agent_key` on restart" | resolved — v1 has no mid-process agent restart; keys stable across all runs |
+| A6 | `08-memory.md:44` vs `08-memory.md:44-45` | `session_id`: "mints a new `session_id`" on every start vs "restart within same process run (same session_id)" | resolved — removed "restart within same process run" (never happens in v1); always new session |
+| A7 | `ui/tui.md:3` vs `monorepo-structure.md:14` | TUI path: `packages/tui/` vs actual package `packages/jie-tui/` | resolved — fixed to `packages/jie-tui/` |
+| A8 | `ui/tui.md:8-9` vs `monorepo-structure.md:43` | TUI imports `@jie-platform/core` but actual package name is `@cuzfrog/jie-platform` | resolved — imports fixed to `@cuzfrog/jie-platform` |
+| A9 | `03-event-system.md:74` vs `05-agent-model.md:275,11-monitoring.md:28,34` | Domain event payload type lacks `error` field, but specs reference one | resolved — monitoring spec fixed; error is in `prompt` string, not separate field |
 
 ---
 
-## Group C: Cross-Reference and Structure Issues
+## Group B: Undefined pi-agent Types — RESOLVED
 
-| # | Issue | Evidence | Status |
+Types from `@earendil-works/pi-agent-core` used throughout the spec but never defined or linked.
+
+| # | Files | Issue | Status |
 |---|---|---|---|
-| C1 | **Broken ref: `06-code-lens/service.md`.** Actual path is `../code-lens/service.md`. Code-Lens specs live outside jie-platform. | `02-protocol-stack.md:9` | open |
-| C2 | **Broken ref: `07-ui/messaging-protocol.md`.** Actual path is `ui/messaging-protocol.md` (no `07-` prefix). | `02-protocol-stack.md:20`, `03-event-system.md:18` | open |
-| C3 | **Broken ref: `07-ui/cli.md`.** Actual path is `ui/cli.md`. | `09-deployment.md:75` | open |
-| C4 | **Broken ref: `14-configuration.md`.** Actual path is `10-configuration.md`. | `12-installation.md:111` | open |
-| C5 | **Broken ref: `15-monitoring.md`.** Actual path is `11-monitoring.md`. | `12-installation.md:142` | open |
-| C6 | **Gaps in file numbering.** No `01`, `06`, `07`, `13`–`17` prefixed files. `ui/` has no numeric prefix. Intentional or accidental? Confusing for navigation. | Directory listing | open |
+| B1 | `05-agent-model.md:12,22-28` | `ToolSpec` — described in prose table but no TypeScript `type ToolSpec = string` or parsing function | resolved — ToolSpec = string union; parse/validate deferred to implementation |
+| B2 | `05-agent-model.md:328-398`, `08-memory.md:15,24,78` | `AgentMessage` — pi-agent type used in `persist()`, `restore()`, adaptation layer; never defined | resolved — documented in pi-agent-api-reference.md |
+| B3 | `08-memory.md:37,77` | `CompactionSummaryMessage` — used to detect compaction; never defined | resolved — documented in pi-agent-api-reference.md |
+| B4 | `05-agent-model.md:323` | `AgentLoopTurnUpdate` — pi-agent type used in `prepareNextTurn`; never defined | resolved — documented in pi-agent-api-reference.md |
+| B5 | `05-agent-model.md:134,159,332-340` | `AgentTool` — pi-agent target type for tool adaptation; table maps fields but never shows the interface | resolved — documented in pi-agent-api-reference.md |
+| B6 | `05-agent-model.md:239,247` | `Agent` class — `agent.subscribe()`, `agent.prompt()`, `agent.continue()`, `agent.steer()`, `agent.state` used but API never documented | resolved — documented in pi-agent-api-reference.md |
+| B7 | `05-agent-model.md:320,388` | `transformContext` hook — pi-agent feature; signature not shown | resolved — documented in pi-agent-api-reference.md |
+| B8 | `05-agent-model.md:322-323` | `convertToLlm`, `prepareNextTurn` — pi-agent options; signatures and contracts not documented | resolved — documented in pi-agent-api-reference.md |
+| B9 | `05-agent-model.md:386` | `agent.state` shape — `state.tools`, `state.systemPrompt`, `state.model`, `state.messages` referenced; shape and mutability undocumented | resolved — AgentState documented in pi-agent-api-reference.md |
+| B10 | `05-agent-model.md:141` | `TSchema` — described as TypeBox, but no import path or exact type | resolved — TypeBox `TSchema` from `@earendil-works/pi-ai`; Jie tools use it directly via pi-agent's type system |
+| B11 | `05-agent-model.md:325` | `steeringMode: "all"` — meaning and valid values never defined | resolved — QueueMode documented in pi-agent-api-reference.md |
+| B12 | `05-agent-model.md:326` | `toolExecution: "sequential"` — meaning and valid values never defined | resolved — ToolExecutionMode documented in pi-agent-api-reference.md |
+
+**Resolved:** Created `specs/jie-platform/pi-agent-api-reference.md` with comprehensive API documentation. Cross-referenced in `05-agent-model.md`, `08-memory.md`, `03-event-system.md`.
 
 ---
 
-## Group D: Protocol and Message Inconsistencies
+## Group C: Tool Implementation Gaps
 
-| # | Issue | Evidence | Status |
+Tools declared but underspecified to the point of being un-implementable.
+
+| # | Files | Issue | Status |
 |---|---|---|---|
-| D1 | **TUI prompt payload vs PromptMessage envelope mismatch.** `tui.md:27` says the TUI publishes `{ prompt: string, work_id?: string }`. `messaging-protocol.md:22-29` defines `PromptMessage` with `prompt_id`, `content`, `source`, `reply_id`, `timestamp`. `jie-team/01-role-definitions.md:42` says DM receives `{ prompt: string, task_id?: string }`. Three different payloads for the same subject. | `ui/tui.md:27`, `ui/messaging-protocol.md:22-29`, `jie-team/01-role-definitions.md:42` | open |
-| D2 | **`code_lens_url` defaults contradict.** `10-configuration.md:50` says "auto-assigned" (supervisor probes upward from 9001). `12-installation.md:98` says "defaults to `http://localhost:9001`" and is written as-is. `09-deployment.md:40` says "probes ports starting at 9001 upward." Clarify: is the default static 9001, or always probed? | `10-configuration.md:50`, `12-installation.md:98`, `09-deployment.md:40` | open |
-| D3 | **NATS JetStream "enabled by default" statement is incorrect.** `12-installation.md:133` says "v2.10+ enables JetStream by default with an in-memory store." This is false — JetStream requires `-js` flag or `jetstream {}` config block. | `12-installation.md:133` | open |
-| D4 | **`code_lens_url` presence in default config inconsistent.** `10-configuration.md:28` shows it as commented-out (optional). `12-installation.md:107` shows it as present in the resulting config with value `"http://localhost:9001"`. Which is the v1 truth? | `10-configuration.md:28`, `12-installation.md:104-108` | open |
+| C1 | `05-agent-model.md:218` | `WebSearchResult` type — referenced but never defined (what fields?) | open |
+| C2 | `05-agent-model.md:218-219` | `web_search` — no backend specified (DuckDuckGo? Google API? SerpAPI?). No auth, rate limiting, or result format | open |
+| C3 | `05-agent-model.md:220` | `web_fetch` — no HTTP client policy (follow redirects? max depth? UA string? TLS validation? URL allowlist? max response size?) | open |
+| C4 | `04-artifact-store.md:36-37` | `write_artifact`/`read_artifact` — no TypeBox schema, no LLM-facing description, no return type docs (unlike `notify`, `bash`, `web_search`, `web_fetch`) | open |
+| C5 | `05-agent-model.md:213` | `bash` truncation: "stdout + stderr combined truncated to 64 KiB" — but `BashResult` has separate `stdout` and `stderr`. How to split truncated combined output back? Where does the truncation note appear? | open |
 
 ---
 
-## Group E: Fault Tolerance and Concurrency
+## Group D: Core Mechanics "How?"
 
-| # | Issue | Evidence | Status |
+Behavior described in prose but implementation mechanism unspecified.
+
+| # | Files | Issue | Status |
 |---|---|---|---|
-| E1 | **NATS disconnect → cannot publish terminal event (circular).** `05-agent-model.md:197` says on NATS disconnect, the body force-publishes a terminal event with `error = "nats_disconnect"` and exits. But if NATS is disconnected, the publish will fail. What actually happens? | `05-agent-model.md:196-197` | open |
-| E2 | **MCP unreachable → terminal event publish may fail.** `05-agent-model.md:194` says the body force-publishes a terminal event on MCP server unreachable. If the failure was caused by a systemic issue (e.g. network partition), the publish may also fail. No fallback described. | `05-agent-model.md:194` | open |
-| E3 | **SQLite concurrency not addressed.** Multiple agent body processes (N per team) access a single `artifacts.db` file. SQLite supports concurrent reads but single-writer. What locking mode (WAL?)? What is the busy timeout? What happens on write conflict? | `04-artifact-store.md:37`, `09-deployment.md:30` | open |
-| E4 | **Stream ID starting value and wraparound unspecified.** `stream_id` is a per-agent uint32 monotonic counter. Starting at 0? After wraparound at 2^32, do consumers detect the reset? Consumers demux on `(agent_id, stream_id)` but `agent_id` changes on restart — is restart the only valid reset? | `03-event-system.md:31` | open |
-| E5 | **Event loop overflow: "asserts and exits" is ambiguous.** Does the body call `process.exit(1)`? Publish a terminal event first? Log something? The supervisor restarts it, but the spec doesn't say whether a terminal event is emitted. | `05-agent-model.md:159` | open |
-| E6 | **Agent restart — agent_id changes, session continuity broken for observers.** When an agent restarts mid-session, it gets a new `agent_id`. Session events before restart carry the old `agent_id`. The TUI drops old tabs. But if stream chunks or tool telemetry from the new agent need to be correlated with prior events from the old agent_id, there's no linking key. The same role but different agent_id creates ambiguity for diagnostic tooling. | `03-event-system.md:30`, `11-monitoring.md:80` | open |
-| E7 | **Multiple agents of same role — TUI tab label collision.** `11-monitoring.md:78` says tab label is the role name, not `agent_id`. If a blueprint defines 2+ agents of the same role (e.g. 2 researchers), the labels collide. | `11-monitoring.md:78` | open |
-| E8 | **Supervisor-to-child communication unspecified.** How does the supervisor pass config to agent child processes? CLI args? Environment variables? A shared file handle? How does the supervisor detect child death — `waitpid`? The spec says "monitors each child process" but never defines the monitoring mechanism. | `09-deployment.md:43-47` | open |
+| D1 | `03-event-system.md:18,48-59`, `05-agent-model.md:242-261` | Event envelope construction — who wraps `AgentEvent`? TUI publishes `leader.prompt` but has no `agent_role` or `agent_key`. What values go in the envelope? | open |
+| D2 | `05-agent-model.md:360,392-396` | Grace turn detection — "Jie inspects the assistant message. If the LLM did not call `notify`..." — how? Scan `toolResults` in `turn_end`? Parse message text? Mechanism unspecified. | open |
+| D3 | `05-agent-model.md:186` | `notify` recipient count — "returns `recipients: <subscriber count>`" — count of what? Active agent bodies? Callbacks on bus? Counting mechanism undefined. | open |
+| D4 | `08-memory.md:15,50-59` | `AgentMessage` → `TurnRecord` serialization — `persist()` takes `AgentMessage` (pi-agent type) but `TurnRecord` has `role, content`. How is the mapping done? Is content JSON? Plain text? | open |
+| D5 | `08-memory.md:36-41,77` | Compaction range detection — body must compute `compactedSeqRange: [number, number]` from the `CompactionSummaryMessage`. How? | open |
+| D6 | `10-configuration.md:24-25,38-39` | Turn budgets (`error_turn_budget`, `total_turn_budget`) — enforcement mechanism never described. Not in pi-agent integration table. Is this a Jie wrapper or pi-agent feature? | open |
+| D7 | `05-agent-model.md:142,339` | Tool `signal` parameter — `execute(input, ctx, signal?)`. What happens when pi-agent provides no signal? The adaptation layer "combines" signals — handle `undefined`? | open |
+| D8 | `03-event-system.md:90-97`, `05-agent-model.md:362-369` | Streaming flush timer — "200ms" but mechanism unspecified. `setTimeout`? `setInterval`? Debounced flush? How to handle bursts? | open |
+| D9 | `03-event-system.md:116`, `05-agent-model.md:185` | Self-receipt filtering — "event bus filters self-receipt." Is this in `InProcessEventBus.publish()` or in the `AgentBody` subscription callback? | open |
+| D10 | `05-agent-model.md:147` | `ToolResult.terminate` — described as "hint: stop LLM loop after this tool batch." How does Jie act on this hint? Force `agent.idle`? Skip grace turn? Undefined. | open |
+| D11 | `10-configuration.md:24-25` | Turn budget semantics — "decrements on turns consuming tool errors" vs "decrements on every LLM turn." Budget exhaustion → what? Grace turn? Force idle? | open |
 
 ---
 
-## Group F: Operational Readiness (Deployable Application)
+## Group E: Startup, Config & Error Handling
 
-| # | Issue | Evidence | Status |
+Edge cases and failure modes that an implementer must handle but are unspecified.
+
+| # | Files | Issue | Status |
 |---|---|---|---|
-| F1 | **No build/package system spec.** `monorepo-structure.md` shows packages but no `package.json`, build scripts, or bundling strategy. How does `@cuzfrog/jie` get assembled from the monorepo packages? How is it published? | Entire repo, `12-installation.md:79` | open |
-| F2 | **No testing strategy.** No test framework, no test directory structure, no CI pipeline, no E2E test approach. | Absent from all specs | open |
-| F3 | **No logging strategy.** What logging library? Structured logs? Levels? Output destination (stdout, file)? Is there correlation via `session_id`? | Absent from all specs; only "warning log" mentioned in `05-agent-model.md:83` | open |
-| F4 | **No SQLite schema migration strategy.** `memory_turns` table, `artifacts` table, status rows — what happens when the schema evolves across versions? No migration framework specified. | `04-artifact-store.md`, `08-memory.md:108` | open |
-| F5 | **No API versioning for event envelopes or subjects.** Event envelopes have no version field. Subjects have no version prefix. When the platform evolves, old clients and new agents could silently break. | `03-event-system.md:38-48` | open |
-| F6 | **No metrics or tracing beyond heartbeat.** Heartbeats cover liveness. What about: LLM token usage per agent, tool call latency distributions, event throughput, compaction frequency, error rates? | `11-monitoring.md` | open |
-| F7 | **No graceful degradation when Code-Lens is optional.** If Code-Lens is unreachable at startup, `05-agent-model.md:49` says "the agent fails to start." But if no role declares Code-Lens tools, should startup require Code-Lens? The supervisor always starts Code-Lens. | `05-agent-model.md:49`, `09-deployment.md:40` | open |
-| F8 | **No spec for `jie --version` / `jie --help`.** Referenced implicitly in CLI behavior and installation, but never formally defined. | `12-installation.md:123,138`, `cli.md` | open |
-| F9 | **`jie prompt` has no `--agent` flag.** The messaging protocol defines `team.{team_id}.{agent_id}.prompt` for targeted prompts, but `jie prompt` always sends to the leader. No CLI path to target a specific agent from the command line. | `cli.md:138-175`, `02-protocol-stack.md:19` | open |
+| E1 | `09-deployment.md:44`, `ui/cli.md:27` | Team blueprint fallback — "or built-in fallback from `jie-team`." When exactly? `team_path` missing? directory absent? config absent? user cancelled init? | open |
+| E2 | `ui/cli.md:57` | `jie -p` with no config — "walk up to find config (or init)." Does it drop to interactive init before processing `-p` instruction? Or fail? | open |
+| E3 | `10-configuration.md:76-78`, `09-deployment.md:112-115` | MCP server connection failure at startup — hard exit? skip and warn? skip silently? | open |
+| E4 | `ui/cli.md`, `12-installation.md` | `jie init` subcommand — interactive init described as auto-triggered but no explicit `jie init` command exists for manual re-init | open |
+| E5 | `10-configuration.md`, `ui/cli.md` | Config validation — invalid YAML? unknown keys? missing fields? invalid `team_id` charset? Error handling unspecified. | open |
+| E6 | `05-agent-model.md:379`, `08-memory.md:70` | Prompt queue — no max size. No backpressure. Could grow unbounded. | open |
+| E7 | `09-deployment.md` | Graceful shutdown — "finish current turn" but what if the turn is blocked on a tool call? Abort and wait? Force kill after timeout? | open |
 
 ---
 
-## Group G: Agent Model Detail Gaps
+## Group F: Missing Concrete Values
 
-| # | Issue | Evidence | Status |
+Placeholders and deferred decisions an implementer needs.
+
+| # | Files | Issue | Status |
 |---|---|---|---|
-| G1 | **Compaction consumes `total_turn_budget` — could prematurely terminate an agent.** `08-memory.md:125` says compaction is "a separate LLM call that consumes one turn (decrements `total_turn_budget`)." In a session with many compaction events + normal tool-use turns, the agent could hit `total_turn_budget=200` earlier than expected. Should compaction turns be excluded from the budget? | `08-memory.md:125`, `05-agent-model.md:190` | open |
-| G2 | **Post-notify tool calls "dropped with a warning log" — side effects?** If the LLM calls `notify(...)` + `bash(...)` + `write_artifact(...)` in a single response, and `notify` succeeds first, the bash and write_artifact calls are dropped. But the LLM already reasoned they should happen. This can produce inconsistent state silently. Should the body return tool errors for the dropped calls instead of silently dropping? | `05-agent-model.md:83` | open |
-| G3 | **Grace turn budget interaction is redundantly stated.** `05-agent-model.md:164` says the grace turn "does not decrement `error_turn_budget` but does decrement `total_turn_budget` by one." Since `total_turn_budget` already decrements on every turn (line 190), this is normal behavior restated. Remove the redundant clause or clarify if it means something different. | `05-agent-model.md:164` | open |
-| G4 | **Leader prompt queue lost on restart — no user feedback mechanism.** `08-memory.md:118` says queued prompts are lost on restart. `tui.md:54` says the TUI "should surface this." But there's no event or signal from the leader to the TUI when the queue is cleared. How does the TUI detect queue loss? | `08-memory.md:118`, `ui/tui.md:54` | open |
-| G5 | **Agent queue cap of 8 — is this sufficient for non-linear pipelines?** The FIFO queue at cap 8 with overflow=assert is described as safe for serial pipelines. But the team blueprint could define non-linear workflows (e.g. fan-out, parallel roles). The cap should be configurable or the constraint should be documented as a v1 limitation. | `05-agent-model.md:159` | open |
-| G6 | **`read_status` exposed as tool but status write is body-only.** `04-artifact-store.md:47` says `read_status` is available as a tool. `05-agent-model.md:54` says status writes are body-only via `notify`. The LLM can read but not write status. Is `read_task_status` the same tool? `jie-team/01-role-definitions.md:10` mentions `read_task_status` as auto-registered. These should be the same tool, consistently named. | `04-artifact-store.md:47`, `jie-team/01-role-definitions.md:10` | open |
-| G7 | **`write_artifact` takes `(type, content)` but no `work_id` — where does `work_id` come from?** `04-artifact-store.md:46` says "reads the current work-unit identifier from `ExecutionContext`." But `ExecutionContext` is per-tool-call and does contain `work_id`. However, `work_id` is set by the leader when it calls `notify('task.recorded')`. How does the body know which `work_id` to put in `ExecutionContext` before the leader emits `task.recorded`? Before that event, there is no `work_id`. | `04-artifact-store.md:46`, `05-agent-model.md:203-209` | open |
+| F1 | `12-installation.md:44` | Install version — "latest stable" is not a concrete semver | open |
+| F2 | `12-installation.md:55` | Git repo URL — `<repo>` placeholder | open |
+| F3 | `ui/cli.md:77-84` | `jie --version` source — package.json? hardcoded constant? build-time injection? | open |
+| F4 | `04-artifact-store.md:67` | `memory_turns` DDL hidden behind `...` — implementer must cross-reference `08-memory.md` for `TurnRecord` fields and infer DDL | open |
+| F5 | `00-overview.md:22` | Glossary lists `read_file` as example tool — but `read_file` is not a built-in tool (it's an MCP tool from code-lens). Misleading for implementer. | open |
 
 ---
 
-## Group H: Dependency and Runtime Assumptions
+## Group G: Deferred/TBD
 
-| # | Issue | Evidence | Status |
+Explicit TBD markers that may block v1 decisions.
+
+| # | Files | Issue | Status |
 |---|---|---|---|
-| H1 | **`bun` ≥ 1.3.14 pinned as runtime — is this realistic for production?** Bun is fast-moving, occasionally breaking. No Node.js fallback specified. All packages are distributed as TypeScript source? Or compiled? If compiled, to what target? | `12-installation.md:9` | open |
-| H2 | **NATS server must be started manually by the user.** The supervisor does not manage NATS lifecycle (per `09-deployment.md:39` it "starts/verifies NATS connectivity" — does it start nats-server or just check?). If it only checks, the user must manually run `nats-server -js &`. Should the supervisor auto-start NATS as a child process? | `09-deployment.md:39`, `12-installation.md:129-131` | open |
-| H3 | **Bash tool has no sandbox beyond path check.** `05-agent-model.md:104` says "No isolation sandbox beyond the workspace-root constraint in v1." An LLM-executed `bash` command can read/write anywhere within the workspace, access network, spawn processes. This is a significant security consideration documented only as a path constraint. | `05-agent-model.md:104` | open |
+| G1 | `04-artifact-store.md:51` | "GC, archival, and compaction policy is deferred to the **Storage Maintenance** chapter (TBD)" | open |
+| G2 | `08-memory.md:64` | "GC and pruning are deferred to the Storage Maintenance chapter (TBD)" — same TBD chapter | open |
+
+---
+
+## Summary
+
+| Group | Theme | Severity |
+|---|---|---|
+| A | Spec conflicts | Resolved — 9 conflicts fixed |
+| B | Undefined pi-agent types | Resolved — dedicated API reference file created |
+| C | Tool implementation gaps | High — tools un-implementable as specified |
+| D | Core mechanics "how?" | High — behavior described, mechanism absent |
+| E | Startup/config/errors | Medium — edge cases, error handling |
+| F | Missing concrete values | Medium — fill-in-the-blank |
+| G | Deferred/TBD | Low — accepted v1 scope gaps |

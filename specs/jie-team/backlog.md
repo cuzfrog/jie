@@ -11,3 +11,4 @@ Items prioritized by Day N.
 | 11 | `max_iterations` default and per-task override mechanism (default 5). | Day 2 |
 | 12 | Per-role budget tuning: confirm `error_turn_budget=30` and `total_turn_budget=200` defaults per role. | Day 2 |
 | 13 | **Trivial-Task Handling chapter**: fast-path for version bumps, typo fixes. v1 runs full pipeline. | Day 2 |
+| 14 | **Multi-Instance Role**: `TEAM.md` `instances` per-role field to spawn N agent processes for the same soul definition. v1: all roles have exactly 1 instance (`agent_key = {role}`). Memory, subscriptions, and ingress subjects per instance. | Day 2 |

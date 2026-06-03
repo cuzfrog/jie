@@ -1,85 +1,115 @@
 # Deployment and Process Model
 
-## Process Topology
+## Runtime Model
 
-A Jie team runs as a set of OS processes orchestrated by a supervisor:
+Jie runs as a **single OS process** — the `jie` binary. All agents, the EventBus, the ArtifactStore, and the TUI share this process. MCP servers (configured in `mcp.yaml` with `transport: stdio`) run as child subprocesses.
 
 ```
-┌──────────────────────────────────────────────────────┐
-│ Supervisor                                           │
-│  ┌──────────┐ ┌──────────┐ ┌───┐ ┌──────┐          │
-│  │ agent 1  │ │ agent 2  │ │...│ │ tui  │          │
-│  │ (body)   │ │ (body)   │ │   │ │      │          │
-│  └──────────┘ └──────────┘ └───┘ └──────┘          │
-└──────────────────────────────────────────────────────┘
-         │                                     │
-    ┌────┴────┐                          ┌─────┴─────┐
-    │  NATS   │                          │ Artifact  │
-    │ Server  │                          │ Store     │
-    └─────────┘                          │ (SQLite)  │
-                                         └───────────┘
+┌────────────── jie process ──────────────┐
+│                                          │
+│  EventBus (in-process)                   │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ │
+│  │ leader-1 │ │ worker-1 │ │ worker-2 │ │
+│  │(AgentBody)│ │(AgentBody)│ │(AgentBody)│ │
+│  └──────────┘ └──────────┘ └──────────┘ │
+│                                          │
+│  ┌──────────┐  ┌──────────────────┐     │
+│  │   TUI    │  │  ArtifactStore   │     │
+│  │(jie-tui) │  │  (SQLite)        │     │
+│  └──────────┘  └──────────────────┘     │
+│                                          │
+└──────────────────────────────────────────┘
+         │
+    ┌────┴────┐
+    │   MCP   │  (subprocess, stdio transport)
+    │ servers │
+    └─────────┘
 ```
 
-| Process | Count | Role |
+| Component | Count | Nature |
 |---|---|---|
-| Supervisor | 1 | Orchestrates team lifecycle: spawns, health-checks, restarts agent bodies and stdio MCP servers. |
-| Agent body | N (per team blueprint) | Each role defined in `TEAM.md` is its own OS process. |
-| MCP server (stdio) | N (per `mcp.yaml` with `transport: stdio`) | Subprocess managed by supervisor. |
-| TUI | 1 | Terminal UI. Subscribes to team events on NATS, publishes prompts. |
-| NATS Server | 1 (shared) | Message bus. External process — may be shared across teams (soft isolation). |
-| Artifact Store | 0 (SQLite file) | Not a process. One SQLite database file per workspace, accessed by agent bodies via `packages/storage/`. |
+| `jie` process | 1 | Binary entry. Runs supervisor, agents, TUI in-process. |
+| AgentBody | N (per blueprint) | In-process instance. Each has its own EventBus subscriptions, MemoryManager, and async event loop. |
+| TUI | 1 | In-process component (imported from `jie-tui`). Passes `EventBus` and `ArtifactStore` refs at construction. |
+| ArtifactStore | 1 | SQLite file. Single-writer by design (one process). |
+| MCP servers (stdio) | N (per `mcp.yaml`) | Child subprocess managed by `jie`. |
 
-## Supervisor
+No process-per-agent. No NATS server. No PID file for individual agents. No network ports.
 
-The supervisor is the team's lifecycle manager. It is **not** an agent — it has no soul, no LLM, and no event subscriptions. It is operational infrastructure.
+## Startup Sequence
 
-Responsibilities:
+### `jie` (interactive TUI mode)
 
-- **Launch.** On team start, the supervisor:
-  1. Verifies NATS connectivity.
-  2. Loads `mcp.yaml`, connects to all configured MCP servers, fetches tool catalogs, and registers all tools into `ToolRegistry`.
-  3. Spawns agent body processes: leader agent first (it subscribes to prompt ingress), then remaining agents.
-  4. Spawns the TUI process.
-- **Health monitoring.** The supervisor monitors each child process (agents and stdio MCP servers). If an agent body exits:
-  - On clean exit after publishing a terminal event: the supervisor restarts the agent process. The body re-subscribes via NATS and is ready for the next work unit.
-  - On crash (SIGSEGV, unhandled panic): the supervisor restarts the process.
-  - On MCP server unreachable (exited after publishing a terminal event): supervisor restarts the MCP server, re-fetches catalog, re-registers tools, then restarts the agent.
-- **Team shutdown.** Supervisor sends SIGTERM to all child processes, waits for graceful exit, then force-kills stragglers.
+1. Walk up from CWD to find `.jie/config.yaml`. If absent, run interactive init flow.
+2. Load team blueprint from `team_path` in config (or built-in fallback from `jie-team`).
+3. Instantiate `InProcessEventBus`.
+4. Open `ArtifactStore` (SQLite at `{workspace_root}/.jie/artifacts.db`).
+5. Connect to MCP servers configured in `.jie/mcp.yaml`; register tools into `ToolRegistry`.
+6. For each role in the blueprint, instantiate `AgentBody`:
+   - Pass `AgentSoul` (parsed from agent `.md` files), `EventBus`, `ArtifactStore`, `MemoryManager`.
+   - Each `AgentBody` subscribes to its auto-subscriptions (`{agent_key}`, plus `leader.prompt` for the leader) and domain topics from its `subscribe:` frontmatter.
+7. Call `body.start()` on each AgentBody — they enter event loop, waiting for prompts.
+8. Import and start `jie-tui` component, passing `EventBus` + `ArtifactStore` references.
+9. TUI renders. Agents process work. SIGINT/SIGTERM triggers graceful shutdown.
 
-## Agent Body Process
+### `jie -p "instruction"` (print mode)
 
-Each agent body is an independent OS process that:
+Same as steps 1–7 above, then:
 
-1. Loads its soul definition from the team blueprint (parsed from `TEAM.md` + agent `.md` files).
-2. Connects to NATS and subscribes to the auto-computed subjects.
-3. Opens the team's SQLite artifact store.
-4. Enters the event loop (see `05-agent-model.md`).
-5. Exits when `stop()` is called or on a fatal error after publishing a terminal event.
+8. Subscribe to `agent.stream.chunk` (filter: `agent_role === leader`) → print to stdout. Also subscribe to domain topics to track work-unit lifecycle.
+9. Publish `{ prompt: "instruction" }` to `leader.prompt`.
+10. Wait for leader `agent.idle` event.
+11. Print final newline, stop all agents, close DB, exit.
 
-Agent bodies do not communicate directly with each other. All coordination is through the event bus.
+### Graceful Shutdown
+
+On SIGINT/SIGTERM:
+1. Stop each `AgentBody` (finish current turn, publish terminal event).
+2. Unsubscribe all EventBus listeners.
+3. Close `ArtifactStore` (SQLite).
+4. Terminate MCP subprocesses.
+5. Exit 0.
 
 ## Workspace Layout
 
 ```
 ./
   .jie/                  # Team-local state
-    config.yaml          # Platform config (NATS address, workspace root, team_id, team_path)
-    mcp.yaml             # MCP server definitions (project-level, overrides ~/.jie/mcp.yaml)
-    artifacts.db         # SQLite artifact store (one per team)
+    config.yaml          # Platform config (workspace_root, team_id, team_path)
+    mcp.yaml             # MCP server definitions
+    artifacts.db         # SQLite artifact store
     teams/               # Team blueprints
       default/           # One directory per team
         TEAM.md          # Team wiring (leader)
-        dm.md            # Agent definitions
-        researcher.md
+        leader.md        # Agent definitions
+        worker_a.md
   src/                   # User's codebase (the workspace root)
 ```
 
-The `.jie/` directory is the team's scratch space. It is discovered by the supervisor via walking up from the current working directory to find `.jie/config.yaml`.
+## Health and Restarts
 
-## CLI Entry Points
+Agents do not crash — they handle tool failures gracefully and transition to `idle`. See `05-agent-model.md` Failure Handling.
 
-Defined in `07-ui/cli.md`. The headless CLI (`jie`) provides `jie`, `jie start`, `jie ui`, `jie prompt`, `jie doctor`, `jie query-task`, `jie stop`.
+If the `jie` process itself crashes (SIGSEGV, OOM), all agents die with it. No automatic restart in v1 — the user re-runs `jie`. Process-level resilience is a Day 2 concern.
 
-## Configuration
+## Logging
 
-Defined in `10-configuration.md`. Minimum v1 surface: `.jie/config.yaml` with `team_id`, `team_path`, `nats_url`, and `workspace_root`. MCP servers are configured in `.jie/mcp.yaml`.
+v1 uses `console.log` / `console.error` to stdout/stderr. No external logging library.
+
+**Format**: `[ISO8601] [LEVEL] [agent_key] message`
+
+| Level | Usage |
+|---|---|
+| `INFO` | Lifecycle events: agent started, work unit created, MCP server connected. |
+| `WARN` | Non-fatal anomalies: tool execution approaching timeout, compaction threshold reached. |
+| `ERROR` | Fatal conditions before exit: config parse failure, SQLite open failure. |
+
+Tool-result errors are surfaced through the LLM conversation, not via the log. Agent-to-agent diagnostics are on the EventBus — logging is for operator visibility only.
+
+Agents log to the shared stdout of the `jie` process. The `agent_key` prefix disambiguates output.
+
+## MCP Server Management
+
+MCP servers with `transport: stdio` are spawned as child subprocesses at startup. The parent `jie` process monitors them:
+- If an MCP server exits unexpectedly, the in-flight tool call (if any) times out or returns `mcp_server_unreachable`. All subsequent invocations to that server also return errors until the server is reconnected. Agents handle these as tool-result errors and may retry or fail gracefully.
+- The supervisor reconnects and re-registers tools on restart; the agent whose tool failed continues processing and learns from the error message.

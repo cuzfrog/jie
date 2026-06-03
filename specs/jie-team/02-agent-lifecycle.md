@@ -1,61 +1,59 @@
 # Agent Lifecycle
 
-All agent processes are long-lived. They start with the team and remain subscribed to the bus indefinitely.
+All agents are long-lived. They start with the team and remain subscribed to the bus indefinitely.
 
 ## Pipeline Seriality
 
-Each role subscribes to the event the previous role emits, so under normal operation only one agent is processing at a time per task. There is no team-wide distributed latch; pipeline structure provides serialization.
+Each role subscribes to the topic the previous role publishes to, so under normal operation only one agent is processing at a time per task. There is no team-wide distributed latch; pipeline structure provides serialization.
 
 The DM enforces a **single-task-in-flight** invariant: it does not emit `task.recorded` for a new task while a previous task is still in flight. A task is in flight from `task.recorded` until the DM emits `task.done` or `task.failed`. Additional user prompts queue in the DM's local FIFO until the active task terminates.
 
-## Session Flow (single iteration)
+## Workflow (single iteration)
 
 ```
-[user prompt arrives at DM]
+[user prompt arrives at DM on leader.prompt]
 
 DM
   → may pull additional context via MCP tools
-  → mints a new session_id
   → writes the task artifact (iteration = 1)
-  → publishes session.{id}.task.recorded   { task_id, task_artifact_id }
+  → notify('task.recorded', '...')
 
-Researcher reacts to task.recorded
+Researcher receives task.recorded
   → reads task artifact, web searches, reads project documentation via read_module_doc
   → writes research artifact (iteration = 1)
-  → publishes session.{id}.task.researched   { task_id, research_artifact_id }
+  → notify('task.researched', '...')
 
-Architect reacts to task.researched
+Architect receives task.researched
   → reads research artifact
   → queries code-lens for current structure
   → updates CONTEXT.md via write_module_contract
-  → publishes session.{id}.task.designed   { task_id, descriptor_paths }
+  → notify('task.designed', '...')
 
-Planner reacts to task.designed
+Planner receives task.designed
   → reads task + research artifacts, reads updated descriptors
   → writes plan artifact (iteration = 1)
-  → publishes session.{id}.task.planned   { task_id, iteration: 1, plan_artifact_id }
+  → notify('task.planned', '...')
 
-Implementer reacts to task.planned
+Implementer receives task.planned
   → reads plan artifact and module descriptors
   → write_file (boundary-enforced), bash (run tests, linters, build tools)
-  → publishes session.{id}.task.implemented   { task_id, iteration: 1, result_artifact_ids }
-    (or session.{id}.task.failed on hard violation)
+  → notify('task.implemented', '...')
+    (or notify('task.failed', '...') on hard violation)
 
-Reviewer reacts to task.implemented
+Reviewer receives task.implemented
   → reads plan + result artifacts, inspects diffs
   → writes review artifact (iteration = N)
-  → publishes:
-       session.{id}.task.review_passed   { task_id, iteration: N, review_artifact_id }
+  → notify('task.review_passed', '...')
     OR
-       session.{id}.task.review_failed   { task_id, iteration: N, review_artifact_id }
+    notify('task.review_failed', '...')
 
-DM reacts to task.review_passed
+DM receives task.review_passed
   → reads result artifacts
   → finalizes externally (e.g. closes the JIRA issue, posts a summary)
   → synthesizes and surfaces result to user
-  → publishes session.{id}.task.done   { task_id, review_artifact_id }
+  → notify('task.done', '...')
 
-DM reacts to task.failed
+DM receives task.failed
   → reads available artifacts
   → surfaces failure to user (no follow-up event)
 ```
@@ -65,11 +63,11 @@ DM reacts to task.failed
 If the reviewer publishes `task.review_failed`:
 
 ```
-Planner reacts to task.review_failed
+Planner receives task.review_failed
   → reads the review artifact + previous plan + accumulated artifacts for this task
   → iteration++
   → writes new plan artifact at iteration N+1
-  → publishes session.{id}.task.planned { task_id, iteration: N+1, plan_artifact_id }
+  → notify('task.planned', '...')
 ```
 
 The pipeline re-enters at Implementer → Reviewer for the new iteration. Loop continues until either:
@@ -79,7 +77,7 @@ The pipeline re-enters at Implementer → Reviewer for the new iteration. Loop c
 
 ## Iteration Ownership
 
-`iteration` lives in the payload of the planner→implementer→reviewer events (`task.planned`, `task.implemented`, `task.review_passed`, `task.review_failed`). The **planner** initializes it to **1** in its first `task.planned` and is the only role permitted to increment it. The implementer and reviewer copy the planner's iteration into their own payloads unchanged. Roles outside the reviewed loop (`task.recorded`, `task.researched`, `task.designed`, `task.done`, `task.failed`) do not carry iteration.
+`iteration` lives in the payload of the planner→implementer→reviewer events. The **planner** initializes it to **1** in its first `task.planned` and is the only role permitted to increment it. The implementer and reviewer track the planner's iteration in their own responses. Roles outside the reviewed loop (`task.recorded`, `task.researched`, `task.designed`, `task.done`, `task.failed`) do not carry iteration.
 
 ## Failure
 

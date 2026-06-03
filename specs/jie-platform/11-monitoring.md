@@ -1,88 +1,33 @@
 # Monitoring
 
-Agent and supervisor heartbeat, discovery, and health reporting. This chapter defines the subjects and envelopes that make the team's operational state visible to observers (TUI, CLI `doctor`, monitoring).
+Observability is derived from the EventBus. Observers (TUI, `-p` mode, future diagnostic tooling) subscribe to platform events to track agent activity and team health. There is no separate monitoring pipeline or metrics collection in v1.
 
-## Heartbeat Subjects
+## Observable Events
 
-| Subject | Publisher | Purpose |
+| Event | Source | What it tells |
 |---|---|---|
-| `supervisor.{team_id}.heartbeat` | Supervisor | Team liveness; TUI and `jie doctor` use this to confirm the team is running. |
-| `agent.{team_id}.{role}.{agent_id}.heartbeat` | Each agent body | Per-agent status (idle/busy/error) and work-unit association. |
+| `agent.stream.chunk` | Any agent | Live LLM output, per-chunk. TUI renders it; `-p` prints it. |
+| `agent.stream.end` | Any agent | An LLM turn completed. TUI can advance the chat pane. |
+| `agent.tool.call` | Any agent | Which tool is about to run, with truncated input. |
+| `agent.tool.result` | Any agent | Tool outcome, duration, error status. |
+| `agent.idle` | Any agent | Agent ready for new work. TUI updates tab status; `-p` uses it to know when to exit. |
+| `{domain_topic}` | Any agent (via `notify`) | Work-unit lifecycle progression (team-defined). TUI shows pipeline timeline. |
 
-Both subjects are **ephemeral** (no JetStream durability). Heartbeats are point-in-time; a missed heartbeat is stale after the grace period.
+Tool telemetry events (`agent.tool.call`, `agent.tool.result`) and domain events from the team blueprint constitute the full observable surface of a running team. Any diagnostic tooling or external monitor can subscribe to these events on the EventBus.
 
-## Heartbeat Interval
+## Agent Status (in TUI)
 
-Both supervisor and agents publish heartbeats every **5 seconds** by default. The interval is non-configurable in v1; tuning is deferred.
+With heartbeats removed, the TUI derives agent status from the following:
 
-A heartbeat collector (e.g. `jie doctor` CLI) waits **2× the interval (10s)** to declare an agent `unknown`. For a one-shot health check (`jie doctor`), the collection window is 2 seconds — it reports whatever heartbeats arrive within that window and marks agents without a fresh heartbeat as `unknown`.
-
-## Supervisor Heartbeat
-
-The supervisor publishes to `supervisor.{team_id}.heartbeat` every 5 seconds.
-
-```typescript
-interface SupervisorHeartbeat {
-  supervisor_pid: number;
-  uptime_seconds: number;
-  agent_count: number;
-  timestamp: string;   // ISO 8601
-}
-```
-
-## Agent Heartbeat
-
-Each agent body publishes to `agent.{team_id}.{role}.{agent_id}.heartbeat` every 5 seconds.
-
-```typescript
-interface AgentHeartbeat {
-  agent_id: string;
-  role: string;                    // team-defined role identifier
-  status: "idle" | "busy" | "error";
-  current_work_id?: string;
-  current_session_id?: string;
-  uptime_seconds: number;
-  timestamp: string;               // ISO 8601
-}
-```
-
-### Status Definitions
-
-| Status | Meaning |
+| TUI display | Derived from |
 |---|---|
-| `idle` | Agent is subscribed to its event subjects and waiting for work. No active work unit. |
-| `busy` | Agent is processing a work unit (LLM turn in progress, tool execution, etc.). |
-| `error` | Agent has encountered an unrecoverable error and will exit after publishing a terminal event. The supervisor will restart it. |
+| Agent is alive | AgentBody is instantiated and subscribed to EventBus |
+| Agent is busy | `agent.stream.chunk` or `agent.tool.call` was recently received for this agent, and no `agent.idle` has followed |
+| Agent is idle | `agent.idle` event received; no subsequent streaming or tool activity |
+| Agent errored | Domain event received with `error:` prefix in `prompt` (e.g., `error: "missing_emission"`) |
 
-Transition rules:
+The TUI does not need a heartbeat interval — it observes events as they arrive on the bus. Since everything is in-process, there is no network partition or missed-event concern.
 
-- All agents start in `idle` after connecting to NATS.
-- An agent transitions to `busy` when it begins processing an event (before the first LLM call).
-- On terminal events, all agents revert to `idle`.
-- If an agent publishes a terminal event due to an internal error, it sets status `error`, publishes one final heartbeat, then exits.
+## Error Surfacing
 
-Timing: the status in a heartbeat reflects the agent's state **at the time the heartbeat was published**. A client that receives a `busy` heartbeat has no guarantee the agent is still busy; this is a soft signal.
-
-## Agent Discovery
-
-Observers discover agents via heartbeat traffic. The process:
-
-1. Subscribe to `agent.{team_id}.>.heartbeat`.
-2. Collect heartbeats. Each unique `(role, agent_id)` tuple that appears is an active agent.
-3. Agents that restart get a new `agent_id` (per `03-event-system.md` Identifiers). The old `agent_id` stops emitting heartbeats and is naturally pruned after the grace period.
-
-No separate `agent.online` or `agent.offline` event is needed. Discovery is heartbeat-driven. If an agent starts, its first heartbeat arrives within 5 seconds; if it stops, its heartbeats cease and it ages out.
-
-### Agent Tabs in TUI
-
-The TUI maps each unique `(role, agent_id)` seen in heartbeats to a tab. The tab label is the role name (e.g. `researcher`), not `agent_id`. The `agent_id` is available in the tab's detail view if needed.
-
-When an agent restarts (new `agent_id`), the TUI drops the old tab and creates a fresh one under the same role label. Any live stream chunks from the old `agent_id` are discarded.
-
-## Grace Period and Staleness
-
-A heartbeat is considered **fresh** for 10 seconds after its `timestamp`. A heartbeat older than 10 seconds is **stale**.
-
-- An agent with a stale last heartbeat is reported as `unknown` by `jie doctor`.
-- The TUI may gray out or mark a tab when an agent has been silent beyond the grace period.
-- The supervisor is not expected to go silent unless crashing; a missing supervisor heartbeat in `jie doctor` triggers exit code 1.
+When an agent encounters an unrecoverable condition, it publishes a terminal event via `notify` with an error string as the `prompt` (e.g., `error = "missing_emission"`), then transitions to idle. The TUI surfaces the error to the user.

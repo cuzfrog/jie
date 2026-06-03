@@ -2,114 +2,68 @@
 
 ## Purpose
 
-The Memory subsystem manages agent context lifecycle: the LLM conversation history, compaction of stale turns, and persistence across restarts. It is owned by `MemoryStore`, a private component of `AgentBody`. Memory operations are internal to the agent — they are **not** published on the event bus.
+The Memory subsystem provides durable persistence for an agent's conversation history. It is a write-through adapter: every message produced by the pi-agent loop is persisted to SQLite immediately. On restart, the full history is restored and loaded back into the agent.
 
-## MemoryStore
+`AgentMessage` types used throughout this chapter are defined in `pi-agent-api-reference.md`.
+
+Memory operations are internal to the agent — they are **not** published on the event bus.
+
+Context windowing, compaction triggering, and token estimation are owned by `@earendil-works/pi-agent-core` via its `transformContext` and `CompactionSettings`. jie's `MemoryManager` is responsible for storage only.
+
+## MemoryManager
 
 ```typescript
-interface MemoryStore {
-  // Append a conversation turn to the current session's history.
-  append(turn: Turn): void;
+interface MemoryManager {
+  // Write-through a finalized message to durable storage.
+  persist(message: AgentMessage, agent_key: string, session_id: string): void;
 
-  // Return the current context-window view: the prefix (system prompt +
-  // pinned turns) followed by the N most recent uncompacted turns up to a
-  // token budget. Older turns exist on disk but are not passed to the LLM.
-  context(token_budget: number): Turn[];
+  // Called after pi-agent's compaction completes. Marks the compacted raw messages
+  // as replaced and persists the CompactionSummaryMessage as a new row.
+  compact(compactedSeqRange: [number, number], summary: AgentMessage, agent_key: string, session_id: string): void;
 
-  // Compact the oldest uncompacted turns into a summary turn, reducing the
-  // live token count. The summary replaces the compacted turns in the
-  // logical history; the original turns are preserved on disk for audit.
-  compact(target_tokens: number): void;
-
-  // Persist the full history to durable storage (snapshot).
-  // Called periodically and on agent shutdown.
-  flush(): Promise<void>;
-
-  // Reload state from a previous snapshot, if one exists.
-  // Returns false if no snapshot is found (fresh start).
-  reload(agent_id: string, session_id: string): Promise<boolean>;
-}
-
-interface Turn {
-  role:     'system' | 'user' | 'assistant';
-  content:  string;
-  summary?: string;   // non-null when this turn is the result of compaction
+  // Restore non-compacted history from durable storage for a given (agent_key, session_id).
+  // Returns the complete AgentMessage[] suitable for loading into agent.state.messages.
+  // Returns an empty array if no prior history exists.
+  restore(agent_key: string, session_id: string): Promise<AgentMessage[]>;
 }
 ```
 
-`MemoryStore` is initialized by `AgentBody` at startup. It holds the full conversation history (append-only on disk) and a sliding window view that is passed to the LLM on each turn.
+`MemoryManager` is initialized by `AgentBody` at startup. It does not hold an in-memory copy of the conversation — the pi-agent's `state.messages` is the sole in-memory source of truth.
 
-## Compaction
+### Persist
 
-Compaction is the process of summarizing old turns to free token budget. It is triggered when the estimated token count of the in-window history exceeds a configured threshold.
+Called on every `message_end` event emitted by the pi-agent. The message is serialized and written to the `memory_turns` table immediately — no buffering, no periodic flush. Messages are partitioned by `session_id` so that a new process run starts with a fresh conversation context.
 
-### Trigger
+### Compact
 
-Compaction fires when `context(token_budget).estimated_tokens > threshold`, where `threshold` is a fraction of the model's context window (default 0.7). The body checks after every `assistant` turn before constructing the context for the next LLM call.
+pi-agent's `transformContext` handles compaction: it selects raw messages to compact, generates a summary via a separate LLM call, and injects a `CompactionSummaryMessage` into the message array. **Compaction turns do not consume `total_turn_budget`** — they are infrastructure overhead, not agent reasoning. When compaction completes, the agent body calls `memory.compact()` to sync storage:
 
-### Policy
+1. The summary message is persisted as a new row (like any other message).
+2. The raw messages in the compacted range are marked `compacted = true`.
 
-1. The oldest uncompacted turn is selected as the boundary. All turns up to and including it are candidates for compaction.
-2. A system-level summary prompt is injected: "Summarize the following conversation segment, preserving all task-relevant decisions, errors encountered, file paths touched, and unresolved questions."
-3. The compacted turns are replaced in the sliding window by a single `assistant` turn with `summary` set to the compaction result.
-4. Original turns are **never deleted** — they remain on disk for full-replay audit and debugging.
-5. Compaction does not decrement `error_turn_budget` or `total_turn_budget`. It is a memory operation, not a tool call.
+### Restore
 
-### Non-publication
+On agent start, the body mints a new `session_id` and calls `memory.restore(agent_key, session_id)`. This queries `memory_turns` for all rows matching `(agent_key, session_id)` where `compacted = false`, ordered by `seq`. On a fresh start (new session_id), this returns an empty array — the agent begins with a clean conversation.
 
-Compaction is an internal agent operation. The body performs it silently — no event is published, no tool call is recorded, and the TUI sees nothing. The LLM is not informed of compaction; from its perspective, the conversation history simply has an injected summary turn.
-
-## Context Lifecycle
-
-### Session Start
-
-On receiving an inbound event, the body:
-
-1. Constructs the **prefix**: system prompt fragments (`identity`, `tools_guide`, `constraints`, `prose` from `AgentSoul`) plus the inbound event content.
-2. If a prior snapshot exists for this `(agent_id, session_id)`, `MemoryStore.reload()` restores the full history from disk. The body resumes the conversation where the prior session left off.
-3. Appends the inbound event as a `user` turn.
-
-### Turn Loop
-
-Each LLM turn:
-
-1. Body calls `memory.context(token_budget)` to get the current window.
-2. Window is sent to the LLM.
-3. LLM response is appended as `assistant` turn. If the LLM called tools, each `tool_call` / `tool_result` pair is appended as synthetic turns (not exposed as `agent.tool.*` events on the bus — those are separate telemetry).
-4. Compaction check runs. If the window exceeds threshold, compaction fires and the window is replaced.
-
-### Agent Restart
-
-When an agent restarts (supervisor restart or crash recovery):
-
-1. `AgentBody.start()` calls `memory.reload(agent_id, session_id)`.
-2. If a snapshot exists, the full conversation history is restored. The body re-subscribes to NATS and resumes its event loop from the last unacknowledged JetStream event.
-3. If no snapshot exists (fresh start, or the snapshot was intentionally cleared), the agent starts with an empty history. The system prompt prefix is still loaded.
-4. Compaction summaries are preserved in the snapshot — an agent restarting mid-compaction sees the summary, not the raw original turns (though the originals remain on disk).
-
-### Shutdown
-
-On clean exit, `memory.flush()` persists the full history. On crash, the most recent auto-flushed snapshot is the recovery point.
+Compacted raw messages are preserved in storage (for full-replay audit) but are not returned by `restore` — the `CompactionSummaryMessage` replaces them in the restored history.
 
 ## Persistence
 
 ```typescript
 interface TurnRecord {
   session_id: string;
-  agent_id:   string;
-  seq:        number;       // monotonically increasing within the session
-  role:       string;
+  agent_key:  string;
+  seq:        number;        // monotonically increasing within the session
+  role:       string;        // 'user' | 'assistant' | 'toolResult' | 'compactionSummary'
   content:    string;
-  summary:    string | null;
-  created_at: string;       // ISO 8601
+  compacted:  boolean;       // true if this row was compacted and replaced by a summary
+  created_at: string;        // ISO 8601
 }
 ```
 
-Turns are stored in the workspace's artifact store (SQLite, same database as artifacts) in a `memory_turns` table. The table is keyed by `(agent_id, session_id, seq)`. This keeps conversation history colocated with work artifacts and avoids a second storage surface.
+Messages are stored in the workspace's artifact store (SQLite, same database as artifacts) in a `memory_turns` table. The table is keyed by `(agent_key, session_id, seq)`. This keeps conversation history colocated with work artifacts and avoids a second storage surface.
 
-Auto-flush writes a snapshot every **10 turns** (configurable). On `flush()`, the full history is checkpointed to disk. On `reload()`, the entire `(agent_id, session_id)` history is read back into memory.
-
-v1 keeps all turns indefinitely (same retention policy as the artifact store — see `04-artifact-store.md`). GC and pruning are deferred to the Storage Maintenance chapter (TBD).
+v1 keeps all rows indefinitely (same retention policy as the artifact store — see `04-artifact-store.md`). GC and pruning are deferred to the Storage Maintenance chapter (TBD).
 
 ## Leader Agent Working Memory
 
@@ -118,8 +72,12 @@ The leader agent (as designated by the team blueprint) may maintain in-memory st
 - **Prompt queue**: FIFO queue of user prompts received while a work unit is in flight. On completion of the current work unit, the leader dequeues the next prompt. This queue is lost on restart; in v1, queued prompts are not persisted.
 - **In-flight awareness**: the leader tracks whether any work unit is currently in flight using status reads plus its own working memory. On reload, the leader reads the artifact store to discover any work unit that was in a non-terminal status at the time of crash and resumes monitoring it.
 
-## Integration with LLM Library
+## Integration with pi-agent
 
-`MemoryStore` produces a `Turn[]` suitable for the LLM library. The body is responsible for converting the turn list into the library's expected message format. `MemoryStore` does not depend on the LLM library — it produces a plain structured turn list.
+`MemoryManager` integrates via pi-agent's event subscription and hooks:
 
-Compaction summaries are generated by a dedicated compaction call: the body invokes the LLM with a short system prompt asking it to summarize. This is a separate LLM call that consumes one turn (decrements `total_turn_budget`) but does not trigger the normal tool-call loop.
+- **Subscription**: The body calls `agent.subscribe(listener)`. On `message_end`, it calls `memory.persist(message, agent_key, session_id)`. On compaction (detected via a `CompactionSummaryMessage` appearing in `agent_end.messages`), it calls `memory.compact(compactedSeqRange, summary, agent_key, session_id)`.
+- **Restore**: On startup, the body mints a new `session_id`, calls `memory.restore(agent_key, session_id)`, pushes the returned `AgentMessage[]` into `agent.state.messages`, then calls `agent.continue()`.
+- **Tool hooks**: `beforeToolCall` and `afterToolCall` are wired at Agent construction but not used for memory — only for Jie's EventBus telemetry (`agent.tool.call` / `agent.tool.result`). See `05-agent-model.md` pi-agent Integration Contract.
+
+pi-agent's `CompactionSettings` are configured at agent construction with `enabled: false` for v1 (compaction deferred). When enabled, pi-agent's `transformContext` triggers summarization; the result flows through `message_end` events and `MemoryManager.compact()` records the compaction in storage.

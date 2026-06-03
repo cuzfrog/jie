@@ -1,26 +1,28 @@
-# ADR 1: Prompt-In / Publish-Out Agent Model
+# ADR 1: Topic-Based Pub/Sub Agent Communication
 
 ## Status
 
-Accepted.
+Accepted (revised 2026-05-29).
 
 ## Context
 
-Previous design had agents subscribing to domain events (`session.*.task.recorded`, etc.) via a subscription graph defined in the team blueprint. This created a tightly-coupled pipeline where every agent was aware of the event bus and the platform needed to manage subscription topologies, JetStream replay, and agent-dependent spawn ordering.
+Previous design had agents with no knowledge of the event bus, a leader-only `delegate` tool, and `session.*.>` subscriptions for tracking pipeline progress. This created coupling between the leader and worker agents and required special injection mechanisms for session events to re-enter the leader's LLM loop.
 
 ## Decision
 
-Agents have no knowledge of the event bus. They receive prompts and use tools. Communication model:
+Agents communicate exclusively through topic-based pub/sub on the EventBus. The model:
 
-- **Non-leader agents** subscribe only to `team.{team_id}.prompt.{role}` — a personal ingress channel.
-- **The leader** subscribes to `team.{team_id}.prompt` (user ingress) and `session.*.>` (tracking pipeline).
-- **`delegate` tool** (leader-only) publishes a prompt to another agent's ingress channel.
-- **`notify` tool** (all agents) publishes exactly one domain event to signal turn completion, gated by `soul.notify` (a whitelist in the agent's `.md` frontmatter).
-- Pipeline order is described in the leader's system prompt prose, not encoded in a subscription graph.
+- **Every agent auto-subscribes to its `{agent_key}`** at startup — this is the direct-addressing channel.
+- **The leader additionally auto-subscribes to `leader.prompt`** — user prompt ingress from TUI/CLI.
+- **Domain topic subscriptions** are declared in the agent's `.md` frontmatter `subscribe:` field (e.g. `task.recorded`, `task.researched`).
+- **`notify(topic, prompt)`** (all agents) publishes to `{topic}` on the EventBus with prompt content and source identity. The event bus filters self-receipt to prevent notification loops. `notify` does not end the LLM's turn.
+- Pipeline order is encoded in the subscription graph — each agent subscribes to the previous agent's topic.
 
 ## Consequences
 
-- Platform has no knowledge of pipeline topology. No subscription graph to parse, no topological sort for spawn order, no JetStream replay.
-- Team workflows are defined in natural language (leader's prose), not config. Custom pipelines require no code changes.
-- Zero-event-subscription agents can be tested in isolation — feed a prompt, observe the `notify` output.
-- The leader is a single point of orchestration. If the leader crashes, the pipeline stalls until supervisor restarts it.
+- No `delegate` tool. No `session_id`. No `agent.{role}.prompt` subjects.
+- Agent keys double as direct-addressing topics. Domain topics for pipeline progression.
+- The platform is agnostic of topic semantics — agents subscribe to strings; the team blueprint defines the topic namespace and subscription graph.
+- The leader has no special tools or subscriptions beyond `leader.prompt` auto-sub. Uses `notify` like any other agent.
+- Agents can be tested in isolation: publish a message to their subscribed topic, observe the `notify` output.
+- The subscription graph provides natural pipeline serialization.

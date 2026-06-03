@@ -15,12 +15,12 @@ type TaskPhase =
 
 `task_status` rows are **append-only** in the artifact store. The latest row per `task_id` (by `created_at`) is the canonical current status. There is no separate KV substrate; the artifact store is the single source of truth.
 
-When the LLM calls `notify`, the body:
+When the LLM calls `notify(topic, prompt)`, the body (if this agent participates in task status tracking):
 
 - Reads the current status (or `null` if no prior row).
 - Validates the requested transition against the Allowed Transition Table (below).
 - On legal transition: appends a new `task_status` row via `append_status` and publishes the event.
-- On illegal transition: the append is **not** performed and `notify` returns a tool-error (`illegal_transition`). The LLM may retry with a different `event_type`.
+- On illegal transition: the append is **not** performed and `notify` returns a tool-error (`illegal_transition`). The LLM may retry with a different topic.
 
 ## Allowed Transition Table
 

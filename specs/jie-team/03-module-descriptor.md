@@ -24,7 +24,7 @@ exports:
 
 - `file` — relative to the directory the descriptor lives in.
 - `entries[].name` — the public symbol name as the language understands it.
-- `entries[].signature` — **opaque, language-defined canonical text**. The language adapter (in Code-Lens) owns extraction, canonicalization, and equality. See `jie-platform/06-code-lens/service.md` for the `LanguageAdapter` interface.
+- `entries[].signature` — **opaque, language-defined canonical text**. The language adapter (in Code-Lens) owns extraction, canonicalization, and equality. See `code-lens/service.md` for the `LanguageAdapter` interface.
 
 ## Rules
 

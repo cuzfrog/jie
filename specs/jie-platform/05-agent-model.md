@@ -7,15 +7,15 @@ A soul declares an agent's behavioral profile. Souls are derived from the team b
 ```typescript
 interface AgentSoul {
   role:            string;      // agent identifier (filename stem from TEAM.md directory)
-  model:           string;      // '<provider>/<model>', resolved via @earendil-works/pi-ai's getModel()
+  model:           string;      // '<provider>/<model_id>', split on first '/', resolved via pi-ai's getModel(provider, modelId)
   system_prompt:   string;      // prose body of the agent's .md file
   tools:           ToolSpec[];  // from frontmatter `tools`, resolved through ToolRegistry
-  notify:          string[];    // from frontmatter `notify` — event_type values this agent may emit
+  subscribe:       string[];    // from frontmatter `subscribe` — topic names this agent listens to
   subscriptions:   string[];    // auto-computed by platform (agent does not declare this)
 }
 ```
 
-Agents have no knowledge of the event bus and no domain-event subscriptions. They receive prompts and use tools. The leader agent is the sole exception — the platform auto-subscribes it to `session.*.>` and `team.{team_id}.prompt` so it can track pipeline progress and accept user input. Non-leader agents subscribe only to `team.{team_id}.prompt.{role}` for ingress via `delegate`.
+Agents communicate exclusively through `notify` (publishing to topics) and subscription-based ingress. They have no direct references to other agents.
 
 The `system_prompt` is the markdown prose from the agent's `.md` file, verbatim. No fragmentation into identity/tools_guide/constraints/prose — it's one block the LLM sees as its system message.
 
@@ -59,26 +59,29 @@ The team blueprint lives at `.jie/teams/<team_name>/`:
 
 ```
 .jie/teams/default/
-  TEAM.md              # frontmatter: leader
-  dm.md                # agent files — filename is role name
-  researcher.md
-  architect.md
-  planner.md
-  implementer.md
-  reviewer.md
+  TEAM.md              # frontmatter: leader, optional per-role instances
+  leader.md            # agent files — filename (stem) is the role identifier
+  worker_a.md
+  worker_b.md
 ```
+  
+The built-in dev team (`jie-team`) provides a concrete blueprint with 6 roles (DM, Researcher, Architect, Planner, Implementer, Reviewer). See `jie-team/01-role-definitions.md`.
 
 ### TEAM.md
 
-Minimal wiring — just declares the leader role:
+Minimal wiring — declares the leader role and optional per-role instance counts:
 
 ```yaml
 ---
-leader: dm
+leader: leader
+# Day 2 — multi-instance roles. v1: every role has exactly 1 instance.
+# instances:
+#   worker_a: 1
+#   worker_b: 2
 ---
 ```
 
-All `.md` files in the directory besides `TEAM.md` are agent definitions. Filename (stem) is the role identifier.
+All `.md` files in the directory besides `TEAM.md` are agent definitions. Filename (stem) is the role identifier. Each role maps to a persistent `agent_key = {role}-{N}`. In v1 with one instance per role, keys are `{role}-1` (e.g. `leader-1`, `worker_a-1`). Multi-instance roles (`N > 1`) are deferred to Day 2.
 
 ### Agent .md
 
@@ -92,72 +95,100 @@ tools:
   - web_fetch
   - write_artifact
   - read_artifact
-notify:
-  - task.researched
+subscribe:
+  - task.recorded
 ---
+
+# System Prompt
+
+You are a researcher agent. Your job is...
+
+When you finish, call `notify('task.researched', '...')` to signal completion.
 ```
 
 **Frontmatter fields:**
 
 | Field | Required | Description |
 |---|---|---|
-| `model` | yes | `<provider>/<model>` string, resolved via `@earendil-works/pi-ai` |
+| `model` | yes | `<provider>/<model_id>` string. Split on first `/` → `getModel(provider, modelId)` via pi-ai. API keys from environment (see `10-configuration.md`). |
 | `tools` | yes | list of tool spec strings. Resolved through `ToolRegistry` at load time. |
-| `notify` | yes | list of `event_type` values this agent is permitted to emit via `notify`. May be empty. |
+| `subscribe` | yes | list of topic strings this agent listens to. May be empty. |
 
 **Prose body** → `AgentSoul.system_prompt`. Provided to the LLM as the system message.
 
 ### Platform Auto-Wiring
 
-After parsing, the platform constructs `AgentSoul` instances with the following subscriptions determined by role, not declared in config:
+After parsing, the platform constructs `AgentSoul` instances with auto-computed subscriptions. Every agent auto-subscribes to its own `{agent_key}` for direct addressing. The leader additionally auto-subscribes to `leader.prompt` for user input.
 
-| Agent | Auto-subscriptions |
+| Subscription | Who gets it |
 |---|---|
-| Leader | `team.{team_id}.prompt`, `session.*.>` |
-| All other agents | `team.{team_id}.prompt.{role}` |
+| `{agent_key}` | Every agent (auto, based on role name and instance N) |
+| `leader.prompt` | Leader only (auto, based on `TEAM.md` `leader` field) |
+| Domain topics from `subscribe:` | Per agent `.md` frontmatter |
 
-The leader is the only agent subscribed to domain events. Pipeline progress tracking is the leader's responsibility, driven by its system prompt prose (which describes the workflow). Other agents wake up only when the leader delegates to them.
+No other auto-subscriptions. The leader has no special tools or subscriptions beyond what other agents have.
 
 ## Tool
 
+Jie tools use TypeBox schemas (matching `@earendil-works/pi-ai`'s type system). At AgentBody construction, each Jie `Tool` is adapted into pi-agent's `AgentTool` interface.
+
 ```typescript
-interface Tool<TInput = unknown, TOutput = unknown> {
+interface Tool<TInput = any> {
   name:        string;
   description: string;
-  schema:      ZodSchema<TInput>;
-  execute(input: TInput, ctx: ExecutionContext): Promise<TOutput>;
+  label:       string;                          // human-readable name for UI / telemetry
+  timeout?:    number;                          // per-invocation timeout in ms (default 120_000)
+  parameters:  TSchema;                         // TypeBox schema — defines LLM-visible tool schema
+  execute(input: TInput, ctx: ExecutionContext, signal?: AbortSignal): Promise<ToolResult>;
+}
+```
+
+```typescript
+interface ToolResult {
+  content:   string;          // text returned to the LLM conversation
+  details?:  unknown;         // structured details for afterToolCall hooks
+  terminate?: boolean;        // hint: stop LLM loop after this tool batch (optional)
 }
 ```
 
 Tools are plain typed functions. With one exception (the built-in `notify` tool, see below), tools have no awareness of the event bus. MCP-backed tools implement the same interface; the MCP call is an implementation detail of `execute`. Custom team-defined tools cannot publish events.
 
+**Timeout.** Every tool call has a default timeout of **120 seconds**. The adaptation layer combines any pi-agent-provided `signal` with `AbortSignal.timeout(tool.timeout ?? 120_000)`. Tools receive the combined `signal` and should abort when it fires. Individual tools may override the default (e.g. `bash` uses 300s). MCP tools inherit the 120s default.
+
+### Tool Adaptation to pi-agent
+
+At `AgentBody` construction, each Jie `Tool` is wrapped into pi-agent's `AgentTool`:
+
+| pi-agent field | Jie source |
+|---|---|
+| `name` | `Tool.name` |
+| `description` | `Tool.description` |
+| `label` | `Tool.label` |
+| `parameters` | `Tool.parameters` (TypeBox, passed directly) |
+| `prepareArguments` | TypeBox `Value.Create(parameters)` + `Value.Validate(parameters, raw)` — shims raw LLM args to typed params before validation |
+| `execute(toolCallId, params, signal?, onUpdate?)` | Calls `tool.execute(params, ctx)` → wraps return as `{ content: [{ type: "text", text: result.content }], details: result.details, terminate: result.terminate }`. Passes `onUpdate` through for tools that stream partial results. |
+| `executionMode` | Always `"sequential"` in v1 (parallel tool execution deferred to Day 2) |
+
+Most built-in tools return synchronous results and ignore `onUpdate`. Tools like `bash` may use `onUpdate` for live stdout streaming.
+
 ### Built-in Tool: `notify`
 
-`notify` is auto-registered on every agent body. It is the LLM's sole means of publishing an event and is how an agent signals that its turn is complete.
+`notify` is auto-registered on every agent body. It is the LLM's sole means of publishing an event to another agent or to a domain topic.
 
 ```typescript
-notify(input: { event_type: string; payload: Record<string, unknown> }): { ok: true }
+notify(input: { topic: string; prompt: string }): { ok: true; recipients: number }
 ```
 
 Behavior inside the body:
 
-1. Validate `event_type ∈ soul.notify`. Otherwise return a tool-error: `not_in_notify_list`.
-2. Enrich the LLM-supplied payload with context fields (from `ExecutionContext`): `work_id`, `session_id`.
-3. Append a status row via `artifact_store.append_status(work_id, event_type, payload)`.
-4. Publish `session.{session_id}.{event_type}` on the event bus.
-5. Return `{ ok: true }` to the LLM and **end the turn loop** for the current inbound event. Any subsequent LLM tool calls in the same response are dropped with a warning log.
+1. Publish `{ topic, prompt, source: this.agent_key }` to `{topic}` on the event bus.
+2. The event bus filters self-receipt: the publishing agent does not receive its own notification, even if subscribed to the topic.
+3. Return `{ ok: true, recipients: <subscriber count> }` to the LLM. If `recipients === 0`, the LLM can react to the undelivered notification.
+4. The LLM continues processing — `notify` does **not** end the turn loop.
 
-No transition validation in v1 — status rows are append-only with the latest row per `work_id` as canonical state. The leader agent interprets status progression (via its system prompt).
+On receipt, an agent formats the notification as a synthetic `user` message in the LLM conversation: `[{source_agent_key} on '{topic}']: {prompt}`.
 
-### Built-in Tool: `delegate`
-
-Auto-registered on the **leader only**. The leader uses `delegate` to hand work to another agent.
-
-```typescript
-delegate(input: { prompt: string; role: string; work_id?: string }): void
-```
-
-The body publishes a `PromptMessage` envelope to `team.{team_id}.prompt.{role}`. The target agent's body receives it, injects it as a prompt turn into the LLM context, and begins its event loop. `delegate` is fire-and-forget — it does not block on the target agent's completion. The leader tracks completion by receiving the target agent's `notify` event via its `session.*.>` subscription.
+The built-in team blueprint uses domain topics for pipeline progression. Prose examples use shorthand `notify('topic', 'prompt')` for readability; the actual LLM call follows the TypeBox schema: `notify({ topic: string, prompt: string })`.
 
 ### Built-in Tool: `bash`
 
@@ -176,11 +207,10 @@ interface BashResult {
 Rules:
 
 - The command execs in the team's workspace root by default. `workdir`, if provided, is resolved relative to the workspace root. Path resolution uses `realpath`; the resolved absolute path must start with the resolved absolute workspace root path. Any `workdir` that resolves outside the workspace root results in a tool-error (`workdir_escape`).
-- A fixed timeout (default 300s per invocation) kills the process and returns `exit_code = -1` with stderr: `"command timed out"`.
+- A fixed timeout (default 300s per invocation) kills the process and returns a tool error (`command_timed_out`). The agent sees this as a failed tool invocation.
 - The command runs with the workspace's environment (inherited from the agent process). No isolation sandbox beyond the workspace-root constraint in v1.
 - Shell is `/bin/sh` (POSIX).
 - Output (`stdout` + `stderr` combined) is truncated to 64 KiB; the tool returns a note when truncation occurred.
-- Consecutive `bash` calls that consistently return non-zero exit codes are tool-result errors that decrement `error_turn_budget`.
 
 ### Built-in Tools: `web_search` and `web_fetch`
 
@@ -193,12 +223,12 @@ These are built-in tools in `packages/jie-platform/tools/`. They implement the `
 
 ## Tool Telemetry
 
-Every tool call is observable on the event bus. The body emits two events per tool invocation:
+Every tool call is observable on Jie's event bus. The body wires pi-agent's `beforeToolCall` and `afterToolCall` hooks to emit:
 
-- **`agent.tool.call`** — emitted **before** `tool.execute()`. Payload: `tool_call_id`, `name`, JSON-serialized `input`, `input_truncated`.
-- **`agent.tool.result`** — emitted **after** `tool.execute()` returns (or throws). Payload: `tool_call_id`, `name`, JSON-serialized `output` (or `null` on throw), `output_truncated`, `duration_ms`, `error` (or `null`).
+- **`agent.tool.call`** — emitted in `beforeToolCall` (before tool execution). Payload: `tool_call_id`, `name`, JSON-serialized `input`, `input_truncated`.
+- **`agent.tool.result`** — emitted in `afterToolCall` (after execution completes or throws). Payload: `tool_call_id`, `name`, JSON-serialized `output` (or `null` on throw), `output_truncated`, `duration_ms`, `error` (or `null`).
 
-`tool_call_id` is a per-agent uint32 monotonic counter starting at 0.
+`tool_call_id` is pi-agent's per-invocation string. Jie publishes its own monotonic `uint32` counter for the event bus payload (starts at 0 per agent).
 
 Input and output are JSON-serialized. If the serialized string exceeds **4 KiB**, it is middle-truncated: the first and last `(4096 - MARKER_LEN) / 2` chars are preserved, with a marker `...[N chars truncated]...` in between.
 
@@ -206,17 +236,18 @@ Both events are **ephemeral** (NATS core pub/sub). They are **observer-only** �
 
 ## AgentBody
 
+`AgentBody` wraps pi-agent's `Agent` class. It owns the EventBus bridge, tool adaptation, memory persistence, and lifecycle coordination.
+
 ```typescript
 class AgentBody {
-  readonly id:                 string;          // process instance id: {role}-{8-hex}
+  readonly agent_key:          string;          // persistent instance identity: {role}-{N}
   readonly soul:               AgentSoul;       // immutable after construction
   readonly is_leader:          boolean;         // true if this role is the TEAM.md leader
-  readonly error_turn_budget:  number;          // per-loop error tolerance; default 30
-  readonly total_turn_budget:  number;          // per-loop hard turn cap; default 200
 
-  private bus:        EventBus;
-  private artifacts:  ArtifactStore;
-  private memory:     MemoryStore;              // see 08-memory.md
+  private agent:   Agent;                       // pi-agent-core's Agent instance
+  private bus:     EventBus;
+  private artifacts: ArtifactStore;
+  private memory:  MemoryManager;               // see 08-memory.md
 
   start(): void {}    // subscribes to soul.subscriptions on bus, begins event loop
   stop(): void {}     // unsubscribes, shuts down cleanly
@@ -225,39 +256,38 @@ class AgentBody {
 
 - No inheritance. `AgentBody` is the only concrete class.
 - Soul is immutable. An agent's role cannot change at runtime.
-- Compaction is owned by the `MemoryStore`, not by the body. See `08-memory.md`.
-- The body is the **only** publisher of events on the bus. The LLM expresses publication intent through `notify`; the body validates and executes the publish.
+- pi-agent's `Agent` handles the LLM loop, tool execution, streaming, and compaction.
+- The body is the **only** publisher of events on Jie's bus. The LLM expresses publication intent through `notify`; the body validates and executes the publish.
 
 ### Event Loop
 
-Agents wake up on a prompt — either a user prompt (leader only) or a delegated prompt from the leader (non-leader agents).
+Agents wake up on a prompt — either a user prompt (leader via `leader.prompt`) or a topic notification from another agent (via `notify` to a topic the agent subscribes to).
 
 While running:
 
-1. Receive a `PromptMessage` from the agent's prompt ingress subject (`team.{team_id}.prompt` or `team.{team_id}.prompt.{role}`).
-2. If currently processing a prior prompt, append to a bounded FIFO queue (cap 8). On overflow, the body **asserts and exits**. The supervisor restarts the body.
-3. When idle, dequeue the next prompt and process it.
+1. Receive a message on a subscribed subject (e.g. `leader.prompt` or a domain topic like `task.recorded`).
+2. If currently processing a prior message, the incoming message waits until the agent is idle.
+3. When idle, pick up the next message and process it.
 
-Processing a prompt = one LLM-driven loop of (think → optionally call tools → think → ...) bounded by the budgets below. The LLM signals completion by calling `notify(event_type, payload)`. On a successful `notify`, the body publishes the event and the loop ends.
+Processing a prompt = one LLM-driven loop of (think → optionally call tools → think → ...). The LLM may call `notify(topic, prompt)` at any point to broadcast to other agents; this does not end the turn. The turn ends when the LLM produces a response with no further tool calls.
 
-If the LLM ends its response (no further tool calls, no `notify`), the body grants exactly **one grace turn**: it sends a system-level reminder to the LLM ("your turn ended without calling `notify`; emit now or explain why you cannot") and resumes the loop. If the next response also ends without a successful `notify`, the body force-publishes a terminal event with `error = "missing_emission"`. The grace turn does not decrement `error_turn_budget` but does decrement `total_turn_budget` by one.
+If the LLM ends its response without calling `notify`, the body grants exactly **one grace turn**: it sends a system-level reminder to the LLM ("your turn ended without calling `notify`; emit now or explain why you cannot") and resumes the loop. If the next response also ends without a successful `notify`, the body calls `notify` itself with `error = "missing_emission"` as the prompt, then goes idle.
 
 ### Concurrency Model
 
-Pipeline seriality is enforced by the leader: it delegates one agent at a time and waits for that agent's `notify` event before delegating the next. There is no distributed latch — the leader's own event loop is the gate. The leader's system prompt describes the pipeline order.
+Agents are independent — they process their own message queue serially. Pipeline seriality (one agent at a time) is enforced by the team blueprint's topic subscription graph: each role subscribes to the previous role's topic, so under normal operation only one agent processes at a time per task.
+
+The leader enforces a single-task-in-flight invariant via its system prompt — it does not emit `task.recorded` for a new task while a previous task is active. This is team-defined behavior, not a platform mechanism.
 
 ### Failure Handling
 
-Agents resolve errors using LLM reasoning; they are not crash-and-restart components. Two **fixed budgets**, scoped to one event-handling loop, bound runaway behavior:
+Agents resolve errors using LLM reasoning; they are not crash-and-restart components. Tool errors are returned to the LLM as tool-result messages in the same conversation; the LLM may try a different approach.
 
-- **`error_turn_budget`** (default 30, per-body). Decrements by one on every turn that consumes at least one tool-result error. Pure-thinking and all-success turns do not decrement it. When it hits zero, the body force-publishes a terminal event with `error = "error_budget_exhausted"`.
-- **`total_turn_budget`** (default 200, per-body). Decrements by one on every LLM turn unconditionally. Safety net against pathological loops. When it hits zero, the body force-publishes a terminal event with `error = "turn_budget_exhausted"`.
+**Grace turn.** The sole platform-enforced termination: if the LLM ends a response without calling `notify`, the body sends a system reminder and resumes the loop. If the next response also ends without a successful `notify`, the body publishes a terminal `notify` with `error = "missing_emission"` and goes idle.
 
-Tool errors are returned to the LLM as tool-result messages in the same conversation; the LLM may try a different approach.
+**MCP server crash mid-session.** If an MCP server becomes unreachable while a tool call is in flight, the in-flight call times out (per the default 120s timeout) or returns `mcp_server_unreachable`. The error surfaces to the LLM as a tool-result error — the agent handles it like any other tool error and may retry or degrade gracefully. No process exit. Subsequent MCP calls to the same server return errors until the server is reconnected.
 
-**MCP server crash mid-session.** If an MCP server becomes unreachable while a tool call is in flight, the tool returns a fatal error (`mcp_server_unreachable`). The body treats this as unrecoverable: it logs the server and tool name, force-publishes a terminal event with `error = "mcp_server_unreachable:{server}"`, and exits. No retry, no reconnect. The supervisor restarts the agent.
-
-**NATS disconnect** is handled the same way: the body force-publishes a terminal event with `error = "nats_disconnect"` and exits. The supervisor restarts the process.
+**Bus disconnect.** The in-process `EventBus` cannot disconnect (it's a local data structure). When the process exits, the supervisor detects the child exit and restarts it.
 
 ## ExecutionContext
 
@@ -265,10 +295,104 @@ Passed to every tool call. Provides identifiers and storage; **does not** expose
 
 ```typescript
 interface ExecutionContext {
-  session_id:  string;
-  work_id:     string;        // team-defined work-unit identifier
-  agent_id:    string;
+  session_id:  string;        // per-process-run identifier; shared across agents in the same process
+  agent_key:   string;        // persistent instance identity: {role}-{N}
   agent_role:  string;
   artifacts:   ArtifactStore;
 }
+
+## pi-agent Integration Contract
+
+`AgentBody` wraps pi-agent's `Agent` class. This section defines the exact interface boundary: what Jie provides to pi-agent, what pi-agent provides to Jie, and how events flow between them. For the full pi-agent API surface, see `pi-agent-api-reference.md`.
+
+### Agent Construction
+
+At `AgentBody` construction, Jie instantiates pi-agent's `Agent` with the following `AgentOptions`:
+
+| Option | Jie provides |
+|---|---|
+| `sessionId` | Jie's `session_id` (per-process-run ULID) |
+| `getApiKey(provider)` | Resolves via pi-ai's `getEnvApiKey(provider)` — same env vars as `10-configuration.md` |
+| `tools` | Set via `agent.state.tools` after construction (see Tool Adaptation below) |
+| `systemPrompt` | Set via `agent.state.systemPrompt` — `AgentSoul.system_prompt` |
+| `model` | Set via `agent.state.model` — resolved from soul's `model` string via pi-ai's `getModel(provider, modelId)` |
+| `beforeToolCall` | Emits `agent.tool.call` on Jie's EventBus; can block execution |
+| `afterToolCall` | Emits `agent.tool.result` on Jie's EventBus |
+| `transformContext` | See Memory Persistence below |
+| `convertToLlm` | pi-agent's default — converts `AgentMessage[]` to LLM `Message[]`, filtering non-LLM messages |
+| `prepareNextTurn` | Checks Jie's EventBus for queued prompts/notifications; returns next prompt as `AgentLoopTurnUpdate` |
+| `compactionSettings` | `CompactionSettings { enabled: false, reserveTokens: 16384, keepRecentTokens: 20000 }` (compaction deferred to Day 2) |
+| `steeringMode` | Always `"all"` in v1 |
+| `toolExecution` | Always `"sequential"` in v1 |
+
+After construction, Jie sets `agent.state.tools` to the adapted `AgentTool[]`. Jie does NOT set `thinkingLevel` — agents use the model default unless the agent `.md` specifies otherwise (Day 2).
+
+### Tool Adaptation
+
+At construction time, each Jie `Tool` from `AgentSoul.tools` is wrapped into pi-agent's `AgentTool`:
+
+| pi-agent `AgentTool` field | Adaptation |
+|---|---|
+| `name`, `description`, `label` | Copied directly from Jie `Tool` |
+| `parameters` | Jie `Tool.parameters` (TypeBox `TSchema`), passed directly |
+| `prepareArguments(raw)` | `TypeBox.Value.Create(parameters, raw)` — coerces defaults, then `TypeBox.Value.Validate(parameters, result)` — validates. Throws on validation failure; pi-agent surfaces it as a tool error to the LLM. |
+| `execute(toolCallId, params, signal?, onUpdate?)` | Combines `signal` with `AbortSignal.timeout(tool.timeout ?? 120_000)`, calls `tool.execute(params, ctx, combinedSignal)`. Wraps return value: `{ content: [{ type: "text", text: result.content }], details: result.details, terminate: result.terminate ?? false }`. On throw (including `AbortError`), re-throws; pi-agent marks the result as `isError`. |
+| `executionMode` | Always `"sequential"` |
+
+`ExecutionContext` is closed over at adaptation time — `session_id`, `agent_key`, `agent_role`, and `artifacts` are bound once. Tools never receive different execution contexts within the same agent's lifetime.
+
+### Event Bridging
+
+pi-agent emits events via `agent.subscribe(listener)`. Jie subscribes to these and bridges them to its EventBus:
+
+| pi-agent event | Jie EventBus subject | Notes |
+|---|---|---|
+| `agent_start` | — | Internal lifecycle; not published |
+| `agent_end({ messages })` | — | Marks LLM loop completion; body then publishes `agent.idle` |
+| `message_end({ message })` | — | Triggers `memory.persist(message, agent_key, session_id)` |
+| `message_update({ message, assistantMessageEvent })` | `agent.stream.chunk` | Buffered: flush at 64 chars or 200ms (see below) |
+| `message_start({ message })` | — | Streaming bookkeeping; no bus event |
+| `turn_start` | — | Internal turn tracking |
+| `turn_end({ message, toolResults })` | — | Grace turn check: did the LLM call `notify`? |
+| `tool_execution_start` | — | Deferred to Day 2 (currently `beforeToolCall` covers this) |
+| `tool_execution_end` | — | Deferred to Day 2 (currently `afterToolCall` covers this) |
+
+The grace turn mechanism is Jie's own logic in the `turn_end` handler: if the assistant message contains no `notify` tool call, Jie queues a system reminder via `agent.steer()`. If the next turn also lacks a `notify`, Jie calls the `notify` tool itself with `error = "missing_emission"`.
+
+### Streaming Pipeline
+
+pi-agent emits `message_update` on every token delta (text/thinking/tool_call content). Jie buffers these:
+
+1. On first `message_update` of a new stream, allocate a new buffer and `stream_id` (per-LLM-invocation counter).
+2. Append delta text to the buffer.
+3. If buffer length ≥ `stream_chunk_size` (default 64 chars) OR `stream_flush_ms` (default 200ms) elapsed since first buffered character, publish `agent.stream.chunk` with `{ stream_id, seq, text }` and reset the buffer.
+4. On `message_end` (assistant response complete), flush remaining buffer as final chunk and publish `agent.stream.end` with `{ stream_id, total_chunks }`.
+
+Streaming events are published on Jie's EventBus; the TUI and `-p` mode consume them.
+
+### Prompt Ingress & Queuing
+
+When a message arrives on Jie's EventBus (via `leader.prompt` or a topic subscription), the body:
+
+1. If idle — formats the message as a synthetic `user` `AgentMessage`, calls `agent.prompt(message)`.
+2. If busy — queues the message in `AgentBody`'s in-memory queue. After `agent_end`, the body checks the queue and calls `agent.prompt(nextMessage)`.
+
+The queue is FIFO, in-memory only (not persisted). Lost on restart. See `08-memory.md` Leader Agent Working Memory.
+
+### Memory Persistence
+
+On `message_end`, the body calls `memory.persist(message, agent_key, session_id)` — write-through to SQLite.
+
+Memory is durable but session-scoped: a new process run gets a new `session_id`, so agents start with clean conversations each time. Memory restore is used only for debugging or future compaction-aware replay.
+
+pi-agent's `transformContext` hook is wired but passive in v1: Jie's default `transformContext` is the identity function (no-op). Automatic compaction via pi-agent's `CompactionSettings` is deferred to Day 2 — the defaults are configured but not activated (`enabled: false` for v1). When enabled, `memory.compact()` records compaction summaries.
+
+### Grace Turn
+
+After `turn_end`, Jie inspects the assistant message. If the LLM did not call `notify`:
+
+1. **First failure**: Queue a system reminder via `agent.steer({ role: "user", content: "Your turn ended without calling `notify`. Emit now or explain why you cannot." })`. The loop continues; pi-agent processes the steering message.
+2. **Second consecutive failure**: The body calls `notify(error = "missing_emission")` on the agent's behalf, publishes `agent.idle`, and stops the loop.
+
+If the LLM calls `notify` successfully at any point, the grace counter resets.
 ```
