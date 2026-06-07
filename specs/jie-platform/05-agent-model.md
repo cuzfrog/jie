@@ -112,7 +112,7 @@ When you finish, call `notify('task.researched', '...')` to signal completion.
 |---|---|---|
 | `model` | no | `<provider>/<model_id>` string. Split on first `/` → `getModel(provider, modelId)` via pi-ai. If absent, inherited from the user's global default at startup (see `10-configuration.md` "Model Resolution"). |
 | `tools` | yes | list of tool spec strings. Resolved through `ToolRegistry` at load time. |
-| `subscribe` | yes | list of topic strings this agent listens to. May be empty. |
+| `subscribe` | yes (may be empty `[]`) | list of topic strings this agent listens to. The field is required (must be present in the frontmatter), but the list may be empty for agents that have no domain subscriptions — the leader, for example, has only its auto-subscriptions (`{agent_key}`, `leader.prompt`) and lists no domain topics. |
 
 **Prose body** → `AgentSoul.system_prompt`. Provided to the LLM as the system message.
 
@@ -210,6 +210,8 @@ Behavior inside the body:
 On receipt, an agent formats the notification as a synthetic `user` message in the LLM conversation: `[{source_agent_key} on '{topic}']: {prompt}`.
 
 The built-in team blueprint uses domain topics for pipeline progression. Prose examples use shorthand `notify('topic', 'prompt')` for readability; the actual LLM call follows the TypeBox schema: `notify({ topic: string, prompt: string })`.
+
+**Business identifiers are not a platform concept.** `task_id`, `work_id`, and any other team-defined identifier are the **team's** concern, not the platform's. The body treats the `topic` and `prompt` of a `notify` call as opaque strings; it does not parse them for business meaning. The receiving agent's LLM extracts identifiers from the synthetic `user` message as part of its reasoning. The platform has no `task_id` field, no work-tracking primitive, and no implicit propagation of identifiers across turns. This is consistent with ADR 7 (which removed `work_id` from `ExecutionContext`) and ADR 12 (platform is generic; jie-team owns its own identifier scheme).
 
 ### Built-in Tool: `bash`
 
@@ -322,9 +324,48 @@ full file, continue with offset until complete.
 
 ### Built-in Tool: `write_file`
 
-> **Day 2.** The `write_file` tool is needed by the dev team Implementer role (`jie-team/01-role-definitions.md`) but its behavior is entangled with the **frozen-rule enforcement** (jie-team backlog #8): it must parse the file, extract public symbols, canonicalize, and compare against the module descriptor before writing. Until the Module Boundary Enforcement chapter is written, `write_file` is **not in v1's tool set**.
+`write_file` writes text content to a file at a path within the workspace. It is the natural sibling of `read_file` and completes the platform's file I/O pair.
 
-The dev team blueprint (`jie-team`) ships with `write_file` listed in the Implementer role's tool list. v1 ships with the tool list only as documentation — at runtime, the Implementer uses `bash` + redirection (`cat > file <<'EOF' ... EOF`) as a stand-in. Day 2 introduces the proper `write_file` tool once the boundary-enforcement contract is defined.
+```typescript
+write_file(input: { path: string; content: string }): {
+  path:          string;     // canonicalized, workspace-relative
+  bytes_written: number;
+  created_at:    string;     // ISO 8601 — file's mtime after the write
+}
+```
+
+Rules:
+
+- `path` is resolved relative to the workspace root. The resolved absolute path must start with the resolved absolute workspace root path. Any `path` that resolves outside the workspace root results in a tool error (`path_escape`).
+- `content` is written verbatim (no template expansion, no shell interpretation). UTF-8 encoded bytes only.
+- Existing files are overwritten (idempotent). There is no separate "create" or "append" mode in v1.
+- Missing parent directories are created on write (`mkdir -p` semantics). The platform does not require pre-existing directory structure.
+- Inherits the tool's 120s default timeout. Writes are synchronous and bounded; the timeout only fires on I/O hang.
+- v1 is **text only** — no binary writes, no encoding conversion, no `mode`/`flags` parameters. The platform treats `content` as UTF-8 text and writes bytes verbatim.
+- The platform enforces **workspace-root containment only**. It does **not** check module boundaries, frozen rules, or any other team-defined constraint. Those checks are the team layer's responsibility — see "Boundary Enforcement" below.
+
+Description (LLM-facing):
+
+```
+Write `content` to `path` (relative to workspace root, or absolute within workspace).
+Overwrites the file if it exists. Creates parent directories as needed. Text only;
+content is written verbatim as UTF-8 bytes. The platform enforces workspace containment
+(path_escape on violation) but does NOT check module boundaries — for that, the team
+blueprint's role system prompt / descriptor contract applies on top.
+```
+
+#### Boundary Enforcement (Platform vs Team)
+
+`write_file` enforces only **workspace-root containment** (the `path_escape` rule above). It does **not** enforce module boundaries (frozen rules, descriptor checks). The two enforcement layers are distinct:
+
+| Layer | What it enforces | When it runs | v1 status |
+|---|---|---|---|
+| Platform `write_file` | "Inside the workspace root" | At the tool call | v1 (this spec) |
+| Team descriptor / frozen rule | "Inside the allowed module boundary" | At the role's system prompt or via a wrapper tool that the team defines | jie-team backlog #8 (Day 2) |
+
+This separation lets the platform ship a useful writer in v1 without waiting for the team's boundary-enforcement contract. Teams that need module-boundary enforcement wrap the platform's writer (or instruct the agent via system prompt) to validate against the module descriptor before calling `write_file`. Teams that don't need it (e.g. the minimal team) get a plain writer for free.
+
+**Consequence:** in v1, an agent with `write_file` in its tool list can write any file inside the workspace root, including files inside a frozen module. The team layer is responsible for preventing that, not the platform. This is an explicit Day-1 commitment: boundary enforcement is jie-team's contract, and it lands with jie-team backlog #8.
 
 ## Tool Telemetry
 
@@ -336,6 +377,8 @@ Every tool call is observable on Jie's event bus. The body wires pi-agent's `bef
 `tool_call_id` is pi-agent's per-invocation string. Jie publishes its own monotonic `uint32` counter for the event bus payload (starts at 0 per agent).
 
 Input and output are JSON-serialized. If the serialized string exceeds **4 KiB**, it is middle-truncated: the first and last `(4096 - MARKER_LEN) / 2` chars are preserved, with a marker `...[N chars truncated]...` in between.
+
+**Truncation scope.** The 4 KiB middle-truncation applies to the **event payload** published on the bus (for TUI/diagnostic consumption). The LLM itself always sees the full, untruncated tool input and tool result — pi-agent's `execute` callback receives the untruncated value, and the LLM's `toolResult` message in the conversation is untruncated. The truncation is purely a UI/log concern.
 
 Both events are **ephemeral** (NATS core pub/sub). They are **observer-only** — no agent subscribes to them. The TUI and diagnostic tooling consume them.
 
@@ -419,11 +462,11 @@ At `AgentBody` construction, Jie instantiates pi-agent's `Agent` with the follow
 | `tools` | Set via `agent.state.tools` after construction (see Tool Adaptation below) |
 | `systemPrompt` | Set via `agent.state.systemPrompt` — `AgentSoul.system_prompt` |
 | `model` | Set via `agent.state.model` — resolved from soul's `model` string via pi-ai's `getModel(provider, modelId)` |
-| `beforeToolCall` | Emits `agent.tool.call` on Jie's EventBus; can block execution |
+| `beforeToolCall` | Emits `agent.tool.call` on Jie's EventBus. Jie does not use the hook to block execution — the event is published for telemetry, then pi-agent proceeds with tool execution normally. Per pi-agent's contract (`pi-agent-api-reference.md:330`), `beforeToolCall` *can* return `{ result?, abortRemaining? }` to block or abort, but Jie's implementation does not exercise that path in v1. |
 | `afterToolCall` | Emits `agent.tool.result` on Jie's EventBus |
 | `transformContext` | See Memory Persistence below |
 | `convertToLlm` | pi-agent's default — converts `AgentMessage[]` to LLM `Message[]`, filtering non-LLM messages |
-| `prepareNextTurn` | Checks Jie's EventBus for queued prompts/notifications; returns next prompt as `AgentLoopTurnUpdate` |
+| `prepareNextTurn` | — (not wired in v1; prompt injection uses `agent.prompt()` from the body's queue — see "Prompt Ingress & Queuing" below) |
 | `compactionSettings` | `CompactionSettings { enabled: false, reserveTokens: 16384, keepRecentTokens: 20000 }` (compaction deferred to Day 2) |
 | `steeringMode` | Always `"all"` in v1 |
 | `toolExecution` | Always `"sequential"` in v1 |
@@ -481,6 +524,8 @@ When a message arrives on Jie's EventBus (via `leader.prompt` or a topic subscri
 2. If busy — queues the message in `AgentBody`'s in-memory queue. After `agent_end`, the body checks the queue and calls `agent.prompt(nextMessage)`.
 
 The queue is FIFO, in-memory only (not persisted). Lost on restart. See `08-memory.md` Leader Agent Working Memory.
+
+**Queue observability.** The body publishes `agent.queue.update` on every enqueue and every dequeue, mirroring pi's `queue_update` event. The payload is `{ prompts: string[] }` — the current snapshot of the queue. The TUI subscribes to this event to render the queued-prompt indicator (e.g., "3 prompts queued") and a peek of the contents. Without this event, the TUI would have to derive queue state from "leader is not idle", which is brittle when multiple agents are active.
 
 > **v1 has no cap** on this queue (it is intentionally unbounded, matching pi-agent's `followUpQueue` / `steeringQueue` behavior). A backlog item exists to revisit cap value, drop policy, and observability — see `backlog.md` #19.
 

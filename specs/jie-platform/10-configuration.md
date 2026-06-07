@@ -24,7 +24,7 @@ stream_flush_ms: 200        # max ms before flushing a stream chunk
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `team_id` | string | *(absent — uses built-in default)* | Lookup key for a user-installed team. See "Team Resolution". Charset `[A-Za-z0-9_-]`, max 32 chars. |
+| `team_id` | string | *(absent — defaults to `"minimal"`)* | Lookup key for a user-installed team. See "Team Resolution". Charset `[A-Za-z0-9_-]`, max 32 chars. |
 | `workspace_root` | string | `"."` | Root directory for path resolution (e.g. `bash` `workdir` enforcement). Relative paths resolve against the config file's directory. |
 | `stream_chunk_size` | number | `64` | Characters per `agent.stream.chunk` event. |
 | `stream_flush_ms` | number | `200` | Max ms before flushing a partial stream chunk. |
@@ -37,15 +37,16 @@ The platform resolves which team to run with this order:
 |---|---|---|
 | 1 | Project-local | `.jie/teams/<team_id>/TEAM.md` (relative to the config file's directory, or CWD if no config) |
 | 2 | Global | `~/.jie/teams/<team_id>/TEAM.md` |
-| 3 | Built-in default | Hardcoded minimal team in the `jie-team` package |
+
+When `team_id` is **absent** from config (or no config exists), the platform defaults `team_id` to `"minimal"` and applies the same two-tier lookup. There is no separate "built-in default" tier; the minimal team is just a team with `team_id = "minimal"`, expected to live at the standard paths because `jie-team`'s `postinstall` script copies it there on first install.
 
 Rules:
 
-- If `team_id` is **absent** from config (or no config exists) → built-in default runs. The default is always reachable by omitting `team_id`; there is no opt-in keyword.
-- If `team_id` is **set** but neither #1 nor #2 has a matching manifest → **startup fails** with a clear error citing the missing path. The platform does not silently fall back to the built-in default in this case.
-- The built-in default team is the **minimal team** (1 `general` leader, default tools). See `jie-team/minimal-team.md`.
+- If `team_id` is **set** but neither #1 nor #2 has a matching manifest → **startup fails** with a clear error citing the missing path. The platform does not silently fall back to the minimal team in this case.
+- If `team_id` is **absent** and the resolved default (`"minimal"`) is not found at either path → **startup fails** with a clear error pointing at the install step: `team 'minimal' not found. Run \`jie team install minimal\` or reinstall jie to populate ~/.jie/teams/minimal/.` This is the failure mode when jie-team was never installed or its postinstall did not run.
+- The minimal team's manifest is the **minimal team** (1 `general` leader, default tools). See `jie-platform/minimal-team.md`. The dev team (DM/Researcher/Architect/Planner/Implementer/Reviewer pipeline) is also shipped in jie-team; users activate it with `team_id: dev` after `jie team install dev`.
 
-User teams are installed by placing a `TEAM.md` and per-role `.md` files at the appropriate path. The v1 dev team (DM/Researcher/Architect/Planner/Implementer/Reviewer pipeline) is shipped as a starter template — users copy it to `.jie/teams/<chosen_id>/` and set `team_id: <chosen_id>` in their config to activate it. A `jie team install` command is not provided in v1; users copy files manually or follow documented setup.
+User teams come from one of two sources: (1) installed via `jie team install <id>` (copies the named team's `.md` files from jie-team's bundled manifests to `~/.jie/teams/<id>/` or `.jie/teams/<id>/`); (2) created manually by placing a `TEAM.md` and per-role `.md` files at the appropriate path.
 
 ## Config Validation
 
@@ -60,6 +61,7 @@ The platform validates the config strictly at startup. **Any of the following is
 | `stream_chunk_size` is not a positive integer | `stream_chunk_size must be a positive integer` |
 | `stream_flush_ms` is not a positive integer | `stream_flush_ms must be a positive integer` |
 | `team_id` is set but user team is not found at either lookup path | `team <team_id> not found: checked .jie/teams/<id>/ and ~/.jie/teams/<id>/` |
+| Default `team_id = "minimal"` and minimal team is not found at either lookup path | `team 'minimal' not found. Run \`jie team install minimal\` or reinstall jie to populate ~/.jie/teams/minimal/.` |
 
 There are no silent fallbacks for invalid config. The user must fix the config and re-run.
 

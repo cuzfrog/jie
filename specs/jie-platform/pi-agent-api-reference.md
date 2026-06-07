@@ -92,7 +92,7 @@ interface AgentOptions {
 }
 ```
 
-**Jie's usage:** Jie sets `steeringMode: "all"`, `toolExecution: "sequential"`, and wires `beforeToolCall`, `afterToolCall`, `prepareNextTurn`, `transformContext`, `convertToLlm` to bridge events and manage memory. See `05-agent-model.md` Integration Contract table.
+**Jie's usage:** Jie sets `steeringMode: "all"`, `toolExecution: "sequential"`, and wires `beforeToolCall`, `afterToolCall`, `transformContext`, `convertToLlm` to bridge events and manage memory. `prepareNextTurn` is **not wired** in v1 — prompt injection uses `agent.prompt()` from the body's in-memory queue after `agent_end` (see `05-agent-model.md` "Prompt Ingress & Queuing").
 
 ---
 

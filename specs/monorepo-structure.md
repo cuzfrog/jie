@@ -8,12 +8,12 @@ packages/
   jie-platform/   # Platform runtime lib — barrel entry: index.ts
     core/           # AgentBody, AgentSoul, EventBus, Tool interface & registry
     storage/        # ArtifactStore interface + SQLite default implementation
-    tools/          # Built-in tools: notify, bash, read_file, web_search, web_fetch
-    team/           # Interface for team-blueprint and build the workflow
+    tools/          # Built-in tools: notify, bash, read_file, write_file, web_search, web_fetch, write_artifact, read_artifact
+    team/           # Team-blueprint loader: parses .md files, builds AgentSoul[] — agnostic of jie-team
     index.ts        # Barrel: re-exports all public APIs
   jie-tui/        # Terminal UI: renders agent streams, tool calls, pipeline events
   jie-cli/        # CLI entry point (jie binary) — supervisor + command dispatch
-  jie-team/       # Team-specific: role definitions, workflow blueprints, built-in dev team + minimal fallback team
+  jie-team/       # Manifest + install: ships dev team and minimal team as .md files; postinstall script copies them to user/project teams folders
 ```
 
 ## Dependencies
@@ -21,11 +21,13 @@ packages/
 ```
 jie-cli → jie-platform  (types, AgentBody, EventBus, ArtifactStore, MemoryManager)
 jie-cli → jie-tui       (import TUI component, pass EventBus + ArtifactStore refs)
-jie-cli → jie-team      (built-in minimal team as fallback, dev team as starter template)
+jie-cli → jie-team      (jie team install command only — invokes jie-team's install logic)
 jie-tui → jie-platform  (types, event envelope shapes)
-jie-team → jie-platform (types: AgentSoul, ToolSpec)
+jie-team → jie-platform (types: AgentSoul, ToolSpec — dev only, erased at runtime)
 code-lens               (standalone — no jie dependencies)
 ```
+
+**Agnosticism rule (ADR 12).** `jie-platform` has zero runtime dependency on `jie-team` — no `import` in any form, including types. The platform reads team manifests from filesystem paths (`.jie/teams/<id>/`, `~/.jie/teams/<id>/`). The `jie-team` package owns the distribution of the bundled teams (dev team, minimal team) via its `postinstall` script; after install, the manifests live at the standard paths and the platform finds them by name.
 
 ## Build System
 
@@ -52,7 +54,11 @@ code-lens               (standalone — no jie dependencies)
 // packages/jie-team/package.json
 {
   "name": "@cuzfrog/jie-team",
-  "exports": { ".": "./index.ts" }
+  "files": ["teams/", "scripts/"],
+  "exports": { ".": "./index.ts" },
+  "scripts": {
+    "postinstall": "bun run scripts/install.ts"
+  }
 }
 ```
 
@@ -79,7 +85,7 @@ code-lens               (standalone — no jie dependencies)
 }
 ```
 
-`bun install -g @cuzfrog/jie` installs the workspace set. The binary is `jie` → `packages/jie-cli/index.ts`.
+`bun install -g @cuzfrog/jie` installs the workspace set. The binary is `jie` → `packages/jie-cli/index.ts`. **jie-team is in `dependencies` so its `postinstall` script runs** — the script copies the bundled team manifests to `~/.jie/teams/`. The platform itself does not import jie-team at runtime.
 
 ## Testing
 

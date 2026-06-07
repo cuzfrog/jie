@@ -81,6 +81,8 @@ The leader agent (as designated by the team blueprint) may maintain in-memory st
 - **Prompt queue**: FIFO queue of user prompts received while a work unit is in flight. On completion of the current work unit, the leader dequeues the next prompt. This queue is lost on restart; in v1, queued prompts are not persisted.
 - **In-flight awareness**: the leader tracks whether any work unit is currently in flight using status reads plus its own working memory. On reload, the leader reads the artifact store to discover any work unit that was in a non-terminal status at the time of crash and resumes monitoring it.
 
+**No platform-reserved key for in-flight tracking.** The platform does not reserve an artifact key (e.g., `__in_flight__`) for in-flight awareness — this is the team's concern. The dev team uses `{task_id}/status` with a sequence suffix; other teams may use different keys. The platform's role is to make the artifact store available; the team defines the key scheme. This is consistent with ADR 7 (which removed `work_id` from `ExecutionContext`) and ADR 12 (platform is generic; the team owns its own identifier scheme).
+
 ## Integration with pi-agent
 
 `MemoryManager` integrates via pi-agent's event subscription and hooks:

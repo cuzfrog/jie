@@ -38,6 +38,7 @@ agent.stream.chunk                   — batched LLM output (all agents)
 agent.stream.end                     — LLM response complete
 agent.tool.call                      — tool invocation about to execute
 agent.tool.result                    — tool execution completed
+agent.queue.update                   — agent's in-memory prompt queue changed (enqueue or dequeue)
 agent.idle                           — agent entered idle state (replaces heartbeat)
 ```
 
@@ -73,10 +74,14 @@ type PlatformEventPayload<T extends PlatformEventType> =
   T extends 'agent.stream.end'     ? { stream_id: number; total_chunks: number } :
   T extends 'agent.tool.call'      ? { tool_call_id: number; name: string; input: string; input_truncated: boolean } :
   T extends 'agent.tool.result'    ? { tool_call_id: number; name: string; output: string | null; output_truncated: boolean; duration_ms: number; error: string | null } :
+  T extends 'agent.queue.update'   ? { prompts: string[] } :
   T extends 'agent.idle'           ? { } :
   // Topic-published events carry domain-defined payloads:
   T extends string                 ? { prompt: string; source: string } :
   never;
+```
+
+**Type-narrowing boundary.** The platform's `PlatformEventPayload` falls through to `{ prompt, source }` for any string `T` that is not a platform event. This is a deliberately permissive shape — the platform does not validate domain event payloads. The actual domain event payload types (e.g., `task.review_passed` carrying `review_artifact_id`, `task.planned` carrying `plan_artifact_id`) are defined in `jie-team/05-event-types.md` and consumed by jie-team's roles via their LLM context. The platform treats all domain events as opaque `{ prompt, source }` for envelope purposes; the LLM in the receiving agent parses the payload from the synthetic `user` message. The platform's only validation is the envelope (version, agent_role, agent_key, timestamp) and the platform's own event payloads.
 
 type PlatformEventType =
   | 'leader.prompt'
@@ -84,6 +89,7 @@ type PlatformEventType =
   | 'agent.stream.end'
   | 'agent.tool.call'
   | 'agent.tool.result'
+  | 'agent.queue.update'
   | 'agent.idle';
 ```
 
@@ -112,6 +118,8 @@ Every tool call emits two events:
 ## Agent Idle
 
 When an agent transitions from `busy` to `idle` (work unit complete, terminal event published, or error recovery complete), it publishes `agent.idle`. This is the signal for observers (TUI, `-p` mode) that the agent is ready for new work. Replaces the heartbeat-based discovery model.
+
+**`agent.idle` is published on every `agent_end`** — the LLM's `stopReason` does not gate the publish. Whether the LLM finished naturally (`"stop"`, `"length"`) or exited from an error (`"error"`, `"aborted"`), the agent returns to idle. Observers can rely on `agent.idle` as a definitive "this agent is no longer processing" signal — they do not need to inspect `stopReason` separately to know the agent is ready for new work.
 
 ## Inter-Agent Messaging
 

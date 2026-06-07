@@ -29,19 +29,17 @@ v1 scope:
 - **Encoding:** UTF-8. No charset detection in v1.
 - **Timeout:** inherits the platform's 120s default (effectively never fires; reads are synchronous and bounded).
 
-`write_file` is **not** in v1. Its behavior is entangled with the frozen-rule enforcement (jie-team backlog #8 — Module Boundary Enforcement chapter). Until that contract is defined, the dev team Implementer uses `bash` + redirection as a stand-in. The blueprint lists `write_file` to document the intended Day 2 surface.
+`write_file` is a separate decision — see ADR 11.
 
 ## Rationale
 
 - **File reading is platform-level.** It is a universal primitive — any agent (DM, Researcher, Implementer, Reviewer, etc.) that inspects source code, configuration, or any artifact needs it. Making teams wire up an MCP server for basic file I/O is friction without value.
 - **Mirror pi's `read`.** Pi is the agent runtime underneath Jie. The pi agent already invokes `read` to feed file contents back to the LLM. Jie's `read_file` is a typed, workspace-bounded wrapper with the same shape — agents can reason about it the same way they would about pi's tool.
 - **Text-only is sufficient for v1.** The dev team reads source code, plan artifacts (Markdown), and module contracts. None of these require image attachment. Adding image support would mean threading attachment handling through pi-agent's message format — useful but deferrable.
-- **`write_file` waits for the frozen rule.** Writing to the workspace is the central concern of the Module Boundary Enforcement chapter (jie-team backlog #8). It must parse, extract public symbols, canonicalize, and compare against the module descriptor before writing. Shipping a `write_file` without that contract would be a footgun — agents would silently violate module boundaries.
 
 ## Consequences
 
 - `packages/jie-platform/tools/` gains a `read_file.ts` module.
 - Built-in tool list in `monorepo-structure.md` and `00-overview.md` updated.
 - The dev team blueprint (`01-role-definitions.md`) needs no change — `read_file` was already in the Implementer/Reviewer tool lists; v1 simply resolves it to a real implementation rather than a missing tool.
-- The Implementer's `write_file` reference is preserved as a forward-looking note. Implementer uses `bash` for writes in v1.
-- The platform's path-resolution policy (workspace-root containment) now applies to two tools (`bash` workdir, `read_file` path) — both surface `path_escape` / `workdir_escape` tool errors on violation. The error taxonomy is consistent.
+- The platform's path-resolution policy (workspace-root containment) applies to `read_file` and `bash` `workdir`; both surface `path_escape` / `workdir_escape` tool errors on violation. `write_file` (ADR 11) extends the same policy to writes. The error taxonomy is consistent.

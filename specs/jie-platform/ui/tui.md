@@ -78,7 +78,7 @@ In the in-process deployment (v1 default), the leader and all agents run in the 
 - The TUI never encounters a "leader offline" state — if the leader stops, the process has crashed.
 - Prompt input is always available. During a work-unit-in-flight, prompts are queued per the leader's memory behavior (see `08-memory.md`).
 
-  When the leader is busy (has not published `agent.idle` since its last prompt), the TUI must show a visible queued-prompt indicator after the user submits a prompt. The indicator clears when the leader picks up the prompt (resumes streaming on `agent.stream.chunk`). If multiple prompts are queued, show the count.
+  When the user submits a prompt while the leader is busy, the TUI must show a visible queued-prompt indicator. The TUI derives this from the `agent.queue.update` event (`{ prompts: string[] }`) published by the body on every enqueue and dequeue. If the queue is empty (or the event is absent), the indicator is hidden. If the queue is non-empty, the indicator shows the count and a peek of the contents (first ~100 chars per prompt). The indicator updates as messages enqueue and dequeue — no polling, no derived state.
 
   The prompt queue is in-memory only — lost on process restart (acceptable for v1).
 

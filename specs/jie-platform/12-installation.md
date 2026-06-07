@@ -79,13 +79,23 @@ For project-level model overrides (e.g. a team pinned to a specific model id), c
 
 ### Installing a User Team
 
+`jie-team` ships two bundled teams as `.md` files: **minimal** (1 `general` leader) and **dev** (DM/Researcher/Architect/Planner/Implementer/Reviewer pipeline). On `bun install -g @cuzfrog/jie` (or workspace install in dev), jie-team's `postinstall` script copies both teams' manifests to `~/.jie/teams/`. After install, the minimal team is available by default; the dev team is activated by setting `team_id: dev` in config.
+
+To re-run the install manually (for example, after deleting a team folder), use the CLI:
+
+```bash
+jie team install            # install all bundled teams to ~/.jie/teams/
+jie team install minimal    # install only the minimal team
+jie team install dev --scope project   # install the dev team to .jie/teams/ in the current project
+jie team install dev --force           # overwrite existing files (default: skip on conflict)
+```
+
 To use a non-default team:
 
-1. Create `.jie/teams/<team_id>/` in the project (or `~/.jie/teams/<team_id>/` for a global install).
-2. Place `TEAM.md` and one `.md` per agent role in that directory. See `05-agent-model.md` Blueprint Loading for the file format.
-3. Add `team_id: <team_id>` to `.jie/config.yaml`.
+1. Ensure the team is installed at one of the standard paths (via `jie team install` or by manual copy). For a custom team, create `.jie/teams/<team_id>/` in the project (or `~/.jie/teams/<team_id>/` for a global install) and place `TEAM.md` and one `.md` per agent role in that directory. See `05-agent-model.md` "Blueprint Loading" for the file format.
+2. Add `team_id: <team_id>` to `.jie/config.yaml`.
 
-The v1 dev team blueprint (DM/Researcher/Architect/Planner/Implementer/Reviewer) is shipped in the `jie-team` package as a starter template. Users copy the relevant `.md` files into their team directory and set `team_id` accordingly. There is no `jie team install` command in v1.
+The dev team blueprint (DM/Researcher/Architect/Planner/Implementer/Reviewer) is shipped in `jie-team` as a starter template. `jie team install dev` populates the standard paths; users then either activate it via `team_id: dev` or copy the manifests into a project-local directory and customize.
 
 ## Verification
 

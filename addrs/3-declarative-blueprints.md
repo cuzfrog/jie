@@ -31,3 +31,4 @@ Blueprints are declarative files — no code between platform and team:
 - Tools: LLM-authored markdown is natural. No TypeScript compilation, no module resolution.
 - Type safety boundary: the YAML frontmatter has a small, well-defined schema (`model`, `tools`, `notify`). Validation at parse time.
 - MCP tools referenced by name in `tools` resolve through `ToolRegistry` — the agent author doesn't write MCP connection code.
+- **Package boundary (refined by ADR 12).** jie-team is a **manifest + install** package: it ships `.md` files for the dev team and minimal team, plus a `postinstall` script that copies them to `~/.jie/teams/<id>/`. The platform is **agnostic of jie-team**: it reads team manifests from filesystem paths, has no `import` of jie-team, and treats the built-in default as just a default `team_id = "minimal"` value. The CLI's `jie team install` command is the manual re-entry point for the install logic.
