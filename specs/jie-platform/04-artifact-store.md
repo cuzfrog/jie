@@ -28,14 +28,14 @@ The interface is the only dependency visible to `core`. The backing store is inj
 
 **Timestamps:** `created_at` is ISO 8601 in UTC (e.g. `2026-05-29T14:30:00.000Z`).
 
-## General Tools
+## Tool Wrappers
 
-Built-in tools that wrap the store:
+The store is exposed to agents through two built-in tools, defined in `jie-platform/05-agent-model.md`:
 
 - `write_artifact(key, content)` — stores content at key. The agent builds the key (e.g. `{task_id}/plan`, `{task_id}/research`).
 - `read_artifact(key)` — returns the content at key, or `null` if not found. (Missing artifact is a normal result, not a tool error; the LLM can reason about it.)
 
-These are the only two artifact tools exposed to agents.
+These are the only two artifact tools exposed to agents. See `05-agent-model.md` for the full TypeBox schemas, return shapes, and tool descriptions.
 
 Artifacts are never passed in event payloads. Events carry only `artifact_id`.
 

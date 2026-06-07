@@ -46,17 +46,25 @@ Types from `@earendil-works/pi-agent-core` used throughout the spec but never de
 
 ---
 
-## Group C: Tool Implementation Gaps
+## Group C: Tool Implementation Gaps — RESOLVED
 
-Tools declared but underspecified to the point of being un-implementable.
+All built-in tools now have full TypeBox schemas, return types, descriptions, and behavioral policies. Captured in `05-agent-model.md`.
+
+**Key decisions:**
+- `WebSearchResult = { title, url, snippet }` — minimal, no optional fields.
+- `web_search` backend: pluggable `WebSearchProvider` interface; default is DuckDuckGo HTML scrape (no API key). Alternative providers (Brave, Tavily) are a Day 2 concern.
+- `web_fetch` HTTP policy: http(s) only, follow ≤5 redirects, 5 MiB body cap, TLS validation, plain-text conversion for HTML (format-agnostic return), inherit 120s timeout.
+- `write_artifact` returns `{ key, created_at }` on success; tool error on storage failure.
+- `read_artifact` returns `{ key, content, created_at } | null` — missing is normal, not a tool error.
+- `bash` truncates `stdout` and `stderr` **independently to 32 KiB each**; `BashResult.truncated: { stdout, stderr }` reports clipping; truncated streams get a `[truncated to 32 KiB]` marker.
 
 | # | Files | Issue | Status |
 |---|---|---|---|
-| C1 | `05-agent-model.md:218` | `WebSearchResult` type — referenced but never defined (what fields?) | open |
-| C2 | `05-agent-model.md:218-219` | `web_search` — no backend specified (DuckDuckGo? Google API? SerpAPI?). No auth, rate limiting, or result format | open |
-| C3 | `05-agent-model.md:220` | `web_fetch` — no HTTP client policy (follow redirects? max depth? UA string? TLS validation? URL allowlist? max response size?) | open |
-| C4 | `04-artifact-store.md:36-37` | `write_artifact`/`read_artifact` — no TypeBox schema, no LLM-facing description, no return type docs (unlike `notify`, `bash`, `web_search`, `web_fetch`) | open |
-| C5 | `05-agent-model.md:213` | `bash` truncation: "stdout + stderr combined truncated to 64 KiB" — but `BashResult` has separate `stdout` and `stderr`. How to split truncated combined output back? Where does the truncation note appear? | open |
+| C1 | `05-agent-model.md:218` | `WebSearchResult` type — referenced but never defined (what fields?) | resolved — `{ title, url, snippet }` |
+| C2 | `05-agent-model.md:218-219` | `web_search` — no backend specified (DuckDuckGo? Google API? SerpAPI?). No auth, rate limiting, or result format | resolved — `WebSearchProvider` interface + DuckDuckGo HTML default; alt backends Day 2 |
+| C3 | `05-agent-model.md:220` | `web_fetch` — no HTTP client policy (follow redirects? max depth? UA string? TLS validation? URL allowlist? max response size?) | resolved — http(s)-only, ≤5 redirects, 5 MiB cap, TLS on, plain text output, 120s timeout |
+| C4 | `04-artifact-store.md:36-37` | `write_artifact`/`read_artifact` — no TypeBox schema, no LLM-facing description, no return type docs (unlike `notify`, `bash`, `web_search`, `web_fetch`) | resolved — full TypeBox schemas in `05-agent-model.md`; `04-artifact-store.md` reduced to brief reference |
+| C5 | `05-agent-model.md:213` | `bash` truncation: "stdout + stderr combined truncated to 64 KiB" — but `BashResult` has separate `stdout` and `stderr`. How to split truncated combined output back? Where does the truncation note appear? | resolved — independent 32 KiB truncation per stream; `truncated: { stdout, stderr }` flag + marker on truncated stream |
 
 ---
 
@@ -85,19 +93,28 @@ Behavior described in prose but implementation mechanism unspecified.
 
 ---
 
-## Group E: Startup, Config & Error Handling
+## Group E: Startup, Config & Error Handling — RESOLVED
 
-Edge cases and failure modes that an implementer must handle but are unspecified.
+Startup, config discovery, validation, MCP failure handling, and shutdown are all fully specified. Captured in `10-configuration.md`, `09-deployment.md`, `12-installation.md`, and `ui/cli.md`. New minimal team blueprint in `jie-team/minimal-team.md`.
+
+**Key decisions:**
+- **No interactive init flow.** Both `jie` (TUI) and `jie -p` walk up for config; if absent, run with all defaults. The built-in minimal team is the default. To customize, the user creates `.jie/config.yaml` manually.
+- **Team resolution order**: `.jie/teams/<team_id>/` (project) → `~/.jie/teams/<team_id>/` (global) → built-in default. If `team_id` is set but no manifest found → startup fails. Default is reached only by omitting `team_id`.
+- **Strict config validation.** YAML parse, unknown key, invalid value, missing user team — any of these is a hard fail with a clear error and exit code 1. No silent fallbacks.
+- **MCP startup**: per-server connect failure logs WARN and skips; team startup continues. Cascade: if the team's blueprint depends on a missing tool, the team fails to start with a precise error.
+- **Graceful shutdown**: 10-second bounded. Send abort to in-flight operations (agent loops, tool calls, MCP requests) via the combined `AbortSignal`; wait up to 10s; force-exit on timeout.
+- **No `jie init` subcommand** in v1.
+- **Prompt queue cap** deferred to Day 2 (backlog #19). v1's `AgentBody` queue is unbounded, matching pi-agent's behavior.
 
 | # | Files | Issue | Status |
 |---|---|---|---|
-| E1 | `09-deployment.md:44`, `ui/cli.md:27` | Team blueprint fallback — "or built-in fallback from `jie-team`." When exactly? `team_path` missing? directory absent? config absent? user cancelled init? | open |
-| E2 | `ui/cli.md:57` | `jie -p` with no config — "walk up to find config (or init)." Does it drop to interactive init before processing `-p` instruction? Or fail? | open |
-| E3 | `10-configuration.md:76-78`, `09-deployment.md:112-115` | MCP server connection failure at startup — hard exit? skip and warn? skip silently? | open |
-| E4 | `ui/cli.md`, `12-installation.md` | `jie init` subcommand — interactive init described as auto-triggered but no explicit `jie init` command exists for manual re-init | open |
-| E5 | `10-configuration.md`, `ui/cli.md` | Config validation — invalid YAML? unknown keys? missing fields? invalid `team_id` charset? Error handling unspecified. | open |
-| E6 | `05-agent-model.md:379`, `08-memory.md:70` | Prompt queue — no max size. No backpressure. Could grow unbounded. | open |
-| E7 | `09-deployment.md` | Graceful shutdown — "finish current turn" but what if the turn is blocked on a tool call? Abort and wait? Force kill after timeout? | open |
+| E1 | `09-deployment.md:44`, `ui/cli.md:27` | Team blueprint fallback — "or built-in fallback from `jie-team`." When exactly? `team_path` missing? directory absent? config absent? user cancelled init? | resolved — `team_id` omitted → built-in minimal team; `team_id` set → user team at standard paths; missing user team → hard fail |
+| E2 | `ui/cli.md:57` | `jie -p` with no config — "walk up to find config (or init)." Does it drop to interactive init before processing `-p` instruction? Or fail? | resolved — no init flow in either mode; all-defaults run with minimal team |
+| E3 | `10-configuration.md:76-78`, `09-deployment.md:112-115` | MCP server connection failure at startup — hard exit? skip and warn? skip silently? | resolved — WARN-and-skip at MCP layer; fail-and-exit at agent-load layer if a blueprint tool can't resolve |
+| E4 | `ui/cli.md`, `12-installation.md` | `jie init` subcommand — interactive init described as auto-triggered but no explicit `jie init` command exists for manual re-init | resolved — no `jie init` in v1; users create config manually |
+| E5 | `10-configuration.md`, `ui/cli.md` | Config validation — invalid YAML? unknown keys? missing fields? invalid `team_id` charset? Error handling unspecified. | resolved — strict validation; every error is a hard fail with clear message; see `10-configuration.md` Config Validation |
+| E6 | `05-agent-model.md:379`, `08-memory.md:70` | Prompt queue — no max size. No backpressure. Could grow unbounded. | deferred to Day 2 — backlog #19 (cap value, drop policy, observability) |
+| E7 | `09-deployment.md` | Graceful shutdown — "finish current turn" but what if the turn is blocked on a tool call? Abort and wait? Force kill after timeout? | resolved — 10s bounded shutdown; send abort via combined `AbortSignal`; force-exit on timeout |
 
 ---
 
@@ -132,8 +149,8 @@ Explicit TBD markers that may block v1 decisions.
 |---|---|---|
 | A | Spec conflicts | Resolved — 9 conflicts fixed |
 | B | Undefined pi-agent types | Resolved — dedicated API reference file created |
-| C | Tool implementation gaps | High — tools un-implementable as specified |
+| C | Tool implementation gaps | Resolved — all built-in tools fully specified |
 | D | Core mechanics "how?" | High — behavior described, mechanism absent |
-| E | Startup/config/errors | Medium — edge cases, error handling |
+| E | Startup/config/errors | Resolved — startup, validation, MCP, shutdown all specified |
 | F | Missing concrete values | Medium — fill-in-the-blank |
 | G | Deferred/TBD | Low — accepted v1 scope gaps |

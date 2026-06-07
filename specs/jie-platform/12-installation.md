@@ -8,7 +8,7 @@
 | Git | Optional | Used only if the user's workflow involves git; Jie has no git integration in v1. |
 | TypeScript / tsconfig | Optional | Only required if the workspace under Jie management is TypeScript. |
 
-No NATS. No Docker. No license server. A supported LLM provider API key is required — set via environment variables (see `10-configuration.md`).
+No NATS. No Docker. No license server. A supported LLM provider API key is required for the runtime to make LLM calls, but it is **not required at install time** — the user runs `jie login` interactively (or sets an env var) before the first `jie` invocation, and the platform refuses to start with a clear error otherwise. See `10-configuration.md` "Credentials Resolution Order".
 
 ### Platform Support
 
@@ -64,23 +64,33 @@ All Jie-internal packages (`jie-platform`, `jie-tui`, `jie-team`, `code-lens`) a
 
 External tool dependencies (linters, formatters, test runners) are **not** installed by Jie. Agents invoke them via the `bash` tool; they must be present in the workspace's `node_modules` or system `PATH`.
 
-## Project Initialization (Interactive)
+## Project Setup (Optional)
 
-When `jie` is run and no `.jie/config.yaml` is found by walking up from CWD, the CLI enters an interactive init flow:
+The `jie` CLI works out of the box with no config file. To customize (custom team, workspace root, stream tunables), create `.jie/config.yaml` manually in the workspace root. All fields are optional; see `10-configuration.md` for the schema and validation rules.
 
-1. **`team_id`** — default: `"default"`. Any string matching `[A-Za-z0-9_-]{1,32}`.
-2. **`workspace_root`** — default: `"."`. Relative to the directory where `.jie/config.yaml` lives.
+### First-Run Credentials and Model
 
-The CLI writes `.jie/config.yaml` and proceeds.
+The platform does not assume a model or provider. The first `jie` invocation in a fresh environment — before the user has run `jie login` and `jie model` — fails fast at the model pre-check with a clear pointer to the right command. Expected sequence on a clean machine:
 
-### Resulting Config
-
-```yaml
-team_id: "my-project"
-workspace_root: "."
+```bash
+jie login                              # one-time: pick a provider, OAuth or paste API key → ~/.jie/auth.json
+jie model anthropic/claude-sonnet-4-5  # one-time: set the global default model → ~/.jie/settings.json
+jie                                   # now the team runs
 ```
 
-Full field semantics in `10-configuration.md`.
+After the first two commands, subsequent `jie` (and `jie -p`) invocations proceed without setup. Credentials and model persist across runs; nothing else needs to be configured to get a runnable agent.
+
+For project-level model overrides (e.g. a team pinned to a specific model id), create `.jie/settings.json` in the project root by hand. It deep-merges over `~/.jie/settings.json`.
+
+### Installing a User Team
+
+To use a non-default team:
+
+1. Create `.jie/teams/<team_id>/` in the project (or `~/.jie/teams/<team_id>/` for a global install).
+2. Place `TEAM.md` and one `.md` per agent role in that directory. See `05-agent-model.md` Blueprint Loading for the file format.
+3. Add `team_id: <team_id>` to `.jie/config.yaml`.
+
+The v1 dev team blueprint (DM/Researcher/Architect/Planner/Implementer/Reviewer) is shipped in the `jie-team` package as a starter template. Users copy the relevant `.md` files into their team directory and set `team_id` accordingly. There is no `jie team install` command in v1.
 
 ## Verification
 
@@ -103,3 +113,5 @@ jie -p "instruction"   # One-shot print mode
 | Install script fails on bun check | `bun --version`. Must be ≥ 1.3.14. Upgrade: `bun upgrade` or see bun.sh. |
 | Install script fails on platform | Native Windows is unsupported. Use WSL2. |
 | `jie` can't find config | Run from within the workspace or create `.jie/config.yaml`. |
+| `jie` exits 1 with "model resolution failed for N agents" | No global default model is set. Run `jie login` (once) and `jie model <provider>/<modelId>` to configure. See `10-configuration.md` "Model Resolution". |
+| `jie` errors at LLM call time with "no API key found" | Run `jie login` for the resolved provider, or set the provider's env var. See `10-configuration.md` "Credentials Resolution Order". |

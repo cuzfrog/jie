@@ -110,11 +110,32 @@ When you finish, call `notify('task.researched', '...')` to signal completion.
 
 | Field | Required | Description |
 |---|---|---|
-| `model` | yes | `<provider>/<model_id>` string. Split on first `/` → `getModel(provider, modelId)` via pi-ai. API keys from environment (see `10-configuration.md`). |
+| `model` | no | `<provider>/<model_id>` string. Split on first `/` → `getModel(provider, modelId)` via pi-ai. If absent, inherited from the user's global default at startup (see `10-configuration.md` "Model Resolution"). |
 | `tools` | yes | list of tool spec strings. Resolved through `ToolRegistry` at load time. |
 | `subscribe` | yes | list of topic strings this agent listens to. May be empty. |
 
 **Prose body** → `AgentSoul.system_prompt`. Provided to the LLM as the system message.
+
+### Model Resolution
+
+The `model:` field is optional. When absent, the platform falls through to the user's global default — see `10-configuration.md` "Model Resolution" for the full chain. The `AgentSoul.model` value is always a resolved `<provider>/<modelId>` string by the time the soul is constructed; the frontmatter field is just the agent's *explicit override* slot.
+
+If a model string is present but malformed (no `/` separator), the platform fails at startup with `invalid model string: <value>` citing the agent's role. The error is part of the supervisor's pre-check (see "Startup Pre-Check" below).
+
+### Startup Pre-Check
+
+The supervisor walks every agent in the blueprint before constructing any `AgentSoul`. For each agent it attempts to resolve a concrete `(provider, modelId)`. If any agent fails, startup exits 1 with a single error message listing every unresolved agent:
+
+```
+model resolution failed for 2 agents:
+  - leader: no default model configured
+  - researcher: no default model configured
+
+Set a global default with `jie model <provider>/<modelId>` (writes ~/.jie/settings.json),
+or add `model: <provider>/<id>` to each agent's .md frontmatter.
+```
+
+This is a hard fail — no partial startup, no agent constructed. The supervisor does not surface a "missing model" error at LLM-call time; that class of error is caught here.
 
 ### Platform Auto-Wiring
 
@@ -201,6 +222,7 @@ interface BashResult {
   exit_code: number;
   stdout:    string;
   stderr:    string;
+  truncated: { stdout: boolean; stderr: boolean };
 }
 ```
 
@@ -210,16 +232,64 @@ Rules:
 - A fixed timeout (default 300s per invocation) kills the process and returns a tool error (`command_timed_out`). The agent sees this as a failed tool invocation.
 - The command runs with the workspace's environment (inherited from the agent process). No isolation sandbox beyond the workspace-root constraint in v1.
 - Shell is `/bin/sh` (POSIX).
-- Output (`stdout` + `stderr` combined) is truncated to 64 KiB; the tool returns a note when truncation occurred.
+- Output: `stdout` and `stderr` are each independently truncated to **32 KiB**. The `truncated` field reports which streams were clipped. A truncated stream has a marker `[truncated to 32 KiB]` appended at the point of truncation.
 
 ### Built-in Tools: `web_search` and `web_fetch`
 
 ```typescript
 web_search(input: { query: string; max_results?: number }): WebSearchResult[]
+
+interface WebSearchResult {
+  title:   string;
+  url:     string;
+  snippet: string;
+}
+
 web_fetch(input: { url: string }): { content: string; truncated: boolean }
 ```
 
 These are built-in tools in `packages/jie-platform/tools/`. They implement the `Tool` interface and are pluggable — the team blueprint may include or exclude them from specific roles.
+
+#### `web_search` Backend
+
+The `web_search` tool delegates to a `WebSearchProvider` implementation. The default provider scrapes DuckDuckGo HTML (`https://html.duckduckgo.com/html/`) — no API key required, works out of the box. The provider interface is narrow so alternative backends (Brave, Tavily, self-hosted SearXNG) can be plugged in later.
+
+```typescript
+interface WebSearchProvider {
+  search(query: string, max_results: number): Promise<WebSearchResult[]>;
+}
+```
+
+The platform registers one provider at startup. The `web_search` tool calls the registered provider and returns its results as-is. v1 ships only the DuckDuckGo adapter; alternative providers are a Day 2 concern.
+
+#### `web_fetch` HTTP Client Policy
+
+| Policy | Value |
+|---|---|
+| URL schemes | `http`, `https` only. Other schemes (e.g. `file:`, `ftp:`, `data:`) are rejected with a tool error. |
+| Redirects | Follow up to 5 hops. |
+| Max response body | 5 MiB. Larger responses are truncated at 5 MiB and `truncated: true` is set. |
+| TLS | Validation enabled. Self-signed certs are not accepted in v1. |
+| User-Agent | `JieBot/0.1 (+https://github.com/cuzfrog/jie)` |
+| Timeout | Inherits the tool's 120s default. |
+| Encoding | UTF-8 default; if `Content-Type` declares a charset, that charset is used. |
+| Content conversion | HTML is stripped to plain text — script/style/nav/header/footer tags removed, remaining text extracted. Non-HTML responses (e.g. `text/plain`, `application/json`, `application/xml`) are returned verbatim. |
+
+The return type is `{ content: string; truncated: boolean }` — the interface is **format-agnostic**. The `content` field carries whatever text the adapter produces; the tool contract is just "give the LLM the text and tell it if you had to cut it off."
+
+### Built-in Tools: `write_artifact` and `read_artifact`
+
+Wrappers over the `ArtifactStore` interface (see `04-artifact-store.md`):
+
+```typescript
+write_artifact(input: { key: string; content: string }): { key: string; created_at: string }
+read_artifact(input: { key: string }): { key: string; content: string; created_at: string } | null
+```
+
+- `write_artifact` — stores `content` at `key`. Overwrites if the key exists. Returns the canonical `{ key, created_at }` so the LLM can reference the artifact in subsequent event payloads. On storage failure (e.g. disk full, permission denied), the call surfaces a tool error.
+- `read_artifact` — returns the entry at `key`, or `null` if not found. A missing artifact is a normal result, not a tool error — the LLM can reason about it.
+
+These are the only two artifact tools exposed to agents. Artifact content is never passed in event payloads; events carry only `artifact_id`.
 
 ## Tool Telemetry
 
@@ -376,6 +446,8 @@ When a message arrives on Jie's EventBus (via `leader.prompt` or a topic subscri
 2. If busy — queues the message in `AgentBody`'s in-memory queue. After `agent_end`, the body checks the queue and calls `agent.prompt(nextMessage)`.
 
 The queue is FIFO, in-memory only (not persisted). Lost on restart. See `08-memory.md` Leader Agent Working Memory.
+
+> **v1 has no cap** on this queue (it is intentionally unbounded, matching pi-agent's `followUpQueue` / `steeringQueue` behavior). A backlog item exists to revisit cap value, drop policy, and observability — see `backlog.md` #19.
 
 ### Memory Persistence
 

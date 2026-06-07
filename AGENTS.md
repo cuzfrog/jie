@@ -20,7 +20,7 @@
 - allow for configuring MCP servers; pluggable tool implementations; provide tool resolution
 - storage interface for: context and memory management ; generic business agnostic artifacts
 - agnostic of jie-team or code-lens
-- depends on `@earendil-works/pi-agent-core`, API Reference in `jie-platform/pi-agent-api-reference.md`
+- depends on `@earendil-works/pi-agent-core`, API Reference in `jie-platform/pi-agent-api-reference.md`. We should follow pi conventions and reuse what it provides.
 
 ### jie-team
 - the `team-blueprint` to build an agentic workflow to run on top of jie-platform

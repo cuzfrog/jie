@@ -81,3 +81,17 @@ In the in-process deployment (v1 default), the leader and all agents run in the 
   When the leader is busy (has not published `agent.idle` since its last prompt), the TUI must show a visible queued-prompt indicator after the user submits a prompt. The indicator clears when the leader picks up the prompt (resumes streaming on `agent.stream.chunk`). If multiple prompts are queued, show the count.
 
   The prompt queue is in-memory only — lost on process restart (acceptable for v1).
+
+## Slash Commands
+
+The TUI exposes three slash commands that mirror the CLI's `login`, `logout`, and `model` subcommands. They mutate the same files (`~/.jie/auth.json`, `~/.jie/settings.json`) and have the same on-disk effect as their CLI counterparts.
+
+| Command | Writes to | Takes effect on |
+|---|---|---|
+| `/login` | `~/.jie/auth.json` | Next LLM call (no restart needed). |
+| `/logout [<provider>]` | `~/.jie/auth.json` | Next LLM call. |
+| `/model <provider>/<modelId>` | `~/.jie/settings.json` | **Restart of `jie` required.** Agents' resolved `(provider, modelId)` is captured at startup; the running session cannot rebind. |
+
+Unstructured text input for `/model` follows the same `<provider>/<modelId>` form as `jie model` in the CLI (see `ui/cli.md`).
+
+Slash commands are the TUI's only writes to disk outside the runtime event log. They run synchronously in the TUI's input loop; the user stays in the TUI on success. `/model` followed by a successful write shows a hint: `default model set; restart jie for the change to take effect on running agents`.

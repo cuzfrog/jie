@@ -13,7 +13,7 @@ packages/
     index.ts        # Barrel: re-exports all public APIs
   jie-tui/        # Terminal UI: renders agent streams, tool calls, pipeline events
   jie-cli/        # CLI entry point (jie binary) — supervisor + command dispatch
-  jie-team/       # Team-specific: role definitions, workflow blueprints, built-in dev team
+  jie-team/       # Team-specific: role definitions, workflow blueprints, built-in dev team + minimal fallback team
 ```
 
 ## Dependencies
@@ -21,7 +21,7 @@ packages/
 ```
 jie-cli → jie-platform  (types, AgentBody, EventBus, ArtifactStore, MemoryManager)
 jie-cli → jie-tui       (import TUI component, pass EventBus + ArtifactStore refs)
-jie-cli → jie-team      (built-in team blueprint fallback, loaded at runtime)
+jie-cli → jie-team      (built-in minimal team as fallback, dev team as starter template)
 jie-tui → jie-platform  (types, event envelope shapes)
 jie-team → jie-platform (types: AgentSoul, ToolSpec)
 code-lens               (standalone — no jie dependencies)
