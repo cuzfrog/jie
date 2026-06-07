@@ -47,7 +47,7 @@ Artifacts are never passed in event payloads. Events carry only `artifact_id`.
 
 v1 keeps all rows indefinitely. No deletion or compaction runs in v1.
 
-GC, archival, and compaction policy is deferred to the **Storage Maintenance** chapter (TBD).
+GC, archival, and compaction policy are deferred to **backlog item #7** (Storage Maintenance chapter — artifact retention, GC, archival, backup; status chain compaction; JetStream pruning).
 
 ## Schema Migration
 

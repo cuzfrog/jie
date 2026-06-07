@@ -291,6 +291,41 @@ read_artifact(input: { key: string }): { key: string; content: string; created_a
 
 These are the only two artifact tools exposed to agents. Artifact content is never passed in event payloads; events carry only `artifact_id`.
 
+### Built-in Tool: `read_file`
+
+`read_file` reads the contents of a file at a path within the workspace. Mirrors pi's `read` tool (`@earendil-works/pi-coding-agent/src/core/tools/read.ts`).
+
+```typescript
+read_file(input: { path: string; offset?: number; limit?: number }): {
+  content: string;
+  truncated: { content: boolean };
+}
+```
+
+Rules:
+
+- `path` is resolved relative to the workspace root. The resolved absolute path must start with the resolved absolute workspace root path. Any `path` that resolves outside the workspace root results in a tool error (`path_escape`).
+- `offset` is 1-indexed (line number). `limit` is the maximum number of lines to read.
+- Default truncation: **2000 lines OR 50 KiB** (whichever is hit first). `truncated.content` reports whether clipping occurred; a marker `[Truncated: showing X of Y lines (50 KiB limit)]` is appended at the cut point.
+- v1 supports **text only**. Image MIME types (`image/jpeg`, `image/png`, `image/gif`, `image/webp`) return a tool error (`unsupported_media_type`). Image attachment support is a Day 2 extension.
+- Inherits the tool's 120s default timeout. Reading is synchronous and bounded; timeout only fires on I/O hang.
+- Encoding: UTF-8. No charset detection in v1.
+
+Description (LLM-facing):
+
+```
+Read the contents of a file at `path` (relative to workspace root, or absolute
+within workspace). For text files, output is truncated to 2000 lines or 50 KiB
+(whichever is hit first). Use offset/limit for large files. When you need the
+full file, continue with offset until complete.
+```
+
+### Built-in Tool: `write_file`
+
+> **Day 2.** The `write_file` tool is needed by the dev team Implementer role (`jie-team/01-role-definitions.md`) but its behavior is entangled with the **frozen-rule enforcement** (jie-team backlog #8): it must parse the file, extract public symbols, canonicalize, and compare against the module descriptor before writing. Until the Module Boundary Enforcement chapter is written, `write_file` is **not in v1's tool set**.
+
+The dev team blueprint (`jie-team`) ships with `write_file` listed in the Implementer role's tool list. v1 ships with the tool list only as documentation — at runtime, the Implementer uses `bash` + redirection (`cat > file <<'EOF' ... EOF`) as a stand-in. Day 2 introduces the proper `write_file` tool once the boundary-enforcement contract is defined.
+
 ## Tool Telemetry
 
 Every tool call is observable on Jie's event bus. The body wires pi-agent's `beforeToolCall` and `afterToolCall` hooks to emit:

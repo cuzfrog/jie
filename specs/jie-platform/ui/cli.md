@@ -79,6 +79,22 @@ jie --version
 
 Prints `jie <version>` to stdout, exits 0. Does not load config.
 
+### Version Source
+
+The CLI reads its version from the umbrella `@cuzfrog/jie` package's `package.json` at startup. Because the monorepo has zero build step (`monorepo-structure.md`), there is no compile-time injection — the value is fetched at runtime.
+
+**Resolution algorithm** (in `packages/jie-cli/version.ts`):
+
+1. Start at `import.meta.dirname` (the directory containing `packages/jie-cli/index.ts`).
+2. Walk up the parent chain. At each level, try to read `package.json`.
+3. Return the first `package.json` whose `name` equals `"@cuzfrog/jie"` — that's the umbrella.
+4. Use `pkg.version` as `VERSION`.
+5. If no matching package.json is found, fall back to `"0.0.0-dev"` (defensive — should not happen in normal installs).
+
+This mirrors pi's `getPackageDir()` / `VERSION` pattern (`@earendil-works/pi-coding-agent/src/config.ts`).
+
+**Why walk up rather than `import ... with { type: "json" }`:** A direct JSON import is resolved relative to the CLI file. In dev (monorepo layout), the umbrella is `../../package.json`. After `bun install -g` (Day 2 publish), bun flattens dependencies and the relative path breaks. The walk-up algorithm handles both layouts.
+
 ## `jie --help`
 
 ```

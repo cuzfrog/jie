@@ -8,7 +8,7 @@ packages/
   jie-platform/   # Platform runtime lib — barrel entry: index.ts
     core/           # AgentBody, AgentSoul, EventBus, Tool interface & registry
     storage/        # ArtifactStore interface + SQLite default implementation
-    tools/          # Built-in tools: notify, bash, web_search, web_fetch
+    tools/          # Built-in tools: notify, bash, read_file, web_search, web_fetch
     team/           # Interface for team-blueprint and build the workflow
     index.ts        # Barrel: re-exports all public APIs
   jie-tui/        # Terminal UI: renders agent streams, tool calls, pipeline events

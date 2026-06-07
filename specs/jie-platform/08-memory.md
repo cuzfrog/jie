@@ -72,7 +72,7 @@ Storing the full JSON-serialized message preserves all fields for `restore()`, w
 
 Messages are stored in the workspace's artifact store (SQLite, same database as artifacts) in a `memory_turns` table. The table is keyed by `(agent_key, session_id, seq)`. This keeps conversation history colocated with work artifacts and avoids a second storage surface.
 
-v1 keeps all rows indefinitely (same retention policy as the artifact store — see `04-artifact-store.md`). GC and pruning are deferred to the Storage Maintenance chapter (TBD).
+v1 keeps all rows indefinitely (same retention policy as the artifact store — see `04-artifact-store.md`). GC and pruning are deferred to **backlog item #7** (Storage Maintenance chapter).
 
 ## Leader Agent Working Memory
 

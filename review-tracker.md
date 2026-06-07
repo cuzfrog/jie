@@ -118,28 +118,35 @@ Startup, config discovery, validation, MCP failure handling, and shutdown are al
 
 ---
 
-## Group F: Missing Concrete Values
+## Group F: Missing Concrete Values — RESOLVED
 
-Placeholders and deferred decisions an implementer needs.
+All five items resolved. Captured across `12-installation.md`, `ui/cli.md`, `00-overview.md`, `05-agent-model.md`, `monorepo-structure.md`, `backlog.md`.
+
+**Key decisions:**
+- **F1**: v1 only supports local install (`git clone` + `bun link --global`). The polished install script (`https://install.jie.dev`) and npm publish are deferred to Day 2 — see backlog #20.
+- **F2**: Public git URL is `https://cuzfrog.github.com/jie` (per project owner). Substituted in the Manual Install section.
+- **F3**: `jie --version` reads from the umbrella `@cuzfrog/jie` package.json by walking up from `import.meta.dirname` until a `name: "@cuzfrog/jie"` package.json is found. Mirrors pi's `getPackageDir()` / `VERSION` pattern (`@earendil-works/pi-coding-agent/src/config.ts`). Fallback: `0.0.0-dev`.
+- **F4**: Already resolved — the migration block in `04-artifact-store.md` shows the full `memory_turns` DDL with all `TurnRecord` fields, no `...` placeholder.
+- **F5**: `read_file` is a built-in platform tool (mirrors pi's `read`). Added to `jie-platform/tools/`. `write_file` is documented as needed by the dev team Implementer but deferred to Day 2 (entangled with frozen-rule enforcement, jie-team backlog #8).
 
 | # | Files | Issue | Status |
 |---|---|---|---|
-| F1 | `12-installation.md:44` | Install version — "latest stable" is not a concrete semver | open |
-| F2 | `12-installation.md:55` | Git repo URL — `<repo>` placeholder | open |
-| F3 | `ui/cli.md:77-84` | `jie --version` source — package.json? hardcoded constant? build-time injection? | open |
-| F4 | `04-artifact-store.md:67` | `memory_turns` DDL hidden behind `...` — implementer must cross-reference `08-memory.md` for `TurnRecord` fields and infer DDL | open |
-| F5 | `00-overview.md:22` | Glossary lists `read_file` as example tool — but `read_file` is not a built-in tool (it's an MCP tool from code-lens). Misleading for implementer. | open |
+| F1 | `12-installation.md:44` | Install version — "latest stable" is not a concrete semver | resolved — defer to Day 2 (backlog #20); v1 only supports local install via `bun link` |
+| F2 | `12-installation.md:55` | Git repo URL — `<repo>` placeholder | resolved — `https://cuzfrog.github.com/jie` |
+| F3 | `ui/cli.md:77-84` | `jie --version` source — package.json? hardcoded constant? build-time injection? | resolved — walk-up from `import.meta.dirname` to find umbrella `package.json`; fallback `0.0.0-dev` |
+| F4 | `04-artifact-store.md:67` | `memory_turns` DDL hidden behind `...` — implementer must cross-reference `08-memory.md` for `TurnRecord` fields and infer DDL | resolved — full DDL already in migration block |
+| F5 | `00-overview.md:22` | Glossary lists `read_file` as example tool — but `read_file` is not a built-in tool (it's an MCP tool from code-lens). Misleading for implementer. | resolved — `read_file` is now a built-in platform tool; `write_file` noted as Day 2 |
 
 ---
 
-## Group G: Deferred/TBD
+## Group G: Deferred/TBD — RESOLVED
 
-Explicit TBD markers that may block v1 decisions.
+Both items referenced a non-existent "Storage Maintenance chapter (TBD)". Resolved by replacing the dangling pointer with the existing backlog reference (backlog item #7, which already captures the chapter's scope). v1's retention policy ("keep everything indefinitely") is unchanged.
 
 | # | Files | Issue | Status |
 |---|---|---|---|
-| G1 | `04-artifact-store.md:51` | "GC, archival, and compaction policy is deferred to the **Storage Maintenance** chapter (TBD)" | open |
-| G2 | `08-memory.md:64` | "GC and pruning are deferred to the Storage Maintenance chapter (TBD)" — same TBD chapter | open |
+| G1 | `04-artifact-store.md:51` | "GC, archival, and compaction policy is deferred to the **Storage Maintenance** chapter (TBD)" | resolved — replaced TBD pointer with backlog #7 reference |
+| G2 | `08-memory.md:64` | "GC and pruning are deferred to the Storage Maintenance chapter (TBD)" — same TBD chapter | resolved — replaced TBD pointer with backlog #7 reference |
 
 ---
 
@@ -150,7 +157,7 @@ Explicit TBD markers that may block v1 decisions.
 | A | Spec conflicts | Resolved — 9 conflicts fixed |
 | B | Undefined pi-agent types | Resolved — dedicated API reference file created |
 | C | Tool implementation gaps | Resolved — all built-in tools fully specified |
-| D | Core mechanics "how?" | High — behavior described, mechanism absent |
+| D | Core mechanics "how?" | Resolved — ADRs 8 and 9, plus user-intentions.md |
 | E | Startup/config/errors | Resolved — startup, validation, MCP, shutdown all specified |
-| F | Missing concrete values | Medium — fill-in-the-blank |
-| G | Deferred/TBD | Low — accepted v1 scope gaps |
+| F | Missing concrete values | Resolved — install deferred to Day 2, repo URL/version source set, `read_file` added as built-in |
+| G | Deferred/TBD | Resolved — TBD pointers replaced with backlog #7 references |

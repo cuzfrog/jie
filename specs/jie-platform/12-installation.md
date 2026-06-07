@@ -21,42 +21,37 @@ No NATS. No Docker. No license server. A supported LLM provider API key is requi
 
 ## One-Liner Install
 
+> **Day 2.** The polished install script at `https://install.jie.dev` (OS check, bun check, pinned version, idempotent re-run) is a Day 2 concern — see backlog. v1 supports only manual install.
+
 ```bash
 curl -fsSL https://install.jie.dev | sh
 ```
 
-This script installs `@cuzfrog/jie` globally. It is the only supported installation path for v1. The version is pinned in the script.
-
-### Install Script Contract
-
-1. **OS check.** Detects macOS or Linux (including WSL). Exits with an error on native Windows.
-2. **bun check.** Detects `bun --version`. If absent or < 1.3.14, prints an error directing to `https://bun.sh` and exits.
-3. **Jie install.** Runs `bun install -g @cuzfrog/jie` with the pinned version.
-4. **Verification.** Runs `jie --version` to confirm the binary is callable.
-
-The script is idempotent — re-running it upgrades to the pinned version or no-ops if already current.
+When implemented (Day 2), this script installs `@cuzfrog/jie` globally. The version is pinned in the script.
 
 ### Pinned Versions (v1)
 
 | Component | Version | Rationale |
 |---|---|---|
 | bun | ≥ 1.3.14 | Minimum runtime for native TypeScript execution and package management. |
-| @cuzfrog/jie | latest stable | CLI, supervisor, agent bodies, TUI — all in one package. |
+| @cuzfrog/jie | workspace (dev) | CLI, supervisor, agent bodies, TUI — all in one package. The published install path (Day 2) pins a concrete semver. |
 
-## Manual Install (Fallback)
+## Manual Install (v1 path)
+
+```bash
+git clone https://cuzfrog.github.com/jie
+cd jie
+bun install
+bun link --global
+```
+
+Or, if `@cuzfrog/jie` is already published locally (Day 2):
 
 ```bash
 bun install -g @cuzfrog/jie
 ```
 
-From-source build:
-
-```bash
-git clone <repo>
-cd jie
-bun install
-bun link --global
-```
+After either path, `jie --version` confirms the binary is callable.
 
 ## Runtime Dependencies (Shipped with Jie)
 
