@@ -21,17 +21,17 @@ The default dev team is defined in `packages/jie-team/`. It provides:
 - Serial pipeline workflow
 - Task lifecycle with iteration loop
 
-## Per-Role Budget Overrides (Day 2)
+## Per-Role Settings (Day 2)
 
-v1 applies the same `error_turn_budget` and `total_turn_budget` from platform config to all roles. Per-role tuning is deferred to Day 2. The schema reserves a `roles` block:
+v1 applies platform config to all roles uniformly. Per-role tuning is deferred to Day 2. The schema reserves a `roles` block for future use:
 
 ```yaml
 # Day 2 — not yet implemented
 # roles:
 #   implementer:
-#     error_turn_budget: 15
+#     max_iterations: 3
 #   researcher:
-#     total_turn_budget: 100
+#     max_iterations: 1
 ```
 
 ## max_iterations

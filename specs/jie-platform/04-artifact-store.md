@@ -64,7 +64,17 @@ const MIGRATIONS: Array<(db: Database) => void> = [
   // v0 → v1: initial schema
   (db) => {
     db.run(`CREATE TABLE IF NOT EXISTS artifacts (key TEXT PRIMARY KEY, content TEXT NOT NULL, created_at TEXT NOT NULL)`);
-    db.run(`CREATE TABLE IF NOT EXISTS memory_turns (...)`);
+    db.run(`CREATE TABLE IF NOT EXISTS memory_turns (
+      session_id TEXT NOT NULL,
+      agent_key  TEXT NOT NULL,
+      seq        INTEGER NOT NULL,
+      role       TEXT NOT NULL,
+      content    TEXT NOT NULL,
+      compacted  INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (agent_key, session_id, seq)
+    )`);
+    db.run(`CREATE INDEX idx_memory_turns_session ON memory_turns (agent_key, session_id, seq)`);
   },
   // Future migrations added here
 ];

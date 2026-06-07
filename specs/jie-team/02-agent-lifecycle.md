@@ -83,7 +83,7 @@ The pipeline re-enters at Implementer → Reviewer for the new iteration. Loop c
 
 `task.failed` is emitted by:
 
-- An agent whose `error_turn_budget` or `total_turn_budget` is exhausted on the current event.
+- An agent that encounters an unrecoverable error during the current event (e.g., repeated tool failures, internal exception).
 - The implementer when hitting a hard module-boundary block it cannot reason its way around.
 - The planner when iteration cap is reached.
 - The DM if external finalization on `task.review_passed` fails irrecoverably.

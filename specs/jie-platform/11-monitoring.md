@@ -24,10 +24,10 @@ With heartbeats removed, the TUI derives agent status from the following:
 | Agent is alive | AgentBody is instantiated and subscribed to EventBus |
 | Agent is busy | `agent.stream.chunk` or `agent.tool.call` was recently received for this agent, and no `agent.idle` has followed |
 | Agent is idle | `agent.idle` event received; no subsequent streaming or tool activity |
-| Agent errored | Domain event received with `error:` prefix in `prompt` (e.g., `error: "missing_emission"`) |
+| Agent errored | Domain event received with `error:` prefix in `prompt` (e.g., `error: "..."`) |
 
 The TUI does not need a heartbeat interval — it observes events as they arrive on the bus. Since everything is in-process, there is no network partition or missed-event concern.
 
 ## Error Surfacing
 
-When an agent encounters an unrecoverable condition, it publishes a terminal event via `notify` with an error string as the `prompt` (e.g., `error = "missing_emission"`), then transitions to idle. The TUI surfaces the error to the user.
+When an agent encounters an unrecoverable condition, the body publishes a terminal event via `notify` with an error string as the `prompt` (e.g., `error: "..."`), then publishes `agent.idle`. The TUI surfaces the error to the user.

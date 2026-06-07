@@ -269,9 +269,7 @@ While running:
 2. If currently processing a prior message, the incoming message waits until the agent is idle.
 3. When idle, pick up the next message and process it.
 
-Processing a prompt = one LLM-driven loop of (think → optionally call tools → think → ...). The LLM may call `notify(topic, prompt)` at any point to broadcast to other agents; this does not end the turn. The turn ends when the LLM produces a response with no further tool calls.
-
-If the LLM ends its response without calling `notify`, the body grants exactly **one grace turn**: it sends a system-level reminder to the LLM ("your turn ended without calling `notify`; emit now or explain why you cannot") and resumes the loop. If the next response also ends without a successful `notify`, the body calls `notify` itself with `error = "missing_emission"` as the prompt, then goes idle.
+Processing a prompt = one LLM-driven loop managed by pi-agent's `Agent`. The loop runs (think → optionally call tools → think → ...) until the LLM's `stopReason` is `"stop"`, `"length"`, `"error"`, or `"aborted"`. The LLM calls `notify(topic, prompt)` when the system prompt instructs it to — `notify` is a regular tool, not a loop-control mechanism. See pi-agent Integration Contract for loop termination details.
 
 ### Concurrency Model
 
@@ -283,7 +281,7 @@ The leader enforces a single-task-in-flight invariant via its system prompt — 
 
 Agents resolve errors using LLM reasoning; they are not crash-and-restart components. Tool errors are returned to the LLM as tool-result messages in the same conversation; the LLM may try a different approach.
 
-**Grace turn.** The sole platform-enforced termination: if the LLM ends a response without calling `notify`, the body sends a system reminder and resumes the loop. If the next response also ends without a successful `notify`, the body publishes a terminal `notify` with `error = "missing_emission"` and goes idle.
+**Loop termination.** pi-agent's loop terminates when the LLM returns `stopReason: "stop"` (natural end), `"length"` (token limit), `"error"`, or `"aborted"`. Jie does not add its own termination logic on top of pi-agent's loop. `ToolResult.terminate` is a pi-agent mechanism — if a tool returns `terminate: true`, pi-agent stops executing remaining tools in the batch and exits the inner loop. Jie tools may set `terminate: true` but this is pi-agent's concern, not Jie's.
 
 **MCP server crash mid-session.** If an MCP server becomes unreachable while a tool call is in flight, the in-flight call times out (per the default 120s timeout) or returns `mcp_server_unreachable`. The error surfaces to the LLM as a tool-result error — the agent handles it like any other tool error and may retry or degrade gracefully. No process exit. Subsequent MCP calls to the same server return errors until the server is reconnected.
 
@@ -336,7 +334,7 @@ At construction time, each Jie `Tool` from `AgentSoul.tools` is wrapped into pi-
 | `name`, `description`, `label` | Copied directly from Jie `Tool` |
 | `parameters` | Jie `Tool.parameters` (TypeBox `TSchema`), passed directly |
 | `prepareArguments(raw)` | `TypeBox.Value.Create(parameters, raw)` — coerces defaults, then `TypeBox.Value.Validate(parameters, result)` — validates. Throws on validation failure; pi-agent surfaces it as a tool error to the LLM. |
-| `execute(toolCallId, params, signal?, onUpdate?)` | Combines `signal` with `AbortSignal.timeout(tool.timeout ?? 120_000)`, calls `tool.execute(params, ctx, combinedSignal)`. Wraps return value: `{ content: [{ type: "text", text: result.content }], details: result.details, terminate: result.terminate ?? false }`. On throw (including `AbortError`), re-throws; pi-agent marks the result as `isError`. |
+| `execute(toolCallId, params, signal?, onUpdate?)` | Combines `signal` with `AbortSignal.timeout(tool.timeout ?? 120_000)`: if pi-agent provides a signal, uses `AbortSignal.any([piSignal, AbortSignal.timeout(timeout)])`; if pi-agent signal is undefined, uses `AbortSignal.timeout(timeout)` alone. Calls `tool.execute(params, ctx, combinedSignal)`. Wraps return value: `{ content: [{ type: "text", text: result.content }], details: result.details, terminate: result.terminate ?? false }`. On throw (including `AbortError`), re-throws; pi-agent marks the result as `isError`. |
 | `executionMode` | Always `"sequential"` |
 
 `ExecutionContext` is closed over at adaptation time — `session_id`, `agent_key`, `agent_role`, and `artifacts` are bound once. Tools never receive different execution contexts within the same agent's lifetime.
@@ -353,20 +351,20 @@ pi-agent emits events via `agent.subscribe(listener)`. Jie subscribes to these a
 | `message_update({ message, assistantMessageEvent })` | `agent.stream.chunk` | Buffered: flush at 64 chars or 200ms (see below) |
 | `message_start({ message })` | — | Streaming bookkeeping; no bus event |
 | `turn_start` | — | Internal turn tracking |
-| `turn_end({ message, toolResults })` | — | Grace turn check: did the LLM call `notify`? |
+| `turn_end({ message, toolResults })` | — | Turn bookkeeping. pi-agent decides loop continuation based on `message.stopReason` and `ToolResult.terminate`. |
 | `tool_execution_start` | — | Deferred to Day 2 (currently `beforeToolCall` covers this) |
 | `tool_execution_end` | — | Deferred to Day 2 (currently `afterToolCall` covers this) |
 
-The grace turn mechanism is Jie's own logic in the `turn_end` handler: if the assistant message contains no `notify` tool call, Jie queues a system reminder via `agent.steer()`. If the next turn also lacks a `notify`, Jie calls the `notify` tool itself with `error = "missing_emission"`.
+Jie uses `turn_end` for turn bookkeeping only. Loop continuation is pi-agent's responsibility: it checks `message.stopReason` (if `"toolUse"`, loop continues; otherwise exits) and `ToolResult.terminate` (if all tools in batch returned `terminate: true`, loop exits).
 
 ### Streaming Pipeline
 
 pi-agent emits `message_update` on every token delta (text/thinking/tool_call content). Jie buffers these:
 
-1. On first `message_update` of a new stream, allocate a new buffer and `stream_id` (per-LLM-invocation counter).
+1. On first `message_update` of a new stream, allocate a new buffer, `stream_id` (per-LLM-invocation counter), and start a flush timer (`setTimeout`, `stream_flush_ms` default 200ms).
 2. Append delta text to the buffer.
-3. If buffer length ≥ `stream_chunk_size` (default 64 chars) OR `stream_flush_ms` (default 200ms) elapsed since first buffered character, publish `agent.stream.chunk` with `{ stream_id, seq, text }` and reset the buffer.
-4. On `message_end` (assistant response complete), flush remaining buffer as final chunk and publish `agent.stream.end` with `{ stream_id, total_chunks }`.
+3. Flush when: buffer length ≥ `stream_chunk_size` (default 64 chars), or the flush timer fires (200ms since first buffered char). On flush, publish `agent.stream.chunk` with `{ stream_id, seq, text }`, reset the buffer, and clear the timer.
+4. On `message_end` (assistant response complete), clear the timer, flush remaining buffer as final chunk, and publish `agent.stream.end` with `{ stream_id, total_chunks }`.
 
 Streaming events are published on Jie's EventBus; the TUI and `-p` mode consume them.
 
@@ -387,12 +385,13 @@ Memory is durable but session-scoped: a new process run gets a new `session_id`,
 
 pi-agent's `transformContext` hook is wired but passive in v1: Jie's default `transformContext` is the identity function (no-op). Automatic compaction via pi-agent's `CompactionSettings` is deferred to Day 2 — the defaults are configured but not activated (`enabled: false` for v1). When enabled, `memory.compact()` records compaction summaries.
 
-### Grace Turn
+### Loop Termination
 
-After `turn_end`, Jie inspects the assistant message. If the LLM did not call `notify`:
+pi-agent's `Agent` loop terminates based on the LLM's `stopReason` field on `AssistantMessage`:
+- `"stop"` — LLM finished naturally (no more to say, no tool calls). Loop exits.
+- `"length"` — LLM hit max output tokens. Loop exits.
+- `"toolUse"` — LLM requested tool calls. Loop continues after tool execution.
+- `"error"` / `"aborted"` — API error or abort. Loop exits immediately.
 
-1. **First failure**: Queue a system reminder via `agent.steer({ role: "user", content: "Your turn ended without calling `notify`. Emit now or explain why you cannot." })`. The loop continues; pi-agent processes the steering message.
-2. **Second consecutive failure**: The body calls `notify(error = "missing_emission")` on the agent's behalf, publishes `agent.idle`, and stops the loop.
-
-If the LLM calls `notify` successfully at any point, the grace counter resets.
+Jie does not add grace turns or platform-level termination logic. The LLM is trusted to call `notify` per its system prompt. `ToolResult.terminate` is pi-agent's mechanism for a tool to signal "stop after this batch" — it is not Jie's concern.
 ```

@@ -60,23 +60,28 @@ Tools declared but underspecified to the point of being un-implementable.
 
 ---
 
-## Group D: Core Mechanics "How?"
+## Group D: Core Mechanics "How?" — RESOLVED
 
 Behavior described in prose but implementation mechanism unspecified.
 
+**Key ADRs/intentions:**
+- ADR 8 (no grace turn — trust the LLM): `./addrs/8-no-grace-turn.md`
+- ADR 9 (AgentBody mechanisms: signal, streaming, self-receipt, subscriberCount): `./addrs/9-agent-body-mechanisms.md`
+- User intentions: `./user-intentions.md`
+
 | # | Files | Issue | Status |
 |---|---|---|---|
-| D1 | `03-event-system.md:18,48-59`, `05-agent-model.md:242-261` | Event envelope construction — who wraps `AgentEvent`? TUI publishes `leader.prompt` but has no `agent_role` or `agent_key`. What values go in the envelope? | open |
-| D2 | `05-agent-model.md:360,392-396` | Grace turn detection — "Jie inspects the assistant message. If the LLM did not call `notify`..." — how? Scan `toolResults` in `turn_end`? Parse message text? Mechanism unspecified. | open |
-| D3 | `05-agent-model.md:186` | `notify` recipient count — "returns `recipients: <subscriber count>`" — count of what? Active agent bodies? Callbacks on bus? Counting mechanism undefined. | open |
-| D4 | `08-memory.md:15,50-59` | `AgentMessage` → `TurnRecord` serialization — `persist()` takes `AgentMessage` (pi-agent type) but `TurnRecord` has `role, content`. How is the mapping done? Is content JSON? Plain text? | open |
-| D5 | `08-memory.md:36-41,77` | Compaction range detection — body must compute `compactedSeqRange: [number, number]` from the `CompactionSummaryMessage`. How? | open |
-| D6 | `10-configuration.md:24-25,38-39` | Turn budgets (`error_turn_budget`, `total_turn_budget`) — enforcement mechanism never described. Not in pi-agent integration table. Is this a Jie wrapper or pi-agent feature? | open |
-| D7 | `05-agent-model.md:142,339` | Tool `signal` parameter — `execute(input, ctx, signal?)`. What happens when pi-agent provides no signal? The adaptation layer "combines" signals — handle `undefined`? | open |
-| D8 | `03-event-system.md:90-97`, `05-agent-model.md:362-369` | Streaming flush timer — "200ms" but mechanism unspecified. `setTimeout`? `setInterval`? Debounced flush? How to handle bursts? | open |
-| D9 | `03-event-system.md:116`, `05-agent-model.md:185` | Self-receipt filtering — "event bus filters self-receipt." Is this in `InProcessEventBus.publish()` or in the `AgentBody` subscription callback? | open |
-| D10 | `05-agent-model.md:147` | `ToolResult.terminate` — described as "hint: stop LLM loop after this tool batch." How does Jie act on this hint? Force `agent.idle`? Skip grace turn? Undefined. | open |
-| D11 | `10-configuration.md:24-25` | Turn budget semantics — "decrements on turns consuming tool errors" vs "decrements on every LLM turn." Budget exhaustion → what? Grace turn? Force idle? | open |
+| D1 | `03-event-system.md:18,48-59`, `05-agent-model.md:242-261` | Event envelope construction — who wraps `AgentEvent`? TUI publishes `leader.prompt` but has no `agent_role` or `agent_key`. What values go in the envelope? | resolved — only `AgentBody` constructs envelopes; TUI/CLI publish raw payloads; user's intent captured in `user-intentions.md` |
+| D2 | `05-agent-model.md:360,392-396` | Grace turn detection — "Jie inspects the assistant message. If the LLM did not call `notify`..." — how? Scan `toolResults` in `turn_end`? Parse message text? Mechanism unspecified. | resolved — no grace turn in v1; loop terminates on pi-agent's `stopReason`; see ADR 8 |
+| D3 | `05-agent-model.md:186` | `notify` recipient count — "returns `recipients: <subscriber count>`" — count of what? Active agent bodies? Callbacks on bus? Counting mechanism undefined. | resolved — `EventBus.subscriberCount(subject)` added; `notify` returns that count; see ADR 9 §4 |
+| D4 | `08-memory.md:15,50-59` | `AgentMessage` → `TurnRecord` serialization — `persist()` takes `AgentMessage` (pi-agent type) but `TurnRecord` has `role, content`. How is the mapping done? Is content JSON? Plain text? | resolved — `role` from `AgentMessage.role`; `content = JSON.stringify(AgentMessage)`; see `08-memory.md` Serialization section |
+| D5 | `08-memory.md:36-41,77` | Compaction range detection — body must compute `compactedSeqRange: [number, number]` from the `CompactionSummaryMessage`. How? | resolved — moot for v1 (compaction disabled per `enabled: false`); spec documents contract for Day 2 when enabled |
+| D6 | `10-configuration.md:24-25,38-39` | Turn budgets (`error_turn_budget`, `total_turn_budget`) — enforcement mechanism never described. Not in pi-agent integration table. Is this a Jie wrapper or pi-agent feature? | resolved — fields removed from `10-configuration.md`; covered by ADR 6 |
+| D7 | `05-agent-model.md:142,339` | Tool `signal` parameter — `execute(input, ctx, signal?)`. What happens when pi-agent provides no signal? The adaptation layer "combines" signals — handle `undefined`? | resolved — `AbortSignal.any([piSignal, AbortSignal.timeout(timeout)])` if signal provided; `AbortSignal.timeout` alone if not; see ADR 9 §1 |
+| D8 | `03-event-system.md:90-97`, `05-agent-model.md:362-369` | Streaming flush timer — "200ms" but mechanism unspecified. `setTimeout`? `setInterval`? Debounced flush? How to handle bursts? | resolved — `setTimeout` per stream, reset on flush, clear on `message_end`; see ADR 9 §2 |
+| D9 | `03-event-system.md:116`, `05-agent-model.md:185` | Self-receipt filtering — "event bus filters self-receipt." Is this in `InProcessEventBus.publish()` or in the `AgentBody` subscription callback? | resolved — filtered in `AgentBody` subscription callback; keeps `EventBus` transport-agnostic; see ADR 9 §3 |
+| D10 | `05-agent-model.md:147` | `ToolResult.terminate` — described as "hint: stop LLM loop after this tool batch." How does Jie act on this hint? Force `agent.idle`? Skip grace turn? Undefined. | resolved — not Jie's concern; `terminate` is pi-agent's mechanism; Jie tools may set it but loop termination depends on LLM `stopReason` |
+| D11 | `10-configuration.md:24-25` | Turn budget semantics — "decrements on turns consuming tool errors" vs "decrements on every LLM turn." Budget exhaustion → what? Grace turn? Force idle? | resolved — budgets removed entirely per ADR 6; see ADR 8 (no grace turn) |
 
 ---
 

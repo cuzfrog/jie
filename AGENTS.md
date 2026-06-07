@@ -20,6 +20,7 @@
 - allow for configuring MCP servers; pluggable tool implementations; provide tool resolution
 - storage interface for: context and memory management ; generic business agnostic artifacts
 - agnostic of jie-team or code-lens
+- depends on `@earendil-works/pi-agent-core`, API Reference in `jie-platform/pi-agent-api-reference.md`
 
 ### jie-team
 - the `team-blueprint` to build an agentic workflow to run on top of jie-platform
@@ -31,7 +32,7 @@
 - a standalone mcp server to provide code architectural information without the need to dive into the code.
 
 ## Document rules
-- Keep your writing concise but accurate enough to avoid guess room.
+- Keep your writing concise but accurate enough to avoid guessing room.
 - Do not keep intermediate, transient history in md files under `specs/`, they are the update-to-date blueprint for the project.
 - Do not record what you've done if the information is not helpful to make subsequent decisions.
 
@@ -39,10 +40,3 @@
 - When I ask a question, answer it before any actions.
 - When I make a decision, reason it thoroughly, then express your opinion. Only when we both agree, we move on.
 - Stick to fact. Our purpose is to build a good software, don't fluff, challenge my ideas.
-
-## What you do
-- When an important decision is done, write our architectural design decision to dir `./addrs/<N>-<name>.md`, only record those that are consequential to software architecture, keep simple and conscise.
-- Review items one by one with the me, discuss with me for assumptions and consequential decisions. Ask me questions and make decisions together with me. Before asking me you need to do thorough analysis of the architecture, find out sound options and give a recommendation. Ensure we are on the same page.
-- Capture my instentions and record them.
-- Update specs to reflect our decisions, update `./review-tracker.md` for the progress (the tracker is a temporary file). Compact information that has been resolved, we should shift focus on outstanding items.
-oka

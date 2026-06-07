@@ -60,7 +60,7 @@ class Agent {
 **Usage notes:**
 - `prompt()` starts a new conversation turn. Blocks until the agent reaches idle.
 - `continue()` resumes from the current transcript. The last message must be a user or tool-result message.
-- `steer()` queues a message to inject after the current assistant turn finishes (used by Jie for the grace turn reminder).
+- `steer()` queues a message to inject after the current assistant turn finishes. Jie does not use `steer` in v1 (no grace turn).
 - `followUp()` queues a message to inject after the agent would otherwise stop.
 - `subscribe()` returns an unsubscribe function. Event listener receives an `AbortSignal` for the current run.
 
@@ -317,7 +317,7 @@ type AgentEvent =
 | `agent_start` | Agent processing loop begins | — (internal) |
 | `agent_end` | Agent processing loop complete; all messages produced | Triggers `agent.idle` publish |
 | `turn_start` | New assistant turn begins | — (internal) |
-| `turn_end` | Assistant turn complete (response + any tool results) | Grace turn check |
+| `turn_end` | Assistant turn complete (response + any tool results) | Turn bookkeeping. pi-agent decides loop continuation based on `message.stopReason` and `ToolResult.terminate`. |
 | `message_start` | Any message added to transcript | — (internal) |
 | `message_update` | Token delta during assistant streaming | `agent.stream.chunk` (buffered) |
 | `message_end` | Message finalized | `memory.persist()` |

@@ -19,10 +19,6 @@ team_path: "./teams/default"
 # Required — path resolution root
 workspace_root: "."
 
-# Budget defaults — applied at body construction for all agents.
-error_turn_budget: 30       # per-event-loop error tolerance
-total_turn_budget: 200      # per-event-loop hard turn cap
-
 # Streaming tunables
 stream_chunk_size: 64       # characters per agent.stream.chunk
 stream_flush_ms: 200        # max ms before flushing a stream chunk
@@ -35,8 +31,6 @@ stream_flush_ms: 200        # max ms before flushing a stream chunk
 | `team_id` | string | — | Team identity. Charset `[A-Za-z0-9_-]`, max 32 chars. Used for display and future multi-team isolation. |
 | `team_path` | string | `"./teams/default"` | Path to the team blueprint directory (contains `TEAM.md` + agent `.md` files). Relative paths resolve against the config file's directory. |
 | `workspace_root` | string | `"."` | Root directory for path resolution. Relative paths resolve against the config file's directory. |
-| `error_turn_budget` | number | `30` | Per-agent, per-event-loop error tolerance. Decrements on turns consuming tool errors. Exhaustion → agent publishes terminal event and goes idle. |
-| `total_turn_budget` | number | `200` | Per-agent, per-event-loop hard turn cap. Decrements on every LLM turn. |
 | `stream_chunk_size` | number | `64` | Characters per `agent.stream.chunk` event. |
 | `stream_flush_ms` | number | `200` | Max ms before flushing a partial stream chunk. |
 

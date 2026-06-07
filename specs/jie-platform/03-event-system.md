@@ -19,11 +19,13 @@ The in-process implementation is the v1 default. NATS is a pluggable transport f
 interface EventBus {
   publish(subject: string, payload: object): void;
   subscribe(subject: string, callback: (subject: string, payload: object) => void): () => void;
+  subscriberCount(subject: string): number;
 }
 ```
 
 - `publish` — fire-and-forget. Synchronous callback dispatch in-process; async flush in NATS mode.
 - `subscribe` — returns an unsubscribe function. Callbacks are invoked in publish order within a subject.
+- `subscriberCount` — returns the number of active callbacks subscribed to a subject. Used by `notify` to report recipient count.
 - No `request` method — request-reply is an application-layer concern built on pub/sub.
 
 ## Subject Schema
@@ -115,12 +117,12 @@ When an agent transitions from `busy` to `idle` (work unit complete, terminal ev
 
 The `notify` tool (see `05-agent-model.md`) is the sole inter-agent communication channel. It publishes `{ topic, prompt, source }` on the bus to `{topic}`. Every agent auto-subscribes to its own `{agent_key}`, enabling direct addressing. Domain topic subscriptions are declared in the agent's `.md` frontmatter `subscribe:` field.
 
-The event bus filters self-receipt: an agent does not receive events it published on topics it subscribes to. This prevents notification loops.
+Self-receipt filtering is done in `AgentBody`'s subscription callback — if the event's `source` matches the agent's own `agent_key`, the callback skips processing. This keeps the `EventBus` transport-agnostic; a future `NatsEventBus` would not need agent-identity awareness.
 
-The `notify` tool does not end the LLM's turn — the LLM decides when the turn is complete.
+The `notify` tool is a regular tool — it does not control the LLM loop. The LLM decides when the turn is complete via `stopReason`.
 
 ## In-Process Implementation
 
-The default `InProcessEventBus` is a `Map<string, Set<Callback>>`. No serialization, no network. Callbacks are invoked synchronously in subscription order. Unsubscribe removes the callback from the set.
+The default `InProcessEventBus` is a `Map<string, Set<Callback>>`. No serialization, no network. Callbacks are invoked synchronously in subscription order. Unsubscribe removes the callback from the set. `subscriberCount(subject)` returns `callbacksForSubject.size`.
 
 A future `NatsEventBus` implements the same interface over NATS core pub/sub with JSON serialization. No JetStream in v1. Agent restart and replay are Day 2 concerns.

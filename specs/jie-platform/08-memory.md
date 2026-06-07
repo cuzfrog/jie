@@ -36,7 +36,7 @@ Called on every `message_end` event emitted by the pi-agent. The message is seri
 
 ### Compact
 
-pi-agent's `transformContext` handles compaction: it selects raw messages to compact, generates a summary via a separate LLM call, and injects a `CompactionSummaryMessage` into the message array. **Compaction turns do not consume `total_turn_budget`** — they are infrastructure overhead, not agent reasoning. When compaction completes, the agent body calls `memory.compact()` to sync storage:
+pi-agent's `transformContext` handles compaction: it selects raw messages to compact, generates a summary via a separate LLM call, and injects a `CompactionSummaryMessage` into the message array. When compaction completes, the agent body calls `memory.compact()` to sync storage:
 
 1. The summary message is persisted as a new row (like any other message).
 2. The raw messages in the compacted range are marked `compacted = true`.
@@ -55,11 +55,20 @@ interface TurnRecord {
   agent_key:  string;
   seq:        number;        // monotonically increasing within the session
   role:       string;        // 'user' | 'assistant' | 'toolResult' | 'compactionSummary'
-  content:    string;
+  content:    string;        // JSON-serialized AgentMessage
   compacted:  boolean;       // true if this row was compacted and replaced by a summary
   created_at: string;        // ISO 8601
 }
 ```
+
+**Serialization.** `persist()` receives an `AgentMessage` from pi-agent. The mapping to `TurnRecord` is:
+
+| `TurnRecord` field | Source |
+|---|---|
+| `role` | `AgentMessage.role` (e.g. `"user"`, `"assistant"`, `"toolResult"`, `"compactionSummary"`, `"bashExecution"`, `"custom"`) |
+| `content` | `JSON.stringify(AgentMessage)` — the full message serialized as JSON |
+
+Storing the full JSON-serialized message preserves all fields for `restore()`, which loads messages back into `agent.state.messages` where pi-agent expects the typed `AgentMessage` shape. The `role` column is denormalized for query convenience (e.g. listing all assistant messages in a session).
 
 Messages are stored in the workspace's artifact store (SQLite, same database as artifacts) in a `memory_turns` table. The table is keyed by `(agent_key, session_id, seq)`. This keeps conversation history colocated with work artifacts and avoids a second storage surface.
 
