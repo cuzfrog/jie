@@ -1,6 +1,6 @@
-# Minimal Team — Built-in Fallback Blueprint
+# Minimal Team — Fallback Blueprint
 
-The minimal team is the simplest possible `team-blueprint`: one general-purpose leader agent with default tools. It ships in the `jie-team` package as a directory of `.md` files (TEAM.md + general.md) and is used as the **fallback team** when no user team is configured. The fallback is reached only by omitting `team_id` from config — the platform then defaults `team_id` to `"minimal"` and looks it up at the standard paths. See ADR 12 for how jie-team's `postinstall` populates those paths on first install.
+The minimal team is the simplest possible `team-blueprint`: one general-purpose leader agent with default tools. It is just two `.md` files (`TEAM.md` + `general.md`) placed at one of the standard lookup paths, and is used as the **fallback team** when no user team is configured. The fallback is reached only by omitting `team_id` from config — the platform then defaults `team_id` to `"minimal"` and looks it up at the standard paths (see `10-configuration.md` "Team Resolution").
 
 ## Composition
 
@@ -41,18 +41,19 @@ The leader processes a single user prompt per turn. There are no domain topics, 
 
 ## Loader Location
 
-The minimal team is shipped in the `jie-team` package as a directory of `.md` files:
+The minimal team is two `.md` files. The platform does not ship them itself; they must be placed at one of:
+
+- `~/.jie/teams/minimal/` — global
+- `<workspace>/.jie/teams/minimal/` — project-local (overrides the global copy)
 
 ```
-packages/jie-team/teams/minimal/
+.jie/teams/minimal/
   TEAM.md      # frontmatter: leader
   general.md   # agent definition (model, tools, subscribe, system_prompt)
 ```
 
-`jie-team`'s `postinstall` script (and the CLI's `jie team install` command) copies these files to `~/.jie/teams/minimal/` on first install. The platform's team-blueprint loader, when asked to resolve a team with no `team_id` set, defaults to `team_id = "minimal"` and looks up the team at the standard paths (project-local `.jie/teams/minimal/`, then user-level `~/.jie/teams/minimal/`) — see `10-configuration.md` "Team Resolution".
+The team-blueprint loader, when asked to resolve a team with no `team_id` set, defaults to `team_id = "minimal"` and looks it up at the standard paths in `10-configuration.md` "Team Resolution". The minimal team is reached the same way as any other user team: by name, at a standard filesystem path. The platform has no built-in knowledge of any team's manifest contents — `jie-team` is a packaging convenience, not a platform concept.
 
-The platform does not import jie-team in any form. The minimal team is reached the same way as any other user team: by name, at a standard filesystem path. See ADR 12 for the package-boundary principle.
+## Why a Fallback
 
-## Why a Built-in Fallback
-
-A user can run `jie` in any directory with minimal setup. After `bun install -g @cuzfrog/jie` (which triggers jie-team's postinstall and copies the minimal team to `~/.jie/teams/minimal/`), then `jie login` (once, for credentials) and `jie model <provider>/<id>` (once, to pick a model), the platform always has a runnable configuration — a single binary, a single command, a working agent, even if the user has not created any project files yet. The login + model step is the *only* setup the platform requires; everything else is optional.
+A user can run `jie` in any directory with minimal setup: place the minimal team's `TEAM.md` and `general.md` at `~/.jie/teams/minimal/`, run `jie login` (once, for credentials) and `jie model <provider>/<id>` (once, to pick a model). The platform then always has a runnable configuration — a single binary, a single command, a working agent, even if the user has not created any project files yet. The login + model step is the *only* setup the platform requires; everything else is optional.

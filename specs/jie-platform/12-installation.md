@@ -55,7 +55,9 @@ After either path, `jie --version` confirms the binary is callable.
 
 ## Runtime Dependencies (Shipped with Jie)
 
-All Jie-internal packages (`jie-platform`, `jie-tui`, `jie-team`, `code-lens`) are bundled via workspace dependencies in `@cuzfrog/jie`. The user does not install them separately.
+`jie-platform` and `jie-tui` are bundled via workspace dependencies in `@cuzfrog/jie`. The user does not install them separately.
+
+`jie-team` and `code-lens` are **not** platform dependencies. They live in separate packages and ship as plain `.md` / `package.json` artifacts. A user (or a higher-level installer) places their manifests and configuration at the standard paths described in `10-configuration.md` "Team Resolution". See the `jie-team` package README for the manual copy steps.
 
 External tool dependencies (linters, formatters, test runners) are **not** installed by Jie. Agents invoke them via the `bash` tool; they must be present in the workspace's `node_modules` or system `PATH`.
 
@@ -79,23 +81,19 @@ For project-level model overrides (e.g. a team pinned to a specific model id), c
 
 ### Installing a User Team
 
-`jie-team` ships two bundled teams as `.md` files: **minimal** (1 `general` leader) and **dev** (DM/Researcher/Architect/Planner/Implementer/Reviewer pipeline). On `bun install -g @cuzfrog/jie` (or workspace install in dev), jie-team's `postinstall` script copies both teams' manifests to `~/.jie/teams/`. After install, the minimal team is available by default; the dev team is activated by setting `team_id: dev` in config.
+Team manifests are plain files — no platform-managed install step. The platform looks them up by name at the standard paths and refuses to start with a clear error if a requested `team_id` is missing. See `10-configuration.md` "Team Resolution" for the lookup order.
 
-To re-run the install manually (for example, after deleting a team folder), use the CLI:
+For the **minimal** team (the platform's fallback when no `team_id` is configured), obtain `TEAM.md` and `general.md` from the `jie-team` package and place them at one of:
 
-```bash
-jie team install            # install all bundled teams to ~/.jie/teams/
-jie team install minimal    # install only the minimal team
-jie team install dev --scope project   # install the dev team to .jie/teams/ in the current project
-jie team install dev --force           # overwrite existing files (default: skip on conflict)
-```
+- `~/.jie/teams/minimal/` — global, applies to every project for the current user
+- `<workspace>/.jie/teams/minimal/` — project-local, overrides the global copy
+
+The same pattern applies to any other team. The `jie-team` package also ships a **dev** team (DM/Researcher/Architect/Planner/Implementer/Reviewer) which is installed by copying its `.md` files into `~/.jie/teams/dev/` and activated via `team_id: dev` in `.jie/config.yaml`.
 
 To use a non-default team:
 
-1. Ensure the team is installed at one of the standard paths (via `jie team install` or by manual copy). For a custom team, create `.jie/teams/<team_id>/` in the project (or `~/.jie/teams/<team_id>/` for a global install) and place `TEAM.md` and one `.md` per agent role in that directory. See `05-agent-model.md` "Blueprint Loading" for the file format.
+1. Place the team's `TEAM.md` and one `.md` per agent role at `.jie/teams/<team_id>/` (project-local) or `~/.jie/teams/<team_id>/` (global). See `05-agent-model.md` "Blueprint Loading" for the file format.
 2. Add `team_id: <team_id>` to `.jie/config.yaml`.
-
-The dev team blueprint (DM/Researcher/Architect/Planner/Implementer/Reviewer) is shipped in `jie-team` as a starter template. `jie team install dev` populates the standard paths; users then either activate it via `team_id: dev` or copy the manifests into a project-local directory and customize.
 
 ## Verification
 

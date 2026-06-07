@@ -81,7 +81,7 @@ type PlatformEventPayload<T extends PlatformEventType> =
   never;
 ```
 
-**Type-narrowing boundary.** The platform's `PlatformEventPayload` falls through to `{ prompt, source }` for any string `T` that is not a platform event. This is a deliberately permissive shape — the platform does not validate domain event payloads. The actual domain event payload types (e.g., `task.review_passed` carrying `review_artifact_id`, `task.planned` carrying `plan_artifact_id`) are defined in `jie-team/05-event-types.md` and consumed by jie-team's roles via their LLM context. The platform treats all domain events as opaque `{ prompt, source }` for envelope purposes; the LLM in the receiving agent parses the payload from the synthetic `user` message. The platform's only validation is the envelope (version, agent_role, agent_key, timestamp) and the platform's own event payloads.
+**Type-narrowing boundary.** The platform's `PlatformEventPayload` falls through to `{ prompt, source }` for any string `T` that is not a platform event. This is a deliberately permissive shape — the platform does not validate domain event payloads. The actual domain event payload types are defined by the team blueprint and consumed by its roles via their LLM context. The platform treats all domain events as opaque `{ prompt, source }` for envelope purposes; the LLM in the receiving agent parses the payload from the synthetic `user` message. The platform's only validation is the envelope (version, agent_role, agent_key, timestamp) and the platform's own event payloads.
 
 type PlatformEventType =
   | 'leader.prompt'
@@ -93,7 +93,7 @@ type PlatformEventType =
   | 'agent.idle';
 ```
 
-> Domain event types and payloads are defined by the team blueprint. For the built-in dev team, see `jie-team/05-event-types.md`.
+> Domain event types and payloads are defined by the team blueprint.
 
 ## Streaming
 

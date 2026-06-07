@@ -65,7 +65,7 @@ The team blueprint lives at `.jie/teams/<team_name>/`:
   worker_b.md
 ```
   
-The built-in dev team (`jie-team`) provides a concrete blueprint with 6 roles (DM, Researcher, Architect, Planner, Implementer, Reviewer). See `jie-team/01-role-definitions.md`.
+The `jie-team` package ships a concrete blueprint with 6 roles (DM, Researcher, Architect, Planner, Implementer, Reviewer). See the `jie-team` package documentation for the role definitions.
 
 ### TEAM.md
 
@@ -211,7 +211,7 @@ On receipt, an agent formats the notification as a synthetic `user` message in t
 
 The built-in team blueprint uses domain topics for pipeline progression. Prose examples use shorthand `notify('topic', 'prompt')` for readability; the actual LLM call follows the TypeBox schema: `notify({ topic: string, prompt: string })`.
 
-**Business identifiers are not a platform concept.** `task_id`, `work_id`, and any other team-defined identifier are the **team's** concern, not the platform's. The body treats the `topic` and `prompt` of a `notify` call as opaque strings; it does not parse them for business meaning. The receiving agent's LLM extracts identifiers from the synthetic `user` message as part of its reasoning. The platform has no `task_id` field, no work-tracking primitive, and no implicit propagation of identifiers across turns. This is consistent with ADR 7 (which removed `work_id` from `ExecutionContext`) and ADR 12 (platform is generic; jie-team owns its own identifier scheme).
+**Business identifiers are not a platform concept.** `task_id`, `work_id`, and any other team-defined identifier are the **team's** concern, not the platform's. The body treats the `topic` and `prompt` of a `notify` call as opaque strings; it does not parse them for business meaning. The receiving agent's LLM extracts identifiers from the synthetic `user` message as part of its reasoning. The platform has no `task_id` field, no work-tracking primitive, and no implicit propagation of identifiers across turns. This is consistent with ADR 7 (which removed `work_id` from `ExecutionContext`): the platform is generic; the team owns its own identifier scheme.
 
 ### Built-in Tool: `bash`
 
@@ -361,11 +361,11 @@ blueprint's role system prompt / descriptor contract applies on top.
 | Layer | What it enforces | When it runs | v1 status |
 |---|---|---|---|
 | Platform `write_file` | "Inside the workspace root" | At the tool call | v1 (this spec) |
-| Team descriptor / frozen rule | "Inside the allowed module boundary" | At the role's system prompt or via a wrapper tool that the team defines | jie-team backlog #8 (Day 2) |
+| Team descriptor / frozen rule | "Inside the allowed module boundary" | At the role's system prompt or via a wrapper tool that the team defines | `jie-team` backlog (Day 2) |
 
 This separation lets the platform ship a useful writer in v1 without waiting for the team's boundary-enforcement contract. Teams that need module-boundary enforcement wrap the platform's writer (or instruct the agent via system prompt) to validate against the module descriptor before calling `write_file`. Teams that don't need it (e.g. the minimal team) get a plain writer for free.
 
-**Consequence:** in v1, an agent with `write_file` in its tool list can write any file inside the workspace root, including files inside a frozen module. The team layer is responsible for preventing that, not the platform. This is an explicit Day-1 commitment: boundary enforcement is jie-team's contract, and it lands with jie-team backlog #8.
+**Consequence:** in v1, an agent with `write_file` in its tool list can write any file inside the workspace root, including files inside a frozen module. The team layer is responsible for preventing that, not the platform. This is an explicit Day-1 commitment: boundary enforcement is a team-layer contract.
 
 ## Tool Telemetry
 

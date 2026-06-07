@@ -2,35 +2,66 @@
 
 ## Status
 
-Groups A–G are resolved. **Group H (Implementer-grade gaps)** is **complete** — all 14 items resolved. The `review-tracker.md` has Group H as a closed group; resolved items live in its "Resolved History". The implementer pass can begin.
+Groups A–H are resolved. **Group H is closed** — all 14 items resolved.
 
-## Resolved Decisions (this session)
+A fresh implementer pass has surfaced **7 new implementation-grade gaps (Group J)** that block writing working code. They are recorded in `review-tracker.md` Group J. Proposed resolutions are presented in the session transcript; no specs have been updated yet — they await implementer agreement on the 7 decisions.
 
-- **Group H1**: `prepareNextTurn` spec/code mismatch. `AgentLoopTurnUpdate` has no prompt field; the actual mechanism is `agent.prompt()` from the body's in-memory queue after `agent_end`. Spec row at `05-agent-model.md:426` rewritten to "— (not wired in v1; ...)" with cross-reference to "Prompt Ingress & Queuing". `pi-agent-api-reference.md:95` Jie's usage note corrected to drop `prepareNextTurn` from the wired list.
-- **Group H2 + H3 + H4**: `write_file` is a **v1 platform tool**, not Day 2. Minimal team tools = `[bash, read_file, write_file]` (no artifact tools — artifacts are for inter-agent coordination; a single-agent fallback has no peers). Platform enforces workspace-root containment only; module-boundary enforcement is the team layer's concern (jie-team backlog #8, Day 2). **ADR 11** captures the platform/team enforcement split. ADR 10 amended to drop its `write_file` claims. Specs: `05-agent-model.md` (full v1 spec for `write_file` + "Boundary Enforcement" subsection), `minimal-team.md` (tools, system prompt, Behavior), `00-overview.md` (built-in tool list), `monorepo-structure.md` (`tools/` directory listing).
-- **Group H7**: Team-blueprint loader location and **package boundary**. Resolved as **jie-platform owns the loader; jie-team ships manifests + install logic only**. The platform is **agnostic of jie-team** — zero `import` of any kind. jie-team's `postinstall` script (and the new `jie team install` CLI command) copy the bundled team manifests (minimal, dev) to `~/.jie/teams/<id>/`. The "Built-in default" tier in `10-configuration.md` is removed; the default is just `team_id = "minimal"`, looked up at the standard paths. **ADR 12** captures the package-boundary principle. ADR 3 amended with a "Package Boundary" Consequence bullet. Specs: `monorepo-structure.md` (package layout, dependency graph, agnosticism rule, jie-team `package.json` with `postinstall`), `minimal-team.md` (Loader Location + Why a Built-in Fallback), `10-configuration.md` (Team Resolution table simplified, default `team_id` clarified, new error row for missing minimal team), `12-installation.md` (Installing a User Team rewritten to use `jie team install`), `ui/cli.md` (new `jie team install [<id>]` command).
-- **Group H10**: Business identifiers are not a platform concept. `task_id`, `work_id`, and other team-defined identifiers are **the team's** concern. The body treats `notify` payloads and event subjects as opaque strings; the LLM extracts identifiers as part of its reasoning. Confirmed and made explicit in `05-agent-model.md` "Built-in Tool: `notify`" subsection (a new "Business identifiers are not a platform concept" paragraph cross-referencing ADR 7 and ADR 12).
-- **Group H13**: Code-Lens startup policy. Resolved as **code-lens is generic MCP, no special platform code; the dev team declares the dependency in its manifest**. The platform's MCP policy is uniform: WARN-and-skip at connect, fail at team-load if a referenced tool can't resolve. Code-lens follows the same policy. If code-lens is unreachable, the dev team fails at startup (cascade); the minimal team is unaffected. No new ADR — application of ADR 4 (MCP-agnostic platform) + ADR 12 (package boundary). Specs: `code-lens/service.md` "Deployment and Lifecycle" rewritten to drop the "connection failure prevents agent start" claim; `09-deployment.md` "MCP Server Management" gained a "Code-Lens is generic MCP" paragraph.
-- **Group H14**: Queued-prompt indicator mechanism. Resolved as **explicit `agent.queue.update` event**, mirroring pi's `queue_update` (`@earendil-works/pi-coding-agent/src/core/agent-session.ts:464-469`). The body publishes `{ prompts: string[] }` on every enqueue and dequeue. The TUI subscribes to this event; no derived state, no polling. Specs: `03-event-system.md` Subject Schema and Platform Event Payloads updated; `05-agent-model.md` "Prompt Ingress & Queuing" gained a "Queue observability" paragraph; `ui/tui.md` "Degraded States" rewritten to derive the indicator from `agent.queue.update`.
-- **Group H (final 6, hygiene batch)**: H5, H6, H8, H9, H11, H12. All small wording/scope clarifications, no new ADRs. **H5**: `agent.idle` published on every `agent_end` (error/aborted/length too) — explicit note in `03-event-system.md` "Agent Idle" section. **H6**: `beforeToolCall` row in `05-agent-model.md` rewritten to clarify Jie does not use the hook to block execution; the `{ result?, abortRemaining? }` path exists in pi-agent but is not exercised by Jie in v1. **H8**: `subscribe:` field semantics rewritten to "yes (may be empty `[]`)" with clarifying note. **H9**: `PlatformEventPayload` type-narrowing boundary made explicit in `03-event-system.md` — domain event payload types live in `jie-team/05-event-types.md`; the platform treats all string types as opaque. **H11**: 4 KiB truncation scope clarified in `05-agent-model.md` — applies to the event payload only; the LLM sees the full value. **H12**: in-flight recovery clarified in `08-memory.md` — no platform-reserved key; the team owns its key scheme.
+---
 
-**Pre-session Group F5 status update**: F5 was the previous session's "read_file is built-in, write_file is Day 2" pair. This session's H3 elevates `write_file` to v1 and supersedes the F5 second half. ADR 11 is the new authority; F5 should be read with the H2/H3 outcome applied.
+## Open Items — Group J (awaiting agreement)
 
-## Open Questions (not blockers)
+| # | File | Issue | Proposed resolution | ADR? |
+|---|---|---|---|---|
+| J1 | 05-agent-model.md | `BashResult` → LLM `ToolResult.content` mapping unspecified | `content = stdout + "\n--- stderr ---\n" + stderr`; exit code in `details.exitCode` | ADR 13 |
+| J2 | 05-agent-model.md | `notify` LLM-visible return string unspecified | `"Notification delivered to N recipients"`; explicit zero case naming the topic | Spec note |
+| J3 | 03-event-system.md | `EventBus.publish` error propagation when subscriber throws is unspecified | Catch per-callback; continue dispatch; report actual recipient count | ADR 13 |
+| J4 | 03, 05-agent-model.md | `tool_call_id` uint32 counter mapping from pi-agent string ID is unspecified | `Map<pi_toolCallId, uint32>` in AgentBody (non-persistent) | Spec note |
+| J5 | 05-agent-model.md | `write_file` `bytes_written` semantic (bytes vs characters) ambiguous | `Buffer.byteLength(content, "utf8")` | Spec clarification |
+| J6 | 03, ui/tui.md | No initial `agent.idle` on agent start → TUI agents-panel starts empty | Publish `agent.idle` once at startup per agent, after subscriptions registered | ADR 13 |
+| J7 | ui/tui.md | TUI `roles` param purpose unclear (required or redundant?) | Required; provides blueprint-ordered agent list for initial render | Spec clarification |
 
-None at handoff time. The review pass is closed; Groups A–H are all resolved. Implementation can begin.
+---
 
-## Previous decisions
+## Resolved Decisions (Groups A–H)
 
-- **E (startup/config/errors)**: All 7 items in `review-tracker.md` Group E resolved. Key calls: no interactive init, strict config validation, WARN-and-skip MCP at startup / hard-fail at agent load, 10s bounded graceful shutdown, no `jie init` in v1, prompt queue cap deferred to Day 2 (backlog #19).
-- **C (tools)**: All 5 items in `review-tracker.md` Group C resolved. Key calls: `WebSearchResult = { title, url, snippet }`, pluggable `WebSearchProvider` (DuckDuckGo default), format-agnostic `web_fetch`, `bash` 32 KiB per-stream truncation, `write_artifact` returns `{ key, created_at }`.
-- **D (group review)**: All 11 items in `review-tracker.md` Group D resolved. See ADR 8 (no grace turn) and ADR 9 (AgentBody mechanisms). Decisions captured in `user-intentions.md`.
+### Group H (final 6, hygiene batch)
+H5, H6, H8, H9, H11, H12. All small wording/scope clarifications, no new ADRs.
+
+- **H5**: `agent.idle` published on every `agent_end` — explicit note in `03-event-system.md` "Agent Idle" section.
+- **H6**: `beforeToolCall` row rewritten; Jie does not use the hook to block execution in v1.
+- **H8**: `subscribe:` field semantics: "yes (may be empty `[]`)".
+- **H9**: `PlatformEventPayload` type-narrowing boundary explicit: domain payload types live in `jie-team`; platform treats all string types as opaque.
+- **H11**: 4 KiB truncation applies to event payload only; the LLM sees the full value.
+- **H12**: No platform-reserved key for in-flight tracking; team owns its key scheme.
+
+### Group H (structural)
+
+- **H1**: `prepareNextTurn` spec/code mismatch. `AgentLoopTurnUpdate` has no prompt field; actual mechanism is `agent.prompt()` from body's in-memory queue after `agent_end`. Spec row at `05-agent-model.md:426` rewritten; `pi-agent-api-reference.md:95` updated.
+- **H2 + H3 + H4**: `write_file` is a **v1 platform tool**; minimal team tools = `[bash, read_file, write_file]` (no artifact tools for single-agent fallback). Platform enforces workspace-root containment only; module-boundary enforcement is the team layer's responsibility (jie-team backlog #8, Day 2). **ADR 11** captures the split. ADR 10 amended. Specs updated: `05-agent-model.md`, `minimal-team.md`, `00-overview.md`, `monorepo-structure.md`.
+- **H7**: Team-blueprint loader location and **package boundary**. Resolved as **jie-platform owns the loader; jie-team ships manifests + install logic only**. The platform is agnostic of jie-team — zero `import` of any kind. jie-team's `postinstall` + new `jie team install` CLI command copy bundled team manifests to `~/.jie/teams/<id>/`. **ADR 12** captures the principle. ADR 3 amended. Specs updated: `monorepo-structure.md`, `minimal-team.md`, `10-configuration.md`, `12-installation.md`, `ui/cli.md`.
+- **H10**: Business identifiers (`task_id`, `work_id`) are not a platform concept. Note added in `05-agent-model.md` `notify` section, cross-referencing ADR 7 and ADR 12.
+- **H13**: Code-Lens is generic MCP; dev team declares the dependency in its manifest. WARN-and-skip + cascade applies uniformly. Specs updated: `code-lens/service.md`, `09-deployment.md`.
+- **H14**: Queued-prompt indicator mechanism. Resolved as **explicit `agent.queue.update` event** mirroring pi's `queue_update`. Body publishes `{ prompts: string[] }` on every enqueue and dequeue. TUI subscribes. Specs updated: `03-event-system.md`, `05-agent-model.md`, `ui/tui.md`.
+
+### Group H1 pre-session F5 status update
+
+F5 was previously "read_file is built-in, write_file is Day 2". H3 elevates `write_file` to v1 and supersedes the F5 second half. **ADR 11** is the new authority; F5 should be read with the H2/H3 outcome applied.
+
+### Earlier groups (A–G)
+
+All prior groups (A through G) are resolved. Decisions are captured in `./addrs/1` through `./addrs/9`. The handoff document contains the original per-decision notes from prior sessions; those are now archival. The tracker above contains compact one-line summaries of each resolved group.
+
+---
+
+## Previous concise decisions (archival)
+
+- **E (startup/config/errors)**: No interactive init, strict config validation, WARN-and-skip MCP at startup / hard-fail at agent load, 10s bounded graceful shutdown, no `jie init` in v1, prompt queue cap deferred to Day 2 (backlog #19).
+- **C (tools)**: `WebSearchResult = { title, url, snippet }`, pluggable `WebSearchProvider` (DuckDuckGo default), format-agnostic `web_fetch`, `bash` 32 KiB per-stream truncation, `write_artifact` returns `{ key, created_at }`.
+- **D (group review)**: All 11 items resolved. See ADR 8 (no grace turn) and ADR 9 (AgentBody mechanisms). Decisions originally captured in `user-intentions.md`.
 - **D (jie -p mode)**: `jie -p` mode is single-turn: returns leader's first response, exits on first `leader.idle`.
 - **F**: SQLite WAL mode, busy timeout 5000ms, UTC ISO 8601 timestamps.
 - **G**: Default tool timeout 120s (bash overrides to 300s). `notify` returns `{ ok, recipients }`. MCP crash returns tool error (not process exit).
-- **I**: Prompt queuing required, in-memory only (acceptable for v1). TUI shows queued-prompt indicator.
-- **N**: Bash timeout is a tool error (`command_timed_out`). `read_artifact` returns `null` on missing key.
-- **O**: Already resolved in Group A cleanup.
+- **I / N**: Prompt queuing required, in-memory only (acceptable for v1). TUI shows queued-prompt indicator. Bash timeout is a tool error (`command_timed_out`). `read_artifact` returns `null` on missing key.
 - **E (LLM keys)**: LLM API keys via environment variables only. Model strings as `<provider>/<model_id>` split on `/`.
 - **K**: pi-agent integration uses raw `Agent` class. Jie tools use TypeBox schemas.
 - **Pi repo** at `../pi` — `pi-agent-core` provides `Agent` (loop, events, streaming) and `pi-ai` provides `getModel(provider, modelId)` + `getEnvApiKey(provider)`.

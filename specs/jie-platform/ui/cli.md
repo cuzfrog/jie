@@ -101,7 +101,7 @@ This mirrors pi's `getPackageDir()` / `VERSION` pattern (`@earendil-works/pi-cod
 jie --help
 ```
 
-Prints usage summary, subcommands (`-p`, `--print`, `login`, `logout`, `model`, `team install`, `--version`, `--help`), exits 0. Does not load config.
+Prints usage summary, subcommands (`-p`, `--print`, `login`, `logout`, `model`, `--version`, `--help`), exits 0. Does not load config.
 
 ---
 
@@ -178,33 +178,3 @@ ANTHROPIC_API_KEY=sk-ant-... jie --api-key sk-ant-...    # --api-key wins
 
 The flag does not write to `auth.json` — it is a per-invocation override. Useful for CI / ad-hoc rotation without touching the user's saved credentials.
 
-## `jie team install [<id>]`
-
-Install one or all bundled team manifests from the `jie-team` package to a teams directory. The platform reads team manifests from the standard paths (`.jie/teams/<id>/`, `~/.jie/teams/<id>/`); this command is the manual entry point for jie-team's install logic. The same logic runs automatically on `bun install` via jie-team's `postinstall` script (see ADR 12).
-
-```
-jie team install                       # install all bundled teams (minimal, dev) to ~/.jie/teams/
-jie team install minimal               # install only the minimal team
-jie team install dev --scope project   # install the dev team to .jie/teams/ in the current project
-jie team install dev --force           # overwrite existing files at the destination
-```
-
-### Arguments
-
-| Flag | Default | Behavior |
-|---|---|---|
-| `<id>` | *(absent — install all bundled teams)* | Team identifier. Must be one of the bundled teams (`minimal`, `dev`) in v1. |
-| `--scope user` | yes (default) | Install to `~/.jie/teams/<id>/`. |
-| `--scope project` | | Install to `.jie/teams/<id>/` relative to CWD. The directory is created if it does not exist. |
-| `--force` | | Overwrite files that already exist at the destination. Default: skip on conflict to preserve user customizations. |
-
-### Behavior
-
-1. Read the source manifest directory from the `jie-team` package (located via `import.meta.resolve("@cuzfrog/jie-team/package.json")`).
-2. For each `<role>.md` and `TEAM.md` in the source directory, copy to the destination (default: `~/.jie/teams/<id>/`).
-3. Skip files that exist at the destination unless `--force` is set.
-4. Print the destination path and copied/skipped file counts; exit 0.
-
-The command does not start the team, does not load `.jie/config.yaml`, and does not touch `auth.json` or `settings.json`. It is the same logic that runs at jie-team's `postinstall`; running it manually is a no-op if the destination is already populated.
-
-**Exit codes:** 0 (success or no-op), 1 (unknown team id, source manifest missing, copy error).

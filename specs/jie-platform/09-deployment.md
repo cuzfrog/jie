@@ -44,10 +44,10 @@ The startup sequence is the same for both `jie` (TUI) and `jie -p` (print mode),
 2. **Validate config.** If a config file is present, validate it strictly. Any error (YAML parse, unknown key, invalid value) → exit 1. See `10-configuration.md` Config Validation.
 3. **Resolve team.** Apply the team resolution rules from `10-configuration.md`:
    - If `team_id` is set in config → look up `.jie/teams/<team_id>/TEAM.md`, then `~/.jie/teams/<team_id>/TEAM.md`. If neither exists → startup fails.
-   - If `team_id` is absent → use the built-in minimal team from the `jie-team` package.
+   - If `team_id` is absent → use the team at `.jie/teams/minimal/TEAM.md` (or the global equivalent). If neither exists → startup fails.
 4. **Open `ArtifactStore`** (SQLite at `{workspace_root}/.jie/artifacts.db`). Failure → exit 1.
 5. **Connect MCP servers** configured in `.jie/mcp.yaml` (project + global merge). Per-server connect failures log a `WARN` and skip that server; the team continues with the rest. See `10-configuration.md` MCP Server Configuration.
-6. **Construct `AgentSoul`s** from the team's `.md` files (or the built-in minimal team's definition). For each `AgentSoul`, resolve its `tools:` list against the `ToolRegistry`. If any tool fails to resolve (e.g. the MCP server for that tool failed to connect), the team's startup fails with a clear error citing the missing tool.
+6. **Construct `AgentSoul`s** from the resolved team's `.md` files. For each `AgentSoul`, resolve its `tools:` list against the `ToolRegistry`. If any tool fails to resolve (e.g. the MCP server for that tool failed to connect), the team's startup fails with a clear error citing the missing tool.
 7. **Instantiate `InProcessEventBus`** and the `MemoryManager` per body.
 8. **Instantiate `AgentBody`** for each role:
    - Pass `AgentSoul`, `EventBus`, `ArtifactStore`, `MemoryManager`.
@@ -83,7 +83,7 @@ The 10s window balances responsiveness against letting a slow tool complete clea
   src/                   # User's codebase (the workspace root)
 ```
 
-User teams can also live globally at `~/.jie/teams/<team_id>/` for sharing across projects. The built-in minimal team lives in the `jie-team` package source and is loaded when `team_id` is absent from config.
+User teams can also live globally at `~/.jie/teams/<team_id>/` for sharing across projects. The minimal team lives at one of the standard paths and is loaded when `team_id` is absent from config.
 
 ## Health and Restarts
 
@@ -113,4 +113,4 @@ MCP servers with `transport: stdio` are spawned as child subprocesses at startup
 - **Startup connect failure** (server not reachable, catalog fetch failed): log a `WARN`, do not register that server's tools. Startup continues with the rest of the team. If the team's blueprint depends on tools from the failed server, the team fails to start (see `10-configuration.md` Cascade: Agent Load Failure).
 - **Mid-session server exit**: the in-flight tool call (if any) times out or returns `mcp_server_unreachable`. All subsequent invocations to that server also return errors until the server is reconnected. Agents handle these as tool-result errors and may retry or fail gracefully. The supervisor does **not** auto-reconnect mid-session; restart the process to recover.
 
-**Code-Lens is generic MCP.** The platform has no code-lens-specific code. Code-Lens is one MCP server among many, configured in `mcp.yaml` like any other, and follows the cascade policy above. The dev team's code-lens dependency (Architect role's `mcp:code-lens:get_module_exports`, `mcp:code-lens:get_import_graph`) is declared in jie-team's manifest. If code-lens is unreachable at startup, the dev team fails to start (cascade); the minimal team, which has no code-lens dependency, is unaffected. This is consistent with ADR 4 (MCP-agnostic platform) and ADR 12 (package boundary).
+**Code-Lens is generic MCP.** The platform has no code-lens-specific code. Code-Lens is one MCP server among many, configured in `mcp.yaml` like any other, and follows the cascade policy above. A team's code-lens dependency (e.g. an Architect role's `mcp:code-lens:get_module_exports`, `mcp:code-lens:get_import_graph`) is declared in that team's `.md` manifest. If code-lens is unreachable at startup, the dependent team fails to start (cascade); a team with no code-lens dependency is unaffected. This is consistent with ADR 4 (MCP-agnostic platform).
