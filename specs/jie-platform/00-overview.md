@@ -4,6 +4,8 @@
 
 The Jie Platform is an orchestration framework for building multi-agent systems. It provides the runtime infrastructure — event bus, agent model, tool system, persistence, and deployment — without prescribing what agents do or how they coordinate. Teams define agents, event types, and workflows on top of the platform.
 
+**IMPORTANT**: jie-platform knows nothing about jie-team or code-lens! The doc should not contain any information related to them.
+
 ---
 
 ## Glossary
