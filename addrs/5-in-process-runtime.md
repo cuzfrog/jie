@@ -36,7 +36,7 @@ The EventBus interface (`publish`/`subscribe`) was already an abstraction over N
 ## Consequences
 
 - **Removed dependency**: `nats-server` is no longer in the install surface. `bun` is the sole runtime dependency.
-- **Removed from config**: `nats_url` field. Config surface shrinks to `team_id`, `team_path`, `workspace_root`, budget defaults, streaming tunables.
+- **Removed from config**: `nats_url` field. Config surface is now minimal — `defaultProvider`, `defaultModel`, `defaultTeam` in `settings.json`; auth in `auth.json`. `workspace_root` is no longer configurable (workspace = `process.cwd()`); team selection moved out of project config to `--team` flag and `/team` TUI command; stream tunables are hard-coded constants.
 - **Removed from specs**: Heartbeats (replaced by `agent.idle` event), NATS connectivity checks, PID file management, multi-team subject isolation, `messaging-protocol.md`.
 - **Simplified deployment**: Single process. `09-deployment.md` rewritten. Agent "restart" is `stop()` + `new AgentBody()` + `start()` — no process management.
 - **NATS reintroduction**: When a team outgrows single-machine deployment, NATS plugs in via a `NatsEventBus` constructor. The EventBus interface, subject schema, and envelope format are unchanged. No spec rewrite needed.

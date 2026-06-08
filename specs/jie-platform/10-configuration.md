@@ -2,113 +2,174 @@
 
 Platform-level configuration surface. Defines how Jie discovers and loads settings for a team.
 
-## Config File
+## Persistent Files
 
-The config lives at `.jie/config.yaml` within the workspace root. Discovered by walking up from CWD. **All fields are optional** — the config may be absent entirely, in which case the platform runs with all defaults (built-in minimal team, workspace root `"."`, default stream tunables).
+The platform reads and writes a small set of user-visible files. New settings may be added in future versions; this list is illustrative.
 
-### v1 Schema
+| File | Scope | Sensitivity | Holds |
+|---|---|---|---|
+| `~/.jie/settings.json` | Global user settings | Plain JSON (user-readable) | `defaultProvider`, `defaultModel`, `defaultTeam` |
+| `.jie/settings.json` | Project override | Plain JSON (user-readable) | Same fields, deep-merge over global |
+| `~/.jie/auth.json` | Global credentials | mode `0600` (sensitive) | API keys, OAuth tokens |
 
-```yaml
-# Optional — team lookup key. See "Team Resolution" below.
-team_id: "my-team"
+`.jie/settings.json` is the only project-level user settings file. There is no project-level `auth.json` — credentials are global, by design.
 
-# Optional — path resolution root
-workspace_root: "."
+### Discovery
 
-# Optional streaming tunables
-stream_chunk_size: 64       # characters per agent.stream.chunk
-stream_flush_ms: 200        # max ms before flushing a stream chunk
+`.jie/settings.json` is discovered by walking up from CWD to find `.jie/`. `~/.jie/settings.json` and `~/.jie/auth.json` are fixed global paths. Both `jie` (TUI) and `jie -p` modes share this behavior.
+
+If no `.jie/settings.json` is found, the platform runs with global-only settings — no interactive init flow.
+
+## `settings.json`
+
+JSON, two locations, **project overrides global with deep-merge** (nested objects merge, top-level scalars replace, arrays replace). This mirrors pi's `settings.json` convention.
+
+| Location | Scope |
+|---|---|
+| `~/.jie/settings.json` | Global (all projects) |
+| `.jie/settings.json` | Project (current directory; deep-merge over global) |
+
+For v1, three fields are recognized. Other fields are tolerated and ignored (forward-compatibility with future settings), but unrecognized values for recognized fields are a hard fail.
+
+```json
+{
+ "defaultProvider": "anthropic",
+ "defaultModel": "claude-sonnet-4-20250514",
+ "defaultTeam": "dev"
+}
 ```
 
-### Field Semantics
+| Field | Type | Description |
+|---|---|---|
+| `defaultProvider` | string | Provider id (e.g. `anthropic`, `openai`). Must be a known `KnownProvider` from `@earendil-works/pi-ai`; otherwise startup fails. |
+| `defaultModel` | string | Model id within the provider (e.g. `claude-sonnet-4-20250514`). |
+| `defaultTeam` | string | Last user-selected team. Charset `[A-Za-z0-9_-]{1,32}`. See "Team Selection". |
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `team_id` | string | *(absent — defaults to `"minimal"`)* | Lookup key for a user-installed team. See "Team Resolution". Charset `[A-Za-z0-9_-]`, max 32 chars. |
-| `workspace_root` | string | `"."` | Root directory for path resolution (e.g. `bash` `workdir` enforcement). Relative paths resolve against the config file's directory. |
-| `stream_chunk_size` | number | `64` | Characters per `agent.stream.chunk` event. |
-| `stream_flush_ms` | number | `200` | Max ms before flushing a partial stream chunk. |
+**Unknown field policy.** Unrecognized top-level fields in `settings.json` are tolerated (warned, ignored) so future Jie versions can land new settings without breaking old files. Unrecognized *values* for recognized fields (e.g. `defaultProvider: "not-a-real-provider"`) are a hard fail at startup — the platform refuses to guess.
 
-## Team Resolution
+## Team Selection
 
 The platform resolves which team to run with this order:
 
+| Order | Source | Notes |
+|---|---|---|
+|1 | `--team <id>` CLI flag (one-shot override) | TUI has no equivalent — `/team <id>` is persistent (writes to settings). Hard fail if `<id>` is not installed. |
+|2 | Merged settings: `defaultTeam` | Stale values are auto-recovered — see "Stale `defaultTeam` Recovery" below. |
+|3 | First-available user team | Alphabetical across `.jie/teams/*` and `~/.jie/teams/*`, deduped by id. |
+|4 | Built-in minimal team | The platform's hardcoded fallback (`packages/jie-platform/team/built-in/minimal-team.ts`). Always available; used only when steps1–3 yield no team. See `minimal-team.md`. |
+
+### Lookup Paths
+
+Once a team id is resolved, the manifest is located at one of:
+
 | Order | Source | Lookup |
 |---|---|---|
-| 1 | Project-local | `.jie/teams/<team_id>/TEAM.md` (relative to the config file's directory, or CWD if no config) |
-| 2 | Global | `~/.jie/teams/<team_id>/TEAM.md` |
+|1 | Project-local | `.jie/teams/<team_id>/TEAM.md` (relative to the `.jie/` directory discovered by walking up from CWD) |
+|2 | Global | `~/.jie/teams/<team_id>/TEAM.md` |
 
-When `team_id` is **absent** from config (or no config exists), the platform defaults `team_id` to `"minimal"` and applies the same two-tier lookup. There is no separate "built-in default" tier; the minimal team is just a team with `team_id = "minimal"`, expected to live at one of the standard paths above. The platform has no concept of an installed / uninstalled team — it only knows the filesystem paths.
+The platform has no concept of an installed / uninstalled team beyond these filesystem paths.
 
-Rules:
+### Stale `defaultTeam` Recovery
 
-- If `team_id` is **set** but neither #1 nor #2 has a matching manifest → **startup fails** with a clear error citing the missing path. The platform does not silently fall back to the minimal team in this case.
-- If `team_id` is **absent** and the resolved default (`"minimal"`) is not found at either path → **startup fails** with a clear error citing the missing path: `team 'minimal' not found: checked .jie/teams/minimal/ and ~/.jie/teams/minimal/`. The user obtains the minimal team's `.md` files (e.g. from the `jie-team` package) and places them at one of those paths.
-- The minimal team's manifest is the **minimal team** (1 `general` leader, default tools). See `jie-platform/minimal-team.md`.
+If `defaultTeam` from merged settings does not resolve to an installed manifest, the platform self-heals:
 
-User teams come from one of two sources: (1) copied from a third-party source (such as the `jie-team` package) into `~/.jie/teams/<id>/` or `.jie/teams/<id>/`; (2) authored by hand by placing a `TEAM.md` and per-role `.md` files at the appropriate path.
+1. If at least one user team is installed (project + global combined, deduped), pick the first-available alphabetically and write it to the same settings scope where the stale value lived (project `.jie/settings.json` if the stale value was in project settings, else global `~/.jie/settings.json`). Log: `defaultTeam '<id>' is not installed; resetting to '<first-available>'`. Continue startup with the reset value.
+2. If no user teams are installed, clear the stale `defaultTeam` field (write settings back without it). Log: `defaultTeam '<id>' is not installed; no user teams available; falling back to built-in minimal team`. Continue startup with the platform's built-in minimal team (step 4 of the selection order).
+
+This handles the case where the user removed a team directory but their `settings.json` still references it. The platform self-heals instead of failing on the next run.
+
+### Setting `defaultTeam`
+
+CLI: `jie team <id>`. TUI: `/team <id>`.
+
+The platform picks the settings scope based on where `<id>` is installed:
+
+- `.jie/teams/<id>/` exists → write to `.jie/settings.json`.
+- Else `~/.jie/teams/<id>/` exists → write to `~/.jie/settings.json`.
+- Else → exit1; the team must be installed before it can be selected.
+
+If both project-local and global copies exist, project wins (matches the lookup precedence). The CLI command does not start the team; the TUI command swaps the running team in-session — see "Team Swap" below.
+
+### Team Swap (TUI)
+
+`/team <id>` (and `/team` followed by selection in the picker) takes effect immediately in the running TUI session:
+
+1. All current agent bodies receive a graceful stop signal (bounded 10s shutdown, same as `jie` exit — see `09-deployment.md`).
+2. The new team's blueprint is loaded per "Team Selection" rules (steps1–4).
+3. New agent bodies are constructed. The supervisor's `Map<agent_key, session_id>` (`08-memory.md`) is consulted per body: if the `agent_key` has a recorded `session_id`, it is passed to the new body; the body uses it and `restore()` returns the prior `memory_turns` rows. If the `agent_key` is new in this process, the body mints a fresh `session_id` and the supervisor records it. The supervisor's map is in-memory only; on process exit it is lost.
+4. The TUI re-renders: tabs/panels for the old agents close; tabs/panels for the new agents appear via the existing "Agent Discovery" primitives. Every prior team's conversation history is retained for the lifetime of the process run; switching back to a previously-active team restores its conversation in full.
+
+TUI hint on success: `default team set`.
+
+### Showing and Clearing
+
+- `jie team` (no arg) / `/team` (no arg) — print the current `defaultTeam` from merged settings, plus the list of installed teams (project + global, deduped). TUI uses pi's selection-filter UI for picking.
+- `jie team --unset` / `/team --unset` — clear `defaultTeam` from settings. Scope rule: writes to `.jie/settings.json` if it exists, else `~/.jie/settings.json`. Takes effect on the next invocation; the TUI does not have an "unset" mid-session behavior (clearing `defaultTeam` mid-session would leave the running team without a name to fall back to — restart `jie` to land on first-available).
+
+## Workspace Inference
+
+The workspace root is `process.cwd()`. The platform does not read any field to override it. Path resolution in tools (e.g. `bash` workdir enforcement, `read_file`, `write_file`) is rooted at CWD.
+
+Implication: launching `jie` from a subdirectory of a project produces a workspace rooted at that subdirectory. Team manifest lookup and `settings.json` discovery walk up to the project root, but path resolution in tools does not — file paths in tool calls are relative to CWD, not the project root.
+
+### ArtifactStore
+
+Open at `{cwd}/.jie/artifacts.db`. SQLite, single-writer by design.
+
+## Hard-Coded Platform Tunables
+
+The following platform constants are not user-configurable in v1:
+
+| Constant | Value | Role |
+|---|---|---|
+| `stream_chunk_size` | `64` | Characters per `agent.stream.chunk` event. |
+| `stream_flush_ms` | `200` | Max ms before flushing a partial stream chunk. |
+
+See `03-event-system.md` "Streaming" for how these are applied.
 
 ## Config Validation
 
-The platform validates the config strictly at startup. **Any of the following is a hard fail with exit code 1:**
+The platform validates settings at startup. **Any of the following is a hard fail with exit code1:**
 
 | Condition | Error |
 |---|---|
-| YAML parse error | Line/column from the parser. |
-| Unknown key | `unknown config field: <name>` |
-| `team_id` does not match `[A-Za-z0-9_-]{1,32}` | `invalid team_id: <value>` |
-| `workspace_root` is not a string | `workspace_root must be a string` |
-| `stream_chunk_size` is not a positive integer | `stream_chunk_size must be a positive integer` |
-| `stream_flush_ms` is not a positive integer | `stream_flush_ms must be a positive integer` |
-| `team_id` is set but user team is not found at either lookup path | `team <team_id> not found: checked .jie/teams/<id>/ and ~/.jie/teams/<id>/` |
-| Default `team_id = "minimal"` and minimal team is not found at either lookup path | `team 'minimal' not found: checked .jie/teams/minimal/ and ~/.jie/teams/minimal/` |
-
-There are no silent fallbacks for invalid config. The user must fix the config and re-run.
-
-### `settings.json` Validation
-
-`settings.json` is loaded with a soft-unknown-key policy: unrecognized top-level fields are warned and ignored, so a future Jie version can ship a new setting without breaking old files. Recognized fields are validated strictly:
-
-| Condition | Error |
-|---|---|
-| JSON parse error | Line/column from the parser. |
+| `settings.json` JSON parse error | Line/column from the parser. |
 | `defaultProvider` is not a string or is not a known `KnownProvider` | `invalid defaultProvider: <value>` |
 | `defaultModel` is not a string | `defaultModel must be a string` |
-| File exists but is not readable / not valid JSON | Startup fails with parser error. |
+| `defaultTeam` does not match `[A-Za-z0-9_-]{1,32}` | `invalid defaultTeam: <value>` |
+| `--team <id>` flag is given but `<id>` is not installed | `team '<id>' not found: checked .jie/teams/<id>/ and ~/.jie/teams/<id>/` |
 
-The supervisor also performs the per-agent model pre-check (see `05-agent-model.md` "Startup Pre-Check"): if any agent fails to resolve a `(provider, modelId)` against the merged settings, startup fails with one error listing every unresolved agent.
+Stale `defaultTeam` (value set but team not installed) is **not** a hard fail — see "Stale `defaultTeam` Recovery" above.
+
+The platform never fails on "no teams available": the built-in minimal team is the last-resort fallback when no user teams are installed and no `--team` / `defaultTeam` is given. See `minimal-team.md`.
 
 ### `auth.json` Validation
 
 `auth.json` is not validated by the platform — its schema is owned by `@earendil-works/pi-ai`'s `FileAuthStorageBackend`, which writes the canonical shape and refuses to read malformed entries at the provider-call boundary. A malformed `auth.json` surfaces as a credential resolution error at LLM call time, not at startup.
 
-## Config Discovery
-
-The config file is discovered by walking up from CWD to find `.jie/config.yaml`. If not found, the platform runs with all defaults — no interactive init flow. Both `jie` (TUI) and `jie -p` modes share this behavior.
-
 ## MCP Server Configuration
 
-MCP servers are configured in `.jie/mcp.yaml` (project-level; `~/.jie/mcp.yaml` for global defaults). The platform connects to every listed server at startup, fetches tool catalogs, and registers tools into `ToolRegistry`.
+MCP servers are configured in `.jie/mcp.yaml` (project-level; `~/.jie/mcp.yaml` for global defaults). The project file is discovered by walking up from CWD to find `.jie/`. The platform connects to every listed server at startup, fetches tool catalogs, and registers tools into `ToolRegistry`.
 
 ### Schema
 
 ```yaml
 servers:
-  <name>:
-    transport: stdio | http     # required
-    # stdio transport:
-    command: <string>           # required
-    args: [<string>]            # optional
-    # http transport:
-    url: <string>               # required
-    auth:
-      token_env: <string>       # env var containing bearer token
+ <name>:
+ transport: stdio | http # required
+ # stdio transport:
+ command: <string> # required
+ args: [<string>]            # optional
+ # http transport:
+ url: <string> # required
+ auth:
+ token_env: <string> # env var containing bearer token
 ```
 
 ### Resolution
 
 - **`~/.jie/mcp.yaml`** — global (shared across projects).
-- **`.jie/mcp.yaml`** (workspace root) — project-level overrides. Server entries with the same `<name>` replace the global entry entirely (no merge).
+- **`.jie/mcp.yaml`** (project; discovered by walking up from CWD) — project-level overrides. Server entries with the same `<name>` replace the global entry entirely (no merge).
 
 ### Startup Behavior
 
@@ -129,44 +190,7 @@ This means a team with a working MCP server starts cleanly; a team whose bluepri
 
 ## LLM Provider Configuration
 
-The platform does not assume a model or provider. The user picks both via CLI commands (`jie login`, `jie model`) before the first run, and the platform persists the choice to `~/.jie/settings.json`. After that, the platform always has a runnable configuration; before that, every startup fails with a clear error pointing at the right command.
-
-Two persistent files back the runtime:
-
-| File | Scope | Sensitivity | Holds |
-|---|---|---|---|
-| `~/.jie/settings.json` | Global user settings | Plain JSON (user-readable) | `defaultProvider`, `defaultModel` |
-| `.jie/settings.json` | Project override | Plain JSON (user-readable) | Same fields, deep-merge over global |
-| `~/.jie/auth.json` | Global credentials | mode `0600` (sensitive) | API keys, OAuth tokens |
-
-`.jie/settings.json` (project) is the only project-level user settings file. There is no project-level `auth.json` — credentials are global, by design.
-
-### Settings: `settings.json`
-
-JSON, two locations, **project overrides global with deep-merge** (nested objects merge, top-level scalars replace, arrays replace). This mirrors pi's `settings.json` convention.
-
-| Location | Scope |
-|---|---|
-| `~/.jie/settings.json` | Global (all projects) |
-| `.jie/settings.json` | Project (current directory; deep-merge over global) |
-
-For v1, the platform only reads two fields. Other fields are tolerated and ignored (forward-compatibility with future settings), but unrecognized values for recognized fields are an error.
-
-```json
-{
-  "defaultProvider": "anthropic",
-  "defaultModel": "claude-sonnet-4-20250514"
-}
-```
-
-| Field | Type | Description |
-|---|---|---|
-| `defaultProvider` | string | Provider id (e.g. `anthropic`, `openai`). Must be a known `KnownProvider` from `@earendil-works/pi-ai`; otherwise startup fails. |
-| `defaultModel` | string | Model id within the provider (e.g. `claude-sonnet-4-20250514`). |
-
-Both fields are independent — see "Model Resolution" below for how they're used. The CLI accepts them as a single string (`<provider>/<modelId>`) and splits on the first `/` before writing to the file; the file's on-disk shape is the two-field form.
-
-**Unknown field policy.** Unrecognized top-level fields in `settings.json` are tolerated (warned, ignored) so future Jie versions can land new settings without breaking old files. Unrecognized *values* for recognized fields (e.g. `defaultProvider: "not-a-real-provider"`) are a hard fail at startup — the platform refuses to guess.
+The platform does not assume a model or provider. The user picks both via CLI commands (`jie login`, `jie model`) before the first run, and the platform persists the choice to `~/.jie/settings.json` and `~/.jie/auth.json`. After that, the platform always has a runnable configuration; before that, every startup fails with a clear error pointing at the right command.
 
 ### Auth: `auth.json`
 
@@ -174,9 +198,9 @@ JSON, single location (`~/.jie/auth.json`), file mode `0600`. The schema mirrors
 
 ```json
 {
-  "anthropic":   { "type": "api_key", "key": "sk-ant-..." },
-  "openai":      { "type": "api_key", "key": "sk-..." },
-  "github-copilot": { "type": "oauth", "access": "...", "refresh": "...", "expires": 1234567890 }
+ "anthropic": { "type": "api_key", "key": "sk-ant-..." },
+ "openai": { "type": "api_key", "key": "sk-..." },
+ "github-copilot": { "type": "oauth", "access": "...", "refresh": "...", "expires":1234567890 }
 }
 ```
 
@@ -190,14 +214,14 @@ For a given provider, credentials resolve in this order at call time:
 
 | Order | Source | Notes |
 |---|---|---|
-| 1 | `jie --api-key <key>` flag | One-shot, single run. The `jie` binary's top-level flag (Day 2: per-call overrides via the same flag). |
-| 2 | `~/.jie/auth.json` entry for the provider | Set by `jie login` or `jie logout`-cleared. |
-| 3 | Provider's environment variable | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, etc. (See full mapping below.) |
-| 4 | Custom provider keys from `~/.jie/models.json` | Day 2 concern. v1 has no `models.json`. |
+|1 | `jie --api-key <key>` flag | One-shot, single run. The `jie` binary's top-level flag (Day2: per-call overrides via the same flag). |
+|2 | `~/.jie/auth.json` entry for the provider | Set by `jie login` or `jie logout`-cleared. |
+|3 | Provider's environment variable | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, etc. (See full mapping below.) |
+|4 | Custom provider keys from `~/.jie/models.json` | Day2 concern. v1 has no `models.json`. |
 
 Auth file beats env. This means `jie login` (which writes to `auth.json`) wins over a stale env var — the right precedence for the case where the user rotated credentials via the CLI but a service supervisor still exports the old env var.
 
-**Provider → environment variable mapping** (used in step 3 above):
+**Provider → environment variable mapping** (used in step3 above):
 
 | Provider | Environment Variable |
 |---|---|
@@ -227,29 +251,38 @@ A model's `(provider, modelId)` tuple is resolved at startup, before any `AgentS
 
 | Order | Source | When it fires |
 |---|---|---|
-| 1 | `model: <provider>/<modelId>` in agent `.md` frontmatter | Always wins when present. Team author pinned this agent explicitly. |
-| 2 | Merged settings: `defaultProvider` + `defaultModel` | Agent has no `model:`; user has set both fields. |
-| 3 | Merged settings: `defaultProvider` only | Agent has no `model:`; user has set only the provider. Model id is taken from `@earendil-works/pi-ai`'s `defaultModelPerProvider[defaultProvider]`. |
-| 4 | (none) | **Hard fail** at startup pre-check — see `05-agent-model.md` "Startup Pre-Check". |
+|1 | `model: <provider>/<modelId>` in agent `.md` frontmatter | Always wins when present. Team author pinned this agent explicitly. |
+|2 | Merged settings: `defaultProvider` + `defaultModel` | Agent has no `model:`; user has set both fields. |
+|3 | Merged settings: `defaultProvider` only | Agent has no `model:`; user has set only the provider. Model id is taken from `@earendil-works/pi-ai`'s `defaultModelPerProvider[defaultProvider]`. |
+|4 | (none) | **Hard fail** at startup pre-check — see `05-agent-model.md` "Startup Pre-Check". |
 
-The platform delegates the per-provider fallback in step 3 to `pi-ai`'s built-in `defaultModelPerProvider` table. Jie does not maintain its own default-model table; if `pi-ai` ships an updated default for a provider, Jie inherits it on the next release with no spec change.
+The platform delegates the per-provider fallback in step3 to `pi-ai`'s built-in `defaultModelPerProvider` table. Jie does not maintain its own default-model table; if `pi-ai` ships an updated default for a provider, Jie inherits it on the next release with no spec change.
 
 `AgentSoul.model` is still a required field at the *type* level — it just may be inherited from settings rather than declared in the agent's `.md`. The supervisor's pre-check guarantees that by the time an `AgentSoul` is constructed, `soul.model` is a non-empty `<provider>/<modelId>` string. The platform's `getApiKey(provider)` resolver still uses pi-ai's `getEnvApiKey()`; Jie only changes *what* gets passed to it (the resolution order above, plus the `auth.json` step).
 
-### CLI / TUI Surface
+The supervisor also performs the per-agent model pre-check (see `05-agent-model.md` "Startup Pre-Check"): if any agent fails to resolve a `(provider, modelId)` against the merged settings, startup fails with one error listing every unresolved agent.
 
-The three commands that mutate these files:
+## CLI / TUI Surface
+
+The commands that mutate persistent files:
 
 | Command | File it writes | Notes |
 |---|---|---|
 | `jie login` | `~/.jie/auth.json` | Interactive: pick provider, then OAuth or paste API key. `--provider <id> --api-key <key>` for headless use. |
 | `jie logout [<provider>]` | `~/.jie/auth.json` | Clears the entry for the named provider; no argument clears all. |
 | `jie model <provider>/<modelId>` | `~/.jie/settings.json` | Splits on first `/`; sets `defaultProvider` and `defaultModel`. |
+| `jie team <id>` | `.jie/settings.json` or `~/.jie/settings.json` | Scope-aware: writes to the same scope as the team's install location. TUI hot-swaps the running team; CLI takes effect on next invocation. |
+| `jie team` (no arg) | (read-only) | Prints current `defaultTeam` and installed teams. |
+| `jie team --unset` | `.jie/settings.json` or `~/.jie/settings.json` | Clears `defaultTeam`. Takes effect on next invocation. |
+
+The `--team <id>` flag is a one-shot override for `jie` and `jie -p`; the TUI does not have a one-shot equivalent — use `/team <id>` for both persistence and hot-swap.
+
+`jie model <provider>/<modelId>` takes effect on the next LLM call (no restart, matching pi's convention). The platform re-resolves `(provider, modelId)` from merged settings on every LLM call; `/model` writes to settings and the next call picks up the change.
 
 `jie model` writes to **global** settings (`~/.jie/settings.json`). Project-level overrides go in `.jie/settings.json`, edited by hand. This mirrors pi's split: `/login` and `/model` are global-only; project settings are file-edited.
 
 Unstructured text input for `provider` and `model` in CLI args and TUI slash commands follows pi's convention `<provider>/<modelId>`. Two separate flags (e.g. `--provider` and `--model`) are not accepted in v1; the slash is the canonical separator.
 
-### Provider Configuration (v1)
+## Provider Configuration (v1)
 
-No provider-level config in `settings.json` for v1. Base URLs, custom endpoints, and provider-specific options (e.g., `azureBaseUrl`, `vertex region`) are not configurable — agents use pi's default endpoints. Custom provider configuration is a Day 2 concern.
+No provider-level config in `settings.json` for v1. Base URLs, custom endpoints, and provider-specific options (e.g., `azureBaseUrl`, `vertex region`) are not configurable — agents use pi's default endpoints. Custom provider configuration is a Day2 concern.

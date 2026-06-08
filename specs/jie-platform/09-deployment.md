@@ -40,12 +40,14 @@ No process-per-agent. No NATS server. No PID file for individual agents. No netw
 
 The startup sequence is the same for both `jie` (TUI) and `jie -p` (print mode), except for the final UI step.
 
-1. **Discover config.** Walk up from CWD to find `.jie/config.yaml`. If absent, the platform runs with all defaults — no interactive init flow.
-2. **Validate config.** If a config file is present, validate it strictly. Any error (YAML parse, unknown key, invalid value) → exit 1. See `10-configuration.md` Config Validation.
+1. **Discover settings.** Walk up from CWD to find `.jie/`. Load `.jie/settings.json` if present; deep-merge with `~/.jie/settings.json`. If neither exists, run with empty settings. See `10-configuration.md`.
+2. **Validate settings.** Validate `settings.json` strictly. Any error (JSON parse, invalid value) → exit 1. See `10-configuration.md` Config Validation.
 3. **Resolve team.** Apply the team resolution rules from `10-configuration.md`:
-   - If `team_id` is set in config → look up `.jie/teams/<team_id>/TEAM.md`, then `~/.jie/teams/<team_id>/TEAM.md`. If neither exists → startup fails.
-   - If `team_id` is absent → use the team at `.jie/teams/minimal/TEAM.md` (or the global equivalent). If neither exists → startup fails.
-4. **Open `ArtifactStore`** (SQLite at `{workspace_root}/.jie/artifacts.db`). Failure → exit 1.
+   - If `--team <id>` flag is given → use `<id>`; hard fail if not installed.
+   - Else read `defaultTeam` from merged settings → use it; if stale (not installed), WARN and reset to first-available user team (or clear and use built-in minimal if no user teams exist).
+   - Else pick first-available user team alphabetically across `.jie/teams/*` and `~/.jie/teams/*`.
+   - Else use the platform's built-in minimal team (`packages/jie-platform/team/built-in/minimal-team.ts`, see `minimal-team.md`). The platform always has a runnable team.
+4. **Open `ArtifactStore`** (SQLite at `{cwd}/.jie/artifacts.db`). Failure → exit 1.
 5. **Connect MCP servers** configured in `.jie/mcp.yaml` (project + global merge). Per-server connect failures log a `WARN` and skip that server; the team continues with the rest. See `10-configuration.md` MCP Server Configuration.
 6. **Construct `AgentSoul`s** from the resolved team's `.md` files. For each `AgentSoul`, resolve its `tools:` list against the `ToolRegistry`. If any tool fails to resolve (e.g. the MCP server for that tool failed to connect), the team's startup fails with a clear error citing the missing tool.
 7. **Instantiate `InProcessEventBus`** and the `MemoryManager` per body.
@@ -72,18 +74,18 @@ The 10s window balances responsiveness against letting a slow tool complete clea
 
 ```
 ./
-  .jie/                  # Team-local state
-    config.yaml          # Optional platform config (workspace_root, team_id, stream tunables)
+  .jie/                  # Project-local platform state (discovered by walking up from CWD)
+    settings.json        # Optional project overrides for defaultProvider/defaultModel/defaultTeam (deep-merged over global)
     mcp.yaml             # MCP server definitions
     artifacts.db         # SQLite artifact store
     teams/               # User-installed team directories (project-local)
-      <team_id>/         # One directory per team; looked up by team_id from config
+      <team_id>/         # One directory per team; looked up by `defaultTeam` from settings
         TEAM.md          # Team wiring (leader)
         <role>.md        # Agent definitions (one per role)
-  src/                   # User's codebase (the workspace root)
+  src/                   # User's codebase (workspace = process.cwd(), not configurable)
 ```
 
-User teams can also live globally at `~/.jie/teams/<team_id>/` for sharing across projects. The minimal team lives at one of the standard paths and is loaded when `team_id` is absent from config.
+User teams can also live globally at `~/.jie/teams/<team_id>/` for sharing across projects. The platform's selected team is `defaultTeam` from merged settings (or `--team <id>` for one-shot override); `defaultTeam` is reset to first-available if stale.
 
 ## Health and Restarts
 

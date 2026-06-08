@@ -63,7 +63,9 @@ External tool dependencies (linters, formatters, test runners) are **not** insta
 
 ## Project Setup (Optional)
 
-The `jie` CLI works out of the box with no config file. To customize (custom team, workspace root, stream tunables), create `.jie/config.yaml` manually in the workspace root. All fields are optional; see `10-configuration.md` for the schema and validation rules.
+The `jie` CLI works out of the box with no settings file. To customize provider, model, or team selection at the project level, create `.jie/settings.json` manually in the project root. All fields are optional; see `10-configuration.md` for the schema and validation rules.
+
+Platform tunables (stream chunk size, flush interval) are hard-coded in v1; no configuration is exposed for them.
 
 ### First-Run Credentials and Model
 
@@ -75,25 +77,29 @@ jie model anthropic/claude-sonnet-4-5  # one-time: set the global default model 
 jie                                   # now the team runs
 ```
 
-After the first two commands, subsequent `jie` (and `jie -p`) invocations proceed without setup. Credentials and model persist across runs; nothing else needs to be configured to get a runnable agent.
+After the first two commands, subsequent `jie` (and `jie -p`) invocations proceed without setup. Credentials and model persist across runs; nothing else needs to be configured to get a runnable agent. The platform's built-in minimal team is the last-resort fallback when no user team is selected — see `minimal-team.md`. A user with only `jie login` and `jie model` set up can run `jie` immediately; the platform picks the built-in minimal team.
 
 For project-level model overrides (e.g. a team pinned to a specific model id), create `.jie/settings.json` in the project root by hand. It deep-merges over `~/.jie/settings.json`.
 
 ### Installing a User Team
 
-Team manifests are plain files — no platform-managed install step. The platform looks them up by name at the standard paths and refuses to start with a clear error if a requested `team_id` is missing. See `10-configuration.md` "Team Resolution" for the lookup order.
+User-installed teams are plain files — no platform-managed install step. The platform looks them up by name at the standard paths. See `10-configuration.md` "Team Selection" for the resolution rules.
 
-For the **minimal** team (the platform's fallback when no `team_id` is configured), obtain `TEAM.md` and `general.md` from the `jie-team` package and place them at one of:
+The platform's **built-in minimal team** is always available as a last-resort fallback and requires no installation. To install the `jie-team` package's richer version of the minimal team (which lets users customize the system prompt, tools, or default model), obtain `TEAM.md` and `general.md` from the `jie-team` package and place them at one of:
 
 - `~/.jie/teams/minimal/` — global, applies to every project for the current user
-- `<workspace>/.jie/teams/minimal/` — project-local, overrides the global copy
+- `<project>/.jie/teams/minimal/` — project-local (discovered by walking up from CWD to find `.jie/`); overrides the global copy
 
-The same pattern applies to any other team. The `jie-team` package also ships a **dev** team (DM/Researcher/Architect/Planner/Implementer/Reviewer) which is installed by copying its `.md` files into `~/.jie/teams/dev/` and activated via `team_id: dev` in `.jie/config.yaml`.
+Once installed, the user-installed `minimal` team takes precedence over the platform's built-in.
+
+The same pattern applies to any other team. The `jie-team` package also ships a **dev** team (DM/Researcher/Architect/Planner/Implementer/Reviewer), installed by copying its `.md` files into `~/.jie/teams/dev/` and selected via `jie team dev` (or `/team dev` in the TUI).
 
 To use a non-default team:
 
-1. Place the team's `TEAM.md` and one `.md` per agent role at `.jie/teams/<team_id>/` (project-local) or `~/.jie/teams/<team_id>/` (global). See `05-agent-model.md` "Blueprint Loading" for the file format.
-2. Add `team_id: <team_id>` to `.jie/config.yaml`.
+1. Place the team's `TEAM.md` and one `.md` per agent role at `.jie/teams/<id>/` (project-local, discovered by walking up from CWD) or `~/.jie/teams/<id>/` (global). See `05-agent-model.md` "Blueprint Loading" for the file format.
+2. Run `jie team <id>` (or `/team <id>` in the TUI) to set `defaultTeam`. The platform writes to the same scope where the team is installed (project-local install → `.jie/settings.json`; global install → `~/.jie/settings.json`). The TUI hot-swaps the running team; the CLI takes effect on next invocation.
+
+To use a team for a single invocation without changing settings, pass `--team <id>` to `jie` or `jie -p`.
 
 ## Verification
 
@@ -115,6 +121,6 @@ jie -p "instruction"   # One-shot print mode
 |---|---|
 | Install script fails on bun check | `bun --version`. Must be ≥ 1.3.14. Upgrade: `bun upgrade` or see bun.sh. |
 | Install script fails on platform | Native Windows is unsupported. Use WSL2. |
-| `jie` can't find config | Run from within the workspace or create `.jie/config.yaml`. |
+| `jie` can't find config | Run from within the workspace or create `.jie/settings.json`. |
 | `jie` exits 1 with "model resolution failed for N agents" | No global default model is set. Run `jie login` (once) and `jie model <provider>/<modelId>` to configure. See `10-configuration.md` "Model Resolution". |
 | `jie` errors at LLM call time with "no API key found" | Run `jie login` for the resolved provider, or set the provider's env var. See `10-configuration.md` "Credentials Resolution Order". |

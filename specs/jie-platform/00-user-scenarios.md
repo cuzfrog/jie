@@ -16,9 +16,40 @@
 
 ## Scenario 3: switch teams
 1. Under the dir `/tmp/workspace/my-project3/`, when there are  2 team manifests `.jie/teams/my-team-1/` and `.jie/teams/my-team-2/`.
-2. When I run `jie` under the dir `/tmp/workspace/my-project3/`, a TUI opens.
-3. I can use cmd `/team my-team-1` to switch to team `my-team-1`, and I can use cmd `/team my-team-2` to switch to team `my-team-2`.
-3. When I type the cmd `/team`, a list of teams is shown, and I can select one to switch to. I can also type some text to filter the list of teams, just like pi's selection filter.
+2. When I run `jie` under the dir `/tmp/workspace/my-project3/`, a TUI opens with tab(s) containing `my-team-1`'s agent(s).
+3. When I prompt: "Tell me the sum of 1+2", then I should got some response about "3" in the conversation area.
+4. when I use cmd `/team my-team-2` to switch to team `my-team-2`, the TUI tabs change to `my-team-2`'s agent(s), the conversation area is clean.
+5. when I use cmd `/team my-team-1` to switch back to team `my-team-1`, the TUI tabs change to `my-team-1`'s agent(s), the conversation area contains the previous conversation with `my-team-1`'s agent.
+6. When I type the cmd `/team`, a list of teams is shown, and I can select one to switch to. I can also type some text to filter the list of teams, just like pi's selection filter.
+
+### select team with cli
+1. Under the dir `/tmp/workspace/my-project3/`, when there are  2 team manifests `.jie/teams/my-team-1/` and `.jie/teams/my-team-2/`.
+2. when I run `jie --team wrong-team` under the dir `/tmp/workspace/my-project3/`, an error message is printed and the process exits 1.
+3. when I run `jie --team my-team-2` under the dir `/tmp/workspace/my-project3/`, a TUI opens with tab(s) containing `my-team-2`'s agent(s).
+4. I can use cmd `/team my-team-1` to switch to team `my-team-1`.
+
+### select team with -p
+1. Under the dir `/tmp/workspace/my-project3/`, when there are  2 team manifests `.jie/teams/my-team-1/` and `.jie/teams/my-team-2/`.
+2. when I run `jie --team my-team-2 -p "Tell me a story"` under the dir `/tmp/workspace/my-project3/`, response "Once upon a time..." is streamed to stdout, ending with a final newline.
+3. the process exits 0.
+4. when I run `jie --team my-team-1 -p "Tell me a story"` under the dir `/tmp/workspace/my-project3/`, response "Marry had a little lamb" is streamed to stdout, ending with a final newline.
+5. the process exits 0.
+
+`agent-1.md` under `.jie/teams/my-team-1/` contains:
+```
+---
+name: agent-1
+---
+When the user asks you to tell a story, respond: "Marry had a little lamb".
+```
+
+`agent-2.md` under `.jie/teams/my-team-2/` contains:
+```
+---
+name: agent-2
+---
+When the user asks you to tell a story, respond: "Once upon a time..."
+```
 
 ## Scenario 4: one-shot print mode
 1. when I run `jie -p "List files under current dir"` under a dir without any config or team definitions, no TUI opens; the command blocks.

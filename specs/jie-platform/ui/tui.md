@@ -84,14 +84,29 @@ In the in-process deployment (v1 default), the leader and all agents run in the 
 
 ## Slash Commands
 
-The TUI exposes three slash commands that mirror the CLI's `login`, `logout`, and `model` subcommands. They mutate the same files (`~/.jie/auth.json`, `~/.jie/settings.json`) and have the same on-disk effect as their CLI counterparts.
+The TUI exposes slash commands that mirror the CLI's `login`, `logout`, `model`, and `team` subcommands. They mutate the same files (`~/.jie/auth.json`, `~/.jie/settings.json`, `.jie/settings.json`) and have the same on-disk effect as their CLI counterparts.
 
 | Command | Writes to | Takes effect on |
 |---|---|---|
 | `/login` | `~/.jie/auth.json` | Next LLM call (no restart needed). |
 | `/logout [<provider>]` | `~/.jie/auth.json` | Next LLM call. |
-| `/model <provider>/<modelId>` | `~/.jie/settings.json` | **Restart of `jie` required.** Agents' resolved `(provider, modelId)` is captured at startup; the running session cannot rebind. |
+| `/model <provider>/<modelId>` | `~/.jie/settings.json` | Next LLM call (no restart needed). The platform re-resolves `(provider, modelId)` from merged settings on every LLM call. |
+| `/team <id>` | `.jie/settings.json` or `~/.jie/settings.json` | Immediately. Hot-swaps the running team in-session — see `10-configuration.md` "Team Swap". |
+| `/team` (no arg) | (read-only) | Shows current `defaultTeam` plus a list of installed teams with pi's selection-filter UI; selecting one is equivalent to `/team <id>` and hot-swaps. |
+| `/team --unset` | `.jie/settings.json` or `~/.jie/settings.json` | Next `jie` invocation. Mid-session unset is not supported. |
 
 Unstructured text input for `/model` follows the same `<provider>/<modelId>` form as `jie model` in the CLI (see `ui/cli.md`).
 
-Slash commands are the TUI's only writes to disk outside the runtime event log. They run synchronously in the TUI's input loop; the user stays in the TUI on success. `/model` followed by a successful write shows a hint: `default model set; restart jie for the change to take effect on running agents`.
+Slash commands are the TUI's only writes to disk outside the runtime event log. They run synchronously in the TUI's input loop; the user stays in the TUI on success. `/model` followed by a successful write shows a hint: `default model set; takes effect on next LLM call`. `/team <id>` followed by a successful write shows a hint: `default team set`. `/team` with selection completes the swap without prompting — the selected team's agents replace the running ones.
+
+### Model and Team Hot-Swap
+
+The TUI supports model and team swap mid-session because the Memory subsystem preserves conversation history across body restarts within a process run (`08-memory.md`):
+
+- **Model.** The platform re-reads `defaultProvider` + `defaultModel` from merged settings on every LLM call. The agent's `agent_key` is stable across model changes; conversation history is preserved (rows in `memory_turns` keyed by `(agent_key, session_id, seq)` are unchanged when the resolved model changes).
+- **Team.** `/team <id>` (or `/team` followed by selection in the picker) hot-swaps the running team in-session:
+  1. All current agent bodies receive a graceful stop signal (bounded 10s shutdown, same as `jie` exit — see `09-deployment.md`).
+  2. The new team's blueprint is loaded per `10-configuration.md` "Team Selection" rules.
+  3. New agent bodies are constructed. For each new body, the supervisor looks up its `agent_key` in `Map<agent_key, session_id>`. If the body has run before in this process, the supervisor passes the recorded `session_id`; the body uses it and `restore()` returns the prior `memory_turns` rows. If the body has never run, the body mints a new `session_id` and the supervisor records the mapping. In both cases, the new body resumes from where it left off.
+  4. The TUI re-renders: tabs/panels for the old agents close; tabs/panels for the new agents appear via the existing "Agent Discovery" primitives.
+  5. Every prior team's conversation history is retained for the lifetime of the process run (in `memory_turns`, keyed by `(agent_key, session_id, seq)`). Switching back to a previously-active team restores its conversation in full. See user scenario 3 for the expected UX.

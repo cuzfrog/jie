@@ -23,12 +23,12 @@ Blueprints are declarative files — no code between platform and team:
 - `TEAM.md` carries only the leader role name.
 - Agent `.md` frontmatter: `model`, `tools`, `notify`. Prose body = system prompt.
 - Platform parses these files, constructs `AgentSoul` instances, auto-computes subscriptions.
-- `team_path` in `.jie/config.yaml` points to the blueprint directory.
+- `defaultTeam` in `settings.json` (set via `jie team <id>` or `/team <id>`) selects the team to run; the platform looks up the team at `.jie/teams/<id>/` (project) or `~/.jie/teams/<id>/` (global).
 
 ## Consequences
 
-- Custom teams require no code changes. Create a new directory, write `.md` files, point `team_path` at it.
+- Custom teams require no code changes. Create a new directory, write `.md` files, set `defaultTeam` to its id (or pass `--team <id>` for one-shot use).
 - Tools: LLM-authored markdown is natural. No TypeScript compilation, no module resolution.
 - Type safety boundary: the YAML frontmatter has a small, well-defined schema (`model`, `tools`, `notify`). Validation at parse time.
 - MCP tools referenced by name in `tools` resolve through `ToolRegistry` — the agent author doesn't write MCP connection code.
-- **Package boundary (refined by ADR 12).** `jie-team` is a **manifest** package: a directory of `.md` files for the dev team and minimal team, with no `postinstall` script and no CLI integration. The platform is **agnostic of jie-team**: it reads team manifests from filesystem paths, has no `import` of jie-team, and treats the built-in default as just a default `team_id = "minimal"` value. Distributing `jie-team`'s manifests to a working `jie` install is the user's responsibility, via manual copy to `~/.jie/teams/<id>/` or `.jie/teams/<id>/`.
+- **Package boundary (refined by ADR 12).** `jie-team` is a **manifest** package: a directory of `.md` files for the dev team and a richer minimal team, with no `postinstall` script and no CLI integration. The platform is **agnostic of jie-team**: it reads team manifests from filesystem paths, has no `import` of jie-team, and does not depend on `jie-team` being installed. The platform ships a hardcoded built-in minimal team (`packages/jie-platform/team/built-in/minimal-team.ts`) as a last-resort runtime fallback when no user team is selected. The `jie-team` package's `.md` files are an optional user-installable override of the built-in. Distributing `jie-team`'s manifests to a working `jie` install is the user's responsibility, via manual copy to `~/.jie/teams/<id>/` or `.jie/teams/<id>/`.
