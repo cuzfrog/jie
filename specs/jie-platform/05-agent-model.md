@@ -197,15 +197,23 @@ Most built-in tools return synchronous results and ignore `onUpdate`. Tools like
 `notify` is auto-registered on every agent body. It is the LLM's sole means of publishing an event to another agent or to a domain topic.
 
 ```typescript
-notify(input: { topic: string; prompt: string }): { ok: true; recipients: number }
+notify(input: { topic: string; prompt: string }): string  // LLM-visible text; see below
 ```
 
 Behavior inside the body:
 
 1. Publish `{ topic, prompt, source: this.agent_key }` to `{topic}` on the event bus.
-2. The event bus filters self-receipt: the publishing agent does not receive its own notification, even if subscribed to the topic.
-3. Return `{ ok: true, recipients: <subscriber count> }` to the LLM. If `recipients === 0`, the LLM can react to the undelivered notification.
-4. The LLM continues processing — `notify` does **not** end the turn loop.
+2. The event bus filters self-receipt: the publishing agent does not receive its own notification, even if subscribed to the topic. The bus also catches per-subscriber exceptions (see `03-event-system.md` "Error Containment") and continues dispatch — a misbehaving subscriber does not poison the publisher.
+3. The LLM-visible return is a human-readable string summarizing delivery:
+
+   | `recipients = subscriberCount(topic)` | LLM-visible `content` |
+   |---|---|
+   | `> 0` | `"Notification delivered to N recipients"` |
+   | `0` | `"Notification delivered to 0 recipients — no agent is subscribed to '<topic>'"` |
+
+   The zero case is **explicit** because it is the LLM's signal to react: the topic name is unknown, no peer is listening, the message would be lost. The LLM should reconsider the topic, fall back to a different path, or surface the issue to the user.
+4. The body also returns `details = { topic, recipients }` to the LLM pipeline for afterToolCall hooks (TUI render, diagnostics). The `details` field is opaque to the LLM conversation but is visible to observers.
+5. The LLM continues processing — `notify` does **not** end the turn loop.
 
 On receipt, an agent formats the notification as a synthetic `user` message in the LLM conversation: `[{source_agent_key} on '{topic}']: {prompt}`.
 
@@ -235,6 +243,24 @@ Rules:
 - The command runs with the workspace's environment (inherited from the agent process). No isolation sandbox beyond the workspace-root constraint in v1.
 - Shell is `/bin/sh` (POSIX).
 - Output: `stdout` and `stderr` are each independently truncated to **32 KiB**. The `truncated` field reports which streams were clipped. A truncated stream has a marker `[truncated to 32 KiB]` appended at the point of truncation.
+- **Result shape returned to the LLM.** The bash tool's `execute` returns a `ToolResult` with a string `content` (the only thing the LLM sees) and a structured `details` for afterToolCall hooks:
+
+  ```typescript
+  {
+    content: `exit_code: <N>[( command failed) when N != 0]
+  --- stdout ---
+  <output>[ [truncated to 32 KiB] if truncated.stdout ]`,
+    details: { exitCode: number, truncated: { stdout: boolean; stderr: boolean } }
+  }
+  ```
+
+  Format rules:
+  - The `exit_code: <N>` line is always present. The `( command failed)` suffix is appended when `N != 0` so the LLM sees the failure clearly without losing the actual output.
+  - `--- stdout ---` and `--- stderr ---` section headers are emitted; if a section's content is empty, the section is omitted entirely (no header with empty body).
+  - The `[truncated to 32 KiB]` marker is appended to the truncated stream's content, *inside* its section.
+  - The command itself is **not** echoed in the output — the LLM knows what it sent.
+  - `details` carries the structured `exitCode` and `truncated` flags for afterToolCall hooks (TUI render, diagnostics).
+- **Failure mode.** Bash **does not throw on non-zero exit code**. The LLM reads the exit code from the text and reasons about it. Throwing would set `isError: true` in pi-agent's `ToolResultMessage` but discard stdout/stderr — the LLM would lose the actual output, which is precisely what it asked for. Conveying failure in the text is the correct trade-off.
 
 ### Built-in Tools: `web_search` and `web_fetch`
 
@@ -324,15 +350,18 @@ full file, continue with offset until complete.
 
 ### Built-in Tool: `write_file`
 
-`write_file` writes text content to a file at a path within the workspace. It is the natural sibling of `read_file` and completes the platform's file I/O pair.
+`write_file` writes text content to a file at a path within the workspace. It is the natural sibling of `read_file` and completes the platform's file I/O pair. The LLM-facing return string mirrors pi's `write` tool (`@earendil-works/pi-coding-agent/src/core/tools/write.ts`) verbatim, so agents reason about the result the same way.
 
 ```typescript
 write_file(input: { path: string; content: string }): {
   path:          string;     // canonicalized, workspace-relative
-  bytes_written: number;
+  bytes_written: number;     // = content.length, per pi convention
   created_at:    string;     // ISO 8601 — file's mtime after the write
 }
 ```
+
+- **LLM-visible `content`:** `` `Successfully wrote ${content.length} bytes to ${path}` `` — identical to pi's `write` tool. (Note: the count is `content.length`, a JavaScript char count, not a UTF-8 byte count. The field name `bytes_written` follows pi's naming even though it is technically a misnomer for non-ASCII content. The two concerns are aligned, not diverged, so the LLM is not surprised.)
+- **Structured `details`:** the full `{ path, bytes_written, created_at }` object is returned as `details` for afterToolCall hooks (TUI render, diagnostics). The LLM does not see the `details`; only `content` is visible to the conversation.
 
 Rules:
 
@@ -371,10 +400,10 @@ This separation lets the platform ship a useful writer in v1 without waiting for
 
 Every tool call is observable on Jie's event bus. The body wires pi-agent's `beforeToolCall` and `afterToolCall` hooks to emit:
 
-- **`agent.tool.call`** — emitted in `beforeToolCall` (before tool execution). Payload: `tool_call_id`, `name`, JSON-serialized `input`, `input_truncated`.
-- **`agent.tool.result`** — emitted in `afterToolCall` (after execution completes or throws). Payload: `tool_call_id`, `name`, JSON-serialized `output` (or `null` on throw), `output_truncated`, `duration_ms`, `error` (or `null`).
+- **`agent.tool.call`** — emitted in `beforeToolCall` (before tool execution). Payload: `tool_call_id: string`, `name`, JSON-serialized `input`, `input_truncated`.
+- **`agent.tool.result`** — emitted in `afterToolCall` (after execution completes or throws). Payload: `tool_call_id: string`, `name`, JSON-serialized `output` (or `null` on throw), `output_truncated`, `duration_ms`, `error` (or `null`).
 
-`tool_call_id` is pi-agent's per-invocation string. Jie publishes its own monotonic `uint32` counter for the event bus payload (starts at 0 per agent).
+`tool_call_id` is the string id pi-agent provides in its hook context (`ctx.toolCallId: string`). The body passes it through to the bus as-is — no Jie-side counter, no Map, no renumbering. The same string appears in both events for the same tool call, which is what observers (TUI, `-p` mode) use to correlate a `call` with its `result`. The id is opaque to Jie; its format is provider-defined (e.g. OpenAI uses `call_xxx`, Anthropic uses `toolu_xxx`).
 
 Input and output are JSON-serialized. If the serialized string exceeds **4 KiB**, it is middle-truncated: the first and last `(4096 - MARKER_LEN) / 2` chars are preserved, with a marker `...[N chars truncated]...` in between.
 
@@ -397,7 +426,7 @@ class AgentBody {
   private artifacts: ArtifactStore;
   private memory:  MemoryManager;               // see 08-memory.md
 
-  start(): void {}    // subscribes to soul.subscriptions on bus, begins event loop
+  start(): void {}    // subscribes to soul.subscriptions on bus, publishes initial agent.idle, begins event loop
   stop(): void {}     // unsubscribes, shuts down cleanly
 }
 ```
@@ -406,6 +435,7 @@ class AgentBody {
 - Soul is immutable. An agent's role cannot change at runtime.
 - pi-agent's `Agent` handles the LLM loop, tool execution, streaming, and compaction.
 - The body is the **only** publisher of events on Jie's bus. The LLM expresses publication intent through `notify`; the body validates and executes the publish.
+- **`start()` ordering.** Subscriptions register first (to `{agent_key}` plus `leader.prompt` for the leader, plus `soul.subscriptions` for declared topics), then the body publishes one `agent.idle` to advertise "this agent exists, currently idle" to observers, then the body begins processing the message queue. The startup `agent.idle` is published *after* subscriptions to ensure the body is in a consistent state before observers see it. See `03-event-system.md` "Agent Idle".
 
 ### Event Loop
 

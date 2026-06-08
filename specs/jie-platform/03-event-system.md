@@ -72,8 +72,8 @@ type PlatformEventPayload<T extends PlatformEventType> =
   T extends 'leader.prompt'        ? { prompt: string } :
   T extends 'agent.stream.chunk'   ? { stream_id: number; seq: number; text: string } :
   T extends 'agent.stream.end'     ? { stream_id: number; total_chunks: number } :
-  T extends 'agent.tool.call'      ? { tool_call_id: number; name: string; input: string; input_truncated: boolean } :
-  T extends 'agent.tool.result'    ? { tool_call_id: number; name: string; output: string | null; output_truncated: boolean; duration_ms: number; error: string | null } :
+  T extends 'agent.tool.call'      ? { tool_call_id: string; name: string; input: string; input_truncated: boolean } :
+  T extends 'agent.tool.result'    ? { tool_call_id: string; name: string; output: string | null; output_truncated: boolean; duration_ms: number; error: string | null } :
   T extends 'agent.queue.update'   ? { prompts: string[] } :
   T extends 'agent.idle'           ? { } :
   // Topic-published events carry domain-defined payloads:
@@ -113,13 +113,13 @@ Every tool call emits two events:
 - `agent.tool.call` — before execution. `input` is JSON-serialized; truncated at 4 KiB with marker.
 - `agent.tool.result` — after execution. `output` is JSON-serialized; truncated at 4 KiB. `error` is null on success.
 
-`tool_call_id` is a per-agent uint32 monotonic counter starting at 0.
+`tool_call_id` is the string id pi-agent provides in its `beforeToolCall` / `afterToolCall` hooks. The body passes it through to the bus as-is. The value is opaque to Jie and to consumers — it is used by observers (TUI, -p mode) to correlate a `agent.tool.call` event with the matching `agent.tool.result` event. Jie does not synthesize, renumber, or otherwise transform it.
 
 ## Agent Idle
 
 When an agent transitions from `busy` to `idle` (work unit complete, terminal event published, or error recovery complete), it publishes `agent.idle`. This is the signal for observers (TUI, `-p` mode) that the agent is ready for new work. Replaces the heartbeat-based discovery model.
 
-**`agent.idle` is published on every `agent_end`** — the LLM's `stopReason` does not gate the publish. Whether the LLM finished naturally (`"stop"`, `"length"`) or exited from an error (`"error"`, `"aborted"`), the agent returns to idle. Observers can rely on `agent.idle` as a definitive "this agent is no longer processing" signal — they do not need to inspect `stopReason` separately to know the agent is ready for new work.
+**`agent.idle` is published at startup AND on every `agent_end`.** The body publishes one `agent.idle` at the end of `body.start()` — after the body's subscriptions are registered and before it begins processing the message queue. This gives observers (TUI, `-p` mode) an explicit "agent exists, currently idle" signal at boot, so the agents-panel can populate before any prompt is sent. Subsequent publishes fire on every `agent_end` regardless of `stopReason` — whether the LLM finished naturally (`"stop"`, `"length"`) or exited from an error (`"error"`, `"aborted"`), the agent returns to idle. Observers can rely on `agent.idle` as a definitive "this agent is no longer processing" signal — they do not need to inspect `stopReason` separately to know the agent is ready for new work.
 
 ## Inter-Agent Messaging
 
