@@ -2,7 +2,7 @@
 
 Built-in roles for the default software development team blueprint. The platform provides the agent model — the team blueprint defines what roles exist, what topics they listen to, and what tools they have.
 
-`tools` entries follow the notation defined in `jie-platform/05-agent-model.md`:
+`tools` entries follow the notation defined in `jie-platform/06-agent-model.md`:
 - `tool_name` — built-in tool (resolved against platform tool registry)
 - `mcp:<server>:<method>` — specific MCP method
 - `mcp:<server>:<glob>` — globbed MCP tools (anchored shell-style; `*` and `?` only)

@@ -11,8 +11,19 @@ The platform reads and writes a small set of user-visible files. New settings ma
 | `~/.jie/settings.json` | Global user settings | Plain JSON (user-readable) | `defaultProvider`, `defaultModel`, `defaultTeam` |
 | `.jie/settings.json` | Project override | Plain JSON (user-readable) | Same fields, deep-merge over global |
 | `~/.jie/auth.json` | Global credentials | mode `0600` (sensitive) | API keys, OAuth tokens |
+| `~/.jie/mcp.json` | Global MCP server definitions | Plain JSON (forward-looking — Day 2) | MCP server list (stdio / http transports) |
+| `.jie/mcp.json` | Project MCP server overrides | Plain JSON (forward-looking — Day 2) | Same shape, project overrides global |
+| `.jie/teams/<id>/TEAM.md` | Team wiring | Plain text | `leader:` declaration in YAML frontmatter + prose |
+| `.jie/teams/<id>/<role>.md` | Agent definition | Plain text | YAML frontmatter (`model`, `tools`, `subscribe`) + prose body (system prompt) |
 
 `.jie/settings.json` is the only project-level user settings file. There is no project-level `auth.json` — credentials are global, by design.
+
+### File-Format Convention
+
+Config files (machine-edited, schema-validated) are **JSON**; content files (LLM-authored system prompts with structured metadata) are **`.md` with YAML frontmatter**. This matches `@earendil-works/pi-coding-agent`'s split: `settings.json` / `auth.json` are JSON, while skills and prompts are `.md` with YAML frontmatter.
+
+- JSON: `settings.json`, `auth.json`, `mcp.json`. Parsed by the bun/Node built-in `JSON.parse`; no external dep.
+- YAML: team `.md` frontmatter. Parsed by `yaml@2.9.0` (per the platform's runtime-deps block in `monorepo-structure.md`).
 
 ### Discovery
 
@@ -96,7 +107,7 @@ If both project-local and global copies exist, project wins (matches the lookup 
 
 1. All current agent bodies receive a graceful stop signal (bounded 10s shutdown, same as `jie` exit — see `09-deployment.md`).
 2. The new team's blueprint is loaded per "Team Selection" rules (steps1–4).
-3. New agent bodies are constructed. The supervisor's `Map<agent_key, session_id>` (`08-memory.md`) is consulted per body: if the `agent_key` has a recorded `session_id`, it is passed to the new body; the body uses it and `restore()` returns the prior `memory_turns` rows. If the `agent_key` is new in this process, the body mints a fresh `session_id` and the supervisor records it. The supervisor's map is in-memory only; on process exit it is lost.
+3. New agent bodies are constructed. The `JieHandle`'s in-memory `Map<agent_key, session_id>` (`08-memory.md`) is consulted per body: if the `agent_key` has a recorded `session_id`, it is passed to the new body; the body uses it and `restore()` returns the prior `memory_turns` rows. If the `agent_key` is new in this process, the body mints a fresh `session_id` and the handle records it. The handle's map is in-memory only; on process exit it is lost.
 4. The TUI re-renders: tabs/panels for the old agents close; tabs/panels for the new agents appear via the existing "Agent Discovery" primitives. Every prior team's conversation history is retained for the lifetime of the process run; switching back to a previously-active team restores its conversation in full.
 
 TUI hint on success: `default team set`.
@@ -149,31 +160,44 @@ The platform never fails on "no teams available": the built-in minimal team is t
 
 ## MCP Server Configuration
 
-MCP servers are configured in `.jie/mcp.yaml` (project-level; `~/.jie/mcp.yaml` for global defaults). The project file is discovered by walking up from CWD to find `.jie/`. The platform connects to every listed server at startup, fetches tool catalogs, and registers tools into `ToolRegistry`.
+> **Day 2.** Per ADR 17, MCP client integration is **not in v1 MVP**. The platform's `startJie` does not load `mcp.json` in v1. The schema below is forward-looking; it is the design that ships when the MCP client lands. The `ToolRegistry`'s `mcp:<server>:<tool>` and `mcp:<server>:*` spec syntax returns zero matches in v1, so an agent `.md` that lists MCP tools fails the cascade-policy startup check.
+
+MCP servers are configured in `.jie/mcp.json` (project-level; `~/.jie/mcp.json` for global defaults). The project file is discovered by walking up from CWD to find `.jie/`. The platform connects to every listed server at startup, fetches tool catalogs, and registers tools into `ToolRegistry`.
 
 ### Schema
 
-```yaml
-servers:
- <name>:
- transport: stdio | http # required
- # stdio transport:
- command: <string> # required
- args: [<string>]            # optional
- # http transport:
- url: <string> # required
- auth:
- token_env: <string> # env var containing bearer token
+```json
+{
+  "servers": {
+    "<name>": {
+      "transport": "stdio" | "http",
+      "command":  "<string>",
+      "args":     ["<string>"],
+      "url":      "<string>",
+      "auth": {
+        "token_env": "<string>"
+      }
+    }
+  }
+}
 ```
+
+| Field | Type | Notes |
+|---|---|---|
+| `transport` | `"stdio" \| "http"` | Required. |
+| `command` | string | Required for stdio transport. |
+| `args` | string[] | Optional. Arguments to the stdio command. |
+| `url` | string | Required for http transport. |
+| `auth.token_env` | string | Optional. Name of an env var containing a bearer token. |
 
 ### Resolution
 
-- **`~/.jie/mcp.yaml`** — global (shared across projects).
-- **`.jie/mcp.yaml`** (project; discovered by walking up from CWD) — project-level overrides. Server entries with the same `<name>` replace the global entry entirely (no merge).
+- **`~/.jie/mcp.json`** — global (shared across projects).
+- **`.jie/mcp.json`** (project; discovered by walking up from CWD) — project-level overrides. Server entries with the same `<name>` replace the global entry entirely (no merge).
 
 ### Startup Behavior
 
-1. Load merged `mcp.yaml`.
+1. Load merged `mcp.json`.
 2. For each server: attempt to connect.
 3. **If connect fails**: log a `WARN` with the server name and reason. Do not register that server's tools. **Startup continues** with the rest of the team. The team's `ToolRegistry` will simply lack that server's tools.
 4. **If connect succeeds**: fetch tool catalog, register tools into `ToolRegistry`.
@@ -186,7 +210,7 @@ If an agent's `.md` `tools:` list references a tool that cannot be resolved (e.g
 - MCP connect failure → soft (WARN, skip, continue).
 - Tool resolution failure inside an agent → hard (startup fails).
 
-This means a team with a working MCP server starts cleanly; a team whose blueprint depends on a missing MCP server fails fast with a precise error.
+This means a team with a working MCP server starts cleanly; a team whose blueprint depends on a missing MCP server fails fast with a precise error. In v1 (no MCP), the only tools available are the built-ins, so an agent `.md` listing `mcp:*` tools fails the cascade check.
 
 ## LLM Provider Configuration
 
@@ -247,20 +271,20 @@ If credentials are missing for the resolved provider, `getModel()` does not thro
 
 ### Model Resolution
 
-A model's `(provider, modelId)` tuple is resolved at startup, before any `AgentSoul` is constructed. The supervisor walks every agent in the blueprint and resolves each one against the chain below. Resolution is per-agent and may produce different `(provider, modelId)` per role.
+A model's `(provider, modelId)` tuple is resolved at startup, before any `AgentSoul` is constructed. The `startJie` entry walks every agent in the blueprint and resolves each one against the chain below. Resolution is per-agent and may produce different `(provider, modelId)` per role.
 
 | Order | Source | When it fires |
 |---|---|---|
 |1 | `model: <provider>/<modelId>` in agent `.md` frontmatter | Always wins when present. Team author pinned this agent explicitly. |
 |2 | Merged settings: `defaultProvider` + `defaultModel` | Agent has no `model:`; user has set both fields. |
 |3 | Merged settings: `defaultProvider` only | Agent has no `model:`; user has set only the provider. Model id is taken from `@earendil-works/pi-ai`'s `defaultModelPerProvider[defaultProvider]`. |
-|4 | (none) | **Hard fail** at startup pre-check — see `05-agent-model.md` "Startup Pre-Check". |
+|4 | (none) | **Hard fail** at startup pre-check — see `06-agent-model.md` "Startup Pre-Check". |
 
 The platform delegates the per-provider fallback in step3 to `pi-ai`'s built-in `defaultModelPerProvider` table. Jie does not maintain its own default-model table; if `pi-ai` ships an updated default for a provider, Jie inherits it on the next release with no spec change.
 
-`AgentSoul.model` is still a required field at the *type* level — it just may be inherited from settings rather than declared in the agent's `.md`. The supervisor's pre-check guarantees that by the time an `AgentSoul` is constructed, `soul.model` is a non-empty `<provider>/<modelId>` string. The platform's `getApiKey(provider)` resolver still uses pi-ai's `getEnvApiKey()`; Jie only changes *what* gets passed to it (the resolution order above, plus the `auth.json` step).
+`AgentSoul.model` is still a required field at the *type* level — it just may be inherited from settings rather than declared in the agent's `.md`. The startup pre-check (run by `startJie` during team construction) guarantees that by the time an `AgentSoul` is constructed, `soul.model` is a non-empty `<provider>/<modelId>` string. The platform's `getApiKey(provider)` resolver still uses pi-ai's `getEnvApiKey()`; Jie only changes *what* gets passed to it (the resolution order above, plus the `auth.json` step).
 
-The supervisor also performs the per-agent model pre-check (see `05-agent-model.md` "Startup Pre-Check"): if any agent fails to resolve a `(provider, modelId)` against the merged settings, startup fails with one error listing every unresolved agent.
+`startJie` also performs the per-agent model pre-check (see `06-agent-model.md` "Startup Pre-Check"): if any agent fails to resolve a `(provider, modelId)` against the merged settings, startup fails with one error listing every unresolved agent.
 
 ## CLI / TUI Surface
 

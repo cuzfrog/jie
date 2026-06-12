@@ -120,11 +120,11 @@ When you finish, call `notify('task.researched', '...')` to signal completion.
 
 The `model:` field is optional. When absent, the platform falls through to the user's global default — see `10-configuration.md` "Model Resolution" for the full chain. The `AgentSoul.model` value is always a resolved `<provider>/<modelId>` string by the time the soul is constructed; the frontmatter field is just the agent's *explicit override* slot.
 
-If a model string is present but malformed (no `/` separator), the platform fails at startup with `invalid model string: <value>` citing the agent's role. The error is part of the supervisor's pre-check (see "Startup Pre-Check" below).
+If a model string is present but malformed (no `/` separator), the platform fails at startup with `invalid model string: <value>` citing the agent's role. The error is part of the startup pre-check (run by `startJie`) (see "Startup Pre-Check" below).
 
 ### Startup Pre-Check
 
-The supervisor walks every agent in the blueprint before constructing any `AgentSoul`. For each agent it attempts to resolve a concrete `(provider, modelId)`. If any agent fails, startup exits 1 with a single error message listing every unresolved agent:
+`startJie` walks every agent in the blueprint before constructing any `AgentSoul`. For each agent it attempts to resolve a concrete `(provider, modelId)`. If any agent fails, startup exits 1 with a single error message listing every unresolved agent:
 
 ```
 model resolution failed for 2 agents:
@@ -135,7 +135,7 @@ Set a global default with `jie model <provider>/<modelId>` (writes ~/.jie/settin
 or add `model: <provider>/<id>` to each agent's .md frontmatter.
 ```
 
-This is a hard fail — no partial startup, no agent constructed. The supervisor does not surface a "missing model" error at LLM-call time; that class of error is caught here.
+This is a hard fail — no partial startup, no agent constructed. `startJie` does not surface a "missing model" error at LLM-call time; that class of error is caught here.
 
 ### Platform Auto-Wiring
 
@@ -307,7 +307,7 @@ The return type is `{ content: string; truncated: boolean }` — the interface i
 
 ### Built-in Tools: `write_artifact` and `read_artifact`
 
-Wrappers over the `ArtifactStore` interface (see `04-artifact-store.md`):
+Wrappers over the `ArtifactStore` interface (see `05-artifact-store.md`):
 
 ```typescript
 write_artifact(input: { key: string; content: string }): { key: string; created_at: string }
@@ -403,7 +403,7 @@ Every tool call is observable on Jie's event bus. The body wires pi-agent's `bef
 - **`agent.tool.call`** — emitted in `beforeToolCall` (before tool execution). Payload: `tool_call_id: string`, `name`, JSON-serialized `input`, `input_truncated`.
 - **`agent.tool.result`** — emitted in `afterToolCall` (after execution completes or throws). Payload: `tool_call_id: string`, `name`, JSON-serialized `output` (or `null` on throw), `output_truncated`, `duration_ms`, `error` (or `null`).
 
-`tool_call_id` is the string id pi-agent provides in its hook context (`ctx.toolCallId: string`). The body passes it through to the bus as-is — no Jie-side counter, no Map, no renumbering. The same string appears in both events for the same tool call, which is what observers (TUI, `-p` mode) use to correlate a `call` with its `result`. The id is opaque to Jie; its format is provider-defined (e.g. OpenAI uses `call_xxx`, Anthropic uses `toolu_xxx`).
+`tool_call_id` is the string id pi-agent provides in its hook context. The body reads it from the hook context as `ctx.toolCall.id` (in pi-agent-core@0.79.1 the hook context is `{ assistantMessage, toolCall, args, context }`, not the older flat shape) and passes it through to the bus as-is — no Jie-side counter, no Map, no renumbering. The same string appears in both events for the same tool call, which is what observers (TUI, `-p` mode) use to correlate a `call` with its `result`. The id is opaque to Jie; its format is provider-defined (e.g. OpenAI uses `call_xxx`, Anthropic uses `toolu_xxx`).
 
 Input and output are JSON-serialized. If the serialized string exceeds **4 KiB**, it is middle-truncated: the first and last `(4096 - MARKER_LEN) / 2` chars are preserved, with a marker `...[N chars truncated]...` in between.
 
@@ -463,7 +463,7 @@ Agents resolve errors using LLM reasoning; they are not crash-and-restart compon
 
 **MCP server crash mid-session.** If an MCP server becomes unreachable while a tool call is in flight, the in-flight call times out (per the default 120s timeout) or returns `mcp_server_unreachable`. The error surfaces to the LLM as a tool-result error — the agent handles it like any other tool error and may retry or degrade gracefully. No process exit. Subsequent MCP calls to the same server return errors until the server is reconnected.
 
-**Bus disconnect.** The in-process `EventBus` cannot disconnect (it's a local data structure). When the process exits, the supervisor detects the child exit and restarts it.
+**Bus disconnect.** The in-process `EventBus` cannot disconnect (it's a local data structure). When the process exits, the process exits; the user re-runs `jie`.
 
 ## ExecutionContext
 
@@ -492,7 +492,7 @@ At `AgentBody` construction, Jie instantiates pi-agent's `Agent` with the follow
 | `tools` | Set via `agent.state.tools` after construction (see Tool Adaptation below) |
 | `systemPrompt` | Set via `agent.state.systemPrompt` — `AgentSoul.system_prompt` |
 | `model` | Set via `agent.state.model` — resolved from soul's `model` string via pi-ai's `getModel(provider, modelId)` |
-| `beforeToolCall` | Emits `agent.tool.call` on Jie's EventBus. Jie does not use the hook to block execution — the event is published for telemetry, then pi-agent proceeds with tool execution normally. Per pi-agent's contract (`pi-agent-api-reference.md:330`), `beforeToolCall` *can* return `{ result?, abortRemaining? }` to block or abort, but Jie's implementation does not exercise that path in v1. |
+| `beforeToolCall` | Emits `agent.tool.call` on Jie's EventBus. Jie does not use the hook to block execution — the event is published for telemetry, then pi-agent proceeds with tool execution normally. Per pi-agent-core@0.79.1's contract (`pi-agent-api-reference.md`), `beforeToolCall` *can* return `{ block?, reason? }` to block the call or abort the batch, but Jie's implementation does not exercise that path in v1. |
 | `afterToolCall` | Emits `agent.tool.result` on Jie's EventBus |
 | `transformContext` | See Memory Persistence below |
 | `convertToLlm` | pi-agent's default — converts `AgentMessage[]` to LLM `Message[]`, filtering non-LLM messages |

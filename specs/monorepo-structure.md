@@ -4,16 +4,28 @@
 
 ```
 packages/
-  code-lens/      # Standalone MCP server: AST-only code structure queries
+  code-lens/      # Standalone MCP server: AST-only code structure queries (out of scope for v1 MVP — see ADR 17)
   jie-platform/   # Platform runtime lib — barrel entry: index.ts
-    core/           # AgentBody, AgentSoul, EventBus, Tool interface & registry
-    storage/        # ArtifactStore interface + SQLite default implementation
-    tools/          # Built-in tools: notify, bash, read_file, write_file, web_search, web_fetch, write_artifact, read_artifact
-    team/           # Team-blueprint loader: parses .md files, builds AgentSoul[] — agnostic of jie-team
-    index.ts        # Barrel: re-exports all public APIs
-  jie-tui/        # Terminal UI: renders agent streams, tool calls, pipeline events
-  jie-cli/        # CLI entry point (jie binary) — supervisor + command dispatch
-  jie-team/       # Manifest package: ships dev team and minimal team as .md files. No runtime / install surface — users copy manifests into the standard paths by hand.
+    start.ts         # Entry function: startJie(opts): JieHandle (ADR 15)
+    core/            # EventBus, AgentBody, AgentSoul, Tool interface & registry, tool-error
+    storage/         # Storage abstraction (04-storage.md):
+                       storage.ts        # Storage interface (exec/query/transaction/close)
+                       sqlite-storage.ts # SqliteStorage — default backend
+                       init-db.ts        # initializeSchema(storage) — single-version schema bootstrap
+                       artifact-store.ts # ArtifactStore interface + SqliteArtifactStore impl
+                       memory-store.ts   # MemoryManager interface + SqliteMemoryManager impl
+                       index.ts          # barrel
+    tools/           # Built-in tools: notify, bash, read_file, write_file, web_search, web_fetch, write_artifact, read_artifact
+                       (each tool has its own .ts; index.ts is the barrel)
+    team/            # Team-blueprint loader (ADR 16):
+                       loader.ts         # parseTeamFromManifests, loadTeamFromDir, loadMinimalTeam
+                       minimal/          # Built-in last-resort fallback — same .md format as user teams
+                         TEAM.md
+                         general.md
+    index.ts         # Barrel: re-exports all public APIs
+  jie-tui/        # Terminal UI: stub in v1 (throws "TUI not implemented"). See ADR 17.
+  jie-cli/        # CLI entry point (jie binary) — v1 ships `jie -p` plus `login`/`logout`/`model`/`team` setup commands. ADR 17.
+  jie-team/       # Manifest package: out of scope for v1 MVP. Placeholder package.json only. See ADR 12 / ADR 17.
 ```
 
 ## Dependencies
@@ -63,6 +75,37 @@ code-lens               (standalone — no jie dependencies)
 
 `jie-tui/index.ts` exports the TUI component function: `startTUI(options: { bus: EventBus, artifacts: ArtifactStore, roles: string[] })`.
 
+## `jie-platform` Runtime Dependencies
+
+The platform's runtime dep set is small and fixed. Bun provides most of what the platform needs as built-ins; the four runtime deps cover the rest.
+
+```jsonc
+// packages/jie-platform/package.json
+{
+  "name": "@cuzfrog/jie-platform",
+  "type": "module",
+  "exports": { ".": "./index.ts" },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "0.79.1",
+    "@earendil-works/pi-ai":          "0.79.1",
+    "typebox":                        "1.1.38",
+    "yaml":                           "2.9.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript":  "^5.9.3"
+  }
+}
+```
+
+**Bun built-ins** (no dep): `bun:sqlite` (default `Storage` backend), `Bun.Glob` (for `mcp:server:*` resolution in `ToolRegistry`), `fetch` (for `web_search` / `web_fetch` tools), `crypto.randomUUID()` (for `session_id`), `Bun.spawn()` (for `bash` tool and (Day 2) MCP stdio servers), `Bun.argv` (hand-rolled CLI parser), `fs` / `fs/promises` / `path`, `import ... with { type: 'text' }` (for the built-in minimal team per ADR 16).
+
+**Fixed pins, no `^`.** The platform's spec is precise about API shapes. A pi-agent minor version bump can change `BeforeToolCallContext` (it has, between pre-0.75 and 0.79.1). A `yaml` major version bump can change the parse output. Fixed pins mean a `bun install` does not silently change behavior; upgrades are explicit ADR-grade decisions. The pinned `typebox@1.1.38` and `yaml@2.9.0` are the transitive versions of `@earendil-works/pi-agent-core@0.79.1`, so jie and pi-agent share known-good combinations.
+
+**No MCP SDK in v1.** Per ADR 17, MCP client integration is Day 2. `@modelcontextprotocol/sdk@1.29.0` (the standard) is **not** a v1 dep. The `mcp.json` schema in `10-configuration.md` is forward-looking; the platform's `startJie` does not load it in v1.
+
+**No CLI / utility libraries.** No `commander` / `yargs` / `lodash` / `picomatch` / `inquirer` / `chalk`. The v1 CLI surface is small (`-p`, `--team`, `--api-key`, `--resume`, `--continue`, `--version`, `--help`, plus `login` / `logout` / `model` / `team` subcommands); a 20-line manual parser over `Bun.argv` is smaller than the dep. Settings deep-merge is three top-level scalar fields; an 8-line function is smaller than `lodash.merge`. If the CLI grows, the swap to `commander` is a single-file change.
+
 ## Umbrella Package
 
 ```jsonc
@@ -72,8 +115,7 @@ code-lens               (standalone — no jie dependencies)
   "workspaces": ["packages/*"],
   "dependencies": {
     "@cuzfrog/jie-platform": "workspace:*",
-    "@cuzfrog/jie-tui": "workspace:*",
-    "@cuzfrog/code-lens": "workspace:*"
+    "@cuzfrog/jie-tui": "workspace:*"
   },
   "bin": {
     "jie": "packages/jie-cli/index.ts"
@@ -81,7 +123,7 @@ code-lens               (standalone — no jie dependencies)
 }
 ```
 
-`bun install -g @cuzfrog/jie` installs the workspace set. The binary is `jie` → `packages/jie-cli/index.ts`. `jie-team` is a workspace package, not a runtime dependency — its manifests are available as files in the repo, not as something the platform or CLI loads at runtime.
+`bun install -g @cuzfrog/jie` installs the workspace set. The binary is `jie` → `packages/jie-cli/index.ts`. `jie-team` and `code-lens` are workspace packages, not runtime dependencies — `jie-team` ships manifests, `code-lens` is out of scope for the platform MVP (ADR 17).
 
 ## Testing
 

@@ -2,7 +2,7 @@
 
 A standalone process in `packages/code-lens/`. **Exposes an MCP server.** Provides AST-only views of a codebase to any MCP client — IDE plugins, CI tooling, agent frameworks.
 
-> Code-Lens is reusable. It is not coupled to Jie's team layer. Within Jie, an agent connects to it like any other MCP server, and its tools are auto-promoted to first-class entries in the agent's tool list (see `05-agent-model.md`).
+> Code-Lens is reusable. It is not coupled to Jie's team layer. Within Jie, an agent connects to it like any other MCP server, and its tools are auto-promoted to first-class entries in the agent's tool list (see `06-agent-model.md`).
 
 ## Architecture
 
@@ -55,8 +55,8 @@ Both tools dispatch to the appropriate language adapter based on file extension.
 Code-Lens is deployed **per team**: one instance per workspace codebase, started by the supervisor alongside the team processes. It is not a global singleton.
 
 - **Discovery.** Code-Lens is configured like any other MCP server in `.jie/mcp.yaml` (or `~/.jie/mcp.yaml`). The platform treats it uniformly — no special-casing in the runtime. The dev team (`jie-team`) declares its code-lens dependency in its manifest (`mcp:code-lens:get_module_exports`, `mcp:code-lens:get_import_graph` in the Architect role's `tools:`).
-- **Startup.** The platform connects to code-lens like any other MCP server: per-server connect failures log a `WARN` and skip that server. If a team's blueprint references tools from a failed server, the team fails at startup with a precise error citing the missing tool — see `jie-platform/10-configuration.md` "MCP Server Configuration" and the cascade policy in `jie-platform/05-agent-model.md` "MCP Server Management". This is the standard MCP cascade, not a code-lens-specific rule. In practice, the dev team fails to start when code-lens is unreachable; the minimal team (which has no code-lens dependency) is unaffected.
-- **Crash recovery.** Code-Lens follows the standard MCP crash policy (see `05-agent-model.md` "Failure Handling"): mid-session disconnect → the next Code-Lens MCP call returns `mcp_server_unreachable` → body force-publishes a terminal event and exits. The supervisor restarts the full team. Warm AST state is lost on crash; the next startup re-indexes from scratch.
+- **Startup.** The platform connects to code-lens like any other MCP server: per-server connect failures log a `WARN` and skip that server. If a team's blueprint references tools from a failed server, the team fails at startup with a precise error citing the missing tool — see `jie-platform/10-configuration.md` "MCP Server Configuration" and the cascade policy in `jie-platform/06-agent-model.md` "MCP Server Management". This is the standard MCP cascade, not a code-lens-specific rule. In practice, the dev team fails to start when code-lens is unreachable; the minimal team (which has no code-lens dependency) is unaffected.
+- **Crash recovery.** Code-Lens follows the standard MCP crash policy (see `06-agent-model.md` "Failure Handling"): mid-session disconnect → the next Code-Lens MCP call returns `mcp_server_unreachable` → body force-publishes a terminal event and exits. The supervisor restarts the full team. Warm AST state is lost on crash; the next startup re-indexes from scratch.
 - **Per-team rationale.** v1 assumes one team = one workspace. A per-team Code-Lens avoids multi-tenant root disambiguation and isolates failure to one team. Cross-team AST sharing adds complexity with no v1 payoff.
 
 ## Why Not Run LSP Inline

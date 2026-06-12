@@ -55,7 +55,7 @@ The TUI uses this signal — combined with the `roles: string[]` parameter (see 
 - `packages/jie-platform/core/event-bus.ts` (in-process impl): `publish` wraps each callback in `try { callback(...) } catch (err) { console.error(...) }`.
 - `packages/jie-platform/core/agent-body.ts`: `start()` runs the new sequence (subscribe → publish `agent.idle` → start loop). `beforeToolCall` / `afterToolCall` hooks read `ctx.toolCallId` directly — no local counter, no Map.
 - `03-event-system.md` "Agent Idle" section: extend the rule from "on every `agent_end`" to "at startup AND on every `agent_end`". Payload type for `agent.tool.*` events: `tool_call_id: string` (not `number`).
-- `05-agent-model.md`: `AgentBody` class signature's `start()` comment is updated; "Tool Telemetry" section drops the counter paragraph; `BashResult` / `notify` / `write_file` spec notes captured in the same file (J1, J2, J5) reflect their decisions.
+- `06-agent-model.md`: `AgentBody` class signature's `start()` comment is updated; "Tool Telemetry" section drops the counter paragraph; `BashResult` / `notify` / `write_file` spec notes captured in the same file (J1, J2, J5) reflect their decisions.
 - `ui/tui.md` Contract: `roles: string[]` is required; sourced from `.md` filename stems (alphabetical), not `TEAM.md`. Used for initial agents-panel render.
 - TUI agents-panel at boot: populated immediately from `roles` + the per-body startup `agent.idle`. Never-prompted agents are visible from the start.
 - The prior session's `Map<pi_toolCallId, uint32>` design is **superseded** and removed from any tracker or ADR.

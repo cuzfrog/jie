@@ -34,7 +34,7 @@ When implemented (Day 2), this script installs `@cuzfrog/jie` globally. The vers
 | Component | Version | Rationale |
 |---|---|---|
 | bun | ≥ 1.3.14 | Minimum runtime for native TypeScript execution and package management. |
-| @cuzfrog/jie | workspace (dev) | CLI, supervisor, agent bodies, TUI — all in one package. The published install path (Day 2) pins a concrete semver. |
+| @cuzfrog/jie | workspace (dev) | CLI, `startJie` entry, agent bodies, TUI — all in one package. The published install path (Day 2) pins a concrete semver. |
 
 ## Manual Install (v1 path)
 
@@ -96,7 +96,7 @@ The same pattern applies to any other team. The `jie-team` package also ships a 
 
 To use a non-default team:
 
-1. Place the team's `TEAM.md` and one `.md` per agent role at `.jie/teams/<id>/` (project-local, discovered by walking up from CWD) or `~/.jie/teams/<id>/` (global). See `05-agent-model.md` "Blueprint Loading" for the file format.
+1. Place the team's `TEAM.md` and one `.md` per agent role at `.jie/teams/<id>/` (project-local, discovered by walking up from CWD) or `~/.jie/teams/<id>/` (global). See `06-agent-model.md` "Blueprint Loading" for the file format.
 2. Run `jie team <id>` (or `/team <id>` in the TUI) to set `defaultTeam`. The platform writes to the same scope where the team is installed (project-local install → `.jie/settings.json`; global install → `~/.jie/settings.json`). The TUI hot-swaps the running team; the CLI takes effect on next invocation.
 
 To use a team for a single invocation without changing settings, pass `--team <id>` to `jie` or `jie -p`.

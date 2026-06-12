@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Supersedes the "write_file is Day 2" stub that previously lived in `05-agent-model.md`.
+Accepted. Supersedes the "write_file is Day 2" stub that previously lived in `06-agent-model.md`.
 
 ## Context
 
@@ -52,10 +52,10 @@ The minimal team (`jie-platform/minimal-team.md`) ships with `[bash, read_file, 
 ## Consequences
 
 - `packages/jie-platform/tools/` gains a `write_file.ts` module.
-- `05-agent-model.md` "Built-in Tool: `write_file`" section is now a full v1 spec, not a Day 2 stub.
+- `06-agent-model.md` "Built-in Tool: `write_file`" section is now a full v1 spec, not a Day 2 stub.
 - Minimal team tool list updated from `[bash, write_artifact, read_artifact]` to `[bash, read_file, write_file]`. The system prompt no longer references `read_artifact` / `write_artifact`. The "Behavior" section notes that the artifact store is omitted because there are no peers to coordinate with.
 - `monorepo-structure.md` `tools/` directory comment and `00-overview.md` built-in tool list updated to include `write_file`.
 - The dev team blueprint (`jie-team/01-role-definitions.md`) needs **no change** for v1: its Implementer `tools:` already lists `write_file`, and the platform now resolves it. The Day-2 module-boundary check (jie-team backlog #8) will wrap the platform's writer on the team side.
 - The platform's path-resolution policy now applies uniformly to `read_file`, `write_file`, and `bash` `workdir`. All three surface `path_escape` / `workdir_escape` tool errors on violation. The error taxonomy is fully consistent.
-- **Explicit Day-1 commitment:** in v1, an agent with `write_file` in its tool list can write any file inside the workspace root, including files inside a frozen module. The team layer is responsible for preventing that, not the platform. This is documented in `05-agent-model.md` "Boundary Enforcement (Platform vs Team)" so the gap is not silent.
+- **Explicit Day-1 commitment:** in v1, an agent with `write_file` in its tool list can write any file inside the workspace root, including files inside a frozen module. The team layer is responsible for preventing that, not the platform. This is documented in `06-agent-model.md` "Boundary Enforcement (Platform vs Team)" so the gap is not silent.
 - ADR 10 (read_file) is amended to drop the "write_file waits for the frozen rule" rationale and consequence; that territory now belongs to this ADR.

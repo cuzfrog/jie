@@ -2,7 +2,7 @@
 
 ## Runtime Model
 
-Jie runs as a **single OS process** — the `jie` binary. All agents, the EventBus, the ArtifactStore, and the TUI share this process. MCP servers (configured in `mcp.yaml` with `transport: stdio`) run as child subprocesses.
+Jie runs as a **single OS process** — the `jie` binary. All agents, the EventBus, the ArtifactStore, and the TUI share this process. MCP servers (configured in `mcp.json` with `transport: stdio`) run as child subprocesses.
 
 ```
 ┌────────────── jie process ──────────────┐
@@ -28,11 +28,11 @@ Jie runs as a **single OS process** — the `jie` binary. All agents, the EventB
 
 | Component | Count | Nature |
 |---|---|---|
-| `jie` process | 1 | Binary entry. Runs supervisor, agents, TUI in-process. |
+| `jie` process | 1 | Binary entry. Runs the platform's `startJie` (which spins up the bus, bodies, and `JieHandle`), agents, and the TUI in-process. |
 | AgentBody | N (per blueprint) | In-process instance. Each has its own EventBus subscriptions, MemoryManager, and async event loop. |
 | TUI | 1 | In-process component (imported from `jie-tui`). Passes `EventBus` and `ArtifactStore` refs at construction. |
 | ArtifactStore | 1 | SQLite file. Single-writer by design (one process). |
-| MCP servers (stdio) | N (per `mcp.yaml`) | Child subprocess managed by `jie`. |
+| MCP servers (stdio) | N (per `mcp.json`) | Child subprocess managed by `jie`. |
 
 No process-per-agent. No NATS server. No PID file for individual agents. No network ports.
 
@@ -48,7 +48,7 @@ The startup sequence is the same for both `jie` (TUI) and `jie -p` (print mode),
    - Else pick first-available user team alphabetically across `.jie/teams/*` and `~/.jie/teams/*`.
    - Else use the platform's built-in minimal team (`packages/jie-platform/team/built-in/minimal-team.ts`, see `minimal-team.md`). The platform always has a runnable team.
 4. **Open `ArtifactStore`** (SQLite at `{cwd}/.jie/artifacts.db`). Failure → exit 1.
-5. **Connect MCP servers** configured in `.jie/mcp.yaml` (project + global merge). Per-server connect failures log a `WARN` and skip that server; the team continues with the rest. See `10-configuration.md` MCP Server Configuration.
+5. **(Day 2) Connect MCP servers** configured in `.jie/mcp.json` (project + global merge). Per-server connect failures log a `WARN` and skip that server; the team continues with the rest. See `10-configuration.md` MCP Server Configuration. **In v1 (per ADR 17) this step is skipped** — the platform does not load `mcp.json`, and the `ToolRegistry` only has built-in tools. Agent `.md` files listing `mcp:*` tools fail the cascade check at step 6.
 6. **Construct `AgentSoul`s** from the resolved team's `.md` files. For each `AgentSoul`, resolve its `tools:` list against the `ToolRegistry`. If any tool fails to resolve (e.g. the MCP server for that tool failed to connect), the team's startup fails with a clear error citing the missing tool.
 7. **Instantiate `InProcessEventBus`** and the `MemoryManager` per body.
 8. **Instantiate `AgentBody`** for each role:
@@ -56,7 +56,7 @@ The startup sequence is the same for both `jie` (TUI) and `jie -p` (print mode),
    - Each body subscribes to its auto-subscriptions (`{agent_key}`, plus `leader.prompt` for the leader) and domain topics from its `subscribe:` frontmatter.
 9. **Call `body.start()`** on each `AgentBody` — they enter their event loops, waiting for prompts.
 10. **Branch by mode:**
-    - **`jie` (TUI):** Import and start the `jie-tui` component, passing `EventBus` + `ArtifactStore` references. TUI renders, user interacts.
+    - **`jie` (TUI):** Import and start the `jie-tui` component, passing `EventBus` + `ArtifactStore` references. TUI renders, user interacts. (Stub in v1 per ADR 17.)
     - **`jie -p <instruction>`:** Subscribe to `agent.stream.chunk` (filter `agent_role === leader`) → print to stdout. Publish `{ prompt: "<instruction>" }` to `leader.prompt`. Wait for leader `agent.idle` event. Print final newline, exit.
 
 ### Graceful Shutdown
@@ -76,7 +76,7 @@ The 10s window balances responsiveness against letting a slow tool complete clea
 ./
   .jie/                  # Project-local platform state (discovered by walking up from CWD)
     settings.json        # Optional project overrides for defaultProvider/defaultModel/defaultTeam (deep-merged over global)
-    mcp.yaml             # MCP server definitions
+    mcp.json             # MCP server definitions
     artifacts.db         # SQLite artifact store
     teams/               # User-installed team directories (project-local)
       <team_id>/         # One directory per team; looked up by `defaultTeam` from settings
@@ -89,7 +89,7 @@ User teams can also live globally at `~/.jie/teams/<team_id>/` for sharing acros
 
 ## Health and Restarts
 
-Agents do not crash — they handle tool failures gracefully and transition to `idle`. See `05-agent-model.md` Failure Handling.
+Agents do not crash — they handle tool failures gracefully and transition to `idle`. See `06-agent-model.md` Failure Handling.
 
 If the `jie` process itself crashes (SIGSEGV, OOM), all agents die with it. No automatic restart in v1 — the user re-runs `jie`. Process-level resilience is a Day 2 concern.
 
@@ -113,6 +113,6 @@ Agents log to the shared stdout of the `jie` process. The `agent_key` prefix dis
 
 MCP servers with `transport: stdio` are spawned as child subprocesses at startup. The parent `jie` process monitors them:
 - **Startup connect failure** (server not reachable, catalog fetch failed): log a `WARN`, do not register that server's tools. Startup continues with the rest of the team. If the team's blueprint depends on tools from the failed server, the team fails to start (see `10-configuration.md` Cascade: Agent Load Failure).
-- **Mid-session server exit**: the in-flight tool call (if any) times out or returns `mcp_server_unreachable`. All subsequent invocations to that server also return errors until the server is reconnected. Agents handle these as tool-result errors and may retry or fail gracefully. The supervisor does **not** auto-reconnect mid-session; restart the process to recover.
+- **Mid-session server exit**: the in-flight tool call (if any) times out or returns `mcp_server_unreachable`. All subsequent invocations to that server also return errors until the server is reconnected. Agents handle these as tool-result errors and may retry or fail gracefully. The platform does **not** auto-reconnect mid-session; restart the process to recover.
 
-**Code-Lens is generic MCP.** The platform has no code-lens-specific code. Code-Lens is one MCP server among many, configured in `mcp.yaml` like any other, and follows the cascade policy above. A team's code-lens dependency (e.g. an Architect role's `mcp:code-lens:get_module_exports`, `mcp:code-lens:get_import_graph`) is declared in that team's `.md` manifest. If code-lens is unreachable at startup, the dependent team fails to start (cascade); a team with no code-lens dependency is unaffected. This is consistent with ADR 4 (MCP-agnostic platform).
+**Code-Lens is generic MCP.** The platform has no code-lens-specific code. Code-Lens is one MCP server among many, configured in `mcp.json` like any other, and follows the cascade policy above. A team's code-lens dependency (e.g. an Architect role's `mcp:code-lens:get_module_exports`, `mcp:code-lens:get_import_graph`) is declared in that team's `.md` manifest. If code-lens is unreachable at startup, the dependent team fails to start (cascade); a team with no code-lens dependency is unaffected. This is consistent with ADR 4 (MCP-agnostic platform).

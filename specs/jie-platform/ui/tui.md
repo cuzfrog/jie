@@ -13,7 +13,7 @@ function startTUI(options: { bus: EventBus; artifacts: ArtifactStore; roles: str
 
 The TUI runs in the same OS process as all agents and shares the `EventBus` and `ArtifactStore`.
 
-**`roles` is required.** It is the canonical team roster — the list of role identifiers parsed from the team blueprint's `.md` filename stems (excluding `TEAM.md`), sorted alphabetically by stem. `TEAM.md` is **not** the source of roles; it only declares the leader (and is optional for single-agent teams). The supervisor passes the sorted list to `startTUI` after loading the blueprint. The TUI uses `roles` to render the initial agents-panel at boot, before any events have arrived. Live state updates come from `agent.idle` (including the per-body startup publish) and from `agent.stream.chunk` / `agent.tool.*` events as they fire.
+**`roles` is required.** It is the canonical team roster — the list of role identifiers parsed from the team blueprint's `.md` filename stems (excluding `TEAM.md`), sorted alphabetically by stem. `TEAM.md` is **not** the source of roles; it only declares the leader (and is optional for single-agent teams). The CLI (or any host process) computes the sorted list from the team-blueprint loader's output and passes it to `startTUI` before starting the team. The TUI uses `roles` to render the initial agents-panel at boot, before any events have arrived. Live state updates come from `agent.idle` (including the per-body startup publish) and from `agent.stream.chunk` / `agent.tool.*` events as they fire.
 
 ## Inputs
 
@@ -25,7 +25,7 @@ The TUI obtains everything it needs from two surfaces:
    - `agent.tool.call` / `agent.tool.result` — tool execution telemetry from any agent.
    - `agent.idle` — signals an agent is ready for new work; also used for agent discovery.
 
-2. **Artifact Store** (read-only) for content referenced by events. The TUI uses `read(key)` and `list(prefix)` from `04-artifact-store.md`.
+2. **Artifact Store** (read-only) for content referenced by events. The TUI uses `read(key)` and `list(prefix)` from `05-artifact-store.md`.
 
 The TUI gets nothing else. It does not have a private channel to agents and does not call `core` directly.
 
@@ -109,6 +109,6 @@ The TUI supports model and team swap mid-session because the Memory subsystem pr
 - **Team.** `/team <id>` (or `/team` followed by selection in the picker) hot-swaps the running team in-session:
   1. All current agent bodies receive a graceful stop signal (bounded 10s shutdown, same as `jie` exit — see `09-deployment.md`).
   2. The new team's blueprint is loaded per `10-configuration.md` "Team Selection" rules.
-  3. New agent bodies are constructed. For each new body, the supervisor looks up its `agent_key` in `Map<agent_key, session_id>`. If the body has run before in this process, the supervisor passes the recorded `session_id`; the body uses it and `restore()` returns the prior `memory_turns` rows. If the body has never run, the body mints a new `session_id` and the supervisor records the mapping. In both cases, the new body resumes from where it left off.
+  3. New agent bodies are constructed. For each new body, the `JieHandle` looks up its `agent_key` in its in-memory `Map<agent_key, session_id>`. If the body has run before in this process, the handle passes the recorded `session_id`; the body uses it and `restore()` returns the prior `memory_turns` rows. If the body has never run, the body mints a new `session_id` and the handle records the mapping. In both cases, the new body resumes from where it left off.
   4. The TUI re-renders: tabs/panels for the old agents close; tabs/panels for the new agents appear via the existing "Agent Discovery" primitives.
   5. **Conversation history on swap-back** (scenario 3 step 5). The TUI's "previous conversation" is **the events it has already received during this process run**, kept in an in-memory per-`(team_id, agent_key)` event buffer. Because the team swap is in-process (no process restart), the buffer is preserved across swaps. The TUI does **not** read `memory_turns` — that storage is for the LLM's restored prompt context (consumed by the body's `restore()` only); the TUI's display is event-driven. When the user switches back to a previously-active team, the TUI filters the buffer to the new active team's agents and re-renders the conversation area. The `memory_turns` rows on disk remain the source of truth for **agent resume across process restarts** (via `--resume` / `--continue`); the in-memory buffer covers the **same-process** swap-back case. See user scenario 3 for the expected UX.

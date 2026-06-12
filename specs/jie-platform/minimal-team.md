@@ -1,10 +1,33 @@
 # Minimal Team — Platform's Built-in Fallback
 
-The minimal team is the simplest possible `team-blueprint`: one general-purpose leader agent with default tools. The platform ships a **hardcoded** version of the minimal team as a built-in fallback — used when no user-installed team is selected (no `--team` flag, no `defaultTeam` in settings, and no user team manifests available at the standard paths). The `jie-team` package also ships a copy of the minimal team as `.md` files which users can install at `~/.jie/teams/minimal/` or `.jie/teams/minimal/` to override the platform's hardcoded version with a richer one.
+The minimal team is the simplest possible `team-blueprint`: one general-purpose leader agent with default tools. The platform ships a built-in minimal team as **two `.md` files** at `packages/jie-platform/team/minimal/` — the same format as user teams. The `jie-team` package may also ship a richer minimal team as `.md` files, which users can install at `~/.jie/teams/minimal/` or `.jie/teams/minimal/` to override the platform's built-in with a customized one.
 
-## Built-in (Hardcoded)
+## Built-in (Shipped with the Platform)
 
-The platform's built-in minimal team is a TypeScript constant in `packages/jie-platform/team/built-in/minimal-team.ts`. It is the **last-resort fallback** in the team selection chain — used only when no user-installed team is selected. The team-blueprint loader returns this built-in when no manifest is found for the resolved `team_id` AND no user teams are available at the standard paths.
+The platform's built-in minimal team lives at `packages/jie-platform/team/minimal/`:
+
+```
+team/minimal/
+  TEAM.md      # frontmatter: leader: general
+  general.md   # role: general, tools: [bash, read_file, write_file]
+```
+
+These two files are the **last-resort fallback** in the team selection chain — used only when no user-installed team is selected (no `--team` flag, no `defaultTeam` in settings, and no user team manifests available at the standard paths). The team-blueprint loader's `loadMinimalTeam()` reads them via `import` attributes (bun 1.3+) at module-load time:
+
+```typescript
+// packages/jie-platform/team/loader.ts
+import minimalTeamMd  from './minimal/TEAM.md'    with { type: 'text' };
+import minimalAgentMd from './minimal/general.md' with { type: 'text' };
+
+export function loadMinimalTeam(): TeamBlueprint {
+  return parseTeamFromManifests({
+    'TEAM.md':    minimalTeamMd,
+    'general.md': minimalAgentMd,
+  });
+}
+```
+
+The parser is the same one used for user teams; the only difference is where the bytes come from. There is no special-case "this is the built-in" code path.
 
 | Property | Value |
 |---|---|
@@ -27,9 +50,9 @@ complex work.
 
 The system prompt is intentionally short: it establishes identity and points users at the right next step for richer workflows.
 
-## User-Installed (jie-team package override)
+## User-Installed Override (jie-team package)
 
-`jie-team` ships `TEAM.md` and `general.md` for a richer version of the minimal team. Once installed at `~/.jie/teams/minimal/` (or `.jie/teams/minimal/`), the user-installed version takes precedence over the platform's hardcoded version. The package version lets users customize the system prompt, default tools, or default model without forking the platform. See the `jie-team` package README for installation.
+`jie-team` ships `TEAM.md` and `general.md` for a richer version of the minimal team. Once installed at `~/.jie/teams/minimal/` (or `.jie/teams/minimal/`), the user-installed version takes precedence over the platform's built-in. The package version lets users customize the system prompt, default tools, or default model without forking the platform. See the `jie-team` package README for installation.
 
 ```
 .jie/teams/minimal/
@@ -37,11 +60,13 @@ The system prompt is intentionally short: it establishes identity and points use
  general.md   # agent definition (model, tools, subscribe, system_prompt)
 ```
 
+The override is byte-for-byte the same `.md` format as the built-in; the loader does not distinguish "platform's built-in" from "user's copy" once the bytes are in hand.
+
 ## Model
 
 The minimal team does not pin a model. The leader's `(provider, modelId)` is resolved from the user's merged settings at startup, following the chain in `10-configuration.md` "Model Resolution".
 
-The platform performs a startup pre-check: every agent in the blueprint must resolve to a concrete model before any agent is constructed. If any agent fails to resolve, startup exits 1 with one error message listing every unresolved agent and the remediation steps. Per-agent fallback failures do not leak into the LLM call — a missing model is a startup error, not a runtime one.
+The platform performs a startup pre-check (run by `startJie`): every agent in the blueprint must resolve to a concrete model before any agent is constructed. If any agent fails to resolve, startup exits 1 with one error message listing every unresolved agent and the remediation steps. Per-agent fallback failures do not leak into the LLM call — a missing model is a startup error, not a runtime one.
 
 Users who want a different model globally run `jie model <provider>/<modelId>` (or edit `~/.jie/settings.json` directly). Users who want a different model for the minimal team specifically can install the `jie-team` package's `general.md` (which can pin a model in frontmatter) and place it at one of the standard paths.
 

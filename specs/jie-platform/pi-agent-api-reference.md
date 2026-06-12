@@ -1,6 +1,6 @@
 # pi-agent API Reference
 
-The subset of `@earendil-works/pi-agent-core` used by `jie-platform`. Implementers should use this as the authoritative contract for the pi-agent side of the integration. See `specs/jie-platform/05-agent-model.md` "pi-agent Integration Contract" for how Jie bridges events, adapts tools, and manages memory.
+The subset of `@earendil-works/pi-agent-core` used by `jie-platform`. Implementers should use this as the authoritative contract for the pi-agent side of the integration. See `specs/jie-platform/06-agent-model.md` "pi-agent Integration Contract" for how Jie bridges events, adapts tools, and manages memory.
 
 ---
 
@@ -92,7 +92,7 @@ interface AgentOptions {
 }
 ```
 
-**Jie's usage:** Jie sets `steeringMode: "all"`, `toolExecution: "sequential"`, and wires `beforeToolCall`, `afterToolCall`, `transformContext`, `convertToLlm` to bridge events and manage memory. `prepareNextTurn` is **not wired** in v1 — prompt injection uses `agent.prompt()` from the body's in-memory queue after `agent_end` (see `05-agent-model.md` "Prompt Ingress & Queuing").
+**Jie's usage:** Jie sets `steeringMode: "all"`, `toolExecution: "sequential"`, and wires `beforeToolCall`, `afterToolCall`, `transformContext`, `convertToLlm` to bridge events and manage memory. `prepareNextTurn` is **not wired** in v1 — prompt injection uses `agent.prompt()` from the body's in-memory queue after `agent_end` (see `06-agent-model.md` "Prompt Ingress & Queuing").
 
 ---
 
@@ -331,32 +331,49 @@ type AgentEvent =
 
 Hook functions wired at agent construction. Jie uses these for tool telemetry events.
 
+> **Note on pi-agent-core@0.79.1.** The hook context shape changed in pi-agent-core 0.79. The current shape (used by jie) is `{ assistantMessage, toolCall, args, context }`; the tool id and tool name are read from `ctx.toolCall.id` and `ctx.toolCall.name`. An older API exposed a flat `{ toolCallId, toolName, args }` context — that shape is no longer in pi-agent-core. The `BeforeToolCallResult` block shape is also `{ block?, reason? }`, not the older `{ result?, abortRemaining? }`.
+
 ```typescript
 interface BeforeToolCallContext {
-  toolCallId: string;
-  toolName: string;
-  args: any;
+  /** The assistant message that requested the tool call. */
+  assistantMessage: AssistantMessage;
+  /** The raw tool call block from `assistantMessage.content`. */
+  toolCall: AgentToolCall;
+  /** Validated tool arguments for the target tool schema. */
+  args: unknown;
+  /** Current agent context at the time the tool call is prepared. */
+  context: AgentContext;
 }
 
 interface BeforeToolCallResult {
-  /** Block execution: return this value as if the tool executed. */
-  result?: AgentToolResult<any>;
-  /** Abort remaining tool calls in this batch. */
-  abortRemaining?: boolean;
+  /** Block execution: pi-agent emits a synthetic tool-result error instead. */
+  block?: boolean;
+  /** Reason text shown in the synthetic error tool result. */
+  reason?: string;
 }
 
 interface AfterToolCallContext {
-  toolCallId: string;
-  toolName: string;
-  args: any;
-  result: any;
+  /** The assistant message that requested the tool call. */
+  assistantMessage: AssistantMessage;
+  /** The raw tool call block from `assistantMessage.content`. */
+  toolCall: AgentToolCall;
+  /** Validated tool arguments for the target tool schema. */
+  args: unknown;
+  /** The executed tool result before any `afterToolCall` overrides are applied. */
+  result: AgentToolResult<any>;
+  /** Whether the executed tool result is currently treated as an error. */
   isError: boolean;
-  error?: unknown;
+  /** Current agent context at the time the tool call is finalized. */
+  context: AgentContext;
 }
 
 interface AfterToolCallResult {
-  /** Replace the tool result that the LLM sees. */
-  transformedResult?: any;
+  /** Field-by-field partial override of the tool result the LLM sees. */
+  content?: (TextContent | ImageContent)[];
+  details?: unknown;
+  isError?: boolean;
+  /** Hint: stop after the current tool batch. */
+  terminate?: boolean;
 }
 ```
 

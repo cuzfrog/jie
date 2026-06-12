@@ -104,7 +104,7 @@ LLM output originates from pi-agent's `message_update` events (per-token deltas)
 - **Publish**: `agent.stream.chunk` — `{ stream_id, seq, text }`. `stream_id` is a per-LLM-invocation counter; `seq` is the chunk ordinal within that stream.
 - **Completion**: On `message_end` (assistant response finalized), flush remaining buffer, publish final chunk, then publish `agent.stream.end` with `{ stream_id, total_chunks }`.
 
-Tunables (`stream_chunk_size`, `stream_flush_ms`) are in `10-configuration.md`. The TUI and `-p` mode consume these events. See `05-agent-model.md` pi-agent Integration Contract for the full event bridging table.
+Tunables (`stream_chunk_size`, `stream_flush_ms`) are in `10-configuration.md`. The TUI and `-p` mode consume these events. See `06-agent-model.md` pi-agent Integration Contract for the full event bridging table.
 
 ## Tool Telemetry
 
@@ -123,7 +123,7 @@ When an agent transitions from `busy` to `idle` (work unit complete, terminal ev
 
 ## Inter-Agent Messaging
 
-The `notify` tool (see `05-agent-model.md`) is the sole inter-agent communication channel. It publishes `{ topic, prompt, source }` on the bus to `{topic}`. Every agent auto-subscribes to its own `{agent_key}`, enabling direct addressing. Domain topic subscriptions are declared in the agent's `.md` frontmatter `subscribe:` field.
+The `notify` tool (see `06-agent-model.md`) is the sole inter-agent communication channel. It publishes `{ topic, prompt, source }` on the bus to `{topic}`. Every agent auto-subscribes to its own `{agent_key}`, enabling direct addressing. Domain topic subscriptions are declared in the agent's `.md` frontmatter `subscribe:` field.
 
 Self-receipt filtering is done in `AgentBody`'s subscription callback — if the event's `source` matches the agent's own `agent_key`, the callback skips processing. This keeps the `EventBus` transport-agnostic; a future `NatsEventBus` would not need agent-identity awareness.
 
