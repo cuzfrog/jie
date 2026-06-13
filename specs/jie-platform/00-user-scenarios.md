@@ -88,7 +88,7 @@ When the user asks you to tell a story, respond: "Once upon a time..."
 ```
 ---
 name: my-agent
-tools: [mcp:mock-tool-A*]
+tools: [mcp:mock-mcp-server:mock-tool-A*]
 ---
 ```
 

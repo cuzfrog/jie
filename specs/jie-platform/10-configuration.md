@@ -14,7 +14,7 @@ The platform reads and writes a small set of user-visible files. New settings ma
 | `~/.jie/mcp.json` | Global MCP server definitions | Plain JSON (forward-looking — Day 2) | MCP server list (stdio / http transports) |
 | `.jie/mcp.json` | Project MCP server overrides | Plain JSON (forward-looking — Day 2) | Same shape, project overrides global |
 | `.jie/teams/<id>/TEAM.md` | Team wiring | Plain text | `leader:` declaration in YAML frontmatter + prose |
-| `.jie/teams/<id>/<role>.md` | Agent definition | Plain text | YAML frontmatter (`model`, `tools`, `subscribe`) + prose body (system prompt) |
+| `.jie/teams/<id>/<role>.md` | Agent definition | Plain text | YAML frontmatter (`name?`, `model?`, `tools`, `subscribe?`) + prose body (system prompt) |
 
 `.jie/settings.json` is the only project-level user settings file. There is no project-level `auth.json` — credentials are global, by design.
 
@@ -40,7 +40,7 @@ JSON, two locations, **project overrides global with deep-merge** (nested object
 | `~/.jie/settings.json` | Global (all projects) |
 | `.jie/settings.json` | Project (current directory; deep-merge over global) |
 
-For v1, three fields are recognized. Other fields are tolerated and ignored (forward-compatibility with future settings), but unrecognized values for recognized fields are a hard fail.
+For v1, three fields are recognized. Other fields are tolerated and ignored (forward-compatibility with future settings). Unfamiliar *values* for recognized fields (e.g. `defaultProvider: "not-a-real-provider"`) follow the same WARN-and-ignore policy — see "Unknown field policy" below.
 
 ```json
 {
@@ -52,11 +52,11 @@ For v1, three fields are recognized. Other fields are tolerated and ignored (for
 
 | Field | Type | Description |
 |---|---|---|
-| `defaultProvider` | string | Provider id (e.g. `anthropic`, `openai`). Must be a known `KnownProvider` from `@earendil-works/pi-ai`; otherwise startup fails. |
+| `defaultProvider` | string | Provider id (e.g. `anthropic`, `openai`). Unknown values are tolerated (WARN, treat as absent — see "Unknown field policy" below). |
 | `defaultModel` | string | Model id within the provider (e.g. `claude-sonnet-4-20250514`). |
 | `defaultTeam` | string | Last user-selected team. Charset `[A-Za-z0-9_-]{1,32}`. See "Team Selection". |
 
-**Unknown field policy.** Unrecognized top-level fields in `settings.json` are tolerated (warned, ignored) so future Jie versions can land new settings without breaking old files. Unrecognized *values* for recognized fields (e.g. `defaultProvider: "not-a-real-provider"`) are a hard fail at startup — the platform refuses to guess.
+**Unknown field policy.** Unrecognized top-level fields in `settings.json` are tolerated (warned, ignored) so future Jie versions can land new settings without breaking old files. Unrecognized *values* for recognized fields follow the same policy where it makes sense — e.g. `defaultProvider: "not-a-real-provider"` is WARN+ignore (treat the field as absent; model resolution falls through to per-agent `model:`, and if none, surfaces "No model has been selected" at startup pre-check). `jie model <provider>/<modelId>` similarly warns but still writes the user's choice. Shape errors (e.g. `defaultProvider: 42`, `defaultTeam: ["foo"]`) remain a hard fail — those are malformed JSON, not unfamiliar values.
 
 ## Team Selection
 
@@ -145,8 +145,9 @@ The platform validates settings at startup. **Any of the following is a hard fai
 | Condition | Error |
 |---|---|
 | `settings.json` JSON parse error | Line/column from the parser. |
-| `defaultProvider` is not a string or is not a known `KnownProvider` | `invalid defaultProvider: <value>` |
-| `defaultModel` is not a string | `defaultModel must be a string` |
+| `defaultProvider` is not a string (wrong JSON shape) | `defaultProvider must be a string` |
+| `defaultProvider` is a string but is not a known `KnownProvider` | **WARN to stderr, treat the field as absent.** Init-state behavior: model resolution falls through to per-agent `model:` only, and (if none) surfaces "No model has been selected" at startup pre-check. |
+| `defaultModel` is not a string (wrong JSON shape) | `defaultModel must be a string` |
 | `defaultTeam` does not match `[A-Za-z0-9_-]{1,32}` | `invalid defaultTeam: <value>` |
 | `--team <id>` flag is given but `<id>` is not installed | `team '<id>' not found: checked .jie/teams/<id>/ and ~/.jie/teams/<id>/` |
 

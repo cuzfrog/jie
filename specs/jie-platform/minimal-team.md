@@ -32,7 +32,7 @@ The parser is the same one used for user teams; the only difference is where the
 | Property | Value |
 |---|---|
 | Roles | 1 (`general`) |
-| Leader | `general-1` (auto-subscribes to `leader.prompt`) |
+| Leader | `general-1` (auto-subscribes to `leader.prompt`; no `subscribe:` in frontmatter, so no domain topics) |
 | Domain topics | None (no subscription graph; the leader is the only agent) |
 | Tools | `bash`, `read_file`, `write_file` (plus auto-registered `notify`) |
 | Model | Inherited from merged settings — see "Model" below |
@@ -57,7 +57,7 @@ The system prompt is intentionally short: it establishes identity and points use
 ```
 .jie/teams/minimal/
  TEAM.md      # frontmatter: leader
- general.md   # agent definition (model, tools, subscribe, system_prompt)
+ general.md   # agent definition (name, optional model, tools, optional subscribe, system_prompt)
 ```
 
 The override is byte-for-byte the same `.md` format as the built-in; the loader does not distinguish "platform's built-in" from "user's copy" once the bytes are in hand.

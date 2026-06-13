@@ -125,7 +125,7 @@ jie login --provider <id> --api-key <key>        # headless: write a single API 
 - On success, prints `logged in to <provider>` to stdout and exits 0. On user cancellation, exits 0 with no write. On validation error, exits 1.
 - The command does not start the team, does not load `.jie/settings.json`, and does not touch `auth.json`.
 
-**Exit codes:** 0 (success or cancel), 1 (unknown provider, invalid API key format, write error).
+**Exit codes:** 0 (success or cancel), 1 (write error).
 
 ## `jie logout [<provider>]`
 
@@ -163,13 +163,13 @@ jie model openai/gpt-4o
 ### Behavior
 
 1. Parse the argument: split on the first `/`. Both pieces must be non-empty.
-2. Validate that `<provider>` is a known `KnownProvider` (or accept and warn for unknown — same policy as `settings.json` reading).
+2. If `<provider>` is not a known `KnownProvider`, **WARN to stderr** (`unknown provider: <value>`) but continue — the platform's policy is to write what the user supplied; an unknown provider surfaces at model-resolution time (init-state behavior, see `10-configuration.md` Config Validation).
 3. Read the current `~/.jie/settings.json` (if any), set `defaultProvider` and `defaultModel`, deep-merge if other settings are present, write back with mode `0644`.
 4. Print `default model set to <provider>/<modelId>` and exit 0.
 
 The command does not start the team, does not load `.jie/settings.json`, and does not touch `auth.json`. Project-level overrides (`.jie/settings.json`) are not written by `jie model`; users edit that file directly.
 
-**Exit codes:** 0 (success), 1 (malformed argument, unknown provider, write error).
+**Exit codes:** 0 (success), 1 (malformed argument, write error).
 
 ## `jie team`
 
@@ -216,14 +216,23 @@ Takes effect on next `jie` invocation. Mid-session clearing in the TUI is not su
 
 ## `jie --api-key <key>`
 
-One-shot API key override. Applies to the next `jie` or `jie -p` invocation in the same process tree (sets the value for the `getApiKey` callback pi-agent-core uses, ahead of `auth.json` and env vars).
+Write the API key for the resolved provider to `~/.jie/auth.json`. The flag does **not** match the key against the provider's expected format (no `sk-` / `sk-ant-` / etc. prefix assumption) — the user supplies whatever string they have. If the key is wrong, the LLM call fails at first use with whatever error the provider returns.
 
 ```
-jie --api-key sk-ant-... -p "instruction"
-ANTHROPIC_API_KEY=sk-ant-... jie --api-key sk-ant-...    # --api-key wins
+jie --api-key sk-ant-...            # set key for defaultProvider, then exit
+jie --api-key sk-... -p "fix bug"   # set key for defaultProvider, then run -p
 ```
 
-The flag does not write to `auth.json` — it is a per-invocation override. Useful for CI / ad-hoc rotation without touching the user's saved credentials.
+This flag is the `jie login --provider <id> --api-key <key>` flow inlined as a top-level flag, intended for automated modes (CI / scripts) where interactive login is impractical. It writes `auth.json` and persists across runs — the entry is the same shape `jie login` writes. There is exactly one API key per provider (`auth.json` is provider-keyed); `--api-key` overwrites the entry for the resolved provider.
+
+### Behavior
+
+1. Read merged `settings.json`; resolve `defaultProvider`. If `defaultProvider` is unset or invalid (treated as absent per `10-configuration.md` Config Validation), exit 1: `no provider resolved; run 'jie model <provider>/<modelId>' first, or use 'jie login --provider <id> --api-key <key>' to set the key for a specific provider`.
+2. Read `~/.jie/auth.json` if it exists; otherwise start from `{}`.
+3. Set (or replace) the entry for `defaultProvider` with `{ type: 'api_key', key: <key> }`.
+4. Write `~/.jie/auth.json` with mode `0600`.
+5. Print `logged in to <provider>` to stdout.
+6. If `--api-key` is the only CLI flag, exit 0. Otherwise, continue with the remaining flags (e.g., `-p "..."`); the next `jie` / `jie -p` invocation in this process tree reads the just-written credential via the standard chain (`10-configuration.md` Credentials Resolution Order).
 
 ## `jie --resume [<session_id>]` / `jie --continue`
 
@@ -237,9 +246,9 @@ jie --continue                    # resume the most recent session for the curre
 ### Behavior
 
 - **`--resume <session_id>`**: load the named `session_id`. Validation: it must exist in `memory_turns` (i.e. some prior `persist()` call wrote rows under it). If not, exit 1: `unknown session_id: <value>`.
-- **`--continue`**: pick the most recent `session_id` (highest `created_at`) that has rows in `memory_turns` for the current CWD's `ArtifactStore` (or globally, if no CWD-scoped sessions). If no prior session exists, exit 1: `no prior session to continue`.
+- **`--continue`**: pick the most recent `session_id` (highest `created_at`) that has rows in `memory_turns` for the current CWD's `ArtifactStore`. The lookup is CWD-scoped — there is no cross-CWD session index in v1. If no prior session exists in the current CWD's DB, **WARN to stderr** (`no prior session in this directory; starting a new session`) and proceed as if `--continue` were not given (the bodies mint fresh `session_id`s). `--continue` is non-fatal: the absence of a prior session is not an error.
 
 The TUI does not have a slash-command equivalent: opening `jie` (without `--resume`/`--continue`) starts a new session. The TUI's team-swap behavior preserves conversation history mid-session without these flags (see `10-configuration.md` "Team Swap"); `--resume`/`--continue` are for cross-process-run continuation.
 
-**Exit codes:** 0 (success), 1 (unknown session_id, no prior session, `memory_turns` read error).
+**Exit codes:** 0 (success, including the `--continue` no-prior-session WARN-and-proceed case), 1 (unknown session_id for `--resume`, `memory_turns` read error).
 

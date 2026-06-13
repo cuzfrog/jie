@@ -6,11 +6,11 @@ A soul declares an agent's behavioral profile. Souls are derived from the team b
 
 ```typescript
 interface AgentSoul {
-  role:            string;      // agent identifier (filename stem from TEAM.md directory)
+  role:            string;      // agent identifier — from frontmatter `name:` if present, else filename stem
   model:           string;      // '<provider>/<model_id>', split on first '/', resolved via pi-ai's getModel(provider, modelId)
   system_prompt:   string;      // prose body of the agent's .md file
   tools:           ToolSpec[];  // from frontmatter `tools`, resolved through ToolRegistry
-  subscribe:       string[];    // from frontmatter `subscribe` — topic names this agent listens to
+  subscribe:       string[];    // from frontmatter `subscribe:` if present, else `[]` — domain topics this agent listens to
   subscriptions:   string[];    // auto-computed by platform (agent does not declare this)
 }
 ```
@@ -110,9 +110,10 @@ When you finish, call `notify('task.researched', '...')` to signal completion.
 
 | Field | Required | Description |
 |---|---|---|
+| `name` | no | The role identifier for this agent — used as `AgentSoul.role` and as the basis for `agent_key = {role}-{N}`. If absent, the filename stem is used. Two agents in the same blueprint must not resolve to the same role (loader errors at parse time). |
 | `model` | no | `<provider>/<model_id>` string. Split on first `/` → `getModel(provider, modelId)` via pi-ai. If absent, inherited from the user's global default at startup (see `10-configuration.md` "Model Resolution"). |
 | `tools` | yes | list of tool spec strings. Resolved through `ToolRegistry` at load time. |
-| `subscribe` | yes (may be empty `[]`) | list of topic strings this agent listens to. The field is required (must be present in the frontmatter), but the list may be empty for agents that have no domain subscriptions — the leader, for example, has only its auto-subscriptions (`{agent_key}`, `leader.prompt`) and lists no domain topics. |
+| `subscribe` | no | list of domain topic strings this agent listens to (in addition to its auto-subscriptions). If absent, the agent has no domain subscriptions — only `{agent_key}` (every agent) and `leader.prompt` (leader only). The leader for example omits this field; the built-in minimal team's `general` agent omits it too. |
 
 **Prose body** → `AgentSoul.system_prompt`. Provided to the LLM as the system message.
 
@@ -124,16 +125,13 @@ If a model string is present but malformed (no `/` separator), the platform fail
 
 ### Startup Pre-Check
 
-`startJie` walks every agent in the blueprint before constructing any `AgentSoul`. For each agent it attempts to resolve a concrete `(provider, modelId)`. If any agent fails, startup exits 1 with a single error message listing every unresolved agent:
+`startJie` walks every agent in the blueprint before constructing any `AgentSoul`. For each agent it attempts to resolve a concrete `(provider, modelId)`. If any agent fails, startup exits 1 with a single error message:
 
 ```
-model resolution failed for 2 agents:
-  - leader: no default model configured
-  - researcher: no default model configured
-
-Set a global default with `jie model <provider>/<modelId>` (writes ~/.jie/settings.json),
-or add `model: <provider>/<id>` to each agent's .md frontmatter.
+No model has been selected, please login and select a default model.
 ```
+
+(Matches the user scenario 6 expected error. The platform's CLI maps from the internal "no `defaultProvider` and no per-agent `model:`" condition to this user-facing message.)
 
 This is a hard fail — no partial startup, no agent constructed. `startJie` does not surface a "missing model" error at LLM-call time; that class of error is caught here.
 
@@ -145,9 +143,9 @@ After parsing, the platform constructs `AgentSoul` instances with auto-computed 
 |---|---|
 | `{agent_key}` | Every agent (auto, based on role name and instance N) |
 | `leader.prompt` | Leader only (auto, based on `TEAM.md` `leader` field) |
-| Domain topics from `subscribe:` | Per agent `.md` frontmatter |
+| Domain topics from `subscribe:` | Per agent `.md` frontmatter, if the field is present |
 
-No other auto-subscriptions. The leader has no special tools or subscriptions beyond what other agents have.
+`subscribe:` is optional in the frontmatter (see Frontmatter fields above). When absent, the agent's only subscriptions are the auto-subscriptions in the first two rows. The platform's auto-wiring never adds other subscriptions.
 
 ## Tool
 
@@ -186,7 +184,7 @@ At `AgentBody` construction, each Jie `Tool` is wrapped into pi-agent's `AgentTo
 | `description` | `Tool.description` |
 | `label` | `Tool.label` |
 | `parameters` | `Tool.parameters` (TypeBox, passed directly) |
-| `prepareArguments` | TypeBox `Value.Create(parameters)` + `Value.Validate(parameters, raw)` — shims raw LLM args to typed params before validation |
+| `prepareArguments` | `TypeBox.Value.Check(parameters, raw)` — validates the LLM-supplied args against the TypeBox schema. Throws when the check returns `false`; pi-agent surfaces the throw as a tool error to the LLM. No coercion in v1 — the LLM's args must already match the schema. |
 | `execute(toolCallId, params, signal?, onUpdate?)` | Calls `tool.execute(params, ctx)` → wraps return as `{ content: [{ type: "text", text: result.content }], details: result.details, terminate: result.terminate }`. Passes `onUpdate` through for tools that stream partial results. |
 | `executionMode` | Always `"sequential"` in v1 (parallel tool execution deferred to Day 2) |
 
@@ -215,7 +213,7 @@ Behavior inside the body:
 4. The body also returns `details = { topic, recipients }` to the LLM pipeline for afterToolCall hooks (TUI render, diagnostics). The `details` field is opaque to the LLM conversation but is visible to observers.
 5. The LLM continues processing — `notify` does **not** end the turn loop.
 
-On receipt, an agent formats the notification as a synthetic `user` message in the LLM conversation: `[{source_agent_key} on '{topic}']: {prompt}`.
+On receipt, an agent formats the notification as a synthetic `user` message in the LLM conversation: `[{source_agent_key} on '{topic}']: {prompt}` — the "notify path" format from the table in "Prompt Ingress & Queuing" below. (The `leader.prompt` source has no `source_agent_key`, so it uses `[user]: {prompt}` instead.)
 
 The built-in team blueprint uses domain topics for pipeline progression. Prose examples use shorthand `notify('topic', 'prompt')` for readability; the actual LLM call follows the TypeBox schema: `notify({ topic: string, prompt: string })`.
 
@@ -314,8 +312,17 @@ write_artifact(input: { key: string; content: string }): { key: string; created_
 read_artifact(input: { key: string }): { key: string; content: string; created_at: string } | null
 ```
 
+The TypeScript signatures above are the LLM-facing return shapes. The tool's `execute` returns a `ToolResult` (per the `Tool` interface); the field mapping is:
+
+| Tool | `ToolResult.content` (LLM-visible text) | `ToolResult.details` (afterToolCall hook) |
+|---|---|---|
+| `write_artifact` (success) | `\`Stored artifact at ${key} (${content.length} chars)\`` | `{ key, created_at }` |
+| `write_artifact` (storage failure) | thrown — tool error surfaced to LLM | n/a |
+| `read_artifact` (found) | the artifact's `content` (verbatim, no encoding) | `{ key, content, created_at }` |
+| `read_artifact` (missing) | `\`Artifact not found: ${key}\`` | `null` |
+
 - `write_artifact` — stores `content` at `key`. Overwrites if the key exists. Returns the canonical `{ key, created_at }` so the LLM can reference the artifact in subsequent event payloads. On storage failure (e.g. disk full, permission denied), the call surfaces a tool error.
-- `read_artifact` — returns the entry at `key`, or `null` if not found. A missing artifact is a normal result, not a tool error — the LLM can reason about it.
+- `read_artifact` — returns the entry at `key`. A missing artifact is a normal result (formatted message in `content`, `null` in `details`), not a tool error — the LLM can reason about the miss.
 
 These are the only two artifact tools exposed to agents. Artifact content is never passed in event payloads; events carry only `artifact_id`.
 
@@ -400,8 +407,10 @@ This separation lets the platform ship a useful writer in v1 without waiting for
 
 Every tool call is observable on Jie's event bus. The body wires pi-agent's `beforeToolCall` and `afterToolCall` hooks to emit:
 
-- **`agent.tool.call`** — emitted in `beforeToolCall` (before tool execution). Payload: `tool_call_id: string`, `name`, JSON-serialized `input`, `input_truncated`.
-- **`agent.tool.result`** — emitted in `afterToolCall` (after execution completes or throws). Payload: `tool_call_id: string`, `name`, JSON-serialized `output` (or `null` on throw), `output_truncated`, `duration_ms`, `error` (or `null`).
+- **`agent.tool.call`** — emitted in `beforeToolCall` (before tool execution). Payload: `tool_call_id: string`, `name`, `input: string` (JSON-serialized LLM-supplied args), `input_truncated`.
+- **`agent.tool.result`** — emitted in `afterToolCall` (after execution completes or throws). Payload: `tool_call_id: string`, `name`, `output: string | null` (JSON-serialized `ToolResult`, see below), `output_truncated`, `duration_ms`, `error: string | null`.
+
+**What `output` serializes.** The whole Jie `ToolResult = { content: string; details?: unknown; terminate?: boolean }` returned by the tool's `execute` is serialized — not just `content`. This gives observers (TUI, `-p` mode, diagnostics) both the LLM-visible text **and** the structured `details` (e.g. `bash` returns `details: { exitCode, truncated }`; `notify` returns `details: { topic, recipients }`). The LLM conversation itself still sees only `content` — pi-agent's `execute` wrapping (`{ content: [{ type: "text", text: result.content }], details: result.details, terminate: ... }`) is what the LLM receives; the event `output` is Jie's raw view, with everything preserved for observers. Fields whose value is `undefined` are dropped by `JSON.stringify`; `details` and `terminate` may be absent from the serialized string when the tool does not set them. On a thrown `execute`, `output` is `null` and `error` carries the message.
 
 `tool_call_id` is the string id pi-agent provides in its hook context. The body reads it from the hook context as `ctx.toolCall.id` (in pi-agent-core@0.79.1 the hook context is `{ assistantMessage, toolCall, args, context }`, not the older flat shape) and passes it through to the bus as-is — no Jie-side counter, no Map, no renumbering. The same string appears in both events for the same tool call, which is what observers (TUI, `-p` mode) use to correlate a `call` with its `result`. The id is opaque to Jie; its format is provider-defined (e.g. OpenAI uses `call_xxx`, Anthropic uses `toolu_xxx`).
 
@@ -511,7 +520,7 @@ At construction time, each Jie `Tool` from `AgentSoul.tools` is wrapped into pi-
 |---|---|
 | `name`, `description`, `label` | Copied directly from Jie `Tool` |
 | `parameters` | Jie `Tool.parameters` (TypeBox `TSchema`), passed directly |
-| `prepareArguments(raw)` | `TypeBox.Value.Create(parameters, raw)` — coerces defaults, then `TypeBox.Value.Validate(parameters, result)` — validates. Throws on validation failure; pi-agent surfaces it as a tool error to the LLM. |
+| `prepareArguments(raw)` | `TypeBox.Value.Check(parameters, raw)` — validates the LLM-supplied args against the TypeBox schema. Throws when the check returns `false`; pi-agent surfaces the throw as a tool error to the LLM. **No coercion in v1** — `Value.Create` / `Value.Default` are not used; the LLM's args must already match the schema. (TypeBox's current API is `Value.Check`; older `Create` / `Validate` are deprecated.) |
 | `execute(toolCallId, params, signal?, onUpdate?)` | Combines `signal` with `AbortSignal.timeout(tool.timeout ?? 120_000)`: if pi-agent provides a signal, uses `AbortSignal.any([piSignal, AbortSignal.timeout(timeout)])`; if pi-agent signal is undefined, uses `AbortSignal.timeout(timeout)` alone. Calls `tool.execute(params, ctx, combinedSignal)`. Wraps return value: `{ content: [{ type: "text", text: result.content }], details: result.details, terminate: result.terminate ?? false }`. On throw (including `AbortError`), re-throws; pi-agent marks the result as `isError`. |
 | `executionMode` | Always `"sequential"` |
 
@@ -548,10 +557,19 @@ Streaming events are published on Jie's EventBus; the TUI and `-p` mode consume 
 
 ### Prompt Ingress & Queuing
 
-When a message arrives on Jie's EventBus (via `leader.prompt` or a topic subscription), the body:
+When a message arrives on Jie's EventBus (via `leader.prompt` or a topic subscription), the body formats it as a synthetic `user` `AgentMessage` and ingests via `agent.prompt()`:
 
-1. If idle — formats the message as a synthetic `user` `AgentMessage`, calls `agent.prompt(message)`.
-2. If busy — queues the message in `AgentBody`'s in-memory queue. After `agent_end`, the body checks the queue and calls `agent.prompt(nextMessage)`.
+| Source subject | Synthetic `user` message `content` |
+|---|---|
+| `leader.prompt` (no `source`; from TUI / `-p` mode) | ``[user]: {prompt}`` |
+| Domain topic / direct addressing (from `notify`) | ``[{source_agent_key} on '{topic}']: {prompt}`` |
+
+Both formats are plain text — v1 has no image / multimodal content for synthetic user messages. `content` is always a single `string` (see `M8` in `review-tracker.md`). The body converts the payload's `prompt` field verbatim; no escaping, no parsing of inner newlines, no parsing of the recipient's intent. The receiving LLM extracts identifiers, topic names, and structure from the text as part of its reasoning.
+
+Ingress flow:
+
+1. If idle — calls `agent.prompt(syntheticMessage)`.
+2. If busy — queues the synthetic message in `AgentBody`'s in-memory queue. After `agent_end`, the body dequeues and calls `agent.prompt(nextMessage)`.
 
 The queue is FIFO, in-memory only (not persisted). Lost on restart. See `08-memory.md` Leader Agent Working Memory.
 

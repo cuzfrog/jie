@@ -111,7 +111,7 @@ Tunables (`stream_chunk_size`, `stream_flush_ms`) are in `10-configuration.md`. 
 Every tool call emits two events:
 
 - `agent.tool.call` — before execution. `input` is JSON-serialized; truncated at 4 KiB with marker.
-- `agent.tool.result` — after execution. `output` is JSON-serialized; truncated at 4 KiB. `error` is null on success.
+- `agent.tool.result` — after execution. `output` is the **whole Jie `ToolResult = { content, details?, terminate? }`** object (the value the tool's `execute` returned), JSON-serialized — not just `content`. This way observers get both the LLM-visible text and the structured `details`. Fields whose value is `undefined` are dropped by `JSON.stringify`. On a thrown `execute`, `output` is `null` and `error` carries the message. Truncated at 4 KiB (see "Truncation" below).
 
 `tool_call_id` is the string id pi-agent provides in its `beforeToolCall` / `afterToolCall` hooks. The body passes it through to the bus as-is. The value is opaque to Jie and to consumers — it is used by observers (TUI, -p mode) to correlate a `agent.tool.call` event with the matching `agent.tool.result` event. Jie does not synthesize, renumber, or otherwise transform it.
 
