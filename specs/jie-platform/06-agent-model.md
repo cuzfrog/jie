@@ -6,7 +6,7 @@ A soul declares an agent's behavioral profile. Souls are derived from the team b
 
 ```typescript
 interface AgentSoul {
-  role:            string;      // agent identifier — from frontmatter `name:` if present, else filename stem
+  role:            string;      // agent identifier — the agent's .md filename stem (canonical, see ADR 18)
   model:           string;      // '<provider>/<model_id>', split on first '/', resolved via pi-ai's getModel(provider, modelId)
   system_prompt:   string;      // prose body of the agent's .md file
   tools:           ToolSpec[];  // from frontmatter `tools`, resolved through ToolRegistry
@@ -110,10 +110,11 @@ When you finish, call `notify('task.researched', '...')` to signal completion.
 
 | Field | Required | Description |
 |---|---|---|
-| `name` | no | The role identifier for this agent — used as `AgentSoul.role` and as the basis for `agent_key = {role}-{N}`. If absent, the filename stem is used. Two agents in the same blueprint must not resolve to the same role (loader errors at parse time). |
 | `model` | no | `<provider>/<model_id>` string. Split on first `/` → `getModel(provider, modelId)` via pi-ai. If absent, inherited from the user's global default at startup (see `10-configuration.md` "Model Resolution"). |
 | `tools` | yes | list of tool spec strings. Resolved through `ToolRegistry` at load time. |
 | `subscribe` | no | list of domain topic strings this agent listens to (in addition to its auto-subscriptions). If absent, the agent has no domain subscriptions — only `{agent_key}` (every agent) and `leader.prompt` (leader only). The leader for example omits this field; the built-in minimal team's `general` agent omits it too. |
+
+The role identifier is the `.md` filename stem — there is no `name:` frontmatter override (see ADR 18). The directory must not contain two `.md` files with the same stem (the loader treats duplicate stems as a parse-time error).
 
 **Prose body** → `AgentSoul.system_prompt`. Provided to the LLM as the system message.
 
@@ -201,16 +202,16 @@ notify(input: { topic: string; prompt: string }): string  // LLM-visible text; s
 Behavior inside the body:
 
 1. Publish `{ topic, prompt, source: this.agent_key }` to `{topic}` on the event bus.
-2. The event bus filters self-receipt: the publishing agent does not receive its own notification, even if subscribed to the topic. The bus also catches per-subscriber exceptions (see `03-event-system.md` "Error Containment") and continues dispatch — a misbehaving subscriber does not poison the publisher.
-3. The LLM-visible return is a human-readable string summarizing delivery:
+2. The publishing agent's `AgentBody` subscription callback filters self-receipt: when the callback receives an event whose `payload.source` matches its own `agent_key`, it skips processing (per ADR 9 §3 — `Self-receipt filtering`). The `EventBus` itself is transport-agnostic and does not know about agent identity; putting the filter on the bus would leak Jie agent concepts into the transport, and a future `NatsEventBus` would have no agent-key awareness to filter against. The bus also catches per-subscriber exceptions (see `03-event-system.md` "Error Containment") and continues dispatch — a misbehaving subscriber does not poison the publisher.
+3. The LLM-visible return is a human-readable string summarizing delivery. The LLM-facing `recipients` count is `subscriberCount(topic)` minus self if the publisher is itself subscribed to `topic` (i.e., if the topic is in `AgentSoul.subscriptions`). The bus-level `subscriberCount(topic)` is the raw transport count and is unchanged; the LLM-facing number is the count of OTHER agents that would receive the message after self-receipt filtering. `details.recipients` carries the same LLM-facing number — observers see what the LLM was told.
 
-   | `recipients = subscriberCount(topic)` | LLM-visible `content` |
+   | LLM-facing `recipients` | LLM-visible `content` |
    |---|---|
    | `> 0` | `"Notification delivered to N recipients"` |
    | `0` | `"Notification delivered to 0 recipients — no agent is subscribed to '<topic>'"` |
 
    The zero case is **explicit** because it is the LLM's signal to react: the topic name is unknown, no peer is listening, the message would be lost. The LLM should reconsider the topic, fall back to a different path, or surface the issue to the user.
-4. The body also returns `details = { topic, recipients }` to the LLM pipeline for afterToolCall hooks (TUI render, diagnostics). The `details` field is opaque to the LLM conversation but is visible to observers.
+4. The body also returns `details = { topic, recipients }` to the LLM pipeline for afterToolCall hooks (TUI render, diagnostics). The `details` field is opaque to the LLM conversation but is visible to observers. The `recipients` value is the LLM-facing number from step 3.
 5. The LLM continues processing — `notify` does **not** end the turn loop.
 
 On receipt, an agent formats the notification as a synthetic `user` message in the LLM conversation: `[{source_agent_key} on '{topic}']: {prompt}` — the "notify path" format from the table in "Prompt Ingress & Queuing" below. (The `leader.prompt` source has no `source_agent_key`, so it uses `[user]: {prompt}` instead.)
@@ -299,7 +300,7 @@ The platform registers one provider at startup. The `web_search` tool calls the 
 | User-Agent | `JieBot/0.1 (+https://github.com/cuzfrog/jie)` |
 | Timeout | Inherits the tool's 120s default. |
 | Encoding | UTF-8 default; if `Content-Type` declares a charset, that charset is used. |
-| Content conversion | HTML is stripped to plain text — script/style/nav/header/footer tags removed, remaining text extracted. Non-HTML responses (e.g. `text/plain`, `application/json`, `application/xml`) are returned verbatim. |
+| Content conversion | HTML is parsed with `node-html-parser@6.1.13` (per `monorepo-structure.md` runtime deps). The parser removes `<script>`, `<style>`, `<nav>`, `<header>`, `<footer>` elements and their descendants, then returns the text content. `node-html-parser`'s text extraction decodes HTML entities (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&#NNN;`, `&xHHHH;`) — no separate unescape step needed. The returned text may contain residual whitespace from block-level tags; the LLM tolerates this. Non-HTML responses (e.g. `text/plain`, `application/json`, `application/xml`) skip the parser and return verbatim. |
 
 The return type is `{ content: string; truncated: boolean }` — the interface is **format-agnostic**. The `content` field carries whatever text the adapter produces; the tool contract is just "give the LLM the text and tell it if you had to cut it off."
 
@@ -481,6 +482,7 @@ Passed to every tool call. Provides identifiers and storage; **does not** expose
 ```typescript
 interface ExecutionContext {
   session_id:  string;        // per-process-run identifier; shared across agents in the same process
+  team_id:     string;        // resolved team id (from `defaultTeam` resolution); namespace for memory and storage
   agent_key:   string;        // persistent instance identity: {role}-{N}
   agent_role:  string;
   artifacts:   ArtifactStore;
@@ -496,14 +498,14 @@ At `AgentBody` construction, Jie instantiates pi-agent's `Agent` with the follow
 
 | Option | Jie provides |
 |---|---|
-| `sessionId` | Jie's `session_id` (per-process-run ULID) |
+| `sessionId` | Jie's `session_id` (per-process-run ULID via `ulid@2.3.0`, 26 chars — see `monorepo-structure.md` runtime deps) |
 | `getApiKey(provider)` | Resolves via pi-ai's `getEnvApiKey(provider)` — same env vars as `10-configuration.md` |
 | `tools` | Set via `agent.state.tools` after construction (see Tool Adaptation below) |
 | `systemPrompt` | Set via `agent.state.systemPrompt` — `AgentSoul.system_prompt` |
 | `model` | Set via `agent.state.model` — resolved from soul's `model` string via pi-ai's `getModel(provider, modelId)` |
 | `beforeToolCall` | Emits `agent.tool.call` on Jie's EventBus. Jie does not use the hook to block execution — the event is published for telemetry, then pi-agent proceeds with tool execution normally. Per pi-agent-core@0.79.1's contract (`pi-agent-api-reference.md`), `beforeToolCall` *can* return `{ block?, reason? }` to block the call or abort the batch, but Jie's implementation does not exercise that path in v1. |
 | `afterToolCall` | Emits `agent.tool.result` on Jie's EventBus |
-| `transformContext` | See Memory Persistence below |
+| `transformContext` | The body passes a **wrapped** `transformContext` to pi-agent. The wrapper calls the inner `transformContext` (identity in v1; Day 2+ compaction logic when enabled), diffs input vs. output arrays for newly-added `CompactionSummaryMessage` entries, and calls `memory.compact(range, summary, agent_key, session_id, team_id)` for each. Returns the new array unchanged. See `08-memory.md` "Integration with pi-agent" for the full contract. |
 | `convertToLlm` | pi-agent's default — converts `AgentMessage[]` to LLM `Message[]`, filtering non-LLM messages |
 | `prepareNextTurn` | — (not wired in v1; prompt injection uses `agent.prompt()` from the body's queue — see "Prompt Ingress & Queuing" below) |
 | `compactionSettings` | `CompactionSettings { enabled: false, reserveTokens: 16384, keepRecentTokens: 20000 }` (compaction deferred to Day 2) |
@@ -524,7 +526,7 @@ At construction time, each Jie `Tool` from `AgentSoul.tools` is wrapped into pi-
 | `execute(toolCallId, params, signal?, onUpdate?)` | Combines `signal` with `AbortSignal.timeout(tool.timeout ?? 120_000)`: if pi-agent provides a signal, uses `AbortSignal.any([piSignal, AbortSignal.timeout(timeout)])`; if pi-agent signal is undefined, uses `AbortSignal.timeout(timeout)` alone. Calls `tool.execute(params, ctx, combinedSignal)`. Wraps return value: `{ content: [{ type: "text", text: result.content }], details: result.details, terminate: result.terminate ?? false }`. On throw (including `AbortError`), re-throws; pi-agent marks the result as `isError`. |
 | `executionMode` | Always `"sequential"` |
 
-`ExecutionContext` is closed over at adaptation time — `session_id`, `agent_key`, `agent_role`, and `artifacts` are bound once. Tools never receive different execution contexts within the same agent's lifetime.
+`ExecutionContext` is closed over at adaptation time — `session_id`, `team_id`, `agent_key`, `agent_role`, and `artifacts` are bound once. Tools never receive different execution contexts within the same agent's lifetime.
 
 ### Event Bridging
 
@@ -533,11 +535,11 @@ pi-agent emits events via `agent.subscribe(listener)`. Jie subscribes to these a
 | pi-agent event | Jie EventBus subject | Notes |
 |---|---|---|
 | `agent_start` | — | Internal lifecycle; not published |
-| `agent_end({ messages })` | — | Marks LLM loop completion; body then publishes `agent.idle` |
-| `message_end({ message })` | — | Triggers `memory.persist(message, agent_key, session_id)` |
+| `agent_end({ messages })` | — | Marks LLM loop completion; body then publishes `agent.idle`. Compaction detection is **not** in this listener — the body's `transformContext` wrapper owns that (see `08-memory.md` "Integration with pi-agent"). |
+| `message_end({ message })` | — | Triggers `memory.persist(message, agent_key, session_id, team_id)` — unconditional, no role check. pi-agent does not emit `message_end` for `CompactionSummaryMessage` injected by `transformContext`; that path is owned by the body's `transformContext` wrapper (see `08-memory.md`). |
 | `message_update({ message, assistantMessageEvent })` | `agent.stream.chunk` | Buffered: flush at 64 chars or 200ms (see below) |
 | `message_start({ message })` | — | Streaming bookkeeping; no bus event |
-| `turn_start` | — | Internal turn tracking |
+| `turn_start` | `agent.turn.start` | Bridged to the bus on every pi-agent `turn_start`. Used by `-p` mode to detect "all agents idle" (paired with `agent.idle`). Empty payload `{}`; the envelope carries `agent_role` and `agent_key`. |
 | `turn_end({ message, toolResults })` | — | Turn bookkeeping. pi-agent decides loop continuation based on `message.stopReason` and `ToolResult.terminate`. |
 | `tool_execution_start` | — | Deferred to Day 2 (currently `beforeToolCall` covers this) |
 | `tool_execution_end` | — | Deferred to Day 2 (currently `afterToolCall` covers this) |
@@ -573,17 +575,20 @@ Ingress flow:
 
 The queue is FIFO, in-memory only (not persisted). Lost on restart. See `08-memory.md` Leader Agent Working Memory.
 
-**Queue observability.** The body publishes `agent.queue.update` on every enqueue and every dequeue, mirroring pi's `queue_update` event. The payload is `{ prompts: string[] }` — the current snapshot of the queue. The TUI subscribes to this event to render the queued-prompt indicator (e.g., "3 prompts queued") and a peek of the contents. Without this event, the TUI would have to derive queue state from "leader is not idle", which is brittle when multiple agents are active.
+**Queue observability.** The body publishes `agent.queue.update` on every enqueue and every dequeue, mirroring pi's `queue_update` event. The payload is `{ prompts: string[] }` — the current snapshot of the queue. Each element of `prompts` is the synthetic `user`-message format the body would feed to `agent.prompt()`: ``[user]: {prompt}`` for `leader.prompt` and ``[{source_agent_key} on '{topic}']: {prompt}`` for `notify`-sourced prompts (see "Prompt Ingress & Queuing" above). The TUI subscribes to this event to render the queued-prompt indicator (e.g., "3 prompts queued") and a peek of the contents. Without this event, the TUI would have to derive queue state from "leader is not idle", which is brittle when multiple agents are active.
 
 > **v1 has no cap** on this queue (it is intentionally unbounded, matching pi-agent's `followUpQueue` / `steeringQueue` behavior). A backlog item exists to revisit cap value, drop policy, and observability — see `backlog.md` #19.
 
 ### Memory Persistence
 
-On `message_end`, the body calls `memory.persist(message, agent_key, session_id)` — write-through to SQLite.
+Memory has two write paths in the body, both unconditional:
+
+- **`message_end` → `persist`**: On every `message_end` from pi-agent, the body calls `memory.persist(message, agent_key, session_id, team_id)` — write-through to SQLite. No role check; the listener does not special-case summaries.
+- **`transformContext` wrapper → `compact`**: The body passes a wrapped `transformContext` to pi-agent. The wrapper calls the inner `transformContext`, diffs input vs. output for newly-added `CompactionSummaryMessage` entries, and calls `memory.compact(range, summary, agent_key, session_id, team_id)` for each. The wrapper is invariant across days: in v1 the inner is identity (no compaction → wrapper is a no-op); in Day 2+ the inner is pi-agent's actual compaction logic (or a custom implementation) and the wrapper persists the produced summaries. Compaction is trigger-agnostic — `/compact` slash command, pi-agent's auto-threshold, or Day 2+ team hooks all funnel through `transformContext` and the wrapper persists.
 
 Memory is durable but session-scoped: a new process run gets a new `session_id`, so agents start with clean conversations each time. Memory restore is used only for debugging or future compaction-aware replay.
 
-pi-agent's `transformContext` hook is wired but passive in v1: Jie's default `transformContext` is the identity function (no-op). Automatic compaction via pi-agent's `CompactionSettings` is deferred to Day 2 — the defaults are configured but not activated (`enabled: false` for v1). When enabled, `memory.compact()` records compaction summaries.
+`memory.compact()` writes the summary row and the raw range's `compacted=1` flag updates in a single `Storage.transaction()`. The `compactionSummary` role's row is owned exclusively by `compact()`; `persist()` does not write summaries because pi-agent does not emit `message_end` for `CompactionSummaryMessage` injected by `transformContext`. See `08-memory.md` "Compact" and "Integration with pi-agent" for the full contract.
 
 ### Loop Termination
 

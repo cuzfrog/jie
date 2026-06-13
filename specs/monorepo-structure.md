@@ -77,7 +77,7 @@ code-lens               (standalone — no jie dependencies)
 
 ## `jie-platform` Runtime Dependencies
 
-The platform's runtime dep set is small and fixed. Bun provides most of what the platform needs as built-ins; the four runtime deps cover the rest.
+The platform's runtime dep set is small and fixed. Bun provides most of what the platform needs as built-ins; the five runtime deps cover the rest.
 
 ```jsonc
 // packages/jie-platform/package.json
@@ -89,7 +89,9 @@ The platform's runtime dep set is small and fixed. Bun provides most of what the
     "@earendil-works/pi-agent-core": "0.79.1",
     "@earendil-works/pi-ai":          "0.79.1",
     "typebox":                        "1.1.38",
-    "yaml":                           "2.9.0"
+    "yaml":                           "2.9.0",
+    "ulid":                           "2.3.0",
+    "node-html-parser":               "6.1.13"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -98,9 +100,9 @@ The platform's runtime dep set is small and fixed. Bun provides most of what the
 }
 ```
 
-**Bun built-ins** (no dep): `bun:sqlite` (default `Storage` backend), `Bun.Glob` (for `mcp:server:*` resolution in `ToolRegistry`), `fetch` (for `web_search` / `web_fetch` tools), `crypto.randomUUID()` (for `session_id`), `Bun.spawn()` (for `bash` tool and (Day 2) MCP stdio servers), `Bun.argv` (hand-rolled CLI parser), `fs` / `fs/promises` / `path`, `import ... with { type: 'text' }` (for the built-in minimal team per ADR 16).
+**Bun built-ins** (no dep): `bun:sqlite` (default `Storage` backend), `Bun.Glob` (for `mcp:server:*` resolution in `ToolRegistry`), `fetch` (for `web_search` / `web_fetch` tools), `Bun.spawn()` (for `bash` tool and (Day 2) MCP stdio servers), `Bun.argv` (hand-rolled CLI parser), `fs` / `fs/promises` / `path`, `import ... with { type: 'text' }` (for the built-in minimal team per ADR 16). The platform uses `ulid@2.3.0` for `session_id` (26 chars, shorter than UUID v4 and human-scannable in logs and DB rows) rather than `crypto.randomUUID()`; `node-html-parser@6.1.13` parses HTML responses for the `web_fetch` tool (Bun has no built-in HTML parser); see "Fixed pins" below for why a dep was chosen over a built-in.
 
-**Fixed pins, no `^`.** The platform's spec is precise about API shapes. A pi-agent minor version bump can change `BeforeToolCallContext` (it has, between pre-0.75 and 0.79.1). A `yaml` major version bump can change the parse output. Fixed pins mean a `bun install` does not silently change behavior; upgrades are explicit ADR-grade decisions. The pinned `typebox@1.1.38` and `yaml@2.9.0` are the transitive versions of `@earendil-works/pi-agent-core@0.79.1`, so jie and pi-agent share known-good combinations.
+**Fixed pins, no `^`.** The platform's spec is precise about API shapes. A pi-agent minor version bump can change `BeforeToolCallContext` (it has, between pre-0.75 and 0.79.1). A `yaml` major version bump can change the parse output. Fixed pins mean a `bun install` does not silently change behavior; upgrades are explicit ADR-grade decisions. The pinned `typebox@1.1.38` and `yaml@2.9.0` are the transitive versions of `@earendil-works/pi-agent-core@0.79.1`, so jie and pi-agent share known-good combinations. The pinned `ulid@2.3.0` is the canonical Node/bun ULID implementation; its API is one function (`ulid()`) and is stable, so a fixed pin is the right call.
 
 **No MCP SDK in v1.** Per ADR 17, MCP client integration is Day 2. `@modelcontextprotocol/sdk@1.29.0` (the standard) is **not** a v1 dep. The `mcp.json` schema in `10-configuration.md` is forward-looking; the platform's `startJie` does not load it in v1.
 

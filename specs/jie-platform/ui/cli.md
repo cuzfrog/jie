@@ -22,7 +22,7 @@ jie [--team <id>]
    - Else read `defaultTeam` from merged settings → use it; if stale (not installed), WARN and reset to first-available user team, or clear and fall back to the built-in minimal team if no user teams exist.
    - Else pick first-available user team alphabetically across `.jie/teams/*` and `~/.jie/teams/*`.
    - Else use the platform's built-in minimal team (`packages/jie-platform/team/built-in/minimal-team.ts`, see `minimal-team.md`). The platform always has a runnable team.
-4. Open `ArtifactStore` (SQLite at `{cwd}/.jie/artifacts.db`). On failure → exit 1.
+4. Open `ArtifactStore` (SQLite at the `.jie/artifacts.db` discovered by walking up from CWD — same walk as settings/team lookup per `10-configuration.md` "Discovery"; create `.jie/` at the walk's root if absent). On failure → exit 1.
 5. **Model pre-check**: walk every agent in the blueprint and resolve `(provider, modelId)`. If any agent fails (no `model:` in its `.md`, and the merged `settings.json` does not provide a resolvable default), startup exits 1 with one error listing every unresolved agent.
 6. Connect MCP servers. Per-server failures log WARN and skip; if a team's blueprint depends on a missing tool, the team fails to start.
 7. Instantiate and start `AgentBody` for each role.
@@ -56,14 +56,14 @@ jie --print <instruction> [--team <id>] [--timeout <seconds>] [--json]
 ### Behavior
 
 1. Walk up from CWD to find `.jie/`. Load `.jie/settings.json` if present; deep-merge with `~/.jie/settings.json`.
-2. Validate `settings.json`. Resolve team (applying `--team <id>` override if given). Open `ArtifactStore` at `{cwd}/.jie/artifacts.db`. Connect MCP servers. (Same as `jie` steps 2–6, including the model pre-check.)
+2. Validate `settings.json`. Resolve team (applying `--team <id>` override if given). Open `ArtifactStore` at the `.jie/artifacts.db` discovered by walking up from CWD (same walk as settings/team lookup per `10-configuration.md` "Discovery"; create `.jie/` at the walk's root if absent). Connect MCP servers. (Same as `jie` steps 2–6, including the model pre-check.)
 3. Instantiate and start `AgentBody` for each role.
-4. Subscribe to `agent.stream.chunk` events; filter for `agent_role === leader`.
+4. Resolve the leader's role from the loaded team's `TEAM.md` (`leader:` field) and the per-role `agent_key` for that role (per v1's `{role}-{N}` convention: `<leader_role>-1`). Subscribe to `agent.stream.chunk` events; filter for `agent_role === <leader_role>`. Initialize a `Set<agent_key> currentlyBusy = new Set()`.
 5. Publish `{ prompt: "<instruction>" }` to `leader.prompt`.
 6. Print each stream chunk from the leader to stdout as it arrives.
-7. Wait for leader `agent.idle` event.
+7. Track liveness: on every `agent.turn.start` (new event — see `03-event-system.md`), `currentlyBusy.add(agent_key)`. On every `agent.idle`, `currentlyBusy.delete(agent_key)`. The startup `agent.idle` from each body (per `03-event-system.md` "Agent Idle") is a no-op (deletes from an empty set). When `currentlyBusy.size === 0` AND the leader's stream has produced its final chunk, the team is done.
 8. Print final newline, stop all agents, close DB, exit 0.
-9. On timeout → stop agents, exit 3, message to stderr: `"no response from leader within {timeout}s"`.
+9. On timeout → stop agents, exit 3, message to stderr: `"no response from team within {timeout}s"`. `--timeout` is the upper bound on the wait (default 300s; 0 = no timeout).
 
 ### Output Formats
 
@@ -236,17 +236,28 @@ This flag is the `jie login --provider <id> --api-key <key>` flow inlined as a t
 
 ## `jie --resume [<session_id>]` / `jie --continue`
 
-Continue a previous session. The `session_id` is passed to every `AgentBody` at construction, overriding the default "mint a new `session_id`" behavior (`08-memory.md`). The body calls `memory.restore(agent_key, session_id)` and resumes from the prior `memory_turns` rows.
+Continue a previous session. The `session_id` is passed to every `AgentBody` at construction, overriding the default "mint a new `session_id`" behavior (`08-memory.md`). The body calls `memory.restore(agent_key, session_id, team_id)` and resumes from the prior `memory_turns` rows for its `(team_id, agent_key)` pair.
 
 ```
 jie --resume <session_id>        # resume a specific session
-jie --continue                    # resume the most recent session for the current CWD
+jie --continue                    # resume the most recent session for the current CWD's team
 ```
 
 ### Behavior
 
-- **`--resume <session_id>`**: load the named `session_id`. Validation: it must exist in `memory_turns` (i.e. some prior `persist()` call wrote rows under it). If not, exit 1: `unknown session_id: <value>`.
-- **`--continue`**: pick the most recent `session_id` (highest `created_at`) that has rows in `memory_turns` for the current CWD's `ArtifactStore`. The lookup is CWD-scoped — there is no cross-CWD session index in v1. If no prior session exists in the current CWD's DB, **WARN to stderr** (`no prior session in this directory; starting a new session`) and proceed as if `--continue` were not given (the bodies mint fresh `session_id`s). `--continue` is non-fatal: the absence of a prior session is not an error.
+- **`--resume <session_id>`**: load the named `session_id`. Validation: it must exist in `memory_turns` (i.e. some prior `persist()` call wrote rows under it for the current `team_id`). If not, exit 1: `unknown session_id: <value>`.
+- **`--continue`**: pick the `session_id` whose `MAX(created_at)` over its rows in `memory_turns` is greatest, **scoped to the current team's `team_id`** — only sessions that have at least one row matching `team_id = <resolved team>` are candidates. The lookup runs in a single SQL statement against the current CWD's `ArtifactStore`:
+
+  ```sql
+  SELECT session_id
+  FROM memory_turns
+  WHERE team_id = ?
+  GROUP BY session_id
+  ORDER BY MAX(created_at) DESC
+  LIMIT 1;
+  ```
+
+  The `idx_memory_turns_team_session_created` index on `(team_id, session_id, created_at)` makes this an index-only scan. The lookup is CWD-scoped — there is no cross-CWD session index in v1. The algorithm does not distinguish "liveness" states — a session with one row and a session with thousands are both valid candidates; the most recent by `MAX(created_at)` wins. If no rows match (no prior session in this CWD's DB for the current team), **WARN to stderr** (`no prior session in this directory; starting a new session`) and proceed as if `--continue` were not given (the bodies mint fresh `session_id`s). `--continue` is non-fatal: the absence of a prior session is not an error.
 
 The TUI does not have a slash-command equivalent: opening `jie` (without `--resume`/`--continue`) starts a new session. The TUI's team-swap behavior preserves conversation history mid-session without these flags (see `10-configuration.md` "Team Swap"); `--resume`/`--continue` are for cross-process-run continuation.
 

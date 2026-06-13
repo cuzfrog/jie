@@ -38,15 +38,11 @@
 `agent-1.md` under `.jie/teams/my-team-1/` contains:
 ```
 ---
-name: agent-1
----
 When the user asks you to tell a story, respond: "Marry had a little lamb".
 ```
 
 `agent-2.md` under `.jie/teams/my-team-2/` contains:
 ```
----
-name: agent-2
 ---
 When the user asks you to tell a story, respond: "Once upon a time..."
 ```
@@ -87,7 +83,6 @@ When the user asks you to tell a story, respond: "Once upon a time..."
 `my-agent.md`
 ```
 ---
-name: my-agent
 tools: [mcp:mock-mcp-server:mock-tool-A*]
 ---
 ```
@@ -113,11 +108,10 @@ leader: manager # when there's only 1 agent, this is optional
 `manager.md`
 ```
 ---
-name: manager
 subscribe: [work]
 tools: [read_file, write_artifact] # tool `notify` is implicit
 ---
-You are the manager who delegates tasks. 
+You are the manager who delegates tasks.
 - When you receive a task from the user, you delegate it by writing a `task` artifact and notifying the team there is a new task.
 - When you receive a notification of a task completion, you inform the user that the task is done.
 ```
@@ -125,11 +119,10 @@ You are the manager who delegates tasks.
 `worker.md`
 ```
 ---
-name: worker
 subscribe: [work]
 tools: [write_file, read_artifact] 
 ---
-You are the worker who implements tasks. 
+You are the worker who implements tasks.
 - When you receive a notification of a new task, you read the `task` artifact and implement the task.
 - When you finish your task, you notify the team that the task is done.
 ```

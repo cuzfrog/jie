@@ -47,17 +47,17 @@ The startup sequence is the same for both `jie` (TUI) and `jie -p` (print mode),
    - Else read `defaultTeam` from merged settings → use it; if stale (not installed), WARN and reset to first-available user team (or clear and use built-in minimal if no user teams exist).
    - Else pick first-available user team alphabetically across `.jie/teams/*` and `~/.jie/teams/*`.
    - Else use the platform's built-in minimal team (`packages/jie-platform/team/built-in/minimal-team.ts`, see `minimal-team.md`). The platform always has a runnable team.
-4. **Open `ArtifactStore`** (SQLite at `{cwd}/.jie/artifacts.db`). Failure → exit 1.
+4. **Open `ArtifactStore`** (SQLite at the `.jie/artifacts.db` discovered by walking up from CWD to find `.jie/` — same walk as settings and team lookup per `10-configuration.md` "Discovery"). If no `.jie/` exists at any parent level, the platform creates one at the walk's root (the topmost directory reached before `~`) so a fresh `cd /project && jie -p …` works without manual `mkdir .jie`. Failure (e.g. permission denied) → exit 1.
 5. **(Day 2) Connect MCP servers** configured in `.jie/mcp.json` (project + global merge). Per-server connect failures log a `WARN` and skip that server; the team continues with the rest. See `10-configuration.md` MCP Server Configuration. **In v1 (per ADR 17) this step is skipped** — the platform does not load `mcp.json`, and the `ToolRegistry` only has built-in tools. Agent `.md` files listing `mcp:*` tools fail the cascade check at step 6.
 6. **Construct `AgentSoul`s** from the resolved team's `.md` files. For each `AgentSoul`, resolve its `tools:` list against the `ToolRegistry`. If any tool fails to resolve (e.g. the MCP server for that tool failed to connect), the team's startup fails with a clear error citing the missing tool.
-7. **Instantiate `InProcessEventBus`** and the `MemoryManager` per body.
+7. **Instantiate `InProcessEventBus`** and the `MemoryManager` per body. The body's `team_id` is the resolved team id from step 3; the body closes over it and passes it to every `persist` / `compact` / `restore` call.
 8. **Instantiate `AgentBody`** for each role:
-   - Pass `AgentSoul`, `EventBus`, `ArtifactStore`, `MemoryManager`.
+   - Pass `AgentSoul`, `EventBus`, `ArtifactStore`, `MemoryManager`, `team_id`.
    - Each body subscribes to its auto-subscriptions (`{agent_key}`, plus `leader.prompt` for the leader) and domain topics from its `subscribe:` frontmatter.
 9. **Call `body.start()`** on each `AgentBody` — they enter their event loops, waiting for prompts.
 10. **Branch by mode:**
     - **`jie` (TUI):** Import and start the `jie-tui` component, passing `EventBus` + `ArtifactStore` references. TUI renders, user interacts. (Stub in v1 per ADR 17.)
-    - **`jie -p <instruction>`:** Subscribe to `agent.stream.chunk` (filter `agent_role === leader`) → print to stdout. Publish `{ prompt: "<instruction>" }` to `leader.prompt`. Wait for leader `agent.idle` event. Print final newline, exit.
+    - **`jie -p <instruction>`:** Subscribe to `agent.stream.chunk` (filter `agent_role === <leader_role>`) → print to stdout. Publish `{ prompt: "<instruction>" }` to `leader.prompt`. Wait for the all-agents-idle condition (see `ui/cli.md` "jie -p" step 7). Print final newline, exit.
 
 ### Graceful Shutdown
 

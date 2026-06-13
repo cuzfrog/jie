@@ -15,7 +15,7 @@ Agents communicate exclusively through topic-based pub/sub on the EventBus. The 
 - **Every agent auto-subscribes to its `{agent_key}`** at startup — this is the direct-addressing channel.
 - **The leader additionally auto-subscribes to `leader.prompt`** — user prompt ingress from TUI/CLI.
 - **Domain topic subscriptions** are declared in the agent's `.md` frontmatter `subscribe:` field (e.g. `task.recorded`, `task.researched`).
-- **`notify(topic, prompt)`** (all agents) publishes to `{topic}` on the EventBus with prompt content and source identity. The event bus filters self-receipt to prevent notification loops. `notify` does not end the LLM's turn.
+- **`notify(topic, prompt)`** (all agents) publishes to `{topic}` on the EventBus with prompt content and source identity. The publishing agent's `AgentBody` filters its own receipts by `payload.source === agent_key` (see ADR 9 §3 — `Self-receipt filtering`); the bus itself does not filter. `notify` does not end the LLM's turn.
 - Pipeline order is encoded in the subscription graph — each agent subscribes to the previous agent's topic.
 
 ## Consequences

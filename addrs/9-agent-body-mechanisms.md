@@ -38,7 +38,9 @@ Filtering happens in `AgentBody`'s subscription callback, not in `EventBus.publi
 
 ### 4. Notify recipient count (D3)
 
-`EventBus` exposes `subscriberCount(subject): number`. The `notify` tool returns `{ ok: true, recipients: subscriberCount(topic) }`. For `InProcessEventBus`, this is `callbacksForSubject.size`. The `NatsEventBus` would implement it via NATS `num_subscribers` or equivalent.
+`EventBus` exposes `subscriberCount(subject): number`. For `InProcessEventBus`, this is `callbacksForSubject.size`. The `NatsEventBus` would implement it via NATS `num_subscribers` or equivalent.
+
+The LLM-facing `recipients` value in the `notify` tool's return is `subscriberCount(topic)` minus 1 if the publishing agent is itself subscribed to `topic` (i.e., the topic is in the body's `AgentSoul.subscriptions`). This is the count of OTHER agents that would receive the message after self-receipt filtering — the bus-level count is unchanged. The two are allowed to diverge: the bus-level count is a transport primitive; the LLM-facing count is application-level and accounts for the self-receipt filter that lives at the `AgentBody` layer (per §3).
 
 ## Consequences
 

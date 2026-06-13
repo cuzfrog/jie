@@ -71,9 +71,17 @@ export class SqliteArtifactStore implements ArtifactStore {
   }
 
   async list(prefix) {
+    // Escape LIKE metacharacters in the prefix so the user's input is treated literally.
+    // The `\` is doubled so it's a literal backslash for the `ESCAPE` clause; `%` and `_`
+    // are escaped to their literal selves. SQLite then uses the primary key index on
+    // `key` for a range scan up to the first key that doesn't start with the escaped prefix.
+    const escaped = prefix
+      .replace(/\\/g, '\\\\')
+      .replace(/%/g, '\\%')
+      .replace(/_/g, '\\_');
     const rows = this.table.query(
-      `SELECT key, created_at FROM artifacts WHERE key LIKE ? ORDER BY created_at DESC`,
-      [`${prefix}%`],
+      `SELECT key, created_at FROM artifacts WHERE key LIKE ? ESCAPE '\\' ORDER BY created_at DESC`,
+      [`${escaped}%`],
     );
     return rows.map(r => ({ key: r[0] as string, created_at: r[1] as string }));
   }

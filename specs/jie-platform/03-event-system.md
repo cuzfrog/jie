@@ -39,6 +39,7 @@ agent.stream.end                     — LLM response complete
 agent.tool.call                      — tool invocation about to execute
 agent.tool.result                    — tool execution completed
 agent.queue.update                   — agent's in-memory prompt queue changed (enqueue or dequeue)
+agent.turn.start                     — agent began a turn (pi-agent `turn_start` bridged to bus; used by `-p` mode for all-agents-idle detection)
 agent.idle                           — agent entered idle state (replaces heartbeat)
 ```
 
@@ -75,6 +76,7 @@ type PlatformEventPayload<T extends PlatformEventType> =
   T extends 'agent.tool.call'      ? { tool_call_id: string; name: string; input: string; input_truncated: boolean } :
   T extends 'agent.tool.result'    ? { tool_call_id: string; name: string; output: string | null; output_truncated: boolean; duration_ms: number; error: string | null } :
   T extends 'agent.queue.update'   ? { prompts: string[] } :
+  T extends 'agent.turn.start'     ? { } :
   T extends 'agent.idle'           ? { } :
   // Topic-published events carry domain-defined payloads:
   T extends string                 ? { prompt: string; source: string } :
@@ -90,6 +92,7 @@ type PlatformEventType =
   | 'agent.tool.call'
   | 'agent.tool.result'
   | 'agent.queue.update'
+  | 'agent.turn.start'
   | 'agent.idle';
 ```
 

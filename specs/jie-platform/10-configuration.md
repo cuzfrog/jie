@@ -123,9 +123,11 @@ The workspace root is `process.cwd()`. The platform does not read any field to o
 
 Implication: launching `jie` from a subdirectory of a project produces a workspace rooted at that subdirectory. Team manifest lookup and `settings.json` discovery walk up to the project root, but path resolution in tools does not — file paths in tool calls are relative to CWD, not the project root.
 
+> **Project state files** (`.jie/settings.json`, `.jie/teams/`, `.jie/mcp.json`, `.jie/artifacts.db`) are discovered by walking up from CWD to find `.jie/`. **Tool path resolution** (`bash` workdir, `read_file`, `write_file`) is rooted at CWD. The two concerns are deliberately different — `.jie/` is project state, not the workspace. v1 may diverge the two; the TUI surfaces both per backlog #21.
+
 ### ArtifactStore
 
-Open at `{cwd}/.jie/artifacts.db`. SQLite, single-writer by design.
+Open at the `.jie/artifacts.db` discovered by walking up from CWD — same walk as settings and team lookup (see "Workspace Inference" above). If the walked-up `.jie/` does not exist, the platform creates it at the walk's root so a fresh invocation works without manual `mkdir .jie`. SQLite, single-writer by design.
 
 ## Hard-Coded Platform Tunables
 
