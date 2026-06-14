@@ -30,3 +30,6 @@ export {
   resolveStaleDefaultTeam,
   isValidTeamId,
 } from "./config/index.ts";
+export type { ExecutionContext, Tool, ToolResult } from "./tools/types.ts";
+export type { ToolRegistry } from "./tools/tool-registry.ts";
+export { InMemoryToolRegistry } from "./tools/tool-registry.ts";
