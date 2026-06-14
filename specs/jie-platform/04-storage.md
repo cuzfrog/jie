@@ -101,7 +101,7 @@ The `artifacts` table is owned by `SqliteArtifactStore` (see [`05-artifact-store
 
 ## Sharing One Storage Instance
 
-The platform's `startJie` entry (see `06-agent-model.md` and ADR 15) opens one `SqliteStorage` at the configured path (`.jie/artifacts.db` by default) and hands the same `Storage` reference to both `SqliteArtifactStore` and `SqliteMemoryManager`. One connection, one WAL file, one busy_timeout, two tables, two domain interfaces.
+The platform's `startJie` entry (see `06-agent-model.md` and ADR 13) opens one `SqliteStorage` at the configured path (`.jie/artifacts.db` by default) and hands the same `Storage` reference to both `SqliteArtifactStore` and `SqliteMemoryManager`. One connection, one WAL file, one busy_timeout, two tables, two domain interfaces.
 
 A future migration that splits the two tables across files (artifacts in one DB, memory in another) is a `Storage`-impl concern: open two `SqliteStorage` instances, hand each domain store a different one. Domain code is unchanged.
 

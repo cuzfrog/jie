@@ -28,7 +28,7 @@ interface MemoryManager {
 
   // Return the most-recent session_id for `team_id` (by MAX(created_at) over its
   // rows in `memory_turns`), or `null` if no prior session exists. Scoped to
-  // `team_id` alone (per ADR 19). Used by `jie --continue` to resolve the resume
+  // `team_id` alone (per ADR 17). Used by `jie --continue` to resolve the resume
   // target. Pure read; no state change.
   mostRecentSessionId(team_id: string): string | null;
 
@@ -39,7 +39,7 @@ interface MemoryManager {
 }
 ```
 
-`MemoryManager` is initialized by `AgentBody` at startup. It does not hold an in-memory copy of the conversation — the pi-agent's `state.messages` is the sole in-memory source of truth. The two query methods (`mostRecentSessionId`, `hasSession`) are called by `startJie` at startup to resolve `--continue` / `--resume`; the CLI does not run them directly (per ADR 22).
+`MemoryManager` is initialized by `AgentBody` at startup. It does not hold an in-memory copy of the conversation — the pi-agent's `state.messages` is the sole in-memory source of truth. The two query methods (`mostRecentSessionId`, `hasSession`) are called by `startJie` at startup to resolve `--continue` / `--resume`; the CLI does not run them directly (per ADR 20).
 
 ### Persist
 
@@ -60,9 +60,9 @@ Atomicity: a process crash mid-`compact()` rolls back the transaction; on the ne
 
 ### Restore
 
-On agent start, the body's `session_id` is supplied by the `JieHandle` (per ADR 15 and ADR 20). The handle owns the session map; the body is a runtime that uses the value it's given.
+On agent start, the body's `session_id` is supplied by the `JieHandle` (per ADR 13 and ADR 18). The handle owns the session map; the body is a runtime that uses the value it's given.
 
-**`startJie` resolves the `session_id`.** The `session_id` passed to each body is one of three values, in priority order (per ADR 22):
+**`startJie` resolves the `session_id`.** The `session_id` passed to each body is one of three values, in priority order (per ADR 20):
 
 | Source | Resolved by | Behavior |
 |---|---|---|
@@ -74,10 +74,10 @@ The CLI does not run session-id SQL itself; the CLI passes intent via `StartJieO
 
 The `JieHandle` keeps an in-memory `Map<team_id, session_id>`. For each new body:
 
-- If the map has a recorded `session_id` for the body's `team_id` (the team is already loaded in this process — either the startup team on initial `startJie`, or a team that was previously loaded via `JieHandle.loadTeam` and is now being re-loaded; per ADR 21, the team keeps running in `loadedTeams` so the session id persists on the map), the handle passes the recorded value to the body. The body uses it; `memory.restore()` returns the prior `memory_turns` rows for `(team_id, agent_key, session_id)`.
-- If the map has no entry for the body's `team_id` (first load of this team in the process), the handle mints a fresh `session_id` (ULID via `ulid@2.3.0`; 26 chars; shorter than UUID v4 and human-scannable in logs and DB rows), records the mapping, and passes it to the body. The `--resume <session_id>` and `--continue` CLI flags override the minted value: the CLI resolves a `session_id` (the named one for `--resume`, or the most-recent for `--continue` — see `ui/cli.md` and ADR 19), the handle records that value under the team's `team_id`, and the body uses it.
+- If the map has a recorded `session_id` for the body's `team_id` (the team is already loaded in this process — either the startup team on initial `startJie`, or a team that was previously loaded via `JieHandle.loadTeam` and is now being re-loaded; per ADR 19, the team keeps running in `loadedTeams` so the session id persists on the map), the handle passes the recorded value to the body. The body uses it; `memory.restore()` returns the prior `memory_turns` rows for `(team_id, agent_key, session_id)`.
+- If the map has no entry for the body's `team_id` (first load of this team in the process), the handle mints a fresh `session_id` (ULID via `ulid@2.3.0`; 26 chars; shorter than UUID v4 and human-scannable in logs and DB rows), records the mapping, and passes it to the body. The `--resume <session_id>` and `--continue` CLI flags override the minted value: the CLI resolves a `session_id` (the named one for `--resume`, or the most-recent for `--continue` — see `ui/cli.md` and ADR 17), the handle records that value under the team's `team_id`, and the body uses it.
 
-**Per-team session id.** The session id is per process run × team: all agents in the same team in the same process share one session id. On team swap, the new team's session id is independent of the old team's — conversation is bound to the team, not the process. Two teams that share an `agent_key` (e.g., both have a `general` role) are disambiguated by their different `team_id`s: they get different `session_id`s and live in disjoint row sets in `memory_turns`. Switching back to a previously-active team reuses that team's recorded session id (the map's value); the previously-active team's bodies are **not** stopped (per ADR 21 multi-team coexistence) but its session id is preserved on the map for the lifetime of the process.
+**Per-team session id.** The session id is per process run × team: all agents in the same team in the same process share one session id. On team swap, the new team's session id is independent of the old team's — conversation is bound to the team, not the process. Two teams that share an `agent_key` (e.g., both have a `general` role) are disambiguated by their different `team_id`s: they get different `session_id`s and live in disjoint row sets in `memory_turns`. Switching back to a previously-active team reuses that team's recorded session id (the map's value); the previously-active team's bodies are **not** stopped (per ADR 19) but its session id is preserved on the map for the lifetime of the process.
 
 The body then calls `memory.restore(agent_key, session_id, team_id)`. This queries `memory_turns` for all rows matching `(team_id, agent_key, session_id)` where `compacted = false`, ordered by `seq`:
 
@@ -95,7 +95,7 @@ Compacted raw messages are preserved in storage (for full-replay audit) but are 
 ```typescript
 interface TurnRecord {
   team_id:    string;        // namespace; team whose bodies wrote this row
-  session_id: string;        // per-process × team identifier (per ADR 20); shared across all agents in the same team in the same process
+  session_id: string;        // per-process × team identifier (per ADR 18); shared across all agents in the same team in the same process
   agent_key:  string;        // persistent instance identity: {role}-{N}; each agent has its own memory stream
   seq:        number;        // monotonically increasing within (team_id, agent_key, session_id)
   role:       string;        // 'user' | 'assistant' | 'toolResult' | 'compactionSummary'
@@ -118,7 +118,7 @@ Messages are stored in the same SQLite database as the artifact store, in a sepa
 
 v1 keeps all rows indefinitely (same retention policy as the storage layer — see [`04-storage.md`](04-storage.md) "Retention"). GC and pruning are deferred to **backlog item #7** (Storage Maintenance chapter).
 
-**Team scoping.** `team_id` is the namespace for `memory_turns`. Two teams that both contain a role named `general` (and thus both have `agent_key = general-1`) live in disjoint row sets because their `team_id` differs. Users can name roles freely across teams — including reusing names — without collision. The `JieHandle`'s in-memory `Map<team_id, session_id>` (per ADR 20) is keyed by `team_id` alone — the per-team model means all agents in a team share one session id, so per-`agent_key` disambiguation is not needed. Per-team `--continue` lookups filter on `team_id`; the `idx_memory_turns_team_session_created` index on `(team_id, session_id, created_at)` makes those lookups efficient.
+**Team scoping.** `team_id` is the namespace for `memory_turns`. Two teams that both contain a role named `general` (and thus both have `agent_key = general-1`) live in disjoint row sets because their `team_id` differs. Users can name roles freely across teams — including reusing names — without collision. The `JieHandle`'s in-memory `Map<team_id, session_id>` (per ADR 18) is keyed by `team_id` alone — the per-team model means all agents in a team share one session id, so per-`agent_key` disambiguation is not needed. Per-team `--continue` lookups filter on `team_id`; the `idx_memory_turns_team_session_created` index on `(team_id, session_id, created_at)` makes those lookups efficient.
 
 ## Leader Agent Working Memory
 
@@ -136,7 +136,7 @@ The leader agent (as designated by the team blueprint) may maintain in-memory st
 - **Subscription**: The body calls `agent.subscribe(listener)`. On `message_end`, it calls `memory.persist(message, agent_key, session_id, team_id)` unconditionally — no role check, no special case for summaries.
 - **`transformContext` wrapper**: The body passes a wrapped `transformContext` to pi-agent via `AgentOptions`. The wrapper calls the inner `transformContext` (pi-agent's default, or the Day 2+ compaction implementation), diffs the input and output arrays, and for each `CompactionSummaryMessage` that appears in the output but not the input, computes the seq range and calls `memory.compact(range, summary, agent_key, session_id, team_id)`. The wrapper returns the new array unchanged. **The wrapper is invariant across days**: in v1 the inner is the identity function (no compaction → wrapper is a no-op); in Day 2+ the inner is the actual compaction logic → wrapper persists the produced summaries. Compaction is trigger-agnostic — whether the trigger is the user's `/compact` slash command, pi-agent's auto-threshold, or a Day 2+ team hook, all paths funnel through `transformContext` and the wrapper persists.
 - **`agent_end` listener**: publishes `agent.idle` only. Does not detect compaction (the `transformContext` wrapper owns that). The `agent.turn.start` / `agent.idle` alternation is the Event-Order Contract — see `03-event-system.md`.
-- **Restore**: On agent start, the body uses the `session_id` supplied by the `JieHandle` (per ADR 20 and ADR 22). The body's `start()` runs the four-step restore-and-start sequence documented in `06-agent-model.md` "AgentBody" `start()`:
+- **Restore**: On agent start, the body uses the `session_id` supplied by the `JieHandle` (per ADR 18 and ADR 20). The body's `start()` runs the four-step restore-and-start sequence documented in `06-agent-model.md` "AgentBody" `start()`:
 
   1. **Register bus subscriptions** — see `06-agent-model.md`. Subscription callbacks enqueue incoming events onto the body's in-memory `queue` field.
   2. **Restore history** — call `memory.restore(agent_key, session_id, team_id)` → `AgentMessage[]`. Push the returned array into `agent.state.messages`.

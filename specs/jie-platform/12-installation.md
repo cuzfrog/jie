@@ -8,7 +8,7 @@
 | Git | Optional | Used only if the user's workflow involves git; Jie has no git integration in v1. |
 | TypeScript / tsconfig | Optional | Only required if the workspace under Jie management is TypeScript. |
 
-No NATS. No Docker. No license server. A supported LLM provider API key is required for the runtime to make LLM calls, but it is **not required at install time** — the user runs `jie login` interactively before the first `jie` invocation, and the platform refuses to start with a clear error otherwise. `auth.json` is the sole credential source in v1 (per ADR 23); the platform does not read provider environment variables. See `10-configuration.md` "Credentials Resolution Order".
+No NATS. No Docker. No license server. A supported LLM provider API key is required for the runtime to make LLM calls, but it is **not required at install time** — the user runs `jie login` interactively before the first `jie` invocation, and the platform refuses to start with a clear error otherwise. `auth.json` is the sole credential source in v1 (per ADR 21); the platform does not read provider environment variables. See `10-configuration.md` "Credentials Resolution Order".
 
 ### Platform Support
 
@@ -57,7 +57,7 @@ After either path, `jie --version` confirms the binary is callable.
 
 `jie-platform` and `jie-tui` are bundled via workspace dependencies in `@cuzfrog/jie`. The user does not install them separately.
 
-`jie-team` and `code-lens` are **not** platform dependencies. They live in separate packages and ship as plain `.md` / `package.json` artifacts. A user (or a higher-level installer) places their manifests and configuration at the standard paths described in `10-configuration.md` "Team Resolution". See the `jie-team` package README for the manual copy steps.
+Team manifests are plain `.md` files placed at the standard paths described in `10-configuration.md` "Team Selection". v1 ships the built-in minimal team; richer team manifests (when available) are user-installed at `~/.jie/teams/<id>/` or `.jie/teams/<id>/` by hand.
 
 External tool dependencies (linters, formatters, test runners) are **not** installed by Jie. Agents invoke them via the `bash` tool; they must be present in the workspace's `node_modules` or system `PATH`.
 
@@ -85,14 +85,14 @@ For project-level model overrides (e.g. a team pinned to a specific model id), c
 
 User-installed teams are plain files — no platform-managed install step. The platform looks them up by name at the standard paths. See `10-configuration.md` "Team Selection" for the resolution rules.
 
-The platform's **built-in minimal team** is always available as a last-resort fallback and requires no installation. To install the `jie-team` package's richer version of the minimal team (which lets users customize the system prompt, tools, or default model), obtain `TEAM.md` and `general.md` from the `jie-team` package and place them at one of:
+The platform's **built-in minimal team** is always available as a last-resort fallback and requires no installation. To override the built-in's defaults (system prompt, tools, default model), place `TEAM.md` and `general.md` (the minimal-team shape) at one of:
 
 - `~/.jie/teams/minimal/` — global, applies to every project for the current user
 - `<project>/.jie/teams/minimal/` — project-local (discovered by walking up from CWD to find `.jie/`); overrides the global copy
 
 Once installed, the user-installed `minimal` team takes precedence over the platform's built-in.
 
-The same pattern applies to any other team. The `jie-team` package also ships a **dev** team (DM/Researcher/Architect/Planner/Implementer/Reviewer), installed by copying its `.md` files into `~/.jie/teams/dev/` and selected via `jie team dev` (or `/team dev` in the TUI).
+The same pattern applies to any other team: place `TEAM.md` and one `.md` per agent role at the standard paths.
 
 To use a non-default team:
 

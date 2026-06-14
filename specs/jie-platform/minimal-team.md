@@ -1,6 +1,6 @@
 # Minimal Team — Platform's Built-in Fallback
 
-The minimal team is the simplest possible `team-blueprint`: one general-purpose leader agent with default tools. The platform ships a built-in minimal team as **two `.md` files** at `packages/jie-platform/team/minimal/` — the same format as user teams. The `jie-team` package may also ship a richer minimal team as `.md` files, which users can install at `~/.jie/teams/minimal/` or `.jie/teams/minimal/` to override the platform's built-in with a customized one.
+The minimal team is the simplest possible `team-blueprint`: one general-purpose leader agent with default tools. The platform ships a built-in minimal team as **two `.md` files** at `packages/jie-platform/team/minimal/` — the same format as user teams. A user (or a downstream team package) can install a richer minimal team at `~/.jie/teams/minimal/` or `.jie/teams/minimal/` to override the platform's built-in.
 
 ## Built-in (Shipped with the Platform)
 
@@ -32,7 +32,7 @@ The parser is the same one used for user teams; the only difference is where the
 | Property | Value |
 |---|---|
 | Roles | 1 (`general`) |
-| Leader | `general-1` (auto-subscribes to `leader.prompt` in the team's view — the platform prefixes `{team_id}.leader.prompt` on the bus per ADR 21; no `subscribe:` in frontmatter, so no domain topics) |
+| Leader | `general-1` (auto-subscribes to `leader.prompt` in the team's view — the platform prefixes `{team_id}.leader.prompt` on the bus per ADR 19; no `subscribe:` in frontmatter, so no domain topics) |
 | Domain topics | None (no subscription graph; the leader is the only agent) |
 | Tools | `bash`, `read_file`, `write_file` (plus auto-registered `notify`) |
 | Model | Inherited from merged settings — see "Model" below |
@@ -50,9 +50,9 @@ complex work.
 
 The system prompt is intentionally short: it establishes identity and points users at the right next step for richer workflows.
 
-## User-Installed Override (jie-team package)
+## User-Installed Override
 
-`jie-team` ships `TEAM.md` and `general.md` for a richer version of the minimal team. Once installed at `~/.jie/teams/minimal/` (or `.jie/teams/minimal/`), the user-installed version takes precedence over the platform's built-in. The package version lets users customize the system prompt, default tools, or default model without forking the platform. See the `jie-team` package README for installation.
+A user can place `TEAM.md` and `general.md` (the minimal-team shape) at `~/.jie/teams/minimal/` (global) or `.jie/teams/minimal/` (project-local, walking up from CWD). Once installed, the user-installed `minimal` team takes precedence over the platform's built-in. The override is byte-for-byte the same `.md` format as the built-in; the loader does not distinguish "platform's built-in" from "user's copy" once the bytes are in hand.
 
 ```
 .jie/teams/minimal/
@@ -60,15 +60,13 @@ The system prompt is intentionally short: it establishes identity and points use
  general.md   # agent definition (name, optional model, tools, optional subscribe, system_prompt)
 ```
 
-The override is byte-for-byte the same `.md` format as the built-in; the loader does not distinguish "platform's built-in" from "user's copy" once the bytes are in hand.
-
 ## Model
 
 The minimal team does not pin a model. The leader's `(provider, modelId)` is resolved from the user's merged settings at startup, following the chain in `10-configuration.md` "Model Resolution".
 
 The platform performs a startup pre-check (run by `startJie`): every agent in the blueprint must resolve to a concrete model before any agent is constructed. If any agent fails to resolve, startup exits 1 with one error message listing every unresolved agent and the remediation steps. Per-agent fallback failures do not leak into the LLM call — a missing model is a startup error, not a runtime one.
 
-Users who want a different model globally run `jie model <provider>/<modelId>` (or edit `~/.jie/settings.json` directly). Users who want a different model for the minimal team specifically can install the `jie-team` package's `general.md` (which can pin a model in frontmatter) and place it at one of the standard paths.
+Users who want a different model globally run `jie model <provider>/<modelId>` (or edit `~/.jie/settings.json` directly). Users who want a different model for the minimal team specifically can install their own `general.md` (which can pin a model in frontmatter) and place it at one of the standard paths.
 
 ## Behavior
 

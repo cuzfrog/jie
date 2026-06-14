@@ -39,7 +39,7 @@ A single `jie` process can host multiple teams' bodies. Team-specific channels a
 | `{team_id}.leader.prompt` | Leader prompt ingress from TUI or `-p` mode | Leader auto-subscribes; TUI publishes (scoped to the active team). |
 | `{team_id}.{agent_key}` | Direct-addressing channel; the agent with this key auto-subscribes | Every agent auto-subscribes; `notify` publishes. |
 | `{team_id}.{domain_topic}` | Team-defined domain events (e.g. `task.recorded`, `work.researched`) | Agents subscribe via `subscribe:` in `.md`; `notify` publishes. |
-| `{team_id}.team.loaded` | One-shot per team load; payload `{ team_id, agents: { role, agent_key }[] }` — the team's roster. The TUI's agents-panel-at-boot anchor (per ADR 24). | `JieHandle` publishes in `startJie` and `loadTeam`. Not republished on team swap-back. |
+| `{team_id}.team.loaded` | One-shot per team load; payload `{ team_id, agents: { role, agent_key }[] }` — the team's roster. The TUI's agents-panel-at-boot anchor (per ADR 22). | `JieHandle` publishes in `startJie` and `loadTeam`. Not republished on team swap-back. |
 
 **Platform subjects (un-scoped, `team_id` in the envelope):**
 
@@ -53,7 +53,7 @@ A single `jie` process can host multiple teams' bodies. Team-specific channels a
 | `agent.turn.start` | Agent began a turn (pi-agent `turn_start` bridged to bus; consumed by the CLI's `-p` idle gate and the TUI's busy/idle derivation) |
 | `agent.idle` | Agent entered idle state |
 
-The team-blueprint author writes **unscoped** names in `.md` (`leader.prompt`, `leader-1`, `task.recorded`) and in `notify` calls. The platform prefixes `{team_id}.` at body construction (for subscriptions) and at publish time (for `notify`). The agent's view is un-scoped; the bus's view is team-scoped. See ADR 21.
+The team-blueprint author writes **unscoped** names in `.md` (`leader.prompt`, `leader-1`, `task.recorded`) and in `notify` calls. The platform prefixes `{team_id}.` at body construction (for subscriptions) and at publish time (for `notify`). The agent's view is un-scoped; the bus's view is team-scoped. See ADR 19.
 
 - `agent_key` — persistent agent identity: `{role}-{N}` (e.g. `leader-1`, `researcher-1`). Every agent auto-subscribes to `{team_id}.{agent_key}` at startup. Used for direct inter-agent addressing via `notify`.
 - `domain_topic` — dotted string defined by the team blueprint (e.g. `task.recorded`, `work.researched`, `task.completed`). Agents subscribe via `subscribe:` in their `.md` frontmatter; the platform prefixes `{team_id}.` at body construction.
@@ -81,7 +81,7 @@ interface AgentEvent<T extends string = string> {
 
 **Wire format — the bus payload IS the envelope.** Every publisher on the bus (body, TUI, CLI) constructs and publishes a full `AgentEvent` envelope. The bus's `publish(subject, payload)` second argument is the envelope; the bus's `subscribe` callback receives `(subject, envelope)`. There is no shorthand or partial-publish path. When a body publishes via `notify`, the body fills every envelope field (`event_type` from the LLM's topic, `payload: { prompt, source }` per `PlatformEventPayload`, `team_id` from the body's team, `agent_role` and `agent_key` from the body, `version: 1`, `timestamp` ISO 8601). When the TUI or CLI publishes a user prompt to `leader.prompt` (or a direct-addressed user prompt to a specific agent's `{agent_key}`), it fills every envelope field — the convention is that the TUI/CLI fills `agent_role` and `agent_key` with the **target agent's** role and `agent_key` (the leader for `leader.prompt`; the targeted agent for direct addressing) so the envelope matches what the target would have published. The full per-publisher wire-format contract is in `02-protocol-stack.md` "Prompt Ingress" and `06-agent-model.md` `notify` step 2.
 
-**Reading the envelope at a subscriber.** A subscriber reads `envelope.payload` (the inner data) for the event-type-specific fields (e.g., `envelope.payload.prompt` for `leader.prompt`, `envelope.payload.source` for self-receipt filtering on `notify`-sourced events). `envelope.team_id` is the authoritative team identity (the subject's `{team_id}.` prefix is the bus-level scoping, but the envelope is the source of truth for filtering). The body's subscription callback for `notify`-sourced events reads `envelope.payload.source` and compares it to the body's own `agent_key` for self-receipt filtering (per ADR 9 §3).
+**Reading the envelope at a subscriber.** A subscriber reads `envelope.payload` (the inner data) for the event-type-specific fields (e.g., `envelope.payload.prompt` for `leader.prompt`, `envelope.payload.source` for self-receipt filtering on `notify`-sourced events). `envelope.team_id` is the authoritative team identity (the subject's `{team_id}.` prefix is the bus-level scoping, but the envelope is the source of truth for filtering). The body's subscription callback for `notify`-sourced events reads `envelope.payload.source` and compares it to the body's own `agent_key` for self-receipt filtering (per `06-agent-model.md` "Built-in Tool: `notify`" step 3).
 
 ### Platform Event Payloads
 
@@ -174,7 +174,7 @@ Every tool call emits two events:
 
 When an agent transitions from `busy` to `idle` (work unit complete, terminal event published, or error recovery complete), it publishes `agent.idle`. This is the signal for observers (TUI, `-p` mode) that the agent is ready for new work. Replaces the heartbeat-based discovery model.
 
-**`agent.idle` is published on every `agent_end` only.** A body that has not yet processed any turn has published no events; observers treat it as **idle by default** (no event required). The "this agent exists" signal at boot is the separate `{team_id}.team.loaded` event (see Subject Schema), published by the `JieHandle` once per team load, not by the body. This reverses the prior decision to publish `agent.idle` at startup (ADR 13 §3 J6, reversed by ADR 24); the new design separates "this team is loaded" (a one-shot team-routing announcement) from "this body transitioned busy→idle" (a per-body state-transition event).
+**`agent.idle` is published on every `agent_end` only.** A body that has not yet processed any turn has published no events; observers treat it as **idle by default** (no event required). The "this agent exists" signal at boot is the separate `{team_id}.team.loaded` event (see Subject Schema), published by the `JieHandle` once per team load, not by the body. The new design separates "this team is loaded" (a one-shot team-routing announcement) from "this body transitioned busy→idle" (a per-body state-transition event).
 
 `agent.idle` fires on every `agent_end` regardless of `stopReason` — whether the LLM finished naturally (`"stop"`, `"length"`) or exited from an error (`"error"`, `"aborted"`), the agent returns to idle. Observers can rely on `agent.idle` as a definitive "this agent is no longer processing" signal — they do not need to inspect `stopReason` separately to know the agent is ready for new work. The body never publishes `agent.idle` without a preceding `agent.turn.start` for the same turn; see "Event-Order Contract" below.
 

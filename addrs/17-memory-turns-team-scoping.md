@@ -1,19 +1,19 @@
-# ADR 19: Memory Turns Are Team-Scoped
+# ADR 17: Memory Turns Are Team-Scoped
 
 ## Status
 
-Accepted 2026-06-13. Captures the schema, API, and semantic shift introduced by adding `team_id` as the namespace for `memory_turns`.
+Accepted. `team_id` is a first-class column in `memory_turns` and the namespace for the table.
 
 ## Context
 
-The fresh review pass on 2026-06-13 surfaced two issues that resolved together:
+The spec needed two issues resolved together:
 
 1. **`--continue` "most recent" was ambiguous** — the spec said "highest `created_at`" but each `memory_turns` row has its own timestamp; "most recent session" is a derived notion.
 2. **`--continue` needed to be team-scoped** — a user who ran `jie --team A` yesterday and `jie --team B` today should resume B's last session, not A's.
 
 The natural-looking filter for team scoping was `agent_key IN (current team's agent_keys)`. This breaks when two teams both contain a role with the same name (e.g., both have a `general` → both have `agent_key = general-1`). The two `general-1` agents live in different teams but share an `agent_key`; filtering by `agent_key` alone conflates their conversation histories.
 
-The v1 spec explicitly accepted this collision risk: it told users to "avoid collisions by naming roles uniquely across teams" and added a startup WARN. That was the wrong shape — the platform should namespace, not the user. The user can reuse role names freely across teams; `team_id` does the disambiguation.
+A prior v1 spec explicitly accepted this collision risk: it told users to "avoid collisions by naming roles uniquely across teams" and added a startup WARN. That was the wrong shape — the platform should namespace, not the user. The user can reuse role names freely across teams; `team_id` does the disambiguation.
 
 ## Decision
 
@@ -54,7 +54,7 @@ interface MemoryManager {
 }
 ```
 
-The body knows its `team_id` at construction (the team resolution flow at `09-deployment.md:30-40` resolves the team id and constructs bodies from it). The body closes over `team_id` and passes it to every memory call. `ExecutionContext` also exposes `team_id` (per `06-agent-model.md`) so tools can build team-scoped keys if they need to.
+The body knows its `team_id` at construction (the team resolution flow resolves the team id and constructs bodies from it). The body closes over `team_id` and passes it to every memory call. `ExecutionContext` also exposes `team_id` so tools can build team-scoped keys if they need to.
 
 ### `--continue` algorithm
 
@@ -81,13 +81,13 @@ type JieHandle = {
 };
 ```
 
-All agents in the same team in the same process share one session id. On team swap, the new team's session id is independent of the old team's — conversation is bound to the team, not the process. Switch back to a previously-active team reuses the recorded session id; the previously-active team's bodies are **not** stopped (per ADR 21 multi-team coexistence — the team keeps running in the background), but its session id remains on the map for the lifetime of the process. Memory is per-team at the session level, per-agent at the row level.
+All agents in the same team in the same process share one session id. On team swap, the new team's session id is independent of the old team's — conversation is bound to the team, not the process. Switch back to a previously-active team reuses the recorded session id; the previously-active team's bodies are **not** stopped (per ADR 19), but its session id remains on the map for the lifetime of the process. Memory is per-team at the session level, per-agent at the row level.
 
-**Refinement (2026-06-13, ADR 20).** The original ADR-19 design keyed the map on `(team_id, agent_key)`. The per-`agent_key` half of the key was redundant: the session id is shared across all agents in a team, so the per-`agent_key` disambiguation adds no information. v1 collapses the key to `team_id` only. Two teams that share an `agent_key` (e.g., both have a `general` role) are still disambiguated — they have different `team_id`s, so they get different `session_id`s and live in disjoint row sets in `memory_turns`. The `memory_turns` primary key still includes `agent_key` (memory rows are per-agent) — only the session-map key on the handle is simplified.
+**Refinement.** The original design keyed the map on `(team_id, agent_key)`. The per-`agent_key` half of the key was redundant: the session id is shared across all agents in a team, so the per-`agent_key` disambiguation adds no information. The map key collapses to `team_id` only (per ADR 18). Two teams that share an `agent_key` are still disambiguated — they have different `team_id`s, so they get different `session_id`s and live in disjoint row sets in `memory_turns`. The `memory_turns` primary key still includes `agent_key` (memory rows are per-agent) — only the session-map key on the handle is simplified.
 
 ### Removed
 
-- The `08-memory.md` "Cross-team agent_key collisions" section is removed. With `team_id` as a first-class column, two teams with the same `agent_key` live in disjoint row sets. There's no collision to warn about.
+- The "Cross-team agent_key collisions" section in `08-memory.md` is removed. With `team_id` as a first-class column, two teams with the same `agent_key` live in disjoint row sets. There's no collision to warn about.
 - The startup WARN that fired "if a freshly-loaded team would create `agent_key` rows that already exist for the current `session_id`" is removed (no longer possible).
 - The "users avoid collisions by naming roles uniquely across teams" guidance is removed. Users can name roles freely, including reusing names across teams.
 
@@ -102,14 +102,14 @@ All agents in the same team in the same process share one session id. On team sw
 
 - Schema change: `memory_turns` gains a `team_id` column; primary key changes; one new index added; one redundant index dropped.
 - API change: `persist`, `compact`, `restore` all take `team_id`.
-- Semantic shift: `session_id` is no longer the only namespace. Two teams with the same `agent_key` no longer share rows. The `JieHandle`'s map is keyed by `(team_id, agent_key)`.
-- The cross-team collision section and startup WARN are removed. The `agent_key` self-test in `06-agent-model.md`'s startup pre-check (if it referenced collision detection) is also removed.
+- Semantic shift: `session_id` is no longer the only namespace. Two teams with the same `agent_key` no longer share rows. The `JieHandle`'s map is keyed by `team_id`.
+- The cross-team collision section and startup WARN are removed.
 - `ExecutionContext` exposes `team_id`. Tools that need it (e.g., for team-scoped artifact keys) can use it; most tools don't.
-- `--resume <session_id>` is team-scoped implicitly: it looks up rows matching the resolved `team_id` plus the named `session_id`. Resuming a session from a different team requires explicit handling (currently: the lookup just returns empty; a future revision may add a clear error message).
+- `--resume <session_id>` is team-scoped implicitly: it looks up rows matching the resolved `team_id` plus the named `session_id`. Cross-team resume silently returns no rows and proceeds with a fresh session.
 - The v1 DB hasn't shipped, so the schema change is free — no migration needed. The CREATE TABLE IF NOT EXISTS picks up the new shape on first run.
 
 ## Out of scope (deferred)
 
-- **Cross-team `--resume`**: explicit resume of a session owned by a different team. The current spec says "must exist in `memory_turns` (i.e. some prior `persist()` call wrote rows under it for the current `team_id`)" — cross-team resume silently returns no rows and proceeds with a fresh session. A future revision may add an error message; not blocking v1.
+- **Cross-team `--resume`**: explicit resume of a session owned by a different team. Cross-team resume silently returns no rows and proceeds with a fresh session. A future revision may add an error message; not blocking v1.
 - **Multi-level compaction hierarchy**: the schema change to `memory_turns` doesn't preclude adding a `parent_summary_id` column to a future `memory_summaries` table. Out of scope for v1.
-- **Per-team retention policy**: all rows in `memory_turns` are kept indefinitely in v1 (per `04-storage.md` "Retention"). Per-team retention is a Day 2+ concern (backlog #7).
+- **Per-team retention policy**: all rows in `memory_turns` are kept indefinitely in v1 (per `04-storage.md` "Retention"). Per-team retention is a Day 2+ concern.

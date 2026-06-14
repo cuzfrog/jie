@@ -1,8 +1,8 @@
-# ADR 14: Storage Layer Abstractions
+# ADR 12: Storage Layer Abstractions
 
 ## Status
 
-Accepted. Refines `04-artifact-store.md` (now `05-artifact-store.md`) by introducing a generic `Storage` abstraction under the two domain stores.
+Accepted. Introduces a generic `Storage` abstraction under the two domain stores (`ArtifactStore`, `MemoryManager`).
 
 ## Context
 
@@ -37,7 +37,7 @@ interface Storage {
 
 `Storage` is the platform's persistence abstraction. SQL is the contract; a future backend implements the same SQL surface. The default implementation is `SqliteStorage` (`bun:sqlite`-backed).
 
-### Layer 2: Domain stores (sits on `Storage`)
+### Layer 2: Domain stores (sit on `Storage`)
 
 `ArtifactStore` and `MemoryManager` are domain interfaces; their SQLite implementations take a `Storage` reference in their constructor and write SQL at the call site:
 
@@ -71,11 +71,11 @@ export function initializeSchema(storage: Storage): void {
 }
 ```
 
-`SqliteStorage`'s constructor calls `initializeSchema(this)` after opening the connection. Future schema changes append a new versioned migration that advances `PRAGMA user_version`; the function name `initializeSchema` will then become `runMigrations` with the version chain, but v1 has one version and one function. The migrations live in `init-db.ts` (renamed from `migrations.ts` per reviewer direction) — a single file, no `MIGRATIONS` array sprawl.
+`SqliteStorage`'s constructor calls `initializeSchema(this)` after opening the connection. Future schema changes append a new versioned migration that advances `PRAGMA user_version`; the function name `initializeSchema` will then become `runMigrations` with the version chain, but v1 has one version and one function.
 
 ### One Storage instance, multiple domain tables
 
-A single `SqliteStorage` is opened at the platform's `startJie` entry (see ADR 15). One `Storage` reference is shared by both `SqliteArtifactStore` and `SqliteMemoryManager`. The `artifacts` and `memory_turns` tables live in the same DB file (`.jie/artifacts.db`); the file is opened with `PRAGMA journal_mode=WAL` and `PRAGMA busy_timeout=5000` per the existing spec.
+A single `SqliteStorage` is opened at the platform's `startJie` entry (see ADR 13). One `Storage` reference is shared by both `SqliteArtifactStore` and `SqliteMemoryManager`. The `artifacts` and `memory_turns` tables live in the same DB file (`.jie/artifacts.db`); the file is opened with `PRAGMA journal_mode=WAL` and `PRAGMA busy_timeout=5000` per the existing spec.
 
 ### Abstraction is the headline
 
@@ -96,9 +96,4 @@ A single `SqliteStorage` is opened at the platform's `startJie` entry (see ADR 1
 - `packages/jie-platform/storage/init-db.ts` exports `initializeSchema(storage)` — single source of truth for the v1 schema.
 - `packages/jie-platform/storage/artifact-store.ts` exports `ArtifactStore` (interface) and `SqliteArtifactStore` (impl, takes `Storage`).
 - `packages/jie-platform/storage/memory-store.ts` exports `MemoryManager` (interface) and `SqliteMemoryManager` (impl, takes `Storage`).
-- `04-storage.md` (new): the `Storage` abstraction, the `SqliteStorage` default, the `init-db.ts` schema bootstrap. SQLite-as-default is called out in the lead.
-- `04-artifact-store.md` is renamed to `05-artifact-store.md`; its content is reduced to the domain `ArtifactStore` interface and a pointer at `04-storage.md` for the persistence layer.
-- `05-agent-model.md` is renamed to `06-agent-model.md` to make room for `05-artifact-store.md` in numeric order.
-- `08-memory.md` and beyond are unchanged in filename; cross-references to `05-agent-model.md` are updated to `06-agent-model.md`, and to `04-artifact-store.md` are updated to `05-artifact-store.md`.
-- All references to `04-artifact-store.md` in the codebase, the codebase's `addrs/`, and the spec docs are updated.
 - Glossary (`00-overview.md`) gains **Storage** and **Storage Backend** entries; **Memory Store** is renamed to **MemoryManager** for consistency with `08-memory.md`.

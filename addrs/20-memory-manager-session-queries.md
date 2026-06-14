@@ -1,7 +1,8 @@
-# ADR 22: `MemoryManager` Session-Id Queries; `startJie` Resolves `--continue` / `--resume`
+# ADR 20: `MemoryManager` Session-Id Queries; `startJie` Resolves `--continue` / `--resume`
 
 ## Status
-Accepted 2026-06-13. Closes Group 1 of fresh review pass 4.
+
+Accepted. `MemoryManager` exposes the two session-id queries the CLI needs; `startJie` resolves `--continue` / `--resume`.
 
 ## Context
 
@@ -12,7 +13,7 @@ Accepted 2026-06-13. Closes Group 1 of fresh review pass 4.
 
 The `MemoryManager` interface (`08-memory.md`) has only `persist`, `compact`, `restore`. It does not expose these lookups. The existing spec for `--continue` was a vague "single SQL statement against the current CWD's `ArtifactStore`" — but `ArtifactStore` does not expose raw SQL, and the spec is silent on where the query lives.
 
-The fresh review pass 4 surfaced four implementation seams:
+Four implementation seams surfaced:
 
 1. **No query API.** `MemoryManager` lacks the two methods the CLI needs.
 2. **No caller.** The CLI runs before `startJie` constructs the `MemoryManager`. The CLI does not import `MemoryManager` directly; the platform's `startJie` is the lifecycle owner.
@@ -29,7 +30,7 @@ interface MemoryManager {
 
   /** Return the most-recent `session_id` for `team_id` (by MAX(created_at)
    *  over its rows in `memory_turns`), or `null` if no prior session exists.
-   *  Scoped to `team_id` alone (per ADR 19). Used by `jie --continue`. */
+   *  Scoped to `team_id` alone (per ADR 17). Used by `jie --continue`. */
   mostRecentSessionId(team_id: string): string | null;
 
   /** Return `true` if at least one row in `memory_turns` matches
@@ -74,10 +75,6 @@ export interface StartJieOptions {
   mcpServers:  McpServerConfig[];
   resumeSessionId?:     string;        // --resume <id>
   continueLastSession?: boolean;      // --continue
-  // Note: the original ADR 22 also listed `onIdle?: () => void;` here.
-  // That field was removed in ADR 24 (the TUI does not need an idle
-  // callback; it consumes events directly, and the CLI's `-p` mode owns
-  // its own idle gate). The current shape has no `onIdle` field.
 }
 ```
 
@@ -85,7 +82,7 @@ The CLI passes intent; `startJie` does the work. The CLI does not import `Memory
 
 ### 3. `startJie` resolution algorithm
 
-`startJie` constructs a `MemoryManager` (per ADR 15 step 3) and runs the resolution before constructing bodies:
+`startJie` constructs a `MemoryManager` (per ADR 13 step 3) and runs the resolution before constructing bodies:
 
 | Flag set | Action | Failure mode |
 |---|---|---|
@@ -94,7 +91,7 @@ The CLI passes intent; `startJie` does the work. The CLI does not import `Memory
 | Neither | Mint fresh `session_id` (ULID). | n/a |
 | Both | The CLI rejects this combination up front (per `ui/cli.md`); `startJie` does not re-check. | n/a (CLI exits 1) |
 
-The resolved value (or the minted value) is recorded in the handle's `Map<team_id, session_id>` (per ADR 20) and passed to every body in the startup team. The handle's map is `team_id → session_id`; the `--continue` lookup is team-scoped (per ADR 19).
+The resolved value (or the minted value) is recorded in the handle's `Map<team_id, session_id>` (per ADR 18) and passed to every body in the startup team. The handle's map is `team_id → session_id`; the `--continue` lookup is team-scoped (per ADR 17).
 
 ### 4. CLI changes
 
@@ -106,25 +103,19 @@ The resolved value (or the minted value) is recorded in the handle's `Map<team_i
 
 ## Rationale
 
-- **One owner of session-id state.** The handle's `Map<team_id, session_id>` is the canonical source (per ADR 20). The CLI is a thin caller; the platform owns the lifecycle. Putting the queries on `MemoryManager` (a platform type) and the resolution in `startJie` (the platform's lifecycle entry) keeps the schema knowledge inside the platform package.
+- **One owner of session-id state.** The handle's `Map<team_id, session_id>` is the canonical source (per ADR 18). The CLI is a thin caller; the platform owns the lifecycle. Putting the queries on `MemoryManager` (a platform type) and the resolution in `startJie` (the platform's lifecycle entry) keeps the schema knowledge inside the platform package.
 - **CLI is interface-stable.** The CLI's `jie --continue` / `jie --resume <id>` user-facing flags are unchanged. The implementation shifts from "CLI opens a separate `Storage` and runs SQL inline" (fragile, leaks schema) to "CLI passes intent to `startJie`, which owns the work" (clean).
-- **`startJie` is already the failure-exit point.** Per `09-deployment.md` "Startup Sequence" and ADR 15, `startJie` runs the full startup sequence and exits 1 on hard failures (model pre-check, team not found, agent load failure). Adding `--resume` validation to that list is consistent; the user-visible error message is unchanged.
-- **Index supports both queries.** `idx_memory_turns_team_session_created` (added in ADR 19) already exists for the `--continue` aggregate; the primary key already supports the `--resume` validation seek. No new index is needed.
+- **`startJie` is already the failure-exit point.** Per `09-deployment.md` "Startup Sequence" and ADR 13, `startJie` runs the full startup sequence and exits 1 on hard failures (model pre-check, team not found, agent load failure). Adding `--resume` validation to that list is consistent; the user-visible error message is unchanged.
+- **Index supports both queries.** `idx_memory_turns_team_session_created` (added in ADR 17) already exists for the `--continue` aggregate; the primary key already supports the `--resume` validation seek. No new index is needed.
 - **Methods are pure reads.** Neither `mostRecentSessionId` nor `hasSession` mutates state. They are safe to call from any caller; no transaction or ordering constraints.
 
 ## Consequences
 
 - `08-memory.md` "MemoryManager" interface gains the two methods; `SqliteMemoryManager` documents the implementations.
 - `08-memory.md` "Restore" notes (and `06-agent-model.md` "Integration with pi-agent" "Restore" note) clarify that `startJie` does the resolution, not the body.
-- `addrs/15-platform-entry-function.md` `StartJieOptions` interface gains `continueLastSession?: boolean`; the `startJie` step 2 is expanded to "construct a `MemoryManager` from `Storage`; resolve `--continue` / `--resume` per ADR 22; record in the handle's session map".
-- `09-deployment.md` "Startup Sequence" step 7 (`Instantiate InProcessEventBus and the MemoryManager per body`) becomes: "Construct a `MemoryManager` from the open `Storage`. If `continueLastSession` is set, run `mostRecentSessionId(team_id)`; if `resumeSessionId` is set, validate via `hasSession(team_id, resumeSessionId)`; record the resolved value in the handle's `Map<team_id, session_id>` (per ADR 20). Construct per-body `MemoryManager` instances sharing the same `Storage`; each body closes over its `session_id` from the handle."
+- ADR 13 `StartJieOptions` interface gains `continueLastSession?: boolean`; the `startJie` step 2 is expanded to "construct a `MemoryManager` from `Storage`; resolve `--continue` / `--resume` per ADR 20; record in the handle's session map".
+- `09-deployment.md` "Startup Sequence" step 7 (`Instantiate InProcessEventBus and the MemoryManager per body`) becomes: "Construct a `MemoryManager` from the open `Storage`. If `continueLastSession` is set, run `mostRecentSessionId(team_id)`; if `resumeSessionId` is set, validate via `hasSession(team_id, resumeSessionId)`; record the resolved value in the handle's `Map<team_id, session_id>` (per ADR 18). Construct per-body `MemoryManager` instances sharing the same `Storage`; each body closes over its `session_id` from the handle."
 - `ui/cli.md` `jie --continue` / `jie --resume` flows are rewritten to pass intent via `StartJieOptions`; the "single SQL statement" prose is replaced with the `startJie` delegation. The user-visible behavior (including error messages) is unchanged.
 - `06-agent-model.md` "AgentBody" class signature is unchanged — bodies still receive `session_id` from the handle, not from the CLI.
-- Out of scope (deferred): cross-team `--resume` (resuming a session from a different team). `--resume` is team-scoped by the `hasSession` query; cross-team resume silently returns `false` and exits 1. This is consistent with the existing spec and ADR 19.
+- Out of scope (deferred): cross-team `--resume` (resuming a session from a different team). `--resume` is team-scoped by the `hasSession` query; cross-team resume silently returns `false` and exits 1. This is consistent with the existing spec and ADR 17.
 - Out of scope (deferred): `--continue` resolution at team-swap time (i.e., resuming a different session for a swap-loaded team). The handle's session map is the runtime source; `--continue` is a startup-time override only. Day 2+ may add a slash command.
-
-## References
-
-- Closes Group 1 of fresh review pass 4 (`review-tracker.md`).
-- Modifies: `08-memory.md` (interface, restore), `06-agent-model.md` (pi-agent integration), `09-deployment.md` (startup sequence), `ui/cli.md` (CLI flows), `addrs/15-platform-entry-function.md` (StartJieOptions).
-- Depends on: ADR 19 (memory turns team-scoped — the index that supports `--continue`), ADR 20 (per-team session id, handle's map).

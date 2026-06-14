@@ -17,7 +17,7 @@ Tool telemetry events (`agent.tool.call`, `agent.tool.result`) and domain events
 
 ## Agent Status (in TUI)
 
-The TUI derives agent status from the following (after ADR 24 — the body no longer publishes `agent.idle` at startup; the boot signal is `{team_id}.team.loaded`):
+The TUI derives agent status from the following (after ADR 22 — the body no longer publishes `agent.idle` at startup; the boot signal is `{team_id}.team.loaded`):
 
 | TUI display | Derived from |
 |---|---|

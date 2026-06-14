@@ -1,14 +1,14 @@
-# ADR 24: Event-Order Contract; Drop Startup `agent.idle`; New `team.loaded` Event; CLI Owns the Idle Gate
+# ADR 22: Event-Order Contract; Drop Startup `agent.idle`; New `team.loaded` Event; CLI Owns the Idle Gate
 
 ## Status
 
-Accepted 2026-06-14. Reverses ADR 13 §3 (J6) for the `agent.idle` startup publish. Captures four interrelated decisions that stem from one principle: the platform is event-driven; consumers compose their own wait logic; the handle is not the owner of "is the work done?".
+Accepted. Captures four interrelated decisions that stem from one principle: the platform is event-driven; consumers compose their own wait logic; the handle is not the owner of "is the work done?".
 
 ## Context
 
-After Pass 4 (ADRs 22, 23), Pass 5 (`onUpdate` plumbing, `JieHandle.swapTeam` removal, etc.), Pass 6, and Pass 7 (5 spec-precision fixes), the platform's lifecycle and event surface were stable. The fresh review pass on 2026-06-14 surfaced four intertwined items:
+Four intertwined items surfaced in review:
 
-1. **The body publishes `agent.idle` at startup** (per ADR 13 §3 — J6). This was the TUI's agents-panel-at-boot anchor. But it conflates two distinct signals: "this agent exists, currently idle" (startup) and "this agent transitioned busy→idle" (end of turn). An agent that has not yet processed any turn is, by definition, idle — no event is needed to advertise that.
+1. **The body publishes `agent.idle` at startup** (the prior decision). This was the TUI's agents-panel-at-boot anchor. But it conflates two distinct signals: "this agent exists, currently idle" (startup) and "this agent transitioned busy→idle" (end of turn). An agent that has not yet processed any turn is, by definition, idle — no event is needed to advertise that.
 
 2. **No event announces a team's roster.** The TUI derives "agent is alive" from `agent.idle` at startup. With the startup publish removed, the TUI loses its anchor. A clean announcement event is needed.
 
@@ -22,7 +22,7 @@ The four items resolve together. This ADR groups them.
 
 ### 1. Body's `start()` no longer publishes `agent.idle`
 
-The body publishes `agent.idle` only on `agent_end`. A body that has not yet processed any turn has published no events; observers treat it as **idle by default**. This **reverses ADR 13 §3 (J6)**.
+The body publishes `agent.idle` only on `agent_end`. A body that has not yet processed any turn has published no events; observers treat it as **idle by default**.
 
 The boot signal moves to the new `team.loaded` event (Decision 2). The TUI's agents-panel-at-boot story is preserved by the new event, not by per-body `agent.idle`.
 
@@ -114,7 +114,7 @@ The event-order contract is what makes option B correct. The contract is recorde
 
 ## Rationale
 
-- **The platform is event-driven; consumers compose.** The `JieHandle` is a lifecycle object, not a "is the work done?" service. The TUI does not need `waitForIdle` (it runs continuously with the runtime and consumes events). The CLI is the only one-shot consumer and owns its own wait. This matches the principle in `addrs/15-platform-entry-function.md`: the handle owns lifecycle; consumers compose primitives.
+- **The platform is event-driven; consumers compose.** The `JieHandle` is a lifecycle object, not a "is the work done?" service. The TUI does not need `waitForIdle` (it runs continuously with the runtime and consumes events). The CLI is the only one-shot consumer and owns its own wait. This matches the principle in `addrs/13-platform-entry-function.md`: the handle owns lifecycle; consumers compose primitives.
 
 - **Default state is idle; events announce transitions.** Publishing `agent.idle` at startup is redundant — the body has not yet processed any turn, so it is idle by definition. Removing the startup publish eliminates a class of "what does the startup event mean?" ambiguity. The TUI's agents-panel-at-boot story is preserved by the new `team.loaded` event, which has a clean, distinct semantic: "these agents are now part of the team".
 
@@ -124,13 +124,12 @@ The event-order contract is what makes option B correct. The contract is recorde
 
 - **The bus's in-order delivery is the v1 guarantee.** The `InProcessEventBus` dispatches synchronously in publish order. The per-body `seq` is a Day-2 concern for NATS, not a v1 implementation detail. Recording it as a Day-2 backlog item (not a v1 ADR-grade change) is the right call.
 
-- **The contract is recorded in two places, not one.** The ADR explains *why* the contract exists and the decisions that depend on it. The spec doc (`03-event-system.md`) is the normative source for the contract itself. This matches the pattern of ADR 15 + `09-deployment.md` Startup Sequence: the ADR is the decision; the spec is the procedure.
+- **The contract is recorded in two places, not one.** The ADR explains *why* the contract exists and the decisions that depend on it. The spec doc (`03-event-system.md`) is the normative source for the contract itself.
 
 ## Consequences
 
-- `addrs/13-agentbody-runtime-mechanisms.md` — J6 reversed. Body's `start()` no longer publishes `agent.idle`. Amendment note added.
-- `addrs/15-platform-entry-function.md` — `JieHandle` interface drops `waitForIdle`. `StartJieOptions` drops `onIdle`. Handle publishes `{team_id}.team.loaded` in `startJie` (after all `body.start()`) and in `loadTeam`. Amendment history updated.
-- `addrs/21-multi-team-coexistence.md` — `team.loaded` is one-shot per `loadTeam`; not republished on swap-back. The previously-active team is not stopped; the new team's `team.loaded` fires for the new team only.
+- ADR 13 — `JieHandle` interface drops `waitForIdle`. `StartJieOptions` drops `onIdle`. Handle publishes `{team_id}.team.loaded` in `startJie` (after all `body.start()`) and in `loadTeam`.
+- ADR 19 — `team.loaded` is one-shot per `loadTeam`; not republished on swap-back. The previously-active team is not stopped; the new team's `team.loaded` fires for the new team only.
 - `03-event-system.md` — Subject Schema: add `{team_id}.team.loaded`; tighten `agent.idle` row. "Agent Idle" section: rewrite (no startup `agent.idle`; boot signal is `team.loaded`). New section "Event-Order Contract" with both pieces and the Day-2 NATS note.
 - `06-agent-model.md` — `AgentBody.start()` ordering drops the `agent.idle` publish. "Event Bridging" notes the alternation under `turn_start` and `agent_end` rows.
 - `09-deployment.md` — Startup Sequence step 8/9: handle publishes `team.loaded` after all `body.start()` calls. "Graceful Shutdown" notes that `stop()` is the only lifecycle primitive with internal "bodies settled" bookkeeping; the CLI does not consume it.
@@ -139,10 +138,3 @@ The event-order contract is what makes option B correct. The contract is recorde
 - `11-monitoring.md` — "Agent Status" table rewrite: alive = `team.loaded`; busy = `turn_start` (or recent stream/tool activity); idle = default + no `turn_start` observed yet, or `agent.idle` with no subsequent `turn_start`.
 - `backlog.md` — new item: "Day-2 NATS per-body `seq` for cross-subject reorder protection".
 - All cross-references to "the body publishes `agent.idle` at startup" are removed. The TUI's agents-panel-at-boot story moves to `team.loaded`.
-
-## References
-
-- Reverses ADR 13 §3 (J6).
-- Modifies ADR 15 (handle interface) and ADR 21 (multi-team coexistence).
-- Cited by `03-event-system.md` (normative), `06-agent-model.md` (operational), `ui/cli.md` (consumer), `ui/tui.md` (consumer), `09-deployment.md` (deployment), `11-monitoring.md` (monitoring).
-- Closes the fresh review pass on 2026-06-14: critical gap (`waitForIdle` semantics at startup), `team.loaded` event, event-order contract, `waitForIdle` removed from handle. Eight smaller spec-precision gaps (loadTeam pre-check, web_fetch binary, read_file offset, --api-key position, file modes, TUI roles timing, queue-pickup flicker, artifacts.db corruption) folded in the same pass.

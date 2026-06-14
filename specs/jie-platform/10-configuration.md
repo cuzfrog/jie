@@ -126,10 +126,10 @@ If both project-local and global copies exist, project wins (matches the lookup 
 
 ### Team Swap (TUI)
 
-`/team <id>` (and `/team` followed by selection in the picker) takes effect immediately in the running TUI session. The TUI is a passive observer; swap is a view change, not a body-lifecycle change (per ADR 21):
+`/team <id>` (and `/team` followed by selection in the picker) takes effect immediately in the running TUI session. The TUI is a passive observer; swap is a view change, not a body-lifecycle change (per ADR 19):
 
 1. The TUI consults `JieHandle.loadedTeams` (per `addrs/15-platform-entry-function.md`). If the team is already loaded, no body-lifecycle work happens — the team is alive, the TUI just wasn't watching.
-2. If the team is not loaded, the platform calls `JieHandle.loadTeam(teamId)`: parse the blueprint per "Team Selection" rules (steps 1–4); resolve each `AgentSoul.model`; construct bodies; register them on the bus; record them in `loadedTeams`. The `JieHandle`'s in-memory `Map<team_id, session_id>` (`08-memory.md` and ADR 20) is consulted for the new team's `team_id`: if the team was previously active in this process, the recorded `session_id` is passed to each new body; the body uses it and `restore()` returns the prior `memory_turns` rows. If the team is new in this process, the handle mints a fresh `session_id`, records it under the team's `team_id`, and passes it to each new body. All agents in the new team share this session id. The handle's map is in-memory only and is lost on process exit (per `08-memory.md` "Restore").
+2. If the team is not loaded, the platform calls `JieHandle.loadTeam(teamId)`: parse the blueprint per "Team Selection" rules (steps 1–4); resolve each `AgentSoul.model`; construct bodies; register them on the bus; record them in `loadedTeams`. The `JieHandle`'s in-memory `Map<team_id, session_id>` (`08-memory.md` and ADR 18) is consulted for the new team's `team_id`: if the team was previously active in this process, the recorded `session_id` is passed to each new body; the body uses it and `restore()` returns the prior `memory_turns` rows. If the team is new in this process, the handle mints a fresh `session_id`, records it under the team's `team_id`, and passes it to each new body. All agents in the new team share this session id. The handle's map is in-memory only and is lost on process exit (per `08-memory.md` "Restore").
 3. The TUI re-renders: it now subscribes to `{active_team_id}.leader.prompt` for prompt publication and filters platform events by the active team's `team_id` (from the envelope). Tabs/panels for the new team's agents appear via the existing "Agent Discovery" primitives. Every prior team's conversation history is retained for the lifetime of the process run; switching back to a previously-active team restores its conversation in full (the recorded `session_id` is reused, the in-memory event buffer is preserved per the TUI's per-`(team_id, agent_key)` event log).
 4. **The previously-active team is not stopped or destroyed.** Its bodies keep their state — `memory_turns` rows, in-memory prompt queue, LLM context, in-progress work. The TUI just stops publishing prompts to that team's prompt topic. The team's agents continue processing any queued prompts autonomously; the TUI just isn't watching.
 
@@ -179,9 +179,9 @@ A consolidated view of the platform's hard caps and charsets. These are not user
 | Tool telemetry input / output truncation | **4 KiB** middle-truncated | `agent.tool.call`, `agent.tool.result` event payloads (LLM conversation is untruncated) | `06-agent-model.md` |
 | Tool default timeout | **120 s** | All tools unless overridden; combined with pi-agent's signal via `AbortSignal.any` | `06-agent-model.md` "Tool" |
 | `bash` timeout | **300 s** | `bash` (per invocation; SIGTERM then SIGKILL) | `06-agent-model.md` |
-| `session_id` length | **26 chars** (ULID via `ulid@2.3.0`) | Per-team session id; per `addrs/15-platform-entry-function.md` and ADR 20 | `08-memory.md`, `addrs/15` |
+| `session_id` length | **26 chars** (ULID via `ulid@2.3.0`) | Per-team session id; per `addrs/13-platform-entry-function.md` and ADR 18 | `08-memory.md`, `addrs/13` |
 | `team_id` charset | `[A-Za-z0-9_-]{1,32}` | `defaultTeam` in `settings.json`, `--team` flag, team-blueprint loader; loader hard-fails on non-conforming directory names with `invalid team_id: <value>` (spaces and special chars rejected) | `10-configuration.md` (this doc), `06-agent-model.md` |
-| Agent role (filename stem) charset | `[A-Za-z0-9_-]{1,64}` | Team-blueprint loader validates the `.md` filename stem; hard-fails on non-conforming stems with `invalid role: <stem>` (spaces and special chars rejected). The `agent_key = {role}-{N}` is therefore constrained. | `06-agent-model.md`, ADR 18 |
+| Agent role (filename stem) charset | `[A-Za-z0-9_-]{1,64}` | Team-blueprint loader validates the `.md` filename stem; hard-fails on non-conforming stems with `invalid role: <stem>` (spaces and special chars rejected). The `agent_key = {role}-{N}` is therefore constrained. | `06-agent-model.md`, ADR 16 |
 | `notify` `topic` constraints | non-empty, not starting with `agent.`, not starting with `{team_id}.`, no null / control chars | `notify` tool validation | `06-agent-model.md` |
 | `subscribe:` topic constraints | not starting with `agent.` (rejected with `subscribe_rejects_platform_topic`) | Team-blueprint loader | `06-agent-model.md` |
 | `subscribe:` wildcards | not interpreted in v1 (exact-match subject only) | Team-blueprint loader | `06-agent-model.md` |
@@ -216,7 +216,7 @@ The platform never fails on "no teams available": the built-in minimal team is t
 
 ## MCP Server Configuration
 
-> **Day 2.** Per ADR 17, MCP client integration is **not in v1 MVP**. The platform's `startJie` does not load `mcp.json` in v1. The schema below is forward-looking; it is the design that ships when the MCP client lands. The `ToolRegistry`'s `mcp:<server>:<tool>` and `mcp:<server>:*` spec syntax returns zero matches in v1, so an agent `.md` that lists MCP tools fails the cascade-policy startup check.
+> **Day 2.** Per ADR 15, MCP client integration is **not in v1 MVP**. The platform's `startJie` does not load `mcp.json` in v1. The schema below is forward-looking; it is the design that ships when the MCP client lands. The `ToolRegistry`'s `mcp:<server>:<tool>` and `mcp:<server>:*` spec syntax returns zero matches in v1, so an agent `.md` that lists MCP tools fails the cascade-policy startup check.
 
 MCP servers are configured in `.jie/mcp.json` (project-level; `~/.jie/mcp.json` for global defaults). The project file is discovered by walking up from CWD to find `.jie/`. The platform connects to every listed server at startup, fetches tool catalogs, and registers tools into `ToolRegistry`.
 
@@ -244,7 +244,7 @@ MCP servers are configured in `.jie/mcp.json` (project-level; `~/.jie/mcp.json` 
 | `command` | string | Required for stdio transport. |
 | `args` | string[] | Optional. Arguments to the stdio command. |
 | `url` | string | Required for http transport. |
-| `auth.token_env` | string | Optional. Name of an env var containing a bearer token. **This is the MCP server's auth token, not the LLM provider's API key** — `auth.json` is the sole LLM credential source in v1 (per ADR 23); the no-env-var rule does not apply to MCP server auth. |
+| `auth.token_env` | string | Optional. Name of an env var containing a bearer token. **This is the MCP server's auth token, not the LLM provider's API key** — `auth.json` is the sole LLM credential source in v1 (per ADR 21); the no-env-var rule does not apply to MCP server auth. |
 
 The TypeScript type consumed by the platform (per `StartJieOptions.mcpServers` in `addrs/15-platform-entry-function.md`):
 
@@ -268,7 +268,7 @@ export interface McpConfig {
 }
 ```
 
-The `McpServerConfig` field-validity rules (`command` required for stdio, `url` required for http) are enforced by the MCP client when it reads the config at startup; the type itself permits either field to be absent because the discriminator is `transport`. A stdio entry with `url` set (or vice versa) is silently ignored at the field level — the client only reads the field it expects for the transport. In v1 (per ADR 17) the platform does not load `mcp.json`; the type is declared for forward compatibility.
+The `McpServerConfig` field-validity rules (`command` required for stdio, `url` required for http) are enforced by the MCP client when it reads the config at startup; the type itself permits either field to be absent because the discriminator is `transport`. A stdio entry with `url` set (or vice versa) is silently ignored at the field level — the client only reads the field it expects for the transport. In v1 (per ADR 15) the platform does not load `mcp.json`; the type is declared for forward compatibility.
 
 ### Resolution
 
@@ -291,7 +291,7 @@ If an agent's `.md` `tools:` list references a tool that cannot be resolved (e.g
 - Tool resolution failure inside an agent → hard (the team's `loadTeam` fails).
 - **Model resolution failure** (any agent's `model:` cannot be resolved — no `model:` in `.md`, and the merged `settings.json` does not provide a resolvable default) → hard (the team's `loadTeam` fails) with the same error message as `startJie`'s pre-check: "No model has been selected, please login and select a default model." The TUI displays the error in the input area; the previously-active team keeps running.
 
-Per-team scope (per ADR 21): a team whose blueprint depends on a missing tool or missing model fails fast with a precise error. Other loaded teams continue running unaffected. The CLI / TUI surfaces the failure to the user; the user can either fix the blueprint, install the missing tool, or switch to a different team. In v1 (no MCP), the only tools available are the built-ins, so an agent `.md` listing `mcp:*` tools fails the cascade check.
+Per-team scope (per ADR 19): a team whose blueprint depends on a missing tool or missing model fails fast with a precise error. Other loaded teams continue running unaffected. The CLI / TUI surfaces the failure to the user; the user can either fix the blueprint, install the missing tool, or switch to a different team. In v1 (no MCP), the only tools available are the built-ins, so an agent `.md` listing `mcp:*` tools fails the cascade check.
 
 ## LLM Provider Configuration
 
@@ -309,13 +309,13 @@ JSON, single location (`~/.jie/auth.json`), file mode `0600`. The schema mirrors
 }
 ```
 
-The schema is whatever `@earendil-works/pi-ai`'s `FileAuthStorageBackend` writes — Jie does not redefine it. In v1 the `key` field is a plain string (no `!cmd` interpolation, no `$ENV_VAR` expansion; per ADR 23). OAuth tokens (anthropic, openai-codex, github-copilot) are stored here after `jie login` and refreshed automatically by pi-ai at call time.
+The schema is whatever `@earendil-works/pi-ai`'s `FileAuthStorageBackend` writes — Jie does not redefine it. In v1 the `key` field is a plain string (no `!cmd` interpolation, no `$ENV_VAR` expansion; per ADR 21). OAuth tokens (anthropic, openai-codex, github-copilot) are stored here after `jie login` and refreshed automatically by pi-ai at call time.
 
 The CLI mutates `auth.json` via `jie login` and `jie logout`. The file is not edited by hand in v1; `jie login` is the supported entry point.
 
 ### Credentials Resolution Order
 
-For a given provider, credentials resolve in this order at call time (per ADR 23 — v1 has **no environment-variable fallback**; `auth.json` is the sole credential source):
+For a given provider, credentials resolve in this order at call time (per ADR 21 — v1 has **no environment-variable fallback**; `auth.json` is the sole credential source):
 
 | Order | Source | Notes |
 |---|---|---|
@@ -342,7 +342,7 @@ A model's `(provider, modelId)` tuple is resolved at startup, before any `AgentS
 
 The platform delegates the per-provider fallback in step3 to `pi-ai`'s built-in `defaultModelPerProvider` table. Jie does not maintain its own default-model table; if `pi-ai` ships an updated default for a provider, Jie inherits it on the next release with no spec change.
 
-`AgentSoul.model` is still a required field at the *type* level — it just may be inherited from settings rather than declared in the agent's `.md`. The startup pre-check (run by `startJie` during team construction) guarantees that by the time an `AgentSoul` is constructed, `soul.model` is a non-empty `<provider>/<modelId>` string. The platform's `getApiKey(provider)` resolver returns the entry from `auth.json` for the resolved provider (per ADR 23); pi-ai's `getEnvApiKey` is no longer used.
+`AgentSoul.model` is still a required field at the *type* level — it just may be inherited from settings rather than declared in the agent's `.md`. The startup pre-check (run by `startJie` during team construction) guarantees that by the time an `AgentSoul` is constructed, `soul.model` is a non-empty `<provider>/<modelId>` string. The platform's `getApiKey(provider)` resolver returns the entry from `auth.json` for the resolved provider (per ADR 21); pi-ai's `getEnvApiKey` is no longer used.
 
 `startJie` also performs the per-agent model pre-check (see `06-agent-model.md` "Startup Pre-Check"): if any agent fails to resolve a `(provider, modelId)` against the merged settings, startup fails with one error listing every unresolved agent.
 

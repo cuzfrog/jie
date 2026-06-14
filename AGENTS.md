@@ -12,8 +12,7 @@
 ## Architecture
 - @specs/monorepo-structure.md
 - read `00-overview.md` in the dir you will work with to understand the glossary.
-- architectural decision records are in `./addrs/`
-- past reviews in `./past-reviews`, before creating new issues, scan this to prevent duplication, you should compact or remove obsolete entries.
+- architectural decision records are in `./addrs/`. Each ADR is the source of truth for a consequential decision; the spec docs reflect the decisions.
 
 ### jie-platform
 - agents do not directly know each other, they talk via events on an event bus.

@@ -1,19 +1,19 @@
-# ADR 16: Built-in Minimal Team as Manifest Files
+# ADR 14: Built-in Minimal Team as Manifest Files
 
 ## Status
 
-Accepted. Replaces the "hardcoded TypeScript constant" form of the built-in minimal team (per `addrs/12-jie-platform-agnostic-of-jie-team.md` Decision §3) with two `.md` manifest files, format-consistent with user teams, loaded at module-load time via `import` attributes.
+Accepted. The platform ships a built-in minimal team as two `.md` manifest files, format-consistent with user teams, loaded at module-load time via `import` attributes.
 
 ## Context
 
-ADR 12 §3 decided that the platform ships a hardcoded built-in minimal team as a TypeScript constant in `packages/jie-platform/team/built-in/minimal-team.ts`. The rationale was: "a TypeScript constant, not a `.md` file" — making the platform agnostic of any `.md` parser at the built-in level.
+ADR 11 §3 (the prior version of this ADR's decision section) decided that the platform ships a hardcoded built-in minimal team as a TypeScript constant in `packages/jie-platform/team/built-in/minimal-team.ts`. The rationale was: "a TypeScript constant, not a `.md` file" — making the platform agnostic of any `.md` parser at the built-in level.
 
-This works, but has two consequences that a pre-implementation review surfaced as worth fixing:
+This works, but has two consequences worth fixing:
 
 1. **Two code paths in the team loader.** The user-team path parses `TEAM.md + *.md` from a directory. The built-in path returns a TypeScript constant. The "one code path" property the rest of the loader assumes is broken: a future change to the manifest format (e.g. a new frontmatter field) has to be made in two places.
 2. **The built-in is a different format than user teams.** The team format is `.md` (per ADR 3). The built-in is `.ts` (a JS object literal). A user looking at the platform's source to understand "what does a team look like?" finds a TypeScript object literal, not a `.md` file. This contradicts the declarative-blueprint story ADR 3 told.
 
-A pre-implementation review also surfaced the natural runtime-resolution path: the built-in's `.md` content can be bound to a string at module-load time using `import ... with { type: 'text' }` (TC39 import attributes, shipped in bun ≥ 1.3). This avoids the `import.meta.url` + `path.join` + `fs.readFileSync` dance that the alternative "load from a known path" approach would require, and works the same way in the monorepo and after `bun install -g`.
+The natural runtime-resolution path: the built-in's `.md` content can be bound to a string at module-load time using `import ... with { type: 'text' }` (TC39 import attributes, shipped in bun ≥ 1.3). This avoids the `import.meta.url` + `path.join` + `fs.readFileSync` dance that the alternative "load from a known path" approach would require, and works the same way in the monorepo and after `bun install -g`.
 
 ## Decision
 
@@ -101,7 +101,7 @@ The "always has a runnable team" guarantee (per `12-installation.md` "First-Run 
 
 ### Why `import` attributes (not `import.meta.url`)
 
-The reviewer raised `import.meta.url` + `new URL('./minimal/TEAM.md', import.meta.url)` as one path. Two reasons not to use it:
+Two reasons not to use `import.meta.url`:
 
 1. **The bytes can be bound at module-load time.** `with { type: 'text' }` is bun's and Node's modern way to import a file as a string. The path is resolved by the runtime's module resolver — the same code that resolves `import x from './foo.js'`. The platform's code never has to do filesystem lookup for the built-in.
 2. **`import.meta.url` requires a `fileURLToPath` + `path.join` dance** that breaks subtly across symlinks, Windows, and `bun install -g` install locations. `import` attributes avoid all of that.
@@ -117,7 +117,5 @@ The reviewer raised `import.meta.url` + `new URL('./minimal/TEAM.md', import.met
 
 - `packages/jie-platform/team/minimal/TEAM.md` and `team/minimal/general.md` exist as plain `.md` files in the platform's source tree.
 - `packages/jie-platform/team/loader.ts` exports `parseTeamFromManifests`, `loadTeamFromDir`, and `loadMinimalTeam`. The two `.md` strings are imported via `with { type: 'text' }` at the top of the file.
-- `addrs/12-jie-platform-agnostic-of-jie-team.md` Decision §3 is amended: "TypeScript constant" → "two `.md` files at `team/minimal/`, loaded at module-load time via import attributes". The "last-resort fallback" semantics are unchanged.
-- `minimal-team.md` spec is updated to describe the built-in as a `.md`-files + loader pairing (instead of a TypeScript constant), and to point at the import-attribute mechanism in `team/loader.ts`.
-- The built-in is no longer "different from user teams" — both are `.md` files parsed by the same function. A user copying the built-in's `.md` files to `~/.jie/teams/minimal/` overrides the built-in transparently (per ADR 12 §3's "user-installable override" property), and the override is now byte-for-byte the same format.
-- The `monorepo-structure.md` description of `team/` is updated: it no longer has a `built-in/` subdir; it has `loader.ts` plus the `minimal/` directory of `.md` files.
+- The built-in is no longer "different from user teams" — both are `.md` files parsed by the same function. A user copying the built-in's `.md` files to `~/.jie/teams/minimal/` overrides the built-in transparently, and the override is byte-for-byte the same format.
+- The `monorepo-structure.md` description of `team/` is updated: it has `loader.ts` plus the `minimal/` directory of `.md` files.

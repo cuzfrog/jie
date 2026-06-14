@@ -6,7 +6,7 @@ A soul declares an agent's behavioral profile. Souls are derived from the team b
 
 ```typescript
 interface AgentSoul {
-  role:            string;      // agent identifier — the agent's .md filename stem (canonical, see ADR 18)
+  role:            string;      // agent identifier — the agent's .md filename stem (canonical, see ADR 16)
   model:           string;      // '<provider>/<model_id>', split on first '/', resolved via pi-ai's getModel(provider, modelId)
   system_prompt:   string;      // prose body of the agent's .md file
   tools:           ToolSpec[];  // from frontmatter `tools`, resolved through ToolRegistry
@@ -65,7 +65,7 @@ The team blueprint lives at `.jie/teams/<team_name>/`:
   worker_b.md
 ```
   
-The `jie-team` package ships a concrete blueprint with 6 roles (DM, Researcher, Architect, Planner, Implementer, Reviewer). See the `jie-team` package documentation for the role definitions.
+
 
 ### TEAM.md
 
@@ -112,9 +112,9 @@ When you finish, call `notify('task.researched', '...')` to signal completion.
 |---|---|---|
 | `model` | no | `<provider>/<model_id>` string. Split on first `/` → `getModel(provider, modelId)` via pi-ai. If absent, inherited from the user's global default at startup (see `10-configuration.md` "Model Resolution"). |
 | `tools` | yes | list of tool spec strings. Resolved through `ToolRegistry` at load time. |
-| `subscribe` | no | list of domain topic strings this agent listens to (in addition to its auto-subscriptions). **Each string is a complete subject — exact match only; wildcards are not interpreted in v1.** If absent, the agent has no domain subscriptions — only `{agent_key}` (every agent) and `leader.prompt` (leader only). The leader for example omits this field; the built-in minimal team's `general` agent omits it too. For dynamic-topic flows (e.g. `task.${id}.done`), design around static topic names with the id in the payload. The platform prefixes `{team_id}.` at body construction (per ADR 21); team-blueprint authors see the un-scoped names. **Platform topics are not allowed in `subscribe:`** — the team-blueprint loader rejects any `subscribe:` entry that starts with `agent.` (the platform-event prefix) with the error `subscribe_rejects_platform_topic: <topic>` (cites the offending topic), and the team fails to start. The platform manages the isolation; team authors do not need to know which subjects are platform events, and a topic that starts with `agent.` in `subscribe:` is always a mistake. The platform subjects themselves (`agent.stream.chunk`, `agent.idle`, etc.) are observer-only and are not consumed by agents — see `03-event-system.md` "Subject Schema". |
+| `subscribe` | no | list of domain topic strings this agent listens to (in addition to its auto-subscriptions). **Each string is a complete subject — exact match only; wildcards are not interpreted in v1.** If absent, the agent has no domain subscriptions — only `{agent_key}` (every agent) and `leader.prompt` (leader only). The leader for example omits this field; the built-in minimal team's `general` agent omits it too. For dynamic-topic flows (e.g. `task.${id}.done`), design around static topic names with the id in the payload. The platform prefixes `{team_id}.` at body construction (per ADR 19); team-blueprint authors see the un-scoped names. **Platform topics are not allowed in `subscribe:`** — the team-blueprint loader rejects any `subscribe:` entry that starts with `agent.` (the platform-event prefix) with the error `subscribe_rejects_platform_topic: <topic>` (cites the offending topic), and the team fails to start. The platform manages the isolation; team authors do not need to know which subjects are platform events, and a topic that starts with `agent.` in `subscribe:` is always a mistake. The platform subjects themselves (`agent.stream.chunk`, `agent.idle`, etc.) are observer-only and are not consumed by agents — see `03-event-system.md` "Subject Schema". |
 
-The role identifier is the `.md` filename stem — there is no `name:` frontmatter override (see ADR 18). The directory must not contain two `.md` files with the same stem (the loader treats duplicate stems as a parse-time error).
+The role identifier is the `.md` filename stem — there is no `name:` frontmatter override (see ADR 16). The directory must not contain two `.md` files with the same stem (the loader treats duplicate stems as a parse-time error).
 
 **Prose body** → `AgentSoul.system_prompt`. Provided to the LLM as the system message.
 
@@ -128,7 +128,7 @@ The team-blueprint loader validates the manifest format during `startJie`'s team
 | `tools:` field is missing on an agent `.md` | `missing required field 'tools' in <file>` |
 | The team directory's name (`team_id`) does not match `[A-Za-z0-9_-]{1,32}` | `invalid team_id: <value>` (charset per `10-configuration.md` "Platform Limits"; spaces and special chars are rejected) |
 | An agent `.md` filename stem (the role) does not match `[A-Za-z0-9_-]{1,64}` | `invalid role: <stem>` (charset per `10-configuration.md` "Platform Limits"; spaces and special chars are rejected) |
-| Two `.md` files in the team directory share the same stem (per ADR 18) | `duplicate role '<stem>' in <team_dir>` |
+| Two `.md` files in the team directory share the same stem (per ADR 16) | `duplicate role '<stem>' in <team_dir>` |
 | `TEAM.md` is missing for a multi-agent team (≥2 `.md` files in the directory but no `TEAM.md`) | `TEAM.md is required for multi-agent teams; no leader can be resolved (found <N> agent files in <team_dir>)` |
 | `TEAM.md` is present but its `leader:` field is missing, empty, or not a string (e.g. empty frontmatter, or `leader:` with no value) | `TEAM.md 'leader' field is required (found no value in <team_dir>)` |
 | `TEAM.md` is present but its `leader:` field references a role stem that has no matching `.md` file | `TEAM.md 'leader' field references unknown role '<stem>'; checked <team_dir>/` |
@@ -159,7 +159,7 @@ This is a hard fail — no partial startup, no agent constructed. `startJie` doe
 
 ### Platform Auto-Wiring
 
-After parsing, the platform constructs `AgentSoul` instances with auto-computed subscriptions. The team's view is **unscoped**; the platform prefixes `{team_id}.` at body construction (per `03-event-system.md` "Subject Schema" and ADR 21). Every agent auto-subscribes to `{team_id}.{agent_key}` for direct addressing. The leader additionally auto-subscribes to `{team_id}.leader.prompt` for user input.
+After parsing, the platform constructs `AgentSoul` instances with auto-computed subscriptions. The team's view is **unscoped**; the platform prefixes `{team_id}.` at body construction (per `03-event-system.md` "Subject Schema" and ADR 19). Every agent auto-subscribes to `{team_id}.{agent_key}` for direct addressing. The leader additionally auto-subscribes to `{team_id}.leader.prompt` for user input.
 
 | Subscription (team view) | Bus subject | Who gets it |
 |---|---|---|
@@ -244,8 +244,8 @@ Behavior inside the body:
 
    On rejection, the body returns the error to the LLM; no event is published. The `<reason>` field names the specific failure (e.g., `empty`, `starts_with_agent_prefix`, `starts_with_team_prefix`, `contains_null_byte`) so the LLM can fix the call. Per the user's correction: the platform catches "wrong topic" generically — the `{team_id}.` check is one of several validation rules, not a dedicated special case. The LLM learns the rule once and stops making the mistake.
 
-2. **Publish the `AgentEvent` envelope** to `{team_id}.{topic}` on the event bus. The body's notify execution fills the envelope: `event_type` is `topic` (the unscoped name from the LLM); `payload` is `{ prompt, source }` per `PlatformEventPayload` for non-platform events; `team_id` is `this.team_id`; `agent_role` is `this.soul.role`; `agent_key` is `this.agent_key`; `version` is `1`; `timestamp` is the current ISO 8601 string. The team's view is unscoped (the LLM supplies just `topic`); the body prefixes `{team_id}.` in the subject per `03-event-system.md` "Subject Schema" (ADR 21). The wire-format contract (every-publisher-fills-every-field, no shorthand) is in `03-event-system.md` "Event Envelope"; the per-publisher protocol is in `02-protocol-stack.md` "Prompt Ingress".
-3. The publishing agent's `AgentBody` subscription callback filters self-receipt: when the callback receives an event whose `envelope.payload.source` matches its own `agent_key`, it skips processing (per ADR 9 §3 — `Self-receipt filtering`). The bus invokes the callback with `(subject, envelope)`; the body reads `envelope.payload.source` for the self-receipt check. The `EventBus` itself is transport-agnostic and does not know about agent identity; putting the filter on the bus would leak Jie agent concepts into the transport, and a future `NatsEventBus` would have no agent-key awareness to filter against. The bus also catches per-subscriber exceptions (see `03-event-system.md` "Error Containment") and continues dispatch — a misbehaving subscriber does not poison the publisher.
+2. **Publish the `AgentEvent` envelope** to `{team_id}.{topic}` on the event bus. The body's notify execution fills the envelope: `event_type` is `topic` (the unscoped name from the LLM); `payload` is `{ prompt, source }` per `PlatformEventPayload` for non-platform events; `team_id` is `this.team_id`; `agent_role` is `this.soul.role`; `agent_key` is `this.agent_key`; `version` is `1`; `timestamp` is the current ISO 8601 string. The team's view is unscoped (the LLM supplies just `topic`); the body prefixes `{team_id}.` in the subject per `03-event-system.md` "Subject Schema" (ADR 19). The wire-format contract (every-publisher-fills-every-field, no shorthand) is in `03-event-system.md` "Event Envelope"; the per-publisher protocol is in `02-protocol-stack.md` "Prompt Ingress".
+3. The publishing agent's `AgentBody` subscription callback filters self-receipt: when the callback receives an event whose `envelope.payload.source` matches its own `agent_key`, it skips processing (per the `notify` tool step 3 contract). The bus invokes the callback with `(subject, envelope)`; the body reads `envelope.payload.source` for the self-receipt check. The `EventBus` itself is transport-agnostic and does not know about agent identity; putting the filter on the bus would leak Jie agent concepts into the transport, and a future `NatsEventBus` would have no agent-key awareness to filter against. The bus also catches per-subscriber exceptions (see `03-event-system.md` "Error Containment") and continues dispatch — a misbehaving subscriber does not poison the publisher.
 4. The LLM-visible return is a human-readable string summarizing delivery. The LLM-facing `recipients` count is `subscriberCount({team_id}.{topic})` minus self if the publisher is itself subscribed to `{team_id}.{topic}` (i.e., if the topic is in `AgentSoul.subscriptions`). The bus-level `subscriberCount({team_id}.{topic})` is the raw transport count and is unchanged; the LLM-facing number is the count of OTHER agents that would receive the message after self-receipt filtering. `details.recipients` carries the same LLM-facing number — observers see what the LLM was told.
 
    | LLM-facing `recipients` | LLM-visible `content` |
@@ -561,46 +561,6 @@ Errors (snake_case codes, surfaced as typed tool errors):
 | `disk_full` | OS-level `ENOSPC` (no space left on device). |
 | `i_o_error` | Generic catch-all for OS-level write failures (EIO, EROFS read-only filesystem, quota exceeded, lock contention, etc.). |
 
-### Built-in Tool: `edit_file` (Day 2+)
-
-> **Day 2+.** The v1 platform ships `read_file` and `write_file` only. `edit_file` lands when the dev team ships and Implementer/Reviewer roles need a string-replace primitive that's safer than `write_file` (LLM rewrites the whole file each time, leading to off-by-one drift and accidental deletions). The shape mirrors pi's `edit` tool (`@earendil-works/pi-coding-agent/src/core/tools/edit.ts`) verbatim, with Jie's `edit_file` naming and the same snake_case error-code pattern as `read_file` / `write_file`.
-
-```typescript
-edit_file(input: { path: string; old_string: string; new_string: string }): {
-  path:          string;     // canonicalized, workspace-relative
-  bytes_written: number;     // = (new_string.length - old_string.length) when the edit applied
-  created_at:    string;     // ISO 8601 — file's mtime after the write
-}
-```
-
-Rules (in v1 terms; Day 2+ may add to these):
-
-- `path` resolution, UTF-8 only, workspace containment — same as `read_file` / `write_file`. `path_escape` and `unsupported_encoding` apply identically.
-- `edit_file` requires `old_string` to match **exactly one** location in the file. The platform rejects:
-  - Zero matches → `string_not_found` (LLM should re-read and adjust).
-  - More than one match → `multiple_matches` (LLM should include more surrounding context to disambiguate).
-  - Missing `old_string` or `new_string` in input → `invalid_edit_syntax`.
-- The replacement is atomic: read the file, apply the single substitution, write back. If the underlying read or write fails (after the match was verified), the platform returns the corresponding `read_file` / `write_file` error code (`file_not_found`, `is_a_directory`, `permission_denied`, `disk_full`, `i_o_error`).
-- Inherits the platform's 120s default timeout.
-- v1 ships no team that lists `edit_file` in its `tools:` frontmatter; teams that need it can opt in by adding the tool name to `tools:` in their `.md`. The cascade policy applies (per `10-configuration.md`); an unresolved tool in `tools:` is a hard startup failure, so a team opting in must have `edit_file` resolvable (which it is in Day 2+).
-- `edit_file` enforces workspace-root containment only; module-boundary checks are the team layer's responsibility (per the same Boundary Enforcement table below).
-
-Errors (snake_case codes, surfaced as typed tool errors):
-
-| Code | Condition |
-|---|---|
-| `path_escape` | `path` resolves outside the workspace root. |
-| `unsupported_encoding` | File bytes are not valid UTF-8. |
-| `file_too_large` | Resulting `new_string` would push the file over 5 MiB (same cap as `write_file`). |
-| `string_not_found` | `old_string` does not match any location in the file. |
-| `multiple_matches` | `old_string` matches more than one location; the platform does not pick one. |
-| `invalid_edit_syntax` | `old_string` or `new_string` is missing or empty in the input. |
-| `file_not_found` | Underlying read failed with `ENOENT`. |
-| `is_a_directory` | Resolved path is a directory. |
-| `permission_denied` | OS-level `EACCES` on the file or a parent directory. |
-| `disk_full` | OS-level `ENOSPC` on the write-back. |
-| `i_o_error` | Generic catch-all for the underlying read or write failure. |
-
 #### Boundary Enforcement (Platform vs Team)
 
 `write_file` enforces only **workspace-root containment** (the `path_escape` rule above). It does **not** enforce module boundaries (frozen rules, descriptor checks). The two enforcement layers are distinct:
@@ -608,7 +568,7 @@ Errors (snake_case codes, surfaced as typed tool errors):
 | Layer | What it enforces | When it runs | v1 status |
 |---|---|---|---|
 | Platform `write_file` | "Inside the workspace root" | At the tool call | v1 (this spec) |
-| Team descriptor / frozen rule | "Inside the allowed module boundary" | At the role's system prompt or via a wrapper tool that the team defines | `jie-team` backlog (Day 2) |
+| Team descriptor / frozen rule | "Inside the allowed module boundary" | At the role's system prompt or via a wrapper tool that the team defines | Day 2+ (when teams need module-boundary enforcement) |
 
 This separation lets the platform ship a useful writer in v1 without waiting for the team's boundary-enforcement contract. Teams that need module-boundary enforcement wrap the platform's writer (or instruct the agent via system prompt) to validate against the module descriptor before calling `write_file`. Teams that don't need it (e.g. the minimal team) get a plain writer for free.
 
@@ -638,7 +598,7 @@ Both events are **ephemeral** (NATS core pub/sub). They are **observer-only** �
 ```typescript
 class AgentBody {
   readonly agent_key:          string;          // persistent instance identity: {role}-{N} (e.g. 'leader-1', 'worker_a-1')
-  readonly team_id:            string;          // team's identity; prefixes bus subjects (per ADR 21)
+  readonly team_id:            string;          // team's identity; prefixes bus subjects (per ADR 19)
   readonly soul:               AgentSoul;       // immutable after construction
   readonly is_leader:          boolean;         // true iff this role is the team's leader (see "Platform Auto-Wiring" below)
 
@@ -646,7 +606,7 @@ class AgentBody {
   private bus:         EventBus;
   private artifacts:   ArtifactStore;
   private memory:      MemoryManager;           // see 08-memory.md
-  private readonly session_id: string;          // per-team session id; supplied by JieHandle at construction (per 08-memory.md "Restore", ADR 20, and ADR 22)
+  private readonly session_id: string;          // per-team session id; supplied by JieHandle at construction (per 08-memory.md "Restore", ADR 18, and ADR 20)
   private queue:       Array<AgentMessage>;     // in-memory prompt queue; see "Prompt Ingress & Queuing" below
 
   constructor(opts: {
@@ -656,8 +616,8 @@ class AgentBody {
     is_leader:  boolean;         // true iff this role is the team's leader; supplied by the team-blueprint loader (see "Platform Auto-Wiring")
     bus:        EventBus;        // shared EventBus (single instance per process)
     artifacts:  ArtifactStore;   // shared ArtifactStore
-    memory:     MemoryManager;   // shared MemoryManager (per ADR 14; the body uses the platform's MemoryManager instance, not its own)
-    session_id: string;          // per-team session id; supplied by JieHandle (per ADR 20 and ADR 22)
+    memory:     MemoryManager;   // shared MemoryManager (per ADR 12; the body uses the platform's MemoryManager instance, not its own)
+    session_id: string;          // per-team session id; supplied by JieHandle (per ADR 18 and ADR 20)
   });
 
   start(): Promise<void>  // (1) register bus subscriptions; (2) memory.restore() and push to agent.state.messages; (3) if last message is user/toolResult, agent.continue(); (4) start the queue-processing loop — if queue is non-empty, dequeue and agent.prompt(); otherwise, wait for new events. See the four-step "start()" ordering description below.
@@ -670,14 +630,14 @@ class AgentBody {
 - pi-agent's `Agent` handles the LLM loop, tool execution, streaming, and compaction.
 - The body is the **only** publisher of events on Jie's bus. The LLM expresses publication intent through `notify`; the body validates and executes the publish.
 - **`is_leader` is a constructor parameter, not a `AgentSoul` field.** The soul is the role's behavioral profile (model, system prompt, tools, subscriptions); whether the role is the team leader is a team-level fact owned by the team-blueprint loader and passed to each body's constructor. The body uses `is_leader` only to decide whether to auto-subscribe to `{team_id}.leader.prompt` (see "Platform Auto-Wiring" below). The same `AgentSoul` could be the leader in one team and a non-leader in another (e.g., the built-in minimal team's `general` is the leader; a user team might have `general` as a non-leader role).
-- **`start()` is async and returns when the body is fully started.** The `JieHandle` awaits every body's `start()` (in `startJie` step 5 and `loadTeam`) before publishing `{team_id}.team.loaded` (per ADR 24 and `addrs/15-platform-entry-function.md`). The order inside `start()` is:
+- **`start()` is async and returns when the body is fully started.** The `JieHandle` awaits every body's `start()` (in `startJie` step 5 and `loadTeam`) before publishing `{team_id}.team.loaded` (per ADR 22 and `addrs/13-platform-entry-function.md`). The order inside `start()` is:
 
-  1. **Register bus subscriptions.** Subscribe to `{team_id}.{agent_key}` (every body), plus `{team_id}.leader.prompt` if `is_leader === true`, plus `{team_id}.<topic>` for every topic in `soul.subscriptions` (per ADR 21's per-team subject prefixing). The subscription callback enqueues incoming events onto the body's `queue` field and publishes `agent.queue.update` (see "Prompt Ingress & Queuing" below).
+  1. **Register bus subscriptions.** Subscribe to `{team_id}.{agent_key}` (every body), plus `{team_id}.leader.prompt` if `is_leader === true`, plus `{team_id}.<topic>` for every topic in `soul.subscriptions` (per ADR 19's per-team subject prefixing). The subscription callback enqueues incoming events onto the body's `queue` field and publishes `agent.queue.update` (see "Prompt Ingress & Queuing" below).
   2. **Restore history.** Call `memory.restore(agent_key, session_id, team_id)` → `AgentMessage[]`. Push the returned array into `agent.state.messages`.
   3. **Conditionally `continue()`.** If the restored array is non-empty and the last message is `user` or `toolResult`, call `agent.continue()` to resume the in-flight turn. If the array is empty (fresh `session_id`) or ends with `assistant` (a completed prior turn), do **not** call `continue()`; the body waits for the next `agent.prompt()` from the queue.
   4. **Start the queue-processing loop.** If the in-memory `queue` is non-empty (events may have arrived on subscribed subjects between step 1's subscription registration and step 2's restore), dequeue the first message and call `agent.prompt(message)`. Otherwise, wait for new events from the subscription callback. After `agent_end`, the loop dequeues the next message and calls `agent.prompt(nextMessage)`, until the queue is empty.
 
-  The body does **not** publish `agent.idle` at startup (per ADR 24, reversing ADR 13 §3 J6); a body that has not yet processed any turn is treated as idle by default. The "this team is loaded" signal is the `{team_id}.team.loaded` event published by the `JieHandle` after all bodies' `start()` returns. The body publishes `agent.idle` only on every `agent_end`; the alternation with `agent.turn.start` is the Event-Order Contract — see `03-event-system.md` for the canonical contract.
+  The body does **not** publish `agent.idle` at startup; a body that has not yet processed any turn is treated as idle by default. The "this team is loaded" signal is the `{team_id}.team.loaded` event published by the `JieHandle` after all bodies' `start()` returns. The body publishes `agent.idle` only on every `agent_end`; the alternation with `agent.turn.start` is the Event-Order Contract — see `03-event-system.md` for the canonical contract.
 
 ### Event Loop
 
@@ -703,8 +663,6 @@ Agents resolve errors using LLM reasoning; they are not crash-and-restart compon
 
 **Loop termination.** pi-agent's loop terminates when the LLM returns `stopReason: "stop"` (natural end), `"length"` (token limit), `"error"`, or `"aborted"`. Jie does not add its own termination logic on top of pi-agent's loop. `ToolResult.terminate` is a pi-agent mechanism — if a tool returns `terminate: true`, pi-agent stops executing remaining tools in the batch and exits the inner loop. Jie tools may set `terminate: true` but this is pi-agent's concern, not Jie's.
 
-**MCP server crash mid-session.** If an MCP server becomes unreachable while a tool call is in flight, the in-flight call times out (per the default 120s timeout) or returns `mcp_server_unreachable`. The error surfaces to the LLM as a tool-result error — the agent handles it like any other tool error and may retry or degrade gracefully. No process exit. Subsequent MCP calls to the same server return errors until the server is reconnected.
-
 **Bus disconnect.** The in-process `EventBus` cannot disconnect (it's a local data structure). When the process exits, the process exits; the user re-runs `jie`.
 
 ## ExecutionContext
@@ -713,7 +671,7 @@ Passed to every tool call. Provides identifiers and storage; **does not** expose
 
 ```typescript
 interface ExecutionContext {
-  session_id:  string;        // per-process × team identifier (per ADR 20); shared across all agents in the same team in the same process
+  session_id:  string;        // per-process × team identifier (per ADR 18); shared across all agents in the same team in the same process
   team_id:     string;        // resolved team id (from `defaultTeam` resolution); namespace for memory and storage
   agent_key:   string;        // persistent instance identity: {role}-{N}
   agent_role:  string;
@@ -731,7 +689,7 @@ At `AgentBody` construction, Jie instantiates pi-agent's `Agent` with the follow
 | Option | Jie provides |
 |---|---|
 | `sessionId` | The body's `session_id` (per-team ULID via `ulid@2.3.0`, 26 chars — see `monorepo-structure.md` runtime deps and `08-memory.md` "Restore") |
-| `getApiKey(provider)` | Returns the API key from the resolved `auth.json` (per ADR 23). The platform no longer reads provider environment variables — `auth.json` is the sole credential source. `startJie` reads `~/.jie/auth.json` (or the path supplied by the CLI after `jie --api-key` writes) and provides a closure that returns the entry's `key` for the resolved provider, or `undefined` (which surfaces as a credential error at LLM-call time). |
+| `getApiKey(provider)` | Returns the API key from the resolved `auth.json` (per ADR 21). The platform no longer reads provider environment variables — `auth.json` is the sole credential source. `startJie` reads `~/.jie/auth.json` (or the path supplied by the CLI after `jie --api-key` writes) and provides a closure that returns the entry's `key` for the resolved provider, or `undefined` (which surfaces as a credential error at LLM-call time). |
 | `tools` | Set via `agent.state.tools` after construction (see Tool Adaptation below) |
 | `systemPrompt` | Set via `agent.state.systemPrompt` — `AgentSoul.system_prompt` |
 | `model` | Set via `agent.state.model` — resolved from soul's `model` string via pi-ai's `getModel(provider, modelId)` |
@@ -821,7 +779,7 @@ Memory has two write paths in the body, both unconditional:
 - **`message_end` → `persist`**: On every `message_end` from pi-agent, the body calls `memory.persist(message, agent_key, session_id, team_id)` — write-through to SQLite. No role check; the listener does not special-case summaries.
 - **`transformContext` wrapper → `compact`**: The body passes a wrapped `transformContext` to pi-agent. The wrapper calls the inner `transformContext`, diffs input vs. output for newly-added `CompactionSummaryMessage` entries, and calls `memory.compact(range, summary, agent_key, session_id, team_id)` for each. The wrapper is invariant across days: in v1 the inner is identity (no compaction → wrapper is a no-op); in Day 2+ the inner is pi-agent's actual compaction logic (or a custom implementation) and the wrapper persists the produced summaries. Compaction is trigger-agnostic — `/compact` slash command, pi-agent's auto-threshold, or Day 2+ team hooks all funnel through `transformContext` and the wrapper persists.
 
-Memory is durable and session-scoped. The `session_id` is supplied by `JieHandle` at construction (per ADR 20 and ADR 22). Without `--resume` or `--continue`, a new process run mints a fresh `session_id` (ULID via `ulid@2.3.0`) and the agent starts with a clean conversation. With `--resume <id>`, the named `session_id` is validated and used; `memory.restore()` returns prior rows for that session. With `--continue`, the most-recent `session_id` for the current `team_id` is used; `memory.restore()` returns prior rows for that session. In all three cases, `memory.restore()` is the normal Day 1 path, not a debug-only or future-only feature.
+Memory is durable and session-scoped. The `session_id` is supplied by `JieHandle` at construction (per ADR 18 and ADR 20). Without `--resume` or `--continue`, a new process run mints a fresh `session_id` (ULID via `ulid@2.3.0`) and the agent starts with a clean conversation. With `--resume <id>`, the named `session_id` is validated and used; `memory.restore()` returns prior rows for that session. With `--continue`, the most-recent `session_id` for the current `team_id` is used; `memory.restore()` returns prior rows for that session.
 
 `memory.compact()` writes the summary row and the raw range's `compacted=1` flag updates in a single `Storage.transaction()`. The `compactionSummary` role's row is owned exclusively by `compact()`; `persist()` does not write summaries because pi-agent does not emit `message_end` for `CompactionSummaryMessage` injected by `transformContext`. See `08-memory.md` "Compact" and "Integration with pi-agent" for the full contract.
 
