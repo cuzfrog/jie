@@ -47,24 +47,25 @@ The startup sequence is the same for both `jie` (TUI) and `jie -p` (print mode),
    - Else read `defaultTeam` from merged settings → use it; if stale (not installed), WARN and reset to first-available user team (or clear and use built-in minimal if no user teams exist).
    - Else pick first-available user team alphabetically across `.jie/teams/*` and `~/.jie/teams/*`.
    - Else use the platform's built-in minimal team (`packages/jie-platform/team/built-in/minimal-team.ts`, see `minimal-team.md`). The platform always has a runnable team.
-4. **Open `ArtifactStore`** (SQLite at the `.jie/artifacts.db` discovered by walking up from CWD to find `.jie/` — same walk as settings and team lookup per `10-configuration.md` "Discovery"). If no `.jie/` exists at any parent level, the platform creates one at the walk's root (the topmost directory reached before `~`) so a fresh `cd /project && jie -p …` works without manual `mkdir .jie`. Failure (e.g. permission denied) → exit 1.
+4. **Open `ArtifactStore`** (SQLite at the `.jie/artifacts.db` discovered by walking up from CWD to find `.jie/` — same walk as settings and team lookup per `10-configuration.md` "Discovery"). If no `.jie/` exists at any parent level, the platform creates one at the **process CWD** (i.e. where the user invoked `jie`) so a fresh `cd /project && jie -p …` works without manual `mkdir .jie`. Failure (e.g. permission denied) → exit 1.
 5. **(Day 2) Connect MCP servers** configured in `.jie/mcp.json` (project + global merge). Per-server connect failures log a `WARN` and skip that server; the team continues with the rest. See `10-configuration.md` MCP Server Configuration. **In v1 (per ADR 17) this step is skipped** — the platform does not load `mcp.json`, and the `ToolRegistry` only has built-in tools. Agent `.md` files listing `mcp:*` tools fail the cascade check at step 6.
 6. **Construct `AgentSoul`s** from the resolved team's `.md` files. For each `AgentSoul`, resolve its `tools:` list against the `ToolRegistry`. If any tool fails to resolve (e.g. the MCP server for that tool failed to connect), the team's startup fails with a clear error citing the missing tool.
-7. **Instantiate `InProcessEventBus`** and the `MemoryManager` per body. The body's `team_id` is the resolved team id from step 3; the body closes over it and passes it to every `persist` / `compact` / `restore` call.
+7. **Instantiate `InProcessEventBus`** and the `MemoryManager` per body. The body's `team_id` is the resolved team id from step 3; the body closes over it and passes it to every `persist` / `compact` / `restore` call. The body's `session_id` is resolved by the `JieHandle` per `08-memory.md` "Restore" (per-team model: one session id per team, shared across all agents in the team; the handle mints or reuses, depending on whether the team was previously active in this process — see ADR 20). Other teams are **not** loaded at startup; they are loaded on demand by `JieHandle.loadTeam` (per ADR 21).
 8. **Instantiate `AgentBody`** for each role:
-   - Pass `AgentSoul`, `EventBus`, `ArtifactStore`, `MemoryManager`, `team_id`.
-   - Each body subscribes to its auto-subscriptions (`{agent_key}`, plus `leader.prompt` for the leader) and domain topics from its `subscribe:` frontmatter.
+   - Pass `AgentSoul`, `EventBus`, `ArtifactStore`, `MemoryManager`, `team_id`, `session_id` (resolved by the handle per `08-memory.md` "Restore").
+   - Each body subscribes to its auto-subscriptions (`{team_id}.{agent_key}`, plus `{team_id}.leader.prompt` for the leader) and domain topics from its `subscribe:` frontmatter (the platform prefixes `{team_id}.` at body construction per `03-event-system.md` and ADR 21).
+   - Each body fills `team_id` into the `AgentEvent` envelope on every event it publishes.
 9. **Call `body.start()`** on each `AgentBody` — they enter their event loops, waiting for prompts.
 10. **Branch by mode:**
-    - **`jie` (TUI):** Import and start the `jie-tui` component, passing `EventBus` + `ArtifactStore` references. TUI renders, user interacts. (Stub in v1 per ADR 17.)
-    - **`jie -p <instruction>`:** Subscribe to `agent.stream.chunk` (filter `agent_role === <leader_role>`) → print to stdout. Publish `{ prompt: "<instruction>" }` to `leader.prompt`. Wait for the all-agents-idle condition (see `ui/cli.md` "jie -p" step 7). Print final newline, exit.
+    - **`jie` (TUI):** Import and start the `jie-tui` component, passing `EventBus` + `ArtifactStore` references, plus the startup team's `team_id` and `roles`. The TUI subscribes to the un-scoped platform subjects and filters by the active `team_id` from the envelope. TUI renders, user interacts. (Stub in v1 per ADR 17.) The TUI's `/team <id>` slash command calls `JieHandle.swapTeam` / `JieHandle.loadTeam` to switch its view; previously-active teams keep running per ADR 21.
+    - **`jie -p <instruction>`:** Subscribe to `agent.stream.chunk` (filter `team_id === <startup_team_id> && agent_role === <leader_role>`) → print to stdout. Publish `{ prompt: "<instruction>" }` to `{startup_team_id}.leader.prompt`. Wait for the all-agents-idle condition for the startup team (see `ui/cli.md` "jie -p" step 7). Print final newline, exit.
 
 ### Graceful Shutdown
 
 On SIGINT/SIGTERM:
 
-1. **Send abort** to all in-flight operations: agent loops, tool calls, and MCP requests. The combined `AbortSignal` (per ADR 9 §1) propagates the abort; tools see it and throw `AbortError`.
-2. **Bounded wait**: wait up to **10 seconds** for agents to finish their abort handling and exit their loops.
+1. **Send abort** to all in-flight operations across **all loaded teams**: agent loops, tool calls, and MCP requests. The combined `AbortSignal` (per ADR 9 §1) propagates the abort; tools see it and throw `AbortError`.
+2. **Bounded wait**: wait up to **10 seconds** for agents (across all loaded teams) to finish their abort handling and exit their loops.
 3. **On timeout**: force-exit the process. No further cleanup. Agents may have left a partial state in the artifact store; the next run starts with a clean session.
 4. **On graceful exit (within 10s)**: close `ArtifactStore` (SQLite), terminate MCP subprocesses, unsubscribe event listeners, exit 0.
 

@@ -32,7 +32,7 @@ The parser is the same one used for user teams; the only difference is where the
 | Property | Value |
 |---|---|
 | Roles | 1 (`general`) |
-| Leader | `general-1` (auto-subscribes to `leader.prompt`; no `subscribe:` in frontmatter, so no domain topics) |
+| Leader | `general-1` (auto-subscribes to `leader.prompt` in the team's view — the platform prefixes `{team_id}.leader.prompt` on the bus per ADR 21; no `subscribe:` in frontmatter, so no domain topics) |
 | Domain topics | None (no subscription graph; the leader is the only agent) |
 | Tools | `bash`, `read_file`, `write_file` (plus auto-registered `notify`) |
 | Model | Inherited from merged settings — see "Model" below |

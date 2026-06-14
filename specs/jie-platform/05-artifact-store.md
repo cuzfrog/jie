@@ -26,9 +26,9 @@ export interface ArtifactStore {
 }
 ```
 
-- `write` — stores content at key. Overwrites if the key already exists. `INSERT OR REPLACE` semantics.
+- `write` — stores content at key. Overwrites if the key already exists. `INSERT OR REPLACE` semantics. Validates the key against `[A-Za-z0-9_./-]{1,256}` and rejects with `invalid_artifact_key: <value>` on mismatch. Validates the content size against a 5 MiB cap and rejects with `artifact_too_large: <bytes>` (the LLM-visible byte count, matching JS `content.length`) on overflow. Both rejections are tool errors (thrown by the platform's tool layer; not a tool-result error). The key charset and content cap are platform-level limits, not the SQLite type's limits — SQLite can hold up to 1 GB per row, but the platform enforces a smaller cap to bound memory and align with `web_fetch`'s 5 MiB body cap.
 - `read` — returns the entry for key, or `null` if not found.
-- `list` — returns all keys with the given prefix, ordered by `created_at DESC`.
+- `list` — returns all keys with the given prefix, ordered by `created_at DESC`. The `prefix` parameter is not validated against the key charset; `LIKE` metacharacters (`%`, `_`, `\`) in the prefix are escaped per the SQL implementation below.
 
 The interface is the only dependency visible to `core`. The backing store is a `Storage` reference injected at construction; the same `Storage` is shared with `SqliteMemoryManager` (see [`08-memory.md`](08-memory.md)).
 

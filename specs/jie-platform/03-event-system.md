@@ -30,24 +30,35 @@ interface EventBus {
 
 ## Subject Schema
 
-```
-leader.prompt                        — prompt ingress from TUI or -p mode
-{agent_key}                          — direct-addressing channel (every agent auto-subscribes to its own)
-{domain_topic}                       — team-defined domain events (e.g. task.recorded, task.researched)
-agent.stream.chunk                   — batched LLM output (all agents)
-agent.stream.end                     — LLM response complete
-agent.tool.call                      — tool invocation about to execute
-agent.tool.result                    — tool execution completed
-agent.queue.update                   — agent's in-memory prompt queue changed (enqueue or dequeue)
-agent.turn.start                     — agent began a turn (pi-agent `turn_start` bridged to bus; used by `-p` mode for all-agents-idle detection)
-agent.idle                           — agent entered idle state (replaces heartbeat)
-```
+A single `jie` process can host multiple teams' bodies. Team-specific channels are scoped by `team_id`; platform events are un-scoped and carry `team_id` in the envelope (see `AgentEvent` below).
 
-- `agent_key` — persistent agent identity: `{role}-{N}` (e.g. `leader-1`, `researcher-1`). Every agent auto-subscribes to its own `agent_key` at startup. Used for direct inter-agent addressing via `notify`.
-- `domain_topic` — dotted string defined by the team blueprint (e.g. `task.recorded`, `work.researched`, `task.completed`). Agents subscribe via `subscribe:` in their `.md` frontmatter. The platform is agnostic of topic semantics.
-- The leader additionally auto-subscribes to `leader.prompt` for user input ingress.
+**Team-scoped subjects (prefixed with `{team_id}.`):**
 
-No `team_id` prefix — one process runs one team. Multi-team isolation is a Day 2 concern.
+| Subject | Purpose | Subscribers / publishers |
+|---|---|---|
+| `{team_id}.leader.prompt` | Leader prompt ingress from TUI or `-p` mode | Leader auto-subscribes; TUI publishes (scoped to the active team). |
+| `{team_id}.{agent_key}` | Direct-addressing channel; the agent with this key auto-subscribes | Every agent auto-subscribes; `notify` publishes. |
+| `{team_id}.{domain_topic}` | Team-defined domain events (e.g. `task.recorded`, `work.researched`) | Agents subscribe via `subscribe:` in `.md`; `notify` publishes. |
+
+**Platform subjects (un-scoped, `team_id` in the envelope):**
+
+| Subject | Purpose |
+|---|---|
+| `agent.stream.chunk` | Batched LLM output (all agents across all loaded teams) |
+| `agent.stream.end` | LLM response complete |
+| `agent.tool.call` | Tool invocation about to execute |
+| `agent.tool.result` | Tool execution completed |
+| `agent.queue.update` | Agent's in-memory prompt queue changed (enqueue or dequeue) |
+| `agent.turn.start` | Agent began a turn (pi-agent `turn_start` bridged to bus; used by `-p` mode for all-agents-idle detection) |
+| `agent.idle` | Agent entered idle state |
+
+The team-blueprint author writes **unscoped** names in `.md` (`leader.prompt`, `leader-1`, `task.recorded`) and in `notify` calls. The platform prefixes `{team_id}.` at body construction (for subscriptions) and at publish time (for `notify`). The agent's view is un-scoped; the bus's view is team-scoped. See ADR 21.
+
+- `agent_key` — persistent agent identity: `{role}-{N}` (e.g. `leader-1`, `researcher-1`). Every agent auto-subscribes to `{team_id}.{agent_key}` at startup. Used for direct inter-agent addressing via `notify`.
+- `domain_topic` — dotted string defined by the team blueprint (e.g. `task.recorded`, `work.researched`, `task.completed`). Agents subscribe via `subscribe:` in their `.md` frontmatter; the platform prefixes `{team_id}.` at body construction.
+- The leader additionally auto-subscribes to `{team_id}.leader.prompt` for user input ingress.
+
+The TUI subscribes to the un-scoped platform subjects globally and filters by the active team's `team_id` (from the envelope). Multiple teams' platform events flow on the same subjects; the envelope disambiguates.
 
 No `session_id` in subjects — one process run is one session. `session_id` is internal to AgentBody and the Memory subsystem (see `08-memory.md`) where it partitions durable conversation history per process run. It is not published on the event bus.
 
@@ -56,7 +67,8 @@ No `session_id` in subjects — one process run is one session. `session_id` is 
 ```typescript
 interface AgentEvent<T extends string = string> {
   version:     1;           // envelope format version
-  event_type:  T;
+  team_id:     string;      // team's identity (matches the team's directory name)
+  event_type:  T;           // un-scoped logical name (e.g. 'leader.prompt', 'agent.stream.chunk')
   agent_role:  string;      // team-defined role identifier
   agent_key:   string;      // persistent slot identity: {role}-{N}
   timestamp:   string;      // ISO 8601
@@ -126,7 +138,7 @@ When an agent transitions from `busy` to `idle` (work unit complete, terminal ev
 
 ## Inter-Agent Messaging
 
-The `notify` tool (see `06-agent-model.md`) is the sole inter-agent communication channel. It publishes `{ topic, prompt, source }` on the bus to `{topic}`. Every agent auto-subscribes to its own `{agent_key}`, enabling direct addressing. Domain topic subscriptions are declared in the agent's `.md` frontmatter `subscribe:` field.
+The `notify` tool (see `06-agent-model.md`) is the sole inter-agent communication channel. The team's view: the LLM supplies `{ topic, prompt, source }` and the platform publishes to `{team_id}.{topic}`. Every agent auto-subscribes to `{team_id}.{agent_key}` (the platform prefixes at body construction), enabling direct addressing. Domain topic subscriptions are declared in the agent's `.md` frontmatter `subscribe:` field (unscoped in the author's view; the platform prefixes at body construction).
 
 Self-receipt filtering is done in `AgentBody`'s subscription callback — if the event's `source` matches the agent's own `agent_key`, the callback skips processing. This keeps the `EventBus` transport-agnostic; a future `NatsEventBus` would not need agent-identity awareness.
 
@@ -137,3 +149,14 @@ The `notify` tool is a regular tool — it does not control the LLM loop. The LL
 The default `InProcessEventBus` is a `Map<string, Set<Callback>>`. No serialization, no network. Callbacks are invoked synchronously in subscription order. Unsubscribe removes the callback from the set. `subscriberCount(subject)` returns `callbacksForSubject.size`.
 
 A future `NatsEventBus` implements the same interface over NATS core pub/sub with JSON serialization. No JetStream in v1. Agent restart and replay are Day 2 concerns.
+
+## Error Containment
+
+A single subscriber's callback throwing must not break dispatch to other subscribers, and must not propagate back to the publisher. The bus's contract:
+
+1. The bus wraps each callback invocation in a try/catch. If the callback throws (or returns a rejected promise from its async work — synchronous throws only in v1 since `InProcessEventBus` dispatches synchronously), the bus catches the exception.
+2. The publisher's `publish()` call continues to the next subscriber in subscription order. A single misbehaving subscriber does not stop the rest of the dispatch, and does not surface the exception to the publisher's caller.
+3. The caught exception is logged via `console.error` with: the subject, the error message, and the stack trace. The log line is the v1 observability surface; no new event type is published on the bus for subscriber errors in v1.
+4. The bus's own `publish()` call does not throw on subscriber errors. `subscriberCount` is unaffected by errors.
+
+This contract is transport-agnostic. A future `NatsEventBus` impl honors the same rules: per-subscriber isolation, log on error, never propagate to publisher. The in-process impl satisfies it by wrapping the callback invocation in a try/catch around each `Set<Callback>` entry's call.

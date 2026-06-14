@@ -49,17 +49,21 @@ Atomicity: a process crash mid-`compact()` rolls back the transaction; on the ne
 
 ### Restore
 
-On agent start, the body determines its `session_id`:
+On agent start, the body's `session_id` is supplied by the `JieHandle` (per ADR 15 and ADR 20). The handle owns the session map; the body is a runtime that uses the value it's given.
 
-- The body constructor accepts an optional `session_id` parameter. When provided, the body uses it. This is the override path used by `--resume`/`--continue` CLI flags (load a `session_id` from a previous process run) and by the team's swap flow on the `JieHandle` (continue the previously-active team's `session_id` for matching `(team_id, agent_key)` pairs). On team swap, the handle's in-memory map `Map<(team_id, agent_key), session_id>` is consulted first; if there's a recorded `session_id` for that pair, it's passed to the new body.
-- When no `session_id` is provided, the body mints a new one (ULID, 26 chars, monotonic per `monorepo-structure.md` runtime deps — `ulid@2.3.0`; shorter than UUID v4 and human-scannable in logs and DB rows).
+The `JieHandle` keeps an in-memory `Map<team_id, session_id>`. For each new body:
+
+- If the map has a recorded `session_id` for the body's `team_id` (the team is already loaded in this process — either the startup team on initial `startJie`, or a team that was previously loaded via `JieHandle.loadTeam` and is now being re-loaded; per ADR 21, the team keeps running in `loadedTeams` so the session id persists on the map), the handle passes the recorded value to the body. The body uses it; `memory.restore()` returns the prior `memory_turns` rows for `(team_id, agent_key, session_id)`.
+- If the map has no entry for the body's `team_id` (first load of this team in the process), the handle mints a fresh `session_id` (ULID via `ulid@2.3.0`; 26 chars; shorter than UUID v4 and human-scannable in logs and DB rows), records the mapping, and passes it to the body. The `--resume <session_id>` and `--continue` CLI flags override the minted value: the CLI resolves a `session_id` (the named one for `--resume`, or the most-recent for `--continue` — see `ui/cli.md` and ADR 19), the handle records that value under the team's `team_id`, and the body uses it.
+
+**Per-team session id.** The session id is per process run × team: all agents in the same team in the same process share one session id. On team swap, the new team's session id is independent of the old team's — conversation is bound to the team, not the process. Two teams that share an `agent_key` (e.g., both have a `general` role) are disambiguated by their different `team_id`s: they get different `session_id`s and live in disjoint row sets in `memory_turns`. Switching back to a previously-active team reuses that team's recorded session id (the map's value); the previously-active team's bodies are **not** stopped (per ADR 21 multi-team coexistence) but its session id is preserved on the map for the lifetime of the process.
 
 The body then calls `memory.restore(agent_key, session_id, team_id)`. This queries `memory_turns` for all rows matching `(team_id, agent_key, session_id)` where `compacted = false`, ordered by `seq`:
 
-- Fresh `session_id` (newly minted, no prior rows) → empty array; the body begins with a clean conversation.
-- Existing `session_id` (passed in or reused across body restarts) → prior history; the body resumes where it left off. **`seq` is per-agent**: each agent has its own `seq` counter within the session, so the leader's seq 1 and the worker's seq 1 are independent rows. The body's local counter reads `MAX(seq) WHERE (team_id, agent_key, session_id) = (current)` and increments.
+- Fresh `session_id` (newly minted, no prior rows for this team in the current session) → empty array; the body begins with a clean conversation.
+- Existing `session_id` (the swap-back case, or a `--resume` / `--continue` lookup) → prior history; the body resumes where it left off. **`seq` is per-agent**: each agent has its own `seq` counter within the session, so the leader's seq 1 and the worker's seq 1 are independent rows. The body's local counter reads `MAX(seq) WHERE (team_id, agent_key, session_id) = (current)` and increments.
 
-The `JieHandle`'s `Map<(team_id, agent_key), session_id>` is in-memory only; it is lost on process exit. A fresh process run starts with an empty map. Each new `(team_id, agent_key)` pair seen by the handle mints a fresh `session_id` and records the mapping; subsequent body restarts for the same pair (e.g., on team swap) reuse the recorded `session_id`. Switching to a different team yields fresh session_ids for the new team's agent_keys — memory is per-agent-per-team.
+The handle's `Map<team_id, session_id>` is in-memory only; it is lost on process exit. A fresh process run starts with an empty map. Each new team seen by the handle mints a fresh session id and records the mapping; team swap back to a previously-active team reuses the recorded session id. Memory is per-team at the session level, per-agent at the row level.
 
 Compacted raw messages are preserved in storage (for full-replay audit) but are not returned by `restore` — the `CompactionSummaryMessage` replaces them in the restored history.
 
@@ -68,7 +72,7 @@ Compacted raw messages are preserved in storage (for full-replay audit) but are 
 ```typescript
 interface TurnRecord {
   team_id:    string;        // namespace; team whose bodies wrote this row
-  session_id: string;        // per-process-run identifier; shared across agents in the same process
+  session_id: string;        // per-process × team identifier (per ADR 20); shared across all agents in the same team in the same process
   agent_key:  string;        // persistent instance identity: {role}-{N}; each agent has its own memory stream
   seq:        number;        // monotonically increasing within (team_id, agent_key, session_id)
   role:       string;        // 'user' | 'assistant' | 'toolResult' | 'compactionSummary'
@@ -91,7 +95,7 @@ Messages are stored in the same SQLite database as the artifact store, in a sepa
 
 v1 keeps all rows indefinitely (same retention policy as the storage layer — see [`04-storage.md`](04-storage.md) "Retention"). GC and pruning are deferred to **backlog item #7** (Storage Maintenance chapter).
 
-**Team scoping.** `team_id` is the namespace for `memory_turns`. Two teams that both contain a role named `general` (and thus both have `agent_key = general-1`) live in disjoint row sets because their `team_id` differs. Users can name roles freely across teams — including reusing names — without collision. The `JieHandle`'s in-memory map keys on `(team_id, agent_key)` for the same reason. Per-team `--continue` lookups filter on `team_id`; the `idx_memory_turns_team_session_created` index on `(team_id, session_id, created_at)` makes those lookups efficient.
+**Team scoping.** `team_id` is the namespace for `memory_turns`. Two teams that both contain a role named `general` (and thus both have `agent_key = general-1`) live in disjoint row sets because their `team_id` differs. Users can name roles freely across teams — including reusing names — without collision. The `JieHandle`'s in-memory `Map<team_id, session_id>` (per ADR 20) is keyed by `team_id` alone — the per-team model means all agents in a team share one session id, so per-`agent_key` disambiguation is not needed. Per-team `--continue` lookups filter on `team_id`; the `idx_memory_turns_team_session_created` index on `(team_id, session_id, created_at)` makes those lookups efficient.
 
 ## Leader Agent Working Memory
 
@@ -109,7 +113,7 @@ The leader agent (as designated by the team blueprint) may maintain in-memory st
 - **Subscription**: The body calls `agent.subscribe(listener)`. On `message_end`, it calls `memory.persist(message, agent_key, session_id, team_id)` unconditionally — no role check, no special case for summaries.
 - **`transformContext` wrapper**: The body passes a wrapped `transformContext` to pi-agent via `AgentOptions`. The wrapper calls the inner `transformContext` (pi-agent's default, or the Day 2+ compaction implementation), diffs the input and output arrays, and for each `CompactionSummaryMessage` that appears in the output but not the input, computes the seq range and calls `memory.compact(range, summary, agent_key, session_id, team_id)`. The wrapper returns the new array unchanged. **The wrapper is invariant across days**: in v1 the inner is the identity function (no compaction → wrapper is a no-op); in Day 2+ the inner is the actual compaction logic → wrapper persists the produced summaries. Compaction is trigger-agnostic — whether the trigger is the user's `/compact` slash command, pi-agent's auto-threshold, or a Day 2+ team hook, all paths funnel through `transformContext` and the wrapper persists.
 - **`agent_end` listener**: publishes `agent.idle` only. Does not detect compaction (the `transformContext` wrapper owns that).
-- **Restore**: On agent start, the body mints a new `session_id` by default, or uses a passed-in `session_id` (from `--resume`/`--continue` CLI flags or from the `JieHandle`'s `Map<(team_id, agent_key), session_id>` on team swap). The body calls `memory.restore(agent_key, session_id, team_id)`, pushes the returned `AgentMessage[]` into `agent.state.messages`, then calls `agent.continue()`.
+- **Restore**: On agent start, the body uses the `session_id` supplied by the `JieHandle` (per ADR 20). The handle mints a fresh one for the team's first start in the process, or reuses a recorded one for team-swap-back, or uses the value resolved by `--resume` / `--continue`. The body calls `memory.restore(agent_key, session_id, team_id)`, pushes the returned `AgentMessage[]` into `agent.state.messages`, then calls `agent.continue()`.
 - **Tool hooks**: `beforeToolCall` and `afterToolCall` are wired at Agent construction but not used for memory — only for Jie's EventBus telemetry (`agent.tool.call` / `agent.tool.result`). See `06-agent-model.md` pi-agent Integration Contract.
 
 pi-agent's `CompactionSettings` are configured at agent construction with `enabled: false` for v1 (compaction deferred). When enabled, pi-agent's `transformContext` triggers summarization; the resulting `CompactionSummaryMessage` is detected by the body's `transformContext` wrapper, which calls `MemoryManager.compact()` to record the compaction in storage.

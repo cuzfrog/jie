@@ -103,12 +103,12 @@ If both project-local and global copies exist, project wins (matches the lookup 
 
 ### Team Swap (TUI)
 
-`/team <id>` (and `/team` followed by selection in the picker) takes effect immediately in the running TUI session:
+`/team <id>` (and `/team` followed by selection in the picker) takes effect immediately in the running TUI session. The TUI is a passive observer; swap is a view change, not a body-lifecycle change (per ADR 21):
 
-1. All current agent bodies receive a graceful stop signal (bounded 10s shutdown, same as `jie` exit — see `09-deployment.md`).
-2. The new team's blueprint is loaded per "Team Selection" rules (steps1–4).
-3. New agent bodies are constructed. The `JieHandle`'s in-memory `Map<agent_key, session_id>` (`08-memory.md`) is consulted per body: if the `agent_key` has a recorded `session_id`, it is passed to the new body; the body uses it and `restore()` returns the prior `memory_turns` rows. If the `agent_key` is new in this process, the body mints a fresh `session_id` and the handle records it. The handle's map is in-memory only; on process exit it is lost.
-4. The TUI re-renders: tabs/panels for the old agents close; tabs/panels for the new agents appear via the existing "Agent Discovery" primitives. Every prior team's conversation history is retained for the lifetime of the process run; switching back to a previously-active team restores its conversation in full.
+1. The TUI consults `JieHandle.loadedTeams` (per `addrs/15-platform-entry-function.md`). If the team is already loaded, no body-lifecycle work happens — the team is alive, the TUI just wasn't watching.
+2. If the team is not loaded, the platform calls `JieHandle.loadTeam(teamId)`: parse the blueprint per "Team Selection" rules (steps 1–4); resolve each `AgentSoul.model`; construct bodies; register them on the bus; record them in `loadedTeams`. The `JieHandle`'s in-memory `Map<team_id, session_id>` (`08-memory.md` and ADR 20) is consulted for the new team's `team_id`: if the team was previously active in this process, the recorded `session_id` is passed to each new body; the body uses it and `restore()` returns the prior `memory_turns` rows. If the team is new in this process, the handle mints a fresh `session_id`, records it under the team's `team_id`, and passes it to each new body. All agents in the new team share this session id. The handle's map is in-memory only; on process exit it is lost.
+3. The TUI re-renders: it now subscribes to `{active_team_id}.leader.prompt` for prompt publication and filters platform events by the active team's `team_id` (from the envelope). Tabs/panels for the new team's agents appear via the existing "Agent Discovery" primitives. Every prior team's conversation history is retained for the lifetime of the process run; switching back to a previously-active team restores its conversation in full (the recorded `session_id` is reused, the in-memory event buffer is preserved per the TUI's per-`(team_id, agent_key)` event log).
+4. **The previously-active team is not stopped or destroyed.** Its bodies keep their state — `memory_turns` rows, in-memory prompt queue, LLM context, in-progress work. The TUI just stops publishing prompts to that team's prompt topic. The team's agents continue processing any queued prompts autonomously; the TUI just isn't watching.
 
 TUI hint on success: `default team set`.
 
@@ -152,6 +152,7 @@ The platform validates settings at startup. **Any of the following is a hard fai
 | `defaultModel` is not a string (wrong JSON shape) | `defaultModel must be a string` |
 | `defaultTeam` does not match `[A-Za-z0-9_-]{1,32}` | `invalid defaultTeam: <value>` |
 | `--team <id>` flag is given but `<id>` is not installed | `team '<id>' not found: checked .jie/teams/<id>/ and ~/.jie/teams/<id>/` |
+| `--team <id>` flag is given but `<id>` does not match `[A-Za-z0-9_-]{1,32}` | `invalid team id: <value>` (same charset as `defaultTeam`; prevents path-traversal via `..` or special chars) |
 
 Stale `defaultTeam` (value set but team not installed) is **not** a hard fail — see "Stale `defaultTeam` Recovery" above.
 
@@ -208,12 +209,12 @@ MCP servers are configured in `.jie/mcp.json` (project-level; `~/.jie/mcp.json` 
 
 ### Cascade: Agent Load Failure
 
-If an agent's `.md` `tools:` list references a tool that cannot be resolved (e.g. from a failed MCP server, or an unknown built-in name), the **agent's `AgentSoul` construction fails**, and the whole team startup fails with an error citing the missing tool. The platform's policy is:
+If an agent's `.md` `tools:` list references a tool that cannot be resolved (e.g. from a failed MCP server, or an unknown built-in name), the **agent's `AgentSoul` construction fails**, and the team's load fails with an error citing the missing tool. The platform's policy is:
 
 - MCP connect failure → soft (WARN, skip, continue).
-- Tool resolution failure inside an agent → hard (startup fails).
+- Tool resolution failure inside an agent → hard (the team's `loadTeam` fails).
 
-This means a team with a working MCP server starts cleanly; a team whose blueprint depends on a missing MCP server fails fast with a precise error. In v1 (no MCP), the only tools available are the built-ins, so an agent `.md` listing `mcp:*` tools fails the cascade check.
+Per-team scope (per ADR 21): a team whose blueprint depends on a missing tool fails fast with a precise error. Other loaded teams continue running unaffected. The CLI / TUI surfaces the failure to the user; the user can either fix the blueprint, install the missing tool, or switch to a different team. In v1 (no MCP), the only tools available are the built-ins, so an agent `.md` listing `mcp:*` tools fails the cascade check.
 
 ## LLM Provider Configuration
 

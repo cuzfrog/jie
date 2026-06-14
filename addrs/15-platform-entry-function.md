@@ -42,12 +42,13 @@ export interface StartJieOptions {
 export interface JieHandle {
   bus:           EventBus;
   artifacts:     ArtifactStore;
-  memoryFor:     (agentKey: string) => MemoryManager;
-  bodyFor:       (agentKey: string) => AgentBody | undefined;
   bodies:        () => AgentBody[];
-  swapTeam:      (teamId: string) => Promise<void>;
+  bodiesFor:     (teamId: string) => AgentBody[];     // empty if not loaded
+  rolesFor:      (teamId: string) => string[];        // role stems of the loaded team; empty if not loaded
+  loadTeam:      (teamId: string) => Promise<void>;   // parse, construct, register; idempotent if already loaded
+  swapTeam:      (teamId: string) => Promise<void>;   // lazy-loads if not loaded; previously-active team keeps running (ADR 21)
   waitForIdle:   (timeoutMs?: number) => Promise<void>;
-  stop:          (timeoutMs?: number) => Promise<void>; // bounded graceful shutdown
+  stop:          (timeoutMs?: number) => Promise<void>; // bounded graceful shutdown; stops all loaded teams
 }
 
 export function startJie(opts: StartJieOptions): JieHandle;
@@ -64,19 +65,19 @@ export function startJie(opts: StartJieOptions): JieHandle;
 
 `stop(timeoutMs)` (per `09-deployment.md` "Graceful Shutdown"):
 
-1. Send abort to all in-flight operations (the body's `agent.abort()` propagates via the combined `AbortSignal` per ADR 9).
-2. Bounded wait up to `timeoutMs` (default 10s) for bodies to settle.
+1. Send abort to all in-flight operations across **all loaded teams** (per ADR 21): the body's `agent.abort()` propagates via the combined `AbortSignal` per ADR 9.
+2. Bounded wait up to `timeoutMs` (default 10s) for all bodies to settle.
 3. On timeout: force-exit the process. On graceful: close `Storage`, terminate MCP subprocesses, return.
 
-`swapTeam(teamId)` (per `ui/tui.md` "Team Swap" and `10-configuration.md` "Team Swap"):
+`swapTeam(teamId)` (per `ui/tui.md` "Team Swap" and `10-configuration.md` "Team Swap" — rewritten for ADR 21 multi-team coexistence):
 
-1. `stop()` (bounded 10s).
-2. Re-resolve team (per `10-configuration.md` "Team Selection" rules).
-3. For each new body's `agent_key`, look up the prior `session_id` in an in-memory `Map<agent_key, session_id>` kept on the `JieHandle`. Pass it to the new body so `memory.restore()` returns prior rows. New `agent_key`s get a fresh `session_id` and the mapping is recorded.
-4. Re-run the body-instantiation + `start()` sequence.
-5. Resolve when new bodies are subscribed and idle.
+1. If the team is already in `loadedTeams`, return immediately. The previously-active team is not stopped or destroyed — it keeps running with its state intact.
+2. If the team is not loaded, call `loadTeam(teamId)`: parse the blueprint per `10-configuration.md` "Team Selection" rules; resolve each `AgentSoul.model`; construct bodies; register them on the bus; record them in `loadedTeams`.
+3. The `JieHandle`'s in-memory `Map<team_id, session_id>` (per ADR 20) supplies the prior `session_id` for the new team if it was previously active in this process; otherwise the handle mints a fresh `session_id` (ULID via `ulid@2.3.0`) and records it. The session id is passed to each new body; `memory.restore()` returns prior rows where applicable.
+4. Resolve when new bodies are subscribed and have published their startup `agent.idle`.
+5. The TUI's view switches (separate concern, handled by the TUI itself).
 
-The "supervisor" prose in the spec is rewritten to point at `JieHandle` / `startJie` — no separate `Supervisor` class. The in-memory `Map<agent_key, session_id>` is a private field on the handle (or a closure inside `startJie`); it is lost on process exit, matching the existing spec.
+The "supervisor" prose in the spec is rewritten to point at `JieHandle` / `startJie` — no separate `Supervisor` class. The in-memory `Map<team_id, session_id>` is a private field on the handle (or a closure inside `startJie`); it is lost on process exit, matching the existing spec.
 
 ## Rationale
 
@@ -95,4 +96,4 @@ The "supervisor" prose in the spec is rewritten to point at `JieHandle` / `start
 - `addrs/13-agentbody-runtime-mechanisms.md` "supervisor (which loaded the blueprint)" is updated to "the startJie entry, which loaded the blueprint".
 - The CLI's startup is `new JieHandle`-equivalent — i.e. a function call, not a class instantiation. The CLI does not import a `Supervisor` symbol.
 - The "force-publishing on behalf of crashed agents" semantics (backlog #17, Day 2) is implemented on `JieHandle` when the day comes, not on a separate supervisor class.
-- The spec's TUI-facing `roles: string[]` parameter (per ADR 13 / J7) is read by the TUI from the team-blueprint loader's output, **before** `startJie` is called (or by the CLI after `startJie` returns and before passing to the TUI). The handle does not own `roles`.
+- The spec's TUI-facing `roles: string[]` parameter (per ADR 13 / J7) is the **startup team's** roles, read by the TUI from the team-blueprint loader's output **before** `startJie` is called (or by the CLI after `startJie` returns and before passing to the TUI). For any subsequently-loaded team (per ADR 21 multi-team coexistence), the TUI queries `handle.rolesFor(teamId)`. The handle owns roles *per loaded team* via the `loadedTeams` map; it does not own the full roster of installed teams (that's a `10-configuration.md` concern).

@@ -2,6 +2,14 @@
 
 The `jie` binary is the single entry point for all user interaction. It runs as one OS process hosting all agents, the EventBus, and optionally the TUI.
 
+## Flag Parsing Rules
+
+The hand-rolled CLI parser applies these rules uniformly to every flag across `jie`, `jie -p`, `jie login`, `jie logout`, `jie model`, `jie team`, and the resume/continue variants:
+
+- **Duplicate flag is an error.** If the same flag appears more than once on the command line (e.g. `jie -p "..." --team alpha --team beta`, or `jie --api-key k1 --api-key k2`), the CLI exits 1 with `duplicate flag: --<flag>` and does not start the team. The user fixes the command line and re-runs. The "last one wins" shell convention is **not** used; the CLI surfaces the duplicate rather than silently picking one. This applies to every flag — including `--team`, `--api-key`, `--timeout`, `--json`, `--resume`, `--continue`, and the subcommand flags.
+- **Missing required argument is an error.** If a flag that requires an argument (e.g. `--team <id>`, `--api-key <key>`, `--resume <session_id>`, `--model <provider>/<modelId>`) is given without the argument, the CLI exits 1 with `missing argument for --<flag>`.
+- **`--resume` and `--continue` are mutually exclusive.** Per `jie --resume / jie --continue` below.
+
 ## Config Discovery
 
 All commands resolve configuration by walking up from CWD to find `.jie/`, then loading `.jie/settings.json` (if present) and deep-merging it with `~/.jie/settings.json`. If no settings file is found, the platform runs with empty settings — no interactive init flow. To customize provider, model, or team selection at the project level, create `.jie/settings.json` manually. See `10-configuration.md` and `12-installation.md`.
@@ -27,8 +35,8 @@ jie [--team <id>]
 6. Connect MCP servers. Per-server failures log WARN and skip; if a team's blueprint depends on a missing tool, the team fails to start.
 7. Instantiate and start `AgentBody` for each role.
 8. Import `jie-tui`, pass `EventBus` + `ArtifactStore`, start TUI.
-9. TUI is the main event loop — renders agent streams, tool calls, pipeline events. User prompts are published to `leader.prompt` via the EventBus.
-10. Block until TUI exits or SIGINT. Graceful shutdown (10s bounded).
+9. TUI is the main event loop — renders agent streams, tool calls, pipeline events. User prompts are published to `{active_team_id}.leader.prompt` via the EventBus (per `03-event-system.md` Subject Schema and ADR 21).
+10. Block until TUI exits or SIGINT. Graceful shutdown (10s bounded) stops all loaded teams.
 
 **Exit codes:** 0 (normal exit), 1 (config error, team not found, model pre-check failure, agent load failure).
 
@@ -58,11 +66,11 @@ jie --print <instruction> [--team <id>] [--timeout <seconds>] [--json]
 1. Walk up from CWD to find `.jie/`. Load `.jie/settings.json` if present; deep-merge with `~/.jie/settings.json`.
 2. Validate `settings.json`. Resolve team (applying `--team <id>` override if given). Open `ArtifactStore` at the `.jie/artifacts.db` discovered by walking up from CWD (same walk as settings/team lookup per `10-configuration.md` "Discovery"; create `.jie/` at the walk's root if absent). Connect MCP servers. (Same as `jie` steps 2–6, including the model pre-check.)
 3. Instantiate and start `AgentBody` for each role.
-4. Resolve the leader's role from the loaded team's `TEAM.md` (`leader:` field) and the per-role `agent_key` for that role (per v1's `{role}-{N}` convention: `<leader_role>-1`). Subscribe to `agent.stream.chunk` events; filter for `agent_role === <leader_role>`. Initialize a `Set<agent_key> currentlyBusy = new Set()`.
-5. Publish `{ prompt: "<instruction>" }` to `leader.prompt`.
+4. Resolve the leader's role from the loaded team's `TEAM.md` (`leader:` field) and the per-role `agent_key` for that role (per v1's `{role}-{N}` convention: `<leader_role>-1`). Subscribe to `agent.stream.chunk` events; filter for `team_id === <startup_team_id> && agent_role === <leader_role>`. Initialize a `Set<agent_key> currentlyBusy = new Set()`.
+5. Publish `{ prompt: "<instruction>" }` to `{startup_team_id}.leader.prompt` (the bus subject is team-scoped per `03-event-system.md` and ADR 21).
 6. Print each stream chunk from the leader to stdout as it arrives.
 7. Track liveness: on every `agent.turn.start` (new event — see `03-event-system.md`), `currentlyBusy.add(agent_key)`. On every `agent.idle`, `currentlyBusy.delete(agent_key)`. The startup `agent.idle` from each body (per `03-event-system.md` "Agent Idle") is a no-op (deletes from an empty set). When `currentlyBusy.size === 0` AND the leader's stream has produced its final chunk, the team is done.
-8. Print final newline, stop all agents, close DB, exit 0.
+8. Print final newline, stop the startup team's agents (only the loaded teams relevant to this one-shot), close DB, exit 0.
 9. On timeout → stop agents, exit 3, message to stderr: `"no response from team within {timeout}s"`. `--timeout` is the upper bound on the wait (default 300s; 0 = no timeout).
 
 ### Output Formats
@@ -257,9 +265,11 @@ jie --continue                    # resume the most recent session for the curre
   LIMIT 1;
   ```
 
-  The `idx_memory_turns_team_session_created` index on `(team_id, session_id, created_at)` makes this an index-only scan. The lookup is CWD-scoped — there is no cross-CWD session index in v1. The algorithm does not distinguish "liveness" states — a session with one row and a session with thousands are both valid candidates; the most recent by `MAX(created_at)` wins. If no rows match (no prior session in this CWD's DB for the current team), **WARN to stderr** (`no prior session in this directory; starting a new session`) and proceed as if `--continue` were not given (the bodies mint fresh `session_id`s). `--continue` is non-fatal: the absence of a prior session is not an error.
+  The `idx_memory_turns_team_session_created` index on `(team_id, session_id, created_at)` makes this an index-only scan. The lookup is CWD-scoped — there is no cross-CWD session index in v1. The algorithm does not distinguish "liveness" states — a session with one row and a session with thousands are both valid candidates; the most recent by `MAX(created_at)` wins. If no rows match (no prior session in this CWD's DB for the current team), **WARN to stderr** (`no prior session in this directory; starting a new session`) and proceed as if `--continue` were not given (the `JieHandle` mints a fresh `session_id` for the team and passes it to each body, per `08-memory.md` "Restore" and ADR 20). `--continue` is non-fatal: the absence of a prior session is not an error.
 
 The TUI does not have a slash-command equivalent: opening `jie` (without `--resume`/`--continue`) starts a new session. The TUI's team-swap behavior preserves conversation history mid-session without these flags (see `10-configuration.md` "Team Swap"); `--resume`/`--continue` are for cross-process-run continuation.
 
-**Exit codes:** 0 (success, including the `--continue` no-prior-session WARN-and-proceed case), 1 (unknown session_id for `--resume`, `memory_turns` read error).
+**Mutually exclusive.** `--resume` and `--continue` are alternative ways to specify a `session_id`; combining them is a user error. If both flags appear on the same command line, the CLI exits 1 with: `cannot use --resume and --continue together`. The user removes one and re-runs. The CLI does not silently pick one (no last-flag-wins, no `--resume` precedence over `--continue`).
+
+**Exit codes:** 0 (success, including the `--continue` no-prior-session WARN-and-proceed case), 1 (unknown session_id for `--resume`, `memory_turns` read error, `--resume` and `--continue` both given).
 

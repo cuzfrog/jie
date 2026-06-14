@@ -15,7 +15,7 @@ User prompts originate from two surfaces:
 
 | Source | Mechanism | Destination |
 |---|---|---|
-| TUI input | Publishes `{ prompt }` to `leader.prompt` on the in-process EventBus | Leader agent |
-| `jie -p "..."` | Publishes `{ prompt }` to `leader.prompt` on the in-process EventBus | Leader agent |
+| TUI input | Publishes `{ prompt }` to `{active_team_id}.leader.prompt` on the in-process EventBus | Leader agent of the active team |
+| `jie -p "..."` | Publishes `{ prompt }` to `{startup_team_id}.leader.prompt` on the in-process EventBus | Leader agent of the startup team |
 
-The leader agent auto-subscribes to `leader.prompt` at startup. Every agent auto-subscribes to its own `{agent_key}` for direct addressing. Agents also subscribe to domain topics declared in their `.md` frontmatter `subscribe:` field. Agents communicate via the `notify` tool, which publishes to topics on the EventBus.
+The leader agent auto-subscribes to `{team_id}.leader.prompt` at startup (the team's view is unscoped `leader.prompt`; the platform prefixes at body construction per `03-event-system.md` and ADR 21). Every agent auto-subscribes to its own `{team_id}.{agent_key}` for direct addressing. Agents also subscribe to domain topics declared in their `.md` frontmatter `subscribe:` field (the platform prefixes `{team_id}.` at body construction). Agents communicate via the `notify` tool, which publishes to topics on the EventBus (the LLM supplies unscoped `topic`; the body prefixes `{team_id}.`).

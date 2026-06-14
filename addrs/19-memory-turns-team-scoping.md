@@ -71,17 +71,19 @@ The `idx_memory_turns_team_session_created` index makes this an index-only scan.
 
 ### `JieHandle` map
 
-The handle's in-memory session map keys on `(team_id, agent_key)`:
+The handle's in-memory session map keys on `team_id`:
 
 ```typescript
 type JieHandle = {
   // ...
-  private sessionMap: Map<string /* composite "team_id|agent_key" */, string /* session_id */>;
+  private sessionMap: Map<team_id, session_id>;
   // ...
 };
 ```
 
-On team swap, the handle is consulted per `(team_id, agent_key)` tuple; switching to a different team yields fresh `session_id`s for the new team's `agent_key`s — memory is per-agent-per-team.
+All agents in the same team in the same process share one session id. On team swap, the new team's session id is independent of the old team's — conversation is bound to the team, not the process. Switch back to a previously-active team reuses the recorded session id; the previously-active team's bodies are **not** stopped (per ADR 21 multi-team coexistence — the team keeps running in the background), but its session id remains on the map for the lifetime of the process. Memory is per-team at the session level, per-agent at the row level.
+
+**Refinement (2026-06-13, ADR 20).** The original ADR-19 design keyed the map on `(team_id, agent_key)`. The per-`agent_key` half of the key was redundant: the session id is shared across all agents in a team, so the per-`agent_key` disambiguation adds no information. v1 collapses the key to `team_id` only. Two teams that share an `agent_key` (e.g., both have a `general` role) are still disambiguated — they have different `team_id`s, so they get different `session_id`s and live in disjoint row sets in `memory_turns`. The `memory_turns` primary key still includes `agent_key` (memory rows are per-agent) — only the session-map key on the handle is simplified.
 
 ### Removed
 

@@ -1,7 +1,9 @@
 # Context Rules
 
-- Current stage is design Day 1 features.
+- Current stage is design and review Day 1 features. No actual implementation.
+- Only features are scoped, NO compromize to NFR.
 - Our goal is to hammer our specs to build a runnable, deployable, usable application.
+
 
 ## Design Principles
 - Constraints liberate, liberties constrain.

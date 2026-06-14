@@ -12,7 +12,7 @@ description: Review Jie specs and find any gaps from implementation's perspectiv
 
 ### Checklist
 - When an important decision is done, write our architectural design decision to dir `./addrs/<N>-<name>.md`, only record those that are consequential to software architecture, keep simple and conscise.
-- Decisions are captured in docs not only in `review-tracker.md`.
+- Decisions are captured in docs not in `review-tracker.md`. `review-tracker.md` is ephemeral, obsolete entries should be cleaned up.
 - References are updated across related docs, review for conflicts.
 
 ## User Instructions
