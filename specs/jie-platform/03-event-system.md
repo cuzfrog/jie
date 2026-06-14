@@ -39,6 +39,7 @@ A single `jie` process can host multiple teams' bodies. Team-specific channels a
 | `{team_id}.leader.prompt` | Leader prompt ingress from TUI or `-p` mode | Leader auto-subscribes; TUI publishes (scoped to the active team). |
 | `{team_id}.{agent_key}` | Direct-addressing channel; the agent with this key auto-subscribes | Every agent auto-subscribes; `notify` publishes. |
 | `{team_id}.{domain_topic}` | Team-defined domain events (e.g. `task.recorded`, `work.researched`) | Agents subscribe via `subscribe:` in `.md`; `notify` publishes. |
+| `{team_id}.team.loaded` | One-shot per team load; payload `{ team_id, agents: { role, agent_key }[] }` — the team's roster. The TUI's agents-panel-at-boot anchor (per ADR 24). | `JieHandle` publishes in `startJie` and `loadTeam`. Not republished on team swap-back. |
 
 **Platform subjects (un-scoped, `team_id` in the envelope):**
 
@@ -49,7 +50,7 @@ A single `jie` process can host multiple teams' bodies. Team-specific channels a
 | `agent.tool.call` | Tool invocation about to execute |
 | `agent.tool.result` | Tool execution completed |
 | `agent.queue.update` | Agent's in-memory prompt queue changed (enqueue or dequeue) |
-| `agent.turn.start` | Agent began a turn (pi-agent `turn_start` bridged to bus; consumed by `JieHandle.waitForIdle` internally for all-agents-idle detection) |
+| `agent.turn.start` | Agent began a turn (pi-agent `turn_start` bridged to bus; consumed by the CLI's `-p` idle gate and the TUI's busy/idle derivation) |
 | `agent.idle` | Agent entered idle state |
 
 The team-blueprint author writes **unscoped** names in `.md` (`leader.prompt`, `leader-1`, `task.recorded`) and in `notify` calls. The platform prefixes `{team_id}.` at body construction (for subscriptions) and at publish time (for `notify`). The agent's view is un-scoped; the bus's view is team-scoped. See ADR 21.
@@ -121,6 +122,35 @@ LLM output originates from pi-agent's `message_update` events (per-token deltas)
 
 Tunables (`stream_chunk_size`, `stream_flush_ms`) are in `10-configuration.md`. The TUI and `-p` mode consume these events. See `06-agent-model.md` pi-agent Integration Contract for the full event bridging table.
 
+## Event-Order Contract
+
+Two pieces, both load-bearing for observer-side state machines (the CLI's `-p` idle gate, the TUI's busy/idle derivation, any future observer that wants to know "is the work done?").
+
+### Body-side alternation
+
+For each body, the platform events `agent.turn.start` and `agent.idle` follow a **strict alternation**:
+
+- A body that has not yet started any turn has published no events; observers treat it as **idle by default** (no event required).
+- On every pi-agent `turn_start`, the body publishes exactly one `agent.turn.start`.
+- On every pi-agent `agent_end`, the body publishes exactly one `agent.idle`.
+- For the same turn, `agent.turn.start` is always published before the corresponding `agent.idle`. The body never publishes `agent.idle` without a preceding `agent.turn.start` for the same turn.
+- Across turns: `turn_start` → `idle` → `turn_start` → `idle` → ...
+
+The body emits these events on the un-scoped platform subjects (`agent.turn.start`, `agent.idle`); the bus delivers them in publish order; observers (CLI, TUI) update per-body state machines. The body is the sole producer of the alternation; the bus does not synthesize, reorder, or drop events.
+
+### Bus-side in-order delivery
+
+- **v1 (`InProcessEventBus`):** Events are dispatched to subscribers synchronously in publish order. Per-body event order is preserved end-to-end. This is the v1 guarantee that makes the body-side alternation observable as written.
+- **Day-2 NATS:** NATS preserves order per subject but not across subjects. `agent.turn.start` and `agent.idle` are different subjects, so a subscriber could observe `agent.idle` for body A before `agent.turn.start` for body A if NATS reorders across subjects. The Day-2 fix is a **per-body monotonic `seq`** stamped on every event the body publishes; observers discard updates whose `seq` ≤ last-seen for that body, collapsing cross-subject reorder into a no-op. This is a Day-2 concern; see `backlog.md`.
+
+### Why this contract matters
+
+The CLI's `-p` idle gate (`ui/cli.md` `jie -p` step 7) is a local state machine initialized with all bodies in the "idle" state. The gate opens when "all bodies' last observed event is `idle`". Without the body-side alternation, a body could transition from "no event seen" directly to "`idle`" — the gate would open without the body ever having been observed as "busy". The alternation makes this impossible: every `idle` is preceded by a `turn_start` for the same turn, so the body moves through `busy` first. The bus-side in-order delivery makes the per-body state machine deterministic.
+
+The TUI's "agent is busy / idle" derivation in `11-monitoring.md` is also a consumer of this contract. Any future observer (Day-2+ tooling, a `-p` mode that loads multiple teams, etc.) follows the same pattern: subscribe to `agent.turn.start` and `agent.idle`, maintain a per-body state, and treat the absence of events as idle-by-default.
+
+---
+
 ## Tool Telemetry
 
 Every tool call emits two events:
@@ -134,7 +164,9 @@ Every tool call emits two events:
 
 When an agent transitions from `busy` to `idle` (work unit complete, terminal event published, or error recovery complete), it publishes `agent.idle`. This is the signal for observers (TUI, `-p` mode) that the agent is ready for new work. Replaces the heartbeat-based discovery model.
 
-**`agent.idle` is published at startup AND on every `agent_end`.** The body publishes one `agent.idle` at the end of `body.start()` — after the body's subscriptions are registered and before it begins processing the message queue. This gives observers (TUI, `-p` mode) an explicit "agent exists, currently idle" signal at boot, so the agents-panel can populate before any prompt is sent. Subsequent publishes fire on every `agent_end` regardless of `stopReason` — whether the LLM finished naturally (`"stop"`, `"length"`) or exited from an error (`"error"`, `"aborted"`), the agent returns to idle. Observers can rely on `agent.idle` as a definitive "this agent is no longer processing" signal — they do not need to inspect `stopReason` separately to know the agent is ready for new work.
+**`agent.idle` is published on every `agent_end` only.** A body that has not yet processed any turn has published no events; observers treat it as **idle by default** (no event required). The "this agent exists" signal at boot is the separate `{team_id}.team.loaded` event (see Subject Schema), published by the `JieHandle` once per team load, not by the body. This reverses the prior decision to publish `agent.idle` at startup (ADR 13 §3 J6, reversed by ADR 24); the new design separates "this team is loaded" (a one-shot team-routing announcement) from "this body transitioned busy→idle" (a per-body state-transition event).
+
+`agent.idle` fires on every `agent_end` regardless of `stopReason` — whether the LLM finished naturally (`"stop"`, `"length"`) or exited from an error (`"error"`, `"aborted"`), the agent returns to idle. Observers can rely on `agent.idle` as a definitive "this agent is no longer processing" signal — they do not need to inspect `stopReason` separately to know the agent is ready for new work. The body never publishes `agent.idle` without a preceding `agent.turn.start` for the same turn; see "Event-Order Contract" below.
 
 ## Inter-Agent Messaging
 

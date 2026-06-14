@@ -42,13 +42,14 @@ Payload: `{ prompt: string }`. The source is implicit — the TUI is the only us
 
 The TUI discovers active agents from EventBus events:
 
-- Any agent that publishes `agent.stream.chunk`, `agent.tool.call`, `agent.tool.result`, or `agent.idle` becomes visible.
+Any agent that is listed in a `{team_id}.team.loaded` event for the active team, OR publishes `agent.stream.chunk`, `agent.tool.call`, `agent.tool.result`, `agent.turn.start`, or `agent.idle` for the active team, becomes visible. The `{team_id}.team.loaded` event (per ADR 24) is the **anchor for "agent is alive"** — the TUI subscribes to it for each loaded team and populates the agents-panel from its `agents` array as soon as it arrives, before any activity event. The activity events refine the "busy / idle" status (see `11-monitoring.md`).
+
 - The TUI filters platform events by the active team's `team_id` (from the envelope, see `03-event-system.md` `AgentEvent.team_id`). Multiple teams' events flow on the same platform subjects; the envelope disambiguates.
 - Each unique `(team_id, agent_role, agent_key)` for the active team becomes a tab or panel.
 - `team_id`, `agent_role`, and `agent_key` come from the event envelope.
-- When an agent publishes `agent.idle`, the TUI marks that agent slot as ready.
+- When an agent publishes `agent.idle`, the TUI marks that agent slot as ready (no longer processing).
 
-No separate heartbeat protocol — agent presence is derived from activity events. The TUI does not see other teams' agents as "active" — it only renders the active team.
+No separate heartbeat protocol — agent presence is derived from `team.loaded` (alive) plus activity events (busy/idle). The TUI does not see other teams' agents as "active" — it only renders the active team. The `team.loaded` event is one-shot per team load; on team swap-back, the TUI uses the buffer / cache it already built up — `team.loaded` is not republished.
 
 ## Invariants
 
@@ -78,12 +79,14 @@ How any of this is rendered — tabs, panes, charts, markdown, plain text — is
 
 In the in-process deployment (v1 default), the leader and all agents run in the same OS process as the TUI. If any agent's body crashes, the process exits. Therefore:
 
-- The TUI never encounters a "leader offline" state — if the leader stops, the process has crashed.
+- The TUI never encounters a "leader offline" state — if the leader stops, the process has crashed. (The TUI's "agent is alive" check is the presence of the leader in a recent `{team_id}.team.loaded` event; absence of `team.loaded` for an agent is the "I have not seen this team" case, which can also arise from a fresh process that has not yet received the event, or a team that was never loaded in this process.)
 - Prompt input is always available. During a work-unit-in-flight, prompts are queued per the leader's memory behavior (see `08-memory.md`).
 
   When the user submits a prompt while the leader is busy, the TUI must show a visible queued-prompt indicator. The TUI derives this from the `agent.queue.update` event (`{ prompts: string[] }`) published by the body on every enqueue and dequeue. If the queue is empty (or the event is absent), the indicator is hidden. If the queue is non-empty, the indicator shows the count and a peek of the contents (first ~100 chars per prompt). The indicator updates as messages enqueue and dequeue — no polling, no derived state.
 
   The prompt queue is in-memory only — lost on process restart (acceptable for v1).
+
+  **Queue-pickup flicker (UX detail).** When the body picks up a queued prompt and starts the next turn, the sequence is `agent_end` (body publishes `agent.idle`) → `agent.prompt(nextMessage)` (triggers `agent_start` → `agent.turn.start`). The TUI sees `agent.idle` then `agent.turn.start` for the same body within the same tick. The TUI should treat `agent.idle` followed by `agent.turn.start` for the same body within a short window (e.g. 50 ms) as "still busy" to avoid a brief "ready" flicker between turns. This is a pure UX concern — no platform change.
 
 ## Slash Commands
 

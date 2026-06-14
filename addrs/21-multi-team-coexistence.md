@@ -33,9 +33,9 @@ The team-blueprint author writes unscoped names (`leader.prompt`, `leader-1`, `t
 
 ### On-demand team loading
 
-- `startJie()` resolves and loads the startup team (from settings/CLI). The startup team's bodies are constructed and registered on the bus.
+- `startJie()` resolves and loads the startup team (from settings/CLI). The startup team's bodies are constructed and registered on the bus. After all bodies' `start()` returns, the handle publishes one `{team_id}.team.loaded` event for the startup team (per ADR 24).
 - Other teams are loaded on demand. The `JieHandle` tracks loaded teams in `Map<team_id, AgentBody[]>`.
-- `loadTeam(teamId)` consults the map: if loaded, return immediately; if not, parse the new team's blueprint, construct bodies, register on the bus, record in the map. The previously-active team is **not** stopped or destroyed. The TUI's view switch is a separate concern owned by the TUI itself, not a handle method.
+- `loadTeam(teamId)` consults the map: if loaded, return immediately; if not, parse the new team's blueprint, construct bodies, register on the bus, record in the map, and publish one `{team_id}.team.loaded` event for the newly-loaded team. The previously-active team is **not** stopped or destroyed. The TUI's view switch is a separate concern owned by the TUI itself, not a handle method. The `team.loaded` event is **one-shot per team load**: it is not republished when the TUI swaps back to a previously-loaded team; observers that came back to it use the buffer / cache they already built up.
 - `JieHandle.stop()` stops all loaded teams (the only lifecycle-changing operation besides initial load).
 
 ### TUI role
@@ -48,10 +48,10 @@ The old team's leader body is not destroyed on swap, so its in-memory prompt que
 
 ## Implications
 
-- **`JieHandle`** gains `loadTeam(teamId)`, `bodiesFor(teamId)`, `rolesFor(teamId)`. `loadTeam` is the single lifecycle-changing call; the TUI's view switch is a separate concern. (A previous version of this ADR added `swapTeam` as a separate handle method; fresh review pass 5 collapsed it into `loadTeam`.)
-- **TUI's per-`(team_id, agent_key)` event buffer** (existing spec) is the right granularity. Platform events are filtered by the active team's `team_id` (from the envelope).
-- **TUI's `roles` parameter** to `startTUI` is the startup team's roles. The TUI re-queries the handle for new teams' roles on swap.
-- **`Cascade: Agent Load Failure`** (per ADR-style spec rule in `10-configuration.md`) applies per-team: a team that fails to load is rejected, but other loaded teams continue.
+- **`JieHandle`** gains `loadTeam(teamId)`, `bodiesFor(teamId)`, `rolesFor(teamId)`. `loadTeam` is the single lifecycle-changing call; the TUI's view switch is a separate concern. (A previous version of this ADR added `swapTeam` as a separate handle method; fresh review pass 5 collapsed it into `loadTeam`.) Per ADR 24, `waitForIdle` is **removed** from the handle; the CLI's `-p` mode owns its own idle gate.
+- **TUI's per-`(team_id, agent_key)` event buffer** (existing spec) is the right granularity. Platform events are filtered by the active team's `team_id` (from the envelope). The TUI's "agent is alive" derivation moves from `agent.idle` at startup (reversed by ADR 24) to `{team_id}.team.loaded` (per ADR 24 §2).
+- **TUI's `roles` parameter** to `startTUI` is the startup team's roles, sourced by the CLI from `handle.rolesFor(startupTeamId)` after `startJie` returns. The handle is the single source of truth; the CLI does not parse the manifest separately before `startJie`. The TUI re-queries the handle for new teams' roles on swap.
+- **`Cascade: Agent Load Failure`** (per ADR-style spec rule in `10-configuration.md`) applies per-team: a team that fails to load is rejected, but other loaded teams continue. The cascade covers **model-resolution failures** in addition to tool-resolution failures: any agent whose `model:` cannot be resolved (no `model:` in `.md`, and merged settings do not provide a resolvable default) → team load fails with the same error message as `startJie`'s pre-check: "No model has been selected, please login and select a default model." The TUI displays the error in the input area; the previously-active team keeps running.
 
 ## References
 

@@ -213,8 +213,9 @@ If an agent's `.md` `tools:` list references a tool that cannot be resolved (e.g
 
 - MCP connect failure → soft (WARN, skip, continue).
 - Tool resolution failure inside an agent → hard (the team's `loadTeam` fails).
+- **Model resolution failure** (any agent's `model:` cannot be resolved — no `model:` in `.md`, and the merged `settings.json` does not provide a resolvable default) → hard (the team's `loadTeam` fails) with the same error message as `startJie`'s pre-check: "No model has been selected, please login and select a default model." The TUI displays the error in the input area; the previously-active team keeps running.
 
-Per-team scope (per ADR 21): a team whose blueprint depends on a missing tool fails fast with a precise error. Other loaded teams continue running unaffected. The CLI / TUI surfaces the failure to the user; the user can either fix the blueprint, install the missing tool, or switch to a different team. In v1 (no MCP), the only tools available are the built-ins, so an agent `.md` listing `mcp:*` tools fails the cascade check.
+Per-team scope (per ADR 21): a team whose blueprint depends on a missing tool or missing model fails fast with a precise error. Other loaded teams continue running unaffected. The CLI / TUI surfaces the failure to the user; the user can either fix the blueprint, install the missing tool, or switch to a different team. In v1 (no MCP), the only tools available are the built-ins, so an agent `.md` listing `mcp:*` tools fails the cascade check.
 
 ## LLM Provider Configuration
 

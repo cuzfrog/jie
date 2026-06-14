@@ -8,6 +8,7 @@ The hand-rolled CLI parser applies these rules uniformly to every flag across `j
 
 - **Duplicate flag is an error.** If the same flag appears more than once on the command line (e.g. `jie -p "..." --team alpha --team beta`, or `jie --api-key k1 --api-key k2`), the CLI exits 1 with `duplicate flag: --<flag>` and does not start the team. The user fixes the command line and re-runs. The "last one wins" shell convention is **not** used; the CLI surfaces the duplicate rather than silently picking one. This applies to every flag — including `--team`, `--api-key`, `--timeout`, `--json`, `--resume`, `--continue`, and the subcommand flags.
 - **Missing required argument is an error.** If a flag that requires an argument (e.g. `--team <id>`, `--api-key <key>`, `--resume <session_id>`, `--model <provider>/<modelId>`) is given without the argument, the CLI exits 1 with `missing argument for --<flag>`.
+- **Flag ordering is normalized before any side effect.** The CLI parses all flags into a normalized record before executing any side-effecting step. `--api-key <key>` writes `auth.json` before the rest of the flow runs, regardless of position on the command line. `jie -p "..." --api-key <key>` and `jie --api-key <key> -p "..."` behave identically: the API key is in `auth.json` before `-p` resolves the model and starts the LLM call. This is a hard rule — without it, `-p` would race against the just-written credential.
 - **`--resume` and `--continue` are mutually exclusive.** Per `jie --resume / jie --continue` below.
 
 ## Config Discovery
@@ -65,13 +66,46 @@ jie --print <instruction> [--team <id>] [--timeout <seconds>] [--json]
 
 1. Walk up from CWD to find `.jie/`. Load `.jie/settings.json` if present; deep-merge with `~/.jie/settings.json`.
 2. Validate `settings.json`. Resolve team (applying `--team <id>` override if given). Open `ArtifactStore` at the `.jie/artifacts.db` discovered by walking up from CWD (same walk as settings/team lookup per `10-configuration.md` "Discovery"; create `.jie/` at the walk's root if absent). Connect MCP servers. (Same as `jie` steps 2–6, including the model pre-check.)
-3. Instantiate and start `AgentBody` for each role.
-4. Resolve the leader's role from the loaded team's `TEAM.md` (`leader:` field) and the per-role `agent_key` for that role (per v1's `{role}-{N}` convention: `<leader_role>-1`). Subscribe to `agent.stream.chunk` events; filter for `team_id === <startup_team_id> && agent_role === <leader_role>`. Subscribe to `agent.stream.end` events with the same filter.
-5. Publish `{ prompt: "<instruction>" }` to `{startup_team_id}.leader.prompt` (the bus subject is team-scoped per `03-event-system.md` and ADR 21).
-6. Print each stream chunk from the leader to stdout as it arrives.
-7. Wait for the team to be done. The team is done when the leader's `agent.stream.end` has fired AND `handle.waitForIdle(timeout)` resolves — `waitForIdle` waits for every loaded team's bodies to be idle (in `-p` mode only the startup team is loaded, so this is "all startup-team agents are idle"; the user's "wait for any non-idle agent" requirement is met because `waitForIdle` covers the whole loaded set, not just the leader). The CLI uses the handle's `waitForIdle` primitive rather than tracking busy state from `agent.turn.start` / `agent.idle` events — the handle owns lifecycle and the platform's `waitForIdle` is the single source of truth for "is this team still working". The startup `agent.idle` from each body (per `03-event-system.md` "Agent Idle") fires before the leader processes the prompt and is consumed by the handle's wait.
-8. Print final newline, call `handle.stop()` to stop the startup team's agents (per ADR 15), close DB, exit 0.
-9. On timeout → stop agents, exit 3, message to stderr: `"no response from team within {timeout}s"`. `--timeout` is the upper bound on the wait (default 300s; 0 = no timeout).
+3. Instantiate and start `AgentBody` for each role. The handle publishes `{team_id}.team.loaded` for the startup team once all bodies' `start()` returns (per ADR 24).
+4. Resolve the leader's role from the loaded team's `TEAM.md` (`leader:` field) and the per-role `agent_key` for that role (per v1's `{role}-{N}` convention: `<leader_role>-1`). Subscribe to `agent.stream.chunk` events; filter for `team_id === <startup_team_id> && agent_role === <leader_role>`. (The `agent.stream.end` event is published at the end of every LLM stream by the leader — the CLI does **not** subscribe to it; the local idle gate is the source of truth for "work done", not a stream-end check.)
+5. **Set up the local idle gate.** After `startJie()` returns and bodies are started, the CLI enumerates `handle.bodies()` to build the gate's initial state. For each loaded body, the gate's state is initialized to `'idle'` (the default state per the Event-Order Contract). The CLI then subscribes to the un-scoped `agent.turn.start` and `agent.idle` subjects on `handle.bus`. On every event, the CLI updates the corresponding body's state and evaluates the gate. The gate is a local state machine — it lives in CLI code, not on the handle.
+6. Publish `{ prompt: "<instruction>" }` to `{startup_team_id}.leader.prompt` (the bus subject is team-scoped per `03-event-system.md` and ADR 21).
+7. Print each stream chunk from the leader to stdout as it arrives.
+8. **Wait for the idle gate to open.** The gate opens when "for all loaded bodies, the state is `'idle'`". Because the gate is initialized with all bodies in the `'idle'` state, the gate does **not** open until at least one body has transitioned `'idle'` → `'busy'` → `'idle'` (every `'busy'` is preceded by a `'turn_start'` for the same body, and every `'idle'` is preceded by a `'busy'` — see the Event-Order Contract in `03-event-system.md`). The CLI awaits the gate (or `--timeout`, whichever fires first). On gate open: print final newline, call `handle.stop()`, exit 0. On timeout: `handle.stop()`, exit 3 with stderr message `"no response from team within {timeout}s"`. `--timeout` is the upper bound on the wait (default 300s; 0 = no timeout).
+
+The gate implementation (CLI-side, after `startJie()` returns):
+
+```typescript
+let resolveGate: () => void;
+let timer: ReturnType<typeof setTimeout> | undefined;
+const gate = new Promise<void>((resolve, reject) => {
+  resolveGate = resolve;
+  timer = setTimeout(() => reject(new Error('timeout')), timeoutMs * 1000);
+});
+
+const state = new Map<string, 'busy' | 'idle'>();
+const loadedAgentKeys = handle.bodies().map(b => b.agent_key);
+for (const k of loadedAgentKeys) state.set(k, 'idle');
+
+const evaluate = () => {
+  if ([...state.values()].every(v => v === 'idle')) {
+    clearTimeout(timer);
+    resolveGate();
+  }
+};
+
+handle.bus.subscribe('agent.turn.start', (_subj, env) => {
+  if (state.has(env.agent_key)) state.set(env.agent_key, 'busy');
+});
+handle.bus.subscribe('agent.idle', (_subj, env) => {
+  if (state.has(env.agent_key)) {
+    state.set(env.agent_key, 'idle');
+    evaluate();
+  }
+});
+```
+
+The gate relies on the Event-Order Contract (`03-event-system.md` "Event-Order Contract"): `agent.turn.start` is always published before the corresponding `agent.idle` for the same turn, and the bus delivers events in publish order. Under this contract, the gate is a correct "all work done" detector — no body can transition from "no event seen" to `'idle'` without first being observed as `'busy'`. The `JieHandle` does not own this gate; the CLI composes it from primitives.
 
 ### Output Formats
 

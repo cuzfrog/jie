@@ -33,16 +33,22 @@ The body does not synthesize a `tool_call_id`. The event bus payload carries pi-
 - The value is opaque to Jie and to consumers. Provider-defined (OpenAI: `call_xxx`, Anthropic: `toolu_xxx`). Format is not Jie's concern.
 - This supersedes the prior session's `Map<pi_toolCallId, uint32>` design, which added a counter + Map + lifecycle for no clear consumer benefit. The string works for the only consumer need (correlation), and pi-agent's `pendingToolCalls: Set<string>` is precedent that the string is sufficient.
 
-### 3. Initial `agent.idle` at startup (J6)
+### 3. Initial `agent.idle` at startup (J6) — **REVERSED 2026-06-14 by ADR 24**
 
-`AgentBody.start()` publishes `agent.idle` exactly once after subscriptions are registered, before the body begins processing the message queue. The same subject and payload are used; the distinction (startup vs run-end) is implicit in lifecycle position.
+`AgentBody.start()` no longer publishes `agent.idle`. A body that has not yet processed any turn is idle by definition; the startup publish was redundant. The TUI's agents-panel-at-boot story moves to the new `{team_id}.team.loaded` event (see ADR 24 §2), published by the `JieHandle` once per team load. The body still publishes `agent.idle` on every `agent_end` (the busy→idle transition).
 
-- Subscriptions register first (`{agent_key}` plus `leader.prompt` for the leader, plus `soul.subscriptions`).
-- Then the body publishes `agent.idle` to advertise "exists, currently idle" to observers.
-- Then the body begins processing the message queue.
-- The ordering matters: publishing before subscriptions would let observers see the agent before it was wired to receive; publishing after the loop begins would let a hypothetical first event sneak ahead of the idle signal.
+The original J6 decision is preserved here for historical reference:
 
-The TUI uses this signal — combined with the `roles: string[]` parameter (see J7) — to render the agents-panel at boot. Per `08-memory.md` and the J7 decision, the TUI gets the role list from the supervisor (which loaded the blueprint); the per-body `agent.idle` provides the live state.
+> `AgentBody.start()` publishes `agent.idle` exactly once after subscriptions are registered, before the body begins processing the message queue. The same subject and payload are used; the distinction (startup vs run-end) is implicit in lifecycle position.
+>
+> - Subscriptions register first (`{agent_key}` plus `leader.prompt` for the leader, plus `soul.subscriptions`).
+> - Then the body publishes `agent.idle` to advertise "exists, currently idle" to observers.
+> - Then the body begins processing the message queue.
+> - The ordering matters: publishing before subscriptions would let observers see the agent before it was wired to receive; publishing after the loop begins would let a hypothetical first event sneak ahead of the idle signal.
+>
+> The TUI uses this signal — combined with the `roles: string[]` parameter (see J7) — to render the agents-panel at boot. Per `08-memory.md` and the J7 decision, the TUI gets the role list from the supervisor (which loaded the blueprint); the per-body `agent.idle` provides the live state.
+
+**Rationale for the reversal** (per ADR 24): "Default state is idle; events announce transitions." Publishing `agent.idle` at startup conflated two distinct signals ("this agent exists, currently idle" vs "this agent transitioned busy→idle"). Removing the startup publish eliminates a class of "what does the startup event mean?" ambiguity. The TUI's boot story is preserved by `team.loaded` (different event, different semantic). The `JieHandle` is the single source of "is the team loaded?", not the per-body `agent.idle`.
 
 ## Rationale
 
@@ -57,5 +63,5 @@ The TUI uses this signal — combined with the `roles: string[]` parameter (see 
 - `03-event-system.md` "Agent Idle" section: extend the rule from "on every `agent_end`" to "at startup AND on every `agent_end`". Payload type for `agent.tool.*` events: `tool_call_id: string` (not `number`).
 - `06-agent-model.md`: `AgentBody` class signature's `start()` comment is updated; "Tool Telemetry" section drops the counter paragraph; `BashResult` / `notify` / `write_file` spec notes captured in the same file (J1, J2, J5) reflect their decisions.
 - `ui/tui.md` Contract: `roles: string[]` is required; sourced from `.md` filename stems (alphabetical), not `TEAM.md`. Used for initial agents-panel render.
-- TUI agents-panel at boot: populated immediately from `roles` + the per-body startup `agent.idle`. Never-prompted agents are visible from the start.
+- TUI agents-panel at boot: populated from `roles` + the per-body startup `agent.idle` (the **original J6 design**, since reversed by ADR 24). Under the new design, the agents-panel is populated from `{team_id}.team.loaded` for each loaded team, published by the `JieHandle` (per ADR 24). Never-prompted agents are visible from the start.
 - The prior session's `Map<pi_toolCallId, uint32>` design is **superseded** and removed from any tracker or ADR.

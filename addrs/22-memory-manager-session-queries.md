@@ -74,7 +74,10 @@ export interface StartJieOptions {
   mcpServers:  McpServerConfig[];
   resumeSessionId?:     string;        // --resume <id>
   continueLastSession?: boolean;      // --continue
-  onIdle?:     () => void;
+  // Note: the original ADR 22 also listed `onIdle?: () => void;` here.
+  // That field was removed in ADR 24 (the TUI does not need an idle
+  // callback; it consumes events directly, and the CLI's `-p` mode owns
+  // its own idle gate). The current shape has no `onIdle` field.
 }
 ```
 

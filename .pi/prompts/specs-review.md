@@ -12,6 +12,7 @@ To hammer out a solid specs with 0 surprises.
 - Update specs to reflect our decisions, update `./review-tracker.md` for the progress (the tracker is a temporary file). Compact information that has been resolved, we should shift focus on outstanding items.
 - Do not ask trivial questions that have no consequential impact.
 - after a group of specs has been reviewed, perform below checklist then ask me before moving on to the next group.
+- If no gaps are found, just tell me. After all gaps are resolved, clean up the `./review-tracker.md`.
 
 ### Checklist
 - When an important decision is done, write our architectural design decision to dir `./addrs/<N>-<name>.md`, only record those that are consequential to software architecture, keep simple and conscise.

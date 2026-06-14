@@ -17,16 +17,18 @@ Tool telemetry events (`agent.tool.call`, `agent.tool.result`) and domain events
 
 ## Agent Status (in TUI)
 
-With heartbeats removed, the TUI derives agent status from the following:
+The TUI derives agent status from the following (after ADR 24 — the body no longer publishes `agent.idle` at startup; the boot signal is `{team_id}.team.loaded`):
 
 | TUI display | Derived from |
 |---|---|
-| Agent is alive | AgentBody is instantiated and subscribed to EventBus |
-| Agent is busy | `agent.stream.chunk` or `agent.tool.call` was recently received for this agent, and no `agent.idle` has followed |
-| Agent is idle | `agent.idle` event received; no subsequent streaming or tool activity |
+| Agent is alive | The agent's `(role, agent_key)` is listed in a `{team_id}.team.loaded` event for the active team. The TUI subscribes to `{team_id}.team.loaded` per loaded team and populates the agents-panel on receipt. |
+| Agent is busy | `agent.turn.start` for this agent was received AND no subsequent `agent.idle` has followed; OR `agent.stream.chunk` / `agent.tool.call` was recently received for this agent and no `agent.idle` has followed. |
+| Agent is idle | Default state. `agent.idle` for this agent was received AND no subsequent `agent.turn.start` has been observed; OR the agent has published no events yet (initial state). |
 | Agent errored | Domain event received with `error:` prefix in `prompt` (e.g., `error: "..."`) |
 
-The TUI does not need a heartbeat interval — it observes events as they arrive on the bus. Since everything is in-process, there is no network partition or missed-event concern.
+The "still busy" derivation in the `busy` row above is what the body-side alternation (Event-Order Contract, `03-event-system.md`) makes reliable: every `agent.idle` is preceded by an `agent.turn.start` for the same turn, so the TUI's per-body state machine cannot observe `agent.idle` without a preceding `agent.turn.start` having been seen.
+
+The TUI does not need a heartbeat interval — it observes events as they arrive on the bus. Since everything is in-process, there is no network partition or missed-event concern. For the queue-pickup flicker (a brief `agent.idle` between turns when the body picks up the next queued prompt), the TUI should debounce: `agent.idle` followed by `agent.turn.start` for the same body within ~50 ms is "still busy". See `ui/tui.md` "Degraded States".
 
 ## Error Surfacing
 
