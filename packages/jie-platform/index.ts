@@ -33,3 +33,9 @@ export {
 export type { ExecutionContext, Tool, ToolResult } from "./tools/types.ts";
 export type { ToolRegistry } from "./tools/tool-registry.ts";
 export { InMemoryToolRegistry } from "./tools/tool-registry.ts";
+export type { AgentSoul, TeamBlueprint, ToolSpec } from "./team/types.ts";
+export {
+  parseTeamFromManifests,
+  loadTeamFromDir,
+  loadMinimalTeam,
+} from "./team/index.ts";
