@@ -49,7 +49,7 @@ A single `jie` process can host multiple teams' bodies. Team-specific channels a
 | `agent.tool.call` | Tool invocation about to execute |
 | `agent.tool.result` | Tool execution completed |
 | `agent.queue.update` | Agent's in-memory prompt queue changed (enqueue or dequeue) |
-| `agent.turn.start` | Agent began a turn (pi-agent `turn_start` bridged to bus; used by `-p` mode for all-agents-idle detection) |
+| `agent.turn.start` | Agent began a turn (pi-agent `turn_start` bridged to bus; consumed by `JieHandle.waitForIdle` internally for all-agents-idle detection) |
 | `agent.idle` | Agent entered idle state |
 
 The team-blueprint author writes **unscoped** names in `.md` (`leader.prompt`, `leader-1`, `task.recorded`) and in `notify` calls. The platform prefixes `{team_id}.` at body construction (for subscriptions) and at publish time (for `notify`). The agent's view is un-scoped; the bus's view is team-scoped. See ADR 21.
@@ -83,7 +83,7 @@ interface AgentEvent<T extends string = string> {
 ```typescript
 type PlatformEventPayload<T extends PlatformEventType> =
   T extends 'leader.prompt'        ? { prompt: string } :
-  T extends 'agent.stream.chunk'   ? { stream_id: number; seq: number; text: string } :
+  T extends 'agent.stream.chunk'   ? { stream_id: number; seq: number; block_type: "text" | "thinking"; text: string } :
   T extends 'agent.stream.end'     ? { stream_id: number; total_chunks: number } :
   T extends 'agent.tool.call'      ? { tool_call_id: string; name: string; input: string; input_truncated: boolean } :
   T extends 'agent.tool.result'    ? { tool_call_id: string; name: string; output: string | null; output_truncated: boolean; duration_ms: number; error: string | null } :
@@ -115,8 +115,8 @@ type PlatformEventType =
 LLM output originates from pi-agent's `message_update` events (per-token deltas). Jie buffers and publishes `agent.stream.chunk` on its EventBus:
 
 - **Source**: pi-agent's `agent.subscribe(listener)` receives `message_update` events. Each carries an `assistantMessageEvent` with text/thinking/tool_call delta content.
-- **Buffering**: Jie accumulates delta text. Flush when buffer reaches **64 characters** or **200 ms** elapsed since first buffered token.
-- **Publish**: `agent.stream.chunk` — `{ stream_id, seq, text }`. `stream_id` is a per-LLM-invocation counter; `seq` is the chunk ordinal within that stream.
+- **Buffering**: Jie accumulates delta text per `block_type` (`"text"` for `text_delta` events, `"thinking"` for `thinking_delta` events; tool_call deltas are not streamed). Flush when the buffer reaches **64 characters**, **200 ms** elapsed since the first buffered token, or the `block_type` changes (transitions flush the prior buffer first so each chunk carries content of one type).
+- **Publish**: `agent.stream.chunk` — `{ stream_id: number; seq: number; block_type: "text" | "thinking"; text: string }`. `stream_id` is a per-LLM-invocation counter; `seq` is the chunk ordinal within that stream; `block_type` is `"text"` for user-visible text or `"thinking"` for thinking content; `text` is the chunk text.
 - **Completion**: On `message_end` (assistant response finalized), flush remaining buffer, publish final chunk, then publish `agent.stream.end` with `{ stream_id, total_chunks }`.
 
 Tunables (`stream_chunk_size`, `stream_flush_ms`) are in `10-configuration.md`. The TUI and `-p` mode consume these events. See `06-agent-model.md` pi-agent Integration Contract for the full event bridging table.

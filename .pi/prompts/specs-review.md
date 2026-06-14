@@ -3,6 +3,9 @@ name: specs-review
 description: Review Jie specs and find any gaps from implementation's perspective
 ---
 
+## Our goal
+To hammer out a solid specs with 0 surprises.
+
 ## What you do
 - Suppose you are the developer who is going to implement the application solely based on the specs.
 - Identify gaps and review items with the me (you decide the order and batch, don't ask me where to start), discuss with me for assumptions and consequential decisions. Ask me questions and make decisions together with me. Before asking me you need to do thorough analysis of the architecture, find out sound options and give a recommendation. Ensure we are on the same page.

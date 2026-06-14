@@ -328,7 +328,7 @@ Transient provider failures (HTTP 429, 5xx, network errors, or DuckDuckGo HTML l
 | Policy | Value |
 |---|---|
 | URL schemes | `http`, `https` only. Other schemes (e.g. `file:`, `ftp:`, `data:`) are rejected with a tool error. |
-| Redirects | Follow up to 5 redirects (6 total HTTP requests: initial + 5 hops; the 6th response is delivered). All hop URLs must be `http` or `https`; a redirect to any other scheme (`file:`, `ftp:`, `data:`, `javascript:`, etc.) is rejected with a tool error `redirect_exhausted`. Relative redirects resolve to the previous URL's origin first, then the hop-scheme check applies. Exceeding the 5-redirect limit also surfaces `redirect_exhausted`. |
+| Redirects | Bun's default `redirect: 'follow'` is used (follows up to 20 redirects). The tool does not validate intermediate hop schemes; Bun's default hop handling is in effect. The tool surfaces `redirect_exhausted` when Bun's redirect handling fails for any reason (too many redirects, network error during redirect, etc.). |
 | Max response body | 5 MiB. Larger responses are truncated at 5 MiB and `truncated: true` is set. |
 | TLS | Validation enabled. Self-signed certs are not accepted in v1. |
 | User-Agent | `JieBot/0.1 (+https://github.com/cuzfrog/jie)` |
@@ -637,9 +637,9 @@ pi-agent emits events via `agent.subscribe(listener)`. Jie subscribes to these a
 | `agent_start` | — | Internal lifecycle; not published |
 | `agent_end({ messages })` | — | Marks LLM loop completion; body then publishes `agent.idle`. Compaction detection is **not** in this listener — the body's `transformContext` wrapper owns that (see `08-memory.md` "Integration with pi-agent"). |
 | `message_end({ message })` | — | Triggers `memory.persist(message, agent_key, session_id, team_id)` — unconditional, no role check. pi-agent does not emit `message_end` for `CompactionSummaryMessage` injected by `transformContext`; that path is owned by the body's `transformContext` wrapper (see `08-memory.md`). |
-| `message_update({ message, assistantMessageEvent })` | `agent.stream.chunk` | Buffered: flush at 64 chars or 200ms (see below) |
+| `message_update({ message, assistantMessageEvent })` | `agent.stream.chunk` | Buffered per `block_type` (`"text"` / `"thinking"`); flush at 64 chars, 200ms, or block-type change (see Streaming Pipeline) |
 | `message_start({ message })` | — | Streaming bookkeeping; no bus event |
-| `turn_start` | `agent.turn.start` | Bridged to the bus on every pi-agent `turn_start`. Used by `-p` mode to detect "all agents idle" (paired with `agent.idle`). Empty payload `{}`; the envelope carries `agent_role` and `agent_key`. |
+| `turn_start` | `agent.turn.start` | Bridged to the bus on every pi-agent `turn_start`. Consumed by `JieHandle.waitForIdle` internally for "all agents idle" detection (paired with `agent.idle`). Empty payload `{}`; the envelope carries `agent_role` and `agent_key`. |
 | `turn_end({ message, toolResults })` | — | Turn bookkeeping. pi-agent decides loop continuation based on `message.stopReason` and `ToolResult.terminate`. |
 | `tool_execution_start` | — | Deferred to Day 2 (currently `beforeToolCall` covers this) |
 | `tool_execution_update` | — | Deferred to Day 2. v1's adapter discards the `onUpdate` callback from pi-agent (the Jie `Tool` interface has no `onUpdate` parameter); no bus event is published. Observers see only the final `agent.tool.result`. Day 2+ may add a `tool_execution_update` bus event and grow the `Tool` interface to accept partial updates. |
@@ -651,10 +651,11 @@ Jie uses `turn_end` for turn bookkeeping only. Loop continuation is pi-agent's r
 
 pi-agent emits `message_update` on every token delta (text/thinking/tool_call content). Jie buffers these:
 
-1. On first `message_update` of a new stream, allocate a new buffer, `stream_id` (per-LLM-invocation counter), and start a flush timer (`setTimeout`, `stream_flush_ms` default 200ms).
-2. Append delta text to the buffer.
-3. Flush when: buffer length ≥ `stream_chunk_size` (default 64 chars), or the flush timer fires (200ms since first buffered char). On flush, publish `agent.stream.chunk` with `{ stream_id, seq, text }`, reset the buffer, and clear the timer.
-4. On `message_end` (assistant response complete), clear the timer, flush remaining buffer as final chunk, and publish `agent.stream.end` with `{ stream_id, total_chunks }`.
+1. On first `message_update` of a new stream, allocate a new buffer, `stream_id` (per-LLM-invocation counter), record the current `block_type` (`"text"` for `text_delta` events, `"thinking"` for `thinking_delta` events; tool_call deltas are not streamed), and start a flush timer (`setTimeout`, `stream_flush_ms` default 200ms).
+2. If the new event's `block_type` differs from the current `block_type`, flush the current buffer first (publishing a chunk with the prior `block_type`), then reset the buffer and record the new `block_type`. This ensures each chunk carries content of one block type.
+3. Append delta text to the buffer.
+4. Flush when: buffer length ≥ `stream_chunk_size` (default 64 chars), or the flush timer fires (200ms since first buffered char). On flush, publish `agent.stream.chunk` with `{ stream_id, seq, block_type, text }`, reset the buffer, and clear the timer.
+5. On `message_end` (assistant response complete), clear the timer, flush remaining buffer as final chunk, and publish `agent.stream.end` with `{ stream_id, total_chunks }`.
 
 Streaming events are published on Jie's EventBus; the TUI and `-p` mode consume them.
 
@@ -687,7 +688,7 @@ Memory has two write paths in the body, both unconditional:
 - **`message_end` → `persist`**: On every `message_end` from pi-agent, the body calls `memory.persist(message, agent_key, session_id, team_id)` — write-through to SQLite. No role check; the listener does not special-case summaries.
 - **`transformContext` wrapper → `compact`**: The body passes a wrapped `transformContext` to pi-agent. The wrapper calls the inner `transformContext`, diffs input vs. output for newly-added `CompactionSummaryMessage` entries, and calls `memory.compact(range, summary, agent_key, session_id, team_id)` for each. The wrapper is invariant across days: in v1 the inner is identity (no compaction → wrapper is a no-op); in Day 2+ the inner is pi-agent's actual compaction logic (or a custom implementation) and the wrapper persists the produced summaries. Compaction is trigger-agnostic — `/compact` slash command, pi-agent's auto-threshold, or Day 2+ team hooks all funnel through `transformContext` and the wrapper persists.
 
-Memory is durable but session-scoped: a new process run gets a new `session_id`, so agents start with clean conversations each time. Memory restore is used only for debugging or future compaction-aware replay.
+Memory is durable and session-scoped. The `session_id` is supplied by `JieHandle` at construction (per ADR 20 and ADR 22). Without `--resume` or `--continue`, a new process run mints a fresh `session_id` (ULID via `ulid@2.3.0`) and the agent starts with a clean conversation. With `--resume <id>`, the named `session_id` is validated and used; `memory.restore()` returns prior rows for that session. With `--continue`, the most-recent `session_id` for the current `team_id` is used; `memory.restore()` returns prior rows for that session. In all three cases, `memory.restore()` is the normal Day 1 path, not a debug-only or future-only feature.
 
 `memory.compact()` writes the summary row and the raw range's `compacted=1` flag updates in a single `Storage.transaction()`. The `compactionSummary` role's row is owned exclusively by `compact()`; `persist()` does not write summaries because pi-agent does not emit `message_end` for `CompactionSummaryMessage` injected by `transformContext`. See `08-memory.md` "Compact" and "Integration with pi-agent" for the full contract.
 

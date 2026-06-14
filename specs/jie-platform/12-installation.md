@@ -122,5 +122,5 @@ jie -p "instruction"   # One-shot print mode
 | Install script fails on bun check | `bun --version`. Must be ≥ 1.3.14. Upgrade: `bun upgrade` or see bun.sh. |
 | Install script fails on platform | Native Windows is unsupported. Use WSL2. |
 | `jie` can't find config | Run from within the workspace or create `.jie/settings.json`. |
-| `jie` exits 1 with "model resolution failed for N agents" | No global default model is set. Run `jie login` (once) and `jie model <provider>/<modelId>` to configure. See `10-configuration.md` "Model Resolution". |
+| `jie` exits 1 with "No model has been selected, please login and select a default model." | No global default model is set. Run `jie login` (once) and `jie model <provider>/<modelId>` to configure. See `10-configuration.md` "Model Resolution". |
 | `jie` errors at LLM call time with "no API key found" | Run `jie login` for the resolved provider (or `jie --api-key <key>` for a one-shot write to `auth.json`). The platform does not read provider env vars in v1; `auth.json` is the only source. See `10-configuration.md` "Credentials Resolution Order". |

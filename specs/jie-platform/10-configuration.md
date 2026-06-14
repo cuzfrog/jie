@@ -129,9 +129,9 @@ Implication: launching `jie` from a subdirectory of a project produces a workspa
 
 Open at the `.jie/artifacts.db` discovered by walking up from CWD — same walk as settings and team lookup (see "Workspace Inference" above). If the walked-up `.jie/` does not exist, the platform creates it at the walk's root so a fresh invocation works without manual `mkdir .jie`. SQLite, single-writer by design.
 
-## Hard-Coded Platform Tunables
+## Streaming Tunables
 
-The following platform constants are not user-configurable in v1:
+The following streaming-related platform constants are not user-configurable in v1. Other platform constants (tool timeouts, content caps, etc.) live in their respective tool sections.
 
 | Constant | Value | Role |
 |---|---|---|
