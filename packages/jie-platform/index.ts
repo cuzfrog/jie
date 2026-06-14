@@ -35,6 +35,12 @@ export type { ToolRegistry } from "./tools/tool-registry.ts";
 export { InMemoryToolRegistry } from "./tools/tool-registry.ts";
 export { createNotifyTool } from "./tools/notify.ts";
 export type { NotifyDeps } from "./tools/notify.ts";
+export { createBashTool } from "./tools/bash.ts";
+export type { BashDeps } from "./tools/bash.ts";
+export { createReadFileTool } from "./tools/read-file.ts";
+export type { ReadFileDeps } from "./tools/read-file.ts";
+export { createWriteFileTool } from "./tools/write-file.ts";
+export type { WriteFileDeps } from "./tools/write-file.ts";
 export type { AgentEvent } from "./core/agent-event.ts";
 export type { AgentSoul, TeamBlueprint, ToolSpec } from "./team/types.ts";
 export {
