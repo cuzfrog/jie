@@ -41,6 +41,20 @@ export { createReadFileTool } from "./tools/read-file.ts";
 export type { ReadFileDeps } from "./tools/read-file.ts";
 export { createWriteFileTool } from "./tools/write-file.ts";
 export type { WriteFileDeps } from "./tools/write-file.ts";
+export { createWriteArtifactTool } from "./tools/write-artifact.ts";
+export type { WriteArtifactDeps } from "./tools/write-artifact.ts";
+export { createReadArtifactTool } from "./tools/read-artifact.ts";
+export type { ReadArtifactDeps } from "./tools/read-artifact.ts";
+export {
+  createWebSearchTool,
+  DuckDuckGoSearchProvider,
+} from "./tools/web-search.ts";
+export type {
+  WebSearchDeps,
+  WebSearchProvider,
+  WebSearchResult,
+} from "./tools/web-search.ts";
+export { createWebFetchTool } from "./tools/web-fetch.ts";
 export type { AgentEvent } from "./core/agent-event.ts";
 export type { AgentSoul, TeamBlueprint, ToolSpec } from "./team/types.ts";
 export {
