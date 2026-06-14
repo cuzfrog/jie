@@ -68,3 +68,8 @@ Phases 1–3 have parallel tracks; Phases 4–7 are sequential.
 
 ## Functional AC
 `specs/jie-platform/00-user-scenarios.md`
+
+## E2E test local LLM
+- OpenAI compatible endpoint: 192.168.1.6:12345/v1
+- provider: custom/lmstudio
+- model: `qwen3.5-2b`
