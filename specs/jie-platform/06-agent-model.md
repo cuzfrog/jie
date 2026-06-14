@@ -128,7 +128,9 @@ The team-blueprint loader validates the manifest format during `startJie`'s team
 | `tools:` field is missing on an agent `.md` | `missing required field 'tools' in <file>` |
 | Two `.md` files in the team directory share the same stem (per ADR 18) | `duplicate role '<stem>' in <team_dir>` |
 | `TEAM.md` is missing for a multi-agent team (≥2 `.md` files in the directory but no `TEAM.md`) | `TEAM.md is required for multi-agent teams; no leader can be resolved (found <N> agent files in <team_dir>)` |
+| `TEAM.md` is present but its `leader:` field is missing, empty, or not a string (e.g. empty frontmatter, or `leader:` with no value) | `TEAM.md 'leader' field is required (found no value in <team_dir>)` |
 | `TEAM.md` is present but its `leader:` field references a role stem that has no matching `.md` file | `TEAM.md 'leader' field references unknown role '<stem>'; checked <team_dir>/` |
+| `TEAM.md` is present for a single-agent team (1 `.md` file) and its `leader:` field does not match the single role's stem | `TEAM.md 'leader' field '<value>' does not match the single agent role '<stem>' in <team_dir>` |
 | A referenced tool (e.g. `mcp:<server>:<method>`) cannot be resolved | (covered separately — see `10-configuration.md` "Cascade: Agent Load Failure") |
 
 A team directory with **no `.md` files at all** is silently ignored — it is not a parse error, it is not a load failure. `loadTeam(teamId)` for such a team resolves with an empty body roster (`bodiesFor` returns `[]`, `rolesFor` returns `[]`). The team is "loaded" in the sense that it occupies a slot in `loadedTeams`, but it has nothing to run. (This is mostly relevant for `--team <id>` validation — `jie team <id>` would still print `team '<id>' is not installed` because the directory is empty; `loadTeam` is reachable from the platform but not from the CLI's team-selection paths.)
@@ -162,10 +164,24 @@ After parsing, the platform constructs `AgentSoul` instances with auto-computed 
 | Subscription (team view) | Bus subject | Who gets it |
 |---|---|---|
 | `{agent_key}` | `{team_id}.{agent_key}` | Every agent (auto, based on role name and instance N) |
-| `leader.prompt` | `{team_id}.leader.prompt` | Leader only (auto, based on `TEAM.md` `leader` field) |
+| `leader.prompt` | `{team_id}.leader.prompt` | Leader only (auto, based on the team's leader identification — see below) |
 | Domain topics from `subscribe:` | `{team_id}.{domain_topic}` | Per agent `.md` frontmatter, if the field is present |
 
 `subscribe:` is optional in the frontmatter (see Frontmatter fields above). When absent, the agent's only subscriptions are the auto-subscriptions in the first two rows. The platform's auto-wiring never adds other subscriptions.
+
+**Leader identification.** Whether a role is the team leader is a team-level fact. The team-blueprint loader determines it and passes `is_leader: boolean` to each body's constructor (see `AgentBody` class signature above). The rules:
+
+| Team shape | Leader | `is_leader` per body |
+|---|---|---|
+| **Multi-agent team** (≥2 `.md` files) with `TEAM.md` | `TEAM.md`'s `leader:` field (a role stem) | `true` for the matching role's body; `false` for all others |
+| **Multi-agent team** (≥2 `.md` files) **without** `TEAM.md` | (no leader can be resolved) | (parse error: `TEAM.md is required for multi-agent teams; ...`, per "Parse Errors" below) |
+| **Single-agent team** (exactly 1 `.md` file) with `TEAM.md` | `TEAM.md`'s `leader:` field (must match the single role's stem) | `true` for the single body; `false` is unreachable |
+| **Single-agent team** (exactly 1 `.md` file) **without** `TEAM.md` | The single role (implicitly the leader — there is no other role to lead) | `true` for the single body |
+| **Empty team** (no `.md` files) | (no leader can be resolved) | (silently ignored, per "Parse Errors" below) |
+
+The single-agent-without-`TEAM.md` case is the implicit-leader rule: with no `TEAM.md` and one role, the role *is* the leader by construction. The loader sets `is_leader: true` for the single body. The auto-subscription row above (`leader.prompt`) is wired for the single body in this case.
+
+The empty-team case (no `.md` files at all) is silently ignored by the loader — `loadTeam(teamId)` returns a `TeamBlueprint` with an empty roles array; no bodies are constructed. This is a parse edge case, not a normal team shape; the CLI's `-p` mode must guard against an empty team (see `ui/cli.md` `jie -p` step 5).
 
 ## Tool
 
@@ -228,8 +244,8 @@ Behavior inside the body:
 
    On rejection, the body returns the error to the LLM; no event is published. The `<reason>` field names the specific failure (e.g., `empty`, `starts_with_agent_prefix`, `starts_with_team_prefix`, `contains_null_byte`) so the LLM can fix the call. Per the user's correction: the platform catches "wrong topic" generically — the `{team_id}.` check is one of several validation rules, not a dedicated special case. The LLM learns the rule once and stops making the mistake.
 
-2. **Publish** `{ topic, prompt, source: this.agent_key, team_id: this.team_id }` to `{team_id}.{topic}` on the event bus. The team's view is unscoped (the LLM supplies just `topic`); the body prefixes `{team_id}.` per `03-event-system.md` "Subject Schema" (ADR 21).
-3. The publishing agent's `AgentBody` subscription callback filters self-receipt: when the callback receives an event whose `payload.source` matches its own `agent_key`, it skips processing (per ADR 9 §3 — `Self-receipt filtering`). The `EventBus` itself is transport-agnostic and does not know about agent identity; putting the filter on the bus would leak Jie agent concepts into the transport, and a future `NatsEventBus` would have no agent-key awareness to filter against. The bus also catches per-subscriber exceptions (see `03-event-system.md` "Error Containment") and continues dispatch — a misbehaving subscriber does not poison the publisher.
+2. **Publish the `AgentEvent` envelope** to `{team_id}.{topic}` on the event bus. The body's notify execution fills the envelope: `event_type` is `topic` (the unscoped name from the LLM); `payload` is `{ prompt, source }` per `PlatformEventPayload` for non-platform events; `team_id` is `this.team_id`; `agent_role` is `this.soul.role`; `agent_key` is `this.agent_key`; `version` is `1`; `timestamp` is the current ISO 8601 string. The bus's `payload` parameter to `publish()` IS the envelope — there is no shorthand or partial-publish path. The team's view is unscoped (the LLM supplies just `topic`); the body prefixes `{team_id}.` in the subject per `03-event-system.md` "Subject Schema" (ADR 21). The full wire-format contract is in `03-event-system.md` "Event Envelope" and `02-protocol-stack.md` "Prompt Ingress".
+3. The publishing agent's `AgentBody` subscription callback filters self-receipt: when the callback receives an event whose `envelope.payload.source` matches its own `agent_key`, it skips processing (per ADR 9 §3 — `Self-receipt filtering`). The bus invokes the callback with `(subject, envelope)`; the body reads `envelope.payload.source` for the self-receipt check. The `EventBus` itself is transport-agnostic and does not know about agent identity; putting the filter on the bus would leak Jie agent concepts into the transport, and a future `NatsEventBus` would have no agent-key awareness to filter against. The bus also catches per-subscriber exceptions (see `03-event-system.md` "Error Containment") and continues dispatch — a misbehaving subscriber does not poison the publisher.
 4. The LLM-visible return is a human-readable string summarizing delivery. The LLM-facing `recipients` count is `subscriberCount({team_id}.{topic})` minus self if the publisher is itself subscribed to `{team_id}.{topic}` (i.e., if the topic is in `AgentSoul.subscriptions`). The bus-level `subscriberCount({team_id}.{topic})` is the raw transport count and is unchanged; the LLM-facing number is the count of OTHER agents that would receive the message after self-receipt filtering. `details.recipients` carries the same LLM-facing number — observers see what the LLM was told.
 
    | LLM-facing `recipients` | LLM-visible `content` |
@@ -246,6 +262,23 @@ On receipt, an agent formats the notification as a synthetic `user` message in t
 The built-in team blueprint uses domain topics for pipeline progression. Prose examples use shorthand `notify('topic', 'prompt')` for readability; the actual LLM call follows the TypeBox schema: `notify({ topic: string, prompt: string })`.
 
 **Business identifiers are not a platform concept.** `task_id`, `work_id`, and any other team-defined identifier are the **team's** concern, not the platform's. The body treats the `topic` and `prompt` of a `notify` call as opaque strings; it does not parse them for business meaning. The receiving agent's LLM extracts identifiers from the synthetic `user` message as part of its reasoning. The platform has no `task_id` field, no work-tracking primitive, and no implicit propagation of identifiers across turns. This is consistent with ADR 7 (which removed `work_id` from `ExecutionContext`): the platform is generic; the team owns its own identifier scheme.
+
+Description (LLM-facing):
+
+```
+notify({ topic, prompt }): Publish a message to the team-scoped event bus on
+`{team_id}.{topic}`. The receiving agent (any agent whose `subscribe:` field
+lists this topic, or the agent addressed by `topic` if it is an agent_key)
+will see the message as a synthetic user-style entry: `[{source_agent_key}
+on '{topic}']: {prompt}`. Self-receipt is filtered: notifying your own
+agent_key produces 0 actual recipients. Returns the number of OTHER
+recipients (after self-receipt filtering); `0` means no peer is listening
+on the topic — reconsider the topic name, fall back to a different path,
+or surface the issue to the user. Topic names must not start with `agent.`
+(platform events; observer-only) or with `{team_id}.` (the platform manages
+the prefix); empty topics and control characters are rejected. `notify` is
+the SOLE means of inter-agent communication. Does NOT end the turn.
+```
 
 ### Built-in Tool: `bash`
 
@@ -288,6 +321,29 @@ Rules:
   - The command itself is **not** echoed in the output — the LLM knows what it sent.
   - `details` carries the structured `exitCode` and `truncated` flags for afterToolCall hooks (TUI render, diagnostics).
 - **Failure mode.** Bash **does not throw on non-zero exit code**. The LLM reads the exit code from the text and reasons about it. Throwing would set `isError: true` in pi-agent's `ToolResultMessage` but discard stdout/stderr — the LLM would lose the actual output, which is precisely what it asked for. Conveying failure in the text is the correct trade-off.
+
+Description (LLM-facing):
+
+```
+Execute a shell command in `/bin/sh` (POSIX) within the workspace root. The
+command runs with a 300s timeout (SIGTERM, then SIGKILL after a brief grace).
+stdout and stderr are each independently truncated to 32 KiB. Output is
+formatted as `exit_code: <N>` followed by `--- stdout ---` and `--- stderr ---`
+sections (empty sections are omitted). Non-zero exit codes are reported in
+the text, not as a typed error — read the `exit_code` line. The `workdir`
+argument, if provided, is resolved relative to the workspace root and must
+stay inside it (workspace containment; `workdir_escape` on violation). Use
+this for arbitrary shell work (running scripts, invoking CLI tools,
+inspecting the filesystem, etc.); use `read_file` / `write_file` for simple
+text I/O.
+```
+
+Errors (snake_case codes, surfaced as typed tool errors via pi-agent's `isError: true`; the LLM sees the code and a human-readable message):
+
+| Code | Condition |
+|---|---|
+| `workdir_escape` | `workdir` resolves outside the workspace root. |
+| `command_timed_out` | The platform's own 300s timeout fired (SIGTERM, then SIGKILL). OS-level signal-kills from outside the platform surface as a normal non-zero exit (`exit_code: 143` for SIGTERM, `137` for SIGKILL) — not as `command_timed_out`. |
 
 ### Built-in Tools: `web_search` and `web_fetch`
 
@@ -335,9 +391,43 @@ Transient provider failures (HTTP 429, 5xx, network errors, or DuckDuckGo HTML l
 | Timeout | Inherits the tool's 120s default. |
 | Status code | The final response's status is reported in the return value as `status: number`. All status classes (2xx, 3xx-redirected-to-2xx, 4xx, 5xx) are returned with the body. The LLM branches on `status`; the platform does not surface non-2xx as a typed tool error. |
 | Encoding | UTF-8 default; if `Content-Type` declares a charset, that charset is used. If the declared charset is unsupported by Bun's `TextDecoder` (e.g. `Shift_JIS`, `EBCDIC`, `ISO-2022-JP`), the tool falls back to UTF-8 with replacement chars (`\uFFFD` for unconvertible bytes); the tool does not surface `unsupported_charset` as a typed error — best-effort text in UTF-8 is the result. |
-| Content conversion | HTML is parsed with `node-html-parser@6.1.13` (per `monorepo-structure.md` runtime deps). The parser removes `<script>`, `<style>`, `<nav>`, `<header>`, `<footer>` elements and their descendants, then returns the text content. `node-html-parser`'s text extraction decodes HTML entities (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&#NNN;`, `&xHHHH;`) — no separate unescape step needed. The returned text may contain residual whitespace from block-level tags; the LLM tolerates this. The tool classifies the response by `Content-Type` header. **Text-like types** — `text/*` (HTML parsed by `node-html-parser@6.1.13`; non-HTML `text/*` returned verbatim), plus `application/json`, `application/xml`, `application/javascript`, `application/x-www-form-urlencoded` (returned verbatim, no HTML parsing) — are processed and returned as text. **Binary types** — `image/*`, `application/octet-stream`, `application/pdf`, `application/zip`, and any other type not in the text-like list above — return a typed tool error `unsupported_content_type: <type>`. A missing or unparseable `Content-Type` header is treated as `application/octet-stream` (binary → error). |
+| Content conversion | HTML is parsed with `node-html-parser@6.1.13` (per `monorepo-structure.md` runtime deps). The parser removes `<script>`, `<style>`, `<nav>`, `<header>`, `<footer>` elements and their descendants, then returns the text content. `node-html-parser`'s text extraction decodes HTML entities (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&#NNN;`, `&xHHHH;`) — no separate unescape step needed. The returned text may contain residual whitespace from block-level tags; the LLM tolerates this. The tool classifies the response by `Content-Type` header. **Text-like types** are processed and returned as text; **binary types** return a typed tool error `unsupported_content_type: <type>`. A missing or unparseable `Content-Type` header is treated as `application/octet-stream` (binary → error). The text-like / binary split is a curated list, not a media-type-pattern rule; the list is intended to cover the common LLM-relevant cases and is easy to extend if a new format is needed. |
+
+**Text-like types (returned as text, never parsed as HTML):**
+
+| `text/*` | `text/html` is parsed by `node-html-parser@6.1.13` (entity-decoded, `script`/`style`/`nav`/`header`/`footer` removed); all other `text/*` (e.g. `text/plain`, `text/csv`, `text/markdown`, `text/xml`, `text/yaml`) are returned verbatim. |
+| `application/json` and structured-suffix variants | `application/json`, `application/ld+json` (JSON-LD), `application/manifest+json`, `application/vnd.api+json` — all returned verbatim. |
+| `application/xml` and XML-suffix variants | `application/xml`, `application/atom+xml`, `application/rss+xml`, `application/xhtml+xml` — all returned verbatim. (Note: `application/xhtml+xml` is technically XML; the rule is "verbatim, no HTML parsing" regardless of how the subtype is named.) |
+| `application/javascript` family | `application/javascript`, `application/ecmascript`, `application/x-javascript` — returned verbatim. |
+| Form and structured-data encodings | `application/x-www-form-urlencoded`, `application/yaml`, `application/x-yaml`, `application/toml`, `application/sql`, `application/graphql`, `application/graphql+json` — all returned verbatim. |
+
+**Binary types (return `unsupported_content_type: <type>`):** `image/*` (e.g. `image/jpeg`, `image/png`, `image/gif`, `image/webp`, `image/svg+xml` — the latter is text but treated as binary because the LLM rarely wants raw SVG markup), `application/pdf`, `application/zip`, `application/octet-stream`, `application/x-tar`, `application/gzip`, `application/x-gzip`, `application/x-bzip2`, and any other `application/*` not in the text-like list above. The list is open-ended by design: any `application/*` subtype not enumerated as text-like falls to binary. If a new text-like format becomes common (e.g. `application/protobuf` text form), it can be added to the text-like list without changing the rule's shape.
 
 The return type is `{ content: string; status: number; truncated: boolean }` — the interface is **format-agnostic**. The `content` field carries whatever text the adapter produces; `status` is the final HTTP status code after the redirect chain (so a 3xx-redirected-to-2xx returns the 2xx status); `truncated` reports whether the body was clipped at the 5 MiB cap. The tool contract is "give the LLM the text, the final status, and tell it if you had to cut it off." For non-2xx responses (4xx, 5xx) the body is still returned in `content` (so the LLM can read error pages or JSON error schemas) — the status code is the LLM's signal for branching or retry.
+
+Description (LLM-facing):
+
+```
+web_search(query, max_results?): Run a web search and return up to max_results
+results (default 5; max 20 — values above 20 are silently clamped). Each
+result is { title, url, snippet }. The default backend scrapes DuckDuckGo
+HTML (no API key required). Transient failures (HTTP 429, 5xx, network
+errors, no results) surface as `web_search_failed: <message>`; the LLM is
+not given a stack trace.
+
+web_fetch(url): Fetch a URL and return its text content. Supports http/https
+only (file://, ftp://, data:// are rejected). Follows up to 20 redirects.
+Response body is capped at 5 MiB (truncated flag set if clipped). HTML
+responses are parsed with `node-html-parser` (script/style/nav/header/footer
+removed, entities decoded); other text-like types (text/plain, application/
+json, application/xml, application/javascript, application/x-www-form-url-
+encoded) are returned verbatim. Binary types (image/*, application/pdf,
+application/zip, application/octet-stream, etc.) return `unsupported_content_
+type: <type>`. The final HTTP status (after redirects) is in `status` — all
+status classes are returned with the body, including 4xx/5xx (the LLM
+branches on `status`; the platform does not surface non-2xx as an error).
+Inherits the tool's 120s timeout.
+```
 
 ### Built-in Tools: `write_artifact` and `read_artifact`
 
@@ -361,6 +451,28 @@ The TypeScript signatures above are the LLM-facing return shapes. The tool's `ex
 - `read_artifact` — returns the entry at `key`. A missing artifact is a normal result (formatted message in `content`, `null` in `details`), not a tool error — the LLM can reason about the miss. The platform does not validate the key on read; an invalid key (e.g. wrong charset) just returns the "not found" result, consistent with the "missing is normal" rule.
 
 These are the only two artifact tools exposed to agents. Artifact content is never passed in event payloads; events carry only `artifact_id`.
+
+Description (LLM-facing):
+
+```
+write_artifact(key, content): Store `content` (a string) at `key` in the team's
+shared artifact store. Overwrites the existing entry if `key` is already
+present. The agent builds the full key (e.g. `{task_id}/plan`,
+`{task_id}/research`); the platform does not generate ids. Key charset:
+`[A-Za-z0-9_./-]{1,256}` (`invalid_artifact_key: <value>` on violation).
+Content cap: 5 MiB / `content.length` chars (`artifact_too_large: <bytes>`
+on violation). Returns the canonical `{ key, created_at }` so the artifact
+can be referenced in subsequent event payloads. Use the artifact store for
+inter-agent work products (plans, research notes, code-change summaries)
+that outlive a single tool call.
+
+read_artifact(key): Read the entry at `key`. Returns the content verbatim
+on hit; on miss, returns `Artifact not found: <key>` (a normal result, not
+a tool error — the LLM can reason about the miss). The artifact store is
+NOT team-scoped by the platform: two teams using the same key collide. If
+your work product is team-specific, include the team id (available from
+ExecutionContext) in the key scheme.
+```
 
 ### Built-in Tool: `read_file`
 
@@ -525,19 +637,31 @@ Both events are **ephemeral** (NATS core pub/sub). They are **observer-only** �
 
 ```typescript
 class AgentBody {
-  readonly agent_key:          string;          // persistent instance identity: {role}-{N}
+  readonly agent_key:          string;          // persistent instance identity: {role}-{N} (e.g. 'leader-1', 'worker_a-1')
   readonly team_id:            string;          // team's identity; prefixes bus subjects (per ADR 21)
   readonly soul:               AgentSoul;       // immutable after construction
-  readonly is_leader:          boolean;         // true if this role is the TEAM.md leader
+  readonly is_leader:          boolean;         // true iff this role is the team's leader (see "Platform Auto-Wiring" below)
 
   private agent:       Agent;                   // pi-agent-core's Agent instance
   private bus:         EventBus;
   private artifacts:   ArtifactStore;
   private memory:      MemoryManager;           // see 08-memory.md
   private readonly session_id: string;          // per-team session id; supplied by JieHandle at construction (per 08-memory.md "Restore", ADR 20, and ADR 22)
+  private queue:       Array<AgentMessage>;     // in-memory prompt queue; see "Prompt Ingress & Queuing" below
 
-  start(): void {}    // subscribes to soul.subscriptions on bus (prefixed with team_id), publishes initial agent.idle, begins event loop
-  stop(): void {}     // unsubscribes, shuts down cleanly
+  constructor(opts: {
+    agent_key:  string;          // {role}-1 in v1 (single instance per role); supplied by the team-blueprint loader
+    team_id:    string;          // resolved team id (the directory name of .jie/teams/<id>/ or the minimal-team sentinel)
+    soul:       AgentSoul;       // the role's parsed soul
+    is_leader:  boolean;         // true iff this role is the team's leader; supplied by the team-blueprint loader (see "Platform Auto-Wiring")
+    bus:        EventBus;        // shared EventBus (single instance per process)
+    artifacts:  ArtifactStore;   // shared ArtifactStore
+    memory:     MemoryManager;   // shared MemoryManager (per ADR 14; the body uses the platform's MemoryManager instance, not its own)
+    session_id: string;          // per-team session id; supplied by JieHandle (per ADR 20 and ADR 22)
+  });
+
+  start(): Promise<void>  // (1) register bus subscriptions; (2) memory.restore() and push to agent.state.messages; (3) if last message is user/toolResult, agent.continue(); (4) start the queue-processing loop — if queue is non-empty, dequeue and agent.prompt(); otherwise, wait for new events. See the four-step "start()" ordering description below.
+  stop():  void           // unsubscribe, shut down cleanly
 }
 ```
 
@@ -545,7 +669,15 @@ class AgentBody {
 - Soul is immutable. An agent's role cannot change at runtime.
 - pi-agent's `Agent` handles the LLM loop, tool execution, streaming, and compaction.
 - The body is the **only** publisher of events on Jie's bus. The LLM expresses publication intent through `notify`; the body validates and executes the publish.
-- **`start()` ordering.** Subscriptions register first (to `{team_id}.{agent_key}` plus `{team_id}.leader.prompt` for the leader, plus `{team_id}.<topic>` for `soul.subscriptions` — the platform prefixes the team's view with `{team_id}.` per ADR 21), then the body begins processing the message queue. The body does **not** publish `agent.idle` at startup; the "this team is loaded" signal is the `{team_id}.team.loaded` event published by the `JieHandle` (per ADR 24). The body publishes `agent.idle` only on every `agent_end` — see `03-event-system.md` "Agent Idle" and "Event-Order Contract".
+- **`is_leader` is a constructor parameter, not a `AgentSoul` field.** The soul is the role's behavioral profile (model, system prompt, tools, subscriptions); whether the role is the team leader is a team-level fact owned by the team-blueprint loader and passed to each body's constructor. The body uses `is_leader` only to decide whether to auto-subscribe to `{team_id}.leader.prompt` (see "Platform Auto-Wiring" below). The same `AgentSoul` could be the leader in one team and a non-leader in another (e.g., the built-in minimal team's `general` is the leader; a user team might have `general` as a non-leader role).
+- **`start()` is async and returns when the body is fully started.** The `JieHandle` awaits every body's `start()` (in `startJie` step 5 and `loadTeam`) before publishing `{team_id}.team.loaded` (per ADR 24 and `addrs/15-platform-entry-function.md`). The order inside `start()` is:
+
+  1. **Register bus subscriptions.** Subscribe to `{team_id}.{agent_key}` (every body), plus `{team_id}.leader.prompt` if `is_leader === true`, plus `{team_id}.<topic>` for every topic in `soul.subscriptions` (per ADR 21's per-team subject prefixing). The subscription callback enqueues incoming events onto the body's `queue` field and publishes `agent.queue.update` (see "Prompt Ingress & Queuing" below).
+  2. **Restore history.** Call `memory.restore(agent_key, session_id, team_id)` → `AgentMessage[]`. Push the returned array into `agent.state.messages`.
+  3. **Conditionally `continue()`.** If the restored array is non-empty and the last message is `user` or `toolResult`, call `agent.continue()` to resume the in-flight turn. If the array is empty (fresh `session_id`) or ends with `assistant` (a completed prior turn), do **not** call `continue()`; the body waits for the next `agent.prompt()` from the queue.
+  4. **Start the queue-processing loop.** If the in-memory `queue` is non-empty (events may have arrived on subscribed subjects between step 1's subscription registration and step 2's restore), dequeue the first message and call `agent.prompt(message)`. Otherwise, wait for new events from the subscription callback. After `agent_end`, the loop dequeues the next message and calls `agent.prompt(nextMessage)`, until the queue is empty.
+
+  The body does **not** publish `agent.idle` at startup (per ADR 24, reversing ADR 13 §3 J6); a body that has not yet processed any turn is treated as idle by default. The "this team is loaded" signal is the `{team_id}.team.loaded` event published by the `JieHandle` after all bodies' `start()` returns. The body publishes `agent.idle` only on every `agent_end` — see `03-event-system.md` "Agent Idle" and "Event-Order Contract".
 
 ### Event Loop
 
@@ -661,12 +793,13 @@ Streaming events are published on Jie's EventBus; the TUI and `-p` mode consume 
 
 ### Prompt Ingress & Queuing
 
-When a message arrives on Jie's EventBus (via `leader.prompt` or a topic subscription), the body formats it as a synthetic `user` `AgentMessage` and ingests via `agent.prompt()`:
+When a message arrives on Jie's EventBus (via `leader.prompt` or a topic subscription), the body formats it as a synthetic `user` `AgentMessage` and ingests via `agent.prompt()`. The bus invokes the subscription callback with `(subject, envelope)`; the body reads `envelope.payload.prompt` (and `envelope.payload.source` for the "notify path" format). The format is keyed on the presence of `envelope.payload.source` — a TUI/CLI-published `leader.prompt` has no `source` (the TUI/CLI is not an agent), so the body formats it as `[user]: {prompt}`; a `notify`-sourced event has `source`, so the body formats it as `[{source_agent_key} on '{topic}']: {prompt}`. TUI-published direct-addressed user prompts (per `ui/tui.md` "Prompt Sending") follow the same `leader.prompt` format because the TUI does not fill `payload.source`.
 
-| Source subject | Synthetic `user` message `content` |
-|---|---|
-| `leader.prompt` (no `source`; from TUI / `-p` mode) | ``[user]: {prompt}`` |
-| Domain topic / direct addressing (from `notify`) | ``[{source_agent_key} on '{topic}']: {prompt}`` |
+| Source | `envelope.payload` shape | Synthetic `user` message `content` |
+|---|---|---|
+| `leader.prompt` (from TUI / `-p` mode) | `{ prompt }` (no `source`) | ``[user]: {prompt}`` |
+| TUI direct addressing to `{team_id}.{agent_key}` (per `ui/tui.md`) | `{ prompt }` (no `source`) | ``[user]: {prompt}`` (same rule — format is keyed on the presence of `source`, not on the subject) |
+| Domain topic / direct addressing (from `notify` between bodies) | `{ prompt, source }` | ``[{source_agent_key} on '{topic}']: {prompt}`` |
 
 Both formats are plain text — v1 has no image / multimodal content for synthetic user messages. `content` is always a single `string` (see `M8` in `review-tracker.md`). The body converts the payload's `prompt` field verbatim; no escaping, no parsing of inner newlines, no parsing of the recipient's intent. The receiving LLM extracts identifiers, topic names, and structure from the text as part of its reasoning.
 

@@ -54,6 +54,39 @@ export function loadMinimalTeam(): TeamBlueprint {
 }
 ```
 
+The `TeamBlueprint` shape (returned by all three entry points):
+
+```typescript
+// packages/jie-platform/team/loader.ts
+
+/**
+ * A parsed team blueprint. The loader returns one of these from every entry
+ * point (`loadTeamFromDir`, `loadMinimalTeam`). The `startJie` entry consumes
+ * it: walks the `roles` to build `AgentSoul`s, resolves the leader from
+ * `leaderRole` (or the single role in `roles` for the single-agent-without-
+ * TEAM.md case, per 06-agent-model.md "Platform Auto-Wiring"), and constructs
+ * one AgentBody per role with `is_leader` set per the leader-identification
+ * rules.
+ */
+export interface TeamBlueprint {
+  /** Sorted alphabetically by role stem; the order is preserved through
+   *  soul construction and body instantiation. The CLI sources the TUI's
+   *  `roles` parameter from this list. */
+  roles: AgentSoul[];
+
+  /** The role stem of the leader. `null` only for the empty-team edge case
+   *  (no `.md` files in the team directory), where `roles` is also `[]`
+   *  and the team is silently ignored. For single-agent teams without
+   *  TEAM.md, this is the single role's stem (implicit-leader rule). For
+   *  multi-agent teams, this is TEAM.md's `leader:` value (and must match
+   *  one of the role stems in `roles` — verified by the parse-errors
+   *  table in 06-agent-model.md). */
+  leaderRole: string | null;
+}
+```
+
+`AgentSoul` is the role's parsed soul per `06-agent-model.md` "AgentSoul" (model, system_prompt, tools, subscribe, subscriptions). The loader does NOT attach the team's resolved `team_id` to the blueprint; `team_id` is a runtime concern supplied by `startJie` (the directory name of `.jie/teams/<id>/` or the built-in minimal sentinel), not a parse-time artifact. The blueprint is the static, team-id-agnostic result of parsing the `.md` files.
+
 The `parseTeamFromManifests` parser is the **only** place that knows about frontmatter syntax and role-file shape. `loadTeamFromDir` and `loadMinimalTeam` differ only in where the bytes come from.
 
 ### Built-in selection

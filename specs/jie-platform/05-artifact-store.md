@@ -30,6 +30,8 @@ export interface ArtifactStore {
 - `read` — returns the entry for key, or `null` if not found.
 - `list` — returns all keys with the given prefix, ordered by `created_at DESC`. The `prefix` parameter is not validated against the key charset; `LIKE` metacharacters (`%`, `_`, `\`) in the prefix are escaped per the SQL implementation below.
 
+**Artifact keys are NOT team-scoped by the platform.** The `artifacts` table is a single namespace shared by every team's agents. Two teams that both write to a key like `task_1/plan` will overwrite each other; two teams that both `list('task_1/')` will see each other's rows. The platform does NOT prefix keys with `team_id` automatically. The team is responsible for namespacing its own keys when cross-team isolation matters — typically by including the team's `team_id` (or another team-specific discriminator) in the key scheme. The `ExecutionContext.team_id` is available to tools for this purpose; `write_artifact` and `read_artifact` do not insert it implicitly. This is consistent with ADR 7 ("Client owns the key scheme"): the platform imposes no schema, no reserved prefixes, no automatic scoping — the team decides its key conventions.
+
 The interface is the only dependency visible to `core`. The backing store is a `Storage` reference injected at construction; the same `Storage` is shared with `SqliteMemoryManager` (see [`08-memory.md`](08-memory.md)).
 
 ## Default Implementation: `SqliteArtifactStore`

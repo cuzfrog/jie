@@ -58,6 +58,29 @@ For v1, three fields are recognized. Other fields are tolerated and ignored (for
 
 **Unknown field policy.** Unrecognized top-level fields in `settings.json` are tolerated (warned, ignored) so future Jie versions can land new settings without breaking old files. Unrecognized *values* for recognized fields follow the same policy where it makes sense — e.g. `defaultProvider: "not-a-real-provider"` is WARN+ignore (treat the field as absent; model resolution falls through to per-agent `model:`, and if none, surfaces "No model has been selected" at startup pre-check). `jie model <provider>/<modelId>` similarly warns but still writes the user's choice. Shape errors (e.g. `defaultProvider: 42`, `defaultTeam: ["foo"]`) remain a hard fail — those are malformed JSON, not unfamiliar values.
 
+The TypeScript type consumed by the platform (per `StartJieOptions.settings` in `addrs/15-platform-entry-function.md`):
+
+```typescript
+// packages/jie-platform/types/settings.ts
+
+/**
+ * Merged settings after deep-merging .jie/settings.json over ~/.jie/settings.json.
+ * Unrecognized fields are tolerated on disk (warned, ignored) and are NOT
+ * surfaced here — only the three v1 fields are exposed. The `?` on each field
+ * reflects that a recognized field may be absent in the merged file (e.g. the
+ * user has not run `jie model` yet); the `defaultProvider`/`defaultModel`
+ * resolution chain in 06-agent-model.md "Model Resolution" treats absent as
+ * "fall through to next source".
+ */
+export interface MergedSettings {
+  defaultProvider?: string;  // e.g. "anthropic", "openai"
+  defaultModel?:    string;  // model id within the provider
+  defaultTeam?:     string;  // charset [A-Za-z0-9_-]{1,32}
+}
+```
+
+The merge rule is **deep-merge for nested objects, replace for top-level scalars and arrays** (per "settings.json" header above). The platform never persists its own fields; the only writer is the CLI's `jie model` / `jie team` / `jie --api-key` commands. `MergedSettings` is the read-side projection — it is what `startJie` sees after the CLI's resolution step.
+
 ## Team Selection
 
 The platform resolves which team to run with this order:
@@ -140,6 +163,35 @@ The following streaming-related platform constants are not user-configurable in 
 
 See `03-event-system.md` "Streaming" for how these are applied.
 
+## Platform Limits
+
+A consolidated view of the platform's hard caps and charsets. These are not user-configurable in v1; the values are the contract. Each row points at the doc that applies the limit.
+
+| Limit | Value | Where applied | Doc |
+|---|---|---|---|
+| Artifact key charset | `[A-Za-z0-9_./-]{1,256}` | `write_artifact`, `read_artifact`, `list` (prefix is escaped, not validated) | `05-artifact-store.md`, `06-agent-model.md` |
+| Artifact content cap | **5 MiB** (`content.length` chars) | `write_artifact` | `05-artifact-store.md`, `06-agent-model.md` |
+| `web_fetch` body cap | **5 MiB** | `web_fetch` (truncated at 5 MiB; `truncated: true` set) | `06-agent-model.md` |
+| `write_file` content cap | **5 MiB** (`content.length` chars) | `write_file` | `06-agent-model.md` |
+| `bash` stdout / stderr cap | **32 KiB** per stream | `bash` (truncated independently; `[truncated to 32 KiB]` marker appended) | `06-agent-model.md` |
+| `read_file` default truncation | **2000 lines OR 50 KiB** (whichever first) | `read_file` (override with `offset` / `limit`) | `06-agent-model.md` |
+| `read_file` `offset` / `limit` clamping | `offset` ≥ 1 (0 → 1); `limit` ≥ 1 (0 → unset) | `read_file` (clamped at the call site; no error) | `06-agent-model.md` |
+| Tool telemetry input / output truncation | **4 KiB** middle-truncated | `agent.tool.call`, `agent.tool.result` event payloads (LLM conversation is untruncated) | `06-agent-model.md` |
+| Tool default timeout | **120 s** | All tools unless overridden; combined with pi-agent's signal via `AbortSignal.any` | `06-agent-model.md` "Tool" |
+| `bash` timeout | **300 s** | `bash` (per invocation; SIGTERM then SIGKILL) | `06-agent-model.md` |
+| `session_id` length | **26 chars** (ULID via `ulid@2.3.0`) | Per-team session id; per `addrs/15-platform-entry-function.md` and ADR 20 | `08-memory.md`, `addrs/15` |
+| `team_id` charset | `[A-Za-z0-9_-]{1,32}` | `defaultTeam` in `settings.json`, `--team` flag, team-blueprint loader | `10-configuration.md` (this doc) |
+| Agent role (filename stem) charset | (no constraint) | Loader uses `path.parse(file).name` as the role id; an unconstrained stem produces an unconstrained `agent_key` | `06-agent-model.md`, ADR 18 |
+| `notify` `topic` constraints | non-empty, not starting with `agent.`, not starting with `{team_id}.`, no null / control chars | `notify` tool validation | `06-agent-model.md` |
+| `subscribe:` topic constraints | not starting with `agent.` (rejected with `subscribe_rejects_platform_topic`) | Team-blueprint loader | `06-agent-model.md` |
+| `subscribe:` wildcards | not interpreted in v1 (exact-match subject only) | Team-blueprint loader | `06-agent-model.md` |
+| Workspace root | `process.cwd()` (not configurable) | All file-tool path resolution | `09-deployment.md`, `06-agent-model.md` |
+| `auth.json` mode | `0600` (sensitive) | `jie login`, `jie logout`, `jie --api-key` | `10-configuration.md`, `12-installation.md` |
+| `artifacts.db` mode | `0600` (sensitive — holds `memory_turns`) | First-open creation | `09-deployment.md` |
+| `.jie/` directory mode | `0755` | First-creation by the platform | `09-deployment.md` |
+
+The limits are platform-wide. Per-tool overrides exist only where called out: `bash` uses 300 s (vs. the 120 s default); individual tools may declare their own content caps. v1 exposes no user-facing knob for any of these; the values are the contract. Day 2+ may add `settings.json` fields to make some of these configurable (likely candidates: the streaming tunables, the bash timeout, and the tool default timeout — content caps are less likely to be tunable because they map to platform-level SQL/HTTP limits).
+
 ## Config Validation
 
 The platform validates settings at startup. **Any of the following is a hard fail with exit code1:**
@@ -193,6 +245,30 @@ MCP servers are configured in `.jie/mcp.json` (project-level; `~/.jie/mcp.json` 
 | `args` | string[] | Optional. Arguments to the stdio command. |
 | `url` | string | Required for http transport. |
 | `auth.token_env` | string | Optional. Name of an env var containing a bearer token. |
+
+The TypeScript type consumed by the platform (per `StartJieOptions.mcpServers` in `addrs/15-platform-entry-function.md`):
+
+```typescript
+// packages/jie-platform/types/mcp.ts (forward-looking — used by startJie once the MCP client lands)
+
+export type McpTransport = 'stdio' | 'http';
+
+export interface McpServerConfig {
+  transport:  McpTransport;
+  command?:   string;        // stdio only
+  args?:      string[];      // stdio only
+  url?:       string;        // http only
+  auth?: {
+    token_env?: string;      // name of an env var containing a bearer token
+  };
+}
+
+export interface McpConfig {
+  servers: Record<string, McpServerConfig>;  // keyed by server name
+}
+```
+
+The `McpServerConfig` field-validity rules (`command` required for stdio, `url` required for http) are enforced by the MCP client when it reads the config at startup; the type itself permits either field to be absent because the discriminator is `transport`. A stdio entry with `url` set (or vice versa) is silently ignored at the field level — the client only reads the field it expects for the transport. In v1 (per ADR 17) the platform does not load `mcp.json`; the type is declared for forward compatibility.
 
 ### Resolution
 

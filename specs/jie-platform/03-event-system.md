@@ -79,6 +79,10 @@ interface AgentEvent<T extends string = string> {
 
 `payload` is a discriminated union keyed on `event_type`. The platform defines infrastructure event payloads; the team blueprint defines domain event payloads.
 
+**Wire format — the bus payload IS the envelope.** Every publisher on the bus (body, TUI, CLI) constructs and publishes a full `AgentEvent` envelope. The bus's `publish(subject, payload)` second argument is the envelope; the bus's `subscribe` callback receives `(subject, envelope)`. There is no shorthand or partial-publish path. When a body publishes via `notify`, the body fills every envelope field (`event_type` from the LLM's topic, `payload: { prompt, source }` per `PlatformEventPayload`, `team_id` from the body's team, `agent_role` and `agent_key` from the body, `version: 1`, `timestamp` ISO 8601). When the TUI or CLI publishes a user prompt to `leader.prompt` (or a direct-addressed user prompt to a specific agent's `{agent_key}`), it fills every envelope field — the convention is that the TUI/CLI fills `agent_role` and `agent_key` with the **target agent's** role and `agent_key` (the leader for `leader.prompt`; the targeted agent for direct addressing) so the envelope matches what the target would have published. The full per-publisher wire-format contract is in `02-protocol-stack.md` "Prompt Ingress" and `06-agent-model.md` `notify` step 2.
+
+**Reading the envelope at a subscriber.** A subscriber reads `envelope.payload` (the inner data) for the event-type-specific fields (e.g., `envelope.payload.prompt` for `leader.prompt`, `envelope.payload.source` for self-receipt filtering on `notify`-sourced events). `envelope.team_id` is the authoritative team identity (the subject's `{team_id}.` prefix is the bus-level scoping, but the envelope is the source of truth for filtering). The body's subscription callback for `notify`-sourced events reads `envelope.payload.source` and compares it to the body's own `agent_key` for self-receipt filtering (per ADR 9 §3).
+
 ### Platform Event Payloads
 
 ```typescript
