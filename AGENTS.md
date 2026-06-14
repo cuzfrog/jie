@@ -60,7 +60,7 @@
 
 ### Git
 - When involving git operations, refer to @doc/AGENTS_GIT.md.
-- Use `scripts/gh-bot.mjs` instead of `gh` to assume your identity.
+- Do not use `gh`. use `./scripts/gh-bot.mjs` so you will have your identity `abao-bot`
 
 ## Coding Principles
 - Read files in full before making wide-ranging changes, before editing files you have not already fully inspected, and when the user asks you to investigate or audit something. Do not rely only on search snippets for broad changes. Given a change, do not first attempt to insert into current code base. First look at it from a higher perspective, discover refactor opportunities.
@@ -82,7 +82,8 @@
 
 ## File Edit Checklist
 Pre-action:
-- Before adding utility functions/logic, check `src/utils/` for reuse.
+- Before adding utility functions/logic, check existing utils for reuse.
+- Before adding logic to existing files, check if the abstraction level is correct, if not propose refactoring first.
 
 Post-action:
-- After file edit (semantic or logic change), run: `npm run test`
+- After file edit (semantic or logic change), run tests.
