@@ -66,11 +66,11 @@ jie --print <instruction> [--team <id>] [--timeout <seconds>] [--json]
 1. Walk up from CWD to find `.jie/`. Load `.jie/settings.json` if present; deep-merge with `~/.jie/settings.json`.
 2. Validate `settings.json`. Resolve team (applying `--team <id>` override if given). Open `ArtifactStore` at the `.jie/artifacts.db` discovered by walking up from CWD (same walk as settings/team lookup per `10-configuration.md` "Discovery"; create `.jie/` at the walk's root if absent). Connect MCP servers. (Same as `jie` steps 2–6, including the model pre-check.)
 3. Instantiate and start `AgentBody` for each role.
-4. Resolve the leader's role from the loaded team's `TEAM.md` (`leader:` field) and the per-role `agent_key` for that role (per v1's `{role}-{N}` convention: `<leader_role>-1`). Subscribe to `agent.stream.chunk` events; filter for `team_id === <startup_team_id> && agent_role === <leader_role>`. Initialize a `Set<agent_key> currentlyBusy = new Set()`.
+4. Resolve the leader's role from the loaded team's `TEAM.md` (`leader:` field) and the per-role `agent_key` for that role (per v1's `{role}-{N}` convention: `<leader_role>-1`). Subscribe to `agent.stream.chunk` events; filter for `team_id === <startup_team_id> && agent_role === <leader_role>`. Subscribe to `agent.stream.end` events with the same filter.
 5. Publish `{ prompt: "<instruction>" }` to `{startup_team_id}.leader.prompt` (the bus subject is team-scoped per `03-event-system.md` and ADR 21).
 6. Print each stream chunk from the leader to stdout as it arrives.
-7. Track liveness: on every `agent.turn.start` (new event — see `03-event-system.md`), `currentlyBusy.add(agent_key)`. On every `agent.idle`, `currentlyBusy.delete(agent_key)`. The startup `agent.idle` from each body (per `03-event-system.md` "Agent Idle") is a no-op (deletes from an empty set). When `currentlyBusy.size === 0` AND the leader's stream has produced its final chunk, the team is done.
-8. Print final newline, stop the startup team's agents (only the loaded teams relevant to this one-shot), close DB, exit 0.
+7. Wait for the team to be done. The team is done when the leader's `agent.stream.end` has fired AND `handle.waitForIdle(timeout)` resolves — `waitForIdle` waits for every loaded team's bodies to be idle (in `-p` mode only the startup team is loaded, so this is "all startup-team agents are idle"; the user's "wait for any non-idle agent" requirement is met because `waitForIdle` covers the whole loaded set, not just the leader). The CLI uses the handle's `waitForIdle` primitive rather than tracking busy state from `agent.turn.start` / `agent.idle` events — the handle owns lifecycle and the platform's `waitForIdle` is the single source of truth for "is this team still working". The startup `agent.idle` from each body (per `03-event-system.md` "Agent Idle") fires before the leader processes the prompt and is consumed by the handle's wait.
+8. Print final newline, call `handle.stop()` to stop the startup team's agents (per ADR 15), close DB, exit 0.
 9. On timeout → stop agents, exit 3, message to stderr: `"no response from team within {timeout}s"`. `--timeout` is the upper bound on the wait (default 300s; 0 = no timeout).
 
 ### Output Formats
@@ -240,7 +240,7 @@ This flag is the `jie login --provider <id> --api-key <key>` flow inlined as a t
 3. Set (or replace) the entry for `defaultProvider` with `{ type: 'api_key', key: <key> }`.
 4. Write `~/.jie/auth.json` with mode `0600`.
 5. Print `logged in to <provider>` to stdout.
-6. If `--api-key` is the only CLI flag, exit 0. Otherwise, continue with the remaining flags (e.g., `-p "..."`); the next `jie` / `jie -p` invocation in this process tree reads the just-written credential via the standard chain (`10-configuration.md` Credentials Resolution Order).
+6. If `--api-key` is the only CLI flag, exit 0. Otherwise, continue with the remaining flags (e.g., `-p "..."`); the rest of this command's flow reads the just-written credential from `auth.json` via the standard chain (`10-configuration.md` Credentials Resolution Order).
 
 ## `jie --resume [<session_id>]` / `jie --continue`
 
@@ -253,8 +253,10 @@ jie --continue                    # resume the most recent session for the curre
 
 ### Behavior
 
-- **`--resume <session_id>`**: load the named `session_id`. Validation: it must exist in `memory_turns` (i.e. some prior `persist()` call wrote rows under it for the current `team_id`). If not, exit 1: `unknown session_id: <value>`.
-- **`--continue`**: pick the `session_id` whose `MAX(created_at)` over its rows in `memory_turns` is greatest, **scoped to the current team's `team_id`** — only sessions that have at least one row matching `team_id = <resolved team>` are candidates. The lookup runs in a single SQL statement against the current CWD's `ArtifactStore`:
+The CLI does not run session-id SQL itself. It passes intent via `StartJieOptions` and `startJie` does the work (per ADR 22):
+
+- **`--resume <session_id>`**: CLI sets `StartJieOptions.resumeSessionId = <id>`. `startJie` validates via `memory.hasSession(team_id, session_id)`. If `false` → exit 1: `unknown session_id: <value>`. If `true` → `startJie` uses the value and records it in the handle's `Map<team_id, session_id>`.
+- **`--continue`**: CLI sets `StartJieOptions.continueLastSession = true`. `startJie` queries `memory.mostRecentSessionId(team_id)` — a single SQL statement against `memory_turns` scoped to the current team's `team_id`:
 
   ```sql
   SELECT session_id
@@ -265,7 +267,8 @@ jie --continue                    # resume the most recent session for the curre
   LIMIT 1;
   ```
 
-  The `idx_memory_turns_team_session_created` index on `(team_id, session_id, created_at)` makes this an index-only scan. The lookup is CWD-scoped — there is no cross-CWD session index in v1. The algorithm does not distinguish "liveness" states — a session with one row and a session with thousands are both valid candidates; the most recent by `MAX(created_at)` wins. If no rows match (no prior session in this CWD's DB for the current team), **WARN to stderr** (`no prior session in this directory; starting a new session`) and proceed as if `--continue` were not given (the `JieHandle` mints a fresh `session_id` for the team and passes it to each body, per `08-memory.md` "Restore" and ADR 20). `--continue` is non-fatal: the absence of a prior session is not an error.
+  The `idx_memory_turns_team_session_created` index on `(team_id, session_id, created_at)` makes this an index-only scan. The lookup is CWD-scoped — there is no cross-CWD session index in v1. The algorithm does not distinguish "liveness" states — a session with one row and a session with thousands are both valid candidates; the most recent by `MAX(created_at)` wins. If no rows match (no prior session in this CWD's DB for the current team), `startJie` emits **WARN to stderr** (`no prior session in this directory; starting a new session`) and mints a fresh `session_id` (ULID via `ulid@2.3.0`) per `08-memory.md` "Restore" and ADR 20. `--continue` is non-fatal: the absence of a prior session is not an error.
+- **Neither flag**: `startJie` mints a fresh `session_id` and records it in the handle's `Map<team_id, session_id>`.
 
 The TUI does not have a slash-command equivalent: opening `jie` (without `--resume`/`--continue`) starts a new session. The TUI's team-swap behavior preserves conversation history mid-session without these flags (see `10-configuration.md` "Team Swap"); `--resume`/`--continue` are for cross-process-run continuation.
 

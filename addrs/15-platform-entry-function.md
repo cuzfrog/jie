@@ -35,8 +35,9 @@ export interface StartJieOptions {
   storage:     Storage;           // pre-opened (with init-db applied)
   teamId:      string | "minimal";// resolved team
   mcpServers:  McpServerConfig[]; // from .jie/mcp.json (Day 2 — not loaded in v1 per ADR 17)
-  resumeSessionId?: string;       // --resume
-  onIdle?:     () => void;        // -p mode hook
+  resumeSessionId?:     string;   // --resume <id>; validated by startJie via memory.hasSession
+  continueLastSession?: boolean; // --continue; resolved by startJie via memory.mostRecentSessionId
+  onIdle?:     () => void;        // -p mode hook (Day 2+)
 }
 
 export interface JieHandle {
@@ -45,8 +46,7 @@ export interface JieHandle {
   bodies:        () => AgentBody[];
   bodiesFor:     (teamId: string) => AgentBody[];     // empty if not loaded
   rolesFor:      (teamId: string) => string[];        // role stems of the loaded team; empty if not loaded
-  loadTeam:      (teamId: string) => Promise<void>;   // parse, construct, register; idempotent if already loaded
-  swapTeam:      (teamId: string) => Promise<void>;   // lazy-loads if not loaded; previously-active team keeps running (ADR 21)
+  loadTeam:      (teamId: string) => Promise<void>;   // ensure-loaded; idempotent if already loaded; previously-active team keeps running (ADR 21)
   waitForIdle:   (timeoutMs?: number) => Promise<void>;
   stop:          (timeoutMs?: number) => Promise<void>; // bounded graceful shutdown; stops all loaded teams
 }
@@ -58,8 +58,8 @@ export function startJie(opts: StartJieOptions): JieHandle;
 
 1. Connect MCP servers (per-server failures log WARN and skip; tools registered into a `ToolRegistry`).
 2. Resolve the team: load the manifest from the team-blueprint loader; resolve each `AgentSoul.model` against merged settings; build the `AgentSoul[]`.
-3. Construct one `MemoryManager` per agent (sharing the `Storage`).
-4. Instantiate one `AgentBody` per agent (closed-over with `AgentSoul`, the `EventBus`, the `ArtifactStore`, the per-body `MemoryManager`).
+3. Construct one `MemoryManager` (per ADR 14's `SqliteMemoryManager`) from the open `Storage`. Resolve the startup team's `session_id` per ADR 22: validate `resumeSessionId` via `memory.hasSession` (exit 1 on failure with `unknown session_id: <value>`); query `mostRecentSessionId` for `continueLastSession` (WARN and mint fresh on null); else mint fresh (ULID). Record the resolved value in the handle's `Map<team_id, session_id>` (per ADR 20).
+4. Instantiate one `AgentBody` per agent (closed-over with `AgentSoul`, the `EventBus`, the `ArtifactStore`, the per-body `MemoryManager`, and the `session_id` resolved in step 3).
 5. Call `body.start()` on each body — this registers subscriptions, publishes the startup `agent.idle`, and begins the message queue (per ADR 13).
 6. Return a `JieHandle` with the lifecycle methods.
 
@@ -69,13 +69,14 @@ export function startJie(opts: StartJieOptions): JieHandle;
 2. Bounded wait up to `timeoutMs` (default 10s) for all bodies to settle.
 3. On timeout: force-exit the process. On graceful: close `Storage`, terminate MCP subprocesses, return.
 
-`swapTeam(teamId)` (per `ui/tui.md` "Team Swap" and `10-configuration.md` "Team Swap" — rewritten for ADR 21 multi-team coexistence):
+The lifecycle-changing call is `loadTeam(teamId)` (per `ui/tui.md` "Team" and ADR 21 multi-team coexistence):
 
 1. If the team is already in `loadedTeams`, return immediately. The previously-active team is not stopped or destroyed — it keeps running with its state intact.
-2. If the team is not loaded, call `loadTeam(teamId)`: parse the blueprint per `10-configuration.md` "Team Selection" rules; resolve each `AgentSoul.model`; construct bodies; register them on the bus; record them in `loadedTeams`.
+2. If the team is not loaded, parse the blueprint per `10-configuration.md` "Team Selection" rules; resolve each `AgentSoul.model`; construct bodies; register them on the bus; record them in `loadedTeams`.
 3. The `JieHandle`'s in-memory `Map<team_id, session_id>` (per ADR 20) supplies the prior `session_id` for the new team if it was previously active in this process; otherwise the handle mints a fresh `session_id` (ULID via `ulid@2.3.0`) and records it. The session id is passed to each new body; `memory.restore()` returns prior rows where applicable.
 4. Resolve when new bodies are subscribed and have published their startup `agent.idle`.
-5. The TUI's view switches (separate concern, handled by the TUI itself).
+
+The TUI's view switch is a separate concern: the TUI calls `loadTeam(teamId)` (idempotent) and then re-renders to subscribe to the new team's `leader.prompt` and filter platform events by the new `team_id`. There is no `swapTeam` on the handle — the "swap" semantic is the TUI's view change, not a body-lifecycle change. (A previous version of this ADR added `swapTeam` to the handle as a wrapper around `loadTeam` plus "view switch"; fresh review pass 5 collapsed it back into `loadTeam` only, with the view switch owned by the TUI.)
 
 The "supervisor" prose in the spec is rewritten to point at `JieHandle` / `startJie` — no separate `Supervisor` class. The in-memory `Map<team_id, session_id>` is a private field on the handle (or a closure inside `startJie`); it is lost on process exit, matching the existing spec.
 
@@ -83,7 +84,7 @@ The "supervisor" prose in the spec is rewritten to point at `JieHandle` / `start
 
 - **A function is the right granularity for "the thing that starts the platform".** The supervisor is a sequence of effects, not a stateful object the rest of the code talks to. Modeling it as a function makes the startup sequence explicit and the lifecycle handle a small, plain object.
 - **No class means no false promises.** A `Supervisor` class invites subclassing, multi-method dispatch, dependency injection, and other ceremony that the spec does not need. A function with a handle object is the simplest thing that satisfies the spec's lifecycle requirements.
-- **The handle is the natural place for the `Map<agent_key, session_id>`.** Team swap needs to look up a body's prior session; that lookup is a method on the handle (`handle.swapTeam`). Putting the map on the handle makes the lifetime obvious (it dies with the handle) and the swap logic self-contained.
+- **The handle is the natural place for the `Map<agent_key, session_id>`.** Team load needs to look up a body's prior session; that lookup is a method on the handle (`handle.loadTeam`). Putting the map on the handle makes the lifetime obvious (it dies with the handle) and the load logic self-contained.
 - **"Supervisor" was a placeholder name for a concept that did not have a clear shape.** Renaming to `startJie` + `JieHandle` aligns the code, the spec, and the natural-language prose. The next time someone reads "the supervisor's map", the spec will say "the handle's session map", and the implementation will match.
 - **Aligns with `09-deployment.md`'s "Startup Sequence" steps.** The function is the executable form of those steps. The handle is what the steps leave behind.
 
@@ -97,3 +98,8 @@ The "supervisor" prose in the spec is rewritten to point at `JieHandle` / `start
 - The CLI's startup is `new JieHandle`-equivalent — i.e. a function call, not a class instantiation. The CLI does not import a `Supervisor` symbol.
 - The "force-publishing on behalf of crashed agents" semantics (backlog #17, Day 2) is implemented on `JieHandle` when the day comes, not on a separate supervisor class.
 - The spec's TUI-facing `roles: string[]` parameter (per ADR 13 / J7) is the **startup team's** roles, read by the TUI from the team-blueprint loader's output **before** `startJie` is called (or by the CLI after `startJie` returns and before passing to the TUI). For any subsequently-loaded team (per ADR 21 multi-team coexistence), the TUI queries `handle.rolesFor(teamId)`. The handle owns roles *per loaded team* via the `loadedTeams` map; it does not own the full roster of installed teams (that's a `10-configuration.md` concern).
+
+## Amendment history
+
+- **2026-06-13 (ADR 22):** `StartJieOptions` gains `continueLastSession?: boolean`. `startJie` step 3 expanded: the platform constructs a `MemoryManager` from the open `Storage` and uses it to resolve `--continue` (via `mostRecentSessionId`) and validate `--resume` (via `hasSession`) before constructing bodies. The CLI no longer runs session-id SQL itself; it passes intent via `StartJieOptions` and `startJie` does the work.
+- **2026-06-13 (Group 4 of pass 4):** `handle.waitForIdle()` is the platform's idle-detection primitive (per fresh review pass 4). `-p` mode calls `handle.waitForIdle()` to wait for the team to be done (covers all non-idle agents across all loaded teams, not just the leader). The ad-hoc `currentlyBusy` Set in `ui/cli.md` "jie -p" is removed; the team-filter inconsistency it carried is gone with it. `StartJieOptions.onIdle` is retained for Day-2+ use (e.g. TUI's "all agents idle" hint) but is not consumed by `-p` mode in v1.

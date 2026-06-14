@@ -232,44 +232,23 @@ JSON, single location (`~/.jie/auth.json`), file mode `0600`. The schema mirrors
 }
 ```
 
-The schema is whatever `@earendil-works/pi-ai`'s `FileAuthStorageBackend` writes — Jie does not redefine it. The `key` field supports command execution (`!cmd`), env interpolation (`$ENV_VAR` / `${ENV_VAR}`), and literal values; see pi's `providers.md` for the full interpolation grammar. OAuth tokens (anthropic, openai-codex, github-copilot) are stored here after `jie login` and refreshed automatically by pi-ai at call time.
+The schema is whatever `@earendil-works/pi-ai`'s `FileAuthStorageBackend` writes — Jie does not redefine it. In v1 the `key` field is a plain string (no `!cmd` interpolation, no `$ENV_VAR` expansion; per ADR 23). OAuth tokens (anthropic, openai-codex, github-copilot) are stored here after `jie login` and refreshed automatically by pi-ai at call time.
 
 The CLI mutates `auth.json` via `jie login` and `jie logout`. The file is not edited by hand in v1; `jie login` is the supported entry point.
 
 ### Credentials Resolution Order
 
-For a given provider, credentials resolve in this order at call time:
+For a given provider, credentials resolve in this order at call time (per ADR 23 — v1 has **no environment-variable fallback**; `auth.json` is the sole credential source):
 
 | Order | Source | Notes |
 |---|---|---|
-|1 | `jie --api-key <key>` flag | One-shot, single run. The `jie` binary's top-level flag (Day2: per-call overrides via the same flag). |
-|2 | `~/.jie/auth.json` entry for the provider | Set by `jie login` or `jie logout`-cleared. |
-|3 | Provider's environment variable | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, etc. (See full mapping below.) |
-|4 | Custom provider keys from `~/.jie/models.json` | Day2 concern. v1 has no `models.json`. |
+|1 | `jie --api-key <key>` flag | Writes `auth.json` for the resolved provider. The flag is the inlined `jie login --provider <id> --api-key <key>` flow. The entry persists across runs. |
+|2 | `~/.jie/auth.json` entry for the provider | Set by `jie login` or `jie --api-key`. Sole credential source at LLM-call time. |
+|3 | Custom provider keys from `~/.jie/models.json` | Day2 concern. v1 has no `models.json`. |
 
-Auth file beats env. This means `jie login` (which writes to `auth.json`) wins over a stale env var — the right precedence for the case where the user rotated credentials via the CLI but a service supervisor still exports the old env var.
+**No env-var fallback in v1.** The platform does not read provider environment variables. `auth.json` is the only credential source. A user with a key in their shell runs `jie --api-key <key>` once; the entry is then in `auth.json` and persists across runs. The "Auth file beats env" rule from the previous version of this spec is no longer needed because there is no env to beat.
 
-**Provider → environment variable mapping** (used in step3 above):
-
-| Provider | Environment Variable |
-|---|---|
-| `anthropic` | `ANTHROPIC_OAUTH_TOKEN` (first), then `ANTHROPIC_API_KEY` |
-| `openai` | `OPENAI_API_KEY` |
-| `google` | `GEMINI_API_KEY` |
-| `google-vertex` | `GOOGLE_CLOUD_API_KEY` (or ADC via `GOOGLE_APPLICATION_CREDENTIALS`) |
-| `deepseek` | `DEEPSEEK_API_KEY` |
-| `groq` | `GROQ_API_KEY` |
-| `openrouter` | `OPENROUTER_API_KEY` |
-| `xai` | `XAI_API_KEY` |
-| `mistral` | `MISTRAL_API_KEY` |
-| `cerebras` | `CEREBRAS_API_KEY` |
-| `huggingface` | `HF_TOKEN` |
-| `fireworks` | `FIREWORKS_API_KEY` |
-| `together` | `TOGETHER_API_KEY` |
-| `github-copilot` | `COPILOT_GITHUB_TOKEN` |
-| `amazon-bedrock` | AWS SDK credential chain (`AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`, or IAM role) |
-
-For the canonical mapping, see `@earendil-works/pi-ai`'s `env-api-keys.ts`.
+The `auth.json` `key` field in v1 is a plain string (no `!cmd` interpolation, no `$ENV_VAR` expansion). The previous interpolation grammar was a pi-ai concern that is no longer reachable.
 
 If credentials are missing for the resolved provider, `getModel()` does not throw; the error surfaces when the LLM call is attempted. The agent receives a tool-like error in its conversation and may degrade gracefully.
 
@@ -286,7 +265,7 @@ A model's `(provider, modelId)` tuple is resolved at startup, before any `AgentS
 
 The platform delegates the per-provider fallback in step3 to `pi-ai`'s built-in `defaultModelPerProvider` table. Jie does not maintain its own default-model table; if `pi-ai` ships an updated default for a provider, Jie inherits it on the next release with no spec change.
 
-`AgentSoul.model` is still a required field at the *type* level — it just may be inherited from settings rather than declared in the agent's `.md`. The startup pre-check (run by `startJie` during team construction) guarantees that by the time an `AgentSoul` is constructed, `soul.model` is a non-empty `<provider>/<modelId>` string. The platform's `getApiKey(provider)` resolver still uses pi-ai's `getEnvApiKey()`; Jie only changes *what* gets passed to it (the resolution order above, plus the `auth.json` step).
+`AgentSoul.model` is still a required field at the *type* level — it just may be inherited from settings rather than declared in the agent's `.md`. The startup pre-check (run by `startJie` during team construction) guarantees that by the time an `AgentSoul` is constructed, `soul.model` is a non-empty `<provider>/<modelId>` string. The platform's `getApiKey(provider)` resolver returns the entry from `auth.json` for the resolved provider (per ADR 23); pi-ai's `getEnvApiKey` is no longer used.
 
 `startJie` also performs the per-agent model pre-check (see `06-agent-model.md` "Startup Pre-Check"): if any agent fails to resolve a `(provider, modelId)` against the merged settings, startup fails with one error listing every unresolved agent.
 

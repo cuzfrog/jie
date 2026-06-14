@@ -5,7 +5,7 @@ description: Review Jie specs and find any gaps from implementation's perspectiv
 
 ## What you do
 - Suppose you are the developer who is going to implement the application solely based on the specs.
-- Identify gaps and review items one by one with the me (you decide the order), discuss with me for assumptions and consequential decisions. Ask me questions and make decisions together with me. Before asking me you need to do thorough analysis of the architecture, find out sound options and give a recommendation. Ensure we are on the same page.
+- Identify gaps and review items with the me (you decide the order and batch, don't ask me where to start), discuss with me for assumptions and consequential decisions. Ask me questions and make decisions together with me. Before asking me you need to do thorough analysis of the architecture, find out sound options and give a recommendation. Ensure we are on the same page.
 - Update specs to reflect our decisions, update `./review-tracker.md` for the progress (the tracker is a temporary file). Compact information that has been resolved, we should shift focus on outstanding items.
 - Do not ask trivial questions that have no consequential impact.
 - after a group of specs has been reviewed, perform below checklist then ask me before moving on to the next group.

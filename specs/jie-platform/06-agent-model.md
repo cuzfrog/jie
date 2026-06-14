@@ -205,10 +205,10 @@ At `AgentBody` construction, each Jie `Tool` is wrapped into pi-agent's `AgentTo
 | `label` | `Tool.label` |
 | `parameters` | `Tool.parameters` (TypeBox, passed directly) |
 | `prepareArguments` | `TypeBox.Value.Check(parameters, raw)` — validates the LLM-supplied args against the TypeBox schema. Throws when the check returns `false`; pi-agent surfaces the throw as a tool error to the LLM. No coercion in v1 — the LLM's args must already match the schema. |
-| `execute(toolCallId, params, signal?, onUpdate?)` | Calls `tool.execute(params, ctx)` → wraps return as `{ content: [{ type: "text", text: result.content }], details: result.details, terminate: result.terminate }`. Passes `onUpdate` through for tools that stream partial results. |
+| `execute(toolCallId, params, signal?, onUpdate?)` | Calls `tool.execute(params, ctx)` → wraps return as `{ content: [{ type: "text", text: result.content }], details: result.details, terminate: result.terminate }`. **In v1, the `onUpdate` callback is discarded by the adapter** — the Jie `Tool` interface (above) has no `onUpdate` parameter, and v1 tools return a single final `ToolResult`. Day 2+ may grow the `Tool` interface and bridge live updates. |
 | `executionMode` | Always `"sequential"` in v1 (parallel tool execution deferred to Day 2) |
 
-Most built-in tools return synchronous results and ignore `onUpdate`. Tools like `bash` may use `onUpdate` for live stdout streaming.
+Most built-in tools return synchronous results and ignore `onUpdate`. **v1 tools do not stream partial results** — the Jie `Tool` interface returns a single final `ToolResult`. Live stdout streaming via `onUpdate` is a Day 2+ capability (see "Event Bridging" table; the `tool_execution_update` pi-agent event is not bridged in v1).
 
 ### Built-in Tool: `notify`
 
@@ -318,6 +318,10 @@ interface WebSearchProvider {
 ```
 
 The platform registers one provider at startup. The `web_search` tool calls the registered provider and returns its results as-is. v1 ships only the DuckDuckGo adapter; alternative providers are a Day 2 concern. Providers are never asked for more than 20 results (the platform clamps before the call, per the `web_search` `max_results` policy above).
+
+#### `web_search` Failure Handling
+
+Transient provider failures (HTTP 429, 5xx, network errors, or DuckDuckGo HTML layout changes that yield zero results from a valid query) surface to the LLM as a typed tool error `web_search_failed: <message>`. The platform does **not** retry in v1; the LLM receives the error and reasons about it — it may try a different query, switch to `web_fetch` for a known URL, or fall back to other approaches. The `<message>` is the underlying error class from the provider (e.g. `http_429`, `http_5xx`, `network_unreachable`, `provider_returned_no_results`); the LLM is not given a stack trace. Day 2+ may add retry/backoff. The same shape as the bash `command_timed_out` pattern: typed error code, no retry, LLM branches.
 
 #### `web_fetch` HTTP Client Policy
 
@@ -530,7 +534,7 @@ class AgentBody {
   private bus:         EventBus;
   private artifacts:   ArtifactStore;
   private memory:      MemoryManager;           // see 08-memory.md
-  private readonly session_id: string;          // per-team session id; supplied by JieHandle at construction (per 08-memory.md "Restore" and ADR 20)
+  private readonly session_id: string;          // per-team session id; supplied by JieHandle at construction (per 08-memory.md "Restore", ADR 20, and ADR 22)
 
   start(): void {}    // subscribes to soul.subscriptions on bus (prefixed with team_id), publishes initial agent.idle, begins event loop
   stop(): void {}     // unsubscribes, shuts down cleanly
@@ -595,7 +599,7 @@ At `AgentBody` construction, Jie instantiates pi-agent's `Agent` with the follow
 | Option | Jie provides |
 |---|---|
 | `sessionId` | The body's `session_id` (per-team ULID via `ulid@2.3.0`, 26 chars — see `monorepo-structure.md` runtime deps and `08-memory.md` "Restore") |
-| `getApiKey(provider)` | Resolves via pi-ai's `getEnvApiKey(provider)` — same env vars as `10-configuration.md` |
+| `getApiKey(provider)` | Returns the API key from the resolved `auth.json` (per ADR 23). The platform no longer reads provider environment variables — `auth.json` is the sole credential source. `startJie` reads `~/.jie/auth.json` (or the path supplied by the CLI after `jie --api-key` writes) and provides a closure that returns the entry's `key` for the resolved provider, or `undefined` (which surfaces as a credential error at LLM-call time). |
 | `tools` | Set via `agent.state.tools` after construction (see Tool Adaptation below) |
 | `systemPrompt` | Set via `agent.state.systemPrompt` — `AgentSoul.system_prompt` |
 | `model` | Set via `agent.state.model` — resolved from soul's `model` string via pi-ai's `getModel(provider, modelId)` |
@@ -638,6 +642,7 @@ pi-agent emits events via `agent.subscribe(listener)`. Jie subscribes to these a
 | `turn_start` | `agent.turn.start` | Bridged to the bus on every pi-agent `turn_start`. Used by `-p` mode to detect "all agents idle" (paired with `agent.idle`). Empty payload `{}`; the envelope carries `agent_role` and `agent_key`. |
 | `turn_end({ message, toolResults })` | — | Turn bookkeeping. pi-agent decides loop continuation based on `message.stopReason` and `ToolResult.terminate`. |
 | `tool_execution_start` | — | Deferred to Day 2 (currently `beforeToolCall` covers this) |
+| `tool_execution_update` | — | Deferred to Day 2. v1's adapter discards the `onUpdate` callback from pi-agent (the Jie `Tool` interface has no `onUpdate` parameter); no bus event is published. Observers see only the final `agent.tool.result`. Day 2+ may add a `tool_execution_update` bus event and grow the `Tool` interface to accept partial updates. |
 | `tool_execution_end` | — | Deferred to Day 2 (currently `afterToolCall` covers this) |
 
 Jie uses `turn_end` for turn bookkeeping only. Loop continuation is pi-agent's responsibility: it checks `message.stopReason` (if `"toolUse"`, loop continues; otherwise exits) and `ToolResult.terminate` (if all tools in batch returned `terminate: true`, loop exits).

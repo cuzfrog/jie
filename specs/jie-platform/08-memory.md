@@ -25,10 +25,21 @@ interface MemoryManager {
   // Returns the complete AgentMessage[] suitable for loading into agent.state.messages.
   // Returns an empty array if no prior history exists.
   restore(agent_key: string, session_id: string, team_id: string): Promise<AgentMessage[]>;
+
+  // Return the most-recent session_id for `team_id` (by MAX(created_at) over its
+  // rows in `memory_turns`), or `null` if no prior session exists. Scoped to
+  // `team_id` alone (per ADR 19). Used by `jie --continue` to resolve the resume
+  // target. Pure read; no state change.
+  mostRecentSessionId(team_id: string): string | null;
+
+  // Return `true` if at least one row in `memory_turns` matches
+  // (team_id, session_id). Used by `jie --resume <id>` validation. Pure read;
+  // no state change.
+  hasSession(team_id: string, session_id: string): boolean;
 }
 ```
 
-`MemoryManager` is initialized by `AgentBody` at startup. It does not hold an in-memory copy of the conversation — the pi-agent's `state.messages` is the sole in-memory source of truth.
+`MemoryManager` is initialized by `AgentBody` at startup. It does not hold an in-memory copy of the conversation — the pi-agent's `state.messages` is the sole in-memory source of truth. The two query methods (`mostRecentSessionId`, `hasSession`) are called by `startJie` at startup to resolve `--continue` / `--resume`; the CLI does not run them directly (per ADR 22).
 
 ### Persist
 
@@ -50,6 +61,16 @@ Atomicity: a process crash mid-`compact()` rolls back the transaction; on the ne
 ### Restore
 
 On agent start, the body's `session_id` is supplied by the `JieHandle` (per ADR 15 and ADR 20). The handle owns the session map; the body is a runtime that uses the value it's given.
+
+**`startJie` resolves the `session_id`.** The `session_id` passed to each body is one of three values, in priority order (per ADR 22):
+
+| Source | Resolved by | Behavior |
+|---|---|---|
+| `StartJieOptions.resumeSessionId` (set by `jie --resume <id>`) | `startJie` validates via `memory.hasSession(team_id, session_id)`. If `false` → exit 1 with `unknown session_id: <value>`. If `true` → use it. | Hard fail on validation failure. |
+| `StartJieOptions.continueLastSession: true` (set by `jie --continue`) | `startJie` queries `memory.mostRecentSessionId(team_id)`. If `null` → WARN to stderr `no prior session in this directory; starting a new session` and mint fresh. If non-null → use it. | Non-fatal WARN on no prior session. |
+| Neither flag | `startJie` mints a fresh `session_id` (ULID via `ulid@2.3.0`). | n/a |
+
+The CLI does not run session-id SQL itself; the CLI passes intent via `StartJieOptions` and `startJie` does the work.
 
 The `JieHandle` keeps an in-memory `Map<team_id, session_id>`. For each new body:
 
@@ -113,7 +134,7 @@ The leader agent (as designated by the team blueprint) may maintain in-memory st
 - **Subscription**: The body calls `agent.subscribe(listener)`. On `message_end`, it calls `memory.persist(message, agent_key, session_id, team_id)` unconditionally — no role check, no special case for summaries.
 - **`transformContext` wrapper**: The body passes a wrapped `transformContext` to pi-agent via `AgentOptions`. The wrapper calls the inner `transformContext` (pi-agent's default, or the Day 2+ compaction implementation), diffs the input and output arrays, and for each `CompactionSummaryMessage` that appears in the output but not the input, computes the seq range and calls `memory.compact(range, summary, agent_key, session_id, team_id)`. The wrapper returns the new array unchanged. **The wrapper is invariant across days**: in v1 the inner is the identity function (no compaction → wrapper is a no-op); in Day 2+ the inner is the actual compaction logic → wrapper persists the produced summaries. Compaction is trigger-agnostic — whether the trigger is the user's `/compact` slash command, pi-agent's auto-threshold, or a Day 2+ team hook, all paths funnel through `transformContext` and the wrapper persists.
 - **`agent_end` listener**: publishes `agent.idle` only. Does not detect compaction (the `transformContext` wrapper owns that).
-- **Restore**: On agent start, the body uses the `session_id` supplied by the `JieHandle` (per ADR 20). The handle mints a fresh one for the team's first start in the process, or reuses a recorded one for team-swap-back, or uses the value resolved by `--resume` / `--continue`. The body calls `memory.restore(agent_key, session_id, team_id)`, pushes the returned `AgentMessage[]` into `agent.state.messages`, then calls `agent.continue()`.
+- **Restore**: On agent start, the body uses the `session_id` supplied by the `JieHandle` (per ADR 20 and ADR 22). The body calls `memory.restore(agent_key, session_id, team_id)`, pushes the returned `AgentMessage[]` into `agent.state.messages`, then conditionally calls `agent.continue()`. The condition: `agent.continue()` is called **only** when the last message in the restored array is `user` or `toolResult` (per pi-agent's API contract in `pi-agent-api-reference.md` — `continue()` requires a `user`/`toolResult` tail). When the array is empty (fresh `session_id`) or ends with `assistant` (a completed prior turn), the body does **not** call `continue()`; it waits for the next `agent.prompt()` from the subscription queue. This handles all three restore cases correctly: fresh session (empty → wait), completed turn (assistant tail → wait), in-flight turn (user or toolResult tail → resume).
 - **Tool hooks**: `beforeToolCall` and `afterToolCall` are wired at Agent construction but not used for memory — only for Jie's EventBus telemetry (`agent.tool.call` / `agent.tool.result`). See `06-agent-model.md` pi-agent Integration Contract.
 
 pi-agent's `CompactionSettings` are configured at agent construction with `enabled: false` for v1 (compaction deferred). When enabled, pi-agent's `transformContext` triggers summarization; the resulting `CompactionSummaryMessage` is detected by the body's `transformContext` wrapper, which calls `MemoryManager.compact()` to record the compaction in storage.

@@ -35,20 +35,20 @@ The team-blueprint author writes unscoped names (`leader.prompt`, `leader-1`, `t
 
 - `startJie()` resolves and loads the startup team (from settings/CLI). The startup team's bodies are constructed and registered on the bus.
 - Other teams are loaded on demand. The `JieHandle` tracks loaded teams in `Map<team_id, AgentBody[]>`.
-- `swapTeam(teamId)` consults the map: if loaded, switch the TUI's view; if not, parse the new team's blueprint, construct bodies, register on the bus, record in the map, then switch the view. The previously-active team is **not** stopped or destroyed.
+- `loadTeam(teamId)` consults the map: if loaded, return immediately; if not, parse the new team's blueprint, construct bodies, register on the bus, record in the map. The previously-active team is **not** stopped or destroyed. The TUI's view switch is a separate concern owned by the TUI itself, not a handle method.
 - `JieHandle.stop()` stops all loaded teams (the only lifecycle-changing operation besides initial load).
 
 ### TUI role
 
 The TUI publishes prompts to `{active_team_id}.leader.prompt`. The TUI's slash commands (`/team <id>`) write settings and switch the TUI's view; they do not initiate body lifecycle changes. Slash-command behavior that previously implied "hot-swap" (which destroyed the old team) is rewritten to "view switch" (which leaves the old team running).
 
-### Leader prompt queue across `swapTeam`
+### Leader prompt queue across team view-switches
 
 The old team's leader body is not destroyed on swap, so its in-memory prompt queue is preserved. The TUI just stops publishing to the old team's prompt topic; the old team continues to process its queue in the background. When the TUI switches back, the TUI resumes publishing to the old team's prompt topic; the old team picks up where it left off.
 
 ## Implications
 
-- **`JieHandle`** gains `loadTeam(teamId)`, `bodiesFor(teamId)`, `rolesFor(teamId)`. `swapTeam` is rewritten to consult `loadedTeams` and lazy-load if absent.
+- **`JieHandle`** gains `loadTeam(teamId)`, `bodiesFor(teamId)`, `rolesFor(teamId)`. `loadTeam` is the single lifecycle-changing call; the TUI's view switch is a separate concern. (A previous version of this ADR added `swapTeam` as a separate handle method; fresh review pass 5 collapsed it into `loadTeam`.)
 - **TUI's per-`(team_id, agent_key)` event buffer** (existing spec) is the right granularity. Platform events are filtered by the active team's `team_id` (from the envelope).
 - **TUI's `roles` parameter** to `startTUI` is the startup team's roles. The TUI re-queries the handle for new teams' roles on swap.
 - **`Cascade: Agent Load Failure`** (per ADR-style spec rule in `10-configuration.md`) applies per-team: a team that fails to load is rejected, but other loaded teams continue.

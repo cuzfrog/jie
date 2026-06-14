@@ -8,7 +8,7 @@
 | Git | Optional | Used only if the user's workflow involves git; Jie has no git integration in v1. |
 | TypeScript / tsconfig | Optional | Only required if the workspace under Jie management is TypeScript. |
 
-No NATS. No Docker. No license server. A supported LLM provider API key is required for the runtime to make LLM calls, but it is **not required at install time** — the user runs `jie login` interactively (or sets an env var) before the first `jie` invocation, and the platform refuses to start with a clear error otherwise. See `10-configuration.md` "Credentials Resolution Order".
+No NATS. No Docker. No license server. A supported LLM provider API key is required for the runtime to make LLM calls, but it is **not required at install time** — the user runs `jie login` interactively before the first `jie` invocation, and the platform refuses to start with a clear error otherwise. `auth.json` is the sole credential source in v1 (per ADR 23); the platform does not read provider environment variables. See `10-configuration.md` "Credentials Resolution Order".
 
 ### Platform Support
 
@@ -123,4 +123,4 @@ jie -p "instruction"   # One-shot print mode
 | Install script fails on platform | Native Windows is unsupported. Use WSL2. |
 | `jie` can't find config | Run from within the workspace or create `.jie/settings.json`. |
 | `jie` exits 1 with "model resolution failed for N agents" | No global default model is set. Run `jie login` (once) and `jie model <provider>/<modelId>` to configure. See `10-configuration.md` "Model Resolution". |
-| `jie` errors at LLM call time with "no API key found" | Run `jie login` for the resolved provider, or set the provider's env var. See `10-configuration.md` "Credentials Resolution Order". |
+| `jie` errors at LLM call time with "no API key found" | Run `jie login` for the resolved provider (or `jie --api-key <key>` for a one-shot write to `auth.json`). The platform does not read provider env vars in v1; `auth.json` is the only source. See `10-configuration.md` "Credentials Resolution Order". |
