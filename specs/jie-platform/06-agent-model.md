@@ -11,7 +11,7 @@ interface AgentSoul {
   system_prompt:   string;      // prose body of the agent's .md file
   tools:           ToolSpec[];  // from frontmatter `tools`, resolved through ToolRegistry
   subscribe:       string[];    // from frontmatter `subscribe:` if present, else `[]` — domain topics this agent listens to
-  subscriptions:   string[];    // auto-computed by platform (agent does not declare this)
+  subscriptions:   string[];    // auto-computed by the platform to the team-scoped subject list (e.g. `['{team_id}.task.recorded']`); the body subscribes to these directly without further prefixing
 }
 ```
 
@@ -126,6 +126,8 @@ The team-blueprint loader validates the manifest format during `startJie`'s team
 |---|---|
 | YAML frontmatter is malformed (parse error) | `invalid frontmatter in <file>: <yaml error>` |
 | `tools:` field is missing on an agent `.md` | `missing required field 'tools' in <file>` |
+| The team directory's name (`team_id`) does not match `[A-Za-z0-9_-]{1,32}` | `invalid team_id: <value>` (charset per `10-configuration.md` "Platform Limits"; spaces and special chars are rejected) |
+| An agent `.md` filename stem (the role) does not match `[A-Za-z0-9_-]{1,64}` | `invalid role: <stem>` (charset per `10-configuration.md` "Platform Limits"; spaces and special chars are rejected) |
 | Two `.md` files in the team directory share the same stem (per ADR 18) | `duplicate role '<stem>' in <team_dir>` |
 | `TEAM.md` is missing for a multi-agent team (≥2 `.md` files in the directory but no `TEAM.md`) | `TEAM.md is required for multi-agent teams; no leader can be resolved (found <N> agent files in <team_dir>)` |
 | `TEAM.md` is present but its `leader:` field is missing, empty, or not a string (e.g. empty frontmatter, or `leader:` with no value) | `TEAM.md 'leader' field is required (found no value in <team_dir>)` |
@@ -134,8 +136,6 @@ The team-blueprint loader validates the manifest format during `startJie`'s team
 | A referenced tool (e.g. `mcp:<server>:<method>`) cannot be resolved | (covered separately — see `10-configuration.md` "Cascade: Agent Load Failure") |
 
 A team directory with **no `.md` files at all** is silently ignored — it is not a parse error, it is not a load failure. `loadTeam(teamId)` for such a team resolves with an empty body roster (`bodiesFor` returns `[]`, `rolesFor` returns `[]`). The team is "loaded" in the sense that it occupies a slot in `loadedTeams`, but it has nothing to run. (This is mostly relevant for `--team <id>` validation — `jie team <id>` would still print `team '<id>' is not installed` because the directory is empty; `loadTeam` is reachable from the platform but not from the CLI's team-selection paths.)
-
-Unknown frontmatter fields are tolerated (warned, ignored), matching the platform's "unrecognized fields are tolerated" policy on `settings.json`. The CLI prints the parse error on stderr and exits 1. The user fixes the manifest and re-runs.
 
 Unknown frontmatter fields are tolerated (warned, ignored), matching the platform's "unrecognized fields are tolerated" policy on `settings.json`. The CLI prints the parse error on stderr and exits 1. The user fixes the manifest and re-runs.
 
@@ -244,7 +244,7 @@ Behavior inside the body:
 
    On rejection, the body returns the error to the LLM; no event is published. The `<reason>` field names the specific failure (e.g., `empty`, `starts_with_agent_prefix`, `starts_with_team_prefix`, `contains_null_byte`) so the LLM can fix the call. Per the user's correction: the platform catches "wrong topic" generically — the `{team_id}.` check is one of several validation rules, not a dedicated special case. The LLM learns the rule once and stops making the mistake.
 
-2. **Publish the `AgentEvent` envelope** to `{team_id}.{topic}` on the event bus. The body's notify execution fills the envelope: `event_type` is `topic` (the unscoped name from the LLM); `payload` is `{ prompt, source }` per `PlatformEventPayload` for non-platform events; `team_id` is `this.team_id`; `agent_role` is `this.soul.role`; `agent_key` is `this.agent_key`; `version` is `1`; `timestamp` is the current ISO 8601 string. The bus's `payload` parameter to `publish()` IS the envelope — there is no shorthand or partial-publish path. The team's view is unscoped (the LLM supplies just `topic`); the body prefixes `{team_id}.` in the subject per `03-event-system.md` "Subject Schema" (ADR 21). The full wire-format contract is in `03-event-system.md` "Event Envelope" and `02-protocol-stack.md` "Prompt Ingress".
+2. **Publish the `AgentEvent` envelope** to `{team_id}.{topic}` on the event bus. The body's notify execution fills the envelope: `event_type` is `topic` (the unscoped name from the LLM); `payload` is `{ prompt, source }` per `PlatformEventPayload` for non-platform events; `team_id` is `this.team_id`; `agent_role` is `this.soul.role`; `agent_key` is `this.agent_key`; `version` is `1`; `timestamp` is the current ISO 8601 string. The team's view is unscoped (the LLM supplies just `topic`); the body prefixes `{team_id}.` in the subject per `03-event-system.md` "Subject Schema" (ADR 21). The wire-format contract (every-publisher-fills-every-field, no shorthand) is in `03-event-system.md` "Event Envelope"; the per-publisher protocol is in `02-protocol-stack.md` "Prompt Ingress".
 3. The publishing agent's `AgentBody` subscription callback filters self-receipt: when the callback receives an event whose `envelope.payload.source` matches its own `agent_key`, it skips processing (per ADR 9 §3 — `Self-receipt filtering`). The bus invokes the callback with `(subject, envelope)`; the body reads `envelope.payload.source` for the self-receipt check. The `EventBus` itself is transport-agnostic and does not know about agent identity; putting the filter on the bus would leak Jie agent concepts into the transport, and a future `NatsEventBus` would have no agent-key awareness to filter against. The bus also catches per-subscriber exceptions (see `03-event-system.md` "Error Containment") and continues dispatch — a misbehaving subscriber does not poison the publisher.
 4. The LLM-visible return is a human-readable string summarizing delivery. The LLM-facing `recipients` count is `subscriberCount({team_id}.{topic})` minus self if the publisher is itself subscribed to `{team_id}.{topic}` (i.e., if the topic is in `AgentSoul.subscriptions`). The bus-level `subscriberCount({team_id}.{topic})` is the raw transport count and is unchanged; the LLM-facing number is the count of OTHER agents that would receive the message after self-receipt filtering. `details.recipients` carries the same LLM-facing number — observers see what the LLM was told.
 
@@ -359,7 +359,7 @@ interface WebSearchResult {
 web_fetch(input: { url: string }): { content: string; status: number; truncated: boolean }
 ```
 
-**`web_search` `max_results` policy.** When the LLM omits `max_results`, the tool defaults to **5**. The platform caps `max_results` at **20** — values above 20 are silently clamped to 20 (the LLM is not surfaced with a typed error; the cap is a quality-of-service guard, not a strict limit). The platform clamps before calling the underlying `WebSearchProvider` (per the provider's `search(query, max_results)` contract below), so providers are never asked for more than 20 results.
+**`web_search` `max_results` policy.** When the LLM omits `max_results`, the tool defaults to **5**. The platform caps `max_results` at **20** — values above 20 are silently clamped to 20 (the LLM is not surfaced with a typed error; the cap is a quality-of-service guard, not a strict limit). The platform also clamps `max_results >= 1` at the call site: values `< 1` (including `0` and negatives) are treated as if omitted and default to 5. The platform clamps before calling the underlying `WebSearchProvider` (per the provider's `search(query, max_results)` contract below), so providers are never asked for more than 20 results and never for fewer than 1.
 
 These are built-in tools in `packages/jie-platform/tools/`. They implement the `Tool` interface and are pluggable — the team blueprint may include or exclude them from specific roles.
 
@@ -582,7 +582,7 @@ Rules (in v1 terms; Day 2+ may add to these):
   - Missing `old_string` or `new_string` in input → `invalid_edit_syntax`.
 - The replacement is atomic: read the file, apply the single substitution, write back. If the underlying read or write fails (after the match was verified), the platform returns the corresponding `read_file` / `write_file` error code (`file_not_found`, `is_a_directory`, `permission_denied`, `disk_full`, `i_o_error`).
 - Inherits the platform's 120s default timeout.
-- v1 team blueprint (`jie-team`) does not list `edit_file` in any role's `tools:` frontmatter; teams that need it can opt in by adding the tool name to `tools:` in their `.md`. The cascade policy applies (per `10-configuration.md`); an unresolved tool in `tools:` is a hard startup failure, so a team opting in must have `edit_file` resolvable (which it is in Day 2+).
+- v1 ships no team that lists `edit_file` in its `tools:` frontmatter; teams that need it can opt in by adding the tool name to `tools:` in their `.md`. The cascade policy applies (per `10-configuration.md`); an unresolved tool in `tools:` is a hard startup failure, so a team opting in must have `edit_file` resolvable (which it is in Day 2+).
 - `edit_file` enforces workspace-root containment only; module-boundary checks are the team layer's responsibility (per the same Boundary Enforcement table below).
 
 Errors (snake_case codes, surfaced as typed tool errors):
@@ -677,7 +677,7 @@ class AgentBody {
   3. **Conditionally `continue()`.** If the restored array is non-empty and the last message is `user` or `toolResult`, call `agent.continue()` to resume the in-flight turn. If the array is empty (fresh `session_id`) or ends with `assistant` (a completed prior turn), do **not** call `continue()`; the body waits for the next `agent.prompt()` from the queue.
   4. **Start the queue-processing loop.** If the in-memory `queue` is non-empty (events may have arrived on subscribed subjects between step 1's subscription registration and step 2's restore), dequeue the first message and call `agent.prompt(message)`. Otherwise, wait for new events from the subscription callback. After `agent_end`, the loop dequeues the next message and calls `agent.prompt(nextMessage)`, until the queue is empty.
 
-  The body does **not** publish `agent.idle` at startup (per ADR 24, reversing ADR 13 §3 J6); a body that has not yet processed any turn is treated as idle by default. The "this team is loaded" signal is the `{team_id}.team.loaded` event published by the `JieHandle` after all bodies' `start()` returns. The body publishes `agent.idle` only on every `agent_end` — see `03-event-system.md` "Agent Idle" and "Event-Order Contract".
+  The body does **not** publish `agent.idle` at startup (per ADR 24, reversing ADR 13 §3 J6); a body that has not yet processed any turn is treated as idle by default. The "this team is loaded" signal is the `{team_id}.team.loaded` event published by the `JieHandle` after all bodies' `start()` returns. The body publishes `agent.idle` only on every `agent_end`; the alternation with `agent.turn.start` is the Event-Order Contract — see `03-event-system.md` for the canonical contract.
 
 ### Event Loop
 
@@ -767,11 +767,11 @@ pi-agent emits events via `agent.subscribe(listener)`. Jie subscribes to these a
 | pi-agent event | Jie EventBus subject | Notes |
 |---|---|---|
 | `agent_start` | — | Internal lifecycle; not published |
-| `agent_end({ messages })` | — | Marks LLM loop completion; body then publishes `agent.idle`. The body never publishes `agent.idle` without a preceding `agent.turn.start` for the same turn (Event-Order Contract; see `03-event-system.md`). Compaction detection is **not** in this listener — the body's `transformContext` wrapper owns that (see `08-memory.md` "Integration with pi-agent"). |
+| `agent_end({ messages })` | — | Marks LLM loop completion; body then publishes `agent.idle`. The alternation with `agent.turn.start` is the Event-Order Contract — see `03-event-system.md`. Compaction detection is **not** in this listener — the body's `transformContext` wrapper owns that (see `08-memory.md` "Integration with pi-agent"). |
 | `message_end({ message })` | — | Triggers `memory.persist(message, agent_key, session_id, team_id)` — unconditional, no role check. pi-agent does not emit `message_end` for `CompactionSummaryMessage` injected by `transformContext`; that path is owned by the body's `transformContext` wrapper (see `08-memory.md`). |
 | `message_update({ message, assistantMessageEvent })` | `agent.stream.chunk` | Buffered per `block_type` (`"text"` / `"thinking"`); flush at 64 chars, 200ms, or block-type change (see Streaming Pipeline) |
 | `message_start({ message })` | — | Streaming bookkeeping; no bus event |
-| `turn_start` | `agent.turn.start` | Bridged to the bus on every pi-agent `turn_start`. Empty payload `{}`; the envelope carries `agent_role` and `agent_key`. Per the Event-Order Contract (`03-event-system.md`), `agent.turn.start` is always published before the corresponding `agent.idle` for the same turn. The CLI's `-p` idle gate (`ui/cli.md` step 7) and the TUI's "agent is busy" derivation (`11-monitoring.md`) consume this event. |
+| `turn_start` | `agent.turn.start` | Bridged to the bus on every pi-agent `turn_start`. Empty payload `{}`; the envelope carries `agent_role` and `agent_key`. The CLI's `-p` idle gate (`ui/cli.md` step 7) and the TUI's "agent is busy" derivation (`11-monitoring.md`) consume this event. The alternation with `agent.idle` is the Event-Order Contract — see `03-event-system.md`. |
 | `turn_end({ message, toolResults })` | — | Turn bookkeeping. pi-agent decides loop continuation based on `message.stopReason` and `ToolResult.terminate`. |
 | `tool_execution_start` | — | Deferred to Day 2 (currently `beforeToolCall` covers this) |
 | `tool_execution_update` | — | Deferred to Day 2. v1's adapter discards the `onUpdate` callback from pi-agent (the Jie `Tool` interface has no `onUpdate` parameter); no bus event is published. Observers see only the final `agent.tool.result`. Day 2+ may add a `tool_execution_update` bus event and grow the `Tool` interface to accept partial updates. |
@@ -801,7 +801,7 @@ When a message arrives on Jie's EventBus (via `leader.prompt` or a topic subscri
 | TUI direct addressing to `{team_id}.{agent_key}` (per `ui/tui.md`) | `{ prompt }` (no `source`) | ``[user]: {prompt}`` (same rule — format is keyed on the presence of `source`, not on the subject) |
 | Domain topic / direct addressing (from `notify` between bodies) | `{ prompt, source }` | ``[{source_agent_key} on '{topic}']: {prompt}`` |
 
-Both formats are plain text — v1 has no image / multimodal content for synthetic user messages. `content` is always a single `string` (see `M8` in `review-tracker.md`). The body converts the payload's `prompt` field verbatim; no escaping, no parsing of inner newlines, no parsing of the recipient's intent. The receiving LLM extracts identifiers, topic names, and structure from the text as part of its reasoning.
+Both formats are plain text — v1 has no image / multimodal content for synthetic user messages. `content` is always a single `string`. The body converts the payload's `prompt` field verbatim; no escaping, no parsing of inner newlines, no parsing of the recipient's intent. The receiving LLM extracts identifiers, topic names, and structure from the text as part of its reasoning.
 
 Ingress flow:
 

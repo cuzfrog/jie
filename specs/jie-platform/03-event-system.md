@@ -88,6 +88,7 @@ interface AgentEvent<T extends string = string> {
 ```typescript
 type PlatformEventPayload<T extends PlatformEventType> =
   T extends 'leader.prompt'        ? { prompt: string } :
+  T extends 'user.prompt'          ? { prompt: string } :
   T extends 'agent.stream.chunk'   ? { stream_id: number; seq: number; block_type: "text" | "thinking"; text: string } :
   T extends 'agent.stream.end'     ? { stream_id: number; total_chunks: number } :
   T extends 'agent.tool.call'      ? { tool_call_id: string; name: string; input: string; input_truncated: boolean } :
@@ -95,15 +96,21 @@ type PlatformEventPayload<T extends PlatformEventType> =
   T extends 'agent.queue.update'   ? { prompts: string[] } :
   T extends 'agent.turn.start'     ? { } :
   T extends 'agent.idle'           ? { } :
-  // Topic-published events carry domain-defined payloads:
+  // Topic-published events (notify's `event_type` from the LLM, team-defined
+  // domain events): the platform does not validate the payload shape. Bodies
+  // publish `{ prompt, source }` (per the `notify` tool's contract); observers
+  // read the inner fields defensively. The catch-all is the type-level
+  // approximation; the actual domain payload is opaque to the platform.
   T extends string                 ? { prompt: string; source: string } :
   never;
 ```
 
-**Type-narrowing boundary.** The platform's `PlatformEventPayload` falls through to `{ prompt, source }` for any string `T` that is not a platform event. This is a deliberately permissive shape — the platform does not validate domain event payloads. The actual domain event payload types are defined by the team blueprint and consumed by its roles via their LLM context. The platform treats all domain events as opaque `{ prompt, source }` for envelope purposes; the LLM in the receiving agent parses the payload from the synthetic `user` message. The platform's only validation is the envelope (version, agent_role, agent_key, timestamp) and the platform's own event payloads.
+**Type-narrowing boundary.** `user.prompt` (TUI direct-addressed user prompt) has payload `{ prompt: string }` — no `source` field, because the TUI is not an agent. The body formats the synthetic `user` message by the actual presence of `payload.source` (per `06-agent-model.md` "Prompt Ingress & Queuing"), so the type's catch-all is not consulted at runtime for `user.prompt`. The platform's own event payloads are precisely typed. Domain event types (`notify`'s `event_type` from the LLM) fall through to the `{ prompt, source }` shape — the actual domain payload is opaque to the platform; the receiving agent's LLM parses it from the synthetic `user` message. The platform's only validation is the envelope (version, agent_role, agent_key, timestamp) and the platform's own event payloads.
 
+```typescript
 type PlatformEventType =
   | 'leader.prompt'
+  | 'user.prompt'
   | 'agent.stream.chunk'
   | 'agent.stream.end'
   | 'agent.tool.call'
@@ -117,14 +124,13 @@ type PlatformEventType =
 
 ## Streaming
 
-LLM output originates from pi-agent's `message_update` events (per-token deltas). Jie buffers and publishes `agent.stream.chunk` on its EventBus:
+LLM output originates from pi-agent's `message_update` events (per-token deltas). The body buffers and publishes `agent.stream.chunk` on the EventBus:
 
-- **Source**: pi-agent's `agent.subscribe(listener)` receives `message_update` events. Each carries an `assistantMessageEvent` with text/thinking/tool_call delta content.
-- **Buffering**: Jie accumulates delta text per `block_type` (`"text"` for `text_delta` events, `"thinking"` for `thinking_delta` events; tool_call deltas are not streamed). Flush when the buffer reaches **64 characters**, **200 ms** elapsed since the first buffered token, or the `block_type` changes (transitions flush the prior buffer first so each chunk carries content of one type).
-- **Publish**: `agent.stream.chunk` — `{ stream_id: number; seq: number; block_type: "text" | "thinking"; text: string }`. `stream_id` is a per-LLM-invocation counter; `seq` is the chunk ordinal within that stream; `block_type` is `"text"` for user-visible text or `"thinking"` for thinking content; `text` is the chunk text.
-- **Completion**: On `message_end` (assistant response finalized), flush remaining buffer, publish final chunk, then publish `agent.stream.end` with `{ stream_id, total_chunks }`.
+- **Buffering**: accumulated per `block_type` (`"text"` for `text_delta`, `"thinking"` for `thinking_delta`; tool_call deltas are not streamed). Flush at 64 chars, 200 ms, or `block_type` change (transitions flush the prior buffer first so each chunk carries one type).
+- **Publish**: `agent.stream.chunk` — `{ stream_id: number; seq: number; block_type: "text" | "thinking"; text: string }`. `stream_id` is a per-LLM-invocation counter; `seq` is the chunk ordinal within that stream.
+- **Completion**: on `message_end` (assistant response finalized), flush the remaining buffer and publish `agent.stream.end` with `{ stream_id, total_chunks }`.
 
-Tunables (`stream_chunk_size`, `stream_flush_ms`) are in `10-configuration.md`. The TUI and `-p` mode consume these events. See `06-agent-model.md` pi-agent Integration Contract for the full event bridging table.
+Tunables (`stream_chunk_size`, `stream_flush_ms`) are in `10-configuration.md` "Streaming Tunables". The 5-step body implementation (buffer allocation, flush timer, block-type transitions) is in `06-agent-model.md` "Streaming Pipeline". The TUI and `-p` mode consume these events.
 
 ## Event-Order Contract
 
