@@ -18,6 +18,14 @@ export { InProcessEventBus } from "./core/in-process-event-bus.ts";
 export { AgentBody } from "./core/agent-body.ts";
 export type { AgentBodyOptions } from "./core/agent-body.ts";
 export { adaptToolToAgent } from "./core/tool-adapter.ts";
+export {
+  makeStreamPublisher,
+  publishPlatformEvent,
+  publishToolCallEvent,
+  publishToolResultEvent,
+  truncateForTelemetry,
+} from "./core/streaming.ts";
+export type { BlockType } from "./core/streaming.ts";
 export type {
   MergedSettings,
   RawSettings,

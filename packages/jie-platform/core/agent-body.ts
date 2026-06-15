@@ -2,7 +2,9 @@ import {
   Agent,
   type AgentMessage,
   type AgentTool,
+  type AgentEvent as PiAgentEvent,
 } from "@earendil-works/pi-agent-core";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { ArtifactStore } from "../storage/artifact-store.ts";
 import type { EventBus } from "./event-bus.ts";
 import type { MemoryManager } from "../storage/memory-store.ts";
@@ -11,6 +13,13 @@ import type { Tool } from "../tools/types.ts";
 import type { ToolRegistry } from "../tools/tool-registry.ts";
 import type { ExecutionContext } from "../tools/types.ts";
 import { adaptToolToAgent } from "./tool-adapter.ts";
+import {
+  makeStreamPublisher,
+  publishPlatformEvent,
+  publishToolCallEvent,
+  publishToolResultEvent,
+  type BlockType,
+} from "./streaming.ts";
 
 export interface AgentBodyOptions {
   agent_key: string;
@@ -21,18 +30,9 @@ export interface AgentBodyOptions {
   artifacts: ArtifactStore;
   memory: MemoryManager;
   session_id: string;
-  /** Tool registry for resolving `soul.tools` (spec strings) to
-   *  `Tool` instances. */
   tool_registry: ToolRegistry;
-  /** Provider for the API key. In v1 this is supplied by startJie
-   *  from the resolved `auth.json`. */
   getApiKey: (provider: string) => Promise<string | undefined> | string | undefined;
-  /** A Model object (pi-ai). In production this comes from
-   *  `pi-ai.getModel(provider, modelId)`; tests can pass any object
-   *  that satisfies the public shape used by pi-agent. */
-  model: Parameters<Agent["subscribe"]>[0] extends never ? never : unknown;
-  /** Optional factory for the pi-agent `Agent` instance. Defaults
-   *  to `new Agent(opts)`. Tests inject a fake factory. */
+  model: unknown;
   createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
 }
 
@@ -40,6 +40,28 @@ type AgentFactory = (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
 
 function defaultAgentFactory(opts: ConstructorParameters<typeof Agent>[0]): Agent {
   return new Agent(opts);
+}
+
+interface AgentEventEnvelope {
+  version: 1;
+  team_id: string;
+  event_type: string;
+  agent_role: string;
+  agent_key: string;
+  timestamp: string;
+  payload: Record<string, unknown>;
+}
+
+function asEnvelope(payload: object): AgentEventEnvelope {
+  return payload as AgentEventEnvelope;
+}
+
+function isAssistantMessage(m: unknown): m is AssistantMessage {
+  return (
+    typeof m === "object" &&
+    m !== null &&
+    (m as { role?: string }).role === "assistant"
+  );
 }
 
 export class AgentBody {
@@ -58,6 +80,8 @@ export class AgentBody {
   private readonly queue: AgentMessage[] = [];
   private readonly unsubscribers: Array<() => void> = [];
   private started = false;
+  private readonly toolTimestamps = new Map<string, number>();
+  private stream: ReturnType<typeof makeStreamPublisher>;
 
   constructor(opts: AgentBodyOptions) {
     this.agent_key = opts.agent_key;
@@ -71,6 +95,12 @@ export class AgentBody {
     this.tool_registry = opts.tool_registry;
     this.getApiKey = opts.getApiKey;
     this.createAgent = opts.createAgent ?? defaultAgentFactory;
+    this.stream = makeStreamPublisher(
+      this.bus,
+      this.agent_key,
+      this.soul.role,
+      this.team_id,
+    );
 
     const ctx: ExecutionContext = {
       session_id: this.session_id,
@@ -88,17 +118,60 @@ export class AgentBody {
       steeringMode: "all",
       followUpMode: "all",
       toolExecution: "sequential",
+      beforeToolCall: async (context) => {
+        const toolCallId = context.toolCall.id;
+        this.toolTimestamps.set(toolCallId, Date.now());
+        publishToolCallEvent(
+          this.bus,
+          this.agent_key,
+          this.soul.role,
+          this.team_id,
+          toolCallId,
+          context.toolCall.name,
+          context.args,
+        );
+        return undefined;
+      },
+      afterToolCall: async (context) => {
+        const toolCallId = context.toolCall.id;
+        const startedAt = this.toolTimestamps.get(toolCallId) ?? Date.now();
+        const durationMs = Date.now() - startedAt;
+        this.toolTimestamps.delete(toolCallId);
+        const error =
+          context.isError && context.result !== undefined
+            ? (context.result as { content?: Array<{ text?: string }> }).content
+                ?.map((c) => c.text)
+                .filter((t): t is string => typeof t === "string")
+                .join("\n") ?? "tool error"
+            : context.isError
+              ? "tool error"
+              : null;
+        const outputPayload = error === null ? context.result : null;
+        publishToolResultEvent(
+          this.bus,
+          this.agent_key,
+          this.soul.role,
+          this.team_id,
+          toolCallId,
+          context.toolCall.name,
+          outputPayload,
+          durationMs,
+          error,
+        );
+        return undefined;
+      },
     });
     this.agent.state.systemPrompt = this.soul.system_prompt;
     this.agent.state.model = opts.model as never;
     this.agent.state.tools = adapted;
+
+    this.unsubscribers.push(
+      this.agent.subscribe((event) => {
+        this.handlePiAgentEvent(event);
+      }),
+    );
   }
 
-  /**
-   * Resolve `soul.tools` against the registry, adapt each into
-   * pi-agent's `AgentTool` shape, and return the array for
-   * `agent.state.tools`.
-   */
   private adaptTools(ctx: ExecutionContext): AgentTool[] {
     const out: AgentTool[] = [];
     for (const spec of this.soul.tools) {
@@ -110,13 +183,6 @@ export class AgentBody {
     return out;
   }
 
-  /**
-   * The `transformContext` wrapper: in v1 the inner is identity (no
-   * compaction enabled), so the wrapper is a no-op pass-through. The
-   * shape is kept in place for Day 2+ when the inner may produce
-   * `CompactionSummaryMessage` entries; the wrapper would diff and
-   * call `memory.compact` for each new entry.
-   */
   private wrapTransformContext(): (
     messages: AgentMessage[],
     signal?: AbortSignal,
@@ -124,19 +190,62 @@ export class AgentBody {
     return async (messages) => messages;
   }
 
-  /**
-   * Subscribe to the body's required bus subjects.
-   *  - `{team_id}.{agent_key}` — every body
-   *  - `{team_id}.leader.prompt` — leaders only
-   *  - `{team_id}.<topic>` — for each entry in `soul.subscriptions`
-   */
+  private handlePiAgentEvent(event: PiAgentEvent): void {
+    switch (event.type) {
+      case "turn_start":
+        publishPlatformEvent(
+          this.bus,
+          "agent.turn.start",
+          this.agent_key,
+          this.soul.role,
+          this.team_id,
+          {},
+        );
+        return;
+      case "agent_end":
+        publishPlatformEvent(
+          this.bus,
+          "agent.idle",
+          this.agent_key,
+          this.soul.role,
+          this.team_id,
+          {},
+        );
+        return;
+      case "message_start":
+        this.stream.beginStream();
+        return;
+      case "message_update": {
+        const ame = event.assistantMessageEvent;
+        if (ame.type === "text_delta") {
+          this.stream.append("text", ame.delta);
+        } else if (ame.type === "thinking_delta") {
+          this.stream.append("thinking", ame.delta);
+        }
+        return;
+      }
+      case "message_end":
+        this.stream.endStream();
+        if (isAssistantMessage(event.message) || event.message.role === "user" || event.message.role === "toolResult") {
+          this.memory.persist(
+            event.message as unknown as AgentMessage,
+            this.agent_key,
+            this.session_id,
+            this.team_id,
+          );
+        }
+        return;
+      default:
+        return;
+    }
+  }
+
   private registerSubscriptions(): void {
     const own = `${this.team_id}.${this.agent_key}`;
     this.unsubscribers.push(
       this.bus.subscribe(own, (_subject, payload) => {
-        const eventType = (payload as { event_type?: string }).event_type
-          ?? this.agent_key;
-        this.ingestEvent(eventType, payload);
+        const envelope = asEnvelope(payload);
+        this.ingestEvent(envelope.event_type, payload);
       }),
     );
     if (this.is_leader) {
@@ -155,10 +264,6 @@ export class AgentBody {
     }
   }
 
-  /**
-   * Build a synthetic `user` message from an inbound event envelope
-   * and enqueue it (or call `agent.prompt` if idle).
-   */
   private ingestEvent(topic: string, payload: object): void {
     const envelope = payload as { payload?: { prompt?: string; source?: string } };
     const inner = envelope?.payload ?? {};
@@ -174,18 +279,23 @@ export class AgentBody {
     } as unknown as AgentMessage;
     if (this.agent.state.isStreaming) {
       this.queue.push(message);
+      publishPlatformEvent(
+        this.bus,
+        "agent.queue.update",
+        this.agent_key,
+        this.soul.role,
+        this.team_id,
+        { prompts: this.queue.map((m) => this.formatSynthetic(m)) },
+      );
     } else {
       void this.agent.prompt(message);
     }
   }
 
-  /**
-   * The four-step `start()`:
-   *   (1) register bus subscriptions
-   *   (2) memory.restore() and push to agent.state.messages
-   *   (3) if last message is `user` or `toolResult`, call agent.continue()
-   *   (4) drain any prompts enqueued during (1)-(3)
-   */
+  private formatSynthetic(message: AgentMessage): string {
+    return String((message as { content: unknown }).content);
+  }
+
   async start(): Promise<void> {
     if (this.started) return;
     this.started = true;
@@ -208,20 +318,27 @@ export class AgentBody {
 
     while (this.queue.length > 0) {
       const next = this.queue.shift()!;
+      publishPlatformEvent(
+        this.bus,
+        "agent.queue.update",
+        this.agent_key,
+        this.soul.role,
+        this.team_id,
+        { prompts: this.queue.map((m) => this.formatSynthetic(m)) },
+      );
       await this.agent.prompt(next);
     }
   }
 
-  /** Detach all bus subscriptions. Idempotent. */
   stop(): void {
     for (const off of this.unsubscribers) off();
     this.unsubscribers.length = 0;
   }
 
-  /** Currently enqueued prompts (synthetic-user form), for tests. */
   peekQueue(): AgentMessage[] {
     return [...this.queue];
   }
 }
 
 export type { Tool };
+export { type BlockType };
