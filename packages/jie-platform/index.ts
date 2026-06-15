@@ -15,6 +15,9 @@ export { JiePlatformError } from "./storage/domain-types.ts";
 export type { TurnRecord } from "./storage/domain-types.ts";
 export type { EventBus, EventCallback } from "./core/event-bus.ts";
 export { InProcessEventBus } from "./core/in-process-event-bus.ts";
+export { AgentBody } from "./core/agent-body.ts";
+export type { AgentBodyOptions } from "./core/agent-body.ts";
+export { adaptToolToAgent } from "./core/tool-adapter.ts";
 export type {
   MergedSettings,
   RawSettings,
