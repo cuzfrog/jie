@@ -18,6 +18,8 @@ export { InProcessEventBus } from "./core/in-process-event-bus.ts";
 export { AgentBody } from "./core/agent-body.ts";
 export type { AgentBodyOptions } from "./core/agent-body.ts";
 export { adaptToolToAgent } from "./core/tool-adapter.ts";
+export { startJie } from "./start.ts";
+export type { StartJieOptions, JieHandle } from "./start.ts";
 export {
   makeStreamPublisher,
   publishPlatformEvent,

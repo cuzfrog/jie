@@ -69,10 +69,10 @@ export class AgentBody {
   readonly team_id: string;
   readonly soul: AgentSoul;
   readonly is_leader: boolean;
+  readonly session_id: string;
   private readonly bus: EventBus;
   private readonly artifacts: ArtifactStore;
   private readonly memory: MemoryManager;
-  private readonly session_id: string;
   private readonly tool_registry: ToolRegistry;
   private readonly getApiKey: AgentBodyOptions["getApiKey"];
   private readonly createAgent: AgentFactory;
