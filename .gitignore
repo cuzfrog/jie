@@ -1,2 +1,9 @@
 .codemie/
 .vscode/
+node_modules/
+
+
+.env
+
+.jie/*.db
+.jie/settings.json
