@@ -12,6 +12,19 @@
         "@types/node": "25.9.3",
       },
     },
+    "packages/jie-cli": {
+      "name": "@cuzfrog/jie-cli",
+      "dependencies": {
+        "@cuzfrog/jie-platform": "workspace:*",
+        "@earendil-works/pi-agent-core": "0.79.1",
+        "@earendil-works/pi-ai": "0.79.1",
+      },
+      "devDependencies": {
+        "@types/bun": "1.3.14",
+        "@types/node": "25.9.3",
+        "typescript": "^5.9.3",
+      },
+    },
     "packages/jie-platform": {
       "name": "@cuzfrog/jie-platform",
       "dependencies": {
@@ -83,6 +96,8 @@
     "@aws/lambda-invoke-store": ["@aws/lambda-invoke-store@0.2.4", "", {}, "sha512-iY8yvjE0y651BixKNPgmv1WrQc+GZ142sb0z4gYnChDDY2YqI4P/jsSopBWrKfAt7LOJAkOXt7rC/hms+WclQQ=="],
 
     "@babel/runtime": ["@babel/runtime@7.29.7", "", {}, "sha512-Nq8OhGWiZIZGV6hLHoyAKLLcJihP/xFeBMGJoUrxTX2psI8dCifzLhZISFb+VWS3wFMRDmCGw5R+dOySCqPLhw=="],
+
+    "@cuzfrog/jie-cli": ["@cuzfrog/jie-cli@workspace:packages/jie-cli"],
 
     "@cuzfrog/jie-platform": ["@cuzfrog/jie-platform@workspace:packages/jie-platform"],
 

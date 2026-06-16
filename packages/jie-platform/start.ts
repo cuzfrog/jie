@@ -1,5 +1,6 @@
 import { ulid } from "ulid";
 import { getModel, type Model } from "@earendil-works/pi-ai";
+import type { Agent } from "@earendil-works/pi-agent-core";
 import type { Storage } from "./storage/storage.ts";
 import type { ArtifactStore } from "./storage/artifact-store.ts";
 import {
@@ -48,6 +49,10 @@ export interface StartJieOptions {
   /** Optional override for `getApiKey`. Used by tests; production
    *  reads from `~/.jie/auth.json`. */
   getApiKey?: (provider: string) => Promise<string | undefined> | string | undefined;
+  /** Optional override for the pi-agent factory. Used by tests to
+   *  inject a controllable agent that fires canned events. Each
+   *  body calls this factory once at construction. */
+  createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
 }
 
 export interface JieHandle {
@@ -71,6 +76,7 @@ function defaultResolveModel(provider: string, modelId: string): Model<any> {
 }
 
 function defaultLoadTeamBlueprint(teamId: string): TeamBlueprint {
+  if (teamId === "minimal") return loadMinimalTeam();
   const teamDir = join(projectTeamsDir(teamId) ?? "", "");
   if (existsSync(teamDir)) {
     return loadTeamFromDir(teamDir);
@@ -123,8 +129,7 @@ export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
   const bus: EventBus = new InProcessEventBus();
 
   // Step 1: resolve the team blueprint.
-  const blueprint: TeamBlueprint =
-    opts.teamId === "minimal" ? loadMinimalTeam() : loadTeamBlueprint(opts.teamId);
+  const blueprint: TeamBlueprint = loadTeamBlueprint(opts.teamId);
 
   // Step 2: model pre-check (every soul must resolve).
   const resolvedModels = new Map<string, Model<any>>();
@@ -162,8 +167,7 @@ export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
   const loadedTeams = new Map<string, { blueprint: TeamBlueprint; bodies: AgentBody[] }>();
 
   async function buildAndStart(teamId: string): Promise<AgentBody[]> {
-    const bp: TeamBlueprint =
-      teamId === "minimal" ? loadMinimalTeam() : loadTeamBlueprint(teamId);
+    const bp: TeamBlueprint = loadTeamBlueprint(teamId);
 
     // If already loaded, return existing bodies (idempotent).
     const existing = loadedTeams.get(teamId);
@@ -212,6 +216,7 @@ export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
           tool_registry: toolRegistry,
           getApiKey: async (provider: string) => getApiKey(provider),
           model,
+          createAgent: opts.createAgent,
         }),
       );
     }
