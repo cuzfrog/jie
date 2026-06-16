@@ -13,6 +13,8 @@ export type ParsedCli =
   | { kind: "logout"; provider?: string }
   | { kind: "model"; provider: string; modelId: string }
   | { kind: "team"; teamId?: string; unset: boolean }
+  | { kind: "apiKey"; apiKey: string }
+  | { kind: "tui"; team?: string }
   | { kind: "error"; message: string };
 
 export interface RawArgv {
@@ -28,7 +30,7 @@ export function parseFlags(argv: string[]): ParsedCli {
   const seen = new Map<string, string>(); // flag -> value (or "" for boolean)
   // Determine subcommand / first arg.
   const rest = argv.slice();
-  if (rest.length === 0) return { kind: "help" };
+  if (rest.length === 0) return { kind: "tui" };
   const first = rest[0]!;
 
   // Top-level flags (no subcommand).
@@ -42,7 +44,15 @@ export function parseFlags(argv: string[]): ParsedCli {
   // Otherwise, this is either `jie -p "..."`, `jie --api-key ... -p "..."`,
   // or `jie` (TUI mode — out of v1 scope).
   if (first === "--api-key") {
-    return parsePrint(rest.slice(1), dupes, seen, first);
+    const v = rest[1];
+    if (v === undefined) return { kind: "error", message: "missing argument for --api-key" };
+    if (rest.length > 2) {
+      // Combined with other flags (e.g. `-p "..."`): route to the
+      // print flow so `--api-key` writes auth.json before the
+      // print flow resolves the model.
+      return parsePrint(rest.slice(1), dupes, seen, first);
+    }
+    return { kind: "apiKey", apiKey: v };
   }
   if (PRINT_FLAGS.has(first)) {
     return parsePrint(rest.slice(1), dupes, seen, first);
@@ -240,7 +250,7 @@ function parsePrint(
     }
   }
   if (resume !== undefined && continueLast) {
-    return { kind: "error", message: "--resume and --continue are mutually exclusive" };
+    return { kind: "error", message: "cannot use --resume and --continue together" };
   }
   if (instruction === undefined) {
     return { kind: "error", message: "missing instruction for -p/--print" };

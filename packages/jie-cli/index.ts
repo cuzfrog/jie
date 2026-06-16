@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync, chmodSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, chmodSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import {
@@ -15,13 +15,27 @@ import {
   type TeamBlueprint,
 } from "@cuzfrog/jie-platform";
 import type { Model } from "@earendil-works/pi-ai";
+import { getProviders } from "@earendil-works/pi-ai";
 import type { Agent } from "@earendil-works/pi-agent-core";
 import { parseFlags, type ParsedCli } from "./cli-flags.ts";
+import { VERSION } from "./version.ts";
 
-const HOME = homedir();
-const HOME_JIE = join(HOME, ".jie");
-const HOME_SETTINGS = join(HOME_JIE, "settings.json");
-const HOME_AUTH = join(HOME_JIE, "auth.json");
+function resolvedHomeDir(): string {
+  // `os.homedir()` in bun caches the value at startup and does
+  // not honor runtime `process.env.HOME` changes (used by tests).
+  // Read `process.env.HOME` directly so tests can redirect HOME.
+  const fromEnv = process.env.HOME;
+  return fromEnv !== undefined && fromEnv !== "" ? fromEnv : homedir();
+}
+function homeJieDir(): string {
+  return join(resolvedHomeDir(), ".jie");
+}
+function globalAuthPath(): string {
+  return join(resolvedHomeDir(), ".jie", "auth.json");
+}
+function globalSettingsPath(): string {
+  return join(resolvedHomeDir(), ".jie", "settings.json");
+}
 
 function findProjectJieRoot(cwd: string): string | null {
   let current = cwd;
@@ -49,9 +63,10 @@ function projectSettingsPath(cwd: string): string | null {
 }
 
 function writeAuthJson(auth: AuthJson): void {
-  mkdirSync(HOME_JIE, { recursive: true, mode: 0o755 });
-  writeFileSync(HOME_AUTH, JSON.stringify(auth, null, 2), "utf-8");
-  chmodSync(HOME_AUTH, 0o600);
+  mkdirSync(homeJieDir(), { recursive: true, mode: 0o755 });
+  const path = globalAuthPath();
+  writeFileSync(path, JSON.stringify(auth, null, 2), "utf-8");
+  chmodSync(path, 0o600);
 }
 
 function writeSettings(
@@ -65,14 +80,14 @@ function writeSettings(
     const path = join(root, ".jie", "settings.json");
     writeFileSync(path, JSON.stringify(settings, null, 2), "utf-8");
   } else {
-    mkdirSync(HOME_JIE, { recursive: true, mode: 0o755 });
-    writeFileSync(HOME_SETTINGS, JSON.stringify(settings, null, 2), "utf-8");
+    mkdirSync(homeJieDir(), { recursive: true, mode: 0o755 });
+    writeFileSync(globalSettingsPath(), JSON.stringify(settings, null, 2), "utf-8");
   }
 }
 
 function loadAuthOrEmpty(): AuthJson {
   try {
-    return loadAuthJson({ homeDir: HOME });
+    return loadAuthJson({ homeDir: resolvedHomeDir() });
   } catch {
     return {};
   }
@@ -104,7 +119,7 @@ function teamInstalled(teamId: string, cwd: string): boolean {
   const root = findProjectJieRoot(cwd);
   const candidates = [
     root ? join(root, ".jie", "teams", teamId) : null,
-    join(HOME_JIE, "teams", teamId),
+    join(homeJieDir(), "teams", teamId),
   ].filter((p): p is string => p !== null);
   return candidates.some((p) => existsSync(join(p, "TEAM.md")));
 }
@@ -140,8 +155,11 @@ async function run(parsed: ParsedCli, cwd: string, _argv: string[]): Promise<num
       printHelp();
       return 0;
     case "version":
-      console.log("jie 0.0.0-dev");
+      console.log(`jie ${VERSION}`);
       return 0;
+    case "tui":
+      printError("TUI not implemented in v1 MVP; use jie -p");
+      return 1;
     case "error":
       printError(parsed.message);
       return 1;
@@ -153,6 +171,8 @@ async function run(parsed: ParsedCli, cwd: string, _argv: string[]): Promise<num
       return runModel(parsed, cwd);
     case "team":
       return runTeam(parsed, cwd);
+    case "apiKey":
+      return runApiKey(parsed, cwd);
     case "print":
       return runPrint(parsed, cwd, _argv as unknown as PrintHooks);
   }
@@ -163,17 +183,45 @@ function printHelp(): void {
 
 Usage:
   jie -p "<instruction>" [--team <id>] [--timeout <s>] [--json]
+                 [--api-key <key>] [--resume <id> | --continue]
   jie --print "<instruction>" ...
-  jie [--team <id>]
-  jie --version
-  jie --help
-  jie login [--provider <id>] [--api-key <key>]
+
+  jie login --provider <id> --api-key <key>
   jie logout [<provider>]
   jie model <provider>/<modelId>
   jie team [<id>] | [--unset]
+
   jie --api-key <key>
   jie --resume <session_id> | --continue
+
+  jie [--team <id>]                  # interactive TUI (not in v1 MVP)
+  jie --version
+  jie --help
 `);
+}
+
+async function runApiKey(
+  parsed: Extract<ParsedCli, { kind: "apiKey" }>,
+  cwd: string,
+): Promise<number> {
+  const settings = (() => {
+    try {
+      return loadMergedSettings(cwd, { homeDir: resolvedHomeDir() });
+    } catch {
+      return {} as MergedSettings;
+    }
+  })();
+  const provider = settings.defaultProvider;
+  if (provider === undefined) {
+    printError(
+      "no provider resolved; run 'jie model <provider>/<modelId>' first, or use 'jie login --provider <id> --api-key <key>' to set the key for a specific provider",
+    );
+    return 1;
+  }
+  const auth = loadAuthOrEmpty();
+  writeAuthJson(setAuthProvider(auth, provider, parsed.apiKey));
+  console.log(`logged in to ${provider}`);
+  return 0;
 }
 
 async function runLogin(
@@ -211,10 +259,14 @@ async function runModel(
   parsed: Extract<ParsedCli, { kind: "model" }>,
   cwd: string,
 ): Promise<number> {
+  const known = new Set<string>(getProviders() as readonly string[]);
+  if (!known.has(parsed.provider)) {
+    printError(`unknown provider: ${parsed.provider}`);
+  }
   const projectPath = projectSettingsPath(cwd);
   const existing = (() => {
     try {
-      return loadMergedSettings(cwd, { homeDir: HOME });
+      return loadMergedSettings(cwd, { homeDir: resolvedHomeDir() });
     } catch {
       return {} as MergedSettings;
     }
@@ -233,6 +285,29 @@ async function runModel(
   return 0;
 }
 
+/** Per spec, team ids are `[A-Za-z0-9_-]{1,32}`. */
+const TEAM_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
+
+function listInstalledTeamIds(cwd: string): string[] {
+  const root = findProjectJieRoot(cwd);
+  const candidates = [
+    root ? join(root, ".jie", "teams") : null,
+    join(homeJieDir(), "teams"),
+  ].filter((p): p is string => p !== null);
+  const seen = new Set<string>();
+  for (const dir of candidates) {
+    if (!existsSync(dir)) continue;
+    for (const entry of readdirSync(dir)) {
+      const teamPath = join(dir, entry);
+      if (entry.startsWith(".")) continue;
+      if (!existsSync(join(teamPath, "TEAM.md"))) continue;
+      seen.add(entry);
+    }
+  }
+  seen.add(BUILTIN_MINIMAL_TEAM_ID);
+  return [...seen].sort();
+}
+
 async function runTeam(
   parsed: Extract<ParsedCli, { kind: "team" }>,
   cwd: string,
@@ -240,12 +315,14 @@ async function runTeam(
   if (parsed.teamId === undefined && !parsed.unset) {
     const merged = (() => {
       try {
-        return loadMergedSettings(cwd, { homeDir: HOME });
+        return loadMergedSettings(cwd, { homeDir: resolvedHomeDir() });
       } catch {
         return {} as MergedSettings;
       }
     })();
+    const installed = listInstalledTeamIds(cwd);
     console.log(`defaultTeam: ${merged.defaultTeam ?? "unset"}`);
+    console.log(`installed: ${installed.join(", ")}`);
     return 0;
   }
   if (parsed.unset) {
@@ -253,7 +330,7 @@ async function runTeam(
     if (projectPath !== null && existsSync(projectPath)) {
       const existing = (() => {
         try {
-          return loadMergedSettings(cwd, { homeDir: HOME });
+          return loadMergedSettings(cwd, { homeDir: resolvedHomeDir() });
         } catch {
           return {} as MergedSettings;
         }
@@ -264,7 +341,7 @@ async function runTeam(
     } else {
       const existing = (() => {
         try {
-          return loadMergedSettings(cwd, { homeDir: HOME });
+          return loadMergedSettings(cwd, { homeDir: resolvedHomeDir() });
         } catch {
           return {} as MergedSettings;
         }
@@ -277,20 +354,26 @@ async function runTeam(
     return 0;
   }
   const id = parsed.teamId!;
+  if (!TEAM_ID_PATTERN.test(id)) {
+    printError(`invalid team id '${id}'; must match [A-Za-z0-9_-]{1,32}`);
+    return 1;
+  }
   const projectPath = projectSettingsPath(cwd);
   const projectTeamDir = projectPath
     ? join(projectPath, "..", "teams", id)
     : null;
-  const globalTeamDir = join(HOME_JIE, "teams", id);
-  const inProject = projectTeamDir !== null && existsSync(join(projectTeamDir, "TEAM.md"));
-  const inGlobal = existsSync(join(globalTeamDir, "TEAM.md"));
+  const globalTeamDir = join(homeJieDir(), "teams", id);
+  const inProject = id === BUILTIN_MINIMAL_TEAM_ID
+    || (projectTeamDir !== null && existsSync(join(projectTeamDir, "TEAM.md")));
+  const inGlobal = id === BUILTIN_MINIMAL_TEAM_ID
+    || existsSync(join(globalTeamDir, "TEAM.md"));
   if (!inProject && !inGlobal) {
     printError(`team '${id}' is not installed; checked .jie/teams/${id}/ and ~/.jie/teams/${id}/`);
     return 1;
   }
   const existing = (() => {
     try {
-      return loadMergedSettings(cwd, { homeDir: HOME });
+      return loadMergedSettings(cwd, { homeDir: resolvedHomeDir() });
     } catch {
       return {} as MergedSettings;
     }
@@ -310,7 +393,7 @@ async function runPrint(
   if (parsed.apiKey !== undefined) {
     const merged = (() => {
       try {
-        return loadMergedSettings(cwd, { homeDir: HOME });
+        return loadMergedSettings(cwd, { homeDir: resolvedHomeDir() });
       } catch {
         return {} as MergedSettings;
       }
@@ -330,7 +413,7 @@ async function runPrint(
   // Discover settings and team.
   const settings = (() => {
     try {
-      return loadMergedSettings(cwd, { homeDir: HOME });
+      return loadMergedSettings(cwd, { homeDir: resolvedHomeDir() });
     } catch (e) {
       printError(e instanceof Error ? e.message : String(e));
       return null;
@@ -339,7 +422,7 @@ async function runPrint(
   if (settings === null) return 1;
 
   // Apply stale defaultTeam recovery.
-  const recovered = resolveStaleDefaultTeam(settings, cwd, { homeDir: HOME });
+  const recovered = resolveStaleDefaultTeam(settings, cwd, { homeDir: resolvedHomeDir() });
   if (recovered !== null) {
     settings.defaultTeam = recovered;
   }

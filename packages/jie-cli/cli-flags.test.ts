@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { parseFlags } from "./cli-flags.ts";
 
 describe("parseFlags — help / version", () => {
-  test("no args -> help", () => {
-    expect(parseFlags([])).toEqual({ kind: "help" });
+  test("no args -> tui (TUI not implemented in v1)", () => {
+    expect(parseFlags([])).toEqual({ kind: "tui" });
   });
 
   test("--help -> help", () => {
@@ -163,7 +163,7 @@ describe("parseFlags — -p", () => {
   test("-p with both --resume and --continue -> error", () => {
     expect(parseFlags(["-p", "x", "--resume", "a", "--continue"])).toEqual({
       kind: "error",
-      message: "--resume and --continue are mutually exclusive",
+      message: "cannot use --resume and --continue together",
     });
   });
 
