@@ -5,6 +5,7 @@ import {
   SqliteStorage,
   loadAuthJson,
   loadMergedSettings,
+  ModelRegistry,
   resolveStaleDefaultTeam,
   startJie,
   type MergedSettings,
@@ -453,7 +454,17 @@ async function runPrint(
     if (entry.type === "api_key") return entry.key;
     return undefined;
   };
-  const getApiKey = hooks.getApiKey ?? authGetApiKey;
+  // The auth.json entry wins; fall back to the registry's
+  // `models.json`-resolved key (e.g. `$MY_API_KEY` env interpolation
+  // for a custom provider). This makes the user's local LLM
+  // config in `models.json` work end-to-end without writing to
+  // `auth.json`.
+  const registryFallback = ModelRegistry.load(cwd, { homeDir: resolvedHomeDir() });
+  const getApiKey = hooks.getApiKey ?? (async (provider: string): Promise<string | undefined> => {
+    const fromAuth = authGetApiKey(provider);
+    if (fromAuth !== undefined) return fromAuth;
+    return registryFallback.getApiKey(provider);
+  });
   const finalSettings = hooks.settingsOverride ?? settings;
 
   // Resolve team blueprint eagerly to know the leader's role.

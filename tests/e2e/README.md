@@ -28,9 +28,7 @@ The v1-scenarios test calls a real LLM. It is gated by env:
 | Env var | Default | Meaning |
 |---------|---------|---------|
 | `JIE_E2E_LLM_BASE_URL` | (unset → tests skip) | LLM base URL, e.g. `http://192.168.1.6:12345`. The test appends `/v1` to this. |
-| `JIE_E2E_LLM_API_KEY` | `not-needed` | API key sent in the `Authorization` header. |
-| `JIE_E2E_LLM_PROVIDER` | `lm-studio` | Provider id used in `settings.json` and `auth.json`. |
-| `JIE_E2E_LLM_MODEL_ID` | `qwen3.5-2b` | Model id used in the prompt and as the model's `id`. |
+| `JIE_E2E_LLM_API_KEY` | `not-needed` | API key sent in the `Authorization` header. Interpolated into `.jie/models.json`'s `apiKey` field via `$JIE_E2E_LLM_KEY`. |
 
 For the dev environment (LM Studio at `http://192.168.1.6:12345` exposing
 `qwen3.5-2b`):
@@ -39,30 +37,27 @@ For the dev environment (LM Studio at `http://192.168.1.6:12345` exposing
 JIE_E2E_LLM_BASE_URL=http://192.168.1.6:12345 bun test tests/e2e/v1-scenarios.test.ts
 ```
 
-The dev environment is wired up via the `lm-studio` provider in
-`~/.pi/agent/models.json`. The e2e test does not consume that file
-directly; it constructs a `Model` object from the env-var config
-above. This keeps the test hermetic — the user's actual settings
-file is not consulted.
-
 ## Test design notes
 
-**Deterministic prompts.** Scenario 2 in `v1-scenarios.test.ts` tells
-the agent to respond with a fixed marker (`TEAM_ONE` / `TEAM_TWO`),
-not to summarize a story. The test asserts the marker appears in
-stdout. This is robust to LLM variability: a 2b model may not
-produce a coherent story, but it can follow "respond with this
-literal text".
-
-**Why the test bypasses pi-ai's model registry.** The test injects
-the `Model` via `PrintHooks.resolveModel` rather than relying on
-pi-ai's `getModel()`. This is because pi-ai's `getModel` reads a
-hardcoded list of well-known providers and models; the LM Studio
-local model is not in that list. The `resolveModel` hook is the
-v1-extensibility seam for adding custom models without forking
-pi-ai.
-
-**HERMETIC HOME.** The test redirects `process.env.HOME` to a tmp
+**Hermetic HOME.** The test redirects `process.env.HOME` to a tmp
 dir for the duration of each test, so the user's real
 `~/.jie/auth.json` and `~/.jie/settings.json` are never consulted.
 The afterEach restores the original HOME.
+
+**Project-scoped config.** Each test writes a `.jie/models.json`
+and a `.jie/settings.json` inside the test workspace (the project
+root). These are what the platform's `ModelRegistry` reads. The
+test does not consume `~/.pi/agent/models.json` — it constructs
+its own provider config in the test workspace, which keeps the
+test self-contained.
+
+**`models.json` resolution.** The test relies on issue #20's
+`ModelRegistry` to resolve the local LLM provider. The `apiKey`
+field uses `$JIE_E2E_LLM_KEY` env interpolation, which the
+registry resolves at load time. This is the same path the user
+takes to set up a custom provider: write `.jie/models.json` with
+`apiKey: "$MY_KEY"` and the env var holds the secret.
+
+**Deterministic prompts.** Scenario 2 instructs the agent to
+respond with the literal marker `TEAM_ONE` / `TEAM_TWO` so the
+assertions are robust to LLM variability.

@@ -1,5 +1,5 @@
 import { ulid } from "ulid";
-import { getModel, type Model } from "@earendil-works/pi-ai";
+import { getModel as piGetModel, type Model } from "@earendil-works/pi-ai";
 import type { Agent } from "@earendil-works/pi-agent-core";
 import type { Storage } from "./storage/storage.ts";
 import type { ArtifactStore } from "./storage/artifact-store.ts";
@@ -20,7 +20,7 @@ import {
   type TeamBlueprint,
 } from "./team/index.ts";
 import { globalSettingsPath, projectSettingsPath, projectTeamsDir } from "./config/paths.ts";
-import { loadMergedSettings, loadAuthJson, type MergedSettings, type AuthJson } from "./config/index.ts";
+import { loadMergedSettings, loadAuthJson, ModelRegistry, type MergedSettings, type AuthJson } from "./config/index.ts";
 import type { ToolRegistry } from "./tools/tool-registry.ts";
 import { InMemoryToolRegistry } from "./tools/tool-registry.ts";
 import type { McpServerConfig } from "./config/index.ts";
@@ -53,6 +53,10 @@ export interface StartJieOptions {
    *  inject a controllable agent that fires canned events. Each
    *  body calls this factory once at construction. */
   createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
+  /** Optional pre-built model registry. Used by tests to inject a
+   *  registry without going through `models.json`. Production code
+   *  lets the default `ModelRegistry.load(opts.workspace)` kick in. */
+  modelRegistry?: ModelRegistry;
 }
 
 export interface JieHandle {
@@ -68,11 +72,15 @@ export interface JieHandle {
 const NO_MODEL_ERROR =
   "No model has been selected, please login and select a default model.";
 
-function defaultResolveModel(provider: string, modelId: string): Model<any> {
-  return getModel(
-    provider as Parameters<typeof getModel>[0],
-    modelId as Parameters<typeof getModel>[1],
-  ) as unknown as Model<any>;
+function defaultResolveModel(registry: ModelRegistry): (provider: string, modelId: string) => Model<any> {
+  return (provider: string, modelId: string): Model<any> => {
+    const fromRegistry = registry.resolve(provider, modelId);
+    if (fromRegistry !== undefined) return fromRegistry;
+    return piGetModel(
+      provider as Parameters<typeof piGetModel>[0],
+      modelId as Parameters<typeof piGetModel>[1],
+    ) as unknown as Model<any>;
+  };
 }
 
 function defaultLoadTeamBlueprint(workspace: string, teamId: string): TeamBlueprint {
@@ -125,11 +133,12 @@ function resolveSoulModel(
 
 export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
   const toolRegistry = opts.toolRegistry ?? new InMemoryToolRegistry();
-  const resolveModel = opts.resolveModel ?? defaultResolveModel;
+  const registry = opts.modelRegistry ?? ModelRegistry.load(opts.workspace);
+  const resolveModel = opts.resolveModel ?? defaultResolveModel(registry);
   const defaultLoader = (teamId: string) =>
     defaultLoadTeamBlueprint(opts.workspace, teamId);
   const loadTeamBlueprint = opts.loadTeamBlueprint ?? defaultLoader;
-  const getApiKey = opts.getApiKey ?? (async (_provider: string) => undefined);
+  const getApiKey = opts.getApiKey ?? (async (provider: string) => registry.getApiKey(provider));
   const artifacts: ArtifactStore = new SqliteArtifactStore(opts.storage);
   const memory: MemoryManager = new SqliteMemoryManager(opts.storage);
   const bus: EventBus = new InProcessEventBus();

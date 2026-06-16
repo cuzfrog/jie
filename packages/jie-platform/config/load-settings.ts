@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { getProviders } from "@earendil-works/pi-ai";
 import type { MergedSettings, RawSettings } from "./types.ts";
 import { globalSettingsPath, projectSettingsPath } from "./paths.ts";
 
@@ -28,8 +27,10 @@ function readSettingsFile(path: string): RawSettings | null {
  *  - `defaultProvider` not a string
  *  - `defaultModel` not a string
  *  - `defaultTeam` not matching `[A-Za-z0-9_-]{1,32}`
- *  Unknown `defaultProvider` values are WARN-and-ignored (treated as
- *  absent), per the "Unknown field policy" in the spec. */
+ *  Unknown `defaultProvider` values are accepted: custom providers
+ *  registered via `models.json` are valid references, and the
+ *  registry will fail at request time if the provider has no
+ *  registered models. */
 export function validateSettings(raw: RawSettings, source: string): MergedSettings {
   const result: MergedSettings = {};
 
@@ -37,13 +38,7 @@ export function validateSettings(raw: RawSettings, source: string): MergedSettin
     if (typeof raw.defaultProvider !== "string") {
       throw new Error(`${source}: defaultProvider must be a string`);
     }
-    if (isKnownProvider(raw.defaultProvider)) {
-      result.defaultProvider = raw.defaultProvider;
-    } else {
-      console.warn(
-        `${source}: unknown defaultProvider '${raw.defaultProvider}'; treating as absent`,
-      );
-    }
+    result.defaultProvider = raw.defaultProvider;
   }
 
   if ("defaultModel" in raw && raw.defaultModel !== undefined) {
@@ -64,12 +59,6 @@ export function validateSettings(raw: RawSettings, source: string): MergedSettin
   }
 
   return result;
-}
-
-const KNOWN_PROVIDERS = new Set<string>(getProviders());
-
-function isKnownProvider(provider: string): boolean {
-  return KNOWN_PROVIDERS.has(provider);
 }
 
 /** Deep-merges two settings records. Project (the second arg) wins for

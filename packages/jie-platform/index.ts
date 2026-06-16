@@ -40,8 +40,17 @@ export type {
 export {
   loadMergedSettings,
   loadAuthJson,
+  loadModelsConfig,
   resolveStaleDefaultTeam,
   isValidTeamId,
+  ModelRegistry,
+} from "./config/index.ts";
+export type {
+  RawModelsConfig,
+  RawProviderConfig,
+  RawModelConfig,
+  ResolvedProviderConfig,
+  ResolvedModelsConfig,
 } from "./config/index.ts";
 export type { ExecutionContext, Tool, ToolResult } from "./tools/types.ts";
 export type { ToolRegistry } from "./tools/tool-registry.ts";

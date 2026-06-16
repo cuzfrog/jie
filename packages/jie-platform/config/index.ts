@@ -7,6 +7,14 @@ export type {
   McpServerConfig,
   McpConfig,
 } from "./types.ts";
+export type {
+  RawModelsConfig,
+  RawProviderConfig,
+  RawModelConfig,
+  RawModelOverride,
+  ResolvedProviderConfig,
+  ResolvedModelsConfig,
+} from "./load-models.ts";
 export {
   homeJieDir,
   globalSettingsPath,
@@ -28,3 +36,5 @@ export {
   isTeamInstalled,
   listInstalledTeams,
 } from "./resolve-stale-team.ts";
+export { loadModelsConfig, resolveValue } from "./load-models.ts";
+export { ModelRegistry } from "./registry.ts";

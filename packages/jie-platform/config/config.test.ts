@@ -104,17 +104,15 @@ describe("loadMergedSettings", () => {
     expect(() => loadMergedSettings(cwd, { homeDir })).toThrow();
   });
 
-  test("unknown defaultProvider is WARN-and-ignored; field is absent", () => {
+  test("unknown defaultProvider is accepted (custom providers are valid via models.json)", () => {
     mkdirSync(join(projectRoot, ".jie"), { recursive: true });
     writeFileSync(
       join(projectRoot, ".jie", "settings.json"),
-      JSON.stringify({ defaultProvider: "not-a-real-provider" }),
+      JSON.stringify({ defaultProvider: "lm-studio", defaultModel: "qwen3.5-2b" }),
     );
-    const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
     const merged = loadMergedSettings(cwd, { homeDir });
-    expect(merged.defaultProvider).toBeUndefined();
-    expect(warnSpy).toHaveBeenCalled();
-    warnSpy.mockRestore();
+    expect(merged.defaultProvider).toBe("lm-studio");
+    expect(merged.defaultModel).toBe("qwen3.5-2b");
   });
 });
 

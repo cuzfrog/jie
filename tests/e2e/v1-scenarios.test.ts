@@ -1,16 +1,14 @@
 /**
  * End-to-end v1 user-scenario tests.
  *
- * These tests drive the full `jie -p` pipeline against a real LLM
- * provider. They are gated by the env var `JIE_E2E_LLM_BASE_URL`
- * (and `JIE_E2E_LLM_API_KEY`, defaulting to "not-needed"). When
- * the env is unset, the tests are skipped — they are meant to be
- * run in environments where a local LLM is reachable.
+ * Drives the full `jie -p` pipeline against a real LLM provider,
+ * configured via `.jie/models.json` in the test workspace.
+ * The dev environment is LM Studio at `http://192.168.1.6:12345/v1`
+ * exposing model `qwen3.5-2b`. The base URL is read from
+ * `JIE_E2E_LLM_BASE_URL`; the rest is the platform's `models.json`
+ * machinery (issue #20).
  *
- * The local LLM in the dev environment is LM Studio at
- * `http://192.168.1.6:12345/v1`, exposing model `qwen3.5-2b`.
- * Both are configured in `~/.pi/agent/models.json` under the
- * `lm-studio` provider.
+ * When `JIE_E2E_LLM_BASE_URL` is unset, the tests are skipped.
  */
 import {
   afterEach,
@@ -21,7 +19,6 @@ import {
   test,
 } from "bun:test";
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
@@ -29,68 +26,86 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Model } from "@earendil-works/pi-ai";
-import { runPrintCli, type PrintHooks } from "../../packages/jie-cli/index.ts";
-import type { MergedSettings } from "@cuzfrog/jie-platform";
+import { runPrintCli } from "../../packages/jie-cli/index.ts";
 
 const LLM_BASE_URL = process.env.JIE_E2E_LLM_BASE_URL;
 const LLM_API_KEY = process.env.JIE_E2E_LLM_API_KEY ?? "not-needed";
-const LLM_PROVIDER = process.env.JIE_E2E_LLM_PROVIDER ?? "lm-studio";
-const LLM_MODEL_ID = process.env.JIE_E2E_LLM_MODEL_ID ?? "qwen3.5-2b";
+const LLM_PROVIDER = "lm-studio";
+const LLM_MODEL_ID = "qwen3.5-2b";
 
 const E2E_ENABLED = LLM_BASE_URL !== undefined && LLM_BASE_URL !== "";
 
-/** A `Model<"openai-completions">` shaped for an OpenAI-compatible
- *  local LLM. The fields are the same as the ones in
- *  `~/.pi/agent/models.json` under the `lm-studio` provider. */
-function makeLocalModel(): Model<"openai-completions"> {
-  return {
-    id: LLM_MODEL_ID,
-    name: LLM_MODEL_ID,
-    api: "openai-completions",
-    provider: LLM_PROVIDER,
-    baseUrl: `${LLM_BASE_URL}/v1`,
-    reasoning: true,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 131528,
-    maxTokens: 40960,
-    compat: {
-      supportsDeveloperRole: false,
-      supportsReasoningEffort: false,
-    },
-  } as Model<"openai-completions">;
+/** Writes the project's `.jie/models.json` with the dev LLM
+ *  provider configuration. The `apiKey` uses `$ENV` interpolation
+ *  so the test does not embed a real key; the env var is set in
+ *  `beforeEach`. */
+function writeModelsJson(workspace: string): void {
+  mkdirSync(join(workspace, ".jie"), { recursive: true });
+  writeFileSync(
+    join(workspace, ".jie", "models.json"),
+    JSON.stringify(
+      {
+        providers: {
+          [LLM_PROVIDER]: {
+            baseUrl: `${LLM_BASE_URL}/v1`,
+            api: "openai-completions",
+            apiKey: "$JIE_E2E_LLM_KEY",
+            compat: {
+              supportsDeveloperRole: false,
+              supportsReasoningEffort: false,
+            },
+            models: [
+              {
+                id: LLM_MODEL_ID,
+                name: LLM_MODEL_ID,
+                reasoning: true,
+                input: ["text"],
+                contextWindow: 131528,
+                maxTokens: 40960,
+                cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+              },
+            ],
+          },
+        },
+      },
+      null,
+      2,
+    ),
+  );
 }
 
-function makeSettings(): MergedSettings {
-  return { defaultProvider: LLM_PROVIDER, defaultModel: LLM_MODEL_ID };
-}
-
-function makeHooks(overrides: Partial<PrintHooks> = {}): PrintHooks {
-  return {
-    resolveModel: () => makeLocalModel() as unknown as Model<never>,
-    getApiKey: () => LLM_API_KEY,
-    settingsOverride: makeSettings(),
-    ...overrides,
-  };
+/** Writes `settings.json` (project-scoped) so the CLI's
+ *  `loadMergedSettings` returns the LLM provider/model. */
+function writeSettingsJson(workspace: string): void {
+  mkdirSync(join(workspace, ".jie"), { recursive: true });
+  writeFileSync(
+    join(workspace, ".jie", "settings.json"),
+    JSON.stringify(
+      { defaultProvider: LLM_PROVIDER, defaultModel: LLM_MODEL_ID },
+      null,
+      2,
+    ),
+  );
 }
 
 describe("v1 user-scenarios — real LLM end-to-end", () => {
   let workspace: string;
   let prevHome: string | undefined;
+  let prevKey: string | undefined;
   let writeOut: ReturnType<typeof spyOn> | undefined;
   let writeErr: ReturnType<typeof spyOn> | undefined;
 
   beforeEach(() => {
     workspace = mkdtempSync(join(tmpdir(), "jie-e2e-"));
     // Redirect HOME so the CLI does not pick up the user's real
-    // `~/.jie/auth.json` / `~/.jie/settings.json` for these
-    // tests. Each test sets up its own auth.json / settings.json
-    // explicitly.
+    // `~/.jie/auth.json` / `~/.jie/models.json`.
     prevHome = process.env.HOME;
     const fakeHome = join(workspace, "home");
     mkdirSync(fakeHome, { recursive: true });
     process.env.HOME = fakeHome;
+    // Set the key for `$JIE_E2E_LLM_KEY` interpolation.
+    prevKey = process.env.JIE_E2E_LLM_KEY;
+    process.env.JIE_E2E_LLM_KEY = LLM_API_KEY;
     writeOut = spyOn(process.stdout, "write").mockImplementation(() => true);
     writeErr = spyOn(console, "error").mockImplementation(() => {});
   });
@@ -98,11 +113,10 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
   afterEach(() => {
     writeOut?.mockRestore();
     writeErr?.mockRestore();
-    if (prevHome === undefined) {
-      delete process.env.HOME;
-    } else {
-      process.env.HOME = prevHome;
-    }
+    if (prevHome === undefined) delete process.env.HOME;
+    else process.env.HOME = prevHome;
+    if (prevKey === undefined) delete process.env.JIE_E2E_LLM_KEY;
+    else process.env.JIE_E2E_LLM_KEY = prevKey;
     rmSync(workspace, { recursive: true, force: true });
   });
 
@@ -113,9 +127,12 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
         .join("") ?? ""
     );
   }
+
   test.if(E2E_ENABLED)(
     "Scenario 1: jie -p in fresh dir → exit 0, stdout non-empty, ends with \\n",
     async () => {
+      writeModelsJson(workspace);
+      writeSettingsJson(workspace);
       const code = await runPrintCli(
         {
           kind: "print",
@@ -127,10 +144,10 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
           continueLast: false,
         },
         workspace,
-        makeHooks(),
+        {},
       );
-      expect(code).toBe(0);
       const stdout = captureStdout();
+      expect(code).toBe(0);
       expect(stdout.length).toBeGreaterThan(0);
       expect(stdout.endsWith("\n")).toBe(true);
     },
@@ -139,6 +156,9 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
   test.if(E2E_ENABLED)(
     "Scenario 2: --team my-team-1 / my-team-2 / wrong-team produce distinct outputs",
     async () => {
+      writeModelsJson(workspace);
+      writeSettingsJson(workspace);
+
       // Set up two teams under the workspace.
       const teamsDir = join(workspace, ".jie", "teams");
       for (const [id, marker] of [
@@ -160,7 +180,6 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
       // First, with my-team-1, stdout should contain TEAM_ONE.
       writeOut?.mockReset();
       writeOut?.mockImplementation(() => true);
-      writeErr?.mockReset();
       const code1 = await runPrintCli(
         {
           kind: "print",
@@ -173,7 +192,7 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
           continueLast: false,
         },
         workspace,
-        makeHooks(),
+        {},
       );
       const out1 = captureStdout();
       expect(code1).toBe(0);
@@ -194,11 +213,15 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
           continueLast: false,
         },
         workspace,
-        makeHooks(),
+        {},
       );
       expect(code2).toBe(0);
       const out2 = captureStdout();
       expect(out2).toContain("TEAM_TWO");
+
+      // Finally, with wrong-team, exit 1.
+      writeOut?.mockReset();
+      writeOut?.mockImplementation(() => true);
       const code3 = await runPrintCli(
         {
           kind: "print",
@@ -211,7 +234,7 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
           continueLast: false,
         },
         workspace,
-        makeHooks(),
+        {},
       );
       expect(code3).toBe(1);
     },
@@ -220,8 +243,8 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
   test.if(E2E_ENABLED)(
     "Scenario 3: first-time setup → 'no model' error, then setup, then success",
     async () => {
-      // First call: no auth, no settings, no team. The CLI should
-      // exit 1 with the "No model has been selected" message.
+      // First call: no models.json, no settings, no team. The CLI
+      // should exit 1 with the "No model has been selected" message.
       writeErr?.mockReset();
       const code1 = await runPrintCli(
         {
@@ -234,43 +257,25 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
           continueLast: false,
         },
         workspace,
-        {
-          // No `settingsOverride` so the CLI reads from
-          // `loadMergedSettings`. The fake HOME is empty, so
-          // there is no defaultProvider / defaultModel.
-          resolveModel: () => makeLocalModel() as unknown as Model<never>,
-          getApiKey: () => LLM_API_KEY,
-        },
+        {},
       );
       expect(code1).toBe(1);
-      const stderr1 = (writeErr?.mock.calls as unknown[][]).map((c) => String(c[0] as string)).join("") ?? "";
+      const stderr1 =
+        (writeErr?.mock.calls as unknown[][])
+          .map((c) => String(c[0] as string))
+          .join("") ?? "";
       expect(stderr1).toContain(
         "No model has been selected, please login and select a default model.",
       );
 
-      // Now: simulate the user running `jie login` + `jie model`.
-      const fakeHome = process.env.HOME!;
-      mkdirSync(join(fakeHome, ".jie"), { recursive: true });
-      writeFileSync(
-        join(fakeHome, ".jie", "auth.json"),
-        JSON.stringify({ [LLM_PROVIDER]: { type: "api_key", key: LLM_API_KEY } }, null, 2),
-      );
-      writeFileSync(
-        join(fakeHome, ".jie", "settings.json"),
-        JSON.stringify(
-          { defaultProvider: LLM_PROVIDER, defaultModel: LLM_MODEL_ID },
-          null,
-          2,
-        ),
-      );
+      // Simulate `jie model lm-studio/qwen3.5-2b` and the user
+      // creating `.jie/models.json` with the provider config.
+      writeModelsJson(workspace);
+      writeSettingsJson(workspace);
 
-      // Final call: with auth + settings, the CLI should resolve
-      // the model and stream a response. Since the local LLM
-      // provider is unknown to pi-ai's `getProviders()` list, we
-      // still pass `resolveModel` as a safety net — but ideally,
-      // we should be able to drive the CLI without it. We pass it
-      // because the platform's `loadMergedSettings` warns and
-      // ignores unknown `defaultProvider` values.
+      // Final call: with .jie/models.json and .jie/settings.json,
+      // the CLI should resolve the model through the registry and
+      // stream a response. No hooks needed.
       writeOut?.mockReset();
       writeOut?.mockImplementation(() => true);
       const code2 = await runPrintCli(
@@ -284,7 +289,7 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
           continueLast: false,
         },
         workspace,
-        makeHooks(),
+        {},
       );
       expect(code2).toBe(0);
       const stdout2 = captureStdout();
