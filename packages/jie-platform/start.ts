@@ -75,9 +75,13 @@ function defaultResolveModel(provider: string, modelId: string): Model<any> {
   ) as unknown as Model<any>;
 }
 
-function defaultLoadTeamBlueprint(teamId: string): TeamBlueprint {
+function defaultLoadTeamBlueprint(workspace: string, teamId: string): TeamBlueprint {
   if (teamId === "minimal") return loadMinimalTeam();
-  const teamDir = join(projectTeamsDir(teamId) ?? "", "");
+  const teamsRoot = projectTeamsDir(workspace);
+  if (teamsRoot === null) {
+    throw new Error(`team '${teamId}' not found`);
+  }
+  const teamDir = join(teamsRoot, teamId);
   if (existsSync(teamDir)) {
     return loadTeamFromDir(teamDir);
   }
@@ -122,7 +126,9 @@ function resolveSoulModel(
 export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
   const toolRegistry = opts.toolRegistry ?? new InMemoryToolRegistry();
   const resolveModel = opts.resolveModel ?? defaultResolveModel;
-  const loadTeamBlueprint = opts.loadTeamBlueprint ?? defaultLoadTeamBlueprint;
+  const defaultLoader = (teamId: string) =>
+    defaultLoadTeamBlueprint(opts.workspace, teamId);
+  const loadTeamBlueprint = opts.loadTeamBlueprint ?? defaultLoader;
   const getApiKey = opts.getApiKey ?? (async (_provider: string) => undefined);
   const artifacts: ArtifactStore = new SqliteArtifactStore(opts.storage);
   const memory: MemoryManager = new SqliteMemoryManager(opts.storage);
