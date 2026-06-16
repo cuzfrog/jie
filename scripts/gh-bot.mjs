@@ -12,6 +12,12 @@
  *   GH_APP_ID                — GitHub App ID
  *   GH_INSTALLATION_ID       — Installation ID (from app's install page URL)
  *   GH_APP_PRIVATE_KEY_PATH  — path to the app's .pem private key
+ *
+ * Note: GitHub is deprecating Projects (classic) GraphQL API
+ * (repository.issue.projectCards). The gh CLI v2.92.0+ uses the new
+ * Projects V2 API (projectV2/projectsV2). To avoid deprecation warnings:
+ * 1. Upgrade gh CLI to v2.92.0 or later
+ * 2. Ensure the GitHub App has "read:project" permission
  */
 
 import * as crypto from "node:crypto";
@@ -186,6 +192,25 @@ async function main() {
   if (ghArgs.length === 0) {
     console.error("Usage: gh-bot.mjs <gh subcommand> [args...]");
     process.exit(1);
+  }
+
+  // Check gh CLI version for Projects (classic) deprecation
+  try {
+    const { spawnSync } = await import("node:child_process");
+    const versionResult = spawnSync("gh", ["--version"], { encoding: "utf-8" });
+    const versionMatch = versionResult.stdout?.match(/gh version (\d+)\.(\d+)/);
+    if (versionMatch) {
+      const major = parseInt(versionMatch[1], 10);
+      const minor = parseInt(versionMatch[2], 10);
+      // v2.92.0+ uses Projects V2 API
+      if (major < 2 || (major === 2 && minor < 92)) {
+        console.error("[gh-bot] WARNING: gh CLI version < 2.92.0 detected.");
+        console.error("[gh-bot] Projects (classic) GraphQL API is deprecated. Upgrade gh CLI to v2.92.0+ to use Projects V2 API.");
+        console.error("[gh-bot] See: https://github.blog/changelog/2024-05-23-sunset-notice-projects-classic/");
+      }
+    }
+  } catch {
+    // ignore version check errors
   }
 
   const child = spawn("gh", ghArgs, {

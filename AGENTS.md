@@ -82,7 +82,7 @@
 
 ## Things to avoid
 - do not `find` from the root dir, it's slow and unnecessary. Use `pwd` to figure out where you are.
-- do not assume a tool is available until you are told, search before calling if you are not sure.
+- do not assume a tool is available unless you are told, search before calling if you are not sure.
 
 ## File Edit Checklist
 Pre-action:

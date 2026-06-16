@@ -23,40 +23,40 @@ bun test tests/e2e/event-order.test.ts tests/e2e/memory-roundtrip.test.ts
 
 ### Real-LLM tests
 
-The v1-scenarios test calls a real LLM. It is gated by env:
-
-| Env var | Default | Meaning |
-|---------|---------|---------|
-| `JIE_E2E_LLM_BASE_URL` | (unset → tests skip) | LLM base URL, e.g. `http://192.168.1.6:12345`. The test appends `/v1` to this. |
-| `JIE_E2E_LLM_API_KEY` | `not-needed` | API key sent in the `Authorization` header. Interpolated into `.jie/models.json`'s `apiKey` field via `$JIE_E2E_LLM_KEY`. |
-
-For the dev environment (LM Studio at `http://192.168.1.6:12345` exposing
-`qwen3.5-2b`):
+The v1-scenarios test calls a real LLM. The endpoint, provider id,
+and model id are declared in `tests/e2e/fixtures/models.json`. The
+test copies this fixture into the test workspace's `.jie/` and runs
+the user scenarios end-to-end through the CLI's `ModelRegistry` —
+the same path the user takes via `.jie/models.json` (issue #20).
 
 ```sh
-JIE_E2E_LLM_BASE_URL=http://192.168.1.6:12345 bun test tests/e2e/v1-scenarios.test.ts
+bun test tests/e2e/v1-scenarios.test.ts
 ```
+
+If the LLM endpoint in the fixture is unreachable, the test fails
+with a network error. To point the test at a different endpoint,
+edit `tests/e2e/fixtures/models.json`.
 
 ## Test design notes
 
-**Hermetic HOME.** The test redirects `process.env.HOME` to a tmp
-dir for the duration of each test, so the user's real
-`~/.jie/auth.json` and `~/.jie/settings.json` are never consulted.
-The afterEach restores the original HOME.
+**Hermetic HOME.** Each test redirects `process.env.HOME` to a tmp
+dir, so the user's real `~/.jie/auth.json` and
+`~/.jie/models.json` are never consulted. The `afterEach` restores
+the original HOME.
 
-**Project-scoped config.** Each test writes a `.jie/models.json`
-and a `.jie/settings.json` inside the test workspace (the project
-root). These are what the platform's `ModelRegistry` reads. The
-test does not consume `~/.pi/agent/models.json` — it constructs
-its own provider config in the test workspace, which keeps the
-test self-contained.
+**Self-contained fixture.** The test reads
+`tests/e2e/fixtures/models.json` once at module load and copies
+it into the test workspace. The test does not depend on the
+project's own `.jie/models.json` — the fixture is a data file
+shipped with the test, so the e2e scenarios can be exercised
+independently of any local LLM config the developer has set up.
 
-**`models.json` resolution.** The test relies on issue #20's
-`ModelRegistry` to resolve the local LLM provider. The `apiKey`
-field uses `$JIE_E2E_LLM_KEY` env interpolation, which the
-registry resolves at load time. This is the same path the user
-takes to set up a custom provider: write `.jie/models.json` with
-`apiKey: "$MY_KEY"` and the env var holds the secret.
+**Project-scope writes only.** The scenario tests write the
+fixture to `{workspace}/.jie/models.json` (project scope). The
+per-scope merge semantics and user-scope fallback are covered by
+the platform's unit tests (`load-models.test.ts`,
+`registry.test.ts`); the e2e test only verifies the end-to-end
+flow against a real LLM.
 
 **Deterministic prompts.** Scenario 2 instructs the agent to
 respond with the literal marker `TEAM_ONE` / `TEAM_TWO` so the
