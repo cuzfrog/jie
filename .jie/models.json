@@ -1,0 +1,25 @@
+{
+  "providers": {
+    "lm-studio": {
+      "name": "LM Studio",
+      "baseUrl": "http://192.168.1.6:12345/v1",
+      "api": "openai-completions",
+      "apiKey": "not-needed",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false
+      },
+      "models": [
+        {
+          "id": "qwen3.5-2b",
+          "name": "qwen3.5-2b",
+          "reasoning": true,
+          "input": ["text"],
+          "contextWindow": 131528,
+          "maxTokens": 4096,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        }
+      ]
+    }
+  }
+}

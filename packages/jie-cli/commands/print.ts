@@ -55,13 +55,13 @@ export interface PrintDeps {
   createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
 }
 
-function projectArtifactsPath(cwd: string): string {
+function projectStoragePath(cwd: string): string {
   const root = findProjectJieRoot(cwd);
   if (root === null) {
     mkdirSync(join(cwd, ".jie"), { recursive: true, mode: 0o755 });
-    return join(cwd, ".jie", "artifacts.db");
+    return join(cwd, ".jie", "storage.db");
   }
-  return join(root, ".jie", "artifacts.db");
+  return join(root, ".jie", "storage.db");
 }
 
 export async function runPrint(
@@ -114,7 +114,7 @@ export async function runPrint(
   }
 
   // Open storage.
-  const artifactsPath = projectArtifactsPath(cwd);
+  const artifactsPath = projectStoragePath(cwd);
   const storage = new SqliteStorage(artifactsPath);
 
   // Read auth for getApiKey.

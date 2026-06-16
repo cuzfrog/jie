@@ -1,6 +1,9 @@
 {
   "name": "@cuzfrog/jie",
   "workspaces": ["packages/*"],
+  "bin": {
+    "jie": "packages/jie-cli/index.ts"
+  },
   "dependencies": {
     "@cuzfrog/jie-platform": "workspace:*"
   },

@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# not used yet
+export LOCAL_LLM_BASE_URL=http://192.168.1.6:12345
+export LOCAL_LLM_MODEL=qwen3.5-2b

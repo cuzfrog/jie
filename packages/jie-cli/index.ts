@@ -1,3 +1,4 @@
+#!/usr/bin/env bun
 /** `jie` — the platform CLI.
  *
  *  This file is the entry point. It only:
@@ -135,3 +136,7 @@ export type PrintHooks = Partial<PrintDeps>;
 // `./index.ts` in earlier versions. Prefer importing from the
 // owning module directly.
 export type { MergedSettings, TeamBlueprint };
+
+if (import.meta.main) {
+  process.exit(await main(Bun.argv.slice(2)));
+}
