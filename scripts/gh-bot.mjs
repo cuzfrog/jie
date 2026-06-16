@@ -55,7 +55,8 @@ function createJWT(appId, privateKey) {
   const header = { alg: "RS256", typ: "JWT" };
   const payload = {
     iat: now,
-    exp: now + 600,
+    // Stay well under GitHub's 10-minute cap.
+    exp: now + 60,
     iss: appId,
   };
 
