@@ -1,6 +1,6 @@
 # Context Rules
 
-- Only features are scoped, NO compromize to NFR.
+- IMPORTANT: adhere to Code Conventions and Coding Principles
 
 ## Design Principles
 - Constraints liberate, liberties constrain.
@@ -42,13 +42,15 @@
 
 ## Code Conventions
 
-- No `any` types, No enums, No inline imports, No Classes
+- No `any` types, No enums, No inline imports, No Classes.
+- Use interfaces for OOP abstractions.
 - Use only erasable TypeScript syntax compatible with Node strip-only mode in TypeScript. Do not use constructor parameter properties, `enum`, `namespace`/`module`, `import =`, `export =`, or other TypeScript constructs that require JavaScript emit. Use explicit fields and constructor assignments instead of parameter properties.
 - Public types, contract, methods, higher-level abstractions should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers. See below section `Single file layout`.
 - Do not add comments except it's a consequential information and the code itself cannot tell.
 
 ### Test
 - use mocks for unit test. A file `my-function.ts`'s test file `my-function.test.ts` should only test `my-function.ts`.
+- tests should align with the test target file. E.g. a test `function1.test.ts` should test and only test `function1.ts`. If `function1.test.ts` is testing `index.ts`, it a smell of coding principle violation.
 
 ### Single file layout (ordered from top to bottom)
 1. imports
@@ -62,7 +64,7 @@
 - When involving git operations, refer to @doc/AGENTS_GIT.md.
 - Do not use `gh`. use `./scripts/gh-bot.mjs` so you will have your identity `abao-bot`
 
-## Coding Principles
+### Coding Principles
 - Read files in full before making wide-ranging changes, before editing files you have not already fully inspected, and when the user asks you to investigate or audit something. Do not rely only on search snippets for broad changes. Given a change, do not first attempt to insert into current code base. First look at it from a higher perspective, discover refactor opportunities.
 - Check node_modules for external API type definitions instead of guessing
 - NEVER remove or downgrade code to fix type errors from outdated dependencies; upgrade the dependency instead
@@ -72,8 +74,9 @@
 - A responsibility should belong to an earlier performer. E.g. if type `Config` can parse the configuration into ready-to-use types, it shouldn't pass raw strings to its clients. A producer should produce the best output for its consumers.
 - A module should be easily testable with mocked dependencies. Unit tests should be done with mocks without creating actual dependency or causing any side effects.
 - Logic should be put in pure functions as much as possible. Any side effects, e.g. IO, should be at the edge layers with minimal logic. This makes the code easier to test.
+- Only features are scoped, NO compromize on NFR.
 
-### SOLID principles:
+#### SOLID principles:
 - **Single Responsibility Principle**: A function, class, or module should have one, and only one, reason to change.
 - **Open/Closed Principle**: Hide implementations behind interfaces. So that modifications happen without the client code needing to know.
 - **Liskov Substitution Principle**: Switching implementation should not violate the interface's contract, including implicit ones like side effects and error handling.
@@ -87,7 +90,7 @@
 ## File Edit Checklist
 Pre-action:
 - Before adding utility functions/logic, check existing utils for reuse.
-- Before adding logic to existing files, check if the abstraction level is correct, if not propose refactoring first.
+- Before adding logic to existing files, check if any coding principles are violated, if violated, propose refactoring first.
 
 Post-action:
 - After file edit (semantic or logic change), run tests.

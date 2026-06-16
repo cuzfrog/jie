@@ -8,11 +8,38 @@ import type {
   AgentMessage,
 } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, AssistantMessageEvent } from "@earendil-works/pi-ai";
-import { runPrintCli } from "./index.ts";
+import { runPrint, type PrintDeps, type PrintArgs } from "./print.ts";
+import { makeAuthStore } from "../auth-store.ts";
+import { makeSettingsStore } from "../settings-store.ts";
+import { makeTeamsRepo } from "../teams.ts";
 import { SqliteStorage, type MergedSettings, type TeamBlueprint } from "@cuzfrog/jie-platform";
 
 function makeSettings(): MergedSettings {
   return { defaultProvider: "anthropic", defaultModel: "claude-sonnet-4" };
+}
+
+function makeDeps(homeDir: string, hooks: Partial<PrintDeps> = {}): PrintDeps {
+  return {
+    authStore: makeAuthStore(homeDir),
+    settingsStore: makeSettingsStore(homeDir),
+    teamsRepo: makeTeamsRepo(homeDir),
+    homeDir,
+    ...hooks,
+  };
+}
+
+function printArgs(partial: Partial<PrintArgs> = {}): PrintArgs {
+  return {
+    kind: "print",
+    instruction: "hi",
+    team: undefined,
+    timeout: 5,
+    json: false,
+    apiKey: undefined,
+    resume: undefined,
+    continueLast: false,
+    ...partial,
+  };
 }
 
 interface StubHandle {
@@ -90,32 +117,27 @@ function makeTextDelta(delta: string, partial: AssistantMessage): AssistantMessa
 
 describe("print mode — guard rails", () => {
   let workspace: string;
+  let homeDir: string;
   let storage: SqliteStorage;
 
   beforeEach(() => {
     workspace = mkdtempSync(join(tmpdir(), "jie-cli-print-"));
+    homeDir = mkdtempSync(join(tmpdir(), "jie-cli-print-home-"));
     storage = new SqliteStorage(":memory:");
   });
 
   afterEach(() => {
     storage.close();
     rmSync(workspace, { recursive: true, force: true });
+    rmSync(homeDir, { recursive: true, force: true });
   });
 
   test("--team <id> not installed exits 1 with team-not-installed message", async () => {
     const writeErr = spyOn(console, "error").mockImplementation(() => {});
-    const code = await runPrintCli(
-      {
-        kind: "print",
-        instruction: "hello",
-        team: "ghost",
-        timeout: 1,
-        json: false,
-        apiKey: undefined,
-        resume: undefined,
-        continueLast: false,
-      },
+    const code = await runPrint(
+      printArgs({ instruction: "hello", team: "ghost", timeout: 1 }),
       workspace,
+      makeDeps(homeDir),
     );
     expect(code).toBe(1);
     const messages = writeErr.mock.calls.map((c) => String(c[0]));
@@ -125,24 +147,15 @@ describe("print mode — guard rails", () => {
 
   test("empty team (no .md files) guard: exits 1 with no-agents message", async () => {
     const writeErr = spyOn(console, "error").mockImplementation(() => {});
-    const code = await runPrintCli(
-      {
-        kind: "print",
-        instruction: "hello",
-        team: "minimal",
-        timeout: 1,
-        json: false,
-        apiKey: undefined,
-        resume: undefined,
-        continueLast: false,
-      },
+    const code = await runPrint(
+      printArgs({ instruction: "hello", team: "minimal", timeout: 1 }),
       workspace,
-      {
+      makeDeps(homeDir, {
         loadTeamBlueprint: () => ({ roles: [], leaderRole: null }),
         resolveModel: () => ({ id: "x" } as never),
         getApiKey: () => undefined,
         settingsOverride: makeSettings(),
-      },
+      }),
     );
     expect(code).toBe(1);
     const messages = writeErr.mock.calls.map((c) => String(c[0]));
@@ -153,44 +166,35 @@ describe("print mode — guard rails", () => {
 
 describe("print mode — happy path with stub agent", () => {
   let workspace: string;
+  let homeDir: string;
   let stub: StubFactory;
 
   beforeEach(() => {
     workspace = mkdtempSync(join(tmpdir(), "jie-cli-print-happy-"));
+    homeDir = mkdtempSync(join(tmpdir(), "jie-cli-print-happy-home-"));
     stub = makeStubAgentFactory();
   });
 
   afterEach(() => {
     rmSync(workspace, { recursive: true, force: true });
+    rmSync(homeDir, { recursive: true, force: true });
   });
 
   test("stub returns 'hello world': exit 0, stdout has 'hello world' followed by '\\n'", async () => {
     const writeOut = spyOn(process.stdout, "write").mockImplementation(() => true);
     const writeErr = spyOn(console, "error").mockImplementation(() => {});
 
-    const codePromise = runPrintCli(
-      {
-        kind: "print",
-        instruction: "hi",
-        team: undefined,
-        timeout: 5,
-        json: false,
-        apiKey: undefined,
-        resume: undefined,
-        continueLast: false,
-      },
+    const codePromise = runPrint(
+      printArgs({ instruction: "hi", timeout: 5 }),
       workspace,
-      {
+      makeDeps(homeDir, {
         resolveModel: () => ({ id: "x" } as never),
         getApiKey: () => undefined,
         settingsOverride: makeSettings(),
         createAgent: stub.factory,
-      },
+      }),
     );
 
-    // Give the CLI a tick to publish the prompt envelope and have
-    // the body ingest it. The stub's `prompt` is a no-op, so the
-    // test drives the agent through its events directly.
     await new Promise((r) => setTimeout(r, 10));
 
     const leader = stub.handles[0]!;
@@ -219,24 +223,15 @@ describe("print mode — happy path with stub agent", () => {
     const writeOut = spyOn(process.stdout, "write").mockImplementation(() => true);
     const writeErr = spyOn(console, "error").mockImplementation(() => {});
 
-    const code = await runPrintCli(
-      {
-        kind: "print",
-        instruction: "hi",
-        team: undefined,
-        timeout: 1,
-        json: false,
-        apiKey: undefined,
-        resume: undefined,
-        continueLast: false,
-      },
+    const code = await runPrint(
+      printArgs({ instruction: "hi", timeout: 1 }),
       workspace,
-      {
+      makeDeps(homeDir, {
         resolveModel: () => ({ id: "x" } as never),
         getApiKey: () => undefined,
         settingsOverride: makeSettings(),
         createAgent: stub.factory,
-      },
+      }),
     );
 
     expect(code).toBe(3);
@@ -250,24 +245,15 @@ describe("print mode — happy path with stub agent", () => {
     const writeOut = spyOn(process.stdout, "write").mockImplementation(() => true);
     const writeErr = spyOn(console, "error").mockImplementation(() => {});
 
-    const codePromise = runPrintCli(
-      {
-        kind: "print",
-        instruction: "hi",
-        team: undefined,
-        timeout: 5,
-        json: true,
-        apiKey: undefined,
-        resume: undefined,
-        continueLast: false,
-      },
+    const codePromise = runPrint(
+      printArgs({ instruction: "hi", timeout: 5, json: true }),
       workspace,
-      {
+      makeDeps(homeDir, {
         resolveModel: () => ({ id: "x" } as never),
         getApiKey: () => undefined,
         settingsOverride: makeSettings(),
         createAgent: stub.factory,
-      },
+      }),
     );
 
     await new Promise((r) => setTimeout(r, 10));
@@ -304,24 +290,15 @@ describe("print mode — happy path with stub agent", () => {
     const writeOut = spyOn(process.stdout, "write").mockImplementation(() => true);
     const writeErr = spyOn(console, "error").mockImplementation(() => {});
 
-    const codePromise = runPrintCli(
-      {
-        kind: "print",
-        instruction: "hi",
-        team: undefined,
-        timeout: 5,
-        json: false,
-        apiKey: undefined,
-        resume: undefined,
-        continueLast: false,
-      },
+    const codePromise = runPrint(
+      printArgs({ instruction: "hi", timeout: 5 }),
       workspace,
-      {
+      makeDeps(homeDir, {
         resolveModel: () => ({ id: "x" } as never),
         getApiKey: () => undefined,
         settingsOverride: makeSettings(),
         createAgent: stub.factory,
-      },
+      }),
     );
 
     await new Promise((r) => setTimeout(r, 10));
@@ -350,13 +327,16 @@ describe("print mode — happy path with stub agent", () => {
 
 describe("print mode — multi-agent gate", () => {
   let workspace: string;
+  let homeDir: string;
 
   beforeEach(() => {
     workspace = mkdtempSync(join(tmpdir(), "jie-cli-print-multi-"));
+    homeDir = mkdtempSync(join(tmpdir(), "jie-cli-print-multi-home-"));
   });
 
   afterEach(() => {
     rmSync(workspace, { recursive: true, force: true });
+    rmSync(homeDir, { recursive: true, force: true });
   });
 
   test("gate waits for ALL bodies to go idle, not just the leader", async () => {
@@ -386,25 +366,16 @@ describe("print mode — multi-agent gate", () => {
       leaderRole: "leader",
     };
 
-    const codePromise = runPrintCli(
-      {
-        kind: "print",
-        instruction: "hi",
-        team: undefined,
-        timeout: 5,
-        json: false,
-        apiKey: undefined,
-        resume: undefined,
-        continueLast: false,
-      },
+    const codePromise = runPrint(
+      printArgs({ instruction: "hi", timeout: 5 }),
       workspace,
-      {
+      makeDeps(homeDir, {
         loadTeamBlueprint: () => twoAgentTeam,
         resolveModel: () => ({ id: "x" } as never),
         getApiKey: () => undefined,
         settingsOverride: makeSettings(),
         createAgent: stub.factory,
-      },
+      }),
     );
 
     await new Promise((r) => setTimeout(r, 10));

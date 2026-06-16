@@ -45,6 +45,15 @@ export {
   isValidTeamId,
   ModelRegistry,
 } from "./config/index.ts";
+export {
+  homeJieDir,
+  globalAuthPath,
+  globalSettingsPath,
+  globalTeamsDir,
+  findProjectJieRoot,
+  projectSettingsPath,
+  projectTeamsDir,
+} from "./config/paths.ts";
 export type {
   RawModelsConfig,
   RawProviderConfig,
