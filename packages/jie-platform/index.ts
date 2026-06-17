@@ -2,7 +2,6 @@ export { startJie } from "./start.ts";
 export type { JieHandle } from "./start.ts";
 
 export type { AgentEvent } from "./core/agent-event.ts";
-export type { TeamBlueprint } from "./team/types.ts";
 
 export { SqliteStorage } from "./storage/sqlite-storage.ts";
 

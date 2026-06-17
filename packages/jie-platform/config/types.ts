@@ -1,5 +1,7 @@
 import type { OAuthCredentials } from "@earendil-works/pi-ai";
 
+export type ConfigScope = "user" | "project";
+
 /** Merged settings after deep-merging `.jie/settings.json` over
  *  `~/.jie/settings.json`. Unrecognized top-level fields on disk are
  *  tolerated (warned, ignored) and are NOT surfaced here — only the

@@ -11,8 +11,5 @@ frozen:
   - package.json
   - settings-store.test.ts
   - settings-store.ts
-  - teams.test.ts
-  - teams.ts
   - version.ts
 ---
-

@@ -10,20 +10,18 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { makeSettingsStore } from "../settings-store.ts";
-import { makeTeamsRepo } from "../teams.ts";
+import { createTeamRegistry, type TeamRegistry } from "@cuzfrog/jie-platform/team";
 import { runModel, runTeam } from "./settings.ts";
 
 describe("runModel", () => {
   let homeDir: string;
   let cwd: string;
   let settings: ReturnType<typeof makeSettingsStore>;
-  let teams: ReturnType<typeof makeTeamsRepo>;
 
   beforeEach(() => {
     homeDir = mkdtempSync(join(tmpdir(), "jie-cli-model-"));
     cwd = mkdtempSync(join(tmpdir(), "jie-cli-model-cwd-"));
     settings = makeSettingsStore(homeDir);
-    teams = makeTeamsRepo(homeDir);
   });
 
   afterEach(() => {
@@ -36,7 +34,6 @@ describe("runModel", () => {
       { kind: "model", provider: "anthropic", modelId: "claude-opus-4" },
       cwd,
       settings,
-      teams,
     );
     expect(code).toBe(0);
     const path = join(homeDir, ".jie", "settings.json");
@@ -57,7 +54,6 @@ describe("runModel", () => {
         { kind: "model", provider: "anthropic", modelId: "claude-opus-4" },
         nested,
         settings,
-        teams,
       );
       expect(code).toBe(0);
       const path = join(projectRoot, ".jie", "settings.json");
@@ -78,7 +74,6 @@ describe("runModel", () => {
         { kind: "model", provider: "ghost-provider", modelId: "ghost-model" },
         cwd,
         settings,
-        teams,
       );
       expect(code).toBe(0);
       expect(errs.join("\n")).toContain("unknown provider: ghost-provider");
@@ -97,13 +92,18 @@ describe("runTeam", () => {
   let homeDir: string;
   let cwd: string;
   let settings: ReturnType<typeof makeSettingsStore>;
-  let teams: ReturnType<typeof makeTeamsRepo>;
+  let teamRegistry: TeamRegistry;
 
   beforeEach(() => {
     homeDir = mkdtempSync(join(tmpdir(), "jie-cli-team-"));
     cwd = mkdtempSync(join(tmpdir(), "jie-cli-team-cwd-"));
     settings = makeSettingsStore(homeDir);
-    teams = makeTeamsRepo(homeDir);
+    // `homeJieDir` is the path to the `.jie/` directory; teams
+    // live under `<homeJieDir>/teams/<id>/`.
+    teamRegistry = createTeamRegistry({
+      workspace: cwd,
+      homeJieDir: join(homeDir, ".jie"),
+    });
   });
 
   afterEach(() => {
@@ -118,7 +118,7 @@ describe("runTeam", () => {
       { kind: "team", teamId: "dev", unset: false },
       cwd,
       settings,
-      teams,
+      teamRegistry,
     );
     expect(code).toBe(0);
     expect(JSON.parse(readFileSync(join(homeDir, ".jie", "settings.json"), "utf-8"))).toEqual({
@@ -133,7 +133,7 @@ describe("runTeam", () => {
       { kind: "team", teamId: "dev", unset: false },
       cwd,
       settings,
-      teams,
+      teamRegistry,
     );
     expect(code).toBe(0);
     expect(JSON.parse(readFileSync(join(cwd, ".jie", "settings.json"), "utf-8"))).toEqual({
@@ -152,7 +152,7 @@ describe("runTeam", () => {
         { kind: "team", teamId: "ghost", unset: false },
         cwd,
         settings,
-        teams,
+        teamRegistry,
       );
       expect(code).toBe(1);
       expect(errs.join("\n")).toContain("is not installed");
@@ -172,7 +172,7 @@ describe("runTeam", () => {
         { kind: "team", teamId: "bad id with spaces", unset: false },
         cwd,
         settings,
-        teams,
+        teamRegistry,
       );
       expect(code).toBe(1);
       expect(errs.join("\n")).toContain("invalid team id");
@@ -191,7 +191,7 @@ describe("runTeam", () => {
       { kind: "team", unset: true },
       cwd,
       settings,
-      teams,
+      teamRegistry,
     );
     expect(code).toBe(0);
     expect(JSON.parse(readFileSync(join(homeDir, ".jie", "settings.json"), "utf-8"))).toEqual({
@@ -210,7 +210,7 @@ describe("runTeam", () => {
       { kind: "team", unset: true },
       cwd,
       settings,
-      teams,
+      teamRegistry,
     );
     expect(code).toBe(0);
     expect(JSON.parse(readFileSync(join(cwd, ".jie", "settings.json"), "utf-8"))).toEqual({
@@ -237,7 +237,7 @@ describe("runTeam", () => {
         { kind: "team", unset: false },
         cwd,
         settings,
-        teams,
+        teamRegistry,
       );
       expect(code).toBe(0);
       const out = logs.join("\n");
@@ -260,7 +260,7 @@ describe("runTeam", () => {
         { kind: "team", unset: false },
         cwd,
         settings,
-        teams,
+        teamRegistry,
       );
       expect(code).toBe(0);
       const out = logs.join("\n");

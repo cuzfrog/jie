@@ -15,10 +15,10 @@
  *       and the timeout (if any) has not elapsed.
  *
  *  The `PrintDeps` type carries the runtime stores plus optional
- *  test hooks (`loadTeamBlueprint`, `resolveModel`, `getApiKey`,
- *  `settingsOverride`, `createAgent`). Real `main` constructs
- *  the runtime stores from `process.env.HOME`; tests inject
- *  mocks.
+ *  test hooks (`loadTeam`, `resolveModel`, `getApiKey`,
+ *  `settingsOverride`, `createAgent`, `teamRegistry`). Real
+ *  `main` constructs the runtime stores from `process.env.HOME`;
+ *  tests inject mocks.
  */
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -32,13 +32,12 @@ import {
   type AuthJson,
   type JieHandle,
   type MergedSettings,
-  type TeamBlueprint,
 } from "@cuzfrog/jie-platform";
+import { createTeamRegistry, type Team, type TeamRegistry } from "@cuzfrog/jie-platform/team";
 import type { Model } from "@earendil-works/pi-ai";
 import type { Agent } from "@earendil-works/pi-agent-core";
 import type { AuthStore } from "../auth-store.ts";
 import type { SettingsStore } from "../settings-store.ts";
-import { BUILTIN_MINIMAL_TEAM_ID, type TeamsRepo } from "../teams.ts";
 import type { ParsedCli } from "../cli-flags.ts";
 
 export type PrintArgs = Extract<ParsedCli, { kind: "print" }>;
@@ -46,9 +45,11 @@ export type PrintArgs = Extract<ParsedCli, { kind: "print" }>;
 export interface PrintDeps {
   authStore: AuthStore;
   settingsStore: SettingsStore;
-  teamsRepo: TeamsRepo;
   homeDir: string;
-  loadTeamBlueprint?: (teamId: string) => TeamBlueprint;
+  /** Optional override for the team registry. If omitted,
+   *  `runPrint` constructs one from `cwd` and `homeDir`. */
+  teamRegistry?: TeamRegistry;
+  loadTeam?: (teamId: string) => Team;
   resolveModel?: (provider: string, modelId: string) => Model<any>;
   getApiKey?: (provider: string) => string | undefined;
   settingsOverride?: MergedSettings;
@@ -99,14 +100,22 @@ export async function runPrint(
     settings.defaultTeam = recovered;
   }
 
-  const teamId = parsed.team ?? settings.defaultTeam ?? BUILTIN_MINIMAL_TEAM_ID;
-  if (parsed.team !== undefined && !deps.teamsRepo.isInstalled(parsed.team, cwd)) {
+  const teamRegistry =
+    deps.teamRegistry ??
+    createTeamRegistry({ workspace: cwd, homeJieDir: deps.homeDir });
+
+  // The chosen teamId. When the user has not set `--team` and
+  // `settings.defaultTeam` is unset, fall back to the built-in
+  // minimal team (the magic string `"minimal"` is recognized by
+  // the registry's `loadTeam`).
+  const teamId: string = parsed.team ?? settings.defaultTeam ?? "minimal";
+  if (!teamRegistry.isValidTeamId(teamId)) {
     console.error(
-      `team '${parsed.team}' is not installed; checked .jie/teams/${parsed.team}/ and ~/.jie/teams/${parsed.team}/`,
+      `invalid team id '${teamId}'; must match [A-Za-z0-9_-]{1,32}`,
     );
     return 1;
   }
-  if (teamId !== BUILTIN_MINIMAL_TEAM_ID && !deps.teamsRepo.isInstalled(teamId, cwd)) {
+  if (!teamRegistry.isInstalled(teamId)) {
     console.error(
       `team '${teamId}' is not installed; checked .jie/teams/${teamId}/ and ~/.jie/teams/${teamId}/`,
     );
@@ -145,13 +154,15 @@ export async function runPrint(
   try {
     handle = await startJie({
       workspace: cwd,
+      homeJieDir: deps.homeDir,
       settings: finalSettings,
       storage,
       teamId,
       resumeSessionId: parsed.resume,
       continueLastSession: parsed.continueLast,
       getApiKey,
-      loadTeamBlueprint: deps.loadTeamBlueprint,
+      loadTeam: deps.loadTeam,
+      teamRegistry: deps.teamRegistry,
       resolveModel: deps.resolveModel,
       createAgent: deps.createAgent,
     });

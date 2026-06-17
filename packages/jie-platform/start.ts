@@ -13,24 +13,23 @@ import { InProcessEventBus } from "./core/in-process-event-bus.ts";
 import { AgentBody } from "./core/agent-body.ts";
 import type { AgentEvent } from "./core/agent-event.ts";
 import {
-  loadMinimalTeam,
-  loadTeamFromDir,
+  createTeamRegistry,
   type AgentSoul,
-  type TeamBlueprint,
+  type Team,
+  type TeamRegistry,
 } from "./team/index.ts";
-import { projectTeamsDir } from "./config/paths.ts";
 import { ModelRegistry, type MergedSettings, type AuthJson } from "./config/index.ts";
 import type { ToolRegistry } from "./tools/tool-registry.ts";
 import { createToolRegistry } from "./tools/tool-registry.ts";
 import type { McpServerConfig } from "./config/index.ts";
-import { join } from "node:path";
-import { existsSync } from "node:fs";
 
 export interface StartJieOptions {
   workspace: string;
+  /** The user's home jie dir (e.g. `~/.jie/`). */
+  homeJieDir: string;
   settings: MergedSettings;
   storage: Storage;
-  teamId: string | "minimal";
+  teamId: string;
   mcpServers?: McpServerConfig[];
   resumeSessionId?: string;
   continueLastSession?: boolean;
@@ -40,8 +39,12 @@ export interface StartJieOptions {
    *  `startJie`. */
   toolRegistry?: ToolRegistry;
   /** Optional override for the team lookup; defaults to
-   *  `loadTeamFromDir` for non-minimal team ids. */
-  loadTeamBlueprint?: (teamId: string) => TeamBlueprint;
+   *  `TeamRegistry.loadTeam`. Tests inject a custom function to
+   *  return canned teams without going through the registry. */
+  loadTeam?: (teamId: string) => Team;
+  /** Optional override for the team registry. Defaults to one
+   *  created from `workspace` and `homeJieDir`. */
+  teamRegistry?: TeamRegistry;
   /** Optional override for `getModel`. Used by tests; production
    *  uses pi-ai's `getModel`. */
   resolveModel?: (provider: string, modelId: string) => Model<any>;
@@ -80,19 +83,6 @@ function defaultResolveModel(registry: ModelRegistry): (provider: string, modelI
       modelId as Parameters<typeof piGetModel>[1],
     ) as unknown as Model<any>;
   };
-}
-
-function defaultLoadTeamBlueprint(workspace: string, teamId: string): TeamBlueprint {
-  if (teamId === "minimal") return loadMinimalTeam();
-  const teamsRoot = projectTeamsDir(workspace);
-  if (teamsRoot === null) {
-    throw new Error(`team '${teamId}' not found`);
-  }
-  const teamDir = join(teamsRoot, teamId);
-  if (existsSync(teamDir)) {
-    return loadTeamFromDir(teamDir);
-  }
-  throw new Error(`team '${teamId}' not found`);
 }
 
 function _defaultGetApiKey(
@@ -134,16 +124,17 @@ export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
   const toolRegistry = opts.toolRegistry ?? createToolRegistry();
   const registry = opts.modelRegistry ?? ModelRegistry.load(opts.workspace);
   const resolveModel = opts.resolveModel ?? defaultResolveModel(registry);
-  const defaultLoader = (teamId: string) =>
-    defaultLoadTeamBlueprint(opts.workspace, teamId);
-  const loadTeamBlueprint = opts.loadTeamBlueprint ?? defaultLoader;
+  const teamRegistry =
+    opts.teamRegistry ??
+    createTeamRegistry({ workspace: opts.workspace, homeJieDir: opts.homeJieDir });
+  const loadTeam = opts.loadTeam ?? ((teamId: string) => teamRegistry.loadTeam(teamId));
   const getApiKey = opts.getApiKey ?? (async (provider: string) => registry.getApiKey(provider));
   const artifacts: ArtifactStore = new SqliteArtifactStore(opts.storage);
   const memory: MemoryManager = new SqliteMemoryManager(opts.storage);
   const bus: EventBus = new InProcessEventBus();
 
   // Step 1: resolve the team blueprint.
-  const blueprint: TeamBlueprint = loadTeamBlueprint(opts.teamId);
+  const blueprint: Team = loadTeam(opts.teamId);
 
   // Step 2: model pre-check (every soul must resolve).
   const resolvedModels = new Map<string, Model<any>>();
@@ -178,10 +169,10 @@ export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
   }
 
   // Step 4: build bodies for the startup team.
-  const loadedTeams = new Map<string, { blueprint: TeamBlueprint; bodies: AgentBody[] }>();
+  const loadedTeams = new Map<string, { blueprint: Team; bodies: AgentBody[] }>();
 
   async function buildAndStart(teamId: string): Promise<AgentBody[]> {
-    const bp: TeamBlueprint = loadTeamBlueprint(teamId);
+    const bp: Team = loadTeam(teamId);
 
     // If already loaded, return existing bodies (idempotent).
     const existing = loadedTeams.get(teamId);
@@ -284,7 +275,7 @@ export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
   return handle;
 }
 
-function publishTeamLoaded(bus: EventBus, teamId: string, bp: TeamBlueprint): void {
+function publishTeamLoaded(bus: EventBus, teamId: string, bp: Team): void {
   const sorted = [...bp.roles].sort((a, b) => a.role.localeCompare(b.role));
   const agents = sorted.map((r) => ({ role: r.role, agent_key: `${r.role}-1` }));
   const envelope: AgentEvent = {

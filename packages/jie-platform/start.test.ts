@@ -34,21 +34,25 @@ function makeStubModel(): Model<any> {
 
 describe("startJie — happy path (minimal team)", () => {
   let workspace: string;
+  let homeJieDir: string;
   let storage: SqliteStorage;
 
   beforeEach(() => {
     workspace = mkdtempSync(join(tmpdir(), "jie-start-"));
+    homeJieDir = mkdtempSync(join(tmpdir(), "jie-start-home-"));
     storage = new SqliteStorage(":memory:");
   });
 
   afterEach(() => {
     storage.close();
     rmSync(workspace, { recursive: true, force: true });
+    rmSync(homeJieDir, { recursive: true, force: true });
   });
 
   test("starts the minimal team; handle exposes 1 body and 1 role", async () => {
     const handle = await startJie({
       workspace,
+      homeJieDir,
       settings: makeSettings(),
       storage,
       teamId: "minimal",
@@ -67,6 +71,7 @@ describe("startJie — happy path (minimal team)", () => {
     void tmp;
     const handle = await startJie({
       workspace,
+      homeJieDir,
       settings: makeSettings(),
       storage,
       teamId: "minimal",
@@ -82,6 +87,7 @@ describe("startJie — happy path (minimal team)", () => {
     let captured: ((subject: string, payload: object) => void) | undefined;
     const second = await startJie({
       workspace,
+      homeJieDir,
       settings: makeSettings(),
       storage: storage2,
       teamId: "minimal",
@@ -105,6 +111,7 @@ describe("startJie — happy path (minimal team)", () => {
   test("team.loaded is not republished on subsequent loadTeam calls (idempotent)", async () => {
     const handle = await startJie({
       workspace,
+      homeJieDir,
       settings: makeSettings(),
       storage,
       teamId: "minimal",
@@ -122,6 +129,7 @@ describe("startJie — happy path (minimal team)", () => {
     await expect(
       startJie({
         workspace,
+        homeJieDir,
         settings: {},
         storage,
         teamId: "minimal",
@@ -133,6 +141,7 @@ describe("startJie — happy path (minimal team)", () => {
     await expect(
       startJie({
         workspace,
+        homeJieDir,
         settings: makeSettings(),
         storage,
         teamId: "minimal",
@@ -146,6 +155,7 @@ describe("startJie — happy path (minimal team)", () => {
   test("handle.stop() detaches all bus subscriptions", async () => {
     const handle = await startJie({
       workspace,
+      homeJieDir,
       settings: makeSettings(),
       storage,
       teamId: "minimal",
@@ -161,22 +171,26 @@ describe("startJie — happy path (minimal team)", () => {
 
 describe("startJie — session id resolution", () => {
   let workspace: string;
+  let homeJieDir: string;
   let storage: SqliteStorage;
 
   beforeEach(() => {
     workspace = mkdtempSync(join(tmpdir(), "jie-start-sess-"));
+    homeJieDir = mkdtempSync(join(tmpdir(), "jie-start-sess-home-"));
     storage = new SqliteStorage(":memory:");
   });
 
   afterEach(() => {
     storage.close();
     rmSync(workspace, { recursive: true, force: true });
+    rmSync(homeJieDir, { recursive: true, force: true });
   });
 
   test("resumeSessionId: valid id is used; invalid id rejects with 'unknown session_id:'", async () => {
     const filePath = join(workspace, "persistent.db");
     const h1 = await startJie({
       workspace,
+      homeJieDir,
       settings: makeSettings(),
       storage: new SqliteStorage(filePath),
       teamId: "minimal",
@@ -199,6 +213,7 @@ describe("startJie — session id resolution", () => {
 
     const h2 = await startJie({
       workspace,
+      homeJieDir,
       settings: makeSettings(),
       storage: new SqliteStorage(filePath),
       teamId: "minimal",
@@ -211,6 +226,7 @@ describe("startJie — session id resolution", () => {
     await expect(
       startJie({
         workspace,
+        homeJieDir,
         settings: makeSettings(),
         storage: new SqliteStorage(filePath),
         teamId: "minimal",
@@ -224,6 +240,7 @@ describe("startJie — session id resolution", () => {
     const filePath = join(workspace, "persistent2.db");
     const h1 = await startJie({
       workspace,
+      homeJieDir,
       settings: makeSettings(),
       storage: new SqliteStorage(filePath),
       teamId: "minimal",
@@ -242,6 +259,7 @@ describe("startJie — session id resolution", () => {
 
     const h2 = await startJie({
       workspace,
+      homeJieDir,
       settings: makeSettings(),
       storage: new SqliteStorage(filePath),
       teamId: "minimal",
@@ -255,21 +273,25 @@ describe("startJie — session id resolution", () => {
 
 describe("startJie — multi-team coexistence (loadTeam)", () => {
   let workspace: string;
+  let homeJieDir: string;
   let storage: SqliteStorage;
 
   beforeEach(() => {
     workspace = mkdtempSync(join(tmpdir(), "jie-start-multi-"));
+    homeJieDir = mkdtempSync(join(tmpdir(), "jie-start-multi-home-"));
     storage = new SqliteStorage(":memory:");
   });
 
   afterEach(() => {
     storage.close();
     rmSync(workspace, { recursive: true, force: true });
+    rmSync(homeJieDir, { recursive: true, force: true });
   });
 
   test("loadTeam is idempotent: already-loaded team returns immediately without re-publishing team.loaded", async () => {
     const handle = await startJie({
       workspace,
+      homeJieDir,
       settings: makeSettings(),
       storage,
       teamId: "minimal",
@@ -286,6 +308,7 @@ describe("startJie — multi-team coexistence (loadTeam)", () => {
   test("bodies() across multiple teams returns the union", async () => {
     const handle = await startJie({
       workspace,
+      homeJieDir,
       settings: makeSettings(),
       storage,
       teamId: "minimal",
@@ -294,6 +317,7 @@ describe("startJie — multi-team coexistence (loadTeam)", () => {
     // Inject a custom team loader that returns a second team.
     const handle2 = await startJie({
       workspace,
+      homeJieDir,
       settings: makeSettings(),
       storage: new SqliteStorage(":memory:"),
       teamId: "minimal",
@@ -306,25 +330,29 @@ describe("startJie — multi-team coexistence (loadTeam)", () => {
 
 describe("startJie — empty team (loadTeam of nonexistent)", () => {
   let workspace: string;
+  let homeJieDir: string;
   let storage: SqliteStorage;
 
   beforeEach(() => {
     workspace = mkdtempSync(join(tmpdir(), "jie-start-empty-"));
+    homeJieDir = mkdtempSync(join(tmpdir(), "jie-start-empty-home-"));
     storage = new SqliteStorage(":memory:");
   });
 
   afterEach(() => {
     storage.close();
     rmSync(workspace, { recursive: true, force: true });
+    rmSync(homeJieDir, { recursive: true, force: true });
   });
 
   test("empty team: bodiesFor returns [] and rolesFor returns []", async () => {
     const handle = await startJie({
       workspace,
+      homeJieDir,
       settings: makeSettings(),
       storage,
       teamId: "minimal",
-      loadTeamBlueprint: () => ({
+      loadTeam: () => ({
         roles: [],
         leaderRole: null,
       }),

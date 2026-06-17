@@ -3,20 +3,24 @@
  *
  *  This file is the entry point. It only:
  *    1. Parses argv via `cli-flags.ts`.
- *    2. Resolves HOME and constructs the runtime stores/repos.
- *    3. Dispatches to a subcommand module under `./commands/`.
+ *    2. Resolves HOME and constructs the runtime stores.
+ *    3. Constructs a `TeamRegistry` for the current cwd.
+ *    4. Dispatches to a subcommand module under `./commands/`.
  *
  *  Domain logic lives in:
- *    - `auth-store.ts`, `settings-store.ts`, `teams.ts` — stores.
+ *    - `auth-store.ts`, `settings-store.ts` — stores.
  *    - `home-paths.ts` — HOME resolution.
  *    - `commands/auth.ts` — `login`, `logout`, top-level `--api-key`.
  *    - `commands/settings.ts` — `model`, `team`.
  *    - `commands/print.ts` — `jie -p` (the full agentic pipeline).
+ *    - `@cuzfrog/jie-platform/team` — `TeamRegistry` (the CLI is a
+ *      thin consumer; team loading and discovery live in the
+ *      platform's team module).
  */
-import type { MergedSettings, TeamBlueprint } from "@cuzfrog/jie-platform";
+import type { MergedSettings } from "@cuzfrog/jie-platform";
+import { createTeamRegistry, type TeamRegistry, type Team } from "@cuzfrog/jie-platform/team";
 import { makeAuthStore, type AuthStore } from "./auth-store.ts";
 import { makeSettingsStore, type SettingsStore } from "./settings-store.ts";
-import { makeTeamsRepo, type TeamsRepo } from "./teams.ts";
 import { resolveHomeDir } from "./home-paths.ts";
 import { parseFlags, type ParsedCli } from "./cli-flags.ts";
 import { runLogin, runLogout, runApiKey } from "./commands/auth.ts";
@@ -27,7 +31,6 @@ import { VERSION } from "./version.ts";
 interface Deps {
   authStore: AuthStore;
   settingsStore: SettingsStore;
-  teamsRepo: TeamsRepo;
   homeDir: string;
 }
 
@@ -35,7 +38,6 @@ function makeDeps(homeDir: string): Deps {
   return {
     authStore: makeAuthStore(homeDir),
     settingsStore: makeSettingsStore(homeDir),
-    teamsRepo: makeTeamsRepo(homeDir),
     homeDir,
   };
 }
@@ -72,14 +74,15 @@ async function run(parsed: ParsedCli, cwd: string, deps: Deps): Promise<number> 
     case "apiKey":
       return runApiKey(parsed, cwd, deps.settingsStore, deps.authStore);
     case "model":
-      return runModel(parsed, cwd, deps.settingsStore, deps.teamsRepo);
-    case "team":
-      return runTeam(parsed, cwd, deps.settingsStore, deps.teamsRepo);
+      return runModel(parsed, cwd, deps.settingsStore);
+    case "team": {
+      const teamRegistry = createTeamRegistry({ workspace: cwd, homeJieDir: deps.homeDir });
+      return runTeam(parsed, cwd, deps.settingsStore, teamRegistry);
+    }
     case "print":
       return runPrint(parsed, cwd, {
         authStore: deps.authStore,
         settingsStore: deps.settingsStore,
-        teamsRepo: deps.teamsRepo,
         homeDir: deps.homeDir,
       });
   }
@@ -120,7 +123,6 @@ export async function runPrintCli(
   const deps: PrintDeps = {
     authStore: makeAuthStore(homeDir),
     settingsStore: makeSettingsStore(homeDir),
-    teamsRepo: makeTeamsRepo(homeDir),
     homeDir,
     ...hooks,
   };
@@ -135,7 +137,7 @@ export type PrintHooks = Partial<PrintDeps>;
 // backward compatibility with callers that imported the type from
 // `./index.ts` in earlier versions. Prefer importing from the
 // owning module directly.
-export type { MergedSettings, TeamBlueprint };
+export type { MergedSettings, Team, TeamRegistry };
 
 if (import.meta.main) {
   process.exit(await main(Bun.argv.slice(2)));

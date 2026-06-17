@@ -98,21 +98,25 @@ function makeTurnRecordingFactory(): {
 
 describe("memory-roundtrip — persist and resume across two startJie calls", () => {
   let workspace: string;
+  let homeJieDir: string;
   let dbPath: string;
 
   beforeEach(() => {
     workspace = mkdtempSync(join(tmpdir(), "jie-mem-rt-"));
+    homeJieDir = mkdtempSync(join(tmpdir(), "jie-mem-rt-home-"));
     dbPath = join(workspace, "memory.db");
   });
 
   afterEach(() => {
     rmSync(workspace, { recursive: true, force: true });
+    rmSync(homeJieDir, { recursive: true, force: true });
   });
 
   test("first call: 5 messages persisted; second --continue: state restored with 5 messages", async () => {
     const stub1 = makeTurnRecordingFactory();
     const first = await startJie({
       workspace,
+      homeJieDir,
       settings: makeSettings(),
       storage: new SqliteStorage(dbPath),
       teamId: "minimal",
@@ -155,6 +159,7 @@ describe("memory-roundtrip — persist and resume across two startJie calls", ()
     const stub2 = makeTurnRecordingFactory();
     const second = await startJie({
       workspace,
+      homeJieDir,
       settings: makeSettings(),
       storage: new SqliteStorage(dbPath),
       teamId: "minimal",

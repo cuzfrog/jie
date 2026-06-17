@@ -1,5 +1,5 @@
 {
-  "module-gate": {
+  "module-gates": {
     "sourceRoot": "packages/"
   }
 }

@@ -1,9 +1,3 @@
-/** Tool spec string from frontmatter `tools:`. The `ToolRegistry.resolve`
- *  call on the spec returns the resolved `Tool` instances at body
- *  construction; the soul itself holds the spec string (the `name`
- *  shape), not the resolved object. */
-export type ToolSpec = string;
-
 /** A soul declares an agent's behavioral profile. The team-blueprint
  *  loader constructs one per role; the platform then derives
  *  `AgentBody` from each soul at body construction. */
@@ -24,7 +18,7 @@ export interface AgentSoul {
 
   /** Tool spec strings from frontmatter `tools:`. Resolved against
    *  the `ToolRegistry` at body construction. */
-  tools: ToolSpec[];
+  tools: string[];
 
   /** Domain topics from frontmatter `subscribe:`. The team's view is
    *  un-scoped; the platform prefixes `{team_id}.` at body
@@ -42,8 +36,9 @@ export interface AgentSoul {
  *  `startJie` consumes it: walks `roles` to build `AgentSoul`s,
  *  resolves the leader from `leaderRole`, and constructs one
  *  `AgentBody` per role with `is_leader` set per the
- *  leader-identification rules. */
-export interface TeamBlueprint {
+ *  leader-identification rules. The `TeamRegistry.loadTeam` entry
+ *  point returns the same shape. */
+export interface Team {
   /** Sorted alphabetically by role stem. The order is preserved
    *  through soul construction and body instantiation. The CLI
    *  sources the TUI's `roles` parameter from this list. */

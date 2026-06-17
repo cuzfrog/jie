@@ -97,8 +97,3 @@ export function loadMergedSettings(
 
   return deepMergeSettings(globalSettings, projectSettings);
 }
-
-/** Validate a team id against the v1 charset `[A-Za-z0-9_-]{1,32}`. */
-export function isValidTeamId(id: string): boolean {
-  return TEAM_ID_PATTERN.test(id);
-}

@@ -1,12 +1,20 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { parse as parseYaml } from "yaml";
-import type { AgentSoul, TeamBlueprint } from "./types.ts";
+import type { AgentSoul, Team } from "./types.ts";
 
 const TEAM_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
 const ROLE_STEM_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
 const FRONTMATTER_DELIMITER = "---";
+
+/** Validate a team id against the v1 charset
+ *  `[A-Za-z0-9_-]{1,32}`. The team module owns the charset rule;
+ *  external callers (settings validation, CLI guards, the
+ *  registry) use this function. */
+export function isValidTeamId(id: string): boolean {
+  return TEAM_ID_PATTERN.test(id);
+}
 
 /** Frontmatter field. The YAML is parsed as a free-form object;
  *  fields are extracted and validated in `parseAgentFile`. */
@@ -143,12 +151,12 @@ export interface ParseTeamOptions {
 }
 
 /** Single parser: parse a map of file-name → file-content into a
- *  `TeamBlueprint`. All three entry points (`loadTeamFromDir`,
- *  `loadMinimalTeam`) delegate to this function. */
+ *  `Team`. All entry points (`loadTeamFromDir`, `loadMinimalTeam`)
+ *  delegate to this function. */
 export function parseTeamFromManifests(
   manifests: Record<string, string>,
   options: ParseTeamOptions,
-): TeamBlueprint {
+): Team {
   const { teamId, sourceDir = "" } = options;
 
   if (!TEAM_ID_PATTERN.test(teamId)) {
@@ -243,7 +251,7 @@ export function parseTeamFromManifests(
  *  `parseTeamFromManifests`. The directory name (last segment of
  *  `dirPath`) is the team_id and is validated against the v1
  *  charset. */
-export function loadTeamFromDir(dirPath: string): TeamBlueprint {
+export function loadTeamFromDir(dirPath: string): Team {
   const teamId = basename(dirPath);
   const manifests: Record<string, string> = {};
   for (const entry of readdirSync(dirPath).sort()) {
@@ -262,7 +270,7 @@ export function loadTeamFromDir(dirPath: string): TeamBlueprint {
  *  files at module-load time via `with { type: 'text' }` import
  *  attributes and delegates to `parseTeamFromManifests`. The
  *  minimal team's `team_id` is the literal `"minimal"`. */
-export function loadMinimalTeam(): TeamBlueprint {
+export function loadMinimalTeam(): Team {
   return parseTeamFromManifests(
     {
       "TEAM.md": MINIMAL_TEAM_MD,

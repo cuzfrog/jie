@@ -1,4 +1,5 @@
 export type {
+  ConfigScope,
   MergedSettings,
   RawSettings,
   AuthEntry,
@@ -28,7 +29,6 @@ export {
   loadMergedSettings,
   validateSettings,
   deepMergeSettings,
-  isValidTeamId,
 } from "./load-settings.ts";
 export { loadAuthJson } from "./load-auth.ts";
 export {

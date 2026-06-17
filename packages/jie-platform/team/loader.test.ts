@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  isValidTeamId,
   loadMinimalTeam,
   loadTeamFromDir,
   parseTeamFromManifests,
@@ -243,5 +244,34 @@ describe("parseTeamFromManifests", () => {
     );
     expect(bp.leaderRole).toBe("general");
     expect(bp.roles[0]?.role).toBe("general");
+  });
+});
+
+describe("isValidTeamId", () => {
+  test("accepts the v1 charset: [A-Za-z0-9_-]{1,32}", () => {
+    expect(isValidTeamId("a")).toBe(true);
+    expect(isValidTeamId("team")).toBe(true);
+    expect(isValidTeamId("team_1")).toBe(true);
+    expect(isValidTeamId("team-1")).toBe(true);
+    expect(isValidTeamId("minimal")).toBe(true);
+    expect(isValidTeamId("ABCxyz0123")).toBe(true);
+    expect(isValidTeamId("a".repeat(32))).toBe(true);
+  });
+
+  test("rejects empty string", () => {
+    expect(isValidTeamId("")).toBe(false);
+  });
+
+  test("rejects strings longer than 32 chars", () => {
+    expect(isValidTeamId("a".repeat(33))).toBe(false);
+    expect(isValidTeamId("a".repeat(64))).toBe(false);
+  });
+
+  test("rejects characters outside [A-Za-z0-9_-]", () => {
+    expect(isValidTeamId("a b")).toBe(false);
+    expect(isValidTeamId("a.b")).toBe(false);
+    expect(isValidTeamId("a/b")).toBe(false);
+    expect(isValidTeamId("a:b")).toBe(false);
+    expect(isValidTeamId("a@b")).toBe(false);
   });
 });

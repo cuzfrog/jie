@@ -11,8 +11,8 @@ import type { AssistantMessage, AssistantMessageEvent } from "@earendil-works/pi
 import { runPrint, type PrintDeps, type PrintArgs } from "./print.ts";
 import { makeAuthStore } from "../auth-store.ts";
 import { makeSettingsStore } from "../settings-store.ts";
-import { makeTeamsRepo } from "../teams.ts";
-import { SqliteStorage, type MergedSettings, type TeamBlueprint } from "@cuzfrog/jie-platform";
+import { SqliteStorage, type MergedSettings } from "@cuzfrog/jie-platform";
+import type { Team } from "@cuzfrog/jie-platform/team";
 
 function makeSettings(): MergedSettings {
   return { defaultProvider: "anthropic", defaultModel: "claude-sonnet-4" };
@@ -22,7 +22,6 @@ function makeDeps(homeDir: string, hooks: Partial<PrintDeps> = {}): PrintDeps {
   return {
     authStore: makeAuthStore(homeDir),
     settingsStore: makeSettingsStore(homeDir),
-    teamsRepo: makeTeamsRepo(homeDir),
     homeDir,
     ...hooks,
   };
@@ -151,7 +150,7 @@ describe("print mode — guard rails", () => {
       printArgs({ instruction: "hello", team: "minimal", timeout: 1 }),
       workspace,
       makeDeps(homeDir, {
-        loadTeamBlueprint: () => ({ roles: [], leaderRole: null }),
+        loadTeam: () => ({ roles: [], leaderRole: null }),
         resolveModel: () => ({ id: "x" } as never),
         getApiKey: () => undefined,
         settingsOverride: makeSettings(),
@@ -344,7 +343,7 @@ describe("print mode — multi-agent gate", () => {
     const writeOut = spyOn(process.stdout, "write").mockImplementation(() => true);
     const writeErr = spyOn(console, "error").mockImplementation(() => {});
 
-    const twoAgentTeam: TeamBlueprint = {
+    const twoAgentTeam: Team = {
       roles: [
         {
           role: "leader",
@@ -370,7 +369,7 @@ describe("print mode — multi-agent gate", () => {
       printArgs({ instruction: "hi", timeout: 5 }),
       workspace,
       makeDeps(homeDir, {
-        loadTeamBlueprint: () => twoAgentTeam,
+        loadTeam: () => twoAgentTeam,
         resolveModel: () => ({ id: "x" } as never),
         getApiKey: () => undefined,
         settingsOverride: makeSettings(),
