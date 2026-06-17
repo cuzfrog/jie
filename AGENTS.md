@@ -47,6 +47,7 @@
 - Use only erasable TypeScript syntax compatible with Node strip-only mode in TypeScript. Do not use constructor parameter properties, `enum`, `namespace`/`module`, `import =`, `export =`, or other TypeScript constructs that require JavaScript emit. Use explicit fields and constructor assignments instead of parameter properties.
 - Public types, contract, methods, higher-level abstractions should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers. See below section `Single file layout`.
 - Do not add comments except it's a consequential information and the code itself cannot tell.
+- Avoid trivial functions, inline them.
 
 ### Test
 - use mocks for unit test. A file `my-function.ts`'s test file `my-function.test.ts` should only test `my-function.ts`.
@@ -75,6 +76,14 @@
 - A module should be easily testable with mocked dependencies. Unit tests should be done with mocks without creating actual dependency or causing any side effects.
 - Logic should be put in pure functions as much as possible. Any side effects, e.g. IO, should be at the edge layers with minimal logic. This makes the code easier to test.
 - Only features are scoped, NO compromize on NFR.
+
+#### Module visibility
+Minimal visibility or public surface of a type or a module. This ensures loose coupling and separation of concerns. If this is violated, e.g. a type or a module exposes multiple functions, it usually means the design is wrong.
+- A module should only have 1 interface and its constructor method that are public. All other implementations should not be exposed.
+- For a single file module, all other things in the file should be file private. For unit testing complex logic, re-export them at the file bottom with `_` prefix to the function, meaning only "visible for testing".
+- All imports from a module must import from `index.ts`. A module `index.ts` should only export module public types and functions.
+- In each module, search `MODULE.md` for its api, responsibilities, and files layout. You must follow its specifications. You cannot change the visibility. You should not modify this file. You cannot add any other public types/functions.
+- Cross boundary domain types, config types, DTOs are exempted from the visibility rule.
 
 #### SOLID principles:
 - **Single Responsibility Principle**: A function, class, or module should have one, and only one, reason to change.

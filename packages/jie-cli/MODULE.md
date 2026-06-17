@@ -1,0 +1,18 @@
+---
+frozen:
+  - auth-store.test.ts
+  - auth-store.ts
+  - cli-flags.test.ts
+  - cli-flags.ts
+  - home-paths.test.ts
+  - home-paths.ts
+  - index.test.ts
+  - index.ts
+  - package.json
+  - settings-store.test.ts
+  - settings-store.ts
+  - teams.test.ts
+  - teams.ts
+  - version.ts
+---
+

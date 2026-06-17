@@ -4,6 +4,7 @@ node_modules/
 
 
 .env
+review-tracker.md
 
 .jie/*.db
 .jie/settings.json

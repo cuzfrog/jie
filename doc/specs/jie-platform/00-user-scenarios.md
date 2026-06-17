@@ -4,10 +4,17 @@ The v1 acceptance surface. Each scenario describes a sequence of user actions an
 
 ## Scenario 1: one-shot print mode `[v1]`
 
-1. Run `jie -p "List files under current dir"` in a directory without any `.jie/` configuration or team definitions.
+1. Run `jie -p "List files under current dir"` in a directory with a text file `file1.txt`, without any team definitions, with local LLM provider and model configured.
 2. No TUI opens; the command blocks until completion.
-3. Streamed chunks print to stdout, ending with a final newline.
+3. Streamed chunks print to stdout, ending with a final newline. The response should contain `file1.txt` to verify the agent has used the `bash` tool to list the files.
 4. The process exits 0.
+
+## Scenario 1a: one-shot read and write file `[v1]`
+1. Run `jie -p "Read the file1.txt and write its content to file2.txt"` in a directory with a text file `file1.txt`, without any team definitions, with local LLM provider and model configured. The `file1.txt` contains "Hello123888".
+2. No TUI opens; the command blocks until completion.
+3. Response prints to stdout, ending with a final newline.
+4. The process exits 0.
+5. `file2.txt` contains "Hello123888"
 
 The platform falls back to the built-in minimal team (per `06-agent-model.md` "Blueprint Loading" and `minimal-team.md`).
 

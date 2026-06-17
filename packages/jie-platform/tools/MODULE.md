@@ -1,0 +1,23 @@
+---
+frozen:
+  - artifact.test.ts
+  - bash.test.ts
+  - bash.ts
+  - index.ts
+  - notify.test.ts
+  - notify.ts
+  - path-utils.ts
+  - read-artifact.ts
+  - read-file.test.ts
+  - read-file.ts
+  - registry.test.ts
+  - tool-registry.ts
+  - types.ts
+  - web-fetch.test.ts
+  - web-fetch.ts
+  - web-search.test.ts
+  - web-search.ts
+  - write-artifact.ts
+  - write-file.test.ts
+  - write-file.ts
+---
