@@ -15,14 +15,13 @@ import type { AgentEvent } from "./core/agent-event.ts";
 import {
   loadMinimalTeam,
   loadTeamFromDir,
-  parseTeamFromManifests,
   type AgentSoul,
   type TeamBlueprint,
 } from "./team/index.ts";
-import { globalSettingsPath, projectSettingsPath, projectTeamsDir } from "./config/paths.ts";
-import { loadMergedSettings, loadAuthJson, ModelRegistry, type MergedSettings, type AuthJson } from "./config/index.ts";
+import { projectTeamsDir } from "./config/paths.ts";
+import { ModelRegistry, type MergedSettings, type AuthJson } from "./config/index.ts";
 import type { ToolRegistry } from "./tools/tool-registry.ts";
-import { InMemoryToolRegistry } from "./tools/tool-registry.ts";
+import { createToolRegistry } from "./tools/tool-registry.ts";
 import type { McpServerConfig } from "./config/index.ts";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
@@ -36,7 +35,7 @@ export interface StartJieOptions {
   resumeSessionId?: string;
   continueLastSession?: boolean;
   /** Optional override for the registry. Defaults to an empty
-   *  `InMemoryToolRegistry` (callers can pre-register tools). The
+   *  in-memory registry (callers can pre-register tools). The
    *  CLI's `jie` binary registers the built-ins before calling
    *  `startJie`. */
   toolRegistry?: ToolRegistry;
@@ -132,7 +131,7 @@ function resolveSoulModel(
 }
 
 export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
-  const toolRegistry = opts.toolRegistry ?? new InMemoryToolRegistry();
+  const toolRegistry = opts.toolRegistry ?? createToolRegistry();
   const registry = opts.modelRegistry ?? ModelRegistry.load(opts.workspace);
   const resolveModel = opts.resolveModel ?? defaultResolveModel(registry);
   const defaultLoader = (teamId: string) =>
@@ -300,8 +299,4 @@ function publishTeamLoaded(bus: EventBus, teamId: string, bp: TeamBlueprint): vo
   bus.publish(`${teamId}.team.loaded`, envelope);
 }
 
-// Re-export common types and helpers for the CLI to use.
-export { loadAuthJson, loadMergedSettings };
-export { globalSettingsPath, projectSettingsPath, projectTeamsDir };
-export type { MergedSettings, AuthJson, McpServerConfig, TeamBlueprint, AgentSoul };
-export { parseTeamFromManifests, loadTeamFromDir, loadMinimalTeam };
+

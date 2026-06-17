@@ -7,7 +7,7 @@ import {
   InMemoryArtifactStore,
   InMemoryMemoryManager,
 } from "../storage/index.ts";
-import { InMemoryToolRegistry } from "../tools/tool-registry.ts";
+import { createToolRegistry, type ToolRegistry } from "../tools/tool-registry.ts";
 import type { AgentSoul } from "../team/types.ts";
 import type { Tool, ToolResult } from "../tools/types.ts";
 import { Type } from "typebox";
@@ -96,7 +96,7 @@ describe("AgentBody — pi-agent event bridging", () => {
   let bus: InProcessEventBus;
   let artifacts: InMemoryArtifactStore;
   let memory: InMemoryMemoryManager;
-  let registry: InMemoryToolRegistry;
+  let registry: ToolRegistry;
   let body: AgentBody | undefined;
   let fireEvent: ((e: PiAgentEvent) => void) | undefined;
 
@@ -104,7 +104,7 @@ describe("AgentBody — pi-agent event bridging", () => {
     bus = new InProcessEventBus();
     artifacts = new InMemoryArtifactStore();
     memory = new InMemoryMemoryManager();
-    registry = new InMemoryToolRegistry();
+    registry = createToolRegistry();
     registry.register("noop", makeNoopTool());
   });
 
@@ -324,14 +324,14 @@ describe("AgentBody — agent.queue.update", () => {
   let bus: InProcessEventBus;
   let artifacts: InMemoryArtifactStore;
   let memory: InMemoryMemoryManager;
-  let registry: InMemoryToolRegistry;
+  let registry: ToolRegistry;
   let body: AgentBody | undefined;
 
   beforeEach(() => {
     bus = new InProcessEventBus();
     artifacts = new InMemoryArtifactStore();
     memory = new InMemoryMemoryManager();
-    registry = new InMemoryToolRegistry();
+    registry = createToolRegistry();
     registry.register("noop", makeNoopTool());
   });
 

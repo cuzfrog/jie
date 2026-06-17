@@ -7,10 +7,10 @@ import type {
 import {
   AgentBody,
   InProcessEventBus,
-  InMemoryToolRegistry,
   type AgentEvent,
-  type AgentSoul,
-} from "@cuzfrog/jie-platform";
+} from "@cuzfrog/jie-platform/core";
+import { toolRegistry, type ToolRegistry } from "@cuzfrog/jie-platform/tools";
+import type { AgentSoul } from "@cuzfrog/jie-platform/team";
 import {
   InMemoryArtifactStore,
   InMemoryMemoryManager,
@@ -84,14 +84,14 @@ describe("Event-Order Contract — body-side alternation", () => {
   let bus: InProcessEventBus;
   let artifacts: InMemoryArtifactStore;
   let memory: InMemoryMemoryManager;
-  let registry: InMemoryToolRegistry;
+  let registry: ToolRegistry;
   let body: AgentBody | undefined;
 
   beforeEach(() => {
     bus = new InProcessEventBus();
     artifacts = new InMemoryArtifactStore();
     memory = new InMemoryMemoryManager();
-    registry = new InMemoryToolRegistry();
+    registry = toolRegistry;
     registry.register("noop", makeNoopTool());
   });
 
@@ -230,7 +230,7 @@ describe("Event-Order Contract — bus-side in-order delivery", () => {
     const bus = new InProcessEventBus();
     const artifacts = new InMemoryArtifactStore();
     const memory = new InMemoryMemoryManager();
-    const registry = new InMemoryToolRegistry();
+    const registry = toolRegistry;
     registry.register("noop", makeNoopTool());
 
     const arrival: Array<{ subject: string; type: string }> = [];

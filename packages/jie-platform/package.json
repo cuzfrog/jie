@@ -3,6 +3,9 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./core": "./core/index.ts",
+    "./team": "./team/index.ts",
+    "./tools": "./tools/index.ts",
     "./storage": "./storage/index.ts"
   },
   "dependencies": {

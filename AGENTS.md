@@ -82,7 +82,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 - A module should only have 1 interface and its constructor method that are public. All other implementations should not be exposed.
 - For a single file module, all other things in the file should be file private. For unit testing complex logic, re-export them at the file bottom with `_` prefix to the function, meaning only "visible for testing".
 - All imports from a module must import from `index.ts`. A module `index.ts` should only export module public types and functions.
-- In each module, search `MODULE.md` for its api, responsibilities, and files layout. You must follow its specifications. You cannot change the visibility. You should not modify this file. You cannot add any other public types/functions.
+- In each module, search `MODULE.md` for its api, responsibilities, and files layout. You must follow its specifications. You cannot change the visibility. You should not modify this file. You cannot add any other public types/functions. Any changes must be discussed with me.
 - Cross boundary domain types, config types, DTOs are exempted from the visibility rule.
 
 #### SOLID principles:

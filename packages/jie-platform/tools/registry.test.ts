@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Type } from "typebox";
-import { InMemoryToolRegistry } from "./tool-registry.ts";
+import { createToolRegistry, type ToolRegistry } from "./tool-registry.ts";
 import type { Tool, ToolResult } from "./types.ts";
 
 function makeTool(name: string): Tool {
@@ -15,22 +15,22 @@ function makeTool(name: string): Tool {
   };
 }
 
-describe("InMemoryToolRegistry", () => {
+describe("createToolRegistry", () => {
   test("register + resolve an exact name returns the single tool", () => {
-    const reg = new InMemoryToolRegistry();
+    const reg: ToolRegistry = createToolRegistry();
     const a = makeTool("a");
     reg.register("a", a);
     expect(reg.resolve("a")).toEqual([a]);
   });
 
   test("resolve of a missing name returns an empty array (not an error)", () => {
-    const reg = new InMemoryToolRegistry();
+    const reg: ToolRegistry = createToolRegistry();
     reg.register("a", makeTool("a"));
     expect(reg.resolve("missing")).toEqual([]);
   });
 
   test("register three tools; resolve each individually", () => {
-    const reg = new InMemoryToolRegistry();
+    const reg: ToolRegistry = createToolRegistry();
     const a = makeTool("a");
     const b = makeTool("b");
     const c = makeTool("c");
@@ -43,7 +43,7 @@ describe("InMemoryToolRegistry", () => {
   });
 
   test("glob `*` matches every registered tool", () => {
-    const reg = new InMemoryToolRegistry();
+    const reg: ToolRegistry = createToolRegistry();
     reg.register("mock-tool-A1", makeTool("mock-tool-A1"));
     reg.register("mock-tool-A2", makeTool("mock-tool-A2"));
     reg.register("mock-tool-B1", makeTool("mock-tool-B1"));
@@ -55,7 +55,7 @@ describe("InMemoryToolRegistry", () => {
   });
 
   test("glob `prefix*` matches tools starting with the prefix", () => {
-    const reg = new InMemoryToolRegistry();
+    const reg: ToolRegistry = createToolRegistry();
     const a1 = makeTool("mock-tool-A1");
     const a2 = makeTool("mock-tool-A2");
     const b1 = makeTool("mock-tool-B1");
@@ -69,7 +69,7 @@ describe("InMemoryToolRegistry", () => {
   });
 
   test("glob `?` matches exactly one character; `??` requires two", () => {
-    const reg = new InMemoryToolRegistry();
+    const reg: ToolRegistry = createToolRegistry();
     const b1 = makeTool("mock-tool-B1");
     reg.register("mock-tool-B1", b1);
     expect(reg.resolve("mock-tool-B?")).toEqual([b1]);
@@ -77,21 +77,21 @@ describe("InMemoryToolRegistry", () => {
   });
 
   test("glob is case-sensitive", () => {
-    const reg = new InMemoryToolRegistry();
+    const reg: ToolRegistry = createToolRegistry();
     reg.register("Bash", makeTool("Bash"));
     expect(reg.resolve("Bash")).toHaveLength(1);
     expect(reg.resolve("bash")).toEqual([]);
   });
 
   test("glob `*` matches an empty suffix (e.g. 'B*' matches 'B' alone)", () => {
-    const reg = new InMemoryToolRegistry();
+    const reg: ToolRegistry = createToolRegistry();
     const b = makeTool("B");
     reg.register("B", b);
     expect(reg.resolve("B*")).toEqual([b]);
   });
 
   test("`mcp:server:tool` returns [] in v1 — no MCP client", () => {
-    const reg = new InMemoryToolRegistry();
+    const reg: ToolRegistry = createToolRegistry();
     reg.register("bash", makeTool("bash"));
     reg.register("mock-tool-A1", makeTool("mock-tool-A1"));
     // `mcp:foo:bar` — the part after the last `:` is `bar`, exact match.
@@ -100,7 +100,7 @@ describe("InMemoryToolRegistry", () => {
   });
 
   test("`mcp:foo:mock-tool-A*` matches the two A tools", () => {
-    const reg = new InMemoryToolRegistry();
+    const reg: ToolRegistry = createToolRegistry();
     const a1 = makeTool("mock-tool-A1");
     const a2 = makeTool("mock-tool-A2");
     const b1 = makeTool("mock-tool-B1");
@@ -113,7 +113,7 @@ describe("InMemoryToolRegistry", () => {
   });
 
   test("`mcp:foo:*` matches every tool (wildcard ignores the server prefix)", () => {
-    const reg = new InMemoryToolRegistry();
+    const reg: ToolRegistry = createToolRegistry();
     const a1 = makeTool("mock-tool-A1");
     const a2 = makeTool("mock-tool-A2");
     const b1 = makeTool("mock-tool-B1");
@@ -128,7 +128,7 @@ describe("InMemoryToolRegistry", () => {
   });
 
   test("duplicate register replaces the prior entry (last-writer-wins)", () => {
-    const reg = new InMemoryToolRegistry();
+    const reg: ToolRegistry = createToolRegistry();
     const first = makeTool("a");
     const second = makeTool("a");
     reg.register("a", first);
@@ -137,7 +137,7 @@ describe("InMemoryToolRegistry", () => {
   });
 
   test("list() returns all registered tools", () => {
-    const reg = new InMemoryToolRegistry();
+    const reg: ToolRegistry = createToolRegistry();
     const a = makeTool("a");
     const b = makeTool("b");
     const c = makeTool("c");
@@ -149,7 +149,7 @@ describe("InMemoryToolRegistry", () => {
   });
 
   test("resolve is anchored to the full name — '*bash' does not match 'my-bash'", () => {
-    const reg = new InMemoryToolRegistry();
+    const reg: ToolRegistry = createToolRegistry();
     reg.register("my-bash", makeTool("my-bash"));
     reg.register("bash", makeTool("bash"));
     // Glob is anchored: `*bash` matches "bash", "my-bash", etc. (the

@@ -21,3 +21,7 @@ frozen:
   - write-file.test.ts
   - write-file.ts
 ---
+
+# Notes
+- tools' types should not escape from this module. Tools should be registered without an external caller knowing them.
+- `toolRegistry` instance is exported for jie-platform to register MCP and user custom tools.

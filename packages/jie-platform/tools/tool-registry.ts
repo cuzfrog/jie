@@ -23,16 +23,14 @@ export interface ToolRegistry {
   list(): Tool[];
 }
 
-function specPattern(spec: string): string {
-  const lastColon = spec.lastIndexOf(":");
-  if (lastColon === -1) return spec;
-  return spec.substring(lastColon + 1);
+export function createToolRegistry(): ToolRegistry {
+  return new InMemoryToolRegistry();
 }
 
 /** Default implementation. Tools are kept in a `Map` (insertion
  *  order preserved, replace-on-duplicate). Glob matching is
  *  delegated to `Bun.Glob` per the platform's runtime-deps block. */
-export class InMemoryToolRegistry implements ToolRegistry {
+class InMemoryToolRegistry implements ToolRegistry {
   private readonly tools = new Map<string, Tool>();
 
   register(name: string, tool: Tool): void {
@@ -52,4 +50,10 @@ export class InMemoryToolRegistry implements ToolRegistry {
   list(): Tool[] {
     return [...this.tools.values()];
   }
+}
+
+function specPattern(spec: string): string {
+  const lastColon = spec.lastIndexOf(":");
+  if (lastColon === -1) return spec;
+  return spec.substring(lastColon + 1);
 }
