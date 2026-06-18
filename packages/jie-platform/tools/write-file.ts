@@ -2,7 +2,7 @@ import { mkdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types.ts";
-import { JiePlatformError } from "../storage/domain-types.ts";
+import { JiePlatformError } from "../domain-types.ts";
 import { mapErrno, resolveWithinWorkspace } from "./path-utils.ts";
 
 const CONTENT_CAP = 5 * 1024 * 1024; // 5 MiB

@@ -1,3 +1,5 @@
+import { SqliteStorage } from "./sqlite-storage";
+
 /**
  * Persistence abstraction. `Storage` is the interface; `SqliteStorage`
  * is the default implementation. Domain stores (`ArtifactStore`,
@@ -19,7 +21,16 @@ export interface Storage {
    *  reads; other Storage calls outside `fn` see the pre-transaction
    *  state until commit. */
   transaction<T>(fn: (storage: Storage) => T): T;
+}
 
-  /** Close the underlying connection. Idempotent. */
-  close(): void;
+interface CreateStorageOpstions {
+  type: "sqlite";
+  filePath: string;
+}
+
+export function createStorage(options: CreateStorageOpstions): Storage {
+  if (options.type === "sqlite") {
+    return new SqliteStorage(options.filePath);
+  }
+  throw new Error(`Unknown storage type: ${options.type}`);
 }

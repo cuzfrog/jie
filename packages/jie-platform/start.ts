@@ -1,12 +1,5 @@
 import { ulid } from "ulid";
 import { getModel as piGetModel, type Model } from "@earendil-works/pi-ai";
-import type { Storage } from "./storage/storage.ts";
-import type { ArtifactStore } from "./storage/artifact-store.ts";
-import {
-  SqliteArtifactStore,
-  SqliteMemoryManager,
-} from "./storage/index.ts";
-import type { MemoryManager } from "./storage/memory-store.ts";
 import type { EventBus } from "./core/event-bus.ts";
 import { InProcessEventBus } from "./core/in-process-event-bus.ts";
 import { AgentBody } from "./core/agent-body.ts";
@@ -15,19 +8,33 @@ import { createTeamRegistry, type AgentSoul, type Team } from "./team/index.ts";
 import { ModelRegistry, type MergedSettings } from "./config/index.ts";
 import { createToolRegistry, type ToolRegistry } from "./tools";
 import type { McpServerConfig } from "./config/index.ts";
+import {
+  createArtifactStore,
+  createMemoryManager,
+  createStorage,
+  type ArtifactStore,
+  type MemoryManager,
+} from "./storage";
 
 export interface StartJieOptions {
   workspace: string;
   /** The user's home jie dir (e.g. `~/.jie/`). */
   homeJieDir: string;
   settings: MergedSettings;
-  storage: Storage;
   /** The team id to load. When `undefined`, the registry falls
    *  back to the built-in minimal team. External modules do not
    *  need to know about the minimal team — they can pass
    *  `undefined` and the platform handles the fallback. */
   teamId?: string;
-  mcpServers?: McpServerConfig[];
+  /** Override the SQLite file path used for the platform's storage.
+   *  Defaults to `{workspace}/.jie/storage.db`. Tests can pass
+   *  `":memory:"` for an in-process, in-memory database. The storage
+   *  is auto-collected when the platform handle is released — there
+   *  is no `close()` to call. */
+  storageFilePath?: string;
+  /** Forward-looking stub: the MCP client will consume this once it
+   *  lands. The platform does not load `mcp.json` in v1. */
+  mcpServerConfigs?: McpServerConfig[];
   resumeSessionId?: string;
   continueLastSession?: boolean;
 }
@@ -96,8 +103,17 @@ export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
   });
   const getApiKey = async (provider: string): Promise<string | undefined> =>
     registry.getApiKey(provider);
-  const artifacts: ArtifactStore = new SqliteArtifactStore(opts.storage);
-  const memory: MemoryManager = new SqliteMemoryManager(opts.storage);
+  // The platform owns the storage. The default file path is
+  // `{workspace}/.jie/storage.db`; tests can pass `:memory:` via
+  // `storageFilePath`. The storage has no `close()` — the
+  // underlying SQLite database is auto-collected when the last
+  // reference goes out of scope.
+  const storage = createStorage({
+    type: "sqlite",
+    filePath: opts.storageFilePath ?? `${opts.workspace}/.jie/storage.db`,
+  });
+  const artifacts: ArtifactStore = createArtifactStore(storage);
+  const memory: MemoryManager = createMemoryManager(storage);
   const bus: EventBus = new InProcessEventBus();
 
   // Step 1: resolve the team blueprint. The registry's

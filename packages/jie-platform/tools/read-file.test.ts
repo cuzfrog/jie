@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createReadFileTool } from "./read-file.ts";
-import { JiePlatformError } from "../storage/domain-types.ts";
+import { JiePlatformError } from "../domain-types.ts";
 
 describe("read_file", () => {
   let workspace: string;

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { SqliteStorage } from "./sqlite-storage.ts";
 import { SqliteArtifactStore, InMemoryArtifactStore } from "./artifact-store.ts";
-import { JiePlatformError } from "./domain-types.ts";
+import { JiePlatformError } from "../domain-types.ts";
 
 function makeStore(): SqliteArtifactStore {
   return new SqliteArtifactStore(new SqliteStorage(":memory:"));

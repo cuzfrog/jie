@@ -10,7 +10,6 @@ Contract from `doc/addrs/22-event-order-contract.md`.
 | File | LLM required | What it tests |
 |------|--------------|---------------|
 | `event-order.test.ts` | No | Body-side alternation and bus-side in-order delivery from ADR 22. Uses stub agents. |
-| `memory-roundtrip.test.ts` | No | First `startJie` call persists messages; second call with `continueLastSession: true` restores them into the agent's state. |
 | `v1-scenarios.test.ts` | Yes | The three v1 user scenarios (no team, two teams, first-time setup). |
 
 ## Running
@@ -18,7 +17,7 @@ Contract from `doc/addrs/22-event-order-contract.md`.
 ### Stub tests (no LLM needed)
 
 ```sh
-bun test tests/e2e/event-order.test.ts tests/e2e/memory-roundtrip.test.ts
+bun test tests/e2e/event-order.test.ts
 ```
 
 ### Real-LLM tests

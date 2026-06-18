@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { createWriteArtifactTool } from "./write-artifact.ts";
 import { createReadArtifactTool } from "./read-artifact.ts";
 import { InMemoryArtifactStore } from "../storage/artifact-store.ts";
-import { JiePlatformError } from "../storage/domain-types.ts";
+import { JiePlatformError } from "../domain-types.ts";
 
 describe("write_artifact", () => {
   test("success: content reports key + char count; details carries key + created_at", async () => {

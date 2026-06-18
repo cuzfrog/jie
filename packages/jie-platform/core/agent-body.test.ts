@@ -10,10 +10,19 @@ import { Agent, type AgentMessage } from "@earendil-works/pi-agent-core";
 import { Type } from "typebox";
 import { AgentBody } from "./agent-body.ts";
 import { InProcessEventBus } from "./in-process-event-bus.ts";
-import {
-  InMemoryArtifactStore,
-  InMemoryMemoryManager,
-} from "../storage/index.ts";
+// EXCEPTION: The `InMemory*` classes are file-private to the storage
+// module — they are intentionally not re-exported from `storage/index.ts`.
+// Tests in this same package reach them via direct sibling-file imports
+// so we can substitute mocks for the real SQLite-backed factories
+// without `mock.module()` (which is global-state and would leak across
+// test files). The cross-directory file-specific import is acceptable
+// here because the dependency is a true in-memory mock, not a coupling
+// to the storage module's public surface. If a new sibling module is
+// added that needs in-memory mocks, copy this comment — do NOT use
+// this pattern for production code.
+import { InMemoryArtifactStore } from "../storage/artifact-store.ts";
+import { InMemoryMemoryManager } from "../storage/memory-store.ts";
+import type { ArtifactStore, MemoryManager } from "../storage/index.ts";
 import { createToolRegistry, type ToolRegistry } from "../tools/tool-registry.ts";
 import type { AgentSoul } from "../team/types.ts";
 import type { Tool, ToolResult } from "../tools/types.ts";
@@ -86,15 +95,14 @@ function makeNoopTool(): Tool {
 
 describe("AgentBody — construction", () => {
   let bus: InProcessEventBus;
-  let artifacts: InMemoryArtifactStore;
-  let memory: InMemoryMemoryManager;
+  let artifacts: ArtifactStore;
+  let memory: MemoryManager;
   let registry: ToolRegistry;
   let body: AgentBody;
 
   beforeEach(() => {
     bus = new InProcessEventBus();
-    artifacts = new InMemoryArtifactStore();
-    memory = new InMemoryMemoryManager();
+    artifacts = new InMemoryArtifactStore(); memory = new InMemoryMemoryManager();
     registry = createToolRegistry();
     registry.register("noop", makeNoopTool());
   });
@@ -127,15 +135,14 @@ describe("AgentBody — construction", () => {
 
 describe("AgentBody — start() subscriptions", () => {
   let bus: InProcessEventBus;
-  let artifacts: InMemoryArtifactStore;
-  let memory: InMemoryMemoryManager;
+  let artifacts: ArtifactStore;
+  let memory: MemoryManager;
   let registry: ToolRegistry;
   let body: AgentBody;
 
   beforeEach(() => {
     bus = new InProcessEventBus();
-    artifacts = new InMemoryArtifactStore();
-    memory = new InMemoryMemoryManager();
+    artifacts = new InMemoryArtifactStore(); memory = new InMemoryMemoryManager();
     registry = createToolRegistry();
     registry.register("noop", makeNoopTool());
     const result = makeFakeAgentFactory();
@@ -260,8 +267,8 @@ describe("AgentBody — start() subscriptions", () => {
 
 describe("AgentBody — start() restore + continue", () => {
   let bus: InProcessEventBus;
-  let artifacts: InMemoryArtifactStore;
-  let memory: InMemoryMemoryManager;
+  let artifacts: ArtifactStore;
+  let memory: MemoryManager;
   let registry: ToolRegistry;
   let fake: FakeAgent;
 
@@ -286,8 +293,7 @@ describe("AgentBody — start() restore + continue", () => {
 
   beforeEach(() => {
     bus = new InProcessEventBus();
-    artifacts = new InMemoryArtifactStore();
-    memory = new InMemoryMemoryManager();
+    artifacts = new InMemoryArtifactStore(); memory = new InMemoryMemoryManager();
     registry = createToolRegistry();
     registry.register("noop", makeNoopTool());
   });
@@ -379,8 +385,7 @@ describe("AgentBody — start() restore + continue", () => {
 describe("AgentBody — tool adaptation", () => {
   test("soul.tools specs are resolved and adapted", () => {
     const bus = new InProcessEventBus();
-    const artifacts = new InMemoryArtifactStore();
-    const memory = new InMemoryMemoryManager();
+    const artifacts = new InMemoryArtifactStore(); const memory = new InMemoryMemoryManager();
     const registry = createToolRegistry();
     registry.register("noop", makeNoopTool());
 
@@ -410,15 +415,14 @@ describe("AgentBody — tool adaptation", () => {
 
 describe("AgentBody — prompt ingress format", () => {
   let bus: InProcessEventBus;
-  let artifacts: InMemoryArtifactStore;
-  let memory: InMemoryMemoryManager;
+  let artifacts: ArtifactStore;
+  let memory: MemoryManager;
   let registry: ToolRegistry;
   let fake: FakeAgent;
 
   beforeEach(() => {
     bus = new InProcessEventBus();
-    artifacts = new InMemoryArtifactStore();
-    memory = new InMemoryMemoryManager();
+    artifacts = new InMemoryArtifactStore(); memory = new InMemoryMemoryManager();
     registry = createToolRegistry();
     registry.register("noop", makeNoopTool());
   });

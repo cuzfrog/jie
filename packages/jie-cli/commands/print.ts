@@ -4,11 +4,12 @@
  *    1. (Optional) `--api-key` writes `auth.json` for the
  *       resolved `defaultProvider`.
  *    2. Load merged settings, recover from a stale `defaultTeam`.
- *    3. Open the SQLite storage under `{cwd}/.jie/artifacts.db`.
+ *    3. Compute the storage file path under `{project}/.jie/`.
  *    4. Hand off to `startJie` (which constructs the
- *       `TeamRegistry` internally from `workspace` + `homeJieDir`
- *       and loads the team). If the team is not found,
- *       `startJie` throws and we surface the error.
+ *       `TeamRegistry` and storage internally from `workspace`
+ *       + `homeJieDir` + `storageFilePath`, and loads the team).
+ *       If the team is not found, `startJie` throws and we
+ *       surface the error.
  *    5. Pick the leader body, publish the prompt envelope, and
  *       filter the `agent.stream.chunk` bus for the leader's
  *       text. Open the idle gate; exit when all bodies are idle
@@ -24,7 +25,6 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import {
-  SqliteStorage,
   findProjectJieRoot,
   resolveStaleDefaultTeam,
   startJie,
@@ -97,38 +97,32 @@ export async function runPrint(
   // team via the registry's `loadTeam(undefined)`.
   const teamId: string | undefined = parsed.team ?? settings.defaultTeam;
 
-  // Open storage.
-  const artifactsPath = projectStoragePath(cwd);
-  const storage = new SqliteStorage(artifactsPath);
-
   // Hand off to the platform. `startJie` constructs the team
-  // registry internally from `workspace` + `homeJieDir`, and
-  // resolves `getApiKey` from the merged `ModelRegistry` +
-  // `~/.jie/auth.json`. If the team is not installed, `startJie`
-  // throws and we surface the error. When `teamId` is
-  // `undefined`, the platform falls back to the built-in minimal
-  // team.
+  // registry and the SQLite storage internally from `workspace`
+  // + `homeJieDir` + `storageFilePath`, and resolves `getApiKey`
+  // from the merged `ModelRegistry` + `~/.jie/auth.json`. If the
+  // team is not installed, `startJie` throws and we surface the
+  // error. When `teamId` is `undefined`, the platform falls back
+  // to the built-in minimal team.
   let handle: JieHandle;
   try {
     handle = await startJie({
       workspace: cwd,
       homeJieDir: join(deps.homeDir, ".jie"),
       settings,
-      storage,
+      storageFilePath: projectStoragePath(cwd),
       teamId,
       resumeSessionId: parsed.resume,
       continueLastSession: parsed.continueLast,
     });
   } catch (e) {
     console.error(e instanceof Error ? e.message : String(e));
-    storage.close();
     return 1;
   }
 
   if (handle.bodies().length === 0) {
     console.error(`team has no agents to run; check the team manifest`);
     await handle.stop();
-    storage.close();
     return 1;
   }
 
@@ -141,14 +135,13 @@ export async function runPrint(
   if (leader === undefined) {
     console.error(`team has no leader; check TEAM.md's 'leader:' field`);
     await handle.stop();
-    storage.close();
     return 1;
   }
   const leaderRole = leader.soul.role;
   const leaderKey = leader.agent_key;
 
   // Set up stream filtering + idle gate.
-  return runGate(handle, storage, {
+  return runGate(handle, {
     teamId: resolvedTeamId,
     leaderRole,
     leaderKey,
@@ -169,7 +162,6 @@ interface GateOptions {
 
 async function runGate(
   handle: JieHandle,
-  storage: SqliteStorage,
   opts: GateOptions,
 ): Promise<number> {
   // Stream filter.
@@ -249,11 +241,9 @@ async function runGate(
       console.error(msg);
     }
     await handle.stop();
-    storage.close();
     return 3;
   }
   if (!opts.json) process.stdout.write("\n");
   await handle.stop();
-  storage.close();
   return 0;
 }

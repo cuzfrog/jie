@@ -1,7 +1,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types.ts";
-import { JiePlatformError } from "../storage/domain-types.ts";
+import { JiePlatformError } from "../domain-types.ts";
 import { mapErrno, resolveWithinWorkspace } from "./path-utils.ts";
 
 const DEFAULT_LINE_CAP = 2000;

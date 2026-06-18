@@ -1,7 +1,7 @@
 import { parse as parseHtml } from "node-html-parser";
 import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types.ts";
-import { JiePlatformError } from "../storage/domain-types.ts";
+import { JiePlatformError } from "../domain-types.ts";
 
 const WEB_FETCH_DESCRIPTION = `web_fetch(url): Fetch a URL and return its text content. Supports http/https
 only (file://, ftp://, data:// are rejected). Follows up to 20 redirects.

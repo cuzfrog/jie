@@ -9,13 +9,27 @@ import {
   InProcessEventBus,
   type AgentEvent,
 } from "@cuzfrog/jie-platform/core";
-import { toolRegistry, type ToolRegistry } from "@cuzfrog/jie-platform/tools";
+import { createToolRegistry, type ToolRegistry } from "@cuzfrog/jie-platform/tools";
 import type { AgentSoul } from "@cuzfrog/jie-platform/team";
 import {
-  InMemoryArtifactStore,
-  InMemoryMemoryManager,
+  createArtifactStore,
+  createMemoryManager,
+  createStorage,
+  type ArtifactStore,
+  type MemoryManager,
 } from "@cuzfrog/jie-platform/storage";
 import { Type } from "typebox";
+
+/** Build the artifact + memory stores the body depends on. Uses the
+ *  public storage factory with an in-process `:memory:` SQLite
+ *  database — fast, side-effect-free, no real IO. */
+function makeMockStores(): { artifacts: ArtifactStore; memory: MemoryManager } {
+  const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
+  return {
+    artifacts: createArtifactStore(storage),
+    memory: createMemoryManager(storage),
+  };
+}
 
 function makeSoul(): AgentSoul {
   return {
@@ -82,16 +96,15 @@ function makeStubAgentFactory(): StubFactory {
 
 describe("Event-Order Contract — body-side alternation", () => {
   let bus: InProcessEventBus;
-  let artifacts: InMemoryArtifactStore;
-  let memory: InMemoryMemoryManager;
+  let artifacts: ArtifactStore;
+  let memory: MemoryManager;
   let registry: ToolRegistry;
   let body: AgentBody | undefined;
 
   beforeEach(() => {
     bus = new InProcessEventBus();
-    artifacts = new InMemoryArtifactStore();
-    memory = new InMemoryMemoryManager();
-    registry = toolRegistry;
+    ({ artifacts, memory } = makeMockStores());
+    registry = createToolRegistry();
     registry.register("noop", makeNoopTool());
   });
 
@@ -228,9 +241,8 @@ describe("Event-Order Contract — bus-side in-order delivery", () => {
 
   test("a body publishing turn_start then agent_end synchronously produces that order in the subscriber's receive list", async () => {
     const bus = new InProcessEventBus();
-    const artifacts = new InMemoryArtifactStore();
-    const memory = new InMemoryMemoryManager();
-    const registry = toolRegistry;
+    const { artifacts, memory } = makeMockStores();
+    const registry = createToolRegistry();
     registry.register("noop", makeNoopTool());
 
     const arrival: Array<{ subject: string; type: string }> = [];

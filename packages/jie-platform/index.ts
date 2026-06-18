@@ -3,8 +3,6 @@ export type { JieHandle } from "./start.ts";
 
 export type { AgentEvent } from "./core/agent-event.ts";
 
-export { SqliteStorage } from "./storage/sqlite-storage.ts";
-
 export {
   loadMergedSettings,
   loadAuthJson,

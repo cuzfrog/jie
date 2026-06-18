@@ -5,7 +5,7 @@ import type { AgentEvent } from "../core/agent-event.ts";
 import type { EventBus } from "../core/event-bus.ts";
 import type { ExecutionContext } from "./types.ts";
 import { createNotifyTool } from "./notify.ts";
-import { JiePlatformError } from "../storage/domain-types.ts";
+import { JiePlatformError } from "../domain-types.ts";
 
 function makeCtx(): ExecutionContext {
   return {

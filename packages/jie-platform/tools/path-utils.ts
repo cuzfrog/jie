@@ -1,6 +1,6 @@
 import { realpathSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
-import { JiePlatformError } from "../storage/domain-types.ts";
+import { JiePlatformError } from "../domain-types.ts";
 
 /** Resolve `path` against `workspaceRoot` and enforce workspace-root
  *  containment. Throws `JiePlatformError` with code `path_escape` on

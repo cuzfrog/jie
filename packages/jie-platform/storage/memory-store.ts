@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Storage } from "./storage.ts";
-import type { TurnRecord } from "./domain-types.ts";
+import type { TurnRecord } from "../domain-types.ts";
 
 /** Conversation-history persistence interface. A per-body adapter that
  *  write-throughs every pi-agent message to durable storage, and on
@@ -39,6 +39,10 @@ export interface MemoryManager {
   /** True if at least one row in `memory_turns` matches
    *  (team_id, session_id). */
   hasSession(team_id: string, session_id: string): boolean;
+}
+
+export function createMemoryManager(storage: Storage): MemoryManager {
+  return new SqliteMemoryManager(storage);
 }
 
 /** Default `MemoryManager` implementation. SQL is written at the call

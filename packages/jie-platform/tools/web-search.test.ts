@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createWebSearchTool, type WebSearchProvider } from "./web-search.ts";
-import { JiePlatformError } from "../storage/domain-types.ts";
+import { JiePlatformError } from "../domain-types.ts";
 
 function stubProvider(results: { title: string; url: string; snippet: string }[]): WebSearchProvider {
   return { async search() { return results; } };

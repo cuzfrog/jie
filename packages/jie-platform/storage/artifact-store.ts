@@ -1,5 +1,5 @@
 import type { Storage } from "./storage.ts";
-import { JiePlatformError } from "./domain-types.ts";
+import { JiePlatformError } from "../domain-types.ts";
 
 /** Work-product persistence domain interface. The platform imposes no
  *  schema, no reserved prefixes, no automatic scoping — the team
@@ -25,6 +25,10 @@ export interface ArtifactStore {
    *  `created_at DESC`. `LIKE` metacharacters in the prefix are
    *  escaped so the caller's input is treated literally. */
   list(prefix: string): Promise<{ key: string; created_at: string }[]>;
+}
+
+export function createArtifactStore(storage: Storage): ArtifactStore {
+  return new SqliteArtifactStore(storage);
 }
 
 const ARTIFACT_KEY_PATTERN = /^[A-Za-z0-9_./-]{1,256}$/;

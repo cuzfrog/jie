@@ -42,18 +42,19 @@
 
 ## Code Conventions
 
-- No `any` types, No enums, No inline imports, No Classes.
+- No `any` types, No enums, No inline imports (all imports must be at the top).
 - Use interfaces for OOP abstractions.
 - Use only erasable TypeScript syntax compatible with Node strip-only mode in TypeScript. Do not use constructor parameter properties, `enum`, `namespace`/`module`, `import =`, `export =`, or other TypeScript constructs that require JavaScript emit. Use explicit fields and constructor assignments instead of parameter properties.
 - Public types, contract, methods, higher-level abstractions should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers. See below section `Single file layout`.
 - Do not add comments except it's a consequential information and the code itself cannot tell.
 - Avoid trivial functions, inline them.
-- Import from a module without specific file, e,g, `import { foo } from "../module"`.
+- Imports from a module without specific file, e,g, `import { foo } from "../module"`. Not `"../module/index.ts"`. For siblings in the immediate directory, directly import from the sibling, e.g. `import { foo } from "./foo"`.
 - Full variable names, e.g. `const artifactStore = new ArtifactStore()`.
 
 ### Test
 - use mocks for unit test. A file `my-function.ts`'s test file `my-function.test.ts` should only test `my-function.ts`.
 - tests should align with the test target file. E.g. a test `function1.test.ts` should test and only test `function1.ts`. If `function1.test.ts` is testing `index.ts`, it a smell of coding principle violation.
+- refer to https://bun.com/docs/test/mocks for how to use mocks
 
 ### Single file layout (ordered from top to bottom)
 1. imports

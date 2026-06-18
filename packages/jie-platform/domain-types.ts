@@ -1,7 +1,8 @@
-/** Platform-level typed error. Domain stores throw this when validation
- *  fails (e.g. an invalid artifact key). The `code` is the
- *  machine-readable identifier; `message` is the human-readable form
- *  (which the tool layer surfaces to the LLM and to the user). */
+/** Platform-level typed error. Domain stores and tools throw this when
+ *  validation fails (e.g. an invalid artifact key, a path that escapes
+ *  the workspace). The `code` is the machine-readable identifier;
+ *  `message` is the human-readable form (which the tool layer surfaces
+ *  to the LLM and to the user). */
 export class JiePlatformError extends Error {
   constructor(
     public readonly code: string,

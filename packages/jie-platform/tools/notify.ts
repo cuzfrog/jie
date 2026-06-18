@@ -2,7 +2,7 @@ import { Type } from "typebox";
 import type { EventBus } from "../core/event-bus.ts";
 import type { AgentEvent } from "../core/agent-event.ts";
 import type { ExecutionContext, Tool, ToolResult } from "./types.ts";
-import { JiePlatformError } from "../storage/domain-types.ts";
+import { JiePlatformError } from "../domain-types.ts";
 
 const NOTIFY_DESCRIPTION = `notify({ topic, prompt }): Publish a message to the team-scoped event bus on
 \`{team_id}.{topic}\`. The receiving agent (any agent whose \`subscribe:\` field

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createWebFetchTool } from "./web-fetch.ts";
-import { JiePlatformError } from "../storage/domain-types.ts";
+import { JiePlatformError } from "../domain-types.ts";
 
 let server: ReturnType<typeof Bun.serve>;
 let baseUrl: string;

@@ -54,9 +54,6 @@ function makeThrowingStorage(failOn: "exec", callIndex: number): {
     transaction<T>(fn: (s: Storage) => T): T {
       return inner.transaction(() => fn(wrapped));
     },
-    close() {
-      inner.close();
-    },
   };
   return { storage: wrapped, inner };
 }
