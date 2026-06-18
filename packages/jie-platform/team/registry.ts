@@ -1,10 +1,6 @@
 import { existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import {
-  isValidTeamId,
-  loadMinimalTeam,
-  loadTeamFromDir,
-} from "./loader.ts";
+import { loadMinimalTeam, loadTeamFromDir } from "./loader.ts";
 import type { Team } from "./types.ts";
 
 /** Internal id of the built-in minimal team. The literal is a
@@ -44,12 +40,11 @@ export interface TeamRegistry {
   /** Load a team by id. The minimal team is the fallback when
    *  `teamId` is `undefined` (no team specified) or matches the
    *  built-in id. Otherwise searches project scope first, then
-   *  user scope. Throws when the id is not found in any scope. */
+   *  user scope. Throws when the id is not found in any scope.
+   *  Charset validation runs at parse time inside the loader —
+   *  an invalid id never reaches the runtime because the loader
+   *  rejects the directory basename. */
   loadTeam(teamId?: string): Team;
-
-  /** Validate a team id against the v1 charset
-   *  `[A-Za-z0-9_-]{1,32}`. */
-  isValidTeamId(id: string): boolean;
 
   /** Whether a team is installed. The minimal team is always
    *  reported as installed. */
@@ -101,7 +96,6 @@ export function createTeamRegistry(opts: TeamRegistryOptions): TeamRegistry {
       }
       throw new Error(`team '${teamId}' not found`);
     },
-    isValidTeamId,
     isInstalled(id) {
       return isMinimal(id) || isProjectTeam(id) || isUserTeam(id);
     },

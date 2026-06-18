@@ -21,7 +21,6 @@ export {
   projectSettingsPath,
 } from "./config/paths.ts";
 
-export { toolRegistry } from "./tools/index.ts";
 export type {
   Tool,
   ToolResult,

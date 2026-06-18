@@ -161,7 +161,16 @@ describe("runTeam", () => {
     }
   });
 
-  test("team with malformed id -> exit 1", async () => {
+  test("team with malformed id -> exit 1 (charset validation moved to parse time)", async () => {
+    // Charset validation is no longer the CLI's responsibility.
+    // The flag parser rejects malformed ids at parse time, and
+    // the loader / settings-store validator reject them at
+    // read time. The runtime `runTeam` accepts whatever the
+    // user typed and delegates the existence check to
+    // `isInstalled`. A malformed id that cannot correspond to
+    // any directory on disk (e.g. "bad id with spaces") fails
+    // the `isInstalled` check and the user sees the standard
+    // "is not installed" message.
     const errs: string[] = [];
     const orig = console.error;
     console.error = (...args: unknown[]) => {
@@ -175,7 +184,7 @@ describe("runTeam", () => {
         teamRegistry,
       );
       expect(code).toBe(1);
-      expect(errs.join("\n")).toContain("invalid team id");
+      expect(errs.join("\n")).toContain("is not installed");
     } finally {
       console.error = orig;
     }

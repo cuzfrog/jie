@@ -4,38 +4,34 @@
  *    1. (Optional) `--api-key` writes `auth.json` for the
  *       resolved `defaultProvider`.
  *    2. Load merged settings, recover from a stale `defaultTeam`.
- *    3. Validate the chosen team id is installed.
- *    4. Open the SQLite storage under `{cwd}/.jie/artifacts.db`.
- *    5. Build a `getApiKey` resolver that prefers `auth.json` and
- *       falls back to `models.json` env-interpolated keys.
- *    6. Hand off to `startJie` to spin up the bodies.
- *    7. Pick the leader body, publish the prompt envelope, and
+ *    3. Open the SQLite storage under `{cwd}/.jie/artifacts.db`.
+ *    4. Hand off to `startJie` (which constructs the
+ *       `TeamRegistry` internally from `workspace` + `homeJieDir`
+ *       and loads the team). If the team is not found,
+ *       `startJie` throws and we surface the error.
+ *    5. Pick the leader body, publish the prompt envelope, and
  *       filter the `agent.stream.chunk` bus for the leader's
  *       text. Open the idle gate; exit when all bodies are idle
  *       and the timeout (if any) has not elapsed.
  *
- *  The `PrintDeps` type carries the runtime stores plus optional
- *  test hooks (`loadTeam`, `resolveModel`, `getApiKey`,
- *  `settingsOverride`, `createAgent`, `teamRegistry`). Real
- *  `main` constructs the runtime stores from `process.env.HOME`;
- *  tests inject mocks.
+ *  The `PrintDeps` type carries the runtime stores. Real `main`
+ *  constructs the stores from `process.env.HOME`. Team loading
+ *  and LLM resolution are not mockable from here — tests that
+ *  need a specific team write the team to a real temp directory;
+ *  tests that need a specific LLM endpoint set up
+ *  `.jie/models.json` + `auth.json` on disk.
  */
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import {
-  ModelRegistry,
   SqliteStorage,
   findProjectJieRoot,
   resolveStaleDefaultTeam,
   startJie,
   type AgentEvent,
-  type AuthJson,
   type JieHandle,
   type MergedSettings,
 } from "@cuzfrog/jie-platform";
-import { createTeamRegistry, type Team, type TeamRegistry } from "@cuzfrog/jie-platform/team";
-import type { Model } from "@earendil-works/pi-ai";
-import type { Agent } from "@earendil-works/pi-agent-core";
 import type { AuthStore } from "../auth-store.ts";
 import type { SettingsStore } from "../settings-store.ts";
 import type { ParsedCli } from "../cli-flags.ts";
@@ -45,15 +41,10 @@ export type PrintArgs = Extract<ParsedCli, { kind: "print" }>;
 export interface PrintDeps {
   authStore: AuthStore;
   settingsStore: SettingsStore;
+  /** The user's HOME directory. `runPrint` derives
+   *  `<homeDir>/.jie` (the `homeJieDir`) and passes that to
+   *  `startJie`. */
   homeDir: string;
-  /** Optional override for the team registry. If omitted,
-   *  `runPrint` constructs one from `cwd` and `homeDir`. */
-  teamRegistry?: TeamRegistry;
-  loadTeam?: (teamId: string) => Team;
-  resolveModel?: (provider: string, modelId: string) => Model<any>;
-  getApiKey?: (provider: string) => string | undefined;
-  settingsOverride?: MergedSettings;
-  createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
 }
 
 function projectStoragePath(cwd: string): string {
@@ -85,7 +76,7 @@ export async function runPrint(
     console.log(`logged in to ${provider}`);
   }
 
-  // Discover settings and team.
+  // Discover settings.
   let settings: MergedSettings;
   try {
     settings = deps.settingsStore.load(cwd);
@@ -100,71 +91,33 @@ export async function runPrint(
     settings.defaultTeam = recovered;
   }
 
-  const teamRegistry =
-    deps.teamRegistry ??
-    createTeamRegistry({ workspace: cwd, homeJieDir: deps.homeDir });
-
   // The chosen teamId. When the user has not set `--team` and
-  // `settings.defaultTeam` is unset, fall back to the built-in
-  // minimal team (the magic string `"minimal"` is recognized by
-  // the registry's `loadTeam`).
-  const teamId: string = parsed.team ?? settings.defaultTeam ?? "minimal";
-  if (!teamRegistry.isValidTeamId(teamId)) {
-    console.error(
-      `invalid team id '${teamId}'; must match [A-Za-z0-9_-]{1,32}`,
-    );
-    return 1;
-  }
-  if (!teamRegistry.isInstalled(teamId)) {
-    console.error(
-      `team '${teamId}' is not installed; checked .jie/teams/${teamId}/ and ~/.jie/teams/${teamId}/`,
-    );
-    return 1;
-  }
+  // `settings.defaultTeam` is unset, leave `teamId` undefined so
+  // the platform's `startJie` falls back to the built-in minimal
+  // team via the registry's `loadTeam(undefined)`.
+  const teamId: string | undefined = parsed.team ?? settings.defaultTeam;
 
   // Open storage.
   const artifactsPath = projectStoragePath(cwd);
   const storage = new SqliteStorage(artifactsPath);
 
-  // Read auth for getApiKey.
-  const auth = deps.authStore.load();
-  const authGetApiKey = (provider: string): string | undefined => {
-    const entry = (auth as AuthJson)[provider];
-    if (entry === undefined) return undefined;
-    if (entry.type === "api_key") return entry.key;
-    return undefined;
-  };
-  // The auth.json entry wins; fall back to the registry's
-  // `models.json`-resolved key (e.g. `$MY_API_KEY` env interpolation
-  // for a custom provider). This makes the user's local LLM
-  // config in `models.json` work end-to-end without writing to
-  // `auth.json`.
-  const registryFallback = ModelRegistry.load(cwd, { homeDir: deps.homeDir });
-  const getApiKey =
-    deps.getApiKey ??
-    (async (provider: string): Promise<string | undefined> => {
-      const fromAuth = authGetApiKey(provider);
-      if (fromAuth !== undefined) return fromAuth;
-      return registryFallback.getApiKey(provider);
-    });
-  const finalSettings = deps.settingsOverride ?? settings;
-
-  // Resolve team blueprint eagerly to know the leader's role.
+  // Hand off to the platform. `startJie` constructs the team
+  // registry internally from `workspace` + `homeJieDir`, and
+  // resolves `getApiKey` from the merged `ModelRegistry` +
+  // `~/.jie/auth.json`. If the team is not installed, `startJie`
+  // throws and we surface the error. When `teamId` is
+  // `undefined`, the platform falls back to the built-in minimal
+  // team.
   let handle: JieHandle;
   try {
     handle = await startJie({
       workspace: cwd,
-      homeJieDir: deps.homeDir,
-      settings: finalSettings,
+      homeJieDir: join(deps.homeDir, ".jie"),
+      settings,
       storage,
       teamId,
       resumeSessionId: parsed.resume,
       continueLastSession: parsed.continueLast,
-      getApiKey,
-      loadTeam: deps.loadTeam,
-      teamRegistry: deps.teamRegistry,
-      resolveModel: deps.resolveModel,
-      createAgent: deps.createAgent,
     });
   } catch (e) {
     console.error(e instanceof Error ? e.message : String(e));
@@ -173,7 +126,7 @@ export async function runPrint(
   }
 
   if (handle.bodies().length === 0) {
-    console.error(`team '${teamId}' has no agents to run; check the team manifest`);
+    console.error(`team has no agents to run; check the team manifest`);
     await handle.stop();
     storage.close();
     return 1;
@@ -183,9 +136,10 @@ export async function runPrint(
   // `is_leader: true` (per `start.ts`: `soul.role === bp.leaderRole`),
   // so we look it up from the loaded bodies rather than guessing
   // from the alphabetically-sorted role list.
-  const leader = handle.bodiesFor(teamId).find((b) => b.is_leader);
+  const resolvedTeamId = handle.bodies()[0]!.team_id;
+  const leader = handle.bodiesFor(resolvedTeamId).find((b) => b.is_leader);
   if (leader === undefined) {
-    console.error(`team '${teamId}' has no leader; check TEAM.md's 'leader:' field`);
+    console.error(`team has no leader; check TEAM.md's 'leader:' field`);
     await handle.stop();
     storage.close();
     return 1;
@@ -195,7 +149,7 @@ export async function runPrint(
 
   // Set up stream filtering + idle gate.
   return runGate(handle, storage, {
-    teamId,
+    teamId: resolvedTeamId,
     leaderRole,
     leaderKey,
     instruction: parsed.instruction,

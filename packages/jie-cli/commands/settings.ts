@@ -60,10 +60,6 @@ export async function runTeam(
     return 0;
   }
   const id = parsed.teamId!;
-  if (!teamRegistry.isValidTeamId(id)) {
-    console.error(`invalid team id '${id}'; must match [A-Za-z0-9_-]{1,32}`);
-    return 1;
-  }
   if (!teamRegistry.isInstalled(id)) {
     console.error(
       `team '${id}' is not installed; checked .jie/teams/${id}/ and ~/.jie/teams/${id}/`,

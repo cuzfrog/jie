@@ -4,32 +4,21 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startJie } from "./start.ts";
 import { SqliteStorage } from "./storage/sqlite-storage.ts";
-import type { Model } from "@earendil-works/pi-ai";
 import type { AuthJson, MergedSettings } from "./config/index.ts";
 
 function makeSettings(
   overrides: Partial<MergedSettings> = {},
 ): MergedSettings {
-  return { defaultProvider: "anthropic", defaultModel: "claude-sonnet-4", ...overrides };
+  // `claude-sonnet-4-5` is a real pi-ai model id; using it
+  // means the real `defaultResolveModel` (which calls pi-ai's
+  // `getModel`) can resolve the soul's model without test
+  // hooks. Tests that need to exercise the "no model" path
+  // override this with an empty settings object.
+  return { defaultProvider: "anthropic", defaultModel: "claude-sonnet-4-5", ...overrides };
 }
 
 function makeAuth(entries: AuthJson = {}): AuthJson {
   return entries;
-}
-
-function makeStubModel(): Model<any> {
-  return {
-    id: "claude-sonnet-4",
-    name: "Claude Sonnet 4",
-    api: "anthropic-messages",
-    provider: "anthropic",
-    baseUrl: "https://example.invalid",
-    reasoning: false,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 200000,
-    maxTokens: 8192,
-  } as unknown as Model<any>;
 }
 
 describe("startJie — happy path (minimal team)", () => {
@@ -56,7 +45,6 @@ describe("startJie — happy path (minimal team)", () => {
       settings: makeSettings(),
       storage,
       teamId: "minimal",
-      resolveModel: () => makeStubModel(),
     });
     expect(handle.bodies()).toHaveLength(1);
     expect(handle.bodiesFor("minimal")).toHaveLength(1);
@@ -64,19 +52,14 @@ describe("startJie — happy path (minimal team)", () => {
   });
 
   test("publishes {team_id}.team.loaded once with sorted agents", async () => {
-    const events: unknown[] = [];
-    // Subscribe BEFORE calling startJie so we don't miss the
-    // publish (which is in-process and synchronous).
-    const tmp = new SqliteStorage(":memory:");
-    void tmp;
     const handle = await startJie({
       workspace,
       homeJieDir,
       settings: makeSettings(),
       storage,
       teamId: "minimal",
-      resolveModel: () => makeStubModel(),
     });
+    const events: unknown[] = [];
     handle.bus.subscribe("minimal.team.loaded", (_s, p) => {
       events.push(p);
     });
@@ -84,26 +67,16 @@ describe("startJie — happy path (minimal team)", () => {
     // second call that subscribes before startJie.
     const events2: unknown[] = [];
     const storage2 = new SqliteStorage(":memory:");
-    let captured: ((subject: string, payload: object) => void) | undefined;
     const second = await startJie({
       workspace,
       homeJieDir,
       settings: makeSettings(),
       storage: storage2,
       teamId: "minimal",
-      resolveModel: () => makeStubModel(),
     });
-    second.bus.subscribe("minimal.team.loaded", (s, p) => {
+    second.bus.subscribe("minimal.team.loaded", (_s, p) => {
       events2.push(p);
-      captured = s as never;
     });
-    void captured;
-    // The first startJie in this test already published; we
-    // verify the event was published by checking the body
-    // count and that an existing subscription receives no
-    // *additional* events (idempotency). The actual event shape
-    // is verified by the `team.loaded published exactly once`
-    // test in the multi-team suite below.
     expect(events).toHaveLength(0);
     expect(events2).toHaveLength(0);
   });
@@ -115,7 +88,6 @@ describe("startJie — happy path (minimal team)", () => {
       settings: makeSettings(),
       storage,
       teamId: "minimal",
-      resolveModel: () => makeStubModel(),
     });
     const events: unknown[] = [];
     handle.bus.subscribe("minimal.team.loaded", (_s, p) => {
@@ -137,21 +109,6 @@ describe("startJie — happy path (minimal team)", () => {
     ).rejects.toThrow(/No model has been selected/);
   });
 
-  test("model pre-check: invalid provider throws the user-facing error", async () => {
-    await expect(
-      startJie({
-        workspace,
-        homeJieDir,
-        settings: makeSettings(),
-        storage,
-        teamId: "minimal",
-        resolveModel: () => {
-          throw new Error("unknown provider");
-        },
-      }),
-    ).rejects.toThrow(/No model has been selected/);
-  });
-
   test("handle.stop() detaches all bus subscriptions", async () => {
     const handle = await startJie({
       workspace,
@@ -159,7 +116,6 @@ describe("startJie — happy path (minimal team)", () => {
       settings: makeSettings(),
       storage,
       teamId: "minimal",
-      resolveModel: () => makeStubModel(),
     });
     const body = handle.bodies()[0]!;
     expect(handle.bus.subscriberCount("minimal.general-1")).toBeGreaterThan(0);
@@ -194,14 +150,8 @@ describe("startJie — session id resolution", () => {
       settings: makeSettings(),
       storage: new SqliteStorage(filePath),
       teamId: "minimal",
-      resolveModel: () => makeStubModel(),
     });
     const validId = h1.bodies()[0]!.session_id;
-    // Persist a synthetic user message so memory.hasSession has a
-    // row to find.
-    const mem = h1.artifacts;
-    void mem;
-    // Use the in-process memory: import SqliteMemoryManager directly.
     const { SqliteMemoryManager } = await import("./storage/index.ts");
     new SqliteMemoryManager(new SqliteStorage(filePath)).persist(
       { role: "user", content: "x", timestamp: Date.now() } as never,
@@ -218,7 +168,6 @@ describe("startJie — session id resolution", () => {
       storage: new SqliteStorage(filePath),
       teamId: "minimal",
       resumeSessionId: validId,
-      resolveModel: () => makeStubModel(),
     });
     expect(h2.bodies()[0]!.session_id).toBe(validId);
     await h2.stop();
@@ -231,7 +180,6 @@ describe("startJie — session id resolution", () => {
         storage: new SqliteStorage(filePath),
         teamId: "minimal",
         resumeSessionId: "not-a-real-id",
-        resolveModel: () => makeStubModel(),
       }),
     ).rejects.toThrow(/unknown session_id: not-a-real-id/);
   });
@@ -244,10 +192,8 @@ describe("startJie — session id resolution", () => {
       settings: makeSettings(),
       storage: new SqliteStorage(filePath),
       teamId: "minimal",
-      resolveModel: () => makeStubModel(),
     });
     const recentId = h1.bodies()[0]!.session_id;
-    // Persist a message so mostRecentSessionId can find a row.
     const { SqliteMemoryManager } = await import("./storage/index.ts");
     new SqliteMemoryManager(new SqliteStorage(filePath)).persist(
       { role: "user", content: "x", timestamp: Date.now() } as never,
@@ -264,7 +210,6 @@ describe("startJie — session id resolution", () => {
       storage: new SqliteStorage(filePath),
       teamId: "minimal",
       continueLastSession: true,
-      resolveModel: () => makeStubModel(),
     });
     expect(h2.bodies()[0]!.session_id).toBe(recentId);
     await h2.stop();
@@ -295,7 +240,6 @@ describe("startJie — multi-team coexistence (loadTeam)", () => {
       settings: makeSettings(),
       storage,
       teamId: "minimal",
-      resolveModel: () => makeStubModel(),
     });
     const calls: unknown[] = [];
     handle.bus.subscribe("minimal.team.loaded", (_s, p) => {
@@ -312,23 +256,12 @@ describe("startJie — multi-team coexistence (loadTeam)", () => {
       settings: makeSettings(),
       storage,
       teamId: "minimal",
-      resolveModel: () => makeStubModel(),
     });
-    // Inject a custom team loader that returns a second team.
-    const handle2 = await startJie({
-      workspace,
-      homeJieDir,
-      settings: makeSettings(),
-      storage: new SqliteStorage(":memory:"),
-      teamId: "minimal",
-      resolveModel: () => makeStubModel(),
-    });
-    void handle;
-    void handle2;
+    expect(handle.bodies().length).toBeGreaterThan(0);
   });
 });
 
-describe("startJie — empty team (loadTeam of nonexistent)", () => {
+describe("startJie — empty team (no .md files)", () => {
   let workspace: string;
   let homeJieDir: string;
   let storage: SqliteStorage;
@@ -346,17 +279,20 @@ describe("startJie — empty team (loadTeam of nonexistent)", () => {
   });
 
   test("empty team: bodiesFor returns [] and rolesFor returns []", async () => {
+    // Create a user-scoped team directory with TEAM.md but no
+    // agent .md files. The loader returns `{ roles: [],
+    // leaderRole: null }`.
+    const userTeam = join(homeJieDir, "teams", "ghost");
+    const { mkdirSync, writeFileSync } = await import("node:fs");
+    mkdirSync(userTeam, { recursive: true });
+    writeFileSync(join(userTeam, "TEAM.md"), "---\n---\n");
+
     const handle = await startJie({
       workspace,
       homeJieDir,
       settings: makeSettings(),
       storage,
-      teamId: "minimal",
-      loadTeam: () => ({
-        roles: [],
-        leaderRole: null,
-      }),
-      resolveModel: () => makeStubModel(),
+      teamId: "ghost",
     });
     expect(handle.bodiesFor("ghost")).toEqual([]);
     expect(handle.rolesFor("ghost")).toEqual([]);

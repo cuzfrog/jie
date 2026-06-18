@@ -1,6 +1,5 @@
 import { ulid } from "ulid";
 import { getModel as piGetModel, type Model } from "@earendil-works/pi-ai";
-import type { Agent } from "@earendil-works/pi-agent-core";
 import type { Storage } from "./storage/storage.ts";
 import type { ArtifactStore } from "./storage/artifact-store.ts";
 import {
@@ -12,15 +11,9 @@ import type { EventBus } from "./core/event-bus.ts";
 import { InProcessEventBus } from "./core/in-process-event-bus.ts";
 import { AgentBody } from "./core/agent-body.ts";
 import type { AgentEvent } from "./core/agent-event.ts";
-import {
-  createTeamRegistry,
-  type AgentSoul,
-  type Team,
-  type TeamRegistry,
-} from "./team/index.ts";
-import { ModelRegistry, type MergedSettings, type AuthJson } from "./config/index.ts";
-import type { ToolRegistry } from "./tools/tool-registry.ts";
-import { createToolRegistry } from "./tools/tool-registry.ts";
+import { createTeamRegistry, type AgentSoul, type Team } from "./team/index.ts";
+import { ModelRegistry, type MergedSettings } from "./config/index.ts";
+import { createToolRegistry, type ToolRegistry } from "./tools";
 import type { McpServerConfig } from "./config/index.ts";
 
 export interface StartJieOptions {
@@ -29,36 +22,14 @@ export interface StartJieOptions {
   homeJieDir: string;
   settings: MergedSettings;
   storage: Storage;
-  teamId: string;
+  /** The team id to load. When `undefined`, the registry falls
+   *  back to the built-in minimal team. External modules do not
+   *  need to know about the minimal team — they can pass
+   *  `undefined` and the platform handles the fallback. */
+  teamId?: string;
   mcpServers?: McpServerConfig[];
   resumeSessionId?: string;
   continueLastSession?: boolean;
-  /** Optional override for the registry. Defaults to an empty
-   *  in-memory registry (callers can pre-register tools). The
-   *  CLI's `jie` binary registers the built-ins before calling
-   *  `startJie`. */
-  toolRegistry?: ToolRegistry;
-  /** Optional override for the team lookup; defaults to
-   *  `TeamRegistry.loadTeam`. Tests inject a custom function to
-   *  return canned teams without going through the registry. */
-  loadTeam?: (teamId: string) => Team;
-  /** Optional override for the team registry. Defaults to one
-   *  created from `workspace` and `homeJieDir`. */
-  teamRegistry?: TeamRegistry;
-  /** Optional override for `getModel`. Used by tests; production
-   *  uses pi-ai's `getModel`. */
-  resolveModel?: (provider: string, modelId: string) => Model<any>;
-  /** Optional override for `getApiKey`. Used by tests; production
-   *  reads from `~/.jie/auth.json`. */
-  getApiKey?: (provider: string) => Promise<string | undefined> | string | undefined;
-  /** Optional override for the pi-agent factory. Used by tests to
-   *  inject a controllable agent that fires canned events. Each
-   *  body calls this factory once at construction. */
-  createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
-  /** Optional pre-built model registry. Used by tests to inject a
-   *  registry without going through `models.json`. Production code
-   *  lets the default `ModelRegistry.load(opts.workspace)` kick in. */
-  modelRegistry?: ModelRegistry;
 }
 
 export interface JieHandle {
@@ -84,15 +55,6 @@ function defaultResolveModel(registry: ModelRegistry): (provider: string, modelI
     ) as unknown as Model<any>;
   };
 }
-
-function _defaultGetApiKey(
-  _auth: AuthJson,
-): (provider: string) => string | undefined {
-  return (_provider: string) => {
-    return undefined;
-  };
-}
-void _defaultGetApiKey;
 
 function resolveSoulModel(
   soul: AgentSoul,
@@ -121,20 +83,27 @@ function resolveSoulModel(
 }
 
 export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
-  const toolRegistry = opts.toolRegistry ?? createToolRegistry();
-  const registry = opts.modelRegistry ?? ModelRegistry.load(opts.workspace);
-  const resolveModel = opts.resolveModel ?? defaultResolveModel(registry);
-  const teamRegistry =
-    opts.teamRegistry ??
-    createTeamRegistry({ workspace: opts.workspace, homeJieDir: opts.homeJieDir });
-  const loadTeam = opts.loadTeam ?? ((teamId: string) => teamRegistry.loadTeam(teamId));
-  const getApiKey = opts.getApiKey ?? (async (provider: string) => registry.getApiKey(provider));
+  const toolRegistry: ToolRegistry = createToolRegistry();
+  const registry = ModelRegistry.load(opts.workspace);
+  const resolveModel = defaultResolveModel(registry);
+  // The team registry is constructed here from the workspace +
+  // homeJieDir; there is no override path. Tests that need to
+  // exercise a specific team should write the team to a real
+  // temp directory and pass its path as `workspace`.
+  const teamRegistry = createTeamRegistry({
+    workspace: opts.workspace,
+    homeJieDir: opts.homeJieDir,
+  });
+  const getApiKey = async (provider: string): Promise<string | undefined> =>
+    registry.getApiKey(provider);
   const artifacts: ArtifactStore = new SqliteArtifactStore(opts.storage);
   const memory: MemoryManager = new SqliteMemoryManager(opts.storage);
   const bus: EventBus = new InProcessEventBus();
 
-  // Step 1: resolve the team blueprint.
-  const blueprint: Team = loadTeam(opts.teamId);
+  // Step 1: resolve the team blueprint. The registry's
+  // `loadTeam(undefined)` falls back to the built-in minimal team.
+  const resolvedTeamId = opts.teamId ?? "minimal";
+  const blueprint: Team = teamRegistry.loadTeam(resolvedTeamId);
 
   // Step 2: model pre-check (every soul must resolve).
   const resolvedModels = new Map<string, Model<any>>();
@@ -145,7 +114,7 @@ export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
 
   // Step 3: session id resolution for the startup team.
   const sessionIds = new Map<string, string>();
-  for (const teamId of [opts.teamId]) {
+  for (const teamId of [resolvedTeamId]) {
     let resolved: string;
     if (opts.resumeSessionId !== undefined) {
       if (!memory.hasSession(teamId, opts.resumeSessionId)) {
@@ -172,7 +141,7 @@ export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
   const loadedTeams = new Map<string, { blueprint: Team; bodies: AgentBody[] }>();
 
   async function buildAndStart(teamId: string): Promise<AgentBody[]> {
-    const bp: Team = loadTeam(teamId);
+    const bp: Team = teamRegistry.loadTeam(teamId);
 
     // If already loaded, return existing bodies (idempotent).
     const existing = loadedTeams.get(teamId);
@@ -221,7 +190,6 @@ export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
           tool_registry: toolRegistry,
           getApiKey: async (provider: string) => getApiKey(provider),
           model,
-          createAgent: opts.createAgent,
         }),
       );
     }
@@ -234,7 +202,7 @@ export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
   }
 
   // Build and start the startup team.
-  await buildAndStart(opts.teamId);
+  await buildAndStart(resolvedTeamId);
 
   // The handle is the externally visible lifecycle object.
   const handle: JieHandle = {

@@ -97,14 +97,6 @@ describe("createTeamRegistry", () => {
     });
   });
 
-  describe("isValidTeamId", () => {
-    test("delegates to the team module's validator", () => {
-      const r = createTeamRegistry({ workspace, homeJieDir });
-      expect(r.isValidTeamId("team_1")).toBe(true);
-      expect(r.isValidTeamId("a b")).toBe(false);
-    });
-  });
-
   describe("isInstalled", () => {
     test("returns true for 'minimal' (always available)", () => {
       const r = createTeamRegistry({ workspace, homeJieDir });

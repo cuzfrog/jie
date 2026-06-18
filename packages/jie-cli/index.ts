@@ -4,7 +4,8 @@
  *  This file is the entry point. It only:
  *    1. Parses argv via `cli-flags.ts`.
  *    2. Resolves HOME and constructs the runtime stores.
- *    3. Constructs a `TeamRegistry` for the current cwd.
+ *    3. For subcommands that need team discovery (currently just
+ *       `team`), constructs a `TeamRegistry` for the current cwd.
  *    4. Dispatches to a subcommand module under `./commands/`.
  *
  *  Domain logic lives in:
@@ -13,10 +14,14 @@
  *    - `commands/auth.ts` — `login`, `logout`, top-level `--api-key`.
  *    - `commands/settings.ts` — `model`, `team`.
  *    - `commands/print.ts` — `jie -p` (the full agentic pipeline).
- *    - `@cuzfrog/jie-platform/team` — `TeamRegistry` (the CLI is a
- *      thin consumer; team loading and discovery live in the
- *      platform's team module).
+ *    - `@cuzfrog/jie-platform` — `startJie` (the print pipeline
+ *      constructs the team registry internally; the CLI is a thin
+ *      consumer that only knows `workspace` + `homeJieDir`).
+ *    - `@cuzfrog/jie-platform/team` — `TeamRegistry` (the `team`
+ *      subcommand uses it for `isInstalled` / `listInstalled` /
+ *      `locate`).
  */
+import { join } from "node:path";
 import type { MergedSettings } from "@cuzfrog/jie-platform";
 import { createTeamRegistry, type TeamRegistry, type Team } from "@cuzfrog/jie-platform/team";
 import { makeAuthStore, type AuthStore } from "./auth-store.ts";
@@ -76,7 +81,10 @@ async function run(parsed: ParsedCli, cwd: string, deps: Deps): Promise<number> 
     case "model":
       return runModel(parsed, cwd, deps.settingsStore);
     case "team": {
-      const teamRegistry = createTeamRegistry({ workspace: cwd, homeJieDir: deps.homeDir });
+      const teamRegistry = createTeamRegistry({
+        workspace: cwd,
+        homeJieDir: join(deps.homeDir, ".jie"),
+      });
       return runTeam(parsed, cwd, deps.settingsStore, teamRegistry);
     }
     case "print":
@@ -111,20 +119,20 @@ Usage:
 }
 
 /** Backward-compatible test entry point: constructs stores from
- *  `process.env.HOME` and forwards optional test hooks to
- *  `runPrint`. The e2e test calls this with `{ settingsOverride,
- *  resolveModel, getApiKey, createAgent, ... }` to inject mocks. */
+ *  `process.env.HOME` and forwards the call to `runPrint`. The
+ *  e2e test calls this with no hooks — `runPrint` resolves the
+ *  team registry, model registry, and auth from the real
+ *  filesystem. */
 export async function runPrintCli(
   parsed: Extract<ParsedCli, { kind: "print" }>,
   cwd: string,
-  hooks: Partial<PrintDeps> = {},
+  _hooks: Partial<PrintDeps> = {},
 ): Promise<number> {
   const homeDir = resolveHomeDir();
   const deps: PrintDeps = {
     authStore: makeAuthStore(homeDir),
     settingsStore: makeSettingsStore(homeDir),
     homeDir,
-    ...hooks,
   };
   return runPrint(parsed, cwd, deps);
 }
@@ -132,7 +140,6 @@ export async function runPrintCli(
 // Exported for tests.
 export { run as runCli };
 export type { ParsedCli, PrintDeps };
-export type PrintHooks = Partial<PrintDeps>;
 // Used internally by `commands/print.ts`; re-exported here for
 // backward compatibility with callers that imported the type from
 // `./index.ts` in earlier versions. Prefer importing from the
