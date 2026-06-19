@@ -12,8 +12,9 @@
  *       surface the error.
  *    5. Pick the leader body, publish the prompt envelope, and
  *       filter the `agent.stream.chunk` bus for the leader's
- *       text. Open the idle gate; exit when all bodies are idle
- *       and the timeout (if any) has not elapsed.
+ *       text. Open the idle gate; exit when the gate opens or
+ *       the timeout fires. The gate is a single `busy` counter
+ *       on `agent.turn.start` / `agent.idle` — see `setupIdleGate`.
  *
  *  The `PrintDeps` type carries the runtime stores. Real `main`
  *  constructs the stores from `process.env.HOME`. Team loading
@@ -31,6 +32,7 @@ import {
   type JieHandle,
   type MergedSettings,
 } from "@cuzfrog/jie-platform";
+import type { EventBus } from "@cuzfrog/jie-platform/core";
 import type { AuthStore, SettingsStore } from "@cuzfrog/jie-platform/config";
 import type { ParsedCli } from "../index.ts";
 
@@ -176,47 +178,6 @@ async function runGate(
     }
   });
 
-  // Idle gate.
-  const state = new Map<string, "busy" | "idle">();
-  for (const b of handle.bodies()) state.set(b.agent_key, "idle");
-
-  let resolveGate!: () => void;
-  let rejectGate!: (err: Error) => void;
-  const gate = new Promise<void>((resolve, reject) => {
-    resolveGate = resolve;
-    rejectGate = reject;
-  });
-  const timer =
-    opts.timeout > 0
-      ? setTimeout(() => rejectGate(new Error("timeout")), opts.timeout * 1000)
-      : undefined;
-
-  function evaluate(): void {
-    if ([...state.values()].every((v) => v === "idle")) {
-      if (timer !== undefined) clearTimeout(timer);
-      resolveGate();
-    }
-  }
-  handle.bus.subscribe("agent.turn.start", (_subj, payload) => {
-    const agentEvent = payload as AgentEvent;
-    // Per-body event; `agent_key` is guaranteed present by the
-    // Event-Order Contract (ADR 22). The `!` documents the
-    // contract since the envelope type allows the field to be
-    // omitted for team-level events.
-    const key = agentEvent.agent_key!;
-    if (state.has(key)) {
-      state.set(key, "busy");
-    }
-  });
-  handle.bus.subscribe("agent.idle", (_subj, payload) => {
-    const agentEvent = payload as AgentEvent;
-    const key = agentEvent.agent_key!;
-    if (state.has(key)) {
-      state.set(key, "idle");
-      evaluate();
-    }
-  });
-
   // Publish the prompt envelope.
   const envelope: AgentEvent = {
     version: 1,
@@ -230,7 +191,7 @@ async function runGate(
   handle.bus.publish(`${opts.teamId}.leader.prompt`, envelope);
 
   try {
-    await gate;
+    await setupIdleGate(handle.bus, opts.timeout);
   } catch (e) {
     if (!opts.json) process.stdout.write("\n");
     const msg = e instanceof Error ? e.message : String(e);
@@ -245,4 +206,54 @@ async function runGate(
   if (!opts.json) process.stdout.write("\n");
   await handle.stop();
   return 0;
+}
+
+/** The CLI's idle gate for `-p` mode.
+ *
+ *  Resolves when the bus has observed as many `agent.idle` events
+ *  as `agent.turn.start` events (the `busy` counter returns to 0).
+ *  Rejects with `Error("timeout")` if `timeoutSec` > 0 and the gate
+ *  has not opened in that wall-clock window.
+ *
+ *  The counter is correct because the Event-Order Contract
+ *  (`doc/specs/jie-platform/03-event-system.md` "Event-Order
+ *  Contract", and `doc/addrs/22-event-order-contract.md`)
+ *  guarantees that whenever work is in flight, the bus sees a
+ *  matching `turn_start` before the corresponding `idle`. A
+ *  notifying body (e.g. the leader calling `notify`) starts the
+ *  recipient's turn synchronously inside the notify call — the
+ *  recipient's `turn_start` is published before the notifier's
+ *  `notify` tool returns, so before the notifier's `idle`. The
+ *  counter is therefore always ≥ 1 while work is in flight, and
+ *  returns to 0 only when all in-flight turns have ended.
+ *
+ *  The gate's `resolve` is only called from inside the
+ *  `agent.idle` handler, so if no body ever responds the gate
+ *  stays pending and the timeout fires.
+ */
+function setupIdleGate(bus: EventBus, timeoutSec: number): Promise<void> {
+  let busy = 0;
+  let resolve!: () => void;
+  let reject!: (err: Error) => void;
+  const promise = new Promise<void>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  const timer =
+    timeoutSec > 0
+      ? setTimeout(() => reject(new Error("timeout")), timeoutSec * 1000)
+      : undefined;
+
+  bus.subscribe("agent.turn.start", () => {
+    busy++;
+  });
+  bus.subscribe("agent.idle", () => {
+    busy--;
+    if (busy === 0) {
+      if (timer !== undefined) clearTimeout(timer);
+      resolve();
+    }
+  });
+
+  return promise;
 }
