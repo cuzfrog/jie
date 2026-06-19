@@ -1,5 +1,6 @@
 {
   "name": "@cuzfrog/jie",
+  "version": "0.1.0",
   "workspaces": ["packages/*"],
   "bin": {
     "jie": "packages/jie-cli/index.ts"

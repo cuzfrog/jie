@@ -164,12 +164,12 @@ async function runGate(
 ): Promise<number> {
   // Stream filter.
   handle.bus.subscribe("agent.stream.chunk", (_subj, payload) => {
-    const env = payload as AgentEvent;
-    if (env.team_id !== opts.teamId) return;
-    if (env.agent_role !== opts.leaderRole) return;
-    const text = String(env.payload.text ?? "");
+    const agentEvent = payload as AgentEvent;
+    if (agentEvent.team_id !== opts.teamId) return;
+    if (agentEvent.agent_role !== opts.leaderRole) return;
+    const text = String(agentEvent.payload.text ?? "");
     if (opts.json) {
-      const seq = Number(env.payload.seq ?? 0);
+      const seq = Number(agentEvent.payload.seq ?? 0);
       process.stdout.write(JSON.stringify({ chunk: text, seq }) + "\n");
     } else {
       process.stdout.write(text);
@@ -198,15 +198,21 @@ async function runGate(
     }
   }
   handle.bus.subscribe("agent.turn.start", (_subj, payload) => {
-    const env = payload as AgentEvent;
-    if (state.has(env.agent_key)) {
-      state.set(env.agent_key, "busy");
+    const agentEvent = payload as AgentEvent;
+    // Per-body event; `agent_key` is guaranteed present by the
+    // Event-Order Contract (ADR 22). The `!` documents the
+    // contract since the envelope type allows the field to be
+    // omitted for team-level events.
+    const key = agentEvent.agent_key!;
+    if (state.has(key)) {
+      state.set(key, "busy");
     }
   });
   handle.bus.subscribe("agent.idle", (_subj, payload) => {
-    const env = payload as AgentEvent;
-    if (state.has(env.agent_key)) {
-      state.set(env.agent_key, "idle");
+    const agentEvent = payload as AgentEvent;
+    const key = agentEvent.agent_key!;
+    if (state.has(key)) {
+      state.set(key, "idle");
       evaluate();
     }
   });

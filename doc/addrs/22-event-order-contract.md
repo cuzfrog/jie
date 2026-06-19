@@ -35,7 +35,7 @@ The boot signal moves to the new `team.loaded` event (Decision 2). The TUI's age
 | Publisher | The `JieHandle` — in `startJie` (for the startup team) and in `loadTeam` (for each subsequently-loaded team) |
 | Timing | Once per team load, after all bodies' `start()` returns |
 | Repetition | One-shot per team load. Not republished on team swap-back. The team is already loaded; observers that came back to it use the buffer / cache they already built up. |
-| Envelope | Plain payload (not the `AgentEvent` envelope). The TUI processes the `team_id` and `agents` fields directly. |
+| Envelope | `AgentEvent` envelope with `agent_role` and `agent_key` omitted. The handle is the publisher; no single body "owns" the event, so the per-body fields are not filled. Consumers that need the per-body fields read per-body events; the TUI processes the `team_id` and `agents` payload fields directly. |
 
 ### 3. `JieHandle.waitForIdle` is removed. CLI owns the idle gate.
 

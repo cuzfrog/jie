@@ -10,6 +10,8 @@
 - @doc/specs/monorepo-structure.md
 - read `00-overview.md` in the dir you will work with to understand the glossary.
 - architectural decision records are in `doc/addrs/`. Each ADR is the source of truth for a consequential decision; the spec docs reflect the decisions.
+- @doc/DEVELOPMENT.md
+- @doc/plan/MILESTONES.md
 
 ### jie-platform
 - agents do not directly know each other, they talk via events on an event bus.
@@ -34,6 +36,7 @@
 - Do not keep intermediate, transient history in md files under `specs/`, they are the update-to-date blueprint for the project.
 - Do not record what you've done if the information is not helpful to make subsequent decisions.
 - No emojis in commits, issues, PR comments, or code
+- Do not use newline to break sentences.
 
 ## Conversation style
 - When I ask a question, answer it before any actions.
@@ -99,6 +102,8 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 ## Things to avoid
 - do not `find` from the root dir, it's slow and unnecessary. Use `pwd` to figure out where you are.
 - do not assume a tool is available unless you are told, search before calling if you are not sure.
+- do not write test-only production code, testability should be achieved by adhering to above coding principles.
+- do not shorten variables, function names. E.g. use `agentEvent` instead of `event` or `env` to avoid confusion.
 
 ## File Edit Checklist
 Pre-action:

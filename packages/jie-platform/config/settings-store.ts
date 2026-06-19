@@ -84,9 +84,18 @@ export function makeSettingsStore(homeDir: string): SettingsStore {
     resolveDefaultTeam(settings, cwd) {
       const staleId = settings.defaultTeam;
       if (staleId === undefined) return null;
-      if (isTeamInstalled(staleId, cwd, homeDir)) return null;
-
+      // Discover the project root once and use it for both
+      // `isTeamInstalled` and `listInstalledTeams`. Previously
+      // `isTeamInstalled` was called with `cwd` while
+      // `listInstalledTeams` used the discovered `projectRoot` —
+      // running `jie` from a subdirectory of a project that has
+      // `.jie/teams/<id>` would diverge: the stale-defaultTeam
+      // check would not see the team as installed, so the
+      // function would clear it and pick a recovery even though
+      // the team IS installed at the project root.
       const projectRoot = findProjectJieRoot(cwd) ?? cwd;
+      if (isTeamInstalled(staleId, projectRoot, homeDir)) return null;
+
       const projectPathFull = join(projectRoot, ".jie", "settings.json");
       const globalPathFull = globalSettingsPath(homeDir);
 

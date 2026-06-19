@@ -1,5 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { InProcessEventBus } from "./in-process-event-bus.ts";
+import type { AgentEvent } from "./agent-event.ts";
 
 describe("InProcessEventBus", () => {
   test("publishes to subscribers in subscription order with the same arguments", () => {
@@ -109,5 +110,59 @@ describe("InProcessEventBus", () => {
     });
     bus.publish("s", payload);
     expect(seen).toBe(payload);
+  });
+
+  test("publish is depth-first synchronous: nested subscribers complete before outer publish returns", () => {
+    // The InProcessEventBus dispatches subscribers depth-first
+    // synchronously. A subscriber that itself calls bus.publish
+    // sees the inner publish run to completion (all its
+    // subscribers run, including events they publish) before
+    // the outer callback returns. This is the property the
+    // CLI's idle gate relies on: a body's notify call returns
+    // only after the recipient's handler has run end-to-end, so
+    // any events the recipient publishes (e.g. its own
+    // agent.turn.start) are observed before the notifying
+    // body's notify returns. Locking this in here justifies a
+    // future simplification of `runGate` in `print.ts`.
+    const bus = new InProcessEventBus();
+    const events: string[] = [];
+
+    bus.subscribe("wake", () => {
+      events.push("A-enter");
+      bus.publish("B-topic", { msg: "do work" });
+      events.push("A-leave");
+    });
+
+    bus.subscribe("B-topic", () => {
+      events.push("B-received");
+      bus.publish("agent.turn.start", {
+        version: 1,
+        team_id: "t1",
+        event_type: "agent.turn.start",
+        agent_role: "worker",
+        agent_key: "worker-1",
+        timestamp: new Date().toISOString(),
+        payload: {},
+      } as AgentEvent);
+      events.push("B-signaled-busy");
+    });
+
+    bus.subscribe("agent.turn.start", (_subject, p) => {
+      events.push(`observer:${(p as AgentEvent).agent_key}:turn_start`);
+    });
+
+    events.push("before-publish");
+    bus.publish("wake", { instruction: "wake up" });
+    events.push("after-publish");
+
+    expect(events).toEqual([
+      "before-publish",
+      "A-enter",
+      "B-received",
+      "observer:worker-1:turn_start",
+      "B-signaled-busy",
+      "A-leave",
+      "after-publish",
+    ]);
   });
 });

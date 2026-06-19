@@ -270,8 +270,6 @@ function publishTeamLoaded(bus: EventBus, teamId: string, bp: Team): void {
     version: 1,
     team_id: teamId,
     event_type: `${teamId}.team.loaded`,
-    agent_role: sorted[0]?.role ?? "",
-    agent_key: sorted[0] ? `${sorted[0].role}-1` : "",
     timestamp: new Date().toISOString(),
     payload: { team_id: teamId, agents },
   };

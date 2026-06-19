@@ -202,4 +202,57 @@ describe("SettingsStore.resolveDefaultTeam", () => {
     const result = store.resolveDefaultTeam({ defaultTeam: "ghost" }, projectRoot);
     expect(result).toBe("alpha");
   });
+
+  test("subdir of a project with the team installed: returns null and leaves settings untouched", () => {
+    // The team is installed at the project root, not in the
+    // cwd subdir. Pre-fix bug: `isTeamInstalled` was called
+    // with `cwd` (the subdir) so it would not see the team and
+    // would mutate the project settings to a recovery or clear
+    // the default. Post-fix: both `isTeamInstalled` and
+    // `listInstalledTeams` use the discovered project root, so
+    // the team is recognized as installed and the settings
+    // file is left untouched.
+    mkdirSync(join(projectRoot, ".jie", "teams", "alive"), { recursive: true });
+    writeFileSync(join(projectRoot, ".jie", "teams", "alive", "TEAM.md"), "x");
+    mkdirSync(join(projectRoot, ".jie"), { recursive: true });
+    writeFileSync(
+      join(projectRoot, ".jie", "settings.json"),
+      JSON.stringify({ defaultTeam: "alive" }),
+    );
+    const subdir = join(projectRoot, "a", "b", "c");
+    mkdirSync(subdir, { recursive: true });
+    const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+
+    const store = makeSettingsStore(homeDir);
+    const result = store.resolveDefaultTeam({ defaultTeam: "alive" }, subdir);
+    expect(result).toBeNull();
+    const written = JSON.parse(
+      readFileSync(join(projectRoot, ".jie", "settings.json"), "utf-8"),
+    );
+    expect(written.defaultTeam).toBe("alive");
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  test("subdir of a project without the team: falls back to a home-dir team (projectRoot-discovered)", () => {
+    // The project has no team; only home dir has `alpha`. From a
+    // subdir of the project, both code paths must use the
+    // project root (not the subdir) so the empty-project case
+    // is observed correctly and the home-dir team is picked.
+    mkdirSync(join(homeDir, ".jie", "teams", "alpha"), { recursive: true });
+    writeFileSync(join(homeDir, ".jie", "teams", "alpha", "TEAM.md"), "x");
+    mkdirSync(join(projectRoot, ".jie"), { recursive: true });
+    writeFileSync(
+      join(projectRoot, ".jie", "settings.json"),
+      JSON.stringify({ defaultTeam: "ghost" }),
+    );
+    const subdir = join(projectRoot, "deep", "nested");
+    mkdirSync(subdir, { recursive: true });
+    const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+
+    const store = makeSettingsStore(homeDir);
+    const result = store.resolveDefaultTeam({ defaultTeam: "ghost" }, subdir);
+    expect(result).toBe("alpha");
+    warnSpy.mockRestore();
+  });
 });
