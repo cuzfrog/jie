@@ -9,7 +9,9 @@
  *    4. Dispatches to a subcommand module under `./commands/`.
  *
  *  Domain logic lives in:
- *    - `auth-store.ts`, `settings-store.ts` — stores.
+ *    - `@cuzfrog/jie-platform/config` — stores (`AuthStore`,
+ *      `SettingsStore`) and the `home-paths` / `load-*` / `paths`
+ *      utilities they wrap.
  *    - `home-paths.ts` — HOME resolution.
  *    - `commands/auth.ts` — `login`, `logout`, top-level `--api-key`.
  *    - `commands/settings.ts` — `model`, `team`.
@@ -23,14 +25,20 @@
  */
 import { join } from "node:path";
 import type { MergedSettings } from "@cuzfrog/jie-platform";
+import type { AuthStore, SettingsStore } from "@cuzfrog/jie-platform/config";
+import { makeAuthStore, makeSettingsStore } from "@cuzfrog/jie-platform/config";
 import { createTeamRegistry, type TeamRegistry, type Team } from "@cuzfrog/jie-platform/team";
-import { makeAuthStore, type AuthStore } from "./auth-store.ts";
-import { makeSettingsStore, type SettingsStore } from "./settings-store.ts";
 import { resolveHomeDir } from "./home-paths.ts";
 import { parseFlags, type ParsedCli } from "./cli-flags.ts";
-import { runLogin, runLogout, runApiKey } from "./commands/auth.ts";
-import { runModel, runTeam } from "./commands/settings.ts";
-import { runPrint, type PrintDeps } from "./commands/print.ts";
+import {
+  runApiKey,
+  runLogin,
+  runLogout,
+  runModel,
+  runPrint,
+  runTeam,
+  type PrintDeps,
+} from "./commands/index.ts";
 import { VERSION } from "./version.ts";
 
 interface Deps {

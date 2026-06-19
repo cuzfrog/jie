@@ -1,7 +1,5 @@
 ---
 frozen:
-  - auth-store.test.ts
-  - auth-store.ts
   - cli-flags.test.ts
   - cli-flags.ts
   - home-paths.test.ts
@@ -9,7 +7,5 @@ frozen:
   - index.test.ts
   - index.ts
   - package.json
-  - settings-store.test.ts
-  - settings-store.ts
   - version.ts
 ---

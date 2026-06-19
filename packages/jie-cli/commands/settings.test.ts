@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { makeSettingsStore } from "../settings-store.ts";
+import { makeSettingsStore } from "@cuzfrog/jie-platform/config";
 import { createTeamRegistry, type TeamRegistry } from "@cuzfrog/jie-platform/team";
 import { runModel, runTeam } from "./settings.ts";
 

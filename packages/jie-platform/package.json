@@ -3,6 +3,7 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./config": "./config/index.ts",
     "./core": "./core/index.ts",
     "./team": "./team/index.ts",
     "./tools": "./tools/index.ts",

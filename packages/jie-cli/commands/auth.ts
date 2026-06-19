@@ -4,9 +4,8 @@
  *  top-level `--api-key` resolves the provider from the merged
  *  settings; the `login` subcommand takes the provider as a flag.
  */
-import type { AuthStore } from "../auth-store.ts";
-import type { SettingsStore } from "../settings-store.ts";
-import type { ParsedCli } from "../cli-flags.ts";
+import type { AuthStore, SettingsStore } from "@cuzfrog/jie-platform/config";
+import type { ParsedCli } from "../index.ts";
 
 export async function runLogin(
   parsed: Extract<ParsedCli, { kind: "login" }>,

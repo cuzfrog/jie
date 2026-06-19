@@ -27,7 +27,6 @@ describe("AuthStore", () => {
 
     const path = join(homeDir, ".jie", "auth.json");
     expect(existsSync(path)).toBe(true);
-    // Mask the type bits so the assertion is portable across platforms.
     const mode = statSync(path).mode & 0o777;
     expect(mode).toBe(0o600);
     expect(JSON.parse(readFileSync(path, "utf-8"))).toEqual(auth);

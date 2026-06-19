@@ -15,7 +15,7 @@ import {
   loadMergedSettings,
   projectSettingsPath,
   type MergedSettings,
-} from "@cuzfrog/jie-platform";
+} from "./index.ts";
 
 export type Scope = "project" | "global";
 

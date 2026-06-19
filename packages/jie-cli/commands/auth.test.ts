@@ -9,8 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { makeAuthStore } from "../auth-store.ts";
-import { makeSettingsStore } from "../settings-store.ts";
+import { makeAuthStore, makeSettingsStore } from "@cuzfrog/jie-platform/config";
 import { runApiKey, runLogin, runLogout } from "./auth.ts";
 
 describe("runLogin", () => {

@@ -11,7 +11,7 @@ import {
   homeJieDir,
   loadAuthJson,
   type AuthJson,
-} from "@cuzfrog/jie-platform";
+} from "./index.ts";
 
 export interface AuthStore {
   load(): AuthJson;

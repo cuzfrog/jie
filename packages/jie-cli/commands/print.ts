@@ -32,9 +32,8 @@ import {
   type JieHandle,
   type MergedSettings,
 } from "@cuzfrog/jie-platform";
-import type { AuthStore } from "../auth-store.ts";
-import type { SettingsStore } from "../settings-store.ts";
-import type { ParsedCli } from "../cli-flags.ts";
+import type { AuthStore, SettingsStore } from "@cuzfrog/jie-platform/config";
+import type { ParsedCli } from "../index.ts";
 
 export type PrintArgs = Extract<ParsedCli, { kind: "print" }>;
 

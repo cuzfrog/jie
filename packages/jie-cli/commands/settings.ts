@@ -13,9 +13,9 @@
  */
 import { getProviders } from "@earendil-works/pi-ai";
 import { findProjectJieRoot, type MergedSettings } from "@cuzfrog/jie-platform";
+import type { SettingsStore } from "@cuzfrog/jie-platform/config";
 import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
-import type { SettingsStore } from "../settings-store.ts";
-import type { ParsedCli } from "../cli-flags.ts";
+import type { ParsedCli } from "../index.ts";
 
 function projectScope(cwd: string): boolean {
   return findProjectJieRoot(cwd) !== null;

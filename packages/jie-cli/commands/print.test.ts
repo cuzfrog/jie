@@ -2,9 +2,8 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { makeAuthStore, makeSettingsStore } from "@cuzfrog/jie-platform/config";
 import { runPrint, type PrintDeps, type PrintArgs } from "./print.ts";
-import { makeAuthStore } from "../auth-store.ts";
-import { makeSettingsStore } from "../settings-store.ts";
 
 function makeDeps(homeDir: string): PrintDeps {
   return {
