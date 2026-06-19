@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { InMemoryArtifactStore } from "../storage/artifact-store.ts";
-import { InProcessEventBus } from "../core/in-process-event-bus.ts";
+import { createEventBus, type EventBus } from "../core/event-bus.ts";
 import type { AgentEvent } from "../core/agent-event.ts";
-import type { EventBus } from "../core/event-bus.ts";
 import type { ExecutionContext } from "./types.ts";
 import { createNotifyTool } from "./notify.ts";
 import { JiePlatformError } from "../domain-types.ts";
@@ -19,7 +18,7 @@ function makeCtx(): ExecutionContext {
 
 describe("notify — topic validation", () => {
   test("rejects empty topic with notify_invalid_topic: empty", async () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     const tool = createNotifyTool({ bus, isSelfSubscribed: () => false });
     let caught: unknown;
     try {
@@ -33,7 +32,7 @@ describe("notify — topic validation", () => {
   });
 
   test("rejects topic starting with `agent.`", async () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     const tool = createNotifyTool({ bus, isSelfSubscribed: () => false });
     let caught: unknown;
     try {
@@ -48,7 +47,7 @@ describe("notify — topic validation", () => {
   });
 
   test("rejects topic starting with the body's team_id", async () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     const tool = createNotifyTool({ bus, isSelfSubscribed: () => false });
     const ctx = makeCtx();
     let caught: unknown;
@@ -64,7 +63,7 @@ describe("notify — topic validation", () => {
   });
 
   test("rejects topic containing a null byte", async () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     const tool = createNotifyTool({ bus, isSelfSubscribed: () => false });
     let caught: unknown;
     try {
@@ -81,7 +80,7 @@ describe("notify — topic validation", () => {
 
 describe("notify — valid publish path", () => {
   test("publishes a full AgentEvent envelope to {team_id}.{topic}", async () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     const tool = createNotifyTool({ bus, isSelfSubscribed: () => false });
     let received: AgentEvent | undefined;
     let receivedSubject: string | undefined;
@@ -109,7 +108,7 @@ describe("notify — valid publish path", () => {
   });
 
   test("LLM-facing content is the > 0 variant when there are recipients", async () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     const tool = createNotifyTool({ bus, isSelfSubscribed: () => false });
     bus.subscribe("t1.task", () => {});
     bus.subscribe("t1.task", () => {});
@@ -123,7 +122,7 @@ describe("notify — valid publish path", () => {
   });
 
   test("LLM-facing content is the 0 variant when no peer is listening", async () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     const tool = createNotifyTool({ bus, isSelfSubscribed: () => false });
     const result = await tool.execute(
       { topic: "ghost", prompt: "x" },
@@ -135,7 +134,7 @@ describe("notify — valid publish path", () => {
   });
 
   test("`details = { topic, recipients }` is returned for afterToolCall hooks", async () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     const tool = createNotifyTool({ bus, isSelfSubscribed: () => false });
     bus.subscribe("t1.task", () => {});
 
@@ -147,7 +146,7 @@ describe("notify — valid publish path", () => {
   });
 
   test("recipients count subtracts 1 when the publisher is itself subscribed", async () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     bus.subscribe("t1.task", () => {});
     const tool = createNotifyTool({
       bus,
@@ -162,7 +161,7 @@ describe("notify — valid publish path", () => {
   });
 
   test("recipients is not negative when the publisher is the only subscriber", async () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     bus.subscribe("t1.task", () => {});
     const tool = createNotifyTool({
       bus,
@@ -176,7 +175,7 @@ describe("notify — valid publish path", () => {
   });
 
   test("does not end the LLM turn (terminate not set)", async () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     const tool = createNotifyTool({ bus, isSelfSubscribed: () => false });
     const result = await tool.execute(
       { topic: "task", prompt: "x" },
@@ -186,7 +185,7 @@ describe("notify — valid publish path", () => {
   });
 
   test("tool metadata: name, description, label, parameters", () => {
-    const bus: EventBus = new InProcessEventBus();
+    const bus: EventBus = createEventBus();
     const tool = createNotifyTool({ bus, isSelfSubscribed: () => false });
     expect(tool.name).toBe("notify");
     expect(tool.label).toBe("Notify");

@@ -6,7 +6,8 @@ import type {
 } from "@earendil-works/pi-agent-core";
 import {
   AgentBody,
-  InProcessEventBus,
+  createEventBus,
+  type EventBus,
   type AgentEvent,
 } from "@cuzfrog/jie-platform/core";
 import { createToolRegistry, type ToolRegistry } from "@cuzfrog/jie-platform/tools";
@@ -95,14 +96,14 @@ function makeStubAgentFactory(): StubFactory {
 }
 
 describe("Event-Order Contract — body-side alternation", () => {
-  let bus: InProcessEventBus;
+  let bus: EventBus;
   let artifacts: ArtifactStore;
   let memory: MemoryManager;
   let registry: ToolRegistry;
   let body: AgentBody | undefined;
 
   beforeEach(() => {
-    bus = new InProcessEventBus();
+    bus = createEventBus();
     ({ artifacts, memory } = makeMockStores());
     registry = createToolRegistry();
     registry.register("noop", makeNoopTool());
@@ -226,8 +227,8 @@ describe("Event-Order Contract — body-side alternation", () => {
 });
 
 describe("Event-Order Contract — bus-side in-order delivery", () => {
-  test("InProcessEventBus dispatches to a single subscriber in publish order", () => {
-    const bus = new InProcessEventBus();
+  test("createEventBus returns a bus that dispatches to a single subscriber in publish order", () => {
+    const bus = createEventBus();
     const received: string[] = [];
     bus.subscribe("mixed", (_s, p) => {
       received.push((p as { tag: string }).tag);
@@ -240,7 +241,7 @@ describe("Event-Order Contract — bus-side in-order delivery", () => {
   });
 
   test("a body publishing turn_start then agent_end synchronously produces that order in the subscriber's receive list", async () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     const { artifacts, memory } = makeMockStores();
     const registry = createToolRegistry();
     registry.register("noop", makeNoopTool());

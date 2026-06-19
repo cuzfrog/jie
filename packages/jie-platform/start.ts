@@ -1,7 +1,6 @@
 import { ulid } from "ulid";
 import { getModel as piGetModel, type Model } from "@earendil-works/pi-ai";
-import type { EventBus } from "./core/event-bus.ts";
-import { InProcessEventBus } from "./core/in-process-event-bus.ts";
+import { createEventBus, type EventBus } from "./core/event-bus.ts";
 import { AgentBody } from "./core/agent-body.ts";
 import type { AgentEvent } from "./core/agent-event.ts";
 import { createTeamRegistry, type AgentSoul, type Team } from "./team/index.ts";
@@ -114,7 +113,7 @@ export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
   });
   const artifacts: ArtifactStore = createArtifactStore(storage);
   const memory: MemoryManager = createMemoryManager(storage);
-  const bus: EventBus = new InProcessEventBus();
+  const bus: EventBus = createEventBus();
 
   // Step 1: resolve the team blueprint. The registry's
   // `loadTeam(undefined)` falls back to the built-in minimal team.

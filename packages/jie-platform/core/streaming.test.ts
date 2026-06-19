@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { InProcessEventBus } from "./in-process-event-bus.ts";
+import { createEventBus, type EventBus } from "./event-bus.ts";
 import {
   makeStreamPublisher,
   publishPlatformEvent,
@@ -27,13 +27,13 @@ describe("truncateForTelemetry", () => {
 });
 
 describe("makeStreamPublisher", () => {
-  let bus: InProcessEventBus;
+  let bus: EventBus;
   const agentKey = "general-1";
   const agentRole = "general";
   const teamId = "t1";
 
   beforeEach(() => {
-    bus = new InProcessEventBus();
+    bus = createEventBus();
   });
 
   function makeStream() {
@@ -105,7 +105,7 @@ describe("makeStreamPublisher", () => {
 
 describe("publishToolCallEvent", () => {
   test("emits agent.tool.call with truncated JSON-serialized input", () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     const received: AgentEvent[] = [];
     bus.subscribe("agent.tool.call", (_s, p) => {
       received.push(p as AgentEvent);
@@ -124,7 +124,7 @@ describe("publishToolCallEvent", () => {
 
 describe("publishToolResultEvent", () => {
   test("emits agent.tool.result with duration_ms and serialized output", () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     const received: AgentEvent[] = [];
     bus.subscribe("agent.tool.result", (_s, p) => {
       received.push(p as AgentEvent);
@@ -150,7 +150,7 @@ describe("publishToolResultEvent", () => {
   });
 
   test("error path: error string is set; output is null", () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     const received: AgentEvent[] = [];
     bus.subscribe("agent.tool.result", (_s, p) => {
       received.push(p as AgentEvent);
@@ -172,7 +172,7 @@ describe("publishToolResultEvent", () => {
 
 describe("publishPlatformEvent", () => {
   test("emits the platform event with empty payload by default", () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     const received: AgentEvent[] = [];
     bus.subscribe("agent.idle", (_s, p) => {
       received.push(p as AgentEvent);

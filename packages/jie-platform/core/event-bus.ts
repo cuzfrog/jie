@@ -1,3 +1,5 @@
+import { InProcessEventBus } from "./in-process-event-bus";
+
 /** A callback registered against a subject. Receives the subject the
  *  event was published on and the payload (the AgentEvent envelope, in
  *  the platform's wire contract). */
@@ -19,4 +21,8 @@ export interface EventBus {
   /** Number of active callbacks subscribed to a subject. Unaffected by
    *  callback errors. */
   subscriberCount(subject: string): number;
+}
+
+export function createEventBus(): EventBus {
+  return new InProcessEventBus();
 }

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { AgentEvent as PiAgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, AssistantMessageEvent } from "@earendil-works/pi-ai";
 import { AgentBody } from "./agent-body.ts";
-import { InProcessEventBus } from "./in-process-event-bus.ts";
+import { createEventBus, type EventBus } from "./event-bus.ts";
 // EXCEPTION: The `InMemory*` classes are file-private to the storage
 // module — they are intentionally not re-exported from `storage/index.ts`.
 // Tests in this same package reach them via direct sibling-file imports
@@ -102,7 +102,7 @@ function makeNoopTool(): Tool {
 }
 
 describe("AgentBody — pi-agent event bridging", () => {
-  let bus: InProcessEventBus;
+  let bus: EventBus;
   let artifacts: ArtifactStore;
   let memory: MemoryManager;
   let registry: ToolRegistry;
@@ -110,7 +110,7 @@ describe("AgentBody — pi-agent event bridging", () => {
   let fireEvent: ((e: PiAgentEvent) => void) | undefined;
 
   beforeEach(() => {
-    bus = new InProcessEventBus();
+    bus = createEventBus();
     artifacts = new InMemoryArtifactStore(); memory = new InMemoryMemoryManager();
     registry = createToolRegistry();
     registry.register("noop", makeNoopTool());
@@ -329,14 +329,14 @@ describe("AgentBody — pi-agent event bridging", () => {
 });
 
 describe("AgentBody — agent.queue.update", () => {
-  let bus: InProcessEventBus;
+  let bus: EventBus;
   let artifacts: ArtifactStore;
   let memory: MemoryManager;
   let registry: ToolRegistry;
   let body: AgentBody | undefined;
 
   beforeEach(() => {
-    bus = new InProcessEventBus();
+    bus = createEventBus();
     artifacts = new InMemoryArtifactStore(); memory = new InMemoryMemoryManager();
     registry = createToolRegistry();
     registry.register("noop", makeNoopTool());

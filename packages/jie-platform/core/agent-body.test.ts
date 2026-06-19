@@ -9,7 +9,7 @@ import {
 import { Agent, type AgentMessage } from "@earendil-works/pi-agent-core";
 import { Type } from "typebox";
 import { AgentBody } from "./agent-body.ts";
-import { InProcessEventBus } from "./in-process-event-bus.ts";
+import { createEventBus, type EventBus } from "./event-bus.ts";
 // EXCEPTION: The `InMemory*` classes are file-private to the storage
 // module — they are intentionally not re-exported from `storage/index.ts`.
 // Tests in this same package reach them via direct sibling-file imports
@@ -94,14 +94,14 @@ function makeNoopTool(): Tool {
 }
 
 describe("AgentBody — construction", () => {
-  let bus: InProcessEventBus;
+  let bus: EventBus;
   let artifacts: ArtifactStore;
   let memory: MemoryManager;
   let registry: ToolRegistry;
   let body: AgentBody;
 
   beforeEach(() => {
-    bus = new InProcessEventBus();
+    bus = createEventBus();
     artifacts = new InMemoryArtifactStore(); memory = new InMemoryMemoryManager();
     registry = createToolRegistry();
     registry.register("noop", makeNoopTool());
@@ -134,14 +134,14 @@ describe("AgentBody — construction", () => {
 });
 
 describe("AgentBody — start() subscriptions", () => {
-  let bus: InProcessEventBus;
+  let bus: EventBus;
   let artifacts: ArtifactStore;
   let memory: MemoryManager;
   let registry: ToolRegistry;
   let body: AgentBody;
 
   beforeEach(() => {
-    bus = new InProcessEventBus();
+    bus = createEventBus();
     artifacts = new InMemoryArtifactStore(); memory = new InMemoryMemoryManager();
     registry = createToolRegistry();
     registry.register("noop", makeNoopTool());
@@ -266,7 +266,7 @@ describe("AgentBody — start() subscriptions", () => {
 });
 
 describe("AgentBody — start() restore + continue", () => {
-  let bus: InProcessEventBus;
+  let bus: EventBus;
   let artifacts: ArtifactStore;
   let memory: MemoryManager;
   let registry: ToolRegistry;
@@ -292,7 +292,7 @@ describe("AgentBody — start() restore + continue", () => {
   }
 
   beforeEach(() => {
-    bus = new InProcessEventBus();
+    bus = createEventBus();
     artifacts = new InMemoryArtifactStore(); memory = new InMemoryMemoryManager();
     registry = createToolRegistry();
     registry.register("noop", makeNoopTool());
@@ -384,7 +384,7 @@ describe("AgentBody — start() restore + continue", () => {
 
 describe("AgentBody — tool adaptation", () => {
   test("soul.tools specs are resolved and adapted", () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     const artifacts = new InMemoryArtifactStore(); const memory = new InMemoryMemoryManager();
     const registry = createToolRegistry();
     registry.register("noop", makeNoopTool());
@@ -414,14 +414,14 @@ describe("AgentBody — tool adaptation", () => {
 });
 
 describe("AgentBody — prompt ingress format", () => {
-  let bus: InProcessEventBus;
+  let bus: EventBus;
   let artifacts: ArtifactStore;
   let memory: MemoryManager;
   let registry: ToolRegistry;
   let fake: FakeAgent;
 
   beforeEach(() => {
-    bus = new InProcessEventBus();
+    bus = createEventBus();
     artifacts = new InMemoryArtifactStore(); memory = new InMemoryMemoryManager();
     registry = createToolRegistry();
     registry.register("noop", makeNoopTool());
