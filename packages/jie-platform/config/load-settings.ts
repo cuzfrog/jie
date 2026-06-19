@@ -81,7 +81,7 @@ function deepMergeSettings(
  *  file exists. */
 export function loadMergedSettings(
   cwd: string,
-  options: { homeDir?: string } = {},
+  options: { homeDir: string },
 ): MergedSettings {
   const globalPath = globalSettingsPath(options.homeDir);
   const projectPath = projectSettingsPath(cwd);

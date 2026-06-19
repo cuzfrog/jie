@@ -28,12 +28,36 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runPrintCli } from "../../packages/jie-cli/index.ts";
+import { main } from "../../packages/jie-cli/index.ts";
 
 interface Fixture {
   provider: string;
   modelId: string;
   raw: string;
+}
+
+interface PrintArgv {
+  instruction: string;
+  team?: string;
+  timeout?: number;
+  json?: boolean;
+  apiKey?: string;
+  resume?: string;
+  continueLast?: boolean;
+}
+
+/** Builds the argv for `jie -p "<instruction>" [...]` from a
+ *  `PrintArgv` shape. Mirrors the field-to-flag mapping in
+ *  `cli-flags.ts:parsePrint`. */
+function printArgv(p: PrintArgv): string[] {
+  const argv: string[] = ["-p", p.instruction];
+  if (p.team !== undefined) argv.push("--team", p.team);
+  if (p.timeout !== undefined) argv.push("--timeout", String(p.timeout));
+  if (p.json === true) argv.push("--json");
+  if (p.apiKey !== undefined) argv.push("--api-key", p.apiKey);
+  if (p.resume !== undefined) argv.push("--resume", p.resume);
+  if (p.continueLast === true) argv.push("--continue");
+  return argv;
 }
 
 const FIXTURE_PATH = join(import.meta.dir, "fixtures", "models.json");
@@ -107,18 +131,9 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
     async () => {
       writeModelsJsonTo(workspace);
       writeSettingsJson(workspace);
-      const code = await runPrintCli(
-        {
-          kind: "print",
-          instruction: "List files under current dir",
-          timeout: 60,
-          json: false,
-          apiKey: undefined,
-          resume: undefined,
-          continueLast: false,
-        },
+      const code = await main(
+        printArgv({ instruction: "List files under current dir", timeout: 60 }),
         workspace,
-        {},
       );
       const stdout = captureStdout();
       expect(code).toBe(0);
@@ -154,19 +169,9 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
       // First, with my-team-1, stdout should contain TEAM_ONE.
       writeOut?.mockReset();
       writeOut?.mockImplementation(() => true);
-      const code1 = await runPrintCli(
-        {
-          kind: "print",
-          instruction: "say it",
-          team: "my-team-1",
-          timeout: 60,
-          json: false,
-          apiKey: undefined,
-          resume: undefined,
-          continueLast: false,
-        },
+      const code1 = await main(
+        printArgv({ instruction: "say it", team: "my-team-1", timeout: 60 }),
         workspace,
-        {},
       );
       const out1 = captureStdout();
       expect(code1).toBe(0);
@@ -175,19 +180,9 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
       // Then, with my-team-2, stdout should contain TEAM_TWO.
       writeOut?.mockReset();
       writeOut?.mockImplementation(() => true);
-      const code2 = await runPrintCli(
-        {
-          kind: "print",
-          instruction: "say it",
-          team: "my-team-2",
-          timeout: 60,
-          json: false,
-          apiKey: undefined,
-          resume: undefined,
-          continueLast: false,
-        },
+      const code2 = await main(
+        printArgv({ instruction: "say it", team: "my-team-2", timeout: 60 }),
         workspace,
-        {},
       );
       expect(code2).toBe(0);
       const out2 = captureStdout();
@@ -196,19 +191,9 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
       // Finally, with wrong-team, exit 1.
       writeOut?.mockReset();
       writeOut?.mockImplementation(() => true);
-      const code3 = await runPrintCli(
-        {
-          kind: "print",
-          instruction: "hi",
-          team: "wrong-team",
-          timeout: 60,
-          json: false,
-          apiKey: undefined,
-          resume: undefined,
-          continueLast: false,
-        },
+      const code3 = await main(
+        printArgv({ instruction: "hi", team: "wrong-team", timeout: 60 }),
         workspace,
-        {},
       );
       expect(code3).toBe(1);
     },
@@ -220,18 +205,9 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
       // First call: no models.json, no settings, no team. The CLI
       // should exit 1 with the "No model has been selected" message.
       writeErr?.mockReset();
-      const code1 = await runPrintCli(
-        {
-          kind: "print",
-          instruction: "Tell me a joke",
-          timeout: 5,
-          json: false,
-          apiKey: undefined,
-          resume: undefined,
-          continueLast: false,
-        },
+      const code1 = await main(
+        printArgv({ instruction: "Tell me a joke", timeout: 5 }),
         workspace,
-        {},
       );
       expect(code1).toBe(1);
       const stderr1 =
@@ -252,18 +228,9 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
       // stream a response. No hooks needed.
       writeOut?.mockReset();
       writeOut?.mockImplementation(() => true);
-      const code2 = await runPrintCli(
-        {
-          kind: "print",
-          instruction: "Tell me a joke",
-          timeout: 60,
-          json: false,
-          apiKey: undefined,
-          resume: undefined,
-          continueLast: false,
-        },
+      const code2 = await main(
+        printArgv({ instruction: "Tell me a joke", timeout: 60 }),
         workspace,
-        {},
       );
       expect(code2).toBe(0);
       const stdout2 = captureStdout();

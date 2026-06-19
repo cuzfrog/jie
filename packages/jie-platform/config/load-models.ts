@@ -86,8 +86,8 @@ const KNOWN_APIS: ReadonlySet<Api> = new Set<Api>([
  *  their `Model` instances. Returns an empty config when neither
  *  file exists. Throws on JSON parse errors and shape validation
  *  errors with a precise path. */
-export function loadModelsConfig(cwd: string, options: { homeDir?: string } = {}): ResolvedModelsConfig {
-  const homeDir = options.homeDir ?? process.env.HOME ?? "";
+export function loadModelsConfig(cwd: string, options: { homeDir: string }): ResolvedModelsConfig {
+  const homeDir = options.homeDir;
   const projectPath = (() => {
     const root = findProjectJieRoot(cwd);
     return root === null ? null : `${root}/.jie/models.json`;

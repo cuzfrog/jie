@@ -7,7 +7,7 @@ import { globalAuthPath } from "./paths.ts";
  *  `auth.json`'s schema is owned by `@earendil-works/pi-ai`'s
  *  `FileAuthStorageBackend`, which refuses malformed entries at the
  *  provider-call boundary. */
-export function loadAuthJson(options: { homeDir?: string } = {}): AuthJson {
+export function loadAuthJson(options: { homeDir: string }): AuthJson {
   const path = globalAuthPath(options.homeDir);
   let text: string;
   try {

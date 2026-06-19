@@ -17,7 +17,7 @@ export class ModelRegistry {
   /** Build a registry by reading the project's `models.json` and the
    *  global one under `~/.jie/models.json`. Missing files yield an
    *  empty custom config; only built-in providers are available. */
-  static load(cwd: string, options: { homeDir?: string } = {}): ModelRegistry {
+  static load(cwd: string, options: { homeDir: string }): ModelRegistry {
     return new ModelRegistry(loadModelsConfig(cwd, options));
   }
 

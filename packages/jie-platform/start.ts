@@ -1,8 +1,7 @@
 import { ulid } from "ulid";
 import { getModel as piGetModel, type Model } from "@earendil-works/pi-ai";
-import { createEventBus, type EventBus } from "./core/event-bus.ts";
-import { AgentBody } from "./core/agent-body.ts";
-import type { AgentEvent } from "./core/agent-event.ts";
+import { dirname } from "node:path";
+import { AgentBody, type AgentEvent, createEventBus, type EventBus } from "./core/index.ts";
 import { createTeamRegistry, type AgentSoul, type Team } from "./team/index.ts";
 import { ModelRegistry, type MergedSettings } from "./config/index.ts";
 import { createToolRegistry, type ToolRegistry } from "./tools";
@@ -90,7 +89,13 @@ function resolveSoulModel(
 
 export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
   const toolRegistry: ToolRegistry = createToolRegistry();
-  const registry = ModelRegistry.load(opts.workspace);
+  // The CLI supplies `homeJieDir` as `join(resolveHomeDir(), ".jie")`,
+  // so `dirname` recovers the user's actual HOME. The model
+  // registry needs HOME for `<homeDir>/.jie/models.json`. The
+  // platform never reads `process.env.HOME` itself — HOME
+  // resolution is owned by the CLI.
+  const homeDir = dirname(opts.homeJieDir);
+  const registry = ModelRegistry.load(opts.workspace, { homeDir });
   const resolveModel = defaultResolveModel(registry);
   // The team registry is constructed here from the workspace +
   // homeJieDir; there is no override path. Tests that need to

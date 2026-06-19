@@ -1,19 +1,18 @@
 import { existsSync } from "node:fs";
-import { homedir as osHomedir } from "node:os";
 import { dirname, join } from "node:path";
 
 /** Global user Jie dir (`~/.jie/`). */
-export function homeJieDir(homeDir: string = osHomedir()): string {
+export function homeJieDir(homeDir: string): string {
   return join(homeDir, ".jie");
 }
 
 /** Path to `~/.jie/settings.json`. */
-export function globalSettingsPath(homeDir: string = osHomedir()): string {
+export function globalSettingsPath(homeDir: string): string {
   return join(homeJieDir(homeDir), "settings.json");
 }
 
 /** Path to `~/.jie/auth.json`. */
-export function globalAuthPath(homeDir: string = osHomedir()): string {
+export function globalAuthPath(homeDir: string): string {
   return join(homeJieDir(homeDir), "auth.json");
 }
 

@@ -10,9 +10,8 @@
  *
  *  Domain logic lives in:
  *    - `@cuzfrog/jie-platform/config` — stores (`AuthStore`,
- *      `SettingsStore`) and the `home-paths` / `load-*` / `paths`
- *      utilities they wrap.
- *    - `home-paths.ts` — HOME resolution.
+ *      `SettingsStore`) and the `paths` / `load-*` utilities they
+ *      wrap.
  *    - `commands/auth.ts` — `login`, `logout`, top-level `--api-key`.
  *    - `commands/settings.ts` — `model`, `team`.
  *    - `commands/print.ts` — `jie -p` (the full agentic pipeline).
@@ -23,12 +22,11 @@
  *      subcommand uses it for `isInstalled` / `listInstalled` /
  *      `locate`).
  */
+import { homedir } from "node:os";
 import { join } from "node:path";
-import type { MergedSettings } from "@cuzfrog/jie-platform";
 import type { AuthStore, SettingsStore } from "@cuzfrog/jie-platform/config";
 import { makeAuthStore, makeSettingsStore } from "@cuzfrog/jie-platform/config";
-import { createTeamRegistry, type TeamRegistry, type Team } from "@cuzfrog/jie-platform/team";
-import { resolveHomeDir } from "./home-paths.ts";
+import { createTeamRegistry } from "@cuzfrog/jie-platform/team";
 import { parseFlags, type ParsedCli } from "./cli-flags.ts";
 import {
   runApiKey,
@@ -37,7 +35,6 @@ import {
   runModel,
   runPrint,
   runTeam,
-  type PrintDeps,
 } from "./commands/index.ts";
 import { VERSION } from "./version.ts";
 
@@ -55,11 +52,19 @@ function makeDeps(homeDir: string): Deps {
   };
 }
 
-export async function main(argv: string[]): Promise<number> {
+/** HOME resolution. Reads `process.env.HOME` first so tests can
+ *  redirect HOME without `os.homedir()` caching the value at
+ *  startup; falls back to `os.homedir()` when unset or empty. */
+function resolveHomeDir(): string {
+  const fromEnv = process.env.HOME;
+  return fromEnv !== undefined && fromEnv !== "" ? fromEnv : homedir();
+}
+
+export async function main(argv: string[], cwd: string = process.cwd()): Promise<number> {
   const parsed = parseFlags(argv);
   const deps = makeDeps(resolveHomeDir());
   try {
-    return await run(parsed, process.cwd(), deps);
+    return await run(parsed, cwd, deps);
   } catch (err) {
     console.error(err instanceof Error ? err.message : String(err));
     return 1;
@@ -126,34 +131,8 @@ Usage:
 `);
 }
 
-/** Backward-compatible test entry point: constructs stores from
- *  `process.env.HOME` and forwards the call to `runPrint`. The
- *  e2e test calls this with no hooks — `runPrint` resolves the
- *  team registry, model registry, and auth from the real
- *  filesystem. */
-export async function runPrintCli(
-  parsed: Extract<ParsedCli, { kind: "print" }>,
-  cwd: string,
-  _hooks: Partial<PrintDeps> = {},
-): Promise<number> {
-  const homeDir = resolveHomeDir();
-  const deps: PrintDeps = {
-    authStore: makeAuthStore(homeDir),
-    settingsStore: makeSettingsStore(homeDir),
-    homeDir,
-  };
-  return runPrint(parsed, cwd, deps);
-}
-
-// Exported for tests.
-export { run as runCli };
-export type { ParsedCli, PrintDeps };
-// Used internally by `commands/print.ts`; re-exported here for
-// backward compatibility with callers that imported the type from
-// `./index.ts` in earlier versions. Prefer importing from the
-// owning module directly.
-export type { MergedSettings, Team, TeamRegistry };
-
 if (import.meta.main) {
   process.exit(await main(Bun.argv.slice(2)));
 }
+
+export type { ParsedCli } from "./cli-flags.ts";
