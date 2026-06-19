@@ -31,7 +31,7 @@ function readSettingsFile(path: string): RawSettings | null {
  *  registered via `models.json` are valid references, and the
  *  registry will fail at request time if the provider has no
  *  registered models. */
-export function validateSettings(raw: RawSettings, source: string): MergedSettings {
+function validateSettings(raw: RawSettings, source: string): MergedSettings {
   const result: MergedSettings = {};
 
   if ("defaultProvider" in raw && raw.defaultProvider !== undefined) {
@@ -67,7 +67,7 @@ export function validateSettings(raw: RawSettings, source: string): MergedSettin
  *  side; other top-level fields are not surfaced. The deep-merge is
  *  general — the platform's v1 schema has no nested objects, but the
  *  rule is in place for future settings. */
-export function deepMergeSettings(
+function deepMergeSettings(
   base: MergedSettings,
   override: MergedSettings,
 ): MergedSettings {

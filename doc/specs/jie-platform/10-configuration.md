@@ -251,20 +251,14 @@ The TypeScript type consumed by the platform (per `StartJieOptions.mcpServers` i
 ```typescript
 // packages/jie-platform/types/mcp.ts (forward-looking — used by startJie once the MCP client lands)
 
-export type McpTransport = 'stdio' | 'http';
-
 export interface McpServerConfig {
-  transport:  McpTransport;
+  transport:  'stdio' | 'http';
   command?:   string;        // stdio only
   args?:      string[];      // stdio only
   url?:       string;        // http only
   auth?: {
     token_env?: string;      // name of an env var containing a bearer token
   };
-}
-
-export interface McpConfig {
-  servers: Record<string, McpServerConfig>;  // keyed by server name
 }
 ```
 

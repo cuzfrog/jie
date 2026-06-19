@@ -1,7 +1,5 @@
 import type { OAuthCredentials } from "@earendil-works/pi-ai";
 
-export type ConfigScope = "user" | "project";
-
 /** Merged settings after deep-merging `.jie/settings.json` over
  *  `~/.jie/settings.json`. Unrecognized top-level fields on disk are
  *  tolerated (warned, ignored) and are NOT surfaced here — only the
@@ -28,22 +26,14 @@ export type AuthEntry =
 /** The on-disk shape of `~/.jie/auth.json`. */
 export type AuthJson = Record<string, AuthEntry>;
 
-/** Discriminator for the MCP server transport. */
-export type McpTransport = "stdio" | "http";
-
 /** Single MCP server config (forward-looking — used by `startJie` once
  *  the MCP client lands; the platform does not load `mcp.json` in v1). */
 export interface McpServerConfig {
-  transport: McpTransport;
+  transport: "stdio" | "http";
   command?: string;
   args?: string[];
   url?: string;
   auth?: {
     token_env?: string;
   };
-}
-
-/** The on-disk shape of `mcp.json`. */
-export interface McpConfig {
-  servers: Record<string, McpServerConfig>;
 }

@@ -1,40 +1,12 @@
-export type {
-  ConfigScope,
-  MergedSettings,
-  RawSettings,
-  AuthEntry,
-  AuthJson,
-  McpTransport,
-  McpServerConfig,
-  McpConfig,
-} from "./types.ts";
-export type {
-  RawModelsConfig,
-  RawProviderConfig,
-  RawModelConfig,
-  RawModelOverride,
-  ResolvedProviderConfig,
-  ResolvedModelsConfig,
-} from "./load-models.ts";
+export type { MergedSettings, AuthJson, McpServerConfig } from "./types.ts";
 export {
   homeJieDir,
   globalSettingsPath,
   globalAuthPath,
-  globalTeamsDir,
   findProjectJieRoot,
   projectSettingsPath,
-  projectTeamsDir,
 } from "./paths.ts";
-export {
-  loadMergedSettings,
-  validateSettings,
-  deepMergeSettings,
-} from "./load-settings.ts";
+export { loadMergedSettings } from "./load-settings.ts";
 export { loadAuthJson } from "./load-auth.ts";
-export {
-  resolveStaleDefaultTeam,
-  isTeamInstalled,
-  listInstalledTeams,
-} from "./resolve-stale-team.ts";
-export { loadModelsConfig, resolveValue } from "./load-models.ts";
+export { resolveStaleDefaultTeam } from "./resolve-stale-team.ts";
 export { ModelRegistry } from "./registry.ts";

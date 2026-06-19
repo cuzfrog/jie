@@ -8,16 +8,13 @@ export {
   loadAuthJson,
   resolveStaleDefaultTeam,
   ModelRegistry,
-} from "./config/index.ts";
-export type { MergedSettings, AuthJson } from "./config/index.ts";
-
-export {
   findProjectJieRoot,
   homeJieDir,
   globalAuthPath,
   globalSettingsPath,
   projectSettingsPath,
-} from "./config/paths.ts";
+} from "./config/index.ts";
+export type { MergedSettings, AuthJson } from "./config/index.ts";
 
 export type {
   Tool,

@@ -187,7 +187,7 @@ function resolveConfig(raw: RawModelsConfig): ResolvedModelsConfig {
 
     if (rawCfg.models !== undefined) {
       for (const rawM of rawCfg.models) {
-        const model = buildModel(providerId, api, rawCfg.baseUrl, rawM, compat, headers, authHeader, apiKey);
+        const model = buildModel(providerId, api, rawCfg.baseUrl, rawM, compat, headers, authHeader);
         models.push(model);
       }
     }
@@ -224,7 +224,6 @@ function buildModel(
   providerCompat: ResolvedProviderConfig["compat"],
   providerHeaders: Record<string, string>,
   authHeader: boolean,
-  providerApiKey: string,
 ): Model<any> {
   if (typeof raw.id !== "string" || raw.id === "") {
     throw new Error(`models.json: provider '${providerId}': model.id is required`);
@@ -251,7 +250,6 @@ function buildModel(
   if (Object.keys(providerHeaders).length > 0) result.headers = providerHeaders;
   if (Object.keys(mergedCompat).length > 0) result.compat = mergedCompat as never;
   if (authHeader === false) (result as unknown as { __authHeader?: boolean }).__authHeader = false;
-  void providerApiKey;
   return result;
 }
 

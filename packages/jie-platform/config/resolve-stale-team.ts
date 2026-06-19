@@ -6,7 +6,7 @@ import { findProjectJieRoot, globalSettingsPath } from "./paths.ts";
 
 /** A team is "installed" when its manifest dir exists and contains a
  *  `TEAM.md` file at the conventional location. */
-export function isTeamInstalled(
+function isTeamInstalled(
   teamId: string,
   projectPath: string,
   homeDir: string,
@@ -20,7 +20,7 @@ export function isTeamInstalled(
 
 /** Lists installed team ids under both project and global roots,
  *  deduped, sorted alphabetically. */
-export function listInstalledTeams(
+function listInstalledTeams(
   projectPath: string,
   homeDir: string,
 ): string[] {
@@ -50,10 +50,6 @@ function readRawSettings(path: string): RawSettings | null {
 
 function writeRawSettings(path: string, value: RawSettings): void {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
-}
-
-export interface ResolveStaleOptions {
-  homeDir?: string;
 }
 
 /** Self-heals a stale `defaultTeam` in merged settings.

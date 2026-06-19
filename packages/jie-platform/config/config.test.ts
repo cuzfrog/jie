@@ -7,7 +7,6 @@ import {
   loadMergedSettings,
   resolveStaleDefaultTeam,
 } from "./index.ts";
-import type { McpConfig, McpServerConfig } from "./types.ts";
 
 describe("loadMergedSettings", () => {
   let homeDir: string;
@@ -239,26 +238,5 @@ describe("loadAuthJson", () => {
     );
     const auth = loadAuthJson({ homeDir });
     expect(auth.anthropic).toEqual({ type: "api_key", key: "sk-test" });
-  });
-});
-
-describe("McpServerConfig", () => {
-  test("stdio and http variants compile", () => {
-    const stdio: McpServerConfig = { transport: "stdio", command: "bin", args: ["a"] };
-    const http: McpServerConfig = { transport: "http", url: "https://x" };
-    const withAuth: McpServerConfig = {
-      transport: "http",
-      url: "https://x",
-      auth: { token_env: "TOKEN" },
-    };
-    const cfg: McpConfig = { servers: { s1: stdio, s2: http, s3: withAuth } };
-    expect(cfg.servers.s1?.transport).toBe("stdio");
-    expect(cfg.servers.s2?.url).toBe("https://x");
-    expect(cfg.servers.s3?.auth?.token_env).toBe("TOKEN");
-  });
-
-  test("a stdio entry without command compiles (runtime validation deferred to Day 2 MCP client)", () => {
-    const stdio: McpServerConfig = { transport: "stdio" };
-    expect(stdio.transport).toBe("stdio");
   });
 });

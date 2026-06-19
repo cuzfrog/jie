@@ -17,11 +17,6 @@ export function globalAuthPath(homeDir: string = osHomedir()): string {
   return join(homeJieDir(homeDir), "auth.json");
 }
 
-/** Path to the global teams root (`~/.jie/teams/`). */
-export function globalTeamsDir(homeDir: string = osHomedir()): string {
-  return join(homeJieDir(homeDir), "teams");
-}
-
 /** Walks up from `cwd` looking for a `.jie/` directory. Returns the
  *  directory containing `.jie/` or `null` if none is found before the
  *  filesystem root. */
@@ -42,12 +37,4 @@ export function projectSettingsPath(cwd: string): string | null {
   const root = findProjectJieRoot(cwd);
   if (root === null) return null;
   return join(root, ".jie", "settings.json");
-}
-
-/** Path to `.jie/teams/` under the discovered project root, or `null`
- *  if no `.jie/` is found walking up from `cwd`. */
-export function projectTeamsDir(cwd: string): string | null {
-  const root = findProjectJieRoot(cwd);
-  if (root === null) return null;
-  return join(root, ".jie", "teams");
 }
