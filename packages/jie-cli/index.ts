@@ -27,7 +27,7 @@ import { join } from "node:path";
 import type { AuthStore, SettingsStore } from "@cuzfrog/jie-platform/config";
 import { makeAuthStore, makeSettingsStore } from "@cuzfrog/jie-platform/config";
 import { createTeamRegistry } from "@cuzfrog/jie-platform/team";
-import { parseFlags, type ParsedCli } from "./cli-flags.ts";
+import { parseFlags, type ParsedCli as ParsedArgs } from "./cli-flags.ts";
 import {
   runApiKey,
   runLogin,
@@ -52,14 +52,6 @@ function makeDeps(homeDir: string): Deps {
   };
 }
 
-/** HOME resolution. Reads `process.env.HOME` first so tests can
- *  redirect HOME without `os.homedir()` caching the value at
- *  startup; falls back to `os.homedir()` when unset or empty. */
-function resolveHomeDir(): string {
-  const fromEnv = process.env.HOME;
-  return fromEnv !== undefined && fromEnv !== "" ? fromEnv : homedir();
-}
-
 export async function main(argv: string[], cwd: string = process.cwd()): Promise<number> {
   const parsed = parseFlags(argv);
   const deps = makeDeps(resolveHomeDir());
@@ -71,8 +63,8 @@ export async function main(argv: string[], cwd: string = process.cwd()): Promise
   }
 }
 
-async function run(parsed: ParsedCli, cwd: string, deps: Deps): Promise<number> {
-  switch (parsed.kind) {
+async function run(args: ParsedArgs, cwd: string, deps: Deps): Promise<number> {
+  switch (args.kind) {
     case "help":
       printHelp();
       return 0;
@@ -83,25 +75,25 @@ async function run(parsed: ParsedCli, cwd: string, deps: Deps): Promise<number> 
       console.error("TUI not implemented in v1 MVP; use jie -p");
       return 1;
     case "error":
-      console.error(parsed.message);
+      console.error(args.message);
       return 1;
     case "login":
-      return runLogin(parsed, deps.authStore);
+      return runLogin(args, deps.authStore);
     case "logout":
-      return runLogout(parsed, deps.authStore);
+      return runLogout(args, deps.authStore);
     case "apiKey":
-      return runApiKey(parsed, cwd, deps.settingsStore, deps.authStore);
+      return runApiKey(args, cwd, deps.settingsStore, deps.authStore);
     case "model":
-      return runModel(parsed, cwd, deps.settingsStore);
+      return runModel(args, cwd, deps.settingsStore);
     case "team": {
       const teamRegistry = createTeamRegistry({
         workspace: cwd,
         homeJieDir: join(deps.homeDir, ".jie"),
       });
-      return runTeam(parsed, cwd, deps.settingsStore, teamRegistry);
+      return runTeam(args, cwd, deps.settingsStore, teamRegistry);
     }
     case "print":
-      return runPrint(parsed, cwd, {
+      return runPrint(args, cwd, {
         authStore: deps.authStore,
         settingsStore: deps.settingsStore,
         homeDir: deps.homeDir,
@@ -129,6 +121,14 @@ Usage:
   jie --version
   jie --help
 `);
+}
+
+/** HOME resolution. Reads `process.env.HOME` first so tests can
+ *  redirect HOME without `os.homedir()` caching the value at
+ *  startup; falls back to `os.homedir()` when unset or empty. */
+function resolveHomeDir(): string {
+  const fromEnv = process.env.HOME;
+  return fromEnv !== undefined && fromEnv !== "" ? fromEnv : homedir();
 }
 
 if (import.meta.main) {

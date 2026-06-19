@@ -55,12 +55,12 @@ function projectStoragePath(cwd: string): string {
 }
 
 export async function runPrint(
-  parsed: PrintArgs,
+  args: PrintArgs,
   cwd: string,
   deps: PrintDeps,
 ): Promise<number> {
   // --api-key first (writes auth.json before the rest of the flow runs).
-  if (parsed.apiKey !== undefined) {
+  if (args.apiKey !== undefined) {
     const provider = deps.settingsStore.load(cwd).defaultProvider;
     if (provider === undefined) {
       console.error(
@@ -69,7 +69,7 @@ export async function runPrint(
       return 1;
     }
     deps.authStore.write(
-      deps.authStore.setProvider(deps.authStore.load(), provider, parsed.apiKey),
+      deps.authStore.setProvider(deps.authStore.load(), provider, args.apiKey),
     );
     console.log(`logged in to ${provider}`);
   }
@@ -93,7 +93,7 @@ export async function runPrint(
   // `settings.defaultTeam` is unset, leave `teamId` undefined so
   // the platform's `startJie` falls back to the built-in minimal
   // team via the registry's `loadTeam(undefined)`.
-  const teamId: string | undefined = parsed.team ?? settings.defaultTeam;
+  const teamId: string | undefined = args.team ?? settings.defaultTeam;
 
   // Hand off to the platform. `startJie` constructs the team
   // registry and the SQLite storage internally from `workspace`
@@ -110,8 +110,8 @@ export async function runPrint(
       settings,
       storageFilePath: projectStoragePath(cwd),
       teamId,
-      resumeSessionId: parsed.resume,
-      continueLastSession: parsed.continueLast,
+      resumeSessionId: args.resume,
+      continueLastSession: args.continueLast,
     });
   } catch (e) {
     console.error(e instanceof Error ? e.message : String(e));
@@ -143,9 +143,9 @@ export async function runPrint(
     teamId: resolvedTeamId,
     leaderRole,
     leaderKey,
-    instruction: parsed.instruction,
-    timeout: parsed.timeout,
-    json: parsed.json,
+    instruction: args.instruction,
+    timeout: args.timeout,
+    json: args.json,
   });
 }
 
