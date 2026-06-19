@@ -26,7 +26,6 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import {
   findProjectJieRoot,
-  resolveStaleDefaultTeam,
   startJie,
   type AgentEvent,
   type JieHandle,
@@ -85,7 +84,7 @@ export async function runPrint(
   }
 
   // Apply stale defaultTeam recovery.
-  const recovered = resolveStaleDefaultTeam(settings, cwd, { homeDir: deps.homeDir });
+  const recovered = deps.settingsStore.resolveDefaultTeam(settings, cwd);
   if (recovered !== null) {
     settings.defaultTeam = recovered;
   }

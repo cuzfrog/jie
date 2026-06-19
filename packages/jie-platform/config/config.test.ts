@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { makeAuthStore, makeSettingsStore, resolveStaleDefaultTeam } from "./index.ts";
+import { makeAuthStore, makeSettingsStore } from "./index.ts";
 
 describe("SettingsStore.load", () => {
   let homeDir: string;
@@ -82,106 +82,6 @@ describe("SettingsStore.load", () => {
     const merged = makeSettingsStore(homeDir).load(cwd);
     expect(merged.defaultProvider).toBe("lm-studio");
     expect(merged.defaultModel).toBe("qwen3.5-2b");
-  });
-});
-
-describe("resolveStaleDefaultTeam", () => {
-  let homeDir: string;
-  let projectRoot: string;
-
-  beforeEach(() => {
-    homeDir = mkdtempSync(join(tmpdir(), "jie-home-"));
-    projectRoot = mkdtempSync(join(tmpdir(), "jie-project-"));
-  });
-
-  afterEach(() => {
-    rmSync(homeDir, { recursive: true, force: true });
-    rmSync(projectRoot, { recursive: true, force: true });
-  });
-
-  test("returns first-installed team and writes back to project settings", () => {
-    mkdirSync(join(projectRoot, ".jie", "teams", "real"), { recursive: true });
-    writeFileSync(join(projectRoot, ".jie", "teams", "real", "TEAM.md"), "x");
-    mkdirSync(join(projectRoot, ".jie"), { recursive: true });
-    writeFileSync(
-      join(projectRoot, ".jie", "settings.json"),
-      JSON.stringify({ defaultTeam: "ghost" }),
-    );
-    const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
-
-    const result = resolveStaleDefaultTeam(
-      { defaultTeam: "ghost" },
-      projectRoot,
-      { homeDir },
-    );
-    expect(result).toBe("real");
-    const written = JSON.parse(
-      readFileSync(join(projectRoot, ".jie", "settings.json"), "utf-8"),
-    );
-    expect(written.defaultTeam).toBe("real");
-    warnSpy.mockRestore();
-  });
-
-  test("returns null and removes defaultTeam when no user teams installed", () => {
-    mkdirSync(join(projectRoot, ".jie"), { recursive: true });
-    writeFileSync(
-      join(projectRoot, ".jie", "settings.json"),
-      JSON.stringify({ defaultTeam: "ghost", defaultProvider: "anthropic" }),
-    );
-    const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
-
-    const result = resolveStaleDefaultTeam(
-      { defaultTeam: "ghost" },
-      projectRoot,
-      { homeDir },
-    );
-    expect(result).toBeNull();
-    const written = JSON.parse(
-      readFileSync(join(projectRoot, ".jie", "settings.json"), "utf-8"),
-    );
-    expect(written.defaultTeam).toBeUndefined();
-    expect(written.defaultProvider).toBe("anthropic");
-    warnSpy.mockRestore();
-  });
-
-  test("returns null when defaultTeam is not set", () => {
-    const result = resolveStaleDefaultTeam({}, projectRoot, { homeDir });
-    expect(result).toBeNull();
-  });
-
-  test("returns null when defaultTeam resolves to an installed team", () => {
-    mkdirSync(join(projectRoot, ".jie", "teams", "alive"), { recursive: true });
-    writeFileSync(join(projectRoot, ".jie", "teams", "alive", "TEAM.md"), "x");
-    mkdirSync(join(projectRoot, ".jie"), { recursive: true });
-    writeFileSync(
-      join(projectRoot, ".jie", "settings.json"),
-      JSON.stringify({ defaultTeam: "alive" }),
-    );
-    const result = resolveStaleDefaultTeam(
-      { defaultTeam: "alive" },
-      projectRoot,
-      { homeDir },
-    );
-    expect(result).toBeNull();
-  });
-
-  test("picks alphabetically first across project + global, deduped", () => {
-    mkdirSync(join(projectRoot, ".jie", "teams", "zeta"), { recursive: true });
-    writeFileSync(join(projectRoot, ".jie", "teams", "zeta", "TEAM.md"), "x");
-    mkdirSync(join(homeDir, ".jie", "teams", "alpha"), { recursive: true });
-    writeFileSync(join(homeDir, ".jie", "teams", "alpha", "TEAM.md"), "x");
-    mkdirSync(join(projectRoot, ".jie"), { recursive: true });
-    writeFileSync(
-      join(projectRoot, ".jie", "settings.json"),
-      JSON.stringify({ defaultTeam: "ghost" }),
-    );
-
-    const result = resolveStaleDefaultTeam(
-      { defaultTeam: "ghost" },
-      projectRoot,
-      { homeDir },
-    );
-    expect(result).toBe("alpha");
   });
 });
 

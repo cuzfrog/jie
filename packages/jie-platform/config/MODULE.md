@@ -11,7 +11,6 @@ frozen:
   - paths.ts
   - registry.test.ts
   - registry.ts
-  - resolve-stale-team.ts
   - settings-store.test.ts
   - settings-store.ts
   - types.ts

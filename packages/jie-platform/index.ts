@@ -4,7 +4,6 @@ export type { JieHandle } from "./start.ts";
 export type { AgentEvent } from "./core/agent-event.ts";
 
 export {
-  resolveStaleDefaultTeam,
   ModelRegistry,
   findProjectJieRoot,
   homeJieDir,

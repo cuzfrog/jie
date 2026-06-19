@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import {
   existsSync,
   mkdirSync,
@@ -112,5 +112,94 @@ describe("SettingsStore", () => {
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
+  });
+});
+
+describe("SettingsStore.resolveDefaultTeam", () => {
+  let homeDir: string;
+  let projectRoot: string;
+
+  beforeEach(() => {
+    homeDir = mkdtempSync(join(tmpdir(), "jie-cli-home-"));
+    projectRoot = mkdtempSync(join(tmpdir(), "jie-cli-proj-"));
+  });
+
+  afterEach(() => {
+    rmSync(homeDir, { recursive: true, force: true });
+    rmSync(projectRoot, { recursive: true, force: true });
+  });
+
+  test("returns first-installed team and writes back to project settings", () => {
+    mkdirSync(join(projectRoot, ".jie", "teams", "real"), { recursive: true });
+    writeFileSync(join(projectRoot, ".jie", "teams", "real", "TEAM.md"), "x");
+    mkdirSync(join(projectRoot, ".jie"), { recursive: true });
+    writeFileSync(
+      join(projectRoot, ".jie", "settings.json"),
+      JSON.stringify({ defaultTeam: "ghost" }),
+    );
+    const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+
+    const store = makeSettingsStore(homeDir);
+    const result = store.resolveDefaultTeam({ defaultTeam: "ghost" }, projectRoot);
+    expect(result).toBe("real");
+    const written = JSON.parse(
+      readFileSync(join(projectRoot, ".jie", "settings.json"), "utf-8"),
+    );
+    expect(written.defaultTeam).toBe("real");
+    warnSpy.mockRestore();
+  });
+
+  test("returns null and removes defaultTeam when no user teams installed", () => {
+    mkdirSync(join(projectRoot, ".jie"), { recursive: true });
+    writeFileSync(
+      join(projectRoot, ".jie", "settings.json"),
+      JSON.stringify({ defaultTeam: "ghost", defaultProvider: "anthropic" }),
+    );
+    const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+
+    const store = makeSettingsStore(homeDir);
+    const result = store.resolveDefaultTeam({ defaultTeam: "ghost" }, projectRoot);
+    expect(result).toBeNull();
+    const written = JSON.parse(
+      readFileSync(join(projectRoot, ".jie", "settings.json"), "utf-8"),
+    );
+    expect(written.defaultTeam).toBeUndefined();
+    expect(written.defaultProvider).toBe("anthropic");
+    warnSpy.mockRestore();
+  });
+
+  test("returns null when defaultTeam is not set", () => {
+    const store = makeSettingsStore(homeDir);
+    const result = store.resolveDefaultTeam({}, projectRoot);
+    expect(result).toBeNull();
+  });
+
+  test("returns null when defaultTeam resolves to an installed team", () => {
+    mkdirSync(join(projectRoot, ".jie", "teams", "alive"), { recursive: true });
+    writeFileSync(join(projectRoot, ".jie", "teams", "alive", "TEAM.md"), "x");
+    mkdirSync(join(projectRoot, ".jie"), { recursive: true });
+    writeFileSync(
+      join(projectRoot, ".jie", "settings.json"),
+      JSON.stringify({ defaultTeam: "alive" }),
+    );
+    const store = makeSettingsStore(homeDir);
+    const result = store.resolveDefaultTeam({ defaultTeam: "alive" }, projectRoot);
+    expect(result).toBeNull();
+  });
+
+  test("picks alphabetically first across project + global, deduped", () => {
+    mkdirSync(join(projectRoot, ".jie", "teams", "zeta"), { recursive: true });
+    writeFileSync(join(projectRoot, ".jie", "teams", "zeta", "TEAM.md"), "x");
+    mkdirSync(join(homeDir, ".jie", "teams", "alpha"), { recursive: true });
+    writeFileSync(join(homeDir, ".jie", "teams", "alpha", "TEAM.md"), "x");
+    mkdirSync(join(projectRoot, ".jie"), { recursive: true });
+    writeFileSync(
+      join(projectRoot, ".jie", "settings.json"),
+      JSON.stringify({ defaultTeam: "ghost" }),
+    );
+
+    const store = makeSettingsStore(homeDir);
+    const result = store.resolveDefaultTeam({ defaultTeam: "ghost" }, projectRoot);
+    expect(result).toBe("alpha");
   });
 });
