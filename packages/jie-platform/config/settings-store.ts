@@ -12,10 +12,10 @@ import {
   findProjectJieRoot,
   globalSettingsPath,
   homeJieDir,
-  loadMergedSettings,
   projectSettingsPath,
-  type MergedSettings,
-} from "./index.ts";
+} from "./paths.ts";
+import { loadMergedSettings } from "./load-settings.ts";
+import type { MergedSettings } from "./types.ts";
 
 export type Scope = "project" | "global";
 

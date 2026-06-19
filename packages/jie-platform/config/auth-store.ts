@@ -6,12 +6,9 @@
  *  by the `login`, `logout`, and `--api-key` commands.
  */
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
-import {
-  globalAuthPath,
-  homeJieDir,
-  loadAuthJson,
-  type AuthJson,
-} from "./index.ts";
+import { globalAuthPath, homeJieDir } from "./paths.ts";
+import { loadAuthJson } from "./load-auth.ts";
+import type { AuthJson } from "./types.ts";
 
 export interface AuthStore {
   load(): AuthJson;

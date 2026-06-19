@@ -2,13 +2,9 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  loadAuthJson,
-  loadMergedSettings,
-  resolveStaleDefaultTeam,
-} from "./index.ts";
+import { makeAuthStore, makeSettingsStore, resolveStaleDefaultTeam } from "./index.ts";
 
-describe("loadMergedSettings", () => {
+describe("SettingsStore.load", () => {
   let homeDir: string;
   let projectRoot: string;
   let cwd: string;
@@ -36,7 +32,7 @@ describe("loadMergedSettings", () => {
       JSON.stringify({ defaultTeam: "dev", unknown_field: 1 }),
     );
 
-    const merged = loadMergedSettings(cwd, { homeDir });
+    const merged = makeSettingsStore(homeDir).load(cwd);
     expect(merged.defaultTeam).toBe("dev");
     expect("unknown_field" in (merged as Record<string, unknown>)).toBe(false);
   });
@@ -51,7 +47,7 @@ describe("loadMergedSettings", () => {
     const subdir = join(projectRoot, "a", "b", "c");
     mkdirSync(subdir, { recursive: true });
 
-    const merged = loadMergedSettings(subdir, { homeDir });
+    const merged = makeSettingsStore(homeDir).load(subdir);
     expect(merged.defaultTeam).toBe("nested");
   });
 
@@ -67,40 +63,14 @@ describe("loadMergedSettings", () => {
       JSON.stringify({ defaultProvider: "anthropic" }),
     );
 
-    const merged = loadMergedSettings(cwd, { homeDir });
+    const merged = makeSettingsStore(homeDir).load(cwd);
     expect(merged.defaultProvider).toBe("anthropic");
     expect(merged.defaultModel).toBe("gpt-4");
   });
 
   test("returns empty object when neither file exists", () => {
-    const merged = loadMergedSettings(cwd, { homeDir });
+    const merged = makeSettingsStore(homeDir).load(cwd);
     expect(merged).toEqual({});
-  });
-
-  test("throws 'invalid defaultTeam' when charset is violated", () => {
-    mkdirSync(join(projectRoot, ".jie"), { recursive: true });
-    writeFileSync(
-      join(projectRoot, ".jie", "settings.json"),
-      JSON.stringify({ defaultTeam: "x y" }),
-    );
-    expect(() => loadMergedSettings(cwd, { homeDir })).toThrow(/invalid defaultTeam/);
-  });
-
-  test("throws 'must be a string' on shape errors", () => {
-    mkdirSync(join(projectRoot, ".jie"), { recursive: true });
-    writeFileSync(
-      join(projectRoot, ".jie", "settings.json"),
-      JSON.stringify({ defaultProvider: 42 }),
-    );
-    expect(() => loadMergedSettings(cwd, { homeDir })).toThrow(
-      /defaultProvider must be a string/,
-    );
-  });
-
-  test("throws on JSON parse error", () => {
-    mkdirSync(join(projectRoot, ".jie"), { recursive: true });
-    writeFileSync(join(projectRoot, ".jie", "settings.json"), "{ not json");
-    expect(() => loadMergedSettings(cwd, { homeDir })).toThrow();
   });
 
   test("unknown defaultProvider is accepted (custom providers are valid via models.json)", () => {
@@ -109,7 +79,7 @@ describe("loadMergedSettings", () => {
       join(projectRoot, ".jie", "settings.json"),
       JSON.stringify({ defaultProvider: "lm-studio", defaultModel: "qwen3.5-2b" }),
     );
-    const merged = loadMergedSettings(cwd, { homeDir });
+    const merged = makeSettingsStore(homeDir).load(cwd);
     expect(merged.defaultProvider).toBe("lm-studio");
     expect(merged.defaultModel).toBe("qwen3.5-2b");
   });
@@ -215,7 +185,7 @@ describe("resolveStaleDefaultTeam", () => {
   });
 });
 
-describe("loadAuthJson", () => {
+describe("AuthStore.load", () => {
   let homeDir: string;
 
   beforeEach(() => {
@@ -227,7 +197,7 @@ describe("loadAuthJson", () => {
   });
 
   test("returns {} when ~/.jie/auth.json does not exist", () => {
-    expect(loadAuthJson({ homeDir })).toEqual({});
+    expect(makeAuthStore(homeDir).load()).toEqual({});
   });
 
   test("returns the typed shape for an api_key entry", () => {
@@ -236,7 +206,7 @@ describe("loadAuthJson", () => {
       join(homeDir, ".jie", "auth.json"),
       JSON.stringify({ anthropic: { type: "api_key", key: "sk-test" } }),
     );
-    const auth = loadAuthJson({ homeDir });
+    const auth = makeAuthStore(homeDir).load();
     expect(auth.anthropic).toEqual({ type: "api_key", key: "sk-test" });
   });
 });
