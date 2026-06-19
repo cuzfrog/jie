@@ -146,11 +146,11 @@ The workspace root is `process.cwd()`. The platform does not read any field to o
 
 Implication: launching `jie` from a subdirectory of a project produces a workspace rooted at that subdirectory. Team manifest lookup and `settings.json` discovery walk up to the project root, but path resolution in tools does not — file paths in tool calls are relative to CWD, not the project root.
 
-> **Project state files** (`.jie/settings.json`, `.jie/teams/`, `.jie/mcp.json`, `.jie/artifacts.db`) are discovered by walking up from CWD to find `.jie/`. **Tool path resolution** (`bash` workdir, `read_file`, `write_file`) is rooted at CWD. The two concerns are deliberately different — `.jie/` is project state, not the workspace. v1 may diverge the two; the TUI surfaces both per backlog #21.
+> **Project state files** (`.jie/settings.json`, `.jie/teams/`, `.jie/mcp.json`, `.jie/storage.db`) are discovered by walking up from CWD to find `.jie/`. **Tool path resolution** (`bash` workdir, `read_file`, `write_file`) is rooted at CWD. The two concerns are deliberately different — `.jie/` is project state, not the workspace. v1 may diverge the two; the TUI surfaces both per backlog #21.
 
 ### ArtifactStore
 
-Open at the `.jie/artifacts.db` discovered by walking up from CWD — same walk as settings and team lookup (see "Workspace Inference" above). If the walked-up `.jie/` does not exist, the platform creates it at the walk's root so a fresh invocation works without manual `mkdir .jie`. SQLite, single-writer by design.
+Open at the `.jie/storage.db` discovered by walking up from CWD — same walk as settings and team lookup (see "Workspace Inference" above). If the walked-up `.jie/` does not exist, the platform creates it at the walk's root so a fresh invocation works without manual `mkdir .jie`. SQLite, single-writer by design.
 
 ## Streaming Tunables
 
@@ -187,7 +187,7 @@ A consolidated view of the platform's hard caps and charsets. These are not user
 | `subscribe:` wildcards | not interpreted in v1 (exact-match subject only) | Team-blueprint loader | `06-agent-model.md` |
 | Workspace root | `process.cwd()` (not configurable) | All file-tool path resolution | `09-deployment.md`, `06-agent-model.md` |
 | `auth.json` mode | `0600` (sensitive) | `jie login`, `jie logout`, `jie --api-key` | `10-configuration.md`, `12-installation.md` |
-| `artifacts.db` mode | `0600` (sensitive — holds `memory_turns`) | First-open creation | `09-deployment.md` |
+| `storage.db` mode | `0600` (sensitive — holds `memory_turns`) | First-open creation | `09-deployment.md` |
 | `.jie/` directory mode | `0755` | First-creation by the platform | `09-deployment.md` |
 
 The limits are platform-wide. Per-tool overrides exist only where called out: `bash` uses 300 s (vs. the 120 s default); individual tools may declare their own content caps. v1 exposes no user-facing knob for any of these; the values are the contract. Day 2+ may add `settings.json` fields to make some of these configurable (likely candidates: the streaming tunables, the bash timeout, and the tool default timeout — content caps are less likely to be tunable because they map to platform-level SQL/HTTP limits).

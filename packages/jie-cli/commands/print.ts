@@ -191,21 +191,16 @@ async function runGate(
       ? setTimeout(() => rejectGate(new Error("timeout")), opts.timeout * 1000)
       : undefined;
 
-  const seenBusy = new Set<string>();
-
   function evaluate(): void {
     if ([...state.values()].every((v) => v === "idle")) {
-      if (seenBusy.size === state.size) {
-        if (timer !== undefined) clearTimeout(timer);
-        resolveGate();
-      }
+      if (timer !== undefined) clearTimeout(timer);
+      resolveGate();
     }
   }
   handle.bus.subscribe("agent.turn.start", (_subj, payload) => {
     const env = payload as AgentEvent;
     if (state.has(env.agent_key)) {
       state.set(env.agent_key, "busy");
-      seenBusy.add(env.agent_key);
     }
   });
   handle.bus.subscribe("agent.idle", (_subj, payload) => {

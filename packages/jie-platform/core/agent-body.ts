@@ -5,13 +5,10 @@ import {
   type AgentEvent as PiAgentEvent,
 } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
-import type { ArtifactStore } from "../storage/artifact-store.ts";
+import type { ArtifactStore, MemoryManager } from "../storage/index.ts";
 import type { EventBus } from "./event-bus.ts";
-import type { MemoryManager } from "../storage/memory-store.ts";
-import type { AgentSoul } from "../team/types.ts";
-import type { Tool } from "../tools/types.ts";
-import type { ToolRegistry } from "../tools/tool-registry.ts";
-import type { ExecutionContext } from "../tools/types.ts";
+import type { AgentSoul } from "../team/index.ts";
+import type { Tool, ToolRegistry, ExecutionContext } from "../tools/index.ts";
 import { adaptToolToAgent } from "./tool-adapter.ts";
 import {
   makeStreamPublisher,
@@ -333,10 +330,6 @@ export class AgentBody {
   stop(): void {
     for (const off of this.unsubscribers) off();
     this.unsubscribers.length = 0;
-  }
-
-  peekQueue(): AgentMessage[] {
-    return [...this.queue];
   }
 }
 

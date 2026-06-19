@@ -32,6 +32,7 @@ export function createToolRegistry(): ToolRegistry {
  *  delegated to `Bun.Glob` per the platform's runtime-deps block. */
 class InMemoryToolRegistry implements ToolRegistry {
   private readonly tools = new Map<string, Tool>();
+  private readonly globs = new Map<string, Bun.Glob>();
 
   register(name: string, tool: Tool): void {
     this.tools.set(name, tool);
@@ -39,7 +40,11 @@ class InMemoryToolRegistry implements ToolRegistry {
 
   resolve(spec: string): Tool[] {
     const pattern = specPattern(spec);
-    const glob = new Bun.Glob(pattern);
+    let glob = this.globs.get(pattern);
+    if (glob === undefined) {
+      glob = new Bun.Glob(pattern);
+      this.globs.set(pattern, glob);
+    }
     const matched: Tool[] = [];
     for (const [name, tool] of this.tools) {
       if (glob.match(name)) matched.push(tool);
