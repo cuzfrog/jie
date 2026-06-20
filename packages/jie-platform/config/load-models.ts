@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { getModels as piGetModels } from "@earendil-works/pi-ai";
 import type { Api, Model, OpenAICompletionsCompat, OpenAIResponsesCompat, AnthropicMessagesCompat } from "@earendil-works/pi-ai";
-import { findProjectJieRoot, homeJieDir } from "./paths.ts";
 
 export interface RawModelsConfig {
   providers?: Record<string, RawProviderConfig>;
@@ -73,13 +73,9 @@ const KNOWN_APIS: ReadonlySet<Api> = new Set<Api>([
   "mistral-conversations",
 ]);
 
-export function loadModelsConfig(cwd: string, options: { homeDir: string }): ResolvedModelsConfig {
-  const homeDir = options.homeDir;
-  const projectPath = (() => {
-    const root = findProjectJieRoot(cwd);
-    return root === null ? null : `${root}/.jie/models.json`;
-  })();
-  const globalPath = `${homeJieDir(homeDir)}/models.json`;
+export function loadModelsConfig(homeJieDir: string, projectJieDir: string | null): ResolvedModelsConfig {
+  const projectPath = projectJieDir === null ? null : join(projectJieDir, "models.json");
+  const globalPath = join(homeJieDir, "models.json");
 
   const globalRaw = readModelsFile(globalPath);
   const projectRaw = projectPath === null ? null : readModelsFile(projectPath);

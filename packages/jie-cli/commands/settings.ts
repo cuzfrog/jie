@@ -1,14 +1,13 @@
 
 import { getProviders } from "@earendil-works/pi-ai";
 import type { MergedSettings } from "@cuzfrog/jie-platform";
-import { findProjectJieRoot } from "@cuzfrog/jie-platform";
 import type { SettingsStore } from "@cuzfrog/jie-platform/config";
 import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
 import type { ParsedArgs } from "../index.ts";
 
 export async function runModel(
   parsed: Extract<ParsedArgs, { kind: "model" }>,
-  cwd: string,
+  projectJieDir: string | null,
   settings: SettingsStore,
 ): Promise<number> {
   const known = new Set<string>(getProviders() as readonly string[]);
@@ -22,7 +21,7 @@ export async function runModel(
     defaultModel: parsed.modelId,
   };
   const scope: "project" | "global" =
-    findProjectJieRoot(cwd) !== null ? "project" : "global";
+    projectJieDir !== null ? "project" : "global";
   settings.write(next, scope);
   console.log(`default model set to ${parsed.provider}/${parsed.modelId}`);
   return 0;

@@ -2,7 +2,7 @@ import { ulid } from "ulid";
 import { getModel as piGetModel, type Model } from "@earendil-works/pi-ai";
 import { AgentBody, type AgentEvent, type EventBus } from "./core/index.ts";
 import { type AgentSoul, type Team, type TeamRegistry } from "./team/index.ts";
-import { ModelRegistry, type SettingsStore } from "./config/index.ts";
+import { type ModelRegistry, type SettingsStore } from "./config/index.ts";
 import { type ToolRegistry } from "./tools";
 import type { McpServerConfig } from "./config/index.ts";
 import {

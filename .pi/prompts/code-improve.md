@@ -3,7 +3,8 @@ name: code-improve
 description: Improve code quality, resolve technical debt, reduce code entropy, make code ready for next stage implementation.
 ---
 
-We have just finished current stage implementation and are improving the code base. Before next stage work, we must improve code quality, resolve technical debt, reduce code entropy, so that next stage implementation can be easier.
+## Goal
+Improve code quality, resolve technical debt, reduce code entropy, so that next stage implementation can be easier.
 
 ## What you do
 - Adhere to context rules, specifically Code Conventions and Coding Principles.

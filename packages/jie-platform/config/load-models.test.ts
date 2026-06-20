@@ -7,10 +7,14 @@ import { loadModelsConfig, resolveValue } from "./load-models.ts";
 describe("loadModelsConfig", () => {
   let cwd: string;
   let homeDir: string;
+  let homeJieDir: string;
+  let projectJieDir: string | null;
 
   beforeEach(() => {
     cwd = mkdtempSync(join(tmpdir(), "jie-models-cwd-"));
     homeDir = mkdtempSync(join(tmpdir(), "jie-models-home-"));
+    homeJieDir = join(homeDir, ".jie");
+    projectJieDir = null;
   });
 
   afterEach(() => {
@@ -19,15 +23,15 @@ describe("loadModelsConfig", () => {
   });
 
   test("returns empty config when neither file exists", () => {
-    const result = loadModelsConfig(cwd, { homeDir });
+    const result = loadModelsConfig(homeJieDir, projectJieDir);
     expect(result.providers.size).toBe(0);
     expect(result.models).toEqual([]);
   });
 
   test("loads a well-formed global models.json", () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
+    mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
-      join(homeDir, ".jie", "models.json"),
+      join(homeJieDir, "models.json"),
       JSON.stringify({
         providers: {
           "lm-studio": {
@@ -39,7 +43,7 @@ describe("loadModelsConfig", () => {
         },
       }),
     );
-    const result = loadModelsConfig(cwd, { homeDir });
+    const result = loadModelsConfig(homeJieDir, projectJieDir);
     expect(result.providers.size).toBe(1);
     const provider = result.providers.get("lm-studio");
     expect(provider?.baseUrl).toBe("http://localhost:1234/v1");
@@ -48,9 +52,10 @@ describe("loadModelsConfig", () => {
   });
 
   test("loads a well-formed project .jie/models.json", () => {
-    mkdirSync(join(cwd, ".jie"), { recursive: true });
+    const projJie = join(cwd, ".jie");
+    mkdirSync(projJie, { recursive: true });
     writeFileSync(
-      join(cwd, ".jie", "models.json"),
+      join(projJie, "models.json"),
       JSON.stringify({
         providers: {
           ollama: {
@@ -62,14 +67,15 @@ describe("loadModelsConfig", () => {
         },
       }),
     );
-    const result = loadModelsConfig(cwd, { homeDir });
+    const result = loadModelsConfig(homeJieDir, projJie);
     expect(result.providers.has("ollama")).toBe(true);
   });
 
   test("project overrides global per provider id", () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
+    const projJie = join(cwd, ".jie");
+    mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
-      join(homeDir, ".jie", "models.json"),
+      join(homeJieDir, "models.json"),
       JSON.stringify({
         providers: {
           "lm-studio": { baseUrl: "http://global:1234/v1", api: "openai-completions", models: [] },
@@ -77,25 +83,25 @@ describe("loadModelsConfig", () => {
         },
       }),
     );
-    mkdirSync(join(cwd, ".jie"), { recursive: true });
+    mkdirSync(projJie, { recursive: true });
     writeFileSync(
-      join(cwd, ".jie", "models.json"),
+      join(projJie, "models.json"),
       JSON.stringify({
         providers: {
           "lm-studio": { baseUrl: "http://project:5678/v1", api: "openai-completions", models: [{ id: "local-1" }] },
         },
       }),
     );
-    const result = loadModelsConfig(cwd, { homeDir });
+    const result = loadModelsConfig(homeJieDir, projJie);
     expect(result.providers.get("lm-studio")?.baseUrl).toBe("http://project:5678/v1");
     expect(result.providers.get("ollama")?.baseUrl).toBe("http://global-ollama:11434/v1");
     expect(result.models.find((m) => m.id === "local-1")).toBeDefined();
   });
 
   test("$ENV interpolation in apiKey", () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
+    mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
-      join(homeDir, ".jie", "models.json"),
+      join(homeJieDir, "models.json"),
       JSON.stringify({
         providers: {
           anthropic: {
@@ -109,7 +115,7 @@ describe("loadModelsConfig", () => {
     );
     process.env.ANTHROPIC_TEST_KEY = "sk-test-123";
     try {
-      const result = loadModelsConfig(cwd, { homeDir });
+      const result = loadModelsConfig(homeJieDir, projectJieDir);
       expect(result.providers.get("anthropic")?.apiKey).toBe("sk-test-123");
     } finally {
       delete process.env.ANTHROPIC_TEST_KEY;
@@ -117,9 +123,9 @@ describe("loadModelsConfig", () => {
   });
 
   test("${ENV} interpolation in headers", () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
+    mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
-      join(homeDir, ".jie", "models.json"),
+      join(homeJieDir, "models.json"),
       JSON.stringify({
         providers: {
           custom: {
@@ -134,7 +140,7 @@ describe("loadModelsConfig", () => {
     );
     process.env.TEST_ORG_ID = "org-42";
     try {
-      const result = loadModelsConfig(cwd, { homeDir });
+      const result = loadModelsConfig(homeJieDir, projectJieDir);
       expect(result.providers.get("custom")?.headers["x-org-id"]).toBe("org-42");
     } finally {
       delete process.env.TEST_ORG_ID;
@@ -142,9 +148,9 @@ describe("loadModelsConfig", () => {
   });
 
   test("missing env var resolves to empty string", () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
+    mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
-      join(homeDir, ".jie", "models.json"),
+      join(homeJieDir, "models.json"),
       JSON.stringify({
         providers: {
           custom: {
@@ -157,33 +163,33 @@ describe("loadModelsConfig", () => {
       }),
     );
     delete process.env.DEFINITELY_UNSET_VAR;
-    const result = loadModelsConfig(cwd, { homeDir });
+    const result = loadModelsConfig(homeJieDir, projectJieDir);
     expect(result.providers.get("custom")?.apiKey).toBe("");
   });
 
   test("malformed JSON throws with file path", () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
-    writeFileSync(join(homeDir, ".jie", "models.json"), "{ broken");
-    expect(() => loadModelsConfig(cwd, { homeDir })).toThrow(/models.json at/);
+    mkdirSync(homeJieDir, { recursive: true });
+    writeFileSync(join(homeJieDir, "models.json"), "{ broken");
+    expect(() => loadModelsConfig(homeJieDir, projectJieDir)).toThrow(/models.json at/);
   });
 
   test("throws on unknown api", () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
+    mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
-      join(homeDir, ".jie", "models.json"),
+      join(homeJieDir, "models.json"),
       JSON.stringify({
         providers: {
           bad: { baseUrl: "https://x", api: "future-api", models: [] },
         },
       }),
     );
-    expect(() => loadModelsConfig(cwd, { homeDir })).toThrow(/unknown api 'future-api'/);
+    expect(() => loadModelsConfig(homeJieDir, projectJieDir)).toThrow(/unknown api 'future-api'/);
   });
 
   test("throws when model.id is empty", () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
+    mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
-      join(homeDir, ".jie", "models.json"),
+      join(homeJieDir, "models.json"),
       JSON.stringify({
         providers: {
           bad: {
@@ -194,26 +200,26 @@ describe("loadModelsConfig", () => {
         },
       }),
     );
-    expect(() => loadModelsConfig(cwd, { homeDir })).toThrow(/model.id is required/);
+    expect(() => loadModelsConfig(homeJieDir, projectJieDir)).toThrow(/model.id is required/);
   });
 
   test("throws when baseUrl is missing", () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
+    mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
-      join(homeDir, ".jie", "models.json"),
+      join(homeJieDir, "models.json"),
       JSON.stringify({
         providers: {
           bad: { api: "openai-completions", models: [] },
         },
       }),
     );
-    expect(() => loadModelsConfig(cwd, { homeDir })).toThrow(/baseUrl is required/);
+    expect(() => loadModelsConfig(homeJieDir, projectJieDir)).toThrow(/baseUrl is required/);
   });
 
   test("full model config preserves optional fields", () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
+    mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
-      join(homeDir, ".jie", "models.json"),
+      join(homeJieDir, "models.json"),
       JSON.stringify({
         providers: {
           "lm-studio": {
@@ -237,7 +243,7 @@ describe("loadModelsConfig", () => {
         },
       }),
     );
-    const result = loadModelsConfig(cwd, { homeDir });
+    const result = loadModelsConfig(homeJieDir, projectJieDir);
     const model = result.models[0];
     expect(model).toBeDefined();
     expect(model?.name).toBe("Qwen 3.5 2B");

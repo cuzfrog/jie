@@ -4,6 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { makeAuthStore, makeSettingsStore } from "./index.ts";
 
+function projectJieOf(root: string): string {
+  return join(root, ".jie");
+}
+
 describe("SettingsStore.load", () => {
   let homeJieDir: string;
   let projectRoot: string;
@@ -33,7 +37,7 @@ describe("SettingsStore.load", () => {
       JSON.stringify({ defaultTeam: "dev", unknown_field: 1 }),
     );
 
-    const merged = makeSettingsStore(cwd, homeJieDir).load();
+    const merged = makeSettingsStore(cwd, homeJieDir, projectJieOf(projectRoot)).load();
     expect(merged.defaultTeam).toBe("dev");
     expect("unknown_field" in (merged as unknown as Record<string, unknown>)).toBe(false);
   });
@@ -48,7 +52,7 @@ describe("SettingsStore.load", () => {
     const subdir = join(projectRoot, "a", "b", "c");
     mkdirSync(subdir, { recursive: true });
 
-    const merged = makeSettingsStore(subdir, homeJieDir).load();
+    const merged = makeSettingsStore(subdir, homeJieDir, projectJieOf(projectRoot)).load();
     expect(merged.defaultTeam).toBe("nested");
   });
 
@@ -64,13 +68,13 @@ describe("SettingsStore.load", () => {
       JSON.stringify({ defaultProvider: "anthropic" }),
     );
 
-    const merged = makeSettingsStore(cwd, homeJieDir).load();
+    const merged = makeSettingsStore(cwd, homeJieDir, projectJieOf(projectRoot)).load();
     expect(merged.defaultProvider).toBe("anthropic");
     expect(merged.defaultModel).toBe("gpt-4");
   });
 
   test("returns empty object when neither file exists", () => {
-    const merged = makeSettingsStore(cwd, homeJieDir).load();
+    const merged = makeSettingsStore(cwd, homeJieDir, projectJieOf(projectRoot)).load();
     expect(merged).toEqual({});
   });
 
@@ -80,17 +84,19 @@ describe("SettingsStore.load", () => {
       join(projectRoot, ".jie", "settings.json"),
       JSON.stringify({ defaultProvider: "lm-studio", defaultModel: "qwen3.5-2b" }),
     );
-    const merged = makeSettingsStore(cwd, homeJieDir).load();
+    const merged = makeSettingsStore(cwd, homeJieDir, projectJieOf(projectRoot)).load();
     expect(merged.defaultProvider).toBe("lm-studio");
     expect(merged.defaultModel).toBe("qwen3.5-2b");
   });
 });
 
 describe("AuthStore.load", () => {
+  let homeJieDir: string;
   let homeDir: string;
 
   beforeEach(() => {
     homeDir = mkdtempSync(join(tmpdir(), "jie-home-"));
+    homeJieDir = join(homeDir, ".jie");
   });
 
   afterEach(() => {
@@ -98,16 +104,16 @@ describe("AuthStore.load", () => {
   });
 
   test("returns {} when ~/.jie/auth.json does not exist", () => {
-    expect(makeAuthStore(homeDir).load()).toEqual({});
+    expect(makeAuthStore(homeJieDir).load()).toEqual({});
   });
 
   test("returns the typed shape for an api_key entry", () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
+    mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
-      join(homeDir, ".jie", "auth.json"),
+      join(homeJieDir, "auth.json"),
       JSON.stringify({ anthropic: { type: "api_key", key: "sk-test" } }),
     );
-    const auth = makeAuthStore(homeDir).load();
+    const auth = makeAuthStore(homeJieDir).load();
     expect(auth.anthropic).toEqual({ type: "api_key", key: "sk-test" });
   });
 });

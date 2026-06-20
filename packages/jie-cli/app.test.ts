@@ -2,10 +2,10 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { createEventBus } from "@cuzfrog/jie-platform/core";
 import {
-  ModelRegistry,
+  createModelRegistry,
   makeAuthStore,
   makeSettingsStore,
 } from "@cuzfrog/jie-platform/config";
@@ -16,13 +16,14 @@ import { createApp, type AppArgs, type AppDeps } from "./app.ts";
 
 function makeDeps(workspace: string, homeJieDir: string): AppDeps {
   const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
+  const projectJieDir = join(workspace, ".jie");
   return {
-    authStore: makeAuthStore(dirname(homeJieDir)),
-    settingsStore: makeSettingsStore(workspace, homeJieDir),
+    authStore: makeAuthStore(homeJieDir),
+    settingsStore: makeSettingsStore(workspace, homeJieDir, projectJieDir),
     bus: createEventBus(),
     storage,
-    teamRegistry: createTeamRegistry({ workspace, homeJieDir }),
-    modelRegistry: ModelRegistry.load(workspace, { homeDir: dirname(homeJieDir) }),
+    teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
+    modelRegistry: createModelRegistry(homeJieDir, projectJieDir),
     toolRegistry: createToolRegistry(),
     memoryManager: createMemoryManager(storage),
   };
@@ -33,6 +34,7 @@ function appArgs(partial: Partial<AppArgs> = {}): AppArgs {
     kind: "print",
     cwd: "/tmp/workspace",
     homeJieDir: "/tmp/home/.jie",
+    projectJieDir: null,
     teamId: undefined,
     apiKey: undefined,
     resume: undefined,

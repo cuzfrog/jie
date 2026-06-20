@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Settings, RawSettings } from "./types.ts";
-import { globalSettingsPath, projectSettingsPath } from "./paths.ts";
 
 const TEAM_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
 
@@ -56,11 +56,11 @@ function deepMergeSettings(
 }
 
 export function loadMergedSettings(
-  cwd: string,
-  options: { homeDir: string },
+  homeJieDir: string,
+  projectJieDir: string | null,
 ): Settings {
-  const globalPath = globalSettingsPath(options.homeDir);
-  const projectPath = projectSettingsPath(cwd);
+  const globalPath = join(homeJieDir, "settings.json");
+  const projectPath = projectJieDir === null ? null : join(projectJieDir, "settings.json");
 
   const globalRaw = readSettingsFile(globalPath);
   const projectRaw = projectPath === null ? null : readSettingsFile(projectPath);

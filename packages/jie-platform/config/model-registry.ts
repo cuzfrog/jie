@@ -2,15 +2,22 @@ import type { Model } from "@earendil-works/pi-ai";
 import { getModel as piGetModel, getModels as piGetModels, getProviders as piGetProviders } from "@earendil-works/pi-ai";
 import { loadModelsConfig, type ResolvedModelsConfig, type ResolvedProviderConfig } from "./load-models.ts";
 
-export class ModelRegistry {
+export interface ModelRegistry {
+  providers(): string[];
+  resolve(provider: string, modelId: string): Model<any> | undefined;
+  listModels(provider: string): Model<any>[];
+  getApiKey(provider: string): string | undefined;
+}
+
+export function createModelRegistry(homeJieDir: string, projectJieDir: string | null): ModelRegistry {
+  return new PiModelRegistry(loadModelsConfig(homeJieDir, projectJieDir));
+}
+
+export class PiModelRegistry implements ModelRegistry {
   private readonly custom: ResolvedModelsConfig;
 
   constructor(custom: ResolvedModelsConfig) {
     this.custom = custom;
-  }
-
-  static load(cwd: string, options: { homeDir: string }): ModelRegistry {
-    return new ModelRegistry(loadModelsConfig(cwd, options));
   }
 
   providers(): string[] {
@@ -51,7 +58,6 @@ export class ModelRegistry {
     }
     return undefined;
   }
-
 }
 
 function applyProviderConfig(model: Model<any>, cfg: ResolvedProviderConfig | undefined): Model<any> {

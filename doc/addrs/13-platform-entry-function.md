@@ -34,8 +34,8 @@ export interface CreateJieOptions {
 export interface JiePlatformDeps {
   bus:           EventBus;        // caller-owned; the platform publishes on it
   storage:       Storage;         // pre-opened (with init-db applied)
-  teamRegistry:  TeamRegistry;    // constructed from workspace + homeJieDir
-  modelRegistry: ModelRegistry;   // constructed from workspace + homeDir
+  teamRegistry:  TeamRegistry;    // constructed from homeJieDir + projectJieDir
+  modelRegistry: ModelRegistry;   // constructed from homeJieDir + projectJieDir
   toolRegistry:  ToolRegistry;    // tools available to bodies (notify, mcp stubs, ...)
   memoryManager: MemoryManager;   // session-lookup API; constructed from `storage`
 }

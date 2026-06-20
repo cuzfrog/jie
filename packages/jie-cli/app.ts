@@ -30,13 +30,14 @@ export interface App {
 }
 
 export type AppCreationResult =
-  | { kind: "ok"; context: App }
+  | { kind: "ok"; app: App }
   | { kind: "error"; code: number };
 
 export interface AppArgs {
   kind: "print" | "tui";
   cwd: string;
   homeJieDir: string;
+  projectJieDir: string | null;
   teamId?: string;
   apiKey?: string;
   resume?: string;
@@ -122,6 +123,6 @@ export async function createApp(
 
   return {
     kind: "ok",
-    context: { handle, ...info, settings },
+    app: { handle, ...info, settings },
   };
 }

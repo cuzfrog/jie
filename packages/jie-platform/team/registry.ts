@@ -1,25 +1,15 @@
 import { existsSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { isValidTeamId, loadMinimalTeam, loadTeamFromDir } from "./loader.ts";
 import type { Team } from "./types.ts";
 
 const BUILTIN_MINIMAL_TEAM_ID = "minimal";
 
-function findProjectRoot(cwd: string): string | null {
-  let current = cwd;
-  for (;;) {
-    if (existsSync(join(current, ".jie"))) return current;
-    const parent = dirname(current);
-    if (parent === current) return null;
-    current = parent;
-  }
-}
-
 export interface TeamRegistryOptions {
 
-  workspace: string;
-
   homeJieDir: string;
+
+  projectJieDir: string | null;
 }
 
 export interface TeamRegistry {
@@ -34,12 +24,11 @@ export interface TeamRegistry {
 }
 
 export function createTeamRegistry(opts: TeamRegistryOptions): TeamRegistry {
-  const { workspace, homeJieDir } = opts;
+  const { homeJieDir, projectJieDir } = opts;
   const userTeamsDir = join(homeJieDir, "teams");
 
   function projectTeamsDir(): string | null {
-    const root = findProjectRoot(workspace);
-    return root === null ? null : join(root, ".jie", "teams");
+    return projectJieDir === null ? null : join(projectJieDir, "teams");
   }
 
   function isMinimal(id: string): boolean {

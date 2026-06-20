@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createEventBus } from "./core";
 import { createJiePlatform } from "./start.ts";
-import { ModelRegistry } from "./config";
+import { createModelRegistry } from "./config";
 import { createTeamRegistry } from "./team/index.ts";
 import { createToolRegistry } from "./tools";
 import { createMemoryManager, createStorage } from "./storage";
@@ -29,13 +29,14 @@ function makeSettingsStoreStub(settings: MergedSettings): {
 }
 
 function makeDeps(workspace: string, homeJieDir: string, filePath: string = ":memory:") {
+  const projectJieDir = join(workspace, ".jie");
   const storage = createStorage({ type: "sqlite", filePath });
   return {
     bus: createEventBus(),
     settingsStore: makeSettingsStoreStub(makeSettings()),
     storage,
-    teamRegistry: createTeamRegistry({ workspace, homeJieDir }),
-    modelRegistry: ModelRegistry.load(workspace, { homeDir: dirname(homeJieDir) }),
+    teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
+    modelRegistry: createModelRegistry(homeJieDir, projectJieDir),
     toolRegistry: createToolRegistry(),
     memoryManager: createMemoryManager(storage),
   };
@@ -103,12 +104,13 @@ describe("createJiePlatform", () => {
     test("model pre-check: no model in soul or settings throws", async () => {
       const filePath = join(workspace, "no-model.db");
       const storage = createStorage({ type: "sqlite", filePath });
+      const projectJieDir = join(workspace, ".jie");
       const deps = {
         bus: createEventBus(),
         settingsStore: makeSettingsStoreStub({}),
         storage,
-        teamRegistry: createTeamRegistry({ workspace, homeJieDir }),
-        modelRegistry: ModelRegistry.load(workspace, { homeDir: dirname(homeJieDir) }),
+        teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
+        modelRegistry: createModelRegistry(homeJieDir, projectJieDir),
         toolRegistry: createToolRegistry(),
         memoryManager: createMemoryManager(storage),
       };
@@ -135,13 +137,14 @@ describe("createJiePlatform", () => {
   describe("session id resolution", () => {
     test("resumeSessionId: valid id is used; invalid id rejects with 'unknown session_id:'", async () => {
       const filePath = join(workspace, "resume.db");
+      const projectJieDir = join(workspace, ".jie");
       const storage1 = createStorage({ type: "sqlite", filePath });
       const deps1 = {
         bus: createEventBus(),
         settingsStore: makeSettingsStoreStub(makeSettings()),
         storage: storage1,
-        teamRegistry: createTeamRegistry({ workspace, homeJieDir }),
-        modelRegistry: ModelRegistry.load(workspace, { homeDir: dirname(homeJieDir) }),
+        teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
+        modelRegistry: createModelRegistry(homeJieDir, projectJieDir),
         toolRegistry: createToolRegistry(),
         memoryManager: createMemoryManager(storage1),
       };
@@ -163,8 +166,8 @@ describe("createJiePlatform", () => {
         bus: createEventBus(),
         settingsStore: makeSettingsStoreStub(makeSettings()),
         storage: storage2,
-        teamRegistry: createTeamRegistry({ workspace, homeJieDir }),
-        modelRegistry: ModelRegistry.load(workspace, { homeDir: dirname(homeJieDir) }),
+        teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
+        modelRegistry: createModelRegistry(homeJieDir, projectJieDir),
         toolRegistry: createToolRegistry(),
         memoryManager: createMemoryManager(storage2),
       };
@@ -179,8 +182,8 @@ describe("createJiePlatform", () => {
         bus: createEventBus(),
         settingsStore: makeSettingsStoreStub(makeSettings()),
         storage: storage3,
-        teamRegistry: createTeamRegistry({ workspace, homeJieDir }),
-        modelRegistry: ModelRegistry.load(workspace, { homeDir: dirname(homeJieDir) }),
+        teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
+        modelRegistry: createModelRegistry(homeJieDir, projectJieDir),
         toolRegistry: createToolRegistry(),
         memoryManager: createMemoryManager(storage3),
       };

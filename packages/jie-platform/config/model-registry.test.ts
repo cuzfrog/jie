@@ -2,16 +2,20 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ModelRegistry } from "./model-registry.ts";
+import { createModelRegistry, PiModelRegistry } from "./model-registry.ts";
 import { loadModelsConfig } from "./load-models.ts";
 
 describe("ModelRegistry", () => {
   let cwd: string;
   let homeDir: string;
+  let homeJieDir: string;
+  let projectJieDir: string | null;
 
   beforeEach(() => {
     cwd = mkdtempSync(join(tmpdir(), "jie-reg-cwd-"));
     homeDir = mkdtempSync(join(tmpdir(), "jie-reg-home-"));
+    homeJieDir = join(homeDir, ".jie");
+    projectJieDir = null;
   });
 
   afterEach(() => {
@@ -20,7 +24,7 @@ describe("ModelRegistry", () => {
   });
 
   test("empty registry: providers() returns only built-ins", () => {
-    const reg = ModelRegistry.load(cwd, { homeDir });
+    const reg = createModelRegistry(homeJieDir, projectJieDir);
     const providers = reg.providers();
     expect(providers.length).toBeGreaterThan(0);
     expect(providers).toContain("anthropic");
@@ -28,14 +32,14 @@ describe("ModelRegistry", () => {
   });
 
   test("empty registry: getApiKey returns undefined for built-in (auth.json flow)", () => {
-    const reg = ModelRegistry.load(cwd, { homeDir });
+    const reg = createModelRegistry(homeJieDir, projectJieDir);
     expect(reg.getApiKey("anthropic")).toBeUndefined();
   });
 
   test("custom provider: resolve() returns the registered Model", () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
+    mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
-      join(homeDir, ".jie", "models.json"),
+      join(homeJieDir, "models.json"),
       JSON.stringify({
         providers: {
           "lm-studio": {
@@ -47,7 +51,7 @@ describe("ModelRegistry", () => {
         },
       }),
     );
-    const reg = ModelRegistry.load(cwd, { homeDir });
+    const reg = createModelRegistry(homeJieDir, projectJieDir);
     const model = reg.resolve("lm-studio", "qwen3.5-2b");
     expect(model).toBeDefined();
     expect(model?.id).toBe("qwen3.5-2b");
@@ -56,9 +60,9 @@ describe("ModelRegistry", () => {
   });
 
   test("custom provider: getApiKey returns the resolved key", () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
+    mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
-      join(homeDir, ".jie", "models.json"),
+      join(homeJieDir, "models.json"),
       JSON.stringify({
         providers: {
           "lm-studio": {
@@ -70,14 +74,14 @@ describe("ModelRegistry", () => {
         },
       }),
     );
-    const reg = ModelRegistry.load(cwd, { homeDir });
+    const reg = createModelRegistry(homeJieDir, projectJieDir);
     expect(reg.getApiKey("lm-studio")).toBe("my-key");
   });
 
   test("custom provider: getApiKey returns undefined for empty apiKey", () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
+    mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
-      join(homeDir, ".jie", "models.json"),
+      join(homeJieDir, "models.json"),
       JSON.stringify({
         providers: {
           "lm-studio": {
@@ -89,12 +93,12 @@ describe("ModelRegistry", () => {
         },
       }),
     );
-    const reg = ModelRegistry.load(cwd, { homeDir });
+    const reg = createModelRegistry(homeJieDir, projectJieDir);
     expect(reg.getApiKey("lm-studio")).toBeUndefined();
   });
 
   test("built-in provider: resolve() returns pi-ai's model", () => {
-    const reg = ModelRegistry.load(cwd, { homeDir });
+    const reg = createModelRegistry(homeJieDir, projectJieDir);
     const providers = reg.providers();
     const anthropicProvider = providers.find((p) => p === "anthropic");
     expect(anthropicProvider).toBeDefined();
@@ -106,9 +110,10 @@ describe("ModelRegistry", () => {
   });
 
   test("built-in provider with override: baseUrl is replaced on resolved model", () => {
-    mkdirSync(join(cwd, ".jie"), { recursive: true });
+    const projJie = join(cwd, ".jie");
+    mkdirSync(projJie, { recursive: true });
     writeFileSync(
-      join(cwd, ".jie", "models.json"),
+      join(projJie, "models.json"),
       JSON.stringify({
         providers: {
           anthropic: {
@@ -117,36 +122,36 @@ describe("ModelRegistry", () => {
         },
       }),
     );
-    const reg = ModelRegistry.load(cwd, { homeDir });
+    const reg = createModelRegistry(homeJieDir, projJie);
     const models = reg.listModels("anthropic");
     expect(models.length).toBeGreaterThan(0);
     expect(models[0]?.baseUrl).toBe("https://my-proxy.example.com");
   });
 
   test("unknown provider: resolve() returns undefined", () => {
-    const reg = ModelRegistry.load(cwd, { homeDir });
+    const reg = createModelRegistry(homeJieDir, projectJieDir);
     expect(reg.resolve("not-a-real-provider", "any-model")).toBeUndefined();
   });
 
   test("providers() lists custom before built-in", () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
+    mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
-      join(homeDir, ".jie", "models.json"),
+      join(homeJieDir, "models.json"),
       JSON.stringify({
         providers: {
           "lm-studio": { baseUrl: "http://x", api: "openai-completions", models: [] },
         },
       }),
     );
-    const reg = ModelRegistry.load(cwd, { homeDir });
+    const reg = createModelRegistry(homeJieDir, projectJieDir);
     const providers = reg.providers();
     expect(providers[0]).toBe("lm-studio");
   });
 
   test("listModels: custom provider returns its own models", () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
+    mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
-      join(homeDir, ".jie", "models.json"),
+      join(homeJieDir, "models.json"),
       JSON.stringify({
         providers: {
           custom: {
@@ -157,16 +162,16 @@ describe("ModelRegistry", () => {
         },
       }),
     );
-    const reg = ModelRegistry.load(cwd, { homeDir });
+    const reg = createModelRegistry(homeJieDir, projectJieDir);
     const models = reg.listModels("custom");
     expect(models).toHaveLength(2);
     expect(models.map((m) => m.id).sort()).toEqual(["m1", "m2"]);
   });
 
   test("registry constructed from a pre-built config", () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
+    mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
-      join(homeDir, ".jie", "models.json"),
+      join(homeJieDir, "models.json"),
       JSON.stringify({
         providers: {
           direct: {
@@ -177,8 +182,8 @@ describe("ModelRegistry", () => {
         },
       }),
     );
-    const custom = loadModelsConfig(cwd, { homeDir });
-    const reg = new ModelRegistry(custom);
+    const custom = loadModelsConfig(homeJieDir, projectJieDir);
+    const reg = new PiModelRegistry(custom);
     expect(reg.resolve("direct", "z")).toBeDefined();
   });
 });

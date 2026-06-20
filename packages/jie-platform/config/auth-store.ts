@@ -1,6 +1,6 @@
 
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
-import { globalAuthPath, homeJieDir } from "./paths.ts";
+import { join } from "node:path";
 import { loadAuthJson } from "./load-auth.ts";
 import type { AuthJson } from "./types.ts";
 
@@ -12,18 +12,18 @@ export interface AuthStore {
   clear(): AuthJson;
 }
 
-export function makeAuthStore(homeDir: string): AuthStore {
+export function makeAuthStore(homeJieDir: string): AuthStore {
   return {
     load(): AuthJson {
       try {
-        return loadAuthJson({ homeDir });
+        return loadAuthJson(homeJieDir);
       } catch {
         return {};
       }
     },
     write(auth: AuthJson): void {
-      mkdirSync(homeJieDir(homeDir), { recursive: true, mode: 0o755 });
-      const path = globalAuthPath(homeDir);
+      mkdirSync(homeJieDir, { recursive: true, mode: 0o755 });
+      const path = join(homeJieDir, "auth.json");
       writeFileSync(path, `${JSON.stringify(auth, null, 2)}\n`, "utf-8");
       chmodSync(path, 0o600);
     },

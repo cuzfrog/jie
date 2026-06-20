@@ -14,11 +14,13 @@ import { runApiKey, runLogin, runLogout } from "./auth.ts";
 
 describe("runLogin", () => {
   let homeDir: string;
+  let homeJieDir: string;
   let auth: ReturnType<typeof makeAuthStore>;
 
   beforeEach(() => {
     homeDir = mkdtempSync(join(tmpdir(), "jie-cli-login-"));
-    auth = makeAuthStore(homeDir);
+    homeJieDir = join(homeDir, ".jie");
+    auth = makeAuthStore(homeJieDir);
   });
 
   afterEach(() => {
@@ -31,7 +33,7 @@ describe("runLogin", () => {
       auth,
     );
     expect(code).toBe(0);
-    const path = join(homeDir, ".jie", "auth.json");
+    const path = join(homeJieDir, "auth.json");
     expect(existsSync(path)).toBe(true);
     expect(JSON.parse(readFileSync(path, "utf-8"))).toEqual({
       anthropic: { type: "api_key", key: "sk-test" },
@@ -41,7 +43,7 @@ describe("runLogin", () => {
   test("login without flags -> exit 1, no auth.json written", async () => {
     const code = await runLogin({ kind: "login" }, auth);
     expect(code).toBe(1);
-    expect(existsSync(join(homeDir, ".jie", "auth.json"))).toBe(false);
+    expect(existsSync(join(homeJieDir, "auth.json"))).toBe(false);
   });
 
   test("login merges with existing entries (preserves prior providers)", async () => {
@@ -51,7 +53,7 @@ describe("runLogin", () => {
       auth,
     );
     expect(code).toBe(0);
-    expect(JSON.parse(readFileSync(join(homeDir, ".jie", "auth.json"), "utf-8"))).toEqual({
+    expect(JSON.parse(readFileSync(join(homeJieDir, "auth.json"), "utf-8"))).toEqual({
       openai: { type: "api_key", key: "sk-o" },
       anthropic: { type: "api_key", key: "sk-a" },
     });
@@ -60,11 +62,13 @@ describe("runLogin", () => {
 
 describe("runLogout", () => {
   let homeDir: string;
+  let homeJieDir: string;
   let auth: ReturnType<typeof makeAuthStore>;
 
   beforeEach(() => {
     homeDir = mkdtempSync(join(tmpdir(), "jie-cli-logout-"));
-    auth = makeAuthStore(homeDir);
+    homeJieDir = join(homeDir, ".jie");
+    auth = makeAuthStore(homeJieDir);
   });
 
   afterEach(() => {
@@ -78,7 +82,7 @@ describe("runLogout", () => {
     });
     const code = await runLogout({ kind: "logout", provider: "anthropic" }, auth);
     expect(code).toBe(0);
-    expect(JSON.parse(readFileSync(join(homeDir, ".jie", "auth.json"), "utf-8"))).toEqual({
+    expect(JSON.parse(readFileSync(join(homeJieDir, "auth.json"), "utf-8"))).toEqual({
       openai: { type: "api_key", key: "sk-o" },
     });
   });
@@ -87,14 +91,14 @@ describe("runLogout", () => {
     auth.write({ anthropic: { type: "api_key", key: "sk-a" } });
     const code = await runLogout({ kind: "logout" }, auth);
     expect(code).toBe(0);
-    expect(JSON.parse(readFileSync(join(homeDir, ".jie", "auth.json"), "utf-8"))).toEqual({});
+    expect(JSON.parse(readFileSync(join(homeJieDir, "auth.json"), "utf-8"))).toEqual({});
   });
 
   test("logout a missing provider is a no-op (no error)", async () => {
     auth.write({ openai: { type: "api_key", key: "sk-o" } });
     const code = await runLogout({ kind: "logout", provider: "ghost" }, auth);
     expect(code).toBe(0);
-    expect(JSON.parse(readFileSync(join(homeDir, ".jie", "auth.json"), "utf-8"))).toEqual({
+    expect(JSON.parse(readFileSync(join(homeJieDir, "auth.json"), "utf-8"))).toEqual({
       openai: { type: "api_key", key: "sk-o" },
     });
   });
@@ -111,8 +115,8 @@ describe("runApiKey (top-level --api-key)", () => {
     homeDir = mkdtempSync(join(tmpdir(), "jie-cli-apikey-"));
     cwd = mkdtempSync(join(tmpdir(), "jie-cli-apikey-cwd-"));
     homeJieDir = join(homeDir, ".jie");
-    auth = makeAuthStore(homeDir);
-    settings = makeSettingsStore(cwd, homeJieDir);
+    auth = makeAuthStore(homeJieDir);
+    settings = makeSettingsStore(cwd, homeJieDir, null);
   });
 
   afterEach(() => {
@@ -121,14 +125,16 @@ describe("runApiKey (top-level --api-key)", () => {
   });
 
   test("--api-key sk-new writes auth.json for defaultProvider and exits 0", async () => {
-    mkdirSync(join(cwd, ".jie"), { recursive: true });
+    const projectJieDir = join(cwd, ".jie");
+    mkdirSync(projectJieDir, { recursive: true });
     writeFileSync(
-      join(cwd, ".jie", "settings.json"),
+      join(projectJieDir, "settings.json"),
       JSON.stringify({ defaultProvider: "anthropic", defaultModel: "claude-sonnet-4" }),
     );
-    const code = await runApiKey({ kind: "apiKey", apiKey: "sk-new" }, settings, auth);
+    const projectSettings = makeSettingsStore(cwd, homeJieDir, projectJieDir);
+    const code = await runApiKey({ kind: "apiKey", apiKey: "sk-new" }, projectSettings, auth);
     expect(code).toBe(0);
-    expect(JSON.parse(readFileSync(join(homeDir, ".jie", "auth.json"), "utf-8"))).toEqual({
+    expect(JSON.parse(readFileSync(join(homeJieDir, "auth.json"), "utf-8"))).toEqual({
       anthropic: { type: "api_key", key: "sk-new" },
     });
   });
@@ -136,6 +142,6 @@ describe("runApiKey (top-level --api-key)", () => {
   test("--api-key without defaultProvider -> exit 1, no auth.json written", async () => {
     const code = await runApiKey({ kind: "apiKey", apiKey: "sk-new" }, settings, auth);
     expect(code).toBe(1);
-    expect(existsSync(join(homeDir, ".jie", "auth.json"))).toBe(false);
+    expect(existsSync(join(homeJieDir, "auth.json"))).toBe(false);
   });
 });

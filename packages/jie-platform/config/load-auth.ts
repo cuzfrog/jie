@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { AuthJson } from "./types.ts";
-import { globalAuthPath } from "./paths.ts";
 
-export function loadAuthJson(options: { homeDir: string }): AuthJson {
-  const path = globalAuthPath(options.homeDir);
+export function loadAuthJson(homeJieDir: string): AuthJson {
+  const path = join(homeJieDir, "auth.json");
   let text: string;
   try {
     text = readFileSync(path, "utf-8");

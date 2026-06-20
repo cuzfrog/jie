@@ -1,10 +1,6 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import {
-  findProjectJieRoot,
-  projectSettingsPath,
-} from "./paths.ts";
+import { join } from "node:path";
 import { loadMergedSettings } from "./load-settings.ts";
 import type { Settings, RawSettings } from "./types.ts";
 
@@ -17,23 +13,25 @@ export interface SettingsStore {
   unsetDefaultTeam(): void;
 }
 
-export function makeSettingsStore(cwd: string, homeJieDir: string): SettingsStore {
-
-  const homeDir = dirname(homeJieDir);
+export function makeSettingsStore(
+  cwd: string,
+  homeJieDir: string,
+  projectJieDir: string | null,
+): SettingsStore {
   return {
     load(): Settings {
       try {
-        return loadMergedSettings(cwd, { homeDir });
+        return loadMergedSettings(homeJieDir, projectJieDir);
       } catch {
         return {} as Settings;
       }
     },
     write(settings, scope): void {
       if (scope === "project") {
-        const root = findProjectJieRoot(cwd) ?? cwd;
-        mkdirSync(join(root, ".jie"), { recursive: true, mode: 0o755 });
+        const target = projectJieDir ?? join(cwd, ".jie");
+        mkdirSync(target, { recursive: true, mode: 0o755 });
         writeRawSettings(
-          join(root, ".jie", "settings.json"),
+          join(target, "settings.json"),
           settings as unknown as RawSettings,
         );
       } else {
@@ -48,7 +46,7 @@ export function makeSettingsStore(cwd: string, homeJieDir: string): SettingsStor
       const existing = this.load();
       const next: Settings = { ...existing };
       delete next.defaultTeam;
-      const scope: Scope = projectSettingsPath(cwd) !== null ? "project" : "global";
+      const scope: Scope = projectJieDir !== null ? "project" : "global";
       this.write(next, scope);
     },
   };

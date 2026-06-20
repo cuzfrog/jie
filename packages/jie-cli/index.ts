@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import {
-  ModelRegistry,
+  createModelRegistry,
   makeAuthStore,
   makeSettingsStore,
 } from "@cuzfrog/jie-platform/config";
@@ -36,6 +36,7 @@ export async function main(argv: string[], cwd: string = process.cwd()): Promise
 
 async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<number> {
   const homeJieDir = join(homeDir, ".jie");
+  const projectJieDir = findProjectJieDir(cwd);
   switch (args.kind) {
     case "help":
       printHelp();
@@ -50,34 +51,35 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<numb
       console.error(args.message);
       return 1;
     case "login": {
-      const authStore = makeAuthStore(homeDir);
+      const authStore = makeAuthStore(homeJieDir);
       return runLogin(args, authStore);
     }
     case "logout": {
-      const authStore = makeAuthStore(homeDir);
+      const authStore = makeAuthStore(homeJieDir);
       return runLogout(args, authStore);
     }
     case "apiKey": {
-      const authStore = makeAuthStore(homeDir);
-      const settingsStore = makeSettingsStore(cwd, homeJieDir);
+      const authStore = makeAuthStore(homeJieDir);
+      const settingsStore = makeSettingsStore(cwd, homeJieDir, projectJieDir);
       return runApiKey(args, settingsStore, authStore);
     }
     case "model": {
-      const settingsStore = makeSettingsStore(cwd, homeJieDir);
-      return runModel(args, cwd, settingsStore);
+      const settingsStore = makeSettingsStore(cwd, homeJieDir, projectJieDir);
+      return runModel(args, projectJieDir, settingsStore);
     }
     case "team": {
-      const teamRegistry = createTeamRegistry({ workspace: cwd, homeJieDir });
-      const settingsStore = makeSettingsStore(cwd, homeJieDir);
+      const teamRegistry = createTeamRegistry({ homeJieDir, projectJieDir });
+      const settingsStore = makeSettingsStore(cwd, homeJieDir, projectJieDir);
       return runTeam(args, settingsStore, teamRegistry);
     }
     case "print": {
-      const deps = buildPlatformDeps(cwd, homeJieDir);
+      const deps = buildPlatformDeps(cwd, homeJieDir, projectJieDir);
       const result = await createApp(
         {
           kind: "print",
           cwd,
           homeJieDir,
+          projectJieDir,
           teamId: args.team,
           apiKey: args.apiKey,
           resume: args.resume,
@@ -86,25 +88,25 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<numb
         deps,
       );
       if (result.kind === "error") return result.code;
-      return runPrint(result.context.handle, result.context.teamId, result.context.leaderRole, result.context.leaderKey, args);
+      return runPrint(result.app.handle, result.app.teamId, result.app.leaderRole, result.app.leaderKey, args);
     }
   }
 }
 
-function buildPlatformDeps(cwd: string, homeJieDir: string) {
+function buildPlatformDeps(cwd: string, homeJieDir: string, projectJieDir: string | null) {
   mkdirSync(homeJieDir, { recursive: true, mode: 0o755 });
   const storage = createStorage({
     type: "sqlite",
     filePath: join(homeJieDir, "storage.db"),
   });
-  const teamRegistry = createTeamRegistry({ workspace: cwd, homeJieDir });
-  const modelRegistry = ModelRegistry.load(cwd, { homeDir: dirname(homeJieDir) });
+  const teamRegistry = createTeamRegistry({ homeJieDir, projectJieDir });
+  const modelRegistry = createModelRegistry(homeJieDir, projectJieDir);
   const toolRegistry = createToolRegistry();
   const memoryManager = createMemoryManager(storage);
   const bus = createEventBus();
   return {
-    authStore: makeAuthStore(dirname(homeJieDir)),
-    settingsStore: makeSettingsStore(cwd, homeJieDir),
+    authStore: makeAuthStore(homeJieDir),
+    settingsStore: makeSettingsStore(cwd, homeJieDir, projectJieDir),
     bus,
     storage,
     teamRegistry,
@@ -139,6 +141,17 @@ Usage:
 function resolveHomeDir(): string {
   const fromEnv = process.env.HOME;
   return fromEnv !== undefined && fromEnv !== "" ? fromEnv : homedir();
+}
+
+function findProjectJieDir(cwd: string): string | null {
+  let current = cwd;
+  for (;;) {
+    const candidate = join(current, ".jie");
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
 }
 
 if (import.meta.main) {
