@@ -1,6 +1,8 @@
 import type { Model } from "@earendil-works/pi-ai";
 import { getModel as piGetModel, getModels as piGetModels, getProviders as piGetProviders } from "@earendil-works/pi-ai";
 import { loadModelsConfig, type ResolvedModelsConfig, type ResolvedProviderConfig } from "./load-models.ts";
+import type { AuthStore } from "./auth-store.ts";
+import { JiePlatformError } from "../domain-types.ts";
 
 export interface ModelRegistry {
   providers(): string[];
@@ -9,15 +11,21 @@ export interface ModelRegistry {
   getApiKey(provider: string): string | undefined;
 }
 
-export function createModelRegistry(homeJieDir: string, projectJieDir: string | null): ModelRegistry {
-  return new PiModelRegistry(loadModelsConfig(homeJieDir, projectJieDir));
+export function createModelRegistry(
+  homeJieDir: string,
+  projectJieDir: string | null,
+  authStore: AuthStore,
+): ModelRegistry {
+  return new PiModelRegistry(loadModelsConfig(homeJieDir, projectJieDir), authStore);
 }
 
 class PiModelRegistry implements ModelRegistry {
   private readonly custom: ResolvedModelsConfig;
+  private readonly authStore: AuthStore;
 
-  constructor(custom: ResolvedModelsConfig) {
+  constructor(custom: ResolvedModelsConfig, authStore: AuthStore) {
     this.custom = custom;
+    this.authStore = authStore;
   }
 
   providers(): string[] {
@@ -52,6 +60,15 @@ class PiModelRegistry implements ModelRegistry {
   }
 
   getApiKey(provider: string): string | undefined {
+    const auth = this.authStore.load();
+    const entry = auth[provider];
+    if (entry !== undefined) {
+      if (entry.type === "api_key") return entry.key;
+      throw new JiePlatformError(
+        "oauth_not_supported",
+        `OAuth credentials for '${provider}' are not supported in v1; use 'jie login --api-key' or 'jie --api-key' instead`,
+      );
+    }
     const customProvider = this.custom.providers.get(provider);
     if (customProvider !== undefined) {
       return customProvider.apiKey === "" ? undefined : customProvider.apiKey;

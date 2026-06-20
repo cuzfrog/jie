@@ -83,8 +83,6 @@ function resolveSoulModel(
 
 export async function createJiePlatform(opts: CreateJieOptions, deps: JiePlatformDeps): Promise<JiePlatform> {
   const resolveModel = defaultResolveModel(deps.modelRegistry);
-  const getApiKey = async (provider: string): Promise<string | undefined> =>
-    deps.modelRegistry.getApiKey(provider);
   const artifactStore: ArtifactStore = createArtifactStore(deps.storage);
   const bus: EventBus = deps.bus;
 
@@ -153,11 +151,11 @@ export async function createJiePlatform(opts: CreateJieOptions, deps: JiePlatfor
     const out: AgentBody[] = [];
     for (const soul of bp.roles) {
       const is_leader = soul.role === bp.leaderRole;
-      const agent_key = `${soul.role}-1`;
+      const agentKey = `${soul.role}-1`;
       const model = resolveSoulModel(soul, deps.settingsStore, resolveModel);
       out.push(
         createAgentBody({
-          agentKey: agent_key,
+          agentKey,
           teamId: teamId,
           soul,
           isLeader: is_leader,
@@ -166,7 +164,7 @@ export async function createJiePlatform(opts: CreateJieOptions, deps: JiePlatfor
           memory: deps.memoryManager,
           sessionId: sid,
           tool_registry: deps.toolRegistry,
-          getApiKey: async (provider: string) => getApiKey(provider),
+          getApiKey: async (provider: string) => deps.modelRegistry.getApiKey(provider),
           model,
         }),
       );

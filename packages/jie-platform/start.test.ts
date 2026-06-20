@@ -1,42 +1,44 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { join } from "node:path";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createEventBus } from "./core";
 import { createJiePlatform } from "./start.ts";
-import { createModelRegistry } from "./config";
+import { createModelRegistry, type SettingsStore } from "./config";
+import type { AuthStore } from "./config";
 import { createTeamRegistry } from "./team/index.ts";
 import { createToolRegistry } from "./tools";
 import { createMemoryManager, createStorage } from "./storage";
 import type { MergedSettings } from "./config";
 
-function makeSettings(overrides: Partial<MergedSettings> = {}): MergedSettings {
+const settingsStore = vi.mocked<SettingsStore>({
+  load: vi.fn(),
+  write: vi.fn(),
+  unsetDefaultTeam: vi.fn(),
+});
 
-  return { defaultProvider: "anthropic", defaultModel: "claude-sonnet-4-5", ...overrides };
-}
+const authStore = vi.mocked<AuthStore>({
+  load: vi.fn(),
+  write: vi.fn(),
+  setProvider: vi.fn(),
+  removeProvider: vi.fn(),
+  clear: vi.fn(),
+});
 
-function makeSettingsStoreStub(settings: MergedSettings): {
-  load: () => MergedSettings;
-  write: () => void;
-  unsetDefaultTeam: () => void;
-} {
-  return {
-    load: () => settings,
-    write: () => undefined,
-    unsetDefaultTeam: () => undefined,
-  };
-}
+const DEFAULT_SETTINGS: MergedSettings = {
+  defaultProvider: "anthropic",
+  defaultModel: "claude-sonnet-4-5",
+};
 
 function makeDeps(workspace: string, homeJieDir: string, filePath: string = ":memory:") {
   const projectJieDir = join(workspace, ".jie");
   const storage = createStorage({ type: "sqlite", filePath });
   return {
     bus: createEventBus(),
-    settingsStore: makeSettingsStoreStub(makeSettings()),
+    settingsStore,
     storage,
     teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
-    modelRegistry: createModelRegistry(homeJieDir, projectJieDir),
+    modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
     toolRegistry: createToolRegistry(),
     memoryManager: createMemoryManager(storage),
   };
@@ -55,6 +57,7 @@ describe("createJiePlatform", () => {
   beforeEach(() => {
     workspace = mkdtempSync(join(tmpdir(), "jie-start-"));
     homeJieDir = mkdtempSync(join(tmpdir(), "jie-start-home-"));
+    settingsStore.load.mockReturnValue(DEFAULT_SETTINGS);
   });
 
   afterEach(() => {
@@ -102,15 +105,16 @@ describe("createJiePlatform", () => {
     });
 
     test("model pre-check: no model in soul or settings throws", async () => {
+      settingsStore.load.mockReturnValueOnce({});
       const filePath = join(workspace, "no-model.db");
       const storage = createStorage({ type: "sqlite", filePath });
       const projectJieDir = join(workspace, ".jie");
       const deps = {
         bus: createEventBus(),
-        settingsStore: makeSettingsStoreStub({}),
+        settingsStore,
         storage,
         teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
-        modelRegistry: createModelRegistry(homeJieDir, projectJieDir),
+        modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
         toolRegistry: createToolRegistry(),
         memoryManager: createMemoryManager(storage),
       };
@@ -141,10 +145,10 @@ describe("createJiePlatform", () => {
       const storage1 = createStorage({ type: "sqlite", filePath });
       const deps1 = {
         bus: createEventBus(),
-        settingsStore: makeSettingsStoreStub(makeSettings()),
+        settingsStore,
         storage: storage1,
         teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
-        modelRegistry: createModelRegistry(homeJieDir, projectJieDir),
+        modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
         toolRegistry: createToolRegistry(),
         memoryManager: createMemoryManager(storage1),
       };
@@ -164,10 +168,10 @@ describe("createJiePlatform", () => {
       const storage2 = createStorage({ type: "sqlite", filePath });
       const deps2 = {
         bus: createEventBus(),
-        settingsStore: makeSettingsStoreStub(makeSettings()),
+        settingsStore,
         storage: storage2,
         teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
-        modelRegistry: createModelRegistry(homeJieDir, projectJieDir),
+        modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
         toolRegistry: createToolRegistry(),
         memoryManager: createMemoryManager(storage2),
       };
@@ -180,10 +184,10 @@ describe("createJiePlatform", () => {
       const storage3 = createStorage({ type: "sqlite", filePath });
       const deps3 = {
         bus: createEventBus(),
-        settingsStore: makeSettingsStoreStub(makeSettings()),
+        settingsStore,
         storage: storage3,
         teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
-        modelRegistry: createModelRegistry(homeJieDir, projectJieDir),
+        modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
         toolRegistry: createToolRegistry(),
         memoryManager: createMemoryManager(storage3),
       };
@@ -198,7 +202,6 @@ describe("createJiePlatform", () => {
 
   describe("empty team (no .md files)", () => {
     test("team.loaded is published with empty agents array", async () => {
-
       const userTeam = join(homeJieDir, "teams", "ghost");
       mkdirSync(userTeam, { recursive: true });
       writeFileSync(join(userTeam, "TEAM.md"), "---\n---\n");

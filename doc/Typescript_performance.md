@@ -1,18 +1,5 @@
 # TypeScript performance
 
-Reference distilled from <https://github.com/microsoft/TypeScript/wiki/Performance>. The points here are the ones relevant to this codebase; full list is in the wiki.
-
-## Why we care
-
-Before fix: `bun x tsc --noEmit --extendedDiagnostics` showed 1.2M type instantiations and 6s total time. After replacing two custom conditional types with type-map lookups, instantiations dropped to 0 and total time to 1.7s.
-
-| Metric | Before | After |
-|---|---|---|
-| Types | 159,121 | 85 |
-| Instantiations | 1,203,125 | 0 |
-| Memory | 577 MB | 204 MB |
-| Total time | 6.0 s | 1.7 s |
-
 ## Avoid conditional types for hot call sites
 
 Per the wiki's "Naming Complex Types" section, every time a generic function is called, TypeScript re-runs the conditional type. Extracting to a named alias helps the compiler cache the result, but the conditional is still re-evaluated.
@@ -49,16 +36,6 @@ export interface AgentEventPublisher {
 ## Naming complex types helps caching
 
 Per the wiki: "If the return type ... was extracted out to a type alias, more information can be cached by the compiler." Always extract complex conditional types to named aliases — but the lookup-map pattern above is strictly faster.
-
-## tsconfig.json settings
-
-The wiki's three highest-impact config flags. All three are already set in this repo:
-
-- `skipLibCheck: true` — skip type-checking `.d.ts` files. Lines of Definitions in this project is 181k; most are external `.d.ts`.
-- `types: ["bun", "node"]` — restrict automatic `@types` inclusion. Without this, tsc scans every `@types/*` package in `node_modules`.
-- `strict: true` — enables `strictFunctionTypes`, which lets tsc use faster variance checks instead of structural comparison for generic assignability.
-
-`incremental: true` (now enabled) — saves a `.tsbuildinfo` file so subsequent `tsc` invocations can skip unchanged files.
 
 ## Prefer interfaces over intersections
 

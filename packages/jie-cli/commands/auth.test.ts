@@ -1,59 +1,65 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { makeAuthStore, makeSettingsStore } from "@cuzfrog/jie-platform/config";
+import { describe, expect, test } from "bun:test";
+import type { AuthJson, AuthStore, SettingsStore } from "@cuzfrog/jie-platform/config";
 import { runApiKey, runLogin, runLogout } from "./auth.ts";
 
+const auth = vi.mocked<AuthStore>({
+  load: vi.fn(),
+  write: vi.fn(),
+  setProvider: vi.fn(),
+  removeProvider: vi.fn(),
+  clear: vi.fn(),
+});
+
+const settings = vi.mocked<SettingsStore>({
+  load: vi.fn(),
+  write: vi.fn(),
+  unsetDefaultTeam: vi.fn(),
+});
+
 describe("runLogin", () => {
-  let homeDir: string;
-  let homeJieDir: string;
-  let auth: ReturnType<typeof makeAuthStore>;
-
   beforeEach(() => {
-    homeDir = mkdtempSync(join(tmpdir(), "jie-cli-login-"));
-    homeJieDir = join(homeDir, ".jie");
-    auth = makeAuthStore(homeJieDir);
+    auth.load.mockReturnValue({});
+    auth.setProvider.mockImplementation(
+      (current: AuthJson, provider: string, key: string): AuthJson => ({
+        ...current,
+        [provider]: { type: "api_key", key },
+      }),
+    );
   });
 
-  afterEach(() => {
-    rmSync(homeDir, { recursive: true, force: true });
-  });
-
-  test("login --provider anthropic --api-key sk-test writes auth.json and prints success", async () => {
+  test("login --provider anthropic --api-key sk-test calls load -> setProvider -> write with the right args and prints success", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
     const code = await runLogin(
       { kind: "login", provider: "anthropic", apiKey: "sk-test" },
       auth,
     );
     expect(code).toBe(0);
-    const path = join(homeJieDir, "auth.json");
-    expect(existsSync(path)).toBe(true);
-    expect(JSON.parse(readFileSync(path, "utf-8"))).toEqual({
-      anthropic: { type: "api_key", key: "sk-test" },
-    });
+    expect(auth.setProvider).toHaveBeenCalledWith({}, "anthropic", "sk-test");
+    expect(auth.write).toHaveBeenCalledWith({ anthropic: { type: "api_key", key: "sk-test" } });
+    expect(logSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain("logged in to anthropic");
+    logSpy.mockRestore();
   });
 
-  test("login without flags -> exit 1, no auth.json written", async () => {
+  test("login without flags -> exit 1, no load/setProvider/write calls", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => { });
     const code = await runLogin({ kind: "login" }, auth);
     expect(code).toBe(1);
-    expect(existsSync(join(homeJieDir, "auth.json"))).toBe(false);
+    expect(auth.load).not.toHaveBeenCalled();
+    expect(auth.setProvider).not.toHaveBeenCalled();
+    expect(auth.write).not.toHaveBeenCalled();
+    errSpy.mockRestore();
   });
 
-  test("login merges with existing entries (preserves prior providers)", async () => {
-    auth.write({ openai: { type: "api_key", key: "sk-o" } });
+  test("login merges with existing entries (passes the loaded auth to setProvider)", async () => {
+    const existing: AuthJson = { openai: { type: "api_key", key: "sk-o" } };
+    auth.load.mockReturnValueOnce(existing);
     const code = await runLogin(
       { kind: "login", provider: "anthropic", apiKey: "sk-a" },
       auth,
     );
     expect(code).toBe(0);
-    expect(JSON.parse(readFileSync(join(homeJieDir, "auth.json"), "utf-8"))).toEqual({
+    expect(auth.setProvider).toHaveBeenCalledWith(existing, "anthropic", "sk-a");
+    expect(auth.write).toHaveBeenCalledWith({
       openai: { type: "api_key", key: "sk-o" },
       anthropic: { type: "api_key", key: "sk-a" },
     });
@@ -61,87 +67,78 @@ describe("runLogin", () => {
 });
 
 describe("runLogout", () => {
-  let homeDir: string;
-  let homeJieDir: string;
-  let auth: ReturnType<typeof makeAuthStore>;
-
   beforeEach(() => {
-    homeDir = mkdtempSync(join(tmpdir(), "jie-cli-logout-"));
-    homeJieDir = join(homeDir, ".jie");
-    auth = makeAuthStore(homeJieDir);
-  });
-
-  afterEach(() => {
-    rmSync(homeDir, { recursive: true, force: true });
+    auth.load.mockReturnValue({});
   });
 
   test("logout anthropic removes only the anthropic entry", async () => {
-    auth.write({
+    const initial: AuthJson = {
       anthropic: { type: "api_key", key: "sk-a" },
       openai: { type: "api_key", key: "sk-o" },
-    });
+    };
+    auth.load.mockReturnValueOnce(initial);
+    auth.removeProvider.mockImplementation(
+      (current: AuthJson, provider: string): AuthJson => {
+        const next = { ...current };
+        delete next[provider as keyof typeof next];
+        return next as AuthJson;
+      },
+    );
     const code = await runLogout({ kind: "logout", provider: "anthropic" }, auth);
     expect(code).toBe(0);
-    expect(JSON.parse(readFileSync(join(homeJieDir, "auth.json"), "utf-8"))).toEqual({
-      openai: { type: "api_key", key: "sk-o" },
-    });
+    expect(auth.removeProvider).toHaveBeenCalledWith(initial, "anthropic");
+    expect(auth.write).toHaveBeenCalledWith({ openai: { type: "api_key", key: "sk-o" } });
   });
 
   test("logout (no provider) clears all entries", async () => {
-    auth.write({ anthropic: { type: "api_key", key: "sk-a" } });
+    auth.clear.mockReturnValue({});
     const code = await runLogout({ kind: "logout" }, auth);
     expect(code).toBe(0);
-    expect(JSON.parse(readFileSync(join(homeJieDir, "auth.json"), "utf-8"))).toEqual({});
+    expect(auth.clear).toHaveBeenCalled();
+    expect(auth.write).toHaveBeenCalledWith({});
   });
 
-  test("logout a missing provider is a no-op (no error)", async () => {
-    auth.write({ openai: { type: "api_key", key: "sk-o" } });
+  test("logout a missing provider is a no-op on the result but still writes", async () => {
+    const initial: AuthJson = { openai: { type: "api_key", key: "sk-o" } };
+    auth.load.mockReturnValueOnce(initial);
+    auth.removeProvider.mockImplementation(
+      (current: AuthJson, provider: string): AuthJson => {
+        const next = { ...current };
+        delete next[provider as keyof typeof next];
+        return next as AuthJson;
+      },
+    );
     const code = await runLogout({ kind: "logout", provider: "ghost" }, auth);
     expect(code).toBe(0);
-    expect(JSON.parse(readFileSync(join(homeJieDir, "auth.json"), "utf-8"))).toEqual({
-      openai: { type: "api_key", key: "sk-o" },
-    });
+    expect(auth.removeProvider).toHaveBeenCalledWith(initial, "ghost");
+    expect(auth.write).toHaveBeenCalledWith({ openai: { type: "api_key", key: "sk-o" } });
   });
 });
 
 describe("runApiKey (top-level --api-key)", () => {
-  let homeDir: string;
-  let cwd: string;
-  let homeJieDir: string;
-  let auth: ReturnType<typeof makeAuthStore>;
-  let settings: ReturnType<typeof makeSettingsStore>;
-
   beforeEach(() => {
-    homeDir = mkdtempSync(join(tmpdir(), "jie-cli-apikey-"));
-    cwd = mkdtempSync(join(tmpdir(), "jie-cli-apikey-cwd-"));
-    homeJieDir = join(homeDir, ".jie");
-    auth = makeAuthStore(homeJieDir);
-    settings = makeSettingsStore(cwd, homeJieDir, null);
-  });
-
-  afterEach(() => {
-    rmSync(homeDir, { recursive: true, force: true });
-    rmSync(cwd, { recursive: true, force: true });
+    auth.load.mockReturnValue({});
+    auth.setProvider.mockImplementation(
+      (current: AuthJson, provider: string, key: string): AuthJson => ({
+        ...current,
+        [provider]: { type: "api_key", key },
+      }),
+    );
   });
 
   test("--api-key sk-new writes auth.json for defaultProvider and exits 0", async () => {
-    const projectJieDir = join(cwd, ".jie");
-    mkdirSync(projectJieDir, { recursive: true });
-    writeFileSync(
-      join(projectJieDir, "settings.json"),
-      JSON.stringify({ defaultProvider: "anthropic", defaultModel: "claude-sonnet-4" }),
-    );
-    const projectSettings = makeSettingsStore(cwd, homeJieDir, projectJieDir);
-    const code = await runApiKey({ kind: "apiKey", apiKey: "sk-new" }, projectSettings, auth);
+    settings.load.mockReturnValueOnce({ defaultProvider: "anthropic" });
+    const code = await runApiKey({ kind: "apiKey", apiKey: "sk-new" }, settings, auth);
     expect(code).toBe(0);
-    expect(JSON.parse(readFileSync(join(homeJieDir, "auth.json"), "utf-8"))).toEqual({
-      anthropic: { type: "api_key", key: "sk-new" },
-    });
+    expect(settings.load).toHaveBeenCalled();
+    expect(auth.setProvider).toHaveBeenCalledWith({}, "anthropic", "sk-new");
+    expect(auth.write).toHaveBeenCalledWith({ anthropic: { type: "api_key", key: "sk-new" } });
   });
 
   test("--api-key without defaultProvider -> exit 1, no auth.json written", async () => {
+    settings.load.mockReturnValueOnce({});
     const code = await runApiKey({ kind: "apiKey", apiKey: "sk-new" }, settings, auth);
     expect(code).toBe(1);
-    expect(existsSync(join(homeJieDir, "auth.json"))).toBe(false);
+    expect(auth.write).not.toHaveBeenCalled();
   });
 });

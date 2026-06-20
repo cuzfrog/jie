@@ -100,12 +100,13 @@ function buildPlatformDeps(cwd: string, homeJieDir: string, projectJieDir: strin
     filePath: join(homeJieDir, "storage.db"),
   });
   const teamRegistry = createTeamRegistry({ homeJieDir, projectJieDir });
-  const modelRegistry = createModelRegistry(homeJieDir, projectJieDir);
+  const authStore = makeAuthStore(homeJieDir);
+  const modelRegistry = createModelRegistry(homeJieDir, projectJieDir, authStore);
   const toolRegistry = createToolRegistry();
   const memoryManager = createMemoryManager(storage);
   const bus = createEventBus();
   return {
-    authStore: makeAuthStore(homeJieDir),
+    authStore,
     settingsStore: makeSettingsStore(cwd, homeJieDir, projectJieDir),
     bus,
     storage,

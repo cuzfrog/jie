@@ -31,8 +31,8 @@ The platform falls back to the built-in minimal team (per `06-agent-model.md` "B
 
 ## Scenario 3: first-time setup `[v1]`
 
-1. On a fresh machine without user-scope config, run `jie -p "Tell me a joke"` under any directory without project-scope config. Startup exits 1 with: `No model has been selected, please login and select a default model.`
-2. Run `jie login`, pick `anthropic`, paste API key — `~/.jie/auth.json` exists and saves the API key (per pi convention).
-3. Run `jie model anthropic/claude-sonnet-4-5` — `~/.jie/settings.json` contains `defaultProvider: anthropic` and `defaultModel: claude-sonnet-4-5`.
+1. On a fresh machine without user-scope config, run `jie -p "Tell me a joke"` under any directory without project-scope config. Startup exits 1 with error info similar to: `No model has been selected, please login and select a default model.`
+2. Run `jie login`, pick `nvidia`, paste API key — `~/.jie/auth.json` exists and saves the API key (per pi convention). (The API key can be found from env var `NVIDIA_API_KEY`)
+3. Run `jie model nvidia/stepfun-ai/step-3.7-flash` — `~/.jie/settings.json` contains `defaultProvider: nvidia` and `defaultModel: stepfun-ai/step-3.7-flash`.
 4. Run `jie -p "Tell me a joke"` again. Response streams to stdout, ending with a final newline.
 5. The process exits 0.

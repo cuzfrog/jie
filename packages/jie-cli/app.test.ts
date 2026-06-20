@@ -1,29 +1,48 @@
 
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { createEventBus } from "@cuzfrog/jie-platform/core";
 import {
   createModelRegistry,
-  makeAuthStore,
-  makeSettingsStore,
+  type AuthStore,
+  type SettingsStore,
 } from "@cuzfrog/jie-platform/config";
-import { createStorage, createMemoryManager } from "@cuzfrog/jie-platform/storage";
-import { createTeamRegistry } from "@cuzfrog/jie-platform/team";
+import { createEventBus } from "@cuzfrog/jie-platform/core";
+import { createMemoryManager, createStorage } from "@cuzfrog/jie-platform/storage";
+import { type TeamRegistry } from "@cuzfrog/jie-platform/team";
 import { createToolRegistry } from "@cuzfrog/jie-platform/tools";
+import { join } from "node:path";
 import { createApp, type AppArgs, type AppDeps } from "./app.ts";
+
+const authStore = vi.mocked<AuthStore>({
+  load: vi.fn(),
+  write: vi.fn(),
+  setProvider: vi.fn(),
+  removeProvider: vi.fn(),
+  clear: vi.fn(),
+});
+
+const settingsStore = vi.mocked<SettingsStore>({
+  load: vi.fn(),
+  write: vi.fn(),
+  unsetDefaultTeam: vi.fn(),
+});
+
+const teamRegistry = vi.mocked<TeamRegistry>({
+  loadTeam: vi.fn(),
+  isInstalled: vi.fn(),
+  listInstalled: vi.fn(),
+  locate: vi.fn(),
+});
 
 function makeDeps(workspace: string, homeJieDir: string): AppDeps {
   const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
   const projectJieDir = join(workspace, ".jie");
+
   return {
-    authStore: makeAuthStore(homeJieDir),
-    settingsStore: makeSettingsStore(workspace, homeJieDir, projectJieDir),
+    authStore,
+    settingsStore,
     bus: createEventBus(),
     storage,
-    teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
-    modelRegistry: createModelRegistry(homeJieDir, projectJieDir),
+    teamRegistry,
+    modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
     toolRegistry: createToolRegistry(),
     memoryManager: createMemoryManager(storage),
   };
@@ -43,34 +62,16 @@ function appArgs(partial: Partial<AppArgs> = {}): AppArgs {
   };
 }
 
-function writeEmptyTeam(homeJieDir: string, id: string): void {
-
-  const dir = join(homeJieDir, "teams", id);
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "TEAM.md"), "---\n---\n");
-}
-
 describe("createApp — guard rails", () => {
-  let workspace: string;
-  let homeDir: string;
-  let homeJieDir: string;
-
   beforeEach(() => {
-    workspace = mkdtempSync(join(tmpdir(), "jie-cli-app-"));
-    homeDir = mkdtempSync(join(tmpdir(), "jie-cli-app-home-"));
-    homeJieDir = join(homeDir, ".jie");
-  });
-
-  afterEach(() => {
-    rmSync(workspace, { recursive: true, force: true });
-    rmSync(homeDir, { recursive: true, force: true });
+    settingsStore.load.mockReturnValue({});
   });
 
   test("--api-key without defaultProvider: returns error code 1, no auth.json written", async () => {
-    const writeErr = spyOn(console, "error").mockImplementation(() => {});
+    const writeErr = vi.spyOn(console, "error").mockImplementation(() => { });
     const result = await createApp(
-      appArgs({ cwd: workspace, homeJieDir, apiKey: "sk-test" }),
-      makeDeps(workspace, homeJieDir),
+      appArgs({ cwd: "/tmp/workspace", homeJieDir: "/tmp/home/.jie", apiKey: "sk-test" }),
+      makeDeps("/tmp/workspace", "/tmp/home/.jie"),
     );
     expect(result.kind).toBe("error");
     if (result.kind === "error") {
@@ -82,10 +83,13 @@ describe("createApp — guard rails", () => {
   });
 
   test("--team <id> not installed: returns error code 1 with team-not-found message", async () => {
-    const writeErr = spyOn(console, "error").mockImplementation(() => {});
+    teamRegistry.loadTeam.mockImplementationOnce(() => {
+      throw new Error("team 'ghost' not found");
+    });
+    const writeErr = vi.spyOn(console, "error").mockImplementation(() => { });
     const result = await createApp(
-      appArgs({ cwd: workspace, homeJieDir, teamId: "ghost" }),
-      makeDeps(workspace, homeJieDir),
+      appArgs({ cwd: "/tmp/workspace", homeJieDir: "/tmp/home/.jie", teamId: "ghost" }),
+      makeDeps("/tmp/workspace", "/tmp/home/.jie"),
     );
     expect(result.kind).toBe("error");
     if (result.kind === "error") {
@@ -97,11 +101,16 @@ describe("createApp — guard rails", () => {
   });
 
   test("empty team (TEAM.md, no agent .md files) guard: returns error code 1 with no-agents message", async () => {
-    writeEmptyTeam(homeJieDir, "empty");
-    const writeErr = spyOn(console, "error").mockImplementation(() => {});
+    const emptyTeam = {
+      id: "empty",
+      leaderRole: "general",
+      roles: [],
+    };
+    teamRegistry.loadTeam.mockReturnValue(emptyTeam);
+    const writeErr = vi.spyOn(console, "error").mockImplementation(() => { });
     const result = await createApp(
-      appArgs({ cwd: workspace, homeJieDir, teamId: "empty" }),
-      makeDeps(workspace, homeJieDir),
+      appArgs({ cwd: "/tmp/workspace", homeJieDir: "/tmp/home/.jie", teamId: "empty" }),
+      makeDeps("/tmp/workspace", "/tmp/home/.jie"),
     );
     expect(result.kind).toBe("error");
     if (result.kind === "error") {

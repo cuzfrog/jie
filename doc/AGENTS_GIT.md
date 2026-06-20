@@ -5,7 +5,6 @@
 
 ### branching
 - Main branch: `main`
-- Feature branches: `<task_id>_<short-description>`, e.g., `ISSUE-2_config-loader`
 - User branches: `dev_*`, `fix_`.
 
 ### PR title - semantic-pull-request format:

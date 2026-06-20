@@ -57,9 +57,9 @@
 - Try to keep code in one line if the row is < 140 chars.
 
 ### Test
-- use mocks for unit test. A file `my-function.ts`'s test file `my-function.test.ts` should only test `my-function.ts`.
-- tests should align with the test target file. E.g. a test `function1.test.ts` should test and only test `function1.ts`. If `function1.test.ts` is testing `index.ts`, it a smell of coding principle violation.
-- refer to https://bun.com/docs/test/mocks for how to use mocks
+- use mocks for unit test. See @doc/HOW_TO_MOCK.md
+- tests should align with the test target file. E.g. a test `function1.test.ts` should test and only test `function1.ts`. If `function1.test.ts` is testing `index.ts`, it a smell of coding principle violation. Unit tests should not test dependencies.
+- do not import `bun:test`, all test utilities have been added to global namespace and is compatible with `vi`.
 
 ### Single file layout (ordered from top to bottom)
 1. imports
