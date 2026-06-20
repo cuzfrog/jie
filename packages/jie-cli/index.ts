@@ -1,28 +1,4 @@
 #!/usr/bin/env bun
-/** `jie` — the platform CLI.
- *
- *  This file is the entry point. It only:
- *    1. Parses argv via `cli-flags.ts`.
- *    2. Resolves HOME, `~/.jie/`, and the runtime stores.
- *    3. Constructs the platform's `JiePlatformDeps` (bus,
- *       storage, registries, memory) for branches that need
- *       them.
- *    4. Dispatches to a subcommand module under `./commands/`
- *       (or to `createApp` + `runPrint` for the `-p` branch).
- *
- *  Domain logic lives in:
- *    - `@cuzfrog/jie-platform/config` — stores (`AuthStore`,
- *      `SettingsStore`) and the `paths` / `load-*` utilities they
- *      wrap.
- *    - `commands/auth.ts` — `login`, `logout`, top-level `--api-key`.
- *    - `commands/settings.ts` — `model`, `team`.
- *    - `commands/print.ts` — `jie -p` (the full agentic pipeline).
- *    - `@cuzfrog/jie-platform` — `createJiePlatform` (the print
- *      branch goes through `createApp` which owns the call).
- *    - `@cuzfrog/jie-platform/team` — `TeamRegistry` (the `team`
- *      subcommand uses it for `isInstalled` / `listInstalled` /
- *      `locate`).
- */
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -68,15 +44,6 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<numb
       console.log(`jie ${VERSION}`);
       return 0;
     case "tui":
-      // TUI branch stub. When the TUI package lands, the
-      // structure mirrors the `-p` branch below:
-      //   const result = await createApp(args, deps);
-      //   if (result.kind === "error") return result.code;
-      //   return runTuiFlow(result.context.handle, result.context.teamId, ...);
-      // For now we just signal that the branch is not yet
-      // implemented; we do not call `createApp` because the
-      // TUI flow is a no-op and `createJiePlatform` would fail
-      // without a configured model.
       console.error("TUI not implemented in v1 MVP; use jie -p");
       return 1;
     case "error":
@@ -169,9 +136,6 @@ Usage:
 `);
 }
 
-/** HOME resolution. Reads `process.env.HOME` first so tests can
- *  redirect HOME without `os.homedir()` caching the value at
- *  startup; falls back to `os.homedir()` when unset or empty. */
 function resolveHomeDir(): string {
   const fromEnv = process.env.HOME;
   return fromEnv !== undefined && fromEnv !== "" ? fromEnv : homedir();

@@ -39,6 +39,7 @@ export interface AgentSoul {
  *  leader-identification rules. The `TeamRegistry.loadTeam` entry
  *  point returns the same shape. */
 export interface Team {
+  id: string;
   /** Sorted alphabetically by role stem. The order is preserved
    *  through soul construction and body instantiation. The CLI
    *  sources the TUI's `roles` parameter from this list. */

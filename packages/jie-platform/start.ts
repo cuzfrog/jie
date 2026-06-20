@@ -16,10 +16,6 @@ export interface CreateJieOptions {
   workspace: string;
   /** The user's home jie dir (e.g. `~/.jie/`). */
   homeJieDir: string;
-  /** The settings store. The platform calls `settingsStore.load()`
-   *  internally so future runtime changes (e.g. a TUI command
-   *  updating the default model) are picked up. */
-  settingsStore: SettingsStore;
   /** The team id to load. Fallback to default minimal team. */
   teamId?: string;
   /** Forward-looking stub: the MCP client will consume this once it
@@ -31,6 +27,7 @@ export interface CreateJieOptions {
 
 export interface JiePlatformDeps {
   bus: EventBus;
+  settingsStore: SettingsStore;
   storage: Storage;
   teamRegistry: TeamRegistry;
   modelRegistry: ModelRegistry;
@@ -100,7 +97,7 @@ export async function createJiePlatform(opts: CreateJieOptions, deps: JiePlatfor
 
   // Step 2: model pre-check (every soul must resolve).
   for (const soul of blueprint.roles) {
-    resolveSoulModel(soul, opts.settingsStore, resolveModel);
+    resolveSoulModel(soul, deps.settingsStore, resolveModel);
   }
 
   // Step 3: session id resolution for the startup team.
@@ -167,7 +164,7 @@ export async function createJiePlatform(opts: CreateJieOptions, deps: JiePlatfor
     for (const soul of bp.roles) {
       const is_leader = soul.role === bp.leaderRole;
       const agent_key = `${soul.role}-1`;
-      const model = resolveSoulModel(soul, opts.settingsStore, resolveModel);
+      const model = resolveSoulModel(soul, deps.settingsStore, resolveModel);
       out.push(
         new AgentBody({
           agent_key,

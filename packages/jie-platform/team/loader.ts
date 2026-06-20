@@ -244,7 +244,7 @@ export function parseTeamFromManifests(
     }
   }
 
-  return { roles, leaderRole };
+  return { id: teamId, roles, leaderRole };
 }
 
 /** Read a team's `.md` files from a directory and parse them via

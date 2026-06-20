@@ -4,7 +4,6 @@ frozen:
   - cli-flags.ts
   - index.test.ts
   - index.ts
-  - package.json
   - version.ts
   - app.ts
   - app.test.ts

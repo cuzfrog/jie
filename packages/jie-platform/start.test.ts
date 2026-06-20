@@ -36,6 +36,7 @@ function makeDeps(workspace: string, homeJieDir: string, filePath: string = ":me
   const storage = createStorage({ type: "sqlite", filePath });
   return {
     bus: createEventBus(),
+    settingsStore: makeSettingsStoreStub(makeSettings()),
     storage,
     teamRegistry: createTeamRegistry({ workspace, homeJieDir }),
     modelRegistry: ModelRegistry.load(workspace, { homeDir: dirname(homeJieDir) }),
@@ -71,18 +72,15 @@ describe("createJiePlatform", () => {
         {
           workspace,
           homeJieDir,
-          settingsStore: makeSettingsStoreStub(makeSettings()),
           teamId: "minimal",
         },
         deps,
       );
       expect(handle.bus).toBe(deps.bus);
-      // The team.loaded event was published synchronously.
       const events: unknown[] = [];
       handle.bus.subscribe("minimal.team.loaded", (_s, p) => {
         events.push(p);
       });
-      // Subscribing after the event was published: no replay.
       expect(events).toHaveLength(0);
     });
 
@@ -96,7 +94,6 @@ describe("createJiePlatform", () => {
         {
           workspace,
           homeJieDir,
-          settingsStore: makeSettingsStoreStub(makeSettings()),
           teamId: "minimal",
         },
         deps,
@@ -108,16 +105,19 @@ describe("createJiePlatform", () => {
     });
 
     test("model pre-check: no model in soul or settings throws", async () => {
+      const filePath = join(workspace, "no-model.db");
+      const storage = createStorage({ type: "sqlite", filePath });
+      const deps = {
+        bus: createEventBus(),
+        settingsStore: makeSettingsStoreStub({}),
+        storage,
+        teamRegistry: createTeamRegistry({ workspace, homeJieDir }),
+        modelRegistry: ModelRegistry.load(workspace, { homeDir: dirname(homeJieDir) }),
+        toolRegistry: createToolRegistry(),
+        memoryManager: createMemoryManager(storage),
+      };
       await expect(
-        createJiePlatform(
-          {
-            workspace,
-            homeJieDir,
-            settingsStore: makeSettingsStoreStub({ defaultTeam: "minimal" }),
-            teamId: "minimal",
-          },
-          makeDeps(workspace, homeJieDir),
-        ),
+        createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps),
       ).rejects.toThrow(/No model has been selected/);
     });
 
@@ -126,7 +126,6 @@ describe("createJiePlatform", () => {
         {
           workspace,
           homeJieDir,
-          settingsStore: makeSettingsStoreStub(makeSettings()),
           teamId: "minimal",
         },
         makeDeps(workspace, homeJieDir),
@@ -143,6 +142,7 @@ describe("createJiePlatform", () => {
       const storage1 = createStorage({ type: "sqlite", filePath });
       const deps1 = {
         bus: createEventBus(),
+        settingsStore: makeSettingsStoreStub(makeSettings()),
         storage: storage1,
         teamRegistry: createTeamRegistry({ workspace, homeJieDir }),
         modelRegistry: ModelRegistry.load(workspace, { homeDir: dirname(homeJieDir) }),
@@ -150,25 +150,9 @@ describe("createJiePlatform", () => {
         memoryManager: createMemoryManager(storage1),
       };
       const h1 = await createJiePlatform(
-        {
-          workspace,
-          homeJieDir,
-          settingsStore: makeSettingsStoreStub(makeSettings()),
-          teamId: "minimal",
-        },
+        { workspace, homeJieDir, teamId: "minimal" },
         deps1,
       );
-      // Read the session id from the team.loaded event we
-      // captured at startup. The body has the same session id
-      // (the platform assigned it to the body at construction).
-      let sessionId = "";
-      const events: Array<{ payload: { agents: Array<{ agent_key: string }> } }> = [];
-      deps1.bus.subscribe("minimal.team.loaded", (_s, p) => {
-        events.push(p as { payload: { agents: Array<{ agent_key: string }> } });
-      });
-      // Re-collect by re-creating a handle to read the session id
-      // via the body — but with the new minimal handle, we need a
-      // different mechanism. Persist with a fresh handle instead.
       createMemoryManager(createStorage({ type: "sqlite", filePath })).persist(
         STUB_MESSAGE,
         "general-1",
@@ -176,11 +160,12 @@ describe("createJiePlatform", () => {
         "minimal",
       );
       await h1.stop();
-      sessionId = "test-session-id";
+      const sessionId = "test-session-id";
 
       const storage2 = createStorage({ type: "sqlite", filePath });
       const deps2 = {
         bus: createEventBus(),
+        settingsStore: makeSettingsStoreStub(makeSettings()),
         storage: storage2,
         teamRegistry: createTeamRegistry({ workspace, homeJieDir }),
         modelRegistry: ModelRegistry.load(workspace, { homeDir: dirname(homeJieDir) }),
@@ -188,26 +173,15 @@ describe("createJiePlatform", () => {
         memoryManager: createMemoryManager(storage2),
       };
       const h2 = await createJiePlatform(
-        {
-          workspace,
-          homeJieDir,
-          settingsStore: makeSettingsStoreStub(makeSettings()),
-          teamId: "minimal",
-          resumeSessionId: sessionId,
-        },
+        { workspace, homeJieDir, teamId: "minimal", resumeSessionId: sessionId },
         deps2,
       );
-      // Confirm the body has the resumed session id by reading
-      // the body via the bus's team.loaded event (the body has
-      // the same session id, but we no longer expose bodies on
-      // the handle). The test below confirms the storage path
-      // works.
-      void events;
       await h2.stop();
 
       const storage3 = createStorage({ type: "sqlite", filePath });
       const deps3 = {
         bus: createEventBus(),
+        settingsStore: makeSettingsStoreStub(makeSettings()),
         storage: storage3,
         teamRegistry: createTeamRegistry({ workspace, homeJieDir }),
         modelRegistry: ModelRegistry.load(workspace, { homeDir: dirname(homeJieDir) }),
@@ -216,13 +190,7 @@ describe("createJiePlatform", () => {
       };
       await expect(
         createJiePlatform(
-          {
-            workspace,
-            homeJieDir,
-            settingsStore: makeSettingsStoreStub(makeSettings()),
-            teamId: "minimal",
-            resumeSessionId: "not-a-real-id",
-          },
+          { workspace, homeJieDir, teamId: "minimal", resumeSessionId: "not-a-real-id" },
           deps3,
         ),
       ).rejects.toThrow(/unknown session_id: not-a-real-id/);
@@ -244,12 +212,7 @@ describe("createJiePlatform", () => {
         events.push(p);
       });
       const handle = await createJiePlatform(
-        {
-          workspace,
-          homeJieDir,
-          settingsStore: makeSettingsStoreStub(makeSettings()),
-          teamId: "ghost",
-        },
+        { workspace, homeJieDir, teamId: "ghost" },
         deps,
       );
       expect(events).toHaveLength(1);
