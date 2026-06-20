@@ -43,6 +43,7 @@
 - When I make a decision, reason it thoroughly, then express your opinion. Only when we both agree, we move on.
 - Stick to fact. Our purpose is to build a good software, don't fluff, challenge my ideas.
 - Directly ask questions without calling ask_user tool, there's no such a tool.
+- Do not ask trivial questions that have no consequences.
 
 ## Code Conventions
 
@@ -65,7 +66,7 @@
 3. 1 public interface
 4. constructor method
 5. concrete implementation
-6. private functions
+6. private functions (at bottom)
 
 ### Git
 - When involving git operations, refer to @doc/AGENTS_GIT.md.

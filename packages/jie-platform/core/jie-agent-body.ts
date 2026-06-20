@@ -7,31 +7,22 @@ import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { MemoryManager } from "../storage/index.ts";
 import type { EventBus } from "./event-bus.ts";
 import type { AgentSoul } from "../team/index.ts";
-import {
-  publishPlatformEvent,
-  type StreamPublisher,
-} from "./streaming.ts";
+import type { AgentEventPublisher } from "./agent-event.ts";
+import type { StreamPublisher } from "./streaming.ts";
 import type { AgentBody } from "./agent-body.ts";
 import type { AgentEvent } from "./agent-event.ts";
 
-function isAssistantMessage(m: unknown): m is AssistantMessage {
-  return (
-    typeof m === "object" &&
-    m !== null &&
-    (m as { role?: string }).role === "assistant"
-  );
-}
-
 export class JieAgentBody implements AgentBody {
-  readonly agent_key: string;
-  readonly team_id: string;
-  readonly soul: AgentSoul;
-  readonly is_leader: boolean;
+  private readonly agent_key: string;
+  private readonly team_id: string;
+  private readonly soul: AgentSoul;
+  private readonly is_leader: boolean;
   private readonly session_id: string;
   private readonly bus: EventBus;
   private readonly memory: MemoryManager;
   private readonly agent: Agent;
   private readonly stream: StreamPublisher;
+  private readonly publisher: AgentEventPublisher;
   private readonly queue: AgentMessage[] = [];
   private readonly unsubscribers: Array<() => void> = [];
   private readonly externalCleanups: Array<() => void> = [];
@@ -47,6 +38,7 @@ export class JieAgentBody implements AgentBody {
     memory: MemoryManager;
     agent: Agent;
     stream: StreamPublisher;
+    publisher: AgentEventPublisher;
   }) {
     this.agent_key = deps.agent_key;
     this.team_id = deps.team_id;
@@ -57,29 +49,16 @@ export class JieAgentBody implements AgentBody {
     this.memory = deps.memory;
     this.agent = deps.agent;
     this.stream = deps.stream;
+    this.publisher = deps.publisher;
   }
 
   handlePiAgentEvent(event: PiAgentEvent): void {
     switch (event.type) {
       case "turn_start":
-        publishPlatformEvent(
-          this.bus,
-          "agent.turn.start",
-          this.agent_key,
-          this.soul.role,
-          this.team_id,
-          {},
-        );
+        this.publisher.publish("agent.turn.start", {});
         return;
       case "agent_end":
-        publishPlatformEvent(
-          this.bus,
-          "agent.idle",
-          this.agent_key,
-          this.soul.role,
-          this.team_id,
-          {},
-        );
+        this.publisher.publish("agent.idle", {});
         return;
       case "message_start":
         this.stream.beginStream();
@@ -135,14 +114,9 @@ export class JieAgentBody implements AgentBody {
 
     while (this.queue.length > 0) {
       const next = this.queue.shift()!;
-      publishPlatformEvent(
-        this.bus,
-        "agent.queue.update",
-        this.agent_key,
-        this.soul.role,
-        this.team_id,
-        { prompts: this.queue.map((m) => this.formatSynthetic(m)) },
-      );
+      this.publisher.publish("agent.queue.update", {
+        prompts: this.queue.map((m) => formatSynthetic(m)),
+      });
       await this.agent.prompt(next);
     }
   }
@@ -193,20 +167,23 @@ export class JieAgentBody implements AgentBody {
     } as unknown as AgentMessage;
     if (this.agent.state.isStreaming) {
       this.queue.push(message);
-      publishPlatformEvent(
-        this.bus,
-        "agent.queue.update",
-        this.agent_key,
-        this.soul.role,
-        this.team_id,
-        { prompts: this.queue.map((m) => this.formatSynthetic(m)) },
-      );
+      this.publisher.publish("agent.queue.update", {
+        prompts: this.queue.map((m) => formatSynthetic(m)),
+      });
     } else {
       void this.agent.prompt(message);
     }
   }
+}
 
-  private formatSynthetic(message: AgentMessage): string {
-    return String((message as { content: unknown }).content);
-  }
+function formatSynthetic(message: AgentMessage): string {
+  return String((message as { content: unknown }).content);
+}
+
+function isAssistantMessage(m: unknown): m is AssistantMessage {
+  return (
+    typeof m === "object" &&
+    m !== null &&
+    (m as { role?: string }).role === "assistant"
+  );
 }

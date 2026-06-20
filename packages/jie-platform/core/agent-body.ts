@@ -3,12 +3,9 @@ import type { ArtifactStore, MemoryManager } from "../storage";
 import type { AgentSoul } from "../team";
 import type { ExecutionContext, ToolRegistry } from "../tools";
 import { adaptToolToAgent } from "./tool-adapter";
-import {
-  makeStreamPublisher,
-  publishToolCallEvent,
-  publishToolResultEvent,
-} from "./streaming";
+import { makeStreamPublisher } from "./streaming";
 import { JieAgentBody } from "./jie-agent-body";
+import { makeAgentEventPublisher } from "./agent-event";
 
 export interface CreateAgentBodyOptions {
   agent_key: string;
@@ -49,13 +46,28 @@ function adaptAllTools(
   return out;
 }
 
+function extractToolError(context: {
+  isError: boolean;
+  result: unknown;
+}): string | null {
+  if (!context.isError) return null;
+  if (context.result === undefined) return "tool error";
+  const content = (context.result as { content?: Array<{ text?: string }> }).content;
+  if (!Array.isArray(content)) return "tool error";
+  const text = content
+    .map((c) => c.text)
+    .filter((t): t is string => typeof t === "string")
+    .join("\n");
+  return text.length > 0 ? text : "tool error";
+}
+
 export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
-  const stream = makeStreamPublisher(
-    opts.bus,
-    opts.agent_key,
-    opts.soul.role,
-    opts.team_id,
-  );
+  const publisher = makeAgentEventPublisher(opts.bus, {
+    agentKey: opts.agent_key,
+    agentRole: opts.soul.role,
+    teamId: opts.team_id,
+  });
+  const stream = makeStreamPublisher(publisher);
 
   const ctx: ExecutionContext = {
     session_id: opts.session_id,
@@ -80,42 +92,26 @@ export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
     beforeToolCall: async (context) => {
       const toolCallId = context.toolCall.id;
       toolTimestamps.set(toolCallId, Date.now());
-      publishToolCallEvent(
-        opts.bus,
-        opts.agent_key,
-        opts.soul.role,
-        opts.team_id,
-        toolCallId,
-        context.toolCall.name,
-        context.args,
-      );
+      publisher.publish("agent.tool.call", {
+        tool_call_id: toolCallId,
+        name: context.toolCall.name,
+        input: context.args,
+      });
       return undefined;
     },
     afterToolCall: async (context) => {
       const toolCallId = context.toolCall.id;
       const startedAt = toolTimestamps.get(toolCallId) ?? Date.now();
       toolTimestamps.delete(toolCallId);
-      const error =
-        context.isError && context.result !== undefined
-          ? (context.result as { content?: Array<{ text?: string }> }).content
-              ?.map((c) => c.text)
-              .filter((t): t is string => typeof t === "string")
-              .join("\n") ?? "tool error"
-          : context.isError
-            ? "tool error"
-            : null;
-      const outputPayload = error === null ? context.result : null;
-      publishToolResultEvent(
-        opts.bus,
-        opts.agent_key,
-        opts.soul.role,
-        opts.team_id,
-        toolCallId,
-        context.toolCall.name,
-        outputPayload,
-        Date.now() - startedAt,
+      const error = extractToolError(context);
+      const output = error === null ? context.result : null;
+      publisher.publish("agent.tool.result", {
+        tool_call_id: toolCallId,
+        name: context.toolCall.name,
+        output,
+        durationMs: Date.now() - startedAt,
         error,
-      );
+      });
       return undefined;
     },
   });
@@ -133,6 +129,7 @@ export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
     memory: opts.memory,
     agent,
     stream,
+    publisher,
   });
 
   const unsubscribeAgent = agent.subscribe((event) =>

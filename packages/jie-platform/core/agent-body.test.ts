@@ -152,9 +152,10 @@ describe("createAgentBody — wiring", () => {
     const opts = makeOpts({ agent_key: "leader-1", is_leader: true, session_id: "sess-x" });
     const cap = makeFakeAgentFactory();
     const body = createAgentBody({ ...opts, createAgent: cap.factory }) as JieAgentBody;
-    expect(body.agent_key).toBe("leader-1");
-    expect(body.team_id).toBe("t1");
-    expect(body.is_leader).toBe(true);
+    const identity = body as unknown as { agent_key: string; team_id: string; is_leader: boolean };
+    expect(identity.agent_key).toBe("leader-1");
+    expect(identity.team_id).toBe("t1");
+    expect(identity.is_leader).toBe(true);
   });
 
   test("beforeToolCall publishes agent.tool.call with the right payload", async () => {

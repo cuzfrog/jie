@@ -9,6 +9,7 @@ import {
 import { type Agent, type AgentMessage } from "@earendil-works/pi-agent-core";
 import { JieAgentBody } from "./jie-agent-body.ts";
 import { createEventBus, type EventBus } from "./event-bus.ts";
+import { makeAgentEventPublisher, type AgentEventPublisher } from "./agent-event.ts";
 import type { MemoryManager } from "../storage";
 import type { AgentSoul } from "../team";
 import type { StreamPublisher } from "./streaming.ts";
@@ -95,12 +96,18 @@ interface Harness {
   beginStream: ReturnType<typeof mock>;
   append: ReturnType<typeof mock>;
   endStream: ReturnType<typeof mock>;
+  publisher: AgentEventPublisher;
   persisted: AgentMessage[];
   makeBody: (overrides?: Partial<{ soul: AgentSoul; is_leader: boolean; session_id: string; agent_key: string }>) => JieAgentBody;
 }
 
 function makeHarness(): Harness {
   const bus = createEventBus();
+  const publisher = makeAgentEventPublisher(bus, {
+    agentKey: "general-1",
+    agentRole: "general",
+    teamId: "t1",
+  });
   const { memory, persisted } = makeFakeMemory();
   const { agent, state, prompt, continue: cont, subscribe } = makeFakeAgent();
   const { stream, beginStream, append, endStream } = makeFakeStream();
@@ -115,6 +122,7 @@ function makeHarness(): Harness {
       memory,
       agent,
       stream,
+      publisher,
     });
   return {
     bus,
@@ -128,6 +136,7 @@ function makeHarness(): Harness {
     beginStream,
     append,
     endStream,
+    publisher,
     persisted,
     makeBody,
   };
@@ -136,7 +145,11 @@ function makeHarness(): Harness {
 describe("JieAgentBody — identity", () => {
   test("constructor stores the identity fields from deps", () => {
     const h = makeHarness();
-    const body = h.makeBody({ agent_key: "leader-1", is_leader: true });
+    const body = h.makeBody({ agent_key: "leader-1", is_leader: true }) as unknown as {
+      agent_key: string;
+      team_id: string;
+      is_leader: boolean;
+    };
     expect(body.agent_key).toBe("leader-1");
     expect(body.team_id).toBe("t1");
     expect(body.is_leader).toBe(true);
