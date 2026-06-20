@@ -1,9 +1,9 @@
 
 import type { AuthStore, SettingsStore } from "@cuzfrog/jie-platform/config";
-import type { ParsedArgs } from "../index.ts";
+import type { ParsedArgsMap } from "../cli-flags.ts";
 
 export async function runLogin(
-  parsed: Extract<ParsedArgs, { kind: "login" }>,
+  parsed: ParsedArgsMap["login"],
   auth: AuthStore,
 ): Promise<number> {
   if (parsed.provider === undefined || parsed.apiKey === undefined) {
@@ -18,7 +18,7 @@ export async function runLogin(
 }
 
 export async function runLogout(
-  parsed: Extract<ParsedArgs, { kind: "logout" }>,
+  parsed: ParsedArgsMap["logout"],
   auth: AuthStore,
 ): Promise<number> {
   if (parsed.provider !== undefined) {
@@ -32,7 +32,7 @@ export async function runLogout(
 }
 
 export async function runApiKey(
-  parsed: Extract<ParsedArgs, { kind: "apiKey" }>,
+  parsed: ParsedArgsMap["apiKey"],
   settings: SettingsStore,
   auth: AuthStore,
 ): Promise<number> {

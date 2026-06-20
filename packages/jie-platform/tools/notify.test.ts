@@ -8,11 +8,11 @@ import { JiePlatformError } from "../domain-types.ts";
 
 function makeCtx(): ExecutionContext {
   return {
-    session_id: "sess-1",
-    team_id: "t1",
-    agent_key: "leader-1",
-    agent_role: "leader",
-    artifacts: new InMemoryArtifactStore(),
+    sessionId: "sess-1",
+    teamId: "t1",
+    agentKey: "leader-1",
+    agentRole: "leader",
+    artifactStore: new InMemoryArtifactStore(),
   };
 }
 
@@ -52,7 +52,7 @@ describe("notify — topic validation", () => {
     const ctx = makeCtx();
     let caught: unknown;
     try {
-      await tool.execute({ topic: `${ctx.team_id}.task`, prompt: "x" }, ctx);
+      await tool.execute({ topic: `${ctx.teamId}.task`, prompt: "x" }, ctx);
     } catch (e) {
       caught = e;
     }

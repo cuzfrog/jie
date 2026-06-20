@@ -2,11 +2,11 @@ import type { TSchema } from "typebox";
 import type { ArtifactStore } from "../storage/artifact-store.ts";
 
 export interface ExecutionContext {
-  session_id: string;
-  team_id: string;
-  agent_key: string;
-  agent_role: string;
-  artifacts: ArtifactStore;
+  sessionId: string;
+  teamId: string;
+  agentKey: string;
+  agentRole: string;
+  artifactStore: ArtifactStore;
 }
 
 export interface ToolResult {

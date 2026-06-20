@@ -121,8 +121,8 @@ function makeHarness(): Harness {
       bus,
       memory,
       agent,
-      stream,
-      publisher,
+      streamPublisher: stream,
+      eventPublisher: publisher,
     });
   return {
     bus,

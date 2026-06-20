@@ -1,16 +1,17 @@
 
-
-export type ParsedArgs =
-  | { kind: "print"; instruction: string; team?: string; timeout: number; json: boolean; apiKey?: string; resume?: string; continueLast: boolean }
-  | { kind: "version" }
-  | { kind: "help" }
-  | { kind: "login"; provider?: string; apiKey?: string }
-  | { kind: "logout"; provider?: string }
-  | { kind: "model"; provider: string; modelId: string }
-  | { kind: "team"; teamId?: string; unset: boolean }
-  | { kind: "apiKey"; apiKey: string }
-  | { kind: "tui"; team?: string }
-  | { kind: "error"; message: string };
+export interface ParsedArgsMap {
+  print: { kind: "print"; instruction: string; team?: string; timeout: number; json: boolean; apiKey?: string; resume?: string; continueLast: boolean };
+  version: { kind: "version" };
+  help: { kind: "help" };
+  login: { kind: "login"; provider?: string; apiKey?: string };
+  logout: { kind: "logout"; provider?: string };
+  model: { kind: "model"; provider: string; modelId: string };
+  team: { kind: "team"; teamId?: string; unset: boolean };
+  apiKey: { kind: "apiKey"; apiKey: string };
+  tui: { kind: "tui"; team?: string };
+  error: { kind: "error"; message: string };
+}
+export type ParsedArgs = ParsedArgsMap[keyof ParsedArgsMap];
 
 const PRINT_FLAGS = new Set(["-p", "--print"]);
 

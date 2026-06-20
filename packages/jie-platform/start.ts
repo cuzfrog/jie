@@ -157,14 +157,14 @@ export async function createJiePlatform(opts: CreateJieOptions, deps: JiePlatfor
       const model = resolveSoulModel(soul, deps.settingsStore, resolveModel);
       out.push(
         createAgentBody({
-          agent_key,
-          team_id: teamId,
+          agentKey: agent_key,
+          teamId: teamId,
           soul,
-          is_leader,
+          isLeader: is_leader,
           bus,
-          artifacts: artifactStore,
+          artifactStore: artifactStore,
           memory: deps.memoryManager,
-          session_id: sid,
+          sessionId: sid,
           tool_registry: deps.toolRegistry,
           getApiKey: async (provider: string) => getApiKey(provider),
           model,

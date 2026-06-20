@@ -62,7 +62,7 @@ export function createNotifyTool(deps: NotifyDeps): Tool<NotifyInput> {
       input: NotifyInput,
       ctx: ExecutionContext,
     ): Promise<ToolResult> {
-      const reason = validateTopic(input.topic, ctx.team_id);
+      const reason = validateTopic(input.topic, ctx.teamId);
       if (reason !== null) {
         throw new JiePlatformError(
           "notify_invalid_topic",
@@ -70,7 +70,7 @@ export function createNotifyTool(deps: NotifyDeps): Tool<NotifyInput> {
         );
       }
 
-      const subject = `${ctx.team_id}.${input.topic}`;
+      const subject = `${ctx.teamId}.${input.topic}`;
       const totalSubscribers = deps.bus.subscriberCount(subject);
       const recipients = deps.isSelfSubscribed(input.topic)
         ? Math.max(0, totalSubscribers - 1)
@@ -78,12 +78,12 @@ export function createNotifyTool(deps: NotifyDeps): Tool<NotifyInput> {
 
       const envelope: AgentEvent = {
         version: 1,
-        team_id: ctx.team_id,
+        team_id: ctx.teamId,
         event_type: input.topic,
-        agent_role: ctx.agent_role,
-        agent_key: ctx.agent_key,
+        agent_role: ctx.agentRole,
+        agent_key: ctx.agentKey,
         timestamp: new Date().toISOString(),
-        payload: { prompt: input.prompt, source: ctx.agent_key },
+        payload: { prompt: input.prompt, source: ctx.agentKey },
       };
       deps.bus.publish(subject, envelope);
 

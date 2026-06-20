@@ -157,5 +157,3 @@ function findProjectJieDir(cwd: string): string | null {
 if (import.meta.main) {
   process.exit(await main(Bun.argv.slice(2)));
 }
-
-export type { ParsedArgs } from "./cli-flags.ts";

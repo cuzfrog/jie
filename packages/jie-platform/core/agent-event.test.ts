@@ -36,12 +36,12 @@ describe("makeAgentEventPublisher — envelope stamping", () => {
     expect(received[0]!.payload).toEqual({ prompts: ["a", "b"] });
   });
 
-  test("envelope payload for unknown topic defaults to Record<string, unknown>", () => {
+  test("agent.idle takes an empty payload", () => {
     const bus = createEventBus();
     const received = collect(bus, "agent.idle");
     const publisher = makeAgentEventPublisher(bus, identity);
-    publisher.publish("agent.idle", { custom: "data" });
-    expect(received[0]!.payload).toEqual({ custom: "data" });
+    publisher.publish("agent.idle", {});
+    expect(received[0]!.payload).toEqual({});
   });
 });
 

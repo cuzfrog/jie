@@ -10,21 +10,25 @@ export interface AgentEvent<T extends string = string> {
   payload: Record<string, unknown>;
 }
 
-export type AgentEventPayload<T extends string> =
-  T extends "agent.tool.call"
-    ? { tool_call_id: string; name: string; input: unknown }
-    : T extends "agent.tool.result"
-      ? { tool_call_id: string; name: string; output: unknown; durationMs: number; error: string | null }
-      : T extends "agent.stream.chunk"
-        ? { stream_id: number; seq: number; block_type: "text" | "thinking"; text: string }
-        : T extends "agent.stream.end"
-          ? { stream_id: number; total_chunks: number }
-          : T extends "agent.queue.update"
-            ? { prompts: string[] }
-            : Record<string, unknown>;
+export interface AgentEventPayloadMap {
+  "agent.turn.start": Record<string, never>;
+  "agent.idle": Record<string, never>;
+  "agent.tool.call": { tool_call_id: string; name: string; input: unknown };
+  "agent.tool.result": {
+    tool_call_id: string;
+    name: string;
+    output: unknown;
+    durationMs: number;
+    error: string | null;
+  };
+  "agent.stream.chunk": { stream_id: number; seq: number; block_type: "text" | "thinking"; text: string };
+  "agent.stream.end": { stream_id: number; total_chunks: number };
+  "agent.queue.update": { prompts: string[] };
+}
+export type AgentEventPayload<T extends keyof AgentEventPayloadMap> = AgentEventPayloadMap[T];
 
 export interface AgentEventPublisher {
-  publish<T extends string>(topic: T, payload: AgentEventPayload<T>): void;
+  publish<T extends keyof AgentEventPayloadMap>(topic: T, payload: AgentEventPayloadMap[T]): void;
 }
 
 export function makeAgentEventPublisher(
@@ -33,12 +37,7 @@ export function makeAgentEventPublisher(
 ): AgentEventPublisher {
   function buildToolCallPayload(p: { tool_call_id: string; name: string; input: unknown }): Record<string, unknown> {
     const { text, truncated } = truncateForTelemetry(jsonStringify(p.input));
-    return {
-      tool_call_id: p.tool_call_id,
-      name: p.name,
-      input: text,
-      input_truncated: truncated,
-    };
+    return { tool_call_id: p.tool_call_id, name: p.name, input: text, input_truncated: truncated };
   }
 
   function buildToolResultPayload(p: {
@@ -60,14 +59,14 @@ export function makeAgentEventPublisher(
   }
 
   return {
-    publish<T extends string>(topic: T, payload: AgentEventPayload<T>): void {
-      let envPayload: Record<string, unknown>;
+    publish(topic: string, payload: Record<string, unknown>): void {
+      let eventPayload: Record<string, unknown>;
       switch (topic) {
         case "agent.tool.call":
-          envPayload = buildToolCallPayload(payload as { tool_call_id: string; name: string; input: unknown });
+          eventPayload = buildToolCallPayload(payload as { tool_call_id: string; name: string; input: unknown });
           break;
         case "agent.tool.result":
-          envPayload = buildToolResultPayload(payload as {
+          eventPayload = buildToolResultPayload(payload as {
             tool_call_id: string;
             name: string;
             output: unknown;
@@ -76,16 +75,16 @@ export function makeAgentEventPublisher(
           });
           break;
         default:
-          envPayload = payload as Record<string, unknown>;
+          eventPayload = payload;
       }
-      const envelope: AgentEvent<T> = {
+      const envelope: AgentEvent = {
         version: 1,
         team_id: identity.teamId,
         event_type: topic,
         agent_role: identity.agentRole,
         agent_key: identity.agentKey,
         timestamp: new Date().toISOString(),
-        payload: envPayload,
+        payload: eventPayload,
       };
       bus.publish(topic, envelope);
     },
@@ -97,9 +96,7 @@ const TRUNCATION_BYTES = TRUNCATION_KB * 1024;
 const MARKER_FORMAT = "...[%d chars truncated]...";
 
 function truncateForTelemetry(input: string): { text: string; truncated: boolean } {
-  if (input.length <= TRUNCATION_BYTES) {
-    return { text: input, truncated: false };
-  }
+  if (input.length <= TRUNCATION_BYTES) return { text: input, truncated: false };
   const half = Math.floor((TRUNCATION_BYTES - 25) / 2);
   const truncatedChars = input.length - half * 2;
   return {

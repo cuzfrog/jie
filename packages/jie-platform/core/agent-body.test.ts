@@ -46,14 +46,14 @@ function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): CreateAgentB
   const registry = createToolRegistry();
   registry.register("noop", makeNoopTool());
   return {
-    agent_key: "general-1",
-    team_id: "t1",
+    agentKey: "general-1",
+    teamId: "t1",
     soul: makeSoul(),
-    is_leader: true,
+    isLeader: true,
     bus,
-    artifacts: createArtifactStore(storage),
+    artifactStore: createArtifactStore(storage),
     memory: createMemoryManager(storage),
-    session_id: "s1",
+    sessionId: "s1",
     tool_registry: registry,
     getApiKey: () => undefined,
     model: { provider: "anthropic", id: "claude-sonnet-4" },
@@ -149,7 +149,7 @@ describe("createAgentBody — wiring", () => {
   });
 
   test("returned body's identity matches the options", () => {
-    const opts = makeOpts({ agent_key: "leader-1", is_leader: true, session_id: "sess-x" });
+    const opts = makeOpts({ agentKey: "leader-1", isLeader: true, sessionId: "sess-x" });
     const cap = makeFakeAgentFactory();
     const body = createAgentBody({ ...opts, createAgent: cap.factory }) as JieAgentBody;
     const identity = body as unknown as { agent_key: string; team_id: string; is_leader: boolean };

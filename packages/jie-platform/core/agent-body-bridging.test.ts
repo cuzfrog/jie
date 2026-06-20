@@ -110,14 +110,14 @@ function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): CreateAgentB
   const registry = createToolRegistry();
   registry.register("noop", makeNoopTool());
   return {
-    agent_key: "general-1",
-    team_id: "t1",
+    agentKey: "general-1",
+    teamId: "t1",
     soul: makeSoul(),
-    is_leader: true,
+    isLeader: true,
     bus,
-    artifacts: makeArtifacts(),
+    artifactStore: makeArtifacts(),
     memory: makeMemory(),
-    session_id: "s1",
+    sessionId: "s1",
     tool_registry: registry,
     getApiKey: () => undefined,
     model: {},

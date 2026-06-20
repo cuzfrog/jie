@@ -3,10 +3,10 @@ import { getProviders } from "@earendil-works/pi-ai";
 import type { MergedSettings } from "@cuzfrog/jie-platform";
 import type { SettingsStore } from "@cuzfrog/jie-platform/config";
 import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
-import type { ParsedArgs } from "../index.ts";
+import type { ParsedArgsMap } from "../cli-flags.ts";
 
 export async function runModel(
-  parsed: Extract<ParsedArgs, { kind: "model" }>,
+  parsed: ParsedArgsMap["model"],
   projectJieDir: string | null,
   settings: SettingsStore,
 ): Promise<number> {
@@ -28,7 +28,7 @@ export async function runModel(
 }
 
 export async function runTeam(
-  parsed: Extract<ParsedArgs, { kind: "team" }>,
+  parsed: ParsedArgsMap["team"],
   settings: SettingsStore,
   teamRegistry: TeamRegistry,
 ): Promise<number> {

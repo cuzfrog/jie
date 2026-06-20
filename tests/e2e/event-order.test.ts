@@ -121,14 +121,14 @@ describe("Event-Order Contract — body-side alternation", () => {
     bus.subscribe("agent.idle", () => events.push("idle"));
     const stub = makeStubAgentFactory();
     body = createAgentBody({
-      agent_key: "general-1",
-      team_id: "t1",
+      agentKey: "general-1",
+      teamId: "t1",
       soul: makeSoul(),
-      is_leader: true,
+      isLeader: true,
       bus,
-      artifacts,
+      artifactStore: artifacts,
       memory,
-      session_id: "s1",
+      sessionId: "s1",
       tool_registry: registry,
       getApiKey: () => undefined,
       model: {},
@@ -166,14 +166,14 @@ describe("Event-Order Contract — body-side alternation", () => {
     );
     const stub = makeStubAgentFactory();
     body = createAgentBody({
-      agent_key: "general-1",
-      team_id: "t1",
+      agentKey: "general-1",
+      teamId: "t1",
       soul: makeSoul(),
-      is_leader: true,
+      isLeader: true,
       bus,
-      artifacts,
+      artifactStore: artifacts,
       memory,
-      session_id: "s1",
+      sessionId: "s1",
       tool_registry: registry,
       getApiKey: () => undefined,
       model: {},
@@ -191,14 +191,14 @@ describe("Event-Order Contract — body-side alternation", () => {
     bus.subscribe("agent.idle", () => events.push("idle"));
     const stub = makeStubAgentFactory();
     body = createAgentBody({
-      agent_key: "general-1",
-      team_id: "t1",
+      agentKey: "general-1",
+      teamId: "t1",
       soul: makeSoul(),
-      is_leader: true,
+      isLeader: true,
       bus,
-      artifacts,
+      artifactStore: artifacts,
       memory,
-      session_id: "s1",
+      sessionId: "s1",
       tool_registry: registry,
       getApiKey: () => undefined,
       model: {},
@@ -257,14 +257,14 @@ describe("Event-Order Contract — bus-side in-order delivery", () => {
 
     const stub = makeStubAgentFactory();
     const body = createAgentBody({
-      agent_key: "general-1",
-      team_id: "t1",
+      agentKey: "general-1",
+      teamId: "t1",
       soul: makeSoul(),
-      is_leader: true,
+      isLeader: true,
       bus,
-      artifacts,
+      artifactStore: artifacts,
       memory,
-      session_id: "s1",
+      sessionId: "s1",
       tool_registry: registry,
       getApiKey: () => undefined,
       model: {},

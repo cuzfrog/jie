@@ -53,7 +53,8 @@
 - Public types, contract, methods, higher-level abstractions should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers. See below section `Single file layout`.
 - Avoid trivial functions, inline them.
 - Imports from a module without specific file, e,g, `import { foo } from "../module"`. Not `"../module/index.ts"`. For siblings in the immediate directory, directly import from the sibling, e.g. `import { foo } from "./foo"`.
-- Full variable names, e.g. `const artifactStore = new ArtifactStore()`.
+- Use camelCase full variable names, e.g. `const artifactStore = new ArtifactStore()`.
+- Try to keep code in one line if the row is < 140 chars.
 
 ### Test
 - use mocks for unit test. A file `my-function.ts`'s test file `my-function.test.ts` should only test `my-function.ts`.
@@ -103,7 +104,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 - do not `find` from the root dir, it's slow and unnecessary. Use `pwd` to figure out where you are.
 - do not assume a tool is available unless you are told, search before calling if you are not sure.
 - do not write test-only production code, testability should be achieved by adhering to above coding principles.
-- do not shorten variables, function names. E.g. use `agentEvent` instead of `event` or `env` to avoid confusion.
+- do not shorten variables, function names. E.g. use `agentEvent` for type `AgentEvent` instead of `event` or `env` to avoid confusion.
 - do not add comments unless the code itself cannot tell, decisions should be captured in docs or addrs.
 
 ## File Edit Checklist

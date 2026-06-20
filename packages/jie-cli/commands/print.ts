@@ -1,9 +1,9 @@
 
 import type { JiePlatform } from "@cuzfrog/jie-platform";
 import type { AgentEvent, EventBus } from "@cuzfrog/jie-platform/core";
-import type { ParsedArgs } from "../index.ts";
+import type { ParsedArgsMap } from "../cli-flags.ts";
 
-export type PrintArgs = Extract<ParsedArgs, { kind: "print" }>;
+export type PrintArgs = ParsedArgsMap["print"];
 
 export async function runPrint(
   handle: JiePlatform,

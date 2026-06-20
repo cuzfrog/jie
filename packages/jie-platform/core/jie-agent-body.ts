@@ -37,8 +37,8 @@ export class JieAgentBody implements AgentBody {
     bus: EventBus;
     memory: MemoryManager;
     agent: Agent;
-    stream: StreamPublisher;
-    publisher: AgentEventPublisher;
+    streamPublisher: StreamPublisher;
+    eventPublisher: AgentEventPublisher;
   }) {
     this.agent_key = deps.agent_key;
     this.team_id = deps.team_id;
@@ -48,8 +48,8 @@ export class JieAgentBody implements AgentBody {
     this.bus = deps.bus;
     this.memory = deps.memory;
     this.agent = deps.agent;
-    this.stream = deps.stream;
-    this.publisher = deps.publisher;
+    this.stream = deps.streamPublisher;
+    this.publisher = deps.eventPublisher;
   }
 
   handlePiAgentEvent(event: PiAgentEvent): void {
