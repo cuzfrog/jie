@@ -2,11 +2,6 @@ import { realpathSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import { JiePlatformError } from "../domain-types.ts";
 
-/** Resolve `path` against `workspaceRoot` and enforce workspace-root
- *  containment. Throws `JiePlatformError` with code `path_escape` on
- *  violation. The check uses realpath to defeat symlink-based
- *  escape; the resolved absolute path must equal or start with the
- *  resolved absolute workspace root. */
 export function resolveWithinWorkspace(
   path: string,
   workspaceRoot: string,
@@ -33,9 +28,6 @@ export function resolveWithinWorkspace(
   return real;
 }
 
-/** Map a Node `ErrnoException` to a JiePlatformError. `errorMap`
- *  maps errno codes to platform error codes. Returns the thrown
- *  error so callers can re-throw. */
 export function mapErrno(
   e: unknown,
   errorMap: Record<string, string>,

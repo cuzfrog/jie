@@ -39,8 +39,7 @@ describe("SqliteStorage", () => {
   });
 
   test("PRAGMA journal_mode is WAL and busy_timeout is 5000 (file-backed)", () => {
-    // WAL cannot be enabled on `:memory:` databases — SQLite returns
-    // 'memory' for them — so we use a tmp file for this assertion.
+
     const dir = mkdtempSync(join(tmpdir(), "jie-storage-"));
     const path = join(dir, "wal.db");
     try {
@@ -48,7 +47,7 @@ describe("SqliteStorage", () => {
       const journalMode = storage.query("PRAGMA journal_mode");
       expect(journalMode).toEqual([["wal"]]);
       const busyTimeout = storage.query("PRAGMA busy_timeout");
-      // SQLite returns busy_timeout as an integer
+
       expect(Number(busyTimeout[0]?.[0])).toBe(5000);
     } finally {
       rmSync(dir, { recursive: true, force: true });

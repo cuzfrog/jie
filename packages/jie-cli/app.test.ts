@@ -1,15 +1,4 @@
-/** Tests for the shared `createApp` orchestrator.
- *
- *  `createApp` is the layer that owns the platform's
- *  `createJiePlatform` lifecycle call. Both the `-p` branch
- *  (`runPrint` in `commands/print.ts`) and the TUI branch
- *  (currently a stub in `index.ts`) go through it. These tests
- *  cover the shared concerns: --api-key, settings load,
- *  createJiePlatform, and the empty-team guard.
- *
- *  The prompt-flow-specific tests (leader resolution, gate)
- *  live in `commands/print.test.ts` and `core/event-bus.test.ts`.
- */
+
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -53,8 +42,7 @@ function appArgs(partial: Partial<AppArgs> = {}): AppArgs {
 }
 
 function writeEmptyTeam(homeJieDir: string, id: string): void {
-  // A team directory with a `TEAM.md` but no agent `.md` files.
-  // The loader returns `{ roles: [], leaderRole: null }`.
+
   const dir = join(homeJieDir, "teams", id);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "TEAM.md"), "---\n---\n");

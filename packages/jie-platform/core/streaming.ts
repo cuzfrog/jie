@@ -73,7 +73,7 @@ export function makeStreamPublisher(bus: EventBus, agentKey: string, agentRole: 
   }
 
   return {
-    /** Begin a new stream (called on `message_start`). */
+
     beginStream(): void {
       streamId += 1;
       seq = 0;
@@ -85,8 +85,7 @@ export function makeStreamPublisher(bus: EventBus, agentKey: string, agentRole: 
         timer = null;
       }
     },
-    /** Append a delta; flushes eagerly at the size threshold or on
-     *  block-type change. */
+
     append(blockTypeValue: BlockType, delta: string): void {
       if (blockType !== null && blockType !== blockTypeValue) {
         flush();
@@ -101,8 +100,7 @@ export function makeStreamPublisher(bus: EventBus, agentKey: string, agentRole: 
         timer = setTimeout(() => flush(), STREAM_FLUSH_MS);
       }
     },
-    /** End the current stream: flush any remaining buffer, publish
-     *  `agent.stream.end`, return the total chunk count. */
+
     endStream(): { stream_id: number; total_chunks: number } {
       flush();
       const out = { stream_id: streamId, total_chunks: totalChunks };

@@ -135,11 +135,7 @@ describe("loadTeamFromDir", () => {
   });
 
   test("duplicate role stem detection is defensive (the OS prevents exact-name duplicates)", () => {
-    // The duplicate-stem check is defensive code. A case-sensitive
-    // filesystem prevents two files with the same name in one
-    // directory, so `loadTeamFromDir` cannot produce a duplicate
-    // stem in practice. The check exists to guard against future
-    // input methods or case-insensitive filesystems (e.g. macOS).
+
     writeFileSync(
       join(dir, "general.md"),
       `---\ntools:\n  - bash\n---\n`,

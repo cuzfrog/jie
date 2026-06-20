@@ -1,18 +1,4 @@
-/**
- * Resolve the umbrella `@cuzfrog/jie` package version at runtime by
- * walking up from `import.meta.dirname`. The umbrella `package.json`
- * has no fixed path: in dev (monorepo layout) it sits at
- * `../../package.json`; after `bun install -g` (Day 2 publish) the
- * tree is flattened and the relative path breaks. Walking up
- * from the CLI's directory handles both layouts.
- *
- * Resolution algorithm:
- *   1. Start at `import.meta.dirname`.
- *   2. Walk up the parent chain.
- *   3. At each level, try to read `package.json`.
- *   4. Return the first whose `name` equals `"@cuzfrog/jie"`.
- *   5. Fallback `"0.0.0-dev"` if no matching `package.json` is found.
- */
+
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,7 +21,6 @@ export function resolveVersion(startDir: string): string {
         return pkg.version;
       }
     } catch {
-      // No `package.json` at this level, or unreadable — keep walking.
     }
     const parent = dirname(dir);
     if (parent === dir) return FALLBACK_VERSION;

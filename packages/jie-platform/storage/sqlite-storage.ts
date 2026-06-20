@@ -2,9 +2,6 @@ import { Database, type SQLQueryBindings } from "bun:sqlite";
 import type { Storage } from "./storage.ts";
 import { initializeSchema } from "./init-db.ts";
 
-/** Default `Storage` backend, backed by `bun:sqlite`.
- *  Opens `filePath`, sets WAL + busy_timeout pragmas, applies the v1
- *  schema, returns the storage view. */
 export class SqliteStorage implements Storage {
   private readonly db: Database;
 

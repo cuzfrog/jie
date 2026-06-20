@@ -135,7 +135,7 @@ The team-blueprint loader validates the manifest format during `startJie`'s team
 | `TEAM.md` is present for a single-agent team (1 `.md` file) and its `leader:` field does not match the single role's stem | `TEAM.md 'leader' field '<value>' does not match the single agent role '<stem>' in <team_dir>` |
 | A referenced tool (e.g. `mcp:<server>:<method>`) cannot be resolved | (covered separately — see `10-configuration.md` "Cascade: Agent Load Failure") |
 
-A team directory with **no `.md` files at all** is silently ignored — it is not a parse error, it is not a load failure. `loadTeam(teamId)` for such a team resolves with an empty body roster (`handle.bodies().get(teamId)` returns `[]`). The team is "loaded" in the sense that it occupies a slot in `loadedTeams`, but it has nothing to run. (This is mostly relevant for `--team <id>` validation — `jie team <id>` would still print `team '<id>' is not installed` because the directory is empty; `loadTeam` is reachable from the platform but not from the CLI's team-selection paths.)
+A team directory with **no `.md` files at all** is silently ignored — it is not a parse error, it is not a load failure. `loadTeamFromDir` for such a team returns a `Team` with an empty `roles` array and `leaderRole: null`; no bodies are constructed. The CLI's `createApp` orchestrator detects the empty-roster case via the `team.loaded` event's `agents: []` payload and exits 1 with `team '<id>' has no agents to run; check the team manifest`. (In Day 2+ multi-team per ADR 19, the same case produces a `team.loaded` event with `agents: []` and a slot in the loaded-teams map.)
 
 Unknown frontmatter fields are tolerated (warned, ignored), matching the platform's "unrecognized fields are tolerated" policy on `settings.json`. The CLI prints the parse error on stderr and exits 1. The user fixes the manifest and re-runs.
 
@@ -181,7 +181,7 @@ After parsing, the platform constructs `AgentSoul` instances with auto-computed 
 
 The single-agent-without-`TEAM.md` case is the implicit-leader rule: with no `TEAM.md` and one role, the role *is* the leader by construction. The loader sets `is_leader: true` for the single body. The auto-subscription row above (`leader.prompt`) is wired for the single body in this case.
 
-The empty-team case (no `.md` files at all) is silently ignored by the loader — `loadTeam(teamId)` returns a `TeamBlueprint` with an empty roles array; no bodies are constructed. This is a parse edge case, not a normal team shape; the CLI's `-p` mode must guard against an empty team (see `ui/cli.md` `jie -p` step 5).
+The empty-team case (no `.md` files at all) is silently ignored by the loader — `loadTeamFromDir` returns a `Team` with an empty roles array and `leaderRole: null`; no bodies are constructed. This is a parse edge case, not a normal team shape; the CLI's `-p` mode must guard against an empty team (see `ui/cli.md` `jie -p` step 5).
 
 ## Tool
 
@@ -606,7 +606,7 @@ class AgentBody {
   private bus:         EventBus;
   private artifacts:   ArtifactStore;
   private memory:      MemoryManager;           // see 08-memory.md
-  private readonly session_id: string;          // per-team session id; supplied by JieHandle at construction (per 08-memory.md "Restore", ADR 18, and ADR 20)
+  private readonly session_id: string;
   private queue:       Array<AgentMessage>;     // in-memory prompt queue; see "Prompt Ingress & Queuing" below
 
   constructor(opts: {
@@ -617,7 +617,7 @@ class AgentBody {
     bus:        EventBus;        // shared EventBus (single instance per process)
     artifacts:  ArtifactStore;   // shared ArtifactStore
     memory:     MemoryManager;   // shared MemoryManager (per ADR 12; the body uses the platform's MemoryManager instance, not its own)
-    session_id: string;          // per-team session id; supplied by JieHandle (per ADR 18 and ADR 20)
+    session_id: string;
   });
 
   start(): Promise<void>  // (1) register bus subscriptions; (2) memory.restore() and push to agent.state.messages; (3) if last message is user/toolResult, agent.continue(); (4) start the queue-processing loop — if queue is non-empty, dequeue and agent.prompt(); otherwise, wait for new events. See the four-step "start()" ordering description below.
@@ -630,14 +630,14 @@ class AgentBody {
 - pi-agent's `Agent` handles the LLM loop, tool execution, streaming, and compaction.
 - The body is the **only** publisher of events on Jie's bus. The LLM expresses publication intent through `notify`; the body validates and executes the publish.
 - **`is_leader` is a constructor parameter, not a `AgentSoul` field.** The soul is the role's behavioral profile (model, system prompt, tools, subscriptions); whether the role is the team leader is a team-level fact owned by the team-blueprint loader and passed to each body's constructor. The body uses `is_leader` only to decide whether to auto-subscribe to `{team_id}.leader.prompt` (see "Platform Auto-Wiring" below). The same `AgentSoul` could be the leader in one team and a non-leader in another (e.g., the built-in minimal team's `general` is the leader; a user team might have `general` as a non-leader role).
-- **`start()` is async and returns when the body is fully started.** The `JieHandle` awaits every body's `start()` (in `startJie` step 5 and `loadTeam`) before publishing `{team_id}.team.loaded` (per ADR 22 and `addrs/13-platform-entry-function.md`). The order inside `start()` is:
+- **`start()` is async and returns when the body is fully started.** The platform awaits every body's `start()` (in `createJiePlatform`'s startup sequence and the platform's internal `loadTeam`) before publishing `{team_id}.team.loaded` (per ADR 22 and `addrs/13-platform-entry-function.md`). The order inside `start()` is:
 
   1. **Register bus subscriptions.** Subscribe to `{team_id}.{agent_key}` (every body), plus `{team_id}.leader.prompt` if `is_leader === true`, plus `{team_id}.<topic>` for every topic in `soul.subscriptions` (per ADR 19's per-team subject prefixing). The subscription callback enqueues incoming events onto the body's `queue` field and publishes `agent.queue.update` (see "Prompt Ingress & Queuing" below).
   2. **Restore history.** Call `memory.restore(agent_key, session_id, team_id)` → `AgentMessage[]`. Push the returned array into `agent.state.messages`.
   3. **Conditionally `continue()`.** If the restored array is non-empty and the last message is `user` or `toolResult`, call `agent.continue()` to resume the in-flight turn. If the array is empty (fresh `session_id`) or ends with `assistant` (a completed prior turn), do **not** call `continue()`; the body waits for the next `agent.prompt()` from the queue.
   4. **Start the queue-processing loop.** If the in-memory `queue` is non-empty (events may have arrived on subscribed subjects between step 1's subscription registration and step 2's restore), dequeue the first message and call `agent.prompt(message)`. Otherwise, wait for new events from the subscription callback. After `agent_end`, the loop dequeues the next message and calls `agent.prompt(nextMessage)`, until the queue is empty.
 
-  The body does **not** publish `agent.idle` at startup; a body that has not yet processed any turn is treated as idle by default. The "this team is loaded" signal is the `{team_id}.team.loaded` event published by the `JieHandle` after all bodies' `start()` returns. The body publishes `agent.idle` only on every `agent_end`; the alternation with `agent.turn.start` is the Event-Order Contract — see `03-event-system.md` for the canonical contract.
+  The body does **not** publish `agent.idle` at startup; a body that has not yet processed any turn is treated as idle by default. The "this team is loaded" signal is the `{team_id}.team.loaded` event published by the platform after all bodies' `start()` returns. The body publishes `agent.idle` only on every `agent_end`; the alternation with `agent.turn.start` is the Event-Order Contract — see `03-event-system.md` for the canonical contract.
 
 ### Event Loop
 
@@ -779,7 +779,7 @@ Memory has two write paths in the body, both unconditional:
 - **`message_end` → `persist`**: On every `message_end` from pi-agent, the body calls `memory.persist(message, agent_key, session_id, team_id)` — write-through to SQLite. No role check; the listener does not special-case summaries.
 - **`transformContext` wrapper → `compact`**: The body passes a wrapped `transformContext` to pi-agent. The wrapper calls the inner `transformContext`, diffs input vs. output for newly-added `CompactionSummaryMessage` entries, and calls `memory.compact(range, summary, agent_key, session_id, team_id)` for each. The wrapper is invariant across days: in v1 the inner is identity (no compaction → wrapper is a no-op); in Day 2+ the inner is pi-agent's actual compaction logic (or a custom implementation) and the wrapper persists the produced summaries. Compaction is trigger-agnostic — `/compact` slash command, pi-agent's auto-threshold, or Day 2+ team hooks all funnel through `transformContext` and the wrapper persists.
 
-Memory is durable and session-scoped. The `session_id` is supplied by `JieHandle` at construction (per ADR 18 and ADR 20). Without `--resume` or `--continue`, a new process run mints a fresh `session_id` (ULID via `ulid@2.3.0`) and the agent starts with a clean conversation. With `--resume <id>`, the named `session_id` is validated and used; `memory.restore()` returns prior rows for that session. With `--continue`, the most-recent `session_id` for the current `team_id` is used; `memory.restore()` returns prior rows for that session.
+Memory is durable and session-scoped. The `session_id` is supplied by the platform at construction (per ADR 18 and ADR 20). Without `--resume` or `--continue`, a new process run mints a fresh `session_id` (ULID via `ulid@2.3.0`) and the agent starts with a clean conversation. With `--resume <id>`, the named `session_id` is validated and used; `memory.restore()` returns prior rows for that session. With `--continue`, the most-recent `session_id` for the current `team_id` is used; `memory.restore()` returns prior rows for that session.
 
 `memory.compact()` writes the summary row and the raw range's `compacted=1` flag updates in a single `Storage.transaction()`. The `compactionSummary` role's row is owned exclusively by `compact()`; `persist()` does not write summaries because pi-agent does not emit `message_end` for `CompactionSummaryMessage` injected by `transformContext`. See `08-memory.md` "Compact" and "Integration with pi-agent" for the full contract.
 

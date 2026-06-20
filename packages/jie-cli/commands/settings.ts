@@ -1,15 +1,4 @@
-/** `model` and `team` subcommands — write to settings.json.
- *
- *  `model` sets `defaultProvider` + `defaultModel`. The write
- *  scope is "project" if `.jie/` is found walking up from
- *  `cwd`, else "global".
- *
- *  `team` sets / unsets `defaultTeam`. Setter validates the team
- *  id via the registry's `isInstalled`. The write scope is
- *  "project" if the registry reports the team as
- *  project-scoped, else "global" (including the built-in minimal
- *  team, which the registry reports as user-scoped).
- */
+
 import { getProviders } from "@earendil-works/pi-ai";
 import type { MergedSettings } from "@cuzfrog/jie-platform";
 import { findProjectJieRoot } from "@cuzfrog/jie-platform";

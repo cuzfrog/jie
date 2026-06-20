@@ -39,7 +39,7 @@ A single `jie` process can host multiple teams' bodies. Team-specific channels a
 | `{team_id}.leader.prompt` | Leader prompt ingress from TUI or `-p` mode | Leader auto-subscribes; TUI publishes (scoped to the active team). |
 | `{team_id}.{agent_key}` | Direct-addressing channel; the agent with this key auto-subscribes | Every agent auto-subscribes; `notify` publishes. |
 | `{team_id}.{domain_topic}` | Team-defined domain events (e.g. `task.recorded`, `work.researched`) | Agents subscribe via `subscribe:` in `.md`; `notify` publishes. |
-| `{team_id}.team.loaded` | One-shot per team load; payload `{ team_id, agents: { role, agent_key, is_leader }[] }` — the team's roster. The TUI's agents-panel-at-boot anchor (per ADR 22); the `-p` flow's team-info source. | `JieHandle` publishes in `createJiePlatform`. Not republished on team swap-back. |
+| `{team_id}.team.loaded` | One-shot per team load; payload `{ team_id, agents: { role, agent_key, is_leader }[] }` — the team's roster. The TUI's agents-panel-at-boot anchor (per ADR 22); the `-p` flow's team-info source. | The platform publishes in `createJiePlatform` (startup team) and in the platform's internal `loadTeam` (Day 2+ multi-team). Not republished on team swap-back. |
 
 **Platform subjects (un-scoped, `team_id` in the envelope):**
 
@@ -181,7 +181,7 @@ Every tool call emits two events:
 
 When an agent transitions from `busy` to `idle` (work unit complete, terminal event published, or error recovery complete), it publishes `agent.idle`. This is the signal for observers (TUI, `-p` mode) that the agent is ready for new work. Replaces the heartbeat-based discovery model.
 
-**`agent.idle` is published on every `agent_end` only.** A body that has not yet processed any turn has published no events; observers treat it as **idle by default** (no event required). The "this agent exists" signal at boot is the separate `{team_id}.team.loaded` event (see Subject Schema), published by the `JieHandle` once per team load, not by the body. The new design separates "this team is loaded" (a one-shot team-routing announcement) from "this body transitioned busy→idle" (a per-body state-transition event).
+**`agent.idle` is published on every `agent_end` only.** A body that has not yet processed any turn has published no events; observers treat it as **idle by default** (no event required). The "this agent exists" signal at boot is the separate `{team_id}.team.loaded` event (see Subject Schema), published by the platform once per team load, not by the body. The new design separates "this team is loaded" (a one-shot team-routing announcement) from "this body transitioned busy→idle" (a per-body state-transition event).
 
 `agent.idle` fires on every `agent_end` regardless of `stopReason` — whether the LLM finished naturally (`"stop"`, `"length"`) or exited from an error (`"error"`, `"aborted"`), the agent returns to idle. Observers can rely on `agent.idle` as a definitive "this agent is no longer processing" signal — they do not need to inspect `stopReason` separately to know the agent is ready for new work. The body never publishes `agent.idle` without a preceding `agent.turn.start` for the same turn; see "Event-Order Contract" below.
 

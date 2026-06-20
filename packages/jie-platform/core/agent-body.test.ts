@@ -10,16 +10,7 @@ import { Agent, type AgentMessage } from "@earendil-works/pi-agent-core";
 import { Type } from "typebox";
 import { AgentBody } from "./agent-body.ts";
 import { createEventBus, type EventBus } from "./event-bus.ts";
-// EXCEPTION: The `InMemory*` classes are file-private to the storage
-// module — they are intentionally not re-exported from `storage/index.ts`.
-// Tests in this same package reach them via direct sibling-file imports
-// so we can substitute mocks for the real SQLite-backed factories
-// without `mock.module()` (which is global-state and would leak across
-// test files). The cross-directory file-specific import is acceptable
-// here because the dependency is a true in-memory mock, not a coupling
-// to the storage module's public surface. If a new sibling module is
-// added that needs in-memory mocks, copy this comment — do NOT use
-// this pattern for production code.
+
 import { InMemoryArtifactStore } from "../storage/artifact-store.ts";
 import { InMemoryMemoryManager } from "../storage/memory-store.ts";
 import type { ArtifactStore, MemoryManager } from "../storage/index.ts";
@@ -220,8 +211,7 @@ describe("AgentBody — start() subscriptions", () => {
       createAgent: result.factory,
     });
     await body.start();
-    // The body should have registered only its own-addressed
-    // subscription (worker-1), not leader.prompt.
+
     expect(bus.subscriberCount("t1.worker-1")).toBe(1);
     expect(bus.subscriberCount("t1.leader.prompt")).toBe(0);
   });
@@ -405,8 +395,7 @@ describe("AgentBody — tool adaptation", () => {
       createAgent: factory,
     });
     void body;
-    // The fake's state.tools is set on construction; verify the
-    // constructor populated it.
+
     expect((fake.state.tools as unknown[]).length).toBe(1);
     const adapted = (fake.state.tools as unknown[])[0] as { name: string };
     expect(adapted.name).toBe("noop");

@@ -5,7 +5,7 @@ import type { Tool, ToolResult } from "./types.ts";
 import { JiePlatformError } from "../domain-types.ts";
 import { mapErrno, resolveWithinWorkspace } from "./path-utils.ts";
 
-const CONTENT_CAP = 5 * 1024 * 1024; // 5 MiB
+const CONTENT_CAP = 5 * 1024 * 1024;
 
 const WRITE_FILE_DESCRIPTION = `Write \`content\` to \`path\` (relative to workspace root, or absolute within workspace).
 Overwrites the file if it exists. Creates parent directories as needed. Text only;
@@ -49,7 +49,6 @@ export function createWriteFileTool(deps: WriteFileDeps): Tool<WriteFileInput> {
 
       const real = resolveWithinWorkspace(input.path, deps.workspaceRoot);
 
-      // Reject if the resolved path is an existing directory.
       let stat;
       try {
         stat = statSync(real);
@@ -65,7 +64,6 @@ export function createWriteFileTool(deps: WriteFileDeps): Tool<WriteFileInput> {
         );
       }
 
-      // Create missing parent directories.
       try {
         mkdirSync(dirname(real), { recursive: true });
       } catch (e) {

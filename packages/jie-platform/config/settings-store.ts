@@ -1,17 +1,4 @@
-/** Settings persistence (`./.jie/settings.json` and `~/.jie/settings.json`).
- *
- *  Wraps the platform's read-only `loadMergedSettings` with the
- *  write side. Project scope (`./.jie/settings.json`) wins over
- *  global (`~/.jie/settings.json`) per the spec's merge order;
- *  callers pick the scope for `write` based on whether the
- *  current working directory is inside a project root.
- *
- *  Both `cwd` and `homeJieDir` are bound at construction; the
- *  returned store is a closure over them. The interface is the
- *  three CRUD operations; the stale-defaultTeam recovery is
- *  the CLI's concern (`packages/jie-cli/app.ts`), not the
- *  store's.
- */
+
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
@@ -26,18 +13,12 @@ export type Scope = "project" | "global";
 export interface SettingsStore {
   load(): Settings;
   write(settings: Settings, scope: Scope): void;
-  /** Removes `defaultTeam` from the merged settings and writes
-   *  back to whichever scope the previous `defaultTeam` lived
-   *  in (project if a project `.jie/settings.json` exists,
-   *  else global). */
+
   unsetDefaultTeam(): void;
 }
 
 export function makeSettingsStore(cwd: string, homeJieDir: string): SettingsStore {
-  // `loadMergedSettings` takes the user's HOME directory (the
-  // parent of `.jie/`), not the `.jie/` dir itself. The store's
-  // public surface uses `homeJieDir` (the `.jie/` dir); the load
-  // call derives `homeDir` for the platform's read-only helper.
+
   const homeDir = dirname(homeJieDir);
   return {
     load(): Settings {

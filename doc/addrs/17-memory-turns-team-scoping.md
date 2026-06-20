@@ -69,17 +69,11 @@ LIMIT 1;
 
 The `idx_memory_turns_team_session_created` index makes this an index-only scan. No `agent_key` filter — `team_id` alone is the namespace. A session with one row and a session with thousands are both valid candidates; the most recent by `MAX(created_at)` wins. Empty result: WARN to stderr (`no prior session in this directory; starting a new session`) and proceed as if `--continue` were not given.
 
-### `JieHandle` map
+### `JiePlatform`'s internal session map
 
-The handle's in-memory session map keys on `team_id`:
+`createJiePlatform` holds a private `Map<team_id, session_id>` as a closure field (it is not part of the `JiePlatform` interface). The handle's v1 public surface is `{ bus, stop }` (per ADR 13); the map is an implementation detail of the platform's startup sequence.
 
-```typescript
-type JieHandle = {
-  // ...
-  private sessionMap: Map<team_id, session_id>;
-  // ...
-};
-```
+In v1, the map has at most one entry (the startup team). In Day 2+ multi-team, the same map shape covers the loaded teams; ADR 19 captures the Day 2+ lifecycle.
 
 All agents in the same team in the same process share one session id. On team swap, the new team's session id is independent of the old team's — conversation is bound to the team, not the process. Switch back to a previously-active team reuses the recorded session id; the previously-active team's bodies are **not** stopped (per ADR 19), but its session id remains on the map for the lifetime of the process. Memory is per-team at the session level, per-agent at the row level.
 
@@ -102,7 +96,7 @@ All agents in the same team in the same process share one session id. On team sw
 
 - Schema change: `memory_turns` gains a `team_id` column; primary key changes; one new index added; one redundant index dropped.
 - API change: `persist`, `compact`, `restore` all take `team_id`.
-- Semantic shift: `session_id` is no longer the only namespace. Two teams with the same `agent_key` no longer share rows. The `JieHandle`'s map is keyed by `team_id`.
+- Semantic shift: `session_id` is no longer the only namespace. Two teams with the same `agent_key` no longer share rows. The platform's internal `Map<team_id, session_id>` (a closure field of `createJiePlatform`, not a public field of `JiePlatform` per ADR 13) is keyed by `team_id`.
 - The cross-team collision section and startup WARN are removed.
 - `ExecutionContext` exposes `team_id`. Tools that need it (e.g., for team-scoped artifact keys) can use it; most tools don't.
 - `--resume <session_id>` is team-scoped implicitly: it looks up rows matching the resolved `team_id` plus the named `session_id`. Cross-team resume silently returns no rows and proceeds with a fresh session.

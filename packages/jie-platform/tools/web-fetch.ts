@@ -17,7 +17,7 @@ branches on \`status\`; the platform does not surface non-2xx as an error).
 Inherits the tool's 120s timeout.`;
 
 const USER_AGENT = "JieBot/0.1 (+https://github.com/cuzfrog/jie)";
-const BODY_CAP = 5 * 1024 * 1024; // 5 MiB
+const BODY_CAP = 5 * 1024 * 1024;
 
 const TEXT_LIKE_PREFIXES = ["text/"];
 const TEXT_LIKE_APPLICATIONS = new Set<string>([
@@ -68,10 +68,7 @@ function decodeBody(bytes: Uint8Array, charset: string | null): string {
   if (charset === null) {
     return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
   }
-  // The WHATWG Encoding Standard lists a fixed set of supported
-  // encodings; unknown labels (e.g. 'Shift_JIS') cause TextDecoder
-  // to throw RangeError. Fall back to UTF-8 with replacement chars
-  // (the spec's policy). Normalize common aliases.
+
   const normalized = normalizeCharset(charset);
   try {
     return new TextDecoder(

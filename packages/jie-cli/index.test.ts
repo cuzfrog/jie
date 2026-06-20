@@ -1,13 +1,4 @@
-/** Integration tests for the `jie` main entry.
- *
- *  These tests exercise the full `main(argv)` path end-to-end
- *  (cli-flags → dispatch → command module). Per-command unit
- *  tests live in `commands/*.test.ts`; this file is reserved
- *  for behaviors that only manifest at the dispatch boundary:
- *  duplicate / missing-argument guards, --version / --help /
- *  no-flags, top-level --api-key, and the --resume unknown
- *  session path through main().
- */
+
 import { describe, expect, spyOn, test } from "bun:test";
 import {
   existsSync,
@@ -28,7 +19,7 @@ interface Capture {
 }
 
 interface RunOptions {
-  /** Pre-create files in the homeDir's `.jie/` tree before `main` runs. */
+
   pre?: (homeDir: string) => void;
 }
 

@@ -14,12 +14,11 @@ import {
 
 export interface CreateJieOptions {
   workspace: string;
-  /** The user's home jie dir (e.g. `~/.jie/`). */
+
   homeJieDir: string;
-  /** The team id to load. Fallback to default minimal team. */
+
   teamId?: string;
-  /** Forward-looking stub: the MCP client will consume this once it
-   *  lands. The platform does not load `mcp.json` in v1. */
+
   mcpServerConfigs?: McpServerConfig[];
   resumeSessionId?: string;
   continueLastSession?: boolean;
@@ -59,8 +58,7 @@ function resolveSoulModel(
   settingsStore: SettingsStore,
   resolveModel: (provider: string, modelId: string) => Model<any>,
 ): Model<any> {
-  // Read settings at call time so a runtime change to the
-  // default model is picked up by the next body that loads.
+
   const settings = settingsStore.load();
   const modelStr = soul.model !== "" ? soul.model : (
     settings.defaultProvider !== undefined && settings.defaultModel !== undefined
@@ -90,17 +88,13 @@ export async function createJiePlatform(opts: CreateJieOptions, deps: JiePlatfor
   const artifactStore: ArtifactStore = createArtifactStore(deps.storage);
   const bus: EventBus = deps.bus;
 
-  // Step 1: resolve the team blueprint. The registry's
-  // `loadTeam(undefined)` falls back to the built-in minimal team.
   const resolvedTeamId = opts.teamId ?? "minimal";
   const blueprint: Team = deps.teamRegistry.loadTeam(resolvedTeamId);
 
-  // Step 2: model pre-check (every soul must resolve).
   for (const soul of blueprint.roles) {
     resolveSoulModel(soul, deps.settingsStore, resolveModel);
   }
 
-  // Step 3: session id resolution for the startup team.
   const sessionIds = new Map<string, string>();
   for (const teamId of [resolvedTeamId]) {
     let resolved: string;
@@ -125,18 +119,14 @@ export async function createJiePlatform(opts: CreateJieOptions, deps: JiePlatfor
     sessionIds.set(teamId, resolved);
   }
 
-  // Step 4: build bodies for the startup team.
   const loadedTeams = new Map<string, AgentBody[]>();
 
   async function buildAndStart(teamId: string): Promise<AgentBody[]> {
     const bp: Team = deps.teamRegistry.loadTeam(teamId);
 
-    // If already loaded, return existing bodies (idempotent).
     const existing = loadedTeams.get(teamId);
     if (existing !== undefined) return existing;
 
-    // For session-id resolution on a swap-loaded team, reuse the
-    // recorded value if any; else mint a fresh one.
     let sid = sessionIds.get(teamId);
     if (sid === undefined) {
       if (opts.resumeSessionId !== undefined) {
@@ -189,15 +179,8 @@ export async function createJiePlatform(opts: CreateJieOptions, deps: JiePlatfor
     return out;
   }
 
-  // Build and start the startup team.
   await buildAndStart(resolvedTeamId);
 
-  // The handle is the externally visible lifecycle object. Its
-  // surface is intentionally minimal: just the bus and the stop
-  // method. All team-level information (teamId, leader, bodies)
-  // is exposed via bus events (e.g. `<team_id>.team.loaded`) so
-  // the TUI and any other consumer can derive it from the event
-  // stream without holding a reference to the live bodies.
   const handle: JiePlatform = {
     bus,
     stop: async (timeoutMs: number = 10_000) => {
@@ -206,9 +189,7 @@ export async function createJiePlatform(opts: CreateJieOptions, deps: JiePlatfor
         allBodies.push(...bodies);
       }
       for (const b of allBodies) b.stop();
-      // Real abort/wait integration is a Day 2 concern (per the
-      // deployment spec); v1's `stop` is a synchronous detach of
-      // bus subscriptions. The CLI does not rely on the timeout.
+
       void timeoutMs;
     },
   };

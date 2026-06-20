@@ -2,11 +2,8 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Storage } from "./storage.ts";
 import type { TurnRecord } from "../domain-types.ts";
 
-/** Conversation-history persistence interface. A per-body adapter that
- *  write-throughs every pi-agent message to durable storage, and on
- *  agent start, restores the full non-compacted history. */
 export interface MemoryManager {
-  /** Write-through a finalized message to durable storage. */
+
   persist(
     message: AgentMessage,
     agent_key: string,
@@ -14,8 +11,6 @@ export interface MemoryManager {
     team_id: string,
   ): void;
 
-  /** Mark the compacted raw messages as replaced and persist the
-   *  CompactionSummaryMessage as a new row. Atomic. */
   compact(
     compactedSeqRange: [number, number],
     summary: AgentMessage,
@@ -24,20 +19,14 @@ export interface MemoryManager {
     team_id: string,
   ): void;
 
-  /** Restore non-compacted history for (team_id, agent_key, session_id),
-   *  ordered by `seq`. Empty array when no prior history exists. */
   restore(
     agent_key: string,
     session_id: string,
     team_id: string,
   ): Promise<AgentMessage[]>;
 
-  /** Most-recent session_id for `team_id` (by MAX(created_at) over
-   *  its rows), or `null`. Scoped to `team_id` alone (per ADR 17). */
   mostRecentSessionId(team_id: string): string | null;
 
-  /** True if at least one row in `memory_turns` matches
-   *  (team_id, session_id). */
   hasSession(team_id: string, session_id: string): boolean;
 }
 
@@ -45,8 +34,6 @@ export function createMemoryManager(storage: Storage): MemoryManager {
   return new SqliteMemoryManager(storage);
 }
 
-/** Default `MemoryManager` implementation. SQL is written at the call
- *  site. `compact` is atomic via `Storage.transaction`. */
 export class SqliteMemoryManager implements MemoryManager {
   constructor(private readonly storage: Storage) {}
 
@@ -149,8 +136,6 @@ export class SqliteMemoryManager implements MemoryManager {
   }
 }
 
-/** In-memory mock used by tests. Implements the same `MemoryManager`
- *  interface; no persistence. */
 export class InMemoryMemoryManager implements MemoryManager {
   private readonly rows: TurnRecord[] = [];
 

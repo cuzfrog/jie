@@ -4,9 +4,9 @@ import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types.ts";
 import { JiePlatformError } from "../domain-types.ts";
 
-const STREAM_CAP = 32 * 1024; // 32 KiB
+const STREAM_CAP = 32 * 1024;
 const TRUNCATION_MARKER = "[truncated to 32 KiB]";
-const TIMEOUT_MS = 300_000; // 300 seconds
+const TIMEOUT_MS = 300_000;
 
 const BASH_DESCRIPTION = `Execute a shell command in \`/bin/sh\` (POSIX) within the workspace root. The
 command runs with a 300s timeout (SIGTERM, then SIGKILL after a brief grace).
@@ -93,7 +93,6 @@ export function createBashTool(deps: BashDeps): Tool<BashInput> {
           try {
             proc.kill("SIGKILL");
           } catch {
-            // already dead
           }
         }, 5_000);
       }, TIMEOUT_MS);
@@ -102,7 +101,6 @@ export function createBashTool(deps: BashDeps): Tool<BashInput> {
         try {
           proc.kill("SIGTERM");
         } catch {
-          // already dead
         }
       };
       signal?.addEventListener("abort", abortHandler);
@@ -120,13 +118,11 @@ export function createBashTool(deps: BashDeps): Tool<BashInput> {
               try {
                 await reader.cancel();
               } catch {
-                // already cancelled
               }
               break;
             }
           }
         } catch {
-          // stream closed
         }
       })();
       const stderrReader = (async () => {
@@ -140,13 +136,11 @@ export function createBashTool(deps: BashDeps): Tool<BashInput> {
               try {
                 await reader.cancel();
               } catch {
-                // already cancelled
               }
               break;
             }
           }
         } catch {
-          // stream closed
         }
       })();
 
@@ -154,9 +148,6 @@ export function createBashTool(deps: BashDeps): Tool<BashInput> {
       clearTimeout(timer);
       signal?.removeEventListener("abort", abortHandler);
 
-      // Drain any remaining output with a short grace period so a
-      // killed-during-write process can flush before the readers
-      // give up.
       const drainTimeout = 500;
       await Promise.race([
         Promise.allSettled([stdoutReader, stderrReader]),

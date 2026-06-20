@@ -113,17 +113,7 @@ describe("InProcessEventBus", () => {
   });
 
   test("publish is depth-first synchronous: nested subscribers complete before outer publish returns", () => {
-    // The InProcessEventBus dispatches subscribers depth-first
-    // synchronously. A subscriber that itself calls bus.publish
-    // sees the inner publish run to completion (all its
-    // subscribers run, including events they publish) before
-    // the outer callback returns. This is the property the
-    // CLI's idle gate relies on: a body's notify call returns
-    // only after the recipient's handler has run end-to-end, so
-    // any events the recipient publishes (e.g. its own
-    // agent.turn.start) are observed before the notifying
-    // body's notify returns. Locking this in here justifies a
-    // future simplification of `runGate` in `print.ts`.
+
     const bus = new InProcessEventBus();
     const events: string[] = [];
 

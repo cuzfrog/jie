@@ -12,11 +12,7 @@ import { createMemoryManager, createStorage } from "./storage";
 import type { MergedSettings } from "./config";
 
 function makeSettings(overrides: Partial<MergedSettings> = {}): MergedSettings {
-  // `claude-sonnet-4-5` is a real pi-ai model id; using it
-  // means the real `defaultResolveModel` (which calls pi-ai's
-  // `getModel`) can resolve the soul's model without test
-  // hooks. Tests that need to exercise the "no model" path
-  // override this with an empty settings object.
+
   return { defaultProvider: "anthropic", defaultModel: "claude-sonnet-4-5", ...overrides };
 }
 
@@ -199,9 +195,7 @@ describe("createJiePlatform", () => {
 
   describe("empty team (no .md files)", () => {
     test("team.loaded is published with empty agents array", async () => {
-      // A user-scoped team directory with TEAM.md but no
-      // agent .md files. The loader returns `{ roles: [],
-      // leaderRole: null }`.
+
       const userTeam = join(homeJieDir, "teams", "ghost");
       mkdirSync(userTeam, { recursive: true });
       writeFileSync(join(userTeam, "TEAM.md"), "---\n---\n");

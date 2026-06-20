@@ -17,12 +17,6 @@ or surface the issue to the user. Topic names must not start with \`agent.\`
 the prefix); empty topics and control characters are rejected. \`notify\` is
 the SOLE means of inter-agent communication. Does NOT end the turn.`;
 
-/** Build the standard `notify` tool. The bus reference is captured at
- *  construction; the tool publishes envelopes on the same bus the
- *  body is wired to. `isSelfSubscribed` is provided by the body
- *  construction site so the tool can compute the LLM-facing
- *  recipient count (subscriberCount minus 1 if the publisher is
- *  itself subscribed, per the spec's step 4). */
 export interface NotifyDeps {
   bus: EventBus;
   isSelfSubscribed: (topic: string) => boolean;

@@ -1,10 +1,4 @@
-/** Auth persistence (`~/.jie/auth.json`).
- *
- *  Wraps the platform's read-only `loadAuthJson` with the write
- *  side (file creation, mode 0o600 for secrets), plus the small
- *  cross-store operations (`setProvider`, `removeProvider`) used
- *  by the `login`, `logout`, and `--api-key` commands.
- */
+
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { globalAuthPath, homeJieDir } from "./paths.ts";
 import { loadAuthJson } from "./load-auth.ts";

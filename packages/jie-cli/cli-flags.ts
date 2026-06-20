@@ -1,9 +1,4 @@
-/**
- * Hand-rolled CLI flag parser. Keeps the dependency surface small —
- * no commander / yargs. Returns a normalized record (or an error
- * for duplicate / missing-argument cases per the spec's
- * "Flag Parsing Rules").
- */
+
 
 export type ParsedArgs =
   | { kind: "print"; instruction: string; team?: string; timeout: number; json: boolean; apiKey?: string; resume?: string; continueLast: boolean }
@@ -21,13 +16,12 @@ const PRINT_FLAGS = new Set(["-p", "--print"]);
 
 export function parseFlags(argv: string[]): ParsedArgs {
   const dupes = new Set<string>();
-  const seen = new Map<string, string>(); // flag -> value (or "" for boolean)
-  // Determine subcommand / first arg.
+  const seen = new Map<string, string>();
+
   const rest = argv.slice();
   if (rest.length === 0) return { kind: "tui" };
   const first = rest[0]!;
 
-  // Top-level flags (no subcommand).
   if (first === "--version") return { kind: "version" };
   if (first === "--help" || first === "-h") return { kind: "help" };
   if (first === "login") return parseLogin(rest.slice(1), dupes, seen);
@@ -35,15 +29,11 @@ export function parseFlags(argv: string[]): ParsedArgs {
   if (first === "model") return parseModel(rest.slice(1));
   if (first === "team") return parseTeam(rest.slice(1));
 
-  // Otherwise, this is either `jie -p "..."`, `jie --api-key ... -p "..."`,
-  // or `jie` (TUI mode — out of v1 scope).
   if (first === "--api-key") {
     const v = rest[1];
     if (v === undefined) return { kind: "error", message: "missing argument for --api-key" };
     if (rest.length > 2) {
-      // Combined with other flags (e.g. `-p "..."`): route to the
-      // print flow so `--api-key` writes auth.json before the
-      // print flow resolves the model.
+
       return parsePrint(rest.slice(1), dupes, seen, first);
     }
     return { kind: "apiKey", apiKey: v };
@@ -155,7 +145,7 @@ function parsePrint(
       apiKey = args[i]!;
       i += 1;
     } else {
-      // Mark the -p/--print flag as seen for duplicate detection.
+
       seen.set(firstFlag, "");
     }
   } else if (firstFlag === "--resume") {

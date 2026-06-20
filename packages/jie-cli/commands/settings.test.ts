@@ -103,8 +103,7 @@ describe("runTeam", () => {
     cwd = mkdtempSync(join(tmpdir(), "jie-cli-team-cwd-"));
     homeJieDir = join(homeDir, ".jie");
     settings = makeSettingsStore(cwd, homeJieDir);
-    // `homeJieDir` is the path to the `.jie/` directory; teams
-    // live under `<homeJieDir>/teams/<id>/`.
+
     teamRegistry = createTeamRegistry({
       workspace: cwd,
       homeJieDir,
@@ -164,15 +163,7 @@ describe("runTeam", () => {
   });
 
   test("team with malformed id -> exit 1 (charset validation moved to parse time)", async () => {
-    // Charset validation is no longer the CLI's responsibility.
-    // The flag parser rejects malformed ids at parse time, and
-    // the loader / settings-store validator reject them at
-    // read time. The runtime `runTeam` accepts whatever the
-    // user typed and delegates the existence check to
-    // `isInstalled`. A malformed id that cannot correspond to
-    // any directory on disk (e.g. "bad id with spaces") fails
-    // the `isInstalled` check and the user sees the standard
-    // "is not installed" message.
+
     const errs: string[] = [];
     const orig = console.error;
     console.error = (...args: unknown[]) => {

@@ -94,8 +94,7 @@ describe("createToolRegistry", () => {
     const reg: ToolRegistry = createToolRegistry();
     reg.register("bash", makeTool("bash"));
     reg.register("mock-tool-A1", makeTool("mock-tool-A1"));
-    // `mcp:foo:bar` — the part after the last `:` is `bar`, exact match.
-    // No tool is named `bar` (no MCP client in v1), so the result is [].
+
     expect(reg.resolve("mcp:foo:bar")).toEqual([]);
   });
 
@@ -152,8 +151,7 @@ describe("createToolRegistry", () => {
     const reg: ToolRegistry = createToolRegistry();
     reg.register("my-bash", makeTool("my-bash"));
     reg.register("bash", makeTool("bash"));
-    // Glob is anchored: `*bash` matches "bash", "my-bash", etc. (the
-    // pattern is the whole name).
+
     expect(reg.resolve("*bash").map((t) => t.name).sort()).toEqual([
       "bash",
       "my-bash",

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. The `session_id` is per process × team. The `JieHandle` mints it; the body accepts it.
+Accepted. The `session_id` is per process × team. `createJiePlatform` mints it; the body accepts it.
 
 ## Context
 
@@ -10,7 +10,7 @@ The v1 session-id lifecycle had three intertwined gaps:
 
 1. **Body mints vs handle mints.** `08-memory.md` "Restore" was internally inconsistent. The first paragraph said "the body mints a new one"; the last paragraph said "Each new `(team_id, agent_key)` pair seen by the handle mints a fresh `session_id` and records the mapping". The `AgentBody` class signature in `06-agent-model.md` did not expose `session_id`, leaving no API for the handle to learn the body-minted value.
 
-2. **Session id scope.** The spec was ambiguous on whether the session id is per-process, per-team, or per-agent. ADR 17's `JieHandle` map keyed on `(team_id, agent_key)` implied per-(team, agent). `--continue` found one session id per team (implying per-team). `memory_turns` rows were disjoint by `agent_key` (per-agent at the row level).
+2. **Session id scope.** The spec was ambiguous on whether the session id is per-process, per-team, or per-agent. ADR 17's internal session map keyed on `(team_id, agent_key)` implied per-(team, agent). `--continue` found one session id per team (implying per-team). `memory_turns` rows were disjoint by `agent_key` (per-agent at the row level).
 
 3. **Team swap semantics.** On team swap, the new team gets a fresh session id, because the conversation is bound to the team, not the process. Switching back to a previously-active team restores that team's session; the previously-active team's session id remains on the map for the lifetime of the process. (Per ADR 19, team swap is a view change, not a body-lifecycle change; the session id persists because the team keeps running in `loadedTeams`.)
 
@@ -36,9 +36,9 @@ All agents in the same team in the same process share one session id. On team sw
 
 `memory_turns` rows are still per-agent at the row level (`agent_key` and `seq` are in the primary key), so the leader's seq 1 and the worker's seq 1 are independent rows within the team's session.
 
-### 3. JieHandle map keys on `team_id`
+### 3. Internal session map keys on `team_id`
 
-The map is `Map<team_id, session_id>`. The per-`agent_key` half of the key in ADR 17's original design was redundant: the session id is shared across agents in a team, so per-agent disambiguation adds no information. Two teams that share an `agent_key` (e.g., both have a `general` role) are still disambiguated — they have different `team_id`s, so they get different `session_id`s and live in disjoint row sets in `memory_turns`.
+The map is a private `Map<team_id, session_id>` field of `createJiePlatform` (closure state, not part of the public `JiePlatform` interface). The per-`agent_key` half of the key in ADR 17's original design was redundant: the session id is shared across agents in a team, so per-agent disambiguation adds no information. Two teams that share an `agent_key` (e.g., both have a `general` role) are still disambiguated — they have different `team_id`s, so they get different `session_id`s and live in disjoint row sets in `memory_turns`.
 
 ## Rationale
 
@@ -53,14 +53,14 @@ The map is `Map<team_id, session_id>`. The per-`agent_key` half of the key in AD
 - `08-memory.md` "Restore" — rewritten: handle mints; body accepts; per-team model; map keys on `team_id`. Internal contradiction resolved.
 - `08-memory.md` "Persistence" `TurnRecord` comment — `session_id` is "per-process × team identifier".
 - `08-memory.md` "Team scoping" paragraph — map key updated from `(team_id, agent_key)` to `team_id`.
-- `08-memory.md` "Integration with pi-agent" "Restore" bullet — updated to "uses the `session_id` supplied by the `JieHandle`".
+- `08-memory.md` "Integration with pi-agent" "Restore" bullet — updated to "uses the `session_id` supplied by the platform" (i.e. the value passed to the body constructor by `createJiePlatform` from its private session map).
 - `06-agent-model.md` "AgentBody" class signature — `private readonly session_id: string` added.
 - `06-agent-model.md` "ExecutionContext" — `session_id` comment updated to "per-process × team identifier".
 - `06-agent-model.md` pi-agent Integration Contract — `sessionId` row's comment updated from "per-process-run ULID" to "per-team ULID".
 - `09-deployment.md` Startup Sequence — body construction lists `session_id` (resolved by the handle per `08-memory.md` "Restore") in the parameters.
 - `10-configuration.md` "Team Swap" — `Map<agent_key, session_id>` → `Map<team_id, session_id>`; "body mints" → "handle mints"; consult is per-team, not per-body.
 - `ui/tui.md` "Model and Team Hot-Swap" — same updates as `10-configuration.md`; primary key reference updated to `(team_id, agent_key, session_id, seq)` per ADR 17.
-- ADR 13 — "per body" → "per team"; map key updated to `Map<team_id, session_id>`.
+- ADR 13 — "per body" → "per team"; the platform's internal `Map<team_id, session_id>` (a closure field of `createJiePlatform`, not a public field of `JiePlatform`) is the source of truth for the session id.
 - ADR 17 — `JieHandle map` section updated from `Map<(team_id, agent_key), session_id>` to `Map<team_id, session_id>` with a refinement note (the per-`agent_key` half of the key was redundant).
 - `--resume` and `--continue` semantics unchanged at the user surface (per-team, scoped to the current `team_id`). The `--resume <id>` validation continues to check that the named `session_id` has rows for the current `team_id`; mismatches exit 1.
 - `ExecutionContext.session_id` unchanged at the type level — its value is the body's `session_id`, which is per-team in v1.

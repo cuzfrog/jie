@@ -75,10 +75,6 @@ export function createWebSearchTool(deps: WebSearchDeps): Tool<WebSearchInput> {
   };
 }
 
-/** Default provider: scrapes DuckDuckGo HTML. No API key required.
- *  The HTML layout may change; the adapter returns whatever it
- *  finds, and zero results triggers `provider_returned_no_results`
- *  per the failure-handling rule. */
 export class DuckDuckGoSearchProvider implements WebSearchProvider {
   async search(query: string, max_results: number): Promise<WebSearchResult[]> {
     const url = "https://html.duckduckgo.com/html/";
@@ -101,10 +97,7 @@ export class DuckDuckGoSearchProvider implements WebSearchProvider {
 
 function parseDuckDuckGoResults(html: string, max: number): WebSearchResult[] {
   const results: WebSearchResult[] = [];
-  // DuckDuckGo HTML result blocks are .result elements. Each has:
-  //  - a.result__a (the title link)
-  //  - a.result__snippet (the snippet)
-  // We do a lightweight regex parse to keep the dependency surface small.
+
   const blockPattern = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
   let match: RegExpExecArray | null;
   while ((match = blockPattern.exec(html)) !== null && results.length < max) {

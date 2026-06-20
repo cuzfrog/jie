@@ -1,10 +1,5 @@
 import type { EventBus, EventCallback } from "./event-bus.ts";
 
-/** v1 default `EventBus` impl. Backed by `Map<string, Set<Callback>>`;
- *  callbacks are invoked synchronously in publish order. A throwing
- *  callback does not stop dispatch to subsequent subscribers; the
- *  error is logged via `console.error` and the publisher sees no
- *  exception. */
 export class InProcessEventBus implements EventBus {
   private readonly subscribers = new Map<string, Set<EventCallback>>();
 

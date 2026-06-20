@@ -32,8 +32,6 @@ function summaryMessage(text: string): AgentMessage {
   } as unknown as AgentMessage;
 }
 
-/** A `Storage` wrapper that throws on the nth call to a chosen method.
- *  Used to verify that `compact` rolls back atomically. */
 function makeThrowingStorage(failOn: "exec", callIndex: number): {
   storage: Storage;
   inner: SqliteStorage;
@@ -109,15 +107,12 @@ describe("SqliteMemoryManager", () => {
   });
 
   test("compact is atomic: a thrown error rolls back both writes", () => {
-    // 3 messages persisted under a real Storage-backed manager.
+
     const real = makeManager();
     real.persist(userMessage("a"), "agent-1", "s1", "t1");
     real.persist(userMessage("b"), "agent-1", "s1", "t1");
     real.persist(userMessage("c"), "agent-1", "s1", "t1");
 
-    // The wrapped Storage throws on the second exec call inside compact
-    // (the first is the INSERT of the summary; the second is the UPDATE
-    // marking the range compacted). The transaction must roll back both.
     const { storage } = makeThrowingStorage("exec", 2);
     const throwing = new SqliteMemoryManager(storage);
 
@@ -137,9 +132,6 @@ describe("SqliteMemoryManager", () => {
       "synthetic storage failure",
     );
 
-    // After rollback: no summary row, and the range rows are still
-    // compacted=0. We re-read against `real` (the real, non-throwing
-    // path) to verify the public contract.
     void real;
   });
 

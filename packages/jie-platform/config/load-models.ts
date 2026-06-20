@@ -3,11 +3,6 @@ import { getModels as piGetModels } from "@earendil-works/pi-ai";
 import type { Api, Model, OpenAICompletionsCompat, OpenAIResponsesCompat, AnthropicMessagesCompat } from "@earendil-works/pi-ai";
 import { findProjectJieRoot, homeJieDir } from "./paths.ts";
 
-/** pi-compatible `models.json` shape, restricted to the v1 surface
- *  (see issue #20). Each provider entry produces zero-or-more `Model`
- *  values after validation. The `compat` field is intentionally
- *  loose (an object) — the per-`api` discrimination happens during
- *  construction. */
 export interface RawModelsConfig {
   providers?: Record<string, RawProviderConfig>;
 }
@@ -51,8 +46,6 @@ export interface RawModelOverride {
   cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
 }
 
-/** A fully-resolved provider config, ready to be turned into
- *  `Model<Api>` instances and to be queried for `getApiKey`. */
 export interface ResolvedProviderConfig {
   provider: string;
   baseUrl: string;
@@ -80,12 +73,6 @@ const KNOWN_APIS: ReadonlySet<Api> = new Set<Api>([
   "mistral-conversations",
 ]);
 
-/** Reads `{cwd}/.jie/models.json` and `~/.jie/models.json`, deep-merges
- *  them (project wins per-provider-id), validates the shape, resolves
- *  `$ENV` interpolation, and returns a flat registry of providers and
- *  their `Model` instances. Returns an empty config when neither
- *  file exists. Throws on JSON parse errors and shape validation
- *  errors with a precise path. */
 export function loadModelsConfig(cwd: string, options: { homeDir: string }): ResolvedModelsConfig {
   const homeDir = options.homeDir;
   const projectPath = (() => {
@@ -195,10 +182,6 @@ function resolveConfig(raw: RawModelsConfig): ResolvedModelsConfig {
   return { providers, models };
 }
 
-/** Resolves the API for a provider. Required for new (non-built-in)
- *  providers; for built-in overrides, falls back to the built-in's
- *  registered API so the user only needs to specify the field
- *  they're changing (e.g. just `baseUrl`). */
 function resolveApi(providerId: string, declared: string | undefined): Api {
   if (declared !== undefined && declared !== "") {
     if (!KNOWN_APIS.has(declared as Api)) {
@@ -206,7 +189,7 @@ function resolveApi(providerId: string, declared: string | undefined): Api {
     }
     return declared as Api;
   }
-  // Try built-in: look up any model on this provider and read its api.
+
   const builtinProbe = (piGetModels as (p: string) => Array<{ api: Api }> | undefined)(
     providerId as Parameters<typeof piGetModels>[0],
   );
@@ -253,9 +236,6 @@ function buildModel(
   return result;
 }
 
-/** Resolves `$ENV_VAR` and `${ENV_VAR}` interpolation. Unknown env
- *  variables resolve to the empty string (does not throw). Plain
- *  literals are returned as-is. */
 export function resolveValue(value: string, _path: string): string {
   return value.replace(/\$\{([A-Z_][A-Z0-9_]*)\}|\$([A-Z_][A-Z0-9_]*)/g, (_, braced: string | undefined, plain: string | undefined) => {
     const name = braced ?? plain ?? "";

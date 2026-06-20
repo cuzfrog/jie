@@ -52,14 +52,10 @@ describe("SqliteArtifactStore", () => {
     await store.write("ax", "v1");
     await store.write("ay", "v2");
     await store.write("a_", "v3");
-    // "a%" prefix: escaped `%` is a literal char, not a wildcard.
-    // No key starts with the literal three-char sequence "a%" (the
-    // artifact-key charset rejects `%` on write, so this can never
-    // match). If `%` were unescaped, this would match "ax" and "ay".
+
     const list1 = await store.list("a%");
     expect(list1).toEqual([]);
-    // "a_" prefix: escaped `_` is a literal char, not a single-char wildcard.
-    // "a_" matches; "ax" does not (the second char is not literal "_").
+
     const list2 = await store.list("a_");
     expect(list2.map((r) => r.key)).toEqual(["a_"]);
   });

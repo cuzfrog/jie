@@ -1,8 +1,4 @@
-/** Platform-level typed error. Domain stores and tools throw this when
- *  validation fails (e.g. an invalid artifact key, a path that escapes
- *  the workspace). The `code` is the machine-readable identifier;
- *  `message` is the human-readable form (which the tool layer surfaces
- *  to the LLM and to the user). */
+
 export class JiePlatformError extends Error {
   constructor(
     public readonly code: string,
@@ -13,8 +9,6 @@ export class JiePlatformError extends Error {
   }
 }
 
-/** A row in the `memory_turns` table. The platform owns the row shape;
- *  `content` holds the JSON-serialized `AgentMessage` from pi-agent. */
 export interface TurnRecord {
   team_id: string;
   session_id: string;

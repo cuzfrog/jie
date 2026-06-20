@@ -1,55 +1,104 @@
-# ADR 19: Multi-team coexistence in v1 — team-scoped subjects, on-demand loading
+# ADR 19: Multi-team Coexistence — v1 Single-team, Day 2+ Multi-team Design
 
 ## Status
 
-Accepted. A single `jie` process can host multiple teams' bodies, each autonomous, each addressable through team-scoped event-bus subjects.
+Accepted. v1 ships a single-team model. The handle's public surface is `{ bus, stop }` only; the team info is exposed via the `team.loaded` event. Multi-team coexistence (on-demand `loadTeam`, `bodies()`, per-team lifecycle on the handle) is a Day 2+ concern.
+
+The v1 decision and the Day 2+ design are both recorded here so the v1 code, the ADR, and the Day 2+ plan stay consistent.
 
 ## Context
 
-The TUI's team-swap step previously said "All current agent bodies receive a graceful stop signal." That is wrong. A team is not destroyed by a swap; it keeps its state and runs in the background. A client (TUI) can switch back at any time, and the team is unaware of the UI's observation. The TUI is a pure passive observer; it does not control agent behavior.
+The earlier v1 design let one `jie` process host multiple teams' bodies, with on-demand team loading via `handle.loadTeam(teamId)`, an in-memory `Map<team_id, AgentBody[]>` exposed as `handle.bodies()`, and a `handle.teamId` getter for the active team. The TUI's `/team <id>` slash command was the consumer of `loadTeam`; the handle's `bodies()` map was the source of truth for "which teams are alive".
 
-This contradicts:
+A round-6 simplification (matching the v1 surface in `addrs/13-platform-entry-function.md`) reduced the handle to `{ bus, stop }`. Reasons:
 
-- `03-event-system.md` Subject Schema: *"No `team_id` prefix — one process runs one team. Multi-team isolation is a Day 2 concern."*
-- `ui/tui.md` "Model and Team Hot-Swap" → "Team" step 1: *"All current agent bodies receive a graceful stop signal (bounded 10s shutdown, same as `jie` exit)."*
-
-The "Day 2" deferral of multi-team isolation is pulled forward into v1.
+- **v1 has no TUI** (ADR 15). The `/team <id>` slash command — the only planned v1 consumer of `loadTeam` — does not exist in v1. The handle's `loadTeam` would be a public method with zero v1 callers.
+- **`bodies()` and `teamId` were the TUI's bootstrap hooks.** Without a TUI, the CLI is the only consumer of the handle. The CLI's `createApp` orchestrator already captures the team info from the `team.loaded` event (per ADR 25) and does not need `bodies()` to derive it.
+- **Day 2+ still wants the design.** Multi-team processes (TUI swapping teams, multiple teams running in one process) are a real product direction. The design captured below is the Day 2+ target; the v1 code does not implement it, but the spec documents the path.
 
 ## Decision
 
-### EventBus subject scheme: team-scoped for team channels, un-scoped for platform events
+### v1 handle surface
+
+```typescript
+interface JiePlatform {
+  bus: EventBus;
+  stop: (timeoutMs?: number) => Promise<void>;
+}
+```
+
+The handle does not expose `loadTeam`, `bodies()`, or `teamId`. The startup team is the only team in the process. Team info (teamId, leaderRole, leaderKey) is captured by the CLI's `createApp` from the `team.loaded` event and passed to `runPrint` (the only v1 prompt-flow consumer); the TUI, when it lands in Day 2+, will subscribe to the bus and derive the same info from the event stream.
+
+### v1 team-scoped event subjects
+
+The event-bus subject scheme is unchanged from the pre-round-6 design:
 
 | Channel | Subject | Notes |
 |---|---|---|
-| Leader prompt ingress | `{team_id}.leader.prompt` | TUI publishes; the active team's leader auto-subscribes. |
+| Leader prompt ingress | `{team_id}.leader.prompt` | TUI/CLI publishes; the active team's leader auto-subscribes. |
 | Agent's own key | `{team_id}.{agent_key}` | Direct-addressing; the agent with this key auto-subscribes. |
 | Domain topic | `{team_id}.{topic}` | `notify` tool, `subscribe:` field. |
 | Platform events | `agent.stream.chunk`, `agent.stream.end`, `agent.tool.call`, `agent.tool.result`, `agent.queue.update`, `agent.turn.start`, `agent.idle` | Un-scoped; `team_id` in the envelope. |
 
-The team-blueprint author writes unscoped names (`leader.prompt`, `leader-1`, `task.recorded`) in `.md` frontmatter and in `notify` calls. The platform prefixes `{team_id}.` at body construction (for subscriptions) and at publish time (for `notify`). The agent's view is un-scoped; the bus's view is team-scoped.
+The team-blueprint author writes unscoped names (`leader.prompt`, `leader-1`, `task.recorded`) in `.md` frontmatter and in `notify` calls. The platform prefixes `{team_id}.` at body construction (for subscriptions) and at publish time (for `notify`). The agent's view is un-scoped; the bus's view is team-scoped. This scheme is Day 2+ ready: a second team's bodies will not see the first team's events on the un-scoped platform subjects because the envelope's `team_id` disambiguates.
 
-### AgentEvent envelope gains `team_id`
+### v1 `team.loaded` event
 
-`team_id` is added to `AgentEvent`. Bodies fill it in from their team's `team_id`; the TUI uses it to filter platform events by the active team. Subject parsing is not required.
+Published once at startup, after all bodies' `start()` returns. Payload:
 
-### On-demand team loading
+```typescript
+{ team_id: string, agents: { role: string, agent_key: string, is_leader: boolean }[] }
+```
 
-- `startJie()` resolves and loads the startup team (from settings/CLI). The startup team's bodies are constructed and registered on the bus. After all bodies' `start()` returns, the handle publishes one `{team_id}.team.loaded` event for the startup team (per ADR 22).
-- Other teams are loaded on demand. The `JieHandle` tracks loaded teams in `Map<team_id, AgentBody[]>`.
-- `loadTeam(teamId)` consults the map: if loaded, return immediately; if not, parse the new team's blueprint, construct bodies, register on the bus, record in the map, and publish one `{team_id}.team.loaded` event for the newly-loaded team. The previously-active team is **not** stopped or destroyed. The TUI's view switch is a separate concern owned by the TUI itself, not a handle method. The `team.loaded` event is **one-shot per team load**: it is not republished when the TUI swaps back to a previously-loaded team; observers that came back to it use the buffer / cache they already built up.
-- `JieHandle.stop()` stops all loaded teams (the only lifecycle-changing operation besides initial load).
+`is_leader` is per the loader's leader-identification rules. This is the only team-routing event in v1; the CLI subscribes to it and captures the team info. The TUI (Day 2+) does the same.
 
-### TUI role
+### Day 2+ multi-team design (reference, not v1 code)
 
-The TUI publishes prompts to `{active_team_id}.leader.prompt`. The TUI's slash commands (`/team <id>`) write settings and switch the TUI's view; they do not initiate body lifecycle changes. Slash-command behavior that previously implied "hot-swap" (which destroyed the old team) is rewritten to "view switch" (which leaves the old team running).
+When the TUI lands and multi-team processes become a real product, the handle will regain the lifecycle surface:
 
-### Leader prompt queue across team view-switches
+```typescript
+interface JiePlatform {
+  bus: EventBus;
+  loadTeam(teamId: string): Promise<void>;
+  bodies(): Map<team_id, AgentBody[]>;
+  teamId: string;
+  stop: (timeoutMs?: number) => Promise<void>;
+}
+```
+
+- **`loadTeam(teamId)`** consults `bodies()`: if loaded, returns immediately; if not, parses the blueprint, constructs bodies, registers them on the bus, records the mapping, and publishes one `{team_id}.team.loaded` event for the new team. The previously-active team is **not** stopped; the TUI's view switch is a separate concern owned by the TUI itself.
+- **`bodies()`** returns `Map<team_id, AgentBody[]>`; consumers that need per-team bodies read `bodies().get(teamId)`.
+- **`teamId`** is the handle's current "active team" — the TUI's `/team <id>` sets it, the TUI filters platform events by it. (Note: the body construction in `startJie` already reads `opts.teamId`, so the `teamId` getter just exposes the value the handle is using.)
+- **`team.loaded` is one-shot per team load.** It is not republished on team swap-back. Observers that came back to a previously-loaded team use the buffer / cache they already built up.
+- The handle's `Map<team_id, session_id>` (per ADR 18) is also extended in Day 2+ to cover all loaded teams; the v1 single-team map is the one-entry case of that.
+
+The TUI's `/team <id>` slash command (Day 2+) calls `loadTeam(teamId)` (idempotent) and then switches its view. Slash-command behavior that previously implied "hot-swap" (which destroyed the old team) is rewritten to "view switch" (which leaves the old team running).
+
+### Leader prompt queue across team view-switches (Day 2+)
 
 The old team's leader body is not destroyed on swap, so its in-memory prompt queue is preserved. The TUI just stops publishing to the old team's prompt topic; the old team continues to process its queue in the background. When the TUI switches back, the TUI resumes publishing to the old team's prompt topic; the old team picks up where it left off.
 
-## Implications
+## Rationale
 
-- **`JieHandle`** gains `loadTeam(teamId)`. `loadTeam` is the single lifecycle-changing call; the TUI's view switch is a separate concern. Per ADR 22, `waitForIdle` is **removed** from the handle; the CLI's `-p` mode owns its own idle gate. The handle's `bodies()` returns `Map<teamId, AgentBody[]>`; consumers that need per-team bodies read `bodies().get(teamId)`. (The earlier `bodiesFor` / `rolesFor` convenience methods were removed in ADR 13's "minimal handle" revision.)
-- **TUI's per-`(team_id, agent_key)` event buffer** (existing spec) is the right granularity. Platform events are filtered by the active team's `team_id` (from the envelope). The TUI's "agent is alive" derivation moves from `agent.idle` at startup (the prior decision, reversed by ADR 22) to `{team_id}.team.loaded`.
-- **TUI's `roles` parameter** to `startTUI` is the startup team's roles, sourced by the TUI from `handle.bodies().get(handle.teamId)?.map(b => b.soul.role)` after `startJie` returns. The handle is the single source of truth; the CLI does not parse the manifest separately before `startJie`. The TUI re-queries the handle for new teams' roles on swap.
-- **`Cascade: Agent Load Failure`** (per `10-configuration.md`) applies per-team: a team that fails to load is rejected, but other loaded teams continue. The cascade covers **model-resolution failures** in addition to tool-resolution failures: any agent whose `model:` cannot be resolved (no `model:` in `.md`, and merged settings do not provide a resolvable default) → team load fails with the same error message as `startJie`'s pre-check: "No model has been selected, please login and select a default model." The TUI displays the error in the input area; the previously-active team keeps running.
+- **v1 has no TUI** (ADR 15). A public `loadTeam` with no v1 caller is dead-on-arrival API surface. v1 ships what v1 needs.
+- **v1 is a one-shot prompt flow.** The CLI's `createApp` orchestrator is the only prompt-flow consumer. The orchestrator already captures team info from the bus; `bodies()` would be redundant.
+- **The Day 2+ design is the right long-term shape.** Multi-team processes are a real product direction. Recording the design now lets Day 2+ land without re-deriving the subject scheme or the team-routing rules.
+- **The team-scoped subject scheme is v1-correct.** Even with a single team in v1, the scheme scales to N teams without code changes — the platform's bus already routes per-`{team_id}.` prefix. Day 2+ ships the lifecycle methods, not a different bus.
+- **The `team.loaded` event is v1-correct.** The shape carries `is_leader`, which the TUI's agents-panel needs (per ADR 25). The CLI uses the same fields.
+
+## Consequences
+
+- `packages/jie-platform/start.ts` exports `createJiePlatform` returning a `JiePlatform` with only `{ bus, stop }`. `loadTeam` and `bodies()` are not on the interface. The internal `loadTeam` (in the function body) loads only the startup team; the internal `loadedTeams` map is a closure field, not exposed.
+- The CLI's `createApp` orchestrator (in `packages/jie-cli/app.ts`) subscribes to the startup team's `team.loaded` event before calling `createJiePlatform`, captures the team info from the event, and passes it to `runPrint`. The orchestrator does not call `loadTeam` or read `bodies()` (they don't exist on the public surface).
+- `doc/addrs/13-platform-entry-function.md` — `JiePlatform` is `{ bus, stop }`; the multi-team section (ADR 19 above) is the Day 2+ reference.
+- `doc/addrs/25-tui-is-event-driven.md` — section 1 ("TUI's permitted surface on `JieHandle`") lists `bus`, `stop` for v1, with a Day 2+ note for `loadTeam` / `bodies()` / `teamId`.
+- `doc/specs/jie-platform/06-agent-model.md` and `doc/specs/jie-platform/ui/tui.md` — references to `loadTeam` / `bodies()` are rewritten as "Day 2+ multi-team, see ADR 19".
+- `doc/specs/jie-platform/09-deployment.md` Startup Sequence — the "Branch by mode" step uses the v1 handle's `bus` and `stop`; the multi-team step (load additional teams) is moved to a Day 2+ reference.
+- `00-user-scenarios.md` and `11-monitoring.md` — unchanged (v1 is single-team; the v1 surface is what those documents describe).
+- `backlog.md` — the multi-team design is the Day 2+ reference target.
+
+## Out of scope (v1)
+
+- **Multi-team per process** (Day 2+): the v1 single-team startup is a one-entry case of the design above. When the TUI lands, the handle regains `loadTeam` and `bodies()` per the Day 2+ shape; the v1 code's subject scheme and `team.loaded` semantics are unchanged.
+- **TUI's `/team <id>` slash command** (Day 2+): TUI is a stub in v1 (ADR 15).
+- **Team-swap body destruction** (Day 2+): the "old team is destroyed on swap" semantic is incorrect and was rewritten to "view switch" long before v1; the v1 single-team startup is the simplest case.

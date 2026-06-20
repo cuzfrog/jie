@@ -3,16 +3,7 @@ import type { AgentEvent as PiAgentEvent, AgentMessage } from "@earendil-works/p
 import type { AssistantMessage, AssistantMessageEvent } from "@earendil-works/pi-ai";
 import { AgentBody } from "./agent-body.ts";
 import { createEventBus, type EventBus } from "./event-bus.ts";
-// EXCEPTION: The `InMemory*` classes are file-private to the storage
-// module — they are intentionally not re-exported from `storage/index.ts`.
-// Tests in this same package reach them via direct sibling-file imports
-// so we can substitute mocks for the real SQLite-backed factories
-// without `mock.module()` (which is global-state and would leak across
-// test files). The cross-directory file-specific import is acceptable
-// here because the dependency is a true in-memory mock, not a coupling
-// to the storage module's public surface. If a new sibling module is
-// added that needs in-memory mocks, copy this comment — do NOT use
-// this pattern for production code.
+
 import { InMemoryArtifactStore } from "../storage/artifact-store.ts";
 import { InMemoryMemoryManager } from "../storage/memory-store.ts";
 import type { ArtifactStore, MemoryManager } from "../storage/index.ts";
@@ -281,7 +272,7 @@ describe("AgentBody — pi-agent event bridging", () => {
     fireEvent!({ type: "message_start", message: msg });
     fireEvent!({ type: "message_end", message: msg });
     const restored = memory.restore("general-1", "s1", "t1");
-    // The promise resolves asynchronously; give it a tick.
+
     return restored.then((rows) => {
       expect(rows.length).toBe(1);
     });
@@ -353,9 +344,7 @@ describe("AgentBody — agent.queue.update", () => {
     });
     const result = makeFakeAgentFactory({
       onEvent: (l) => {
-        // The body subscribes; we need to track the listener for later
-        // use but for the queue test we just need the body to call
-        // prompt() in response to a leader.prompt publish.
+
         void l;
       },
     });

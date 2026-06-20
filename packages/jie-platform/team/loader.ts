@@ -8,16 +8,10 @@ const ROLE_STEM_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
 const FRONTMATTER_DELIMITER = "---";
 
-/** Validate a team id against the v1 charset
- *  `[A-Za-z0-9_-]{1,32}`. The team module owns the charset rule;
- *  external callers (settings validation, CLI guards, the
- *  registry) use this function. */
 export function isValidTeamId(id: string): boolean {
   return TEAM_ID_PATTERN.test(id);
 }
 
-/** Frontmatter field. The YAML is parsed as a free-form object;
- *  fields are extracted and validated in `parseAgentFile`. */
 interface RawFrontmatter {
   model?: string;
   tools?: unknown;
@@ -25,11 +19,6 @@ interface RawFrontmatter {
   leader?: unknown;
 }
 
-/** Splits a `.md` file into its frontmatter block (YAML) and the
- *  prose body. The leading `---` is consumed; the closing `---`
- *  line terminates the block; everything after the closing fence
- *  (trimmed of leading newline) is the body. Returns `null`
- *  frontmatter when the file does not start with `---`. */
 function splitFrontmatter(content: string): {
   frontmatter: RawFrontmatter | null;
   body: string;
@@ -77,8 +66,6 @@ function asString(
   return value;
 }
 
-/** Parse one agent `.md` file. `role` is the filename stem (caller
- *  is responsible for charset validation). */
 function parseAgentFile(
   role: string,
   content: string,
@@ -121,9 +108,6 @@ function parseAgentFile(
   };
 }
 
-/** Parse `TEAM.md` content. Returns the `leader:` value (a role
- *  stem) or `null` if absent/empty. The caller validates the
- *  leader against the role set. */
 function parseTeamFile(
   content: string,
   file: string,
@@ -140,19 +124,12 @@ function parseTeamFile(
 }
 
 export interface ParseTeamOptions {
-  /** The team_id for charset validation. Required for the charset
-   *  check on the directory name. Not stored in the returned
-   *  blueprint. */
+
   teamId: string;
 
-  /** The source directory of the manifests — used only to format
-   *  parse error messages. */
   sourceDir?: string;
 }
 
-/** Single parser: parse a map of file-name → file-content into a
- *  `Team`. All entry points (`loadTeamFromDir`, `loadMinimalTeam`)
- *  delegate to this function. */
 export function parseTeamFromManifests(
   manifests: Record<string, string>,
   options: ParseTeamOptions,
@@ -247,10 +224,6 @@ export function parseTeamFromManifests(
   return { id: teamId, roles, leaderRole };
 }
 
-/** Read a team's `.md` files from a directory and parse them via
- *  `parseTeamFromManifests`. The directory name (last segment of
- *  `dirPath`) is the team_id and is validated against the v1
- *  charset. */
 export function loadTeamFromDir(dirPath: string): Team {
   const teamId = basename(dirPath);
   const manifests: Record<string, string> = {};
@@ -266,10 +239,6 @@ export function loadTeamFromDir(dirPath: string): Team {
   });
 }
 
-/** Built-in minimal team loader. Reads the platform's two `.md`
- *  files at module-load time via `with { type: 'text' }` import
- *  attributes and delegates to `parseTeamFromManifests`. The
- *  minimal team's `team_id` is the literal `"minimal"`. */
 export function loadMinimalTeam(): Team {
   return parseTeamFromManifests(
     {
@@ -280,8 +249,5 @@ export function loadMinimalTeam(): Team {
   );
 }
 
-// Bound at module-load time. Bun reads the file and gives us a
-// string. No `import.meta.url`, no `fs.readFileSync`, no
-// `process.cwd()`.
 import MINIMAL_TEAM_MD from "./minimal/TEAM.md" with { type: "text" };
 import MINIMAL_GENERAL_MD from "./minimal/general.md" with { type: "text" };

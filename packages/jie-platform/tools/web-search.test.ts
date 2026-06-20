@@ -53,7 +53,6 @@ describe("web_search", () => {
     try {
       await tool.execute({ query: "x", max_results: 100 }, {} as never);
     } catch {
-      // zero results throws, but we only care about the provider input
     }
     expect(received).toBe(20);
   });
