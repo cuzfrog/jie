@@ -2,8 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createModelRegistry, PiModelRegistry } from "./model-registry.ts";
-import { loadModelsConfig } from "./load-models.ts";
+import { createModelRegistry } from "./model-registry.ts";
 
 describe("ModelRegistry", () => {
   let cwd: string;
@@ -168,22 +167,4 @@ describe("ModelRegistry", () => {
     expect(models.map((m) => m.id).sort()).toEqual(["m1", "m2"]);
   });
 
-  test("registry constructed from a pre-built config", () => {
-    mkdirSync(homeJieDir, { recursive: true });
-    writeFileSync(
-      join(homeJieDir, "models.json"),
-      JSON.stringify({
-        providers: {
-          direct: {
-            baseUrl: "http://y",
-            api: "openai-completions",
-            models: [{ id: "z" }],
-          },
-        },
-      }),
-    );
-    const custom = loadModelsConfig(homeJieDir, projectJieDir);
-    const reg = new PiModelRegistry(custom);
-    expect(reg.resolve("direct", "z")).toBeDefined();
-  });
 });

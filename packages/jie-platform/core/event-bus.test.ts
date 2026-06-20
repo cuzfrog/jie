@@ -1,10 +1,10 @@
 import { describe, expect, spyOn, test } from "bun:test";
-import { InProcessEventBus } from "./in-process-event-bus.ts";
+import { createEventBus } from "./event-bus.ts";
 import type { AgentEvent } from "./agent-event.ts";
 
 describe("InProcessEventBus", () => {
   test("publishes to subscribers in subscription order with the same arguments", () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     const received: Array<[string, object]> = [];
     bus.subscribe("s", (subject, payload) => {
       received.push([subject, payload]);
@@ -21,7 +21,7 @@ describe("InProcessEventBus", () => {
   });
 
   test("a throwing callback does not stop dispatch; subsequent subscribers still run", () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     const errorSpy = spyOn(console, "error").mockImplementation(() => {});
     let secondRan = false;
     bus.subscribe("s", () => {
@@ -42,7 +42,7 @@ describe("InProcessEventBus", () => {
   });
 
   test("subscriberCount reflects registers minus unsubscribes", () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     expect(bus.subscriberCount("s")).toBe(0);
     const off1 = bus.subscribe("s", () => {});
     const off2 = bus.subscribe("s", () => {});
@@ -58,7 +58,7 @@ describe("InProcessEventBus", () => {
   });
 
   test("unsubscribe prevents the callback from firing on later publish", () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     let ran = false;
     const off = bus.subscribe("s", () => {
       ran = true;
@@ -70,13 +70,13 @@ describe("InProcessEventBus", () => {
   });
 
   test("publish to a subject with no subscribers is a no-op", () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     expect(() => bus.publish("no-subscribers", { anything: 1 })).not.toThrow();
     expect(bus.subscriberCount("no-subscribers")).toBe(0);
   });
 
   test("a throwing callback does not change subscriberCount", () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     const errorSpy = spyOn(console, "error").mockImplementation(() => {});
     bus.subscribe("s", () => {
       throw new Error("boom");
@@ -87,7 +87,7 @@ describe("InProcessEventBus", () => {
   });
 
   test("subscribers on different subjects are isolated", () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     let aRan = false;
     let bRan = false;
     bus.subscribe("a", () => {
@@ -102,7 +102,7 @@ describe("InProcessEventBus", () => {
   });
 
   test("callback receives the published payload object by reference", () => {
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     let seen: object | undefined;
     const payload = { inner: "value" };
     bus.subscribe("s", (_subject, p) => {
@@ -114,7 +114,7 @@ describe("InProcessEventBus", () => {
 
   test("publish is depth-first synchronous: nested subscribers complete before outer publish returns", () => {
 
-    const bus = new InProcessEventBus();
+    const bus = createEventBus();
     const events: string[] = [];
 
     bus.subscribe("wake", () => {

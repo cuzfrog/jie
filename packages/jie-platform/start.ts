@@ -1,6 +1,6 @@
 import { ulid } from "ulid";
 import { getModel as piGetModel, type Model } from "@earendil-works/pi-ai";
-import { AgentBody, type AgentEvent, type EventBus } from "./core/index.ts";
+import { type AgentBody, type AgentEvent, type EventBus, createAgentBody } from "./core/index.ts";
 import { type AgentSoul, type Team, type TeamRegistry } from "./team/index.ts";
 import { type ModelRegistry, type SettingsStore } from "./config/index.ts";
 import { type ToolRegistry } from "./tools";
@@ -156,7 +156,7 @@ export async function createJiePlatform(opts: CreateJieOptions, deps: JiePlatfor
       const agent_key = `${soul.role}-1`;
       const model = resolveSoulModel(soul, deps.settingsStore, resolveModel);
       out.push(
-        new AgentBody({
+        createAgentBody({
           agent_key,
           team_id: teamId,
           soul,

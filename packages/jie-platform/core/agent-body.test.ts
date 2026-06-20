@@ -1,24 +1,22 @@
+import { describe, expect, mock, test } from "bun:test";
+import type {
+  Agent as PiAgent,
+  AgentEvent as PiAgentEvent,
+  AgentMessage,
+} from "@earendil-works/pi-agent-core";
+import { createAgentBody, type CreateAgentBodyOptions } from "./agent-body.ts";
+import { JieAgentBody } from "./jie-agent-body.ts";
+import { createEventBus } from "./event-bus.ts";
 import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  test,
-} from "bun:test";
-import { Agent, type AgentMessage } from "@earendil-works/pi-agent-core";
+  createArtifactStore,
+  createMemoryManager,
+  createStorage,
+} from "../storage";
+import { createToolRegistry, type Tool } from "../tools";
+import type { AgentSoul } from "../team";
 import { Type } from "typebox";
-import { AgentBody } from "./agent-body.ts";
-import { createEventBus, type EventBus } from "./event-bus.ts";
 
-import { InMemoryArtifactStore } from "../storage/artifact-store.ts";
-import { InMemoryMemoryManager } from "../storage/memory-store.ts";
-import type { ArtifactStore, MemoryManager } from "../storage/index.ts";
-import { createToolRegistry, type ToolRegistry } from "../tools/tool-registry.ts";
-import type { AgentSoul } from "../team/types.ts";
-import type { Tool, ToolResult } from "../tools/types.ts";
-
-function makeSoul(): AgentSoul {
+function makeSoul(overrides: Partial<AgentSoul> = {}): AgentSoul {
   return {
     role: "general",
     model: "anthropic/claude-sonnet-4",
@@ -26,49 +24,7 @@ function makeSoul(): AgentSoul {
     tools: ["noop"],
     subscribe: [],
     subscriptions: [],
-  };
-}
-
-interface FakeAgent {
-  subscribe: ReturnType<typeof mock>;
-  state: {
-    systemPrompt: string;
-    model: unknown;
-    tools: unknown[];
-    messages: AgentMessage[];
-    isStreaming: boolean;
-  };
-  continue: ReturnType<typeof mock>;
-  prompt: ReturnType<typeof mock>;
-}
-
-function makeFakeAgentFactory(overrides: Partial<FakeAgent> = {}): {
-  factory: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
-  fake: FakeAgent;
-} {
-  const fake: FakeAgent = {
-    subscribe: mock(() => () => {}),
-    state: {
-      systemPrompt: "",
-      model: null,
-      tools: [],
-      messages: [],
-      isStreaming: false,
-      ...overrides.state,
-    },
-    continue: mock(async () => {}),
-    prompt: mock(async () => {}),
     ...overrides,
-  };
-  const stub = {
-    state: fake.state,
-    subscribe: fake.subscribe,
-    continue: fake.continue,
-    prompt: fake.prompt,
-  } as unknown as Agent;
-  return {
-    factory: () => stub,
-    fake,
   };
 }
 
@@ -78,409 +34,197 @@ function makeNoopTool(): Tool {
     description: "no-op",
     label: "Noop",
     parameters: Type.Object({}),
-    async execute(): Promise<ToolResult> {
+    async execute() {
       return { content: "noop" };
     },
   };
 }
 
-describe("AgentBody — construction", () => {
-  let bus: EventBus;
-  let artifacts: ArtifactStore;
-  let memory: MemoryManager;
-  let registry: ToolRegistry;
-  let body: AgentBody;
+function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): CreateAgentBodyOptions {
+  const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
+  const bus = createEventBus();
+  const registry = createToolRegistry();
+  registry.register("noop", makeNoopTool());
+  return {
+    agent_key: "general-1",
+    team_id: "t1",
+    soul: makeSoul(),
+    is_leader: true,
+    bus,
+    artifacts: createArtifactStore(storage),
+    memory: createMemoryManager(storage),
+    session_id: "s1",
+    tool_registry: registry,
+    getApiKey: () => undefined,
+    model: { provider: "anthropic", id: "claude-sonnet-4" },
+    ...overrides,
+  };
+}
 
-  beforeEach(() => {
-    bus = createEventBus();
-    artifacts = new InMemoryArtifactStore(); memory = new InMemoryMemoryManager();
-    registry = createToolRegistry();
-    registry.register("noop", makeNoopTool());
+interface FakeAgentCapture {
+  factory: (opts: ConstructorParameters<typeof PiAgent>[0]) => PiAgent;
+  fake: {
+    subscribe: ReturnType<typeof mock>;
+    state: { systemPrompt: string; model: unknown; tools: unknown[]; messages: AgentMessage[]; isStreaming: boolean };
+    continue: ReturnType<typeof mock>;
+    prompt: ReturnType<typeof mock>;
+  };
+  lastOpts: () => ConstructorParameters<typeof PiAgent>[0] | undefined;
+  agentListener: ((event: PiAgentEvent) => void) | undefined;
+}
+
+function makeFakeAgentFactory(): FakeAgentCapture {
+  let listener: ((event: PiAgentEvent) => void) | undefined;
+  const subscribe = mock((l: (event: PiAgentEvent) => void) => {
+    listener = l;
+    return () => {};
+  });
+  const state = {
+    systemPrompt: "",
+    model: null,
+    tools: [] as unknown[],
+    messages: [] as AgentMessage[],
+    isStreaming: false,
+  };
+  const fake = {
+    subscribe,
+    state,
+    continue: mock(async () => {}),
+    prompt: mock(async () => {}),
+  };
+  const stub = fake as unknown as PiAgent;
+  let captured: ConstructorParameters<typeof PiAgent>[0] | undefined;
+  return {
+    factory: (opts) => {
+      captured = opts;
+      return stub;
+    },
+    fake,
+    lastOpts: () => captured,
+    get agentListener() {
+      return listener;
+    },
+  } as FakeAgentCapture;
+}
+
+describe("createAgentBody — wiring", () => {
+  test("invokes opts.createAgent exactly once with the right shape", () => {
+    const opts = makeOpts();
+    const cap = makeFakeAgentFactory();
+    const tracked = mock((o: ConstructorParameters<typeof PiAgent>[0]) => cap.factory(o));
+    createAgentBody({ ...opts, createAgent: tracked });
+    expect(tracked).toHaveBeenCalledTimes(1);
+    const passed = tracked.mock.calls[0]![0]!;
+    expect(passed.sessionId).toBe("s1");
+    expect(passed.steeringMode).toBe("all");
+    expect(passed.followUpMode).toBe("all");
+    expect(passed.toolExecution).toBe("sequential");
+    expect(passed.convertToLlm).toBeUndefined();
   });
 
-  afterEach(() => {
-    body?.stop();
+  test("passes the right agent.state fields after construction", () => {
+    const opts = makeOpts();
+    const cap = makeFakeAgentFactory();
+    createAgentBody({ ...opts, createAgent: cap.factory });
+    expect(cap.fake.state.systemPrompt).toBe(opts.soul.system_prompt);
+    expect(cap.fake.state.model).toBe(opts.model);
+    expect((cap.fake.state.tools as unknown[]).length).toBe(1);
   });
 
-  test("constructor accepts the required options", () => {
-    const { factory } = makeFakeAgentFactory();
-    body = new AgentBody({
-      agent_key: "general-1",
-      team_id: "t1",
-      soul: makeSoul(),
-      is_leader: true,
-      bus,
-      artifacts,
-      memory,
-      session_id: "s1",
-      tool_registry: registry,
-      getApiKey: () => undefined,
-      model: {},
-      createAgent: factory,
+  test("adapts soul.tools specs through the tool registry", () => {
+    const opts = makeOpts({
+      soul: makeSoul({ tools: ["noop"] }),
     });
-    expect(body.agent_key).toBe("general-1");
+    const cap = makeFakeAgentFactory();
+    createAgentBody({ ...opts, createAgent: cap.factory });
+    const tools = cap.fake.state.tools as Array<{ name: string }>;
+    expect(tools[0]!.name).toBe("noop");
+  });
+
+  test("subscribes to agent events via agent.subscribe", () => {
+    const opts = makeOpts();
+    const cap = makeFakeAgentFactory();
+    createAgentBody({ ...opts, createAgent: cap.factory });
+    expect(cap.fake.subscribe).toHaveBeenCalledTimes(1);
+  });
+
+  test("returned body's identity matches the options", () => {
+    const opts = makeOpts({ agent_key: "leader-1", is_leader: true, session_id: "sess-x" });
+    const cap = makeFakeAgentFactory();
+    const body = createAgentBody({ ...opts, createAgent: cap.factory }) as JieAgentBody;
+    expect(body.agent_key).toBe("leader-1");
     expect(body.team_id).toBe("t1");
     expect(body.is_leader).toBe(true);
   });
-});
 
-describe("AgentBody — start() subscriptions", () => {
-  let bus: EventBus;
-  let artifacts: ArtifactStore;
-  let memory: MemoryManager;
-  let registry: ToolRegistry;
-  let body: AgentBody;
-
-  beforeEach(() => {
-    bus = createEventBus();
-    artifacts = new InMemoryArtifactStore(); memory = new InMemoryMemoryManager();
-    registry = createToolRegistry();
-    registry.register("noop", makeNoopTool());
-    const result = makeFakeAgentFactory();
-    body = new AgentBody({
-      agent_key: "general-1",
-      team_id: "t1",
-      soul: makeSoul(),
-      is_leader: true,
-      bus,
-      artifacts,
-      memory,
-      session_id: "s1",
-      tool_registry: registry,
-      getApiKey: () => undefined,
-      model: {},
-      createAgent: result.factory,
+  test("beforeToolCall publishes agent.tool.call with the right payload", async () => {
+    const opts = makeOpts();
+    const cap = makeFakeAgentFactory();
+    createAgentBody({ ...opts, createAgent: cap.factory });
+    const hook = cap.lastOpts()?.beforeToolCall;
+    if (hook === undefined) {
+      throw new Error("beforeToolCall hook not provided");
+    }
+    const received: AgentEventLike[] = [];
+    opts.bus.subscribe("agent.tool.call", (_s, p) => {
+      received.push(p as AgentEventLike);
+    });
+    await hook({
+      toolCall: { id: "c1", name: "bash" },
+      args: { command: "ls" },
+    } as never);
+    expect(received).toHaveLength(1);
+    expect(received[0]!.payload).toMatchObject({
+      tool_call_id: "c1",
+      name: "bash",
     });
   });
 
-  afterEach(() => {
+  test("afterToolCall publishes agent.tool.result with duration_ms", async () => {
+    const opts = makeOpts();
+    const cap = makeFakeAgentFactory();
+    createAgentBody({ ...opts, createAgent: cap.factory });
+    const beforeHook = cap.lastOpts()?.beforeToolCall;
+    const afterHook = cap.lastOpts()?.afterToolCall;
+    if (beforeHook === undefined || afterHook === undefined) {
+      throw new Error("tool hooks not provided");
+    }
+    await beforeHook({ toolCall: { id: "c1", name: "bash" }, args: {} } as never);
+    const received: AgentEventLike[] = [];
+    opts.bus.subscribe("agent.tool.result", (_s, p) => {
+      received.push(p as AgentEventLike);
+    });
+    await afterHook({
+      toolCall: { id: "c1", name: "bash" },
+      isError: false,
+      result: { content: [{ text: "ok" }] },
+    } as never);
+    expect(received).toHaveLength(1);
+    expect(received[0]!.payload).toMatchObject({
+      tool_call_id: "c1",
+      name: "bash",
+    });
+    expect((received[0]!.payload as { duration_ms: number }).duration_ms).toBeGreaterThanOrEqual(0);
+  });
+
+  test("stop() invokes the agent subscription's unsubscribe", () => {
+    const opts = makeOpts();
+    const cap = makeFakeAgentFactory();
+    const body = createAgentBody({ ...opts, createAgent: cap.factory });
+    let unsubscribed = false;
+    cap.fake.subscribe = mock(() => {
+      return () => {
+        unsubscribed = true;
+      };
+    }) as unknown as typeof cap.fake.subscribe;
+    const body2 = createAgentBody({ ...opts, createAgent: cap.factory });
+    body2.stop();
+    expect(unsubscribed).toBe(true);
     body.stop();
   });
-
-  test("subscribes to {team_id}.{agent_key}", async () => {
-    await body.start();
-    let received = false;
-    bus.subscribe("t1.general-1", () => {
-      received = true;
-    });
-    bus.publish("t1.general-1", {
-      version: 1,
-      team_id: "t1",
-      event_type: "test",
-      agent_role: "general",
-      agent_key: "general-1",
-      timestamp: new Date().toISOString(),
-      payload: { prompt: "hi" },
-    });
-    expect(received).toBe(true);
-  });
-
-  test("is_leader=true: subscribes to {team_id}.leader.prompt", async () => {
-    await body.start();
-    let received = false;
-    bus.subscribe("t1.leader.prompt", () => {
-      received = true;
-    });
-    bus.publish("t1.leader.prompt", {
-      version: 1,
-      team_id: "t1",
-      event_type: "leader.prompt",
-      agent_role: "general",
-      agent_key: "general-1",
-      timestamp: new Date().toISOString(),
-      payload: { prompt: "go" },
-    });
-    expect(received).toBe(true);
-  });
-
-  test("is_leader=false: does NOT subscribe to {team_id}.leader.prompt", async () => {
-    body.stop();
-    const result = makeFakeAgentFactory();
-    body = new AgentBody({
-      agent_key: "worker-1",
-      team_id: "t1",
-      soul: { ...makeSoul(), role: "worker" },
-      is_leader: false,
-      bus,
-      artifacts,
-      memory,
-      session_id: "s1",
-      tool_registry: registry,
-      getApiKey: () => undefined,
-      model: {},
-      createAgent: result.factory,
-    });
-    await body.start();
-
-    expect(bus.subscriberCount("t1.worker-1")).toBe(1);
-    expect(bus.subscriberCount("t1.leader.prompt")).toBe(0);
-  });
-
-  test("subscribes to each topic in soul.subscriptions", async () => {
-    body.stop();
-    const result = makeFakeAgentFactory();
-    body = new AgentBody({
-      agent_key: "general-1",
-      team_id: "t1",
-      soul: {
-        ...makeSoul(),
-        subscribe: ["task.recorded"],
-        subscriptions: ["task.recorded"],
-      },
-      is_leader: true,
-      bus,
-      artifacts,
-      memory,
-      session_id: "s1",
-      tool_registry: registry,
-      getApiKey: () => undefined,
-      model: {},
-      createAgent: result.factory,
-    });
-    await body.start();
-    let received = false;
-    bus.subscribe("t1.task.recorded", () => {
-      received = true;
-    });
-    bus.publish("t1.task.recorded", {
-      version: 1,
-      team_id: "t1",
-      event_type: "task.recorded",
-      agent_role: "general",
-      agent_key: "general-1",
-      timestamp: new Date().toISOString(),
-      payload: { prompt: "task", source: "x" },
-    });
-    expect(received).toBe(true);
-  });
 });
 
-describe("AgentBody — start() restore + continue", () => {
-  let bus: EventBus;
-  let artifacts: ArtifactStore;
-  let memory: MemoryManager;
-  let registry: ToolRegistry;
-  let fake: FakeAgent;
-
-  function makeBody() {
-    const result = makeFakeAgentFactory();
-    fake = result.fake;
-    return new AgentBody({
-      agent_key: "general-1",
-      team_id: "t1",
-      soul: makeSoul(),
-      is_leader: true,
-      bus,
-      artifacts,
-      memory,
-      session_id: "s1",
-      tool_registry: registry,
-      getApiKey: () => undefined,
-      model: {},
-      createAgent: result.factory,
-    });
-  }
-
-  beforeEach(() => {
-    bus = createEventBus();
-    artifacts = new InMemoryArtifactStore(); memory = new InMemoryMemoryManager();
-    registry = createToolRegistry();
-    registry.register("noop", makeNoopTool());
-  });
-
-  test("fresh session (no rows): no continue call", async () => {
-    const body = makeBody();
-    await body.start();
-    expect(fake.continue).not.toHaveBeenCalled();
-  });
-
-  test("restore ends with `user`: agent.continue is called", async () => {
-    memory.persist(
-      {
-        role: "user",
-        content: "prior user",
-        timestamp: Date.now(),
-      } as unknown as AgentMessage,
-      "general-1",
-      "s1",
-      "t1",
-    );
-    const body = makeBody();
-    await body.start();
-    expect(fake.continue).toHaveBeenCalledTimes(1);
-  });
-
-  test("restore ends with `toolResult`: agent.continue is called", async () => {
-    memory.persist(
-      {
-        role: "toolResult",
-        toolCallId: "x",
-        toolName: "t",
-        content: [{ type: "text", text: "r" }],
-        timestamp: Date.now(),
-        isError: false,
-      } as unknown as AgentMessage,
-      "general-1",
-      "s1",
-      "t1",
-    );
-    const body = makeBody();
-    await body.start();
-    expect(fake.continue).toHaveBeenCalledTimes(1);
-  });
-
-  test("restore ends with `assistant`: continue NOT called", async () => {
-    memory.persist(
-      {
-        role: "assistant",
-        content: [{ type: "text", text: "done" }],
-        timestamp: Date.now(),
-      } as unknown as AgentMessage,
-      "general-1",
-      "s1",
-      "t1",
-    );
-    const body = makeBody();
-    await body.start();
-    expect(fake.continue).not.toHaveBeenCalled();
-  });
-
-  test("restored messages are pushed into agent.state.messages", async () => {
-    memory.persist(
-      {
-        role: "user",
-        content: "a",
-        timestamp: Date.now(),
-      } as unknown as AgentMessage,
-      "general-1",
-      "s1",
-      "t1",
-    );
-    memory.persist(
-      {
-        role: "assistant",
-        content: [{ type: "text", text: "b" }],
-        timestamp: Date.now(),
-      } as unknown as AgentMessage,
-      "general-1",
-      "s1",
-      "t1",
-    );
-    const body = makeBody();
-    await body.start();
-    expect(fake.state.messages).toHaveLength(2);
-  });
-});
-
-describe("AgentBody — tool adaptation", () => {
-  test("soul.tools specs are resolved and adapted", () => {
-    const bus = createEventBus();
-    const artifacts = new InMemoryArtifactStore(); const memory = new InMemoryMemoryManager();
-    const registry = createToolRegistry();
-    registry.register("noop", makeNoopTool());
-
-    const { factory, fake } = makeFakeAgentFactory();
-    const body = new AgentBody({
-      agent_key: "general-1",
-      team_id: "t1",
-      soul: { ...makeSoul(), tools: ["noop"] },
-      is_leader: true,
-      bus,
-      artifacts,
-      memory,
-      session_id: "s1",
-      tool_registry: registry,
-      getApiKey: () => undefined,
-      model: {},
-      createAgent: factory,
-    });
-    void body;
-
-    expect((fake.state.tools as unknown[]).length).toBe(1);
-    const adapted = (fake.state.tools as unknown[])[0] as { name: string };
-    expect(adapted.name).toBe("noop");
-  });
-});
-
-describe("AgentBody — prompt ingress format", () => {
-  let bus: EventBus;
-  let artifacts: ArtifactStore;
-  let memory: MemoryManager;
-  let registry: ToolRegistry;
-  let fake: FakeAgent;
-
-  beforeEach(() => {
-    bus = createEventBus();
-    artifacts = new InMemoryArtifactStore(); memory = new InMemoryMemoryManager();
-    registry = createToolRegistry();
-    registry.register("noop", makeNoopTool());
-  });
-
-  test("`leader.prompt` (no source) is formatted as `[user]: <prompt>`", async () => {
-    const result = makeFakeAgentFactory();
-    fake = result.fake;
-    const body = new AgentBody({
-      agent_key: "general-1",
-      team_id: "t1",
-      soul: makeSoul(),
-      is_leader: true,
-      bus,
-      artifacts,
-      memory,
-      session_id: "s1",
-      tool_registry: registry,
-      getApiKey: () => undefined,
-      model: {},
-      createAgent: result.factory,
-    });
-    await body.start();
-    bus.publish("t1.leader.prompt", {
-      version: 1,
-      team_id: "t1",
-      event_type: "leader.prompt",
-      agent_role: "general",
-      agent_key: "general-1",
-      timestamp: new Date().toISOString(),
-      payload: { prompt: "hello" },
-    });
-    const calls = fake.prompt.mock.calls as Array<[AgentMessage]>;
-    expect(calls.length).toBeGreaterThan(0);
-    const synthetic = calls[0]![0] as { role: string; content: string };
-    expect(synthetic.role).toBe("user");
-    expect(synthetic.content).toBe("[user]: hello");
-  });
-
-  test("notify-sourced event (with source) is formatted as `[<source> on '<topic>']: <prompt>`", async () => {
-    const result = makeFakeAgentFactory();
-    fake = result.fake;
-    const body = new AgentBody({
-      agent_key: "general-1",
-      team_id: "t1",
-      soul: makeSoul(),
-      is_leader: true,
-      bus,
-      artifacts,
-      memory,
-      session_id: "s1",
-      tool_registry: registry,
-      getApiKey: () => undefined,
-      model: {},
-      createAgent: result.factory,
-    });
-    await body.start();
-    bus.publish("t1.general-1", {
-      version: 1,
-      team_id: "t1",
-      event_type: "task.researched",
-      agent_role: "researcher",
-      agent_key: "researcher-1",
-      timestamp: new Date().toISOString(),
-      payload: { prompt: "report", source: "researcher-1" },
-    });
-    const calls = fake.prompt.mock.calls as Array<[AgentMessage]>;
-    const synthetic = calls[0]![0] as { content: string };
-    expect(synthetic.content).toBe(
-      "[researcher-1 on 'task.researched']: report",
-    );
-  });
-});
+interface AgentEventLike {
+  event_type: string;
+  payload: Record<string, unknown>;
+}

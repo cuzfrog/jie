@@ -4,7 +4,6 @@ frozen:
   - auth-store.ts
   - config.test.ts
   - index.ts
-  - load-auth.ts
   - load-models.test.ts
   - load-models.ts
   - load-settings.ts

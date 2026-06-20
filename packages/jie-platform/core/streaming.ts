@@ -9,26 +9,13 @@ const MARKER_FORMAT = "...[%d chars truncated]...";
 
 export type BlockType = "text" | "thinking";
 
-export function truncateForTelemetry(input: string): {
-  text: string;
-  truncated: boolean;
-} {
-  if (input.length <= TRUNCATION_BYTES) {
-    return { text: input, truncated: false };
-  }
-  const half = Math.floor((TRUNCATION_BYTES - 25) / 2);
-  const truncatedChars = input.length - half * 2;
-  return {
-    text: `${input.slice(0, half)}${MARKER_FORMAT.replace("%d", String(truncatedChars))}${input.slice(input.length - half)}`,
-    truncated: true,
-  };
+export interface StreamPublisher {
+  beginStream(): void;
+  append(blockType: BlockType, delta: string): void;
+  endStream(): { stream_id: number; total_chunks: number };
 }
 
-function jsonStringify(value: unknown): string {
-  return JSON.stringify(value, (_k, v) => (v === undefined ? undefined : v));
-}
-
-export function makeStreamPublisher(bus: EventBus, agentKey: string, agentRole: string, teamId: string) {
+export function makeStreamPublisher(bus: EventBus, agentKey: string, agentRole: string, teamId: string): StreamPublisher {
   let streamId = 0;
   let buffer = "";
   let blockType: BlockType | null = null;
@@ -188,4 +175,23 @@ export function publishPlatformEvent(
     payload,
   };
   bus.publish(topic, envelope);
+}
+
+export function truncateForTelemetry(input: string): {
+  text: string;
+  truncated: boolean;
+} {
+  if (input.length <= TRUNCATION_BYTES) {
+    return { text: input, truncated: false };
+  }
+  const half = Math.floor((TRUNCATION_BYTES - 25) / 2);
+  const truncatedChars = input.length - half * 2;
+  return {
+    text: `${input.slice(0, half)}${MARKER_FORMAT.replace("%d", String(truncatedChars))}${input.slice(input.length - half)}`,
+    truncated: true,
+  };
+}
+
+function jsonStringify(value: unknown): string {
+  return JSON.stringify(value, (_k, v) => (v === undefined ? undefined : v));
 }

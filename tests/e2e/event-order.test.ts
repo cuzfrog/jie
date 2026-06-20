@@ -5,8 +5,9 @@ import type {
   AgentMessage,
 } from "@earendil-works/pi-agent-core";
 import {
-  AgentBody,
+  createAgentBody,
   createEventBus,
+  type AgentBody,
   type EventBus,
   type AgentEvent,
 } from "@cuzfrog/jie-platform/core";
@@ -119,7 +120,7 @@ describe("Event-Order Contract — body-side alternation", () => {
     bus.subscribe("agent.turn.start", () => events.push("turn_start"));
     bus.subscribe("agent.idle", () => events.push("idle"));
     const stub = makeStubAgentFactory();
-    body = new AgentBody({
+    body = createAgentBody({
       agent_key: "general-1",
       team_id: "t1",
       soul: makeSoul(),
@@ -164,7 +165,7 @@ describe("Event-Order Contract — body-side alternation", () => {
       turnStartEvents.push(p as AgentEvent),
     );
     const stub = makeStubAgentFactory();
-    body = new AgentBody({
+    body = createAgentBody({
       agent_key: "general-1",
       team_id: "t1",
       soul: makeSoul(),
@@ -189,7 +190,7 @@ describe("Event-Order Contract — body-side alternation", () => {
     bus.subscribe("agent.turn.start", () => events.push("turn_start"));
     bus.subscribe("agent.idle", () => events.push("idle"));
     const stub = makeStubAgentFactory();
-    body = new AgentBody({
+    body = createAgentBody({
       agent_key: "general-1",
       team_id: "t1",
       soul: makeSoul(),
@@ -255,7 +256,7 @@ describe("Event-Order Contract — bus-side in-order delivery", () => {
     });
 
     const stub = makeStubAgentFactory();
-    const body = new AgentBody({
+    const body = createAgentBody({
       agent_key: "general-1",
       team_id: "t1",
       soul: makeSoul(),

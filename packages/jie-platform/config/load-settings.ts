@@ -3,9 +3,26 @@ import { join } from "node:path";
 import type { Settings, RawSettings } from "./types.ts";
 
 const TEAM_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
+const DEFAULT_TEAM_ERROR = (value: unknown): string => `invalid defaultTeam: ${value}`;
 
-const DEFAULT_TEAM_ERROR = (value: unknown): string =>
-  `invalid defaultTeam: ${value}`;
+export function loadMergedSettings(
+  homeJieDir: string,
+  projectJieDir: string | null,
+): Settings {
+  const globalPath = join(homeJieDir, "settings.json");
+  const projectPath = projectJieDir === null ? null : join(projectJieDir, "settings.json");
+
+  const globalRaw = readSettingsFile(globalPath);
+  const projectRaw = projectPath === null ? null : readSettingsFile(projectPath);
+
+  const globalSettings = globalRaw === null ? {} : validateSettings(globalRaw, globalPath);
+  const projectSettings =
+    projectRaw === null
+      ? {}
+      : validateSettings(projectRaw, projectPath ?? "<unknown>");
+
+  return deepMergeSettings(globalSettings, projectSettings);
+}
 
 function readSettingsFile(path: string): RawSettings | null {
   let text: string;
@@ -48,28 +65,10 @@ function validateSettings(raw: RawSettings, source: string): Settings {
   return result;
 }
 
+// stub for future config shape where deep merge is needed.
 function deepMergeSettings(
   base: Settings,
   override: Settings,
 ): Settings {
   return { ...base, ...override };
-}
-
-export function loadMergedSettings(
-  homeJieDir: string,
-  projectJieDir: string | null,
-): Settings {
-  const globalPath = join(homeJieDir, "settings.json");
-  const projectPath = projectJieDir === null ? null : join(projectJieDir, "settings.json");
-
-  const globalRaw = readSettingsFile(globalPath);
-  const projectRaw = projectPath === null ? null : readSettingsFile(projectPath);
-
-  const globalSettings = globalRaw === null ? {} : validateSettings(globalRaw, globalPath);
-  const projectSettings =
-    projectRaw === null
-      ? {}
-      : validateSettings(projectRaw, projectPath ?? "<unknown>");
-
-  return deepMergeSettings(globalSettings, projectSettings);
 }

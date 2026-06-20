@@ -13,7 +13,7 @@ export function createModelRegistry(homeJieDir: string, projectJieDir: string | 
   return new PiModelRegistry(loadModelsConfig(homeJieDir, projectJieDir));
 }
 
-export class PiModelRegistry implements ModelRegistry {
+class PiModelRegistry implements ModelRegistry {
   private readonly custom: ResolvedModelsConfig;
 
   constructor(custom: ResolvedModelsConfig) {

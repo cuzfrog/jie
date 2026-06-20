@@ -1,15 +1,18 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 import type { AgentEvent as PiAgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, AssistantMessageEvent } from "@earendil-works/pi-ai";
-import { AgentBody } from "./agent-body.ts";
+import { createAgentBody, type AgentBody, type CreateAgentBodyOptions } from "./agent-body.ts";
 import { createEventBus, type EventBus } from "./event-bus.ts";
 
-import { InMemoryArtifactStore } from "../storage/artifact-store.ts";
-import { InMemoryMemoryManager } from "../storage/memory-store.ts";
-import type { ArtifactStore, MemoryManager } from "../storage/index.ts";
-import { createToolRegistry, type ToolRegistry } from "../tools/tool-registry.ts";
-import type { AgentSoul } from "../team/types.ts";
-import type { Tool, ToolResult } from "../tools/types.ts";
+import {
+  createArtifactStore,
+  createMemoryManager,
+  createStorage,
+  type ArtifactStore,
+  type MemoryManager,
+} from "../storage";
+import { createToolRegistry, type Tool, type ToolResult } from "../tools";
+import type { AgentSoul } from "../team";
 import { Type } from "typebox";
 import type { AgentEvent } from "./agent-event.ts";
 
@@ -92,27 +95,46 @@ function makeNoopTool(): Tool {
   };
 }
 
+function makeMemory(): MemoryManager {
+  const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
+  return createMemoryManager(storage);
+}
+
+function makeArtifacts(): ArtifactStore {
+  const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
+  return createArtifactStore(storage);
+}
+
+function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): CreateAgentBodyOptions {
+  const bus = createEventBus();
+  const registry = createToolRegistry();
+  registry.register("noop", makeNoopTool());
+  return {
+    agent_key: "general-1",
+    team_id: "t1",
+    soul: makeSoul(),
+    is_leader: true,
+    bus,
+    artifacts: makeArtifacts(),
+    memory: makeMemory(),
+    session_id: "s1",
+    tool_registry: registry,
+    getApiKey: () => undefined,
+    model: {},
+    ...overrides,
+  };
+}
+
 describe("AgentBody — pi-agent event bridging", () => {
-  let bus: EventBus;
-  let artifacts: ArtifactStore;
-  let memory: MemoryManager;
-  let registry: ToolRegistry;
   let body: AgentBody | undefined;
   let fireEvent: ((e: PiAgentEvent) => void) | undefined;
-
-  beforeEach(() => {
-    bus = createEventBus();
-    artifacts = new InMemoryArtifactStore(); memory = new InMemoryMemoryManager();
-    registry = createToolRegistry();
-    registry.register("noop", makeNoopTool());
-  });
 
   afterEach(() => {
     body?.stop();
     body = undefined;
   });
 
-  function capturedEvents(topic: string): AgentEvent[] {
+  function capturedEvents(topic: string, bus: EventBus): AgentEvent[] {
     const out: AgentEvent[] = [];
     bus.subscribe(topic, (_s, p) => {
       out.push(p as AgentEvent);
@@ -121,26 +143,14 @@ describe("AgentBody — pi-agent event bridging", () => {
   }
 
   test("turn_start publishes agent.turn.start with empty payload", () => {
-    const turnStart = capturedEvents("agent.turn.start");
+    const opts = makeOpts();
+    const turnStart = capturedEvents("agent.turn.start", opts.bus);
     const result = makeFakeAgentFactory({
       onEvent: (l) => {
         fireEvent = l;
       },
     });
-    body = new AgentBody({
-      agent_key: "general-1",
-      team_id: "t1",
-      soul: makeSoul(),
-      is_leader: true,
-      bus,
-      artifacts,
-      memory,
-      session_id: "s1",
-      tool_registry: registry,
-      getApiKey: () => undefined,
-      model: {},
-      createAgent: result.factory,
-    });
+    body = createAgentBody({ ...opts, createAgent: result.factory });
     fireEvent!({ type: "turn_start" });
     expect(turnStart).toHaveLength(1);
     expect(turnStart[0]!.event_type).toBe("agent.turn.start");
@@ -148,26 +158,14 @@ describe("AgentBody — pi-agent event bridging", () => {
   });
 
   test("agent_end publishes agent.idle with empty payload", () => {
-    const idle = capturedEvents("agent.idle");
+    const opts = makeOpts();
+    const idle = capturedEvents("agent.idle", opts.bus);
     const result = makeFakeAgentFactory({
       onEvent: (l) => {
         fireEvent = l;
       },
     });
-    body = new AgentBody({
-      agent_key: "general-1",
-      team_id: "t1",
-      soul: makeSoul(),
-      is_leader: true,
-      bus,
-      artifacts,
-      memory,
-      session_id: "s1",
-      tool_registry: registry,
-      getApiKey: () => undefined,
-      model: {},
-      createAgent: result.factory,
-    });
+    body = createAgentBody({ ...opts, createAgent: result.factory });
     fireEvent!({ type: "agent_end", messages: [] });
     expect(idle).toHaveLength(1);
     expect(idle[0]!.event_type).toBe("agent.idle");
@@ -175,54 +173,30 @@ describe("AgentBody — pi-agent event bridging", () => {
   });
 
   test("body-side alternation: turn_start always precedes agent.idle", () => {
+    const opts = makeOpts();
     const events: string[] = [];
-    bus.subscribe("agent.turn.start", () => events.push("turn_start"));
-    bus.subscribe("agent.idle", () => events.push("idle"));
+    opts.bus.subscribe("agent.turn.start", () => events.push("turn_start"));
+    opts.bus.subscribe("agent.idle", () => events.push("idle"));
     const result = makeFakeAgentFactory({
       onEvent: (l) => {
         fireEvent = l;
       },
     });
-    body = new AgentBody({
-      agent_key: "general-1",
-      team_id: "t1",
-      soul: makeSoul(),
-      is_leader: true,
-      bus,
-      artifacts,
-      memory,
-      session_id: "s1",
-      tool_registry: registry,
-      getApiKey: () => undefined,
-      model: {},
-      createAgent: result.factory,
-    });
+    body = createAgentBody({ ...opts, createAgent: result.factory });
     fireEvent!({ type: "turn_start" });
     fireEvent!({ type: "agent_end", messages: [] });
     expect(events).toEqual(["turn_start", "idle"]);
   });
 
   test("message_update text_delta buffers and flushes at 64 chars", () => {
-    const chunks = capturedEvents("agent.stream.chunk");
+    const opts = makeOpts();
+    const chunks = capturedEvents("agent.stream.chunk", opts.bus);
     const result = makeFakeAgentFactory({
       onEvent: (l) => {
         fireEvent = l;
       },
     });
-    body = new AgentBody({
-      agent_key: "general-1",
-      team_id: "t1",
-      soul: makeSoul(),
-      is_leader: true,
-      bus,
-      artifacts,
-      memory,
-      session_id: "s1",
-      tool_registry: registry,
-      getApiKey: () => undefined,
-      model: {},
-      createAgent: result.factory,
-    });
+    body = createAgentBody({ ...opts, createAgent: result.factory });
     fireEvent!({ type: "message_start", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
     const amEvent: AssistantMessageEvent = {
       type: "text_delta",
@@ -245,25 +219,13 @@ describe("AgentBody — pi-agent event bridging", () => {
   });
 
   test("message_end persists the message via memory.persist", () => {
+    const opts = makeOpts();
     const result = makeFakeAgentFactory({
       onEvent: (l) => {
         fireEvent = l;
       },
     });
-    body = new AgentBody({
-      agent_key: "general-1",
-      team_id: "t1",
-      soul: makeSoul(),
-      is_leader: true,
-      bus,
-      artifacts,
-      memory,
-      session_id: "s1",
-      tool_registry: registry,
-      getApiKey: () => undefined,
-      model: {},
-      createAgent: result.factory,
-    });
+    body = createAgentBody({ ...opts, createAgent: result.factory });
     const msg = {
       role: "assistant",
       content: [{ type: "text", text: "hello" }],
@@ -271,7 +233,7 @@ describe("AgentBody — pi-agent event bridging", () => {
     } as unknown as AssistantMessage;
     fireEvent!({ type: "message_start", message: msg });
     fireEvent!({ type: "message_end", message: msg });
-    const restored = memory.restore("general-1", "s1", "t1");
+    const restored = opts.memory.restore("general-1", "s1", "t1");
 
     return restored.then((rows) => {
       expect(rows.length).toBe(1);
@@ -279,24 +241,12 @@ describe("AgentBody — pi-agent event bridging", () => {
   });
 
   test("beforeToolCall hook publishes agent.tool.call", async () => {
-    const calls = capturedEvents("agent.tool.call");
+    const opts = makeOpts();
+    const calls = capturedEvents("agent.tool.call", opts.bus);
     const result = makeFakeAgentFactory();
-    body = new AgentBody({
-      agent_key: "general-1",
-      team_id: "t1",
-      soul: makeSoul(),
-      is_leader: true,
-      bus,
-      artifacts,
-      memory,
-      session_id: "s1",
-      tool_registry: registry,
-      getApiKey: () => undefined,
-      model: {},
-      createAgent: result.factory,
-    });
-    const opts = result.lastOpts();
-    const hook = opts?.beforeToolCall;
+    body = createAgentBody({ ...opts, createAgent: result.factory });
+    const captured = result.lastOpts();
+    const hook = captured?.beforeToolCall;
     if (hook === undefined) {
       throw new Error("beforeToolCall hook not captured");
     }
@@ -320,51 +270,27 @@ describe("AgentBody — pi-agent event bridging", () => {
 });
 
 describe("AgentBody — agent.queue.update", () => {
-  let bus: EventBus;
-  let artifacts: ArtifactStore;
-  let memory: MemoryManager;
-  let registry: ToolRegistry;
   let body: AgentBody | undefined;
-
-  beforeEach(() => {
-    bus = createEventBus();
-    artifacts = new InMemoryArtifactStore(); memory = new InMemoryMemoryManager();
-    registry = createToolRegistry();
-    registry.register("noop", makeNoopTool());
-  });
 
   afterEach(() => {
     body?.stop();
   });
 
   test("queue.update published on enqueue with synthetic snapshot", async () => {
+    const opts = makeOpts();
     const events: AgentEvent[] = [];
-    bus.subscribe("agent.queue.update", (_s, p) => {
+    opts.bus.subscribe("agent.queue.update", (_s, p) => {
       events.push(p as AgentEvent);
     });
     const result = makeFakeAgentFactory({
       onEvent: (l) => {
-
         void l;
       },
     });
-    body = new AgentBody({
-      agent_key: "general-1",
-      team_id: "t1",
-      soul: makeSoul(),
-      is_leader: true,
-      bus,
-      artifacts,
-      memory,
-      session_id: "s1",
-      tool_registry: registry,
-      getApiKey: () => undefined,
-      model: {},
-      createAgent: result.factory,
-    });
+    body = createAgentBody({ ...opts, createAgent: result.factory });
     result.fake.state.isStreaming = true;
-    await body.start();
-    bus.publish("t1.leader.prompt", {
+    await (body as unknown as { start: () => Promise<void> }).start();
+    opts.bus.publish("t1.leader.prompt", {
       version: 1,
       team_id: "t1",
       event_type: "leader.prompt",
