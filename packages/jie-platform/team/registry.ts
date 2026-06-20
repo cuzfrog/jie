@@ -1,6 +1,6 @@
 import { existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { loadMinimalTeam, loadTeamFromDir } from "./loader.ts";
+import { isValidTeamId, loadMinimalTeam, loadTeamFromDir } from "./loader.ts";
 import type { Team } from "./types.ts";
 
 /** Internal id of the built-in minimal team. The literal is a
@@ -86,6 +86,9 @@ export function createTeamRegistry(opts: TeamRegistryOptions): TeamRegistry {
     loadTeam(teamId) {
       if (teamId === undefined || isMinimal(teamId)) {
         return loadMinimalTeam();
+      }
+      if (!isValidTeamId(teamId)) {
+        throw new Error(`invalid team_id: ${teamId}`);
       }
       const projectDir = projectTeamsDir();
       if (projectDir !== null && existsSync(join(projectDir, teamId, "TEAM.md"))) {

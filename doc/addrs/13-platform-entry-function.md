@@ -18,33 +18,44 @@ A pre-implementation review surfaced that the natural shape is **a single export
 
 ## Decision
 
-The platform's entry point is a single function in `packages/jie-platform/start.ts`:
+The platform's entry point is a single function in `packages/jie-platform/start.ts`. The function takes the workspace-level options plus a `JiePlatformDeps` bundle for the runtime services (storage, registries, memory). The CLI constructs the bundle from `cwd` and `homeJieDir`; tests construct it with a `:memory:` storage.
 
 ```typescript
-export interface StartJieOptions {
+export interface CreateJieOptions {
   workspace:   string;            // process.cwd()
-  settings:    MergedSettings;    // resolved from .jie/ + ~/.jie/
-  storage:     Storage;           // pre-opened (with init-db applied)
+  homeJieDir:  string;            // e.g. ~/.jie/
+  settingsStore: SettingsStore;   // bound to (cwd, homeJieDir); platform calls .load()
   teamId:      string | "minimal";// resolved team
-  mcpServers:  McpServerConfig[]; // from .jie/mcp.json (Day 2 — not loaded in v1 per ADR 15)
-  resumeSessionId?:     string;   // --resume <id>; validated by startJie via memory.hasSession
-  continueLastSession?: boolean; // --continue; resolved by startJie via memory.mostRecentSessionId
+  mcpServerConfigs?: McpServerConfig[]; // forward-looking stub (not loaded in v1 per ADR 15)
+  resumeSessionId?:     string;   // --resume <id>; validated via memory.hasSession
+  continueLastSession?: boolean; // --continue; resolved via memory.mostRecentSessionId
 }
 
-export interface JieHandle {
-  bus:           EventBus;
-  artifacts:     ArtifactStore;
-  bodies:        () => AgentBody[];
-  bodiesFor:     (teamId: string) => AgentBody[];     // empty if not loaded
-  rolesFor:      (teamId: string) => string[];        // role stems of the loaded team; empty if not loaded
-  loadTeam:      (teamId: string) => Promise<void>;   // ensure-loaded; idempotent if already loaded; previously-active team keeps running (ADR 19); publishes {team_id}.team.loaded for the new team
-  stop:          (timeoutMs?: number) => Promise<void>; // bounded graceful shutdown; stops all loaded teams
+export interface JiePlatformDeps {
+  bus:           EventBus;        // caller-owned; the platform publishes on it
+  storage:       Storage;         // pre-opened (with init-db applied)
+  teamRegistry:  TeamRegistry;    // constructed from workspace + homeJieDir
+  modelRegistry: ModelRegistry;   // constructed from workspace + homeDir
+  toolRegistry:  ToolRegistry;    // tools available to bodies (notify, mcp stubs, ...)
+  memoryManager: MemoryManager;   // session-lookup API; constructed from `storage`
 }
 
-export function startJie(opts: StartJieOptions): Promise<JieHandle>;
+export interface JiePlatform {
+  bus:  EventBus;
+  stop: (timeoutMs?: number) => Promise<void>;
+}
+
+export function createJiePlatform(
+  opts: CreateJieOptions,
+  deps: JiePlatformDeps,
+): Promise<JiePlatform>;
 ```
 
-`startJie` is `async` and does the full startup sequence (storage is already open by the caller, so `startJie` does not own DB lifecycle):
+The function is re-exported under the older public name for backward compatibility: `startJie` is an alias for `createJiePlatform`, and `JieHandle` is an alias for `JiePlatform`. New code should use `createJiePlatform` / `JiePlatform`; existing code that imports `startJie` / `JieHandle` continues to work.
+
+The handle is intentionally minimal. All team-level state (teamId, the bodies, the per-body `is_leader` flag) is exposed via bus events — specifically `{team_id}.team.loaded` published once at startup. The CLI captures the team info from the bus in the orchestrator (`createApp`) and passes it to the prompt flow (`runPrint`); the TUI subscribes to the bus directly. This is the "TUI only sees eventBus" design from ADR 25.
+
+`createJiePlatform` is `async` and does the full startup sequence. The caller supplies the `storage` (already open), the `teamRegistry`, the `modelRegistry`, the `toolRegistry`, and the `memory` manager. The platform uses `storage` for the `artifactStore` and for the `memory` manager's underlying connection; `teamRegistry` / `modelRegistry` / `toolRegistry` are used as-is.
 
 1. Connect MCP servers (per-server failures log WARN and skip; tools registered into a `ToolRegistry`). Skipped in v1 per ADR 15.
 2. Resolve the team: load the manifest from the team-blueprint loader; resolve each `AgentSoul.model` against merged settings; build the `AgentSoul[]`.
@@ -82,9 +93,9 @@ The "supervisor" prose in the spec is rewritten to point at `JieHandle` / `start
 
 ## Consequences
 
-- `packages/jie-platform/start.ts` exports `startJie` and `JieHandle`. The CLI's `jie` / `jie -p` entry calls `startJie` with resolved options.
-- The "supervisor" prose in `08-memory.md` and `09-deployment.md` is rewritten to refer to `JieHandle`.
+- `packages/jie-platform/start.ts` exports `createJiePlatform` (and the public alias `startJie`), `JiePlatform` (and the public alias `JieHandle`), and `JiePlatformDeps`. The CLI's `jie -p` entry constructs a `JiePlatformDeps` bundle and calls `startJie` with it. `JiePlatformDeps` is not re-exported from `@cuzfrog/jie-platform`'s public surface (the platform's `index.ts` is frozen); consumers construct the bundle and TypeScript infers the type from the function signature.
+- The "supervisor" prose in `08-memory.md` and `09-deployment.md` is rewritten to refer to `JieHandle` / `JiePlatform`.
 - The CLI's startup is a function call, not a class instantiation. The CLI does not import a `Supervisor` symbol.
-- The "force-publishing on behalf of crashed agents" semantics (backlog, Day 2) is implemented on `JieHandle` when the day comes, not on a separate supervisor class.
-- The spec's TUI-facing `roles: string[]` parameter is the **startup team's** roles, sourced by the CLI from `handle.rolesFor(startupTeamId)` after `startJie` returns and before passing to the TUI. The handle is the single source of truth for "which roles are in which loaded team"; the CLI does not parse the team manifest separately before `startJie`. For any subsequently-loaded team (per ADR 19 multi-team coexistence), the TUI queries `handle.rolesFor(teamId)` at swap time. The handle owns roles *per loaded team* via the `loadedTeams` map; it does not own the full roster of installed teams (that's a `10-configuration.md` concern).
-- Empty-team `-p` mode guard: if `handle.bodies()` is empty after `startJie()` resolves, the CLI exits 1 with `team '<id>' has no agents to run; check the team manifest` and does not enter the gate. See `ui/cli.md` `jie -p` step 5.
+- The "force-publishing on behalf of crashed agents" semantics (backlog, Day 2) is implemented on `JiePlatform` when the day comes, not on a separate supervisor class.
+- The spec's TUI-facing `roles: string[]` parameter is the **startup team's** roles, sourced by the TUI from the `team.loaded` event's `agents[].role` field (each entry also carries `is_leader: boolean`). The CLI's `createApp` orchestrator subscribes to the event before `createJiePlatform` returns and captures the team info (`teamId`, `leaderRole`, `leaderKey`); the orchestrator passes these to `runPrint`. The TUI subscribes to the bus directly and derives all state from the event stream. The platform's `JiePlatform` interface is `{ bus, stop }` — the team info is not exposed on the handle (ADR 25's "TUI only sees eventBus" rule).
+- Empty-team guard: when a team has no agents (or no leader), `team.loaded` is published with an empty `agents` array. The CLI's `createApp` orchestrator detects this and exits 1 with `team '<id>' has no agents to run; check the team manifest`; the gate is never entered. See `ui/cli.md` `jie -p` step 5.

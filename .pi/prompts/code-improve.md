@@ -10,7 +10,8 @@ We have just finished current stage implementation and are improving the code ba
 - Analyze the code and documents. Suppose you are going to add more features from next stages, think about what makes the code hard to change?
 - Discuss with the me upon blocking or important issues. Offer your solutions. Be honest, if the my idea does not make sense, push back. Ask me questions if you need to.
 - Use the temporary file `tmp/improvement-plan.md` to capture the implementation plan and execute the plan.
-- Ensure references and documents are consistent.
+- Do not add comments to code unless the code cannot tell. Ensure references and documents are consistent.
+- I may have modified the code, follow my intentions.
 
 ## User Instructions
 $ARGUMENTS

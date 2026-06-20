@@ -1,35 +1,27 @@
 import { ulid } from "ulid";
 import { getModel as piGetModel, type Model } from "@earendil-works/pi-ai";
-import { dirname } from "node:path";
-import { AgentBody, type AgentEvent, createEventBus, type EventBus } from "./core/index.ts";
-import { createTeamRegistry, type AgentSoul, type Team } from "./team/index.ts";
-import { ModelRegistry, type MergedSettings } from "./config/index.ts";
-import { createToolRegistry, type ToolRegistry } from "./tools";
+import { AgentBody, type AgentEvent, type EventBus } from "./core/index.ts";
+import { type AgentSoul, type Team, type TeamRegistry } from "./team/index.ts";
+import { ModelRegistry, type SettingsStore } from "./config/index.ts";
+import { type ToolRegistry } from "./tools";
 import type { McpServerConfig } from "./config/index.ts";
 import {
   createArtifactStore,
-  createMemoryManager,
-  createStorage,
   type ArtifactStore,
   type MemoryManager,
+  type Storage,
 } from "./storage";
 
-export interface StartJieOptions {
+export interface CreateJieOptions {
   workspace: string;
   /** The user's home jie dir (e.g. `~/.jie/`). */
   homeJieDir: string;
-  settings: MergedSettings;
-  /** The team id to load. When `undefined`, the registry falls
-   *  back to the built-in minimal team. External modules do not
-   *  need to know about the minimal team — they can pass
-   *  `undefined` and the platform handles the fallback. */
+  /** The settings store. The platform calls `settingsStore.load()`
+   *  internally so future runtime changes (e.g. a TUI command
+   *  updating the default model) are picked up. */
+  settingsStore: SettingsStore;
+  /** The team id to load. Fallback to default minimal team. */
   teamId?: string;
-  /** Override the SQLite file path used for the platform's storage.
-   *  Defaults to `{workspace}/.jie/storage.db`. Tests can pass
-   *  `":memory:"` for an in-process, in-memory database. The storage
-   *  is auto-collected when the platform handle is released — there
-   *  is no `close()` to call. */
-  storageFilePath?: string;
   /** Forward-looking stub: the MCP client will consume this once it
    *  lands. The platform does not load `mcp.json` in v1. */
   mcpServerConfigs?: McpServerConfig[];
@@ -37,13 +29,17 @@ export interface StartJieOptions {
   continueLastSession?: boolean;
 }
 
-export interface JieHandle {
+export interface JiePlatformDeps {
   bus: EventBus;
-  artifacts: ArtifactStore;
-  bodies: () => AgentBody[];
-  bodiesFor: (teamId: string) => AgentBody[];
-  rolesFor: (teamId: string) => string[];
-  loadTeam: (teamId: string) => Promise<void>;
+  storage: Storage;
+  teamRegistry: TeamRegistry;
+  modelRegistry: ModelRegistry;
+  toolRegistry: ToolRegistry;
+  memoryManager: MemoryManager;
+}
+
+export interface JiePlatform {
+  bus: EventBus;
   stop: (timeoutMs?: number) => Promise<void>;
 }
 
@@ -63,9 +59,12 @@ function defaultResolveModel(registry: ModelRegistry): (provider: string, modelI
 
 function resolveSoulModel(
   soul: AgentSoul,
-  settings: MergedSettings,
+  settingsStore: SettingsStore,
   resolveModel: (provider: string, modelId: string) => Model<any>,
 ): Model<any> {
+  // Read settings at call time so a runtime change to the
+  // default model is picked up by the next body that loads.
+  const settings = settingsStore.load();
   const modelStr = soul.model !== "" ? soul.model : (
     settings.defaultProvider !== undefined && settings.defaultModel !== undefined
       ? `${settings.defaultProvider}/${settings.defaultModel}`
@@ -87,49 +86,21 @@ function resolveSoulModel(
   }
 }
 
-export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
-  const toolRegistry: ToolRegistry = createToolRegistry();
-  // The CLI supplies `homeJieDir` as `join(resolveHomeDir(), ".jie")`,
-  // so `dirname` recovers the user's actual HOME. The model
-  // registry needs HOME for `<homeDir>/.jie/models.json`. The
-  // platform never reads `process.env.HOME` itself — HOME
-  // resolution is owned by the CLI.
-  const homeDir = dirname(opts.homeJieDir);
-  const registry = ModelRegistry.load(opts.workspace, { homeDir });
-  const resolveModel = defaultResolveModel(registry);
-  // The team registry is constructed here from the workspace +
-  // homeJieDir; there is no override path. Tests that need to
-  // exercise a specific team should write the team to a real
-  // temp directory and pass its path as `workspace`.
-  const teamRegistry = createTeamRegistry({
-    workspace: opts.workspace,
-    homeJieDir: opts.homeJieDir,
-  });
+export async function createJiePlatform(opts: CreateJieOptions, deps: JiePlatformDeps): Promise<JiePlatform> {
+  const resolveModel = defaultResolveModel(deps.modelRegistry);
   const getApiKey = async (provider: string): Promise<string | undefined> =>
-    registry.getApiKey(provider);
-  // The platform owns the storage. The default file path is
-  // `{workspace}/.jie/storage.db`; tests can pass `:memory:` via
-  // `storageFilePath`. The storage has no `close()` — the
-  // underlying SQLite database is auto-collected when the last
-  // reference goes out of scope.
-  const storage = createStorage({
-    type: "sqlite",
-    filePath: opts.storageFilePath ?? `${opts.workspace}/.jie/storage.db`,
-  });
-  const artifacts: ArtifactStore = createArtifactStore(storage);
-  const memory: MemoryManager = createMemoryManager(storage);
-  const bus: EventBus = createEventBus();
+    deps.modelRegistry.getApiKey(provider);
+  const artifactStore: ArtifactStore = createArtifactStore(deps.storage);
+  const bus: EventBus = deps.bus;
 
   // Step 1: resolve the team blueprint. The registry's
   // `loadTeam(undefined)` falls back to the built-in minimal team.
   const resolvedTeamId = opts.teamId ?? "minimal";
-  const blueprint: Team = teamRegistry.loadTeam(resolvedTeamId);
+  const blueprint: Team = deps.teamRegistry.loadTeam(resolvedTeamId);
 
   // Step 2: model pre-check (every soul must resolve).
-  const resolvedModels = new Map<string, Model<any>>();
   for (const soul of blueprint.roles) {
-    const model = resolveSoulModel(soul, opts.settings, resolveModel);
-    resolvedModels.set(soul.role, model);
+    resolveSoulModel(soul, opts.settingsStore, resolveModel);
   }
 
   // Step 3: session id resolution for the startup team.
@@ -137,12 +108,12 @@ export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
   for (const teamId of [resolvedTeamId]) {
     let resolved: string;
     if (opts.resumeSessionId !== undefined) {
-      if (!memory.hasSession(teamId, opts.resumeSessionId)) {
+      if (!deps.memoryManager.hasSession(teamId, opts.resumeSessionId)) {
         throw new Error(`unknown session_id: ${opts.resumeSessionId}`);
       }
       resolved = opts.resumeSessionId;
     } else if (opts.continueLastSession === true) {
-      const recent = memory.mostRecentSessionId(teamId);
+      const recent = deps.memoryManager.mostRecentSessionId(teamId);
       if (recent === null) {
         console.warn(
           "no prior session in this directory; starting a new session",
@@ -158,26 +129,26 @@ export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
   }
 
   // Step 4: build bodies for the startup team.
-  const loadedTeams = new Map<string, { blueprint: Team; bodies: AgentBody[] }>();
+  const loadedTeams = new Map<string, AgentBody[]>();
 
   async function buildAndStart(teamId: string): Promise<AgentBody[]> {
-    const bp: Team = teamRegistry.loadTeam(teamId);
+    const bp: Team = deps.teamRegistry.loadTeam(teamId);
 
     // If already loaded, return existing bodies (idempotent).
     const existing = loadedTeams.get(teamId);
-    if (existing !== undefined) return existing.bodies;
+    if (existing !== undefined) return existing;
 
     // For session-id resolution on a swap-loaded team, reuse the
     // recorded value if any; else mint a fresh one.
     let sid = sessionIds.get(teamId);
     if (sid === undefined) {
       if (opts.resumeSessionId !== undefined) {
-        if (!memory.hasSession(teamId, opts.resumeSessionId)) {
+        if (!deps.memoryManager.hasSession(teamId, opts.resumeSessionId)) {
           throw new Error(`unknown session_id: ${opts.resumeSessionId}`);
         }
         sid = opts.resumeSessionId;
       } else if (opts.continueLastSession === true) {
-        const recent = memory.mostRecentSessionId(teamId);
+        const recent = deps.memoryManager.mostRecentSessionId(teamId);
         if (recent === null) {
           console.warn(
             "no prior session in this directory; starting a new session",
@@ -196,7 +167,7 @@ export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
     for (const soul of bp.roles) {
       const is_leader = soul.role === bp.leaderRole;
       const agent_key = `${soul.role}-1`;
-      const model = resolveSoulModel(soul, opts.settings, resolveModel);
+      const model = resolveSoulModel(soul, opts.settingsStore, resolveModel);
       out.push(
         new AgentBody({
           agent_key,
@@ -204,10 +175,10 @@ export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
           soul,
           is_leader,
           bus,
-          artifacts,
-          memory,
+          artifacts: artifactStore,
+          memory: deps.memoryManager,
           session_id: sid,
-          tool_registry: toolRegistry,
+          tool_registry: deps.toolRegistry,
           getApiKey: async (provider: string) => getApiKey(provider),
           model,
         }),
@@ -216,7 +187,7 @@ export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
     for (const body of out) {
       await body.start();
     }
-    loadedTeams.set(teamId, { blueprint: bp, bodies: out });
+    loadedTeams.set(teamId, out);
     publishTeamLoaded(bus, teamId, bp);
     return out;
   }
@@ -224,32 +195,17 @@ export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
   // Build and start the startup team.
   await buildAndStart(resolvedTeamId);
 
-  // The handle is the externally visible lifecycle object.
-  const handle: JieHandle = {
+  // The handle is the externally visible lifecycle object. Its
+  // surface is intentionally minimal: just the bus and the stop
+  // method. All team-level information (teamId, leader, bodies)
+  // is exposed via bus events (e.g. `<team_id>.team.loaded`) so
+  // the TUI and any other consumer can derive it from the event
+  // stream without holding a reference to the live bodies.
+  const handle: JiePlatform = {
     bus,
-    artifacts,
-    bodies: () => {
-      const all: AgentBody[] = [];
-      for (const { bodies } of loadedTeams.values()) {
-        all.push(...bodies);
-      }
-      return all;
-    },
-    bodiesFor: (teamId: string) => {
-      const entry = loadedTeams.get(teamId);
-      return entry === undefined ? [] : entry.bodies;
-    },
-    rolesFor: (teamId: string) => {
-      const entry = loadedTeams.get(teamId);
-      if (entry === undefined) return [];
-      return entry.blueprint.roles.map((r) => r.role);
-    },
-    loadTeam: async (teamId: string) => {
-      await buildAndStart(teamId);
-    },
     stop: async (timeoutMs: number = 10_000) => {
       const allBodies: AgentBody[] = [];
-      for (const { bodies } of loadedTeams.values()) {
+      for (const bodies of loadedTeams.values()) {
         allBodies.push(...bodies);
       }
       for (const b of allBodies) b.stop();
@@ -265,7 +221,11 @@ export async function startJie(opts: StartJieOptions): Promise<JieHandle> {
 
 function publishTeamLoaded(bus: EventBus, teamId: string, bp: Team): void {
   const sorted = [...bp.roles].sort((a, b) => a.role.localeCompare(b.role));
-  const agents = sorted.map((r) => ({ role: r.role, agent_key: `${r.role}-1` }));
+  const agents = sorted.map((r) => ({
+    role: r.role,
+    agent_key: `${r.role}-1`,
+    is_leader: r.role === bp.leaderRole,
+  }));
   const envelope: AgentEvent = {
     version: 1,
     team_id: teamId,
@@ -275,5 +235,3 @@ function publishTeamLoaded(bus: EventBus, teamId: string, bp: Team): void {
   };
   bus.publish(`${teamId}.team.loaded`, envelope);
 }
-
-

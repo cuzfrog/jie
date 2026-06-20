@@ -1,4 +1,4 @@
-export type { MergedSettings, AuthJson, McpServerConfig } from "./types.ts";
+export type { Settings as MergedSettings, AuthJson, McpServerConfig } from "./types.ts";
 export {
   homeJieDir,
   globalSettingsPath,

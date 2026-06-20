@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import type { MergedSettings, RawSettings } from "./types.ts";
+import type { Settings, RawSettings } from "./types.ts";
 import { globalSettingsPath, projectSettingsPath } from "./paths.ts";
 
 const TEAM_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
@@ -31,8 +31,8 @@ function readSettingsFile(path: string): RawSettings | null {
  *  registered via `models.json` are valid references, and the
  *  registry will fail at request time if the provider has no
  *  registered models. */
-function validateSettings(raw: RawSettings, source: string): MergedSettings {
-  const result: MergedSettings = {};
+function validateSettings(raw: RawSettings, source: string): Settings {
+  const result: Settings = {};
 
   if ("defaultProvider" in raw && raw.defaultProvider !== undefined) {
     if (typeof raw.defaultProvider !== "string") {
@@ -68,9 +68,9 @@ function validateSettings(raw: RawSettings, source: string): MergedSettings {
  *  general — the platform's v1 schema has no nested objects, but the
  *  rule is in place for future settings. */
 function deepMergeSettings(
-  base: MergedSettings,
-  override: MergedSettings,
-): MergedSettings {
+  base: Settings,
+  override: Settings,
+): Settings {
   return { ...base, ...override };
 }
 
@@ -82,7 +82,7 @@ function deepMergeSettings(
 export function loadMergedSettings(
   cwd: string,
   options: { homeDir: string },
-): MergedSettings {
+): Settings {
   const globalPath = globalSettingsPath(options.homeDir);
   const projectPath = projectSettingsPath(cwd);
 

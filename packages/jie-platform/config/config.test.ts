@@ -5,25 +5,26 @@ import { join } from "node:path";
 import { makeAuthStore, makeSettingsStore } from "./index.ts";
 
 describe("SettingsStore.load", () => {
-  let homeDir: string;
+  let homeJieDir: string;
   let projectRoot: string;
   let cwd: string;
 
   beforeEach(() => {
-    homeDir = mkdtempSync(join(tmpdir(), "jie-home-"));
+    const homeDir = mkdtempSync(join(tmpdir(), "jie-home-"));
+    homeJieDir = join(homeDir, ".jie");
     projectRoot = mkdtempSync(join(tmpdir(), "jie-project-"));
     cwd = projectRoot;
   });
 
   afterEach(() => {
-    rmSync(homeDir, { recursive: true, force: true });
+    rmSync(homeJieDir, { recursive: true, force: true });
     rmSync(projectRoot, { recursive: true, force: true });
   });
 
   test("walks up to find project .jie/ and merges with global", () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
+    mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
-      join(homeDir, ".jie", "settings.json"),
+      join(homeJieDir, "settings.json"),
       JSON.stringify({ defaultTeam: "global-team" }),
     );
     mkdirSync(join(projectRoot, ".jie"), { recursive: true });
@@ -32,13 +33,13 @@ describe("SettingsStore.load", () => {
       JSON.stringify({ defaultTeam: "dev", unknown_field: 1 }),
     );
 
-    const merged = makeSettingsStore(homeDir).load(cwd);
+    const merged = makeSettingsStore(cwd, homeJieDir).load();
     expect(merged.defaultTeam).toBe("dev");
-    expect("unknown_field" in (merged as Record<string, unknown>)).toBe(false);
+    expect("unknown_field" in (merged as unknown as Record<string, unknown>)).toBe(false);
   });
 
   test("walks up from a subdirectory of the project", () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
+    mkdirSync(homeJieDir, { recursive: true });
     mkdirSync(join(projectRoot, ".jie"), { recursive: true });
     writeFileSync(
       join(projectRoot, ".jie", "settings.json"),
@@ -47,14 +48,14 @@ describe("SettingsStore.load", () => {
     const subdir = join(projectRoot, "a", "b", "c");
     mkdirSync(subdir, { recursive: true });
 
-    const merged = makeSettingsStore(homeDir).load(subdir);
+    const merged = makeSettingsStore(subdir, homeJieDir).load();
     expect(merged.defaultTeam).toBe("nested");
   });
 
   test("project values win over global for top-level scalars", () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
+    mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
-      join(homeDir, ".jie", "settings.json"),
+      join(homeJieDir, "settings.json"),
       JSON.stringify({ defaultProvider: "openai", defaultModel: "gpt-4" }),
     );
     mkdirSync(join(projectRoot, ".jie"), { recursive: true });
@@ -63,13 +64,13 @@ describe("SettingsStore.load", () => {
       JSON.stringify({ defaultProvider: "anthropic" }),
     );
 
-    const merged = makeSettingsStore(homeDir).load(cwd);
+    const merged = makeSettingsStore(cwd, homeJieDir).load();
     expect(merged.defaultProvider).toBe("anthropic");
     expect(merged.defaultModel).toBe("gpt-4");
   });
 
   test("returns empty object when neither file exists", () => {
-    const merged = makeSettingsStore(homeDir).load(cwd);
+    const merged = makeSettingsStore(cwd, homeJieDir).load();
     expect(merged).toEqual({});
   });
 
@@ -79,7 +80,7 @@ describe("SettingsStore.load", () => {
       join(projectRoot, ".jie", "settings.json"),
       JSON.stringify({ defaultProvider: "lm-studio", defaultModel: "qwen3.5-2b" }),
     );
-    const merged = makeSettingsStore(homeDir).load(cwd);
+    const merged = makeSettingsStore(cwd, homeJieDir).load();
     expect(merged.defaultProvider).toBe("lm-studio");
     expect(merged.defaultModel).toBe("qwen3.5-2b");
   });

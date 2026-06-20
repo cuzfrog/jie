@@ -1,5 +1,5 @@
-export { startJie } from "./start.ts";
-export type { JieHandle } from "./start.ts";
+export { createJiePlatform } from "./start.ts";
+export type { JiePlatform } from "./start.ts";
 
 export type { AgentEvent } from "./core/agent-event.ts";
 

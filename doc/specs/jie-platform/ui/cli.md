@@ -35,7 +35,7 @@ jie [--team <id>]
 5. **Model pre-check**: walk every agent in the blueprint and resolve `(provider, modelId)`. If any agent fails (no `model:` in its `.md`, and the merged `settings.json` does not provide a resolvable default), startup exits 1 with one error listing every unresolved agent.
 6. Connect MCP servers. Per-server failures log WARN and skip; if a team's blueprint depends on a missing tool, the team fails to start.
 7. Instantiate and start `AgentBody` for each role.
-8. Import `jie-tui`, pass `EventBus` + `ArtifactStore` + `roles` (the startup team's role stems, sorted alphabetically — sourced from `handle.rolesFor(startupTeamId)`), start TUI. (Stub in v1 per ADR 15; throws on call.)
+8. Import `jie-tui`, pass `EventBus` + `roles` (the startup team's role stems, sorted alphabetically — sourced by the TUI from `handle.bodies().get(handle.teamId)?.map(b => b.soul.role)`), start TUI. (Stub in v1 per ADR 15; throws on call.)
 9. TUI is the main event loop — renders agent streams, tool calls, pipeline events. User prompts are published as `AgentEvent` envelopes to `{active_team_id}.leader.prompt` (or to `{active_team_id}.{agent_key}` for direct addressing) via the EventBus — the TUI fills every envelope field per the wire-format contract in `02-protocol-stack.md` "Prompt Ingress" and `ui/tui.md` "Prompt Sending".
 10. Block until TUI exits or SIGINT. Graceful shutdown (10s bounded) stops all loaded teams.
 

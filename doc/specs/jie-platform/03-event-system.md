@@ -39,7 +39,7 @@ A single `jie` process can host multiple teams' bodies. Team-specific channels a
 | `{team_id}.leader.prompt` | Leader prompt ingress from TUI or `-p` mode | Leader auto-subscribes; TUI publishes (scoped to the active team). |
 | `{team_id}.{agent_key}` | Direct-addressing channel; the agent with this key auto-subscribes | Every agent auto-subscribes; `notify` publishes. |
 | `{team_id}.{domain_topic}` | Team-defined domain events (e.g. `task.recorded`, `work.researched`) | Agents subscribe via `subscribe:` in `.md`; `notify` publishes. |
-| `{team_id}.team.loaded` | One-shot per team load; payload `{ team_id, agents: { role, agent_key }[] }` — the team's roster. The TUI's agents-panel-at-boot anchor (per ADR 22). | `JieHandle` publishes in `startJie` and `loadTeam`. Not republished on team swap-back. |
+| `{team_id}.team.loaded` | One-shot per team load; payload `{ team_id, agents: { role, agent_key, is_leader }[] }` — the team's roster. The TUI's agents-panel-at-boot anchor (per ADR 22); the `-p` flow's team-info source. | `JieHandle` publishes in `createJiePlatform`. Not republished on team swap-back. |
 
 **Platform subjects (un-scoped, `team_id` in the envelope):**
 
@@ -134,7 +134,14 @@ Tunables (`stream_chunk_size`, `stream_flush_ms`) are in `10-configuration.md` "
 
 ## Event-Order Contract
 
-Two pieces, both load-bearing for observer-side state machines (the CLI's `-p` idle gate, the TUI's busy/idle derivation, any future observer that wants to know "is the work done?").
+At least 1 agent will always be seen as busy when there's work passing around. The eventBus ensures FIFO message delivery. E.g.
+```text
+1. jie start: agent A (leader) and B are both idle
+2. prompt is sent to agent A (busy)
+3. agent A (busy) notifies, agent B listens to and receives the event and becomes busy
+4. agent A's `notify` tool call returns, it becomes idle
+```
+Agent B becomes busy before agent A becomes idle.
 
 ### Body-side alternation
 

@@ -5,10 +5,10 @@
  *  settings; the `login` subcommand takes the provider as a flag.
  */
 import type { AuthStore, SettingsStore } from "@cuzfrog/jie-platform/config";
-import type { ParsedCli } from "../index.ts";
+import type { ParsedArgs } from "../index.ts";
 
 export async function runLogin(
-  parsed: Extract<ParsedCli, { kind: "login" }>,
+  parsed: Extract<ParsedArgs, { kind: "login" }>,
   auth: AuthStore,
 ): Promise<number> {
   if (parsed.provider === undefined || parsed.apiKey === undefined) {
@@ -23,7 +23,7 @@ export async function runLogin(
 }
 
 export async function runLogout(
-  parsed: Extract<ParsedCli, { kind: "logout" }>,
+  parsed: Extract<ParsedArgs, { kind: "logout" }>,
   auth: AuthStore,
 ): Promise<number> {
   if (parsed.provider !== undefined) {
@@ -37,12 +37,11 @@ export async function runLogout(
 }
 
 export async function runApiKey(
-  parsed: Extract<ParsedCli, { kind: "apiKey" }>,
-  cwd: string,
+  parsed: Extract<ParsedArgs, { kind: "apiKey" }>,
   settings: SettingsStore,
   auth: AuthStore,
 ): Promise<number> {
-  const provider = settings.load(cwd).defaultProvider;
+  const provider = settings.load().defaultProvider;
   if (provider === undefined) {
     console.error(
       "no provider resolved; run 'jie model <provider>/<modelId>' first, or use 'jie login --provider <id> --api-key <key>' to set the key for a specific provider",

@@ -6,4 +6,6 @@ frozen:
   - index.ts
   - package.json
   - version.ts
+  - app.ts
+  - app.test.ts
 ---

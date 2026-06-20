@@ -103,14 +103,16 @@ describe("runLogout", () => {
 describe("runApiKey (top-level --api-key)", () => {
   let homeDir: string;
   let cwd: string;
+  let homeJieDir: string;
   let auth: ReturnType<typeof makeAuthStore>;
   let settings: ReturnType<typeof makeSettingsStore>;
 
   beforeEach(() => {
     homeDir = mkdtempSync(join(tmpdir(), "jie-cli-apikey-"));
     cwd = mkdtempSync(join(tmpdir(), "jie-cli-apikey-cwd-"));
+    homeJieDir = join(homeDir, ".jie");
     auth = makeAuthStore(homeDir);
-    settings = makeSettingsStore(homeDir);
+    settings = makeSettingsStore(cwd, homeJieDir);
   });
 
   afterEach(() => {
@@ -124,12 +126,7 @@ describe("runApiKey (top-level --api-key)", () => {
       join(cwd, ".jie", "settings.json"),
       JSON.stringify({ defaultProvider: "anthropic", defaultModel: "claude-sonnet-4" }),
     );
-    const code = await runApiKey(
-      { kind: "apiKey", apiKey: "sk-new" },
-      cwd,
-      settings,
-      auth,
-    );
+    const code = await runApiKey({ kind: "apiKey", apiKey: "sk-new" }, settings, auth);
     expect(code).toBe(0);
     expect(JSON.parse(readFileSync(join(homeDir, ".jie", "auth.json"), "utf-8"))).toEqual({
       anthropic: { type: "api_key", key: "sk-new" },
@@ -137,12 +134,7 @@ describe("runApiKey (top-level --api-key)", () => {
   });
 
   test("--api-key without defaultProvider -> exit 1, no auth.json written", async () => {
-    const code = await runApiKey(
-      { kind: "apiKey", apiKey: "sk-new" },
-      cwd,
-      settings,
-      auth,
-    );
+    const code = await runApiKey({ kind: "apiKey", apiKey: "sk-new" }, settings, auth);
     expect(code).toBe(1);
     expect(existsSync(join(homeDir, ".jie", "auth.json"))).toBe(false);
   });

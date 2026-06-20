@@ -39,55 +39,51 @@ The boot signal moves to the new `team.loaded` event (Decision 2). The TUI's age
 
 ### 3. `JieHandle.waitForIdle` is removed. CLI owns the idle gate.
 
-The `JieHandle` interface drops the `waitForIdle` method. `StartJieOptions.onIdle` is also removed — the TUI does not need a callback; it consumes events directly.
+The `JiePlatform` / `JieHandle` interface drops the `waitForIdle` method. `CreateJieOptions.onIdle` is also removed — the TUI does not need a callback; it consumes events directly.
 
-`JieHandle` is reduced to lifecycle and introspection: `bus`, `artifacts`, `bodies`, `bodiesFor`, `rolesFor`, `loadTeam`, `stop`. The handle still owns the internal "bodies settled" bookkeeping needed for `stop()`'s graceful shutdown (send abort, wait for bodies to exit), but does not expose it.
+`JieHandle` is reduced to lifecycle: `bus` and `stop`. All team-level information (teamId, the bodies, the per-body `is_leader` flag) is exposed via bus events — specifically `{team_id}.team.loaded` published once at startup with payload `{ team_id, agents: [{ role, agent_key, is_leader }, ...] }`. The CLI's `createApp` orchestrator subscribes to the event before `createJiePlatform` returns and captures the team info; the TUI subscribes to the bus directly. The handle still owns the internal "bodies settled" bookkeeping needed for `stop()`'s graceful shutdown (send abort, wait for bodies to exit), but does not expose it.
 
 The CLI's `-p` mode is the only consumer of an "is the work done?" primitive. It owns this composition:
 
 ```typescript
-// CLI-side, in -p mode, after startJie() returns:
-let resolveGate: () => void;
-let timer: ReturnType<typeof setTimeout> | undefined;
-const gate = new Promise<void>((resolve, reject) => {
-  resolveGate = resolve;
-  timer = setTimeout(() => reject(new Error('timeout')), timeoutMs * 1000);
-});
-
-const state = new Map<agentKey, 'busy' | 'idle'>();
-const loadedAgentKeys = handle.bodies().map(b => b.agent_key);
-for (const k of loadedAgentKeys) state.set(k, 'idle');
-
-const evaluate = () => {
-  if ([...state.values()].every(v => v === 'idle')) {
-    clearTimeout(timer);
-    resolveGate();
-  }
-};
-
-handle.bus.subscribe('agent.turn.start', (_subj, env) => {
-  if (state.has(env.agent_key)) state.set(env.agent_key, 'busy');
-});
-handle.bus.subscribe('agent.idle', (_subj, env) => {
-  if (state.has(env.agent_key)) {
-    state.set(env.agent_key, 'idle');
-    evaluate();
-  }
-});
+// CLI-side, in -p mode, after startJie() returns.
+function setupIdleGate(bus: EventBus, timeoutSec: number): Promise<void> {
+  let busy = 0;
+  let resolve!: () => void;
+  let reject!: (err: Error) => void;
+  const promise = new Promise<void>((res, rej) => { resolve = res; reject = rej; });
+  const timer = timeoutSec > 0
+    ? setTimeout(() => reject(new Error('timeout')), timeoutSec * 1000)
+    : undefined;
+  bus.subscribe('agent.turn.start', () => { busy++; });
+  bus.subscribe('agent.idle', () => {
+    busy--;
+    if (busy === 0) {
+      if (timer !== undefined) clearTimeout(timer);
+      resolve();
+    }
+  });
+  return promise;
+}
 
 // Publish the prompt.
 handle.bus.publish(`${teamId}.leader.prompt`, { prompt: instruction });
 
 // Wait for the gate (or timeout).
-await gate.catch(/* timeout handler */);
+try {
+  await setupIdleGate(handle.bus, args.timeout);
+} catch (e) {
+  if (e instanceof Error && e.message === 'timeout') { /* handle timeout */ }
+  else { throw e; }
+}
 printFinalNewline();
-handle.stop();
+await handle.stop();
 exit(0);
 ```
 
-The gate is initialized with all bodies in the "idle" state. The gate opens when "for all loaded bodies, the state is `idle`". On gate open: print final newline, `handle.stop()`, exit 0. On timeout: `handle.stop()`, exit 3.
+The gate is a single `busy` counter. The gate opens when `busy` returns to 0. On gate open: print final newline, `handle.stop()`, exit 0. On timeout: `handle.stop()`, exit 3.
 
-The `seenBusy` boolean is **not** used. The gate relies on the Event-Order Contract (Decision 4) to guarantee that no body can transition directly from "no event seen" to "`idle`" without first being observed as "busy" (because every `idle` is preceded by a `turn_start` for the same turn).
+There is no per-body state map. The counter is correct because the Event-Order Contract (Decision 4) guarantees that every `agent.idle` is preceded by an `agent.turn.start` for the same turn, so the counter is always ≥ 1 while work is in flight and only returns to 0 when all in-flight turns have ended.
 
 ### 4. Event-Order Contract
 

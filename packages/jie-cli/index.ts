@@ -3,10 +3,12 @@
  *
  *  This file is the entry point. It only:
  *    1. Parses argv via `cli-flags.ts`.
- *    2. Resolves HOME and constructs the runtime stores.
- *    3. For subcommands that need team discovery (currently just
- *       `team`), constructs a `TeamRegistry` for the current cwd.
- *    4. Dispatches to a subcommand module under `./commands/`.
+ *    2. Resolves HOME, `~/.jie/`, and the runtime stores.
+ *    3. Constructs the platform's `JiePlatformDeps` (bus,
+ *       storage, registries, memory) for branches that need
+ *       them.
+ *    4. Dispatches to a subcommand module under `./commands/`
+ *       (or to `createApp` + `runPrint` for the `-p` branch).
  *
  *  Domain logic lives in:
  *    - `@cuzfrog/jie-platform/config` — stores (`AuthStore`,
@@ -15,19 +17,26 @@
  *    - `commands/auth.ts` — `login`, `logout`, top-level `--api-key`.
  *    - `commands/settings.ts` — `model`, `team`.
  *    - `commands/print.ts` — `jie -p` (the full agentic pipeline).
- *    - `@cuzfrog/jie-platform` — `startJie` (the print pipeline
- *      constructs the team registry internally; the CLI is a thin
- *      consumer that only knows `workspace` + `homeJieDir`).
+ *    - `@cuzfrog/jie-platform` — `createJiePlatform` (the print
+ *      branch goes through `createApp` which owns the call).
  *    - `@cuzfrog/jie-platform/team` — `TeamRegistry` (the `team`
  *      subcommand uses it for `isInstalled` / `listInstalled` /
  *      `locate`).
  */
+import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
-import type { AuthStore, SettingsStore } from "@cuzfrog/jie-platform/config";
-import { makeAuthStore, makeSettingsStore } from "@cuzfrog/jie-platform/config";
+import { dirname, join } from "node:path";
+import {
+  ModelRegistry,
+  makeAuthStore,
+  makeSettingsStore,
+} from "@cuzfrog/jie-platform/config";
+import { createEventBus } from "@cuzfrog/jie-platform/core";
+import { createStorage, createMemoryManager } from "@cuzfrog/jie-platform/storage";
 import { createTeamRegistry } from "@cuzfrog/jie-platform/team";
-import { parseFlags, type ParsedCli as ParsedArgs } from "./cli-flags.ts";
+import { createToolRegistry } from "@cuzfrog/jie-platform/tools";
+import { createApp } from "./app.ts";
+import { parseFlags, type ParsedArgs } from "./cli-flags.ts";
 import {
   runApiKey,
   runLogin,
@@ -38,32 +47,19 @@ import {
 } from "./commands/index.ts";
 import { VERSION } from "./version.ts";
 
-interface Deps {
-  authStore: AuthStore;
-  settingsStore: SettingsStore;
-  homeDir: string;
-}
-
-function makeDeps(homeDir: string): Deps {
-  return {
-    authStore: makeAuthStore(homeDir),
-    settingsStore: makeSettingsStore(homeDir),
-    homeDir,
-  };
-}
-
 export async function main(argv: string[], cwd: string = process.cwd()): Promise<number> {
   const parsed = parseFlags(argv);
-  const deps = makeDeps(resolveHomeDir());
+  const homeDir = resolveHomeDir();
   try {
-    return await run(parsed, cwd, deps);
+    return await run(parsed, cwd, homeDir);
   } catch (err) {
     console.error(err instanceof Error ? err.message : String(err));
     return 1;
   }
 }
 
-async function run(args: ParsedArgs, cwd: string, deps: Deps): Promise<number> {
+async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<number> {
+  const homeJieDir = join(homeDir, ".jie");
   switch (args.kind) {
     case "help":
       printHelp();
@@ -72,33 +68,83 @@ async function run(args: ParsedArgs, cwd: string, deps: Deps): Promise<number> {
       console.log(`jie ${VERSION}`);
       return 0;
     case "tui":
+      // TUI branch stub. When the TUI package lands, the
+      // structure mirrors the `-p` branch below:
+      //   const result = await createApp(args, deps);
+      //   if (result.kind === "error") return result.code;
+      //   return runTuiFlow(result.context.handle, result.context.teamId, ...);
+      // For now we just signal that the branch is not yet
+      // implemented; we do not call `createApp` because the
+      // TUI flow is a no-op and `createJiePlatform` would fail
+      // without a configured model.
       console.error("TUI not implemented in v1 MVP; use jie -p");
       return 1;
     case "error":
       console.error(args.message);
       return 1;
-    case "login":
-      return runLogin(args, deps.authStore);
-    case "logout":
-      return runLogout(args, deps.authStore);
-    case "apiKey":
-      return runApiKey(args, cwd, deps.settingsStore, deps.authStore);
-    case "model":
-      return runModel(args, cwd, deps.settingsStore);
-    case "team": {
-      const teamRegistry = createTeamRegistry({
-        workspace: cwd,
-        homeJieDir: join(deps.homeDir, ".jie"),
-      });
-      return runTeam(args, cwd, deps.settingsStore, teamRegistry);
+    case "login": {
+      const authStore = makeAuthStore(homeDir);
+      return runLogin(args, authStore);
     }
-    case "print":
-      return runPrint(args, cwd, {
-        authStore: deps.authStore,
-        settingsStore: deps.settingsStore,
-        homeDir: deps.homeDir,
-      });
+    case "logout": {
+      const authStore = makeAuthStore(homeDir);
+      return runLogout(args, authStore);
+    }
+    case "apiKey": {
+      const authStore = makeAuthStore(homeDir);
+      const settingsStore = makeSettingsStore(cwd, homeJieDir);
+      return runApiKey(args, settingsStore, authStore);
+    }
+    case "model": {
+      const settingsStore = makeSettingsStore(cwd, homeJieDir);
+      return runModel(args, cwd, settingsStore);
+    }
+    case "team": {
+      const teamRegistry = createTeamRegistry({ workspace: cwd, homeJieDir });
+      const settingsStore = makeSettingsStore(cwd, homeJieDir);
+      return runTeam(args, settingsStore, teamRegistry);
+    }
+    case "print": {
+      const deps = buildPlatformDeps(cwd, homeJieDir);
+      const result = await createApp(
+        {
+          kind: "print",
+          cwd,
+          homeJieDir,
+          teamId: args.team,
+          apiKey: args.apiKey,
+          resume: args.resume,
+          continueLast: args.continueLast,
+        },
+        deps,
+      );
+      if (result.kind === "error") return result.code;
+      return runPrint(result.context.handle, result.context.teamId, result.context.leaderRole, result.context.leaderKey, args);
+    }
   }
+}
+
+function buildPlatformDeps(cwd: string, homeJieDir: string) {
+  mkdirSync(homeJieDir, { recursive: true, mode: 0o755 });
+  const storage = createStorage({
+    type: "sqlite",
+    filePath: join(homeJieDir, "storage.db"),
+  });
+  const teamRegistry = createTeamRegistry({ workspace: cwd, homeJieDir });
+  const modelRegistry = ModelRegistry.load(cwd, { homeDir: dirname(homeJieDir) });
+  const toolRegistry = createToolRegistry();
+  const memoryManager = createMemoryManager(storage);
+  const bus = createEventBus();
+  return {
+    authStore: makeAuthStore(dirname(homeJieDir)),
+    settingsStore: makeSettingsStore(cwd, homeJieDir),
+    bus,
+    storage,
+    teamRegistry,
+    modelRegistry,
+    toolRegistry,
+    memoryManager,
+  };
 }
 
 function printHelp(): void {
@@ -135,4 +181,4 @@ if (import.meta.main) {
   process.exit(await main(Bun.argv.slice(2)));
 }
 
-export type { ParsedCli } from "./cli-flags.ts";
+export type { ParsedArgs } from "./cli-flags.ts";

@@ -4,7 +4,7 @@ import type { OAuthCredentials } from "@earendil-works/pi-ai";
  *  `~/.jie/settings.json`. Unrecognized top-level fields on disk are
  *  tolerated (warned, ignored) and are NOT surfaced here — only the
  *  three v1 fields are exposed. */
-export interface MergedSettings {
+export interface Settings {
   defaultProvider?: string;
   defaultModel?: string;
   defaultTeam?: string;

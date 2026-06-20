@@ -44,18 +44,19 @@ The push model is the natural fit:
 The TUI's permitted surface on `JieHandle` is:
 
 - `bus: EventBus` — for subscribing to platform events.
-- `artifacts: ArtifactStore` — for read-only artifact access
-  (e.g. rendering a saved plan).
-- `rolesFor(teamId): string[]` — for the TUI's own bootstrap
-  (knowing the team exists, listing its role stems for the slash
-  command completion).
+- `teamId: string` — for filtering platform events to the active team.
+- `bodies(): Map<teamId, AgentBody[]>` — for the TUI's own bootstrap
+  (knowing the team exists, listing its bodies for the agents panel).
 - `loadTeam(teamId): Promise<void>` — for the TUI's `/team <id>`
   command (idempotent ensure-loaded per ADR 19).
 - `stop()` — for shutdown.
 
-The TUI does not call `bodies()` or `bodiesFor()`. The TUI does
-not read `body.model`, `body.soul.system_prompt`,
-`body.soul.tools`, or any other body field.
+The TUI does not read `body.model`, `body.soul.system_prompt`,
+`body.soul.tools`, or any other body field. (The earlier
+`artifacts` and `rolesFor` convenience methods on the handle were
+removed in ADR 13's "minimal handle" revision; the TUI's
+artifact access, when needed, is via the bodies' `artifacts`
+field, and role stems are derived from `bodies().get(teamId)?.map(b => b.soul.role)`.)
 
 ### 2. The platform publishes enough information for the TUI to render
 
@@ -108,8 +109,9 @@ displays has a corresponding bus event.
 ## Consequences
 
 - `JieHandle` does not gain a `bodiesForTui()` method or similar.
-  The TUI's permitted surface is the bus, the artifact store, and
-  the team's role list.
+  The TUI's permitted surface is the bus, the team's bodies (via
+  `bodies().get(teamId)`), and the lifecycle methods (`loadTeam`,
+  `stop`).
 - The `{team_id}.team.loaded` payload is extended (per stage-2
   work) to carry the model id and resolved tool list per agent.
   The extension is a wire-format change; the existing fields are

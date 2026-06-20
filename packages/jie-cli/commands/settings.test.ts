@@ -16,12 +16,14 @@ import { runModel, runTeam } from "./settings.ts";
 describe("runModel", () => {
   let homeDir: string;
   let cwd: string;
+  let homeJieDir: string;
   let settings: ReturnType<typeof makeSettingsStore>;
 
   beforeEach(() => {
     homeDir = mkdtempSync(join(tmpdir(), "jie-cli-model-"));
     cwd = mkdtempSync(join(tmpdir(), "jie-cli-model-cwd-"));
-    settings = makeSettingsStore(homeDir);
+    homeJieDir = join(homeDir, ".jie");
+    settings = makeSettingsStore(cwd, homeJieDir);
   });
 
   afterEach(() => {
@@ -50,10 +52,11 @@ describe("runModel", () => {
     try {
       mkdirSync(join(projectRoot, ".jie"), { recursive: true });
       mkdirSync(nested, { recursive: true });
+      const nestedSettings = makeSettingsStore(nested, homeJieDir);
       const code = await runModel(
         { kind: "model", provider: "anthropic", modelId: "claude-opus-4" },
         nested,
-        settings,
+        nestedSettings,
       );
       expect(code).toBe(0);
       const path = join(projectRoot, ".jie", "settings.json");
@@ -91,18 +94,20 @@ describe("runModel", () => {
 describe("runTeam", () => {
   let homeDir: string;
   let cwd: string;
+  let homeJieDir: string;
   let settings: ReturnType<typeof makeSettingsStore>;
   let teamRegistry: TeamRegistry;
 
   beforeEach(() => {
     homeDir = mkdtempSync(join(tmpdir(), "jie-cli-team-"));
     cwd = mkdtempSync(join(tmpdir(), "jie-cli-team-cwd-"));
-    settings = makeSettingsStore(homeDir);
+    homeJieDir = join(homeDir, ".jie");
+    settings = makeSettingsStore(cwd, homeJieDir);
     // `homeJieDir` is the path to the `.jie/` directory; teams
     // live under `<homeJieDir>/teams/<id>/`.
     teamRegistry = createTeamRegistry({
       workspace: cwd,
-      homeJieDir: join(homeDir, ".jie"),
+      homeJieDir,
     });
   });
 
@@ -116,7 +121,6 @@ describe("runTeam", () => {
     writeFileSync(join(homeDir, ".jie", "teams", "dev", "TEAM.md"), "");
     const code = await runTeam(
       { kind: "team", teamId: "dev", unset: false },
-      cwd,
       settings,
       teamRegistry,
     );
@@ -131,7 +135,6 @@ describe("runTeam", () => {
     writeFileSync(join(cwd, ".jie", "teams", "dev", "TEAM.md"), "");
     const code = await runTeam(
       { kind: "team", teamId: "dev", unset: false },
-      cwd,
       settings,
       teamRegistry,
     );
@@ -150,7 +153,6 @@ describe("runTeam", () => {
     try {
       const code = await runTeam(
         { kind: "team", teamId: "ghost", unset: false },
-        cwd,
         settings,
         teamRegistry,
       );
@@ -179,7 +181,6 @@ describe("runTeam", () => {
     try {
       const code = await runTeam(
         { kind: "team", teamId: "bad id with spaces", unset: false },
-        cwd,
         settings,
         teamRegistry,
       );
@@ -191,19 +192,18 @@ describe("runTeam", () => {
   });
 
   test("team --unset removes defaultTeam from global settings", async () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
+    mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
-      join(homeDir, ".jie", "settings.json"),
+      join(homeJieDir, "settings.json"),
       JSON.stringify({ defaultProvider: "p", defaultModel: "m", defaultTeam: "dev" }),
     );
     const code = await runTeam(
       { kind: "team", unset: true },
-      cwd,
       settings,
       teamRegistry,
     );
     expect(code).toBe(0);
-    expect(JSON.parse(readFileSync(join(homeDir, ".jie", "settings.json"), "utf-8"))).toEqual({
+    expect(JSON.parse(readFileSync(join(homeJieDir, "settings.json"), "utf-8"))).toEqual({
       defaultProvider: "p",
       defaultModel: "m",
     });
@@ -217,7 +217,6 @@ describe("runTeam", () => {
     );
     const code = await runTeam(
       { kind: "team", unset: true },
-      cwd,
       settings,
       teamRegistry,
     );
@@ -231,9 +230,9 @@ describe("runTeam", () => {
   test("team (no arg) prints defaultTeam and installed list", async () => {
     mkdirSync(join(homeDir, ".jie", "teams", "dev"), { recursive: true });
     writeFileSync(join(homeDir, ".jie", "teams", "dev", "TEAM.md"), "");
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
+    mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
-      join(homeDir, ".jie", "settings.json"),
+      join(homeJieDir, "settings.json"),
       JSON.stringify({ defaultProvider: "p", defaultModel: "m", defaultTeam: "dev" }),
     );
     const logs: string[] = [];
@@ -244,7 +243,6 @@ describe("runTeam", () => {
     try {
       const code = await runTeam(
         { kind: "team", unset: false },
-        cwd,
         settings,
         teamRegistry,
       );
@@ -267,7 +265,6 @@ describe("runTeam", () => {
     try {
       const code = await runTeam(
         { kind: "team", unset: false },
-        cwd,
         settings,
         teamRegistry,
       );

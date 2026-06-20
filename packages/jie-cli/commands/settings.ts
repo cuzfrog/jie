@@ -1,28 +1,24 @@
 /** `model` and `team` subcommands — write to settings.json.
  *
  *  `model` sets `defaultProvider` + `defaultModel`. The write
- *  scope is "project" if `.jie/` is found walking up from `cwd`,
- *  else "global".
+ *  scope is "project" if `.jie/` is found walking up from
+ *  `cwd`, else "global".
  *
  *  `team` sets / unsets `defaultTeam`. Setter validates the team
- *  id against `[A-Za-z0-9_-]{1,32}` and against the registry's
- *  `isInstalled`. The write scope is "project" if the registry
- *  reports the team as project-scoped, else "global" (including
- *  the built-in minimal team, which the registry reports as
- *  user-scoped).
+ *  id via the registry's `isInstalled`. The write scope is
+ *  "project" if the registry reports the team as
+ *  project-scoped, else "global" (including the built-in minimal
+ *  team, which the registry reports as user-scoped).
  */
 import { getProviders } from "@earendil-works/pi-ai";
-import { findProjectJieRoot, type MergedSettings } from "@cuzfrog/jie-platform";
+import type { MergedSettings } from "@cuzfrog/jie-platform";
+import { findProjectJieRoot } from "@cuzfrog/jie-platform";
 import type { SettingsStore } from "@cuzfrog/jie-platform/config";
 import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
-import type { ParsedCli } from "../index.ts";
-
-function projectScope(cwd: string): boolean {
-  return findProjectJieRoot(cwd) !== null;
-}
+import type { ParsedArgs } from "../index.ts";
 
 export async function runModel(
-  parsed: Extract<ParsedCli, { kind: "model" }>,
+  parsed: Extract<ParsedArgs, { kind: "model" }>,
   cwd: string,
   settings: SettingsStore,
 ): Promise<number> {
@@ -30,32 +26,33 @@ export async function runModel(
   if (!known.has(parsed.provider)) {
     console.error(`unknown provider: ${parsed.provider}`);
   }
-  const existing = settings.load(cwd);
+  const existing = settings.load();
   const next: MergedSettings = {
     ...existing,
     defaultProvider: parsed.provider,
     defaultModel: parsed.modelId,
   };
-  settings.write(next, projectScope(cwd) ? "project" : "global", cwd);
+  const scope: "project" | "global" =
+    findProjectJieRoot(cwd) !== null ? "project" : "global";
+  settings.write(next, scope);
   console.log(`default model set to ${parsed.provider}/${parsed.modelId}`);
   return 0;
 }
 
 export async function runTeam(
-  parsed: Extract<ParsedCli, { kind: "team" }>,
-  cwd: string,
+  parsed: Extract<ParsedArgs, { kind: "team" }>,
   settings: SettingsStore,
   teamRegistry: TeamRegistry,
 ): Promise<number> {
   if (parsed.teamId === undefined && !parsed.unset) {
-    const merged = settings.load(cwd);
+    const merged = settings.load();
     const installed = teamRegistry.listInstalled();
     console.log(`defaultTeam: ${merged.defaultTeam ?? "unset"}`);
     console.log(`installed: ${installed.join(", ")}`);
     return 0;
   }
   if (parsed.unset) {
-    settings.unsetDefaultTeam(cwd);
+    settings.unsetDefaultTeam();
     console.log("default team unset");
     return 0;
   }
@@ -66,11 +63,10 @@ export async function runTeam(
     );
     return 1;
   }
-  const existing = settings.load(cwd);
+  const existing = settings.load();
   const next: MergedSettings = { ...existing, defaultTeam: id };
-  // Project location wins on per-team-id collision per the spec.
   const loc = teamRegistry.locate(id);
-  settings.write(next, loc === "project" ? "project" : "global", cwd);
+  settings.write(next, loc === "project" ? "project" : "global");
   console.log(`default team set to ${id}`);
   return 0;
 }

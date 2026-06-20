@@ -50,7 +50,6 @@
 - Use interfaces for OOP abstractions.
 - Use only erasable TypeScript syntax compatible with Node strip-only mode in TypeScript. Do not use constructor parameter properties, `enum`, `namespace`/`module`, `import =`, `export =`, or other TypeScript constructs that require JavaScript emit. Use explicit fields and constructor assignments instead of parameter properties.
 - Public types, contract, methods, higher-level abstractions should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers. See below section `Single file layout`.
-- Do not add comments except it's a consequential information and the code itself cannot tell.
 - Avoid trivial functions, inline them.
 - Imports from a module without specific file, e,g, `import { foo } from "../module"`. Not `"../module/index.ts"`. For siblings in the immediate directory, directly import from the sibling, e.g. `import { foo } from "./foo"`.
 - Full variable names, e.g. `const artifactStore = new ArtifactStore()`.
@@ -104,6 +103,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 - do not assume a tool is available unless you are told, search before calling if you are not sure.
 - do not write test-only production code, testability should be achieved by adhering to above coding principles.
 - do not shorten variables, function names. E.g. use `agentEvent` instead of `event` or `env` to avoid confusion.
+- do not add comments unless the code itself cannot tell, decisions should be captured in docs or addrs.
 
 ## File Edit Checklist
 Pre-action:
