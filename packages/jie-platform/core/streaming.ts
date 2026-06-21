@@ -9,7 +9,7 @@ export type BlockType = "text" | "thinking";
 export interface StreamPublisher {
   beginStream(): void;
   append(blockType: BlockType, delta: string): void;
-  endStream(): { stream_id: number; total_chunks: number };
+  endStream(): { streamId: number; totalChunks: number };
 }
 
 export function makeStreamPublisher(events: EventManager, sender: Sender): StreamPublisher {
@@ -30,7 +30,7 @@ export function makeStreamPublisher(events: EventManager, sender: Sender): Strea
     }
     events.publish("agent.stream.chunk", {
       stream_id: streamId,
-      seq: seq,
+      seq,
       block_type: blockType,
       text: buffer,
     }, sender);
@@ -72,11 +72,11 @@ export function makeStreamPublisher(events: EventManager, sender: Sender): Strea
       }
     },
 
-    endStream(): { stream_id: number; total_chunks: number } {
+    endStream(): { streamId: number; totalChunks: number } {
       flush();
       const out = { stream_id: streamId, total_chunks: totalChunks };
       events.publish("agent.stream.end", out, sender);
-      return out;
+      return { streamId, totalChunks };
     },
   };
 }

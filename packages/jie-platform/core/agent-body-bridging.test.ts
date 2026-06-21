@@ -21,7 +21,7 @@ function makeSoul(): AgentSoul {
   return {
     role: "general",
     model: "anthropic/claude-sonnet-4",
-    system_prompt: "you are a general assistant",
+    systemPrompt: "you are a general assistant",
     tools: ["noop"],
     subscribe: [],
     subscriptions: [],
@@ -119,7 +119,7 @@ function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: Crea
     artifactStore: makeArtifacts(),
     memory: makeMemory(),
     sessionId: "s1",
-    tool_registry: registry,
+    toolRegistry: registry,
     getApiKey: () => undefined,
     model: {},
     ...overrides,

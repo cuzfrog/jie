@@ -12,11 +12,11 @@ import type { StreamPublisher } from "./streaming.ts";
 import type { AgentBody } from "./agent-body.ts";
 
 export class JieAgentBody implements AgentBody {
-  private readonly agent_key: string;
-  private readonly team_id: string;
+  private readonly agentKey: string;
+  private readonly teamId: string;
   private readonly soul: AgentSoul;
-  private readonly is_leader: boolean;
-  private readonly session_id: string;
+  private readonly isLeader: boolean;
+  private readonly sessionId: string;
   private readonly eventManager: EventManager;
   private readonly memory: MemoryManager;
   private readonly agent: Agent;
@@ -28,28 +28,28 @@ export class JieAgentBody implements AgentBody {
   private started = false;
 
   constructor(deps: {
-    agent_key: string;
-    team_id: string;
+    agentKey: string;
+    teamId: string;
     soul: AgentSoul;
-    is_leader: boolean;
-    session_id: string;
+    isLeader: boolean;
+    sessionId: string;
     events: EventManager;
     memory: MemoryManager;
     agent: Agent;
     streamPublisher: StreamPublisher;
   }) {
-    this.agent_key = deps.agent_key;
-    this.team_id = deps.team_id;
+    this.agentKey = deps.agentKey;
+    this.teamId = deps.teamId;
     this.soul = deps.soul;
-    this.is_leader = deps.is_leader;
-    this.session_id = deps.session_id;
+    this.isLeader = deps.isLeader;
+    this.sessionId = deps.sessionId;
     this.eventManager = deps.events;
     this.memory = deps.memory;
     this.agent = deps.agent;
     this.stream = deps.streamPublisher;
     this.sender = {
       kind: "agent",
-      identity: { teamId: this.team_id, agentRole: this.soul.role, agentKey: this.agent_key },
+      identity: { teamId: this.teamId, agentRole: this.soul.role, agentKey: this.agentKey },
     };
   }
 
@@ -78,9 +78,9 @@ export class JieAgentBody implements AgentBody {
         if (isAssistantMessage(event.message) || event.message.role === "user" || event.message.role === "toolResult") {
           this.memory.persist(
             event.message as unknown as AgentMessage,
-            this.agent_key,
-            this.session_id,
-            this.team_id,
+            this.agentKey,
+            this.sessionId,
+            this.teamId,
           );
         }
         return;
@@ -100,9 +100,9 @@ export class JieAgentBody implements AgentBody {
     this.registerSubscriptions();
 
     const restored = await this.memory.restore(
-      this.agent_key,
-      this.session_id,
-      this.team_id,
+      this.agentKey,
+      this.sessionId,
+      this.teamId,
     );
     if (restored.length > 0) {
       this.agent.state.messages = restored;
@@ -130,22 +130,22 @@ export class JieAgentBody implements AgentBody {
   }
 
   private registerSubscriptions(): void {
-    const ownSubject = `${this.team_id}.${this.agent_key}`;
+    const ownSubject = `${this.teamId}.${this.agentKey}`;
     this.unsubscribers.push(
       this.eventManager.subscribe(ownSubject, (env) => {
         this.ingestEvent(env.event_type, env);
       }),
     );
-    if (this.is_leader) {
+    if (this.isLeader) {
       this.unsubscribers.push(
-        this.eventManager.subscribe(`${this.team_id}.leader.prompt`, (env) => {
+        this.eventManager.subscribe(`${this.teamId}.leader.prompt`, (env) => {
           this.ingestEvent(env.event_type, env);
         }),
       );
     }
     for (const topic of this.soul.subscriptions) {
       this.unsubscribers.push(
-        this.eventManager.subscribe(`${this.team_id}.${topic}`, (env) => {
+        this.eventManager.subscribe(`${this.teamId}.${topic}`, (env) => {
           this.ingestEvent(topic, env);
         }),
       );

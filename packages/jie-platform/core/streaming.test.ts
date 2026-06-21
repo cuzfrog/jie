@@ -71,7 +71,7 @@ describe("makeStreamPublisher", () => {
     stream.append("text", "x".repeat(64));
     stream.append("text", "y".repeat(64));
     const out = stream.endStream();
-    expect(out.total_chunks).toBe(2);
+    expect(out.totalChunks).toBe(2);
     expect(ends).toHaveLength(1);
     expect(ends[0]!.payload).toEqual({ stream_id: 1, total_chunks: 2 });
   });

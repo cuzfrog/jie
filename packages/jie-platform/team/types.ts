@@ -5,7 +5,7 @@ export interface AgentSoul {
 
   model: string;
 
-  system_prompt: string;
+  systemPrompt: string;
 
   tools: string[];
 

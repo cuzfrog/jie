@@ -110,12 +110,12 @@ describe("write_file", () => {
     );
     const details = result.details as {
       path: string;
-      bytes_written: number;
-      created_at: string;
+      bytesWritten: number;
+      createdAt: string;
     };
     expect(details.path).toBe("a.txt");
-    expect(details.bytes_written).toBe(5);
-    expect(typeof details.created_at).toBe("string");
-    expect(new Date(details.created_at).getTime()).toBeGreaterThan(0);
+    expect(details.bytesWritten).toBe(5);
+    expect(typeof details.createdAt).toBe("string");
+    expect(new Date(details.createdAt).getTime()).toBeGreaterThan(0);
   });
 });

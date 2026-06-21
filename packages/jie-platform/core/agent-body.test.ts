@@ -21,7 +21,7 @@ function makeSoul(overrides: Partial<AgentSoul> = {}): AgentSoul {
   return {
     role: "general",
     model: "anthropic/claude-sonnet-4",
-    system_prompt: "you are a general assistant",
+    systemPrompt: "you are a general assistant",
     tools: ["noop"],
     subscribe: [],
     subscriptions: [],
@@ -55,7 +55,7 @@ function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: Crea
     artifactStore: createArtifactStore(storage),
     memory: createMemoryManager(storage),
     sessionId: "s1",
-    tool_registry: registry,
+    toolRegistry: registry,
     getApiKey: () => undefined,
     model: { provider: "anthropic", id: "claude-sonnet-4" },
     ...overrides,
@@ -128,7 +128,7 @@ describe("createAgentBody — wiring", () => {
     const { opts } = makeOpts();
     const cap = makeFakeAgentFactory();
     createAgentBody({ ...opts, createAgent: cap.factory });
-    expect(cap.fake.state.systemPrompt).toBe(opts.soul.system_prompt);
+    expect(cap.fake.state.systemPrompt).toBe(opts.soul.systemPrompt);
     expect(cap.fake.state.model).toBe(opts.model);
     expect((cap.fake.state.tools as unknown[]).length).toBe(1);
   });
@@ -154,10 +154,10 @@ describe("createAgentBody — wiring", () => {
     const { opts } = makeOpts({ agentKey: "leader-1", isLeader: true, sessionId: "sess-x" });
     const cap = makeFakeAgentFactory();
     const body = createAgentBody({ ...opts, createAgent: cap.factory }) as JieAgentBody;
-    const identity = body as unknown as { agent_key: string; team_id: string; is_leader: boolean };
-    expect(identity.agent_key).toBe("leader-1");
-    expect(identity.team_id).toBe("t1");
-    expect(identity.is_leader).toBe(true);
+    const identity = body as unknown as { agentKey: string; teamId: string; isLeader: boolean };
+    expect(identity.agentKey).toBe("leader-1");
+    expect(identity.teamId).toBe("t1");
+    expect(identity.isLeader).toBe(true);
   });
 
   test("beforeToolCall publishes agent.tool.call with the right payload", async () => {

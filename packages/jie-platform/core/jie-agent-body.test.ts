@@ -98,7 +98,7 @@ interface Harness {
   endStream: ReturnType<typeof mock>;
   publisher: EventManager;
   persisted: AgentMessage[];
-  makeBody: (overrides?: Partial<{ soul: AgentSoul; is_leader: boolean; session_id: string; agent_key: string }>) => JieAgentBody;
+  makeBody: (overrides?: Partial<{ soul: AgentSoul; isLeader: boolean; sessionId: string; agentKey: string }>) => JieAgentBody;
 }
 
 function makeHarness(): Harness {
@@ -109,11 +109,11 @@ function makeHarness(): Harness {
   const { stream, beginStream, append, endStream } = makeFakeStream();
   const makeBody: Harness["makeBody"] = (overrides = {}) =>
     new JieAgentBody({
-      agent_key: overrides.agent_key ?? "general-1",
-      team_id: "t1",
+      agentKey: overrides.agentKey ?? "general-1",
+      teamId: "t1",
       soul: overrides.soul ?? makeSoul(),
-      is_leader: overrides.is_leader ?? true,
-      session_id: overrides.session_id ?? "s1",
+      isLeader: overrides.isLeader ?? true,
+      sessionId: overrides.sessionId ?? "s1",
       events: publisher,
       memory,
       agent,
@@ -140,14 +140,14 @@ function makeHarness(): Harness {
 describe("JieAgentBody — identity", () => {
   test("constructor stores the identity fields from deps", () => {
     const h = makeHarness();
-    const body = h.makeBody({ agent_key: "leader-1", is_leader: true }) as unknown as {
-      agent_key: string;
-      team_id: string;
-      is_leader: boolean;
+    const body = h.makeBody({ agentKey: "leader-1", isLeader: true }) as unknown as {
+      agentKey: string;
+      teamId: string;
+      isLeader: boolean;
     };
-    expect(body.agent_key).toBe("leader-1");
-    expect(body.team_id).toBe("t1");
-    expect(body.is_leader).toBe(true);
+    expect(body.agentKey).toBe("leader-1");
+    expect(body.teamId).toBe("t1");
+    expect(body.isLeader).toBe(true);
   });
 });
 
@@ -182,7 +182,7 @@ describe("JieAgentBody — start() subscriptions", () => {
     expect(received).toBe(true);
   });
 
-  test("is_leader=true: subscribes to {team_id}.leader.prompt", async () => {
+  test("isLeader=true: subscribes to {teamId}.leader.prompt", async () => {
     await body.start();
     let received = false;
     h.bus.subscribe("t1.leader.prompt", () => {
@@ -200,8 +200,8 @@ describe("JieAgentBody — start() subscriptions", () => {
     expect(received).toBe(true);
   });
 
-  test("is_leader=false: does NOT subscribe to {team_id}.leader.prompt", () => {
-    const b2 = h.makeBody({ is_leader: false, agent_key: "worker-1" });
+  test("isLeader=false: does NOT subscribe to {teamId}.leader.prompt", () => {
+    const b2 = h.makeBody({ isLeader: false, agentKey: "worker-1" });
     void b2;
     expect(h.bus.subscriberCount("t1.worker-1")).toBe(0);
     expect(h.bus.subscriberCount("t1.leader.prompt")).toBe(0);

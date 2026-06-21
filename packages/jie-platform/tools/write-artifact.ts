@@ -1,6 +1,6 @@
 import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types.ts";
-import type { ArtifactStore } from "../storage/artifact-store.ts";
+import type { ArtifactStore } from "../storage";
 
 const WRITE_ARTIFACT_DESCRIPTION = `write_artifact(key, content): Store \`content\` (a string) at \`key\` in the team's
 shared artifact store. Overwrites the existing entry if \`key\` is already

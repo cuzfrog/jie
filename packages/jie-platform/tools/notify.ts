@@ -29,11 +29,11 @@ type TopicValidationReason =
 
 function validateTopic(
   topic: string,
-  team_id: string,
+  teamId: string,
 ): TopicValidationReason | null {
   if (topic === "") return "empty";
   if (topic.startsWith("agent.")) return "starts_with_agent_prefix";
-  if (topic.startsWith(`${team_id}.`)) return "starts_with_team_prefix";
+  if (topic.startsWith(`${teamId}.`)) return "starts_with_team_prefix";
   for (let i = 0; i < topic.length; i += 1) {
     const code = topic.charCodeAt(i);
     if (code === 0 || (code < 0x20 && code !== 0x09)) {

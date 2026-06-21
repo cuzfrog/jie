@@ -20,6 +20,6 @@ export interface McpServerConfig {
   args?: string[];
   url?: string;
   auth?: {
-    token_env?: string;
+    tokenEnv?: string;
   };
 }

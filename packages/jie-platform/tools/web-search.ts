@@ -16,7 +16,7 @@ export interface WebSearchResult {
 }
 
 export interface WebSearchProvider {
-  search(query: string, max_results: number): Promise<WebSearchResult[]>;
+  search(query: string, maxResults: number): Promise<WebSearchResult[]>;
 }
 
 const DEFAULT_MAX = 5;
@@ -28,7 +28,7 @@ export interface WebSearchDeps {
 
 interface WebSearchInput {
   query: string;
-  max_results?: number;
+  maxResults?: number;
 }
 
 function clampMaxResults(value: number | undefined): number {
@@ -44,10 +44,10 @@ export function createWebSearchTool(deps: WebSearchDeps): Tool<WebSearchInput> {
     label: "Web Search",
     parameters: Type.Object({
       query: Type.String(),
-      max_results: Type.Optional(Type.Number()),
+      maxResults: Type.Optional(Type.Number()),
     }),
     async execute(input: WebSearchInput): Promise<ToolResult> {
-      const max = clampMaxResults(input.max_results);
+      const max = clampMaxResults(input.maxResults);
       let results: WebSearchResult[];
       try {
         results = await deps.provider.search(input.query, max);
@@ -69,14 +69,14 @@ export function createWebSearchTool(deps: WebSearchDeps): Tool<WebSearchInput> {
       );
       return {
         content: lines.join("\n\n"),
-        details: { results, query: input.query, max_results: max },
+        details: { results, query: input.query, maxResults: max },
       };
     },
   };
 }
 
 export class DuckDuckGoSearchProvider implements WebSearchProvider {
-  async search(query: string, max_results: number): Promise<WebSearchResult[]> {
+  async search(query: string, maxResults: number): Promise<WebSearchResult[]> {
     const url = "https://html.duckduckgo.com/html/";
     const body = new URLSearchParams({ q: query }).toString();
     const response = await fetch(url, {
@@ -91,7 +91,7 @@ export class DuckDuckGoSearchProvider implements WebSearchProvider {
     if (response.status >= 500) throw new Error("http_5xx");
     if (!response.ok) throw new Error(`http_${response.status}`);
     const html = await response.text();
-    return parseDuckDuckGoResults(html, max_results);
+    return parseDuckDuckGoResults(html, maxResults);
   }
 }
 

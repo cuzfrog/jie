@@ -1,6 +1,6 @@
 import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types.ts";
-import type { ArtifactStore } from "../storage/artifact-store.ts";
+import type { ArtifactStore } from "../storage";
 
 const READ_ARTIFACT_DESCRIPTION = `read_artifact(key): Read the entry at \`key\`. Returns the content verbatim
 on hit; on miss, returns \`Artifact not found: <key>\` (a normal result, not

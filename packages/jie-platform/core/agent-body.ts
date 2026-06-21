@@ -17,7 +17,7 @@ export interface CreateAgentBodyOptions {
   artifactStore: ArtifactStore;
   memory: MemoryManager;
   sessionId: string;
-  tool_registry: ToolRegistry;
+  toolRegistry: ToolRegistry;
   getApiKey: (provider: string) => Promise<string | undefined> | string | undefined;
   model: unknown;
   createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
@@ -42,7 +42,7 @@ export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
     agentRole: opts.soul.role,
     artifactStore: opts.artifactStore,
   };
-  const tools = adaptAllTools(opts.soul, opts.tool_registry, ctx);
+  const tools = adaptAllTools(opts.soul, opts.toolRegistry, ctx);
 
   const toolTimestamps = new Map<string, number>();
 
@@ -83,16 +83,16 @@ export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
       return undefined;
     },
   });
-  agent.state.systemPrompt = opts.soul.system_prompt;
+  agent.state.systemPrompt = opts.soul.systemPrompt;
   agent.state.model = opts.model as never;
   agent.state.tools = tools;
 
   const body = new JieAgentBody({
-    agent_key: opts.agentKey,
-    team_id: opts.teamId,
+    agentKey: opts.agentKey,
+    teamId: opts.teamId,
     soul: opts.soul,
-    is_leader: opts.isLeader,
-    session_id: opts.sessionId,
+    isLeader: opts.isLeader,
+    sessionId: opts.sessionId,
     events: opts.events,
     memory: opts.memory,
     agent,

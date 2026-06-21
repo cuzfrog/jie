@@ -71,7 +71,7 @@ export async function createJiePlatform(opts: CreateJiePlatformOptions, deps: Ji
           artifactStore,
           memory: deps.memoryManager,
           sessionId,
-          tool_registry: deps.toolRegistry,
+          toolRegistry: deps.toolRegistry,
           getApiKey: async (provider: string) => deps.modelRegistry.getApiKey(provider),
           model,
         }),

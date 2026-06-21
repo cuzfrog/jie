@@ -28,7 +28,7 @@ describe("loadMinimalTeam", () => {
   test("the general soul has a non-empty system_prompt and no model pinned", () => {
     const bp = loadMinimalTeam();
     const soul = bp.roles[0]!;
-    expect(soul.system_prompt.length).toBeGreaterThan(0);
+    expect(soul.systemPrompt.length).toBeGreaterThan(0);
     expect(soul.model).toBe("");
   });
 });
@@ -219,7 +219,7 @@ describe("loadTeamFromDir", () => {
       `---\ntools:\n  - bash\n---\nFirst line.\nSecond line.\n`,
     );
     const bp = loadTeamFromDir(dir);
-    expect(bp.roles[0]?.system_prompt).toBe("First line.\nSecond line.\n");
+    expect(bp.roles[0]?.systemPrompt).toBe("First line.\nSecond line.\n");
   });
 
   test("empty team directory returns an empty blueprint with null leader", () => {

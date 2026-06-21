@@ -51,7 +51,7 @@ describe("web_search", () => {
       },
     });
     try {
-      await tool.execute({ query: "x", max_results: 100 }, {} as never);
+      await tool.execute({ query: "x", maxResults: 100 }, {} as never);
     } catch {
     }
     expect(received).toBe(20);

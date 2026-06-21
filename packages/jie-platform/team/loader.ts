@@ -101,7 +101,7 @@ function parseAgentFile(
   return {
     role,
     model,
-    system_prompt: body,
+    systemPrompt: body,
     tools,
     subscribe,
     subscriptions: [...subscribe],

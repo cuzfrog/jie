@@ -109,7 +109,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 
 ## Best practices
 - write down your plan before execution.
-- use a todo-list to track your tasks.
+- when you have multiple steps in your execution, use a todo-list to track your tasks.
 
 (you can write tmp files to `./tmp/`, which is ephemeral)
 

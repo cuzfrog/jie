@@ -16,6 +16,7 @@ export interface EventPayloadMap {
   "leader.prompt": { prompt: string };
   "user.prompt": { prompt: string };
   "team.loaded": { agents: Array<{ role: string; agent_key: string; is_leader: boolean }> };
+  "custom": { topic: string; payload: unknown };
 }
 
 export interface AgentIdentity {

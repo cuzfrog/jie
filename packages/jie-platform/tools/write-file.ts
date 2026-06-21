@@ -87,8 +87,8 @@ export function createWriteFileTool(deps: WriteFileDeps): Tool<WriteFileInput> {
         content: `Successfully wrote ${input.content.length} bytes to ${input.path}`,
         details: {
           path: input.path,
-          bytes_written: input.content.length,
-          created_at: createdAt,
+          bytesWritten: input.content.length,
+          createdAt,
         },
       };
     },
