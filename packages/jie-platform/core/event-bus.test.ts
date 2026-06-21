@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { createEventBus } from "./event-bus.ts";
-import type { AgentEvent } from "./agent-event.ts";
+import type { EventEnvelope } from "./types.ts";
 
 describe("InProcessEventBus", () => {
   test("publishes to subscribers in subscription order with the same arguments", () => {
@@ -127,18 +127,18 @@ describe("InProcessEventBus", () => {
       events.push("B-received");
       bus.publish("agent.turn.start", {
         version: 1,
-        team_id: "t1",
         event_type: "agent.turn.start",
-        agent_role: "worker",
-        agent_key: "worker-1",
+        sender: { kind: "agent", identity: { teamId: "t1", agentRole: "worker", agentKey: "worker-1" } },
         timestamp: new Date().toISOString(),
         payload: {},
-      } as AgentEvent);
+      } as EventEnvelope<"agent.turn.start">);
       events.push("B-signaled-busy");
     });
 
     bus.subscribe("agent.turn.start", (_subject, p) => {
-      events.push(`observer:${(p as AgentEvent).agent_key}:turn_start`);
+      const env = p as EventEnvelope<"agent.turn.start">;
+      const key = env.sender.kind === "agent" ? env.sender.identity.agentKey : undefined;
+      events.push(`observer:${key}:turn_start`);
     });
 
     events.push("before-publish");

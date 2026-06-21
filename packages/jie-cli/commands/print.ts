@@ -1,6 +1,5 @@
-
 import type { JiePlatform } from "@cuzfrog/jie-platform";
-import type { AgentEvent, EventBus } from "@cuzfrog/jie-platform/core";
+import type { EventManager, Sender } from "@cuzfrog/jie-platform/core";
 import type { ParsedArgsMap } from "../cli-flags.ts";
 
 export type PrintArgs = ParsedArgsMap["print"];
@@ -12,32 +11,26 @@ export async function runPrint(
   leaderKey: string,
   args: PrintArgs,
 ): Promise<number> {
-  handle.bus.subscribe("agent.stream.chunk", (_subj, payload) => {
-    const agentEvent = payload as AgentEvent;
-    if (agentEvent.team_id !== teamId) return;
-    if (agentEvent.agent_role !== leaderRole) return;
-    const text = String(agentEvent.payload.text ?? "");
+  const leaderSender: Sender = {
+    kind: "agent",
+    identity: { teamId, agentRole: leaderRole, agentKey: leaderKey },
+  };
+  handle.events.subscribe("agent.stream.chunk", (env) => {
+    if (env.sender.kind !== "agent") return;
+    if (env.sender.identity.teamId !== teamId) return;
+    if (env.sender.identity.agentRole !== leaderRole) return;
+    const text = env.payload.text;
     if (args.json) {
-      const seq = Number(agentEvent.payload.seq ?? 0);
-      process.stdout.write(JSON.stringify({ chunk: text, seq }) + "\n");
+      process.stdout.write(JSON.stringify({ chunk: text, seq: env.payload.seq }) + "\n");
     } else {
       process.stdout.write(text);
     }
   });
 
-  const envelope: AgentEvent = {
-    version: 1,
-    team_id: teamId,
-    event_type: "leader.prompt",
-    agent_role: leaderRole,
-    agent_key: leaderKey,
-    timestamp: new Date().toISOString(),
-    payload: { prompt: args.instruction },
-  };
-  handle.bus.publish(`${teamId}.leader.prompt`, envelope);
+  handle.events.publish(`${teamId}.leader.prompt`, { prompt: args.instruction }, leaderSender);
 
   try {
-    await setupIdleGate(handle.bus, args.timeout);
+    await setupIdleGate(handle.events, args.timeout);
   } catch (e) {
     if (!args.json) process.stdout.write("\n");
     const msg = e instanceof Error ? e.message : String(e);
@@ -54,7 +47,7 @@ export async function runPrint(
   return 0;
 }
 
-function setupIdleGate(bus: EventBus, timeoutSec: number): Promise<void> {
+function setupIdleGate(events: EventManager, timeoutSec: number): Promise<void> {
   let busy = 0;
   let resolve!: () => void;
   let reject!: (err: Error) => void;
@@ -67,10 +60,10 @@ function setupIdleGate(bus: EventBus, timeoutSec: number): Promise<void> {
       ? setTimeout(() => reject(new Error("timeout")), timeoutSec * 1000)
       : undefined;
 
-  bus.subscribe("agent.turn.start", () => {
+  events.subscribe("agent.turn.start", () => {
     busy++;
   });
-  bus.subscribe("agent.idle", () => {
+  events.subscribe("agent.idle", () => {
     busy--;
     if (busy === 0) {
       if (timer !== undefined) clearTimeout(timer);

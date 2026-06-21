@@ -1,29 +1,30 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { createEventBus, type EventBus } from "./event-bus.ts";
 import { makeStreamPublisher } from "./streaming.ts";
-import { makeAgentEventPublisher } from "./agent-event.ts";
-import type { AgentEvent } from "./agent-event.ts";
+import { createEventManager } from "./event-manager.ts";
+import type { EventEnvelope, Sender } from "./types.ts";
 
 describe("makeStreamPublisher", () => {
   let bus: EventBus;
   const agentKey = "general-1";
   const agentRole = "general";
   const teamId = "t1";
+  const sender: Sender = { kind: "agent", identity: { teamId, agentRole, agentKey } };
 
   beforeEach(() => {
     bus = createEventBus();
   });
 
   function makeStream() {
-    const publisher = makeAgentEventPublisher(bus, { agentKey, agentRole, teamId });
-    return makeStreamPublisher(publisher);
+    const events = createEventManager(bus);
+    return makeStreamPublisher(events, sender);
   }
 
   test("append at >= 64 chars flushes immediately", () => {
     const stream = makeStream();
-    const chunks: AgentEvent[] = [];
+    const chunks: EventEnvelope<"agent.stream.chunk">[] = [];
     bus.subscribe("agent.stream.chunk", (_s, p) => {
-      chunks.push(p as AgentEvent);
+      chunks.push(p as EventEnvelope<"agent.stream.chunk">);
     });
     stream.beginStream();
     stream.append("text", "x".repeat(64));
@@ -32,9 +33,9 @@ describe("makeStreamPublisher", () => {
 
   test("emits agent.stream.chunk when text delta reaches 64 chars", () => {
     const stream = makeStream();
-    const chunks: AgentEvent[] = [];
+    const chunks: EventEnvelope<"agent.stream.chunk">[] = [];
     bus.subscribe("agent.stream.chunk", (_s, p) => {
-      chunks.push(p as AgentEvent);
+      chunks.push(p as EventEnvelope<"agent.stream.chunk">);
     });
     stream.beginStream();
     stream.append("text", "x".repeat(64));
@@ -49,9 +50,9 @@ describe("makeStreamPublisher", () => {
 
   test("block_type change flushes the prior block before appending the new one", () => {
     const stream = makeStream();
-    const chunks: AgentEvent[] = [];
+    const chunks: EventEnvelope<"agent.stream.chunk">[] = [];
     bus.subscribe("agent.stream.chunk", (_s, p) => {
-      chunks.push(p as AgentEvent);
+      chunks.push(p as EventEnvelope<"agent.stream.chunk">);
     });
     stream.beginStream();
     stream.append("text", "hello");
@@ -62,9 +63,9 @@ describe("makeStreamPublisher", () => {
 
   test("endStream publishes agent.stream.end with stream_id and total_chunks", () => {
     const stream = makeStream();
-    const ends: AgentEvent[] = [];
+    const ends: EventEnvelope<"agent.stream.end">[] = [];
     bus.subscribe("agent.stream.end", (_s, p) => {
-      ends.push(p as AgentEvent);
+      ends.push(p as EventEnvelope<"agent.stream.end">);
     });
     stream.beginStream();
     stream.append("text", "x".repeat(64));
@@ -75,17 +76,15 @@ describe("makeStreamPublisher", () => {
     expect(ends[0]!.payload).toEqual({ stream_id: 1, total_chunks: 2 });
   });
 
-  test("envelope is stamped with identity from the publisher", () => {
+  test("envelope is stamped with sender from constructor", () => {
     const stream = makeStream();
-    const ends: AgentEvent[] = [];
+    const ends: EventEnvelope<"agent.stream.end">[] = [];
     bus.subscribe("agent.stream.end", (_s, p) => {
-      ends.push(p as AgentEvent);
+      ends.push(p as EventEnvelope<"agent.stream.end">);
     });
     stream.beginStream();
     stream.endStream();
-    expect(ends[0]!.team_id).toBe(teamId);
-    expect(ends[0]!.agent_key).toBe(agentKey);
-    expect(ends[0]!.agent_role).toBe(agentRole);
+    expect(ends[0]!.sender).toEqual(sender);
     expect(ends[0]!.event_type).toBe("agent.stream.end");
   });
 });

@@ -1,5 +1,5 @@
 ---
-name: code-review
+name: improvement-review
 description: Review Jie code and find any gaps from architecture's perspective
 ---
 
@@ -16,7 +16,7 @@ Reduce code entropy, resolve tech debts, and prepare a well-structured code for 
 
 ### Checklist
 - When an architectural significant decision is done, write our architectural design decision to dir `./addrs/<N>-<name>.md`, only record those that are consequential to software architecture, keep simple and conscise.
-- Decisions are captured as plan as github issues, not in `review-tracker.md`. `review-tracker.md` is ephemeral, obsolete entries should be cleaned up.
+- Decisions are captured as github issues, not in `tmp/review-tracker.md`. `tmp/review-tracker.md` is ephemeral, obsolete entries should be cleaned up.
 - References are updated across related docs, no conflicts.
 
 ## User Instructions

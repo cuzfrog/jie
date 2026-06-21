@@ -5,15 +5,15 @@ import type { ExecutionContext, ToolRegistry } from "../tools";
 import { adaptToolToAgent } from "./tool-adapter";
 import { makeStreamPublisher } from "./streaming";
 import { JieAgentBody } from "./jie-agent-body";
-import { makeAgentEventPublisher } from "./agent-event";
-import type { EventBus } from "./event-bus";
+import type { EventManager } from "./event-manager";
+import type { Sender } from "./types";
 
 export interface CreateAgentBodyOptions {
   agentKey: string;
   teamId: string;
   soul: AgentSoul;
   isLeader: boolean;
-  bus: EventBus;
+  events: EventManager;
   artifactStore: ArtifactStore;
   memory: MemoryManager;
   sessionId: string;
@@ -28,17 +28,12 @@ export interface AgentBody {
   stop(): void;
 }
 
-function defaultAgentFactory(opts: ConstructorParameters<typeof Agent>[0]): Agent {
-  return new Agent(opts);
-}
-
 export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
-  const eventPublisher = makeAgentEventPublisher(opts.bus, {
-    agentKey: opts.agentKey,
-    agentRole: opts.soul.role,
-    teamId: opts.teamId,
-  });
-  const streamPublisher = makeStreamPublisher(eventPublisher);
+  const sender: Sender = {
+    kind: "agent",
+    identity: { teamId: opts.teamId, agentRole: opts.soul.role, agentKey: opts.agentKey },
+  };
+  const streamPublisher = makeStreamPublisher(opts.events, sender);
 
   const ctx: ExecutionContext = {
     sessionId: opts.sessionId,
@@ -63,11 +58,12 @@ export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
     beforeToolCall: async (context) => {
       const toolCallId = context.toolCall.id;
       toolTimestamps.set(toolCallId, Date.now());
-      eventPublisher.publish("agent.tool.call", {
+      opts.events.publish("agent.tool.call", {
         tool_call_id: toolCallId,
         name: context.toolCall.name,
-        input: context.args,
-      });
+        input: JSON.stringify(context.args),
+        input_truncated: false,
+      }, sender);
       return undefined;
     },
     afterToolCall: async (context) => {
@@ -75,14 +71,15 @@ export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
       const startedAt = toolTimestamps.get(toolCallId) ?? Date.now();
       toolTimestamps.delete(toolCallId);
       const error = extractToolError(context);
-      const output = error === null ? context.result : null;
-      eventPublisher.publish("agent.tool.result", {
+      const result = error === null ? context.result : null;
+      opts.events.publish("agent.tool.result", {
         tool_call_id: toolCallId,
         name: context.toolCall.name,
-        output,
-        durationMs: Date.now() - startedAt,
+        output: error === null ? JSON.stringify(result) : null,
+        output_truncated: false,
+        duration_ms: Date.now() - startedAt,
         error,
-      });
+      }, sender);
       return undefined;
     },
   });
@@ -96,11 +93,10 @@ export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
     soul: opts.soul,
     is_leader: opts.isLeader,
     session_id: opts.sessionId,
-    bus: opts.bus,
+    events: opts.events,
     memory: opts.memory,
     agent,
     streamPublisher,
-    eventPublisher,
   });
 
   const unsubscribeAgent = agent.subscribe((event) =>
@@ -124,6 +120,10 @@ function adaptAllTools(
     }
   }
   return out;
+}
+
+function defaultAgentFactory(opts: ConstructorParameters<typeof Agent>[0]): Agent {
+  return new Agent(opts);
 }
 
 function extractToolError(context: {

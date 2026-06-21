@@ -1,4 +1,5 @@
-import type { AgentEventPublisher } from "./agent-event.ts";
+import type { EventManager } from "./event-manager.ts";
+import type { Sender } from "./types.ts";
 
 const STREAM_CHUNK_SIZE = 64;
 const STREAM_FLUSH_MS = 200;
@@ -11,7 +12,7 @@ export interface StreamPublisher {
   endStream(): { stream_id: number; total_chunks: number };
 }
 
-export function makeStreamPublisher(publisher: AgentEventPublisher): StreamPublisher {
+export function makeStreamPublisher(events: EventManager, sender: Sender): StreamPublisher {
   let streamId = 0;
   let buffer = "";
   let blockType: BlockType | null = null;
@@ -27,12 +28,12 @@ export function makeStreamPublisher(publisher: AgentEventPublisher): StreamPubli
       }
       return;
     }
-    publisher.publish("agent.stream.chunk", {
+    events.publish("agent.stream.chunk", {
       stream_id: streamId,
       seq: seq,
       block_type: blockType,
       text: buffer,
-    });
+    }, sender);
     seq += 1;
     totalChunks += 1;
     buffer = "";
@@ -74,7 +75,7 @@ export function makeStreamPublisher(publisher: AgentEventPublisher): StreamPubli
     endStream(): { stream_id: number; total_chunks: number } {
       flush();
       const out = { stream_id: streamId, total_chunks: totalChunks };
-      publisher.publish("agent.stream.end", out);
+      events.publish("agent.stream.end", out, sender);
       return out;
     },
   };

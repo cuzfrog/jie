@@ -7,6 +7,7 @@ import type {
 import { createAgentBody, type CreateAgentBodyOptions } from "./agent-body.ts";
 import { JieAgentBody } from "./jie-agent-body.ts";
 import { createEventBus } from "./event-bus.ts";
+import { createEventManager } from "./event-manager.ts";
 import {
   createArtifactStore,
   createMemoryManager,
@@ -40,17 +41,17 @@ function makeNoopTool(): Tool {
   };
 }
 
-function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): CreateAgentBodyOptions {
+function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: CreateAgentBodyOptions; bus: ReturnType<typeof createEventBus> } {
   const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
   const bus = createEventBus();
   const registry = createToolRegistry();
   registry.register("noop", makeNoopTool());
-  return {
+  const opts: CreateAgentBodyOptions = {
     agentKey: "general-1",
     teamId: "t1",
     soul: makeSoul(),
     isLeader: true,
-    bus,
+    events: createEventManager(bus),
     artifactStore: createArtifactStore(storage),
     memory: createMemoryManager(storage),
     sessionId: "s1",
@@ -59,6 +60,7 @@ function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): CreateAgentB
     model: { provider: "anthropic", id: "claude-sonnet-4" },
     ...overrides,
   };
+  return { opts, bus };
 }
 
 interface FakeAgentCapture {
@@ -109,7 +111,7 @@ function makeFakeAgentFactory(): FakeAgentCapture {
 
 describe("createAgentBody — wiring", () => {
   test("invokes opts.createAgent exactly once with the right shape", () => {
-    const opts = makeOpts();
+    const { opts } = makeOpts();
     const cap = makeFakeAgentFactory();
     const tracked = mock((o: ConstructorParameters<typeof PiAgent>[0]) => cap.factory(o));
     createAgentBody({ ...opts, createAgent: tracked });
@@ -123,7 +125,7 @@ describe("createAgentBody — wiring", () => {
   });
 
   test("passes the right agent.state fields after construction", () => {
-    const opts = makeOpts();
+    const { opts } = makeOpts();
     const cap = makeFakeAgentFactory();
     createAgentBody({ ...opts, createAgent: cap.factory });
     expect(cap.fake.state.systemPrompt).toBe(opts.soul.system_prompt);
@@ -132,7 +134,7 @@ describe("createAgentBody — wiring", () => {
   });
 
   test("adapts soul.tools specs through the tool registry", () => {
-    const opts = makeOpts({
+    const { opts } = makeOpts({
       soul: makeSoul({ tools: ["noop"] }),
     });
     const cap = makeFakeAgentFactory();
@@ -142,14 +144,14 @@ describe("createAgentBody — wiring", () => {
   });
 
   test("subscribes to agent events via agent.subscribe", () => {
-    const opts = makeOpts();
+    const { opts } = makeOpts();
     const cap = makeFakeAgentFactory();
     createAgentBody({ ...opts, createAgent: cap.factory });
     expect(cap.fake.subscribe).toHaveBeenCalledTimes(1);
   });
 
   test("returned body's identity matches the options", () => {
-    const opts = makeOpts({ agentKey: "leader-1", isLeader: true, sessionId: "sess-x" });
+    const { opts } = makeOpts({ agentKey: "leader-1", isLeader: true, sessionId: "sess-x" });
     const cap = makeFakeAgentFactory();
     const body = createAgentBody({ ...opts, createAgent: cap.factory }) as JieAgentBody;
     const identity = body as unknown as { agent_key: string; team_id: string; is_leader: boolean };
@@ -159,7 +161,7 @@ describe("createAgentBody — wiring", () => {
   });
 
   test("beforeToolCall publishes agent.tool.call with the right payload", async () => {
-    const opts = makeOpts();
+    const { opts, bus } = makeOpts();
     const cap = makeFakeAgentFactory();
     createAgentBody({ ...opts, createAgent: cap.factory });
     const hook = cap.lastOpts()?.beforeToolCall;
@@ -167,7 +169,7 @@ describe("createAgentBody — wiring", () => {
       throw new Error("beforeToolCall hook not provided");
     }
     const received: AgentEventLike[] = [];
-    opts.bus.subscribe("agent.tool.call", (_s, p) => {
+    bus.subscribe("agent.tool.call", (_s, p) => {
       received.push(p as AgentEventLike);
     });
     await hook({
@@ -182,7 +184,7 @@ describe("createAgentBody — wiring", () => {
   });
 
   test("afterToolCall publishes agent.tool.result with duration_ms", async () => {
-    const opts = makeOpts();
+    const { opts, bus } = makeOpts();
     const cap = makeFakeAgentFactory();
     createAgentBody({ ...opts, createAgent: cap.factory });
     const beforeHook = cap.lastOpts()?.beforeToolCall;
@@ -192,7 +194,7 @@ describe("createAgentBody — wiring", () => {
     }
     await beforeHook({ toolCall: { id: "c1", name: "bash" }, args: {} } as never);
     const received: AgentEventLike[] = [];
-    opts.bus.subscribe("agent.tool.result", (_s, p) => {
+    bus.subscribe("agent.tool.result", (_s, p) => {
       received.push(p as AgentEventLike);
     });
     await afterHook({
@@ -208,8 +210,73 @@ describe("createAgentBody — wiring", () => {
     expect((received[0]!.payload as { duration_ms: number }).duration_ms).toBeGreaterThanOrEqual(0);
   });
 
+  test("beforeToolCall shapes tool args into wire form (short input → input_truncated=false)", async () => {
+    const { opts, bus } = makeOpts();
+    const cap = makeFakeAgentFactory();
+    createAgentBody({ ...opts, createAgent: cap.factory });
+    const hook = cap.lastOpts()?.beforeToolCall;
+    if (hook === undefined) throw new Error("beforeToolCall hook not provided");
+    const received: AgentEventLike[] = [];
+    bus.subscribe("agent.tool.call", (_s, p) => {
+      received.push(p as AgentEventLike);
+    });
+    await hook({
+      toolCall: { id: "c1", name: "bash" },
+      args: { command: "ls" },
+    } as never);
+    expect(received).toHaveLength(1);
+    const payload = received[0]!.payload as { input: string; input_truncated: boolean };
+    expect(typeof payload.input).toBe("string");
+    expect(payload.input_truncated).toBe(false);
+  });
+
+  test("beforeToolCall truncates long input with marker", async () => {
+    const { opts, bus } = makeOpts();
+    const cap = makeFakeAgentFactory();
+    createAgentBody({ ...opts, createAgent: cap.factory });
+    const hook = cap.lastOpts()?.beforeToolCall;
+    if (hook === undefined) throw new Error("beforeToolCall hook not provided");
+    const received: AgentEventLike[] = [];
+    bus.subscribe("agent.tool.call", (_s, p) => {
+      received.push(p as AgentEventLike);
+    });
+    await hook({
+      toolCall: { id: "c1", name: "bash" },
+      args: { command: "x".repeat(8000) },
+    } as never);
+    const payload = received[0]!.payload as { input: string; input_truncated: boolean };
+    expect(payload.input_truncated).toBe(true);
+    expect(payload.input).toContain("chars truncated");
+    expect(payload.input.length).toBeLessThan(8000);
+  });
+
+  test("afterToolCall: error path leaves output null and output_truncated=false", async () => {
+    const { opts, bus } = makeOpts();
+    const cap = makeFakeAgentFactory();
+    createAgentBody({ ...opts, createAgent: cap.factory });
+    const beforeHook = cap.lastOpts()?.beforeToolCall;
+    const afterHook = cap.lastOpts()?.afterToolCall;
+    if (beforeHook === undefined || afterHook === undefined) {
+      throw new Error("tool hooks not provided");
+    }
+    await beforeHook({ toolCall: { id: "c1", name: "bash" }, args: {} } as never);
+    const received: AgentEventLike[] = [];
+    bus.subscribe("agent.tool.result", (_s, p) => {
+      received.push(p as AgentEventLike);
+    });
+    await afterHook({
+      toolCall: { id: "c1", name: "bash" },
+      isError: true,
+      result: { content: [{ text: "boom" }] },
+    } as never);
+    const payload = received[0]!.payload as { output: string | null; output_truncated: boolean; error: string };
+    expect(payload.output).toBeNull();
+    expect(payload.output_truncated).toBe(false);
+    expect(payload.error).toBe("boom");
+  });
+
   test("stop() invokes the agent subscription's unsubscribe", () => {
-    const opts = makeOpts();
+    const { opts } = makeOpts();
     const cap = makeFakeAgentFactory();
     const body = createAgentBody({ ...opts, createAgent: cap.factory });
     let unsubscribed = false;

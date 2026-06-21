@@ -4,7 +4,7 @@ import {
   type AuthStore,
   type SettingsStore,
 } from "@cuzfrog/jie-platform/config";
-import { createEventBus } from "@cuzfrog/jie-platform/core";
+import { createEventBus, createEventManager } from "@cuzfrog/jie-platform/core";
 import { createMemoryManager, createStorage } from "@cuzfrog/jie-platform/storage";
 import { type TeamRegistry } from "@cuzfrog/jie-platform/team";
 import { createToolRegistry } from "@cuzfrog/jie-platform/tools";
@@ -39,7 +39,7 @@ function makeDeps(workspace: string, homeJieDir: string): AppDeps {
   return {
     authStore,
     settingsStore,
-    bus: createEventBus(),
+    events: createEventManager(createEventBus()),
     storage,
     teamRegistry,
     modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),

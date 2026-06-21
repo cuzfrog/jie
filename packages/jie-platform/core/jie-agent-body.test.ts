@@ -9,7 +9,7 @@ import {
 import { type Agent, type AgentMessage } from "@earendil-works/pi-agent-core";
 import { JieAgentBody } from "./jie-agent-body.ts";
 import { createEventBus, type EventBus } from "./event-bus.ts";
-import { makeAgentEventPublisher, type AgentEventPublisher } from "./agent-event.ts";
+import { createEventManager, type EventManager } from "./event-manager.ts";
 import type { MemoryManager } from "../storage";
 import type { AgentSoul } from "../team";
 import type { StreamPublisher } from "./streaming.ts";
@@ -96,18 +96,14 @@ interface Harness {
   beginStream: ReturnType<typeof mock>;
   append: ReturnType<typeof mock>;
   endStream: ReturnType<typeof mock>;
-  publisher: AgentEventPublisher;
+  publisher: EventManager;
   persisted: AgentMessage[];
   makeBody: (overrides?: Partial<{ soul: AgentSoul; is_leader: boolean; session_id: string; agent_key: string }>) => JieAgentBody;
 }
 
 function makeHarness(): Harness {
   const bus = createEventBus();
-  const publisher = makeAgentEventPublisher(bus, {
-    agentKey: "general-1",
-    agentRole: "general",
-    teamId: "t1",
-  });
+  const publisher = createEventManager(bus);
   const { memory, persisted } = makeFakeMemory();
   const { agent, state, prompt, continue: cont, subscribe } = makeFakeAgent();
   const { stream, beginStream, append, endStream } = makeFakeStream();
@@ -118,11 +114,10 @@ function makeHarness(): Harness {
       soul: overrides.soul ?? makeSoul(),
       is_leader: overrides.is_leader ?? true,
       session_id: overrides.session_id ?? "s1",
-      bus,
+      events: publisher,
       memory,
       agent,
       streamPublisher: stream,
-      eventPublisher: publisher,
     });
   return {
     bus,

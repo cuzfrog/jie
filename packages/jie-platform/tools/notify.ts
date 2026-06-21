@@ -1,6 +1,5 @@
 import { Type } from "typebox";
-import type { EventBus } from "../core/event-bus.ts";
-import type { AgentEvent } from "../core/agent-event.ts";
+import type { EventManager, Sender } from "../core/index.ts";
 import type { ExecutionContext, Tool, ToolResult } from "./types.ts";
 import { JiePlatformError } from "../domain-types.ts";
 
@@ -18,7 +17,7 @@ the prefix); empty topics and control characters are rejected. \`notify\` is
 the SOLE means of inter-agent communication. Does NOT end the turn.`;
 
 export interface NotifyDeps {
-  bus: EventBus;
+  events: EventManager;
   isSelfSubscribed: (topic: string) => boolean;
 }
 
@@ -71,21 +70,16 @@ export function createNotifyTool(deps: NotifyDeps): Tool<NotifyInput> {
       }
 
       const subject = `${ctx.teamId}.${input.topic}`;
-      const totalSubscribers = deps.bus.subscriberCount(subject);
+      const totalSubscribers = deps.events.subscriberCount(subject);
       const recipients = deps.isSelfSubscribed(input.topic)
         ? Math.max(0, totalSubscribers - 1)
         : totalSubscribers;
 
-      const envelope: AgentEvent = {
-        version: 1,
-        team_id: ctx.teamId,
-        event_type: input.topic,
-        agent_role: ctx.agentRole,
-        agent_key: ctx.agentKey,
-        timestamp: new Date().toISOString(),
-        payload: { prompt: input.prompt, source: ctx.agentKey },
+      const sender: Sender = {
+        kind: "agent",
+        identity: { teamId: ctx.teamId, agentRole: ctx.agentRole, agentKey: ctx.agentKey },
       };
-      deps.bus.publish(subject, envelope);
+      deps.events.publish(subject, { prompt: input.prompt, source: ctx.agentKey }, sender);
 
       const content =
         recipients > 0

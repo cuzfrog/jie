@@ -28,6 +28,39 @@ interface EventBus {
 - `subscriberCount` — returns the number of active callbacks subscribed to a subject. Used by `notify` to report recipient count.
 - No `request` method — request-reply is an application-layer concern built on pub/sub.
 
+## Public Surface: EventManager
+
+`EventBus` is an internal transport type. External consumers (CLI, TUI, agent bodies) use the type-safe `EventManager` abstraction layered on top:
+
+```typescript
+interface AgentIdentity {
+  teamId: string;
+  agentRole?: string;
+  agentKey?: string;
+}
+
+type Sender =
+  | { kind: "agent"; identity: AgentIdentity }
+  | { kind: "cli" }
+  | { kind: "tui" };
+
+interface EventManager {
+  publish<T extends string>(subject: T, payload: T extends keyof EventPayloadMap ? EventPayloadMap[T] : Record<string, unknown>, sender: Sender): void;
+  subscribe<T extends string>(subject: T, callback: (event: EventEnvelope<T>) => void): () => void;
+  subscriberCount(subject: string): number;
+}
+
+function createEventManager(bus: EventBus): EventManager;
+```
+
+- `publish(subject, payload, sender)` — `subject` is the **full bus subject** (caller-computed; the manager does no routing). `payload` is typed when `subject` matches a key in `EventPayloadMap`; runtime topics (LLM-provided `notify` topics, soul subscriptions) take `Record<string, unknown>`. `sender` is required on every publish. The body publishes `agent.tool.call`/`result` on the bare subject; bodies publishing their own key events or `notify` events compute the full subject (`${teamId}.${topic}`); CLI publishes `team.loaded` and `leader.prompt` similarly.
+- `subscribe(subject, callback)` — `subject` is the full subject the caller wants to listen on. Type-narrowed callback for known topics; untyped envelope for runtime topics.
+- `subscriberCount(subject)` — for the recipient-count tool (`notify`).
+
+The `EventPayloadMap` is the source of truth for typed payloads. It describes the **wire form** — what flows on the bus. Callers pre-stringify tool args via `JSON.stringify`; the manager validates length and re-truncates if the caller's string exceeds the cap (overriding `*_truncated`). The truncation logic lives inside `EventManager` (file-private).
+
+**`JiePlatform.events: EventManager`** is the public handle. Consumers never touch the underlying `EventBus` directly.
+
 ## Subject Schema
 
 A single `jie` process can host multiple teams' bodies. Team-specific channels are scoped by `team_id`; platform events are un-scoped and carry `team_id` in the envelope (see `AgentEvent` below).
@@ -39,7 +72,7 @@ A single `jie` process can host multiple teams' bodies. Team-specific channels a
 | `{team_id}.leader.prompt` | Leader prompt ingress from TUI or `-p` mode | Leader auto-subscribes; TUI publishes (scoped to the active team). |
 | `{team_id}.{agent_key}` | Direct-addressing channel; the agent with this key auto-subscribes | Every agent auto-subscribes; `notify` publishes. |
 | `{team_id}.{domain_topic}` | Team-defined domain events (e.g. `task.recorded`, `work.researched`) | Agents subscribe via `subscribe:` in `.md`; `notify` publishes. |
-| `{team_id}.team.loaded` | One-shot per team load; payload `{ team_id, agents: { role, agent_key, is_leader }[] }` — the team's roster. The TUI's agents-panel-at-boot anchor (per ADR 22); the `-p` flow's team-info source. | The platform publishes in `createJiePlatform` (startup team) and in the platform's internal `loadTeam` (Day 2+ multi-team). Not republished on team swap-back. |
+| `{team_id}.team.loaded` | One-shot per team load; payload `{ agents: { role, agent_key, is_leader }[] }` — the team's roster. `team_id` is in the envelope. The TUI's agents-panel-at-boot anchor (per ADR 22); the `-p` flow's team-info source. | The platform publishes in `createJiePlatform` (startup team) and in the platform's internal `loadTeam` (Day 2+ multi-team). Not republished on team swap-back. |
 
 **Platform subjects (un-scoped, `team_id` in the envelope):**
 
@@ -66,22 +99,25 @@ No `session_id` in subjects — one process run is one session. `session_id` is 
 ## Event Envelope
 
 ```typescript
-interface AgentEvent<T extends string = string> {
+interface EventEnvelope<T extends string = string> {
   version:     1;           // envelope format version
-  team_id:     string;      // team's identity (matches the team's directory name)
-  event_type:  T;           // un-scoped logical name (e.g. 'leader.prompt', 'agent.stream.chunk')
-  agent_role:  string;      // team-defined role identifier
-  agent_key:   string;      // persistent slot identity: {role}-{N}
+  event_type:  T;           // the published subject (full bus subject)
+  sender:      Sender;      // discriminated union (agent / cli / tui)
   timestamp:   string;      // ISO 8601
-  payload:     Record<string, unknown>;
+  payload:     T extends keyof EventPayloadMap ? EventPayloadMap[T] : Record<string, unknown>;
 }
 ```
 
-`payload` is a discriminated union keyed on `event_type`. The platform defines infrastructure event payloads; the team blueprint defines domain event payloads.
+`payload` is a discriminated union keyed on `event_type` for known topics, and `Record<string, unknown>` for runtime topics. The platform defines infrastructure event payloads; the team blueprint defines domain event payloads.
 
-**Wire format — the bus payload IS the envelope.** Every publisher on the bus (body, TUI, CLI) constructs and publishes a full `AgentEvent` envelope. The bus's `publish(subject, payload)` second argument is the envelope; the bus's `subscribe` callback receives `(subject, envelope)`. There is no shorthand or partial-publish path. When a body publishes via `notify`, the body fills every envelope field (`event_type` from the LLM's topic, `payload: { prompt, source }` per `PlatformEventPayload`, `team_id` from the body's team, `agent_role` and `agent_key` from the body, `version: 1`, `timestamp` ISO 8601). When the TUI or CLI publishes a user prompt to `leader.prompt` (or a direct-addressed user prompt to a specific agent's `{agent_key}`), it fills every envelope field — the convention is that the TUI/CLI fills `agent_role` and `agent_key` with the **target agent's** role and `agent_key` (the leader for `leader.prompt`; the targeted agent for direct addressing) so the envelope matches what the target would have published. The full per-publisher wire-format contract is in `02-protocol-stack.md` "Prompt Ingress" and `06-agent-model.md` `notify` step 2.
+**Wire format — the bus payload IS the envelope.** Every publisher on the bus (body, TUI, CLI) constructs and publishes a full `EventEnvelope` envelope. The bus's `publish(subject, payload)` second argument is the envelope; the bus's `subscribe` callback receives `(subject, envelope)`. There is no shorthand or partial-publish path. When a body publishes via `notify`, the body fills `payload: { prompt, source }`, `event_type` is the full subject (`${teamId}.${topic}`), `sender` is `{ kind: "agent", identity: { teamId, agentRole, agentKey } }`. When the CLI publishes `leader.prompt`, it fills `sender` with the **target agent's** identity (the leader) — so observers see a consistent sender across CLI-relayed and body-published prompts. The full per-publisher wire-format contract is in `02-protocol-stack.md` "Prompt Ingress" and `06-agent-model.md` `notify` step 2.
 
-**Reading the envelope at a subscriber.** A subscriber reads `envelope.payload` (the inner data) for the event-type-specific fields (e.g., `envelope.payload.prompt` for `leader.prompt`, `envelope.payload.source` for self-receipt filtering on `notify`-sourced events). `envelope.team_id` is the authoritative team identity (the subject's `{team_id}.` prefix is the bus-level scoping, but the envelope is the source of truth for filtering). The body's subscription callback for `notify`-sourced events reads `envelope.payload.source` and compares it to the body's own `agent_key` for self-receipt filtering (per `06-agent-model.md` "Built-in Tool: `notify`" step 3).
+**Reading the envelope at a subscriber.** A subscriber reads `envelope.payload` (the inner data) for the event-type-specific fields (e.g., `envelope.payload.prompt` for `leader.prompt`, `envelope.payload.source` for self-receipt filtering on `notify`-sourced events). `envelope.sender` carries the publisher's identity; agents use `envelope.sender.identity.agentKey` for self-receipt filtering (per `06-agent-model.md` "Built-in Tool: `notify`" step 3). The body's subscription callback for `notify`-sourced events reads `envelope.payload.source` and compares it to the body's own `agent_key`.
+
+**Sender kinds.** Three variants:
+- `{ kind: "agent", identity }` — a body publishes. `identity` carries `teamId`, `agentRole`, `agentKey`. The CLI uses this when relaying a user prompt to the leader (it impersonates the leader so subscribers see the leader as the conceptual sender).
+- `{ kind: "cli" }` — the platform publishes a team-level event like `team.loaded` where no specific agent is the source.
+- `{ kind: "tui" }` — the TUI publishes a user-prompt event.
 
 ### Platform Event Payloads
 

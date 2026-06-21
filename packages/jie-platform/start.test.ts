@@ -2,7 +2,7 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { join } from "node:path";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { createEventBus } from "./core";
+import { createEventBus, createEventManager } from "./core";
 import { createJiePlatform } from "./start.ts";
 import { createModelRegistry, type SettingsStore } from "./config";
 import type { AuthStore } from "./config";
@@ -33,8 +33,10 @@ const DEFAULT_SETTINGS: MergedSettings = {
 function makeDeps(workspace: string, homeJieDir: string, filePath: string = ":memory:") {
   const projectJieDir = join(workspace, ".jie");
   const storage = createStorage({ type: "sqlite", filePath });
+  const bus = createEventBus();
   return {
-    bus: createEventBus(),
+    events: createEventManager(bus),
+    bus,
     settingsStore,
     storage,
     teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
@@ -66,7 +68,7 @@ describe("createJiePlatform", () => {
   });
 
   describe("happy path (minimal team)", () => {
-    test("starts the minimal team; bus is the one passed in via deps", async () => {
+    test("starts the minimal team; events is the manager wrapping the bus from deps", async () => {
       const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform(
         {
@@ -76,10 +78,9 @@ describe("createJiePlatform", () => {
         },
         deps,
       );
-      expect(handle.bus).toBe(deps.bus);
       const events: unknown[] = [];
-      handle.bus.subscribe("minimal.team.loaded", (_s, p) => {
-        events.push(p);
+      handle.events.subscribe("leader.prompt", (env) => {
+        events.push(env);
       });
       expect(events).toHaveLength(0);
     });
@@ -109,8 +110,10 @@ describe("createJiePlatform", () => {
       const filePath = join(workspace, "no-model.db");
       const storage = createStorage({ type: "sqlite", filePath });
       const projectJieDir = join(workspace, ".jie");
+      const bus = createEventBus();
       const deps = {
-        bus: createEventBus(),
+        events: createEventManager(bus),
+        bus,
         settingsStore,
         storage,
         teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
@@ -124,17 +127,18 @@ describe("createJiePlatform", () => {
     });
 
     test("handle.stop() detaches all bus subscriptions", async () => {
+      const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform(
         {
           workspace,
           homeJieDir,
           teamId: "minimal",
         },
-        makeDeps(workspace, homeJieDir),
+        deps,
       );
-      expect(handle.bus.subscriberCount("minimal.general-1")).toBeGreaterThan(0);
+      expect(deps.bus.subscriberCount("minimal.general-1")).toBeGreaterThan(0);
       await handle.stop();
-      expect(handle.bus.subscriberCount("minimal.general-1")).toBe(0);
+      expect(deps.bus.subscriberCount("minimal.general-1")).toBe(0);
     });
   });
 
@@ -143,8 +147,10 @@ describe("createJiePlatform", () => {
       const filePath = join(workspace, "resume.db");
       const projectJieDir = join(workspace, ".jie");
       const storage1 = createStorage({ type: "sqlite", filePath });
+      const bus1 = createEventBus();
       const deps1 = {
-        bus: createEventBus(),
+        bus: bus1,
+        events: createEventManager(bus1),
         settingsStore,
         storage: storage1,
         teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
@@ -166,8 +172,10 @@ describe("createJiePlatform", () => {
       const sessionId = "test-session-id";
 
       const storage2 = createStorage({ type: "sqlite", filePath });
+      const bus2 = createEventBus();
       const deps2 = {
-        bus: createEventBus(),
+        bus: bus2,
+        events: createEventManager(bus2),
         settingsStore,
         storage: storage2,
         teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
@@ -182,8 +190,10 @@ describe("createJiePlatform", () => {
       await h2.stop();
 
       const storage3 = createStorage({ type: "sqlite", filePath });
+      const bus3 = createEventBus();
       const deps3 = {
-        bus: createEventBus(),
+        bus: bus3,
+        events: createEventManager(bus3),
         settingsStore,
         storage: storage3,
         teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),

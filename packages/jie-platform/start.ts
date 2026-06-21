@@ -1,6 +1,10 @@
 import { ulid } from "ulid";
 import { getModel as piGetModel, type Model } from "@earendil-works/pi-ai";
-import { type AgentBody, type AgentEvent, type EventBus, createAgentBody } from "./core/index.ts";
+import {
+  type AgentBody,
+  type EventManager,
+  createAgentBody,
+} from "./core/index.ts";
 import { type AgentSoul, type Team, type TeamRegistry } from "./team/index.ts";
 import { type ModelRegistry, type SettingsStore } from "./config/index.ts";
 import { type ToolRegistry } from "./tools";
@@ -22,7 +26,7 @@ export interface CreateJiePlatformOptions {
 }
 
 export interface JiePlatformDeps {
-  bus: EventBus;
+  events: EventManager;
   settingsStore: SettingsStore;
   storage: Storage;
   teamRegistry: TeamRegistry;
@@ -32,15 +36,13 @@ export interface JiePlatformDeps {
 }
 
 export interface JiePlatform {
-  bus: EventBus;
+  events: EventManager;
   stop: (timeoutMs?: number) => Promise<void>;
 }
 
 export async function createJiePlatform(opts: CreateJiePlatformOptions, deps: JiePlatformDeps): Promise<JiePlatform> {
   const resolveModel = defaultResolveModel(deps.modelRegistry);
   const artifactStore: ArtifactStore = createArtifactStore(deps.storage);
-  const bus: EventBus = deps.bus;
-
   const resolvedTeamId = opts.teamId ?? "minimal";
 
   const sessionIds = new Map<string, string>();
@@ -65,7 +67,7 @@ export async function createJiePlatform(opts: CreateJiePlatformOptions, deps: Ji
           teamId,
           soul,
           isLeader,
-          bus,
+          events: deps.events,
           artifactStore,
           memory: deps.memoryManager,
           sessionId,
@@ -79,14 +81,14 @@ export async function createJiePlatform(opts: CreateJiePlatformOptions, deps: Ji
       await body.start();
     }
     loadedTeams.set(teamId, out);
-    publishTeamLoaded(bus, teamId, bp);
+    publishTeamLoaded(deps.events, teamId, bp);
     return out;
   }
 
   await loadAndStartTeam(resolvedTeamId);
 
   const handle: JiePlatform = {
-    bus,
+    events: deps.events,
     stop: async (timeoutMs: number = 10_000) => {
       const allBodies: AgentBody[] = [];
       for (const bodies of loadedTeams.values()) {
@@ -101,21 +103,14 @@ export async function createJiePlatform(opts: CreateJiePlatformOptions, deps: Ji
   return handle;
 }
 
-function publishTeamLoaded(bus: EventBus, teamId: string, bp: Team): void {
+function publishTeamLoaded(events: EventManager, teamId: string, bp: Team): void {
   const sorted = [...bp.roles].sort((a, b) => a.role.localeCompare(b.role));
   const agents = sorted.map((r) => ({
     role: r.role,
     agent_key: `${r.role}-1`,
     is_leader: r.role === bp.leaderRole,
   }));
-  const envelope: AgentEvent = {
-    version: 1,
-    team_id: teamId,
-    event_type: `${teamId}.team.loaded`,
-    timestamp: new Date().toISOString(),
-    payload: { team_id: teamId, agents },
-  };
-  bus.publish(`${teamId}.team.loaded`, envelope);
+  events.publish(`${teamId}.team.loaded`, { agents }, { kind: "cli" });
 }
 
 const NO_MODEL_ERROR =

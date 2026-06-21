@@ -6,14 +6,14 @@ import {
   type ToolRegistry
 } from "@cuzfrog/jie-platform";
 import type { AuthStore, SettingsStore } from "@cuzfrog/jie-platform/config";
-import type { AgentEvent, EventBus } from "@cuzfrog/jie-platform/core";
+import type { EventManager } from "@cuzfrog/jie-platform/core";
 import type { MemoryManager, Storage } from "@cuzfrog/jie-platform/storage";
 import type { Team, TeamRegistry } from "@cuzfrog/jie-platform/team";
 
 export interface AppDeps {
   authStore: AuthStore;
   settingsStore: SettingsStore;
-  bus: EventBus;
+  events: EventManager;
   storage: Storage;
   teamRegistry: TeamRegistry;
   modelRegistry: ModelRegistry;
@@ -73,19 +73,12 @@ export async function createApp(
   }
 
   let captured: { teamId: string; leaderRole: string; leaderKey: string } | null = null;
-  const subject = `${team.id}.team.loaded`;
-  deps.bus.subscribe(subject, (_subj: string, payload: object) => {
-    const agentEvent = payload as AgentEvent;
-    const agents = (agentEvent.payload.agents ?? []) as Array<{
-      role: string;
-      agent_key: string;
-      is_leader?: boolean;
-    }>;
-    const leader: { role: string; agent_key: string } | undefined =
-      agents.find((a) => a.is_leader === true) ?? agents[0];
+  deps.events.subscribe(`${team.id}.team.loaded`, (env) => {
+    const agents = (env.payload as { agents: Array<{ role: string; agent_key: string; is_leader: boolean }> }).agents;
+    const leader = agents.find((a) => a.is_leader) ?? agents[0];
     if (leader === undefined) return;
     captured = {
-      teamId: agentEvent.team_id,
+      teamId: team.id,
       leaderRole: leader.role,
       leaderKey: leader.agent_key,
     };

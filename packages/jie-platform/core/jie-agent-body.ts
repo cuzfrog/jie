@@ -5,12 +5,11 @@ import {
 } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { MemoryManager } from "../storage/index.ts";
-import type { EventBus } from "./event-bus.ts";
 import type { AgentSoul } from "../team/index.ts";
-import type { AgentEventPublisher } from "./agent-event.ts";
+import type { EventManager } from "./event-manager.ts";
+import type { Sender } from "./types.ts";
 import type { StreamPublisher } from "./streaming.ts";
 import type { AgentBody } from "./agent-body.ts";
-import type { AgentEvent } from "./agent-event.ts";
 
 export class JieAgentBody implements AgentBody {
   private readonly agent_key: string;
@@ -18,11 +17,11 @@ export class JieAgentBody implements AgentBody {
   private readonly soul: AgentSoul;
   private readonly is_leader: boolean;
   private readonly session_id: string;
-  private readonly bus: EventBus;
+  private readonly eventManager: EventManager;
   private readonly memory: MemoryManager;
   private readonly agent: Agent;
   private readonly stream: StreamPublisher;
-  private readonly publisher: AgentEventPublisher;
+  private readonly sender: Sender;
   private readonly queue: AgentMessage[] = [];
   private readonly unsubscribers: Array<() => void> = [];
   private readonly externalCleanups: Array<() => void> = [];
@@ -34,31 +33,33 @@ export class JieAgentBody implements AgentBody {
     soul: AgentSoul;
     is_leader: boolean;
     session_id: string;
-    bus: EventBus;
+    events: EventManager;
     memory: MemoryManager;
     agent: Agent;
     streamPublisher: StreamPublisher;
-    eventPublisher: AgentEventPublisher;
   }) {
     this.agent_key = deps.agent_key;
     this.team_id = deps.team_id;
     this.soul = deps.soul;
     this.is_leader = deps.is_leader;
     this.session_id = deps.session_id;
-    this.bus = deps.bus;
+    this.eventManager = deps.events;
     this.memory = deps.memory;
     this.agent = deps.agent;
     this.stream = deps.streamPublisher;
-    this.publisher = deps.eventPublisher;
+    this.sender = {
+      kind: "agent",
+      identity: { teamId: this.team_id, agentRole: this.soul.role, agentKey: this.agent_key },
+    };
   }
 
   handlePiAgentEvent(event: PiAgentEvent): void {
     switch (event.type) {
       case "turn_start":
-        this.publisher.publish("agent.turn.start", {});
+        this.eventManager.publish("agent.turn.start", {}, this.sender);
         return;
       case "agent_end":
-        this.publisher.publish("agent.idle", {});
+        this.eventManager.publish("agent.idle", {}, this.sender);
         return;
       case "message_start":
         this.stream.beginStream();
@@ -114,9 +115,9 @@ export class JieAgentBody implements AgentBody {
 
     while (this.queue.length > 0) {
       const next = this.queue.shift()!;
-      this.publisher.publish("agent.queue.update", {
+      this.eventManager.publish("agent.queue.update", {
         prompts: this.queue.map((m) => formatSynthetic(m)),
-      });
+      }, this.sender);
       await this.agent.prompt(next);
     }
   }
@@ -129,32 +130,30 @@ export class JieAgentBody implements AgentBody {
   }
 
   private registerSubscriptions(): void {
-    const own = `${this.team_id}.${this.agent_key}`;
+    const ownSubject = `${this.team_id}.${this.agent_key}`;
     this.unsubscribers.push(
-      this.bus.subscribe(own, (_subject, payload) => {
-        const envelope = payload as AgentEvent;
-        this.ingestEvent(envelope.event_type, payload);
+      this.eventManager.subscribe(ownSubject, (env) => {
+        this.ingestEvent(env.event_type, env);
       }),
     );
     if (this.is_leader) {
       this.unsubscribers.push(
-        this.bus.subscribe(`${this.team_id}.leader.prompt`, (_subject, payload) => {
-          this.ingestEvent("leader.prompt", payload);
+        this.eventManager.subscribe(`${this.team_id}.leader.prompt`, (env) => {
+          this.ingestEvent(env.event_type, env);
         }),
       );
     }
     for (const topic of this.soul.subscriptions) {
       this.unsubscribers.push(
-        this.bus.subscribe(`${this.team_id}.${topic}`, (_subject, payload) => {
-          this.ingestEvent(topic, payload);
+        this.eventManager.subscribe(`${this.team_id}.${topic}`, (env) => {
+          this.ingestEvent(topic, env);
         }),
       );
     }
   }
 
   private ingestEvent(topic: string, payload: object): void {
-    const envelope = payload as AgentEvent;
-    const inner = envelope.payload;
+    const inner = (payload as { payload: { source?: string; prompt?: string } }).payload;
     const source = inner.source;
     const prompt = inner.prompt ?? "";
     const synthetic = source
@@ -167,9 +166,9 @@ export class JieAgentBody implements AgentBody {
     } as unknown as AgentMessage;
     if (this.agent.state.isStreaming) {
       this.queue.push(message);
-      this.publisher.publish("agent.queue.update", {
+      this.eventManager.publish("agent.queue.update", {
         prompts: this.queue.map((m) => formatSynthetic(m)),
-      });
+      }, this.sender);
     } else {
       void this.agent.prompt(message);
     }
