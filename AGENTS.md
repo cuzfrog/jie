@@ -53,7 +53,7 @@
 - Public types, contract, methods, higher-level abstractions should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers. See below section `Single file layout`.
 - Avoid trivial functions, inline them.
 - Imports from a module without specific file, e,g, `import { foo } from "../module"`. Not `"../module/index.ts"`. For siblings in the immediate directory, directly import from the sibling, e.g. `import { foo } from "./foo"`.
-- Use camelCase full variable names, e.g. `const artifactStore = new ArtifactStore()`.
+- Use camelCase full variable names, snake_case for wire-bound shapes. See @doc/FIELD_NAMING.md
 - Try to keep code in one line if the row is < 140 chars.
 
 ### Test

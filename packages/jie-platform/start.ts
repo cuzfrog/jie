@@ -12,13 +12,10 @@ import {
   type Storage,
 } from "./storage";
 
-export interface CreateJieOptions {
+export interface CreateJiePlatformOptions {
   workspace: string;
-
   homeJieDir: string;
-
   teamId?: string;
-
   mcpServerConfigs?: McpServerConfig[];
   resumeSessionId?: string;
   continueLastSession?: boolean;
@@ -37,6 +34,88 @@ export interface JiePlatformDeps {
 export interface JiePlatform {
   bus: EventBus;
   stop: (timeoutMs?: number) => Promise<void>;
+}
+
+export async function createJiePlatform(opts: CreateJiePlatformOptions, deps: JiePlatformDeps): Promise<JiePlatform> {
+  const resolveModel = defaultResolveModel(deps.modelRegistry);
+  const artifactStore: ArtifactStore = createArtifactStore(deps.storage);
+  const bus: EventBus = deps.bus;
+
+  const resolvedTeamId = opts.teamId ?? "minimal";
+
+  const sessionIds = new Map<string, string>();
+  const loadedTeams = new Map<string, AgentBody[]>();
+
+  async function loadAndStartTeam(teamId: string): Promise<AgentBody[]> {
+    const existing = loadedTeams.get(teamId);
+    if (existing !== undefined) return existing;
+
+    const bp: Team = deps.teamRegistry.loadTeam(teamId);
+    const sessionId = resolveSessionId(deps.memoryManager, opts, teamId);
+    sessionIds.set(teamId, sessionId);
+
+    const out: AgentBody[] = [];
+    for (const soul of bp.roles) {
+      const isLeader = soul.role === bp.leaderRole;
+      const agentKey = `${soul.role}-1`;
+      const model = resolveSoulModel(soul, deps.settingsStore, resolveModel);
+      out.push(
+        createAgentBody({
+          agentKey,
+          teamId,
+          soul,
+          isLeader,
+          bus,
+          artifactStore,
+          memory: deps.memoryManager,
+          sessionId,
+          tool_registry: deps.toolRegistry,
+          getApiKey: async (provider: string) => deps.modelRegistry.getApiKey(provider),
+          model,
+        }),
+      );
+    }
+    for (const body of out) {
+      await body.start();
+    }
+    loadedTeams.set(teamId, out);
+    publishTeamLoaded(bus, teamId, bp);
+    return out;
+  }
+
+  await loadAndStartTeam(resolvedTeamId);
+
+  const handle: JiePlatform = {
+    bus,
+    stop: async (timeoutMs: number = 10_000) => {
+      const allBodies: AgentBody[] = [];
+      for (const bodies of loadedTeams.values()) {
+        allBodies.push(...bodies);
+      }
+      for (const b of allBodies) b.stop();
+
+      void timeoutMs;
+    },
+  };
+
+  return handle;
+}
+
+function publishTeamLoaded(bus: EventBus, teamId: string, bp: Team): void {
+  const sorted = [...bp.roles].sort((a, b) => a.role.localeCompare(b.role));
+  const agents = sorted.map((r) => ({
+    role: r.role,
+    agent_key: `${r.role}-1`,
+    is_leader: r.role === bp.leaderRole,
+  }));
+  const envelope: AgentEvent = {
+    version: 1,
+    team_id: teamId,
+    event_type: `${teamId}.team.loaded`,
+    timestamp: new Date().toISOString(),
+    payload: { team_id: teamId, agents },
+  };
+  bus.publish(`${teamId}.team.loaded`, envelope);
 }
 
 const NO_MODEL_ERROR =
@@ -81,133 +160,26 @@ function resolveSoulModel(
   }
 }
 
-export async function createJiePlatform(opts: CreateJieOptions, deps: JiePlatformDeps): Promise<JiePlatform> {
-  const resolveModel = defaultResolveModel(deps.modelRegistry);
-  const artifactStore: ArtifactStore = createArtifactStore(deps.storage);
-  const bus: EventBus = deps.bus;
-
-  const resolvedTeamId = opts.teamId ?? "minimal";
-  const blueprint: Team = deps.teamRegistry.loadTeam(resolvedTeamId);
-
-  for (const soul of blueprint.roles) {
-    resolveSoulModel(soul, deps.settingsStore, resolveModel);
-  }
-
-  const sessionIds = new Map<string, string>();
-  for (const teamId of [resolvedTeamId]) {
-    let resolved: string;
-    if (opts.resumeSessionId !== undefined) {
-      if (!deps.memoryManager.hasSession(teamId, opts.resumeSessionId)) {
-        throw new Error(`unknown session_id: ${opts.resumeSessionId}`);
-      }
-      resolved = opts.resumeSessionId;
-    } else if (opts.continueLastSession === true) {
-      const recent = deps.memoryManager.mostRecentSessionId(teamId);
-      if (recent === null) {
-        console.warn(
-          "no prior session in this directory; starting a new session",
-        );
-        resolved = ulid();
-      } else {
-        resolved = recent;
-      }
-    } else {
-      resolved = ulid();
+function resolveSessionId(
+  memory: MemoryManager,
+  opts: CreateJiePlatformOptions,
+  teamId: string,
+): string {
+  if (opts.resumeSessionId !== undefined) {
+    if (!memory.hasSession(teamId, opts.resumeSessionId)) {
+      throw new Error(`unknown session_id: ${opts.resumeSessionId}`);
     }
-    sessionIds.set(teamId, resolved);
+    return opts.resumeSessionId;
   }
-
-  const loadedTeams = new Map<string, AgentBody[]>();
-
-  async function buildAndStart(teamId: string): Promise<AgentBody[]> {
-    const bp: Team = deps.teamRegistry.loadTeam(teamId);
-
-    const existing = loadedTeams.get(teamId);
-    if (existing !== undefined) return existing;
-
-    let sid = sessionIds.get(teamId);
-    if (sid === undefined) {
-      if (opts.resumeSessionId !== undefined) {
-        if (!deps.memoryManager.hasSession(teamId, opts.resumeSessionId)) {
-          throw new Error(`unknown session_id: ${opts.resumeSessionId}`);
-        }
-        sid = opts.resumeSessionId;
-      } else if (opts.continueLastSession === true) {
-        const recent = deps.memoryManager.mostRecentSessionId(teamId);
-        if (recent === null) {
-          console.warn(
-            "no prior session in this directory; starting a new session",
-          );
-          sid = ulid();
-        } else {
-          sid = recent;
-        }
-      } else {
-        sid = ulid();
-      }
-      sessionIds.set(teamId, sid);
-    }
-
-    const out: AgentBody[] = [];
-    for (const soul of bp.roles) {
-      const is_leader = soul.role === bp.leaderRole;
-      const agentKey = `${soul.role}-1`;
-      const model = resolveSoulModel(soul, deps.settingsStore, resolveModel);
-      out.push(
-        createAgentBody({
-          agentKey,
-          teamId: teamId,
-          soul,
-          isLeader: is_leader,
-          bus,
-          artifactStore: artifactStore,
-          memory: deps.memoryManager,
-          sessionId: sid,
-          tool_registry: deps.toolRegistry,
-          getApiKey: async (provider: string) => deps.modelRegistry.getApiKey(provider),
-          model,
-        }),
+  if (opts.continueLastSession === true) {
+    const recent = memory.mostRecentSessionId(teamId);
+    if (recent === null) {
+      console.warn(
+        "no prior session in this directory; starting a new session",
       );
+      return ulid();
     }
-    for (const body of out) {
-      await body.start();
-    }
-    loadedTeams.set(teamId, out);
-    publishTeamLoaded(bus, teamId, bp);
-    return out;
+    return recent;
   }
-
-  await buildAndStart(resolvedTeamId);
-
-  const handle: JiePlatform = {
-    bus,
-    stop: async (timeoutMs: number = 10_000) => {
-      const allBodies: AgentBody[] = [];
-      for (const bodies of loadedTeams.values()) {
-        allBodies.push(...bodies);
-      }
-      for (const b of allBodies) b.stop();
-
-      void timeoutMs;
-    },
-  };
-
-  return handle;
-}
-
-function publishTeamLoaded(bus: EventBus, teamId: string, bp: Team): void {
-  const sorted = [...bp.roles].sort((a, b) => a.role.localeCompare(b.role));
-  const agents = sorted.map((r) => ({
-    role: r.role,
-    agent_key: `${r.role}-1`,
-    is_leader: r.role === bp.leaderRole,
-  }));
-  const envelope: AgentEvent = {
-    version: 1,
-    team_id: teamId,
-    event_type: `${teamId}.team.loaded`,
-    timestamp: new Date().toISOString(),
-    payload: { team_id: teamId, agents },
-  };
-  bus.publish(`${teamId}.team.loaded`, envelope);
+  return ulid();
 }
