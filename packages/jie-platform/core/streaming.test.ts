@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { createEventBus, type EventBus } from "./event-bus.ts";
+import { createEventBus, type EventBus } from "../event/event-bus.ts";
 import { makeStreamPublisher } from "./streaming.ts";
 import { createEventManager } from "./event-manager.ts";
 import type { Sender } from "./types.ts";

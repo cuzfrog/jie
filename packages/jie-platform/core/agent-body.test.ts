@@ -6,7 +6,7 @@ import type {
 } from "@earendil-works/pi-agent-core";
 import { createAgentBody, type CreateAgentBodyOptions } from "./agent-body.ts";
 import { JieAgentBody } from "./jie-agent-body.ts";
-import { createEventBus } from "./event-bus.ts";
+import { createEventBus } from "../event/event-bus.ts";
 import { createEventManager } from "./event-manager.ts";
 import {
   createArtifactStore,

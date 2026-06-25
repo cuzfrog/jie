@@ -59,7 +59,7 @@ export const Events = {
     createEvent("leader.prompt", sender, { prompt }),
   userPrompt: (sender: Sender, prompt: string) =>
     createEvent("user.prompt", sender, { prompt }),
-  teamLoaded: (sender: Sender, agents: Array<{ role: string; agent_key: string; is_leader: boolean }>) =>
+  teamLoaded: (sender: Sender, teamId: string, agents: Array<{ role: string; agent_key: string; is_leader: boolean }>) =>
     createEvent("team.loaded", sender, { agents }),
   envelope: <T extends string>(sender: Sender, type: T, payload: Record<string, unknown>) =>
     Object.freeze({

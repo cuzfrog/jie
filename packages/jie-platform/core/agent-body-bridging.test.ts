@@ -2,7 +2,7 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 import type { AgentEvent as PiAgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, AssistantMessageEvent } from "@earendil-works/pi-ai";
 import { createAgentBody, type AgentBody, type CreateAgentBodyOptions } from "./agent-body.ts";
-import { createEventBus, type EventBus } from "./event-bus.ts";
+import { createEventBus, type EventBus } from "../event/event-bus.ts";
 import { createEventManager } from "./event-manager.ts";
 
 import {

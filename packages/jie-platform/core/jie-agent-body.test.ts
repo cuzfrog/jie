@@ -8,7 +8,7 @@ import {
 } from "bun:test";
 import { type Agent, type AgentMessage } from "@earendil-works/pi-agent-core";
 import { JieAgentBody } from "./jie-agent-body.ts";
-import { createEventBus, type EventBus } from "./event-bus.ts";
+import { createEventBus, type EventBus } from "../event/event-bus.ts";
 import { createEventManager, type EventManager } from "./event-manager.ts";
 import type { MemoryManager } from "../storage";
 import type { AgentSoul } from "../team";
