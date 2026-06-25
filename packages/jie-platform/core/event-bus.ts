@@ -1,9 +1,11 @@
-export type EventCallback = (subject: string, payload: object) => void;
+type EventCallback = (subject: string, payload: object) => void;
 
+/** Low level primitive behind `EventManager`. */
 export interface EventBus {
 
   publish(subject: string, payload: object): void;
 
+  /** returns an unsubscribe function */
   subscribe(subject: string, callback: EventCallback): () => void;
 
   subscriberCount(subject: string): number;

@@ -83,7 +83,7 @@ export class SqliteArtifactStore implements ArtifactStore {
     };
   }
 
-  async list(prefix: string): Promise<{ key: string; createdAt: string }[]> {
+  async list(prefix: string): Promise<{ key: string; created_at: string }[]> {
     const escaped = escapeLikePrefix(prefix);
     const rows = this.storage.query(
       `SELECT key, created_at FROM artifacts WHERE key LIKE ? ESCAPE '\\' ORDER BY created_at DESC`,
@@ -91,7 +91,7 @@ export class SqliteArtifactStore implements ArtifactStore {
     );
     return rows.map((row) => ({
       key: row[0] as string,
-      createdAt: row[1] as string,
+      created_at: row[1] as string,
     }));
   }
 }

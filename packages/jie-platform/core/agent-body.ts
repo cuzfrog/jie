@@ -6,7 +6,7 @@ import { adaptToolToAgent } from "./tool-adapter";
 import { makeStreamPublisher } from "./streaming";
 import { JieAgentBody } from "./jie-agent-body";
 import type { EventManager } from "./event-manager";
-import type { Sender } from "./types";
+import { Events, type Sender } from "./types";
 
 export interface CreateAgentBodyOptions {
   agentKey: string;
@@ -58,12 +58,13 @@ export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
     beforeToolCall: async (context) => {
       const toolCallId = context.toolCall.id;
       toolTimestamps.set(toolCallId, Date.now());
-      opts.events.publish("agent.tool.call", {
-        tool_call_id: toolCallId,
-        name: context.toolCall.name,
-        input: JSON.stringify(context.args),
-        input_truncated: false,
-      }, sender);
+      opts.events.publish(Events.agentToolCall(
+        sender,
+        toolCallId,
+        context.toolCall.name,
+        JSON.stringify(context.args),
+        false,
+      ));
       return undefined;
     },
     afterToolCall: async (context) => {
@@ -72,14 +73,15 @@ export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
       toolTimestamps.delete(toolCallId);
       const error = extractToolError(context);
       const result = error === null ? context.result : null;
-      opts.events.publish("agent.tool.result", {
-        tool_call_id: toolCallId,
-        name: context.toolCall.name,
-        output: error === null ? JSON.stringify(result) : null,
-        output_truncated: false,
-        duration_ms: Date.now() - startedAt,
+      opts.events.publish(Events.agentToolResult(
+        sender,
+        toolCallId,
+        context.toolCall.name,
+        error === null ? JSON.stringify(result) : null,
+        false,
+        Date.now() - startedAt,
         error,
-      }, sender);
+      ));
       return undefined;
     },
   });

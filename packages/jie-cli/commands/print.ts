@@ -1,5 +1,5 @@
 import type { JiePlatform } from "@cuzfrog/jie-platform";
-import type { EventManager, Sender } from "@cuzfrog/jie-platform/core";
+import { Events, type EventManager, type Sender } from "@cuzfrog/jie-platform/core";
 import type { ParsedArgsMap } from "../cli-flags.ts";
 
 export type PrintArgs = ParsedArgsMap["print"];
@@ -27,7 +27,7 @@ export async function runPrint(
     }
   });
 
-  handle.events.publish(`${teamId}.leader.prompt`, { prompt: args.instruction }, leaderSender);
+  handle.events.publish(Events.envelope(leaderSender, `${teamId}.leader.prompt`, { prompt: args.instruction }));
 
   try {
     await setupIdleGate(handle.events, args.timeout);

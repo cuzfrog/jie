@@ -45,19 +45,41 @@ type Sender =
   | { kind: "tui" };
 
 interface EventManager {
-  publish<T extends string>(subject: T, payload: T extends keyof EventPayloadMap ? EventPayloadMap[T] : Record<string, unknown>, sender: Sender): void;
+  publish<T extends string>(event: EventEnvelope<T>): void;
   subscribe<T extends string>(subject: T, callback: (event: EventEnvelope<T>) => void): () => void;
   subscriberCount(subject: string): number;
 }
 
-function createEventManager(bus: EventBus): EventManager;
+function createEventManager(bus?: EventBus): EventManager;
 ```
 
-- `publish(subject, payload, sender)` — `subject` is the **full bus subject** (caller-computed; the manager does no routing). `payload` is typed when `subject` matches a key in `EventPayloadMap`; runtime topics (LLM-provided `notify` topics, soul subscriptions) take `Record<string, unknown>`. `sender` is required on every publish. The body publishes `agent.tool.call`/`result` on the bare subject; bodies publishing their own key events or `notify` events compute the full subject (`${teamId}.${topic}`); CLI publishes `team.loaded` and `leader.prompt` similarly.
+- `publish(event)` — `event` is a full `EventEnvelope` constructed by the caller via the `Events` factory. The manager stamps nothing; the envelope is the bus payload. The manager applies tool-telemetry truncation (file-private) before publishing. The `envelope.type` is the full bus subject (caller-computed; the manager does no routing).
 - `subscribe(subject, callback)` — `subject` is the full subject the caller wants to listen on. Type-narrowed callback for known topics; untyped envelope for runtime topics.
 - `subscriberCount(subject)` — for the recipient-count tool (`notify`).
 
-The `EventPayloadMap` is the source of truth for typed payloads. It describes the **wire form** — what flows on the bus. Callers pre-stringify tool args via `JSON.stringify`; the manager validates length and re-truncates if the caller's string exceeds the cap (overriding `*_truncated`). The truncation logic lives inside `EventManager` (file-private).
+`createEventManager(bus?)` — if `bus` is omitted, the manager builds and owns an in-process bus; tests can pass an explicit `EventBus` for direct low-level observation. The bus is not part of the public surface of `core/index.ts`; external code uses `createEventManager()` only.
+
+### The `Events` factory
+
+All envelopes are constructed through the `Events` factory. There is no other envelope constructor. Each known event type has a dedicated method with **flat args** (no payload object):
+
+```typescript
+Events.agentTurnStart(sender)
+Events.agentIdle(sender)
+Events.agentToolCall(sender, tool_call_id, name, input, input_truncated)
+Events.agentToolResult(sender, tool_call_id, name, output, output_truncated, duration_ms, error)
+Events.agentStreamChunk(sender, stream_id, seq, block_type, text)
+Events.agentStreamEnd(sender, stream_id, total_chunks)
+Events.agentQueueUpdate(sender, prompts)
+Events.leaderPrompt(sender, prompt)
+Events.userPrompt(sender, prompt)
+Events.teamLoaded(sender, agents)
+Events.envelope<T extends string>(sender, type: T, payload: Record<string, unknown>)
+```
+
+`Events.envelope` is the runtime-subject factory used by the CLI (team-scoped `leader.prompt`, `team.loaded`) and by the `notify` tool (team-scoped domain topics). The payload is opaque to the platform for runtime subjects.
+
+`EventPayloadMap` is the source of truth for typed payloads but is **not exported**. It describes the wire form — what flows on the bus. Callers pre-stringify tool args via `JSON.stringify`; the manager validates length and re-truncates if the caller's string exceeds the cap (overriding `*_truncated`). The truncation logic lives inside `EventManager` (file-private).
 
 **`JiePlatform.events: EventManager`** is the public handle. Consumers never touch the underlying `EventBus` directly.
 
@@ -101,16 +123,16 @@ No `session_id` in subjects — one process run is one session. `session_id` is 
 ```typescript
 interface EventEnvelope<T extends string = string> {
   version:     1;           // envelope format version
-  event_type:  T;           // the published subject (full bus subject)
+  type:        T;           // the published subject (full bus subject)
   sender:      Sender;      // discriminated union (agent / cli / tui)
   timestamp:   string;      // ISO 8601
   payload:     T extends keyof EventPayloadMap ? EventPayloadMap[T] : Record<string, unknown>;
 }
 ```
 
-`payload` is a discriminated union keyed on `event_type` for known topics, and `Record<string, unknown>` for runtime topics. The platform defines infrastructure event payloads; the team blueprint defines domain event payloads.
+`payload` is a discriminated union keyed on `type` for known topics, and `Record<string, unknown>` for runtime topics. The platform defines infrastructure event payloads; the team blueprint defines domain event payloads.
 
-**Wire format — the bus payload IS the envelope.** Every publisher on the bus (body, TUI, CLI) constructs and publishes a full `EventEnvelope` envelope. The bus's `publish(subject, payload)` second argument is the envelope; the bus's `subscribe` callback receives `(subject, envelope)`. There is no shorthand or partial-publish path. When a body publishes via `notify`, the body fills `payload: { prompt, source }`, `event_type` is the full subject (`${teamId}.${topic}`), `sender` is `{ kind: "agent", identity: { teamId, agentRole, agentKey } }`. When the CLI publishes `leader.prompt`, it fills `sender` with the **target agent's** identity (the leader) — so observers see a consistent sender across CLI-relayed and body-published prompts. The full per-publisher wire-format contract is in `02-protocol-stack.md` "Prompt Ingress" and `06-agent-model.md` `notify` step 2.
+**Wire format — the bus payload IS the envelope.** Every publisher on the bus (body, TUI, CLI) constructs and publishes a full `EventEnvelope` envelope. The bus's `publish(subject, payload)` second argument is the envelope; the bus's `subscribe` callback receives `(subject, envelope)`. There is no shorthand or partial-publish path. When a body publishes via `notify`, the body fills `payload: { prompt, source }` and the envelope's `type` is the full subject (`${teamId}.${topic}`); `sender` is `{ kind: "agent", identity: { teamId, agentRole, agentKey } }`. When the CLI publishes `leader.prompt`, it fills `sender` with the **target agent's** identity (the leader) — so observers see a consistent sender across CLI-relayed and body-published prompts. The full per-publisher wire-format contract is in `02-protocol-stack.md` "Prompt Ingress" and `06-agent-model.md` `notify` step 2.
 
 **Reading the envelope at a subscriber.** A subscriber reads `envelope.payload` (the inner data) for the event-type-specific fields (e.g., `envelope.payload.prompt` for `leader.prompt`, `envelope.payload.source` for self-receipt filtering on `notify`-sourced events). `envelope.sender` carries the publisher's identity; agents use `envelope.sender.identity.agentKey` for self-receipt filtering (per `06-agent-model.md` "Built-in Tool: `notify`" step 3). The body's subscription callback for `notify`-sourced events reads `envelope.payload.source` and compares it to the body's own `agent_key`.
 

@@ -1,5 +1,5 @@
 import { Type } from "typebox";
-import type { EventManager, Sender } from "../core/index.ts";
+import { Events, type EventManager, type Sender } from "../core/index.ts";
 import type { ExecutionContext, Tool, ToolResult } from "./types.ts";
 import { JiePlatformError } from "../domain-types.ts";
 
@@ -79,7 +79,7 @@ export function createNotifyTool(deps: NotifyDeps): Tool<NotifyInput> {
         kind: "agent",
         identity: { teamId: ctx.teamId, agentRole: ctx.agentRole, agentKey: ctx.agentKey },
       };
-      deps.events.publish(subject, { prompt: input.prompt, source: ctx.agentKey }, sender);
+      deps.events.publish(Events.envelope(sender, subject, { prompt: input.prompt, source: ctx.agentKey }));
 
       const content =
         recipients > 0

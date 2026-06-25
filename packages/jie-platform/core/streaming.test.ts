@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { createEventBus, type EventBus } from "./event-bus.ts";
 import { makeStreamPublisher } from "./streaming.ts";
 import { createEventManager } from "./event-manager.ts";
-import type { EventEnvelope, Sender } from "./types.ts";
+import type { Sender } from "./types.ts";
 
 describe("makeStreamPublisher", () => {
   let bus: EventBus;
@@ -22,9 +22,9 @@ describe("makeStreamPublisher", () => {
 
   test("append at >= 64 chars flushes immediately", () => {
     const stream = makeStream();
-    const chunks: EventEnvelope<"agent.stream.chunk">[] = [];
+    const chunks: object[] = [];
     bus.subscribe("agent.stream.chunk", (_s, p) => {
-      chunks.push(p as EventEnvelope<"agent.stream.chunk">);
+      chunks.push(p);
     });
     stream.beginStream();
     stream.append("text", "x".repeat(64));
@@ -33,14 +33,14 @@ describe("makeStreamPublisher", () => {
 
   test("emits agent.stream.chunk when text delta reaches 64 chars", () => {
     const stream = makeStream();
-    const chunks: EventEnvelope<"agent.stream.chunk">[] = [];
+    const chunks: object[] = [];
     bus.subscribe("agent.stream.chunk", (_s, p) => {
-      chunks.push(p as EventEnvelope<"agent.stream.chunk">);
+      chunks.push(p);
     });
     stream.beginStream();
     stream.append("text", "x".repeat(64));
     expect(chunks).toHaveLength(1);
-    expect(chunks[0]!.payload).toMatchObject({
+    expect((chunks[0] as { payload: object }).payload).toMatchObject({
       stream_id: 1,
       seq: 0,
       block_type: "text",
@@ -50,22 +50,22 @@ describe("makeStreamPublisher", () => {
 
   test("block_type change flushes the prior block before appending the new one", () => {
     const stream = makeStream();
-    const chunks: EventEnvelope<"agent.stream.chunk">[] = [];
+    const chunks: object[] = [];
     bus.subscribe("agent.stream.chunk", (_s, p) => {
-      chunks.push(p as EventEnvelope<"agent.stream.chunk">);
+      chunks.push(p);
     });
     stream.beginStream();
     stream.append("text", "hello");
     stream.append("thinking", "world");
     expect(chunks.length).toBeGreaterThanOrEqual(1);
-    expect(chunks[0]!.payload.block_type).toBe("text");
+    expect((chunks[0] as { payload: { block_type: string } }).payload.block_type).toBe("text");
   });
 
   test("endStream publishes agent.stream.end with stream_id and total_chunks", () => {
     const stream = makeStream();
-    const ends: EventEnvelope<"agent.stream.end">[] = [];
+    const ends: object[] = [];
     bus.subscribe("agent.stream.end", (_s, p) => {
-      ends.push(p as EventEnvelope<"agent.stream.end">);
+      ends.push(p);
     });
     stream.beginStream();
     stream.append("text", "x".repeat(64));
@@ -73,18 +73,17 @@ describe("makeStreamPublisher", () => {
     const out = stream.endStream();
     expect(out.totalChunks).toBe(2);
     expect(ends).toHaveLength(1);
-    expect(ends[0]!.payload).toEqual({ stream_id: 1, total_chunks: 2 });
+    expect((ends[0] as { payload: object }).payload).toEqual({ stream_id: 1, total_chunks: 2 });
   });
 
   test("envelope is stamped with sender from constructor", () => {
     const stream = makeStream();
-    const ends: EventEnvelope<"agent.stream.end">[] = [];
+    const ends: object[] = [];
     bus.subscribe("agent.stream.end", (_s, p) => {
-      ends.push(p as EventEnvelope<"agent.stream.end">);
+      ends.push(p);
     });
     stream.beginStream();
     stream.endStream();
-    expect(ends[0]!.sender).toEqual(sender);
-    expect(ends[0]!.event_type).toBe("agent.stream.end");
+    expect(ends[0]).toMatchObject({ sender, type: "agent.stream.end" });
   });
 });

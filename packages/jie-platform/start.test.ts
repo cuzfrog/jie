@@ -2,7 +2,7 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { join } from "node:path";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { createEventBus, createEventManager } from "./core";
+import { createEventManager, type EventEnvelope } from "./core";
 import { createJiePlatform } from "./start.ts";
 import { createModelRegistry, type SettingsStore } from "./config";
 import type { AuthStore } from "./config";
@@ -33,10 +33,8 @@ const DEFAULT_SETTINGS: MergedSettings = {
 function makeDeps(workspace: string, homeJieDir: string, filePath: string = ":memory:") {
   const projectJieDir = join(workspace, ".jie");
   const storage = createStorage({ type: "sqlite", filePath });
-  const bus = createEventBus();
   return {
-    events: createEventManager(bus),
-    bus,
+    events: createEventManager(),
     settingsStore,
     storage,
     teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
@@ -78,7 +76,7 @@ describe("createJiePlatform", () => {
         },
         deps,
       );
-      const events: unknown[] = [];
+      const events: EventEnvelope<string>[] = [];
       handle.events.subscribe("leader.prompt", (env) => {
         events.push(env);
       });
@@ -87,9 +85,9 @@ describe("createJiePlatform", () => {
 
     test("team.loaded is published once at start; the event carries is_leader per agent", async () => {
       const deps = makeDeps(workspace, homeJieDir);
-      const events: unknown[] = [];
-      deps.bus.subscribe("minimal.team.loaded", (_s, p) => {
-        events.push(p);
+      const events: EventEnvelope<string>[] = [];
+      deps.events.subscribe("minimal.team.loaded", (env) => {
+        events.push(env);
       });
       await createJiePlatform(
         {
@@ -100,9 +98,10 @@ describe("createJiePlatform", () => {
         deps,
       );
       expect(events).toHaveLength(1);
-      const env = events[0] as { payload: { agents: Array<{ role: string; is_leader: boolean }> } };
-      expect(env.payload.agents).toHaveLength(1);
-      expect(env.payload.agents[0]!.is_leader).toBe(true);
+      const env = events[0]!;
+      const payload = env.payload as { agents: Array<{ role: string; is_leader: boolean }> };
+      expect(payload.agents).toHaveLength(1);
+      expect(payload.agents[0]!.is_leader).toBe(true);
     });
 
     test("model pre-check: no model in soul or settings throws", async () => {
@@ -110,10 +109,8 @@ describe("createJiePlatform", () => {
       const filePath = join(workspace, "no-model.db");
       const storage = createStorage({ type: "sqlite", filePath });
       const projectJieDir = join(workspace, ".jie");
-      const bus = createEventBus();
       const deps = {
-        events: createEventManager(bus),
-        bus,
+        events: createEventManager(),
         settingsStore,
         storage,
         teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
@@ -136,9 +133,9 @@ describe("createJiePlatform", () => {
         },
         deps,
       );
-      expect(deps.bus.subscriberCount("minimal.general-1")).toBeGreaterThan(0);
+      expect(deps.events.subscriberCount("minimal.general-1")).toBeGreaterThan(0);
       await handle.stop();
-      expect(deps.bus.subscriberCount("minimal.general-1")).toBe(0);
+      expect(deps.events.subscriberCount("minimal.general-1")).toBe(0);
     });
   });
 
@@ -147,10 +144,8 @@ describe("createJiePlatform", () => {
       const filePath = join(workspace, "resume.db");
       const projectJieDir = join(workspace, ".jie");
       const storage1 = createStorage({ type: "sqlite", filePath });
-      const bus1 = createEventBus();
       const deps1 = {
-        bus: bus1,
-        events: createEventManager(bus1),
+        events: createEventManager(),
         settingsStore,
         storage: storage1,
         teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
@@ -172,10 +167,8 @@ describe("createJiePlatform", () => {
       const sessionId = "test-session-id";
 
       const storage2 = createStorage({ type: "sqlite", filePath });
-      const bus2 = createEventBus();
       const deps2 = {
-        bus: bus2,
-        events: createEventManager(bus2),
+        events: createEventManager(),
         settingsStore,
         storage: storage2,
         teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
@@ -190,10 +183,8 @@ describe("createJiePlatform", () => {
       await h2.stop();
 
       const storage3 = createStorage({ type: "sqlite", filePath });
-      const bus3 = createEventBus();
       const deps3 = {
-        bus: bus3,
-        events: createEventManager(bus3),
+        events: createEventManager(),
         settingsStore,
         storage: storage3,
         teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
@@ -217,17 +208,17 @@ describe("createJiePlatform", () => {
       writeFileSync(join(userTeam, "TEAM.md"), "---\n---\n");
 
       const deps = makeDeps(workspace, homeJieDir);
-      const events: unknown[] = [];
-      deps.bus.subscribe("ghost.team.loaded", (_s, p) => {
-        events.push(p);
+      const events: EventEnvelope<string>[] = [];
+      deps.events.subscribe("ghost.team.loaded", (env) => {
+        events.push(env);
       });
       const handle = await createJiePlatform(
         { workspace, homeJieDir, teamId: "ghost" },
         deps,
       );
       expect(events).toHaveLength(1);
-      const env = events[0] as { payload: { agents: unknown[] } };
-      expect(env.payload.agents).toEqual([]);
+      const payload = events[0]!.payload as { agents: unknown[] };
+      expect(payload.agents).toEqual([]);
       await handle.stop();
     });
   });

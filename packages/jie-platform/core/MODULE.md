@@ -5,7 +5,6 @@ frozen:
   - agent-body.ts
   - jie-agent-body.test.ts
   - jie-agent-body.ts
-  - agent-event.ts
   - event-bus.test.ts
   - event-bus.ts
   - event-manager.ts

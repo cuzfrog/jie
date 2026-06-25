@@ -7,7 +7,7 @@ import {
   makeAuthStore,
   makeSettingsStore,
 } from "@cuzfrog/jie-platform/config";
-import { createEventBus, createEventManager } from "@cuzfrog/jie-platform/core";
+import { createEventManager } from "@cuzfrog/jie-platform/core";
 import { createStorage, createMemoryManager } from "@cuzfrog/jie-platform/storage";
 import { createTeamRegistry } from "@cuzfrog/jie-platform/team";
 import { createToolRegistry } from "@cuzfrog/jie-platform/tools";
@@ -104,8 +104,7 @@ function buildPlatformDeps(cwd: string, homeJieDir: string, projectJieDir: strin
   const modelRegistry = createModelRegistry(homeJieDir, projectJieDir, authStore);
   const toolRegistry = createToolRegistry();
   const memoryManager = createMemoryManager(storage);
-  const bus = createEventBus();
-  const events = createEventManager(bus);
+  const events = createEventManager();
   return {
     authStore,
     settingsStore: makeSettingsStore(cwd, homeJieDir, projectJieDir),

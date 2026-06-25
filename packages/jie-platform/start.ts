@@ -3,6 +3,7 @@ import { getModel as piGetModel, type Model } from "@earendil-works/pi-ai";
 import {
   type AgentBody,
   type EventManager,
+  Events,
   createAgentBody,
 } from "./core/index.ts";
 import { type AgentSoul, type Team, type TeamRegistry } from "./team/index.ts";
@@ -110,7 +111,7 @@ function publishTeamLoaded(events: EventManager, teamId: string, bp: Team): void
     agent_key: `${r.role}-1`,
     is_leader: r.role === bp.leaderRole,
   }));
-  events.publish(`${teamId}.team.loaded`, { agents }, { kind: "cli" });
+  events.publish(Events.envelope({ kind: "cli" }, `${teamId}.team.loaded`, { agents }));
 }
 
 const NO_MODEL_ERROR =

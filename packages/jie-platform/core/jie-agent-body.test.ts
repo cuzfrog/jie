@@ -18,7 +18,7 @@ function makeSoul(overrides: Partial<AgentSoul> = {}): AgentSoul {
   return {
     role: "general",
     model: "anthropic/claude-sonnet-4",
-    system_prompt: "you are a general assistant",
+    systemPrompt: "you are a general assistant",
     tools: [],
     subscribe: [],
     subscriptions: [],
@@ -172,10 +172,8 @@ describe("JieAgentBody — start() subscriptions", () => {
     });
     h.bus.publish("t1.general-1", {
       version: 1,
-      team_id: "t1",
-      event_type: "test",
-      agent_role: "general",
-      agent_key: "general-1",
+      type: "t1.general-1",
+      sender: { kind: "agent", identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" } },
       timestamp: new Date().toISOString(),
       payload: { prompt: "hi" },
     });
@@ -190,10 +188,8 @@ describe("JieAgentBody — start() subscriptions", () => {
     });
     h.bus.publish("t1.leader.prompt", {
       version: 1,
-      team_id: "t1",
-      event_type: "leader.prompt",
-      agent_role: "general",
-      agent_key: "general-1",
+      type: "t1.leader.prompt",
+      sender: { kind: "agent", identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" } },
       timestamp: new Date().toISOString(),
       payload: { prompt: "go" },
     });
@@ -219,10 +215,8 @@ describe("JieAgentBody — start() subscriptions", () => {
     });
     h.bus.publish("t1.task.recorded", {
       version: 1,
-      team_id: "t1",
-      event_type: "task.recorded",
-      agent_role: "general",
-      agent_key: "general-1",
+      type: "t1.task.recorded",
+      sender: { kind: "agent", identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" } },
       timestamp: new Date().toISOString(),
       payload: { prompt: "task", source: "x" },
     });
@@ -303,10 +297,8 @@ describe("JieAgentBody — prompt ingress format", () => {
     await body.start();
     h.bus.publish("t1.leader.prompt", {
       version: 1,
-      team_id: "t1",
-      event_type: "leader.prompt",
-      agent_role: "general",
-      agent_key: "general-1",
+      type: "t1.leader.prompt",
+      sender: { kind: "agent", identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" } },
       timestamp: new Date().toISOString(),
       payload: { prompt: "hello" },
     });
@@ -319,14 +311,14 @@ describe("JieAgentBody — prompt ingress format", () => {
   });
 
   test("notify-sourced event (with source) is formatted as `[<source> on '<topic>']: <prompt>`", async () => {
-    const body = h.makeBody();
+    const body = h.makeBody({
+      soul: makeSoul({ subscriptions: ["task.researched"] }),
+    });
     await body.start();
-    h.bus.publish("t1.general-1", {
+    h.bus.publish("t1.task.researched", {
       version: 1,
-      team_id: "t1",
-      event_type: "task.researched",
-      agent_role: "researcher",
-      agent_key: "researcher-1",
+      type: "t1.task.researched",
+      sender: { kind: "agent", identity: { teamId: "t1", agentRole: "researcher", agentKey: "researcher-1" } },
       timestamp: new Date().toISOString(),
       payload: { prompt: "report", source: "researcher-1" },
     });

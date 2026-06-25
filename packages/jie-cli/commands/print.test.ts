@@ -52,9 +52,11 @@ describe("runPrint", () => {
     expect(events.subscribe).toHaveBeenCalledWith("agent.turn.start", expect.any(Function));
     expect(events.subscribe).toHaveBeenCalledWith("agent.idle", expect.any(Function));
     expect(events.publish).toHaveBeenCalledWith(
-      "t1.leader.prompt",
-      expect.objectContaining({ prompt: "hi" }),
-      expect.objectContaining({ kind: "agent", identity: expect.objectContaining({ teamId, agentRole: leaderRole, agentKey: leaderKey }) }),
+      expect.objectContaining({
+        type: "t1.leader.prompt",
+        payload: expect.objectContaining({ prompt: "hi" }),
+        sender: expect.objectContaining({ kind: "agent", identity: expect.objectContaining({ teamId, agentRole: leaderRole, agentKey: leaderKey }) }),
+      }),
     );
     expect(handle.stop).toHaveBeenCalled();
   });

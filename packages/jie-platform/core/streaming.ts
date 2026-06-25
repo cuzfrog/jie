@@ -1,5 +1,5 @@
 import type { EventManager } from "./event-manager.ts";
-import type { Sender } from "./types.ts";
+import { Events, type Sender } from "./types.ts";
 
 const STREAM_CHUNK_SIZE = 64;
 const STREAM_FLUSH_MS = 200;
@@ -28,12 +28,13 @@ export function makeStreamPublisher(events: EventManager, sender: Sender): Strea
       }
       return;
     }
-    events.publish("agent.stream.chunk", {
-      stream_id: streamId,
+    events.publish(Events.agentStreamChunk(
+      sender,
+      streamId,
       seq,
-      block_type: blockType,
-      text: buffer,
-    }, sender);
+      blockType,
+      buffer,
+    ));
     seq += 1;
     totalChunks += 1;
     buffer = "";
@@ -74,8 +75,7 @@ export function makeStreamPublisher(events: EventManager, sender: Sender): Strea
 
     endStream(): { streamId: number; totalChunks: number } {
       flush();
-      const out = { stream_id: streamId, total_chunks: totalChunks };
-      events.publish("agent.stream.end", out, sender);
+      events.publish(Events.agentStreamEnd(sender, streamId, totalChunks));
       return { streamId, totalChunks };
     },
   };

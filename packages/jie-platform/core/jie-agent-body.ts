@@ -7,7 +7,7 @@ import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { MemoryManager } from "../storage/index.ts";
 import type { AgentSoul } from "../team/index.ts";
 import type { EventManager } from "./event-manager.ts";
-import type { Sender } from "./types.ts";
+import { Events, type Sender } from "./types.ts";
 import type { StreamPublisher } from "./streaming.ts";
 import type { AgentBody } from "./agent-body.ts";
 
@@ -56,10 +56,10 @@ export class JieAgentBody implements AgentBody {
   handlePiAgentEvent(event: PiAgentEvent): void {
     switch (event.type) {
       case "turn_start":
-        this.eventManager.publish("agent.turn.start", {}, this.sender);
+        this.eventManager.publish(Events.agentTurnStart(this.sender));
         return;
       case "agent_end":
-        this.eventManager.publish("agent.idle", {}, this.sender);
+        this.eventManager.publish(Events.agentIdle(this.sender));
         return;
       case "message_start":
         this.stream.beginStream();
@@ -115,9 +115,10 @@ export class JieAgentBody implements AgentBody {
 
     while (this.queue.length > 0) {
       const next = this.queue.shift()!;
-      this.eventManager.publish("agent.queue.update", {
-        prompts: this.queue.map((m) => formatSynthetic(m)),
-      }, this.sender);
+      this.eventManager.publish(Events.agentQueueUpdate(
+        this.sender,
+        this.queue.map((m) => formatSynthetic(m)),
+      ));
       await this.agent.prompt(next);
     }
   }
@@ -133,13 +134,13 @@ export class JieAgentBody implements AgentBody {
     const ownSubject = `${this.teamId}.${this.agentKey}`;
     this.unsubscribers.push(
       this.eventManager.subscribe(ownSubject, (env) => {
-        this.ingestEvent(env.event_type, env);
+        this.ingestEvent(env.type, env);
       }),
     );
     if (this.isLeader) {
       this.unsubscribers.push(
         this.eventManager.subscribe(`${this.teamId}.leader.prompt`, (env) => {
-          this.ingestEvent(env.event_type, env);
+          this.ingestEvent(env.type, env);
         }),
       );
     }
@@ -166,9 +167,10 @@ export class JieAgentBody implements AgentBody {
     } as unknown as AgentMessage;
     if (this.agent.state.isStreaming) {
       this.queue.push(message);
-      this.eventManager.publish("agent.queue.update", {
-        prompts: this.queue.map((m) => formatSynthetic(m)),
-      }, this.sender);
+      this.eventManager.publish(Events.agentQueueUpdate(
+        this.sender,
+        this.queue.map((m) => formatSynthetic(m)),
+      ));
     } else {
       void this.agent.prompt(message);
     }

@@ -35,8 +35,8 @@ describe("web_search", () => {
         },
       },
     });
-    await tool.execute({ query: "x", max_results: 0 }, {} as never);
-    await tool.execute({ query: "y", max_results: -1 }, {} as never);
+    await tool.execute({ query: "x", maxResults: 0 }, {} as never);
+    await tool.execute({ query: "y", maxResults: -1 }, {} as never);
     expect(seen).toEqual([5, 5]);
   });
 

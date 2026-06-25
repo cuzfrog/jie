@@ -15,7 +15,6 @@ import {
 import { createToolRegistry, type Tool, type ToolResult } from "../tools";
 import type { AgentSoul } from "../team";
 import { Type } from "typebox";
-import type { EventEnvelope } from "./types.ts";
 
 function makeSoul(): AgentSoul {
   return {
@@ -136,10 +135,10 @@ describe("AgentBody — pi-agent event bridging", () => {
     body = undefined;
   });
 
-  function capturedEvents(topic: string, bus: EventBus): EventEnvelope<string>[] {
-    const out: EventEnvelope<string>[] = [];
+  function capturedEvents(topic: string, bus: EventBus): object[] {
+    const out: object[] = [];
     bus.subscribe(topic, (_s, p) => {
-      out.push(p as EventEnvelope<string>);
+      out.push(p);
     });
     return out;
   }
@@ -155,8 +154,9 @@ describe("AgentBody — pi-agent event bridging", () => {
     body = createAgentBody({ ...opts, createAgent: result.factory });
     fireEvent!({ type: "turn_start" });
     expect(turnStart).toHaveLength(1);
-    expect(turnStart[0]!.event_type).toBe("agent.turn.start");
-    expect(turnStart[0]!.payload).toEqual({});
+    const env = turnStart[0] as { type: string; payload: object };
+    expect(env.type).toBe("agent.turn.start");
+    expect(env.payload).toBeNull();
   });
 
   test("agent_end publishes agent.idle with empty payload", () => {
@@ -170,8 +170,9 @@ describe("AgentBody — pi-agent event bridging", () => {
     body = createAgentBody({ ...opts, createAgent: result.factory });
     fireEvent!({ type: "agent_end", messages: [] });
     expect(idle).toHaveLength(1);
-    expect(idle[0]!.event_type).toBe("agent.idle");
-    expect(idle[0]!.payload).toEqual({});
+    const env = idle[0] as { type: string; payload: object };
+    expect(env.type).toBe("agent.idle");
+    expect(env.payload).toBeNull();
   });
 
   test("body-side alternation: turn_start always precedes agent.idle", () => {
@@ -217,10 +218,10 @@ describe("AgentBody — pi-agent event bridging", () => {
 
   test("start() does not emit agent.turn.start or agent.idle", async () => {
     const { opts, bus } = makeOpts();
-    const idleEvents: EventEnvelope<string>[] = [];
-    const turnStartEvents: EventEnvelope<string>[] = [];
-    bus.subscribe("agent.idle", (_s, p) => idleEvents.push(p as EventEnvelope<string>));
-    bus.subscribe("agent.turn.start", (_s, p) => turnStartEvents.push(p as EventEnvelope<string>));
+    const idleEvents: object[] = [];
+    const turnStartEvents: object[] = [];
+    bus.subscribe("agent.idle", (_s, p) => idleEvents.push(p));
+    bus.subscribe("agent.turn.start", (_s, p) => turnStartEvents.push(p));
     const result = makeFakeAgentFactory({ onEvent: () => {} });
     body = createAgentBody({ ...opts, createAgent: result.factory });
     await (body as unknown as { start: () => Promise<void> }).start();
@@ -250,7 +251,7 @@ describe("AgentBody — pi-agent event bridging", () => {
       assistantMessageEvent: amEvent,
     });
     expect(chunks).toHaveLength(1);
-    expect(chunks[0]!.payload).toMatchObject({
+    expect((chunks[0] as { payload: object }).payload).toMatchObject({
       stream_id: 1,
       seq: 0,
       block_type: "text",
@@ -302,7 +303,7 @@ describe("AgentBody — pi-agent event bridging", () => {
       context: {} as never,
     });
     expect(calls).toHaveLength(1);
-    expect(calls[0]!.payload).toMatchObject({
+    expect((calls[0] as { payload: object }).payload).toMatchObject({
       tool_call_id: "call_x",
       name: "bash",
     });
@@ -318,9 +319,9 @@ describe("AgentBody — agent.queue.update", () => {
 
   test("queue.update published on enqueue with synthetic snapshot", async () => {
     const { opts, bus } = makeOpts();
-    const events: EventEnvelope<string>[] = [];
+    const events: object[] = [];
     bus.subscribe("agent.queue.update", (_s, p) => {
-      events.push(p as EventEnvelope<string>);
+      events.push(p);
     });
     const result = makeFakeAgentFactory({
       onEvent: (l) => {
@@ -332,16 +333,14 @@ describe("AgentBody — agent.queue.update", () => {
     await (body as unknown as { start: () => Promise<void> }).start();
     bus.publish("t1.leader.prompt", {
       version: 1,
-      team_id: "t1",
-      event_type: "leader.prompt",
-      agent_role: "general",
-      agent_key: "general-1",
+      type: "t1.leader.prompt",
+      sender: { kind: "agent", identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" } },
       timestamp: new Date().toISOString(),
       payload: { prompt: "queued" },
     });
     await new Promise((r) => setTimeout(r, 0));
     expect(events.length).toBeGreaterThan(0);
-    const last = events[events.length - 1]!;
+    const last = events[events.length - 1] as { payload: object };
     expect((last.payload as { prompts: string[] }).prompts).toEqual(["[user]: queued"]);
   });
 });

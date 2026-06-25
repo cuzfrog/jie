@@ -1,10 +1,12 @@
 import type { EventBus } from "./event-bus.ts";
-import type { EventEnvelope, EventPayloadMap, Sender } from "./types.ts";
+import { createEventBus } from "./event-bus.ts";
+import type { EventEnvelope } from "./types.ts";
 
 
 
 export interface EventManager {
-  publish<T extends string>(subject: T, payload: T extends keyof EventPayloadMap ? EventPayloadMap[T] : Record<string, unknown>, sender: Sender): void;
+  publish<T extends string>(event: EventEnvelope<T>): void;
+  /** returns an unsubscribe function */
   subscribe<T extends string>(subject: T, callback: (event: EventEnvelope<T>) => void): () => void;
   subscriberCount(subject: string): number;
 }
@@ -12,13 +14,11 @@ export interface EventManager {
 const TRUNCATION_BYTES = 4 * 1024;
 const TRUNCATION_MARKER = "...[%d chars truncated]...";
 
-export function createEventManager(bus: EventBus): EventManager {
+export function createEventManager(bus: EventBus = createEventBus()): EventManager {
   return {
-    publish<T extends string>(subject: T, payload: T extends keyof EventPayloadMap ? EventPayloadMap[T] : Record<string, unknown>, sender: Sender): void {
-      let shaped: unknown = payload;
-      if (subject === "agent.tool.call") shaped = shapeToolCall(payload as EventPayloadMap["agent.tool.call"]);
-      else if (subject === "agent.tool.result") shaped = shapeToolResult(payload as EventPayloadMap["agent.tool.result"]);
-      bus.publish(subject, buildEnvelope(subject, shaped, sender));
+    publish<T extends string>(event: EventEnvelope<T>): void {
+      const shaped = shapeEnvelope(event);
+      bus.publish(shaped.type, shaped);
     },
     subscribe<T extends string>(subject: T, callback: (event: EventEnvelope<T>) => void): () => void {
       return bus.subscribe(subject, (_subject, env) => {
@@ -31,23 +31,17 @@ export function createEventManager(bus: EventBus): EventManager {
   };
 }
 
-function buildEnvelope(topic: string, payload: unknown, sender: Sender): {
-  version: 1;
-  event_type: string;
-  sender: Sender;
-  timestamp: string;
-  payload: unknown;
-} {
-  return {
-    version: 1 as const,
-    event_type: topic,
-    sender,
-    timestamp: new Date().toISOString(),
-    payload,
-  };
+function shapeEnvelope<T extends string>(event: EventEnvelope<T>): EventEnvelope<T> {
+  if (event.type === "agent.tool.call") {
+    return { ...event, payload: shapeToolCall(event.payload as { tool_call_id: string; name: string; input: string; input_truncated: boolean }) } as EventEnvelope<T>;
+  }
+  if (event.type === "agent.tool.result") {
+    return { ...event, payload: shapeToolResult(event.payload as { tool_call_id: string; name: string; output: string | null; output_truncated: boolean; duration_ms: number; error: string | null }) } as EventEnvelope<T>;
+  }
+  return event;
 }
 
-function shapeToolCall(payload: EventPayloadMap["agent.tool.call"]): EventPayloadMap["agent.tool.call"] {
+function shapeToolCall(payload: { tool_call_id: string; name: string; input: string; input_truncated: boolean }): { tool_call_id: string; name: string; input: string; input_truncated: boolean } {
   if (!payload.input_truncated && payload.input.length > TRUNCATION_BYTES) {
     const { text, truncated } = truncateForTelemetry(payload.input);
     return { tool_call_id: payload.tool_call_id, name: payload.name, input: text, input_truncated: truncated };
@@ -55,7 +49,7 @@ function shapeToolCall(payload: EventPayloadMap["agent.tool.call"]): EventPayloa
   return payload;
 }
 
-function shapeToolResult(payload: EventPayloadMap["agent.tool.result"]): EventPayloadMap["agent.tool.result"] {
+function shapeToolResult(payload: { tool_call_id: string; name: string; output: string | null; output_truncated: boolean; duration_ms: number; error: string | null }): { tool_call_id: string; name: string; output: string | null; output_truncated: boolean; duration_ms: number; error: string | null } {
   if (payload.output === null || payload.output_truncated) return payload;
   if (payload.output.length > TRUNCATION_BYTES) {
     const { text, truncated } = truncateForTelemetry(payload.output);
