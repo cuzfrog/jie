@@ -58,7 +58,7 @@ export interface ResolvedProviderConfig {
 
 export interface ResolvedModelsConfig {
   providers: Map<string, ResolvedProviderConfig>;
-  models: Model<any>[];
+  models: Model<Api>[];
 }
 
 const KNOWN_APIS: ReadonlySet<Api> = new Set<Api>([
@@ -142,7 +142,7 @@ function mergeModelArrays(base: RawModelConfig[] | undefined, override: RawModel
 
 function resolveConfig(raw: RawModelsConfig): ResolvedModelsConfig {
   const providers = new Map<string, ResolvedProviderConfig>();
-  const models: Model<any>[] = [];
+  const models: Model<Api>[] = [];
   if (raw.providers === undefined) return { providers, models };
 
   for (const [providerId, rawCfg] of Object.entries(raw.providers)) {
@@ -203,7 +203,7 @@ function buildModel(
   providerCompat: ResolvedProviderConfig["compat"],
   providerHeaders: Record<string, string>,
   authHeader: boolean,
-): Model<any> {
+): Model<Api> {
   if (typeof raw.id !== "string" || raw.id === "") {
     throw new Error(`models.json: provider '${providerId}': model.id is required`);
   }
@@ -214,7 +214,7 @@ function buildModel(
     cacheRead: raw.cost?.cacheRead ?? 0,
     cacheWrite: raw.cost?.cacheWrite ?? 0,
   };
-  const result: Model<any> = {
+  const result: Model<Api> = {
     id: raw.id,
     name: raw.name ?? raw.id,
     api,
