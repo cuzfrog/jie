@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { AgentSoul, Team } from "./types.ts";
+import { JiePlatformError } from "../domain-types.ts";
 import MINIMAL_TEAM_MD from "./minimal/TEAM.md" with { type: "text" };
 import MINIMAL_GENERAL_MD from "./minimal/general.md" with { type: "text" };
 
@@ -39,7 +40,7 @@ function splitFrontmatter(content: string): {
   try {
     frontmatter = parseYaml(yamlText) as RawFrontmatter | null;
   } catch (e) {
-    throw new Error(`invalid frontmatter: ${(e as Error).message}`);
+    throw new JiePlatformError("invalid_frontmatter", `invalid frontmatter: ${(e as Error).message}`);
   }
   if (frontmatter === null) frontmatter = {};
   return { frontmatter, body };
@@ -47,11 +48,11 @@ function splitFrontmatter(content: string): {
 
 function asStringList(value: unknown, field: string, file: string): string[] {
   if (!Array.isArray(value)) {
-    throw new Error(`${file}: field '${field}' must be a list of strings`);
+    throw new JiePlatformError("invalid_field_type", `${file}: field '${field}' must be a list of strings`);
   }
   return value.map((v) => {
     if (typeof v !== "string") {
-      throw new Error(`${file}: field '${field}' must be a list of strings`);
+      throw new JiePlatformError("invalid_field_type", `${file}: field '${field}' must be a list of strings`);
     }
     return v;
   });
@@ -63,7 +64,7 @@ function asString(
   file: string,
 ): string {
   if (typeof value !== "string") {
-    throw new Error(`${file}: field '${field}' must be a string`);
+    throw new JiePlatformError("invalid_field_type", `${file}: field '${field}' must be a string`);
   }
   return value;
 }
@@ -75,11 +76,11 @@ function parseAgentFile(
 ): AgentSoul {
   const { frontmatter, body } = splitFrontmatter(content);
   if (frontmatter === null) {
-    throw new Error(`invalid frontmatter in ${file}: missing frontmatter block`);
+    throw new JiePlatformError("invalid_frontmatter", `invalid frontmatter in ${file}: missing frontmatter block`);
   }
 
   if (!("tools" in frontmatter) || frontmatter.tools === undefined) {
-    throw new Error(`missing required field 'tools' in ${file}`);
+    throw new JiePlatformError("missing_required_field", `missing required field 'tools' in ${file}`);
   }
   const tools = asStringList(frontmatter.tools, "tools", file);
 
@@ -90,14 +91,14 @@ function parseAgentFile(
 
   for (const topic of subscribe) {
     if (topic.startsWith("agent.")) {
-      throw new Error(`subscribe_rejects_platform_topic: ${topic}`);
+      throw new JiePlatformError("subscribe_rejects_platform_topic", `subscribe_rejects_platform_topic: ${topic}`);
     }
   }
 
   const model = frontmatter.model === undefined ? "" : asString(frontmatter.model, "model", file);
 
   if (model !== "" && !model.includes("/")) {
-    throw new Error(`invalid model string: ${model}`);
+    throw new JiePlatformError("invalid_model_string", `invalid model string: ${model}`);
   }
 
   return {
@@ -116,7 +117,7 @@ function parseTeamFile(
 ): { leader: string | null; frontmatter: RawFrontmatter | null } {
   const { frontmatter, body: _body } = splitFrontmatter(content);
   if (frontmatter === null) {
-    throw new Error(`invalid frontmatter in ${file}: missing frontmatter block`);
+    throw new JiePlatformError("invalid_frontmatter", `invalid frontmatter in ${file}: missing frontmatter block`);
   }
   const leader = frontmatter.leader;
   if (leader === undefined || leader === null || leader === "") {
@@ -139,7 +140,7 @@ export function parseTeamFromManifests(
   const { teamId, sourceDir = "" } = options;
 
   if (!TEAM_ID_PATTERN.test(teamId)) {
-    throw new Error(`invalid team_id: ${teamId}`);
+    throw new JiePlatformError("invalid_team_id", `invalid team_id: ${teamId}`);
   }
 
   const entries = Object.entries(manifests);
@@ -151,7 +152,7 @@ export function parseTeamFromManifests(
   for (const [name] of agentFiles) {
     const stem = name.slice(0, -3);
     if (!ROLE_STEM_PATTERN.test(stem)) {
-      throw new Error(`invalid role: ${stem}`);
+      throw new JiePlatformError("invalid_role", `invalid role: ${stem}`);
     }
   }
 
@@ -159,7 +160,7 @@ export function parseTeamFromManifests(
   for (const [name] of agentFiles) {
     const stem = name.slice(0, -3);
     if (seenStems.has(stem)) {
-      throw new Error(`duplicate role '${stem}' in ${sourceDir || teamId}`);
+      throw new JiePlatformError("duplicate_role", `duplicate role '${stem}' in ${sourceDir || teamId}`);
     }
     seenStems.add(stem);
   }
@@ -179,7 +180,8 @@ export function parseTeamFromManifests(
     const { leader } = parseTeamFile(teamContent, "TEAM.md");
     if (leader === null) {
       if (agentFiles.length >= 2) {
-        throw new Error(
+        throw new JiePlatformError(
+          "leader_required",
           `TEAM.md 'leader' field is required (found no value in ${sourceDir || teamId})`,
         );
       }
@@ -189,21 +191,24 @@ export function parseTeamFromManifests(
     } else {
       const roleStems = new Set(roles.map((r) => r.role));
       if (agentFiles.length === 0) {
-        throw new Error(
+        throw new JiePlatformError(
+          "leader_unknown",
           `TEAM.md 'leader' field references unknown role '${leader}'; checked ${sourceDir || teamId}/`,
         );
       }
       if (agentFiles.length === 1) {
         const only = roles[0]!.role;
         if (leader !== only) {
-          throw new Error(
+          throw new JiePlatformError(
+            "leader_mismatch",
             `TEAM.md 'leader' field '${leader}' does not match the single agent role '${only}' in ${sourceDir || teamId}`,
           );
         }
         leaderRole = only;
       } else {
         if (!roleStems.has(leader)) {
-          throw new Error(
+          throw new JiePlatformError(
+            "leader_unknown",
             `TEAM.md 'leader' field references unknown role '${leader}'; checked ${sourceDir || teamId}/`,
           );
         }
@@ -212,7 +217,8 @@ export function parseTeamFromManifests(
     }
   } else {
     if (agentFiles.length >= 2) {
-      throw new Error(
+      throw new JiePlatformError(
+        "team_file_required",
         `TEAM.md is required for multi-agent teams; no leader can be resolved (found ${agentFiles.length} agent files in ${sourceDir || teamId})`,
       );
     }
