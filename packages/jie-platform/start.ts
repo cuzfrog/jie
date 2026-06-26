@@ -1,5 +1,5 @@
 import { ulid } from "ulid";
-import { getModel as piGetModel, type Model } from "@earendil-works/pi-ai";
+import { getModel as piGetModel, type Api, type Model } from "@earendil-works/pi-ai";
 import { type AgentBody, createAgentBody } from "./core/index.ts";
 import { type EventManager, Events } from "./event/index.ts";
 import { type AgentSoul, type Team, type TeamRegistry } from "./team/index.ts";
@@ -113,22 +113,22 @@ function publishTeamLoaded(events: EventManager, teamId: string, bp: Team): void
 const NO_MODEL_ERROR =
   "No model has been selected, please login and select a default model.";
 
-function defaultResolveModel(registry: ModelRegistry): (provider: string, modelId: string) => Model<any> {
-  return (provider: string, modelId: string): Model<any> => {
+function defaultResolveModel(registry: ModelRegistry): (provider: string, modelId: string) => Model<Api> {
+  return (provider: string, modelId: string): Model<Api> => {
     const fromRegistry = registry.resolve(provider, modelId);
     if (fromRegistry !== undefined) return fromRegistry;
     return piGetModel(
       provider as Parameters<typeof piGetModel>[0],
       modelId as Parameters<typeof piGetModel>[1],
-    ) as unknown as Model<any>;
+    ) as Model<Api>;
   };
 }
 
 function resolveSoulModel(
   soul: AgentSoul,
   settingsStore: SettingsStore,
-  resolveModel: (provider: string, modelId: string) => Model<any>,
-): Model<any> {
+  resolveModel: (provider: string, modelId: string) => Model<Api>,
+): Model<Api> {
 
   const settings = settingsStore.load();
   const modelStr = soul.model !== "" ? soul.model : (
