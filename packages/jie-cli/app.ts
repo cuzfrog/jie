@@ -21,6 +21,7 @@ export interface App {
   teamId: string;
   leaderRole: string;
   leaderKey: string;
+  agentKeys: string[];
   settings: MergedSettings;
 }
 
@@ -67,7 +68,7 @@ export async function createApp(
     return { kind: "error", code: 1 };
   }
 
-  let captured: { teamId: string; leaderRole: string; leaderKey: string } | null = null;
+  let captured: { teamId: string; leaderRole: string; leaderKey: string; agentKeys: string[] } | null = null;
   deps.events.subscribe(`team.${team.id}.loaded`, (env: { payload: unknown }) => {
     const agents = (env.payload as { agents: Array<{ role: string; agent_key: string; is_leader: boolean }> }).agents;
     const leader = agents.find((a) => a.is_leader) ?? agents[0];
@@ -76,6 +77,7 @@ export async function createApp(
       teamId: team.id,
       leaderRole: leader.role,
       leaderKey: leader.agent_key,
+      agentKeys: agents.map((a) => a.agent_key),
     };
   });
 
@@ -101,7 +103,7 @@ export async function createApp(
     await handle.stop();
     return { kind: "error", code: 1 };
   }
-  const info: { teamId: string; leaderRole: string; leaderKey: string } = captured;
+  const info: { teamId: string; leaderRole: string; leaderKey: string; agentKeys: string[] } = captured;
 
   if (info.leaderRole === "") {
     console.error(`team '${team.id}' has no leader; check TEAM.md's 'leader:' field`);

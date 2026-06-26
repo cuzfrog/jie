@@ -9,6 +9,7 @@ export async function runPrint(
   teamId: string,
   leaderRole: string,
   leaderKey: string,
+  agentKeys: string[],
   args: PrintArgs,
 ): Promise<number> {
   handle.events.subscribe("agent.stream.chunk", (env: { sender: Sender; payload: { text: string; seq: number } }) => {
@@ -26,7 +27,7 @@ export async function runPrint(
   handle.events.publish(Events.userPrompt({ kind: "cli" }, teamId, args.instruction, leaderKey));
 
   try {
-    await setupIdleGate(handle.events, leaderKey, args.timeout);
+    await setupIdleGate(handle.events, agentKeys, args.timeout);
   } catch (e) {
     if (!args.json) process.stdout.write("\n");
     const msg = e instanceof Error ? e.message : String(e);
@@ -43,8 +44,10 @@ export async function runPrint(
   return 0;
 }
 
-function setupIdleGate(events: EventManager, leaderKey: string, timeoutSec: number): Promise<void> {
-  let leaderBusy = false;
+function setupIdleGate(events: EventManager, agentKeys: string[], timeoutSec: number): Promise<void> {
+  const state = new Map<string, "busy" | "idle">();
+  for (const k of agentKeys) state.set(k, "idle");
+
   let resolve!: () => void;
   let reject!: (err: Error) => void;
   const promise = new Promise<void>((res, rej) => {
@@ -56,19 +59,25 @@ function setupIdleGate(events: EventManager, leaderKey: string, timeoutSec: numb
       ? setTimeout(() => reject(new Error("timeout")), timeoutSec * 1000)
       : undefined;
 
-  const isLeader = (env: { sender: Sender }): boolean =>
-    env.sender.kind === "agent" && env.sender.identity.agentKey === leaderKey;
+  const agentKeyOf = (env: { sender: Sender }): string | null =>
+    env.sender.kind === "agent" ? env.sender.identity.agentKey : null;
+
+  const evaluate = (): void => {
+    if (timer !== undefined) clearTimeout(timer);
+    unsubTurnStart();
+    unsubIdle();
+    resolve();
+  };
 
   const unsubTurnStart = events.subscribe("agent.turn.start", (env) => {
-    if (isLeader(env)) leaderBusy = true;
+    const k = agentKeyOf(env);
+    if (k !== null && state.has(k)) state.set(k, "busy");
   });
   const unsubIdle = events.subscribe("agent.idle", (env) => {
-    if (isLeader(env)) {
-      leaderBusy = false;
-      if (timer !== undefined) clearTimeout(timer);
-      unsubTurnStart();
-      unsubIdle();
-      resolve();
+    const k = agentKeyOf(env);
+    if (k !== null && state.has(k)) {
+      state.set(k, "idle");
+      if ([...state.values()].every((v) => v === "idle")) evaluate();
     }
   });
 

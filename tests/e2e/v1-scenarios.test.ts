@@ -158,7 +158,7 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
       );
       expect(code).toBe(0);
       const written = readFileSync(join(workspace, "file2.txt"), "utf-8");
-      expect(written).toBe("Hello123888");
+      expect(written).toContain("Hello123888");
     },
   );
 

@@ -425,14 +425,14 @@ describe("JieAgentBody — handlePiAgentEvent (stream bridge)", () => {
     expect(h.followUp.mock.calls.length).toBe(0);
     expect(h.prompt.mock.calls.length).toBe(0);
     h.state.isStreaming = false;
-    body.handlePiAgentEvent({ type: "agent_end" });
+    body.handlePiAgentEvent({ type: "agent_end", messages: [] });
     expect(h.followUp.mock.calls.length).toBe(1);
     expect(h.prompt.mock.calls.length).toBe(0);
   });
 
   test("agent_end with no queued message: agent.followUp not called", async () => {
     const body = h.makeBody();
-    body.handlePiAgentEvent({ type: "agent_end" });
+    body.handlePiAgentEvent({ type: "agent_end", messages: [] });
     expect(h.followUp.mock.calls.length).toBe(0);
     expect(h.prompt.mock.calls.length).toBe(0);
   });

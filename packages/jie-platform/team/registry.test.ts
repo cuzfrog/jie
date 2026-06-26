@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTeamRegistry } from "./registry.ts";
+import { JiePlatformError } from "../domain-types.ts";
 
 function writeTeam(rootDir: string, id: string, leader: string): void {
   const teamDir = join(rootDir, id);
@@ -98,6 +99,28 @@ describe("createTeamRegistry", () => {
       mkdirSync(join(projJie, "teams", "broken"), { recursive: true });
       const r = createTeamRegistry({ homeJieDir, projectJieDir: projJie });
       expect(() => r.loadTeam("broken")).toThrow(/team 'broken' not found/);
+    });
+
+    test("loadTeam throws JiePlatformError with code 'invalid_team_id' for an invalid id", () => {
+      const r = createTeamRegistry({ homeJieDir, projectJieDir });
+      try {
+        r.loadTeam("bad id with spaces");
+        throw new Error("expected throw");
+      } catch (e) {
+        expect(e).toBeInstanceOf(JiePlatformError);
+        expect((e as JiePlatformError).code).toBe("invalid_team_id");
+      }
+    });
+
+    test("loadTeam throws JiePlatformError with code 'team_not_found' when id is absent", () => {
+      const r = createTeamRegistry({ homeJieDir, projectJieDir });
+      try {
+        r.loadTeam("ghost");
+        throw new Error("expected throw");
+      } catch (e) {
+        expect(e).toBeInstanceOf(JiePlatformError);
+        expect((e as JiePlatformError).code).toBe("team_not_found");
+      }
     });
   });
 
