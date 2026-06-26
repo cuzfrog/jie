@@ -1,6 +1,16 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Storage } from "./storage.ts";
-import type { TurnRecord } from "../domain-types.ts";
+
+interface TurnRecord {
+  team_id: string;
+  session_id: string;
+  agent_key: string;
+  seq: number;
+  role: string;
+  content: string;
+  compacted: boolean;
+  created_at: string;
+}
 
 export interface MemoryManager {
 
