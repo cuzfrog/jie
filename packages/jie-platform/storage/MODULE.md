@@ -1,5 +1,5 @@
 ---
-frozen:
+sealed:
   - artifact-store.test.ts
   - artifact-store.ts
   - index.ts

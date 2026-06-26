@@ -538,7 +538,7 @@ Rules:
 - Inherits the tool's 120s default timeout. Writes are synchronous and bounded; the timeout only fires on I/O hang.
 - v1 is **text only** — no binary writes, no encoding conversion, no `mode`/`flags` parameters. The platform treats `content` as UTF-8 text and writes bytes verbatim.
 - **Content cap:** the platform rejects `content` over 5 MiB (`content.length` chars) with a tool error `file_too_large: <bytes>`. The 5 MiB cap aligns with `web_fetch`'s body cap and `write_artifact`'s content cap. Above 5 MiB, the LLM should chunk the write (write in segments) or use the artifact store for the bulk content and a stub file in the workspace.
-- The platform enforces **workspace-root containment only**. It does **not** check module boundaries, frozen rules, or any other team-defined constraint. Those checks are the team layer's responsibility — see "Boundary Enforcement" below.
+- The platform enforces **workspace-root containment only**. It does **not** check module boundaries, sealed rules, or any other team-defined constraint. Those checks are the team layer's responsibility — see "Boundary Enforcement" below.
 
 Description (LLM-facing):
 
@@ -563,16 +563,16 @@ Errors (snake_case codes, surfaced as typed tool errors):
 
 #### Boundary Enforcement (Platform vs Team)
 
-`write_file` enforces only **workspace-root containment** (the `path_escape` rule above). It does **not** enforce module boundaries (frozen rules, descriptor checks). The two enforcement layers are distinct:
+`write_file` enforces only **workspace-root containment** (the `path_escape` rule above). It does **not** enforce module boundaries (sealed rules, descriptor checks). The two enforcement layers are distinct:
 
 | Layer | What it enforces | When it runs | v1 status |
 |---|---|---|---|
 | Platform `write_file` | "Inside the workspace root" | At the tool call | v1 (this spec) |
-| Team descriptor / frozen rule | "Inside the allowed module boundary" | At the role's system prompt or via a wrapper tool that the team defines | Day 2+ (when teams need module-boundary enforcement) |
+| Team descriptor / sealed rule | "Inside the allowed module boundary" | At the role's system prompt or via a wrapper tool that the team defines | Day 2+ (when teams need module-boundary enforcement) |
 
 This separation lets the platform ship a useful writer in v1 without waiting for the team's boundary-enforcement contract. Teams that need module-boundary enforcement wrap the platform's writer (or instruct the agent via system prompt) to validate against the module descriptor before calling `write_file`. Teams that don't need it (e.g. the minimal team) get a plain writer for free.
 
-**Consequence:** in v1, an agent with `write_file` in its tool list can write any file inside the workspace root, including files inside a frozen module. The team layer is responsible for preventing that, not the platform. This is an explicit Day-1 commitment: boundary enforcement is a team-layer contract.
+**Consequence:** in v1, an agent with `write_file` in its tool list can write any file inside the workspace root, including files inside a sealed module. The team layer is responsible for preventing that, not the platform. This is an explicit Day-1 commitment: boundary enforcement is a team-layer contract.
 
 ## Tool Telemetry
 

@@ -1,5 +1,5 @@
 ---
-frozen:
+sealed:
   - auth.test.ts
   - auth.ts
   - index.ts

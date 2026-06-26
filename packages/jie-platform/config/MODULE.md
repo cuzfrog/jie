@@ -1,5 +1,5 @@
 ---
-frozen:
+sealed:
   - auth-store.test.ts
   - auth-store.ts
   - config.test.ts

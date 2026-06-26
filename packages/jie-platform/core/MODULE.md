@@ -1,5 +1,5 @@
 ---
-frozen:
+sealed:
   - agent-body-bridging.test.ts
   - agent-body.test.ts
   - agent-body.ts

@@ -93,7 +93,7 @@ The "supervisor" prose in the spec is rewritten to point at `JiePlatform` / `cre
 
 ## Consequences
 
-- `packages/jie-platform/start.ts` exports `createJiePlatform` (and the public alias `startJie`), `JiePlatform` (and the public alias `JieHandle`), and `JiePlatformDeps`. The CLI's `jie -p` entry constructs a `JiePlatformDeps` bundle and calls `startJie` with it. `JiePlatformDeps` is not re-exported from `@cuzfrog/jie-platform`'s public surface (the platform's `index.ts` is frozen); consumers construct the bundle and TypeScript infers the type from the function signature.
+- `packages/jie-platform/start.ts` exports `createJiePlatform` (and the public alias `startJie`), `JiePlatform` (and the public alias `JieHandle`), and `JiePlatformDeps`. The CLI's `jie -p` entry constructs a `JiePlatformDeps` bundle and calls `startJie` with it. `JiePlatformDeps` is not re-exported from `@cuzfrog/jie-platform`'s public surface (the platform's `index.ts` is sealed); consumers construct the bundle and TypeScript infers the type from the function signature.
 - The "supervisor" prose in `08-memory.md` and `09-deployment.md` is rewritten to refer to `JieHandle` / `JiePlatform`.
 - The CLI's startup is a function call, not a class instantiation. The CLI does not import a `Supervisor` symbol.
 - The "force-publishing on behalf of crashed agents" semantics (backlog, Day 2) is implemented on `JiePlatform` when the day comes, not on a separate supervisor class.

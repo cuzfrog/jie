@@ -1,5 +1,5 @@
 ---
-frozen:
+sealed:
   - index.ts
   - loader.test.ts
   - loader.ts

@@ -1,5 +1,5 @@
 ---
-frozen:
+sealed:
   - artifact.test.ts
   - bash.test.ts
   - bash.ts

@@ -14,7 +14,7 @@ Improve code quality, resolve technical debt, reduce code entropy, so that next 
 - Do not add comments to code.
 - Ensure references and documents are consistent.
 - I may have modified the code, follow my intentions.
-- If you think better to add new exports to frozen files, give me a list of exports to review, if I agree, I will manually add the exports.
+- If you think better to add new exports to sealed files, give me a list of exports to review, if I agree, I will manually add the exports.
 
 ## User Instructions
 $ARGUMENTS
