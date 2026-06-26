@@ -5,7 +5,6 @@ import { type EventManager, Events } from "./event/index.ts";
 import { type AgentSoul, type Team, type TeamRegistry } from "./team/index.ts";
 import { type ModelRegistry, type SettingsStore } from "./config/index.ts";
 import { type ToolRegistry } from "./tools";
-import type { McpServerConfig } from "./config/index.ts";
 import {
   createArtifactStore,
   type ArtifactStore,
@@ -17,7 +16,6 @@ export interface CreateJiePlatformOptions {
   workspace: string;
   homeJieDir: string;
   teamId?: string;
-  mcpServerConfigs?: McpServerConfig[];
   resumeSessionId?: string;
   continueLastSession?: boolean;
 }
@@ -34,7 +32,7 @@ export interface JiePlatformDeps {
 
 export interface JiePlatform {
   events: EventManager;
-  stop: (timeoutMs?: number) => Promise<void>;
+  stop: () => Promise<void>;
 }
 
 export async function createJiePlatform(opts: CreateJiePlatformOptions, deps: JiePlatformDeps): Promise<JiePlatform> {
@@ -86,14 +84,12 @@ export async function createJiePlatform(opts: CreateJiePlatformOptions, deps: Ji
 
   const handle: JiePlatform = {
     events: deps.events,
-    stop: async (timeoutMs: number = 10_000) => {
+    stop: async () => {
       const allBodies: AgentBody[] = [];
       for (const bodies of loadedTeams.values()) {
         allBodies.push(...bodies);
       }
       for (const b of allBodies) b.stop();
-
-      void timeoutMs;
     },
   };
 
