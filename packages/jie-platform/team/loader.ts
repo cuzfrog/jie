@@ -2,6 +2,8 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { AgentSoul, Team } from "./types.ts";
+import MINIMAL_TEAM_MD from "./minimal/TEAM.md" with { type: "text" };
+import MINIMAL_GENERAL_MD from "./minimal/general.md" with { type: "text" };
 
 const TEAM_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
 const ROLE_STEM_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -248,6 +250,3 @@ export function loadMinimalTeam(): Team {
     { teamId: "minimal" },
   );
 }
-
-import MINIMAL_TEAM_MD from "./minimal/TEAM.md" with { type: "text" };
-import MINIMAL_GENERAL_MD from "./minimal/general.md" with { type: "text" };

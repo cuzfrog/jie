@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import type { AgentEvent as PiAgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
+import type { Agent, AgentEvent as PiAgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, AssistantMessageEvent } from "@earendil-works/pi-ai";
 import { createAgentBody, type AgentBody, type CreateAgentBodyOptions } from "./agent-body.ts";
 import { createEventManager, type EventManager } from "../event";
@@ -44,9 +44,9 @@ function makeFakeAgentFactory(options: {
   afterToolCall?: (ctx: unknown) => Promise<unknown>;
   onEvent?: (listener: (event: PiAgentEvent) => void) => void;
 } = {}): {
-  factory: (opts: ConstructorParameters<typeof import("@earendil-works/pi-agent-core").Agent>[0]) => import("@earendil-works/pi-agent-core").Agent;
+  factory: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
   fake: FakeAgent;
-  lastOpts: () => ConstructorParameters<typeof import("@earendil-works/pi-agent-core").Agent>[0] | undefined;
+  lastOpts: () => ConstructorParameters<typeof Agent>[0] | undefined;
 } {
   const fake: FakeAgent = {
     subscribe: mock((listener: (event: PiAgentEvent) => void) => {
@@ -70,8 +70,8 @@ function makeFakeAgentFactory(options: {
     subscribe: fake.subscribe,
     continue: fake.continue,
     prompt: fake.prompt,
-  } as unknown as import("@earendil-works/pi-agent-core").Agent;
-  let captured: ConstructorParameters<typeof import("@earendil-works/pi-agent-core").Agent>[0] | undefined;
+  } as unknown as Agent;
+  let captured: ConstructorParameters<typeof Agent>[0] | undefined;
   return {
     factory: (opts) => {
       captured = opts;
