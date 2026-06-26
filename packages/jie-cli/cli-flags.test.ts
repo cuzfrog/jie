@@ -135,6 +135,20 @@ describe("parseFlags — -p", () => {
     });
   });
 
+  test("-p rejects --timeout 0 (would hang forever)", () => {
+    expect(parseFlags(["-p", "x", "--timeout", "0"])).toEqual({
+      kind: "error",
+      message: "invalid --timeout value: 0 (must be > 0)",
+    });
+  });
+
+  test("-p rejects negative --timeout", () => {
+    expect(parseFlags(["-p", "x", "--timeout", "-1"])).toEqual({
+      kind: "error",
+      message: "invalid --timeout value: -1 (must be > 0)",
+    });
+  });
+
   test("-p with --json", () => {
     expect(parseFlags(["-p", "x", "--json"])).toMatchObject({ json: true });
   });

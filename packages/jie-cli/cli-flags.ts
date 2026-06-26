@@ -187,8 +187,8 @@ function parsePrint(
       if (v === undefined) return { kind: "error", message: "missing argument for --timeout" };
       if (seen.has("--timeout")) dupes.add("--timeout");
       const n = Number(v);
-      if (!Number.isFinite(n) || n < 0) {
-        return { kind: "error", message: `invalid --timeout value: ${v}` };
+      if (!Number.isFinite(n) || n <= 0) {
+        return { kind: "error", message: `invalid --timeout value: ${v} (must be > 0)` };
       }
       seen.set("--timeout", String(n));
       timeout = n;

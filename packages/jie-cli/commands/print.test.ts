@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test, vi } from "bun:test";
 import { runPrint } from "./print.ts";
 
 interface JiePlatformStub {
@@ -36,8 +36,14 @@ describe("runPrint", () => {
       },
     );
     setImmediate(() => {
-      handlers.get("agent.turn.start")?.({ sender: { kind: "agent" }, payload: {} });
-      handlers.get("agent.idle")?.({ sender: { kind: "agent" }, payload: {} });
+      handlers.get("agent.turn.start")?.({
+        sender: { kind: "agent", identity: { teamId: teamId, agentRole: leaderRole, agentKey: leaderKey } },
+        payload: {},
+      });
+      handlers.get("agent.idle")?.({
+        sender: { kind: "agent", identity: { teamId: teamId, agentRole: leaderRole, agentKey: leaderKey } },
+        payload: {},
+      });
     });
 
     const code = await runPrint(
@@ -74,5 +80,45 @@ describe("runPrint", () => {
     );
     expect(code).toBe(3);
     expect(handle.stop).toHaveBeenCalled();
+  });
+
+  test("worker idle does not resolve the leader gate", async () => {
+    const { handle, events } = makeHandle();
+    const teamId = "t1";
+    const leaderKey = "general-1";
+    const workerKey = "worker-1";
+
+    const handlers = new Map<string, (env: { sender: { kind: string; identity?: { teamId?: string; agentRole?: string; agentKey?: string } }; payload: Record<string, unknown> }) => void>();
+    events.subscribe.mockImplementation(
+      (topic: string, callback: (env: { sender: { kind: string; identity?: { teamId?: string; agentRole?: string; agentKey?: string } }; payload: Record<string, unknown> }) => void) => {
+        handlers.set(topic, callback);
+        return () => {};
+      },
+    );
+
+    let workerIdleFired = false;
+    setImmediate(() => {
+      workerIdleFired = true;
+      handlers.get("agent.idle")?.({
+        sender: { kind: "agent", identity: { teamId, agentRole: "worker", agentKey: workerKey } },
+        payload: {},
+      });
+      setTimeout(() => {
+        handlers.get("agent.idle")?.({
+          sender: { kind: "agent", identity: { teamId, agentRole: "general", agentKey: leaderKey } },
+          payload: {},
+        });
+      }, 10);
+    });
+
+    const code = await runPrint(
+      handle as never,
+      teamId,
+      "general",
+      leaderKey,
+      { kind: "print", instruction: "hi", team: undefined, timeout: 1, json: false, apiKey: undefined, resume: undefined, continueLast: false },
+    );
+    expect(workerIdleFired).toBe(true);
+    expect(code).toBe(0);
   });
 });
