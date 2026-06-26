@@ -3,7 +3,6 @@ import {
   type AgentMessage,
   type AgentEvent as PiAgentEvent,
 } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { MemoryManager } from "../storage/index.ts";
 import type { AgentSoul } from "../team/index.ts";
 import type { EventManager } from "../event";
@@ -58,6 +57,14 @@ export class JieAgentBody implements AgentBody {
         return;
       case "agent_end":
         this.eventManager.publish(Events.agentIdle(this.sender));
+        if (this.queue.length > 0) {
+          const next = this.queue.shift()!;
+          this.eventManager.publish(Events.agentQueueUpdate(
+            this.sender,
+            this.queue.map((m) => formatSynthetic(m)),
+          ));
+          void this.agent.prompt(next);
+        }
         return;
       case "message_start":
         this.stream.beginStream();
@@ -73,14 +80,12 @@ export class JieAgentBody implements AgentBody {
       }
       case "message_end":
         this.stream.endStream();
-        if (isAssistantMessage(event.message) || event.message.role === "user" || event.message.role === "toolResult") {
-          this.memory.persist(
-            event.message as unknown as AgentMessage,
-            this.agentKey,
-            this.sessionId,
-            this.teamId,
-          );
-        }
+        this.memory.persist(
+          event.message as unknown as AgentMessage,
+          this.agentKey,
+          this.sessionId,
+          this.teamId,
+        );
         return;
       default:
         return;
@@ -170,14 +175,6 @@ export class JieAgentBody implements AgentBody {
 
 function formatSynthetic(message: AgentMessage): string {
   return String((message as { content: unknown }).content);
-}
-
-function isAssistantMessage(m: unknown): m is AssistantMessage {
-  return (
-    typeof m === "object" &&
-    m !== null &&
-    (m as { role?: string }).role === "assistant"
-  );
 }
 
 function unwrapIngressPayload(payload: unknown): { prompt?: string; source?: string } {

@@ -392,6 +392,47 @@ describe("JieAgentBody — handlePiAgentEvent (stream bridge)", () => {
     await Promise.resolve();
     expect(h.persisted.length).toBe(1);
   });
+
+  test("message_end with custom role: memory.persist is called (no role check)", async () => {
+    const body = h.makeBody();
+    body.handlePiAgentEvent({
+      type: "message_end",
+      message: {
+        role: "custom",
+        customType: "test",
+        content: "x",
+        display: false,
+        timestamp: Date.now(),
+      } as unknown as AgentMessage,
+    });
+    await Promise.resolve();
+    expect(h.persisted.length).toBe(1);
+  });
+
+  test("agent_end drains the queue: dequeued message is passed to agent.prompt", async () => {
+    const body = h.makeBody();
+    await body.start();
+    h.state.isStreaming = true;
+    h.events.publish({
+      topic: "team.t1.agent.general-1.prompt",
+      payload: { prompt: "queued msg" },
+      sender: { kind: "cli" },
+      version: 1,
+      timestamp: new Date().toISOString(),
+    });
+    expect(h.prompt.mock.calls.length).toBe(0);
+    h.state.isStreaming = false;
+    body.handlePiAgentEvent({ type: "agent_end" });
+    await Promise.resolve();
+    expect(h.prompt.mock.calls.length).toBe(1);
+  });
+
+  test("agent_end with no queued message: agent.prompt not called", async () => {
+    const body = h.makeBody();
+    body.handlePiAgentEvent({ type: "agent_end" });
+    await Promise.resolve();
+    expect(h.prompt.mock.calls.length).toBe(0);
+  });
 });
 
 describe("JieAgentBody — addExternalCleanup + stop()", () => {
