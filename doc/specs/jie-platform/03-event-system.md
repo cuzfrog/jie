@@ -240,6 +240,22 @@ Every tool call emits two events:
 
 `tool_call_id` is the string id pi-agent provides in its `beforeToolCall` / `afterToolCall` hooks. The body passes it through to the bus as-is. The value is opaque to Jie and to consumers — it is used by observers (TUI, -p mode) to correlate a `agent.tool.call` event with the matching `agent.tool.result` event. Jie does not synthesize, renumber, or otherwise transform it.
 
+## Truncation
+
+`agent.tool.call.input` and `agent.tool.result.output` are JSON-serialized strings. To keep payload sizes bounded, the `EventManager.publish` path truncates each field at 4 KiB (4096 characters) before the envelope reaches subscribers. The cap is in characters, not bytes — JSON escapes may produce payloads slightly larger than 4096 bytes on the wire, but the string length is checked at the character level so a multi-byte UTF-8 input does not cause an early cut. The corresponding `input_truncated` / `output_truncated` boolean on the event payload is `true` when the field was truncated.
+
+**Strategy: middle-truncation.** The head and tail of the string are preserved; the middle is dropped. A marker is inserted at the cut point. The marker format is `...[%d chars truncated]...` where `%d` is the number of characters removed (literal printf-style placeholder; the runtime substitutes the count). The marker is inserted in place of the removed middle; the surrounding head and tail are unchanged.
+
+**Example.** A 10 KiB string is truncated to roughly 4 KiB. The result looks like:
+
+```
+<first ~2 KiB>...[1234 chars truncated]...<last ~2 KiB>
+```
+
+**Which events apply.** Truncation is applied to the JSON-serialized `input` of `agent.tool.call` and the JSON-serialized `output` of `agent.tool.result`. Other agent events (stream chunks, idle, turn start, queue updates) do not currently apply truncation; their payload sizes are bounded by the upstream contract.
+
+**Implementation.** The constants `TRUNCATION_BYTES = 4 * 1024` and `TRUNCATION_MARKER = "...[%d chars truncated]..."` live in `packages/jie-platform/event/event-manager.ts` and are the single source of truth for this section. This section documents the contract, not the implementation.
+
 ## Agent Idle
 
 When an agent transitions from `busy` to `idle` (work unit complete, terminal event published, or error recovery complete), it publishes `agent.idle`. This is the signal for observers (TUI, `-p` mode) that the agent is ready for new work. Replaces the heartbeat-based discovery model.
