@@ -306,16 +306,6 @@ describe("loadTeamFromDir — typed error codes (issue #65)", () => {
     expectCode(() => loadTeamFromDir(dir), "invalid_role");
   });
 
-  test.skip("duplicate_role (unreachable via parseTeamFromManifests — manifest dict keys are unique)", () => {
-    expectCode(
-      () => parseTeamFromManifests(
-        { "general.md": "---\ntools:\n  - bash\n---\n" },
-        { teamId: "t" },
-      ),
-      "duplicate_role",
-    );
-  });
-
   test("invalid_frontmatter", () => {
     writeFileSync(join(dir, "general.md"), "no frontmatter here\n");
     expectCode(() => loadTeamFromDir(dir), "invalid_frontmatter");
