@@ -66,14 +66,14 @@ The startup sequence is the same for both `jie` (TUI) and `jie -p` (print mode),
 
 On SIGINT/SIGTERM:
 
-1. **Send abort** to all in-flight operations across **all loaded teams**: agent loops, tool calls, and MCP requests. The combined `AbortSignal` propagates the abort; tools see it and throw `AbortError`. **(Day 2 — not implemented in v1.)**
-2. **Bounded wait**: wait up to **10 seconds** for agents (across all loaded teams) to finish their abort handling and exit their loops. The handle maintains internal "bodies settled" bookkeeping for this wait (consuming the same `agent.turn.start` / `agent.idle` events that the CLI's `-p` idle gate consumes per `ui/cli.md` step 7), but does not expose it. `stop()` is the only lifecycle primitive that needs this check; the CLI does not consume it. **(Day 2 — not implemented in v1.)**
-3. **On timeout**: force-exit the process. No further cleanup. Agents may have left a partial state in the artifact store; the next run starts with a clean session. **(Day 2 — not implemented in v1.)**
+1. **Send abort** to all in-flight operations across **all loaded teams**: agent loops, tool calls, and MCP requests. The combined `AbortSignal` propagates the abort; tools see it and throw `AbortError`.
+2. **Bounded wait**: wait up to **10 seconds** for agents (across all loaded teams) to finish their abort handling and exit their loops. The handle maintains internal "bodies settled" bookkeeping for this wait (consuming the same `agent.turn.start` / `agent.idle` events that the CLI's `-p` idle gate consumes per `ui/cli.md` step 7), but does not expose it. `stop()` is the only lifecycle primitive that needs this check; the CLI does not consume it.
+3. **On timeout**: force-exit the process. No further cleanup. Agents may have left a partial state in the artifact store; the next run starts with a clean session.
 4. **On graceful exit (within 10s)**: close `ArtifactStore` (SQLite), terminate MCP subprocesses, unsubscribe event listeners, exit 0.
 
 The 10s window balances responsiveness against letting a slow tool complete cleanly. Configurable later if needed.
 
-**v1 contract.** In v1, `JieHandle.stop()` only does the subscription-detach half of step 4: it iterates the loaded teams' `AgentBody[]`, calls each body's `stop()`, and returns. It does **not** abort in-flight operations, does **not** wait for them to settle, and does **not** force-exit on a timeout. The CLI's `jie -p` does not rely on `stop()` for ordering — it has its own per-body idle gate (per `ui/cli.md` step 7) — so the gap is silent in v1. The TUI (stage 2) will rely on `stop()` for clean shutdown; until steps 1-3 land, the TUI inherits the same v1 limitation.
+**Steps 1-3 are Day 2 — v1 only runs step 4 partial.** In v1, `JieHandle.stop()` only does the subscription-detach half of step 4: it iterates the loaded teams' `AgentBody[]`, calls each body's `stop()`, and returns. It does **not** abort in-flight operations, does **not** wait for them to settle, and does **not** force-exit on a timeout. The CLI's `jie -p` does not rely on `stop()` for ordering — it has its own per-body idle gate (per `ui/cli.md` step 7) — so the gap is silent in v1. The TUI (stage 2) will rely on `stop()` for clean shutdown; until steps 1-3 land, the TUI inherits the same v1 limitation.
 
 ## Workspace Layout
 

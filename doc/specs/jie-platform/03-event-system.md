@@ -254,7 +254,7 @@ Every tool call emits two events:
 
 **Which events apply.** Truncation is applied to the JSON-serialized `input` of `agent.tool.call` and the JSON-serialized `output` of `agent.tool.result`. Other agent events (stream chunks, idle, turn start, queue updates) do not currently apply truncation; their payload sizes are bounded by the upstream contract.
 
-**Implementation.** The constants `TRUNCATION_BYTES = 4 * 1024` and `TRUNCATION_MARKER = "...[%d chars truncated]..."` live in `packages/jie-platform/event/event-manager.ts` and are the single source of truth for this section. This section documents the contract, not the implementation.
+The cap and marker live in `packages/jie-platform/event/event-manager.ts` and may be tuned without breaking consumers.
 
 ## Agent Idle
 

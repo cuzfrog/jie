@@ -1,5 +1,5 @@
 import { ulid } from "ulid";
-import { getModel as piGetModel, type Api, type Model } from "@earendil-works/pi-ai";
+import { type Api, type Model } from "@earendil-works/pi-ai";
 import { type AgentBody, createAgentBody } from "./core/index.ts";
 import { type EventManager, Events } from "./event/index.ts";
 import { type AgentSoul, type Team, type TeamRegistry } from "./team/index.ts";
@@ -111,12 +111,11 @@ const NO_MODEL_ERROR =
 
 function defaultResolveModel(registry: ModelRegistry): (provider: string, modelId: string) => Model<Api> {
   return (provider: string, modelId: string): Model<Api> => {
-    const fromRegistry = registry.resolve(provider, modelId);
-    if (fromRegistry !== undefined) return fromRegistry;
-    return piGetModel(
-      provider as Parameters<typeof piGetModel>[0],
-      modelId as Parameters<typeof piGetModel>[1],
-    ) as unknown as Model<Api>;
+    const resolved = registry.resolve(provider, modelId);
+    if (resolved === undefined) {
+      throw new Error(NO_MODEL_ERROR);
+    }
+    return resolved;
   };
 }
 
@@ -141,11 +140,7 @@ function resolveSoulModel(
   }
   const provider = modelStr.slice(0, slash);
   const modelId = modelStr.slice(slash + 1);
-  try {
-    return resolveModel(provider, modelId);
-  } catch (e) {
-    throw new Error(NO_MODEL_ERROR);
-  }
+  return resolveModel(provider, modelId);
 }
 
 function resolveSessionId(

@@ -39,9 +39,12 @@ class PiModelRegistry implements ModelRegistry {
     const isBuiltin = (piGetProviders() as string[]).includes(provider);
 
     if (isBuiltin) {
-      const builtinModel = piGetModel(provider as Parameters<typeof piGetModel>[0], modelId as Parameters<typeof piGetModel>[1]);
+      const builtinModel = piGetModel(
+        provider as Parameters<typeof piGetModel>[0],
+        modelId as Parameters<typeof piGetModel>[1],
+      );
       if (builtinModel === undefined) return undefined;
-      return applyProviderConfig(builtinModel, customProvider);
+      return applyProviderConfig(builtinModel as unknown as Model<Api>, customProvider);
     }
     const fromCustom = this.custom.models.find((m) => m.provider === provider && m.id === modelId);
     if (fromCustom !== undefined) return applyProviderConfig(fromCustom, customProvider);
