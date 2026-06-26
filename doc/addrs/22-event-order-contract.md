@@ -47,7 +47,7 @@ The CLI's `-p` mode is the only consumer of an "is the work done?" primitive. It
 
 ```typescript
 // CLI-side, in -p mode, after startJie() returns.
-function setupIdleGate(bus: EventBus, timeoutSec: number): Promise<void> {
+function setupIdleGate(events: EventManager, timeoutSec: number): Promise<void> {
   let busy = 0;
   let resolve!: () => void;
   let reject!: (err: Error) => void;
@@ -55,8 +55,8 @@ function setupIdleGate(bus: EventBus, timeoutSec: number): Promise<void> {
   const timer = timeoutSec > 0
     ? setTimeout(() => reject(new Error('timeout')), timeoutSec * 1000)
     : undefined;
-  bus.subscribe('agent.turn.start', () => { busy++; });
-  bus.subscribe('agent.idle', () => {
+  events.subscribe('agent.turn.start', () => { busy++; });
+  events.subscribe('agent.idle', () => {
     busy--;
     if (busy === 0) {
       if (timer !== undefined) clearTimeout(timer);
@@ -66,12 +66,12 @@ function setupIdleGate(bus: EventBus, timeoutSec: number): Promise<void> {
   return promise;
 }
 
-// Publish the prompt.
-handle.bus.publish(`${teamId}.leader.prompt`, { prompt: instruction });
+// Publish the prompt via the Events factory.
+handle.events.publish(Events.userPrompt({ kind: "cli" }, startupTeamId, instruction));
 
 // Wait for the gate (or timeout).
 try {
-  await setupIdleGate(handle.bus, args.timeout);
+  await setupIdleGate(handle.events, args.timeout);
 } catch (e) {
   if (e instanceof Error && e.message === 'timeout') { /* handle timeout */ }
   else { throw e; }

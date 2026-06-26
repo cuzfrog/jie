@@ -4,7 +4,7 @@ import {
   createEventManager,
   type EventManager,
 } from "./event-manager.ts";
-import { Events, type EventEnvelope, type Sender } from "./types.ts";
+import { Events, type EventEnvelope, type Sender } from "./events.ts";
 
 function collect(bus: EventBus, subject: string): unknown[] {
   const out: unknown[] = [];
@@ -28,7 +28,7 @@ describe("createEventManager — envelope stamping", () => {
     expect(received).toHaveLength(1);
     const env = received[0] as EventEnvelope<"agent.turn.start">;
     expect(env.version).toBe(1);
-    expect(env.type).toBe("agent.turn.start");
+    expect(env.topic).toBe("agent.turn.start");
     expect(env.sender).toEqual(agentSender);
     expect(typeof env.timestamp).toBe("string");
   });
@@ -53,15 +53,15 @@ describe("createEventManager — envelope stamping", () => {
 
   test("CLI sender on team.loaded envelope has kind 'cli'", () => {
     const bus = createEventBus();
-    const received = collect(bus, "t1.team.loaded");
+    const received = collect(bus, "team.t1.loaded");
     const events: EventManager = createEventManager(bus);
-    events.publish(Events.envelope({ kind: "cli" }, "t1.team.loaded", { agents: [] }));
+    events.publish(Events.teamLoaded({ kind: "cli" }, "t1", []));
     const env = received[0] as EventEnvelope<string>;
     expect(env.sender.kind).toBe("cli");
   });
 });
 
-describe("createEventManager — subject is caller-routed", () => {
+describe("createEventManager — topic interpolation", () => {
   test("agent.tool.call publishes on the subject from the envelope", () => {
     const bus = createEventBus();
     const received = collect(bus, "agent.tool.call");
@@ -70,22 +70,49 @@ describe("createEventManager — subject is caller-routed", () => {
     expect(received).toHaveLength(1);
   });
 
-  test("leader.prompt publishes on the full subject from the envelope", () => {
+  test("userPrompt publishes to team.{teamId}.agent.{agentKey}.prompt", () => {
     const bus = createEventBus();
-    const received = collect(bus, "t1.leader.prompt");
+    const received = collect(bus, "team.t1.agent.general-1.prompt");
     const events: EventManager = createEventManager(bus);
-    events.publish(Events.envelope(agentSender, "t1.leader.prompt", { prompt: "hi" }));
+    events.publish(Events.userPrompt({ kind: "cli" }, "t1", "hi", "general-1"));
     expect(received).toHaveLength(1);
     const env = received[0] as EventEnvelope<string>;
-    expect(env.payload).toEqual({ prompt: "hi" });
+    expect(env.topic).toBe("team.t1.agent.general-1.prompt");
+    expect(env.sender).toEqual({ kind: "cli" });
+    expect(env.payload).toEqual({ teamId: "t1", agentKey: "general-1", prompt: "hi" });
   });
 
-  test("manager does not route — caller is responsible for the full subject", () => {
+  test("userPrompt targeted to a non-leader agentKey", () => {
     const bus = createEventBus();
-    const received = collect(bus, "leader.prompt");
+    const received = collect(bus, "team.t1.agent.worker-2.prompt");
     const events: EventManager = createEventManager(bus);
-    events.publish(Events.leaderPrompt(agentSender, "x"));
+    events.publish(Events.userPrompt({ kind: "tui" }, "t1", "go", "worker-2"));
     expect(received).toHaveLength(1);
+    const env = received[0] as EventEnvelope<string>;
+    expect(env.topic).toBe("team.t1.agent.worker-2.prompt");
+    expect(env.sender).toEqual({ kind: "tui" });
+    expect(env.payload).toEqual({ teamId: "t1", agentKey: "worker-2", prompt: "go" });
+  });
+
+  test("teamLoaded interpolates teamId from payload", () => {
+    const bus = createEventBus();
+    const received = collect(bus, "team.t1.loaded");
+    const events: EventManager = createEventManager(bus);
+    events.publish(Events.teamLoaded({ kind: "cli" }, "t1", [{ role: "leader", agent_key: "leader-1", is_leader: true }]));
+    expect(received).toHaveLength(1);
+    const env = received[0] as EventEnvelope<string>;
+    expect(env.topic).toBe("team.t1.loaded");
+  });
+
+  test("custom prefixes the clientTopic with custom.", () => {
+    const bus = createEventBus();
+    const received = collect(bus, "custom.t1.task");
+    const events: EventManager = createEventManager(bus);
+    events.publish(Events.custom(agentSender, "t1.task", { prompt: "x" }));
+    expect(received).toHaveLength(1);
+    const env = received[0] as EventEnvelope<string>;
+    expect(env.topic).toBe("custom.t1.task");
+    expect(env.payload).toEqual({ clientTopic: "t1.task", payload: { prompt: "x" } });
   });
 });
 
@@ -94,15 +121,15 @@ describe("createEventManager — subscribe", () => {
     const bus = createEventBus();
     const events: EventManager = createEventManager(bus);
     const received: EventEnvelope<string>[] = [];
-    const off = events.subscribe("t1.leader.prompt", (e) => {
+    const off = events.subscribe("team.t1.agent.general-1.prompt", (e) => {
       received.push(e);
     });
-    events.publish(Events.envelope(agentSender, "t1.leader.prompt", { prompt: "hello" }));
+    events.publish(Events.userPrompt({ kind: "cli" }, "t1", "hello", "general-1"));
     expect(received).toHaveLength(1);
     expect((received[0]!.payload as { prompt: string }).prompt).toBe("hello");
-    expect(received[0]!.sender.kind).toBe("agent");
+    expect(received[0]!.sender.kind).toBe("cli");
     off();
-    events.publish(Events.envelope(agentSender, "t1.leader.prompt", { prompt: "world" }));
+    events.publish(Events.userPrompt({ kind: "cli" }, "t1", "world", "general-1"));
     expect(received).toHaveLength(1);
   });
 
@@ -118,28 +145,28 @@ describe("createEventManager — subscribe", () => {
     expect(received[0]!.payload.text).toBe("hello");
   });
 
-  test("subscribe with a runtime topic uses untyped envelope", () => {
+  test("subscribe to a custom-prefixed topic receives the wrapped envelope", () => {
     const bus = createEventBus();
     const events: EventManager = createEventManager(bus);
     const received: EventEnvelope<string>[] = [];
-    events.subscribe("t1.task.recorded", (e) => {
+    events.subscribe("custom.t1.task.recorded", (e) => {
       received.push(e);
     });
-    events.publish(Events.envelope(agentSender, "t1.task.recorded", { prompt: "go" }));
+    events.publish(Events.custom(agentSender, "t1.task.recorded", { prompt: "go" }));
     expect(received).toHaveLength(1);
-    expect(received[0]!.type).toBe("t1.task.recorded");
-    expect(received[0]!.payload).toEqual({ prompt: "go" });
+    expect(received[0]!.topic).toBe("custom.t1.task.recorded");
+    expect(received[0]!.payload).toEqual({ clientTopic: "t1.task.recorded", payload: { prompt: "go" } });
   });
 
   test("subscriberCount counts subscribers for the given subject", () => {
     const bus = createEventBus();
     const events: EventManager = createEventManager(bus);
-    expect(events.subscriberCount("t1.leader.prompt")).toBe(0);
-    events.subscribe("t1.leader.prompt", () => {});
-    expect(events.subscriberCount("t1.leader.prompt")).toBe(1);
-    expect(events.subscriberCount("t1.task.recorded")).toBe(0);
-    events.subscribe("t1.task.recorded", () => {});
-    expect(events.subscriberCount("t1.task.recorded")).toBe(1);
+    expect(events.subscriberCount("team.t1.agent.general-1.prompt")).toBe(0);
+    events.subscribe("team.t1.agent.general-1.prompt", () => {});
+    expect(events.subscriberCount("team.t1.agent.general-1.prompt")).toBe(1);
+    expect(events.subscriberCount("custom.t1.task.recorded")).toBe(0);
+    events.subscribe("custom.t1.task.recorded", () => {});
+    expect(events.subscriberCount("custom.t1.task.recorded")).toBe(1);
   });
 });
 

@@ -1,5 +1,5 @@
-import type { EventManager } from "./event-manager.ts";
-import { Events, type Sender } from "./types.ts";
+import type { EventManager } from "../event/event-manager.ts";
+import { Events, type Sender } from "../event/events.ts";
 
 const STREAM_CHUNK_SIZE = 64;
 const STREAM_FLUSH_MS = 200;

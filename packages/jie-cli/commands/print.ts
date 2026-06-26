@@ -1,5 +1,5 @@
 import type { JiePlatform } from "@cuzfrog/jie-platform";
-import { Events, type EventManager, type Sender } from "@cuzfrog/jie-platform/core";
+import { Events, type EventManager, type Sender } from "@cuzfrog/jie-platform/event";
 import type { ParsedArgsMap } from "../cli-flags.ts";
 
 export type PrintArgs = ParsedArgsMap["print"];
@@ -11,11 +11,7 @@ export async function runPrint(
   leaderKey: string,
   args: PrintArgs,
 ): Promise<number> {
-  const leaderSender: Sender = {
-    kind: "agent",
-    identity: { teamId, agentRole: leaderRole, agentKey: leaderKey },
-  };
-  handle.events.subscribe("agent.stream.chunk", (env) => {
+  handle.events.subscribe("agent.stream.chunk", (env: { sender: Sender; payload: { text: string; seq: number } }) => {
     if (env.sender.kind !== "agent") return;
     if (env.sender.identity.teamId !== teamId) return;
     if (env.sender.identity.agentRole !== leaderRole) return;
@@ -27,7 +23,7 @@ export async function runPrint(
     }
   });
 
-  handle.events.publish(Events.envelope(leaderSender, `${teamId}.leader.prompt`, { prompt: args.instruction }));
+  handle.events.publish(Events.userPrompt({ kind: "cli" }, teamId, args.instruction, leaderKey));
 
   try {
     await setupIdleGate(handle.events, args.timeout);

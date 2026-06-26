@@ -2,8 +2,7 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 import type { AgentEvent as PiAgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, AssistantMessageEvent } from "@earendil-works/pi-ai";
 import { createAgentBody, type AgentBody, type CreateAgentBodyOptions } from "./agent-body.ts";
-import { createEventBus, type EventBus } from "../event/event-bus.ts";
-import { createEventManager } from "./event-manager.ts";
+import { createEventManager, type EventManager } from "../event";
 
 import {
   createArtifactStore,
@@ -105,8 +104,8 @@ function makeArtifacts(): ArtifactStore {
   return createArtifactStore(storage);
 }
 
-function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: CreateAgentBodyOptions; bus: ReturnType<typeof createEventBus> } {
-  const bus = createEventBus();
+function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: CreateAgentBodyOptions; events: EventManager; subscribeSubject: (topic: string, cb: (subject: string, payload: object) => void) => () => void } {
+  const events: EventManager = createEventManager();
   const registry = createToolRegistry();
   registry.register("noop", makeNoopTool());
   const opts: CreateAgentBodyOptions = {
@@ -114,7 +113,7 @@ function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: Crea
     teamId: "t1",
     soul: makeSoul(),
     isLeader: true,
-    events: createEventManager(bus),
+    events,
     artifactStore: makeArtifacts(),
     memory: makeMemory(),
     sessionId: "s1",
@@ -123,7 +122,17 @@ function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: Crea
     model: {},
     ...overrides,
   };
-  return { opts, bus };
+  const subscribeSubject = (topic: string, cb: (subject: string, payload: object) => void): (() => void) => {
+    const seen = new Map<string, object[]>();
+    const off = events.subscribe(topic, (env) => {
+      const arr = seen.get(topic) ?? [];
+      arr.push(env);
+      seen.set(topic, arr);
+      cb(topic, env);
+    });
+    return off;
+  };
+  return { opts, events, subscribeSubject };
 }
 
 describe("AgentBody — pi-agent event bridging", () => {
@@ -135,17 +144,17 @@ describe("AgentBody — pi-agent event bridging", () => {
     body = undefined;
   });
 
-  function capturedEvents(topic: string, bus: EventBus): object[] {
+  function capturedEvents(topic: string, subscribeSubject: (topic: string, cb: (subject: string, payload: object) => void) => () => void): object[] {
     const out: object[] = [];
-    bus.subscribe(topic, (_s, p) => {
+    subscribeSubject(topic, (_s, p) => {
       out.push(p);
     });
     return out;
   }
 
   test("turn_start publishes agent.turn.start with empty payload", () => {
-    const { opts, bus } = makeOpts();
-    const turnStart = capturedEvents("agent.turn.start", bus);
+    const { opts, subscribeSubject } = makeOpts();
+    const turnStart = capturedEvents("agent.turn.start", subscribeSubject);
     const result = makeFakeAgentFactory({
       onEvent: (l) => {
         fireEvent = l;
@@ -154,14 +163,14 @@ describe("AgentBody — pi-agent event bridging", () => {
     body = createAgentBody({ ...opts, createAgent: result.factory });
     fireEvent!({ type: "turn_start" });
     expect(turnStart).toHaveLength(1);
-    const env = turnStart[0] as { type: string; payload: object };
-    expect(env.type).toBe("agent.turn.start");
+    const env = turnStart[0] as { topic: string; payload: object };
+    expect(env.topic).toBe("agent.turn.start");
     expect(env.payload).toBeNull();
   });
 
   test("agent_end publishes agent.idle with empty payload", () => {
-    const { opts, bus } = makeOpts();
-    const idle = capturedEvents("agent.idle", bus);
+    const { opts, subscribeSubject } = makeOpts();
+    const idle = capturedEvents("agent.idle", subscribeSubject);
     const result = makeFakeAgentFactory({
       onEvent: (l) => {
         fireEvent = l;
@@ -170,16 +179,16 @@ describe("AgentBody — pi-agent event bridging", () => {
     body = createAgentBody({ ...opts, createAgent: result.factory });
     fireEvent!({ type: "agent_end", messages: [] });
     expect(idle).toHaveLength(1);
-    const env = idle[0] as { type: string; payload: object };
-    expect(env.type).toBe("agent.idle");
+    const env = idle[0] as { topic: string; payload: object };
+    expect(env.topic).toBe("agent.idle");
     expect(env.payload).toBeNull();
   });
 
   test("body-side alternation: turn_start always precedes agent.idle", () => {
-    const { opts, bus } = makeOpts();
+    const { opts, subscribeSubject } = makeOpts();
     const events: string[] = [];
-    bus.subscribe("agent.turn.start", () => events.push("turn_start"));
-    bus.subscribe("agent.idle", () => events.push("idle"));
+    subscribeSubject("agent.turn.start", () => events.push("turn_start"));
+    subscribeSubject("agent.idle", () => events.push("idle"));
     const result = makeFakeAgentFactory({
       onEvent: (l) => {
         fireEvent = l;
@@ -192,10 +201,10 @@ describe("AgentBody — pi-agent event bridging", () => {
   });
 
   test("3 turns alternate strictly: turn_start, idle, turn_start, idle, ...", () => {
-    const { opts, bus } = makeOpts();
+    const { opts, subscribeSubject } = makeOpts();
     const events: string[] = [];
-    bus.subscribe("agent.turn.start", () => events.push("turn_start"));
-    bus.subscribe("agent.idle", () => events.push("idle"));
+    subscribeSubject("agent.turn.start", () => events.push("turn_start"));
+    subscribeSubject("agent.idle", () => events.push("idle"));
     const result = makeFakeAgentFactory({
       onEvent: (l) => {
         fireEvent = l;
@@ -217,11 +226,11 @@ describe("AgentBody — pi-agent event bridging", () => {
   });
 
   test("start() does not emit agent.turn.start or agent.idle", async () => {
-    const { opts, bus } = makeOpts();
+    const { opts, subscribeSubject } = makeOpts();
     const idleEvents: object[] = [];
     const turnStartEvents: object[] = [];
-    bus.subscribe("agent.idle", (_s, p) => idleEvents.push(p));
-    bus.subscribe("agent.turn.start", (_s, p) => turnStartEvents.push(p));
+    subscribeSubject("agent.idle", (_s, p) => idleEvents.push(p));
+    subscribeSubject("agent.turn.start", (_s, p) => turnStartEvents.push(p));
     const result = makeFakeAgentFactory({ onEvent: () => {} });
     body = createAgentBody({ ...opts, createAgent: result.factory });
     await (body as unknown as { start: () => Promise<void> }).start();
@@ -230,8 +239,8 @@ describe("AgentBody — pi-agent event bridging", () => {
   });
 
   test("message_update text_delta buffers and flushes at 64 chars", () => {
-    const { opts, bus } = makeOpts();
-    const chunks = capturedEvents("agent.stream.chunk", bus);
+    const { opts, subscribeSubject } = makeOpts();
+    const chunks = capturedEvents("agent.stream.chunk", subscribeSubject);
     const result = makeFakeAgentFactory({
       onEvent: (l) => {
         fireEvent = l;
@@ -282,8 +291,8 @@ describe("AgentBody — pi-agent event bridging", () => {
   });
 
   test("beforeToolCall hook publishes agent.tool.call", async () => {
-    const { opts, bus } = makeOpts();
-    const calls = capturedEvents("agent.tool.call", bus);
+    const { opts, subscribeSubject } = makeOpts();
+    const calls = capturedEvents("agent.tool.call", subscribeSubject);
     const result = makeFakeAgentFactory();
     body = createAgentBody({ ...opts, createAgent: result.factory });
     const captured = result.lastOpts();
@@ -318,10 +327,10 @@ describe("AgentBody — agent.queue.update", () => {
   });
 
   test("queue.update published on enqueue with synthetic snapshot", async () => {
-    const { opts, bus } = makeOpts();
-    const events: object[] = [];
-    bus.subscribe("agent.queue.update", (_s, p) => {
-      events.push(p);
+    const { opts, events: eventManager, subscribeSubject } = makeOpts();
+    const queueUpdates: object[] = [];
+    subscribeSubject("agent.queue.update", (_s, p) => {
+      queueUpdates.push(p);
     });
     const result = makeFakeAgentFactory({
       onEvent: (l) => {
@@ -331,16 +340,16 @@ describe("AgentBody — agent.queue.update", () => {
     body = createAgentBody({ ...opts, createAgent: result.factory });
     result.fake.state.isStreaming = true;
     await (body as unknown as { start: () => Promise<void> }).start();
-    bus.publish("t1.leader.prompt", {
+    eventManager.publish({
       version: 1,
-      type: "t1.leader.prompt",
-      sender: { kind: "agent", identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" } },
+      topic: "team.t1.agent.general-1.prompt",
+      sender: { kind: "cli" },
       timestamp: new Date().toISOString(),
-      payload: { prompt: "queued" },
+      payload: { teamId: "t1", agentKey: "general-1", prompt: "queued" },
     });
     await new Promise((r) => setTimeout(r, 0));
-    expect(events.length).toBeGreaterThan(0);
-    const last = events[events.length - 1] as { payload: object };
+    expect(queueUpdates.length).toBeGreaterThan(0);
+    const last = queueUpdates[queueUpdates.length - 1] as { payload: object };
     expect((last.payload as { prompts: string[] }).prompts).toEqual(["[user]: queued"]);
   });
 });

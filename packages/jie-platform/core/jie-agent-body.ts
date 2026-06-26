@@ -6,8 +6,8 @@ import {
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { MemoryManager } from "../storage/index.ts";
 import type { AgentSoul } from "../team/index.ts";
-import type { EventManager } from "./event-manager.ts";
-import { Events, type Sender } from "./types.ts";
+import type { EventManager } from "../event";
+import { Events, type Sender } from "../event";
 import type { StreamPublisher } from "./streaming.ts";
 import type { AgentBody } from "./agent-body.ts";
 
@@ -15,7 +15,6 @@ export class JieAgentBody implements AgentBody {
   private readonly agentKey: string;
   private readonly teamId: string;
   private readonly soul: AgentSoul;
-  private readonly isLeader: boolean;
   private readonly sessionId: string;
   private readonly eventManager: EventManager;
   private readonly memory: MemoryManager;
@@ -41,7 +40,6 @@ export class JieAgentBody implements AgentBody {
     this.agentKey = deps.agentKey;
     this.teamId = deps.teamId;
     this.soul = deps.soul;
-    this.isLeader = deps.isLeader;
     this.sessionId = deps.sessionId;
     this.eventManager = deps.events;
     this.memory = deps.memory;
@@ -131,30 +129,23 @@ export class JieAgentBody implements AgentBody {
   }
 
   private registerSubscriptions(): void {
-    const ownSubject = `${this.teamId}.${this.agentKey}`;
+    const ownPromptSubject = `team.${this.teamId}.agent.${this.agentKey}.prompt`;
     this.unsubscribers.push(
-      this.eventManager.subscribe(ownSubject, (env) => {
-        this.ingestEvent(env.type, env);
+      this.eventManager.subscribe(ownPromptSubject, (env) => {
+        this.ingestEvent(this.agentKey, env);
       }),
     );
-    if (this.isLeader) {
-      this.unsubscribers.push(
-        this.eventManager.subscribe(`${this.teamId}.leader.prompt`, (env) => {
-          this.ingestEvent(env.type, env);
-        }),
-      );
-    }
     for (const topic of this.soul.subscriptions) {
       this.unsubscribers.push(
-        this.eventManager.subscribe(`${this.teamId}.${topic}`, (env) => {
+        this.eventManager.subscribe(`custom.${this.teamId}.${topic}`, (env) => {
           this.ingestEvent(topic, env);
         }),
       );
     }
   }
 
-  private ingestEvent(topic: string, payload: object): void {
-    const inner = (payload as { payload: { source?: string; prompt?: string } }).payload;
+  private ingestEvent(topic: string, env: { payload: unknown }): void {
+    const inner = unwrapIngressPayload(env.payload);
     const source = inner.source;
     const prompt = inner.prompt ?? "";
     const synthetic = source
@@ -187,4 +178,20 @@ function isAssistantMessage(m: unknown): m is AssistantMessage {
     m !== null &&
     (m as { role?: string }).role === "assistant"
   );
+}
+
+function unwrapIngressPayload(payload: unknown): { prompt?: string; source?: string } {
+  if (payload === null || typeof payload !== "object") return {};
+  const outer = payload as Record<string, unknown>;
+  if ("payload" in outer && typeof outer.payload === "object" && outer.payload !== null) {
+    const inner = outer.payload as Record<string, unknown>;
+    return {
+      prompt: typeof inner.prompt === "string" ? inner.prompt : undefined,
+      source: typeof inner.source === "string" ? inner.source : undefined,
+    };
+  }
+  return {
+    prompt: typeof outer.prompt === "string" ? outer.prompt : undefined,
+    source: typeof outer.source === "string" ? outer.source : undefined,
+  };
 }

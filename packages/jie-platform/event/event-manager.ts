@@ -1,6 +1,6 @@
 import type { EventBus } from "./event-bus.ts";
 import { createEventBus } from "./event-bus.ts";
-import type { EventEnvelope } from "./types.ts";
+import type { EventEnvelope } from "./events.ts";
 
 
 
@@ -18,7 +18,7 @@ export function createEventManager(bus: EventBus = createEventBus()): EventManag
   return {
     publish<T extends string>(event: EventEnvelope<T>): void {
       const shaped = shapeEnvelope(event);
-      bus.publish(shaped.type, shaped);
+      bus.publish(shaped.topic, shaped);
     },
     subscribe<T extends string>(subject: T, callback: (event: EventEnvelope<T>) => void): () => void {
       return bus.subscribe(subject, (_subject, env) => {
@@ -32,10 +32,10 @@ export function createEventManager(bus: EventBus = createEventBus()): EventManag
 }
 
 function shapeEnvelope<T extends string>(event: EventEnvelope<T>): EventEnvelope<T> {
-  if (event.type === "agent.tool.call") {
+  if (event.topic === "agent.tool.call") {
     return { ...event, payload: shapeToolCall(event.payload as { tool_call_id: string; name: string; input: string; input_truncated: boolean }) } as EventEnvelope<T>;
   }
-  if (event.type === "agent.tool.result") {
+  if (event.topic === "agent.tool.result") {
     return { ...event, payload: shapeToolResult(event.payload as { tool_call_id: string; name: string; output: string | null; output_truncated: boolean; duration_ms: number; error: string | null }) } as EventEnvelope<T>;
   }
   return event;

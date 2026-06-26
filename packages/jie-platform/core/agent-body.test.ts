@@ -6,8 +6,7 @@ import type {
 } from "@earendil-works/pi-agent-core";
 import { createAgentBody, type CreateAgentBodyOptions } from "./agent-body.ts";
 import { JieAgentBody } from "./jie-agent-body.ts";
-import { createEventBus } from "../event/event-bus.ts";
-import { createEventManager } from "./event-manager.ts";
+import { createEventManager, type EventManager } from "../event";
 import {
   createArtifactStore,
   createMemoryManager,
@@ -41,9 +40,9 @@ function makeNoopTool(): Tool {
   };
 }
 
-function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: CreateAgentBodyOptions; bus: ReturnType<typeof createEventBus> } {
+function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: CreateAgentBodyOptions; events: EventManager; subscribeSubject: (topic: string, cb: (subject: string, payload: object) => void) => () => void } {
   const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
-  const bus = createEventBus();
+  const events: EventManager = createEventManager();
   const registry = createToolRegistry();
   registry.register("noop", makeNoopTool());
   const opts: CreateAgentBodyOptions = {
@@ -51,7 +50,7 @@ function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: Crea
     teamId: "t1",
     soul: makeSoul(),
     isLeader: true,
-    events: createEventManager(bus),
+    events,
     artifactStore: createArtifactStore(storage),
     memory: createMemoryManager(storage),
     sessionId: "s1",
@@ -60,7 +59,10 @@ function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: Crea
     model: { provider: "anthropic", id: "claude-sonnet-4" },
     ...overrides,
   };
-  return { opts, bus };
+  const subscribeSubject = (topic: string, cb: (subject: string, payload: object) => void): (() => void) => {
+    return events.subscribe(topic, (env) => cb(topic, env));
+  };
+  return { opts, events, subscribeSubject };
 }
 
 interface FakeAgentCapture {
@@ -154,14 +156,13 @@ describe("createAgentBody — wiring", () => {
     const { opts } = makeOpts({ agentKey: "leader-1", isLeader: true, sessionId: "sess-x" });
     const cap = makeFakeAgentFactory();
     const body = createAgentBody({ ...opts, createAgent: cap.factory }) as JieAgentBody;
-    const identity = body as unknown as { agentKey: string; teamId: string; isLeader: boolean };
+    const identity = body as unknown as { agentKey: string; teamId: string };
     expect(identity.agentKey).toBe("leader-1");
     expect(identity.teamId).toBe("t1");
-    expect(identity.isLeader).toBe(true);
   });
 
   test("beforeToolCall publishes agent.tool.call with the right payload", async () => {
-    const { opts, bus } = makeOpts();
+    const { opts, subscribeSubject } = makeOpts();
     const cap = makeFakeAgentFactory();
     createAgentBody({ ...opts, createAgent: cap.factory });
     const hook = cap.lastOpts()?.beforeToolCall;
@@ -169,7 +170,7 @@ describe("createAgentBody — wiring", () => {
       throw new Error("beforeToolCall hook not provided");
     }
     const received: AgentEventLike[] = [];
-    bus.subscribe("agent.tool.call", (_s, p) => {
+    subscribeSubject("agent.tool.call", (_s, p) => {
       received.push(p as AgentEventLike);
     });
     await hook({
@@ -184,7 +185,7 @@ describe("createAgentBody — wiring", () => {
   });
 
   test("afterToolCall publishes agent.tool.result with duration_ms", async () => {
-    const { opts, bus } = makeOpts();
+    const { opts, subscribeSubject } = makeOpts();
     const cap = makeFakeAgentFactory();
     createAgentBody({ ...opts, createAgent: cap.factory });
     const beforeHook = cap.lastOpts()?.beforeToolCall;
@@ -194,7 +195,7 @@ describe("createAgentBody — wiring", () => {
     }
     await beforeHook({ toolCall: { id: "c1", name: "bash" }, args: {} } as never);
     const received: AgentEventLike[] = [];
-    bus.subscribe("agent.tool.result", (_s, p) => {
+    subscribeSubject("agent.tool.result", (_s, p) => {
       received.push(p as AgentEventLike);
     });
     await afterHook({
@@ -211,13 +212,13 @@ describe("createAgentBody — wiring", () => {
   });
 
   test("beforeToolCall shapes tool args into wire form (short input → input_truncated=false)", async () => {
-    const { opts, bus } = makeOpts();
+    const { opts, subscribeSubject } = makeOpts();
     const cap = makeFakeAgentFactory();
     createAgentBody({ ...opts, createAgent: cap.factory });
     const hook = cap.lastOpts()?.beforeToolCall;
     if (hook === undefined) throw new Error("beforeToolCall hook not provided");
     const received: AgentEventLike[] = [];
-    bus.subscribe("agent.tool.call", (_s, p) => {
+    subscribeSubject("agent.tool.call", (_s, p) => {
       received.push(p as AgentEventLike);
     });
     await hook({
@@ -231,13 +232,13 @@ describe("createAgentBody — wiring", () => {
   });
 
   test("beforeToolCall truncates long input with marker", async () => {
-    const { opts, bus } = makeOpts();
+    const { opts, subscribeSubject } = makeOpts();
     const cap = makeFakeAgentFactory();
     createAgentBody({ ...opts, createAgent: cap.factory });
     const hook = cap.lastOpts()?.beforeToolCall;
     if (hook === undefined) throw new Error("beforeToolCall hook not provided");
     const received: AgentEventLike[] = [];
-    bus.subscribe("agent.tool.call", (_s, p) => {
+    subscribeSubject("agent.tool.call", (_s, p) => {
       received.push(p as AgentEventLike);
     });
     await hook({
@@ -251,7 +252,7 @@ describe("createAgentBody — wiring", () => {
   });
 
   test("afterToolCall: error path leaves output null and output_truncated=false", async () => {
-    const { opts, bus } = makeOpts();
+    const { opts, subscribeSubject } = makeOpts();
     const cap = makeFakeAgentFactory();
     createAgentBody({ ...opts, createAgent: cap.factory });
     const beforeHook = cap.lastOpts()?.beforeToolCall;
@@ -261,7 +262,7 @@ describe("createAgentBody — wiring", () => {
     }
     await beforeHook({ toolCall: { id: "c1", name: "bash" }, args: {} } as never);
     const received: AgentEventLike[] = [];
-    bus.subscribe("agent.tool.result", (_s, p) => {
+    subscribeSubject("agent.tool.result", (_s, p) => {
       received.push(p as AgentEventLike);
     });
     await afterHook({

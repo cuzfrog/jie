@@ -8,8 +8,7 @@ import {
 } from "bun:test";
 import { type Agent, type AgentMessage } from "@earendil-works/pi-agent-core";
 import { JieAgentBody } from "./jie-agent-body.ts";
-import { createEventBus, type EventBus } from "../event/event-bus.ts";
-import { createEventManager, type EventManager } from "./event-manager.ts";
+import { createEventManager, type EventManager } from "../event";
 import type { MemoryManager } from "../storage";
 import type { AgentSoul } from "../team";
 import type { StreamPublisher } from "./streaming.ts";
@@ -85,7 +84,7 @@ function makeFakeMemory(): {
 }
 
 interface Harness {
-  bus: EventBus;
+  events: EventManager;
   memory: MemoryManager;
   agent: Agent;
   state: { messages: AgentMessage[]; isStreaming: boolean };
@@ -96,14 +95,12 @@ interface Harness {
   beginStream: ReturnType<typeof mock>;
   append: ReturnType<typeof mock>;
   endStream: ReturnType<typeof mock>;
-  publisher: EventManager;
   persisted: AgentMessage[];
   makeBody: (overrides?: Partial<{ soul: AgentSoul; isLeader: boolean; sessionId: string; agentKey: string }>) => JieAgentBody;
 }
 
 function makeHarness(): Harness {
-  const bus = createEventBus();
-  const publisher = createEventManager(bus);
+  const events: EventManager = createEventManager();
   const { memory, persisted } = makeFakeMemory();
   const { agent, state, prompt, continue: cont, subscribe } = makeFakeAgent();
   const { stream, beginStream, append, endStream } = makeFakeStream();
@@ -114,13 +111,13 @@ function makeHarness(): Harness {
       soul: overrides.soul ?? makeSoul(),
       isLeader: overrides.isLeader ?? true,
       sessionId: overrides.sessionId ?? "s1",
-      events: publisher,
+      events,
       memory,
       agent,
       streamPublisher: stream,
     });
   return {
-    bus,
+    events,
     memory,
     agent,
     state,
@@ -131,7 +128,6 @@ function makeHarness(): Harness {
     beginStream,
     append,
     endStream,
-    publisher,
     persisted,
     makeBody,
   };
@@ -143,11 +139,9 @@ describe("JieAgentBody — identity", () => {
     const body = h.makeBody({ agentKey: "leader-1", isLeader: true }) as unknown as {
       agentKey: string;
       teamId: string;
-      isLeader: boolean;
     };
     expect(body.agentKey).toBe("leader-1");
     expect(body.teamId).toBe("t1");
-    expect(body.isLeader).toBe(true);
   });
 });
 
@@ -164,43 +158,43 @@ describe("JieAgentBody — start() subscriptions", () => {
     body.stop();
   });
 
-  test("subscribes to {team_id}.{agent_key}", async () => {
+  test("subscribes to team.{teamId}.agent.{agentKey}.prompt", async () => {
     await body.start();
     let received = false;
-    h.bus.subscribe("t1.general-1", () => {
+    h.events.subscribe("team.t1.agent.general-1.prompt", () => {
       received = true;
     });
-    h.bus.publish("t1.general-1", {
+    h.events.publish({
       version: 1,
-      type: "t1.general-1",
-      sender: { kind: "agent", identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" } },
+      topic: "team.t1.agent.general-1.prompt",
+      sender: { kind: "cli" },
       timestamp: new Date().toISOString(),
-      payload: { prompt: "hi" },
+      payload: { teamId: "t1", agentKey: "general-1", prompt: "hi" },
     });
     expect(received).toBe(true);
   });
 
-  test("isLeader=true: subscribes to {teamId}.leader.prompt", async () => {
+  test("isLeader=true: subscribes to own agent prompt subject", async () => {
     await body.start();
     let received = false;
-    h.bus.subscribe("t1.leader.prompt", () => {
+    h.events.subscribe("team.t1.agent.general-1.prompt", () => {
       received = true;
     });
-    h.bus.publish("t1.leader.prompt", {
+    h.events.publish({
       version: 1,
-      type: "t1.leader.prompt",
-      sender: { kind: "agent", identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" } },
+      topic: "team.t1.agent.general-1.prompt",
+      sender: { kind: "cli" },
       timestamp: new Date().toISOString(),
-      payload: { prompt: "go" },
+      payload: { teamId: "t1", agentKey: "general-1", prompt: "go" },
     });
     expect(received).toBe(true);
   });
 
-  test("isLeader=false: does NOT subscribe to {teamId}.leader.prompt", () => {
+  test("isLeader=false: subscribes to own agent prompt subject (not leader's)", async () => {
     const b2 = h.makeBody({ isLeader: false, agentKey: "worker-1" });
-    void b2;
-    expect(h.bus.subscriberCount("t1.worker-1")).toBe(0);
-    expect(h.bus.subscriberCount("t1.leader.prompt")).toBe(0);
+    await b2.start();
+    expect(h.events.subscriberCount("team.t1.agent.worker-1.prompt")).toBe(1);
+    b2.stop();
   });
 
   test("subscribes to each topic in soul.subscriptions", async () => {
@@ -210,15 +204,15 @@ describe("JieAgentBody — start() subscriptions", () => {
     });
     await b2.start();
     let received = false;
-    h.bus.subscribe("t1.task.recorded", () => {
+    h.events.subscribe("custom.t1.task.recorded", () => {
       received = true;
     });
-    h.bus.publish("t1.task.recorded", {
+    h.events.publish({
       version: 1,
-      type: "t1.task.recorded",
+      topic: "custom.t1.task.recorded",
       sender: { kind: "agent", identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" } },
       timestamp: new Date().toISOString(),
-      payload: { prompt: "task", source: "x" },
+      payload: { clientTopic: "t1.task.recorded", payload: { prompt: "task", source: "x" } },
     });
     expect(received).toBe(true);
     b2.stop();
@@ -292,15 +286,15 @@ describe("JieAgentBody — prompt ingress format", () => {
     h = makeHarness();
   });
 
-  test("`leader.prompt` (no source) is formatted as `[user]: <prompt>`", async () => {
+  test("`agent.prompt` (no source) is formatted as `[user]: <prompt>`", async () => {
     const body = h.makeBody();
     await body.start();
-    h.bus.publish("t1.leader.prompt", {
+    h.events.publish({
       version: 1,
-      type: "t1.leader.prompt",
-      sender: { kind: "agent", identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" } },
+      topic: "team.t1.agent.general-1.prompt",
+      sender: { kind: "cli" },
       timestamp: new Date().toISOString(),
-      payload: { prompt: "hello" },
+      payload: { teamId: "t1", agentKey: "general-1", prompt: "hello" },
     });
     const calls = h.prompt.mock.calls as Array<[AgentMessage]>;
     expect(calls.length).toBeGreaterThan(0);
@@ -315,12 +309,12 @@ describe("JieAgentBody — prompt ingress format", () => {
       soul: makeSoul({ subscriptions: ["task.researched"] }),
     });
     await body.start();
-    h.bus.publish("t1.task.researched", {
+    h.events.publish({
       version: 1,
-      type: "t1.task.researched",
+      topic: "custom.t1.task.researched",
       sender: { kind: "agent", identity: { teamId: "t1", agentRole: "researcher", agentKey: "researcher-1" } },
       timestamp: new Date().toISOString(),
-      payload: { prompt: "report", source: "researcher-1" },
+      payload: { clientTopic: "t1.task.researched", payload: { prompt: "report", source: "researcher-1" } },
     });
     const calls = h.prompt.mock.calls as Array<[AgentMessage]>;
     const synthetic = calls[0]![0] as { content: string };
@@ -417,18 +411,18 @@ describe("JieAgentBody — addExternalCleanup + stop()", () => {
     const h = makeHarness();
     const body = h.makeBody();
     await body.start();
-    expect(h.bus.subscriberCount("t1.general-1")).toBe(1);
+    expect(h.events.subscriberCount("team.t1.agent.general-1.prompt")).toBe(1);
     body.stop();
-    expect(h.bus.subscriberCount("t1.general-1")).toBe(0);
+    expect(h.events.subscriberCount("team.t1.agent.general-1.prompt")).toBe(0);
   });
 
   test("start() is idempotent (second call does not re-subscribe)", async () => {
     const h = makeHarness();
     const body = h.makeBody();
     await body.start();
-    const countAfterFirst = h.bus.subscriberCount("t1.general-1");
+    const countAfterFirst = h.events.subscriberCount("team.t1.agent.general-1.prompt");
     await body.start();
-    const countAfterSecond = h.bus.subscriberCount("t1.general-1");
+    const countAfterSecond = h.events.subscriberCount("team.t1.agent.general-1.prompt");
     expect(countAfterFirst).toBe(countAfterSecond);
     body.stop();
   });

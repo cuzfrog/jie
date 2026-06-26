@@ -4,7 +4,7 @@ import {
   type AuthStore,
   type SettingsStore,
 } from "@cuzfrog/jie-platform/config";
-import { createEventManager } from "@cuzfrog/jie-platform/core";
+import { createEventManager } from "@cuzfrog/jie-platform/event";
 import { createMemoryManager, createStorage } from "@cuzfrog/jie-platform/storage";
 import { type TeamRegistry } from "@cuzfrog/jie-platform/team";
 import { createToolRegistry } from "@cuzfrog/jie-platform/tools";

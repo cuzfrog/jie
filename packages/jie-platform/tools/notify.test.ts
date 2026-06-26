@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createEventManager,
   type EventManager,
-} from "../core/index.ts";
+} from "../event/index.ts";
 import type { ArtifactStore } from "../storage/index.ts";
 import type { ExecutionContext } from "./types.ts";
 import { createNotifyTool } from "./notify.ts";
@@ -10,10 +10,10 @@ import { JiePlatformError } from "../domain-types.ts";
 
 interface NotifyEnvelope {
   version: 1;
-  type: string;
+  topic: string;
   sender: { kind: "agent"; identity: { teamId: string; agentRole?: string; agentKey?: string } } | { kind: "cli" } | { kind: "tui" };
   timestamp: string;
-  payload: { prompt: string; source: string };
+  payload: { clientTopic: string; payload: { prompt: string; source: string } };
 }
 
 function makeCtx(): ExecutionContext {
@@ -46,8 +46,8 @@ interface Harness {
 function makeHarness(): Harness {
   const events = createEventManager();
   const received: Array<{ subject: string; env: NotifyEnvelope }> = [];
-  events.subscribe("t1.task", (env) => {
-    received.push({ subject: env.type, env: env as unknown as NotifyEnvelope });
+  events.subscribe("custom.t1.task", (env) => {
+    received.push({ subject: env.topic, env: env as unknown as NotifyEnvelope });
   });
   return { events, received };
 }
@@ -115,7 +115,7 @@ describe("notify — topic validation", () => {
 });
 
 describe("notify — valid publish path", () => {
-  test("publishes a full envelope to {team_id}.{topic}", async () => {
+  test("publishes a full envelope to custom.{team_id}.{topic}", async () => {
     const { events, received } = makeHarness();
     const tool = createNotifyTool({ events, isSelfSubscribed: () => false });
 
@@ -126,16 +126,19 @@ describe("notify — valid publish path", () => {
 
     expect(received).toHaveLength(1);
     const { subject, env } = received[0]!;
-    expect(subject).toBe("t1.task");
+    expect(subject).toBe("custom.t1.task");
     expect(env.version).toBe(1);
-    expect(env.type).toBe("t1.task");
+    expect(env.topic).toBe("custom.t1.task");
     expect(env.sender.kind).toBe("agent");
     if (env.sender.kind === "agent") {
       expect(env.sender.identity.teamId).toBe("t1");
       expect(env.sender.identity.agentRole).toBe("leader");
       expect(env.sender.identity.agentKey).toBe("leader-1");
     }
-    expect(env.payload).toEqual({ prompt: "hello", source: "leader-1" });
+    expect(env.payload).toEqual({
+      clientTopic: "t1.task",
+      payload: { prompt: "hello", source: "leader-1" },
+    });
     const ts = new Date(env.timestamp).getTime();
     expect(ts).toBeGreaterThanOrEqual(before);
     expect(ts).toBeLessThanOrEqual(after);
@@ -143,8 +146,8 @@ describe("notify — valid publish path", () => {
 
   test("LLM-facing content is the > 0 variant when there are recipients", async () => {
     const events = createEventManager();
-    events.subscribe("t1.task", () => {});
-    events.subscribe("t1.task", () => {});
+    events.subscribe("custom.t1.task", () => {});
+    events.subscribe("custom.t1.task", () => {});
     const tool = createNotifyTool({ events, isSelfSubscribed: () => false });
 
     const result = await tool.execute(
@@ -169,7 +172,7 @@ describe("notify — valid publish path", () => {
 
   test("`details = { topic, recipients }` is returned for afterToolCall hooks", async () => {
     const events = createEventManager();
-    events.subscribe("t1.task", () => {});
+    events.subscribe("custom.t1.task", () => {});
     const tool = createNotifyTool({ events, isSelfSubscribed: () => false });
 
     const result = await tool.execute(
@@ -181,7 +184,7 @@ describe("notify — valid publish path", () => {
 
   test("recipients count subtracts 1 when the publisher is itself subscribed", async () => {
     const events = createEventManager();
-    events.subscribe("t1.task", () => {});
+    events.subscribe("custom.t1.task", () => {});
     const tool = createNotifyTool({
       events,
       isSelfSubscribed: (topic) => topic === "task",
@@ -196,7 +199,7 @@ describe("notify — valid publish path", () => {
 
   test("recipients is not negative when the publisher is the only subscriber", async () => {
     const events = createEventManager();
-    events.subscribe("t1.task", () => {});
+    events.subscribe("custom.t1.task", () => {});
     const tool = createNotifyTool({
       events,
       isSelfSubscribed: () => true,

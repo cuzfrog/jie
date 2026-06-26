@@ -53,9 +53,9 @@ describe("runPrint", () => {
     expect(events.subscribe).toHaveBeenCalledWith("agent.idle", expect.any(Function));
     expect(events.publish).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: "t1.leader.prompt",
-        payload: expect.objectContaining({ prompt: "hi" }),
-        sender: expect.objectContaining({ kind: "agent", identity: expect.objectContaining({ teamId, agentRole: leaderRole, agentKey: leaderKey }) }),
+        topic: "team.t1.agent.general-1.prompt",
+        payload: expect.objectContaining({ teamId: "t1", agentKey: "general-1", prompt: "hi" }),
+        sender: expect.objectContaining({ kind: "cli" }),
       }),
     );
     expect(handle.stop).toHaveBeenCalled();

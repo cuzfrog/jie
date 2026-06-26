@@ -1,6 +1,6 @@
 
 import { getProviders } from "@earendil-works/pi-ai";
-import type { MergedSettings } from "@cuzfrog/jie-platform";
+import type { MergedSettings } from "@cuzfrog/jie-platform/config";
 import type { SettingsStore } from "@cuzfrog/jie-platform/config";
 import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
 import type { ParsedArgsMap } from "../cli-flags.ts";

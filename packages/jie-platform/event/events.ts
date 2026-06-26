@@ -1,5 +1,3 @@
-import { checkNonEmpty } from "../utils";
-
 type EventPayloadMap = {
   "agent.turn.start": null;
   "agent.idle": null;
@@ -15,15 +13,15 @@ type EventPayloadMap = {
   "agent.stream.chunk": { stream_id: number; seq: number; block_type: "text" | "thinking"; text: string };
   "agent.stream.end": { stream_id: number; total_chunks: number };
   "agent.queue.update": { prompts: string[] };
-  "leader.prompt": { prompt: string };
-  "user.prompt": { prompt: string };
-  "team.loaded": { agents: Array<{ role: string; agent_key: string; is_leader: boolean }> };
+  "team.{teamId}.agent.{agentKey}.prompt": { teamId: string; agentKey: string; prompt: string };
+  "team.{teamId}.loaded": { teamId: string; agents: Array<{ role: string; agent_key: string; is_leader: boolean }> };
+  "custom.{clientTopic}": { clientTopic: string; payload: unknown }
 }
 
 export interface AgentIdentity {
   teamId: string;
-  agentRole?: string;
-  agentKey?: string;
+  agentRole: string;
+  agentKey: string;
 }
 
 export type Sender =
@@ -34,7 +32,7 @@ export type Sender =
 export type EventType = keyof EventPayloadMap;
 export interface EventEnvelope<T extends string = string> {
   version: 1;
-  type: T;
+  topic: string;
   sender: Sender;
   timestamp: string;
   payload: T extends keyof EventPayloadMap ? EventPayloadMap[T] : Record<string, unknown>;
@@ -55,24 +53,28 @@ export const Events = {
     createEvent("agent.stream.end", sender, { stream_id, total_chunks }),
   agentQueueUpdate: (sender: Sender, prompts: string[]) =>
     createEvent("agent.queue.update", sender, { prompts }),
-  leaderPrompt: (sender: Sender, prompt: string) =>
-    createEvent("leader.prompt", sender, { prompt }),
-  userPrompt: (sender: Sender, prompt: string) =>
-    createEvent("user.prompt", sender, { prompt }),
+  userPrompt: (sender: Sender, teamId: string, prompt: string, targetAgentKey: string) =>
+    createEvent("team.{teamId}.agent.{agentKey}.prompt", sender, { teamId, prompt, agentKey: targetAgentKey }),
   teamLoaded: (sender: Sender, teamId: string, agents: Array<{ role: string; agent_key: string; is_leader: boolean }>) =>
-    createEvent("team.loaded", sender, { agents }),
-  envelope: <T extends string>(sender: Sender, type: T, payload: Record<string, unknown>) =>
-    Object.freeze({
-      version: 1,
-      type: checkNonEmpty(type),
-      sender,
-      timestamp: new Date().toISOString(),
-      payload,
-    }) as EventEnvelope<T>,
+    createEvent("team.{teamId}.loaded", sender, { teamId, agents }),
+  custom: (sender: Sender, clientTopic: string, payload: unknown) =>
+    createEvent(`custom.{clientTopic}`, sender, { clientTopic, payload }),
 }
 
 function createEvent<T extends EventType>(type: T, sender: Sender): EventEnvelope<T>;
 function createEvent<T extends EventType>(type: T, sender: Sender, payload: EventPayloadMap[T]): EventEnvelope<T>;
 function createEvent(type: EventType, sender: Sender, payload?: EventPayloadMap[EventType]): EventEnvelope<EventType> {
-  return Object.freeze({ version: 1, sender, type: checkNonEmpty(type), timestamp: new Date().toISOString(), payload: payload ?? null });
+  return Object.freeze({ version: 1, sender, topic: resolveTopic(type, payload), timestamp: new Date().toISOString(), payload: payload ?? null });
 }
+
+const PLACEHOLDER_PATTERN = /\{([a-zA-Z][a-zA-Z0-9]*)\}/g;
+function resolveTopic(template: string, payload: EventPayloadMap[EventType] | null | undefined): string {
+  return template.replace(PLACEHOLDER_PATTERN, (placeholder, key: string) => {
+    if (payload !== null && payload !== undefined && typeof payload === "object") {
+      const value = (payload as Record<string, unknown>)[key];
+      if (typeof value === "string") return value;
+    }
+    throw new Error(`Cannot resolve topic placeholder ${placeholder}: missing ${key} in payload`);
+  });
+}
+

@@ -42,7 +42,6 @@
 - When I ask a question, answer it before any actions.
 - When I make a decision, reason it thoroughly, then express your opinion. Only when we both agree, we move on.
 - Stick to fact. Our purpose is to build a good software, don't fluff, challenge my ideas.
-- Directly ask questions without calling ask_user tool, there's no such a tool.
 - Do not ask trivial questions that have no consequences.
 
 ## Code Conventions

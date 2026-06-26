@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { createEventBus, type EventBus } from "../event/event-bus.ts";
 import { makeStreamPublisher } from "./streaming.ts";
-import { createEventManager } from "./event-manager.ts";
-import type { Sender } from "./types.ts";
+import { createEventManager } from "../event/event-manager.ts";
+import type { Sender } from "../event/events.ts";
 
 describe("makeStreamPublisher", () => {
   let bus: EventBus;
@@ -84,6 +84,6 @@ describe("makeStreamPublisher", () => {
     });
     stream.beginStream();
     stream.endStream();
-    expect(ends[0]).toMatchObject({ sender, type: "agent.stream.end" });
+    expect(ends[0]).toMatchObject({ sender, topic: "agent.stream.end" });
   });
 });

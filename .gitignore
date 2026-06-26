@@ -1,4 +1,5 @@
 .codemie/
+.claude/
 .vscode/
 node_modules/
 

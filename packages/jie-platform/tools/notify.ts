@@ -1,5 +1,5 @@
 import { Type } from "typebox";
-import { Events, type EventManager, type Sender } from "../core/index.ts";
+import { Events, type EventManager, type Sender } from "../event/index.ts";
 import type { ExecutionContext, Tool, ToolResult } from "./types.ts";
 import { JiePlatformError } from "../domain-types.ts";
 
@@ -69,17 +69,17 @@ export function createNotifyTool(deps: NotifyDeps): Tool<NotifyInput> {
         );
       }
 
-      const subject = `${ctx.teamId}.${input.topic}`;
-      const totalSubscribers = deps.events.subscriberCount(subject);
-      const recipients = deps.isSelfSubscribed(input.topic)
-        ? Math.max(0, totalSubscribers - 1)
-        : totalSubscribers;
-
+      const clientTopic = `${ctx.teamId}.${input.topic}`;
       const sender: Sender = {
         kind: "agent",
         identity: { teamId: ctx.teamId, agentRole: ctx.agentRole, agentKey: ctx.agentKey },
       };
-      deps.events.publish(Events.envelope(sender, subject, { prompt: input.prompt, source: ctx.agentKey }));
+      const envelope = Events.custom(sender, clientTopic, { prompt: input.prompt, source: ctx.agentKey });
+      const totalSubscribers = deps.events.subscriberCount(envelope.topic);
+      const recipients = deps.isSelfSubscribed(input.topic)
+        ? Math.max(0, totalSubscribers - 1)
+        : totalSubscribers;
+      deps.events.publish(envelope);
 
       const content =
         recipients > 0

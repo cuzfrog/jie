@@ -2,7 +2,7 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { join } from "node:path";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { createEventManager, type EventEnvelope } from "./core";
+import { createEventManager, type EventEnvelope } from "./event";
 import { createJiePlatform } from "./start.ts";
 import { createModelRegistry, type SettingsStore } from "./config";
 import type { AuthStore } from "./config";
@@ -77,7 +77,7 @@ describe("createJiePlatform", () => {
         deps,
       );
       const events: EventEnvelope<string>[] = [];
-      handle.events.subscribe("leader.prompt", (env) => {
+      handle.events.subscribe("team.minimal.agent.general-1.prompt", (env) => {
         events.push(env);
       });
       expect(events).toHaveLength(0);
@@ -86,7 +86,7 @@ describe("createJiePlatform", () => {
     test("team.loaded is published once at start; the event carries is_leader per agent", async () => {
       const deps = makeDeps(workspace, homeJieDir);
       const events: EventEnvelope<string>[] = [];
-      deps.events.subscribe("minimal.team.loaded", (env) => {
+      deps.events.subscribe("team.minimal.loaded", (env) => {
         events.push(env);
       });
       await createJiePlatform(
@@ -133,9 +133,9 @@ describe("createJiePlatform", () => {
         },
         deps,
       );
-      expect(deps.events.subscriberCount("minimal.general-1")).toBeGreaterThan(0);
+      expect(deps.events.subscriberCount("team.minimal.agent.general-1.prompt")).toBeGreaterThan(0);
       await handle.stop();
-      expect(deps.events.subscriberCount("minimal.general-1")).toBe(0);
+      expect(deps.events.subscriberCount("team.minimal.agent.general-1.prompt")).toBe(0);
     });
   });
 
@@ -209,7 +209,7 @@ describe("createJiePlatform", () => {
 
       const deps = makeDeps(workspace, homeJieDir);
       const events: EventEnvelope<string>[] = [];
-      deps.events.subscribe("ghost.team.loaded", (env) => {
+      deps.events.subscribe("team.ghost.loaded", (env) => {
         events.push(env);
       });
       const handle = await createJiePlatform(

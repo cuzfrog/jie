@@ -1,14 +1,9 @@
-import {
-  createJiePlatform,
-  type JiePlatform,
-  type MergedSettings,
-  type ModelRegistry,
-  type ToolRegistry
-} from "@cuzfrog/jie-platform";
-import type { AuthStore, SettingsStore } from "@cuzfrog/jie-platform/config";
-import type { EventManager } from "@cuzfrog/jie-platform/core";
+import { createJiePlatform, type JiePlatform } from "@cuzfrog/jie-platform";
+import type { AuthStore, MergedSettings, ModelRegistry, SettingsStore } from "@cuzfrog/jie-platform/config";
+import type { EventManager } from "@cuzfrog/jie-platform/event";
 import type { MemoryManager, Storage } from "@cuzfrog/jie-platform/storage";
 import type { Team, TeamRegistry } from "@cuzfrog/jie-platform/team";
+import type { ToolRegistry } from "@cuzfrog/jie-platform/tools";
 
 export interface AppDeps {
   authStore: AuthStore;
@@ -73,7 +68,7 @@ export async function createApp(
   }
 
   let captured: { teamId: string; leaderRole: string; leaderKey: string } | null = null;
-  deps.events.subscribe(`${team.id}.team.loaded`, (env) => {
+  deps.events.subscribe(`team.${team.id}.loaded`, (env: { payload: unknown }) => {
     const agents = (env.payload as { agents: Array<{ role: string; agent_key: string; is_leader: boolean }> }).agents;
     const leader = agents.find((a) => a.is_leader) ?? agents[0];
     if (leader === undefined) return;
