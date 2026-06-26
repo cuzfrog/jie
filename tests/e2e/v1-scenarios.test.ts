@@ -127,8 +127,9 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
   }
 
   test(
-    "Scenario 1: jie -p in fresh dir → exit 0, stdout non-empty, ends with \\n",
+    "Scenario 1: jie -p in fresh dir → exit 0, stdout contains file1.txt, ends with \\n",
     async () => {
+      writeFileSync(join(workspace, "file1.txt"), "");
       writeModelsJsonTo(workspace);
       writeSettingsJson(workspace);
       const code = await main(
@@ -137,8 +138,27 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
       );
       const stdout = captureStdout();
       expect(code).toBe(0);
-      expect(stdout.length).toBeGreaterThan(0);
+      expect(stdout).toContain("file1.txt");
       expect(stdout.endsWith("\n")).toBe(true);
+    },
+  );
+
+  test(
+    "Scenario 1a: jie -p reads file1.txt and writes file2.txt with same content",
+    async () => {
+      writeFileSync(join(workspace, "file1.txt"), "Hello123888");
+      writeModelsJsonTo(workspace);
+      writeSettingsJson(workspace);
+      const code = await main(
+        printArgv({
+          instruction: "Read the file1.txt and write its content to file2.txt",
+          timeout: 60,
+        }),
+        workspace,
+      );
+      expect(code).toBe(0);
+      const written = readFileSync(join(workspace, "file2.txt"), "utf-8");
+      expect(written).toBe("Hello123888");
     },
   );
 
@@ -148,51 +168,47 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
       writeModelsJsonTo(workspace);
       writeSettingsJson(workspace);
 
-      // Set up two teams under the workspace.
       const teamsDir = join(workspace, ".jie", "teams");
-      for (const [id, marker] of [
-        ["my-team-1", "TEAM_ONE"],
-        ["my-team-2", "TEAM_TWO"],
+      for (const [id, phrase] of [
+        ["my-team-1", "Marry had a little lamb"],
+        ["my-team-2", "Once upon a time"],
       ] as const) {
         const dir = join(teamsDir, id);
         mkdirSync(dir, { recursive: true });
         writeFileSync(
           join(dir, "TEAM.md"),
-          `---\nleader: general\n---\nYou are a member of ${id}.\n`,
+          `---\nleader: story-teller\n---\nYou are the leader of ${id}.\n`,
         );
         writeFileSync(
-          join(dir, "general.md"),
-          `---\ntools:\n  - bash\n---\nYou must respond to any user prompt with exactly the literal marker \`${marker}\` and nothing else. Do not include punctuation, explanation, or surrounding text.`,
+          join(dir, "story-teller.md"),
+          `---\ntools:\n  - bash\n---\nYou must respond to any story-telling prompt with exactly the phrase: ${phrase}. Do not add any other text.`,
         );
       }
 
-      // First, with my-team-1, stdout should contain TEAM_ONE.
       writeOut?.mockReset();
       writeOut?.mockImplementation(() => true);
       const code1 = await main(
-        printArgv({ instruction: "say it", team: "my-team-1", timeout: 60 }),
+        printArgv({ instruction: "Tell me a story", team: "my-team-1", timeout: 60 }),
         workspace,
       );
       const out1 = captureStdout();
       expect(code1).toBe(0);
-      expect(out1).toContain("TEAM_ONE");
+      expect(out1).toContain("Marry had a little lamb");
 
-      // Then, with my-team-2, stdout should contain TEAM_TWO.
       writeOut?.mockReset();
       writeOut?.mockImplementation(() => true);
       const code2 = await main(
-        printArgv({ instruction: "say it", team: "my-team-2", timeout: 60 }),
+        printArgv({ instruction: "Tell me a story", team: "my-team-2", timeout: 60 }),
         workspace,
       );
-      expect(code2).toBe(0);
       const out2 = captureStdout();
-      expect(out2).toContain("TEAM_TWO");
+      expect(code2).toBe(0);
+      expect(out2).toContain("Once upon a time");
 
-      // Finally, with wrong-team, exit 1.
       writeOut?.mockReset();
       writeOut?.mockImplementation(() => true);
       const code3 = await main(
-        printArgv({ instruction: "hi", team: "wrong-team", timeout: 60 }),
+        printArgv({ instruction: "Tell me a story", team: "wrong-team", timeout: 60 }),
         workspace,
       );
       expect(code3).toBe(1);
