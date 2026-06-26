@@ -1,5 +1,5 @@
-import type { EventManager } from "../event/event-manager.ts";
-import { Events, type Sender } from "../event/events.ts";
+import type { EventManager } from "../event";
+import { Events, type Sender } from "../event";
 
 const STREAM_CHUNK_SIZE = 64;
 const STREAM_FLUSH_MS = 200;
@@ -15,13 +15,13 @@ export interface StreamPublisher {
 export function makeStreamPublisher(events: EventManager, sender: Sender): StreamPublisher {
   let streamId = 0;
   let buffer = "";
-  let blockType: BlockType | null = null;
+  let currentBlockType: BlockType | null = null;
   let seq = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let totalChunks = 0;
 
   function flush(): void {
-    if (buffer.length === 0 || blockType === null) {
+    if (buffer.length === 0 || currentBlockType === null) {
       if (timer !== null) {
         clearTimeout(timer);
         timer = null;
@@ -32,7 +32,7 @@ export function makeStreamPublisher(events: EventManager, sender: Sender): Strea
       sender,
       streamId,
       seq,
-      blockType,
+      currentBlockType,
       buffer,
     ));
     seq += 1;
@@ -51,18 +51,18 @@ export function makeStreamPublisher(events: EventManager, sender: Sender): Strea
       seq = 0;
       totalChunks = 0;
       buffer = "";
-      blockType = null;
+      currentBlockType = null;
       if (timer !== null) {
         clearTimeout(timer);
         timer = null;
       }
     },
 
-    append(blockTypeValue: BlockType, delta: string): void {
-      if (blockType !== null && blockType !== blockTypeValue) {
+    append(blockType: BlockType, delta: string): void {
+      if (currentBlockType !== null && currentBlockType !== blockType) {
         flush();
       }
-      blockType = blockTypeValue;
+      currentBlockType = blockType;
       buffer += delta;
       if (buffer.length >= STREAM_CHUNK_SIZE) {
         flush();
