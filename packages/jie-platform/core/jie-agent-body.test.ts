@@ -1,11 +1,3 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  test,
-} from "bun:test";
 import { type Agent, type AgentMessage } from "@earendil-works/pi-agent-core";
 import { JieAgentBody } from "./jie-agent-body.ts";
 import { createEventManager, type EventManager } from "../event";
@@ -31,35 +23,41 @@ function makeFakeAgent(overrides: Partial<{
 }> = {}): {
   agent: Agent;
   state: { messages: AgentMessage[]; isStreaming: boolean };
-  prompt: ReturnType<typeof mock>;
-  continue: ReturnType<typeof mock>;
-  subscribe: ReturnType<typeof mock>;
+  prompt: ReturnType<typeof vi.fn>;
+  followUp: ReturnType<typeof vi.fn>;
+  steer: ReturnType<typeof vi.fn>;
+  continue: ReturnType<typeof vi.fn>;
+  subscribe: ReturnType<typeof vi.fn>;
 } {
   const state = {
     messages: overrides.messages ?? [],
     isStreaming: overrides.isStreaming ?? false,
   };
-  const prompt = mock(async () => {});
-  const cont = mock(async () => {});
-  const subscribe = mock(() => () => {});
+  const prompt = vi.fn(async () => {});
+  const followUp = vi.fn(() => {});
+  const steer = vi.fn(() => {});
+  const cont = vi.fn(async () => {});
+  const subscribe = vi.fn(() => () => {});
   const agent = {
     state,
     prompt,
+    followUp,
+    steer,
     continue: cont,
     subscribe,
   } as unknown as Agent;
-  return { agent, state, prompt, continue: cont, subscribe };
+  return { agent, state, prompt, followUp, steer, continue: cont, subscribe };
 }
 
 function makeFakeStream(): {
   stream: StreamPublisher;
-  beginStream: ReturnType<typeof mock>;
-  append: ReturnType<typeof mock>;
-  endStream: ReturnType<typeof mock>;
+  beginStream: ReturnType<typeof vi.fn>;
+  append: ReturnType<typeof vi.fn>;
+  endStream: ReturnType<typeof vi.fn>;
 } {
-  const beginStream = mock(() => {});
-  const append = mock(() => {});
-  const endStream = mock(() => ({ stream_id: 0, total_chunks: 0 }));
+  const beginStream = vi.fn(() => {});
+  const append = vi.fn(() => {});
+  const endStream = vi.fn(() => ({ stream_id: 0, total_chunks: 0 }));
   const stream = {
     beginStream,
     append,
@@ -71,14 +69,14 @@ function makeFakeStream(): {
 function makeFakeMemory(): {
   memory: MemoryManager;
   persisted: AgentMessage[];
-  restore: ReturnType<typeof mock>;
-  persist: ReturnType<typeof mock>;
+  restore: ReturnType<typeof vi.fn>;
+  persist: ReturnType<typeof vi.fn>;
 } {
   const persisted: AgentMessage[] = [];
-  const persist = mock(async (msg: AgentMessage) => {
+  const persist = vi.fn(async (msg: AgentMessage) => {
     persisted.push(msg);
   });
-  const restore = mock(async () => persisted.slice());
+  const restore = vi.fn(async () => persisted.slice());
   const memory = { persist, restore } as unknown as MemoryManager;
   return { memory, persisted, restore, persist };
 }
@@ -88,13 +86,15 @@ interface Harness {
   memory: MemoryManager;
   agent: Agent;
   state: { messages: AgentMessage[]; isStreaming: boolean };
-  prompt: ReturnType<typeof mock>;
-  continue: ReturnType<typeof mock>;
-  subscribe: ReturnType<typeof mock>;
+  prompt: ReturnType<typeof vi.fn>;
+  followUp: ReturnType<typeof vi.fn>;
+  steer: ReturnType<typeof vi.fn>;
+  continue: ReturnType<typeof vi.fn>;
+  subscribe: ReturnType<typeof vi.fn>;
   stream: StreamPublisher;
-  beginStream: ReturnType<typeof mock>;
-  append: ReturnType<typeof mock>;
-  endStream: ReturnType<typeof mock>;
+  beginStream: ReturnType<typeof vi.fn>;
+  append: ReturnType<typeof vi.fn>;
+  endStream: ReturnType<typeof vi.fn>;
   persisted: AgentMessage[];
   makeBody: (overrides?: Partial<{ soul: AgentSoul; isLeader: boolean; sessionId: string; agentKey: string }>) => JieAgentBody;
 }
@@ -102,7 +102,7 @@ interface Harness {
 function makeHarness(): Harness {
   const events: EventManager = createEventManager();
   const { memory, persisted } = makeFakeMemory();
-  const { agent, state, prompt, continue: cont, subscribe } = makeFakeAgent();
+  const { agent, state, prompt, followUp, steer, continue: cont, subscribe } = makeFakeAgent();
   const { stream, beginStream, append, endStream } = makeFakeStream();
   const makeBody: Harness["makeBody"] = (overrides = {}) =>
     new JieAgentBody({
@@ -122,6 +122,8 @@ function makeHarness(): Harness {
     agent,
     state,
     prompt,
+    followUp,
+    steer,
     continue: cont,
     subscribe,
     stream,
@@ -409,7 +411,7 @@ describe("JieAgentBody — handlePiAgentEvent (stream bridge)", () => {
     expect(h.persisted.length).toBe(1);
   });
 
-  test("agent_end drains the queue: dequeued message is passed to agent.prompt", async () => {
+  test("agent_end drains the queue: dequeued message is passed to agent.followUp (not prompt, to avoid activeRun throw)", async () => {
     const body = h.makeBody();
     await body.start();
     h.state.isStreaming = true;
@@ -420,17 +422,18 @@ describe("JieAgentBody — handlePiAgentEvent (stream bridge)", () => {
       version: 1,
       timestamp: new Date().toISOString(),
     });
+    expect(h.followUp.mock.calls.length).toBe(0);
     expect(h.prompt.mock.calls.length).toBe(0);
     h.state.isStreaming = false;
     body.handlePiAgentEvent({ type: "agent_end" });
-    await Promise.resolve();
-    expect(h.prompt.mock.calls.length).toBe(1);
+    expect(h.followUp.mock.calls.length).toBe(1);
+    expect(h.prompt.mock.calls.length).toBe(0);
   });
 
-  test("agent_end with no queued message: agent.prompt not called", async () => {
+  test("agent_end with no queued message: agent.followUp not called", async () => {
     const body = h.makeBody();
     body.handlePiAgentEvent({ type: "agent_end" });
-    await Promise.resolve();
+    expect(h.followUp.mock.calls.length).toBe(0);
     expect(h.prompt.mock.calls.length).toBe(0);
   });
 });
@@ -439,8 +442,8 @@ describe("JieAgentBody — addExternalCleanup + stop()", () => {
   test("stop() invokes each external cleanup", () => {
     const h = makeHarness();
     const body = h.makeBody();
-    const cleanup1 = mock(() => {});
-    const cleanup2 = mock(() => {});
+    const cleanup1 = vi.fn(() => {});
+    const cleanup2 = vi.fn(() => {});
     body.addExternalCleanup(cleanup1);
     body.addExternalCleanup(cleanup2);
     body.stop();

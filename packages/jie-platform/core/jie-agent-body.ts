@@ -63,7 +63,7 @@ export class JieAgentBody implements AgentBody {
             this.sender,
             this.queue.map((m) => formatSynthetic(m)),
           ));
-          void this.agent.prompt(next);
+          this.agent.followUp(next);
         }
         return;
       case "message_start":
