@@ -116,7 +116,7 @@ function defaultResolveModel(registry: ModelRegistry): (provider: string, modelI
     return piGetModel(
       provider as Parameters<typeof piGetModel>[0],
       modelId as Parameters<typeof piGetModel>[1],
-    ) as Model<Api>;
+    ) as unknown as Model<Api>;
   };
 }
 
