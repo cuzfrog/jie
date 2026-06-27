@@ -1,5 +1,9 @@
-import { describe, expect, test } from "bun:test";
-import { createWebSearchTool, type WebSearchProvider } from "./web-search.ts";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
+import {
+  createWebSearchProvider,
+  createWebSearchTool,
+  type WebSearchProvider,
+} from "./web-search.ts";
 import { JiePlatformError } from "../domain-types.ts";
 
 function stubProvider(results: { title: string; url: string; snippet: string }[]): WebSearchProvider {
@@ -103,5 +107,37 @@ describe("web_search", () => {
     });
     const result = await tool.execute({ query: "x" }, {} as never);
     expect(result.terminate).toBeUndefined();
+  });
+});
+
+describe("createWebSearchProvider", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    globalThis.fetch = vi.fn() as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test("returns the internal DuckDuckGo-backed provider (the only way to get a default provider)", () => {
+    const provider = createWebSearchProvider();
+    expect(typeof provider.search).toBe("function");
+  });
+
+  test("DuckDuckGoSearchProvider is not exported: only createWebSearchProvider constructs it", async () => {
+    const provider = createWebSearchProvider();
+    const mockFetch = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    mockFetch.mockResolvedValue(
+      new Response(
+        `<a class="result__a" href="https://a">A</a>` +
+          `<a class="result__snippet">snip</a>`,
+        { status: 200 },
+      ),
+    );
+    const results = await provider.search("x", 5);
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]?.url).toBe("https://a");
   });
 });

@@ -19,6 +19,10 @@ export interface WebSearchProvider {
   search(query: string, maxResults: number): Promise<WebSearchResult[]>;
 }
 
+export function createWebSearchProvider(): WebSearchProvider {
+  return new DuckDuckGoSearchProvider();
+}
+
 const DEFAULT_MAX = 5;
 const HARD_MAX = 20;
 
@@ -75,7 +79,7 @@ export function createWebSearchTool(deps: WebSearchDeps): Tool<WebSearchInput> {
   };
 }
 
-export class DuckDuckGoSearchProvider implements WebSearchProvider {
+class DuckDuckGoSearchProvider implements WebSearchProvider {
   async search(query: string, maxResults: number): Promise<WebSearchResult[]> {
     const url = "https://html.duckduckgo.com/html/";
     const body = new URLSearchParams({ q: query }).toString();
