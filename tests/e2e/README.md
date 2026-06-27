@@ -15,19 +15,48 @@ Contract from `doc/addrs/22-event-order-contract.md`.
 
 ### Real-LLM tests
 
-The v1-scenarios test calls a real LLM. The endpoint, provider id,
-and model id are declared in `tests/e2e/fixtures/models.json`. The
-test copies this fixture into the test workspace's `.jie/` and runs
-the user scenarios end-to-end through the CLI's `ModelRegistry` —
-the same path the user takes via `.jie/models.json` (issue #20).
+The v1-scenarios test calls a real LLM. The endpoint, api key, and
+model id are declared as `${...}` env-var placeholders in
+`tests/e2e/fixtures/models.json` and resolved by `load-models.ts`.
+The test copies the resolved fixture into the test workspace's
+`.jie/` and runs the user scenarios end-to-end through the CLI's
+`ModelRegistry` — the same path the user takes via
+`.jie/models.json` (issue #20).
+
+Required env vars (the test hard-fails at module load if any are
+missing — there is no skip-on-unreachable path):
+
+| Var | Meaning |
+|-----|---------|
+| `JIE_E2E_BASE_URL` | OpenAI-completions base URL (e.g. `http://192.168.1.6:12345/v1`, `https://integrate.api.nvidia.com/v1`) |
+| `JIE_E2E_API_KEY` | Bearer token (`not-needed` for LM Studio; `$NVIDIA_API_KEY` for CI) |
+| `JIE_E2E_MODEL` | Model id (e.g. `qwen3.5-2b`, `nvidia/nemotron-3-nano-30b-a3b`) |
+
+### Local dev (LM Studio)
+
+Source `setenv` from the repo root, then run the e2e script:
 
 ```sh
-bun test tests/e2e/v1-scenarios.test.ts
+. ./setenv
+bun run test:e2e
 ```
 
-If the LLM endpoint in the fixture is unreachable, the test fails
-with a network error. To point the test at a different endpoint,
-edit `tests/e2e/fixtures/models.json`.
+`setenv` exports the three `JIE_E2E_*` vars pointing at the
+machine's local LLM (LM Studio by default).
+
+### CI (NVIDIA)
+
+The `test` workflow runs e2e against `integrate.api.nvidia.com`
+using the repo secret `NVIDIA_API_KEY`. PRs from forks skip the
+e2e step (the secret is not exposed to fork PRs); pushes and
+in-repo PRs run e2e end-to-end.
+
+```sh
+JIE_E2E_BASE_URL=https://integrate.api.nvidia.com/v1 \
+JIE_E2E_API_KEY=$NVIDIA_API_KEY \
+JIE_E2E_MODEL=nvidia/nemotron-3-nano-30b-a3b \
+bun run test:e2e:ci
+```
 
 ## Test design notes
 
@@ -51,5 +80,5 @@ the platform's unit tests (`load-models.test.ts`,
 flow against a real LLM.
 
 **Deterministic prompts.** Scenario 2 instructs the agent to
-respond with the literal marker `TEAM_ONE` / `TEAM_TWO` so the
+respond with the literal marker phrase assigned per team so the
 assertions are robust to LLM variability.
