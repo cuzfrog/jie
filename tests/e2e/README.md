@@ -28,9 +28,9 @@ missing — there is no skip-on-unreachable path):
 
 | Var | Meaning |
 |-----|---------|
-| `JIE_E2E_BASE_URL` | OpenAI-completions base URL (e.g. `http://192.168.1.6:12345/v1`, `https://models.inference.ai.azure.com`) |
-| `JIE_E2E_API_KEY` | Bearer token (`not-needed` for LM Studio; `$GITHUB_TOKEN` for CI) |
-| `JIE_E2E_MODEL` | Model id (e.g. `qwen3.5-2b`, `gpt-4o-mini`) |
+| `JIE_E2E_BASE_URL` | OpenAI-completions base URL (e.g. `http://192.168.1.6:12345/v1`, `https://integrate.api.nvidia.com/v1`) |
+| `JIE_E2E_API_KEY` | Bearer token (`not-needed` for LM Studio; `$NVIDIA_API_KEY` for CI) |
+| `JIE_E2E_MODEL` | Model id (e.g. `qwen3.5-2b`, `nvidia/nemotron-3-nano-30b-a3b`) |
 
 ### Local dev (LM Studio)
 
@@ -44,17 +44,17 @@ bun run test:e2e
 `setenv` exports the three `JIE_E2E_*` vars pointing at the
 machine's local LLM (LM Studio by default).
 
-### CI (GitHub Models)
+### CI (NVIDIA)
 
-The `test` workflow runs e2e against `models.inference.ai.azure.com`
-using the job's built-in `GITHUB_TOKEN` as the API key. PRs from
-forks skip the e2e step (the `GITHUB_TOKEN` is not exposed to fork
-PRs); pushes and in-repo PRs run e2e end-to-end.
+The `test` workflow runs e2e against `integrate.api.nvidia.com`
+using the repo secret `NVIDIA_API_KEY`. PRs from forks skip the
+e2e step (the secret is not exposed to fork PRs); pushes and
+in-repo PRs run e2e end-to-end.
 
 ```sh
-JIE_E2E_BASE_URL=https://models.inference.ai.azure.com \
-JIE_E2E_API_KEY=$GITHUB_TOKEN \
-JIE_E2E_MODEL=gpt-4o-mini \
+JIE_E2E_BASE_URL=https://integrate.api.nvidia.com/v1 \
+JIE_E2E_API_KEY=$NVIDIA_API_KEY \
+JIE_E2E_MODEL=nvidia/nemotron-3-nano-30b-a3b \
 bun run test:e2e:ci
 ```
 

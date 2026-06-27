@@ -27,10 +27,10 @@ jobs:
       - name: Unit tests
         run: bun test --path-ignore-patterns tests/e2e
 
-      - name: e2e (GitHub Models)
+      - name: e2e (NVIDIA)
         if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
         env:
-          JIE_E2E_BASE_URL: https://models.inference.ai.azure.com
-          JIE_E2E_API_KEY: ${{ secrets.GITHUB_TOKEN }}
-          JIE_E2E_MODEL: gpt-4o-mini
+          JIE_E2E_BASE_URL: https://integrate.api.nvidia.com/v1
+          JIE_E2E_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          JIE_E2E_MODEL: nvidia/nemotron-3-nano-30b-a3b
         run: bun test tests/e2e
