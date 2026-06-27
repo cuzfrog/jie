@@ -28,7 +28,6 @@ export class JieAgentBody implements AgentBody {
     agentKey: string;
     teamId: string;
     soul: AgentSoul;
-    isLeader: boolean;
     sessionId: string;
     eventManager: EventManager;
     memory: MemoryManager;

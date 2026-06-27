@@ -91,7 +91,6 @@ export function createAgentBody(options: CreateAgentBodyOptions): AgentBody {
     agentKey: options.agentKey,
     teamId: options.teamId,
     soul: options.soul,
-    isLeader: options.isLeader,
     sessionId: options.sessionId,
     eventManager: options.eventManager,
     memory: options.memory,
