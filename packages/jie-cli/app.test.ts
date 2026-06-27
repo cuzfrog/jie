@@ -45,7 +45,7 @@ function makeDeps(workspace: string, homeJieDir: string): AppDeps {
   return {
     authStore,
     settingsStore,
-    events,
+    eventManager: events,
     storage,
     teamRegistry,
     modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),

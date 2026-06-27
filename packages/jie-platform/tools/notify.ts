@@ -13,7 +13,7 @@ the prefix); empty topics and control characters are rejected. \`notify\` is
 the SOLE means of inter-agent communication. Does NOT end the turn.`;
 
 export interface NotifyDeps {
-  events: EventManager;
+  eventManager: EventManager;
 }
 
 type TopicValidationReason =
@@ -70,7 +70,7 @@ export function createNotifyTool(deps: NotifyDeps): Tool<NotifyInput> {
         identity: { teamId: ctx.teamId, agentRole: ctx.agentRole, agentKey: ctx.agentKey },
       };
       const envelope = Events.custom(sender, clientTopic, { prompt: input.prompt, source: ctx.agentKey });
-      deps.events.publish(envelope);
+      deps.eventManager.publish(envelope);
 
       return {
         content: `Notification published on '${input.topic}'`,

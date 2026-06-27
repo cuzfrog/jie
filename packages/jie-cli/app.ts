@@ -8,7 +8,7 @@ import type { ToolRegistry } from "@cuzfrog/jie-platform/tools";
 export interface AppDeps {
   authStore: AuthStore;
   settingsStore: SettingsStore;
-  events: EventManager;
+  eventManager: EventManager;
   storage: Storage;
   teamRegistry: TeamRegistry;
   modelRegistry: ModelRegistry;
@@ -72,7 +72,7 @@ export async function createApp(
   }
 
   let captured: Captured | null = null;
-  deps.events.subscribe(`team.${team.id}.loaded`, (env: { payload: unknown }) => {
+  deps.eventManager.subscribe(`team.${team.id}.loaded`, (env: { payload: unknown }) => {
     const agents = (env.payload as { agents: Array<{ role: string; agent_key: string; is_leader: boolean }> }).agents;
     const leader = agents.find((a) => a.is_leader) ?? agents[0];
     if (leader === undefined) return;

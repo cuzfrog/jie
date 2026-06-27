@@ -117,7 +117,7 @@ function buildPlatformDeps(cwd: string, homeJieDir: string, projectJieDir: strin
   return {
     authStore,
     settingsStore: makeSettingsStore(cwd, homeJieDir, projectJieDir),
-    events,
+    eventManager: events,
     storage,
     teamRegistry,
     modelRegistry,

@@ -28,8 +28,8 @@ export function createToolRegistry(params: CreateToolRegistryParams): ToolRegist
   registry.register("read_file", createReadFileTool({ workspaceRoot: params.workspaceRoot }) as Tool);
   registry.register("write_file", createWriteFileTool({ workspaceRoot: params.workspaceRoot }) as Tool);
   registry.register("read_artifact", createReadArtifactTool({ artifactStore: params.artifactStore }) as Tool);
-  registry.register("write_artifact", createWriteArtifactTool({ artifacts: params.artifactStore }) as Tool);
-  registry.register("notify", createNotifyTool({ events: params.eventManager }) as Tool);
+  registry.register("write_artifact", createWriteArtifactTool({ artifactStore: params.artifactStore }) as Tool);
+  registry.register("notify", createNotifyTool({ eventManager: params.eventManager }) as Tool);
   registry.register("web_fetch", createWebFetchTool() as Tool);
   registry.register("web_search", createWebSearchTool({ provider: createWebSearchProvider() }) as Tool);
   return registry;

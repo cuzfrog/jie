@@ -13,7 +13,7 @@ export interface CreateAgentBodyOptions {
   teamId: string;
   soul: AgentSoul;
   isLeader: boolean;
-  events: EventManager;
+  eventManager: EventManager;
   artifactStore: ArtifactStore;
   memory: MemoryManager;
   sessionId: string;
@@ -33,7 +33,7 @@ export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
     kind: "agent",
     identity: { teamId: opts.teamId, agentRole: opts.soul.role, agentKey: opts.agentKey },
   };
-  const streamPublisher = makeStreamPublisher(opts.events, sender);
+  const streamPublisher = makeStreamPublisher(opts.eventManager, sender);
 
   const ctx: ExecutionContext = {
     sessionId: opts.sessionId,
@@ -57,7 +57,7 @@ export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
     beforeToolCall: async (context) => {
       const toolCallId = context.toolCall.id;
       toolTimestamps.set(toolCallId, Date.now());
-      opts.events.publish(Events.agentToolCall(
+      opts.eventManager.publish(Events.agentToolCall(
         sender,
         toolCallId,
         context.toolCall.name,
@@ -72,7 +72,7 @@ export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
       toolTimestamps.delete(toolCallId);
       const error = extractToolError(context);
       const output = error === null ? jieToolResultOf(context.result) : null;
-      opts.events.publish(Events.agentToolResult(
+      opts.eventManager.publish(Events.agentToolResult(
         sender,
         toolCallId,
         context.toolCall.name,
@@ -94,7 +94,7 @@ export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
     soul: opts.soul,
     isLeader: opts.isLeader,
     sessionId: opts.sessionId,
-    events: opts.events,
+    eventManager: opts.eventManager,
     memory: opts.memory,
     agent,
     streamPublisher,

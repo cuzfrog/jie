@@ -41,7 +41,7 @@ function makeDeps(workspace: string, homeJieDir: string, filePath: string = ":me
     artifactStore,
   });
   return {
-    events,
+    eventManager: events,
     settingsStore,
     storage,
     teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
@@ -94,7 +94,7 @@ describe("createJiePlatform", () => {
     test("team.loaded is published once at start; the event carries is_leader per agent", async () => {
       const deps = makeDeps(workspace, homeJieDir);
       const events: EventEnvelope<string>[] = [];
-      deps.events.subscribe("team.minimal.loaded", (env) => {
+      deps.eventManager.subscribe("team.minimal.loaded", (env) => {
         events.push(env);
       });
       await createJiePlatform(
@@ -120,7 +120,7 @@ describe("createJiePlatform", () => {
       const events = createEventManager();
       const artifactStore = createArtifactStore(storage);
       const deps = {
-        events,
+        eventManager: events,
         settingsStore,
         storage,
         teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
@@ -144,9 +144,9 @@ describe("createJiePlatform", () => {
         },
         deps,
       );
-      expect(deps.events.subscriberCount("team.minimal.agent.general-1.prompt")).toBeGreaterThan(0);
+      expect(deps.eventManager.subscriberCount("team.minimal.agent.general-1.prompt")).toBeGreaterThan(0);
       await handle.stop();
-      expect(deps.events.subscriberCount("team.minimal.agent.general-1.prompt")).toBe(0);
+      expect(deps.eventManager.subscriberCount("team.minimal.agent.general-1.prompt")).toBe(0);
     });
   });
 
@@ -158,7 +158,7 @@ describe("createJiePlatform", () => {
       const events1 = createEventManager();
       const artifactStore1 = createArtifactStore(storage1);
       const deps1 = {
-        events: events1,
+        eventManager: events1,
         settingsStore,
         storage: storage1,
         teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
@@ -184,7 +184,7 @@ describe("createJiePlatform", () => {
       const events2 = createEventManager();
       const artifactStore2 = createArtifactStore(storage2);
       const deps2 = {
-        events: events2,
+        eventManager: events2,
         settingsStore,
         storage: storage2,
         teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
@@ -203,7 +203,7 @@ describe("createJiePlatform", () => {
       const events3 = createEventManager();
       const artifactStore3 = createArtifactStore(storage3);
       const deps3 = {
-        events: events3,
+        eventManager: events3,
         settingsStore,
         storage: storage3,
         teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
@@ -229,7 +229,7 @@ describe("createJiePlatform", () => {
 
       const deps = makeDeps(workspace, homeJieDir);
       const events: EventEnvelope<string>[] = [];
-      deps.events.subscribe("team.ghost.loaded", (env) => {
+      deps.eventManager.subscribe("team.ghost.loaded", (env) => {
         events.push(env);
       });
       const handle = await createJiePlatform(

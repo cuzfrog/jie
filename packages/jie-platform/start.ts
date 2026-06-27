@@ -20,7 +20,7 @@ export interface CreateJiePlatformOptions {
 }
 
 export interface JiePlatformDeps {
-  events: EventManager;
+  eventManager: EventManager;
   settingsStore: SettingsStore;
   storage: Storage;
   teamRegistry: TeamRegistry;
@@ -61,7 +61,7 @@ export async function createJiePlatform(opts: CreateJiePlatformOptions, deps: Ji
           teamId,
           soul,
           isLeader,
-          events: deps.events,
+          eventManager: deps.eventManager,
           artifactStore: deps.artifactStore,
           memory: deps.memoryManager,
           sessionId,
@@ -75,14 +75,14 @@ export async function createJiePlatform(opts: CreateJiePlatformOptions, deps: Ji
       await body.start();
     }
     loadedTeams.set(teamId, out);
-    publishTeamLoaded(deps.events, teamId, bp);
+    publishTeamLoaded(deps.eventManager, teamId, bp);
     return out;
   }
 
   await loadAndStartTeam(resolvedTeamId);
 
   const handle: JiePlatform = {
-    events: deps.events,
+    events: deps.eventManager,
     stop: async () => {
       const allBodies: AgentBody[] = [];
       for (const bodies of loadedTeams.values()) {

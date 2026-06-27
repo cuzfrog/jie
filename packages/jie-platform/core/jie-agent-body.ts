@@ -31,7 +31,7 @@ export class JieAgentBody implements AgentBody {
     soul: AgentSoul;
     isLeader: boolean;
     sessionId: string;
-    events: EventManager;
+    eventManager: EventManager;
     memory: MemoryManager;
     agent: Agent;
     streamPublisher: StreamPublisher;
@@ -40,7 +40,7 @@ export class JieAgentBody implements AgentBody {
     this.teamId = deps.teamId;
     this.soul = deps.soul;
     this.sessionId = deps.sessionId;
-    this.eventManager = deps.events;
+    this.eventManager = deps.eventManager;
     this.memory = deps.memory;
     this.agent = deps.agent;
     this.stream = deps.streamPublisher;

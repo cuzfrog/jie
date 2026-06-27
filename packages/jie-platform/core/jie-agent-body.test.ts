@@ -111,7 +111,7 @@ function makeHarness(): Harness {
       soul: overrides.soul ?? makeSoul(),
       isLeader: overrides.isLeader ?? true,
       sessionId: overrides.sessionId ?? "s1",
-      events,
+      eventManager: events,
       memory,
       agent,
       streamPublisher: stream,

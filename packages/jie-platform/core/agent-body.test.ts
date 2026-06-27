@@ -55,7 +55,7 @@ function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: Crea
     teamId: "t1",
     soul: makeSoul(),
     isLeader: true,
-    events,
+    eventManager: events,
     artifactStore,
     memory: createMemoryManager(storage),
     sessionId: "s1",

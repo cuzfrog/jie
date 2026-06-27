@@ -14,7 +14,7 @@ inter-agent work products (plans, research notes, code-change summaries)
 that outlive a single tool call.`;
 
 export interface WriteArtifactDeps {
-  artifacts: ArtifactStore;
+  artifactStore: ArtifactStore;
 }
 
 interface WriteArtifactInput {
@@ -34,7 +34,7 @@ export function createWriteArtifactTool(
       content: Type.String(),
     }),
     async execute(input: WriteArtifactInput): Promise<ToolResult> {
-      const { key, created_at } = await deps.artifacts.write(
+      const { key, created_at } = await deps.artifactStore.write(
         input.key,
         input.content,
       );

@@ -11,7 +11,7 @@ function makeStore() {
 describe("write_artifact", () => {
   test("success: content reports key + char count; details carries key + created_at", async () => {
     const store = makeStore();
-    const tool = createWriteArtifactTool({ artifacts: store });
+    const tool = createWriteArtifactTool({ artifactStore: store });
     const result = await tool.execute(
       { key: "task/plan", content: "hello" },
       {} as never,
@@ -24,7 +24,7 @@ describe("write_artifact", () => {
 
   test("invalid key -> invalid_artifact_key", async () => {
     const store = makeStore();
-    const tool = createWriteArtifactTool({ artifacts: store });
+    const tool = createWriteArtifactTool({ artifactStore: store });
     let caught: unknown;
     try {
       await tool.execute({ key: "bad space", content: "x" }, {} as never);
@@ -37,7 +37,7 @@ describe("write_artifact", () => {
 
   test("content > 5 MiB -> artifact_too_large", async () => {
     const store = makeStore();
-    const tool = createWriteArtifactTool({ artifacts: store });
+    const tool = createWriteArtifactTool({ artifactStore: store });
     const huge = "x".repeat(5 * 1024 * 1024 + 1);
     let caught: unknown;
     try {
