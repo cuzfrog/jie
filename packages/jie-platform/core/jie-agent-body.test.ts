@@ -96,7 +96,7 @@ interface Harness {
   append: ReturnType<typeof vi.fn>;
   endStream: ReturnType<typeof vi.fn>;
   persisted: AgentMessage[];
-  makeBody: (overrides?: Partial<{ soul: AgentSoul; isLeader: boolean; sessionId: string; agentKey: string }>) => JieAgentBody;
+  makeBody: (overrides?: Partial<{ soul: AgentSoul; sessionId: string; agentKey: string }>) => JieAgentBody;
 }
 
 function makeHarness(): Harness {
@@ -109,7 +109,6 @@ function makeHarness(): Harness {
       agentKey: overrides.agentKey ?? "general-1",
       teamId: "t1",
       soul: overrides.soul ?? makeSoul(),
-      isLeader: overrides.isLeader ?? true,
       sessionId: overrides.sessionId ?? "s1",
       eventManager: events,
       memory,
@@ -138,7 +137,7 @@ function makeHarness(): Harness {
 describe("JieAgentBody — identity", () => {
   test("constructor stores the identity fields from deps", () => {
     const h = makeHarness();
-    const body = h.makeBody({ agentKey: "leader-1", isLeader: true }) as unknown as {
+    const body = h.makeBody({ agentKey: "leader-1" }) as unknown as {
       agentKey: string;
       teamId: string;
     };
@@ -176,24 +175,8 @@ describe("JieAgentBody — start() subscriptions", () => {
     expect(received).toBe(true);
   });
 
-  test("isLeader=true: subscribes to own agent prompt subject", async () => {
-    await body.start();
-    let received = false;
-    h.events.subscribe("team.t1.agent.general-1.prompt", () => {
-      received = true;
-    });
-    h.events.publish({
-      version: 1,
-      topic: "team.t1.agent.general-1.prompt",
-      sender: { kind: "cli" },
-      timestamp: new Date().toISOString(),
-      payload: { teamId: "t1", agentKey: "general-1", prompt: "go" },
-    });
-    expect(received).toBe(true);
-  });
-
-  test("isLeader=false: subscribes to own agent prompt subject (not leader's)", async () => {
-    const b2 = h.makeBody({ isLeader: false, agentKey: "worker-1" });
+  test("each body subscribes to its own agent prompt subject", async () => {
+    const b2 = h.makeBody({ agentKey: "worker-1" });
     await b2.start();
     expect(h.events.subscriberCount("team.t1.agent.worker-1.prompt")).toBe(1);
     b2.stop();

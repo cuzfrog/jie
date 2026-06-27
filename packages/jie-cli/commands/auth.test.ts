@@ -1,5 +1,7 @@
-import type { AuthJson, AuthStore, SettingsStore } from "@cuzfrog/jie-platform/config";
+import type { AuthStore, SettingsStore } from "@cuzfrog/jie-platform/config";
 import { runApiKey, runLogin, runLogout } from "./auth";
+
+type AuthJson = Record<string, { type: "api_key"; key: string }>;
 
 const auth = vi.mocked<AuthStore>({
   load: vi.fn(),

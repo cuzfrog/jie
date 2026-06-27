@@ -1,5 +1,5 @@
 import { createJiePlatform, type JiePlatform } from "@cuzfrog/jie-platform";
-import type { AuthStore, MergedSettings, ModelRegistry, SettingsStore } from "@cuzfrog/jie-platform/config";
+import type { AuthStore, Settings, ModelRegistry, SettingsStore } from "@cuzfrog/jie-platform/config";
 import type { EventManager } from "@cuzfrog/jie-platform/event";
 import type { ArtifactStore, MemoryManager, Storage } from "@cuzfrog/jie-platform/storage";
 import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
@@ -23,7 +23,7 @@ export interface App {
   leaderRole: string;
   leaderKey: string;
   agentKeys: string[];
-  settings: MergedSettings;
+  settings: Settings;
 }
 
 export type AppCreationResult =
@@ -45,7 +45,7 @@ export async function createApp(
   args: AppArgs,
   dependencies: AppDeps,
 ): Promise<AppCreationResult> {
-  const settings: MergedSettings = dependencies.settingsStore.load();
+  const settings: Settings = dependencies.settingsStore.load();
 
   if (args.apiKey !== undefined) {
     const provider = settings.defaultProvider;

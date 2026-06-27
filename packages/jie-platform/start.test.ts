@@ -7,7 +7,7 @@ import { createJiePlatform } from "./start";
 import {
   createModelRegistry,
   type AuthStore,
-  type MergedSettings,
+  type Settings,
   type SettingsStore,
 } from "./config";
 import { createTeamRegistry } from "./team";
@@ -28,7 +28,7 @@ const authStore = vi.mocked<AuthStore>({
   clear: vi.fn(),
 });
 
-const DEFAULT_SETTINGS: MergedSettings = {
+const DEFAULT_SETTINGS: Settings = {
   defaultProvider: "anthropic",
   defaultModel: "claude-sonnet-4-5",
 };

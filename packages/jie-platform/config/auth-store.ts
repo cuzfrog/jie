@@ -47,7 +47,7 @@ function loadAuthJson(homeJieDir: string): AuthJson {
     text = readFileSync(path, "utf-8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
-    throw e;
+    throw error;
   }
   return JSON.parse(text) as AuthJson;
 }

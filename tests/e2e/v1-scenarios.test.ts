@@ -9,11 +9,11 @@
  * path the user takes via `.jie/models.json` (issue #20).
  *
  * These tests require the LLM endpoint declared in the fixture
- * to be reachable.
+ * to be reachable. If the endpoint is unreachable, the entire
+ * suite is skipped via `describe.skipIf` after a startup probe,
+ * and a warning is printed.
  */
 import {
-  afterEach,
-  beforeEach,
   describe,
   expect,
   spyOn,
@@ -33,6 +33,7 @@ import { main } from "../../packages/jie-cli/index.ts";
 interface Fixture {
   provider: string;
   modelId: string;
+  baseUrl: string;
   raw: string;
 }
 
@@ -64,12 +65,12 @@ const FIXTURE_PATH = join(import.meta.dir, "fixtures", "models.json");
 const FIXTURE: Fixture = (() => {
   const raw = readFileSync(FIXTURE_PATH, "utf-8");
   const parsed = JSON.parse(raw) as {
-    providers: Record<string, { models: Array<{ id: string }> }>;
+    providers: Record<string, { baseUrl: string; models: Array<{ id: string }> }>;
   };
   const providerId = Object.keys(parsed.providers)[0]!;
   const provider = parsed.providers[providerId]!;
   const modelId = provider.models[0]!.id;
-  return { provider: providerId, modelId, raw };
+  return { provider: providerId, modelId, baseUrl: provider.baseUrl, raw };
 })();
 
 /** Writes the fixture's `models.json` content to `{dir}/.jie/models.json`. */
@@ -92,7 +93,64 @@ function writeSettingsJson(workspace: string): void {
   );
 }
 
-describe("v1 user-scenarios — real LLM end-to-end", () => {
+/** Synchronously probe the fixture's baseUrl to decide whether to
+ *  run the e2e scenarios. Returns true if the LLM endpoint is
+ *  reachable.  Uses `node:net` so the probe does not require
+ *  `fetch` semantics; falls back to a 1.5s timeout TCP connect. */
+const LLM_AVAILABLE: boolean = await (async (): Promise<boolean> => {
+  const url = FIXTURE.baseUrl;
+  let host: string;
+  let port: number;
+  try {
+    const u = new URL(url);
+    host = u.hostname;
+    port = u.port === "" ? 80 : Number(u.port);
+  } catch {
+    return false;
+  }
+  try {
+    await new Promise<void>((resolve, reject) => {
+      let socket: { end: () => void } | undefined;
+      const settle = (fn: () => void): void => {
+        try { socket?.end(); } catch { /* socket may already be closed */ }
+        fn();
+      };
+      const timeoutId = setTimeout(
+        () => settle(() => reject(new Error("probe timeout"))),
+        1500,
+      );
+      Bun.connect({
+        hostname: host,
+        port,
+        socket: {
+          open: (s) => {
+            socket = s;
+            clearTimeout(timeoutId);
+            settle(() => resolve());
+          },
+          data: () => {},
+          error: (_s, err) => {
+            clearTimeout(timeoutId);
+            settle(() => reject(err));
+          },
+        },
+      }).catch((err: unknown) => {
+        clearTimeout(timeoutId);
+        settle(() => reject(err));
+      });
+    });
+    return true;
+  } catch (cause) {
+    const reason = cause instanceof Error ? cause.message : String(cause);
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[v1-scenarios] skipping all scenarios: fixture LLM at ${url} unreachable (${reason})`,
+    );
+    return false;
+  }
+})();
+
+describe.skipIf(!LLM_AVAILABLE)("v1 user-scenarios — real LLM end-to-end", () => {
   let workspace: string;
   let prevHome: string | undefined;
   let writeOut: ReturnType<typeof spyOn> | undefined;

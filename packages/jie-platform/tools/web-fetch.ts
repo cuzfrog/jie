@@ -41,17 +41,6 @@ const TEXT_LIKE_APPLICATIONS = new Set<string>([
   "application/graphql+json",
 ]);
 
-function isTextLike(contentType: string): boolean {
-  const baseType = contentType.split(";")[0]!.trim().toLowerCase();
-  if (TEXT_LIKE_PREFIXES.some((prefix) => baseType.startsWith(prefix))) return true;
-  if (TEXT_LIKE_APPLICATIONS.has(baseType)) return true;
-  return false;
-}
-
-function isHtml(contentType: string): boolean {
-  return contentType.split(";")[0]!.trim().toLowerCase() === "text/html";
-}
-
 const STRIP_TAGS = ["script", "style", "nav", "header", "footer"];
 
 interface WebFetchInput {

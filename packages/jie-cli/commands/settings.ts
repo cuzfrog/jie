@@ -1,6 +1,6 @@
 
 import { getProviders } from "@earendil-works/pi-ai";
-import type { MergedSettings } from "@cuzfrog/jie-platform/config";
+import type { Settings } from "@cuzfrog/jie-platform/config";
 import type { SettingsStore } from "@cuzfrog/jie-platform/config";
 import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
 import type { ParsedArgsMap } from "../cli-flags";
@@ -15,7 +15,7 @@ export async function runModel(
     console.error(`unknown provider: ${parsed.provider}`);
   }
   const existing = settings.load();
-  const next: MergedSettings = {
+  const next: Settings = {
     ...existing,
     defaultProvider: parsed.provider,
     defaultModel: parsed.modelId,
@@ -52,7 +52,7 @@ export async function runTeam(
     return 1;
   }
   const existing = settings.load();
-  const next: MergedSettings = { ...existing, defaultTeam: id };
+  const next: Settings = { ...existing, defaultTeam: id };
   const loc = teamRegistry.locate(id);
   settings.write(next, loc === "project" ? "project" : "global");
   console.log(`default team set to ${id}`);
