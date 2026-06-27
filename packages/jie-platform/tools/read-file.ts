@@ -33,15 +33,15 @@ interface ReadFileInput {
 
 function splitLinesPreservingNewline(text: string): string[] {
   const lines: string[] = [];
-  let pos = 0;
-  while (pos < text.length) {
-    const nl = text.indexOf("\n", pos);
-    if (nl === -1) {
-      lines.push(text.substring(pos));
+  let position = 0;
+  while (position < text.length) {
+    const newlineIndex = text.indexOf("\n", position);
+    if (newlineIndex === -1) {
+      lines.push(text.substring(position));
       break;
     }
-    lines.push(text.substring(pos, nl + 1));
-    pos = nl + 1;
+    lines.push(text.substring(position, newlineIndex + 1));
+    position = newlineIndex + 1;
   }
   return lines;
 }

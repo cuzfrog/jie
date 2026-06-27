@@ -42,9 +42,9 @@ const TEXT_LIKE_APPLICATIONS = new Set<string>([
 ]);
 
 function isTextLike(contentType: string): boolean {
-  const ct = contentType.split(";")[0]!.trim().toLowerCase();
-  if (TEXT_LIKE_PREFIXES.some((p) => ct.startsWith(p))) return true;
-  if (TEXT_LIKE_APPLICATIONS.has(ct)) return true;
+  const baseType = contentType.split(";")[0]!.trim().toLowerCase();
+  if (TEXT_LIKE_PREFIXES.some((prefix) => baseType.startsWith(prefix))) return true;
+  if (TEXT_LIKE_APPLICATIONS.has(baseType)) return true;
   return false;
 }
 
