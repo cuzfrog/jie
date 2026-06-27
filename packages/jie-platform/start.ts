@@ -32,6 +32,7 @@ export interface JiePlatformDeps {
 
 export interface JiePlatform {
   events: EventManager;
+  team: { id: string; agents: Array<{ role: string; agentKey: string; isLeader: boolean }> };
   stop: () => Promise<void>;
 }
 
@@ -41,6 +42,7 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
 
   const sessionIds = new Map<string, string>();
   const loadedTeams = new Map<string, AgentBody[]>();
+  const teamRosters = new Map<string, JiePlatform["team"]["agents"]>();
 
   async function loadAndStartTeam(teamId: string): Promise<AgentBody[]> {
     const existing = loadedTeams.get(teamId);
@@ -51,6 +53,7 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
     sessionIds.set(teamId, sessionId);
 
     const out: AgentBody[] = [];
+    const roster: JiePlatform["team"]["agents"] = [];
     for (const soul of blueprint.roles) {
       const isLeader = soul.role === blueprint.leaderRole;
       const agentKey = `${soul.role}-1`;
@@ -70,11 +73,13 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
           model: resolvedModel,
         }),
       );
+      roster.push({ role: soul.role, agentKey, isLeader });
     }
     for (const body of out) {
       await body.start();
     }
     loadedTeams.set(teamId, out);
+    teamRosters.set(teamId, roster);
     publishTeamLoaded(dependencies.eventManager, teamId, blueprint);
     return out;
   }
@@ -83,6 +88,10 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
 
   const handle: JiePlatform = {
     events: dependencies.eventManager,
+    team: {
+      id: resolvedTeamId,
+      agents: teamRosters.get(resolvedTeamId) ?? [],
+    },
     stop: async () => {
       const allBodies: AgentBody[] = [];
       for (const bodies of loadedTeams.values()) {
