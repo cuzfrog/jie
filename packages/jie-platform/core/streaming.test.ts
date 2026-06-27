@@ -1,4 +1,3 @@
-import { beforeEach, describe, expect, test } from "bun:test";
 import { createEventBus, type EventBus } from "../event/event-bus";
 import { makeStreamPublisher } from "./streaming";
 import { createEventManager } from "../event/event-manager";

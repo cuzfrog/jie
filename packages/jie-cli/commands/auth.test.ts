@@ -1,4 +1,3 @@
-import { describe, expect, test } from "bun:test";
 import type { AuthJson, AuthStore, SettingsStore } from "@cuzfrog/jie-platform/config";
 import { runApiKey, runLogin, runLogout } from "./auth";
 

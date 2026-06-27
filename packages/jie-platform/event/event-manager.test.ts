@@ -1,4 +1,3 @@
-import { describe, expect, test } from "bun:test";
 import { createEventBus, type EventBus } from "./event-bus";
 import {
   createEventManager,

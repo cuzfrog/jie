@@ -1,4 +1,3 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
 import type { Agent, AgentEvent as PiAgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, AssistantMessageEvent } from "@earendil-works/pi-ai";
 import { createAgentBody, type AgentBody, type CreateAgentBodyOptions } from "./agent-body";
@@ -27,7 +26,7 @@ function makeSoul(): AgentSoul {
 }
 
 interface FakeAgent {
-  subscribe: ReturnType<typeof mock>;
+  subscribe: ReturnType<typeof vi.fn>;
   state: {
     systemPrompt: string;
     model: unknown;
@@ -35,8 +34,8 @@ interface FakeAgent {
     messages: AgentMessage[];
     isStreaming: boolean;
   };
-  continue: ReturnType<typeof mock>;
-  prompt: ReturnType<typeof mock>;
+  continue: ReturnType<typeof vi.fn>;
+  prompt: ReturnType<typeof vi.fn>;
 }
 
 function makeFakeAgentFactory(options: {
@@ -49,7 +48,7 @@ function makeFakeAgentFactory(options: {
   lastOpts: () => ConstructorParameters<typeof Agent>[0] | undefined;
 } {
   const fake: FakeAgent = {
-    subscribe: mock((listener: (event: PiAgentEvent) => void) => {
+    subscribe: vi.fn((listener: (event: PiAgentEvent) => void) => {
       if (options.onEvent) {
         options.onEvent(listener);
       }
@@ -62,8 +61,8 @@ function makeFakeAgentFactory(options: {
       messages: [],
       isStreaming: false,
     },
-    continue: mock(async () => {}),
-    prompt: mock(async () => {}),
+    continue: vi.fn(async () => {}),
+    prompt: vi.fn(async () => {}),
   };
   const stub = {
     state: fake.state,

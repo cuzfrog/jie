@@ -1,4 +1,3 @@
-import { describe, expect, test, vi } from "bun:test";
 import { runPrint } from "./print";
 
 interface JiePlatformStub {

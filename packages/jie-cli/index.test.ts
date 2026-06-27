@@ -1,5 +1,4 @@
 
-import { describe, expect, spyOn, test } from "bun:test";
 import {
   existsSync,
   mkdirSync,
@@ -37,10 +36,10 @@ async function runInIsolatedHome(argv: string[], options: RunOptions = {}): Prom
   const prevHome = process.env.HOME;
   const stdoutLines: string[] = [];
   const stderrLines: string[] = [];
-  const logSpy = spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+  const logSpy = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
     stdoutLines.push(args.map(String).join(" "));
   });
-  const errSpy = spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+  const errSpy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
     stderrLines.push(args.map(String).join(" "));
   });
   process.chdir(homeDir);

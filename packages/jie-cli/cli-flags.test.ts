@@ -1,4 +1,3 @@
-import { describe, expect, test } from "bun:test";
 import { parseFlags } from "./cli-flags";
 
 describe("parseFlags — help / version", () => {

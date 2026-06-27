@@ -1,4 +1,3 @@
-import { describe, expect, mock, test } from "bun:test";
 import type {
   Agent as PiAgent,
   AgentEvent as PiAgentEvent,
@@ -73,10 +72,10 @@ function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: Crea
 interface FakeAgentCapture {
   factory: (opts: ConstructorParameters<typeof PiAgent>[0]) => PiAgent;
   fake: {
-    subscribe: ReturnType<typeof mock>;
+    subscribe: ReturnType<typeof vi.fn>;
     state: { systemPrompt: string; model: unknown; tools: unknown[]; messages: AgentMessage[]; isStreaming: boolean };
-    continue: ReturnType<typeof mock>;
-    prompt: ReturnType<typeof mock>;
+    continue: ReturnType<typeof vi.fn>;
+    prompt: ReturnType<typeof vi.fn>;
   };
   lastOpts: () => ConstructorParameters<typeof PiAgent>[0] | undefined;
   agentListener: ((event: PiAgentEvent) => void) | undefined;
@@ -84,7 +83,7 @@ interface FakeAgentCapture {
 
 function makeFakeAgentFactory(): FakeAgentCapture {
   let listener: ((event: PiAgentEvent) => void) | undefined;
-  const subscribe = mock((l: (event: PiAgentEvent) => void) => {
+  const subscribe = vi.fn((l: (event: PiAgentEvent) => void) => {
     listener = l;
     return () => {};
   });
@@ -98,8 +97,8 @@ function makeFakeAgentFactory(): FakeAgentCapture {
   const fake = {
     subscribe,
     state,
-    continue: mock(async () => {}),
-    prompt: mock(async () => {}),
+    continue: vi.fn(async () => {}),
+    prompt: vi.fn(async () => {}),
   };
   const stub = fake as unknown as PiAgent;
   let captured: ConstructorParameters<typeof PiAgent>[0] | undefined;
@@ -120,7 +119,7 @@ describe("createAgentBody — wiring", () => {
   test("invokes opts.createAgent exactly once with the right shape", () => {
     const { opts } = makeOpts();
     const cap = makeFakeAgentFactory();
-    const tracked = mock((o: ConstructorParameters<typeof PiAgent>[0]) => cap.factory(o));
+    const tracked = vi.fn((o: ConstructorParameters<typeof PiAgent>[0]) => cap.factory(o));
     createAgentBody({ ...opts, createAgent: tracked });
     expect(tracked).toHaveBeenCalledTimes(1);
     const passed = tracked.mock.calls[0]![0]!;
@@ -286,7 +285,7 @@ describe("createAgentBody — wiring", () => {
     const cap = makeFakeAgentFactory();
     const body = createAgentBody({ ...opts, createAgent: cap.factory });
     let unsubscribed = false;
-    cap.fake.subscribe = mock(() => {
+    cap.fake.subscribe = vi.fn(() => {
       return () => {
         unsubscribed = true;
       };

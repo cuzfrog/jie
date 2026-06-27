@@ -1,4 +1,3 @@
-import { describe, expect, spyOn, test } from "bun:test";
 import { createEventBus } from "./event-bus";
 
 describe("InProcessEventBus", () => {
@@ -21,7 +20,7 @@ describe("InProcessEventBus", () => {
 
   test("a throwing callback does not stop dispatch; subsequent subscribers still run", () => {
     const bus = createEventBus();
-    const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     let secondRan = false;
     bus.subscribe("s", () => {
       throw new Error("boom");
@@ -76,7 +75,7 @@ describe("InProcessEventBus", () => {
 
   test("a throwing callback does not change subscriberCount", () => {
     const bus = createEventBus();
-    const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     bus.subscribe("s", () => {
       throw new Error("boom");
     });
