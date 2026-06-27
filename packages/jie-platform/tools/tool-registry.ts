@@ -24,15 +24,28 @@ interface CreateToolRegistryParams {
 
 export function createToolRegistry(params: CreateToolRegistryParams): ToolRegistry {
   const registry = new InMemoryToolRegistry();
-  registry.register("bash", createBashTool({ workspaceRoot: params.workspaceRoot }) as Tool);
-  registry.register("read_file", createReadFileTool({ workspaceRoot: params.workspaceRoot }) as Tool);
-  registry.register("write_file", createWriteFileTool({ workspaceRoot: params.workspaceRoot }) as Tool);
-  registry.register("read_artifact", createReadArtifactTool({ artifactStore: params.artifactStore }) as Tool);
-  registry.register("write_artifact", createWriteArtifactTool({ artifactStore: params.artifactStore }) as Tool);
-  registry.register("notify", createNotifyTool({ eventManager: params.eventManager }) as Tool);
-  registry.register("web_fetch", createWebFetchTool() as Tool);
-  registry.register("web_search", createWebSearchTool({ provider: createWebSearchProvider() }) as Tool);
+  for (const builtin of builtins(params)) {
+    registry.register(builtin.name, builtin.tool);
+  }
   return registry;
+}
+
+interface BuiltinTool {
+  name: string;
+  tool: Tool;
+}
+
+function builtins(params: CreateToolRegistryParams): BuiltinTool[] {
+  return [
+    { name: "bash", tool: createBashTool({ workspaceRoot: params.workspaceRoot }) as Tool },
+    { name: "read_file", tool: createReadFileTool({ workspaceRoot: params.workspaceRoot }) as Tool },
+    { name: "write_file", tool: createWriteFileTool({ workspaceRoot: params.workspaceRoot }) as Tool },
+    { name: "read_artifact", tool: createReadArtifactTool({ artifactStore: params.artifactStore }) as Tool },
+    { name: "write_artifact", tool: createWriteArtifactTool({ artifactStore: params.artifactStore }) as Tool },
+    { name: "notify", tool: createNotifyTool({ eventManager: params.eventManager }) as Tool },
+    { name: "web_fetch", tool: createWebFetchTool() as Tool },
+    { name: "web_search", tool: createWebSearchTool({ provider: createWebSearchProvider() }) as Tool },
+  ];
 }
 
 class InMemoryToolRegistry implements ToolRegistry {
@@ -44,7 +57,7 @@ class InMemoryToolRegistry implements ToolRegistry {
   }
 
   resolve(spec: string): Tool[] {
-    const pattern = extractToolNameFromSpec(spec);
+    const pattern = parseToolPattern(spec);
     let glob = this.globs.get(pattern);
     if (glob === undefined) {
       glob = new Bun.Glob(pattern);
@@ -62,7 +75,7 @@ class InMemoryToolRegistry implements ToolRegistry {
   }
 }
 
-function extractToolNameFromSpec(toolSpec: string): string {
+function parseToolPattern(toolSpec: string): string {
   const lastColon = toolSpec.lastIndexOf(":");
   if (lastColon === -1) return toolSpec;
   return toolSpec.substring(lastColon + 1);
