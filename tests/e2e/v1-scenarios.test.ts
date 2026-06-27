@@ -14,12 +14,6 @@
  * and a warning is printed.
  */
 import {
-  describe,
-  expect,
-  spyOn,
-  test,
-} from "bun:test";
-import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -153,8 +147,8 @@ const LLM_AVAILABLE: boolean = await (async (): Promise<boolean> => {
 describe.skipIf(!LLM_AVAILABLE)("v1 user-scenarios — real LLM end-to-end", () => {
   let workspace: string;
   let prevHome: string | undefined;
-  let writeOut: ReturnType<typeof spyOn> | undefined;
-  let writeErr: ReturnType<typeof spyOn> | undefined;
+  let writeOut: ReturnType<typeof vi.spyOn> | undefined;
+  let writeErr: ReturnType<typeof vi.spyOn> | undefined;
 
   beforeEach(() => {
     workspace = mkdtempSync(join(tmpdir(), "jie-e2e-"));
@@ -164,8 +158,8 @@ describe.skipIf(!LLM_AVAILABLE)("v1 user-scenarios — real LLM end-to-end", () 
     const fakeHome = join(workspace, "home");
     mkdirSync(fakeHome, { recursive: true });
     process.env.HOME = fakeHome;
-    writeOut = spyOn(process.stdout, "write").mockImplementation(() => true);
-    writeErr = spyOn(console, "error").mockImplementation(() => {});
+    writeOut = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    writeErr = vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
   afterEach(() => {
