@@ -1,5 +1,5 @@
 import { Type } from "typebox";
-import type { Tool, ToolResult } from "./types.ts";
+import type { Tool, ToolResult } from "./types";
 import type { ArtifactStore } from "../storage";
 
 const WRITE_ARTIFACT_DESCRIPTION = `write_artifact(key, content): Store \`content\` (a string) at \`key\` in the team's

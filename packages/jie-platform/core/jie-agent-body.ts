@@ -3,12 +3,11 @@ import {
   type AgentMessage,
   type AgentEvent as PiAgentEvent,
 } from "@earendil-works/pi-agent-core";
-import type { MemoryManager } from "../storage/index.ts";
-import type { AgentSoul } from "../team/index.ts";
-import type { EventManager } from "../event";
-import { Events, type Sender } from "../event";
-import type { StreamPublisher } from "./streaming.ts";
-import type { AgentBody } from "./agent-body.ts";
+import type { MemoryManager } from "../storage";
+import type { AgentSoul } from "../team";
+import { Events, type EventManager, type Sender } from "../event";
+import type { StreamPublisher } from "./streaming";
+import type { AgentBody } from "./agent-body";
 
 export class JieAgentBody implements AgentBody {
   private readonly agentKey: string;

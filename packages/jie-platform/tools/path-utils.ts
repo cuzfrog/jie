@@ -1,6 +1,6 @@
 import { realpathSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
-import { JiePlatformError } from "../domain-types.ts";
+import { JiePlatformError } from "../domain-types";
 
 export function resolveWithinWorkspace(
   path: string,

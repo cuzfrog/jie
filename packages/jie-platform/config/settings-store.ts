@@ -1,8 +1,8 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadMergedSettings } from "./load-settings.ts";
-import type { Settings, RawSettings } from "./types.ts";
+import { loadMergedSettings } from "./load-settings";
+import type { Settings, RawSettings } from "./types";
 
 export type Scope = "project" | "global";
 

@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { SqliteStorage } from "./sqlite-storage.ts";
-import type { Storage } from "./storage.ts";
+import { SqliteStorage } from "./sqlite-storage";
+import type { Storage } from "./storage";
 import {
   SqliteMemoryManager,
   InMemoryMemoryManager,
-} from "./memory-store.ts";
+} from "./memory-store";
 
 function makeManager(): SqliteMemoryManager {
   return new SqliteMemoryManager(new SqliteStorage(":memory:"));

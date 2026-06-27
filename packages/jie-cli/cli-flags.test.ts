@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseFlags } from "./cli-flags.ts";
+import { parseFlags } from "./cli-flags";
 
 describe("parseFlags — help / version", () => {
   test("no args -> tui (TUI not implemented in v1)", () => {

@@ -1,7 +1,7 @@
 
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AuthJson } from "./types.ts";
+import type { AuthJson } from "./types";
 
 export interface AuthStore {
   load(): AuthJson;

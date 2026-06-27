@@ -1,9 +1,9 @@
 import { ulid } from "ulid";
 import { type Api, type Model } from "@earendil-works/pi-ai";
-import { type AgentBody, createAgentBody } from "./core/index.ts";
-import { type EventManager, Events } from "./event/index.ts";
-import { type AgentSoul, type Team, type TeamRegistry } from "./team/index.ts";
-import { type ModelRegistry, type SettingsStore } from "./config/index.ts";
+import { type AgentBody, createAgentBody } from "./core";
+import { type EventManager, Events } from "./event";
+import { type AgentSoul, type Team, type TeamRegistry } from "./team";
+import { type ModelRegistry, type SettingsStore } from "./config";
 import { type ToolRegistry } from "./tools";
 import {
   type ArtifactStore,

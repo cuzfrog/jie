@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { makeSettingsStore } from "./settings-store.ts";
+import { makeSettingsStore } from "./settings-store";
 
 describe("SettingsStore", () => {
   let homeJieDir: string;

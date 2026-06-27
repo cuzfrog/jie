@@ -9,8 +9,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createWriteFileTool } from "./write-file.ts";
-import { JiePlatformError } from "../domain-types.ts";
+import { createWriteFileTool } from "./write-file";
+import { JiePlatformError } from "../domain-types";
 
 describe("write_file", () => {
   let workspace: string;

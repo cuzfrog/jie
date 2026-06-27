@@ -2,11 +2,11 @@ import { describe, expect, test } from "bun:test";
 import {
   createEventManager,
   type EventManager,
-} from "../event/index.ts";
-import type { ArtifactStore } from "../storage/index.ts";
-import type { ExecutionContext } from "./types.ts";
-import { createNotifyTool } from "./notify.ts";
-import { JiePlatformError } from "../domain-types.ts";
+} from "../event";
+import type { ArtifactStore } from "../storage";
+import type { ExecutionContext } from "./types";
+import { createNotifyTool } from "./notify";
+import { JiePlatformError } from "../domain-types";
 
 interface NotifyEnvelope {
   version: 1;

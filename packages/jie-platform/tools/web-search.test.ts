@@ -3,8 +3,8 @@ import {
   createWebSearchProvider,
   createWebSearchTool,
   type WebSearchProvider,
-} from "./web-search.ts";
-import { JiePlatformError } from "../domain-types.ts";
+} from "./web-search";
+import { JiePlatformError } from "../domain-types";
 
 function stubProvider(results: { title: string; url: string; snippet: string }[]): WebSearchProvider {
   return { async search() { return results; } };

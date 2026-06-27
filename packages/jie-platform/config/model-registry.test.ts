@@ -1,9 +1,9 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createModelRegistry } from "./model-registry.ts";
-import type { AuthStore } from "./auth-store.ts";
-import { JiePlatformError } from "../domain-types.ts";
+import { createModelRegistry } from "./model-registry";
+import type { AuthStore } from "./auth-store";
+import { JiePlatformError } from "../domain-types";
 
 const authStore = vi.mocked<AuthStore>({
   load: vi.fn(),

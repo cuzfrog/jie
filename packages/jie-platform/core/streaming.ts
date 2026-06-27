@@ -1,5 +1,4 @@
-import type { EventManager } from "../event";
-import { Events, type Sender } from "../event";
+import { Events, type EventManager, type Sender } from "../event";
 
 const STREAM_CHUNK_SIZE = 64;
 const STREAM_FLUSH_MS = 200;

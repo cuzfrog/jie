@@ -1,4 +1,4 @@
-import type { Storage } from "./storage.ts";
+import type { Storage } from "./storage";
 
 export function initializeSchema(storage: Storage): void {
   storage.exec(`

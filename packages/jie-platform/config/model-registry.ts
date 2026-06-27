@@ -1,8 +1,8 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { getModel as piGetModel, getModels as piGetModels, getProviders as piGetProviders } from "@earendil-works/pi-ai";
-import { loadModelsConfig, type ResolvedModelsConfig, type ResolvedProviderConfig } from "./load-models.ts";
-import type { AuthStore } from "./auth-store.ts";
-import { JiePlatformError } from "../domain-types.ts";
+import { loadModelsConfig, type ResolvedModelsConfig, type ResolvedProviderConfig } from "./load-models";
+import type { AuthStore } from "./auth-store";
+import { JiePlatformError } from "../domain-types";
 
 export interface ModelRegistry {
   providers(): string[];

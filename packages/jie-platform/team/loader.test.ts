@@ -7,8 +7,8 @@ import {
   loadMinimalTeam,
   loadTeamFromDir,
   parseTeamFromManifests,
-} from "./loader.ts";
-import { JiePlatformError } from "../domain-types.ts";
+} from "./loader";
+import { JiePlatformError } from "../domain-types";
 
 describe("loadMinimalTeam", () => {
   test("returns one soul with role 'general' and leaderRole 'general'", () => {

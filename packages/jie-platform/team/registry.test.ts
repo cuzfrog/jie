@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createTeamRegistry } from "./registry.ts";
-import { JiePlatformError } from "../domain-types.ts";
+import { createTeamRegistry } from "./registry";
+import { JiePlatformError } from "../domain-types";
 
 function writeTeam(rootDir: string, id: string, leader: string): void {
   const teamDir = join(rootDir, id);

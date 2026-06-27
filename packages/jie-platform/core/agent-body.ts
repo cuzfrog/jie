@@ -5,8 +5,7 @@ import type { ExecutionContext, ToolRegistry } from "../tools";
 import { adaptToolToAgent } from "./tool-adapter";
 import { makeStreamPublisher } from "./streaming";
 import { JieAgentBody } from "./jie-agent-body";
-import type { EventManager } from "../event";
-import { Events, type Sender } from "../event";
+import { Events, type EventManager, type Sender } from "../event";
 
 export interface CreateAgentBodyOptions {
   agentKey: string;

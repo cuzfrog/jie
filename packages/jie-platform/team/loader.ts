@@ -1,8 +1,8 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { parse as parseYaml } from "yaml";
-import type { AgentSoul, Team } from "./types.ts";
-import { JiePlatformError } from "../domain-types.ts";
+import type { AgentSoul, Team } from "./types";
+import { JiePlatformError } from "../domain-types";
 import MINIMAL_TEAM_MD from "./minimal/TEAM.md" with { type: "text" };
 import MINIMAL_GENERAL_MD from "./minimal/general.md" with { type: "text" };
 

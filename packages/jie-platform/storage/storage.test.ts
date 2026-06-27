@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SqliteStorage } from "./sqlite-storage.ts";
-import { initializeSchema } from "./init-db.ts";
+import { SqliteStorage } from "./sqlite-storage";
+import { initializeSchema } from "./init-db";
 
 describe("SqliteStorage", () => {
   test("constructor creates artifacts and memory_turns tables (idempotent)", () => {

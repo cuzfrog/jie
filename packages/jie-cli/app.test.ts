@@ -13,7 +13,7 @@ import {
 import { type TeamRegistry } from "@cuzfrog/jie-platform/team";
 import { createToolRegistry } from "@cuzfrog/jie-platform/tools";
 import { join } from "node:path";
-import { createApp, type AppArgs, type AppDeps } from "./app.ts";
+import { createApp, type AppArgs, type AppDeps } from "./app";
 
 const authStore = vi.mocked<AuthStore>({
   load: vi.fn(),

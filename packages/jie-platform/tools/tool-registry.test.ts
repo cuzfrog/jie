@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { Type } from "typebox";
-import { createEventManager } from "../event/index.ts";
+import { createEventManager } from "../event";
 import {
   createArtifactStore,
   createStorage,
-} from "../storage/index.ts";
-import { createToolRegistry, type ToolRegistry } from "./tool-registry.ts";
-import type { Tool, ToolResult } from "./types.ts";
+} from "../storage";
+import { createToolRegistry, type ToolRegistry } from "./tool-registry";
+import type { Tool, ToolResult } from "./types";
 
 function makeTool(name: string): Tool {
   return {

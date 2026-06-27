@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { createEventBus, type EventBus } from "./event-bus.ts";
+import { createEventBus, type EventBus } from "./event-bus";
 import {
   createEventManager,
   type EventManager,
-} from "./event-manager.ts";
-import { Events, type EventEnvelope, type Sender } from "./events.ts";
+} from "./event-manager";
+import { Events, type EventEnvelope, type Sender } from "./events";
 
 function collect(bus: EventBus, subject: string): unknown[] {
   const out: unknown[] = [];

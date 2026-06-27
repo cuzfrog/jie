@@ -1,6 +1,6 @@
 import type { JiePlatform } from "@cuzfrog/jie-platform";
 import { Events, type EventManager, type Sender } from "@cuzfrog/jie-platform/event";
-import type { ParsedArgsMap } from "../cli-flags.ts";
+import type { ParsedArgsMap } from "../cli-flags";
 
 export type PrintArgs = ParsedArgsMap["print"];
 

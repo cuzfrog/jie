@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { makeAuthStore } from "./auth-store.ts";
+import { makeAuthStore } from "./auth-store";
 
 describe("AuthStore", () => {
   let homeDir: string;

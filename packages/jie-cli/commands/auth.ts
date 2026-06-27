@@ -1,6 +1,6 @@
 
 import type { AuthStore, SettingsStore } from "@cuzfrog/jie-platform/config";
-import type { ParsedArgsMap } from "../cli-flags.ts";
+import type { ParsedArgsMap } from "../cli-flags";
 
 export async function runLogin(
   parsed: ParsedArgsMap["login"],

@@ -1,5 +1,5 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { Storage } from "./storage.ts";
+import type { Storage } from "./storage";
 
 interface TurnRecord {
   team_id: string;
@@ -45,7 +45,11 @@ export function createMemoryManager(storage: Storage): MemoryManager {
 }
 
 export class SqliteMemoryManager implements MemoryManager {
-  constructor(private readonly storage: Storage) {}
+  private readonly storage: Storage;
+
+  constructor(storage: Storage) {
+    this.storage = storage;
+  }
 
   persist(
     message: AgentMessage,

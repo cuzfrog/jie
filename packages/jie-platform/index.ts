@@ -1,1 +1,1 @@
-export { type JiePlatform, createJiePlatform } from "./start.ts";
+export { type JiePlatform, createJiePlatform } from "./start";

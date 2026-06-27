@@ -1,6 +1,6 @@
 import { Database, type SQLQueryBindings } from "bun:sqlite";
-import type { Storage } from "./storage.ts";
-import { initializeSchema } from "./init-db.ts";
+import type { Storage } from "./storage";
+import { initializeSchema } from "./init-db";
 
 export class SqliteStorage implements Storage {
   private readonly db: Database;

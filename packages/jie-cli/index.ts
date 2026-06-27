@@ -15,8 +15,8 @@ import {
 } from "@cuzfrog/jie-platform/storage";
 import { createTeamRegistry } from "@cuzfrog/jie-platform/team";
 import { createToolRegistry } from "@cuzfrog/jie-platform/tools";
-import { createApp } from "./app.ts";
-import { parseFlags, type ParsedArgs } from "./cli-flags.ts";
+import { createApp } from "./app";
+import { parseFlags, type ParsedArgs } from "./cli-flags";
 import {
   runApiKey,
   runLogin,
@@ -24,8 +24,8 @@ import {
   runModel,
   runPrint,
   runTeam,
-} from "./commands/index.ts";
-import { VERSION } from "./version.ts";
+} from "./commands";
+import { VERSION } from "./version";
 
 export async function main(argv: string[], cwd: string = process.cwd()): Promise<number> {
   const parsed = parseFlags(argv);

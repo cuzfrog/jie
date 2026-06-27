@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { createReadArtifactTool } from "./read-artifact.ts";
-import { createArtifactStore, createStorage } from "../storage/index.ts";
+import { createReadArtifactTool } from "./read-artifact";
+import { createArtifactStore, createStorage } from "../storage";
 
 function makeStore() {
   const storage = createStorage({ type: "sqlite", filePath: ":memory:" });

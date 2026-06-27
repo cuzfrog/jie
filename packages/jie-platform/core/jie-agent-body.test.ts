@@ -1,9 +1,9 @@
 import { type Agent, type AgentMessage } from "@earendil-works/pi-agent-core";
-import { JieAgentBody } from "./jie-agent-body.ts";
+import { JieAgentBody } from "./jie-agent-body";
 import { createEventManager, type EventManager } from "../event";
 import type { MemoryManager } from "../storage";
 import type { AgentSoul } from "../team";
-import type { StreamPublisher } from "./streaming.ts";
+import type { StreamPublisher } from "./streaming";
 
 function makeSoul(overrides: Partial<AgentSoul> = {}): AgentSoul {
   return {

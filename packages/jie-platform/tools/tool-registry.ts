@@ -1,14 +1,14 @@
-import type { Tool } from "./types.ts";
-import { createBashTool } from "./bash.ts";
-import { createNotifyTool } from "./notify.ts";
-import { createReadArtifactTool } from "./read-artifact.ts";
-import { createReadFileTool } from "./read-file.ts";
-import { createWebFetchTool } from "./web-fetch.ts";
-import { createWebSearchProvider, createWebSearchTool } from "./web-search.ts";
-import { createWriteArtifactTool } from "./write-artifact.ts";
-import { createWriteFileTool } from "./write-file.ts";
-import type { EventManager } from "../event/index.ts";
-import type { ArtifactStore } from "../storage/index.ts";
+import type { Tool } from "./types";
+import { createBashTool } from "./bash";
+import { createNotifyTool } from "./notify";
+import { createReadArtifactTool } from "./read-artifact";
+import { createReadFileTool } from "./read-file";
+import { createWebFetchTool } from "./web-fetch";
+import { createWebSearchProvider, createWebSearchTool } from "./web-search";
+import { createWriteArtifactTool } from "./write-artifact";
+import { createWriteFileTool } from "./write-file";
+import type { EventManager } from "../event";
+import type { ArtifactStore } from "../storage";
 
 export interface ToolRegistry {
   register(name: string, tool: Tool): void;

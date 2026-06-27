@@ -4,8 +4,8 @@ import type {
   AgentEvent as PiAgentEvent,
   AgentMessage,
 } from "@earendil-works/pi-agent-core";
-import { createAgentBody, type CreateAgentBodyOptions } from "./agent-body.ts";
-import { JieAgentBody } from "./jie-agent-body.ts";
+import { createAgentBody, type CreateAgentBodyOptions } from "./agent-body";
+import { JieAgentBody } from "./jie-agent-body";
 import { createEventManager, type EventManager } from "../event";
 import {
   createArtifactStore,

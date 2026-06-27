@@ -1,6 +1,6 @@
-import type { EventBus } from "./event-bus.ts";
-import { createEventBus } from "./event-bus.ts";
-import type { EventEnvelope } from "./events.ts";
+import type { EventBus } from "./event-bus";
+import { createEventBus } from "./event-bus";
+import type { EventEnvelope } from "./events";
 
 
 

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { createWriteArtifactTool } from "./write-artifact.ts";
-import { createArtifactStore, createStorage } from "../storage/index.ts";
-import { JiePlatformError } from "../domain-types.ts";
+import { createWriteArtifactTool } from "./write-artifact";
+import { createArtifactStore, createStorage } from "../storage";
+import { JiePlatformError } from "../domain-types";
 
 function makeStore() {
   const storage = createStorage({ type: "sqlite", filePath: ":memory:" });

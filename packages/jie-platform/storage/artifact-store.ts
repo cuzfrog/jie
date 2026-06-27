@@ -1,5 +1,5 @@
-import type { Storage } from "./storage.ts";
-import { JiePlatformError } from "../domain-types.ts";
+import type { Storage } from "./storage";
+import { JiePlatformError } from "../domain-types";
 
 export interface ArtifactStore {
 
@@ -50,7 +50,11 @@ function escapeLikePrefix(prefix: string): string {
 }
 
 export class SqliteArtifactStore implements ArtifactStore {
-  constructor(private readonly storage: Storage) {}
+  private readonly storage: Storage;
+
+  constructor(storage: Storage) {
+    this.storage = storage;
+  }
 
   async write(
     key: string,

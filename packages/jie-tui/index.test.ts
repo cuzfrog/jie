@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { startTUI, type StartTUIOptions } from "./index.ts";
+import { startTUI, type StartTUIOptions } from ".";
 import type { EventManager } from "@cuzfrog/jie-platform/event";
 import type { ArtifactStore } from "@cuzfrog/jie-platform/storage";
 

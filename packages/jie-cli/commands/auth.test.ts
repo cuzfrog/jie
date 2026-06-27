@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AuthJson, AuthStore, SettingsStore } from "@cuzfrog/jie-platform/config";
-import { runApiKey, runLogin, runLogout } from "./auth.ts";
+import { runApiKey, runLogin, runLogout } from "./auth";
 
 const auth = vi.mocked<AuthStore>({
   load: vi.fn(),
