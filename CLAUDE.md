@@ -36,7 +36,7 @@
 - Do not keep intermediate, transient history in md files under `specs/`, they are the update-to-date blueprint for the project.
 - Do not record what you've done if the information is not helpful to make subsequent decisions.
 - No emojis in commits, issues, PR comments, or code
-- Do not use newline to break sentences. Let IDE wrap text.
+- Do not use newline to break sentences, no newline in the same paragraph. Let IDE wrap text.
 
 ## Conversation style
 - When I ask a question, answer it before any actions.
