@@ -30,7 +30,7 @@ interface WriteFileInput {
   content: string;
 }
 
-export function createWriteFileTool(deps: WriteFileDeps): Tool<WriteFileInput> {
+export function createWriteFileTool(dependencies: WriteFileDeps): Tool<WriteFileInput> {
   return {
     name: "write_file",
     description: WRITE_FILE_DESCRIPTION,
@@ -47,7 +47,7 @@ export function createWriteFileTool(deps: WriteFileDeps): Tool<WriteFileInput> {
         );
       }
 
-      const real = resolveWithinWorkspace(input.path, deps.workspaceRoot);
+      const real = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
 
       let stat;
       try {

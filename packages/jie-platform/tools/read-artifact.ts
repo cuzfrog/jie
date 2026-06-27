@@ -18,7 +18,7 @@ interface ReadArtifactInput {
 }
 
 export function createReadArtifactTool(
-  deps: ReadArtifactDeps,
+  dependencies: ReadArtifactDeps,
 ): Tool<ReadArtifactInput> {
   return {
     name: "read_artifact",
@@ -28,7 +28,7 @@ export function createReadArtifactTool(
       key: Type.String(),
     }),
     async execute(input: ReadArtifactInput): Promise<ToolResult> {
-      const hit = await deps.artifactStore.read(input.key);
+      const hit = await dependencies.artifactStore.read(input.key);
       if (hit === null) {
         return {
           content: `Artifact not found: ${input.key}`,

@@ -77,7 +77,7 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<numb
       return runTeam(args, settingsStore, teamRegistry);
     }
     case "print": {
-      const deps = buildPlatformDeps(cwd, homeJieDir, projectJieDir);
+      const dependencies = buildPlatformDeps(cwd, homeJieDir, projectJieDir);
       const result = await createApp(
         {
           kind: "print",
@@ -89,7 +89,7 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<numb
           resume: args.resume,
           continueLast: args.continueLast,
         },
-        deps,
+        dependencies,
       );
       if (result.kind === "error") return result.code;
       return runPrint(result.app.handle, result.app.teamId, result.app.leaderRole, result.app.leaderKey, result.app.agentKeys, args);

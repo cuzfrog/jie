@@ -43,7 +43,7 @@ interface NotifyInput {
   prompt: string;
 }
 
-export function createNotifyTool(deps: NotifyDeps): Tool<NotifyInput> {
+export function createNotifyTool(dependencies: NotifyDeps): Tool<NotifyInput> {
   return {
     name: "notify",
     description: NOTIFY_DESCRIPTION,
@@ -70,7 +70,7 @@ export function createNotifyTool(deps: NotifyDeps): Tool<NotifyInput> {
         identity: { teamId: ctx.teamId, agentRole: ctx.agentRole, agentKey: ctx.agentKey },
       };
       const envelope = Events.custom(sender, clientTopic, { prompt: input.prompt, source: ctx.agentKey });
-      deps.eventManager.publish(envelope);
+      dependencies.eventManager.publish(envelope);
 
       return {
         content: `Notification published on '${input.topic}'`,

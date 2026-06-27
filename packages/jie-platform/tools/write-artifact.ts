@@ -23,7 +23,7 @@ interface WriteArtifactInput {
 }
 
 export function createWriteArtifactTool(
-  deps: WriteArtifactDeps,
+  dependencies: WriteArtifactDeps,
 ): Tool<WriteArtifactInput> {
   return {
     name: "write_artifact",
@@ -34,7 +34,7 @@ export function createWriteArtifactTool(
       content: Type.String(),
     }),
     async execute(input: WriteArtifactInput): Promise<ToolResult> {
-      const { key, created_at } = await deps.artifactStore.write(
+      const { key, created_at } = await dependencies.artifactStore.write(
         input.key,
         input.content,
       );

@@ -45,9 +45,9 @@ export interface AppArgs {
 
 export async function createApp(
   args: AppArgs,
-  deps: AppDeps,
+  dependencies: AppDeps,
 ): Promise<AppCreationResult> {
-  const settings: MergedSettings = deps.settingsStore.load();
+  const settings: MergedSettings = dependencies.settingsStore.load();
 
   if (args.apiKey !== undefined) {
     const provider = settings.defaultProvider;
@@ -57,22 +57,22 @@ export async function createApp(
       );
       return { kind: "error", code: 1 };
     }
-    deps.authStore.write(
-      deps.authStore.setProvider(deps.authStore.load(), provider, args.apiKey),
+    dependencies.authStore.write(
+      dependencies.authStore.setProvider(dependencies.authStore.load(), provider, args.apiKey),
     );
     console.log(`logged in to ${provider}`);
   }
 
   let team: Team;
   try {
-    team = deps.teamRegistry.loadTeam(args.teamId ?? settings.defaultTeam);
+    team = dependencies.teamRegistry.loadTeam(args.teamId ?? settings.defaultTeam);
   } catch (e) {
     console.error(e instanceof Error ? e.message : String(e));
     return { kind: "error", code: 1 };
   }
 
   let captured: Captured | null = null;
-  deps.eventManager.subscribe(`team.${team.id}.loaded`, (env: { payload: unknown }) => {
+  dependencies.eventManager.subscribe(`team.${team.id}.loaded`, (env: { payload: unknown }) => {
     const agents = (env.payload as { agents: Array<{ role: string; agent_key: string; is_leader: boolean }> }).agents;
     const leader = agents.find((a) => a.is_leader) ?? agents[0];
     if (leader === undefined) return;
@@ -94,7 +94,7 @@ export async function createApp(
         resumeSessionId: args.resume,
         continueLastSession: args.continueLast,
       },
-      deps,
+      dependencies,
     );
   } catch (e) {
     console.error(e instanceof Error ? e.message : String(e));

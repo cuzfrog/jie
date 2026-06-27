@@ -24,8 +24,8 @@ export interface TeamRegistry {
   locate(teamId: string): "project" | "user" | "missing";
 }
 
-export function createTeamRegistry(opts: TeamRegistryOptions): TeamRegistry {
-  const { homeJieDir, projectJieDir } = opts;
+export function createTeamRegistry(options: TeamRegistryOptions): TeamRegistry {
+  const { homeJieDir, projectJieDir } = options;
   const userTeamsDir = join(homeJieDir, "teams");
 
   function projectTeamsDir(): string | null {

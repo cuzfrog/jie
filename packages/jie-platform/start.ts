@@ -35,9 +35,9 @@ export interface JiePlatform {
   stop: () => Promise<void>;
 }
 
-export async function createJiePlatform(opts: CreateJiePlatformOptions, deps: JiePlatformDeps): Promise<JiePlatform> {
-  const resolveModel = defaultResolveModel(deps.modelRegistry);
-  const resolvedTeamId = opts.teamId ?? "minimal";
+export async function createJiePlatform(options: CreateJiePlatformOptions, dependencies: JiePlatformDeps): Promise<JiePlatform> {
+  const resolveModel = defaultResolveModel(dependencies.modelRegistry);
+  const resolvedTeamId = options.teamId ?? "minimal";
 
   const sessionIds = new Map<string, string>();
   const loadedTeams = new Map<string, AgentBody[]>();
@@ -46,27 +46,27 @@ export async function createJiePlatform(opts: CreateJiePlatformOptions, deps: Ji
     const existing = loadedTeams.get(teamId);
     if (existing !== undefined) return existing;
 
-    const bp: Team = deps.teamRegistry.loadTeam(teamId);
-    const sessionId = resolveSessionId(deps.memoryManager, opts, teamId);
+    const bp: Team = dependencies.teamRegistry.loadTeam(teamId);
+    const sessionId = resolveSessionId(dependencies.memoryManager, options, teamId);
     sessionIds.set(teamId, sessionId);
 
     const out: AgentBody[] = [];
     for (const soul of bp.roles) {
       const isLeader = soul.role === bp.leaderRole;
       const agentKey = `${soul.role}-1`;
-      const model = resolveSoulModel(soul, deps.settingsStore, resolveModel);
+      const model = resolveSoulModel(soul, dependencies.settingsStore, resolveModel);
       out.push(
         createAgentBody({
           agentKey,
           teamId,
           soul,
           isLeader,
-          eventManager: deps.eventManager,
-          artifactStore: deps.artifactStore,
-          memory: deps.memoryManager,
+          eventManager: dependencies.eventManager,
+          artifactStore: dependencies.artifactStore,
+          memory: dependencies.memoryManager,
           sessionId,
-          toolRegistry: deps.toolRegistry,
-          getApiKey: async (provider: string) => deps.modelRegistry.getApiKey(provider),
+          toolRegistry: dependencies.toolRegistry,
+          getApiKey: async (provider: string) => dependencies.modelRegistry.getApiKey(provider),
           model,
         }),
       );
@@ -75,14 +75,14 @@ export async function createJiePlatform(opts: CreateJiePlatformOptions, deps: Ji
       await body.start();
     }
     loadedTeams.set(teamId, out);
-    publishTeamLoaded(deps.eventManager, teamId, bp);
+    publishTeamLoaded(dependencies.eventManager, teamId, bp);
     return out;
   }
 
   await loadAndStartTeam(resolvedTeamId);
 
   const handle: JiePlatform = {
-    events: deps.eventManager,
+    events: dependencies.eventManager,
     stop: async () => {
       const allBodies: AgentBody[] = [];
       for (const bodies of loadedTeams.values()) {
@@ -144,16 +144,16 @@ function resolveSoulModel(
 
 function resolveSessionId(
   memory: MemoryManager,
-  opts: CreateJiePlatformOptions,
+  options: CreateJiePlatformOptions,
   teamId: string,
 ): string {
-  if (opts.resumeSessionId !== undefined) {
-    if (!memory.hasSession(teamId, opts.resumeSessionId)) {
-      throw new Error(`unknown session_id: ${opts.resumeSessionId}`);
+  if (options.resumeSessionId !== undefined) {
+    if (!memory.hasSession(teamId, options.resumeSessionId)) {
+      throw new Error(`unknown session_id: ${options.resumeSessionId}`);
     }
-    return opts.resumeSessionId;
+    return options.resumeSessionId;
   }
-  if (opts.continueLastSession === true) {
+  if (options.continueLastSession === true) {
     const recent = memory.mostRecentSessionId(teamId);
     if (recent === null) {
       console.warn(

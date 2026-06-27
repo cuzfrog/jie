@@ -46,7 +46,7 @@ function splitLinesPreservingNewline(text: string): string[] {
   return lines;
 }
 
-export function createReadFileTool(deps: ReadFileDeps): Tool<ReadFileInput> {
+export function createReadFileTool(dependencies: ReadFileDeps): Tool<ReadFileInput> {
   return {
     name: "read_file",
     description: READ_FILE_DESCRIPTION,
@@ -57,7 +57,7 @@ export function createReadFileTool(deps: ReadFileDeps): Tool<ReadFileInput> {
       limit: Type.Optional(Type.Number()),
     }),
     async execute(input: ReadFileInput): Promise<ToolResult> {
-      const real = resolveWithinWorkspace(input.path, deps.workspaceRoot);
+      const real = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
 
       let stat;
       try {

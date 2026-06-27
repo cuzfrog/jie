@@ -28,28 +28,28 @@ export interface AgentBody {
   stop(): void;
 }
 
-export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
+export function createAgentBody(options: CreateAgentBodyOptions): AgentBody {
   const sender: Sender = {
     kind: "agent",
-    identity: { teamId: opts.teamId, agentRole: opts.soul.role, agentKey: opts.agentKey },
+    identity: { teamId: options.teamId, agentRole: options.soul.role, agentKey: options.agentKey },
   };
-  const streamPublisher = makeStreamPublisher(opts.eventManager, sender);
+  const streamPublisher = makeStreamPublisher(options.eventManager, sender);
 
   const ctx: ExecutionContext = {
-    sessionId: opts.sessionId,
-    teamId: opts.teamId,
-    agentKey: opts.agentKey,
-    agentRole: opts.soul.role,
-    artifactStore: opts.artifactStore,
+    sessionId: options.sessionId,
+    teamId: options.teamId,
+    agentKey: options.agentKey,
+    agentRole: options.soul.role,
+    artifactStore: options.artifactStore,
   };
-  const tools = adaptAllTools(opts.soul, opts.toolRegistry, ctx);
+  const tools = adaptAllTools(options.soul, options.toolRegistry, ctx);
 
   const toolTimestamps = new Map<string, number>();
 
-  const createAgent = opts.createAgent ?? defaultAgentFactory;
+  const createAgent = options.createAgent ?? defaultAgentFactory;
   const agent = createAgent({
-    sessionId: opts.sessionId,
-    getApiKey: opts.getApiKey,
+    sessionId: options.sessionId,
+    getApiKey: options.getApiKey,
     transformContext: async (messages: AgentMessage[]) => messages,
     steeringMode: "all",
     followUpMode: "all",
@@ -57,7 +57,7 @@ export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
     beforeToolCall: async (context) => {
       const toolCallId = context.toolCall.id;
       toolTimestamps.set(toolCallId, Date.now());
-      opts.eventManager.publish(Events.agentToolCall(
+      options.eventManager.publish(Events.agentToolCall(
         sender,
         toolCallId,
         context.toolCall.name,
@@ -72,7 +72,7 @@ export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
       toolTimestamps.delete(toolCallId);
       const error = extractToolError(context);
       const output = error === null ? jieToolResultOf(context.result) : null;
-      opts.eventManager.publish(Events.agentToolResult(
+      options.eventManager.publish(Events.agentToolResult(
         sender,
         toolCallId,
         context.toolCall.name,
@@ -84,18 +84,18 @@ export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
       return undefined;
     },
   });
-  agent.state.systemPrompt = opts.soul.systemPrompt;
-  agent.state.model = opts.model as never;
+  agent.state.systemPrompt = options.soul.systemPrompt;
+  agent.state.model = options.model as never;
   agent.state.tools = tools;
 
   const body = new JieAgentBody({
-    agentKey: opts.agentKey,
-    teamId: opts.teamId,
-    soul: opts.soul,
-    isLeader: opts.isLeader,
-    sessionId: opts.sessionId,
-    eventManager: opts.eventManager,
-    memory: opts.memory,
+    agentKey: options.agentKey,
+    teamId: options.teamId,
+    soul: options.soul,
+    isLeader: options.isLeader,
+    sessionId: options.sessionId,
+    eventManager: options.eventManager,
+    memory: options.memory,
     agent,
     streamPublisher,
   });
@@ -123,8 +123,8 @@ function adaptAllTools(
   return out;
 }
 
-function defaultAgentFactory(opts: ConstructorParameters<typeof Agent>[0]): Agent {
-  return new Agent(opts);
+function defaultAgentFactory(options: ConstructorParameters<typeof Agent>[0]): Agent {
+  return new Agent(options);
 }
 
 function extractToolError(context: {

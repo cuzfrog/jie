@@ -61,7 +61,7 @@ function captureStream(buf: Buffer, cap: number): { text: string; truncated: boo
   };
 }
 
-export function createBashTool(deps: BashDeps): Tool<BashInput> {
+export function createBashTool(dependencies: BashDeps): Tool<BashInput> {
   return {
     name: "bash",
     description: BASH_DESCRIPTION,
@@ -76,7 +76,7 @@ export function createBashTool(deps: BashDeps): Tool<BashInput> {
       _ctx,
       signal?: AbortSignal,
     ): Promise<ToolResult> {
-      const cwd = resolveWorkdir(input.workdir, deps.workspaceRoot);
+      const cwd = resolveWorkdir(input.workdir, dependencies.workspaceRoot);
 
       const proc = Bun.spawn(["/bin/sh", "-c", input.command], {
         cwd,

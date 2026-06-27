@@ -41,7 +41,7 @@ function clampMaxResults(value: number | undefined): number {
   return value;
 }
 
-export function createWebSearchTool(deps: WebSearchDeps): Tool<WebSearchInput> {
+export function createWebSearchTool(dependencies: WebSearchDeps): Tool<WebSearchInput> {
   return {
     name: "web_search",
     description: WEB_SEARCH_DESCRIPTION,
@@ -54,7 +54,7 @@ export function createWebSearchTool(deps: WebSearchDeps): Tool<WebSearchInput> {
       const max = clampMaxResults(input.maxResults);
       let results: WebSearchResult[];
       try {
-        results = await deps.provider.search(input.query, max);
+        results = await dependencies.provider.search(input.query, max);
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         throw new JiePlatformError(
