@@ -76,7 +76,9 @@ export class JieAgentBody implements AgentBody {
         return;
       }
       case "message_end":
-        this.stream.endStream();
+        if ((event.message as { role?: string }).role === "assistant") {
+          this.stream.endStream();
+        }
         this.memory.persist(
           event.message as unknown as AgentMessage,
           this.agentKey,

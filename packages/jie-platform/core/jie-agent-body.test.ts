@@ -411,6 +411,27 @@ describe("JieAgentBody — handlePiAgentEvent (stream bridge)", () => {
     expect(h.persisted.length).toBe(1);
   });
 
+  test("message_end with assistant: stream.endStream is called (#51)", () => {
+    const body = h.makeBody();
+    body.handlePiAgentEvent({
+      type: "message_end",
+      message: { role: "assistant", content: [] } as unknown as AgentMessage,
+    });
+    expect(h.endStream).toHaveBeenCalled();
+  });
+
+  test("message_end with non-assistant role: stream.endStream is NOT called (#51)", () => {
+    const body = h.makeBody();
+    body.handlePiAgentEvent({
+      type: "message_end",
+      message: {
+        role: "user",
+        content: "hi",
+      } as unknown as AgentMessage,
+    });
+    expect(h.endStream).not.toHaveBeenCalled();
+  });
+
   test("agent_end drains the queue: dequeued message is passed to agent.followUp (not prompt, to avoid activeRun throw)", async () => {
     const body = h.makeBody();
     await body.start();

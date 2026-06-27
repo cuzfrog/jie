@@ -317,6 +317,123 @@ describe("AgentBody — pi-agent event bridging", () => {
       name: "bash",
     });
   });
+
+  test("subscribe listener accepts (event, signal) per pi-agent contract (#51)", () => {
+    const { opts } = makeOpts();
+    let subscribeArgCount: number | undefined;
+    const result = makeFakeAgentFactory({
+      onEvent: (l) => {
+        subscribeArgCount = l.length;
+      },
+    });
+    body = createAgentBody({ ...opts, createAgent: result.factory });
+    expect(subscribeArgCount).toBe(2);
+  });
+
+  test("afterToolCall hook publishes agent.tool.result with the Jie ToolResult shape (#50)", async () => {
+    const { opts, subscribeSubject } = makeOpts();
+    const results: object[] = [];
+    subscribeSubject("agent.tool.result", (_s, p) => {
+      results.push(p);
+    });
+    const result = makeFakeAgentFactory();
+    body = createAgentBody({ ...opts, createAgent: result.factory });
+    const captured = result.lastOpts();
+    const hook = captured?.afterToolCall;
+    if (hook === undefined) {
+      throw new Error("afterToolCall hook not captured");
+    }
+    await hook({
+      assistantMessage: { role: "assistant", content: [] } as unknown as AssistantMessage,
+      toolCall: {
+        type: "toolCall",
+        id: "call_r",
+        name: "noop",
+        arguments: {},
+      },
+      args: {},
+      context: {} as never,
+      result: {
+        content: [{ type: "text", text: "hello" }],
+        details: { foo: 1 },
+        terminate: false,
+      },
+      isError: false,
+    });
+    expect(results).toHaveLength(1);
+    const env = results[0] as { payload: { output: string; error: string | null } };
+    expect(JSON.parse(env.payload.output)).toEqual({
+      content: "hello",
+      details: { foo: 1 },
+      terminate: false,
+    });
+  });
+
+  test("afterToolCall: multi-block content serializes as JSON array (#50)", async () => {
+    const { opts, subscribeSubject } = makeOpts();
+    const results: object[] = [];
+    subscribeSubject("agent.tool.result", (_s, p) => {
+      results.push(p);
+    });
+    const result = makeFakeAgentFactory();
+    body = createAgentBody({ ...opts, createAgent: result.factory });
+    const captured = result.lastOpts();
+    const hook = captured?.afterToolCall;
+    if (hook === undefined) throw new Error("afterToolCall hook not captured");
+    await hook({
+      assistantMessage: { role: "assistant", content: [] } as unknown as AssistantMessage,
+      toolCall: { type: "toolCall", id: "call_m", name: "noop", arguments: {} },
+      args: {},
+      context: {} as never,
+      result: {
+        content: [
+          { type: "text", text: "a" },
+          { type: "image", data: "x" } as never,
+        ],
+        details: { ok: true },
+        terminate: true,
+      },
+      isError: false,
+    });
+    const env = results[0] as { payload: { output: string } };
+    expect(JSON.parse(env.payload.output)).toEqual({
+      content: [
+        { type: "text", text: "a" },
+        { type: "image", data: "x" },
+      ],
+      details: { ok: true },
+      terminate: true,
+    });
+  });
+
+  test("afterToolCall on error: output null, error carries message (#50 unchanged path)", async () => {
+    const { opts, subscribeSubject } = makeOpts();
+    const results: object[] = [];
+    subscribeSubject("agent.tool.result", (_s, p) => {
+      results.push(p);
+    });
+    const result = makeFakeAgentFactory();
+    body = createAgentBody({ ...opts, createAgent: result.factory });
+    const captured = result.lastOpts();
+    const hook = captured?.afterToolCall;
+    if (hook === undefined) throw new Error("afterToolCall hook not captured");
+    await hook({
+      assistantMessage: { role: "assistant", content: [] } as unknown as AssistantMessage,
+      toolCall: { type: "toolCall", id: "call_e", name: "noop", arguments: {} },
+      args: {},
+      context: {} as never,
+      result: {
+        content: [{ type: "text", text: "boom" }],
+        details: {},
+        terminate: false,
+      },
+      isError: true,
+    });
+    expect(results).toHaveLength(1);
+    const env = results[0] as { payload: { output: string | null; error: string | null } };
+    expect(env.payload.output).toBeNull();
+    expect(env.payload.error).toBe("boom");
+  });
 });
 
 describe("AgentBody — agent.queue.update", () => {

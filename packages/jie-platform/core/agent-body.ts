@@ -5,8 +5,8 @@ import type { ExecutionContext, ToolRegistry } from "../tools";
 import { adaptToolToAgent } from "./tool-adapter";
 import { makeStreamPublisher } from "./streaming";
 import { JieAgentBody } from "./jie-agent-body";
-import type { EventManager } from "../event/event-manager.ts";
-import { Events, type Sender } from "../event/events.ts";
+import type { EventManager } from "../event";
+import { Events, type Sender } from "../event";
 
 export interface CreateAgentBodyOptions {
   agentKey: string;
@@ -51,7 +51,6 @@ export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
     sessionId: opts.sessionId,
     getApiKey: opts.getApiKey,
     transformContext: async (messages: AgentMessage[]) => messages,
-    convertToLlm: undefined,
     steeringMode: "all",
     followUpMode: "all",
     toolExecution: "sequential",
@@ -72,12 +71,12 @@ export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
       const startedAt = toolTimestamps.get(toolCallId) ?? Date.now();
       toolTimestamps.delete(toolCallId);
       const error = extractToolError(context);
-      const result = error === null ? context.result : null;
+      const output = error === null ? jieToolResultOf(context.result) : null;
       opts.events.publish(Events.agentToolResult(
         sender,
         toolCallId,
         context.toolCall.name,
-        error === null ? JSON.stringify(result) : null,
+        output === null ? null : JSON.stringify(output),
         false,
         Date.now() - startedAt,
         error,
@@ -101,7 +100,7 @@ export function createAgentBody(opts: CreateAgentBodyOptions): AgentBody {
     streamPublisher,
   });
 
-  const unsubscribeAgent = agent.subscribe((event) =>
+  const unsubscribeAgent = agent.subscribe((event, _signal) =>
     body.handlePiAgentEvent(event),
   );
   body.addExternalCleanup(unsubscribeAgent);
@@ -141,4 +140,28 @@ function extractToolError(context: {
     .filter((t): t is string => typeof t === "string")
     .join("\n");
   return text.length > 0 ? text : "tool error";
+}
+
+interface JieToolResult {
+  content: string | Array<{ type: string; text?: string }>;
+  details?: unknown;
+  terminate?: boolean;
+}
+
+function jieToolResultOf(piResult: unknown): JieToolResult {
+  const r = piResult as {
+    content?: Array<{ type: string; text?: string }>;
+    details?: unknown;
+    terminate?: boolean;
+  };
+  const block = r.content;
+  const content =
+    Array.isArray(block) && block.length === 1 && block[0]?.type === "text"
+      ? (block[0].text ?? "")
+      : (block ?? "");
+  return {
+    content,
+    details: r.details,
+    terminate: r.terminate ?? false,
+  };
 }
