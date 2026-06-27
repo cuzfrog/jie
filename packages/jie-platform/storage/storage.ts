@@ -9,12 +9,12 @@ export interface Storage {
   transaction<T>(fn: (storage: Storage) => T): T;
 }
 
-interface CreateStorageOpstions {
+interface CreateStorageParams {
   type: "sqlite";
   filePath: string;
 }
 
-export function createStorage(options: CreateStorageOpstions): Storage {
+export function createStorage(options: CreateStorageParams): Storage {
   if (options.type === "sqlite") {
     return new SqliteStorage(options.filePath);
   }
