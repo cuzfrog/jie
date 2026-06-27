@@ -1,5 +1,11 @@
 #!/bin/bash
 
-# not used yet
+# Local LLM endpoint (LM Studio or compatible OpenAI-completions server).
 export LOCAL_LLM_BASE_URL=http://192.168.1.6:12345
 export LOCAL_LLM_MODEL=qwen3.5-2b
+
+# e2e test env vars (consumed by tests/e2e/fixtures/models.json).
+# Local devs source this file; CI overrides these via workflow env.
+export JIE_E2E_BASE_URL=${LOCAL_LLM_BASE_URL}/v1
+export JIE_E2E_API_KEY=not-needed
+export JIE_E2E_MODEL=${LOCAL_LLM_MODEL}

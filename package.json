@@ -5,6 +5,10 @@
   "bin": {
     "jie": "packages/jie-cli/index.ts"
   },
+  "scripts": {
+    "test:e2e": "set -a && . ./setenv && set +a && bun test tests/e2e",
+    "test:e2e:ci": "bun test tests/e2e"
+  },
   "dependencies": {
     "@cuzfrog/jie-platform": "workspace:*",
     "@cuzfrog/jie-tui": "workspace:*"

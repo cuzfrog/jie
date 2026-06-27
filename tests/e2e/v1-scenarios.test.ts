@@ -8,10 +8,14 @@
  * provider/model from the workspace, exercising the same code
  * path the user takes via `.jie/models.json` (issue #20).
  *
- * These tests require the LLM endpoint declared in the fixture
- * to be reachable. If the endpoint is unreachable, the entire
- * suite is skipped via `describe.skipIf` after a startup probe,
- * and a warning is printed.
+ * Required env vars (provided by `setenv` for local dev and by
+ * the CI workflow for GitHub Models):
+ *   JIE_E2E_BASE_URL, JIE_E2E_API_KEY, JIE_E2E_MODEL
+ *
+ * The suite hard-fails at module load if any of those are unset,
+ * and again at module load if the LLM endpoint is unreachable.
+ * There is no skip-on-unreachable path; e2e must be backed by a
+ * real LLM in every environment that runs it.
  */
 import {
   mkdirSync,
@@ -56,42 +60,42 @@ function printArgv(p: PrintArgv): string[] {
 }
 
 const FIXTURE_PATH = join(import.meta.dir, "fixtures", "models.json");
+
+/** Required env vars. The CI workflow and `setenv` (for local dev)
+ *  must populate these. Failing here keeps the e2e suite honest:
+ *  it cannot silently green-check. */
+function requireEnv(name: string): string {
+  const v = process.env[name];
+  if (v === undefined || v === "") {
+    throw new Error(
+      `Missing required env var ${name}. Source ./setenv for local dev, or set it in CI.`,
+    );
+  }
+  return v;
+}
+const E2E_BASE_URL = requireEnv("JIE_E2E_BASE_URL");
+requireEnv("JIE_E2E_API_KEY");
+const E2E_MODEL = requireEnv("JIE_E2E_MODEL");
+
 const FIXTURE: Fixture = (() => {
   const raw = readFileSync(FIXTURE_PATH, "utf-8");
   const parsed = JSON.parse(raw) as {
     providers: Record<string, { baseUrl: string; models: Array<{ id: string }> }>;
   };
   const providerId = Object.keys(parsed.providers)[0]!;
-  const provider = parsed.providers[providerId]!;
-  const modelId = provider.models[0]!.id;
-  return { provider: providerId, modelId, baseUrl: provider.baseUrl, raw };
+  return {
+    provider: providerId,
+    modelId: E2E_MODEL,
+    baseUrl: E2E_BASE_URL,
+    raw,
+  };
 })();
 
-/** Writes the fixture's `models.json` content to `{dir}/.jie/models.json`. */
-function writeModelsJsonTo(dir: string): void {
-  mkdirSync(join(dir, ".jie"), { recursive: true });
-  writeFileSync(join(dir, ".jie", "models.json"), FIXTURE.raw);
-}
-
-/** Writes `settings.json` (project-scoped) so the CLI's
- *  `loadMergedSettings` returns the LLM provider/model. */
-function writeSettingsJson(workspace: string): void {
-  mkdirSync(join(workspace, ".jie"), { recursive: true });
-  writeFileSync(
-    join(workspace, ".jie", "settings.json"),
-    JSON.stringify(
-      { defaultProvider: FIXTURE.provider, defaultModel: FIXTURE.modelId },
-      null,
-      2,
-    ),
-  );
-}
-
-/** Synchronously probe the fixture's baseUrl to decide whether to
- *  run the e2e scenarios. Returns true if the LLM endpoint is
- *  reachable.  Uses `node:net` so the probe does not require
- *  `fetch` semantics; falls back to a 1.5s timeout TCP connect. */
-const LLM_AVAILABLE: boolean = await (async (): Promise<boolean> => {
+/** Synchronously probe the fixture's baseUrl to fail fast when the
+ *  LLM endpoint is unreachable. Uses `Bun.connect` so the probe
+ *  does not require `fetch` semantics; falls back to a 1.5s
+ *  timeout TCP connect. */
+async function assertLlmReachable(): Promise<void> {
   const url = FIXTURE.baseUrl;
   let host: string;
   let port: number;
@@ -99,8 +103,8 @@ const LLM_AVAILABLE: boolean = await (async (): Promise<boolean> => {
     const u = new URL(url);
     host = u.hostname;
     port = u.port === "" ? 80 : Number(u.port);
-  } catch {
-    return false;
+  } catch (cause) {
+    throw new Error(`invalid JIE_E2E_BASE_URL: ${url}`);
   }
   try {
     await new Promise<void>((resolve, reject) => {
@@ -133,18 +137,36 @@ const LLM_AVAILABLE: boolean = await (async (): Promise<boolean> => {
         settle(() => reject(err));
       });
     });
-    return true;
   } catch (cause) {
     const reason = cause instanceof Error ? cause.message : String(cause);
-    // eslint-disable-next-line no-console
-    console.warn(
-      `[v1-scenarios] skipping all scenarios: fixture LLM at ${url} unreachable (${reason})`,
+    throw new Error(
+      `e2e backend at ${url} unreachable (${reason}). Start the LLM (LM Studio for local, or fix JIE_E2E_BASE_URL for CI).`,
     );
-    return false;
   }
-})();
+}
+await assertLlmReachable();
 
-describe.skipIf(!LLM_AVAILABLE)("v1 user-scenarios — real LLM end-to-end", () => {
+/** Writes the fixture's `models.json` content to `{dir}/.jie/models.json`. */
+function writeModelsJsonTo(dir: string): void {
+  mkdirSync(join(dir, ".jie"), { recursive: true });
+  writeFileSync(join(dir, ".jie", "models.json"), FIXTURE.raw);
+}
+
+/** Writes `settings.json` (project-scoped) so the CLI's
+ *  `loadMergedSettings` returns the LLM provider/model. */
+function writeSettingsJson(workspace: string): void {
+  mkdirSync(join(workspace, ".jie"), { recursive: true });
+  writeFileSync(
+    join(workspace, ".jie", "settings.json"),
+    JSON.stringify(
+      { defaultProvider: FIXTURE.provider, defaultModel: FIXTURE.modelId },
+      null,
+      2,
+    ),
+  );
+}
+
+describe("v1 user-scenarios — real LLM end-to-end", () => {
   let workspace: string;
   let prevHome: string | undefined;
   let writeOut: ReturnType<typeof vi.spyOn> | undefined;
