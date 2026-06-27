@@ -2,9 +2,9 @@ name: test
 
 on:
   push:
-    branches: [main, "dev_*"]
+    branches: ["**"]
   pull_request:
-    branches: [main, "dev_*"]
+    branches: ["**"]
 
 jobs:
   test:
@@ -30,7 +30,7 @@ jobs:
       - name: e2e (GitHub Models)
         if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
         env:
-          JIE_E2E_BASE_URL: https://api.githubmodels.com/inference
+          JIE_E2E_BASE_URL: https://models.inference.ai.azure.com
           JIE_E2E_API_KEY: ${{ secrets.GITHUB_TOKEN }}
-          JIE_E2E_MODEL: openai/gpt-4o-mini
+          JIE_E2E_MODEL: gpt-4o-mini
         run: bun test tests/e2e

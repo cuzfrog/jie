@@ -28,9 +28,9 @@ missing — there is no skip-on-unreachable path):
 
 | Var | Meaning |
 |-----|---------|
-| `JIE_E2E_BASE_URL` | OpenAI-completions base URL (e.g. `http://192.168.1.6:12345/v1`, `https://api.githubmodels.com/inference`) |
-| `JIE_E2E_API_KEY` | Bearer token (`not-needed` for LM Studio; a GitHub PAT for GitHub Models) |
-| `JIE_E2E_MODEL` | Model id (e.g. `qwen3.5-2b`, `openai/gpt-4o-mini`) |
+| `JIE_E2E_BASE_URL` | OpenAI-completions base URL (e.g. `http://192.168.1.6:12345/v1`, `https://models.inference.ai.azure.com`) |
+| `JIE_E2E_API_KEY` | Bearer token (`not-needed` for LM Studio; `$GITHUB_TOKEN` for CI) |
+| `JIE_E2E_MODEL` | Model id (e.g. `qwen3.5-2b`, `gpt-4o-mini`) |
 
 ### Local dev (LM Studio)
 
@@ -46,15 +46,15 @@ machine's local LLM (LM Studio by default).
 
 ### CI (GitHub Models)
 
-The `test` workflow runs e2e against `api.githubmodels.com` using
-the job's built-in `GITHUB_TOKEN` as the API key. PRs from forks
-skip the e2e step (the `GITHUB_TOKEN` is not exposed to fork PRs);
-pushes and in-repo PRs run e2e end-to-end.
+The `test` workflow runs e2e against `models.inference.ai.azure.com`
+using the job's built-in `GITHUB_TOKEN` as the API key. PRs from
+forks skip the e2e step (the `GITHUB_TOKEN` is not exposed to fork
+PRs); pushes and in-repo PRs run e2e end-to-end.
 
 ```sh
-JIE_E2E_BASE_URL=https://api.githubmodels.com/inference \
+JIE_E2E_BASE_URL=https://models.inference.ai.azure.com \
 JIE_E2E_API_KEY=$GITHUB_TOKEN \
-JIE_E2E_MODEL=openai/gpt-4o-mini \
+JIE_E2E_MODEL=gpt-4o-mini \
 bun run test:e2e:ci
 ```
 
