@@ -7,6 +7,7 @@ sealed:
   - notify.test.ts
   - notify.ts
   - path-utils.ts
+  - read-artifact.test.ts
   - read-artifact.ts
   - read-file.test.ts
   - read-file.ts
@@ -17,6 +18,7 @@ sealed:
   - web-fetch.ts
   - web-search.test.ts
   - web-search.ts
+  - write-artifact.test.ts
   - write-artifact.ts
   - write-file.test.ts
   - write-file.ts
