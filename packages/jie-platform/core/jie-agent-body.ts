@@ -59,10 +59,7 @@ export class JieAgentBody implements AgentBody {
         this.eventManager.publish(Events.agentIdle(this.sender));
         if (this.queue.length > 0) {
           const next = this.queue.shift()!;
-          this.eventManager.publish(Events.agentQueueUpdate(
-            this.sender,
-            this.queue.map((m) => formatSynthetic(m)),
-          ));
+          this.publishQueueSnapshot();
           this.agent.followUp(next);
         }
         return;
@@ -118,10 +115,7 @@ export class JieAgentBody implements AgentBody {
 
     while (this.queue.length > 0) {
       const next = this.queue.shift()!;
-      this.eventManager.publish(Events.agentQueueUpdate(
-        this.sender,
-        this.queue.map((m) => formatSynthetic(m)),
-      ));
+      this.publishQueueSnapshot();
       await this.agent.prompt(next);
     }
   }
@@ -163,13 +157,17 @@ export class JieAgentBody implements AgentBody {
     } as unknown as AgentMessage;
     if (this.agent.state.isStreaming) {
       this.queue.push(message);
-      this.eventManager.publish(Events.agentQueueUpdate(
-        this.sender,
-        this.queue.map((m) => formatSynthetic(m)),
-      ));
+      this.publishQueueSnapshot();
     } else {
       void this.agent.prompt(message);
     }
+  }
+
+  private publishQueueSnapshot(): void {
+    this.eventManager.publish(Events.agentQueueUpdate(
+      this.sender,
+      this.queue.map((m) => formatSynthetic(m)),
+    ));
   }
 }
 

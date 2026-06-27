@@ -9,6 +9,12 @@ interface JiePlatformStub {
   stop: ReturnType<typeof vi.fn>;
 }
 
+type AgentEnvelope = {
+  sender: { kind: string; identity?: { teamId?: string; agentRole?: string; agentKey?: string } };
+  payload: Record<string, unknown>;
+};
+type Handler = (env: AgentEnvelope) => void;
+
 function makeHandle(): { handle: JiePlatformStub; events: JiePlatformStub["events"] } {
   const events = {
     subscribe: vi.fn(),
@@ -21,27 +27,30 @@ function makeHandle(): { handle: JiePlatformStub; events: JiePlatformStub["event
   return { handle, events };
 }
 
+function captureHandlers(events: JiePlatformStub["events"]): Map<string, Handler> {
+  const handlers = new Map<string, Handler>();
+  events.subscribe.mockImplementation((topic: string, cb: Handler) => {
+    handlers.set(topic, cb);
+    return () => {};
+  });
+  return handlers;
+}
+
 describe("runPrint", () => {
   test("happy path: subscribes to agent.stream.chunk, publishes leader.prompt, waits for agent.idle, then stop()s", async () => {
     const { handle, events } = makeHandle();
     const teamId = "t1";
     const leaderRole = "general";
     const leaderKey = "general-1";
+    const handlers = captureHandlers(events);
 
-    const handlers = new Map<string, (env: { sender: { kind: string; identity?: { teamId?: string; agentRole?: string; agentKey?: string } }; payload: { prompt?: string; text?: string } }) => void>();
-    events.subscribe.mockImplementation(
-      (topic: string, callback: (env: { sender: { kind: string; identity?: { teamId?: string; agentRole?: string; agentKey?: string } }; payload: { prompt?: string; text?: string } }) => void) => {
-        handlers.set(topic, callback);
-        return () => {};
-      },
-    );
     setImmediate(() => {
       handlers.get("agent.turn.start")?.({
-        sender: { kind: "agent", identity: { teamId: teamId, agentRole: leaderRole, agentKey: leaderKey } },
+        sender: { kind: "agent", identity: { teamId, agentRole: leaderRole, agentKey: leaderKey } },
         payload: {},
       });
       handlers.get("agent.idle")?.({
-        sender: { kind: "agent", identity: { teamId: teamId, agentRole: leaderRole, agentKey: leaderKey } },
+        sender: { kind: "agent", identity: { teamId, agentRole: leaderRole, agentKey: leaderKey } },
         payload: {},
       });
     });
@@ -84,73 +93,25 @@ describe("runPrint", () => {
     expect(handle.stop).toHaveBeenCalled();
   });
 
-  test("worker idle does not resolve the leader gate", async () => {
+  test("worker busy while leader idles: gate does NOT open until worker idles", async () => {
     const { handle, events } = makeHandle();
     const teamId = "t1";
     const leaderKey = "general-1";
     const workerKey = "worker-1";
+    const handlers = captureHandlers(events);
 
-    const handlers = new Map<string, (env: { sender: { kind: string; identity?: { teamId?: string; agentRole?: string; agentKey?: string } }; payload: Record<string, unknown> }) => void>();
-    events.subscribe.mockImplementation(
-      (topic: string, callback: (env: { sender: { kind: string; identity?: { teamId?: string; agentRole?: string; agentKey?: string } }; payload: Record<string, unknown> }) => void) => {
-        handlers.set(topic, callback);
-        return () => {};
-      },
-    );
-
-    let workerIdleFired = false;
     setImmediate(() => {
-      workerIdleFired = true;
-      handlers.get("agent.idle")?.({
+      handlers.get("agent.turn.start")?.({
+        sender: { kind: "agent", identity: { teamId, agentRole: "general", agentKey: leaderKey } },
+        payload: {},
+      });
+      handlers.get("agent.turn.start")?.({
         sender: { kind: "agent", identity: { teamId, agentRole: "worker", agentKey: workerKey } },
         payload: {},
       });
       setTimeout(() => {
         handlers.get("agent.idle")?.({
           sender: { kind: "agent", identity: { teamId, agentRole: "general", agentKey: leaderKey } },
-          payload: {},
-        });
-      }, 10);
-    });
-
-    const code = await runPrint(
-      handle as never,
-      teamId,
-      "general",
-      leaderKey,
-      [leaderKey, workerKey],
-      { kind: "print", instruction: "hi", team: undefined, timeout: 1, json: false, apiKey: undefined, resume: undefined, continueLast: false },
-    );
-    expect(workerIdleFired).toBe(true);
-    expect(code).toBe(0);
-  });
-
-  test("multi-agent gate: worker remains busy, leader becomes idle, gate does NOT open until worker idles", async () => {
-    const { handle, events } = makeHandle();
-    const teamId = "t1";
-    const leaderKey = "leader-1";
-    const workerKey = "worker-1";
-
-    const handlers = new Map<string, (env: { sender: { kind: string; identity?: { teamId?: string; agentRole?: string; agentKey?: string } }; payload: Record<string, unknown> }) => void>();
-    events.subscribe.mockImplementation(
-      (topic: string, callback: (env: { sender: { kind: string; identity?: { teamId?: string; agentRole?: string; agentKey?: string } }; payload: Record<string, unknown> }) => void) => {
-        handlers.set(topic, callback);
-        return () => {};
-      },
-    );
-
-    setImmediate(() => {
-      handlers.get("agent.turn.start")?.({
-        sender: { kind: "agent", identity: { teamId, agentRole: "leader", agentKey: leaderKey } },
-        payload: {},
-      });
-      handlers.get("agent.turn.start")?.({
-        sender: { kind: "agent", identity: { teamId, agentRole: "worker", agentKey: workerKey } },
-        payload: {},
-      });
-      setTimeout(() => {
-        handlers.get("agent.idle")?.({
-          sender: { kind: "agent", identity: { teamId, agentRole: "leader", agentKey: leaderKey } },
           payload: {},
         });
       }, 10);
@@ -166,10 +127,49 @@ describe("runPrint", () => {
     const code = await runPrint(
       handle as never,
       teamId,
-      "leader",
+      "general",
       leaderKey,
       [leaderKey, workerKey],
-      { kind: "print", instruction: "go", team: undefined, timeout: 2, json: false, apiKey: undefined, resume: undefined, continueLast: false },
+      { kind: "print", instruction: "hi", team: undefined, timeout: 2, json: false, apiKey: undefined, resume: undefined, continueLast: false },
+    );
+    const elapsed = Date.now() - start;
+    expect(code).toBe(0);
+    expect(elapsed).toBeGreaterThanOrEqual(25);
+  });
+
+  test("agents unknown to the gate are ignored: a stray worker-idle does not resolve early", async () => {
+    const { handle, events } = makeHandle();
+    const teamId = "t1";
+    const leaderKey = "general-1";
+    const handlers = captureHandlers(events);
+
+    setImmediate(() => {
+      handlers.get("agent.turn.start")?.({
+        sender: { kind: "agent", identity: { teamId, agentRole: "general", agentKey: leaderKey } },
+        payload: {},
+      });
+      setTimeout(() => {
+        handlers.get("agent.idle")?.({
+          sender: { kind: "agent", identity: { teamId, agentRole: "ghost", agentKey: "ghost-1" } },
+          payload: {},
+        });
+      }, 5);
+      setTimeout(() => {
+        handlers.get("agent.idle")?.({
+          sender: { kind: "agent", identity: { teamId, agentRole: "general", agentKey: leaderKey } },
+          payload: {},
+        });
+      }, 30);
+    });
+
+    const start = Date.now();
+    const code = await runPrint(
+      handle as never,
+      teamId,
+      "general",
+      leaderKey,
+      [leaderKey],
+      { kind: "print", instruction: "hi", team: undefined, timeout: 2, json: false, apiKey: undefined, resume: undefined, continueLast: false },
     );
     const elapsed = Date.now() - start;
     expect(code).toBe(0);
