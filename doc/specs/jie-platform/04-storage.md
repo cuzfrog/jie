@@ -2,7 +2,9 @@
 
 > **The platform's persistence abstraction.** `Storage` is the interface; **`SqliteStorage` is the default implementation.** The interface is backend-agnostic so future implementations (in-memory mocks for tests, a different SQL engine, etc.) implement the same shape with no domain-code changes.
 
-The `ArtifactStore` (see [`05-artifact-store.md`](05-artifact-store.md)) and the `MemoryManager` (see [`08-memory.md`](08-memory.md)) are domain interfaces that sit on top of `Storage`. They share one `Storage` instance per process and therefore one SQLite file (`.jie/artifacts.db`) with two tables: `artifacts` and `memory_turns`.
+The `ArtifactStore` (see [`05-artifact-store.md`](05-artifact-store.md)) and the `MemoryManager` (see [`08-memory.md`](08-memory.md)) are domain interfaces that sit on top of `Storage`. They share one `Storage` instance per process and therefore one SQLite file (`.jie/storage.db`) with two tables: `artifacts` and `memory_turns`.
+
+> **Terminology.** "Storage" is the umbrella concept: the persistence layer (the `Storage` interface, the `SqliteStorage` default, the on-disk file). "Artifact" is a working-flow term: a `Storage` row that captures a piece of work output (a `role-played-answer` summary, a `user-question` record, etc.). The file `storage.db` is named after the umbrella; its `artifacts` and `memory_turns` tables reflect the two domain stores that share it.
 
 ## Interface
 
@@ -101,7 +103,7 @@ The `artifacts` table is owned by `SqliteArtifactStore` (see [`05-artifact-store
 
 ## Sharing One Storage Instance
 
-The platform's `startJie` entry (see `06-agent-model.md` and ADR 13) opens one `SqliteStorage` at the configured path (`.jie/artifacts.db` by default) and hands the same `Storage` reference to both `SqliteArtifactStore` and `SqliteMemoryManager`. One connection, one WAL file, one busy_timeout, two tables, two domain interfaces.
+The platform's `startJie` entry (see `06-agent-model.md` and ADR 13) opens one `SqliteStorage` at the configured path (`.jie/storage.db` by default) and hands the same `Storage` reference to both `SqliteArtifactStore` and `SqliteMemoryManager`. One connection, one WAL file, one busy_timeout, two tables, two domain interfaces.
 
 A future migration that splits the two tables across files (artifacts in one DB, memory in another) is a `Storage`-impl concern: open two `SqliteStorage` instances, hand each domain store a different one. Domain code is unchanged.
 

@@ -1,7 +1,5 @@
-import type { Storage } from "./storage.ts";
+import type { Storage } from "./storage";
 
-/** Apply the v1 schema. Idempotent (`CREATE TABLE IF NOT EXISTS`).
- *  Called by `SqliteStorage`'s constructor after opening the connection. */
 export function initializeSchema(storage: Storage): void {
   storage.exec(`
     CREATE TABLE IF NOT EXISTS artifacts (

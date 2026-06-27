@@ -16,7 +16,7 @@ Runs on top of `jie-platform`. The platform provides the agent model, event bus,
 | **Task** | A unit of work with a durable `task_id` (e.g. a JIRA key or DM-minted prompt id). A task can span multiple planner→implementer→reviewer cycles. Artifacts accumulate under the task. |
 | **Iteration** | One pass through the planner→implementer→reviewer loop within a task. Iteration starts at 1; the reviewer can kick back to the planner to start iteration N+1. Bounded by `max_iterations` per task (default 5). |
 | **Task Status** | An append-only set of status rows per `task_id` in the artifact store. The latest row per `task_id` is the canonical current state: phase, iteration, and updated_at. `done` is the only permanent phase — once reached, the task cannot be re-entered. |
-| **Frozen** | A module boundary that cannot be altered by any agent except the Architect. Defined by the Module Descriptor. |
+| **sealed** | A module boundary that cannot be altered by any agent except the Architect. Defined by the Module Descriptor. |
 | **Module Contract** | The YAML frontmatter of the Module Descriptor. Machine-readable exported signatures per file. Manipulated exclusively through `read_module_contract` and `write_module_contract`. |
 | **Module Descriptor** | A `CONTEXT.md` file located in a source directory. Contains a YAML frontmatter (contract) and markdown prose (doc). Owned by the Architect. |
 | **Leader Agent** | The DM role — sole external-facing entry point for the team. Auto-subscribes to `leader.prompt` via platform auto-wiring. Enforces single-task-in-flight invariant. |

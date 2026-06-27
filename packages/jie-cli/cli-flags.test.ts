@@ -1,5 +1,4 @@
-import { describe, expect, test } from "bun:test";
-import { parseFlags } from "./cli-flags.ts";
+import { parseFlags } from "./cli-flags";
 
 describe("parseFlags — help / version", () => {
   test("no args -> tui (TUI not implemented in v1)", () => {
@@ -132,6 +131,20 @@ describe("parseFlags — -p", () => {
       apiKey: undefined,
       resume: undefined,
       continueLast: false,
+    });
+  });
+
+  test("-p rejects --timeout 0 (would hang forever)", () => {
+    expect(parseFlags(["-p", "x", "--timeout", "0"])).toEqual({
+      kind: "error",
+      message: "invalid --timeout value: 0 (must be > 0)",
+    });
+  });
+
+  test("-p rejects negative --timeout", () => {
+    expect(parseFlags(["-p", "x", "--timeout", "-1"])).toEqual({
+      kind: "error",
+      message: "invalid --timeout value: -1 (must be > 0)",
     });
   });
 

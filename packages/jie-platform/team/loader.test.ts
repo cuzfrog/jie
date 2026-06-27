@@ -1,12 +1,13 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  isValidTeamId,
   loadMinimalTeam,
   loadTeamFromDir,
   parseTeamFromManifests,
-} from "./loader.ts";
+} from "./loader";
+import { JiePlatformError } from "../domain-types";
 
 describe("loadMinimalTeam", () => {
   test("returns one soul with role 'general' and leaderRole 'general'", () => {
@@ -27,7 +28,7 @@ describe("loadMinimalTeam", () => {
   test("the general soul has a non-empty system_prompt and no model pinned", () => {
     const bp = loadMinimalTeam();
     const soul = bp.roles[0]!;
-    expect(soul.system_prompt.length).toBeGreaterThan(0);
+    expect(soul.systemPrompt.length).toBeGreaterThan(0);
     expect(soul.model).toBe("");
   });
 });
@@ -134,11 +135,7 @@ describe("loadTeamFromDir", () => {
   });
 
   test("duplicate role stem detection is defensive (the OS prevents exact-name duplicates)", () => {
-    // The duplicate-stem check is defensive code. A case-sensitive
-    // filesystem prevents two files with the same name in one
-    // directory, so `loadTeamFromDir` cannot produce a duplicate
-    // stem in practice. The check exists to guard against future
-    // input methods or case-insensitive filesystems (e.g. macOS).
+
     writeFileSync(
       join(dir, "general.md"),
       `---\ntools:\n  - bash\n---\n`,
@@ -222,7 +219,7 @@ describe("loadTeamFromDir", () => {
       `---\ntools:\n  - bash\n---\nFirst line.\nSecond line.\n`,
     );
     const bp = loadTeamFromDir(dir);
-    expect(bp.roles[0]?.system_prompt).toBe("First line.\nSecond line.\n");
+    expect(bp.roles[0]?.systemPrompt).toBe("First line.\nSecond line.\n");
   });
 
   test("empty team directory returns an empty blueprint with null leader", () => {
@@ -243,5 +240,132 @@ describe("parseTeamFromManifests", () => {
     );
     expect(bp.leaderRole).toBe("general");
     expect(bp.roles[0]?.role).toBe("general");
+  });
+});
+
+describe("isValidTeamId", () => {
+  test("accepts the v1 charset: [A-Za-z0-9_-]{1,32}", () => {
+    expect(isValidTeamId("a")).toBe(true);
+    expect(isValidTeamId("team")).toBe(true);
+    expect(isValidTeamId("team_1")).toBe(true);
+    expect(isValidTeamId("team-1")).toBe(true);
+    expect(isValidTeamId("minimal")).toBe(true);
+    expect(isValidTeamId("ABCxyz0123")).toBe(true);
+    expect(isValidTeamId("a".repeat(32))).toBe(true);
+  });
+
+  test("rejects empty string", () => {
+    expect(isValidTeamId("")).toBe(false);
+  });
+
+  test("rejects strings longer than 32 chars", () => {
+    expect(isValidTeamId("a".repeat(33))).toBe(false);
+    expect(isValidTeamId("a".repeat(64))).toBe(false);
+  });
+
+  test("rejects characters outside [A-Za-z0-9_-]", () => {
+    expect(isValidTeamId("a b")).toBe(false);
+    expect(isValidTeamId("a.b")).toBe(false);
+    expect(isValidTeamId("a/b")).toBe(false);
+    expect(isValidTeamId("a:b")).toBe(false);
+    expect(isValidTeamId("a@b")).toBe(false);
+  });
+});
+
+describe("loadTeamFromDir — typed error codes (issue #65)", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "jie-loader-codes-"));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  function expectCode(fn: () => unknown, code: string): void {
+    try {
+      fn();
+    } catch (error) {
+      expect(error).toBeInstanceOf(JiePlatformError);
+      expect((error as JiePlatformError).code).toBe(code);
+      return;
+    }
+    throw new Error(`expected throw with code '${code}', got no throw`);
+  }
+
+  test("invalid_team_id", () => {
+    expectCode(
+      () => parseTeamFromManifests({}, { teamId: "bad id!" }),
+      "invalid_team_id",
+    );
+  });
+
+  test("invalid_role", () => {
+    writeFileSync(join(dir, "bad role.md"), "---\ntools:\n  - bash\n---\n");
+    expectCode(() => loadTeamFromDir(dir), "invalid_role");
+  });
+
+  test("invalid_frontmatter", () => {
+    writeFileSync(join(dir, "general.md"), "no frontmatter here\n");
+    expectCode(() => loadTeamFromDir(dir), "invalid_frontmatter");
+  });
+
+  test("missing_required_field", () => {
+    writeFileSync(join(dir, "general.md"), "---\nrole: general\n---\n");
+    expectCode(() => loadTeamFromDir(dir), "missing_required_field");
+  });
+
+  test("invalid_field_type (tools not a list)", () => {
+    writeFileSync(join(dir, "general.md"), "---\ntools: bash\n---\n");
+    expectCode(() => loadTeamFromDir(dir), "invalid_field_type");
+  });
+
+  test("subscribe_rejects_platform_topic", () => {
+    writeFileSync(
+      join(dir, "general.md"),
+      "---\ntools:\n  - bash\nsubscribe:\n  - agent.stream.chunk\n---\n",
+    );
+    expectCode(() => loadTeamFromDir(dir), "subscribe_rejects_platform_topic");
+  });
+
+  test("invalid_model_string", () => {
+    writeFileSync(
+      join(dir, "general.md"),
+      "---\ntools:\n  - bash\nmodel: no-slash\n---\n",
+    );
+    expectCode(() => loadTeamFromDir(dir), "invalid_model_string");
+  });
+
+  test("leader_required (multi-agent, no TEAM.md leader)", () => {
+    writeFileSync(join(dir, "a.md"), "---\ntools:\n  - bash\n---\n");
+    writeFileSync(join(dir, "b.md"), "---\ntools:\n  - bash\n---\n");
+    writeFileSync(
+      join(dir, "TEAM.md"),
+      "---\nleader: \"\"\n---\n",
+    );
+    expectCode(() => loadTeamFromDir(dir), "leader_required");
+  });
+
+  test("team_file_required (multi-agent, no TEAM.md via parseTeamFromManifests)", () => {
+    expectCode(
+      () => parseTeamFromManifests(
+        { "a.md": "---\ntools:\n  - bash\n---\n", "b.md": "---\ntools:\n  - bash\n---\n" },
+        { teamId: "t" },
+      ),
+      "team_file_required",
+    );
+  });
+
+  test("leader_unknown (TEAM.md leader refers to missing role, multi-agent)", () => {
+    writeFileSync(join(dir, "TEAM.md"), "---\nleader: ghost\n---\n");
+    writeFileSync(join(dir, "a.md"), "---\ntools:\n  - bash\n---\n");
+    writeFileSync(join(dir, "b.md"), "---\ntools:\n  - bash\n---\n");
+    expectCode(() => loadTeamFromDir(dir), "leader_unknown");
+  });
+
+  test("leader_mismatch (single-agent, TEAM.md leader differs)", () => {
+    writeFileSync(join(dir, "TEAM.md"), "---\nleader: wrong\n---\n");
+    writeFileSync(join(dir, "general.md"), "---\ntools:\n  - bash\n---\n");
+    expectCode(() => loadTeamFromDir(dir), "leader_mismatch");
   });
 });

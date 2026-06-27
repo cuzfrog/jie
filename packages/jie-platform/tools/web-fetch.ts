@@ -1,7 +1,7 @@
 import { parse as parseHtml } from "node-html-parser";
 import { Type } from "typebox";
-import type { Tool, ToolResult } from "./types.ts";
-import { JiePlatformError } from "../storage/domain-types.ts";
+import type { Tool, ToolResult } from "./types";
+import { JiePlatformError } from "../domain-types";
 
 const WEB_FETCH_DESCRIPTION = `web_fetch(url): Fetch a URL and return its text content. Supports http/https
 only (file://, ftp://, data:// are rejected). Follows up to 20 redirects.
@@ -17,7 +17,7 @@ branches on \`status\`; the platform does not surface non-2xx as an error).
 Inherits the tool's 120s timeout.`;
 
 const USER_AGENT = "JieBot/0.1 (+https://github.com/cuzfrog/jie)";
-const BODY_CAP = 5 * 1024 * 1024; // 5 MiB
+const BODY_CAP = 5 * 1024 * 1024;
 
 const TEXT_LIKE_PREFIXES = ["text/"];
 const TEXT_LIKE_APPLICATIONS = new Set<string>([
@@ -41,58 +41,7 @@ const TEXT_LIKE_APPLICATIONS = new Set<string>([
   "application/graphql+json",
 ]);
 
-function isTextLike(contentType: string): boolean {
-  const ct = contentType.split(";")[0]!.trim().toLowerCase();
-  if (TEXT_LIKE_PREFIXES.some((p) => ct.startsWith(p))) return true;
-  if (TEXT_LIKE_APPLICATIONS.has(ct)) return true;
-  return false;
-}
-
-function isHtml(contentType: string): boolean {
-  return contentType.split(";")[0]!.trim().toLowerCase() === "text/html";
-}
-
 const STRIP_TAGS = ["script", "style", "nav", "header", "footer"];
-
-function htmlToText(html: string): string {
-  const root = parseHtml(html);
-  for (const tag of STRIP_TAGS) {
-    for (const el of root.querySelectorAll(tag)) {
-      el.remove();
-    }
-  }
-  return root.text;
-}
-
-function decodeBody(bytes: Uint8Array, charset: string | null): string {
-  if (charset === null) {
-    return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-  }
-  // The WHATWG Encoding Standard lists a fixed set of supported
-  // encodings; unknown labels (e.g. 'Shift_JIS') cause TextDecoder
-  // to throw RangeError. Fall back to UTF-8 with replacement chars
-  // (the spec's policy). Normalize common aliases.
-  const normalized = normalizeCharset(charset);
-  try {
-    return new TextDecoder(
-      normalized as ConstructorParameters<typeof TextDecoder>[0],
-      { fatal: false },
-    ).decode(bytes);
-  } catch {
-    return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-  }
-}
-
-function normalizeCharset(c: string): string {
-  const lower = c.toLowerCase().replace(/^["']|["']$/g, "");
-  if (lower === "utf8") return "utf-8";
-  return lower;
-}
-
-function extractCharset(contentType: string): string | null {
-  const match = /charset=([^;]+)/i.exec(contentType);
-  return match === null ? null : match[1]!.trim().replace(/^["']|["']$/g, "");
-}
 
 interface WebFetchInput {
   url: string;
@@ -128,10 +77,10 @@ export function createWebFetchTool(): Tool<WebFetchInput> {
         response = await fetch(url, {
           headers: { "User-Agent": USER_AGENT },
         });
-      } catch (e) {
+      } catch (error) {
         throw new JiePlatformError(
           "redirect_exhausted",
-          `redirect_exhausted: ${(e as Error).message}`,
+          `redirect_exhausted: ${(error as Error).message}`,
         );
       }
 
@@ -162,4 +111,52 @@ export function createWebFetchTool(): Tool<WebFetchInput> {
       };
     },
   };
+}
+
+function isTextLike(contentType: string): boolean {
+  const baseType = contentType.split(";")[0]!.trim().toLowerCase();
+  if (TEXT_LIKE_PREFIXES.some((prefix) => baseType.startsWith(prefix))) return true;
+  if (TEXT_LIKE_APPLICATIONS.has(baseType)) return true;
+  return false;
+}
+
+function isHtml(contentType: string): boolean {
+  return contentType.split(";")[0]!.trim().toLowerCase() === "text/html";
+}
+
+function htmlToText(html: string): string {
+  const root = parseHtml(html);
+  for (const tag of STRIP_TAGS) {
+    for (const el of root.querySelectorAll(tag)) {
+      el.remove();
+    }
+  }
+  return root.text;
+}
+
+function decodeBody(bytes: Uint8Array, charset: string | null): string {
+  if (charset === null) {
+    return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  }
+
+  const normalized = normalizeCharset(charset);
+  try {
+    return new TextDecoder(
+      normalized as ConstructorParameters<typeof TextDecoder>[0],
+      { fatal: false },
+    ).decode(bytes);
+  } catch {
+    return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  }
+}
+
+function normalizeCharset(c: string): string {
+  const lower = c.toLowerCase().replace(/^["']|["']$/g, "");
+  if (lower === "utf8") return "utf-8";
+  return lower;
+}
+
+function extractCharset(contentType: string): string | null {
+  const match = /charset=([^;]+)/i.exec(contentType);
+  return match === null ? null : match[1]!.trim().replace(/^["']|["']$/g, "");
 }

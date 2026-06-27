@@ -1,6 +1,6 @@
 import { Type } from "typebox";
-import type { Tool, ToolResult } from "./types.ts";
-import type { ArtifactStore } from "../storage/artifact-store.ts";
+import type { Tool, ToolResult } from "./types";
+import type { ArtifactStore } from "../storage";
 
 const WRITE_ARTIFACT_DESCRIPTION = `write_artifact(key, content): Store \`content\` (a string) at \`key\` in the team's
 shared artifact store. Overwrites the existing entry if \`key\` is already
@@ -14,7 +14,7 @@ inter-agent work products (plans, research notes, code-change summaries)
 that outlive a single tool call.`;
 
 export interface WriteArtifactDeps {
-  artifacts: ArtifactStore;
+  artifactStore: ArtifactStore;
 }
 
 interface WriteArtifactInput {
@@ -23,7 +23,7 @@ interface WriteArtifactInput {
 }
 
 export function createWriteArtifactTool(
-  deps: WriteArtifactDeps,
+  dependencies: WriteArtifactDeps,
 ): Tool<WriteArtifactInput> {
   return {
     name: "write_artifact",
@@ -34,7 +34,7 @@ export function createWriteArtifactTool(
       content: Type.String(),
     }),
     async execute(input: WriteArtifactInput): Promise<ToolResult> {
-      const { key, created_at } = await deps.artifacts.write(
+      const { key, created_at } = await dependencies.artifactStore.write(
         input.key,
         input.content,
       );

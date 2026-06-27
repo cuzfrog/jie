@@ -1,31 +1,19 @@
 import { Type } from "typebox";
-import type { EventBus } from "../core/event-bus.ts";
-import type { AgentEvent } from "../core/agent-event.ts";
-import type { ExecutionContext, Tool, ToolResult } from "./types.ts";
-import { JiePlatformError } from "../storage/domain-types.ts";
+import { Events, type EventManager, type Sender } from "../event";
+import type { ExecutionContext, Tool, ToolResult } from "./types";
+import { JiePlatformError } from "../domain-types";
 
 const NOTIFY_DESCRIPTION = `notify({ topic, prompt }): Publish a message to the team-scoped event bus on
 \`{team_id}.{topic}\`. The receiving agent (any agent whose \`subscribe:\` field
 lists this topic, or the agent addressed by \`topic\` if it is an agent_key)
 will see the message as a synthetic user-style entry: \`[{source_agent_key}
-on '{topic}']: {prompt}\`. Self-receipt is filtered: notifying your own
-agent_key produces 0 actual recipients. Returns the number of OTHER
-recipients (after self-receipt filtering); \`0\` means no peer is listening
-on the topic — reconsider the topic name, fall back to a different path,
-or surface the issue to the user. Topic names must not start with \`agent.\`
+on '{topic}']: {prompt}\`. Topic names must not start with \`agent.\`
 (platform events; observer-only) or with \`{team_id}.\` (the platform manages
 the prefix); empty topics and control characters are rejected. \`notify\` is
 the SOLE means of inter-agent communication. Does NOT end the turn.`;
 
-/** Build the standard `notify` tool. The bus reference is captured at
- *  construction; the tool publishes envelopes on the same bus the
- *  body is wired to. `isSelfSubscribed` is provided by the body
- *  construction site so the tool can compute the LLM-facing
- *  recipient count (subscriberCount minus 1 if the publisher is
- *  itself subscribed, per the spec's step 4). */
 export interface NotifyDeps {
-  bus: EventBus;
-  isSelfSubscribed: (topic: string) => boolean;
+  eventManager: EventManager;
 }
 
 type TopicValidationReason =
@@ -36,11 +24,11 @@ type TopicValidationReason =
 
 function validateTopic(
   topic: string,
-  team_id: string,
+  teamId: string,
 ): TopicValidationReason | null {
   if (topic === "") return "empty";
   if (topic.startsWith("agent.")) return "starts_with_agent_prefix";
-  if (topic.startsWith(`${team_id}.`)) return "starts_with_team_prefix";
+  if (topic.startsWith(`${teamId}.`)) return "starts_with_team_prefix";
   for (let i = 0; i < topic.length; i += 1) {
     const code = topic.charCodeAt(i);
     if (code === 0 || (code < 0x20 && code !== 0x09)) {
@@ -55,7 +43,7 @@ interface NotifyInput {
   prompt: string;
 }
 
-export function createNotifyTool(deps: NotifyDeps): Tool<NotifyInput> {
+export function createNotifyTool(dependencies: NotifyDeps): Tool<NotifyInput> {
   return {
     name: "notify",
     description: NOTIFY_DESCRIPTION,
@@ -66,9 +54,9 @@ export function createNotifyTool(deps: NotifyDeps): Tool<NotifyInput> {
     }),
     async execute(
       input: NotifyInput,
-      ctx: ExecutionContext,
+      executionContext: ExecutionContext,
     ): Promise<ToolResult> {
-      const reason = validateTopic(input.topic, ctx.team_id);
+      const reason = validateTopic(input.topic, executionContext.teamId);
       if (reason !== null) {
         throw new JiePlatformError(
           "notify_invalid_topic",
@@ -76,31 +64,17 @@ export function createNotifyTool(deps: NotifyDeps): Tool<NotifyInput> {
         );
       }
 
-      const subject = `${ctx.team_id}.${input.topic}`;
-      const totalSubscribers = deps.bus.subscriberCount(subject);
-      const recipients = deps.isSelfSubscribed(input.topic)
-        ? Math.max(0, totalSubscribers - 1)
-        : totalSubscribers;
-
-      const envelope: AgentEvent = {
-        version: 1,
-        team_id: ctx.team_id,
-        event_type: input.topic,
-        agent_role: ctx.agent_role,
-        agent_key: ctx.agent_key,
-        timestamp: new Date().toISOString(),
-        payload: { prompt: input.prompt, source: ctx.agent_key },
+      const clientTopic = `${executionContext.teamId}.${input.topic}`;
+      const sender: Sender = {
+        kind: "agent",
+        identity: { teamId: executionContext.teamId, agentRole: executionContext.agentRole, agentKey: executionContext.agentKey },
       };
-      deps.bus.publish(subject, envelope);
-
-      const content =
-        recipients > 0
-          ? `Notification delivered to ${recipients} recipients`
-          : `Notification delivered to 0 recipients — no agent is subscribed to '${input.topic}'`;
+      const envelope = Events.custom(sender, clientTopic, { prompt: input.prompt, source: executionContext.agentKey });
+      dependencies.eventManager.publish(envelope);
 
       return {
-        content,
-        details: { topic: input.topic, recipients },
+        content: `Notification published on '${input.topic}'`,
+        details: { topic: input.topic },
       };
     },
   };

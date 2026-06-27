@@ -1,4 +1,3 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   existsSync,
   mkdirSync,
@@ -9,8 +8,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createWriteFileTool } from "./write-file.ts";
-import { JiePlatformError } from "../storage/domain-types.ts";
+import { createWriteFileTool } from "./write-file";
+import { JiePlatformError } from "../domain-types";
 
 describe("write_file", () => {
   let workspace: string;
@@ -55,8 +54,8 @@ describe("write_file", () => {
     let caught: unknown;
     try {
       await tool.execute({ path: "a.txt", content: huge }, {} as never);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
     expect((caught as JiePlatformError).code).toBe("file_too_large");
@@ -81,8 +80,8 @@ describe("write_file", () => {
         { path: "/etc/cant-touch-this", content: "x" },
         {} as never,
       );
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect((caught as JiePlatformError).code).toBe("path_escape");
   });
@@ -96,8 +95,8 @@ describe("write_file", () => {
         { path: "subdir", content: "x" },
         {} as never,
       );
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect((caught as JiePlatformError).code).toBe("is_a_directory");
   });
@@ -110,12 +109,12 @@ describe("write_file", () => {
     );
     const details = result.details as {
       path: string;
-      bytes_written: number;
-      created_at: string;
+      bytesWritten: number;
+      createdAt: string;
     };
     expect(details.path).toBe("a.txt");
-    expect(details.bytes_written).toBe(5);
-    expect(typeof details.created_at).toBe("string");
-    expect(new Date(details.created_at).getTime()).toBeGreaterThan(0);
+    expect(details.bytesWritten).toBe(5);
+    expect(typeof details.createdAt).toBe("string");
+    expect(new Date(details.createdAt).getTime()).toBeGreaterThan(0);
   });
 });

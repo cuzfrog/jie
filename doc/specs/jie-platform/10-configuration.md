@@ -128,8 +128,8 @@ If both project-local and global copies exist, project wins (matches the lookup 
 
 `/team <id>` (and `/team` followed by selection in the picker) takes effect immediately in the running TUI session. The TUI is a passive observer; swap is a view change, not a body-lifecycle change (per ADR 19):
 
-1. The TUI consults `JieHandle.loadedTeams` (per `addrs/15-platform-entry-function.md`). If the team is already loaded, no body-lifecycle work happens — the team is alive, the TUI just wasn't watching.
-2. If the team is not loaded, the platform calls `JieHandle.loadTeam(teamId)`: parse the blueprint per "Team Selection" rules (steps 1–4); resolve each `AgentSoul.model`; construct bodies; register them on the bus; record them in `loadedTeams`. The `JieHandle`'s in-memory `Map<team_id, session_id>` (`08-memory.md` and ADR 18) is consulted for the new team's `team_id`: if the team was previously active in this process, the recorded `session_id` is passed to each new body; the body uses it and `restore()` returns the prior `memory_turns` rows. If the team is new in this process, the handle mints a fresh `session_id`, records it under the team's `team_id`, and passes it to each new body. All agents in the new team share this session id. The handle's map is in-memory only and is lost on process exit (per `08-memory.md` "Restore").
+1. The TUI consults the platform's internal `loadedTeams` map (per `addrs/13-platform-entry-function.md` and ADR 19). If the team is already loaded, no body-lifecycle work happens — the team is alive, the TUI just wasn't watching.
+2. If the team is not loaded, the platform calls `loadTeam(teamId)` (a Day 2+ method on the handle, not in v1's `{ bus, stop }` surface): parse the blueprint per "Team Selection" rules (steps 1–4); resolve each `AgentSoul.model`; construct bodies; register them on the bus; record them in `loadedTeams`. The platform's private `Map<team_id, session_id>` (`08-memory.md` and ADR 18) is consulted for the new team's `team_id`: if the team was previously active in this process, the recorded `session_id` is passed to each new body; the body uses it and `restore()` returns the prior `memory_turns` rows. If the team is new in this process, the platform mints a fresh `session_id`, records it under the team's `team_id`, and passes it to each new body. All agents in the new team share this session id. The platform's map is in-memory only and is lost on process exit (per `08-memory.md` "Restore").
 3. The TUI re-renders: it now subscribes to `{active_team_id}.leader.prompt` for prompt publication and filters platform events by the active team's `team_id` (from the envelope). Tabs/panels for the new team's agents appear via the existing "Agent Discovery" primitives. Every prior team's conversation history is retained for the lifetime of the process run; switching back to a previously-active team restores its conversation in full (the recorded `session_id` is reused, the in-memory event buffer is preserved per the TUI's per-`(team_id, agent_key)` event log).
 4. **The previously-active team is not stopped or destroyed.** Its bodies keep their state — `memory_turns` rows, in-memory prompt queue, LLM context, in-progress work. The TUI just stops publishing prompts to that team's prompt topic. The team's agents continue processing any queued prompts autonomously; the TUI just isn't watching.
 
@@ -146,11 +146,11 @@ The workspace root is `process.cwd()`. The platform does not read any field to o
 
 Implication: launching `jie` from a subdirectory of a project produces a workspace rooted at that subdirectory. Team manifest lookup and `settings.json` discovery walk up to the project root, but path resolution in tools does not — file paths in tool calls are relative to CWD, not the project root.
 
-> **Project state files** (`.jie/settings.json`, `.jie/teams/`, `.jie/mcp.json`, `.jie/artifacts.db`) are discovered by walking up from CWD to find `.jie/`. **Tool path resolution** (`bash` workdir, `read_file`, `write_file`) is rooted at CWD. The two concerns are deliberately different — `.jie/` is project state, not the workspace. v1 may diverge the two; the TUI surfaces both per backlog #21.
+> **Project state files** (`.jie/settings.json`, `.jie/teams/`, `.jie/mcp.json`, `.jie/storage.db`) are discovered by walking up from CWD to find `.jie/`. **Tool path resolution** (`bash` workdir, `read_file`, `write_file`) is rooted at CWD. The two concerns are deliberately different — `.jie/` is project state, not the workspace. v1 may diverge the two; the TUI surfaces both per backlog #21.
 
 ### ArtifactStore
 
-Open at the `.jie/artifacts.db` discovered by walking up from CWD — same walk as settings and team lookup (see "Workspace Inference" above). If the walked-up `.jie/` does not exist, the platform creates it at the walk's root so a fresh invocation works without manual `mkdir .jie`. SQLite, single-writer by design.
+Open at the `.jie/storage.db` discovered by walking up from CWD — same walk as settings and team lookup (see "Workspace Inference" above). If the walked-up `.jie/` does not exist, the platform creates it at the walk's root so a fresh invocation works without manual `mkdir .jie`. SQLite, single-writer by design.
 
 ## Streaming Tunables
 
@@ -187,7 +187,7 @@ A consolidated view of the platform's hard caps and charsets. These are not user
 | `subscribe:` wildcards | not interpreted in v1 (exact-match subject only) | Team-blueprint loader | `06-agent-model.md` |
 | Workspace root | `process.cwd()` (not configurable) | All file-tool path resolution | `09-deployment.md`, `06-agent-model.md` |
 | `auth.json` mode | `0600` (sensitive) | `jie login`, `jie logout`, `jie --api-key` | `10-configuration.md`, `12-installation.md` |
-| `artifacts.db` mode | `0600` (sensitive — holds `memory_turns`) | First-open creation | `09-deployment.md` |
+| `storage.db` mode | `0600` (sensitive — holds `memory_turns`) | First-open creation | `09-deployment.md` |
 | `.jie/` directory mode | `0755` | First-creation by the platform | `09-deployment.md` |
 
 The limits are platform-wide. Per-tool overrides exist only where called out: `bash` uses 300 s (vs. the 120 s default); individual tools may declare their own content caps. v1 exposes no user-facing knob for any of these; the values are the contract. Day 2+ may add `settings.json` fields to make some of these configurable (likely candidates: the streaming tunables, the bash timeout, and the tool default timeout — content caps are less likely to be tunable because they map to platform-level SQL/HTTP limits).
@@ -251,20 +251,14 @@ The TypeScript type consumed by the platform (per `StartJieOptions.mcpServers` i
 ```typescript
 // packages/jie-platform/types/mcp.ts (forward-looking — used by startJie once the MCP client lands)
 
-export type McpTransport = 'stdio' | 'http';
-
 export interface McpServerConfig {
-  transport:  McpTransport;
+  transport:  'stdio' | 'http';
   command?:   string;        // stdio only
   args?:      string[];      // stdio only
   url?:       string;        // http only
   auth?: {
     token_env?: string;      // name of an env var containing a bearer token
   };
-}
-
-export interface McpConfig {
-  servers: Record<string, McpServerConfig>;  // keyed by server name
 }
 ```
 

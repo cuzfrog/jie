@@ -6,7 +6,7 @@
 packages/
   code-lens/      # Standalone MCP server: AST-only code structure queries (out of scope for v1 MVP — see ADR 15)
   jie-platform/   # Platform runtime lib — barrel entry: index.ts
-    start.ts         # Entry function: startJie(opts): JieHandle (ADR 13)
+    start.ts         # Entry function: createJiePlatform(opts, deps): JiePlatform (ADR 13)
     core/            # EventBus, AgentBody, AgentSoul, Tool interface & registry, tool-error
     storage/         # Storage abstraction (04-storage.md):
                        storage.ts        # Storage interface (exec/query/transaction/close)

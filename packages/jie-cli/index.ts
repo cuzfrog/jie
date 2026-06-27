@@ -1,58 +1,47 @@
 #!/usr/bin/env bun
-/** `jie` — the platform CLI.
- *
- *  This file is the entry point. It only:
- *    1. Parses argv via `cli-flags.ts`.
- *    2. Resolves HOME and constructs the runtime stores/repos.
- *    3. Dispatches to a subcommand module under `./commands/`.
- *
- *  Domain logic lives in:
- *    - `auth-store.ts`, `settings-store.ts`, `teams.ts` — stores.
- *    - `home-paths.ts` — HOME resolution.
- *    - `commands/auth.ts` — `login`, `logout`, top-level `--api-key`.
- *    - `commands/settings.ts` — `model`, `team`.
- *    - `commands/print.ts` — `jie -p` (the full agentic pipeline).
- */
-import type { MergedSettings, TeamBlueprint } from "@cuzfrog/jie-platform";
-import { makeAuthStore, type AuthStore } from "./auth-store.ts";
-import { makeSettingsStore, type SettingsStore } from "./settings-store.ts";
-import { makeTeamsRepo, type TeamsRepo } from "./teams.ts";
-import { resolveHomeDir } from "./home-paths.ts";
-import { parseFlags, type ParsedCli } from "./cli-flags.ts";
-import { runLogin, runLogout, runApiKey } from "./commands/auth.ts";
-import { runModel, runTeam } from "./commands/settings.ts";
-import { runPrint, type PrintDeps } from "./commands/print.ts";
-import { VERSION } from "./version.ts";
+import { existsSync, mkdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
+import {
+  createModelRegistry,
+  makeAuthStore,
+  makeSettingsStore,
+} from "@cuzfrog/jie-platform/config";
+import { createEventManager } from "@cuzfrog/jie-platform/event";
+import {
+  createArtifactStore,
+  createMemoryManager,
+  createStorage,
+} from "@cuzfrog/jie-platform/storage";
+import { createTeamRegistry } from "@cuzfrog/jie-platform/team";
+import { createToolRegistry } from "@cuzfrog/jie-platform/tools";
+import { createApp } from "./app";
+import { parseFlags, type ParsedArgs } from "./cli-flags";
+import {
+  runApiKey,
+  runLogin,
+  runLogout,
+  runModel,
+  runPrint,
+  runTeam,
+} from "./commands";
+import { VERSION } from "./version";
 
-interface Deps {
-  authStore: AuthStore;
-  settingsStore: SettingsStore;
-  teamsRepo: TeamsRepo;
-  homeDir: string;
-}
-
-function makeDeps(homeDir: string): Deps {
-  return {
-    authStore: makeAuthStore(homeDir),
-    settingsStore: makeSettingsStore(homeDir),
-    teamsRepo: makeTeamsRepo(homeDir),
-    homeDir,
-  };
-}
-
-export async function main(argv: string[]): Promise<number> {
+export async function main(argv: string[], cwd: string = process.cwd()): Promise<number> {
   const parsed = parseFlags(argv);
-  const deps = makeDeps(resolveHomeDir());
+  const homeDir = resolveHomeDir();
   try {
-    return await run(parsed, process.cwd(), deps);
+    return await run(parsed, cwd, homeDir);
   } catch (err) {
     console.error(err instanceof Error ? err.message : String(err));
     return 1;
   }
 }
 
-async function run(parsed: ParsedCli, cwd: string, deps: Deps): Promise<number> {
-  switch (parsed.kind) {
+async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<number> {
+  const homeJieDir = join(homeDir, ".jie");
+  const projectJieDir = findProjectJieDir(cwd);
+  switch (args.kind) {
     case "help":
       printHelp();
       return 0;
@@ -63,26 +52,79 @@ async function run(parsed: ParsedCli, cwd: string, deps: Deps): Promise<number> 
       console.error("TUI not implemented in v1 MVP; use jie -p");
       return 1;
     case "error":
-      console.error(parsed.message);
+      console.error(args.message);
       return 1;
-    case "login":
-      return runLogin(parsed, deps.authStore);
-    case "logout":
-      return runLogout(parsed, deps.authStore);
-    case "apiKey":
-      return runApiKey(parsed, cwd, deps.settingsStore, deps.authStore);
-    case "model":
-      return runModel(parsed, cwd, deps.settingsStore, deps.teamsRepo);
-    case "team":
-      return runTeam(parsed, cwd, deps.settingsStore, deps.teamsRepo);
-    case "print":
-      return runPrint(parsed, cwd, {
-        authStore: deps.authStore,
-        settingsStore: deps.settingsStore,
-        teamsRepo: deps.teamsRepo,
-        homeDir: deps.homeDir,
-      });
+    case "login": {
+      const authStore = makeAuthStore(homeJieDir);
+      return runLogin(args, authStore);
+    }
+    case "logout": {
+      const authStore = makeAuthStore(homeJieDir);
+      return runLogout(args, authStore);
+    }
+    case "apiKey": {
+      const authStore = makeAuthStore(homeJieDir);
+      const settingsStore = makeSettingsStore(cwd, homeJieDir, projectJieDir);
+      return runApiKey(args, settingsStore, authStore);
+    }
+    case "model": {
+      const settingsStore = makeSettingsStore(cwd, homeJieDir, projectJieDir);
+      return runModel(args, projectJieDir, settingsStore);
+    }
+    case "team": {
+      const teamRegistry = createTeamRegistry({ homeJieDir, projectJieDir });
+      const settingsStore = makeSettingsStore(cwd, homeJieDir, projectJieDir);
+      return runTeam(args, settingsStore, teamRegistry);
+    }
+    case "print": {
+      const dependencies = buildPlatformDeps(cwd, homeJieDir, projectJieDir);
+      const result = await createApp(
+        {
+          kind: "print",
+          cwd,
+          homeJieDir,
+          projectJieDir,
+          teamId: args.team,
+          apiKey: args.apiKey,
+          resume: args.resume,
+          continueLast: args.continueLast,
+        },
+        dependencies,
+      );
+      if (result.kind === "error") return result.code;
+      return runPrint(result.app.handle, result.app.teamId, result.app.leaderRole, result.app.leaderKey, result.app.agentKeys, args);
+    }
   }
+}
+
+function buildPlatformDeps(cwd: string, homeJieDir: string, projectJieDir: string | null) {
+  mkdirSync(homeJieDir, { recursive: true, mode: 0o755 });
+  const storage = createStorage({
+    type: "sqlite",
+    filePath: join(homeJieDir, "storage.db"),
+  });
+  const teamRegistry = createTeamRegistry({ homeJieDir, projectJieDir });
+  const authStore = makeAuthStore(homeJieDir);
+  const modelRegistry = createModelRegistry(homeJieDir, projectJieDir, authStore);
+  const memoryManager = createMemoryManager(storage);
+  const artifactStore = createArtifactStore(storage);
+  const events = createEventManager();
+  const toolRegistry = createToolRegistry({
+    workspaceRoot: cwd,
+    eventManager: events,
+    artifactStore,
+  });
+  return {
+    authStore,
+    settingsStore: makeSettingsStore(cwd, homeJieDir, projectJieDir),
+    eventManager: events,
+    storage,
+    teamRegistry,
+    modelRegistry,
+    toolRegistry,
+    artifactStore,
+    memoryManager,
+  };
 }
 
 function printHelp(): void {
@@ -107,35 +149,21 @@ Usage:
 `);
 }
 
-/** Backward-compatible test entry point: constructs stores from
- *  `process.env.HOME` and forwards optional test hooks to
- *  `runPrint`. The e2e test calls this with `{ settingsOverride,
- *  resolveModel, getApiKey, createAgent, ... }` to inject mocks. */
-export async function runPrintCli(
-  parsed: Extract<ParsedCli, { kind: "print" }>,
-  cwd: string,
-  hooks: Partial<PrintDeps> = {},
-): Promise<number> {
-  const homeDir = resolveHomeDir();
-  const deps: PrintDeps = {
-    authStore: makeAuthStore(homeDir),
-    settingsStore: makeSettingsStore(homeDir),
-    teamsRepo: makeTeamsRepo(homeDir),
-    homeDir,
-    ...hooks,
-  };
-  return runPrint(parsed, cwd, deps);
+function resolveHomeDir(): string {
+  const homeFromEnv = process.env.HOME;
+  return homeFromEnv !== undefined && homeFromEnv !== "" ? homeFromEnv : homedir();
 }
 
-// Exported for tests.
-export { run as runCli };
-export type { ParsedCli, PrintDeps };
-export type PrintHooks = Partial<PrintDeps>;
-// Used internally by `commands/print.ts`; re-exported here for
-// backward compatibility with callers that imported the type from
-// `./index.ts` in earlier versions. Prefer importing from the
-// owning module directly.
-export type { MergedSettings, TeamBlueprint };
+function findProjectJieDir(cwd: string): string | null {
+  let current = cwd;
+  for (;;) {
+    const candidate = join(current, ".jie");
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+}
 
 if (import.meta.main) {
   process.exit(await main(Bun.argv.slice(2)));

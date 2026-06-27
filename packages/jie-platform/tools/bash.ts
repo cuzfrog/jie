@@ -1,12 +1,12 @@
 import { realpathSync } from "node:fs";
 import { resolve, isAbsolute } from "node:path";
 import { Type } from "typebox";
-import type { Tool, ToolResult } from "./types.ts";
-import { JiePlatformError } from "../storage/domain-types.ts";
+import type { Tool, ToolResult } from "./types";
+import { JiePlatformError } from "../domain-types";
 
-const STREAM_CAP = 32 * 1024; // 32 KiB
+const STREAM_CAP = 32 * 1024;
 const TRUNCATION_MARKER = "[truncated to 32 KiB]";
-const TIMEOUT_MS = 300_000; // 300 seconds
+const TIMEOUT_MS = 300_000;
 
 const BASH_DESCRIPTION = `Execute a shell command in \`/bin/sh\` (POSIX) within the workspace root. The
 command runs with a 300s timeout (SIGTERM, then SIGKILL after a brief grace).
@@ -27,6 +27,132 @@ export interface BashDeps {
 interface BashInput {
   command: string;
   workdir?: string;
+}
+
+export function createBashTool(dependencies: BashDeps): Tool<BashInput> {
+  return {
+    name: "bash",
+    description: BASH_DESCRIPTION,
+    label: "Bash",
+    timeout: TIMEOUT_MS,
+    parameters: Type.Object({
+      command: Type.String(),
+      workdir: Type.Optional(Type.String()),
+    }),
+    async execute(
+      input: BashInput,
+      _executionContext,
+      signal?: AbortSignal,
+    ): Promise<ToolResult> {
+      const cwd = resolveWorkdir(input.workdir, dependencies.workspaceRoot);
+
+      const proc = Bun.spawn(["/bin/sh", "-c", input.command], {
+        cwd,
+        env: process.env,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        proc.kill("SIGTERM");
+        setTimeout(() => {
+          try {
+            proc.kill("SIGKILL");
+          } catch {
+          }
+        }, 5_000);
+      }, TIMEOUT_MS);
+
+      const abortHandler = () => {
+        try {
+          proc.kill("SIGTERM");
+        } catch {
+        }
+      };
+      signal?.addEventListener("abort", abortHandler);
+
+      let stdoutBuf: Buffer = Buffer.alloc(0);
+      let stderrBuf: Buffer = Buffer.alloc(0);
+      const stdoutReader = (async () => {
+        const reader = proc.stdout.getReader();
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            stdoutBuf = Buffer.concat([stdoutBuf, Buffer.from(value)]);
+            if (stdoutBuf.length > STREAM_CAP) {
+              try {
+                await reader.cancel();
+              } catch {
+              }
+              break;
+            }
+          }
+        } catch {
+        }
+      })();
+      const stderrReader = (async () => {
+        const reader = proc.stderr.getReader();
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            stderrBuf = Buffer.concat([stderrBuf, Buffer.from(value)]);
+            if (stderrBuf.length > STREAM_CAP) {
+              try {
+                await reader.cancel();
+              } catch {
+              }
+              break;
+            }
+          }
+        } catch {
+        }
+      })();
+
+      const exitCode = await proc.exited;
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", abortHandler);
+
+      const drainTimeout = 500;
+      await Promise.race([
+        Promise.allSettled([stdoutReader, stderrReader]),
+        new Promise((resolve) => setTimeout(resolve, drainTimeout)),
+      ]);
+
+      if (timedOut) {
+        throw new JiePlatformError(
+          "command_timed_out",
+          `command_timed_out: ${input.command}`,
+        );
+      }
+
+      const out = captureStream(stdoutBuf, STREAM_CAP);
+      const errStream = captureStream(stderrBuf, STREAM_CAP);
+
+      const lines: string[] = [];
+      const failureSuffix = exitCode !== 0 ? " (command failed)" : "";
+      lines.push(`exit_code: ${exitCode}${failureSuffix}`);
+      if (out.text.length > 0) {
+        lines.push("--- stdout ---");
+        lines.push(out.text);
+      }
+      if (errStream.text.length > 0) {
+        lines.push("--- stderr ---");
+        lines.push(errStream.text);
+      }
+
+      return {
+        content: lines.join("\n"),
+        details: {
+          exitCode,
+          truncated: { stdout: out.truncated, stderr: errStream.truncated },
+        },
+      };
+    },
+  };
 }
 
 function resolveWorkdir(
@@ -58,140 +184,5 @@ function captureStream(buf: Buffer, cap: number): { text: string; truncated: boo
   return {
     text: buf.subarray(0, cap).toString("utf-8") + TRUNCATION_MARKER,
     truncated: true,
-  };
-}
-
-export function createBashTool(deps: BashDeps): Tool<BashInput> {
-  return {
-    name: "bash",
-    description: BASH_DESCRIPTION,
-    label: "Bash",
-    timeout: TIMEOUT_MS,
-    parameters: Type.Object({
-      command: Type.String(),
-      workdir: Type.Optional(Type.String()),
-    }),
-    async execute(
-      input: BashInput,
-      _ctx,
-      signal?: AbortSignal,
-    ): Promise<ToolResult> {
-      const cwd = resolveWorkdir(input.workdir, deps.workspaceRoot);
-
-      const proc = Bun.spawn(["/bin/sh", "-c", input.command], {
-        cwd,
-        env: process.env,
-        stdout: "pipe",
-        stderr: "pipe",
-      });
-
-      let timedOut = false;
-      const timer = setTimeout(() => {
-        timedOut = true;
-        proc.kill("SIGTERM");
-        setTimeout(() => {
-          try {
-            proc.kill("SIGKILL");
-          } catch {
-            // already dead
-          }
-        }, 5_000);
-      }, TIMEOUT_MS);
-
-      const abortHandler = () => {
-        try {
-          proc.kill("SIGTERM");
-        } catch {
-          // already dead
-        }
-      };
-      signal?.addEventListener("abort", abortHandler);
-
-      let stdoutBuf: Buffer = Buffer.alloc(0);
-      let stderrBuf: Buffer = Buffer.alloc(0);
-      const stdoutReader = (async () => {
-        const reader = proc.stdout.getReader();
-        try {
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            stdoutBuf = Buffer.concat([stdoutBuf, Buffer.from(value)]);
-            if (stdoutBuf.length > STREAM_CAP) {
-              try {
-                await reader.cancel();
-              } catch {
-                // already cancelled
-              }
-              break;
-            }
-          }
-        } catch {
-          // stream closed
-        }
-      })();
-      const stderrReader = (async () => {
-        const reader = proc.stderr.getReader();
-        try {
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            stderrBuf = Buffer.concat([stderrBuf, Buffer.from(value)]);
-            if (stderrBuf.length > STREAM_CAP) {
-              try {
-                await reader.cancel();
-              } catch {
-                // already cancelled
-              }
-              break;
-            }
-          }
-        } catch {
-          // stream closed
-        }
-      })();
-
-      const exitCode = await proc.exited;
-      clearTimeout(timer);
-      signal?.removeEventListener("abort", abortHandler);
-
-      // Drain any remaining output with a short grace period so a
-      // killed-during-write process can flush before the readers
-      // give up.
-      const drainTimeout = 500;
-      await Promise.race([
-        Promise.allSettled([stdoutReader, stderrReader]),
-        new Promise((resolve) => setTimeout(resolve, drainTimeout)),
-      ]);
-
-      if (timedOut) {
-        throw new JiePlatformError(
-          "command_timed_out",
-          `command_timed_out: ${input.command}`,
-        );
-      }
-
-      const out = captureStream(stdoutBuf, STREAM_CAP);
-      const err = captureStream(stderrBuf, STREAM_CAP);
-
-      const lines: string[] = [];
-      const failureSuffix = exitCode !== 0 ? " (command failed)" : "";
-      lines.push(`exit_code: ${exitCode}${failureSuffix}`);
-      if (out.text.length > 0) {
-        lines.push("--- stdout ---");
-        lines.push(out.text);
-      }
-      if (err.text.length > 0) {
-        lines.push("--- stderr ---");
-        lines.push(err.text);
-      }
-
-      return {
-        content: lines.join("\n"),
-        details: {
-          exitCode,
-          truncated: { stdout: out.truncated, stderr: err.truncated },
-        },
-      };
-    },
   };
 }

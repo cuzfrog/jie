@@ -1,11 +1,10 @@
-import { describe, expect, test } from "bun:test";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { SqliteStorage } from "./sqlite-storage.ts";
-import type { Storage } from "./storage.ts";
+import { SqliteStorage } from "./sqlite-storage";
+import type { Storage } from "./storage";
 import {
   SqliteMemoryManager,
   InMemoryMemoryManager,
-} from "./memory-store.ts";
+} from "./memory-store";
 
 function makeManager(): SqliteMemoryManager {
   return new SqliteMemoryManager(new SqliteStorage(":memory:"));
@@ -32,8 +31,6 @@ function summaryMessage(text: string): AgentMessage {
   } as unknown as AgentMessage;
 }
 
-/** A `Storage` wrapper that throws on the nth call to a chosen method.
- *  Used to verify that `compact` rolls back atomically. */
 function makeThrowingStorage(failOn: "exec", callIndex: number): {
   storage: Storage;
   inner: SqliteStorage;
@@ -53,9 +50,6 @@ function makeThrowingStorage(failOn: "exec", callIndex: number): {
     },
     transaction<T>(fn: (s: Storage) => T): T {
       return inner.transaction(() => fn(wrapped));
-    },
-    close() {
-      inner.close();
     },
   };
   return { storage: wrapped, inner };
@@ -112,15 +106,12 @@ describe("SqliteMemoryManager", () => {
   });
 
   test("compact is atomic: a thrown error rolls back both writes", () => {
-    // 3 messages persisted under a real Storage-backed manager.
+
     const real = makeManager();
     real.persist(userMessage("a"), "agent-1", "s1", "t1");
     real.persist(userMessage("b"), "agent-1", "s1", "t1");
     real.persist(userMessage("c"), "agent-1", "s1", "t1");
 
-    // The wrapped Storage throws on the second exec call inside compact
-    // (the first is the INSERT of the summary; the second is the UPDATE
-    // marking the range compacted). The transaction must roll back both.
     const { storage } = makeThrowingStorage("exec", 2);
     const throwing = new SqliteMemoryManager(storage);
 
@@ -133,16 +124,13 @@ describe("SqliteMemoryManager", () => {
         "s1",
         "t1",
       );
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect((caught as Error | undefined)?.message).toBe(
       "synthetic storage failure",
     );
 
-    // After rollback: no summary row, and the range rows are still
-    // compacted=0. We re-read against `real` (the real, non-throwing
-    // path) to verify the public contract.
     void real;
   });
 

@@ -1,11 +1,11 @@
 import { mkdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { Type } from "typebox";
-import type { Tool, ToolResult } from "./types.ts";
-import { JiePlatformError } from "../storage/domain-types.ts";
-import { mapErrno, resolveWithinWorkspace } from "./path-utils.ts";
+import type { Tool, ToolResult } from "./types";
+import { JiePlatformError } from "../domain-types";
+import { mapErrno, resolveWithinWorkspace } from "./path-utils";
 
-const CONTENT_CAP = 5 * 1024 * 1024; // 5 MiB
+const CONTENT_CAP = 5 * 1024 * 1024;
 
 const WRITE_FILE_DESCRIPTION = `Write \`content\` to \`path\` (relative to workspace root, or absolute within workspace).
 Overwrites the file if it exists. Creates parent directories as needed. Text only;
@@ -30,7 +30,7 @@ interface WriteFileInput {
   content: string;
 }
 
-export function createWriteFileTool(deps: WriteFileDeps): Tool<WriteFileInput> {
+export function createWriteFileTool(dependencies: WriteFileDeps): Tool<WriteFileInput> {
   return {
     name: "write_file",
     description: WRITE_FILE_DESCRIPTION,
@@ -47,15 +47,14 @@ export function createWriteFileTool(deps: WriteFileDeps): Tool<WriteFileInput> {
         );
       }
 
-      const real = resolveWithinWorkspace(input.path, deps.workspaceRoot);
+      const realPath = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
 
-      // Reject if the resolved path is an existing directory.
       let stat;
       try {
-        stat = statSync(real);
-      } catch (e) {
-        const err = e as NodeJS.ErrnoException;
-        if (err.code !== "ENOENT") throw mapErrno(e, ERRNO_MAP);
+        stat = statSync(realPath);
+      } catch (error) {
+        const errno = error as NodeJS.ErrnoException;
+        if (errno.code !== "ENOENT") throw mapErrno(error, ERRNO_MAP);
         stat = null;
       }
       if (stat !== null && stat.isDirectory()) {
@@ -65,22 +64,21 @@ export function createWriteFileTool(deps: WriteFileDeps): Tool<WriteFileInput> {
         );
       }
 
-      // Create missing parent directories.
       try {
-        mkdirSync(dirname(real), { recursive: true });
-      } catch (e) {
-        throw mapErrno(e, ERRNO_MAP);
+        mkdirSync(dirname(realPath), { recursive: true });
+      } catch (error) {
+        throw mapErrno(error, ERRNO_MAP);
       }
 
       try {
-        writeFileSync(real, input.content, "utf-8");
-      } catch (e) {
-        throw mapErrno(e, ERRNO_MAP);
+        writeFileSync(realPath, input.content, "utf-8");
+      } catch (error) {
+        throw mapErrno(error, ERRNO_MAP);
       }
 
       let createdAt: string;
       try {
-        createdAt = statSync(real).mtime.toISOString();
+        createdAt = statSync(realPath).mtime.toISOString();
       } catch {
         createdAt = new Date().toISOString();
       }
@@ -89,8 +87,8 @@ export function createWriteFileTool(deps: WriteFileDeps): Tool<WriteFileInput> {
         content: `Successfully wrote ${input.content.length} bytes to ${input.path}`,
         details: {
           path: input.path,
-          bytes_written: input.content.length,
-          created_at: createdAt,
+          bytesWritten: input.content.length,
+          createdAt,
         },
       };
     },

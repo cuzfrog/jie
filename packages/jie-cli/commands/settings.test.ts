@@ -1,272 +1,194 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { makeSettingsStore } from "../settings-store.ts";
-import { makeTeamsRepo } from "../teams.ts";
-import { runModel, runTeam } from "./settings.ts";
+import type { SettingsStore } from "@cuzfrog/jie-platform/config";
+import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
+import { runModel, runTeam } from "./settings";
+
+const settings = vi.mocked<SettingsStore>({
+  load: vi.fn(),
+  write: vi.fn(),
+  unsetDefaultTeam: vi.fn(),
+});
+
+const teamRegistry = vi.mocked<TeamRegistry>({
+  loadTeam: vi.fn(),
+  isInstalled: vi.fn(),
+  listInstalled: vi.fn(),
+  locate: vi.fn(),
+});
 
 describe("runModel", () => {
-  let homeDir: string;
-  let cwd: string;
-  let settings: ReturnType<typeof makeSettingsStore>;
-  let teams: ReturnType<typeof makeTeamsRepo>;
-
   beforeEach(() => {
-    homeDir = mkdtempSync(join(tmpdir(), "jie-cli-model-"));
-    cwd = mkdtempSync(join(tmpdir(), "jie-cli-model-cwd-"));
-    settings = makeSettingsStore(homeDir);
-    teams = makeTeamsRepo(homeDir);
-  });
-
-  afterEach(() => {
-    rmSync(homeDir, { recursive: true, force: true });
-    rmSync(cwd, { recursive: true, force: true });
+    settings.load.mockReturnValue({});
   });
 
   test("writes global settings when no project .jie/ is found", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
     const code = await runModel(
       { kind: "model", provider: "anthropic", modelId: "claude-opus-4" },
-      cwd,
+      null,
       settings,
-      teams,
     );
     expect(code).toBe(0);
-    const path = join(homeDir, ".jie", "settings.json");
-    expect(existsSync(path)).toBe(true);
-    expect(JSON.parse(readFileSync(path, "utf-8"))).toEqual({
-      defaultProvider: "anthropic",
-      defaultModel: "claude-opus-4",
-    });
+    expect(settings.write).toHaveBeenCalledWith(
+      { defaultProvider: "anthropic", defaultModel: "claude-opus-4" },
+      "global",
+    );
+    expect(logSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain(
+      "default model set to anthropic/claude-opus-4",
+    );
+    logSpy.mockRestore();
   });
 
-  test("writes project settings when .jie/ exists walking up from cwd", async () => {
-    const projectRoot = mkdtempSync(join(tmpdir(), "jie-cli-model-proj-"));
-    const nested = join(projectRoot, "a", "b");
-    try {
-      mkdirSync(join(projectRoot, ".jie"), { recursive: true });
-      mkdirSync(nested, { recursive: true });
-      const code = await runModel(
-        { kind: "model", provider: "anthropic", modelId: "claude-opus-4" },
-        nested,
-        settings,
-        teams,
-      );
-      expect(code).toBe(0);
-      const path = join(projectRoot, ".jie", "settings.json");
-      expect(existsSync(path)).toBe(true);
-    } finally {
-      rmSync(projectRoot, { recursive: true, force: true });
-    }
+  test("writes project settings when projectJieDir is provided", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
+    const code = await runModel(
+      { kind: "model", provider: "anthropic", modelId: "claude-opus-4" },
+      "/some/project/.jie",
+      settings,
+    );
+    expect(code).toBe(0);
+    expect(settings.write).toHaveBeenCalledWith(
+      { defaultProvider: "anthropic", defaultModel: "claude-opus-4" },
+      "project",
+    );
+    logSpy.mockRestore();
   });
 
   test("warns to stderr for unknown providers but still writes the setting", async () => {
-    const errs: string[] = [];
-    const orig = console.error;
-    console.error = (...args: unknown[]) => {
-      errs.push(args.map(String).join(" "));
-    };
-    try {
-      const code = await runModel(
-        { kind: "model", provider: "ghost-provider", modelId: "ghost-model" },
-        cwd,
-        settings,
-        teams,
-      );
-      expect(code).toBe(0);
-      expect(errs.join("\n")).toContain("unknown provider: ghost-provider");
-      const path = join(homeDir, ".jie", "settings.json");
-      expect(JSON.parse(readFileSync(path, "utf-8"))).toEqual({
-        defaultProvider: "ghost-provider",
-        defaultModel: "ghost-model",
-      });
-    } finally {
-      console.error = orig;
-    }
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => { });
+    const code = await runModel(
+      { kind: "model", provider: "ghost-provider", modelId: "ghost-model" },
+      null,
+      settings,
+    );
+    expect(code).toBe(0);
+    expect(errSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain(
+      "unknown provider: ghost-provider",
+    );
+    expect(settings.write).toHaveBeenCalledWith(
+      { defaultProvider: "ghost-provider", defaultModel: "ghost-model" },
+      "global",
+    );
+    errSpy.mockRestore();
   });
 });
 
 describe("runTeam", () => {
-  let homeDir: string;
-  let cwd: string;
-  let settings: ReturnType<typeof makeSettingsStore>;
-  let teams: ReturnType<typeof makeTeamsRepo>;
-
   beforeEach(() => {
-    homeDir = mkdtempSync(join(tmpdir(), "jie-cli-team-"));
-    cwd = mkdtempSync(join(tmpdir(), "jie-cli-team-cwd-"));
-    settings = makeSettingsStore(homeDir);
-    teams = makeTeamsRepo(homeDir);
-  });
-
-  afterEach(() => {
-    rmSync(homeDir, { recursive: true, force: true });
-    rmSync(cwd, { recursive: true, force: true });
+    settings.load.mockReturnValue({});
+    teamRegistry.isInstalled.mockReturnValue(false);
+    teamRegistry.locate.mockReturnValue("user");
+    teamRegistry.listInstalled.mockReturnValue([]);
   });
 
   test("team dev (installed globally) writes defaultTeam to global settings", async () => {
-    mkdirSync(join(homeDir, ".jie", "teams", "dev"), { recursive: true });
-    writeFileSync(join(homeDir, ".jie", "teams", "dev", "TEAM.md"), "");
+    teamRegistry.isInstalled.mockReturnValueOnce(true);
+    teamRegistry.locate.mockReturnValueOnce("user");
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
     const code = await runTeam(
       { kind: "team", teamId: "dev", unset: false },
-      cwd,
       settings,
-      teams,
+      teamRegistry,
     );
     expect(code).toBe(0);
-    expect(JSON.parse(readFileSync(join(homeDir, ".jie", "settings.json"), "utf-8"))).toEqual({
-      defaultTeam: "dev",
-    });
+    expect(settings.write).toHaveBeenCalledWith(
+      { defaultTeam: "dev" },
+      "global",
+    );
+    expect(logSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain(
+      "default team set to dev",
+    );
+    logSpy.mockRestore();
   });
 
   test("team dev (installed in project) writes defaultTeam to project settings", async () => {
-    mkdirSync(join(cwd, ".jie", "teams", "dev"), { recursive: true });
-    writeFileSync(join(cwd, ".jie", "teams", "dev", "TEAM.md"), "");
+    teamRegistry.isInstalled.mockReturnValueOnce(true);
+    teamRegistry.locate.mockReturnValueOnce("project");
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
     const code = await runTeam(
       { kind: "team", teamId: "dev", unset: false },
-      cwd,
       settings,
-      teams,
+      teamRegistry,
     );
     expect(code).toBe(0);
-    expect(JSON.parse(readFileSync(join(cwd, ".jie", "settings.json"), "utf-8"))).toEqual({
-      defaultTeam: "dev",
-    });
+    expect(settings.write).toHaveBeenCalledWith(
+      { defaultTeam: "dev" },
+      "project",
+    );
+    logSpy.mockRestore();
   });
 
   test("team ghost (not installed) -> exit 1", async () => {
-    const errs: string[] = [];
-    const orig = console.error;
-    console.error = (...args: unknown[]) => {
-      errs.push(args.map(String).join(" "));
-    };
-    try {
-      const code = await runTeam(
-        { kind: "team", teamId: "ghost", unset: false },
-        cwd,
-        settings,
-        teams,
-      );
-      expect(code).toBe(1);
-      expect(errs.join("\n")).toContain("is not installed");
-    } finally {
-      console.error = orig;
-    }
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => { });
+    const code = await runTeam(
+      { kind: "team", teamId: "ghost", unset: false },
+      settings,
+      teamRegistry,
+    );
+    expect(code).toBe(1);
+    expect(errSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain(
+      "is not installed",
+    );
+    errSpy.mockRestore();
   });
 
-  test("team with malformed id -> exit 1", async () => {
-    const errs: string[] = [];
-    const orig = console.error;
-    console.error = (...args: unknown[]) => {
-      errs.push(args.map(String).join(" "));
-    };
-    try {
-      const code = await runTeam(
-        { kind: "team", teamId: "bad id with spaces", unset: false },
-        cwd,
-        settings,
-        teams,
-      );
-      expect(code).toBe(1);
-      expect(errs.join("\n")).toContain("invalid team id");
-    } finally {
-      console.error = orig;
-    }
+  test("team with malformed id -> exit 1 (charset validation moved to parse time)", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => { });
+    const code = await runTeam(
+      { kind: "team", teamId: "bad id with spaces", unset: false },
+      settings,
+      teamRegistry,
+    );
+    expect(code).toBe(1);
+    expect(errSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain(
+      "is not installed",
+    );
+    errSpy.mockRestore();
   });
 
   test("team --unset removes defaultTeam from global settings", async () => {
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
-    writeFileSync(
-      join(homeDir, ".jie", "settings.json"),
-      JSON.stringify({ defaultProvider: "p", defaultModel: "m", defaultTeam: "dev" }),
-    );
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
     const code = await runTeam(
       { kind: "team", unset: true },
-      cwd,
       settings,
-      teams,
+      teamRegistry,
     );
     expect(code).toBe(0);
-    expect(JSON.parse(readFileSync(join(homeDir, ".jie", "settings.json"), "utf-8"))).toEqual({
-      defaultProvider: "p",
-      defaultModel: "m",
-    });
-  });
-
-  test("team --unset removes defaultTeam from project settings", async () => {
-    mkdirSync(join(cwd, ".jie"), { recursive: true });
-    writeFileSync(
-      join(cwd, ".jie", "settings.json"),
-      JSON.stringify({ defaultProvider: "p", defaultModel: "m", defaultTeam: "dev" }),
+    expect(settings.unsetDefaultTeam).toHaveBeenCalled();
+    expect(settings.write).not.toHaveBeenCalled();
+    expect(logSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain(
+      "default team unset",
     );
-    const code = await runTeam(
-      { kind: "team", unset: true },
-      cwd,
-      settings,
-      teams,
-    );
-    expect(code).toBe(0);
-    expect(JSON.parse(readFileSync(join(cwd, ".jie", "settings.json"), "utf-8"))).toEqual({
-      defaultProvider: "p",
-      defaultModel: "m",
-    });
+    logSpy.mockRestore();
   });
 
   test("team (no arg) prints defaultTeam and installed list", async () => {
-    mkdirSync(join(homeDir, ".jie", "teams", "dev"), { recursive: true });
-    writeFileSync(join(homeDir, ".jie", "teams", "dev", "TEAM.md"), "");
-    mkdirSync(join(homeDir, ".jie"), { recursive: true });
-    writeFileSync(
-      join(homeDir, ".jie", "settings.json"),
-      JSON.stringify({ defaultProvider: "p", defaultModel: "m", defaultTeam: "dev" }),
+    settings.load.mockReturnValueOnce({ defaultProvider: "p", defaultModel: "m", defaultTeam: "dev" });
+    teamRegistry.listInstalled.mockReturnValueOnce(["dev"]);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
+    const code = await runTeam(
+      { kind: "team", unset: false },
+      settings,
+      teamRegistry,
     );
-    const logs: string[] = [];
-    const orig = console.log;
-    console.log = (...args: unknown[]) => {
-      logs.push(args.map(String).join(" "));
-    };
-    try {
-      const code = await runTeam(
-        { kind: "team", unset: false },
-        cwd,
-        settings,
-        teams,
-      );
-      expect(code).toBe(0);
-      const out = logs.join("\n");
-      expect(out).toContain("defaultTeam: dev");
-      expect(out).toContain("installed:");
-      expect(out).toContain("dev");
-    } finally {
-      console.log = orig;
-    }
+    expect(code).toBe(0);
+    const out = logSpy.mock.calls.map((c) => String(c[0])).join("|");
+    expect(out).toContain("defaultTeam: dev");
+    expect(out).toContain("installed:");
+    expect(out).toContain("dev");
+    logSpy.mockRestore();
   });
 
   test("team (no arg) prints defaultTeam: unset when no defaultTeam is set", async () => {
-    const logs: string[] = [];
-    const orig = console.log;
-    console.log = (...args: unknown[]) => {
-      logs.push(args.map(String).join(" "));
-    };
-    try {
-      const code = await runTeam(
-        { kind: "team", unset: false },
-        cwd,
-        settings,
-        teams,
-      );
-      expect(code).toBe(0);
-      const out = logs.join("\n");
-      expect(out).toContain("defaultTeam: unset");
-    } finally {
-      console.log = orig;
-    }
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
+    const code = await runTeam(
+      { kind: "team", unset: false },
+      settings,
+      teamRegistry,
+    );
+    expect(code).toBe(0);
+    expect(logSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain(
+      "defaultTeam: unset",
+    );
+    logSpy.mockRestore();
   });
 });

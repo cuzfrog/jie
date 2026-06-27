@@ -75,7 +75,7 @@ export function initializeSchema(storage: Storage): void {
 
 ### One Storage instance, multiple domain tables
 
-A single `SqliteStorage` is opened at the platform's `startJie` entry (see ADR 13). One `Storage` reference is shared by both `SqliteArtifactStore` and `SqliteMemoryManager`. The `artifacts` and `memory_turns` tables live in the same DB file (`.jie/artifacts.db`); the file is opened with `PRAGMA journal_mode=WAL` and `PRAGMA busy_timeout=5000` per the existing spec.
+A single `SqliteStorage` is opened at the platform's `startJie` entry (see ADR 13). One `Storage` reference is shared by both `SqliteArtifactStore` and `SqliteMemoryManager`. The `artifacts` and `memory_turns` tables live in the same DB file (`.jie/storage.db`); the file is opened with `PRAGMA journal_mode=WAL` and `PRAGMA busy_timeout=5000` per the existing spec.
 
 ### Abstraction is the headline
 
@@ -92,7 +92,7 @@ A single `SqliteStorage` is opened at the platform's `startJie` entry (see ADR 1
 ## Consequences
 
 - `packages/jie-platform/storage/storage.ts` defines the `Storage` interface.
-- `packages/jie-platform/storage/sqlite-storage.ts` exports `SqliteStorage` (the default backend) — opens `.jie/artifacts.db`, calls `initializeSchema`, sets WAL/busy_timeout, returns the storage view.
+- `packages/jie-platform/storage/sqlite-storage.ts` exports `SqliteStorage` (the default backend) — opens `.jie/storage.db`, calls `initializeSchema`, sets WAL/busy_timeout, returns the storage view.
 - `packages/jie-platform/storage/init-db.ts` exports `initializeSchema(storage)` — single source of truth for the v1 schema.
 - `packages/jie-platform/storage/artifact-store.ts` exports `ArtifactStore` (interface) and `SqliteArtifactStore` (impl, takes `Storage`).
 - `packages/jie-platform/storage/memory-store.ts` exports `MemoryManager` (interface) and `SqliteMemoryManager` (impl, takes `Storage`).

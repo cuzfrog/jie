@@ -1,9 +1,8 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createReadFileTool } from "./read-file.ts";
-import { JiePlatformError } from "../storage/domain-types.ts";
+import { createReadFileTool } from "./read-file";
+import { JiePlatformError } from "../domain-types";
 
 describe("read_file", () => {
   let workspace: string;
@@ -90,8 +89,8 @@ describe("read_file", () => {
     let caught: unknown;
     try {
       await tool.execute({ path: "bad.bin" }, {} as never);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
     expect((caught as JiePlatformError).code).toBe("unsupported_encoding");
@@ -102,8 +101,8 @@ describe("read_file", () => {
     let caught: unknown;
     try {
       await tool.execute({ path: "/etc/passwd" }, {} as never);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect((caught as JiePlatformError).code).toBe("path_escape");
   });
@@ -113,8 +112,8 @@ describe("read_file", () => {
     let caught: unknown;
     try {
       await tool.execute({ path: "missing.txt" }, {} as never);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect((caught as JiePlatformError).code).toBe("file_not_found");
   });
@@ -125,8 +124,8 @@ describe("read_file", () => {
     let caught: unknown;
     try {
       await tool.execute({ path: "subdir" }, {} as never);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect((caught as JiePlatformError).code).toBe("is_a_directory");
   });

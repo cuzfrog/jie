@@ -1,6 +1,6 @@
 import { Type } from "typebox";
-import type { Tool, ToolResult } from "./types.ts";
-import type { ArtifactStore } from "../storage/artifact-store.ts";
+import type { Tool, ToolResult } from "./types";
+import type { ArtifactStore } from "../storage";
 
 const READ_ARTIFACT_DESCRIPTION = `read_artifact(key): Read the entry at \`key\`. Returns the content verbatim
 on hit; on miss, returns \`Artifact not found: <key>\` (a normal result, not
@@ -10,7 +10,7 @@ your work product is team-specific, include the team id (available from
 ExecutionContext) in the key scheme.`;
 
 export interface ReadArtifactDeps {
-  artifacts: ArtifactStore;
+  artifactStore: ArtifactStore;
 }
 
 interface ReadArtifactInput {
@@ -18,7 +18,7 @@ interface ReadArtifactInput {
 }
 
 export function createReadArtifactTool(
-  deps: ReadArtifactDeps,
+  dependencies: ReadArtifactDeps,
 ): Tool<ReadArtifactInput> {
   return {
     name: "read_artifact",
@@ -28,7 +28,7 @@ export function createReadArtifactTool(
       key: Type.String(),
     }),
     async execute(input: ReadArtifactInput): Promise<ToolResult> {
-      const hit = await deps.artifacts.read(input.key);
+      const hit = await dependencies.artifactStore.read(input.key);
       if (hit === null) {
         return {
           content: `Artifact not found: ${input.key}`,

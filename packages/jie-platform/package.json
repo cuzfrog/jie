@@ -3,6 +3,11 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
+    "./config": "./config/index.ts",
+    "./core": "./core/index.ts",
+    "./event": "./event/index.ts",
+    "./team": "./team/index.ts",
+    "./tools": "./tools/index.ts",
     "./storage": "./storage/index.ts"
   },
   "dependencies": {

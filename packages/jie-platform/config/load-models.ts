@@ -1,13 +1,8 @@
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { getModels as piGetModels } from "@earendil-works/pi-ai";
 import type { Api, Model, OpenAICompletionsCompat, OpenAIResponsesCompat, AnthropicMessagesCompat } from "@earendil-works/pi-ai";
-import { findProjectJieRoot, homeJieDir } from "./paths.ts";
 
-/** pi-compatible `models.json` shape, restricted to the v1 surface
- *  (see issue #20). Each provider entry produces zero-or-more `Model`
- *  values after validation. The `compat` field is intentionally
- *  loose (an object) — the per-`api` discrimination happens during
- *  construction. */
 export interface RawModelsConfig {
   providers?: Record<string, RawProviderConfig>;
 }
@@ -51,8 +46,6 @@ export interface RawModelOverride {
   cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
 }
 
-/** A fully-resolved provider config, ready to be turned into
- *  `Model<Api>` instances and to be queried for `getApiKey`. */
 export interface ResolvedProviderConfig {
   provider: string;
   baseUrl: string;
@@ -65,7 +58,7 @@ export interface ResolvedProviderConfig {
 
 export interface ResolvedModelsConfig {
   providers: Map<string, ResolvedProviderConfig>;
-  models: Model<any>[];
+  models: Model<Api>[];
 }
 
 const KNOWN_APIS: ReadonlySet<Api> = new Set<Api>([
@@ -80,19 +73,9 @@ const KNOWN_APIS: ReadonlySet<Api> = new Set<Api>([
   "mistral-conversations",
 ]);
 
-/** Reads `{cwd}/.jie/models.json` and `~/.jie/models.json`, deep-merges
- *  them (project wins per-provider-id), validates the shape, resolves
- *  `$ENV` interpolation, and returns a flat registry of providers and
- *  their `Model` instances. Returns an empty config when neither
- *  file exists. Throws on JSON parse errors and shape validation
- *  errors with a precise path. */
-export function loadModelsConfig(cwd: string, options: { homeDir?: string } = {}): ResolvedModelsConfig {
-  const homeDir = options.homeDir ?? process.env.HOME ?? "";
-  const projectPath = (() => {
-    const root = findProjectJieRoot(cwd);
-    return root === null ? null : `${root}/.jie/models.json`;
-  })();
-  const globalPath = `${homeJieDir(homeDir)}/models.json`;
+export function loadModelsConfig(homeJieDir: string, projectJieDir: string | null): ResolvedModelsConfig {
+  const projectPath = projectJieDir === null ? null : join(projectJieDir, "models.json");
+  const globalPath = join(homeJieDir, "models.json");
 
   const globalRaw = readModelsFile(globalPath);
   const projectRaw = projectPath === null ? null : readModelsFile(projectPath);
@@ -105,9 +88,9 @@ function readModelsFile(path: string): RawModelsConfig | null {
   let text: string;
   try {
     text = readFileSync(path, "utf-8");
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") return null;
-    throw new Error(`models.json at ${path}: ${(e as Error).message}`);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw new Error(`models.json at ${path}: ${(error as Error).message}`);
   }
   try {
     const parsed = JSON.parse(text);
@@ -115,8 +98,8 @@ function readModelsFile(path: string): RawModelsConfig | null {
       throw new Error("expected a JSON object");
     }
     return parsed as RawModelsConfig;
-  } catch (e) {
-    throw new Error(`models.json at ${path}: ${(e as Error).message}`);
+  } catch (error) {
+    throw new Error(`models.json at ${path}: ${(error as Error).message}`);
   }
 }
 
@@ -159,7 +142,7 @@ function mergeModelArrays(base: RawModelConfig[] | undefined, override: RawModel
 
 function resolveConfig(raw: RawModelsConfig): ResolvedModelsConfig {
   const providers = new Map<string, ResolvedProviderConfig>();
-  const models: Model<any>[] = [];
+  const models: Model<Api>[] = [];
   if (raw.providers === undefined) return { providers, models };
 
   for (const [providerId, rawCfg] of Object.entries(raw.providers)) {
@@ -187,7 +170,7 @@ function resolveConfig(raw: RawModelsConfig): ResolvedModelsConfig {
 
     if (rawCfg.models !== undefined) {
       for (const rawM of rawCfg.models) {
-        const model = buildModel(providerId, api, rawCfg.baseUrl, rawM, compat, headers, authHeader, apiKey);
+        const model = buildModel(providerId, api, rawCfg.baseUrl, rawM, compat, headers, authHeader);
         models.push(model);
       }
     }
@@ -195,10 +178,6 @@ function resolveConfig(raw: RawModelsConfig): ResolvedModelsConfig {
   return { providers, models };
 }
 
-/** Resolves the API for a provider. Required for new (non-built-in)
- *  providers; for built-in overrides, falls back to the built-in's
- *  registered API so the user only needs to specify the field
- *  they're changing (e.g. just `baseUrl`). */
 function resolveApi(providerId: string, declared: string | undefined): Api {
   if (declared !== undefined && declared !== "") {
     if (!KNOWN_APIS.has(declared as Api)) {
@@ -206,7 +185,7 @@ function resolveApi(providerId: string, declared: string | undefined): Api {
     }
     return declared as Api;
   }
-  // Try built-in: look up any model on this provider and read its api.
+
   const builtinProbe = (piGetModels as (p: string) => Array<{ api: Api }> | undefined)(
     providerId as Parameters<typeof piGetModels>[0],
   );
@@ -224,8 +203,7 @@ function buildModel(
   providerCompat: ResolvedProviderConfig["compat"],
   providerHeaders: Record<string, string>,
   authHeader: boolean,
-  providerApiKey: string,
-): Model<any> {
+): Model<Api> {
   if (typeof raw.id !== "string" || raw.id === "") {
     throw new Error(`models.json: provider '${providerId}': model.id is required`);
   }
@@ -236,7 +214,7 @@ function buildModel(
     cacheRead: raw.cost?.cacheRead ?? 0,
     cacheWrite: raw.cost?.cacheWrite ?? 0,
   };
-  const result: Model<any> = {
+  const result: Model<Api> = {
     id: raw.id,
     name: raw.name ?? raw.id,
     api,
@@ -251,13 +229,9 @@ function buildModel(
   if (Object.keys(providerHeaders).length > 0) result.headers = providerHeaders;
   if (Object.keys(mergedCompat).length > 0) result.compat = mergedCompat as never;
   if (authHeader === false) (result as unknown as { __authHeader?: boolean }).__authHeader = false;
-  void providerApiKey;
   return result;
 }
 
-/** Resolves `$ENV_VAR` and `${ENV_VAR}` interpolation. Unknown env
- *  variables resolve to the empty string (does not throw). Plain
- *  literals are returned as-is. */
 export function resolveValue(value: string, _path: string): string {
   return value.replace(/\$\{([A-Z_][A-Z0-9_]*)\}|\$([A-Z_][A-Z0-9_]*)/g, (_, braced: string | undefined, plain: string | undefined) => {
     const name = braced ?? plain ?? "";

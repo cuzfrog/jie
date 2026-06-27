@@ -1,31 +1,65 @@
-import { describe, expect, test } from "bun:test";
-import { InMemoryArtifactStore } from "../storage/artifact-store.ts";
-import { InProcessEventBus } from "../core/in-process-event-bus.ts";
-import type { AgentEvent } from "../core/agent-event.ts";
-import type { EventBus } from "../core/event-bus.ts";
-import type { ExecutionContext } from "./types.ts";
-import { createNotifyTool } from "./notify.ts";
-import { JiePlatformError } from "../storage/domain-types.ts";
+import {
+  createEventManager,
+  type EventManager,
+} from "../event";
+import type { ArtifactStore } from "../storage";
+import type { ExecutionContext } from "./types";
+import { createNotifyTool } from "./notify";
+import { JiePlatformError } from "../domain-types";
+
+interface NotifyEnvelope {
+  version: 1;
+  topic: string;
+  sender: { kind: "agent"; identity: { teamId: string; agentRole?: string; agentKey?: string } } | { kind: "cli" } | { kind: "tui" };
+  timestamp: string;
+  payload: { clientTopic: string; payload: { prompt: string; source: string } };
+}
 
 function makeCtx(): ExecutionContext {
   return {
-    session_id: "sess-1",
-    team_id: "t1",
-    agent_key: "leader-1",
-    agent_role: "leader",
-    artifacts: new InMemoryArtifactStore(),
+    sessionId: "sess-1",
+    teamId: "t1",
+    agentKey: "leader-1",
+    agentRole: "leader",
+    artifactStore: stubArtifactStore(),
   };
+}
+
+function stubArtifactStore(): ArtifactStore {
+  return {
+    write: async () => {
+      throw new Error("stub: not implemented");
+    },
+    read: async () => {
+      throw new Error("stub: not implemented");
+    },
+    list: async () => [],
+  };
+}
+
+interface Harness {
+  events: EventManager;
+  received: Array<{ subject: string; env: NotifyEnvelope }>;
+}
+
+function makeHarness(): Harness {
+  const events = createEventManager();
+  const received: Array<{ subject: string; env: NotifyEnvelope }> = [];
+  events.subscribe("custom.t1.task", (env) => {
+    received.push({ subject: env.topic, env: env as unknown as NotifyEnvelope });
+  });
+  return { events, received };
 }
 
 describe("notify — topic validation", () => {
   test("rejects empty topic with notify_invalid_topic: empty", async () => {
-    const bus = new InProcessEventBus();
-    const tool = createNotifyTool({ bus, isSelfSubscribed: () => false });
+    const { events } = makeHarness();
+    const tool = createNotifyTool({ eventManager: events });
     let caught: unknown;
     try {
       await tool.execute({ topic: "", prompt: "x" }, makeCtx());
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
     expect((caught as JiePlatformError).code).toBe("notify_invalid_topic");
@@ -33,13 +67,13 @@ describe("notify — topic validation", () => {
   });
 
   test("rejects topic starting with `agent.`", async () => {
-    const bus = new InProcessEventBus();
-    const tool = createNotifyTool({ bus, isSelfSubscribed: () => false });
+    const { events } = makeHarness();
+    const tool = createNotifyTool({ eventManager: events });
     let caught: unknown;
     try {
       await tool.execute({ topic: "agent.idle", prompt: "x" }, makeCtx());
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect((caught as JiePlatformError).code).toBe("notify_invalid_topic");
     expect((caught as Error).message).toBe(
@@ -48,14 +82,14 @@ describe("notify — topic validation", () => {
   });
 
   test("rejects topic starting with the body's team_id", async () => {
-    const bus = new InProcessEventBus();
-    const tool = createNotifyTool({ bus, isSelfSubscribed: () => false });
+    const { events } = makeHarness();
+    const tool = createNotifyTool({ eventManager: events });
     const ctx = makeCtx();
     let caught: unknown;
     try {
-      await tool.execute({ topic: `${ctx.team_id}.task`, prompt: "x" }, ctx);
-    } catch (e) {
-      caught = e;
+      await tool.execute({ topic: `${ctx.teamId}.task`, prompt: "x" }, ctx);
+    } catch (error) {
+      caught = error;
     }
     expect((caught as JiePlatformError).code).toBe("notify_invalid_topic");
     expect((caught as Error).message).toBe(
@@ -64,13 +98,13 @@ describe("notify — topic validation", () => {
   });
 
   test("rejects topic containing a null byte", async () => {
-    const bus = new InProcessEventBus();
-    const tool = createNotifyTool({ bus, isSelfSubscribed: () => false });
+    const { events } = makeHarness();
+    const tool = createNotifyTool({ eventManager: events });
     let caught: unknown;
     try {
       await tool.execute({ topic: "bad\0topic", prompt: "x" }, makeCtx());
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect((caught as JiePlatformError).code).toBe("notify_invalid_topic");
     expect((caught as Error).message).toBe(
@@ -80,104 +114,73 @@ describe("notify — topic validation", () => {
 });
 
 describe("notify — valid publish path", () => {
-  test("publishes a full AgentEvent envelope to {team_id}.{topic}", async () => {
-    const bus = new InProcessEventBus();
-    const tool = createNotifyTool({ bus, isSelfSubscribed: () => false });
-    let received: AgentEvent | undefined;
-    let receivedSubject: string | undefined;
-    bus.subscribe("t1.task", (subject, payload) => {
-      receivedSubject = subject;
-      received = payload as AgentEvent;
-    });
+  test("publishes a full envelope to custom.{team_id}.{topic}", async () => {
+    const { events, received } = makeHarness();
+    const tool = createNotifyTool({ eventManager: events });
 
     const ctx = makeCtx();
     const before = Date.now();
     await tool.execute({ topic: "task", prompt: "hello" }, ctx);
     const after = Date.now();
 
-    expect(receivedSubject).toBe("t1.task");
-    expect(received).toBeDefined();
-    expect(received!.version).toBe(1);
-    expect(received!.team_id).toBe("t1");
-    expect(received!.event_type).toBe("task");
-    expect(received!.agent_role).toBe("leader");
-    expect(received!.agent_key).toBe("leader-1");
-    expect(received!.payload).toEqual({ prompt: "hello", source: "leader-1" });
-    const ts = new Date(received!.timestamp).getTime();
+    expect(received).toHaveLength(1);
+    const { subject, env } = received[0]!;
+    expect(subject).toBe("custom.t1.task");
+    expect(env.version).toBe(1);
+    expect(env.topic).toBe("custom.t1.task");
+    expect(env.sender.kind).toBe("agent");
+    if (env.sender.kind === "agent") {
+      expect(env.sender.identity.teamId).toBe("t1");
+      expect(env.sender.identity.agentRole).toBe("leader");
+      expect(env.sender.identity.agentKey).toBe("leader-1");
+    }
+    expect(env.payload).toEqual({
+      clientTopic: "t1.task",
+      payload: { prompt: "hello", source: "leader-1" },
+    });
+    const ts = new Date(env.timestamp).getTime();
     expect(ts).toBeGreaterThanOrEqual(before);
     expect(ts).toBeLessThanOrEqual(after);
   });
 
-  test("LLM-facing content is the > 0 variant when there are recipients", async () => {
-    const bus = new InProcessEventBus();
-    const tool = createNotifyTool({ bus, isSelfSubscribed: () => false });
-    bus.subscribe("t1.task", () => {});
-    bus.subscribe("t1.task", () => {});
+  test("LLM-facing content reflects the published topic", async () => {
+    const events = createEventManager();
+    events.subscribe("custom.t1.task", () => {});
+    const tool = createNotifyTool({ eventManager: events });
 
     const result = await tool.execute(
       { topic: "task", prompt: "x" },
       makeCtx(),
     );
-    expect(result.content).toBe("Notification delivered to 2 recipients");
+    expect(result.content).toBe("Notification published on 'task'");
     expect(result.terminate).toBeUndefined();
   });
 
-  test("LLM-facing content is the 0 variant when no peer is listening", async () => {
-    const bus = new InProcessEventBus();
-    const tool = createNotifyTool({ bus, isSelfSubscribed: () => false });
+  test("LLM-facing content is identical whether peers are listening or not", async () => {
+    const { events } = makeHarness();
+    const tool = createNotifyTool({ eventManager: events });
     const result = await tool.execute(
       { topic: "ghost", prompt: "x" },
       makeCtx(),
     );
-    expect(result.content).toBe(
-      "Notification delivered to 0 recipients — no agent is subscribed to 'ghost'",
-    );
+    expect(result.content).toBe("Notification published on 'ghost'");
   });
 
-  test("`details = { topic, recipients }` is returned for afterToolCall hooks", async () => {
-    const bus = new InProcessEventBus();
-    const tool = createNotifyTool({ bus, isSelfSubscribed: () => false });
-    bus.subscribe("t1.task", () => {});
+  test("`details = { topic }` is returned for afterToolCall hooks", async () => {
+    const events = createEventManager();
+    events.subscribe("custom.t1.task", () => {});
+    const tool = createNotifyTool({ eventManager: events });
 
     const result = await tool.execute(
       { topic: "task", prompt: "x" },
       makeCtx(),
     );
-    expect(result.details).toEqual({ topic: "task", recipients: 1 });
-  });
-
-  test("recipients count subtracts 1 when the publisher is itself subscribed", async () => {
-    const bus = new InProcessEventBus();
-    bus.subscribe("t1.task", () => {});
-    const tool = createNotifyTool({
-      bus,
-      isSelfSubscribed: (topic) => topic === "task",
-    });
-    const result = await tool.execute(
-      { topic: "task", prompt: "x" },
-      makeCtx(),
-    );
-    expect(result.details).toEqual({ topic: "task", recipients: 0 });
-    expect(result.content).toContain("0 recipients");
-  });
-
-  test("recipients is not negative when the publisher is the only subscriber", async () => {
-    const bus = new InProcessEventBus();
-    bus.subscribe("t1.task", () => {});
-    const tool = createNotifyTool({
-      bus,
-      isSelfSubscribed: () => true,
-    });
-    const result = await tool.execute(
-      { topic: "task", prompt: "x" },
-      makeCtx(),
-    );
-    expect(result.details).toEqual({ topic: "task", recipients: 0 });
+    expect(result.details).toEqual({ topic: "task" });
   });
 
   test("does not end the LLM turn (terminate not set)", async () => {
-    const bus = new InProcessEventBus();
-    const tool = createNotifyTool({ bus, isSelfSubscribed: () => false });
+    const { events } = makeHarness();
+    const tool = createNotifyTool({ eventManager: events });
     const result = await tool.execute(
       { topic: "task", prompt: "x" },
       makeCtx(),
@@ -186,8 +189,8 @@ describe("notify — valid publish path", () => {
   });
 
   test("tool metadata: name, description, label, parameters", () => {
-    const bus: EventBus = new InProcessEventBus();
-    const tool = createNotifyTool({ bus, isSelfSubscribed: () => false });
+    const events = createEventManager();
+    const tool = createNotifyTool({ eventManager: events });
     expect(tool.name).toBe("notify");
     expect(tool.label).toBe("Notify");
     expect(tool.description).toContain("Publish a message");

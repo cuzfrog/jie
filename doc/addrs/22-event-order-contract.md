@@ -12,7 +12,7 @@ Four intertwined items surfaced in review:
 
 2. **No event announces a team's roster.** The TUI derives "agent is alive" from `agent.idle` at startup. With the startup publish removed, the TUI loses its anchor. A clean announcement event is needed.
 
-3. **`JieHandle.waitForIdle` is the CLI's "is the work done?" primitive.** This couples the handle to the `-p` mode's specific concern. The TUI does not need a "wait for idle" method (it consumes events and runs continuously); only the CLI needs the gate. The wait logic belongs in the CLI, not the handle.
+3. **`JieHandle.waitForIdle` is the CLI's "is the work done?" primitive.** This couples the handle to the `-p` mode's specific concern. The TUI does not need a "wait for idle" method (it consumes events and runs continuously); only the CLI needs the gate. The wait logic belongs in the CLI, not the handle. (This ADR is the historical decision; the v1 public surface of `JiePlatform` is now `{ bus, stop }` per ADR 13's current revision.)
 
 4. **The `waitForIdle` semantic at startup is ambiguous.** The body publishes `agent.idle` at startup. The CLI's `waitForIdle(timeout)` is called right after the prompt is published. A naive implementation that reads "wait for all bodies to be in the idle state" would resolve on the next microtask (every body is idle from startup) and exit 0 before the leader has done any work. The spec was implicit that startup `agent.idle` events are "consumed but do not trigger the resolution", but this was not stated. An implementer could miss it and produce a broken `-p` mode.
 
@@ -32,62 +32,58 @@ The boot signal moves to the new `team.loaded` event (Decision 2). The TUI's age
 |---|---|
 | Subject | `{team_id}.team.loaded` |
 | Payload | `{ team_id, agents: { role: string, agent_key: string }[] }` (sorted alphabetically by role, consistent with the loader's `roles` output) |
-| Publisher | The `JieHandle` — in `startJie` (for the startup team) and in `loadTeam` (for each subsequently-loaded team) |
+| Publisher | The platform — in `createJiePlatform` (for the startup team) and in the platform's internal `loadTeam` (Day 2+ multi-team, per ADR 19; for each subsequently-loaded team) |
 | Timing | Once per team load, after all bodies' `start()` returns |
 | Repetition | One-shot per team load. Not republished on team swap-back. The team is already loaded; observers that came back to it use the buffer / cache they already built up. |
-| Envelope | Plain payload (not the `AgentEvent` envelope). The TUI processes the `team_id` and `agents` fields directly. |
+| Envelope | `AgentEvent` envelope with `agent_role` and `agent_key` omitted. The handle is the publisher; no single body "owns" the event, so the per-body fields are not filled. Consumers that need the per-body fields read per-body events; the TUI processes the `team_id` and `agents` payload fields directly. |
 
 ### 3. `JieHandle.waitForIdle` is removed. CLI owns the idle gate.
 
-The `JieHandle` interface drops the `waitForIdle` method. `StartJieOptions.onIdle` is also removed — the TUI does not need a callback; it consumes events directly.
+The `JiePlatform` / `JieHandle` interface drops the `waitForIdle` method. `CreateJieOptions.onIdle` is also removed — the TUI does not need a callback; it consumes events directly.
 
-`JieHandle` is reduced to lifecycle and introspection: `bus`, `artifacts`, `bodies`, `bodiesFor`, `rolesFor`, `loadTeam`, `stop`. The handle still owns the internal "bodies settled" bookkeeping needed for `stop()`'s graceful shutdown (send abort, wait for bodies to exit), but does not expose it.
+`JiePlatform` (public alias `JieHandle`) is reduced to lifecycle: `bus` and `stop`. All team-level information (teamId, the bodies, the per-body `is_leader` flag) is exposed via bus events — specifically `{team_id}.team.loaded` published once at startup with payload `{ team_id, agents: [{ role, agent_key, is_leader }, ...] }`. The CLI's `createApp` orchestrator subscribes to the event before `createJiePlatform` returns and captures the team info; the TUI subscribes to the bus directly. The handle still owns the internal "bodies settled" bookkeeping needed for `stop()`'s graceful shutdown (send abort, wait for bodies to exit), but does not expose it.
 
 The CLI's `-p` mode is the only consumer of an "is the work done?" primitive. It owns this composition:
 
 ```typescript
-// CLI-side, in -p mode, after startJie() returns:
-let resolveGate: () => void;
-let timer: ReturnType<typeof setTimeout> | undefined;
-const gate = new Promise<void>((resolve, reject) => {
-  resolveGate = resolve;
-  timer = setTimeout(() => reject(new Error('timeout')), timeoutMs * 1000);
-});
+// CLI-side, in -p mode, after startJie() returns.
+function setupIdleGate(events: EventManager, timeoutSec: number): Promise<void> {
+  let busy = 0;
+  let resolve!: () => void;
+  let reject!: (err: Error) => void;
+  const promise = new Promise<void>((res, rej) => { resolve = res; reject = rej; });
+  const timer = timeoutSec > 0
+    ? setTimeout(() => reject(new Error('timeout')), timeoutSec * 1000)
+    : undefined;
+  events.subscribe('agent.turn.start', () => { busy++; });
+  events.subscribe('agent.idle', () => {
+    busy--;
+    if (busy === 0) {
+      if (timer !== undefined) clearTimeout(timer);
+      resolve();
+    }
+  });
+  return promise;
+}
 
-const state = new Map<agentKey, 'busy' | 'idle'>();
-const loadedAgentKeys = handle.bodies().map(b => b.agent_key);
-for (const k of loadedAgentKeys) state.set(k, 'idle');
-
-const evaluate = () => {
-  if ([...state.values()].every(v => v === 'idle')) {
-    clearTimeout(timer);
-    resolveGate();
-  }
-};
-
-handle.bus.subscribe('agent.turn.start', (_subj, env) => {
-  if (state.has(env.agent_key)) state.set(env.agent_key, 'busy');
-});
-handle.bus.subscribe('agent.idle', (_subj, env) => {
-  if (state.has(env.agent_key)) {
-    state.set(env.agent_key, 'idle');
-    evaluate();
-  }
-});
-
-// Publish the prompt.
-handle.bus.publish(`${teamId}.leader.prompt`, { prompt: instruction });
+// Publish the prompt via the Events factory.
+handle.events.publish(Events.userPrompt({ kind: "cli" }, startupTeamId, instruction));
 
 // Wait for the gate (or timeout).
-await gate.catch(/* timeout handler */);
+try {
+  await setupIdleGate(handle.events, args.timeout);
+} catch (e) {
+  if (e instanceof Error && e.message === 'timeout') { /* handle timeout */ }
+  else { throw e; }
+}
 printFinalNewline();
-handle.stop();
+await handle.stop();
 exit(0);
 ```
 
-The gate is initialized with all bodies in the "idle" state. The gate opens when "for all loaded bodies, the state is `idle`". On gate open: print final newline, `handle.stop()`, exit 0. On timeout: `handle.stop()`, exit 3.
+The gate is a single `busy` counter. The gate opens when `busy` returns to 0. On gate open: print final newline, `handle.stop()`, exit 0. On timeout: `handle.stop()`, exit 3.
 
-The `seenBusy` boolean is **not** used. The gate relies on the Event-Order Contract (Decision 4) to guarantee that no body can transition directly from "no event seen" to "`idle`" without first being observed as "busy" (because every `idle` is preceded by a `turn_start` for the same turn).
+There is no per-body state map. The counter is correct because the Event-Order Contract (Decision 4) guarantees that every `agent.idle` is preceded by an `agent.turn.start` for the same turn, so the counter is always ≥ 1 while work is in flight and only returns to 0 when all in-flight turns have ended.
 
 ### 4. Event-Order Contract
 
@@ -114,7 +110,7 @@ The event-order contract is what makes option B correct. The contract is recorde
 
 ## Rationale
 
-- **The platform is event-driven; consumers compose.** The `JieHandle` is a lifecycle object, not a "is the work done?" service. The TUI does not need `waitForIdle` (it runs continuously with the runtime and consumes events). The CLI is the only one-shot consumer and owns its own wait. This matches the principle in `addrs/13-platform-entry-function.md`: the handle owns lifecycle; consumers compose primitives.
+- **The platform is event-driven; consumers compose.** The `JiePlatform` (alias `JieHandle`) is a lifecycle object, not a "is the work done?" service. The TUI does not need `waitForIdle` (it runs continuously with the runtime and consumes events). The CLI is the only one-shot consumer and owns its own wait. This matches the principle in `addrs/13-platform-entry-function.md`: the handle owns lifecycle; consumers compose primitives.
 
 - **Default state is idle; events announce transitions.** Publishing `agent.idle` at startup is redundant — the body has not yet processed any turn, so it is idle by definition. Removing the startup publish eliminates a class of "what does the startup event mean?" ambiguity. The TUI's agents-panel-at-boot story is preserved by the new `team.loaded` event, which has a clean, distinct semantic: "these agents are now part of the team".
 
@@ -128,7 +124,7 @@ The event-order contract is what makes option B correct. The contract is recorde
 
 ## Consequences
 
-- ADR 13 — `JieHandle` interface drops `waitForIdle`. `StartJieOptions` drops `onIdle`. Handle publishes `{team_id}.team.loaded` in `startJie` (after all `body.start()`) and in `loadTeam`.
+- ADR 13 — `JiePlatform` interface drops `waitForIdle`. `StartJieOptions` drops `onIdle`. Handle publishes `{team_id}.team.loaded` in `createJiePlatform` (after all `body.start()`) and in the platform's internal `loadTeam` (Day 2+ per ADR 19).
 - ADR 19 — `team.loaded` is one-shot per `loadTeam`; not republished on swap-back. The previously-active team is not stopped; the new team's `team.loaded` fires for the new team only.
 - `03-event-system.md` — Subject Schema: add `{team_id}.team.loaded`; tighten `agent.idle` row. "Agent Idle" section: rewrite (no startup `agent.idle`; boot signal is `team.loaded`). New section "Event-Order Contract" with both pieces and the Day-2 NATS note.
 - `06-agent-model.md` — `AgentBody.start()` ordering drops the `agent.idle` publish. "Event Bridging" notes the alternation under `turn_start` and `agent_end` rows.

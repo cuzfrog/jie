@@ -10,6 +10,8 @@
 - @doc/specs/monorepo-structure.md
 - read `00-overview.md` in the dir you will work with to understand the glossary.
 - architectural decision records are in `doc/addrs/`. Each ADR is the source of truth for a consequential decision; the spec docs reflect the decisions.
+- @doc/DEVELOPMENT.md
+- @doc/plan/MILESTONES.md
 
 ### jie-platform
 - agents do not directly know each other, they talk via events on an event bus.
@@ -34,23 +36,29 @@
 - Do not keep intermediate, transient history in md files under `specs/`, they are the update-to-date blueprint for the project.
 - Do not record what you've done if the information is not helpful to make subsequent decisions.
 - No emojis in commits, issues, PR comments, or code
+- Do not use newline to break sentences. Let IDE wrap text.
 
 ## Conversation style
 - When I ask a question, answer it before any actions.
 - When I make a decision, reason it thoroughly, then express your opinion. Only when we both agree, we move on.
 - Stick to fact. Our purpose is to build a good software, don't fluff, challenge my ideas.
+- Do not ask trivial questions that have no consequences.
 
 ## Code Conventions
 
-- No `any` types, No enums, No inline imports, No Classes.
+- No `any` types, No enums, No inline imports (all imports must be at the top).
 - Use interfaces for OOP abstractions.
 - Use only erasable TypeScript syntax compatible with Node strip-only mode in TypeScript. Do not use constructor parameter properties, `enum`, `namespace`/`module`, `import =`, `export =`, or other TypeScript constructs that require JavaScript emit. Use explicit fields and constructor assignments instead of parameter properties.
 - Public types, contract, methods, higher-level abstractions should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers. See below section `Single file layout`.
-- Do not add comments except it's a consequential information and the code itself cannot tell.
+- Avoid trivial functions, inline them.
+- Imports from a module without specific file, e,g, `import { foo } from "../module"`. Not `"../module/index.ts"`. For siblings in the immediate directory, directly import from the sibling, e.g. `import { foo } from "./foo"`.
+- Code identifiers (variables, parameters, class fields, function names) use camelCase. Names must be full words, no abbreviations beyond common ones (`id`, `url`, `db`, `ts`). Only serialized events/messages use snake_case.
+- Keep code in one line if the row is < 140 chars. Do not break into multiple lines if the row is < 140 chars.
 
 ### Test
-- use mocks for unit test. A file `my-function.ts`'s test file `my-function.test.ts` should only test `my-function.ts`.
-- tests should align with the test target file. E.g. a test `function1.test.ts` should test and only test `function1.ts`. If `function1.test.ts` is testing `index.ts`, it a smell of coding principle violation.
+- use mocks for unit test. See @doc/HOW_TO_MOCK.md
+- tests should align with the test target file. E.g. a test `function1.test.ts` should test and only test `function1.ts`. If `function1.test.ts` is testing `index.ts`, it a smell of coding principle violation. Unit tests should not test dependencies.
+- do not import `bun:test`, all test utilities have been added to global namespace and is compatible with `vi`.
 
 ### Single file layout (ordered from top to bottom)
 1. imports
@@ -58,7 +66,7 @@
 3. 1 public interface
 4. constructor method
 5. concrete implementation
-6. private functions
+6. private functions (at bottom)
 
 ### Git
 - When involving git operations, refer to @doc/AGENTS_GIT.md.
@@ -69,12 +77,20 @@
 - Check node_modules for external API type definitions instead of guessing
 - NEVER remove or downgrade code to fix type errors from outdated dependencies; upgrade the dependency instead
 - Naming must reflect the abstraction level. If a newly introduced function violates this, considering renaming the existing function to maintain correct abstraction levels.
-- Avoid "helper" functions, they are where code is coupled out of class hierarchy. "helper" functions are functions that are outside the abstraction hierarchy, containing domain logic, serving the only purpose of code reuse. They are different from "utility/support" functions that are purely technical without complex domain logic. Utility functions do not have a position in the abstraction hierarchy.
+- Avoid helper functions, helpers are generally bad, they are where code is coupled out of class hierarchy. helper functions are functions that are outside the abstraction hierarchy, containing domain logic, serving the only purpose of code reuse. They are different from "utility/support" functions that are purely technical without complex domain logic. Utility functions do not have a position in the abstraction hierarchy.
 - A function's parameters should be data it consumes, parameters should not be its dependencies. A high-order function should only be used for transformation instead of procedural processing. Context and config types are exempted from this rule.
 - A responsibility should belong to an earlier performer. E.g. if type `Config` can parse the configuration into ready-to-use types, it shouldn't pass raw strings to its clients. A producer should produce the best output for its consumers.
 - A module should be easily testable with mocked dependencies. Unit tests should be done with mocks without creating actual dependency or causing any side effects.
 - Logic should be put in pure functions as much as possible. Any side effects, e.g. IO, should be at the edge layers with minimal logic. This makes the code easier to test.
 - Only features are scoped, NO compromize on NFR.
+
+#### Module visibility
+Minimal visibility or public surface of a type or a module. This ensures loose coupling and separation of concerns. If this is violated, e.g. a type or a module exposes multiple functions, it usually means the design is wrong.
+- A module should only have 1 interface and its constructor method that are public. All other implementations should not be exposed.
+- For a single file module, all other things in the file should be file private. For unit testing complex logic, re-export them at the file bottom with `_` prefix to the function, meaning only "visible for testing".
+- All imports must be from a module (without explicit `index.ts`), must NOT import from a specific file. For the same file, only use one import statement.
+- In each module, search `MODULE.md` for its api, responsibilities, and files layout. You must follow its specifications. You cannot change the visibility. You should not modify this file. You cannot add any other public types/functions. Any changes must be discussed with me. If you are blocked, ask me to review and manually add the exports. `sealed` files can still be edited, just no new exports.
+- Cross boundary domain types, config types, DTOs are exempted from the visibility rule.
 
 #### SOLID principles:
 - **Single Responsibility Principle**: A function, class, or module should have one, and only one, reason to change.
@@ -86,6 +102,15 @@
 ## Things to avoid
 - do not `find` from the root dir, it's slow and unnecessary. Use `pwd` to figure out where you are.
 - do not assume a tool is available unless you are told, search before calling if you are not sure.
+- do not write test-only production code, testability should be achieved by adhering to above coding principles.
+- do not shorten variables, function names. E.g. use `agentEvent` for type `AgentEvent` instead of `event` or `env` to avoid confusion.
+- do not add comments unless the code itself cannot tell, decisions should be captured in docs or addrs.
+
+## Best practices
+- write down your plan before execution.
+- when you have multiple steps in your execution, use a todo-list to track your tasks. Clean your todo-list periodically to remain focused.
+
+(you can write tmp files to `./tmp/`, which is ephemeral)
 
 ## File Edit Checklist
 Pre-action:

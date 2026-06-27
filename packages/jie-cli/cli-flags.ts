@@ -1,39 +1,28 @@
-/**
- * Hand-rolled CLI flag parser. Keeps the dependency surface small —
- * no commander / yargs. Returns a normalized record (or an error
- * for duplicate / missing-argument cases per the spec's
- * "Flag Parsing Rules").
- */
 
-export type ParsedCli =
-  | { kind: "print"; instruction: string; team?: string; timeout: number; json: boolean; apiKey?: string; resume?: string; continueLast: boolean }
-  | { kind: "version" }
-  | { kind: "help" }
-  | { kind: "login"; provider?: string; apiKey?: string }
-  | { kind: "logout"; provider?: string }
-  | { kind: "model"; provider: string; modelId: string }
-  | { kind: "team"; teamId?: string; unset: boolean }
-  | { kind: "apiKey"; apiKey: string }
-  | { kind: "tui"; team?: string }
-  | { kind: "error"; message: string };
-
-export interface RawArgv {
-  /** Original positional arguments, in order. Flags are interleaved
-   *  with values. The parser consumes flags and their values. */
-  raw: string[];
+export interface ParsedArgsMap {
+  print: { kind: "print"; instruction: string; team?: string; timeout: number; json: boolean; apiKey?: string; resume?: string; continueLast: boolean };
+  version: { kind: "version" };
+  help: { kind: "help" };
+  login: { kind: "login"; provider?: string; apiKey?: string };
+  logout: { kind: "logout"; provider?: string };
+  model: { kind: "model"; provider: string; modelId: string };
+  team: { kind: "team"; teamId?: string; unset: boolean };
+  apiKey: { kind: "apiKey"; apiKey: string };
+  tui: { kind: "tui"; team?: string };
+  error: { kind: "error"; message: string };
 }
+export type ParsedArgs = ParsedArgsMap[keyof ParsedArgsMap];
 
 const PRINT_FLAGS = new Set(["-p", "--print"]);
 
-export function parseFlags(argv: string[]): ParsedCli {
+export function parseFlags(argv: string[]): ParsedArgs {
   const dupes = new Set<string>();
-  const seen = new Map<string, string>(); // flag -> value (or "" for boolean)
-  // Determine subcommand / first arg.
+  const seen = new Map<string, string>();
+
   const rest = argv.slice();
   if (rest.length === 0) return { kind: "tui" };
   const first = rest[0]!;
 
-  // Top-level flags (no subcommand).
   if (first === "--version") return { kind: "version" };
   if (first === "--help" || first === "-h") return { kind: "help" };
   if (first === "login") return parseLogin(rest.slice(1), dupes, seen);
@@ -41,15 +30,11 @@ export function parseFlags(argv: string[]): ParsedCli {
   if (first === "model") return parseModel(rest.slice(1));
   if (first === "team") return parseTeam(rest.slice(1));
 
-  // Otherwise, this is either `jie -p "..."`, `jie --api-key ... -p "..."`,
-  // or `jie` (TUI mode — out of v1 scope).
   if (first === "--api-key") {
     const v = rest[1];
     if (v === undefined) return { kind: "error", message: "missing argument for --api-key" };
     if (rest.length > 2) {
-      // Combined with other flags (e.g. `-p "..."`): route to the
-      // print flow so `--api-key` writes auth.json before the
-      // print flow resolves the model.
+
       return parsePrint(rest.slice(1), dupes, seen, first);
     }
     return { kind: "apiKey", apiKey: v };
@@ -81,7 +66,7 @@ function parseLogin(
   args: string[],
   dupes: Set<string>,
   _seen: Map<string, string>,
-): ParsedCli {
+): ParsedArgs {
   let provider: string | undefined;
   let apiKey: string | undefined;
   for (let i = 0; i < args.length; i += 1) {
@@ -105,7 +90,7 @@ function parseLogout(
   args: string[],
   _dupes: Set<string>,
   _seen: Map<string, string>,
-): ParsedCli {
+): ParsedArgs {
   const provider = args[0];
   if (provider !== undefined && provider.startsWith("-")) {
     return { kind: "error", message: `unknown flag: ${provider}` };
@@ -113,7 +98,7 @@ function parseLogout(
   return { kind: "logout", provider };
 }
 
-function parseModel(args: string[]): ParsedCli {
+function parseModel(args: string[]): ParsedArgs {
   if (args.length === 0) {
     return { kind: "error", message: "missing argument for model" };
   }
@@ -130,7 +115,7 @@ function parseModel(args: string[]): ParsedCli {
   return { kind: "model", provider, modelId };
 }
 
-function parseTeam(args: string[]): ParsedCli {
+function parseTeam(args: string[]): ParsedArgs {
   if (args.length === 0) return { kind: "team", unset: false };
   if (args[0] === "--unset") return { kind: "team", unset: true };
   if (args[0]!.startsWith("-")) {
@@ -144,7 +129,7 @@ function parsePrint(
   dupes: Set<string>,
   seen: Map<string, string>,
   firstFlag: string,
-): ParsedCli {
+): ParsedArgs {
   let team: string | undefined;
   let timeout: number | undefined;
   let json = false;
@@ -161,7 +146,7 @@ function parsePrint(
       apiKey = args[i]!;
       i += 1;
     } else {
-      // Mark the -p/--print flag as seen for duplicate detection.
+
       seen.set(firstFlag, "");
     }
   } else if (firstFlag === "--resume") {
@@ -202,8 +187,8 @@ function parsePrint(
       if (v === undefined) return { kind: "error", message: "missing argument for --timeout" };
       if (seen.has("--timeout")) dupes.add("--timeout");
       const n = Number(v);
-      if (!Number.isFinite(n) || n < 0) {
-        return { kind: "error", message: `invalid --timeout value: ${v}` };
+      if (!Number.isFinite(n) || n <= 0) {
+        return { kind: "error", message: `invalid --timeout value: ${v} (must be > 0)` };
       }
       seen.set("--timeout", String(n));
       timeout = n;

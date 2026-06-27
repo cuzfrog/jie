@@ -1,6 +1,6 @@
 import { Type } from "typebox";
-import type { Tool, ToolResult } from "./types.ts";
-import { JiePlatformError } from "../storage/domain-types.ts";
+import type { Tool, ToolResult } from "./types";
+import { JiePlatformError } from "../domain-types";
 
 const WEB_SEARCH_DESCRIPTION = `web_search(query, max_results?): Run a web search and return up to max_results
 results (default 5; max 20 — values above 20 are silently clamped). Each
@@ -16,11 +16,8 @@ export interface WebSearchResult {
 }
 
 export interface WebSearchProvider {
-  search(query: string, max_results: number): Promise<WebSearchResult[]>;
+  search(query: string, maxResults: number): Promise<WebSearchResult[]>;
 }
-
-const DEFAULT_MAX = 5;
-const HARD_MAX = 20;
 
 export interface WebSearchDeps {
   provider: WebSearchProvider;
@@ -28,31 +25,32 @@ export interface WebSearchDeps {
 
 interface WebSearchInput {
   query: string;
-  max_results?: number;
+  maxResults?: number;
 }
 
-function clampMaxResults(value: number | undefined): number {
-  if (value === undefined || value < 1) return DEFAULT_MAX;
-  if (value > HARD_MAX) return HARD_MAX;
-  return value;
+const DEFAULT_MAX = 5;
+const HARD_MAX = 20;
+
+export function createWebSearchProvider(): WebSearchProvider {
+  return new DuckDuckGoSearchProvider();
 }
 
-export function createWebSearchTool(deps: WebSearchDeps): Tool<WebSearchInput> {
+export function createWebSearchTool(dependencies: WebSearchDeps): Tool<WebSearchInput> {
   return {
     name: "web_search",
     description: WEB_SEARCH_DESCRIPTION,
     label: "Web Search",
     parameters: Type.Object({
       query: Type.String(),
-      max_results: Type.Optional(Type.Number()),
+      maxResults: Type.Optional(Type.Number()),
     }),
     async execute(input: WebSearchInput): Promise<ToolResult> {
-      const max = clampMaxResults(input.max_results);
+      const max = clampMaxResults(input.maxResults);
       let results: WebSearchResult[];
       try {
-        results = await deps.provider.search(input.query, max);
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
+        results = await dependencies.provider.search(input.query, max);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
         throw new JiePlatformError(
           "web_search_failed",
           `web_search_failed: ${message}`,
@@ -69,18 +67,14 @@ export function createWebSearchTool(deps: WebSearchDeps): Tool<WebSearchInput> {
       );
       return {
         content: lines.join("\n\n"),
-        details: { results, query: input.query, max_results: max },
+        details: { results, query: input.query, maxResults: max },
       };
     },
   };
 }
 
-/** Default provider: scrapes DuckDuckGo HTML. No API key required.
- *  The HTML layout may change; the adapter returns whatever it
- *  finds, and zero results triggers `provider_returned_no_results`
- *  per the failure-handling rule. */
-export class DuckDuckGoSearchProvider implements WebSearchProvider {
-  async search(query: string, max_results: number): Promise<WebSearchResult[]> {
+class DuckDuckGoSearchProvider implements WebSearchProvider {
+  async search(query: string, maxResults: number): Promise<WebSearchResult[]> {
     const url = "https://html.duckduckgo.com/html/";
     const body = new URLSearchParams({ q: query }).toString();
     const response = await fetch(url, {
@@ -95,16 +89,13 @@ export class DuckDuckGoSearchProvider implements WebSearchProvider {
     if (response.status >= 500) throw new Error("http_5xx");
     if (!response.ok) throw new Error(`http_${response.status}`);
     const html = await response.text();
-    return parseDuckDuckGoResults(html, max_results);
+    return parseDuckDuckGoResults(html, maxResults);
   }
 }
 
 function parseDuckDuckGoResults(html: string, max: number): WebSearchResult[] {
   const results: WebSearchResult[] = [];
-  // DuckDuckGo HTML result blocks are .result elements. Each has:
-  //  - a.result__a (the title link)
-  //  - a.result__snippet (the snippet)
-  // We do a lightweight regex parse to keep the dependency surface small.
+
   const blockPattern = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
   let match: RegExpExecArray | null;
   while ((match = blockPattern.exec(html)) !== null && results.length < max) {
@@ -114,6 +105,12 @@ function parseDuckDuckGoResults(html: string, max: number): WebSearchResult[] {
     results.push({ title, url, snippet });
   }
   return results;
+}
+
+function clampMaxResults(value: number | undefined): number {
+  if (value === undefined || value < 1) return DEFAULT_MAX;
+  if (value > HARD_MAX) return HARD_MAX;
+  return value;
 }
 
 function stripHtml(s: string): string {

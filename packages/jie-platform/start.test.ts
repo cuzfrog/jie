@@ -1,338 +1,248 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { join } from "node:path";
-import { startJie } from "./start.ts";
-import { SqliteStorage } from "./storage/sqlite-storage.ts";
-import type { Model } from "@earendil-works/pi-ai";
-import type { AuthJson, MergedSettings } from "./config/index.ts";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { createEventManager, type EventEnvelope } from "./event";
+import { createJiePlatform } from "./start";
+import {
+  createModelRegistry,
+  type AuthStore,
+  type Settings,
+  type SettingsStore,
+} from "./config";
+import { createTeamRegistry } from "./team";
+import { createToolRegistry } from "./tools";
+import { createArtifactStore, createMemoryManager, createStorage } from "./storage";
 
-function makeSettings(
-  overrides: Partial<MergedSettings> = {},
-): MergedSettings {
-  return { defaultProvider: "anthropic", defaultModel: "claude-sonnet-4", ...overrides };
-}
+const settingsStore = vi.mocked<SettingsStore>({
+  load: vi.fn(),
+  write: vi.fn(),
+  unsetDefaultTeam: vi.fn(),
+});
 
-function makeAuth(entries: AuthJson = {}): AuthJson {
-  return entries;
-}
+const authStore = vi.mocked<AuthStore>({
+  load: vi.fn(),
+  write: vi.fn(),
+  setProvider: vi.fn(),
+  removeProvider: vi.fn(),
+  clear: vi.fn(),
+});
 
-function makeStubModel(): Model<any> {
+const DEFAULT_SETTINGS: Settings = {
+  defaultProvider: "anthropic",
+  defaultModel: "claude-sonnet-4-5",
+};
+
+function makeDeps(workspace: string, homeJieDir: string, filePath: string = ":memory:") {
+  const projectJieDir = join(workspace, ".jie");
+  const storage = createStorage({ type: "sqlite", filePath });
+  const events = createEventManager();
+  const artifactStore = createArtifactStore(storage);
+  const toolRegistry = createToolRegistry({
+    workspaceRoot: workspace,
+    eventManager: events,
+    artifactStore,
+  });
   return {
-    id: "claude-sonnet-4",
-    name: "Claude Sonnet 4",
-    api: "anthropic-messages",
-    provider: "anthropic",
-    baseUrl: "https://example.invalid",
-    reasoning: false,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 200000,
-    maxTokens: 8192,
-  } as unknown as Model<any>;
+    eventManager: events,
+    settingsStore,
+    storage,
+    teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
+    modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
+    toolRegistry,
+    artifactStore,
+    memoryManager: createMemoryManager(storage),
+  };
 }
 
-describe("startJie — happy path (minimal team)", () => {
+const STUB_MESSAGE: AgentMessage = {
+  role: "user",
+  content: "hello from h1",
+  timestamp: Date.now(),
+};
+
+describe("createJiePlatform", () => {
   let workspace: string;
-  let storage: SqliteStorage;
+  let homeJieDir: string;
 
   beforeEach(() => {
     workspace = mkdtempSync(join(tmpdir(), "jie-start-"));
-    storage = new SqliteStorage(":memory:");
+    homeJieDir = mkdtempSync(join(tmpdir(), "jie-start-home-"));
+    settingsStore.load.mockReturnValue(DEFAULT_SETTINGS);
   });
 
   afterEach(() => {
-    storage.close();
     rmSync(workspace, { recursive: true, force: true });
+    rmSync(homeJieDir, { recursive: true, force: true });
   });
 
-  test("starts the minimal team; handle exposes 1 body and 1 role", async () => {
-    const handle = await startJie({
-      workspace,
-      settings: makeSettings(),
-      storage,
-      teamId: "minimal",
-      resolveModel: () => makeStubModel(),
-    });
-    expect(handle.bodies()).toHaveLength(1);
-    expect(handle.bodiesFor("minimal")).toHaveLength(1);
-    expect(handle.rolesFor("minimal")).toEqual(["general"]);
-  });
-
-  test("publishes {team_id}.team.loaded once with sorted agents", async () => {
-    const events: unknown[] = [];
-    // Subscribe BEFORE calling startJie so we don't miss the
-    // publish (which is in-process and synchronous).
-    const tmp = new SqliteStorage(":memory:");
-    void tmp;
-    const handle = await startJie({
-      workspace,
-      settings: makeSettings(),
-      storage,
-      teamId: "minimal",
-      resolveModel: () => makeStubModel(),
-    });
-    handle.bus.subscribe("minimal.team.loaded", (_s, p) => {
-      events.push(p);
-    });
-    // Re-subscribe path won't fire retroactively; verify with a
-    // second call that subscribes before startJie.
-    const events2: unknown[] = [];
-    const storage2 = new SqliteStorage(":memory:");
-    let captured: ((subject: string, payload: object) => void) | undefined;
-    const second = await startJie({
-      workspace,
-      settings: makeSettings(),
-      storage: storage2,
-      teamId: "minimal",
-      resolveModel: () => makeStubModel(),
-    });
-    second.bus.subscribe("minimal.team.loaded", (s, p) => {
-      events2.push(p);
-      captured = s as never;
-    });
-    void captured;
-    // The first startJie in this test already published; we
-    // verify the event was published by checking the body
-    // count and that an existing subscription receives no
-    // *additional* events (idempotency). The actual event shape
-    // is verified by the `team.loaded published exactly once`
-    // test in the multi-team suite below.
-    expect(events).toHaveLength(0);
-    expect(events2).toHaveLength(0);
-  });
-
-  test("team.loaded is not republished on subsequent loadTeam calls (idempotent)", async () => {
-    const handle = await startJie({
-      workspace,
-      settings: makeSettings(),
-      storage,
-      teamId: "minimal",
-      resolveModel: () => makeStubModel(),
-    });
-    const events: unknown[] = [];
-    handle.bus.subscribe("minimal.team.loaded", (_s, p) => {
-      events.push(p);
-    });
-    await handle.loadTeam("minimal");
-    expect(events).toHaveLength(0);
-  });
-
-  test("model pre-check: no model in soul or settings throws", async () => {
-    await expect(
-      startJie({
-        workspace,
-        settings: {},
-        storage,
-        teamId: "minimal",
-      }),
-    ).rejects.toThrow(/No model has been selected/);
-  });
-
-  test("model pre-check: invalid provider throws the user-facing error", async () => {
-    await expect(
-      startJie({
-        workspace,
-        settings: makeSettings(),
-        storage,
-        teamId: "minimal",
-        resolveModel: () => {
-          throw new Error("unknown provider");
+  describe("happy path (minimal team)", () => {
+    test("starts the minimal team; events is the manager wrapping the bus from deps", async () => {
+      const deps = makeDeps(workspace, homeJieDir);
+      const handle = await createJiePlatform(
+        {
+          workspace,
+          homeJieDir,
+          teamId: "minimal",
         },
-      }),
-    ).rejects.toThrow(/No model has been selected/);
+        deps,
+      );
+      const events: EventEnvelope<string>[] = [];
+      handle.events.subscribe("team.minimal.agent.general-1.prompt", (env) => {
+        events.push(env);
+      });
+      expect(events).toHaveLength(0);
+    });
+
+    test("team.loaded is published once at start; the event carries is_leader per agent", async () => {
+      const deps = makeDeps(workspace, homeJieDir);
+      const events: EventEnvelope<string>[] = [];
+      deps.eventManager.subscribe("team.minimal.loaded", (env) => {
+        events.push(env);
+      });
+      await createJiePlatform(
+        {
+          workspace,
+          homeJieDir,
+          teamId: "minimal",
+        },
+        deps,
+      );
+      expect(events).toHaveLength(1);
+      const env = events[0]!;
+      const payload = env.payload as { agents: Array<{ role: string; is_leader: boolean }> };
+      expect(payload.agents).toHaveLength(1);
+      expect(payload.agents[0]!.is_leader).toBe(true);
+    });
+
+    test("model pre-check: no model in soul or settings throws", async () => {
+      settingsStore.load.mockReturnValueOnce({});
+      const filePath = join(workspace, "no-model.db");
+      const storage = createStorage({ type: "sqlite", filePath });
+      const projectJieDir = join(workspace, ".jie");
+      const events = createEventManager();
+      const artifactStore = createArtifactStore(storage);
+      const deps = {
+        eventManager: events,
+        settingsStore,
+        storage,
+        teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
+        modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
+        toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events, artifactStore }),
+        artifactStore,
+        memoryManager: createMemoryManager(storage),
+      };
+      await expect(
+        createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps),
+      ).rejects.toThrow(/No model has been selected/);
+    });
+
+    test("handle.stop() detaches all bus subscriptions", async () => {
+      const deps = makeDeps(workspace, homeJieDir);
+      const handle = await createJiePlatform(
+        {
+          workspace,
+          homeJieDir,
+          teamId: "minimal",
+        },
+        deps,
+      );
+      expect(deps.eventManager.subscriberCount("team.minimal.agent.general-1.prompt")).toBeGreaterThan(0);
+      await handle.stop();
+      expect(deps.eventManager.subscriberCount("team.minimal.agent.general-1.prompt")).toBe(0);
+    });
   });
 
-  test("handle.stop() detaches all bus subscriptions", async () => {
-    const handle = await startJie({
-      workspace,
-      settings: makeSettings(),
-      storage,
-      teamId: "minimal",
-      resolveModel: () => makeStubModel(),
+  describe("session id resolution", () => {
+    test("resumeSessionId: valid id is used; invalid id rejects with 'unknown session_id:'", async () => {
+      const filePath = join(workspace, "resume.db");
+      const projectJieDir = join(workspace, ".jie");
+      const storage1 = createStorage({ type: "sqlite", filePath });
+      const events1 = createEventManager();
+      const artifactStore1 = createArtifactStore(storage1);
+      const deps1 = {
+        eventManager: events1,
+        settingsStore,
+        storage: storage1,
+        teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
+        modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
+        toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events1, artifactStore: artifactStore1 }),
+        artifactStore: artifactStore1,
+        memoryManager: createMemoryManager(storage1),
+      };
+      const h1 = await createJiePlatform(
+        { workspace, homeJieDir, teamId: "minimal" },
+        deps1,
+      );
+      createMemoryManager(createStorage({ type: "sqlite", filePath })).persist(
+        STUB_MESSAGE,
+        "general-1",
+        "test-session-id",
+        "minimal",
+      );
+      await h1.stop();
+      const sessionId = "test-session-id";
+
+      const storage2 = createStorage({ type: "sqlite", filePath });
+      const events2 = createEventManager();
+      const artifactStore2 = createArtifactStore(storage2);
+      const deps2 = {
+        eventManager: events2,
+        settingsStore,
+        storage: storage2,
+        teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
+        modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
+        toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events2, artifactStore: artifactStore2 }),
+        artifactStore: artifactStore2,
+        memoryManager: createMemoryManager(storage2),
+      };
+      const h2 = await createJiePlatform(
+        { workspace, homeJieDir, teamId: "minimal", resumeSessionId: sessionId },
+        deps2,
+      );
+      await h2.stop();
+
+      const storage3 = createStorage({ type: "sqlite", filePath });
+      const events3 = createEventManager();
+      const artifactStore3 = createArtifactStore(storage3);
+      const deps3 = {
+        eventManager: events3,
+        settingsStore,
+        storage: storage3,
+        teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
+        modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
+        toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events3, artifactStore: artifactStore3 }),
+        artifactStore: artifactStore3,
+        memoryManager: createMemoryManager(storage3),
+      };
+      await expect(
+        createJiePlatform(
+          { workspace, homeJieDir, teamId: "minimal", resumeSessionId: "not-a-real-id" },
+          deps3,
+        ),
+      ).rejects.toThrow(/unknown session_id: not-a-real-id/);
     });
-    const body = handle.bodies()[0]!;
-    expect(handle.bus.subscriberCount("minimal.general-1")).toBeGreaterThan(0);
-    await handle.stop();
-    expect(handle.bus.subscriberCount("minimal.general-1")).toBe(0);
-    void body;
+  });
+
+  describe("empty team (no .md files)", () => {
+    test("team.loaded is published with empty agents array", async () => {
+      const userTeam = join(homeJieDir, "teams", "ghost");
+      mkdirSync(userTeam, { recursive: true });
+      writeFileSync(join(userTeam, "TEAM.md"), "---\n---\n");
+
+      const deps = makeDeps(workspace, homeJieDir);
+      const events: EventEnvelope<string>[] = [];
+      deps.eventManager.subscribe("team.ghost.loaded", (env) => {
+        events.push(env);
+      });
+      const handle = await createJiePlatform(
+        { workspace, homeJieDir, teamId: "ghost" },
+        deps,
+      );
+      expect(events).toHaveLength(1);
+      const payload = events[0]!.payload as { agents: unknown[] };
+      expect(payload.agents).toEqual([]);
+      await handle.stop();
+    });
   });
 });
-
-describe("startJie — session id resolution", () => {
-  let workspace: string;
-  let storage: SqliteStorage;
-
-  beforeEach(() => {
-    workspace = mkdtempSync(join(tmpdir(), "jie-start-sess-"));
-    storage = new SqliteStorage(":memory:");
-  });
-
-  afterEach(() => {
-    storage.close();
-    rmSync(workspace, { recursive: true, force: true });
-  });
-
-  test("resumeSessionId: valid id is used; invalid id rejects with 'unknown session_id:'", async () => {
-    const filePath = join(workspace, "persistent.db");
-    const h1 = await startJie({
-      workspace,
-      settings: makeSettings(),
-      storage: new SqliteStorage(filePath),
-      teamId: "minimal",
-      resolveModel: () => makeStubModel(),
-    });
-    const validId = h1.bodies()[0]!.session_id;
-    // Persist a synthetic user message so memory.hasSession has a
-    // row to find.
-    const mem = h1.artifacts;
-    void mem;
-    // Use the in-process memory: import SqliteMemoryManager directly.
-    const { SqliteMemoryManager } = await import("./storage/index.ts");
-    new SqliteMemoryManager(new SqliteStorage(filePath)).persist(
-      { role: "user", content: "x", timestamp: Date.now() } as never,
-      "general-1",
-      validId,
-      "minimal",
-    );
-    await h1.stop();
-
-    const h2 = await startJie({
-      workspace,
-      settings: makeSettings(),
-      storage: new SqliteStorage(filePath),
-      teamId: "minimal",
-      resumeSessionId: validId,
-      resolveModel: () => makeStubModel(),
-    });
-    expect(h2.bodies()[0]!.session_id).toBe(validId);
-    await h2.stop();
-
-    await expect(
-      startJie({
-        workspace,
-        settings: makeSettings(),
-        storage: new SqliteStorage(filePath),
-        teamId: "minimal",
-        resumeSessionId: "not-a-real-id",
-        resolveModel: () => makeStubModel(),
-      }),
-    ).rejects.toThrow(/unknown session_id: not-a-real-id/);
-  });
-
-  test("continueLastSession: uses the most recent session id", async () => {
-    const filePath = join(workspace, "persistent2.db");
-    const h1 = await startJie({
-      workspace,
-      settings: makeSettings(),
-      storage: new SqliteStorage(filePath),
-      teamId: "minimal",
-      resolveModel: () => makeStubModel(),
-    });
-    const recentId = h1.bodies()[0]!.session_id;
-    // Persist a message so mostRecentSessionId can find a row.
-    const { SqliteMemoryManager } = await import("./storage/index.ts");
-    new SqliteMemoryManager(new SqliteStorage(filePath)).persist(
-      { role: "user", content: "x", timestamp: Date.now() } as never,
-      "general-1",
-      recentId,
-      "minimal",
-    );
-    await h1.stop();
-
-    const h2 = await startJie({
-      workspace,
-      settings: makeSettings(),
-      storage: new SqliteStorage(filePath),
-      teamId: "minimal",
-      continueLastSession: true,
-      resolveModel: () => makeStubModel(),
-    });
-    expect(h2.bodies()[0]!.session_id).toBe(recentId);
-    await h2.stop();
-  });
-});
-
-describe("startJie — multi-team coexistence (loadTeam)", () => {
-  let workspace: string;
-  let storage: SqliteStorage;
-
-  beforeEach(() => {
-    workspace = mkdtempSync(join(tmpdir(), "jie-start-multi-"));
-    storage = new SqliteStorage(":memory:");
-  });
-
-  afterEach(() => {
-    storage.close();
-    rmSync(workspace, { recursive: true, force: true });
-  });
-
-  test("loadTeam is idempotent: already-loaded team returns immediately without re-publishing team.loaded", async () => {
-    const handle = await startJie({
-      workspace,
-      settings: makeSettings(),
-      storage,
-      teamId: "minimal",
-      resolveModel: () => makeStubModel(),
-    });
-    const calls: unknown[] = [];
-    handle.bus.subscribe("minimal.team.loaded", (_s, p) => {
-      calls.push(p);
-    });
-    await handle.loadTeam("minimal");
-    expect(calls).toHaveLength(0);
-  });
-
-  test("bodies() across multiple teams returns the union", async () => {
-    const handle = await startJie({
-      workspace,
-      settings: makeSettings(),
-      storage,
-      teamId: "minimal",
-      resolveModel: () => makeStubModel(),
-    });
-    // Inject a custom team loader that returns a second team.
-    const handle2 = await startJie({
-      workspace,
-      settings: makeSettings(),
-      storage: new SqliteStorage(":memory:"),
-      teamId: "minimal",
-      resolveModel: () => makeStubModel(),
-    });
-    void handle;
-    void handle2;
-  });
-});
-
-describe("startJie — empty team (loadTeam of nonexistent)", () => {
-  let workspace: string;
-  let storage: SqliteStorage;
-
-  beforeEach(() => {
-    workspace = mkdtempSync(join(tmpdir(), "jie-start-empty-"));
-    storage = new SqliteStorage(":memory:");
-  });
-
-  afterEach(() => {
-    storage.close();
-    rmSync(workspace, { recursive: true, force: true });
-  });
-
-  test("empty team: bodiesFor returns [] and rolesFor returns []", async () => {
-    const handle = await startJie({
-      workspace,
-      settings: makeSettings(),
-      storage,
-      teamId: "minimal",
-      loadTeamBlueprint: () => ({
-        roles: [],
-        leaderRole: null,
-      }),
-      resolveModel: () => makeStubModel(),
-    });
-    expect(handle.bodiesFor("ghost")).toEqual([]);
-    expect(handle.rolesFor("ghost")).toEqual([]);
-  });
-});
-
-void makeAuth;

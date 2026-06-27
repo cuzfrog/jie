@@ -1,6 +1,5 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { createWebFetchTool } from "./web-fetch.ts";
-import { JiePlatformError } from "../storage/domain-types.ts";
+import { createWebFetchTool } from "./web-fetch";
+import { JiePlatformError } from "../domain-types";
 
 let server: ReturnType<typeof Bun.serve>;
 let baseUrl: string;
@@ -66,8 +65,8 @@ describe("web_fetch", () => {
     let caught: unknown;
     try {
       await tool.execute({ url: "file:///etc/passwd" }, {} as never);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
     expect((caught as JiePlatformError).code).toBe("unsupported_scheme");
@@ -117,8 +116,8 @@ describe("web_fetch", () => {
     let caught: unknown;
     try {
       await tool.execute({ url: `${baseUrl}/binary` }, {} as never);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
     expect((caught as JiePlatformError).code).toBe("unsupported_content_type");
@@ -126,11 +125,7 @@ describe("web_fetch", () => {
   });
 
   test("missing content-type is treated as application/octet-stream (Bun's HTTP server auto-sets a content-type, so this is verified by the binary case)", async () => {
-    // Bun's HTTP server always sets a content-type on responses,
-    // so the missing-content-type branch is not reachable from a
-    // live Bun server. The branch is covered by the binary case:
-    // the tool's `application/octet-stream` default is what a
-    // genuinely missing content-type would be treated as.
+
     expect(true).toBe(true);
   });
 
@@ -147,13 +142,10 @@ describe("web_fetch", () => {
     let caught: unknown;
     try {
       await tool.execute({ url: `${baseUrl}/redirect-loop` }, {} as never);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
-    // Either redirect_exhausted (fetch's redirect limit) or
-    // unsupported_content_type (loop resolves to a 404 with text
-    // content-type is also possible) — both are platform-defined
-    // typed errors. We assert at least one typed error fired.
+
     expect(caught).toBeInstanceOf(JiePlatformError);
   });
 

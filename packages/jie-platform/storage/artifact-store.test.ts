@@ -1,7 +1,6 @@
-import { describe, expect, test } from "bun:test";
-import { SqliteStorage } from "./sqlite-storage.ts";
-import { SqliteArtifactStore, InMemoryArtifactStore } from "./artifact-store.ts";
-import { JiePlatformError } from "./domain-types.ts";
+import { SqliteStorage } from "./sqlite-storage";
+import { SqliteArtifactStore, InMemoryArtifactStore } from "./artifact-store";
+import { JiePlatformError } from "../domain-types";
 
 function makeStore(): SqliteArtifactStore {
   return new SqliteArtifactStore(new SqliteStorage(":memory:"));
@@ -52,14 +51,10 @@ describe("SqliteArtifactStore", () => {
     await store.write("ax", "v1");
     await store.write("ay", "v2");
     await store.write("a_", "v3");
-    // "a%" prefix: escaped `%` is a literal char, not a wildcard.
-    // No key starts with the literal three-char sequence "a%" (the
-    // artifact-key charset rejects `%` on write, so this can never
-    // match). If `%` were unescaped, this would match "ax" and "ay".
+
     const list1 = await store.list("a%");
     expect(list1).toEqual([]);
-    // "a_" prefix: escaped `_` is a literal char, not a single-char wildcard.
-    // "a_" matches; "ax" does not (the second char is not literal "_").
+
     const list2 = await store.list("a_");
     expect(list2.map((r) => r.key)).toEqual(["a_"]);
   });
@@ -69,8 +64,8 @@ describe("SqliteArtifactStore", () => {
     let caught: unknown;
     try {
       await store.write("bad space", "x");
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
     expect((caught as JiePlatformError).code).toBe("invalid_artifact_key");
@@ -83,8 +78,8 @@ describe("SqliteArtifactStore", () => {
     let caught: unknown;
     try {
       await store.write("k", huge);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
     expect((caught as JiePlatformError).code).toBe("artifact_too_large");

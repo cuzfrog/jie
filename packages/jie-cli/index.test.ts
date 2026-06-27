@@ -1,14 +1,4 @@
-/** Integration tests for the `jie` main entry.
- *
- *  These tests exercise the full `main(argv)` path end-to-end
- *  (cli-flags → dispatch → command module). Per-command unit
- *  tests live in `commands/*.test.ts`; this file is reserved
- *  for behaviors that only manifest at the dispatch boundary:
- *  duplicate / missing-argument guards, --version / --help /
- *  no-flags, top-level --api-key, and the --resume unknown
- *  session path through main().
- */
-import { describe, expect, spyOn, test } from "bun:test";
+
 import {
   existsSync,
   mkdirSync,
@@ -19,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { main } from "./index.ts";
+import { main } from ".";
 
 interface Capture {
   exit: number;
@@ -28,7 +18,7 @@ interface Capture {
 }
 
 interface RunOptions {
-  /** Pre-create files in the homeDir's `.jie/` tree before `main` runs. */
+
   pre?: (homeDir: string) => void;
 }
 
@@ -46,10 +36,10 @@ async function runInIsolatedHome(argv: string[], options: RunOptions = {}): Prom
   const prevHome = process.env.HOME;
   const stdoutLines: string[] = [];
   const stderrLines: string[] = [];
-  const logSpy = spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+  const logSpy = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
     stdoutLines.push(args.map(String).join(" "));
   });
-  const errSpy = spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+  const errSpy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
     stderrLines.push(args.map(String).join(" "));
   });
   process.chdir(homeDir);
@@ -72,9 +62,9 @@ async function runInIsolatedHome(argv: string[], options: RunOptions = {}): Prom
       new Promise<number>((resolve) => setTimeout(() => resolve(-1), 2000)),
     ]);
     if (exit === -1) stderrLines.push("[timeout] main did not return within 2s");
-  } catch (e) {
+  } catch (error) {
     exit = 1;
-    stderrLines.push(e instanceof Error ? e.message : String(e));
+    stderrLines.push(error instanceof Error ? error.message : String(error));
   }
   try {
     const capture: Capture = { exit, stdout: stdoutLines.join("\n"), stderr: stderrLines.join("\n") };

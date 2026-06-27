@@ -1,47 +1,68 @@
-import type { Tool } from "./types.ts";
+import type { Tool } from "./types";
+import { createBashTool } from "./bash";
+import { createNotifyTool } from "./notify";
+import { createReadArtifactTool } from "./read-artifact";
+import { createReadFileTool } from "./read-file";
+import { createWebFetchTool } from "./web-fetch";
+import { createWebSearchProvider, createWebSearchTool } from "./web-search";
+import { createWriteArtifactTool } from "./write-artifact";
+import { createWriteFileTool } from "./write-file";
+import type { EventManager } from "../event";
+import type { ArtifactStore } from "../storage";
 
-/** Central catalog of tools available to agents. The platform feeds it
- *  at startup; the registry is storage-agnostic (a Tool is a Tool,
- *  regardless of MCP origin). */
 export interface ToolRegistry {
-  /** Add a tool. Duplicate names replace the prior entry (last
-   *  writer wins). */
   register(name: string, tool: Tool): void;
-
-  /** Match the spec string against registered tool names using
-   *  anchored shell-style glob (`*`, `?`). A spec of the form
-   *  `mcp:<server>:<pattern>` (or any string containing `:`) uses
-   *  the part after the last `:` as the glob pattern, so the
-   *  registered tool names are matched directly. In v1 (no MCP
-   *  client), the registry holds no `mcp:`-prefixed tools, so
-   *  `mcp:<server>:<bare-name>` returns `[]` because no tool is
-   *  named `<bare-name>`. Returns matched `Tool` instances; zero
-   *  matches is not an error. */
   resolve(spec: string): Tool[];
-
-  /** All registered tools. */
   list(): Tool[];
 }
 
-function specPattern(spec: string): string {
-  const lastColon = spec.lastIndexOf(":");
-  if (lastColon === -1) return spec;
-  return spec.substring(lastColon + 1);
+interface CreateToolRegistryParams {
+  workspaceRoot: string;
+  eventManager: EventManager;
+  artifactStore: ArtifactStore;
 }
 
-/** Default implementation. Tools are kept in a `Map` (insertion
- *  order preserved, replace-on-duplicate). Glob matching is
- *  delegated to `Bun.Glob` per the platform's runtime-deps block. */
-export class InMemoryToolRegistry implements ToolRegistry {
+export function createToolRegistry(params: CreateToolRegistryParams): ToolRegistry {
+  const registry = new InMemoryToolRegistry();
+  for (const builtin of builtins(params)) {
+    registry.register(builtin.name, builtin.tool);
+  }
+  return registry;
+}
+
+interface BuiltinTool {
+  name: string;
+  tool: Tool;
+}
+
+function builtins(params: CreateToolRegistryParams): BuiltinTool[] {
+  return [
+    { name: "bash", tool: createBashTool({ workspaceRoot: params.workspaceRoot }) as Tool },
+    { name: "read_file", tool: createReadFileTool({ workspaceRoot: params.workspaceRoot }) as Tool },
+    { name: "write_file", tool: createWriteFileTool({ workspaceRoot: params.workspaceRoot }) as Tool },
+    { name: "read_artifact", tool: createReadArtifactTool({ artifactStore: params.artifactStore }) as Tool },
+    { name: "write_artifact", tool: createWriteArtifactTool({ artifactStore: params.artifactStore }) as Tool },
+    { name: "notify", tool: createNotifyTool({ eventManager: params.eventManager }) as Tool },
+    { name: "web_fetch", tool: createWebFetchTool() as Tool },
+    { name: "web_search", tool: createWebSearchTool({ provider: createWebSearchProvider() }) as Tool },
+  ];
+}
+
+class InMemoryToolRegistry implements ToolRegistry {
   private readonly tools = new Map<string, Tool>();
+  private readonly globs = new Map<string, Bun.Glob>();
 
   register(name: string, tool: Tool): void {
     this.tools.set(name, tool);
   }
 
   resolve(spec: string): Tool[] {
-    const pattern = specPattern(spec);
-    const glob = new Bun.Glob(pattern);
+    const pattern = parseToolPattern(spec);
+    let glob = this.globs.get(pattern);
+    if (glob === undefined) {
+      glob = new Bun.Glob(pattern);
+      this.globs.set(pattern, glob);
+    }
     const matched: Tool[] = [];
     for (const [name, tool] of this.tools) {
       if (glob.match(name)) matched.push(tool);
@@ -52,4 +73,10 @@ export class InMemoryToolRegistry implements ToolRegistry {
   list(): Tool[] {
     return [...this.tools.values()];
   }
+}
+
+function parseToolPattern(toolSpec: string): string {
+  const lastColon = toolSpec.lastIndexOf(":");
+  if (lastColon === -1) return toolSpec;
+  return toolSpec.substring(lastColon + 1);
 }

@@ -1,9 +1,8 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createBashTool } from "./bash.ts";
-import { JiePlatformError } from "../storage/domain-types.ts";
+import { createBashTool } from "./bash";
+import { JiePlatformError } from "../domain-types";
 
 describe("bash", () => {
   let workspace: string;
@@ -80,8 +79,8 @@ describe("bash", () => {
         { command: "echo bad", workdir: "/tmp" },
         {} as never,
       );
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
     expect((caught as JiePlatformError).code).toBe("workdir_escape");
