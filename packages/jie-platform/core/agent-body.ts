@@ -42,7 +42,7 @@ export function createAgentBody(options: CreateAgentBodyOptions): AgentBody {
     agentRole: options.soul.role,
     artifactStore: options.artifactStore,
   };
-  const tools = adaptAllTools(options.soul, options.toolRegistry, executionContext);
+  const adaptedTools = adaptAllTools(options.soul, options.toolRegistry, executionContext);
 
   const toolTimestamps = new Map<string, number>();
 
@@ -86,7 +86,7 @@ export function createAgentBody(options: CreateAgentBodyOptions): AgentBody {
   });
   agent.state.systemPrompt = options.soul.systemPrompt;
   agent.state.model = options.model as never;
-  agent.state.tools = tools;
+  agent.state.tools = adaptedTools;
 
   const body = new JieAgentBody({
     agentKey: options.agentKey,
@@ -114,8 +114,8 @@ function adaptAllTools(
   executionContext: ExecutionContext,
 ): AgentTool[] {
   const out: AgentTool[] = [];
-  for (const spec of soul.tools) {
-    const tools = toolRegistry.resolve(spec);
+  for (const toolSpec of soul.tools) {
+    const tools = toolRegistry.resolve(toolSpec);
     for (const tool of tools) {
       out.push(adaptToolToAgent(tool, executionContext));
     }
@@ -123,8 +123,8 @@ function adaptAllTools(
   return out;
 }
 
-function defaultAgentFactory(options: ConstructorParameters<typeof Agent>[0]): Agent {
-  return new Agent(options);
+function defaultAgentFactory(agentOptions: ConstructorParameters<typeof Agent>[0]): Agent {
+  return new Agent(agentOptions);
 }
 
 function extractToolError(context: {

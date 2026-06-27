@@ -57,11 +57,11 @@ export function createReadFileTool(dependencies: ReadFileDeps): Tool<ReadFileInp
       limit: Type.Optional(Type.Number()),
     }),
     async execute(input: ReadFileInput): Promise<ToolResult> {
-      const real = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
+      const realPath = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
 
       let stat;
       try {
-        stat = statSync(real);
+        stat = statSync(realPath);
       } catch (e) {
         throw mapErrno(e, ERRNO_MAP);
       }
@@ -74,7 +74,7 @@ export function createReadFileTool(dependencies: ReadFileDeps): Tool<ReadFileInp
 
       let bytes: Uint8Array;
       try {
-        bytes = new Uint8Array(readFileSync(real));
+        bytes = new Uint8Array(readFileSync(realPath));
       } catch (e) {
         throw mapErrno(e, ERRNO_MAP);
       }

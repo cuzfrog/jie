@@ -54,7 +54,7 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
     for (const soul of blueprint.roles) {
       const isLeader = soul.role === blueprint.leaderRole;
       const agentKey = `${soul.role}-1`;
-      const model = resolveSoulModel(soul, dependencies.settingsStore, resolveModel);
+      const resolvedModel = resolveSoulModel(soul, dependencies.settingsStore, resolveModel);
       out.push(
         createAgentBody({
           agentKey,
@@ -67,7 +67,7 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
           sessionId,
           toolRegistry: dependencies.toolRegistry,
           getApiKey: async (provider: string) => dependencies.modelRegistry.getApiKey(provider),
-          model,
+          model: resolvedModel,
         }),
       );
     }

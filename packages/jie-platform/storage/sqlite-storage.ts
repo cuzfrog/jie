@@ -27,8 +27,8 @@ export class SqliteStorage implements Storage {
     return this.db.query(sql).values(...(params as SQLQueryBindings[])) as unknown[][];
   }
 
-  transaction<T>(fn: (storage: Storage) => T): T {
-    const txWrapper = this.db.transaction(() => fn(this));
-    return txWrapper();
+  transaction<T>(body: (storage: Storage) => T): T {
+    const transaction = this.db.transaction(() => body(this));
+    return transaction();
   }
 }

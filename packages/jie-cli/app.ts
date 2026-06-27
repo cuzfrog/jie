@@ -106,8 +106,8 @@ export async function createApp(
     await handle.stop();
     return { kind: "error", code: 1 };
   }
-  const info: Captured = captured;
-  if (info.leaderRole === "") {
+  const capturedInfo: Captured = captured;
+  if (capturedInfo.leaderRole === "") {
     console.error(`team '${team.id}' has no leader; check TEAM.md's 'leader:' field`);
     await handle.stop();
     return { kind: "error", code: 1 };
@@ -115,6 +115,6 @@ export async function createApp(
 
   return {
     kind: "ok",
-    app: { handle, ...info, settings },
+    app: { handle, ...capturedInfo, settings },
   };
 }

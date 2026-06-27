@@ -146,9 +146,9 @@ export class JieAgentBody implements AgentBody {
   }
 
   private ingestEvent(topic: string, env: { payload: unknown }): void {
-    const inner = unwrapIngressPayload(env.payload);
-    const source = inner.source;
-    const prompt = inner.prompt ?? "";
+    const innerPayload = unwrapIngressPayload(env.payload);
+    const source = innerPayload.source;
+    const prompt = innerPayload.prompt ?? "";
     const synthetic = source
       ? `[${source} on '${topic}']: ${prompt}`
       : `[user]: ${prompt}`;

@@ -150,8 +150,8 @@ Usage:
 }
 
 function resolveHomeDir(): string {
-  const fromEnv = process.env.HOME;
-  return fromEnv !== undefined && fromEnv !== "" ? fromEnv : homedir();
+  const homeFromEnv = process.env.HOME;
+  return homeFromEnv !== undefined && homeFromEnv !== "" ? homeFromEnv : homedir();
 }
 
 function findProjectJieDir(cwd: string): string | null {

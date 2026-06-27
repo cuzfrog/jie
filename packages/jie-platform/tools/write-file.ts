@@ -47,14 +47,14 @@ export function createWriteFileTool(dependencies: WriteFileDeps): Tool<WriteFile
         );
       }
 
-      const real = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
+      const realPath = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
 
       let stat;
       try {
-        stat = statSync(real);
+        stat = statSync(realPath);
       } catch (e) {
-        const err = e as NodeJS.ErrnoException;
-        if (err.code !== "ENOENT") throw mapErrno(e, ERRNO_MAP);
+        const errno = e as NodeJS.ErrnoException;
+        if (errno.code !== "ENOENT") throw mapErrno(e, ERRNO_MAP);
         stat = null;
       }
       if (stat !== null && stat.isDirectory()) {
@@ -65,20 +65,20 @@ export function createWriteFileTool(dependencies: WriteFileDeps): Tool<WriteFile
       }
 
       try {
-        mkdirSync(dirname(real), { recursive: true });
+        mkdirSync(dirname(realPath), { recursive: true });
       } catch (e) {
         throw mapErrno(e, ERRNO_MAP);
       }
 
       try {
-        writeFileSync(real, input.content, "utf-8");
+        writeFileSync(realPath, input.content, "utf-8");
       } catch (e) {
         throw mapErrno(e, ERRNO_MAP);
       }
 
       let createdAt: string;
       try {
-        createdAt = statSync(real).mtime.toISOString();
+        createdAt = statSync(realPath).mtime.toISOString();
       } catch {
         createdAt = new Date().toISOString();
       }

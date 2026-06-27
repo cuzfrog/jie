@@ -162,7 +162,7 @@ export function createBashTool(dependencies: BashDeps): Tool<BashInput> {
       }
 
       const out = captureStream(stdoutBuf, STREAM_CAP);
-      const err = captureStream(stderrBuf, STREAM_CAP);
+      const errStream = captureStream(stderrBuf, STREAM_CAP);
 
       const lines: string[] = [];
       const failureSuffix = exitCode !== 0 ? " (command failed)" : "";
@@ -171,16 +171,16 @@ export function createBashTool(dependencies: BashDeps): Tool<BashInput> {
         lines.push("--- stdout ---");
         lines.push(out.text);
       }
-      if (err.text.length > 0) {
+      if (errStream.text.length > 0) {
         lines.push("--- stderr ---");
-        lines.push(err.text);
+        lines.push(errStream.text);
       }
 
       return {
         content: lines.join("\n"),
         details: {
           exitCode,
-          truncated: { stdout: out.truncated, stderr: err.truncated },
+          truncated: { stdout: out.truncated, stderr: errStream.truncated },
         },
       };
     },

@@ -62,8 +62,8 @@ class InMemoryToolRegistry implements ToolRegistry {
   }
 }
 
-function extractToolNameFromSpec(spec: string): string {
-  const lastColon = spec.lastIndexOf(":");
-  if (lastColon === -1) return spec;
-  return spec.substring(lastColon + 1);
+function extractToolNameFromSpec(toolSpec: string): string {
+  const lastColon = toolSpec.lastIndexOf(":");
+  if (lastColon === -1) return toolSpec;
+  return toolSpec.substring(lastColon + 1);
 }

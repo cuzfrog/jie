@@ -32,12 +32,12 @@ export function mapErrno(
   e: unknown,
   errorMap: Record<string, string>,
 ): Error {
-  const err = e as NodeJS.ErrnoException;
-  if (err && typeof err.code === "string") {
-    const code = errorMap[err.code];
+  const errno = e as NodeJS.ErrnoException;
+  if (errno && typeof errno.code === "string") {
+    const code = errorMap[errno.code];
     if (code !== undefined) {
-      return new JiePlatformError(code, `${code}: ${err.message}`);
+      return new JiePlatformError(code, `${code}: ${errno.message}`);
     }
   }
-  return err instanceof Error ? err : new Error(String(e));
+  return errno instanceof Error ? errno : new Error(String(e));
 }
