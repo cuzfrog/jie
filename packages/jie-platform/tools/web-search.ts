@@ -55,8 +55,8 @@ export function createWebSearchTool(dependencies: WebSearchDeps): Tool<WebSearch
       let results: WebSearchResult[];
       try {
         results = await dependencies.provider.search(input.query, max);
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(e);
         throw new JiePlatformError(
           "web_search_failed",
           `web_search_failed: ${message}`,

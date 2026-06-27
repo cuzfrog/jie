@@ -79,8 +79,8 @@ describe("bash", () => {
         { command: "echo bad", workdir: "/tmp" },
         {} as never,
       );
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
     expect((caught as JiePlatformError).code).toBe("workdir_escape");

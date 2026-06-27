@@ -32,8 +32,8 @@ describe("startTUI — v1 stub contract", () => {
     let caught: unknown;
     try {
       startTUI(makeOptions());
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect(caught).toBeInstanceOf(Error);
     expect((caught as Error).message).toBe("TUI not implemented in v1 MVP");
@@ -43,8 +43,8 @@ describe("startTUI — v1 stub contract", () => {
     let caught: unknown;
     try {
       startTUI(makeOptions({ roles: ["leader", "researcher"] }));
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect(caught).toBeInstanceOf(Error);
     expect((caught as Error).message).toBe("TUI not implemented in v1 MVP");

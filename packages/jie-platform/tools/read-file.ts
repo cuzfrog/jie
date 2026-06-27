@@ -62,8 +62,8 @@ export function createReadFileTool(dependencies: ReadFileDeps): Tool<ReadFileInp
       let stat;
       try {
         stat = statSync(realPath);
-      } catch (e) {
-        throw mapErrno(e, ERRNO_MAP);
+      } catch (error) {
+        throw mapErrno(error, ERRNO_MAP);
       }
       if (stat.isDirectory()) {
         throw new JiePlatformError(
@@ -75,8 +75,8 @@ export function createReadFileTool(dependencies: ReadFileDeps): Tool<ReadFileInp
       let bytes: Uint8Array;
       try {
         bytes = new Uint8Array(readFileSync(realPath));
-      } catch (e) {
-        throw mapErrno(e, ERRNO_MAP);
+      } catch (error) {
+        throw mapErrno(error, ERRNO_MAP);
       }
 
       try {

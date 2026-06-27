@@ -62,9 +62,9 @@ async function runInIsolatedHome(argv: string[], options: RunOptions = {}): Prom
       new Promise<number>((resolve) => setTimeout(() => resolve(-1), 2000)),
     ]);
     if (exit === -1) stderrLines.push("[timeout] main did not return within 2s");
-  } catch (e) {
+  } catch (error) {
     exit = 1;
-    stderrLines.push(e instanceof Error ? e.message : String(e));
+    stderrLines.push(error instanceof Error ? error.message : String(e));
   }
   try {
     const capture: Capture = { exit, stdout: stdoutLines.join("\n"), stderr: stderrLines.join("\n") };

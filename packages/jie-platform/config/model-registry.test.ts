@@ -64,8 +64,8 @@ describe("ModelRegistry", () => {
     let caught: unknown;
     try {
       reg.getApiKey("anthropic");
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
     expect((caught as JiePlatformError).code).toBe("oauth_not_supported");

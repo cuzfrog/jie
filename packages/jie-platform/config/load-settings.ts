@@ -28,8 +28,8 @@ function readSettingsFile(path: string): RawSettings | null {
   let text: string;
   try {
     text = readFileSync(path, "utf-8");
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") return null;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw e;
   }
   return JSON.parse(text) as RawSettings;

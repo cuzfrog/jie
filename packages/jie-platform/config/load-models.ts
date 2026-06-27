@@ -88,9 +88,9 @@ function readModelsFile(path: string): RawModelsConfig | null {
   let text: string;
   try {
     text = readFileSync(path, "utf-8");
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") return null;
-    throw new Error(`models.json at ${path}: ${(e as Error).message}`);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw new Error(`models.json at ${path}: ${(error as Error).message}`);
   }
   try {
     const parsed = JSON.parse(text);
@@ -98,8 +98,8 @@ function readModelsFile(path: string): RawModelsConfig | null {
       throw new Error("expected a JSON object");
     }
     return parsed as RawModelsConfig;
-  } catch (e) {
-    throw new Error(`models.json at ${path}: ${(e as Error).message}`);
+  } catch (error) {
+    throw new Error(`models.json at ${path}: ${(error as Error).message}`);
   }
 }
 

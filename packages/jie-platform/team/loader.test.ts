@@ -285,9 +285,9 @@ describe("loadTeamFromDir — typed error codes (issue #65)", () => {
   function expectCode(fn: () => unknown, code: string): void {
     try {
       fn();
-    } catch (e) {
-      expect(e).toBeInstanceOf(JiePlatformError);
-      expect((e as JiePlatformError).code).toBe(code);
+    } catch (error) {
+      expect(error).toBeInstanceOf(JiePlatformError);
+      expect((error as JiePlatformError).code).toBe(code);
       return;
     }
     throw new Error(`expected throw with code '${code}', got no throw`);

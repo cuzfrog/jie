@@ -124,8 +124,8 @@ describe("SqliteMemoryManager", () => {
         "s1",
         "t1",
       );
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect((caught as Error | undefined)?.message).toBe(
       "synthetic storage failure",

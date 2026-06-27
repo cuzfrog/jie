@@ -28,9 +28,9 @@ export async function runPrint(
 
   try {
     await setupIdleGate(handle.events, agentKeys, args.timeout);
-  } catch (e) {
+  } catch (error) {
     if (!args.json) process.stdout.write("\n");
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = error instanceof Error ? error.message : String(e);
     if (msg === "timeout") {
       console.error(`no response from team within ${args.timeout}s`);
     } else {

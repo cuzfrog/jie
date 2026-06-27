@@ -29,15 +29,15 @@ export function resolveWithinWorkspace(
 }
 
 export function mapErrno(
-  e: unknown,
+  error: unknown,
   errorMap: Record<string, string>,
 ): Error {
-  const errno = e as NodeJS.ErrnoException;
+  const errno = error as NodeJS.ErrnoException;
   if (errno && typeof errno.code === "string") {
     const code = errorMap[errno.code];
     if (code !== undefined) {
       return new JiePlatformError(code, `${code}: ${errno.message}`);
     }
   }
-  return errno instanceof Error ? errno : new Error(String(e));
+  return errno instanceof Error ? errno : new Error(String(error));
 }

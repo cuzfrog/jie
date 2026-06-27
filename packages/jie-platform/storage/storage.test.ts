@@ -94,8 +94,8 @@ describe("SqliteStorage", () => {
         );
         throw new Error("rollback");
       });
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect((caught as Error | undefined)?.message).toBe("rollback");
     const rows = storage.query("SELECT key FROM artifacts");

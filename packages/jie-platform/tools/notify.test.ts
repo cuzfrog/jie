@@ -58,8 +58,8 @@ describe("notify — topic validation", () => {
     let caught: unknown;
     try {
       await tool.execute({ topic: "", prompt: "x" }, makeCtx());
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
     expect((caught as JiePlatformError).code).toBe("notify_invalid_topic");
@@ -72,8 +72,8 @@ describe("notify — topic validation", () => {
     let caught: unknown;
     try {
       await tool.execute({ topic: "agent.idle", prompt: "x" }, makeCtx());
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect((caught as JiePlatformError).code).toBe("notify_invalid_topic");
     expect((caught as Error).message).toBe(
@@ -88,8 +88,8 @@ describe("notify — topic validation", () => {
     let caught: unknown;
     try {
       await tool.execute({ topic: `${ctx.teamId}.task`, prompt: "x" }, ctx);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect((caught as JiePlatformError).code).toBe("notify_invalid_topic");
     expect((caught as Error).message).toBe(
@@ -103,8 +103,8 @@ describe("notify — topic validation", () => {
     let caught: unknown;
     try {
       await tool.execute({ topic: "bad\0topic", prompt: "x" }, makeCtx());
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect((caught as JiePlatformError).code).toBe("notify_invalid_topic");
     expect((caught as Error).message).toBe(

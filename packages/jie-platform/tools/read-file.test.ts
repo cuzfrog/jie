@@ -89,8 +89,8 @@ describe("read_file", () => {
     let caught: unknown;
     try {
       await tool.execute({ path: "bad.bin" }, {} as never);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
     expect((caught as JiePlatformError).code).toBe("unsupported_encoding");
@@ -101,8 +101,8 @@ describe("read_file", () => {
     let caught: unknown;
     try {
       await tool.execute({ path: "/etc/passwd" }, {} as never);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect((caught as JiePlatformError).code).toBe("path_escape");
   });
@@ -112,8 +112,8 @@ describe("read_file", () => {
     let caught: unknown;
     try {
       await tool.execute({ path: "missing.txt" }, {} as never);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect((caught as JiePlatformError).code).toBe("file_not_found");
   });
@@ -124,8 +124,8 @@ describe("read_file", () => {
     let caught: unknown;
     try {
       await tool.execute({ path: "subdir" }, {} as never);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect((caught as JiePlatformError).code).toBe("is_a_directory");
   });

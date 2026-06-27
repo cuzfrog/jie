@@ -65,8 +65,8 @@ describe("web_search", () => {
     let caught: unknown;
     try {
       await tool.execute({ query: "x" }, {} as never);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
     expect((caught as JiePlatformError).code).toBe("web_search_failed");
@@ -80,8 +80,8 @@ describe("web_search", () => {
     let caught: unknown;
     try {
       await tool.execute({ query: "x" }, {} as never);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect((caught as JiePlatformError).code).toBe("web_search_failed");
     expect((caught as Error).message).toBe("web_search_failed: http_429");

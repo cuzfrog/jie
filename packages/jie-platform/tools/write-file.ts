@@ -52,9 +52,9 @@ export function createWriteFileTool(dependencies: WriteFileDeps): Tool<WriteFile
       let stat;
       try {
         stat = statSync(realPath);
-      } catch (e) {
-        const errno = e as NodeJS.ErrnoException;
-        if (errno.code !== "ENOENT") throw mapErrno(e, ERRNO_MAP);
+      } catch (error) {
+        const errno = error as NodeJS.ErrnoException;
+        if (errno.code !== "ENOENT") throw mapErrno(error, ERRNO_MAP);
         stat = null;
       }
       if (stat !== null && stat.isDirectory()) {
@@ -66,14 +66,14 @@ export function createWriteFileTool(dependencies: WriteFileDeps): Tool<WriteFile
 
       try {
         mkdirSync(dirname(realPath), { recursive: true });
-      } catch (e) {
-        throw mapErrno(e, ERRNO_MAP);
+      } catch (error) {
+        throw mapErrno(error, ERRNO_MAP);
       }
 
       try {
         writeFileSync(realPath, input.content, "utf-8");
-      } catch (e) {
-        throw mapErrno(e, ERRNO_MAP);
+      } catch (error) {
+        throw mapErrno(error, ERRNO_MAP);
       }
 
       let createdAt: string;

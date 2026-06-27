@@ -39,8 +39,8 @@ function splitFrontmatter(content: string): {
   let frontmatter: RawFrontmatter | null;
   try {
     frontmatter = parseYaml(yamlText) as RawFrontmatter | null;
-  } catch (e) {
-    throw new JiePlatformError("invalid_frontmatter", `invalid frontmatter: ${(e as Error).message}`);
+  } catch (error) {
+    throw new JiePlatformError("invalid_frontmatter", `invalid frontmatter: ${(error as Error).message}`);
   }
   if (frontmatter === null) frontmatter = {};
   return { frontmatter, body };

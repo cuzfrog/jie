@@ -27,8 +27,8 @@ describe("write_artifact", () => {
     let caught: unknown;
     try {
       await tool.execute({ key: "bad space", content: "x" }, {} as never);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
     expect((caught as JiePlatformError).code).toBe("invalid_artifact_key");
@@ -41,8 +41,8 @@ describe("write_artifact", () => {
     let caught: unknown;
     try {
       await tool.execute({ key: "k", content: huge }, {} as never);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect((caught as JiePlatformError).code).toBe("artifact_too_large");
   });

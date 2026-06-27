@@ -65,8 +65,8 @@ describe("web_fetch", () => {
     let caught: unknown;
     try {
       await tool.execute({ url: "file:///etc/passwd" }, {} as never);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
     expect((caught as JiePlatformError).code).toBe("unsupported_scheme");
@@ -116,8 +116,8 @@ describe("web_fetch", () => {
     let caught: unknown;
     try {
       await tool.execute({ url: `${baseUrl}/binary` }, {} as never);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
     expect((caught as JiePlatformError).code).toBe("unsupported_content_type");
@@ -142,8 +142,8 @@ describe("web_fetch", () => {
     let caught: unknown;
     try {
       await tool.execute({ url: `${baseUrl}/redirect-loop` }, {} as never);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
 
     expect(caught).toBeInstanceOf(JiePlatformError);

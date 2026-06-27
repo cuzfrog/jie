@@ -66,8 +66,8 @@ export async function createApp(
   let team: Team;
   try {
     team = dependencies.teamRegistry.loadTeam(args.teamId ?? settings.defaultTeam);
-  } catch (e) {
-    console.error(e instanceof Error ? e.message : String(e));
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(e));
     return { kind: "error", code: 1 };
   }
 
@@ -96,8 +96,8 @@ export async function createApp(
       },
       dependencies,
     );
-  } catch (e) {
-    console.error(e instanceof Error ? e.message : String(e));
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(e));
     return { kind: "error", code: 1 };
   }
 

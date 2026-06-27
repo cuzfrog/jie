@@ -24,8 +24,8 @@ class InProcessEventBus implements EventBus {
     for (const callback of callbacks) {
       try {
         callback(subject, payload);
-      } catch (e) {
-        this.reportError(subject, e);
+      } catch (error) {
+        this.reportError(subject, error);
       }
     }
   }
@@ -46,14 +46,14 @@ class InProcessEventBus implements EventBus {
     return this.subscribers.get(subject)?.size ?? 0;
   }
 
-  private reportError(subject: string, e: unknown): void {
-    if (e instanceof Error) {
+  private reportError(subject: string, error: unknown): void {
+    if (error instanceof Error) {
       console.error(
-        `EventBus callback error on subject "${subject}": ${e.message}`,
-        e.stack,
+        `EventBus callback error on subject "${subject}": ${error.message}`,
+        error.stack,
       );
       return;
     }
-    console.error(`EventBus callback error on subject "${subject}":`, e);
+    console.error(`EventBus callback error on subject "${subject}":`, error);
   }
 }

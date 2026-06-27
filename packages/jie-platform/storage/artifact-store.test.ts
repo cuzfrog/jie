@@ -64,8 +64,8 @@ describe("SqliteArtifactStore", () => {
     let caught: unknown;
     try {
       await store.write("bad space", "x");
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
     expect((caught as JiePlatformError).code).toBe("invalid_artifact_key");
@@ -78,8 +78,8 @@ describe("SqliteArtifactStore", () => {
     let caught: unknown;
     try {
       await store.write("k", huge);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
     expect((caught as JiePlatformError).code).toBe("artifact_too_large");

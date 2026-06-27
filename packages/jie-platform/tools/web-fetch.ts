@@ -125,10 +125,10 @@ export function createWebFetchTool(): Tool<WebFetchInput> {
         response = await fetch(url, {
           headers: { "User-Agent": USER_AGENT },
         });
-      } catch (e) {
+      } catch (error) {
         throw new JiePlatformError(
           "redirect_exhausted",
-          `redirect_exhausted: ${(e as Error).message}`,
+          `redirect_exhausted: ${(error as Error).message}`,
         );
       }
 

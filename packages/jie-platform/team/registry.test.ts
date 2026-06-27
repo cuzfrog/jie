@@ -105,8 +105,8 @@ describe("createTeamRegistry", () => {
       let caught: unknown;
       try {
         r.loadTeam("bad id with spaces");
-      } catch (e) {
-        caught = e;
+      } catch (error) {
+        caught = error;
       }
       expect(caught).toBeInstanceOf(JiePlatformError);
       expect((caught as JiePlatformError).code).toBe("invalid_team_id");
@@ -117,8 +117,8 @@ describe("createTeamRegistry", () => {
       let caught: unknown;
       try {
         r.loadTeam("ghost");
-      } catch (e) {
-        caught = e;
+      } catch (error) {
+        caught = error;
       }
       expect(caught).toBeInstanceOf(JiePlatformError);
       expect((caught as JiePlatformError).code).toBe("team_not_found");

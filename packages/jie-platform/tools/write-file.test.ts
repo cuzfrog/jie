@@ -54,8 +54,8 @@ describe("write_file", () => {
     let caught: unknown;
     try {
       await tool.execute({ path: "a.txt", content: huge }, {} as never);
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
     expect((caught as JiePlatformError).code).toBe("file_too_large");
@@ -80,8 +80,8 @@ describe("write_file", () => {
         { path: "/etc/cant-touch-this", content: "x" },
         {} as never,
       );
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect((caught as JiePlatformError).code).toBe("path_escape");
   });
@@ -95,8 +95,8 @@ describe("write_file", () => {
         { path: "subdir", content: "x" },
         {} as never,
       );
-    } catch (e) {
-      caught = e;
+    } catch (error) {
+      caught = error;
     }
     expect((caught as JiePlatformError).code).toBe("is_a_directory");
   });
