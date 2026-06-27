@@ -31,14 +31,15 @@ export function createEventManager(bus: EventBus = createEventBus()): EventManag
   };
 }
 
+const SHAPERS: Record<string, (payload: unknown) => unknown> = {
+  "agent.tool.call": (payload) => shapeToolCall(payload as { tool_call_id: string; name: string; input: string; input_truncated: boolean }),
+  "agent.tool.result": (payload) => shapeToolResult(payload as { tool_call_id: string; name: string; output: string | null; output_truncated: boolean; duration_ms: number; error: string | null }),
+};
+
 function shapeEnvelope<T extends string>(event: EventEnvelope<T>): EventEnvelope<T> {
-  if (event.topic === "agent.tool.call") {
-    return { ...event, payload: shapeToolCall(event.payload as { tool_call_id: string; name: string; input: string; input_truncated: boolean }) } as EventEnvelope<T>;
-  }
-  if (event.topic === "agent.tool.result") {
-    return { ...event, payload: shapeToolResult(event.payload as { tool_call_id: string; name: string; output: string | null; output_truncated: boolean; duration_ms: number; error: string | null }) } as EventEnvelope<T>;
-  }
-  return event;
+  const shaper = SHAPERS[event.topic];
+  if (shaper === undefined) return event;
+  return { ...event, payload: shaper(event.payload) } as EventEnvelope<T>;
 }
 
 function shapeToolCall(payload: { tool_call_id: string; name: string; input: string; input_truncated: boolean }): { tool_call_id: string; name: string; input: string; input_truncated: boolean } {
