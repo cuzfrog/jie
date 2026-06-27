@@ -202,6 +202,26 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
     );
   }
 
+  function captureStderr(): string {
+    return (
+      (writeErr?.mock.calls as unknown[][])
+        .map((c) => String(c[0] as string))
+        .join("") ?? ""
+    );
+  }
+
+  /** Bundle `code` + captured stderr so a failing assertion shows
+   *  the CLI's last words, not just "Expected 0, Received 1". */
+  function expectExit(actual: number, expected: 0 | 1): void {
+    if (actual === expected) return;
+    const stderr = captureStderr();
+    const lines = [
+      `expected exit ${expected}, got ${actual}.`,
+      stderr === "" ? "(no stderr captured)" : `stderr: ${stderr}`,
+    ];
+    throw new Error(lines.join("\n"));
+  }
+
   test(
     "Scenario 1: jie -p in fresh dir → exit 0, stdout contains file1.txt, ends with \\n",
     async () => {
@@ -213,7 +233,7 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
         workspace,
       );
       const stdout = captureStdout();
-      expect(code).toBe(0);
+      expectExit(code, 0);
       expect(stdout).toContain("file1.txt");
       expect(stdout.endsWith("\n")).toBe(true);
     },
@@ -232,7 +252,7 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
         }),
         workspace,
       );
-      expect(code).toBe(0);
+      expectExit(code, 0);
       const written = readFileSync(join(workspace, "file2.txt"), "utf-8");
       expect(written).toContain("Hello123888");
     },
@@ -268,7 +288,7 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
         workspace,
       );
       const out1 = captureStdout();
-      expect(code1).toBe(0);
+      expectExit(code1, 0);
       expect(out1).toContain("Marry had a little lamb");
 
       writeOut?.mockReset();
@@ -278,7 +298,7 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
         workspace,
       );
       const out2 = captureStdout();
-      expect(code2).toBe(0);
+      expectExit(code2, 0);
       expect(out2).toContain("Once upon a time");
 
       writeOut?.mockReset();
@@ -287,7 +307,7 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
         printArgv({ instruction: "Tell me a story", team: "wrong-team", timeout: 60 }),
         workspace,
       );
-      expect(code3).toBe(1);
+      expectExit(code3, 1);
     },
   );
 
@@ -301,7 +321,7 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
         printArgv({ instruction: "Tell me a joke", timeout: 5 }),
         workspace,
       );
-      expect(code1).toBe(1);
+      expectExit(code1, 1);
       const stderr1 =
         (writeErr?.mock.calls as unknown[][])
           .map((c) => String(c[0] as string))
@@ -324,7 +344,7 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
         printArgv({ instruction: "Tell me a joke", timeout: 60 }),
         workspace,
       );
-      expect(code2).toBe(0);
+      expectExit(code2, 0);
       const stdout2 = captureStdout();
       expect(stdout2.length).toBeGreaterThan(0);
     },
