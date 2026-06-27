@@ -228,6 +228,10 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
       writeFileSync(join(workspace, "file1.txt"), "");
       writeModelsJsonTo(workspace);
       writeSettingsJson(workspace);
+      const home = process.env.HOME ?? "<null>";
+      const settingsFile = readFileSync(join(workspace, ".jie", "settings.json"), "utf-8");
+      const modelsFile = readFileSync(join(workspace, ".jie", "models.json"), "utf-8");
+      process.stderr.write(`\n[diag] HOME=${home}\n[diag] cwd=${workspace}\n[diag] BASE_URL=${process.env.JIE_E2E_BASE_URL}\n[diag] API_KEY=${process.env.JIE_E2E_API_KEY ? "set" : "MISSING"}\n[diag] MODEL=${process.env.JIE_E2E_MODEL}\n[diag] settings.json=${settingsFile}\n[diag] models.json (first 200)=${modelsFile.slice(0, 200)}\n`);
       const code = await main(
         printArgv({ instruction: "List files under current dir", timeout: 60 }),
         workspace,
