@@ -1,10 +1,10 @@
 import { Value } from "typebox/value";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import type { ExecutionContext, Tool } from "../tools/types.ts";
+import type { ExecutionContext, Tool } from "../tools";
 
 export function adaptToolToAgent(
   tool: Tool,
-  ctx: ExecutionContext,
+  executionContext: ExecutionContext,
 ): AgentTool {
   return {
     name: tool.name,
@@ -32,7 +32,7 @@ export function adaptToolToAgent(
       try {
         const result = await tool.execute(
           params as Parameters<typeof tool.execute>[0],
-          ctx,
+          executionContext,
           combined,
         );
         return {

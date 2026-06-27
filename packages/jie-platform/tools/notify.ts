@@ -54,9 +54,9 @@ export function createNotifyTool(dependencies: NotifyDeps): Tool<NotifyInput> {
     }),
     async execute(
       input: NotifyInput,
-      ctx: ExecutionContext,
+      executionContext: ExecutionContext,
     ): Promise<ToolResult> {
-      const reason = validateTopic(input.topic, ctx.teamId);
+      const reason = validateTopic(input.topic, executionContext.teamId);
       if (reason !== null) {
         throw new JiePlatformError(
           "notify_invalid_topic",
@@ -64,12 +64,12 @@ export function createNotifyTool(dependencies: NotifyDeps): Tool<NotifyInput> {
         );
       }
 
-      const clientTopic = `${ctx.teamId}.${input.topic}`;
+      const clientTopic = `${executionContext.teamId}.${input.topic}`;
       const sender: Sender = {
         kind: "agent",
-        identity: { teamId: ctx.teamId, agentRole: ctx.agentRole, agentKey: ctx.agentKey },
+        identity: { teamId: executionContext.teamId, agentRole: executionContext.agentRole, agentKey: executionContext.agentKey },
       };
-      const envelope = Events.custom(sender, clientTopic, { prompt: input.prompt, source: ctx.agentKey });
+      const envelope = Events.custom(sender, clientTopic, { prompt: input.prompt, source: executionContext.agentKey });
       dependencies.eventManager.publish(envelope);
 
       return {

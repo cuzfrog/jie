@@ -73,7 +73,7 @@ export function createBashTool(dependencies: BashDeps): Tool<BashInput> {
     }),
     async execute(
       input: BashInput,
-      _ctx,
+      _executionContext,
       signal?: AbortSignal,
     ): Promise<ToolResult> {
       const cwd = resolveWorkdir(input.workdir, dependencies.workspaceRoot);

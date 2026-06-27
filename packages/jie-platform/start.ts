@@ -46,13 +46,13 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
     const existing = loadedTeams.get(teamId);
     if (existing !== undefined) return existing;
 
-    const bp: Team = dependencies.teamRegistry.loadTeam(teamId);
+    const blueprint: Team = dependencies.teamRegistry.loadTeam(teamId);
     const sessionId = resolveSessionId(dependencies.memoryManager, options, teamId);
     sessionIds.set(teamId, sessionId);
 
     const out: AgentBody[] = [];
-    for (const soul of bp.roles) {
-      const isLeader = soul.role === bp.leaderRole;
+    for (const soul of blueprint.roles) {
+      const isLeader = soul.role === blueprint.leaderRole;
       const agentKey = `${soul.role}-1`;
       const model = resolveSoulModel(soul, dependencies.settingsStore, resolveModel);
       out.push(
@@ -75,7 +75,7 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
       await body.start();
     }
     loadedTeams.set(teamId, out);
-    publishTeamLoaded(dependencies.eventManager, teamId, bp);
+    publishTeamLoaded(dependencies.eventManager, teamId, blueprint);
     return out;
   }
 
@@ -95,12 +95,12 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
   return handle;
 }
 
-function publishTeamLoaded(events: EventManager, teamId: string, bp: Team): void {
-  const sorted = [...bp.roles].sort((a, b) => a.role.localeCompare(b.role));
+function publishTeamLoaded(events: EventManager, teamId: string, blueprint: Team): void {
+  const sorted = [...blueprint.roles].sort((a, b) => a.role.localeCompare(b.role));
   const agents = sorted.map((r) => ({
     role: r.role,
     agent_key: `${r.role}-1`,
-    is_leader: r.role === bp.leaderRole,
+    is_leader: r.role === blueprint.leaderRole,
   }));
   events.publish(Events.teamLoaded({ kind: "cli" }, teamId, agents));
 }

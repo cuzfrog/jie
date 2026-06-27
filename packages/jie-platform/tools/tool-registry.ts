@@ -44,7 +44,7 @@ class InMemoryToolRegistry implements ToolRegistry {
   }
 
   resolve(spec: string): Tool[] {
-    const pattern = specPattern(spec);
+    const pattern = extractToolNameFromSpec(spec);
     let glob = this.globs.get(pattern);
     if (glob === undefined) {
       glob = new Bun.Glob(pattern);
@@ -62,7 +62,7 @@ class InMemoryToolRegistry implements ToolRegistry {
   }
 }
 
-function specPattern(spec: string): string {
+function extractToolNameFromSpec(spec: string): string {
   const lastColon = spec.lastIndexOf(":");
   if (lastColon === -1) return spec;
   return spec.substring(lastColon + 1);

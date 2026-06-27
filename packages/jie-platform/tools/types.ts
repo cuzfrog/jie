@@ -1,5 +1,5 @@
 import type { TSchema } from "typebox";
-import type { ArtifactStore } from "../storage/artifact-store.ts";
+import type { ArtifactStore } from "../storage";
 
 export interface ExecutionContext {
   sessionId: string;
@@ -23,7 +23,7 @@ export interface Tool<TInput = unknown> {
   parameters: TSchema;
   execute: (
     input: TInput,
-    ctx: ExecutionContext,
+    executionContext: ExecutionContext,
     signal?: AbortSignal,
   ) => Promise<ToolResult>;
 }

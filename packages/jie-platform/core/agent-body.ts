@@ -35,14 +35,14 @@ export function createAgentBody(options: CreateAgentBodyOptions): AgentBody {
   };
   const streamPublisher = makeStreamPublisher(options.eventManager, sender);
 
-  const ctx: ExecutionContext = {
+  const executionContext: ExecutionContext = {
     sessionId: options.sessionId,
     teamId: options.teamId,
     agentKey: options.agentKey,
     agentRole: options.soul.role,
     artifactStore: options.artifactStore,
   };
-  const tools = adaptAllTools(options.soul, options.toolRegistry, ctx);
+  const tools = adaptAllTools(options.soul, options.toolRegistry, executionContext);
 
   const toolTimestamps = new Map<string, number>();
 
@@ -111,13 +111,13 @@ export function createAgentBody(options: CreateAgentBodyOptions): AgentBody {
 function adaptAllTools(
   soul: AgentSoul,
   toolRegistry: ToolRegistry,
-  ctx: ExecutionContext,
+  executionContext: ExecutionContext,
 ): AgentTool[] {
   const out: AgentTool[] = [];
   for (const spec of soul.tools) {
     const tools = toolRegistry.resolve(spec);
     for (const tool of tools) {
-      out.push(adaptToolToAgent(tool, ctx));
+      out.push(adaptToolToAgent(tool, executionContext));
     }
   }
   return out;
