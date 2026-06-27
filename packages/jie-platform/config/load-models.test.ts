@@ -146,6 +146,57 @@ describe("loadModelsConfig", () => {
     }
   });
 
+  test("${ENV} interpolation in baseUrl", () => {
+    mkdirSync(homeJieDir, { recursive: true });
+    writeFileSync(
+      join(homeJieDir, "models.json"),
+      JSON.stringify({
+        providers: {
+          nvidia: {
+            baseUrl: "${TEST_BASE_URL}",
+            api: "openai-completions",
+            apiKey: "x",
+            models: [],
+          },
+        },
+      }),
+    );
+    process.env.TEST_BASE_URL = "https://integrate.api.nvidia.com/v1";
+    try {
+      const result = loadModelsConfig(homeJieDir, projectJieDir);
+      expect(result.providers.get("nvidia")?.baseUrl).toBe("https://integrate.api.nvidia.com/v1");
+    } finally {
+      delete process.env.TEST_BASE_URL;
+    }
+  });
+
+  test("${ENV} interpolation in model.id and model.name", () => {
+    mkdirSync(homeJieDir, { recursive: true });
+    writeFileSync(
+      join(homeJieDir, "models.json"),
+      JSON.stringify({
+        providers: {
+          nvidia: {
+            baseUrl: "https://example.com",
+            api: "openai-completions",
+            apiKey: "x",
+            models: [{ id: "${TEST_MODEL_ID}", name: "${TEST_MODEL_NAME}" }],
+          },
+        },
+      }),
+    );
+    process.env.TEST_MODEL_ID = "nvidia/nemotron-3-nano-30b-a3b";
+    process.env.TEST_MODEL_NAME = "Nemotron 3 Nano";
+    try {
+      const result = loadModelsConfig(homeJieDir, projectJieDir);
+      expect(result.models[0]?.id).toBe("nvidia/nemotron-3-nano-30b-a3b");
+      expect(result.models[0]?.name).toBe("Nemotron 3 Nano");
+    } finally {
+      delete process.env.TEST_MODEL_ID;
+      delete process.env.TEST_MODEL_NAME;
+    }
+  });
+
   test("missing env var resolves to empty string", () => {
     mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(

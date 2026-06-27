@@ -157,10 +157,11 @@ function resolveConfig(raw: RawModelsConfig): ResolvedModelsConfig {
     const compat = (rawCfg.compat ?? {}) as ResolvedProviderConfig["compat"];
     const apiKey = resolveValue(rawCfg.apiKey ?? "", `provider '${providerId}' apiKey`);
     const authHeader = rawCfg.authHeader ?? true;
+    const baseUrl = resolveValue(rawCfg.baseUrl, `provider '${providerId}' baseUrl`);
 
     providers.set(providerId, {
       provider: providerId,
-      baseUrl: rawCfg.baseUrl,
+      baseUrl,
       api,
       apiKey,
       headers,
@@ -170,7 +171,16 @@ function resolveConfig(raw: RawModelsConfig): ResolvedModelsConfig {
 
     if (rawCfg.models !== undefined) {
       for (const rawM of rawCfg.models) {
-        const model = buildModel(providerId, api, rawCfg.baseUrl, rawM, compat, headers, authHeader);
+        const resolvedId = resolveValue(rawM.id, `provider '${providerId}' model.id`);
+        const model = buildModel(
+          providerId,
+          api,
+          baseUrl,
+          { ...rawM, id: resolvedId, name: rawM.name === undefined ? undefined : resolveValue(rawM.name, `provider '${providerId}' model.name`) },
+          compat,
+          headers,
+          authHeader,
+        );
         models.push(model);
       }
     }
