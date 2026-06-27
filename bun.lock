@@ -6,6 +6,7 @@
       "name": "@cuzfrog/jie",
       "dependencies": {
         "@cuzfrog/jie-platform": "workspace:*",
+        "@cuzfrog/jie-tui": "workspace:*",
       },
       "devDependencies": {
         "@earendil-works/pi-agent-core": "0.79.1",
@@ -37,6 +38,17 @@
         "typebox": "1.1.38",
         "ulid": "2.3.0",
         "yaml": "2.9.0",
+      },
+      "devDependencies": {
+        "@types/bun": "1.3.14",
+        "@types/node": "25.9.3",
+        "typescript": "5.9.3",
+      },
+    },
+    "packages/jie-tui": {
+      "name": "@cuzfrog/jie-tui",
+      "dependencies": {
+        "@cuzfrog/jie-platform": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "1.3.14",
@@ -103,6 +115,8 @@
     "@cuzfrog/jie-cli": ["@cuzfrog/jie-cli@workspace:packages/jie-cli"],
 
     "@cuzfrog/jie-platform": ["@cuzfrog/jie-platform@workspace:packages/jie-platform"],
+
+    "@cuzfrog/jie-tui": ["@cuzfrog/jie-tui@workspace:packages/jie-tui"],
 
     "@earendil-works/pi-agent-core": ["@earendil-works/pi-agent-core@0.79.1", "", { "dependencies": { "@earendil-works/pi-ai": "^0.79.1", "ignore": "7.0.5", "typebox": "1.1.38", "yaml": "2.9.0" } }, "sha512-PBPjBa2YBm9jauiLtHAKaSfVJ4Dvm3/nK/bR/oHebLjwBCS2tGx3aQDX7MSGAOXi6BejlhzbB/z82BkyAyNjjQ=="],
 

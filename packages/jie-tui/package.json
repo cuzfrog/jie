@@ -1,0 +1,15 @@
+{
+  "name": "@cuzfrog/jie-tui",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@cuzfrog/jie-platform": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.14",
+    "@types/node": "25.9.3",
+    "typescript": "5.9.3"
+  }
+}

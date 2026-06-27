@@ -6,7 +6,8 @@
     "jie": "packages/jie-cli/index.ts"
   },
   "dependencies": {
-    "@cuzfrog/jie-platform": "workspace:*"
+    "@cuzfrog/jie-platform": "workspace:*",
+    "@cuzfrog/jie-tui": "workspace:*"
   },
   "devDependencies": {
     "@earendil-works/pi-agent-core": "0.79.1",
