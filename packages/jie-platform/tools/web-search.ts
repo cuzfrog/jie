@@ -19,13 +19,6 @@ export interface WebSearchProvider {
   search(query: string, maxResults: number): Promise<WebSearchResult[]>;
 }
 
-export function createWebSearchProvider(): WebSearchProvider {
-  return new DuckDuckGoSearchProvider();
-}
-
-const DEFAULT_MAX = 5;
-const HARD_MAX = 20;
-
 export interface WebSearchDeps {
   provider: WebSearchProvider;
 }
@@ -35,10 +28,11 @@ interface WebSearchInput {
   maxResults?: number;
 }
 
-function clampMaxResults(value: number | undefined): number {
-  if (value === undefined || value < 1) return DEFAULT_MAX;
-  if (value > HARD_MAX) return HARD_MAX;
-  return value;
+const DEFAULT_MAX = 5;
+const HARD_MAX = 20;
+
+export function createWebSearchProvider(): WebSearchProvider {
+  return new DuckDuckGoSearchProvider();
 }
 
 export function createWebSearchTool(dependencies: WebSearchDeps): Tool<WebSearchInput> {
@@ -111,6 +105,12 @@ function parseDuckDuckGoResults(html: string, max: number): WebSearchResult[] {
     results.push({ title, url, snippet });
   }
   return results;
+}
+
+function clampMaxResults(value: number | undefined): number {
+  if (value === undefined || value < 1) return DEFAULT_MAX;
+  if (value > HARD_MAX) return HARD_MAX;
+  return value;
 }
 
 function stripHtml(s: string): string {

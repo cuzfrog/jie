@@ -15,117 +15,6 @@ export function isValidTeamId(id: string): boolean {
   return TEAM_ID_PATTERN.test(id);
 }
 
-interface RawFrontmatter {
-  model?: string;
-  tools?: unknown;
-  subscribe?: unknown;
-  leader?: unknown;
-}
-
-function splitFrontmatter(content: string): {
-  frontmatter: RawFrontmatter | null;
-  body: string;
-} {
-  const lines = content.split("\n");
-  if (lines[0]?.trim() !== FRONTMATTER_DELIMITER) {
-    return { frontmatter: null, body: content };
-  }
-  const closingIndex = lines.indexOf(FRONTMATTER_DELIMITER, 1);
-  if (closingIndex === -1) {
-    return { frontmatter: null, body: content };
-  }
-  const yamlText = lines.slice(1, closingIndex).join("\n");
-  const body = lines.slice(closingIndex + 1).join("\n").replace(/^\n/, "");
-  let frontmatter: RawFrontmatter | null;
-  try {
-    frontmatter = parseYaml(yamlText) as RawFrontmatter | null;
-  } catch (error) {
-    throw new JiePlatformError("invalid_frontmatter", `invalid frontmatter: ${(error as Error).message}`);
-  }
-  if (frontmatter === null) frontmatter = {};
-  return { frontmatter, body };
-}
-
-function asStringList(value: unknown, field: string, file: string): string[] {
-  if (!Array.isArray(value)) {
-    throw new JiePlatformError("invalid_field_type", `${file}: field '${field}' must be a list of strings`);
-  }
-  return value.map((v) => {
-    if (typeof v !== "string") {
-      throw new JiePlatformError("invalid_field_type", `${file}: field '${field}' must be a list of strings`);
-    }
-    return v;
-  });
-}
-
-function asString(
-  value: unknown,
-  field: string,
-  file: string,
-): string {
-  if (typeof value !== "string") {
-    throw new JiePlatformError("invalid_field_type", `${file}: field '${field}' must be a string`);
-  }
-  return value;
-}
-
-function parseAgentFile(
-  role: string,
-  content: string,
-  file: string,
-): AgentSoul {
-  const { frontmatter, body } = splitFrontmatter(content);
-  if (frontmatter === null) {
-    throw new JiePlatformError("invalid_frontmatter", `invalid frontmatter in ${file}: missing frontmatter block`);
-  }
-
-  if (!("tools" in frontmatter) || frontmatter.tools === undefined) {
-    throw new JiePlatformError("missing_required_field", `missing required field 'tools' in ${file}`);
-  }
-  const tools = asStringList(frontmatter.tools, "tools", file);
-
-  const subscribe =
-    frontmatter.subscribe === undefined
-      ? []
-      : asStringList(frontmatter.subscribe, "subscribe", file);
-
-  for (const topic of subscribe) {
-    if (topic.startsWith("agent.")) {
-      throw new JiePlatformError("subscribe_rejects_platform_topic", `subscribe_rejects_platform_topic: ${topic}`);
-    }
-  }
-
-  const model = frontmatter.model === undefined ? "" : asString(frontmatter.model, "model", file);
-
-  if (model !== "" && !model.includes("/")) {
-    throw new JiePlatformError("invalid_model_string", `invalid model string: ${model}`);
-  }
-
-  return {
-    role,
-    model,
-    systemPrompt: body,
-    tools,
-    subscribe,
-    subscriptions: [...subscribe],
-  };
-}
-
-function parseTeamFile(
-  content: string,
-  file: string,
-): { leader: string | null; frontmatter: RawFrontmatter | null } {
-  const { frontmatter, body: _body } = splitFrontmatter(content);
-  if (frontmatter === null) {
-    throw new JiePlatformError("invalid_frontmatter", `invalid frontmatter in ${file}: missing frontmatter block`);
-  }
-  const leader = frontmatter.leader;
-  if (leader === undefined || leader === null || leader === "") {
-    return { leader: null, frontmatter };
-  }
-  return { leader: asString(leader, "leader", file), frontmatter };
-}
-
 export interface ParseTeamOptions {
 
   teamId: string;
@@ -255,4 +144,115 @@ export function loadMinimalTeam(): Team {
     },
     { teamId: "minimal" },
   );
+}
+
+interface RawFrontmatter {
+  model?: string;
+  tools?: unknown;
+  subscribe?: unknown;
+  leader?: unknown;
+}
+
+function splitFrontmatter(content: string): {
+  frontmatter: RawFrontmatter | null;
+  body: string;
+} {
+  const lines = content.split("\n");
+  if (lines[0]?.trim() !== FRONTMATTER_DELIMITER) {
+    return { frontmatter: null, body: content };
+  }
+  const closingIndex = lines.indexOf(FRONTMATTER_DELIMITER, 1);
+  if (closingIndex === -1) {
+    return { frontmatter: null, body: content };
+  }
+  const yamlText = lines.slice(1, closingIndex).join("\n");
+  const body = lines.slice(closingIndex + 1).join("\n").replace(/^\n/, "");
+  let frontmatter: RawFrontmatter | null;
+  try {
+    frontmatter = parseYaml(yamlText) as RawFrontmatter | null;
+  } catch (error) {
+    throw new JiePlatformError("invalid_frontmatter", `invalid frontmatter: ${(error as Error).message}`);
+  }
+  if (frontmatter === null) frontmatter = {};
+  return { frontmatter, body };
+}
+
+function asStringList(value: unknown, field: string, file: string): string[] {
+  if (!Array.isArray(value)) {
+    throw new JiePlatformError("invalid_field_type", `${file}: field '${field}' must be a list of strings`);
+  }
+  return value.map((v) => {
+    if (typeof v !== "string") {
+      throw new JiePlatformError("invalid_field_type", `${file}: field '${field}' must be a list of strings`);
+    }
+    return v;
+  });
+}
+
+function asString(
+  value: unknown,
+  field: string,
+  file: string,
+): string {
+  if (typeof value !== "string") {
+    throw new JiePlatformError("invalid_field_type", `${file}: field '${field}' must be a string`);
+  }
+  return value;
+}
+
+function parseAgentFile(
+  role: string,
+  content: string,
+  file: string,
+): AgentSoul {
+  const { frontmatter, body } = splitFrontmatter(content);
+  if (frontmatter === null) {
+    throw new JiePlatformError("invalid_frontmatter", `invalid frontmatter in ${file}: missing frontmatter block`);
+  }
+
+  if (!("tools" in frontmatter) || frontmatter.tools === undefined) {
+    throw new JiePlatformError("missing_required_field", `missing required field 'tools' in ${file}`);
+  }
+  const tools = asStringList(frontmatter.tools, "tools", file);
+
+  const subscribe =
+    frontmatter.subscribe === undefined
+      ? []
+      : asStringList(frontmatter.subscribe, "subscribe", file);
+
+  for (const topic of subscribe) {
+    if (topic.startsWith("agent.")) {
+      throw new JiePlatformError("subscribe_rejects_platform_topic", `subscribe_rejects_platform_topic: ${topic}`);
+    }
+  }
+
+  const model = frontmatter.model === undefined ? "" : asString(frontmatter.model, "model", file);
+
+  if (model !== "" && !model.includes("/")) {
+    throw new JiePlatformError("invalid_model_string", `invalid model string: ${model}`);
+  }
+
+  return {
+    role,
+    model,
+    systemPrompt: body,
+    tools,
+    subscribe,
+    subscriptions: [...subscribe],
+  };
+}
+
+function parseTeamFile(
+  content: string,
+  file: string,
+): { leader: string | null; frontmatter: RawFrontmatter | null } {
+  const { frontmatter, body: _body } = splitFrontmatter(content);
+  if (frontmatter === null) {
+    throw new JiePlatformError("invalid_frontmatter", `invalid frontmatter in ${file}: missing frontmatter block`);
+  }
+  const leader = frontmatter.leader;
+  if (leader === undefined || leader === null || leader === "") {
+    return { leader: null, frontmatter };
+  }
+  return { leader: asString(leader, "leader", file), frontmatter };
 }

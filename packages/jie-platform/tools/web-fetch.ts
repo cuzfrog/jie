@@ -54,43 +54,6 @@ function isHtml(contentType: string): boolean {
 
 const STRIP_TAGS = ["script", "style", "nav", "header", "footer"];
 
-function htmlToText(html: string): string {
-  const root = parseHtml(html);
-  for (const tag of STRIP_TAGS) {
-    for (const el of root.querySelectorAll(tag)) {
-      el.remove();
-    }
-  }
-  return root.text;
-}
-
-function decodeBody(bytes: Uint8Array, charset: string | null): string {
-  if (charset === null) {
-    return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-  }
-
-  const normalized = normalizeCharset(charset);
-  try {
-    return new TextDecoder(
-      normalized as ConstructorParameters<typeof TextDecoder>[0],
-      { fatal: false },
-    ).decode(bytes);
-  } catch {
-    return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-  }
-}
-
-function normalizeCharset(c: string): string {
-  const lower = c.toLowerCase().replace(/^["']|["']$/g, "");
-  if (lower === "utf8") return "utf-8";
-  return lower;
-}
-
-function extractCharset(contentType: string): string | null {
-  const match = /charset=([^;]+)/i.exec(contentType);
-  return match === null ? null : match[1]!.trim().replace(/^["']|["']$/g, "");
-}
-
 interface WebFetchInput {
   url: string;
 }
@@ -159,4 +122,52 @@ export function createWebFetchTool(): Tool<WebFetchInput> {
       };
     },
   };
+}
+
+function isTextLike(contentType: string): boolean {
+  const baseType = contentType.split(";")[0]!.trim().toLowerCase();
+  if (TEXT_LIKE_PREFIXES.some((prefix) => baseType.startsWith(prefix))) return true;
+  if (TEXT_LIKE_APPLICATIONS.has(baseType)) return true;
+  return false;
+}
+
+function isHtml(contentType: string): boolean {
+  return contentType.split(";")[0]!.trim().toLowerCase() === "text/html";
+}
+
+function htmlToText(html: string): string {
+  const root = parseHtml(html);
+  for (const tag of STRIP_TAGS) {
+    for (const el of root.querySelectorAll(tag)) {
+      el.remove();
+    }
+  }
+  return root.text;
+}
+
+function decodeBody(bytes: Uint8Array, charset: string | null): string {
+  if (charset === null) {
+    return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  }
+
+  const normalized = normalizeCharset(charset);
+  try {
+    return new TextDecoder(
+      normalized as ConstructorParameters<typeof TextDecoder>[0],
+      { fatal: false },
+    ).decode(bytes);
+  } catch {
+    return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  }
+}
+
+function normalizeCharset(c: string): string {
+  const lower = c.toLowerCase().replace(/^["']|["']$/g, "");
+  if (lower === "utf8") return "utf-8";
+  return lower;
+}
+
+function extractCharset(contentType: string): string | null {
+  const match = /charset=([^;]+)/i.exec(contentType);
+  return match === null ? null : match[1]!.trim().replace(/^["']|["']$/g, "");
 }

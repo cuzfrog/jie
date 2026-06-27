@@ -29,38 +29,6 @@ interface BashInput {
   workdir?: string;
 }
 
-function resolveWorkdir(
-  workdir: string | undefined,
-  workspaceRoot: string,
-): string {
-  if (workdir === undefined) return workspaceRoot;
-  const rel = isAbsolute(workdir) ? workdir : resolve(workspaceRoot, workdir);
-  let real: string;
-  try {
-    real = realpathSync(rel);
-  } catch {
-    real = rel;
-  }
-  const rootReal = realpathSync(workspaceRoot);
-  if (real !== rootReal && !real.startsWith(rootReal + "/")) {
-    throw new JiePlatformError(
-      "workdir_escape",
-      `workdir_escape: ${workdir}`,
-    );
-  }
-  return real;
-}
-
-function captureStream(buf: Buffer, cap: number): { text: string; truncated: boolean } {
-  if (buf.length <= cap) {
-    return { text: buf.toString("utf-8"), truncated: false };
-  }
-  return {
-    text: buf.subarray(0, cap).toString("utf-8") + TRUNCATION_MARKER,
-    truncated: true,
-  };
-}
-
 export function createBashTool(dependencies: BashDeps): Tool<BashInput> {
   return {
     name: "bash",
@@ -184,5 +152,37 @@ export function createBashTool(dependencies: BashDeps): Tool<BashInput> {
         },
       };
     },
+  };
+}
+
+function resolveWorkdir(
+  workdir: string | undefined,
+  workspaceRoot: string,
+): string {
+  if (workdir === undefined) return workspaceRoot;
+  const rel = isAbsolute(workdir) ? workdir : resolve(workspaceRoot, workdir);
+  let real: string;
+  try {
+    real = realpathSync(rel);
+  } catch {
+    real = rel;
+  }
+  const rootReal = realpathSync(workspaceRoot);
+  if (real !== rootReal && !real.startsWith(rootReal + "/")) {
+    throw new JiePlatformError(
+      "workdir_escape",
+      `workdir_escape: ${workdir}`,
+    );
+  }
+  return real;
+}
+
+function captureStream(buf: Buffer, cap: number): { text: string; truncated: boolean } {
+  if (buf.length <= cap) {
+    return { text: buf.toString("utf-8"), truncated: false };
+  }
+  return {
+    text: buf.subarray(0, cap).toString("utf-8") + TRUNCATION_MARKER,
+    truncated: true,
   };
 }
