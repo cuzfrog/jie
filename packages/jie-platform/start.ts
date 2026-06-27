@@ -6,7 +6,6 @@ import { type AgentSoul, type Team, type TeamRegistry } from "./team/index.ts";
 import { type ModelRegistry, type SettingsStore } from "./config/index.ts";
 import { type ToolRegistry } from "./tools";
 import {
-  createArtifactStore,
   type ArtifactStore,
   type MemoryManager,
   type Storage,
@@ -27,6 +26,7 @@ export interface JiePlatformDeps {
   teamRegistry: TeamRegistry;
   modelRegistry: ModelRegistry;
   toolRegistry: ToolRegistry;
+  artifactStore: ArtifactStore;
   memoryManager: MemoryManager;
 }
 
@@ -37,7 +37,6 @@ export interface JiePlatform {
 
 export async function createJiePlatform(opts: CreateJiePlatformOptions, deps: JiePlatformDeps): Promise<JiePlatform> {
   const resolveModel = defaultResolveModel(deps.modelRegistry);
-  const artifactStore: ArtifactStore = createArtifactStore(deps.storage);
   const resolvedTeamId = opts.teamId ?? "minimal";
 
   const sessionIds = new Map<string, string>();
@@ -63,7 +62,7 @@ export async function createJiePlatform(opts: CreateJiePlatformOptions, deps: Ji
           soul,
           isLeader,
           events: deps.events,
-          artifactStore,
+          artifactStore: deps.artifactStore,
           memory: deps.memoryManager,
           sessionId,
           toolRegistry: deps.toolRegistry,

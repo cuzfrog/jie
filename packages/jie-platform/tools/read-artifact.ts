@@ -10,7 +10,7 @@ your work product is team-specific, include the team id (available from
 ExecutionContext) in the key scheme.`;
 
 export interface ReadArtifactDeps {
-  artifacts: ArtifactStore;
+  artifactStore: ArtifactStore;
 }
 
 interface ReadArtifactInput {
@@ -28,7 +28,7 @@ export function createReadArtifactTool(
       key: Type.String(),
     }),
     async execute(input: ReadArtifactInput): Promise<ToolResult> {
-      const hit = await deps.artifacts.read(input.key);
+      const hit = await deps.artifactStore.read(input.key);
       if (hit === null) {
         return {
           content: `Artifact not found: ${input.key}`,

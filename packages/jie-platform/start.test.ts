@@ -8,7 +8,7 @@ import { createModelRegistry, type SettingsStore } from "./config";
 import type { AuthStore } from "./config";
 import { createTeamRegistry } from "./team/index.ts";
 import { createToolRegistry } from "./tools";
-import { createMemoryManager, createStorage } from "./storage";
+import { createArtifactStore, createMemoryManager, createStorage } from "./storage";
 import type { MergedSettings } from "./config";
 
 const settingsStore = vi.mocked<SettingsStore>({
@@ -33,13 +33,21 @@ const DEFAULT_SETTINGS: MergedSettings = {
 function makeDeps(workspace: string, homeJieDir: string, filePath: string = ":memory:") {
   const projectJieDir = join(workspace, ".jie");
   const storage = createStorage({ type: "sqlite", filePath });
+  const events = createEventManager();
+  const artifactStore = createArtifactStore(storage);
+  const toolRegistry = createToolRegistry({
+    workspaceRoot: workspace,
+    eventManager: events,
+    artifactStore,
+  });
   return {
-    events: createEventManager(),
+    events,
     settingsStore,
     storage,
     teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
     modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
-    toolRegistry: createToolRegistry(),
+    toolRegistry,
+    artifactStore,
     memoryManager: createMemoryManager(storage),
   };
 }
@@ -109,13 +117,16 @@ describe("createJiePlatform", () => {
       const filePath = join(workspace, "no-model.db");
       const storage = createStorage({ type: "sqlite", filePath });
       const projectJieDir = join(workspace, ".jie");
+      const events = createEventManager();
+      const artifactStore = createArtifactStore(storage);
       const deps = {
-        events: createEventManager(),
+        events,
         settingsStore,
         storage,
         teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
         modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
-        toolRegistry: createToolRegistry(),
+        toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events, artifactStore }),
+        artifactStore,
         memoryManager: createMemoryManager(storage),
       };
       await expect(
@@ -144,13 +155,16 @@ describe("createJiePlatform", () => {
       const filePath = join(workspace, "resume.db");
       const projectJieDir = join(workspace, ".jie");
       const storage1 = createStorage({ type: "sqlite", filePath });
+      const events1 = createEventManager();
+      const artifactStore1 = createArtifactStore(storage1);
       const deps1 = {
-        events: createEventManager(),
+        events: events1,
         settingsStore,
         storage: storage1,
         teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
         modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
-        toolRegistry: createToolRegistry(),
+        toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events1, artifactStore: artifactStore1 }),
+        artifactStore: artifactStore1,
         memoryManager: createMemoryManager(storage1),
       };
       const h1 = await createJiePlatform(
@@ -167,13 +181,16 @@ describe("createJiePlatform", () => {
       const sessionId = "test-session-id";
 
       const storage2 = createStorage({ type: "sqlite", filePath });
+      const events2 = createEventManager();
+      const artifactStore2 = createArtifactStore(storage2);
       const deps2 = {
-        events: createEventManager(),
+        events: events2,
         settingsStore,
         storage: storage2,
         teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
         modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
-        toolRegistry: createToolRegistry(),
+        toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events2, artifactStore: artifactStore2 }),
+        artifactStore: artifactStore2,
         memoryManager: createMemoryManager(storage2),
       };
       const h2 = await createJiePlatform(
@@ -183,13 +200,16 @@ describe("createJiePlatform", () => {
       await h2.stop();
 
       const storage3 = createStorage({ type: "sqlite", filePath });
+      const events3 = createEventManager();
+      const artifactStore3 = createArtifactStore(storage3);
       const deps3 = {
-        events: createEventManager(),
+        events: events3,
         settingsStore,
         storage: storage3,
         teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
         modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
-        toolRegistry: createToolRegistry(),
+        toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events3, artifactStore: artifactStore3 }),
+        artifactStore: artifactStore3,
         memoryManager: createMemoryManager(storage3),
       };
       await expect(

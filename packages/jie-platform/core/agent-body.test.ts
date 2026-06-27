@@ -43,7 +43,12 @@ function makeNoopTool(): Tool {
 function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: CreateAgentBodyOptions; events: EventManager; subscribeSubject: (topic: string, cb: (subject: string, payload: object) => void) => () => void } {
   const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
   const events: EventManager = createEventManager();
-  const registry = createToolRegistry();
+  const artifactStore = createArtifactStore(storage);
+  const registry = createToolRegistry({
+    workspaceRoot: "/tmp",
+    eventManager: events,
+    artifactStore,
+  });
   registry.register("noop", makeNoopTool());
   const opts: CreateAgentBodyOptions = {
     agentKey: "general-1",
@@ -51,7 +56,7 @@ function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: Crea
     soul: makeSoul(),
     isLeader: true,
     events,
-    artifactStore: createArtifactStore(storage),
+    artifactStore,
     memory: createMemoryManager(storage),
     sessionId: "s1",
     toolRegistry: registry,

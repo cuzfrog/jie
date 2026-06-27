@@ -5,7 +5,11 @@ import {
   type SettingsStore,
 } from "@cuzfrog/jie-platform/config";
 import { createEventManager } from "@cuzfrog/jie-platform/event";
-import { createMemoryManager, createStorage } from "@cuzfrog/jie-platform/storage";
+import {
+  createArtifactStore,
+  createMemoryManager,
+  createStorage,
+} from "@cuzfrog/jie-platform/storage";
 import { type TeamRegistry } from "@cuzfrog/jie-platform/team";
 import { createToolRegistry } from "@cuzfrog/jie-platform/tools";
 import { join } from "node:path";
@@ -35,15 +39,18 @@ const teamRegistry = vi.mocked<TeamRegistry>({
 function makeDeps(workspace: string, homeJieDir: string): AppDeps {
   const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
   const projectJieDir = join(workspace, ".jie");
+  const events = createEventManager();
+  const artifactStore = createArtifactStore(storage);
 
   return {
     authStore,
     settingsStore,
-    events: createEventManager(),
+    events,
     storage,
     teamRegistry,
     modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
-    toolRegistry: createToolRegistry(),
+    toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events, artifactStore }),
+    artifactStore,
     memoryManager: createMemoryManager(storage),
   };
 }

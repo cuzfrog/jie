@@ -106,7 +106,12 @@ function makeArtifacts(): ArtifactStore {
 
 function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: CreateAgentBodyOptions; events: EventManager; subscribeSubject: (topic: string, cb: (subject: string, payload: object) => void) => () => void } {
   const events: EventManager = createEventManager();
-  const registry = createToolRegistry();
+  const artifactStore = makeArtifacts();
+  const registry = createToolRegistry({
+    workspaceRoot: "/tmp",
+    eventManager: events,
+    artifactStore,
+  });
   registry.register("noop", makeNoopTool());
   const opts: CreateAgentBodyOptions = {
     agentKey: "general-1",

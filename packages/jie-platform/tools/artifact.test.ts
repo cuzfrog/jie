@@ -49,7 +49,7 @@ describe("read_artifact", () => {
   test("hit: LLM content is the artifact's content; details carries key+content+created_at", async () => {
     const store = new InMemoryArtifactStore();
     await store.write("k", "body");
-    const tool = createReadArtifactTool({ artifacts: store });
+    const tool = createReadArtifactTool({ artifactStore: store });
     const result = await tool.execute({ key: "k" }, {} as never);
     expect(result.content).toBe("body");
     const details = result.details as {
@@ -64,7 +64,7 @@ describe("read_artifact", () => {
 
   test("miss: LLM content is 'Artifact not found: <key>'; details is null", async () => {
     const store = new InMemoryArtifactStore();
-    const tool = createReadArtifactTool({ artifacts: store });
+    const tool = createReadArtifactTool({ artifactStore: store });
     const result = await tool.execute({ key: "missing" }, {} as never);
     expect(result.content).toBe("Artifact not found: missing");
     expect(result.details).toBeNull();

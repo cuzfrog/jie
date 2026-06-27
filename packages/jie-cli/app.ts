@@ -1,7 +1,7 @@
 import { createJiePlatform, type JiePlatform } from "@cuzfrog/jie-platform";
 import type { AuthStore, MergedSettings, ModelRegistry, SettingsStore } from "@cuzfrog/jie-platform/config";
 import type { EventManager } from "@cuzfrog/jie-platform/event";
-import type { MemoryManager, Storage } from "@cuzfrog/jie-platform/storage";
+import type { ArtifactStore, MemoryManager, Storage } from "@cuzfrog/jie-platform/storage";
 import type { Team, TeamRegistry } from "@cuzfrog/jie-platform/team";
 import type { ToolRegistry } from "@cuzfrog/jie-platform/tools";
 
@@ -13,6 +13,7 @@ export interface AppDeps {
   teamRegistry: TeamRegistry;
   modelRegistry: ModelRegistry;
   toolRegistry: ToolRegistry;
+  artifactStore: ArtifactStore;
   memoryManager: MemoryManager;
 }
 

@@ -411,6 +411,35 @@ describe("JieAgentBody — handlePiAgentEvent (stream bridge)", () => {
     expect(h.persisted.length).toBe(1);
   });
 
+  test("message_end with user role: memory.persist is called (#49)", async () => {
+    const body = h.makeBody();
+    body.handlePiAgentEvent({
+      type: "message_end",
+      message: {
+        role: "user",
+        content: "hi",
+      } as unknown as AgentMessage,
+    });
+    await Promise.resolve();
+    expect(h.persisted.length).toBe(1);
+  });
+
+  test("message_end with toolResult role: memory.persist is called (#49)", async () => {
+    const body = h.makeBody();
+    body.handlePiAgentEvent({
+      type: "message_end",
+      message: {
+        role: "toolResult",
+        toolCallId: "call_x",
+        content: "ok",
+        isError: false,
+        timestamp: Date.now(),
+      } as unknown as AgentMessage,
+    });
+    await Promise.resolve();
+    expect(h.persisted.length).toBe(1);
+  });
+
   test("message_end with assistant: stream.endStream is called (#51)", () => {
     const body = h.makeBody();
     body.handlePiAgentEvent({

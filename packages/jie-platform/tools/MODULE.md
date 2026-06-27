@@ -10,7 +10,7 @@ sealed:
   - read-artifact.ts
   - read-file.test.ts
   - read-file.ts
-  - registry.test.ts
+  - tool-registry.test.ts
   - tool-registry.ts
   - types.ts
   - web-fetch.test.ts

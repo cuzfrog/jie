@@ -8,7 +8,11 @@ import {
   makeSettingsStore,
 } from "@cuzfrog/jie-platform/config";
 import { createEventManager } from "@cuzfrog/jie-platform/event";
-import { createStorage, createMemoryManager } from "@cuzfrog/jie-platform/storage";
+import {
+  createArtifactStore,
+  createMemoryManager,
+  createStorage,
+} from "@cuzfrog/jie-platform/storage";
 import { createTeamRegistry } from "@cuzfrog/jie-platform/team";
 import { createToolRegistry } from "@cuzfrog/jie-platform/tools";
 import { createApp } from "./app.ts";
@@ -102,9 +106,14 @@ function buildPlatformDeps(cwd: string, homeJieDir: string, projectJieDir: strin
   const teamRegistry = createTeamRegistry({ homeJieDir, projectJieDir });
   const authStore = makeAuthStore(homeJieDir);
   const modelRegistry = createModelRegistry(homeJieDir, projectJieDir, authStore);
-  const toolRegistry = createToolRegistry();
   const memoryManager = createMemoryManager(storage);
+  const artifactStore = createArtifactStore(storage);
   const events = createEventManager();
+  const toolRegistry = createToolRegistry({
+    workspaceRoot: cwd,
+    eventManager: events,
+    artifactStore,
+  });
   return {
     authStore,
     settingsStore: makeSettingsStore(cwd, homeJieDir, projectJieDir),
@@ -113,6 +122,7 @@ function buildPlatformDeps(cwd: string, homeJieDir: string, projectJieDir: strin
     teamRegistry,
     modelRegistry,
     toolRegistry,
+    artifactStore,
     memoryManager,
   };
 }
