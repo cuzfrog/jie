@@ -102,7 +102,9 @@ async function assertLlmReachable(): Promise<void> {
   try {
     const u = new URL(url);
     host = u.hostname;
-    port = u.port === "" ? 80 : Number(u.port);
+    port = u.port === ""
+      ? u.protocol === "https:" ? 443 : 80
+      : Number(u.port);
   } catch (cause) {
     throw new Error(`invalid JIE_E2E_BASE_URL: ${url}`);
   }
