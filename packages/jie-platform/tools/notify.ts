@@ -7,18 +7,13 @@ const NOTIFY_DESCRIPTION = `notify({ topic, prompt }): Publish a message to the 
 \`{team_id}.{topic}\`. The receiving agent (any agent whose \`subscribe:\` field
 lists this topic, or the agent addressed by \`topic\` if it is an agent_key)
 will see the message as a synthetic user-style entry: \`[{source_agent_key}
-on '{topic}']: {prompt}\`. Self-receipt is filtered: notifying your own
-agent_key produces 0 actual recipients. Returns the number of OTHER
-recipients (after self-receipt filtering); \`0\` means no peer is listening
-on the topic — reconsider the topic name, fall back to a different path,
-or surface the issue to the user. Topic names must not start with \`agent.\`
+on '{topic}']: {prompt}\`. Topic names must not start with \`agent.\`
 (platform events; observer-only) or with \`{team_id}.\` (the platform manages
 the prefix); empty topics and control characters are rejected. \`notify\` is
 the SOLE means of inter-agent communication. Does NOT end the turn.`;
 
 export interface NotifyDeps {
   events: EventManager;
-  isSelfSubscribed: (topic: string) => boolean;
 }
 
 type TopicValidationReason =
@@ -75,20 +70,11 @@ export function createNotifyTool(deps: NotifyDeps): Tool<NotifyInput> {
         identity: { teamId: ctx.teamId, agentRole: ctx.agentRole, agentKey: ctx.agentKey },
       };
       const envelope = Events.custom(sender, clientTopic, { prompt: input.prompt, source: ctx.agentKey });
-      const totalSubscribers = deps.events.subscriberCount(envelope.topic);
-      const recipients = deps.isSelfSubscribed(input.topic)
-        ? Math.max(0, totalSubscribers - 1)
-        : totalSubscribers;
       deps.events.publish(envelope);
 
-      const content =
-        recipients > 0
-          ? `Notification delivered to ${recipients} recipients`
-          : `Notification delivered to 0 recipients — no agent is subscribed to '${input.topic}'`;
-
       return {
-        content,
-        details: { topic: input.topic, recipients },
+        content: `Notification published on '${input.topic}'`,
+        details: { topic: input.topic },
       };
     },
   };

@@ -55,7 +55,7 @@ function makeHarness(): Harness {
 describe("notify — topic validation", () => {
   test("rejects empty topic with notify_invalid_topic: empty", async () => {
     const { events } = makeHarness();
-    const tool = createNotifyTool({ events, isSelfSubscribed: () => false });
+    const tool = createNotifyTool({ events });
     let caught: unknown;
     try {
       await tool.execute({ topic: "", prompt: "x" }, makeCtx());
@@ -69,7 +69,7 @@ describe("notify — topic validation", () => {
 
   test("rejects topic starting with `agent.`", async () => {
     const { events } = makeHarness();
-    const tool = createNotifyTool({ events, isSelfSubscribed: () => false });
+    const tool = createNotifyTool({ events });
     let caught: unknown;
     try {
       await tool.execute({ topic: "agent.idle", prompt: "x" }, makeCtx());
@@ -84,7 +84,7 @@ describe("notify — topic validation", () => {
 
   test("rejects topic starting with the body's team_id", async () => {
     const { events } = makeHarness();
-    const tool = createNotifyTool({ events, isSelfSubscribed: () => false });
+    const tool = createNotifyTool({ events });
     const ctx = makeCtx();
     let caught: unknown;
     try {
@@ -100,7 +100,7 @@ describe("notify — topic validation", () => {
 
   test("rejects topic containing a null byte", async () => {
     const { events } = makeHarness();
-    const tool = createNotifyTool({ events, isSelfSubscribed: () => false });
+    const tool = createNotifyTool({ events });
     let caught: unknown;
     try {
       await tool.execute({ topic: "bad\0topic", prompt: "x" }, makeCtx());
@@ -117,7 +117,7 @@ describe("notify — topic validation", () => {
 describe("notify — valid publish path", () => {
   test("publishes a full envelope to custom.{team_id}.{topic}", async () => {
     const { events, received } = makeHarness();
-    const tool = createNotifyTool({ events, isSelfSubscribed: () => false });
+    const tool = createNotifyTool({ events });
 
     const ctx = makeCtx();
     const before = Date.now();
@@ -144,76 +144,44 @@ describe("notify — valid publish path", () => {
     expect(ts).toBeLessThanOrEqual(after);
   });
 
-  test("LLM-facing content is the > 0 variant when there are recipients", async () => {
+  test("LLM-facing content reflects the published topic", async () => {
     const events = createEventManager();
     events.subscribe("custom.t1.task", () => {});
-    events.subscribe("custom.t1.task", () => {});
-    const tool = createNotifyTool({ events, isSelfSubscribed: () => false });
+    const tool = createNotifyTool({ events });
 
     const result = await tool.execute(
       { topic: "task", prompt: "x" },
       makeCtx(),
     );
-    expect(result.content).toBe("Notification delivered to 2 recipients");
+    expect(result.content).toBe("Notification published on 'task'");
     expect(result.terminate).toBeUndefined();
   });
 
-  test("LLM-facing content is the 0 variant when no peer is listening", async () => {
+  test("LLM-facing content is identical whether peers are listening or not", async () => {
     const { events } = makeHarness();
-    const tool = createNotifyTool({ events, isSelfSubscribed: () => false });
+    const tool = createNotifyTool({ events });
     const result = await tool.execute(
       { topic: "ghost", prompt: "x" },
       makeCtx(),
     );
-    expect(result.content).toBe(
-      "Notification delivered to 0 recipients — no agent is subscribed to 'ghost'",
-    );
+    expect(result.content).toBe("Notification published on 'ghost'");
   });
 
-  test("`details = { topic, recipients }` is returned for afterToolCall hooks", async () => {
+  test("`details = { topic }` is returned for afterToolCall hooks", async () => {
     const events = createEventManager();
     events.subscribe("custom.t1.task", () => {});
-    const tool = createNotifyTool({ events, isSelfSubscribed: () => false });
+    const tool = createNotifyTool({ events });
 
     const result = await tool.execute(
       { topic: "task", prompt: "x" },
       makeCtx(),
     );
-    expect(result.details).toEqual({ topic: "task", recipients: 1 });
-  });
-
-  test("recipients count subtracts 1 when the publisher is itself subscribed", async () => {
-    const events = createEventManager();
-    events.subscribe("custom.t1.task", () => {});
-    const tool = createNotifyTool({
-      events,
-      isSelfSubscribed: (topic) => topic === "task",
-    });
-    const result = await tool.execute(
-      { topic: "task", prompt: "x" },
-      makeCtx(),
-    );
-    expect(result.details).toEqual({ topic: "task", recipients: 0 });
-    expect(result.content).toContain("0 recipients");
-  });
-
-  test("recipients is not negative when the publisher is the only subscriber", async () => {
-    const events = createEventManager();
-    events.subscribe("custom.t1.task", () => {});
-    const tool = createNotifyTool({
-      events,
-      isSelfSubscribed: () => true,
-    });
-    const result = await tool.execute(
-      { topic: "task", prompt: "x" },
-      makeCtx(),
-    );
-    expect(result.details).toEqual({ topic: "task", recipients: 0 });
+    expect(result.details).toEqual({ topic: "task" });
   });
 
   test("does not end the LLM turn (terminate not set)", async () => {
     const { events } = makeHarness();
-    const tool = createNotifyTool({ events, isSelfSubscribed: () => false });
+    const tool = createNotifyTool({ events });
     const result = await tool.execute(
       { topic: "task", prompt: "x" },
       makeCtx(),
@@ -223,7 +191,7 @@ describe("notify — valid publish path", () => {
 
   test("tool metadata: name, description, label, parameters", () => {
     const events = createEventManager();
-    const tool = createNotifyTool({ events, isSelfSubscribed: () => false });
+    const tool = createNotifyTool({ events });
     expect(tool.name).toBe("notify");
     expect(tool.label).toBe("Notify");
     expect(tool.description).toContain("Publish a message");
