@@ -4,12 +4,15 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createEventManager, type EventEnvelope } from "./event";
 import { createJiePlatform } from "./start";
-import { createModelRegistry, type SettingsStore } from "./config";
-import type { AuthStore } from "./config";
+import {
+  createModelRegistry,
+  type AuthStore,
+  type MergedSettings,
+  type SettingsStore,
+} from "./config";
 import { createTeamRegistry } from "./team";
 import { createToolRegistry } from "./tools";
 import { createArtifactStore, createMemoryManager, createStorage } from "./storage";
-import type { MergedSettings } from "./config";
 
 const settingsStore = vi.mocked<SettingsStore>({
   load: vi.fn(),
