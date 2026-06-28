@@ -5,8 +5,8 @@ Day 2+ user scenarios from the original `00-user-scenarios.md`. Preserved as a r
 ## Scenario 1: simple agent `[Day 2+]`
 
 1. Run `jie` under `/tmpworkspace/my-project/` without any config. A TUI opens.
-2. The TUI contains one tab: agent with role `general`.
-3. Under the tab, jie behaves as a normal agent CLI (prompt input, conversation screen).
+2. I can open the agents panel, the panel contains one agent with role `general`.
+3. jie behaves as a normal agent CLI (prompt input, conversation screen).
 4. Prompts produce LLM output, the same way as a pi agent.
 
 Requires: TUI (backlog #21).
@@ -15,7 +15,7 @@ Requires: TUI (backlog #21).
 
 1. Run `jie` under `/tmp/workspace/my-project2/` with two team manifests at `.jie/teams/my-team/` (see "team-A-blueprint" below). A TUI opens.
 2. The TUI has two tabs: agent with role `manager` and agent with role `worker`.
-3. Switch tabs to switch between agents. Each tab has a prompt input area and conversation screen.
+3. I can open the agents panel, and switch agents. Each agent has separated conversation in the chat area.
 4. Prompts produce LLM output per agent; each tab is a separate conversation.
 5. With `my-question.txt` containing "100+10=?", prompt the `manager`: "Write the answer of my question in the file `my-question.txt` to file `my-answer.txt`". The `manager` informs the user when the task is done; `my-answer.txt` contains `110`.
 6. While the task is in flight, prompt the `manager`: "Tell me a joke". The `manager` responds with a joke, possibly before the task is done.

@@ -11,7 +11,7 @@
 - [x] stage2: `jie -p` successfully uses tools
 
 ## 0.2.0
-- [ ] stage1: TUI design, prototypes, and docs(test plans, ACs, etc)
-- [ ] stage2: TUI tests and implementation
-- [ ] stage3: code base improvements
-- [ ] stage4: `jie` successfully uses TUI, user experience as gate
+- [ ] stage3: TUI design, prototypes, and docs(test plans, ACs, etc)
+- [ ] stage4: TUI tests and implementation
+- [ ] stage5: code base improvements
+- [ ] stage6: `jie` successfully uses TUI, user experience as gate
