@@ -17,8 +17,8 @@ Per CLAUDE.md, serialized events use snake_case on the wire; TypeScript identifi
 
 | Wire field (snake_case) | State field (camelCase) | Source topic |
 |---|---|---|
-| `agent_key` | `agentKey` | `team.{teamId}.loaded` |
-| `is_leader` | `isLeader` | `team.{teamId}.loaded` |
+| `agent_key` | `agentKey` | `system.teams` |
+| `is_leader` | `isLeader` | `system.teams` |
 | `block_type` | `block.kind` | `agent.stream.chunk` |
 | `tool_call_id` | `card.callId` | `agent.tool.call` / `agent.tool.result` |
 | `duration_ms` | `card.durationMs` | `agent.tool.result` |
@@ -117,17 +117,17 @@ const initialState = (): TuiState => ({
 });
 ```
 
-`showRail` defaults to `false` — the rail is opt-in via `← ←`. `focusedAgentId` defaults to `null` and is set when the first `team.{teamId}.loaded` event arrives (the leader is focused).
+`showRail` defaults to `false` — the rail is opt-in via `← ←`. `focusedAgentId` defaults to `null` and is set when the first `system.teams` event arrives (the leader is focused).
 
-## Roles bootstrap (before `team.loaded`)
+## Roles bootstrap (before `system.teams`)
 
-While `state.teamId === null`, the TUI renders a placeholder rail from the `roles: string[]` argument passed by the host. The placeholder rail shows role names only (no `agentKey`, no model); the chat pane shows pi-tui's `Loader` component (`● Loading team…`). On `team.{teamId}.loaded`, the placeholder entries are upgraded with `agentKey` and `model` and the `Loader` is replaced with the focused agent's chat history.
+While `state.teamId === null`, the TUI renders a placeholder rail from the `roles: string[]` argument passed by the host. The placeholder rail shows role names only (no `agentKey`, no model); the chat pane shows pi-tui's `Loader` component (`● Loading team…`). On `system.teams`, the placeholder entries are upgraded with `agentKey` and `model` and the `Loader` is replaced with the focused agent's chat history.
 
 ## Reducer rules
 
-Each entry is the rule for one topic. Topics are matched in order: `ui.*` first (TUI-local), then `team.*.loaded`, then `*.prompt`, then the un-scoped platform topics, then `custom.*`.
+Each entry is the rule for one topic. Topics are matched in order: `ui.*` first (TUI-local), then `system.teams`, then `*.prompt`, then the un-scoped platform topics, then `custom.*`.
 
-**Cross-team guard.** Every non-`team.*` rule early-returns `state` when `env.sender.identity?.teamId !== state.teamId`. Multi-team events for inactive teams do not mutate state. (When `state.teamId === null`, the guard rejects all events except `team.*.loaded`.)
+**Cross-team guard.** Every non-`team.*` rule early-returns `state` when `env.sender.identity?.teamId !== state.teamId`. Multi-team events for inactive teams do not mutate state. (When `state.teamId === null`, the guard rejects all events except `system.teams`.)
 
 ### `ui.rail.toggle`
 
@@ -170,7 +170,7 @@ Set `state.errorBanner = { text: payload.text, raisedAt: payload.shownAt }`. The
 
 Set `state.errorBanner = null`. Published by the Editor's `onSubmit` and `onCancel` handlers; also by the `agent.turn.start` rule (the body's first signal that the user-submitted prompt is being processed, per `v0.2-mvp-tui.md` Phase 2). There is no auto-clear timeout — errors stay until the user acts.
 
-### `team.{teamId}.loaded`
+### `system.teams`
 
 Seed `state.agents` from `payload.agents`. Each agent entry is:
 
@@ -190,7 +190,7 @@ Reducer steps:
 3. For each agent in `payload.agents`: compute `AgentId = \`${payload.teamId}:${payload.agent_key}\`` and upsert into `agents`. Set `teamId`, `agentKey` (mapped from `payload.agent_key`), `role`, `isLeader` (mapped from `payload.is_leader`), and (if present) `model`. Preserves any other in-progress state (current turn, history) when reloading the same team.
 4. For the leader (the entry with `is_leader === true`): record `state.leaderAgentId`. If `state.focusedAgentId === null`, set it to the leader's `AgentId`.
 
-### `team.{teamId}.agent.{agentKey}.prompt`
+### `system.teams.{teamId}.agent.{agentKey}.prompt`
 
 User-prompt arrival (self-published by the TUI on `Enter`). The bus subject is interpolated from the topic template by the factory (per `03-event-system.md` `resolveTopic`); the `{agentKey}` placeholder resolves to `payload.agentKey` (camelCase per `Events.userPrompt` factory).
 
@@ -268,7 +268,7 @@ Replace `state.queue` with `payload.prompts.slice()`. Empty array clears the que
 
 Domain events from `notify`. The reducer does **not** push them as a timeline entry in v0.2 — domain events are out of scope for the chat pane. The platform surface publishes them; the TUI ignores them at the reducer level. (Day 2+: a `domain-events` section can derive timeline entries without changing the envelope contract.)
 
-### `team.{teamId}.control.interrupt`
+### `system.teams.{teamId}.control.interrupt`
 
 Body-side only — no reducer rule. The body subscribes to this topic directly (per `ui/tui.md` "Input loop and concurrency") and fires its `AbortController`. The "Unknown topic" fallback below applies.
 
@@ -313,9 +313,9 @@ When `state.focusedAgentId === null` (mid team-switch, before the first leader f
 
 `state.agents[agentId].history` grows on three events:
 
-1. A new `team.*.agent.*.prompt` arrives for an agent whose `currentTurn` already has blocks or cards (delegation / follow-up push).
+1. A new `system.teams.*.agent.*.prompt` arrives for an agent whose `currentTurn` already has blocks or cards (delegation / follow-up push).
 2. An `agent.turn.start` arrives for an agent whose `currentTurn` already has blocks or cards (delegation follow-up from the body's side; matches the prompt-side push so history stays consistent regardless of which side opens the new turn first).
-3. The agent slot is reloaded by a `team.*.loaded` event after a team switch (history is reset, then re-seeded).
+3. The agent slot is reloaded by a `system.teams` event after a team switch (history is reset, then re-seeded).
 
 History is not rotated by size or count in v0.2. The renderer slices to its visible rows (`Math.max(0, contentLines.length - bodyRows)`).
 

@@ -112,6 +112,7 @@ function publishTeamLoaded(events: EventManager, teamId: string, blueprint: Team
     is_leader: r.role === blueprint.leaderRole,
   }));
   events.publish(Events.teamLoaded({ kind: "cli" }, teamId, agents));
+  events.publish(Events.systemTeamsLoaded({ kind: "cli" }, teamId, agents));
 }
 
 const NO_MODEL_ERROR =

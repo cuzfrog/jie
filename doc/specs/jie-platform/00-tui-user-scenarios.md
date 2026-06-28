@@ -28,11 +28,11 @@ The e2e suite asserts user-observable behavior — what a human sees, what files
 
 **Observable outputs.**
 
-- After the first `team.loaded`, `state.agents` contains exactly one entry with `agentKey === "general"` and `isLeader === true` (built-in minimal team — the single agent is implicitly the leader). Footer line 1 right reads `my-team:general` (verifiable from the rendered frame).
+- After the first `system.teams`, `state.agents` contains exactly one entry with `agentKey === "general"` and `isLeader === true` (built-in minimal team — the single agent is implicitly the leader). Footer line 1 right reads `my-team:general` (verifiable from the rendered frame).
 - After `Enter`, response tokens stream into the conversation area; `state.agents[my-team:general].currentTurn.blocks[*].text` accumulates the streamed content.
 - After `Ctrl+D`, the process exits 0.
 
-**Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t1.jsonl`. Envelope schema per `tui.md` "Wire-format contract". Includes `team.{teamId}.loaded` (with `payload.agents[0].model === null` for the built-in minimal team — the team's `general` does not pin a model), the user prompt, the agent's streaming response, and `agent.idle` close.
+**Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t1.jsonl`. Envelope schema per `tui.md` "Wire-format contract". Includes `system.teams` (with `payload.agents[0].model === null` for the built-in minimal team — the team's `general` does not pin a model), the user prompt, the agent's streaming response, and `agent.idle` close.
 
 ## Scenario T2: pass work in a team
 
@@ -57,7 +57,7 @@ The e2e suite asserts user-observable behavior — what a human sees, what files
 - The chat area for `manager` (after `Ctrl+↑`) shows the same single scrollback — focus cycling does not affect scrollback content.
 - Final exit code: 0.
 
-**Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t2.jsonl` (with the team-A blueprint at `tests/e2e/tui/fixtures/t2-fixture/`). Envelope schema per `tui.md` "Wire-format contract" (each line is `{ version, timestamp, sender: { identity: { teamId, agentKey } }, topic, payload }`). Includes one `team.{teamId}.loaded`, two user prompts, multiple `agent.turn.start` / `agent.idle` alternations across both agents, `agent.stream.chunk` and `agent.tool.call` / `agent.tool.result` for both, and `custom.{teamId}.task.*` events from `notify`. The ordering constraint: the joke's `agent.stream.chunk` envelopes arrive **before** the worker's `agent.idle`. The `custom.*` events are in the trace for completeness but the reducer does not assert on them (per `tui-state.md` `custom.{teamId}.{topic}` rule).
+**Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t2.jsonl` (with the team-A blueprint at `tests/e2e/tui/fixtures/t2-fixture/`). Envelope schema per `tui.md` "Wire-format contract" (each line is `{ version, timestamp, sender: { identity: { teamId, agentKey } }, topic, payload }`). Includes one `system.teams`, two user prompts, multiple `agent.turn.start` / `agent.idle` alternations across both agents, `agent.stream.chunk` and `agent.tool.call` / `agent.tool.result` for both, and `custom.{teamId}.task.*` events from `notify`. The ordering constraint: the joke's `agent.stream.chunk` envelopes arrive **before** the worker's `agent.idle`. The `custom.*` events are in the trace for completeness but the reducer does not assert on them (per `tui-state.md` `custom.{teamId}.{topic}` rule).
 
 ### T2 test fixture — team-A blueprint
 
@@ -121,7 +121,7 @@ The trace's stubbed manager responses for `task done` are substring-asserted, no
 - After step 7: same as step 6; the rendered frame does not contain the picker's filter rows (verifiable by diffing the post-Enter frame against the pre-`/team Enter` frame).
 - Final exit code: 0.
 
-**Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t3.jsonl`. Envelope schema per `tui.md` "Wire-format contract". Includes two `team.{teamId}.loaded` events (the second on step 4, the first on step 6 either replayed from the buffer or re-emitted by the platform — fixture pins which path), two user prompts, and the in-memory event buffer is asserted via the renderer's view of the state, not via a separate bus event. Each `team.loaded` payload's `agents[0].model` is recorded verbatim (the fixture carries the `(provider, id, effort)` triple).
+**Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t3.jsonl`. Envelope schema per `tui.md` "Wire-format contract". Includes two `system.teams` events (the second on step 4, the first on step 6 either replayed from the buffer or re-emitted by the platform — fixture pins which path), two user prompts, and the in-memory event buffer is asserted via the renderer's view of the state, not via a separate bus event. Each `system.teams` payload's `agents[0].model` is recorded verbatim (the fixture carries the `(provider, id, effort)` triple).
 
 ## Scenario T4: first-time setup (TUI flow)
 
@@ -145,7 +145,7 @@ The trace's stubbed manager responses for `task done` are substring-asserted, no
 - After step 6: conversation area streams the joke; `state.errorBanner` is `null` (cleared by the `agent.turn.start` rule per `tui-state.md`, which fires when the body picks up the user's second prompt).
 - Final exit code: 0.
 
-**Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t4.jsonl`. Envelope schema per `tui.md` "Wire-format contract". Includes a `team.{teamId}.loaded`, the no-model error path (synthesized `ui.error` envelope published by `startTUI` before forwarding the prompt), a slash-command sequence (synthesized `ui.transient` envelopes, not from the platform bus), and a normal prompt / response. The trace's order: `team.loaded` → user prompt → `ui.error { text: "No model..." }` → `ui.error.clear` → `/login` slash command → `ui.transient { text: "logged in to nvidia" }` → `ui.transient.clear` → `/model` slash command → `ui.transient { text: "default model set to nvidia/<modelId>" }` → user prompt → stream.
+**Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t4.jsonl`. Envelope schema per `tui.md` "Wire-format contract". Includes a `system.teams`, the no-model error path (synthesized `ui.error` envelope published by `startTUI` before forwarding the prompt), a slash-command sequence (synthesized `ui.transient` envelopes, not from the platform bus), and a normal prompt / response. The trace's order: `system.teams` → user prompt → `ui.error { text: "No model..." }` → `ui.error.clear` → `/login` slash command → `ui.transient { text: "logged in to nvidia" }` → `ui.transient.clear` → `/model` slash command → `ui.transient { text: "default model set to nvidia/<modelId>" }` → user prompt → stream.
 
 ## Scenario T5: queued prompts
 

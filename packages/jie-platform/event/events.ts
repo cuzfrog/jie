@@ -15,6 +15,9 @@ type EventPayloadMap = {
   "agent.queue.update": { prompts: string[] };
   "team.{teamId}.agent.{agentKey}.prompt": { teamId: string; agentKey: string; prompt: string };
   "team.{teamId}.loaded": { teamId: string; agents: Array<{ role: string; agent_key: string; is_leader: boolean }> };
+  "system.teams": { teamId: string; agents: Array<{ role: string; agent_key: string; is_leader: boolean }> };
+  "system.teams.{teamId}.agent.{agentKey}.prompt": { teamId: string; agentKey: string; prompt: string };
+  "system.teams.{teamId}.control.interrupt": { teamId: string };
   "custom.{clientTopic}": { clientTopic: string; payload: unknown }
 }
 
@@ -57,6 +60,12 @@ export const Events = {
     createEvent("team.{teamId}.agent.{agentKey}.prompt", sender, { teamId, prompt, agentKey: targetAgentKey }),
   teamLoaded: (sender: Sender, teamId: string, agents: Array<{ role: string; agent_key: string; is_leader: boolean }>) =>
     createEvent("team.{teamId}.loaded", sender, { teamId, agents }),
+  systemTeamsLoaded: (sender: Sender, teamId: string, agents: Array<{ role: string; agent_key: string; is_leader: boolean }>) =>
+    createEvent("system.teams", sender, { teamId, agents }),
+  userPromptSystem: (sender: Sender, teamId: string, prompt: string, targetAgentKey: string) =>
+    createEvent("system.teams.{teamId}.agent.{agentKey}.prompt", sender, { teamId, prompt, agentKey: targetAgentKey }),
+  interruptTeam: (sender: Sender, teamId: string) =>
+    createEvent("system.teams.{teamId}.control.interrupt", sender, { teamId }),
   custom: (sender: Sender, clientTopic: string, payload: unknown) =>
     createEvent(`custom.{clientTopic}`, sender, { clientTopic, payload }),
 }

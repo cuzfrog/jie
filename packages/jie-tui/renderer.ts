@@ -218,7 +218,7 @@ interface RenderedFrame {
   lines: string[];
 }
 
-export function render(state: TuiState, opts: RenderOptions, now: number = Date.now()): RenderedFrame {
+export function render(state: TuiState, opts: RenderOptions, now: number): RenderedFrame {
   const cols = opts.cols;
   const rows = opts.rows;
   const showRail = state.showRail && state.agents.size > 0;

@@ -153,7 +153,7 @@ export function startTUI(options: StartTUIOptions): Tui {
       emitError("No focused agent; press <- <- to reveal the rail.");
       return;
     }
-    options.bus.publish(Events.userPrompt({ kind: "tui" }, state.teamId, text, targetKey));
+    options.bus.publish(Events.userPromptSystem({ kind: "tui" }, state.teamId, text, targetKey));
   };
 
   const handleSubmit = (text: string): void => {
@@ -255,7 +255,7 @@ export function startTUI(options: StartTUIOptions): Tui {
 
   return {
     getState: (): TuiState => state,
-    frame: (): string[] => render(state, renderOpts).lines,
+    frame: (): string[] => render(state, renderOpts, Date.now()).lines,
     submit: (text: string): void => handleSubmit(text),
     injectKey,
     stop: (): void => {
