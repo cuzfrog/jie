@@ -48,6 +48,7 @@
 
 - No `any` types, No enums, No inline imports (all imports must be at the top).
 - Use interfaces for OOP abstractions.
+- Prefer plain function over arrow functions.
 - Use only erasable TypeScript syntax compatible with Node strip-only mode in TypeScript. Do not use constructor parameter properties, `enum`, `namespace`/`module`, `import =`, `export =`, or other TypeScript constructs that require JavaScript emit. Use explicit fields and constructor assignments instead of parameter properties.
 - Public types, contract, methods, higher-level abstractions should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers. See below section `Single file layout`.
 - Avoid trivial functions, inline them.
@@ -120,3 +121,4 @@ Pre-action:
 
 Post-action:
 - After file edit (semantic or logic change), run tests.
+- Check violation of context rules.

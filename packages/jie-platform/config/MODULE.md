@@ -12,5 +12,7 @@ sealed:
   - settings-store.test.ts
   - settings-store.ts
   - types.ts
+  - load-settings.test.ts
 ---
+
 
