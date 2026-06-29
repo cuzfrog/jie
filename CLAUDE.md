@@ -13,24 +13,6 @@
 - @doc/DEVELOPMENT.md
 - @doc/plan/MILESTONES.md
 
-### jie-platform
-- agents do not directly know each other, they talk via events on an event bus.
-- a CLI and a TUI
-- provide an interface for `team-blueprint`, but agnostic of `jie-team` or any other team shape
-- allow for configuring MCP servers; pluggable tool implementations; provide tool resolution
-- storage interface for: context and memory management ; generic business agnostic artifacts
-- agnostic of jie-team or code-lens
-- depends on `@earendil-works/pi-agent-core`, API Reference in `jie-platform/pi-agent-api-reference.md`. We should follow pi conventions and reuse what it provides. Given a general question, check how does pi solve it.
-
-### jie-team
-- the `team-blueprint` to build an agentic workflow to run on top of jie-platform
-- a framework for custom team building
-- provide a built-in team-blueprint with predefined workflow for software development
-- provide a simplest `team-blueprint` with 1 leader `general` agent with default tools
-
-### code-lens
-- a standalone mcp server to provide code architectural information without the need to dive into the code.
-
 ## Document rules
 - Keep your writing short and concise but accurate enough to avoid guessing room.
 - Do not keep intermediate, transient history in md files under `specs/`, they are the update-to-date blueprint for the project.
@@ -102,7 +84,6 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 
 ## Things to avoid
 - do not `find` from the root dir, it's slow and unnecessary. Use `pwd` to figure out where you are.
-- do not assume a tool is available unless you are told, search before calling if you are not sure.
 - do not write test-only production code, testability should be achieved by adhering to above coding principles.
 - do not shorten variables, function names. E.g. use `agentEvent` for type `AgentEvent` instead of `event` or `env` to avoid confusion.
 - do not add comments unless the code itself cannot tell, decisions should be captured in docs or addrs.
