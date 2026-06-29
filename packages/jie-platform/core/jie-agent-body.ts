@@ -55,8 +55,14 @@ export class JieAgentBody implements AgentBody {
       case "turn_start":
         this.eventManager.publish(Events.agentTurnStart(agentSender));
         return;
-      case "agent_end":
       case "turn_end": {
+        if (this.queue.length > 0) {
+          const next = this.queue.shift()!;
+          this.agent.followUp(next);
+        }
+        return;
+      }
+      case "agent_end": {
         const final = readFinalStopReason(event);
         this.eventManager.publish(Events.agentIdle(agentSender, final.stopReason, final.isError));
         if (final.isError && final.errorMessage !== null) {

@@ -441,6 +441,59 @@ describe("JieAgentBody — handlePiAgentEvent (stream bridge)", () => {
     expect(h.followUp.mock.calls.length).toBe(0);
     expect(h.prompt.mock.calls.length).toBe(0);
   });
+
+  test("turn_end does NOT publish agent.idle (fix #89: avoid spurious idle on sub-turns)", () => {
+    const h = makeHarness();
+    const body = h.makeBody();
+    let idleCount = 0;
+    h.events.subscribe("agent.idle", () => {
+      idleCount += 1;
+    });
+    body.handlePiAgentEvent({
+      type: "turn_end",
+      message: { role: "assistant", content: [] } as unknown as AgentMessage,
+      toolResults: [],
+    });
+    expect(idleCount).toBe(0);
+  });
+
+  test("turn_end drains the queue via followUp (no idle publish) (#89)", async () => {
+    const h = makeHarness();
+    const body = h.makeBody();
+    await body.start();
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "queued msg", "general-1"));
+    h.state.isStreaming = false;
+    body.handlePiAgentEvent({
+      type: "turn_end",
+      message: { role: "assistant", content: [] } as unknown as AgentMessage,
+      toolResults: [],
+    });
+    expect(h.followUp.mock.calls.length).toBe(1);
+    expect(h.prompt.mock.calls.length).toBe(0);
+  });
+
+  test("agent_end publishes agent.idle exactly once per run (#89)", () => {
+    const h = makeHarness();
+    const body = h.makeBody();
+    let idleCount = 0;
+    h.events.subscribe("agent.idle", () => {
+      idleCount += 1;
+    });
+    body.handlePiAgentEvent({
+      type: "turn_end",
+      message: { role: "assistant", content: [] } as unknown as AgentMessage,
+      toolResults: [],
+    });
+    body.handlePiAgentEvent({
+      type: "turn_end",
+      message: { role: "assistant", content: [] } as unknown as AgentMessage,
+      toolResults: [],
+    });
+    expect(idleCount).toBe(0);
+    body.handlePiAgentEvent({ type: "agent_end", messages: [] });
+    expect(idleCount).toBe(1);
+  });
 });
 
 describe("JieAgentBody — addExternalCleanup + stop()", () => {
