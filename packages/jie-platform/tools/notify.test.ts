@@ -12,7 +12,7 @@ interface NotifyEnvelope {
   topic: string;
   sender: { kind: "agent"; identity: { teamId: string; agentRole?: string; agentKey?: string } } | { kind: "cli" } | { kind: "tui" };
   timestamp: string;
-  payload: { clientTopic: string; payload: { prompt: string; source: string } };
+  payload: { clientTopic: string; payload: string };
 }
 
 function makeCtx(): ExecutionContext {
@@ -136,7 +136,7 @@ describe("notify — valid publish path", () => {
     }
     expect(env.payload).toEqual({
       clientTopic: "t1.task",
-      payload: { prompt: "hello", source: "leader-1" },
+      payload: "hello",
     });
     const ts = new Date(env.timestamp).getTime();
     expect(ts).toBeGreaterThanOrEqual(before);

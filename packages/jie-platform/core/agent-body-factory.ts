@@ -61,7 +61,6 @@ export function createAgentBody(options: CreateAgentBodyOptions): AgentBody {
         toolCallId,
         context.toolCall.name,
         JSON.stringify(context.args),
-        false,
       ));
       return undefined;
     },
@@ -76,7 +75,6 @@ export function createAgentBody(options: CreateAgentBodyOptions): AgentBody {
         toolCallId,
         context.toolCall.name,
         output === null ? null : JSON.stringify(output),
-        false,
         Date.now() - startedAt,
         error,
       ));

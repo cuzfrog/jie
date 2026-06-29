@@ -7,7 +7,7 @@ import type { MemoryManager } from "../storage";
 import type { AgentSoul } from "../team";
 import { Events, type EventManager, type Sender } from "../event";
 import type { StreamPublisher } from "./streaming";
-import type { AgentBody } from "./agent-body";
+import type { AgentBody } from "./agent-body-factory";
 
 export class JieAgentBody implements AgentBody {
   private readonly agentKey: string;
@@ -150,11 +150,10 @@ export class JieAgentBody implements AgentBody {
     }
   }
 
-  private ingestEvent(topic: string, env: { payload: unknown }): void {
-    const innerPayload = unwrapIngressPayload(env.payload);
-    const source = innerPayload.source;
-    const prompt = innerPayload.prompt ?? "";
-    const synthetic = source
+  private ingestEvent(topic: string, env: { sender: Sender; payload: unknown }): void {
+    const prompt = unwrapIngressPayload(env.payload);
+    const source = env.sender.kind === "agent" ? env.sender.identity.agentKey : null;
+    const synthetic = source !== null
       ? `[${source} on '${topic}']: ${prompt}`
       : `[user]: ${prompt}`;
     const message: AgentMessage = {
@@ -191,18 +190,16 @@ function readFinalStopReason(event: { type: string; messages?: ReadonlyArray<{ s
 
 const NO_MODEL_ERROR = "No model has been selected, please login and select a default model.";
 
-function unwrapIngressPayload(payload: unknown): { prompt?: string; source?: string } {
-  if (payload === null || typeof payload !== "object") return {};
+function unwrapIngressPayload(payload: unknown): string {
+  if (typeof payload === "string") return payload;
+  if (payload === null || typeof payload !== "object") return "";
   const outer = payload as Record<string, unknown>;
-  if ("payload" in outer && typeof outer.payload === "object" && outer.payload !== null) {
-    const inner = outer.payload as Record<string, unknown>;
-    return {
-      prompt: typeof inner.prompt === "string" ? inner.prompt : undefined,
-      source: typeof inner.source === "string" ? inner.source : undefined,
-    };
+  const inner = outer.payload;
+  if (typeof inner === "string") return inner;
+  if (inner !== null && typeof inner === "object") {
+    const prompt = (inner as Record<string, unknown>).prompt;
+    if (typeof prompt === "string") return prompt;
   }
-  return {
-    prompt: typeof outer.prompt === "string" ? outer.prompt : undefined,
-    source: typeof outer.source === "string" ? outer.source : undefined,
-  };
+  if (typeof outer.prompt === "string") return outer.prompt;
+  return "";
 }

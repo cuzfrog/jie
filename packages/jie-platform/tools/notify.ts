@@ -69,7 +69,7 @@ export function createNotifyTool(dependencies: NotifyDeps): Tool<NotifyInput> {
         kind: "agent",
         identity: { teamId: executionContext.teamId, agentRole: executionContext.agentRole, agentKey: executionContext.agentKey },
       };
-      const envelope = Events.custom(sender, clientTopic, { prompt: input.prompt, source: executionContext.agentKey });
+      const envelope = Events.custom(sender, clientTopic, input.prompt);
       dependencies.eventManager.publish(envelope);
 
       return {

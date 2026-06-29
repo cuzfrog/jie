@@ -3,7 +3,7 @@ import type {
   AgentEvent as PiAgentEvent,
   AgentMessage,
 } from "@earendil-works/pi-agent-core";
-import { createAgentBody, type CreateAgentBodyOptions } from "./agent-body";
+import { createAgentBody, type CreateAgentBodyOptions } from "./agent-body-factory";
 import { JieAgentBody } from "./jie-agent-body";
 import { createEventManager, type EventManager } from "../event";
 import {

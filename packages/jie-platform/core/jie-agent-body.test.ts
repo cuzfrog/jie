@@ -1,6 +1,6 @@
 import { type Agent, type AgentMessage } from "@earendil-works/pi-agent-core";
 import { JieAgentBody } from "./jie-agent-body";
-import { createEventManager, type EventManager } from "../event";
+import { createEventManager, Events, type EventManager } from "../event";
 import type { MemoryManager } from "../storage";
 import type { AgentSoul } from "../team";
 import type { StreamPublisher } from "./streaming";
@@ -167,13 +167,7 @@ describe("JieAgentBody — start() subscriptions", () => {
     h.events.subscribe("user.prompt", () => {
       received = true;
     });
-    h.events.publish({
-      version: 1,
-      topic: "user.prompt",
-      sender: { kind: "user" },
-      timestamp: new Date().toISOString(),
-      payload: { teamId: "t1", agentKey: "general-1", prompt: "hi" },
-    });
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "hi", "general-1"));
     expect(received).toBe(true);
   });
 
@@ -194,13 +188,7 @@ describe("JieAgentBody — start() subscriptions", () => {
     h.events.subscribe("custom.t1.task.recorded", () => {
       received = true;
     });
-    h.events.publish({
-      version: 1,
-      topic: "custom.t1.task.recorded",
-      sender: { kind: "agent", identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" } },
-      timestamp: new Date().toISOString(),
-      payload: { clientTopic: "t1.task.recorded", payload: { prompt: "task", source: "x" } },
-    });
+    h.events.publish(Events.custom({ kind: "agent", identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" } }, "t1.task.recorded", "task"));
     expect(received).toBe(true);
     b2.stop();
   });
@@ -276,13 +264,7 @@ describe("JieAgentBody — prompt ingress format", () => {
   test("`agent.prompt` (no source) is formatted as `[user]: <prompt>`", async () => {
     const body = h.makeBody();
     await body.start();
-    h.events.publish({
-      version: 1,
-      topic: "user.prompt",
-      sender: { kind: "user" },
-      timestamp: new Date().toISOString(),
-      payload: { teamId: "t1", agentKey: "general-1", prompt: "hello" },
-    });
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "hello", "general-1"));
     const calls = h.prompt.mock.calls as Array<[AgentMessage]>;
     expect(calls.length).toBeGreaterThan(0);
     const synthetic = calls[0]![0] as { role: string; content: string };
@@ -291,18 +273,12 @@ describe("JieAgentBody — prompt ingress format", () => {
     body.stop();
   });
 
-  test("notify-sourced event (with source) is formatted as `[<source> on '<topic>']: <prompt>`", async () => {
+  test("notify-sourced event is formatted as `[<agentKey> on '<topic>']: <prompt>`", async () => {
     const body = h.makeBody({
       soul: makeSoul({ subscriptions: ["task.researched"] }),
     });
     await body.start();
-    h.events.publish({
-      version: 1,
-      topic: "custom.t1.task.researched",
-      sender: { kind: "agent", identity: { teamId: "t1", agentRole: "researcher", agentKey: "researcher-1" } },
-      timestamp: new Date().toISOString(),
-      payload: { clientTopic: "t1.task.researched", payload: { prompt: "report", source: "researcher-1" } },
-    });
+    h.events.publish(Events.custom({ kind: "agent", identity: { teamId: "t1", agentRole: "researcher", agentKey: "researcher-1" } }, "t1.task.researched", "report"));
     const calls = h.prompt.mock.calls as Array<[AgentMessage]>;
     const synthetic = calls[0]![0] as { content: string };
     expect(synthetic.content).toBe(
@@ -450,13 +426,7 @@ describe("JieAgentBody — handlePiAgentEvent (stream bridge)", () => {
     const body = h.makeBody();
     await body.start();
     h.state.isStreaming = true;
-    h.events.publish({
-      topic: "user.prompt",
-      payload: { teamId: "t1", agentKey: "general-1", prompt: "queued msg" },
-      sender: { kind: "user" },
-      version: 1,
-      timestamp: new Date().toISOString(),
-    });
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "queued msg", "general-1"));
     expect(h.followUp.mock.calls.length).toBe(0);
     expect(h.prompt.mock.calls.length).toBe(0);
     h.state.isStreaming = false;

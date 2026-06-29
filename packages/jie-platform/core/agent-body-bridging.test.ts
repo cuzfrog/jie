@@ -1,6 +1,6 @@
 import type { Agent, AgentEvent as PiAgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, AssistantMessageEvent } from "@earendil-works/pi-ai";
-import { createAgentBody, type AgentBody, type CreateAgentBodyOptions } from "./agent-body";
+import { createAgentBody, type AgentBody, type CreateAgentBodyOptions } from "./agent-body-factory";
 import { createEventManager, type EventManager } from "../event";
 
 import {

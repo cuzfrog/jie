@@ -145,8 +145,8 @@ describe("reduceStreamChunk", () => {
 describe("reduceToolCall + reduceToolResult", () => {
   test("a tool.call followed by a matching tool.result produces a single result card", () => {
     let state = promptedState();
-    state = reduce(state, Actions.receiveEvent(Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls", false)));
-    state = reduce(state, Actions.receiveEvent(Events.agentToolResult(TOOL_SENDER, "c1", "bash", "out", false, 12, null)));
+    state = reduce(state, Actions.receiveEvent(Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls")));
+    state = reduce(state, Actions.receiveEvent(Events.agentToolResult(TOOL_SENDER, "c1", "bash", "out", 12, null)));
     const agent = state.agents.get("my-team:general-1");
     expect(agent?.currentTurn?.cards.length).toBe(1);
     const card = agent?.currentTurn?.cards[0];
@@ -163,15 +163,15 @@ describe("reduceToolCall + reduceToolResult", () => {
   test("a tool.result with no matching tool.call is rejected (no phantom card)", () => {
     let state = promptedState();
     const before = state.agents.get("my-team:general-1")?.currentTurn?.cards.length ?? 0;
-    const after = reduce(state, Actions.receiveEvent(Events.agentToolResult(TOOL_SENDER, "c2", "bash", "out", false, 5, null)));
+    const after = reduce(state, Actions.receiveEvent(Events.agentToolResult(TOOL_SENDER, "c2", "bash", "out", 5, null)));
     expect(after).toBe(state);
     expect(after.agents.get("my-team:general-1")?.currentTurn?.cards.length).toBe(before);
   });
 
   test("an error result carries the error message and nulls the output", () => {
     let state = promptedState();
-    state = reduce(state, Actions.receiveEvent(Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls", false)));
-    state = reduce(state, Actions.receiveEvent(Events.agentToolResult(TOOL_SENDER, "c1", "bash", null, false, 5, "boom")));
+    state = reduce(state, Actions.receiveEvent(Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls")));
+    state = reduce(state, Actions.receiveEvent(Events.agentToolResult(TOOL_SENDER, "c1", "bash", null, 5, "boom")));
     const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
     if (card?.kind === "toolResult") {
       expect(card.output).toBeNull();
@@ -182,7 +182,7 @@ describe("reduceToolCall + reduceToolResult", () => {
   test("rejects events from a foreign team", () => {
     const state = promptedState();
     const foreign: Parameters<typeof Events.agentToolCall>[0] = { kind: "agent", identity: { teamId: "other-team", agentRole: "general", agentKey: "general-1" } };
-    const state2 = reduce(state, Actions.receiveEvent(Events.agentToolCall(foreign, "c1", "bash", "x", false)));
+    const state2 = reduce(state, Actions.receiveEvent(Events.agentToolCall(foreign, "c1", "bash", "x")));
     expect(state2).toBe(state);
   });
 });
