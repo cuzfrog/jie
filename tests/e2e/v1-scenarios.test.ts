@@ -27,6 +27,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { main } from "../../packages/jie-cli/index.ts";
+import { NO_MODEL_ERROR } from "../../packages/jie-platform/no-model-error.ts";
 
 interface Fixture {
   provider: string;
@@ -326,9 +327,7 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
         (writeErr?.mock.calls as unknown[][])
           .map((c) => String(c[0] as string))
           .join("") ?? "";
-      expect(stderr1).toContain(
-        "No model has been selected, please login and select a default model.",
-      );
+      expect(stderr1).toContain(NO_MODEL_ERROR);
 
       // Simulate `jie model lm-studio/qwen3.5-2b` and the user
       // creating `.jie/models.json` with the provider config.

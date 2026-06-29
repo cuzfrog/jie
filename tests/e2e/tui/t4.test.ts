@@ -1,5 +1,5 @@
 import { createEventManager, type EventEnvelope } from "@cuzfrog/jie-platform/event";
-import { attachNoModelBody, loadFixture, startTuiOn } from "./harness";
+import { attachNoModelBody, loadFixture, NO_MODEL_ERROR, startTuiOn } from "./harness";
 
 describe("T4 — first-time setup (TUI flow)", () => {
   test("team loads, first prompt raises an error banner about missing model", () => {
@@ -16,7 +16,7 @@ describe("T4 — first-time setup (TUI flow)", () => {
     const stop = attachNoModelBody(bus, "my-team", "general-1", "general");
     tui.submit("Tell me a joke");
     const state = tui.getState();
-    expect(state.errorBanner?.text).toBe("No model has been selected, please login and select a default model.");
+    expect(state.errorBanner?.text).toBe(NO_MODEL_ERROR);
     stop();
   });
 
@@ -29,7 +29,7 @@ describe("T4 — first-time setup (TUI flow)", () => {
     const tui = startTuiOn(bus, [teamLoaded]);
     const stop = attachNoModelBody(bus, "my-team", "general-1", "general");
     tui.submit("Tell me a joke");
-    expect(tui.getState().errorBanner?.text).toBe("No model has been selected, please login and select a default model.");
+    expect(tui.getState().errorBanner?.text).toBe(NO_MODEL_ERROR);
     stop();
     bus.publish(userPrompt);
     for (const env of rest) bus.publish(env);

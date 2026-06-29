@@ -175,17 +175,10 @@ export class JieAgentBody implements AgentBody {
     };
     if (this.agent.state.isStreaming) {
       this.queue.push(message);
-    } else if (!hasModel(this.agent)) {
-      this.eventManager.publish(Events.agentIdle(this.sender, "error", true));
-      this.eventManager.publish(Events.systemError({ kind: "system" }, NO_MODEL_ERROR));
     } else {
       void this.agent.prompt(message);
     }
   }
-}
-
-function hasModel(agent: Agent): boolean {
-  return agent.state.model !== undefined && agent.state.model !== null;
 }
 
 function readFinalStopReason(event: Extract<PiAgentEvent, { type: "agent_end" }> | Extract<PiAgentEvent, { type: "turn_end" }>): { stopReason: string; isError: boolean; errorMessage: string | null } {
@@ -202,5 +195,3 @@ function readFinalStopReason(event: Extract<PiAgentEvent, { type: "agent_end" }>
   const isError = stopReason === "error" || stopReason === "aborted";
   return { stopReason, isError, errorMessage: lastAssistant?.errorMessage ?? null };
 }
-
-const NO_MODEL_ERROR = "No model has been selected, please login and select a default model.";
