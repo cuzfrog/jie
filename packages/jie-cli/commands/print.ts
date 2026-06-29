@@ -4,6 +4,8 @@ import type { ParsedArgsMap } from "../cli-flags";
 
 export type PrintArgs = ParsedArgsMap["print"];
 
+type ChunkEnvelope = { sender: Sender; payload: { text: string; seq: number; stream_id: number } };
+
 export async function runPrint(
   handle: JiePlatform,
   teamId: string,
@@ -12,19 +14,20 @@ export async function runPrint(
   agentKeys: string[],
   args: PrintArgs,
 ): Promise<number> {
-  handle.events.subscribe("agent.stream.chunk", (envelope: { sender: Sender; payload: { text: string; seq: number } }) => {
-    if (envelope.sender.kind !== "agent") return;
-    if (envelope.sender.identity.teamId !== teamId) return;
-    if (envelope.sender.identity.agentRole !== leaderRole) return;
-    const text = envelope.payload.text;
+  handle.events.subscribe("agent.stream.chunk", (envelope) => {
+    const e = envelope as unknown as ChunkEnvelope;
+    if (e.sender.kind !== "agent") return;
+    if (e.sender.identity.teamId !== teamId) return;
+    if (e.sender.identity.agentRole !== leaderRole) return;
+    const text = e.payload.text;
     if (args.json) {
-      process.stdout.write(JSON.stringify({ chunk: text, seq: envelope.payload.seq }) + "\n");
+      process.stdout.write(JSON.stringify({ chunk: text, seq: e.payload.seq }) + "\n");
     } else {
       process.stdout.write(text);
     }
   });
 
-  handle.events.publish(Events.userPrompt({ kind: "cli" }, teamId, args.instruction, leaderKey));
+  handle.events.publish(Events.userPrompt({ kind: "user" }, teamId, args.instruction, leaderKey));
 
   try {
     await setupIdleGate(handle.events, agentKeys, args.timeout);
@@ -70,11 +73,11 @@ function setupIdleGate(events: EventManager, agentKeys: string[], timeoutSec: nu
   };
 
   const unsubTurnStart = events.subscribe("agent.turn.start", (envelope) => {
-    const agentKey = agentKeyOf(envelope);
+    const agentKey = agentKeyOf(envelope as unknown as { sender: Sender });
     if (agentKey !== null && state.has(agentKey)) state.set(agentKey, "busy");
   });
   const unsubIdle = events.subscribe("agent.idle", (envelope) => {
-    const agentKey = agentKeyOf(envelope);
+    const agentKey = agentKeyOf(envelope as unknown as { sender: Sender });
     if (agentKey !== null && state.has(agentKey)) {
       state.set(agentKey, "idle");
       if ([...state.values()].every((v) => v === "idle")) evaluate();

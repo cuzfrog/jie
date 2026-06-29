@@ -185,7 +185,7 @@ describe("AgentBody — pi-agent event bridging", () => {
     expect(idle).toHaveLength(1);
     const env = idle[0] as { topic: string; payload: object };
     expect(env.topic).toBe("agent.idle");
-    expect(env.payload).toBeNull();
+    expect(env.payload).toEqual({ stopReason: "stop", isError: false });
   });
 
   test("body-side alternation: turn_start always precedes agent.idle", () => {
@@ -437,40 +437,5 @@ describe("AgentBody — pi-agent event bridging", () => {
     const env = results[0] as { payload: { output: string | null; error: string | null } };
     expect(env.payload.output).toBeNull();
     expect(env.payload.error).toBe("boom");
-  });
-});
-
-describe("AgentBody — agent.queue.update", () => {
-  let body: AgentBody | undefined;
-
-  afterEach(() => {
-    body?.stop();
-  });
-
-  test("queue.update published on enqueue with synthetic snapshot", async () => {
-    const { opts, events: eventManager, subscribeSubject } = makeOpts();
-    const queueUpdates: object[] = [];
-    subscribeSubject("agent.queue.update", (_s, p) => {
-      queueUpdates.push(p);
-    });
-    const result = makeFakeAgentFactory({
-      onEvent: (l) => {
-        void l;
-      },
-    });
-    body = createAgentBody({ ...opts, createAgent: result.factory });
-    result.fake.state.isStreaming = true;
-    await (body as unknown as { start: () => Promise<void> }).start();
-    eventManager.publish({
-      version: 1,
-      topic: "team.t1.agent.general-1.prompt",
-      sender: { kind: "cli" },
-      timestamp: new Date().toISOString(),
-      payload: { teamId: "t1", agentKey: "general-1", prompt: "queued" },
-    });
-    await new Promise((r) => setTimeout(r, 0));
-    expect(queueUpdates.length).toBeGreaterThan(0);
-    const last = queueUpdates[queueUpdates.length - 1] as { payload: object };
-    expect((last.payload as { prompts: string[] }).prompts).toEqual(["[user]: queued"]);
   });
 });

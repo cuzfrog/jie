@@ -12,6 +12,7 @@ export interface StreamPublisher {
 }
 
 export function makeStreamPublisher(events: EventManager, sender: Sender): StreamPublisher {
+  const agentSender = sender as Parameters<typeof Events.agentStreamChunk>[0];
   let streamId = 0;
   let buffer = "";
   let currentBlockType: BlockType | null = null;
@@ -28,7 +29,7 @@ export function makeStreamPublisher(events: EventManager, sender: Sender): Strea
       return;
     }
     events.publish(Events.agentStreamChunk(
-      sender,
+      agentSender,
       streamId,
       seq,
       currentBlockType,
@@ -74,7 +75,7 @@ export function makeStreamPublisher(events: EventManager, sender: Sender): Strea
 
     endStream(): { streamId: number; totalChunks: number } {
       flush();
-      events.publish(Events.agentStreamEnd(sender, streamId, totalChunks));
+      events.publish(Events.agentStreamEnd(agentSender, streamId, totalChunks));
       return { streamId, totalChunks };
     },
   };

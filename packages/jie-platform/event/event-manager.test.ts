@@ -18,6 +18,9 @@ const agentSender: Sender = {
   identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" },
 };
 
+const systemSender: Sender = { kind: "system" };
+const userSender: Sender = { kind: "user" };
+
 describe("createEventManager — envelope stamping", () => {
   test("stamps version, type, sender, timestamp", () => {
     const bus = createEventBus();
@@ -34,34 +37,35 @@ describe("createEventManager — envelope stamping", () => {
 
   test("payload is passed through for non-tool topics", () => {
     const bus = createEventBus();
-    const received = collect(bus, "agent.queue.update");
+    const received = collect(bus, "user.prompt");
     const events: EventManager = createEventManager(bus);
-    events.publish(Events.agentQueueUpdate(agentSender, ["a", "b"]));
-    const env = received[0] as EventEnvelope<"agent.queue.update">;
-    expect(env.payload).toEqual({ prompts: ["a", "b"] });
+    events.publish(Events.userPrompt(userSender, "t1", "hello", "general-1"));
+    const env = received[0] as EventEnvelope<"user.prompt">;
+    expect(env.payload).toEqual({ teamId: "t1", agentKey: "general-1", prompt: "hello" });
   });
 
   test("agent.idle has null payload", () => {
     const bus = createEventBus();
     const received = collect(bus, "agent.idle");
     const events: EventManager = createEventManager(bus);
-    events.publish(Events.agentIdle(agentSender));
+    events.publish(Events.agentIdle(agentSender, "stop", false));
     const env = received[0] as EventEnvelope<"agent.idle">;
-    expect(env.payload).toBeNull();
+    expect(env.payload).toEqual({ stopReason: "stop", isError: false });
   });
 
-  test("CLI sender on team.loaded envelope has kind 'cli'", () => {
+  test("system sender on system.team.loaded envelope has kind 'system'", () => {
     const bus = createEventBus();
-    const received = collect(bus, "team.t1.loaded");
+    const received = collect(bus, "system.team.loaded");
     const events: EventManager = createEventManager(bus);
-    events.publish(Events.teamLoaded({ kind: "cli" }, "t1", []));
-    const env = received[0] as EventEnvelope<string>;
-    expect(env.sender.kind).toBe("cli");
+    events.publish(Events.teamLoaded(systemSender, "t1", []));
+    const env = received[0] as EventEnvelope<"system.team.loaded">;
+    expect(env.sender.kind).toBe("system");
+    expect(env.topic).toBe("system.team.loaded");
   });
 });
 
-describe("createEventManager — topic interpolation", () => {
-  test("agent.tool.call publishes on the subject from the envelope", () => {
+describe("createEventManager — topic shape", () => {
+  test("agent.tool.call publishes on its static subject", () => {
     const bus = createEventBus();
     const received = collect(bus, "agent.tool.call");
     const events: EventManager = createEventManager(bus);
@@ -69,38 +73,47 @@ describe("createEventManager — topic interpolation", () => {
     expect(received).toHaveLength(1);
   });
 
-  test("userPrompt publishes to team.{teamId}.agent.{agentKey}.prompt", () => {
+  test("userPrompt publishes to the static 'user.prompt' topic with teamId/agentKey in payload", () => {
     const bus = createEventBus();
-    const received = collect(bus, "team.t1.agent.general-1.prompt");
+    const received = collect(bus, "user.prompt");
     const events: EventManager = createEventManager(bus);
-    events.publish(Events.userPrompt({ kind: "cli" }, "t1", "hi", "general-1"));
+    events.publish(Events.userPrompt(userSender, "t1", "hi", "general-1"));
     expect(received).toHaveLength(1);
-    const env = received[0] as EventEnvelope<string>;
-    expect(env.topic).toBe("team.t1.agent.general-1.prompt");
-    expect(env.sender).toEqual({ kind: "cli" });
+    const env = received[0] as EventEnvelope<"user.prompt">;
+    expect(env.topic).toBe("user.prompt");
+    expect(env.sender).toEqual(userSender);
     expect(env.payload).toEqual({ teamId: "t1", agentKey: "general-1", prompt: "hi" });
   });
 
-  test("userPrompt targeted to a non-leader agentKey", () => {
+  test("userPrompt targeted to a non-leader agentKey still resolves", () => {
     const bus = createEventBus();
-    const received = collect(bus, "team.t1.agent.worker-2.prompt");
+    const received = collect(bus, "user.prompt");
     const events: EventManager = createEventManager(bus);
-    events.publish(Events.userPrompt({ kind: "tui" }, "t1", "go", "worker-2"));
+    events.publish(Events.userPrompt(userSender, "t1", "go", "worker-2"));
     expect(received).toHaveLength(1);
-    const env = received[0] as EventEnvelope<string>;
-    expect(env.topic).toBe("team.t1.agent.worker-2.prompt");
-    expect(env.sender).toEqual({ kind: "tui" });
+    const env = received[0] as EventEnvelope<"user.prompt">;
+    expect(env.topic).toBe("user.prompt");
     expect(env.payload).toEqual({ teamId: "t1", agentKey: "worker-2", prompt: "go" });
   });
 
-  test("teamLoaded interpolates teamId from payload", () => {
+  test("teamLoaded publishes to the static 'system.team.loaded' topic", () => {
     const bus = createEventBus();
-    const received = collect(bus, "team.t1.loaded");
+    const received = collect(bus, "system.team.loaded");
     const events: EventManager = createEventManager(bus);
-    events.publish(Events.teamLoaded({ kind: "cli" }, "t1", [{ role: "leader", agent_key: "leader-1", is_leader: true }]));
+    events.publish(Events.teamLoaded(systemSender, "t1", [{ role: "leader", agent_key: "leader-1", is_leader: true }]));
     expect(received).toHaveLength(1);
-    const env = received[0] as EventEnvelope<string>;
-    expect(env.topic).toBe("team.t1.loaded");
+    const env = received[0] as EventEnvelope<"system.team.loaded">;
+    expect(env.topic).toBe("system.team.loaded");
+  });
+
+  test("interruptTeam publishes to 'system.team.interrupted'", () => {
+    const bus = createEventBus();
+    const received = collect(bus, "system.team.interrupted");
+    const events: EventManager = createEventManager(bus);
+    events.publish(Events.interruptTeam(systemSender, "t1"));
+    expect(received).toHaveLength(1);
+    const env = received[0] as EventEnvelope<"system.team.interrupted">;
+    expect(env.topic).toBe("system.team.interrupted");
   });
 
   test("custom prefixes the clientTopic with custom.", () => {
@@ -109,26 +122,26 @@ describe("createEventManager — topic interpolation", () => {
     const events: EventManager = createEventManager(bus);
     events.publish(Events.custom(agentSender, "t1.task", { prompt: "x" }));
     expect(received).toHaveLength(1);
-    const env = received[0] as EventEnvelope<string>;
+    const env = received[0] as { topic: string; payload: unknown };
     expect(env.topic).toBe("custom.t1.task");
     expect(env.payload).toEqual({ clientTopic: "t1.task", payload: { prompt: "x" } });
   });
 });
 
 describe("createEventManager — subscribe", () => {
-  test("type-safe subscribe callback receives typed envelope", () => {
+  test("subscribe callback receives typed envelope on static topic", () => {
     const bus = createEventBus();
     const events: EventManager = createEventManager(bus);
-    const received: EventEnvelope<string>[] = [];
-    const off = events.subscribe("team.t1.agent.general-1.prompt", (e) => {
-      received.push(e);
+    const received: EventEnvelope<"user.prompt">[] = [];
+    const off = events.subscribe("user.prompt", (e) => {
+      received.push(e as EventEnvelope<"user.prompt">);
     });
-    events.publish(Events.userPrompt({ kind: "cli" }, "t1", "hello", "general-1"));
+    events.publish(Events.userPrompt(userSender, "t1", "hello", "general-1"));
     expect(received).toHaveLength(1);
-    expect((received[0]!.payload as { prompt: string }).prompt).toBe("hello");
-    expect(received[0]!.sender.kind).toBe("cli");
+    expect(received[0]!.payload.prompt).toBe("hello");
+    expect(received[0]!.sender.kind).toBe("user");
     off();
-    events.publish(Events.userPrompt({ kind: "cli" }, "t1", "world", "general-1"));
+    events.publish(Events.userPrompt(userSender, "t1", "world", "general-1"));
     expect(received).toHaveLength(1);
   });
 
@@ -137,7 +150,7 @@ describe("createEventManager — subscribe", () => {
     const events: EventManager = createEventManager(bus);
     const received: EventEnvelope<"agent.stream.chunk">[] = [];
     events.subscribe("agent.stream.chunk", (e) => {
-      received.push(e);
+      received.push(e as EventEnvelope<"agent.stream.chunk">);
     });
     events.publish(Events.agentStreamChunk(agentSender, 1, 1, "text", "hello"));
     expect(received).toHaveLength(1);
@@ -147,9 +160,9 @@ describe("createEventManager — subscribe", () => {
   test("subscribe to a custom-prefixed topic receives the wrapped envelope", () => {
     const bus = createEventBus();
     const events: EventManager = createEventManager(bus);
-    const received: EventEnvelope<string>[] = [];
+    const received: { topic: string; payload: unknown }[] = [];
     events.subscribe("custom.t1.task.recorded", (e) => {
-      received.push(e);
+      received.push(e as unknown as { topic: string; payload: unknown });
     });
     events.publish(Events.custom(agentSender, "t1.task.recorded", { prompt: "go" }));
     expect(received).toHaveLength(1);
@@ -160,9 +173,9 @@ describe("createEventManager — subscribe", () => {
   test("subscriberCount counts subscribers for the given subject", () => {
     const bus = createEventBus();
     const events: EventManager = createEventManager(bus);
-    expect(events.subscriberCount("team.t1.agent.general-1.prompt")).toBe(0);
-    events.subscribe("team.t1.agent.general-1.prompt", () => {});
-    expect(events.subscriberCount("team.t1.agent.general-1.prompt")).toBe(1);
+    expect(events.subscriberCount("user.prompt")).toBe(0);
+    events.subscribe("user.prompt", () => {});
+    expect(events.subscriberCount("user.prompt")).toBe(1);
     expect(events.subscriberCount("custom.t1.task.recorded")).toBe(0);
     events.subscribe("custom.t1.task.recorded", () => {});
     expect(events.subscriberCount("custom.t1.task.recorded")).toBe(1);

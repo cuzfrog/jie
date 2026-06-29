@@ -1,26 +1,21 @@
 import type { EventBus } from "./event-bus";
 import { createEventBus } from "./event-bus";
-import type { EventEnvelope } from "./events";
-
-
+import type { EventEnvelope, EventType } from "./events";
 
 export interface EventManager {
-  publish<T extends string>(event: EventEnvelope<T>): void;
+  publish<T extends EventType>(event: EventEnvelope<T>): void;
   /** returns an unsubscribe function */
-  subscribe<T extends string>(subject: T, callback: (event: EventEnvelope<T>) => void): () => void;
+  subscribe<T extends EventType>(subject: T, callback: (event: EventEnvelope<T>) => void): () => void;
   subscriberCount(subject: string): number;
 }
 
-const TRUNCATION_BYTES = 4 * 1024;
-const TRUNCATION_MARKER = "...[%d chars truncated]...";
-
 export function createEventManager(bus: EventBus = createEventBus()): EventManager {
   return {
-    publish<T extends string>(event: EventEnvelope<T>): void {
+    publish<T extends EventType>(event: EventEnvelope<T>): void {
       const shaped = shapeEnvelope(event);
       bus.publish(shaped.topic, shaped);
     },
-    subscribe<T extends string>(subject: T, callback: (event: EventEnvelope<T>) => void): () => void {
+    subscribe<T extends EventType>(subject: T, callback: (event: EventEnvelope<T>) => void): () => void {
       return bus.subscribe(subject, (_subject, env) => {
         callback(env as EventEnvelope<T>);
       });
@@ -31,12 +26,15 @@ export function createEventManager(bus: EventBus = createEventBus()): EventManag
   };
 }
 
+const TRUNCATION_BYTES = 4 * 1024;
+const TRUNCATION_MARKER = "...[%d chars truncated]...";
+
 const SHAPERS: Record<string, (payload: unknown) => unknown> = {
   "agent.tool.call": (payload) => shapeToolCall(payload as { tool_call_id: string; name: string; input: string; input_truncated: boolean }),
   "agent.tool.result": (payload) => shapeToolResult(payload as { tool_call_id: string; name: string; output: string | null; output_truncated: boolean; duration_ms: number; error: string | null }),
 };
 
-function shapeEnvelope<T extends string>(event: EventEnvelope<T>): EventEnvelope<T> {
+function shapeEnvelope<T extends EventType>(event: EventEnvelope<T>): EventEnvelope<T> {
   const shaper = SHAPERS[event.topic];
   if (shaper === undefined) return event;
   return { ...event, payload: shaper(event.payload) } as EventEnvelope<T>;

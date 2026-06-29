@@ -68,9 +68,9 @@ describe("runPrint", () => {
     expect(events.subscribe).toHaveBeenCalledWith("agent.idle", expect.any(Function));
     expect(events.publish).toHaveBeenCalledWith(
       expect.objectContaining({
-        topic: "team.t1.agent.general-1.prompt",
+        topic: "user.prompt",
         payload: expect.objectContaining({ teamId: "t1", agentKey: "general-1", prompt: "hi" }),
-        sender: expect.objectContaining({ kind: "cli" }),
+        sender: expect.objectContaining({ kind: "user" }),
       }),
     );
     expect(handle.stop).toHaveBeenCalled();

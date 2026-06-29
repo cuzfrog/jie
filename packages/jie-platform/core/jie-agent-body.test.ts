@@ -20,9 +20,10 @@ function makeSoul(overrides: Partial<AgentSoul> = {}): AgentSoul {
 function makeFakeAgent(overrides: Partial<{
   messages: AgentMessage[];
   isStreaming: boolean;
+  model: unknown;
 }> = {}): {
   agent: Agent;
-  state: { messages: AgentMessage[]; isStreaming: boolean };
+  state: { messages: AgentMessage[]; isStreaming: boolean; model: unknown };
   prompt: ReturnType<typeof vi.fn>;
   followUp: ReturnType<typeof vi.fn>;
   steer: ReturnType<typeof vi.fn>;
@@ -32,6 +33,7 @@ function makeFakeAgent(overrides: Partial<{
   const state = {
     messages: overrides.messages ?? [],
     isStreaming: overrides.isStreaming ?? false,
+    model: overrides.model ?? {},
   };
   const prompt = vi.fn(async () => {});
   const followUp = vi.fn(() => {});
@@ -159,26 +161,26 @@ describe("JieAgentBody — start() subscriptions", () => {
     body.stop();
   });
 
-  test("subscribes to team.{teamId}.agent.{agentKey}.prompt", async () => {
+  test("subscribes to the static user.prompt topic", async () => {
     await body.start();
     let received = false;
-    h.events.subscribe("team.t1.agent.general-1.prompt", () => {
+    h.events.subscribe("user.prompt", () => {
       received = true;
     });
     h.events.publish({
       version: 1,
-      topic: "team.t1.agent.general-1.prompt",
-      sender: { kind: "cli" },
+      topic: "user.prompt",
+      sender: { kind: "user" },
       timestamp: new Date().toISOString(),
       payload: { teamId: "t1", agentKey: "general-1", prompt: "hi" },
     });
     expect(received).toBe(true);
   });
 
-  test("each body subscribes to its own agent prompt subject", async () => {
+  test("each body subscribes to the shared user.prompt subject and filters by agentKey", async () => {
     const b2 = h.makeBody({ agentKey: "worker-1" });
     await b2.start();
-    expect(h.events.subscriberCount("team.t1.agent.worker-1.prompt")).toBe(1);
+    expect(h.events.subscriberCount("user.prompt")).toBe(1);
     b2.stop();
   });
 
@@ -276,8 +278,8 @@ describe("JieAgentBody — prompt ingress format", () => {
     await body.start();
     h.events.publish({
       version: 1,
-      topic: "team.t1.agent.general-1.prompt",
-      sender: { kind: "cli" },
+      topic: "user.prompt",
+      sender: { kind: "user" },
       timestamp: new Date().toISOString(),
       payload: { teamId: "t1", agentKey: "general-1", prompt: "hello" },
     });
@@ -449,9 +451,9 @@ describe("JieAgentBody — handlePiAgentEvent (stream bridge)", () => {
     await body.start();
     h.state.isStreaming = true;
     h.events.publish({
-      topic: "team.t1.agent.general-1.prompt",
-      payload: { prompt: "queued msg" },
-      sender: { kind: "cli" },
+      topic: "user.prompt",
+      payload: { teamId: "t1", agentKey: "general-1", prompt: "queued msg" },
+      sender: { kind: "user" },
       version: 1,
       timestamp: new Date().toISOString(),
     });
@@ -488,18 +490,18 @@ describe("JieAgentBody — addExternalCleanup + stop()", () => {
     const h = makeHarness();
     const body = h.makeBody();
     await body.start();
-    expect(h.events.subscriberCount("team.t1.agent.general-1.prompt")).toBe(1);
+    expect(h.events.subscriberCount("user.prompt")).toBe(1);
     body.stop();
-    expect(h.events.subscriberCount("team.t1.agent.general-1.prompt")).toBe(0);
+    expect(h.events.subscriberCount("user.prompt")).toBe(0);
   });
 
   test("start() is idempotent (second call does not re-subscribe)", async () => {
     const h = makeHarness();
     const body = h.makeBody();
     await body.start();
-    const countAfterFirst = h.events.subscriberCount("team.t1.agent.general-1.prompt");
+    const countAfterFirst = h.events.subscriberCount("user.prompt");
     await body.start();
-    const countAfterSecond = h.events.subscriberCount("team.t1.agent.general-1.prompt");
+    const countAfterSecond = h.events.subscriberCount("user.prompt");
     expect(countAfterFirst).toBe(countAfterSecond);
     body.stop();
   });

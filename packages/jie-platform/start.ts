@@ -111,8 +111,7 @@ function publishTeamLoaded(events: EventManager, teamId: string, blueprint: Team
     agent_key: `${r.role}-1`,
     is_leader: r.role === blueprint.leaderRole,
   }));
-  events.publish(Events.teamLoaded({ kind: "cli" }, teamId, agents));
-  events.publish(Events.systemTeamsLoaded({ kind: "cli" }, teamId, agents));
+  events.publish(Events.teamLoaded({ kind: "system" }, teamId, agents));
 }
 
 const NO_MODEL_ERROR =
@@ -132,7 +131,7 @@ function resolveSoulModel(
   soul: AgentSoul,
   settingsStore: SettingsStore,
   resolveModel: (provider: string, modelId: string) => Model<Api>,
-): Model<Api> {
+): Model<Api> | undefined {
 
   const settings = settingsStore.load();
   const modelStr = soul.model !== "" ? soul.model : (
@@ -140,9 +139,7 @@ function resolveSoulModel(
       ? `${settings.defaultProvider}/${settings.defaultModel}`
       : ""
   );
-  if (modelStr === "") {
-    throw new Error(NO_MODEL_ERROR);
-  }
+  if (modelStr === "") return undefined;
   const slash = modelStr.indexOf("/");
   if (slash === -1) {
     throw new Error(`invalid model string: ${modelStr}`);

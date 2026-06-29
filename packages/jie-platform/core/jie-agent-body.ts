@@ -49,18 +49,24 @@ export class JieAgentBody implements AgentBody {
   }
 
   handlePiAgentEvent(event: PiAgentEvent): void {
+    const agentSender = this.sender as Parameters<typeof Events.agentTurnStart>[0];
     switch (event.type) {
       case "turn_start":
-        this.eventManager.publish(Events.agentTurnStart(this.sender));
+        this.eventManager.publish(Events.agentTurnStart(agentSender));
         return;
       case "agent_end":
-        this.eventManager.publish(Events.agentIdle(this.sender));
+      case "turn_end": {
+        const final = readFinalStopReason(event as unknown as Parameters<typeof readFinalStopReason>[0]);
+        this.eventManager.publish(Events.agentIdle(agentSender, final.stopReason, final.isError));
+        if (final.isError && final.errorMessage !== null) {
+          this.eventManager.publish(Events.systemError({ kind: "system" }, final.errorMessage));
+        }
         if (this.queue.length > 0) {
           const next = this.queue.shift()!;
-          this.publishQueueSnapshot();
           this.agent.followUp(next);
         }
         return;
+      }
       case "message_start":
         this.stream.beginStream();
         return;
@@ -115,7 +121,6 @@ export class JieAgentBody implements AgentBody {
 
     while (this.queue.length > 0) {
       const next = this.queue.shift()!;
-      this.publishQueueSnapshot();
       await this.agent.prompt(next);
     }
   }
@@ -128,9 +133,11 @@ export class JieAgentBody implements AgentBody {
   }
 
   private registerSubscriptions(): void {
-    const ownPromptSubject = `team.${this.teamId}.agent.${this.agentKey}.prompt`;
     this.unsubscribers.push(
-      this.eventManager.subscribe(ownPromptSubject, (env) => {
+      this.eventManager.subscribe("user.prompt", (env) => {
+        if (env.payload === null || typeof env.payload !== "object") return;
+        const payload = env.payload as { teamId?: unknown; agentKey?: unknown };
+        if (payload.teamId !== this.teamId || payload.agentKey !== this.agentKey) return;
         this.ingestEvent(this.agentKey, env);
       }),
     );
@@ -157,23 +164,32 @@ export class JieAgentBody implements AgentBody {
     } as unknown as AgentMessage;
     if (this.agent.state.isStreaming) {
       this.queue.push(message);
-      this.publishQueueSnapshot();
+    } else if (!hasModel(this.agent)) {
+      const text = NO_MODEL_ERROR;
+      const agentSender = this.sender as Parameters<typeof Events.agentTurnStart>[0];
+      this.eventManager.publish(Events.agentIdle(agentSender, "error", true));
+      this.eventManager.publish(Events.systemError({ kind: "system" }, text));
     } else {
       void this.agent.prompt(message);
     }
   }
-
-  private publishQueueSnapshot(): void {
-    this.eventManager.publish(Events.agentQueueUpdate(
-      this.sender,
-      this.queue.map((m) => formatSynthetic(m)),
-    ));
-  }
 }
 
-function formatSynthetic(message: AgentMessage): string {
-  return String((message as { content: unknown }).content);
+function hasModel(agent: Agent): boolean {
+  return (agent.state as { model?: unknown }).model !== undefined && (agent.state as { model?: unknown }).model !== null;
 }
+
+function readFinalStopReason(event: { type: string; messages?: ReadonlyArray<{ stopReason?: string; errorMessage?: string }>; message?: { stopReason?: string; errorMessage?: string } }): { stopReason: string; isError: boolean; errorMessage: string | null } {
+  const candidates: Array<{ stopReason?: string; errorMessage?: string }> = [];
+  if (Array.isArray(event.messages)) candidates.push(...event.messages);
+  if (event.message !== undefined) candidates.push(event.message);
+  const last = candidates[candidates.length - 1];
+  const stopReason = last?.stopReason ?? "stop";
+  const isError = stopReason === "error" || stopReason === "aborted";
+  return { stopReason, isError, errorMessage: last?.errorMessage ?? null };
+}
+
+const NO_MODEL_ERROR = "No model has been selected, please login and select a default model.";
 
 function unwrapIngressPayload(payload: unknown): { prompt?: string; source?: string } {
   if (payload === null || typeof payload !== "object") return {};

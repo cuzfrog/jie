@@ -37,7 +37,7 @@ describe("T2 — pass work in a team", () => {
     const envelopes = await loadFixture("t2");
     const { tui } = replayEnvelopes(envelopes);
     tui.injectKey("\x1b[D\x1b[D");
-    expect(tui.getState().showRail).toBe(true);
+    expect(tui.getState().showTeamRailPanel).toBe(true);
     expect(tui.getState().focusedAgentId).toBe("my-team:manager-1");
     tui.injectKey("\x1b[1;5B");
     expect(tui.getState().focusedAgentId).toBe("my-team:worker-1");

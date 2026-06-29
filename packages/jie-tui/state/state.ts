@@ -1,103 +1,79 @@
 export type AgentStatus = "idle" | "busy" | "err";
 export type EffortLevel = "low" | "medium" | "high" | "max";
 
-export interface ModelRef {
-  provider: string;
-  id: string;
-  effort: EffortLevel;
+export interface ModelReference {
+  readonly provider: string;
+  readonly id: string;
+  readonly effort: EffortLevel;
 }
 
-export interface Card {
-  kind: "toolCall" | "toolResult";
-  callId: string;
-  name: string;
-  input?: string;
-  output?: string | null;
-  inputTruncated?: boolean;
-  outputTruncated?: boolean;
-  durationMs?: number;
-  error?: string | null;
-  expanded: boolean;
+export interface MessageCard {
+  readonly kind: "toolCall" | "toolResult";
+  readonly callId: string;
+  readonly name: string;
+  readonly input?: string;
+  readonly output?: string | null;
+  readonly inputTruncated?: boolean;
+  readonly outputTruncated?: boolean;
+  readonly durationMs?: number;
+  readonly error?: string | null;
+  readonly expanded: boolean;
 }
 
-export interface Block {
-  kind: "text" | "thinking";
-  text: string;
-  expanded: boolean;
+export interface MessageBlock {
+  readonly kind: "text" | "thinking";
+  readonly text: string;
+  readonly expanded: boolean;
 }
 
-export interface Turn {
-  userPrompt: string;
-  cards: Card[];
-  blocks: Block[];
-  streamId: number | null;
+export interface MessageTurn {
+  readonly userPrompt: string;
+  readonly cards: MessageCard[];
+  readonly blocks: MessageBlock[];
+  readonly streamId: number | null;
 }
 
 export type AgentId = `${string}:${string}`;
 
 export interface AgentUiState {
-  agentId: AgentId;
-  teamId: string;
-  agentKey: string;
-  role: string;
-  isLeader: boolean;
-  status: AgentStatus;
-  lastIdleAt: number;
-  model: ModelRef | null;
-  history: Turn[];
-  currentTurn: Turn | null;
+  readonly agentId: AgentId;
+  readonly teamId: string;
+  readonly agentKey: string;
+  readonly role: string;
+  readonly isLeader: boolean;
+  readonly status: AgentStatus;
+  readonly lastIdleAt: number;
+  readonly model: ModelReference | null;
+  readonly history: MessageTurn[];
+  readonly currentTurn: MessageTurn | null;
 }
 
 export interface TransientMessage {
-  text: string;
-  shownAt: number;
+  readonly text: string;
+  readonly shownAt: number;
 }
 
 export interface ErrorBanner {
-  text: string;
-  raisedAt: number;
+  readonly text: string;
+  readonly raisedAt: number;
 }
 
 export interface TuiState {
-  teamId: string | null;
-  leaderAgentId: AgentId | null;
-  agents: Map<AgentId, AgentUiState>;
-  focusedAgentId: AgentId | null;
-  queue: string[];
-  transientMessage: TransientMessage | null;
-  errorBanner: ErrorBanner | null;
-  showRail: boolean;
+  readonly teamId: string | null;
+  readonly leaderAgentId: AgentId | null;
+  readonly agents: ReadonlyMap<AgentId, AgentUiState>;
+  readonly focusedAgentId: AgentId | null;
+  readonly transientMessage: TransientMessage | null;
+  readonly errorBanner: ErrorBanner | null;
+  readonly showTeamRailPanel: boolean;
 }
 
-export const composeAgentId = (teamId: string, agentKey: string): AgentId => `${teamId}:${agentKey}` as AgentId;
-
-export const emptyAgent = (agentId: AgentId, teamId: string, agentKey: string, role: string, isLeader: boolean): AgentUiState => ({
-  agentId,
-  teamId,
-  agentKey,
-  role,
-  isLeader,
-  status: "idle",
-  lastIdleAt: 0,
-  model: null,
-  history: [],
-  currentTurn: null,
-});
-
-export const freshTurn = (userPrompt: string): Turn => ({
-  userPrompt,
-  cards: [],
-  blocks: [],
-  streamId: null,
-});
-
-export const initialState = (): TuiState => ({
+export const INITIAL_TUI_STATE:TuiState = Object.freeze({
   teamId: null,
   leaderAgentId: null,
   agents: new Map(),
   focusedAgentId: null,
-  queue: [],
   transientMessage: null,
   errorBanner: null,
-  showRail: false,
-});
+  showTeamRailPanel: false,
+} as const);
