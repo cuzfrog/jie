@@ -124,7 +124,7 @@ describe("createEventManager — topic shape", () => {
     expect(received).toHaveLength(1);
     const env = received[0] as { topic: string; payload: unknown };
     expect(env.topic).toBe("custom.t1.task");
-    expect(env.payload).toEqual({ clientTopic: "t1.task", payload: "x" });
+    expect(env.payload).toEqual("x");
   });
 });
 
@@ -167,7 +167,7 @@ describe("createEventManager — subscribe", () => {
     events.publish(Events.custom(agentSender, "t1.task.recorded", "go"));
     expect(received).toHaveLength(1);
     expect(received[0]!.topic).toBe("custom.t1.task.recorded");
-    expect(received[0]!.payload).toEqual({ clientTopic: "t1.task.recorded", payload: "go" });
+    expect(received[0]!.payload).toEqual("go");
   });
 
   test("subscriberCount counts subscribers for the given subject", () => {

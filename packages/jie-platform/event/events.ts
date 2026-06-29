@@ -1,29 +1,14 @@
-export const EventTypes = {
-  AGENT_TURN_START: "agent.turn.start",
-  AGENT_IDLE: "agent.idle",
-  AGENT_TOOL_CALL: "agent.tool.call",
-  AGENT_TOOL_RESULT: "agent.tool.result",
-  AGENT_STREAM_CHUNK: "agent.stream.chunk",
-  AGENT_STREAM_END: "agent.stream.end",
-  USER_PROMPT: "user.prompt",
-  SYSTEM_TEAM_LOADED: "system.team.loaded",
-  SYSTEM_TEAM_INTERRUPTED: "system.team.interrupted",
-  SYSTEM_ERROR: "system.error",
-  CUSTOM: "custom",
-} as const;
-export type EventType = (typeof EventTypes)[keyof typeof EventTypes];
-
 type EventDef<S extends Sender, P = null> = { sender: S; payload: P };
 type EventDefinitions = {
-  [EventTypes.AGENT_TURN_START]: EventDef<AgentSender>;
-  [EventTypes.AGENT_IDLE]: EventDef<AgentSender, { stopReason: string, isError: boolean }>;
-  [EventTypes.AGENT_TOOL_CALL]: EventDef<AgentSender, {
+  "agent.turn.start": EventDef<AgentSender>;
+  "agent.idle": EventDef<AgentSender, { stopReason: string, isError: boolean }>;
+  "agent.tool.call": EventDef<AgentSender, {
     tool_call_id: string;
     name: string;
     input: string;
     input_truncated: boolean;
   }>;
-  [EventTypes.AGENT_TOOL_RESULT]: EventDef<AgentSender, {
+  "agent.tool.result": EventDef<AgentSender, {
     tool_call_id: string;
     name: string;
     output: string | null;
@@ -31,22 +16,23 @@ type EventDefinitions = {
     duration_ms: number;
     error: string | null;
   }>;
-  [EventTypes.AGENT_STREAM_CHUNK]: EventDef<AgentSender, {
+  "agent.stream.chunk": EventDef<AgentSender, {
     stream_id: number;
     seq: number;
     block_type: "text" | "thinking";
     text: string;
   }>;
-  [EventTypes.AGENT_STREAM_END]: EventDef<AgentSender, { stream_id: number; total_chunks: number }>;
-  [EventTypes.USER_PROMPT]: EventDef<UserSender, { teamId: string; agentKey: string; prompt: string }>;
-  [EventTypes.SYSTEM_TEAM_LOADED]: EventDef<SystemSender, {
+  "agent.stream.end": EventDef<AgentSender, { stream_id: number; total_chunks: number }>;
+  "user.prompt": EventDef<UserSender, { teamId: string; agentKey: string; prompt: string }>;
+  "system.team.loaded": EventDef<SystemSender, {
     teamId: string;
     agents: Array<{ role: string; agent_key: string; is_leader: boolean }>;
   }>;
-  [EventTypes.SYSTEM_TEAM_INTERRUPTED]: EventDef<SystemSender, { teamId: string }>;
-  [EventTypes.SYSTEM_ERROR]: EventDef<SystemSender, { error: string }>;
-  [EventTypes.CUSTOM]: EventDef<AgentSender, { topic: string; payload: string }>;
+  "system.team.interrupted": EventDef<SystemSender, { teamId: string }>;
+  "system.error": EventDef<SystemSender, { error: string }>;
+  [topic: `custom.${string}`]: EventDef<AgentSender, string>;
 }
+export type EventType = keyof EventDefinitions;
 
 export interface AgentIdentity {
   teamId: string;
@@ -70,47 +56,40 @@ export interface EventEnvelope<T extends EventType> {
 
 export const Events = {
   agentTurnStart: (sender: AgentSender): EventEnvelope<"agent.turn.start"> =>
-    createEvent(EventTypes.AGENT_TURN_START, sender),
+    createEvent("agent.turn.start", sender),
   agentIdle: (sender: AgentSender, stopReason: string, isError: boolean): EventEnvelope<"agent.idle"> =>
-    createEvent(EventTypes.AGENT_IDLE, sender, { stopReason, isError }),
+    createEvent("agent.idle", sender, { stopReason, isError }),
   agentToolCall,
   agentToolResult,
   agentStreamChunk: (sender: AgentSender, stream_id: number, seq: number, block_type: "text" | "thinking", text: string): EventEnvelope<"agent.stream.chunk"> =>
-    createEvent(EventTypes.AGENT_STREAM_CHUNK, sender, { stream_id, seq, block_type, text }),
+    createEvent("agent.stream.chunk", sender, { stream_id, seq, block_type, text }),
   agentStreamEnd: (sender: AgentSender, stream_id: number, total_chunks: number): EventEnvelope<"agent.stream.end"> =>
-    createEvent(EventTypes.AGENT_STREAM_END, sender, { stream_id, total_chunks }),
+    createEvent("agent.stream.end", sender, { stream_id, total_chunks }),
   userPrompt: (sender: UserSender, teamId: string, prompt: string, agentKey: string): EventEnvelope<"user.prompt"> =>
-    createEvent(EventTypes.USER_PROMPT, sender, { teamId, prompt, agentKey }),
+    createEvent("user.prompt", sender, { teamId, prompt, agentKey }),
   teamLoaded: (sender: SystemSender, teamId: string, agents: Array<{ role: string; agent_key: string; is_leader: boolean }>): EventEnvelope<"system.team.loaded"> =>
-    createEvent(EventTypes.SYSTEM_TEAM_LOADED, sender, { teamId, agents }),
+    createEvent("system.team.loaded", sender, { teamId, agents }),
   interruptTeam: (sender: SystemSender, teamId: string): EventEnvelope<"system.team.interrupted"> =>
-    createEvent(EventTypes.SYSTEM_TEAM_INTERRUPTED, sender, { teamId }),
+    createEvent("system.team.interrupted", sender, { teamId }),
   systemError: (sender: SystemSender, error: string): EventEnvelope<"system.error"> =>
-    createEvent(EventTypes.SYSTEM_ERROR, sender, { error }),
-  custom: (sender: AgentSender, clientTopic: string, payload: string): EventEnvelope<"custom"> =>
-    createEvent(EventTypes.CUSTOM, sender, { topic: clientTopic, payload }),
+    createEvent("system.error", sender, { error }),
+  custom: (sender: AgentSender, clientTopic: string, payload: string): EventEnvelope<`custom.${string}`> =>
+    createEvent(`custom.${clientTopic}`, sender, payload),
 }
 
 function agentToolCall(sender: AgentSender, tool_call_id: string, name: string, input: string): EventEnvelope<"agent.tool.call"> {
   const { text, truncated } = truncateForTelemetry(input);
-  return createEvent(EventTypes.AGENT_TOOL_CALL, sender, { tool_call_id, name, input: text, input_truncated: truncated });
+  return createEvent("agent.tool.call", sender, { tool_call_id, name, input: text, input_truncated: truncated });
 }
 function agentToolResult(sender: AgentSender, tool_call_id: string, name: string, output: string | null, duration_ms: number, error: string | null): EventEnvelope<"agent.tool.result"> {
   const { text, truncated } = truncateForTelemetry(output);
-  return createEvent(EventTypes.AGENT_TOOL_RESULT, sender, { tool_call_id, name, output: text, output_truncated: truncated, duration_ms, error });
+  return createEvent("agent.tool.result", sender, { tool_call_id, name, output: text, output_truncated: truncated, duration_ms, error });
 }
 
 function createEvent<T extends EventType>(type: T, sender: Sender): EventEnvelope<T>;
 function createEvent<T extends EventType>(type: T, sender: Sender, payload: EventDefinitions[T]["payload"]): EventEnvelope<T>;
 function createEvent(type: EventType, sender: Sender, payload?: EventDefinitions[EventType]["payload"]): EventEnvelope<EventType> {
-  return Object.freeze({ version: 1, sender, type, topic: resolveTopic(type, payload), timestamp: new Date().toISOString(), payload: payload ?? null });
-}
-
-function resolveTopic<T extends EventType>(type: T, payload: EventDefinitions[T]["payload"] | null | undefined): string {
-  if (type === EventTypes.CUSTOM) {
-    return `custom.${(payload as { topic: string }).topic}`;
-  }
-  return type;
+  return Object.freeze({ version: 1, sender, type, topic: type, timestamp: new Date().toISOString(), payload: payload ?? null });
 }
 
 const TRUNCATION_BYTES = 4 * 1024;

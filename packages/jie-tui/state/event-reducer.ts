@@ -1,16 +1,16 @@
-import { EventTypes, type EventEnvelope } from "@cuzfrog/jie-platform/event";
+import { type EventEnvelope } from "@cuzfrog/jie-platform/event";
 import type { AgentId, AgentUiState, MessageCard, TuiState, MessageTurn } from "./state";
 import type { AnyEventEnvelope } from "./actions";
 
 export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
-  if (event.type === EventTypes.SYSTEM_TEAM_LOADED) return reduceTeamLoaded(state, event);
-  if (event.type === EventTypes.SYSTEM_ERROR) return reduceSystemError(state, event);
-  if (event.type === EventTypes.USER_PROMPT) return reduceUserPrompt(state, event);
-  if (event.type === EventTypes.AGENT_TURN_START) return reduceTurnStart(state, event);
-  if (event.type === EventTypes.AGENT_IDLE) return reduceIdle(state, event);
-  if (event.type === EventTypes.AGENT_STREAM_CHUNK) return reduceStreamChunk(state, event);
-  if (event.type === EventTypes.AGENT_TOOL_CALL) return reduceToolCall(state, event);
-  if (event.type === EventTypes.AGENT_TOOL_RESULT) return reduceToolResult(state, event);
+  if (event.type === "system.team.loaded") return reduceTeamLoaded(state, event);
+  if (event.type === "system.error") return reduceSystemError(state, event);
+  if (event.type === "user.prompt") return reduceUserPrompt(state, event);
+  if (event.type === "agent.turn.start") return reduceTurnStart(state, event);
+  if (event.type === "agent.idle") return reduceIdle(state, event);
+  if (event.type === "agent.stream.chunk") return reduceStreamChunk(state, event);
+  if (event.type === "agent.tool.call") return reduceToolCall(state, event);
+  if (event.type === "agent.tool.result") return reduceToolResult(state, event);
   return state;
 }
 

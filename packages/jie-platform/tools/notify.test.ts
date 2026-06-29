@@ -1,5 +1,6 @@
 import {
   createEventManager,
+  type EventEnvelope,
   type EventManager,
 } from "../event";
 import type { ArtifactStore } from "../storage";
@@ -7,13 +8,7 @@ import type { ExecutionContext } from "./types";
 import { createNotifyTool } from "./notify";
 import { JiePlatformError } from "../domain-types";
 
-interface NotifyEnvelope {
-  version: 1;
-  topic: string;
-  sender: { kind: "agent"; identity: { teamId: string; agentRole?: string; agentKey?: string } } | { kind: "cli" } | { kind: "tui" };
-  timestamp: string;
-  payload: { clientTopic: string; payload: string };
-}
+type NotifyEnvelope = EventEnvelope<`custom.${string}`>;
 
 function makeCtx(): ExecutionContext {
   return {
@@ -46,7 +41,7 @@ function makeHarness(): Harness {
   const events = createEventManager();
   const received: Array<{ subject: string; env: NotifyEnvelope }> = [];
   events.subscribe("custom.t1.task", (env) => {
-    received.push({ subject: env.topic, env: env as unknown as NotifyEnvelope });
+    received.push({ subject: env.topic, env });
   });
   return { events, received };
 }
@@ -134,10 +129,7 @@ describe("notify — valid publish path", () => {
       expect(env.sender.identity.agentRole).toBe("leader");
       expect(env.sender.identity.agentKey).toBe("leader-1");
     }
-    expect(env.payload).toEqual({
-      clientTopic: "t1.task",
-      payload: "hello",
-    });
+    expect(env.payload).toEqual("hello");
     const ts = new Date(env.timestamp).getTime();
     expect(ts).toBeGreaterThanOrEqual(before);
     expect(ts).toBeLessThanOrEqual(after);

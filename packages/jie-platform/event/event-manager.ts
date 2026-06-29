@@ -5,7 +5,8 @@ import type { EventEnvelope, EventType } from "./events";
 export interface EventManager {
   publish<T extends EventType>(event: EventEnvelope<T>): void;
   /** returns an unsubscribe function */
-  subscribe<T extends EventType>(subject: T, callback: (event: EventEnvelope<T>) => void): () => void;
+  subscribe<T extends EventType>(eventType: T, callback: (event: EventEnvelope<T>) => void): () => void;
+  subscribe(eventType: string, callback: (event: EventEnvelope<EventType>) => void): () => void;
   subscriberCount(subject: string): number;
 }
 
@@ -14,9 +15,9 @@ export function createEventManager(bus: EventBus = createEventBus()): EventManag
     publish<T extends EventType>(event: EventEnvelope<T>): void {
       bus.publish(event.topic, event);
     },
-    subscribe<T extends EventType>(subject: T, callback: (event: EventEnvelope<T>) => void): () => void {
-      return bus.subscribe(subject, (_subject, env) => {
-        callback(env as EventEnvelope<T>);
+    subscribe(eventType: string, callback: (event: EventEnvelope<EventType>) => void): () => void {
+      return bus.subscribe(eventType, (_subject, env) => {
+        callback(env as EventEnvelope<EventType>);
       });
     },
     subscriberCount(subject: string): number {

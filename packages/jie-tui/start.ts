@@ -1,5 +1,5 @@
 import type { EventManager, Sender } from "@cuzfrog/jie-platform/event";
-import { EventTypes, Events } from "@cuzfrog/jie-platform/event";
+import { Events } from "@cuzfrog/jie-platform/event";
 import type { ArtifactStore } from "@cuzfrog/jie-platform/storage";
 import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduce } from "./state";
 import { render, type RenderOptions } from "./renderer";
@@ -133,16 +133,16 @@ export function startTUI(options: StartTUIOptions): Tui {
     dispatch(Actions.receiveEvent(env));
   };
 
-  options.bus.subscribe(EventTypes.SYSTEM_TEAM_LOADED, onBusEvent);
-  options.bus.subscribe(EventTypes.SYSTEM_TEAM_INTERRUPTED, onBusEvent);
-  options.bus.subscribe(EventTypes.SYSTEM_ERROR, onBusEvent);
-  options.bus.subscribe(EventTypes.USER_PROMPT, onBusEvent);
-  options.bus.subscribe(EventTypes.AGENT_TURN_START, onBusEvent);
-  options.bus.subscribe(EventTypes.AGENT_IDLE, onBusEvent);
-  options.bus.subscribe(EventTypes.AGENT_STREAM_CHUNK, onBusEvent);
-  options.bus.subscribe(EventTypes.AGENT_STREAM_END, onBusEvent);
-  options.bus.subscribe(EventTypes.AGENT_TOOL_CALL, onBusEvent);
-  options.bus.subscribe(EventTypes.AGENT_TOOL_RESULT, onBusEvent);
+  options.bus.subscribe("system.team.loaded", onBusEvent);
+  options.bus.subscribe("system.team.interrupted", onBusEvent);
+  options.bus.subscribe("system.error", onBusEvent);
+  options.bus.subscribe("user.prompt", onBusEvent);
+  options.bus.subscribe("agent.turn.start", onBusEvent);
+  options.bus.subscribe("agent.idle", onBusEvent);
+  options.bus.subscribe("agent.stream.chunk", onBusEvent);
+  options.bus.subscribe("agent.stream.end", onBusEvent);
+  options.bus.subscribe("agent.tool.call", onBusEvent);
+  options.bus.subscribe("agent.tool.result", onBusEvent);
 
   let leftArrowCount = 0;
 
