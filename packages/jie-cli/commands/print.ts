@@ -1,10 +1,8 @@
 import type { JiePlatform } from "@cuzfrog/jie-platform";
-import { Events, type EventManager, type Sender } from "@cuzfrog/jie-platform/event";
+import { Events, type EventEnvelope, type EventManager } from "@cuzfrog/jie-platform/event";
 import type { ParsedArgsMap } from "../cli-flags";
 
 export type PrintArgs = ParsedArgsMap["print"];
-
-type ChunkEnvelope = { sender: Sender; payload: { text: string; seq: number; stream_id: number } };
 
 export async function runPrint(
   handle: JiePlatform,
@@ -15,13 +13,12 @@ export async function runPrint(
   args: PrintArgs,
 ): Promise<number> {
   handle.events.subscribe("agent.stream.chunk", (envelope) => {
-    const e = envelope as unknown as ChunkEnvelope;
-    if (e.sender.kind !== "agent") return;
-    if (e.sender.identity.teamId !== teamId) return;
-    if (e.sender.identity.agentRole !== leaderRole) return;
-    const text = e.payload.text;
+    if (envelope.sender.kind !== "agent") return;
+    if (envelope.sender.identity.teamId !== teamId) return;
+    if (envelope.sender.identity.agentRole !== leaderRole) return;
+    const text = envelope.payload.text;
     if (args.json) {
-      process.stdout.write(JSON.stringify({ chunk: text, seq: e.payload.seq }) + "\n");
+      process.stdout.write(JSON.stringify({ chunk: text, seq: envelope.payload.seq }) + "\n");
     } else {
       process.stdout.write(text);
     }
@@ -62,7 +59,7 @@ function setupIdleGate(events: EventManager, agentKeys: string[], timeoutSec: nu
       ? setTimeout(() => reject(new Error("timeout")), timeoutSec * 1000)
       : undefined;
 
-  const agentKeyOf = (envelope: { sender: Sender }): string | null =>
+  const agentKeyOf = (envelope: EventEnvelope<"agent.turn.start"> | EventEnvelope<"agent.idle">): string | null =>
     envelope.sender.kind === "agent" ? envelope.sender.identity.agentKey : null;
 
   const evaluate = (): void => {
@@ -73,11 +70,11 @@ function setupIdleGate(events: EventManager, agentKeys: string[], timeoutSec: nu
   };
 
   const unsubTurnStart = events.subscribe("agent.turn.start", (envelope) => {
-    const agentKey = agentKeyOf(envelope as unknown as { sender: Sender });
+    const agentKey = agentKeyOf(envelope);
     if (agentKey !== null && state.has(agentKey)) state.set(agentKey, "busy");
   });
   const unsubIdle = events.subscribe("agent.idle", (envelope) => {
-    const agentKey = agentKeyOf(envelope as unknown as { sender: Sender });
+    const agentKey = agentKeyOf(envelope);
     if (agentKey !== null && state.has(agentKey)) {
       state.set(agentKey, "idle");
       if ([...state.values()].every((v) => v === "idle")) evaluate();
