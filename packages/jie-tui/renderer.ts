@@ -137,7 +137,6 @@ function truncate(text: string, width: number): string {
 
 function statusGlyph(status: AgentStatus, flickerBusy: boolean): string {
   if (status === "busy" || flickerBusy) return "⠋";
-  if (status === "err") return "✗";
   return "·";
 }
 

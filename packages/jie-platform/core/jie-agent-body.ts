@@ -4,11 +4,12 @@ import {
   type AgentEvent as PiAgentEvent,
 } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, UserMessage } from "@earendil-works/pi-ai";
+import type { StopReason } from "@earendil-works/pi-ai";
 import type { MemoryManager } from "../storage";
 import type { AgentSoul } from "../team";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { StreamPublisher } from "./streaming";
-import type { AgentBody } from "./agent-body-factory";
+import type { AgentBody } from "./agent-body";
 
 export class JieAgentBody implements AgentBody {
   private readonly agentKey: string;
@@ -64,7 +65,7 @@ export class JieAgentBody implements AgentBody {
       }
       case "agent_end": {
         const final = readFinalStopReason(event);
-        this.eventManager.publish(Events.agentIdle(agentSender, final.stopReason, final.isError));
+        this.eventManager.publish(Events.agentIdle(agentSender, final.stopReason));
         if (final.isError && final.errorMessage !== null) {
           this.eventManager.publish(Events.systemError({ kind: "system" }, final.errorMessage));
         }
@@ -181,7 +182,7 @@ export class JieAgentBody implements AgentBody {
   }
 }
 
-function readFinalStopReason(event: Extract<PiAgentEvent, { type: "agent_end" }> | Extract<PiAgentEvent, { type: "turn_end" }>): { stopReason: string; isError: boolean; errorMessage: string | null } {
+function readFinalStopReason(event: Extract<PiAgentEvent, { type: "agent_end" }> | Extract<PiAgentEvent, { type: "turn_end" }>): { stopReason: StopReason; isError: boolean; errorMessage: string | null } {
   const candidates: AgentMessage[] = event.type === "agent_end" ? event.messages : [event.message];
   let lastAssistant: AssistantMessage | undefined;
   for (let i = candidates.length - 1; i >= 0; i -= 1) {
@@ -191,7 +192,7 @@ function readFinalStopReason(event: Extract<PiAgentEvent, { type: "agent_end" }>
       break;
     }
   }
-  const stopReason = lastAssistant?.stopReason ?? "stop";
+  const stopReason: StopReason = lastAssistant?.stopReason ?? "stop";
   const isError = stopReason === "error" || stopReason === "aborted";
   return { stopReason, isError, errorMessage: lastAssistant?.errorMessage ?? null };
 }

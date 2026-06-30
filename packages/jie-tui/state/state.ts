@@ -1,4 +1,6 @@
-export type AgentStatus = "idle" | "busy" | "err";
+import type { StopReason } from "@earendil-works/pi-ai";
+
+export type AgentStatus = "idle" | "busy";
 export type EffortLevel = "low" | "medium" | "high" | "max";
 
 export interface ModelReference {
@@ -43,6 +45,7 @@ export interface AgentUiState {
   readonly isLeader: boolean;
   readonly status: AgentStatus;
   readonly lastIdleAt: number;
+  readonly lastStopReason: StopReason | null;
   readonly model: ModelReference | null;
   readonly history: MessageTurn[];
   readonly currentTurn: MessageTurn | null;

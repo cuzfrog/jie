@@ -1,7 +1,9 @@
+import type { StopReason } from "@earendil-works/pi-ai";
+
 type EventDef<S extends Sender, P = null> = { sender: S; payload: P };
 type EventDefinitions = {
   "agent.turn.start": EventDef<AgentSender>;
-  "agent.idle": EventDef<AgentSender, { stopReason: string, isError: boolean }>;
+  "agent.idle": EventDef<AgentSender, StopReason>;
   "agent.tool.call": EventDef<AgentSender, {
     tool_call_id: string;
     name: string;
@@ -57,8 +59,8 @@ export interface EventEnvelope<T extends EventType> {
 export const Events = {
   agentTurnStart: (sender: AgentSender): EventEnvelope<"agent.turn.start"> =>
     createEvent("agent.turn.start", sender),
-  agentIdle: (sender: AgentSender, stopReason: string, isError: boolean): EventEnvelope<"agent.idle"> =>
-    createEvent("agent.idle", sender, { stopReason, isError }),
+  agentIdle: (sender: AgentSender, stopReason: StopReason): EventEnvelope<"agent.idle"> =>
+    createEvent("agent.idle", sender, stopReason),
   agentToolCall,
   agentToolResult,
   agentStreamChunk: (sender: AgentSender, stream_id: number, seq: number, block_type: "text" | "thinking", text: string): EventEnvelope<"agent.stream.chunk"> =>

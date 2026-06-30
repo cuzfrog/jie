@@ -46,7 +46,16 @@ function reduceTeamLoaded(state: TuiState, event: EventEnvelope<"system.team.loa
 }
 
 function reduceSystemError(state: TuiState, event: EventEnvelope<"system.error">): TuiState {
-  return { ...state, errorBanner: { text: event.payload.error, raisedAt: Date.now() } };
+  const stopReason = findRecentStopReason(state);
+  const text = stopReason === null ? event.payload.error : `[stop: ${stopReason}] ${event.payload.error}`;
+  return { ...state, errorBanner: { text, raisedAt: Date.now() } };
+}
+
+function findRecentStopReason(state: TuiState): string | null {
+  for (const agent of state.agents.values()) {
+    if (agent.lastStopReason !== null) return agent.lastStopReason;
+  }
+  return null;
 }
 
 function reduceUserPrompt(state: TuiState, event: EventEnvelope<"user.prompt">): TuiState {
@@ -89,7 +98,7 @@ function reduceIdle(state: TuiState, event: EventEnvelope<"agent.idle">): TuiSta
   const existing = state.agents.get(agentId);
   if (existing === undefined) return state;
   const newAgents = new Map(state.agents);
-  newAgents.set(agentId, { ...existing, status: "idle", lastIdleAt: Date.now() });
+  newAgents.set(agentId, { ...existing, status: "idle", lastIdleAt: Date.now(), lastStopReason: event.payload });
   return { ...state, agents: newAgents };
 }
 
@@ -179,6 +188,7 @@ function emptyAgent(agentId: AgentId, teamId: string, agentKey: string, role: st
     isLeader,
     status: "idle",
     lastIdleAt: 0,
+    lastStopReason: null,
     model: null,
     history: [],
     currentTurn: null,

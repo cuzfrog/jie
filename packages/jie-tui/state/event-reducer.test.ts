@@ -88,7 +88,7 @@ describe("reduceIdle", () => {
   test("sets status idle and stamps lastIdleAt with a positive timestamp", () => {
     let state = loadedState();
     state = reduce(state, Actions.receiveEvent(Events.agentTurnStart(AGENT_SENDER)));
-    const state2 = reduce(state, Actions.receiveEvent(Events.agentIdle(AGENT_SENDER, "end_turn", false)));
+    const state2 = reduce(state, Actions.receiveEvent(Events.agentIdle(AGENT_SENDER, "stop")));
     const agent = state2.agents.get("my-team:general-1");
     expect(agent?.status).toBe("idle");
     expect(typeof agent?.lastIdleAt).toBe("number");
@@ -98,7 +98,7 @@ describe("reduceIdle", () => {
   test("rejects idle events from a foreign team", () => {
     const state = loadedState();
     const foreign: Parameters<typeof Events.agentIdle>[0] = { kind: "agent", identity: { teamId: "other-team", agentRole: "general", agentKey: "general-1" } };
-    const state2 = reduce(state, Actions.receiveEvent(Events.agentIdle(foreign, "end_turn", false)));
+    const state2 = reduce(state, Actions.receiveEvent(Events.agentIdle(foreign, "stop")));
     expect(state2).toBe(state);
   });
 });

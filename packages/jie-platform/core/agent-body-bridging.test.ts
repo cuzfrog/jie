@@ -1,6 +1,6 @@
 import type { Agent, AgentEvent as PiAgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, AssistantMessageEvent } from "@earendil-works/pi-ai";
-import { createAgentBody, type AgentBody, type CreateAgentBodyOptions } from "./agent-body-factory";
+import { createAgentBody, type AgentBody, type CreateAgentBodyOptions } from "./agent-body";
 import { createEventManager, type EventManager } from "../event";
 
 import {
@@ -172,7 +172,7 @@ describe("AgentBody — pi-agent event bridging", () => {
     expect(env.payload).toBeNull();
   });
 
-  test("agent_end publishes agent.idle with empty payload", () => {
+  test("agent_end publishes agent.idle with the final stopReason", () => {
     const { opts, subscribeSubject } = makeOpts();
     const idle = capturedEvents("agent.idle", subscribeSubject);
     const result = makeFakeAgentFactory({
@@ -183,9 +183,9 @@ describe("AgentBody — pi-agent event bridging", () => {
     body = createAgentBody({ ...opts, createAgent: result.factory });
     fireEvent!({ type: "agent_end", messages: [] });
     expect(idle).toHaveLength(1);
-    const env = idle[0] as { topic: string; payload: object };
+    const env = idle[0] as { topic: string; payload: unknown };
     expect(env.topic).toBe("agent.idle");
-    expect(env.payload).toEqual({ stopReason: "stop", isError: false });
+    expect(env.payload).toBe("stop");
   });
 
   test("body-side alternation: turn_start always precedes agent.idle", () => {

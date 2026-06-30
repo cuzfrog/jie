@@ -61,7 +61,7 @@ export const attachNoModelBody = (
     if (env.payload === null || typeof env.payload !== "object") return;
     const payload = env.payload as { teamId?: unknown; agentKey?: unknown };
     if (payload.teamId !== teamId || payload.agentKey !== agentKey) return;
-    bus.publish(Events.agentIdle(agentSender, "error", true));
+    bus.publish(Events.agentIdle(agentSender, "error"));
     bus.publish(Events.systemError({ kind: "system" }, NO_MODEL_ERROR));
   });
   return unsubscribe;

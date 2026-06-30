@@ -48,9 +48,9 @@ describe("createEventManager — envelope stamping", () => {
     const bus = createEventBus();
     const received = collect(bus, "agent.idle");
     const events: EventManager = createEventManager(bus);
-    events.publish(Events.agentIdle(agentSender, "stop", false));
+    events.publish(Events.agentIdle(agentSender, "stop"));
     const env = received[0] as EventEnvelope<"agent.idle">;
-    expect(env.payload).toEqual({ stopReason: "stop", isError: false });
+    expect(env.payload).toBe("stop");
   });
 
   test("system sender on system.team.loaded envelope has kind 'system'", () => {
