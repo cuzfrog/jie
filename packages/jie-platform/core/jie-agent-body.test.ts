@@ -192,6 +192,36 @@ describe("JieAgentBody — start() subscriptions", () => {
     expect(received).toBe(true);
     b2.stop();
   });
+
+  test("ingestCustom drops self-published events (fix #92: avoid feedback loop)", async () => {
+    body.stop();
+    const b2 = h.makeBody({
+      soul: makeSoul({ subscriptions: ["task.recorded"] }),
+    });
+    await b2.start();
+    h.events.publish(Events.custom(
+      { kind: "agent", identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" } },
+      "t1.task.recorded",
+      "do X",
+    ));
+    expect(h.prompt.mock.calls.length).toBe(0);
+    b2.stop();
+  });
+
+  test("ingestCustom still dispatches events from a different agent", async () => {
+    body.stop();
+    const b2 = h.makeBody({
+      soul: makeSoul({ subscriptions: ["task.recorded"] }),
+    });
+    await b2.start();
+    h.events.publish(Events.custom(
+      { kind: "agent", identity: { teamId: "t1", agentRole: "leader", agentKey: "leader-1" } },
+      "t1.task.recorded",
+      "do X",
+    ));
+    expect(h.prompt.mock.calls.length).toBe(1);
+    b2.stop();
+  });
 });
 
 describe("JieAgentBody — start() restore + continue", () => {
