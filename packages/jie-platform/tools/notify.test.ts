@@ -106,6 +106,30 @@ describe("notify — topic validation", () => {
       "notify_invalid_topic: contains_null_byte",
     );
   });
+
+  test("rejects prompt longer than EVENT_TEXT_TRUNCATION_BYTES (#93)", async () => {
+    const { events, received } = makeHarness();
+    const tool = createNotifyTool({ eventManager: events });
+    const oversized = "x".repeat(4097);
+    let caught: unknown;
+    try {
+      await tool.execute({ topic: "task", prompt: oversized }, makeCtx());
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(JiePlatformError);
+    expect((caught as JiePlatformError).code).toBe("notify_prompt_too_long");
+    expect((caught as Error).message).toContain("prompt length 4097");
+    expect(received).toHaveLength(0);
+  });
+
+  test("accepts prompt exactly at EVENT_TEXT_TRUNCATION_BYTES", async () => {
+    const { events, received } = makeHarness();
+    const tool = createNotifyTool({ eventManager: events });
+    const at = "x".repeat(4096);
+    await tool.execute({ topic: "task", prompt: at }, makeCtx());
+    expect(received).toHaveLength(1);
+  });
 });
 
 describe("notify — valid publish path", () => {
@@ -129,7 +153,7 @@ describe("notify — valid publish path", () => {
       expect(env.sender.identity.agentRole).toBe("leader");
       expect(env.sender.identity.agentKey).toBe("leader-1");
     }
-    expect(env.payload).toEqual("hello");
+    expect(env.payload).toEqual({ message: "hello", truncated: false });
     const ts = new Date(env.timestamp).getTime();
     expect(ts).toBeGreaterThanOrEqual(before);
     expect(ts).toBeLessThanOrEqual(after);

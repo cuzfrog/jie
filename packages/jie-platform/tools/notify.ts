@@ -1,5 +1,5 @@
 import { Type } from "typebox";
-import { Events, type EventManager, type Sender } from "../event";
+import { EVENT_TEXT_TRUNCATION_BYTES, Events, type EventManager, type Sender } from "../event";
 import type { ExecutionContext, Tool, ToolResult } from "./types";
 import { JiePlatformError } from "../domain-types";
 
@@ -61,6 +61,13 @@ export function createNotifyTool(dependencies: NotifyDeps): Tool<NotifyInput> {
         throw new JiePlatformError(
           "notify_invalid_topic",
           `notify_invalid_topic: ${reason}`,
+        );
+      }
+
+      if (input.prompt.length > EVENT_TEXT_TRUNCATION_BYTES) {
+        throw new JiePlatformError(
+          "notify_prompt_too_long",
+          `notify_prompt_too_long: prompt length ${input.prompt.length} exceeds max ${EVENT_TEXT_TRUNCATION_BYTES}`,
         );
       }
 

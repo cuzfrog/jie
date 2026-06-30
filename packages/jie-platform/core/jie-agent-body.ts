@@ -160,9 +160,9 @@ export class JieAgentBody implements AgentBody {
     this.dispatchIngress("user", null, payload.prompt);
   }
 
-  private ingestCustom(topic: string, sender: AgentSender, payload: string): void {
+  private ingestCustom(topic: string, sender: AgentSender, payload: { message: string; truncated: boolean }): void {
     if (sender.identity.agentKey === this.agentKey) return;
-    this.dispatchIngress(topic, sender.identity.agentKey, payload);
+    this.dispatchIngress(topic, sender.identity.agentKey, payload.message);
   }
 
   private dispatchIngress(topic: string, source: string | null, prompt: string): void {

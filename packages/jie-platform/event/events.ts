@@ -32,7 +32,7 @@ type EventDefinitions = {
   }>;
   "system.team.interrupted": EventDef<SystemSender, { teamId: string }>;
   "system.error": EventDef<SystemSender, { error: string }>;
-  [topic: `custom.${string}`]: EventDef<AgentSender, string>;
+  [topic: `custom.${string}`]: EventDef<AgentSender, { message: string, truncated: boolean }>;
 }
 export type EventType = keyof EventDefinitions;
 
@@ -56,6 +56,9 @@ export interface EventEnvelope<T extends EventType> {
   payload: EventDefinitions[T]["payload"];
 }
 
+export const EVENT_TEXT_TRUNCATION_BYTES: number = 4 * 1024;
+const EVENT_TEXT_TRUNCATION_MARKER = "...[%d chars truncated]...";
+
 export const Events = {
   agentTurnStart: (sender: AgentSender): EventEnvelope<"agent.turn.start"> =>
     createEvent("agent.turn.start", sender),
@@ -75,8 +78,10 @@ export const Events = {
     createEvent("system.team.interrupted", sender, { teamId }),
   systemError: (sender: SystemSender, error: string): EventEnvelope<"system.error"> =>
     createEvent("system.error", sender, { error }),
-  custom: (sender: AgentSender, clientTopic: string, payload: string): EventEnvelope<`custom.${string}`> =>
-    createEvent(`custom.${clientTopic}`, sender, payload),
+  custom(sender: AgentSender, clientTopic: string, message: string): EventEnvelope<`custom.${string}`> {
+    const { text, truncated } = truncateForTelemetry(message);
+    return createEvent(`custom.${clientTopic}`, sender, { message: text, truncated });
+  },
 }
 
 function agentToolCall(sender: AgentSender, tool_call_id: string, name: string, input: string): EventEnvelope<"agent.tool.call"> {
@@ -94,16 +99,13 @@ function createEvent(type: EventType, sender: Sender, payload?: EventDefinitions
   return Object.freeze({ version: 1, sender, type, topic: type, timestamp: new Date().toISOString(), payload: payload ?? null });
 }
 
-const TRUNCATION_BYTES = 4 * 1024;
-const TRUNCATION_MARKER = "...[%d chars truncated]...";
-
 function truncateForTelemetry<T extends string | null>(input: T): { text: T; truncated: boolean } {
   if (!input) return { text: input, truncated: false };
-  if (input.length <= TRUNCATION_BYTES) return { text: input, truncated: false };
-  const half = Math.floor((TRUNCATION_BYTES - 25) / 2);
+  if (input.length <= EVENT_TEXT_TRUNCATION_BYTES) return { text: input, truncated: false };
+  const half = Math.floor((EVENT_TEXT_TRUNCATION_BYTES - 25) / 2);
   const truncatedChars = input.length - half * 2;
   return {
-    text: `${input.slice(0, half)}${TRUNCATION_MARKER.replace("%d", String(truncatedChars))}${input.slice(input.length - half)}` as T,
+    text: `${input.slice(0, half)}${EVENT_TEXT_TRUNCATION_MARKER.replace("%d", String(truncatedChars))}${input.slice(input.length - half)}` as T,
     truncated: true,
   };
 }
