@@ -14,4 +14,22 @@ describe("VirtualTerminal smoke", () => {
     terminal.resize(80, 40);
     expect(terminal.rows).toBe(40);
   });
+
+  test("drainInput(maxMs: 0) returns immediately", async () => {
+    const terminal = new VirtualTerminal(80, 24);
+    await terminal.start(() => {}, () => {});
+    const start = Date.now();
+    await terminal.drainInput(0);
+    const elapsed = Date.now() - start;
+    expect(elapsed < 5).toBe(true);
+  });
+
+  test("drainInput(maxMs) honors the bound", async () => {
+    const terminal = new VirtualTerminal(80, 24);
+    await terminal.start(() => {}, () => {});
+    const start = Date.now();
+    await terminal.drainInput(40);
+    const elapsed = Date.now() - start;
+    expect(elapsed >= 35 && elapsed < 200).toBe(true);
+  });
 });

@@ -29,8 +29,13 @@ export class VirtualTerminal implements Terminal {
 		this.xterm.write("\x1b[?2004h");
 	}
 
-	async drainInput(_maxMs?: number, _idleMs?: number): Promise<void> {
-		// no-op
+	async drainInput(maxMs = 1000, _idleMs = 50): Promise<void> {
+		// The xterm harness has no real input source — input is fed via sendInput()
+		// synchronously. We honor maxMs as a no-op wait so callers can bound the
+		// drain loop; tests that want to deliver input should call sendInput()
+		// before this resolves, or pass maxMs: 0 to skip the wait.
+		if (maxMs <= 0) return;
+		await new Promise<void>((resolve) => setTimeout(resolve, maxMs));
 	}
 
 	stop(): void {
