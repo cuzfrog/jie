@@ -1,8 +1,7 @@
 import { createTui, type CreateTUIOptions, type Tui } from ".";
-import type { EventManager } from "@cuzfrog/jie-platform/event";
+import { createEventManager, Events, type EventManager } from "@cuzfrog/jie-platform/event";
 import type { ArtifactStore } from "@cuzfrog/jie-platform/storage";
 import { createTestTuiWithTerminal } from "./test/test-support";
-import { Events } from "@cuzfrog/jie-platform/event";
 
 function makeStubBus(): EventManager {
   return {
@@ -57,12 +56,7 @@ describe("tui.start() with virtual terminal", () => {
 
   test("loads a team, renders the rail, then exits cleanly", async () => {
     withTTY(true, async () => {
-      const events: unknown[] = [];
-      const bus: EventManager = {
-        publish: (env: unknown) => { events.push(env); },
-        subscribe: () => () => {},
-        subscriberCount: () => 0,
-      } as unknown as EventManager;
+      const bus: EventManager = createEventManager();
       const { terminal } = createTestTuiWithTerminal(80, 30);
       const tuiHandle = createTui(makeOptions({ bus, terminal }));
       const started = tuiHandle.start();

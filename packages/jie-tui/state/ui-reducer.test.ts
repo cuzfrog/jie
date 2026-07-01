@@ -55,6 +55,28 @@ describe("cycleAgent", () => {
     const state2 = reduce(reduce(state, Actions.toggleTeamRail()), Actions.switchCycleAgent(1));
     expect(state2.focusedAgentId).toBe("my-team:general-1");
   });
+
+  test("direction=1 from no focused agent lands on the first agent", () => {
+    let state = loadedTeam([
+      { role: "manager", agent_key: "manager-1", is_leader: true },
+      { role: "worker", agent_key: "worker-1", is_leader: false },
+    ]);
+    state = reduce(state, Actions.toggleTeamRail());
+    state = { ...state, focusedAgentId: null };
+    const state2 = reduce(state, Actions.switchCycleAgent(1));
+    expect(state2.focusedAgentId).toBe("my-team:manager-1");
+  });
+
+  test("direction=-1 from no focused agent lands on the last agent", () => {
+    let state = loadedTeam([
+      { role: "manager", agent_key: "manager-1", is_leader: true },
+      { role: "worker", agent_key: "worker-1", is_leader: false },
+    ]);
+    state = reduce(state, Actions.toggleTeamRail());
+    state = { ...state, focusedAgentId: null };
+    const state2 = reduce(state, Actions.switchCycleAgent(-1));
+    expect(state2.focusedAgentId).toBe("my-team:worker-1");
+  });
 });
 
 describe("transient", () => {

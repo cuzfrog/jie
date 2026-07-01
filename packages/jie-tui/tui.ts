@@ -1,5 +1,5 @@
 import { matchesKey, ProcessTerminal, TUI, type Terminal } from "@earendil-works/pi-tui";
-import type { EventManager, Sender } from "@cuzfrog/jie-platform/event";
+import type { EventEnvelope, EventManager, EventType, Sender } from "@cuzfrog/jie-platform/event";
 import { Events } from "@cuzfrog/jie-platform/event";
 import type { ArtifactStore } from "@cuzfrog/jie-platform/storage";
 import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduce } from "./state";
@@ -112,7 +112,7 @@ export function createTui(options: CreateTUIOptions): Tui {
     const focused = state.agents.get(state.focusedAgentId);
     const targetKey = focused?.agentKey ?? (state.leaderAgentId !== null ? state.agents.get(state.leaderAgentId)?.agentKey : undefined);
     if (targetKey === undefined) {
-      emitError("No focused agent; press <- <- to reveal the rail.");
+      emitError("No focused agent; press ctrl+left to reveal the rail.");
       return;
     }
     const sender: Sender = { kind: "user" };
@@ -135,17 +135,20 @@ export function createTui(options: CreateTUIOptions): Tui {
     dispatch(Actions.receiveEvent(env));
   };
 
-  const subscriptions: Array<() => void> = [];
-  subscriptions.push(options.bus.subscribe("system.team.loaded", onBusEvent));
-  subscriptions.push(options.bus.subscribe("system.team.interrupted", onBusEvent));
-  subscriptions.push(options.bus.subscribe("system.error", onBusEvent));
-  subscriptions.push(options.bus.subscribe("user.prompt", onBusEvent));
-  subscriptions.push(options.bus.subscribe("agent.turn.start", onBusEvent));
-  subscriptions.push(options.bus.subscribe("agent.idle", onBusEvent));
-  subscriptions.push(options.bus.subscribe("agent.stream.chunk", onBusEvent));
-  subscriptions.push(options.bus.subscribe("agent.stream.end", onBusEvent));
-  subscriptions.push(options.bus.subscribe("agent.tool.call", onBusEvent));
-  subscriptions.push(options.bus.subscribe("agent.tool.result", onBusEvent));
+  const subscribedTopics = [
+    "system.team.loaded",
+    "system.team.interrupted",
+    "system.error",
+    "user.prompt",
+    "agent.turn.start",
+    "agent.idle",
+    "agent.stream.chunk",
+    "agent.stream.end",
+    "agent.tool.call",
+    "agent.tool.result",
+  ] as const;
+
+  let resolveStart: (() => void) | null = null;
 
   const start = (): Promise<void> => {
     return new Promise<void>((resolve) => {
@@ -173,32 +176,33 @@ export function createTui(options: CreateTUIOptions): Tui {
         return undefined;
       });
 
-      for (const unsub of subscriptions) unsub();
-      subscriptions.length = 0;
-      const wrappedOnBusEvent = (env: AnyEventEnvelope): void => {
-        onBusEvent(env);
+      const onRenderEvent = (env: EventEnvelope<EventType>): void => {
+        onBusEvent(env as AnyEventEnvelope);
         tui.requestRender();
       };
-      subscriptions.push(options.bus.subscribe("system.team.loaded", wrappedOnBusEvent));
-      subscriptions.push(options.bus.subscribe("system.team.interrupted", wrappedOnBusEvent));
-      subscriptions.push(options.bus.subscribe("system.error", wrappedOnBusEvent));
-      subscriptions.push(options.bus.subscribe("user.prompt", wrappedOnBusEvent));
-      subscriptions.push(options.bus.subscribe("agent.turn.start", wrappedOnBusEvent));
-      subscriptions.push(options.bus.subscribe("agent.idle", wrappedOnBusEvent));
-      subscriptions.push(options.bus.subscribe("agent.stream.chunk", wrappedOnBusEvent));
-      subscriptions.push(options.bus.subscribe("agent.stream.end", wrappedOnBusEvent));
-      subscriptions.push(options.bus.subscribe("agent.tool.call", wrappedOnBusEvent));
-      subscriptions.push(options.bus.subscribe("agent.tool.result", wrappedOnBusEvent));
+      const subscriptions: Array<() => void> = [];
+      for (const topic of subscribedTopics) {
+        subscriptions.push(options.bus.subscribe(topic, onRenderEvent));
+      }
 
-      tui.start();
-      const stopWatch = setInterval(() => {
-        if (stopped) {
-          tui.stop();
-          clearInterval(stopWatch);
-          for (const unsub of subscriptions) unsub();
-          resolve();
-        }
-      }, 100);
+      const cleanup = (): void => {
+        for (const unsub of subscriptions) unsub();
+      };
+
+      resolveStart = (): void => {
+        cleanup();
+        tui.stop();
+        resolveStart = null;
+        resolve();
+      };
+
+      try {
+        tui.start();
+      } catch (error) {
+        cleanup();
+        resolveStart = null;
+        throw error;
+      }
     });
   };
 
@@ -207,6 +211,9 @@ export function createTui(options: CreateTUIOptions): Tui {
     submit: (text: string): void => handleSubmit(text),
     stop: (): void => {
       stopped = true;
+      if (resolveStart !== null) {
+        resolveStart();
+      }
     },
     start,
   };

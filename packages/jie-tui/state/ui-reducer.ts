@@ -30,10 +30,15 @@ function reduceAgentCycle(state: TuiState, direction: 1 | -1): TuiState {
   if (!state.showTeamRailPanel) return state;
   const ids = Array.from(state.agents.keys());
   if (ids.length < 2) return state;
-  const currentIndex = state.focusedAgentId === null ? -1 : ids.indexOf(state.focusedAgentId);
   const length = ids.length;
-  const next = ((currentIndex + direction) % length + length) % length;
-  return { ...state, focusedAgentId: ids[next] ?? state.focusedAgentId };
+  if (state.focusedAgentId === null) {
+    const fallback = direction === 1 ? 0 : length - 1;
+    return { ...state, focusedAgentId: ids[fallback]! };
+  }
+  const currentIndex = ids.indexOf(state.focusedAgentId);
+  if (currentIndex === -1) return state;
+  const next = (currentIndex + direction + length) % length;
+  return { ...state, focusedAgentId: ids[next]! };
 }
 
 function reduceClear(state: TuiState): TuiState {
