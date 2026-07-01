@@ -120,9 +120,10 @@ describe("web_fetch", () => {
   test("5 MiB cap: response > 5 MiB is truncated, truncated=true", async () => {
     const tool = createWebFetchTool();
     const result = await tool.execute({ url: `${baseUrl}/huge` }, makeEmptyContext());
-    const details = result.details as { truncated: boolean; status: number };
-    expect(details.truncated).toBe(true);
-    expect(details.status).toBe(200);
+    expect(result.details).toMatchObject({
+      truncated: true,
+      status: 200,
+    });
   });
 
   test("redirect loop (>= 20) surfaces redirect_exhausted or final non-html error", async () => {
@@ -135,8 +136,9 @@ describe("web_fetch", () => {
   test("status: 200 in details; non-2xx returned with the body", async () => {
     const tool = createWebFetchTool();
     const result = await tool.execute({ url: `${baseUrl}/plain` }, makeEmptyContext());
-    const details = result.details as { status: number; truncated: boolean };
-    expect(details.status).toBe(200);
-    expect(details.truncated).toBe(false);
+    expect(result.details).toMatchObject({
+      status: 200,
+      truncated: false,
+    });
   });
 });
