@@ -11,7 +11,6 @@ import { ConfirmExitOverlay } from "./confirm-exit-overlay";
 export interface BuildViewOpts {
   cwd: string;
   git: GitSnapshot;
-  refreshGit?: () => void;
 }
 
 export interface BuildViewResult {

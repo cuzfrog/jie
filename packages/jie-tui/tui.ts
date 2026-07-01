@@ -30,6 +30,7 @@ export interface Tui {
 }
 
 const MIN_COLS = 60;
+const GIT_REFRESH_MIN_INTERVAL_MS = 500;
 
 export function createTui(options: CreateTUIOptions): Tui {
   if (process.stdin.isTTY !== true) {
@@ -43,10 +44,12 @@ export function createTui(options: CreateTUIOptions): Tui {
   let stopped = false;
   const cwd = options.cwd ?? process.cwd();
   const gitService: GitService = options.gitService ?? createGitService({ cwd });
-  const buildViewOpts: BuildViewOpts = {
-    cwd,
-    git: gitService.getSnapshot(),
-    refreshGit: () => { buildViewOpts.git = gitService.getSnapshot(); },
+  let lastGitRefreshAt = 0;
+  const buildViewOpts: BuildViewOpts = { cwd, git: gitService.getSnapshot() };
+  const refreshGitIfStale = (now: number): void => {
+    if (now - lastGitRefreshAt < GIT_REFRESH_MIN_INTERVAL_MS) return;
+    lastGitRefreshAt = now;
+    buildViewOpts.git = gitService.getSnapshot();
   };
 
   let renderRef: (() => void) | null = null;
@@ -165,7 +168,7 @@ export function createTui(options: CreateTUIOptions): Tui {
         if (confirmExit.isVisible() !== state.pendingQuit) {
           confirmExit.setVisible(state.pendingQuit);
         }
-        if (buildViewOpts.refreshGit !== undefined) buildViewOpts.refreshGit();
+        refreshGitIfStale(Date.now());
         const focused = state.focusedAgentId === null ? null : state.agents.get(state.focusedAgentId) ?? null;
         chatPane.setAgent(focused);
         editor.setQueueIndicator(formatQueueIndicator(focused?.queue ?? null));
