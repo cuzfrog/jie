@@ -7,7 +7,7 @@ import {
   loadTeamFromDir,
   parseTeamFromManifests,
 } from "./loader";
-import { JiePlatformError, type JiePlatformErrorCode } from "../types";
+import type { JiePlatformErrorCode } from "../types";
 
 describe("loadMinimalTeam", () => {
   test("returns one soul with role 'general' and leaderRole 'general'", () => {
@@ -148,14 +148,9 @@ describe("loadTeamFromDir — typed error codes", () => {
   });
 
   function expectCode(fn: () => unknown, code: JiePlatformErrorCode): void {
-    try {
-      fn();
-    } catch (error) {
-      expect(error).toBeInstanceOf(JiePlatformError);
-      expect((error as JiePlatformError).code).toBe(code);
-      return;
-    }
-    throw new Error(`expected throw with code '${code}', got no throw`);
+    expect(fn).toThrow(
+      expect.objectContaining({ code }),
+    );
   }
 
   test("invalid_team_id", () => {
