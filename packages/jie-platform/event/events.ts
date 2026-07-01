@@ -47,6 +47,7 @@ export interface UserSender { kind: "user" };
 export interface SystemSender { kind: "system" };
 export type Sender = AgentSender | UserSender | SystemSender;
 
+/** Use `Events.*` to create event. */
 export interface EventEnvelope<T extends EventType> {
   version: 1;
   type: T;
