@@ -10,42 +10,39 @@ function thinkingBlock(text: string): MessageBlock {
 }
 
 describe("MessageView", () => {
-  test("renders plain text", () => {
+  test.each([
+    {
+      name: "plain text",
+      block: () => textBlock("hello world"),
+      expected: "hello world",
+    },
+    {
+      name: "multiple lines from a block with newlines",
+      block: () => textBlock("line one\nline two\nline three"),
+      expected: ["line one", "line two", "line three"],
+    },
+    {
+      name: "fenced code block",
+      block: () => textBlock("```\nconst x = 1;\n```"),
+      expected: "const x = 1;",
+    },
+    {
+      name: "thinking block (same as text)",
+      block: () => thinkingBlock("reasoning chain"),
+      expected: "reasoning chain",
+    },
+  ])("renders $name", ({ block, expected }) => {
     const view = new MessageView();
-    view.setBlock(textBlock("hello world"));
+    view.setBlock(block());
     const flat = view.render(80).join("\n");
-    expect(flat).toContain("hello world");
-  });
-
-  test("renders multiple lines from a block with newlines", () => {
-    const view = new MessageView();
-    view.setBlock(textBlock("line one\nline two\nline three"));
-    const lines = view.render(80);
-    const flat = lines.join("\n");
-    expect(flat).toContain("line one");
-    expect(flat).toContain("line two");
-    expect(flat).toContain("line three");
+    const expectedLines = Array.isArray(expected) ? expected : [expected];
+    for (const line of expectedLines) expect(flat).toContain(line);
   });
 
   test("renders markdown emphasis", () => {
     const view = new MessageView();
     view.setBlock(textBlock("**bold** and *italic*"));
-    const lines = view.render(80);
-    expect(lines.join("\n").length).toBeGreaterThan(0);
-  });
-
-  test("renders fenced code block", () => {
-    const view = new MessageView();
-    view.setBlock(textBlock("```\nconst x = 1;\n```"));
-    const lines = view.render(80);
-    const flat = lines.join("\n");
-    expect(flat).toContain("const x = 1;");
-  });
-
-  test("handles thinking block the same way as text", () => {
-    const view = new MessageView();
-    view.setBlock(thinkingBlock("reasoning chain"));
-    expect(view.render(80).join("\n")).toContain("reasoning chain");
+    expect(view.render(80).join("\n").length).toBeGreaterThan(0);
   });
 
   test("setBlock replaces the previous content", () => {
