@@ -97,14 +97,14 @@ describe("web_search", () => {
 });
 
 describe("createWebSearchProvider", () => {
-  const originalFetch = globalThis.fetch;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    globalThis.fetch = vi.fn() as unknown as typeof fetch;
+    fetchSpy = vi.spyOn(globalThis, "fetch");
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    fetchSpy.mockRestore();
   });
 
   test("returns the internal DuckDuckGo-backed provider (the only way to get a default provider)", () => {
@@ -114,8 +114,7 @@ describe("createWebSearchProvider", () => {
 
   test("DuckDuckGoSearchProvider is not exported: only createWebSearchProvider constructs it", async () => {
     const provider = createWebSearchProvider();
-    const mockFetch = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
-    mockFetch.mockResolvedValue(
+    fetchSpy.mockResolvedValue(
       new Response(
         `<a class="result__a" href="https://a">A</a>` +
           `<a class="result__snippet">snip</a>`,

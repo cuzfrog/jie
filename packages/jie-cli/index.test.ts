@@ -36,10 +36,10 @@ async function runInIsolatedHome(argv: string[], options: RunOptions = {}): Prom
   const prevHome = process.env.HOME;
   const stdoutLines: string[] = [];
   const stderrLines: string[] = [];
-  const logSpy = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+  const logSpy = vi.spyOn(console, "log").mockImplementation((...args: Parameters<typeof console.log>) => {
     stdoutLines.push(args.map(String).join(" "));
   });
-  const errSpy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+  const errSpy = vi.spyOn(console, "error").mockImplementation((...args: Parameters<typeof console.error>) => {
     stderrLines.push(args.map(String).join(" "));
   });
   process.chdir(homeDir);
@@ -116,8 +116,8 @@ describe("jie --api-key (top-level, integration)", () => {
     try {
       expect(r.capture.exit).toBe(0);
       const authText = r.readHomeFile(".jie/auth.json");
-      expect(authText).not.toBeNull();
-      expect(JSON.parse(authText!)).toEqual({ anthropic: { type: "api_key", key: "sk-new" } });
+      if (authText === null) throw new Error("auth.json was not written");
+      expect(JSON.parse(authText)).toEqual({ anthropic: { type: "api_key", key: "sk-new" } });
     } finally {
       r.cleanup();
     }

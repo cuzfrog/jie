@@ -11,7 +11,7 @@ function makeManager(): SqliteMemoryManager {
 }
 
 function userMessage(text: string): AgentMessage {
-  return { role: "user", content: text, timestamp: Date.now() } as unknown as AgentMessage;
+  return { role: "user", content: text, timestamp: Date.now() };
 }
 
 function assistantMessage(text: string): AgentMessage {
@@ -19,7 +19,7 @@ function assistantMessage(text: string): AgentMessage {
     role: "assistant",
     content: [{ type: "text", text }],
     timestamp: Date.now(),
-  } as unknown as AgentMessage;
+  } as AgentMessage;
 }
 
 function summaryMessage(text: string): AgentMessage {
@@ -28,7 +28,7 @@ function summaryMessage(text: string): AgentMessage {
     summary: text,
     tokensBefore: 1000,
     timestamp: Date.now(),
-  } as unknown as AgentMessage;
+  } as AgentMessage;
 }
 
 function makeThrowingStorage(failOn: "exec", callIndex: number): {
