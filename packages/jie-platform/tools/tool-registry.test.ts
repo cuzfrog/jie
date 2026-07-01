@@ -195,17 +195,12 @@ describe("createToolRegistry — built-in installation", () => {
     ]);
   });
 
-  test("populated registry: resolve('bash') returns the installed bash tool", () => {
+  test("populated registry: resolve() returns the matching installed tool for each built-in", () => {
     const reg = makePopulatedReg();
-    const matches = reg.resolve("bash");
-    expect(matches).toHaveLength(1);
-    expect(matches[0]!.name).toBe("bash");
-  });
-
-  test("populated registry: resolve('read_file') returns the installed read_file tool", () => {
-    const reg = makePopulatedReg();
-    const matches = reg.resolve("read_file");
-    expect(matches).toHaveLength(1);
-    expect(matches[0]!.name).toBe("read_file");
+    for (const name of ["bash", "read_file", "write_file", "notify", "web_search", "web_fetch", "read_artifact", "write_artifact"]) {
+      const matches = reg.resolve(name);
+      expect(matches).toHaveLength(1);
+      expect(matches[0]!.name).toBe(name);
+    }
   });
 });

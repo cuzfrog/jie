@@ -373,71 +373,47 @@ describe("JieAgentBody — handlePiAgentEvent (stream bridge)", () => {
     expect(h.endStream).toHaveBeenCalled();
   });
 
-  test("message_end with assistant: memory.persist is called", async () => {
-    const body = h.makeBody();
-    body.handlePiAgentEvent({
-      type: "message_end",
-      message: {
-        role: "assistant",
-        content: [{ type: "text", text: "x" }],
-      } as unknown as AgentMessage,
-    });
-    await Promise.resolve();
-    expect(h.persisted.length).toBe(1);
-  });
-
-  test("message_end with custom role: memory.persist is called (no role check)", async () => {
-    const body = h.makeBody();
-    body.handlePiAgentEvent({
-      type: "message_end",
-      message: {
-        role: "custom",
-        customType: "test",
-        content: "x",
-        display: false,
-        timestamp: Date.now(),
-      } as unknown as AgentMessage,
-    });
-    await Promise.resolve();
-    expect(h.persisted.length).toBe(1);
-  });
-
-  test("message_end with user role: memory.persist is called (#49)", async () => {
-    const body = h.makeBody();
-    body.handlePiAgentEvent({
-      type: "message_end",
-      message: {
-        role: "user",
-        content: "hi",
-      } as unknown as AgentMessage,
-    });
-    await Promise.resolve();
-    expect(h.persisted.length).toBe(1);
-  });
-
-  test("message_end with toolResult role: memory.persist is called (#49)", async () => {
-    const body = h.makeBody();
-    body.handlePiAgentEvent({
-      type: "message_end",
-      message: {
-        role: "toolResult",
-        toolCallId: "call_x",
-        content: "ok",
-        isError: false,
-        timestamp: Date.now(),
-      } as unknown as AgentMessage,
-    });
-    await Promise.resolve();
-    expect(h.persisted.length).toBe(1);
-  });
-
-  test("message_end with assistant: stream.endStream is called (#51)", () => {
-    const body = h.makeBody();
-    body.handlePiAgentEvent({
-      type: "message_end",
-      message: { role: "assistant", content: [] } as unknown as AgentMessage,
-    });
-    expect(h.endStream).toHaveBeenCalled();
+  test("message_end: memory.persist is called for every message role (no role check)", async () => {
+    const cases: Array<{ name: string; message: Record<string, unknown> }> = [
+      {
+        name: "assistant",
+        message: { role: "assistant", content: [{ type: "text", text: "x" }] },
+      },
+      {
+        name: "user",
+        message: { role: "user", content: "hi" },
+      },
+      {
+        name: "toolResult",
+        message: {
+          role: "toolResult",
+          toolCallId: "call_x",
+          content: "ok",
+          isError: false,
+          timestamp: Date.now(),
+        },
+      },
+      {
+        name: "custom",
+        message: {
+          role: "custom",
+          customType: "test",
+          content: "x",
+          display: false,
+          timestamp: Date.now(),
+        },
+      },
+    ];
+    for (const { message } of cases) {
+      const body = h.makeBody();
+      body.handlePiAgentEvent({
+        type: "message_end",
+        message: message as unknown as AgentMessage,
+      });
+      await Promise.resolve();
+      expect(h.persisted.length).toBe(1);
+      h.persisted.length = 0;
+    }
   });
 
   test("message_end with non-assistant role: stream.endStream is NOT called (#51)", () => {

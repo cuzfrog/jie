@@ -159,27 +159,13 @@ describe("notify — valid publish path", () => {
     expect(ts).toBeLessThanOrEqual(after);
   });
 
-  test("LLM-facing content reflects the published topic", async () => {
-    const events = createEventManager();
-    events.subscribe("custom.t1.task", () => {});
-    const tool = createNotifyTool({ eventManager: events });
-
-    const result = await tool.execute(
-      { topic: "task", prompt: "x" },
-      makeCtx(),
-    );
-    expect(result.content).toBe("Notification published on 'task'");
-    expect(result.terminate).toBeUndefined();
-  });
-
-  test("LLM-facing content is identical whether peers are listening or not", async () => {
-    const { events } = makeHarness();
-    const tool = createNotifyTool({ eventManager: events });
-    const result = await tool.execute(
+  test("LLM-facing content is identical whether peers are listening or not; never terminates", async () => {
+    const result = await createNotifyTool({ eventManager: createEventManager() }).execute(
       { topic: "ghost", prompt: "x" },
       makeCtx(),
     );
     expect(result.content).toBe("Notification published on 'ghost'");
+    expect(result.terminate).toBeUndefined();
   });
 
   test("`details = { topic }` is returned for afterToolCall hooks", async () => {

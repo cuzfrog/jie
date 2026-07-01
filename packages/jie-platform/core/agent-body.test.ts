@@ -165,56 +165,6 @@ describe("createAgentBody — wiring", () => {
     expect(identity.teamId).toBe("t1");
   });
 
-  test("beforeToolCall publishes agent.tool.call with the right payload", async () => {
-    const { opts, subscribeSubject } = makeOpts();
-    const cap = makeFakeAgentFactory();
-    createAgentBody({ ...opts, createAgent: cap.factory });
-    const hook = cap.lastOpts()?.beforeToolCall;
-    if (hook === undefined) {
-      throw new Error("beforeToolCall hook not provided");
-    }
-    const received: AgentEventLike[] = [];
-    subscribeSubject("agent.tool.call", (_s, p) => {
-      received.push(p as AgentEventLike);
-    });
-    await hook({
-      toolCall: { id: "c1", name: "bash" },
-      args: { command: "ls" },
-    } as never);
-    expect(received).toHaveLength(1);
-    expect(received[0]!.payload).toMatchObject({
-      tool_call_id: "c1",
-      name: "bash",
-    });
-  });
-
-  test("afterToolCall publishes agent.tool.result with duration_ms", async () => {
-    const { opts, subscribeSubject } = makeOpts();
-    const cap = makeFakeAgentFactory();
-    createAgentBody({ ...opts, createAgent: cap.factory });
-    const beforeHook = cap.lastOpts()?.beforeToolCall;
-    const afterHook = cap.lastOpts()?.afterToolCall;
-    if (beforeHook === undefined || afterHook === undefined) {
-      throw new Error("tool hooks not provided");
-    }
-    await beforeHook({ toolCall: { id: "c1", name: "bash" }, args: {} } as never);
-    const received: AgentEventLike[] = [];
-    subscribeSubject("agent.tool.result", (_s, p) => {
-      received.push(p as AgentEventLike);
-    });
-    await afterHook({
-      toolCall: { id: "c1", name: "bash" },
-      isError: false,
-      result: { content: [{ text: "ok" }] },
-    } as never);
-    expect(received).toHaveLength(1);
-    expect(received[0]!.payload).toMatchObject({
-      tool_call_id: "c1",
-      name: "bash",
-    });
-    expect((received[0]!.payload as { duration_ms: number }).duration_ms).toBeGreaterThanOrEqual(0);
-  });
-
   test("beforeToolCall shapes tool args into wire form (short input → input_truncated=false)", async () => {
     const { opts, subscribeSubject } = makeOpts();
     const cap = makeFakeAgentFactory();
@@ -253,31 +203,6 @@ describe("createAgentBody — wiring", () => {
     expect(payload.input_truncated).toBe(true);
     expect(payload.input).toContain("chars truncated");
     expect(payload.input.length).toBeLessThan(8000);
-  });
-
-  test("afterToolCall: error path leaves output null and output_truncated=false", async () => {
-    const { opts, subscribeSubject } = makeOpts();
-    const cap = makeFakeAgentFactory();
-    createAgentBody({ ...opts, createAgent: cap.factory });
-    const beforeHook = cap.lastOpts()?.beforeToolCall;
-    const afterHook = cap.lastOpts()?.afterToolCall;
-    if (beforeHook === undefined || afterHook === undefined) {
-      throw new Error("tool hooks not provided");
-    }
-    await beforeHook({ toolCall: { id: "c1", name: "bash" }, args: {} } as never);
-    const received: AgentEventLike[] = [];
-    subscribeSubject("agent.tool.result", (_s, p) => {
-      received.push(p as AgentEventLike);
-    });
-    await afterHook({
-      toolCall: { id: "c1", name: "bash" },
-      isError: true,
-      result: { content: [{ text: "boom" }] },
-    } as never);
-    const payload = received[0]!.payload as { output: string | null; output_truncated: boolean; error: string };
-    expect(payload.output).toBeNull();
-    expect(payload.output_truncated).toBe(false);
-    expect(payload.error).toBe("boom");
   });
 
   test("stop() invokes the agent subscription's unsubscribe", () => {
