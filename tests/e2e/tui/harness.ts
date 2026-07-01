@@ -9,7 +9,6 @@ export const startTuiOn = (
 ): Tui => {
   const opts: CreateTUIOptions = {
     eventManager: bus,
-    cols: 80,
     rows: 30,
     cwd: "/tmp",
     branch: "main",

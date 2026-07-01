@@ -7,7 +7,6 @@ export interface CreateTUIOptions {
   eventManager: EventManager;
   cwd?: string;
   branch?: string;
-  cols?: number;
   rows?: number;
   provider?: string;
   modelId?: string;
@@ -22,15 +21,11 @@ export interface Tui {
   stop: () => void;
 }
 
-const DEFAULT_COLS = 80;
 const MIN_COLS = 60;
 
 export function createTui(options: CreateTUIOptions): Tui {
   if (process.stdin.isTTY !== true) {
     throw new Error("TUI requires an interactive terminal; use `jie -p` for scripts.");
-  }
-  if ((options.cols ?? DEFAULT_COLS) < MIN_COLS) {
-    throw new Error(`terminal too narrow for TUI; need at least ${MIN_COLS} columns, got ${options.cols ?? 0}`);
   }
   if (!isUtf8()) {
     throw new Error("TUI requires a UTF-8 locale; set LANG=en_US.UTF-8");
@@ -159,6 +154,9 @@ export function createTui(options: CreateTUIOptions): Tui {
   const start = (): Promise<void> => {
     return new Promise<void>((resolve) => {
       const terminal = options.terminal ?? new ProcessTerminal();
+      if (terminal.columns < MIN_COLS) {
+        throw new Error(`terminal too narrow for TUI; need at least ${MIN_COLS} columns, got ${terminal.columns}`);
+      }
       const tui = new TUI(terminal);
       const { root } = buildView(state, buildViewOpts, tui);
       tui.addChild(root);

@@ -9,7 +9,6 @@ function makeStubBus(): EventManager {
 function makeOptions(overrides: Partial<CreateTUIOptions> = {}): CreateTUIOptions {
   return {
     eventManager: makeStubBus(),
-    cols: 80,
     ...overrides,
   };
 }
@@ -18,12 +17,6 @@ describe("createTui — v0.2 surface", () => {
   test("throws when not on a TTY", () => {
     withTTY(false, () => {
       expect(() => createTui(makeOptions())).toThrow(/interactive terminal/);
-    });
-  });
-
-  test("throws when terminal is too narrow", () => {
-    withTTY(true, () => {
-      expect(() => createTui(makeOptions({ cols: 40 }))).toThrow(/too narrow/);
     });
   });
 
@@ -39,6 +32,14 @@ describe("createTui — v0.2 surface", () => {
 });
 
 describe("createTui — start()", () => {
+  test("throws when terminal is too narrow", () => {
+    withTTY(true, () => {
+      const { terminal } = createTestTuiWithTerminal(40, 30);
+      const tuiHandle = createTui(makeOptions({ terminal }));
+      expect(() => tuiHandle.start()).toThrow(/too narrow/);
+    });
+  });
+
   test("mounts a TUI loop and produces a frame", async () => {
     withTTY(true, async () => {
       const { tui: vt, terminal } = createTestTuiWithTerminal(80, 30);
