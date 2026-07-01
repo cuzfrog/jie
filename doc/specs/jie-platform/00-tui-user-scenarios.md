@@ -168,6 +168,13 @@ The trace's stubbed manager responses for `task done` are substring-asserted, no
 
 **Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t5.jsonl`. Envelope schema per `tui.md` "Wire-format contract". Includes two user prompts, two `agent.turn.start` events, and the `agent.queue.update` envelopes in this exact order: `agent.queue.update {prompts: ["Also write me a haiku..."]}` arrives while prompt 1 is busy; then `agent.idle` (prompt 1 done); then `agent.queue.update {prompts: []}`; then `agent.turn.start` for prompt 2; then the second turn's stream and `agent.idle` close. The order pins the disappearing-frame assertion.
 
+## Scenario T6: queued prompts from agent
+1. Run `jie` under a directory with a team consisting of 2 agents: manager and worker. A TUI opens.
+2. The user prompt to the manager: "send 5 math tasks to the worker 1 per message"
+3. The manager uses tool `notify` 5 times to send 5 messages, then becomes idle.
+4. The worker receives the messages via subscriptino 1 by 1; while the worker is busy with 1 message, rest messages queue up in the worker's prompt queue.
+5. The worker processes these messages 1 by 1 in multiple turns, then becomes idle.
+
 ## Out of v0.2 TUI scope (still archived)
 
 | Archived scenario | Why deferred |
