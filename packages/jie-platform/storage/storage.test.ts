@@ -85,19 +85,15 @@ describe("SqliteStorage", () => {
 
   test("transaction rolls back on throw", () => {
     const storage = new SqliteStorage(":memory:");
-    let caught: unknown = undefined;
-    try {
+    expect(() =>
       storage.transaction((s) => {
         s.exec(
           "INSERT INTO artifacts (key, content, created_at) VALUES (?, ?, ?)",
           ["k2", "c2", "2025-01-02"],
         );
         throw new Error("rollback");
-      });
-    } catch (error) {
-      caught = error;
-    }
-    expect((caught as Error | undefined)?.message).toBe("rollback");
+      }),
+    ).toThrow("rollback");
     const rows = storage.query("SELECT key FROM artifacts");
     expect(rows).toEqual([]);
   });
