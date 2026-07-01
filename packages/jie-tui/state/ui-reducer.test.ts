@@ -101,6 +101,21 @@ describe("error", () => {
   });
 });
 
+describe("pendingQuit", () => {
+  test("setPendingQuit(true) sets the flag; setPendingQuit(false) clears it", () => {
+    const state0 = reduce(INITIAL_TUI_STATE, Actions.setPendingQuit(true));
+    expect(state0.pendingQuit).toBe(true);
+    const state1 = reduce(state0, Actions.setPendingQuit(false));
+    expect(state1.pendingQuit).toBe(false);
+  });
+
+  test("clearTuiState clears pendingQuit", () => {
+    const state0 = reduce(INITIAL_TUI_STATE, Actions.setPendingQuit(true));
+    const state1 = reduce(state0, Actions.clearTuiState());
+    expect(state1.pendingQuit).toBe(false);
+  });
+});
+
 describe("clear", () => {
   test("resets agents, transient, and error", () => {
     let state = loadedTeam([{ role: "general", agent_key: "general-1", is_leader: true }]);

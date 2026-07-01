@@ -9,6 +9,7 @@ export const ActionTypes = {
   CLEAR_TRANSIENT_MESSAGE: "[ui] transient clear",
   SET_ERROR_MESSAGE: "[ui] set error banner",
   CLEAR_ERROR_MESSAGE: "[ui] error clear",
+  SET_PENDING_QUIT: "[ui] pending quit confirmation",
 } as const;
 
 type ActionType = (typeof ActionTypes)[keyof typeof ActionTypes];
@@ -36,6 +37,7 @@ export const Actions = {
 	clearTransientMessage: () => clearTransientMessage,
 	setErrorMessage: (text: string) => createAction(ActionTypes.SET_ERROR_MESSAGE, { text }),
 	clearErrorMessage: () => clearErrorMessage,
+	setPendingQuit: (on: boolean) => createAction(ActionTypes.SET_PENDING_QUIT, { on }),
 } as const;
 
 function createAction<T extends ActionType>(type: T): ActionDef<T, undefined>;

@@ -35,6 +35,7 @@ export function buildView(state: TuiState, opts: BuildViewOpts, tui: TUI): Build
   editor.setText("");
 
   const confirmExit = new ConfirmExitOverlay();
+  confirmExit.setVisible(state.pendingQuit);
 
   const root = new Container();
   root.addChild(rail);

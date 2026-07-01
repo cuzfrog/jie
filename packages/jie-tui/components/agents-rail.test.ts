@@ -37,6 +37,7 @@ function makeState(agents: AgentUiState[], focusedAgentId: AgentUiState["agentId
     focusedAgentId,
     transientMessage: null,
     errorBanner: null,
+    pendingQuit: false,
     showTeamRailPanel: true,
   };
 }

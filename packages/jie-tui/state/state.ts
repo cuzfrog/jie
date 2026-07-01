@@ -56,6 +56,7 @@ export interface TuiState {
   readonly transientMessage: string | null;
   readonly errorBanner: string | null;
   readonly showTeamRailPanel: boolean;
+  readonly pendingQuit: boolean;
 }
 
 export const INITIAL_TUI_STATE: TuiState = Object.freeze({
@@ -66,4 +67,5 @@ export const INITIAL_TUI_STATE: TuiState = Object.freeze({
   transientMessage: null,
   errorBanner: null,
   showTeamRailPanel: false,
+  pendingQuit: false,
 } as const);

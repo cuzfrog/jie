@@ -140,6 +140,7 @@ describe("statusBarContextFromState", () => {
       transientMessage: null,
       errorBanner: null,
       showTeamRailPanel: true,
+      pendingQuit: false,
     };
     expect(_statusBarContextFromState(state)).toEqual({
       focusedStatus: "busy",
@@ -159,6 +160,7 @@ describe("statusBarContextFromState", () => {
       transientMessage: null,
       errorBanner: null,
       showTeamRailPanel: false,
+      pendingQuit: false,
     };
     expect(_statusBarContextFromState(state)).toEqual({
       focusedStatus: null,
@@ -178,6 +180,7 @@ describe("statusBarContextFromState", () => {
       transientMessage: null,
       errorBanner: null,
       showTeamRailPanel: false,
+      pendingQuit: false,
     };
     expect(_statusBarContextFromState(state).showRail).toBe(false);
   });

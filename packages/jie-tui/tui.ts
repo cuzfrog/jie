@@ -1,4 +1,4 @@
-import { ProcessTerminal, TUI, type Terminal } from "@earendil-works/pi-tui";
+import { matchesKey, ProcessTerminal, TUI, type Terminal } from "@earendil-works/pi-tui";
 import { Events, type EventEnvelope, type EventManager, type EventType, type Sender } from "@cuzfrog/jie-platform/event";
 import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduce } from "./state";
 import { runCommand } from "./commands";
@@ -46,6 +46,13 @@ export function createTui(options: CreateTUIOptions): Tui {
     render();
   };
 
+  const isBusy = (): boolean => {
+    for (const agent of state.agents.values()) {
+      if (agent.status === "busy") return true;
+    }
+    return false;
+  };
+
   const emitTransient = (text: string): void => dispatch(Actions.setTransientMessage(text));
   const emitError = (text: string): void => dispatch(Actions.setErrorMessage(text));
 
@@ -57,7 +64,7 @@ export function createTui(options: CreateTUIOptions): Tui {
         dispatch(Actions.clearTuiState());
         return;
       case "stop":
-        stopped = true;
+        requestQuit();
         return;
       case "reply":
         emitTransient(outcome.text);
@@ -66,6 +73,25 @@ export function createTui(options: CreateTUIOptions): Tui {
         emitError(outcome.text);
         return;
     }
+  };
+
+  const requestQuit = (): void => {
+    if (isBusy()) {
+      dispatch(Actions.setPendingQuit(true));
+      return;
+    }
+    stopped = true;
+    if (resolveStart !== null) resolveStart();
+  };
+
+  const confirmQuit = (): void => {
+    dispatch(Actions.setPendingQuit(false));
+    stopped = true;
+    if (resolveStart !== null) resolveStart();
+  };
+
+  const cancelQuit = (): void => {
+    dispatch(Actions.setPendingQuit(false));
   };
 
   const publishPrompt = (text: string): void => {
@@ -131,14 +157,63 @@ export function createTui(options: CreateTUIOptions): Tui {
         throw new Error(`terminal too narrow for TUI; need at least ${MIN_COLS} columns, got ${terminal.columns}`);
       }
       const tui = new TUI(terminal);
-      const { root } = buildView(state, buildViewOpts, tui);
+      const { root, confirmExit } = buildView(state, buildViewOpts, tui);
       tui.addChild(root);
       const requestRender = (): void => tui.requestRender();
+      const renderAll = (): void => {
+        if (confirmExit.isVisible() !== state.pendingQuit) {
+          confirmExit.setVisible(state.pendingQuit);
+        }
+        requestRender();
+      };
+
+      let lastEscapeAt = 0;
+      let lastCtrlDAt = 0;
+      const ESC_WINDOW_MS = 300;
+      const CTRL_D_WINDOW_MS = 500;
+      const now = (): number => Date.now();
 
       tui.addInputListener((data) => {
+        if (state.pendingQuit) {
+          if (data === "y" || data === "Y") {
+            confirmQuit();
+            renderAll();
+            return { consume: true };
+          }
+          if (data === "n" || data === "N" || data === "\r" || data === "\n") {
+            cancelQuit();
+            renderAll();
+            return { consume: true };
+          }
+        }
+        if (matchesKey(data, "escape")) {
+          const at = now();
+          if (at - lastEscapeAt <= ESC_WINDOW_MS && state.teamId !== null) {
+            options.eventManager.publish(Events.interruptTeam({ kind: "system" }, state.teamId));
+            lastEscapeAt = 0;
+            return { consume: true };
+          }
+          lastEscapeAt = at;
+          return { consume: false };
+        }
+        if (matchesKey(data, "ctrl+d")) {
+          const at = now();
+          if (at - lastCtrlDAt <= CTRL_D_WINDOW_MS) {
+            requestQuit();
+            renderAll();
+            lastCtrlDAt = 0;
+            return { consume: true };
+          }
+          lastCtrlDAt = at;
+          return { consume: true };
+        }
+        if (matchesKey(data, "ctrl+c")) {
+          renderAll();
+          return { consume: true };
+        }
         const hit = handleKeyInput(data);
         if (hit === undefined) return undefined;
-        dispatch(hit.action, requestRender);
+        dispatch(hit.action, renderAll);
         return { consume: true };
       });
 
