@@ -190,15 +190,9 @@ describe("createTuiCommandHandler — /login", () => {
     const handler = createTuiCommandHandler(deps);
     handler.handle("/login anthropic sk-test-anthropic");
 
-    expect(authStore.setProvider).toHaveBeenCalledWith(
-      expect.anything(),
-      "anthropic",
-      ANTHROPIC_KEY,
-    );
+    expect(authStore.setProvider).toHaveBeenCalledWith(expect.anything(), "anthropic", ANTHROPIC_KEY);
     expect(authStore.write).toHaveBeenCalledWith({ anthropic: { type: "api_key", key: ANTHROPIC_KEY } });
-    expect(dispatch).toHaveBeenCalledWith(
-      Actions.setTransientMessage(expect.stringContaining("logged in to anthropic")),
-    );
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("logged in to anthropic")));
   });
 
   test("/login with wrong arity sets an error message and does not write", () => {
@@ -207,9 +201,7 @@ describe("createTuiCommandHandler — /login", () => {
     handler.handle("/login anthropic");
 
     expect(authStore.write).not.toHaveBeenCalled();
-    expect(dispatch).toHaveBeenCalledWith(
-      Actions.setErrorMessage(expect.stringContaining("/login <provider> <apiKey>")),
-    );
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/login <provider> <apiKey>")));
   });
 });
 
@@ -222,9 +214,7 @@ describe("createTuiCommandHandler — /logout", () => {
 
     expect(authStore.clear).toHaveBeenCalled();
     expect(authStore.write).toHaveBeenCalledWith({});
-    expect(dispatch).toHaveBeenCalledWith(
-      Actions.setTransientMessage(expect.stringContaining("logged out of all providers")),
-    );
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("logged out of all providers")));
   });
 
   test("/logout <provider> removes one provider and replies", () => {
@@ -235,9 +225,7 @@ describe("createTuiCommandHandler — /logout", () => {
 
     expect(authStore.removeProvider).toHaveBeenCalledWith(expect.anything(), "anthropic");
     expect(authStore.write).toHaveBeenCalledWith({});
-    expect(dispatch).toHaveBeenCalledWith(
-      Actions.setTransientMessage(expect.stringContaining("logged out of anthropic")),
-    );
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("logged out of anthropic")));
   });
 });
 
@@ -251,13 +239,8 @@ describe("createTuiCommandHandler — /model", () => {
     const handler = createTuiCommandHandler(deps);
     handler.handle("/model openai/gpt-4o");
 
-    expect(settingsStore.write).toHaveBeenCalledWith(
-      { defaultProvider: "openai", defaultModel: "gpt-4o" },
-      "global",
-    );
-    expect(dispatch).toHaveBeenCalledWith(
-      Actions.setTransientMessage(expect.stringContaining("default model set to openai/gpt-4o")),
-    );
+    expect(settingsStore.write).toHaveBeenCalledWith({ defaultProvider: "openai", defaultModel: "gpt-4o" }, "global");
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("default model set to openai/gpt-4o")));
   });
 
   test("/model without slash sets an error", () => {
@@ -266,9 +249,7 @@ describe("createTuiCommandHandler — /model", () => {
     handler.handle("/model just-a-string");
 
     expect(settingsStore.write).not.toHaveBeenCalled();
-    expect(dispatch).toHaveBeenCalledWith(
-      Actions.setErrorMessage(expect.stringContaining("invalid")),
-    );
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("invalid")));
   });
 
   test("/model <unknown>/<id> sets an error about unknown provider", () => {
@@ -277,9 +258,7 @@ describe("createTuiCommandHandler — /model", () => {
     handler.handle("/model no-such-provider/gpt-4o");
 
     expect(settingsStore.write).not.toHaveBeenCalled();
-    expect(dispatch).toHaveBeenCalledWith(
-      Actions.setErrorMessage(expect.stringContaining("unknown provider")),
-    );
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("unknown provider")));
   });
 
   test("/model with wrong arity sets an error", () => {
@@ -288,9 +267,7 @@ describe("createTuiCommandHandler — /model", () => {
     handler.handle("/model");
 
     expect(settingsStore.write).not.toHaveBeenCalled();
-    expect(dispatch).toHaveBeenCalledWith(
-      Actions.setErrorMessage(expect.stringContaining("/model <provider>/<modelId>")),
-    );
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/model <provider>/<modelId>")));
   });
 });
 
@@ -305,9 +282,7 @@ describe("createTuiCommandHandler — /team", () => {
     handler.handle("/team --unset");
 
     expect(settingsStore.unsetDefaultTeam).toHaveBeenCalledTimes(1);
-    expect(dispatch).toHaveBeenCalledWith(
-      Actions.setTransientMessage(expect.stringContaining("default team unset")),
-    );
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("default team unset")));
   });
 
   test("/team (no args) replies with defaultTeam and installed list", () => {
@@ -317,12 +292,8 @@ describe("createTuiCommandHandler — /team", () => {
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team");
 
-    expect(dispatch).toHaveBeenCalledWith(
-      Actions.setTransientMessage(expect.stringMatching(/alpha/)),
-    );
-    expect(dispatch).toHaveBeenCalledWith(
-      Actions.setTransientMessage(expect.stringMatching(/minimal.*alpha.*beta/)),
-    );
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringMatching(/alpha/)));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringMatching(/minimal.*alpha.*beta/)));
   });
 
   test("/team (no args) reports 'unset' when no defaultTeam is configured", () => {
@@ -332,9 +303,7 @@ describe("createTuiCommandHandler — /team", () => {
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team");
 
-    expect(dispatch).toHaveBeenCalledWith(
-      Actions.setTransientMessage(expect.stringContaining("unset")),
-    );
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("unset")));
   });
 
   test("/team <id> when team is installed dispatches loadTeam and replies", async () => {
@@ -346,9 +315,7 @@ describe("createTuiCommandHandler — /team", () => {
     expect(teamRegistry.isInstalled).toHaveBeenCalledWith("alpha");
     await new Promise((r) => setImmediate(r));
     expect(loadTeam).toHaveBeenCalledWith("alpha");
-    expect(dispatch).toHaveBeenCalledWith(
-      Actions.setTransientMessage(expect.stringContaining("switching to team 'alpha'")),
-    );
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("switching to team 'alpha'")));
   });
 
   test("/team <id> when team is NOT installed falls through to stub reply", () => {
@@ -358,11 +325,7 @@ describe("createTuiCommandHandler — /team", () => {
     handler.handle("/team ghost");
 
     expect(loadTeam).not.toHaveBeenCalled();
-    expect(dispatch).toHaveBeenCalledWith(
-      Actions.setTransientMessage(expect.stringContaining("ghost")),
-    );
-    expect(dispatch).toHaveBeenCalledWith(
-      Actions.setTransientMessage(expect.stringContaining("not installed")),
-    );
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("ghost")));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("not installed")));
   });
 });

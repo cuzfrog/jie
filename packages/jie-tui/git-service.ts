@@ -9,12 +9,7 @@ export interface GitService {
   getSnapshot: () => GitSnapshot;
 }
 
-export const EMPTY_GIT_SNAPSHOT: GitSnapshot = {
-  branch: "",
-  dirty: false,
-  ahead: 0,
-  behind: 0,
-};
+export const EMPTY_GIT_SNAPSHOT: GitSnapshot = { branch: "", dirty: false, ahead: 0, behind: 0 };
 
 export interface CreateGitServiceOptions {
   readonly cwd: string;
@@ -35,11 +30,7 @@ export function createGitService(options: CreateGitServiceOptions): GitService {
 export function readGitStatusViaSpawn(cwd: string): GitSnapshot {
   let branch = "";
   try {
-    const branchProc = Bun.spawnSync({
-      cmd: ["git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD"],
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const branchProc = Bun.spawnSync({ cmd: ["git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD"], stdout: "pipe", stderr: "pipe" });
     if (branchProc.exitCode === 0) {
       branch = new TextDecoder().decode(branchProc.stdout).trim();
     }
@@ -76,10 +67,7 @@ function aheadBehind(cwd: string): { readonly ahead: number; readonly behind: nu
     const decoded = new TextDecoder().decode(proc.stdout).trim();
     if (decoded === "") return { ahead: 0, behind: 0 };
     const [aheadRaw, behindRaw] = decoded.split(/\s+/);
-    return {
-      ahead: Number.parseInt(aheadRaw ?? "0", 10) || 0,
-      behind: Number.parseInt(behindRaw ?? "0", 10) || 0,
-    };
+    return { ahead: Number.parseInt(aheadRaw ?? "0", 10) || 0, behind: Number.parseInt(behindRaw ?? "0", 10) || 0 };
   } catch {
     return { ahead: 0, behind: 0 };
   }

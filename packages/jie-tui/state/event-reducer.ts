@@ -84,11 +84,7 @@ function reduceModelAssigned(state: TuiState, event: EventEnvelope<"agent.model.
   const agentId = composeAgentId(event.sender.identity.teamId, event.sender.identity.agentKey);
   const existing = state.agents.get(agentId);
   if (existing === undefined) return state;
-  const model: ModelReference = {
-    provider: event.payload.provider,
-    id: event.payload.model,
-    effort: event.payload.effort,
-  };
+  const model: ModelReference = { provider: event.payload.provider, id: event.payload.model, effort: event.payload.effort };
   return withAgent(state, agentId, { ...existing, model });
 }
 
@@ -134,10 +130,7 @@ function reduceStreamChunk(state: TuiState, event: EventEnvelope<"agent.stream.c
   } else {
     blocks.push({ kind: block_type, text });
   }
-  const next: AgentUiState = {
-    ...agent,
-    currentTurn: { ...agent.currentTurn, blocks, streamId: stream_id },
-  };
+  const next: AgentUiState = { ...agent, currentTurn: { ...agent.currentTurn, blocks, streamId: stream_id } };
   return withAgent(state, agentId, next);
 }
 
@@ -148,20 +141,8 @@ function reduceToolCall(state: TuiState, event: EventEnvelope<"agent.tool.call">
   if (agent.currentTurn === null) return state;
   const { tool_call_id, name, input, input_truncated } = event.payload;
   if (agent.currentTurn.cards.some((card) => card.kind === "toolCall" && card.callId === tool_call_id)) return state;
-  const toolCallCard: MessageCard = {
-    kind: "toolCall",
-    callId: tool_call_id,
-    name,
-    input,
-    inputTruncated: input_truncated,
-  };
-  const next: AgentUiState = {
-    ...agent,
-    currentTurn: {
-      ...agent.currentTurn,
-      cards: [...agent.currentTurn.cards, toolCallCard],
-    },
-  };
+  const toolCallCard: MessageCard = { kind: "toolCall", callId: tool_call_id, name, input, inputTruncated: input_truncated };
+  const next: AgentUiState = { ...agent, currentTurn: { ...agent.currentTurn, cards: [...agent.currentTurn.cards, toolCallCard] } };
   return withAgent(state, agentId, next);
 }
 
@@ -183,10 +164,7 @@ function reduceToolResult(state: TuiState, event: EventEnvelope<"agent.tool.resu
     durationMs: duration_ms,
     error,
   };
-  const next: AgentUiState = {
-    ...agent,
-    currentTurn: { ...agent.currentTurn, cards },
-  };
+  const next: AgentUiState = { ...agent, currentTurn: { ...agent.currentTurn, cards } };
   return withAgent(state, agentId, next);
 }
 
@@ -227,12 +205,7 @@ function emptyAgent(agentId: AgentId, teamId: string, agentKey: string, role: st
 }
 
 function freshTurn(userPrompt: string): MessageTurn {
-  return {
-    userPrompt,
-    cards: [],
-    blocks: [],
-    streamId: null,
-  };
+  return { userPrompt, cards: [], blocks: [], streamId: null };
 }
 
 function rotateTurnIfPopulated(agent: AgentUiState): AgentUiState {
@@ -240,11 +213,7 @@ function rotateTurnIfPopulated(agent: AgentUiState): AgentUiState {
   const turn = agent.currentTurn;
   const hasContent = turn.cards.length > 0 || turn.blocks.some((block) => block.text.length > 0);
   if (!hasContent) return agent;
-  return {
-    ...agent,
-    history: [...agent.history, turn],
-    currentTurn: { userPrompt: "", cards: [], blocks: [], streamId: null },
-  };
+  return { ...agent, history: [...agent.history, turn], currentTurn: { userPrompt: "", cards: [], blocks: [], streamId: null } };
 }
 
 function composeAgentId(teamId: string, agentKey: string): AgentId {
