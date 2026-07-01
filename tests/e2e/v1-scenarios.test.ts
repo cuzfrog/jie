@@ -199,19 +199,11 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
   });
 
   function captureStdout(): string {
-    return (
-      (writeOut?.mock.calls as unknown[][])
-        .map((c) => String(c[0] as string))
-        .join("") ?? ""
-    );
+    return writeOut?.mock.calls.map((c) => String(c[0] ?? "")).join("") ?? "";
   }
 
   function captureStderr(): string {
-    return (
-      (writeErr?.mock.calls as unknown[][])
-        .map((c) => String(c[0] as string))
-        .join("") ?? ""
-    );
+    return writeErr?.mock.calls.map((c) => String(c[0] ?? "")).join("") ?? "";
   }
 
   /** Bundle `code` + captured stderr so a failing assertion shows
@@ -324,10 +316,7 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
         workspace,
       );
       expectExit(code1, 1);
-      const stderr1 =
-        (writeErr?.mock.calls as unknown[][])
-          .map((c) => String(c[0] as string))
-          .join("") ?? "";
+      const stderr1 = captureStderr();
       expect(stderr1).toContain(NO_MODEL_ERROR);
 
       writeModelsJsonTo(workspace);
