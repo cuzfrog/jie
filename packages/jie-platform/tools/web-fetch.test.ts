@@ -63,14 +63,9 @@ afterAll(() => {
 describe("web_fetch", () => {
   test("rejects non-http/https schemes", async () => {
     const tool = createWebFetchTool();
-    let caught: unknown;
-    try {
-      await tool.execute({ url: "file:///etc/passwd" }, makeEmptyContext());
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("UNSUPPORTED_SCHEME");
+    await expect(
+      tool.execute({ url: "file:///etc/passwd" }, makeEmptyContext()),
+    ).rejects.toMatchObject({ code: "UNSUPPORTED_SCHEME" });
   });
 
   test("follows redirect to /html", async () => {
@@ -114,15 +109,12 @@ describe("web_fetch", () => {
 
   test("binary content-type -> unsupported_content_type", async () => {
     const tool = createWebFetchTool();
-    let caught: unknown;
-    try {
-      await tool.execute({ url: `${baseUrl}/binary` }, makeEmptyContext());
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("UNSUPPORTED_CONTENT_TYPE");
-    expect((caught as Error).message).toContain("application/octet-stream");
+    await expect(
+      tool.execute({ url: `${baseUrl}/binary` }, makeEmptyContext()),
+    ).rejects.toMatchObject({
+      code: "UNSUPPORTED_CONTENT_TYPE",
+      message: expect.stringContaining("application/octet-stream"),
+    });
   });
 
   test("5 MiB cap: response > 5 MiB is truncated, truncated=true", async () => {
@@ -135,14 +127,9 @@ describe("web_fetch", () => {
 
   test("redirect loop (>= 20) surfaces redirect_exhausted or final non-html error", async () => {
     const tool = createWebFetchTool();
-    let caught: unknown;
-    try {
-      await tool.execute({ url: `${baseUrl}/redirect-loop` }, makeEmptyContext());
-    } catch (error) {
-      caught = error;
-    }
-
-    expect(caught).toBeInstanceOf(JiePlatformError);
+    await expect(
+      tool.execute({ url: `${baseUrl}/redirect-loop` }, makeEmptyContext()),
+    ).rejects.toBeInstanceOf(JiePlatformError);
   });
 
   test("status: 200 in details; non-2xx returned with the body", async () => {
