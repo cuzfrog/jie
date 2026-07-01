@@ -9,7 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createWriteFileTool } from "./write-file";
-import { JiePlatformError } from "../domain-types";
+import { JiePlatformError } from "../types";
 
 describe("write_file", () => {
   let workspace: string;
@@ -58,8 +58,8 @@ describe("write_file", () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("file_too_large");
-    expect((caught as Error).message).toBe(`file_too_large: ${huge.length}`);
+    expect((caught as JiePlatformError).code).toBe("FILE_TOO_LARGE");
+    expect((caught as Error).message).toBe(`File content exceeds the maximum allowed size: ${huge.length}`);
   });
 
   test("content exactly at 5 MiB is accepted", async () => {
@@ -83,7 +83,7 @@ describe("write_file", () => {
     } catch (error) {
       caught = error;
     }
-    expect((caught as JiePlatformError).code).toBe("path_escape");
+    expect((caught as JiePlatformError).code).toBe("PATH_ESCAPE");
   });
 
   test("path is a directory -> is_a_directory", async () => {
@@ -98,7 +98,7 @@ describe("write_file", () => {
     } catch (error) {
       caught = error;
     }
-    expect((caught as JiePlatformError).code).toBe("is_a_directory");
+    expect((caught as JiePlatformError).code).toBe("IS_A_DIRECTORY");
   });
 
   test("details carries path, bytes_written, created_at", async () => {

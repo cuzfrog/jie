@@ -6,7 +6,7 @@ import {
 import type { ArtifactStore } from "../storage";
 import type { ExecutionContext } from "./types";
 import { createNotifyTool } from "./notify";
-import { JiePlatformError } from "../domain-types";
+import { JiePlatformError } from "../types";
 
 type NotifyEnvelope = EventEnvelope<`custom.${string}`>;
 
@@ -57,8 +57,8 @@ describe("notify — topic validation", () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("notify_invalid_topic");
-    expect((caught as Error).message).toBe("notify_invalid_topic: empty");
+    expect((caught as JiePlatformError).code).toBe("NOTIFY_INVALID_TOPIC");
+    expect((caught as Error).message).toBe("Invalid topic for notify: empty");
   });
 
   test("rejects topic starting with `agent.`", async () => {
@@ -70,9 +70,9 @@ describe("notify — topic validation", () => {
     } catch (error) {
       caught = error;
     }
-    expect((caught as JiePlatformError).code).toBe("notify_invalid_topic");
+    expect((caught as JiePlatformError).code).toBe("NOTIFY_INVALID_TOPIC");
     expect((caught as Error).message).toBe(
-      "notify_invalid_topic: starts_with_agent_prefix",
+      "Invalid topic for notify: starts_with_agent_prefix",
     );
   });
 
@@ -86,9 +86,9 @@ describe("notify — topic validation", () => {
     } catch (error) {
       caught = error;
     }
-    expect((caught as JiePlatformError).code).toBe("notify_invalid_topic");
+    expect((caught as JiePlatformError).code).toBe("NOTIFY_INVALID_TOPIC");
     expect((caught as Error).message).toBe(
-      "notify_invalid_topic: starts_with_team_prefix",
+      "Invalid topic for notify: starts_with_team_prefix",
     );
   });
 
@@ -101,9 +101,9 @@ describe("notify — topic validation", () => {
     } catch (error) {
       caught = error;
     }
-    expect((caught as JiePlatformError).code).toBe("notify_invalid_topic");
+    expect((caught as JiePlatformError).code).toBe("NOTIFY_INVALID_TOPIC");
     expect((caught as Error).message).toBe(
-      "notify_invalid_topic: contains_null_byte",
+      "Invalid topic for notify: contains_null_byte",
     );
   });
 
@@ -118,7 +118,7 @@ describe("notify — topic validation", () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("notify_prompt_too_long");
+    expect((caught as JiePlatformError).code).toBe("NOTIFY_PROMPT_TOO_LONG");
     expect((caught as Error).message).toContain("prompt length 4097");
     expect(received).toHaveLength(0);
   });

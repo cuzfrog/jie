@@ -82,7 +82,9 @@ export function createAgentBody(options: CreateAgentBodyOptions): AgentBody {
     },
   });
   agent.state.systemPrompt = options.soul.systemPrompt;
-  agent.state.model = options.model as never;
+  if (options.model !== undefined) {
+    agent.state.model = options.model as never;
+  }
   agent.state.tools = adaptedTools;
 
   const body = new JieAgentBody({

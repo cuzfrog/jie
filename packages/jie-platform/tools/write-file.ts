@@ -2,7 +2,7 @@ import { mkdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types";
-import { JiePlatformError } from "../domain-types";
+import { JiePlatformError, JiePlatformErrorMessages } from "../types";
 import { mapErrno, resolveWithinWorkspace } from "./path-utils";
 
 const CONTENT_CAP = 5 * 1024 * 1024;
@@ -17,12 +17,12 @@ export interface WriteFileDeps {
   workspaceRoot: string;
 }
 
-const ERRNO_MAP: Record<string, string> = {
-  EACCES: "permission_denied",
-  EISDIR: "is_a_directory",
-  ENOSPC: "disk_full",
-  EIO: "i_o_error",
-  EROFS: "i_o_error",
+const ERRNO_MAP: Record<string, keyof typeof JiePlatformErrorMessages> = {
+  EACCES: "PERMISSION_DENIED",
+  EISDIR: "IS_A_DIRECTORY",
+  ENOSPC: "DISK_FULL",
+  EIO: "IO_ERROR",
+  EROFS: "IO_ERROR",
 };
 
 interface WriteFileInput {
@@ -41,10 +41,7 @@ export function createWriteFileTool(dependencies: WriteFileDeps): Tool<WriteFile
     }),
     async execute(input: WriteFileInput): Promise<ToolResult> {
       if (input.content.length > CONTENT_CAP) {
-        throw new JiePlatformError(
-          "file_too_large",
-          `file_too_large: ${input.content.length}`,
-        );
+        throw new JiePlatformError("FILE_TOO_LARGE", { detail: `${input.content.length}` });
       }
 
       const realPath = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
@@ -58,10 +55,7 @@ export function createWriteFileTool(dependencies: WriteFileDeps): Tool<WriteFile
         stat = null;
       }
       if (stat !== null && stat.isDirectory()) {
-        throw new JiePlatformError(
-          "is_a_directory",
-          `is_a_directory: ${input.path}`,
-        );
+        throw new JiePlatformError("IS_A_DIRECTORY", { detail: input.path });
       }
 
       try {

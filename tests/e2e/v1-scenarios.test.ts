@@ -27,7 +27,9 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { main } from "../../packages/jie-cli/index.ts";
-import { NO_MODEL_ERROR } from "../../packages/jie-platform/no-model-error.ts";
+import { JiePlatformErrorMessages } from "@cuzfrog/jie-platform";
+
+const NO_MODEL_ERROR = JiePlatformErrorMessages.NO_MODEL_ERROR;
 
 interface Fixture {
   provider: string;

@@ -4,7 +4,7 @@ sealed:
   - package.json
   - start.test.ts
   - start.ts
-  - domain-types.ts
+  - types.ts
   - utils.ts
 ---
 

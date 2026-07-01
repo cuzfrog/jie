@@ -88,4 +88,4 @@ function statusBarContextFromState(state: TuiState): StatusBarContext {
   };
 }
 
-export const _statusBarContextFromStateForTest = statusBarContextFromState;
+export { statusBarContextFromState as _statusBarContextFromState };

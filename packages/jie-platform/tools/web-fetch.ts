@@ -1,7 +1,7 @@
 import { parse as parseHtml } from "node-html-parser";
 import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types";
-import { JiePlatformError } from "../domain-types";
+import { JiePlatformError } from "../types";
 
 const WEB_FETCH_DESCRIPTION = `web_fetch(url): Fetch a URL and return its text content. Supports http/https
 only (file://, ftp://, data:// are rejected). Follows up to 20 redirects.
@@ -60,16 +60,10 @@ export function createWebFetchTool(): Tool<WebFetchInput> {
       try {
         url = new URL(input.url);
       } catch {
-        throw new JiePlatformError(
-          "unsupported_scheme",
-          `unsupported_scheme: ${input.url}`,
-        );
+        throw new JiePlatformError("UNSUPPORTED_SCHEME", { detail: input.url });
       }
       if (url.protocol !== "http:" && url.protocol !== "https:") {
-        throw new JiePlatformError(
-          "unsupported_scheme",
-          `unsupported_scheme: ${url.protocol}`,
-        );
+        throw new JiePlatformError("UNSUPPORTED_SCHEME", { detail: url.protocol });
       }
 
       let response: Response;
@@ -78,19 +72,16 @@ export function createWebFetchTool(): Tool<WebFetchInput> {
           headers: { "User-Agent": USER_AGENT },
         });
       } catch (error) {
-        throw new JiePlatformError(
-          "redirect_exhausted",
-          `redirect_exhausted: ${(error as Error).message}`,
-        );
+        throw new JiePlatformError("REDIRECT_EXHAUSTED", {
+          detail: (error as Error).message,
+          cause: error as Error,
+        });
       }
 
       const contentType = response.headers.get("content-type") ?? "application/octet-stream";
 
       if (!isTextLike(contentType)) {
-        throw new JiePlatformError(
-          "unsupported_content_type",
-          `unsupported_content_type: ${contentType}`,
-        );
+        throw new JiePlatformError("UNSUPPORTED_CONTENT_TYPE", { detail: contentType });
       }
 
       const arrayBuf = await response.arrayBuffer();

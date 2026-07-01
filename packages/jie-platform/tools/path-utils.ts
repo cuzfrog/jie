@@ -1,6 +1,6 @@
 import { realpathSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
-import { JiePlatformError } from "../domain-types";
+import { JiePlatformError, JiePlatformErrorMessages } from "../types";
 
 export function resolveWithinWorkspace(
   path: string,
@@ -20,10 +20,7 @@ export function resolveWithinWorkspace(
     rootReal = workspaceRoot;
   }
   if (real !== rootReal && !real.startsWith(rootReal + "/")) {
-    throw new JiePlatformError(
-      "path_escape",
-      `path_escape: ${path}`,
-    );
+    throw new JiePlatformError("PATH_ESCAPE", { detail: path });
   }
   return real;
 }
@@ -36,7 +33,10 @@ export function mapErrno(
   if (errno && typeof errno.code === "string") {
     const code = errorMap[errno.code];
     if (code !== undefined) {
-      return new JiePlatformError(code, `${code}: ${errno.message}`);
+      return new JiePlatformError(
+        code as keyof typeof JiePlatformErrorMessages,
+        { detail: errno.message, cause: errno },
+      );
     }
   }
   return errno instanceof Error ? errno : new Error(String(error));

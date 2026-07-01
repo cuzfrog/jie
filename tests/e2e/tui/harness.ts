@@ -1,7 +1,7 @@
 import { createEventManager, Events, type EventEnvelope, type EventManager, type Sender, type EventType } from "@cuzfrog/jie-platform/event";
 import { createTui, type Tui, type CreateTUIOptions } from "@cuzfrog/jie-tui";
 import type { ArtifactStore } from "@cuzfrog/jie-platform/storage";
-import { NO_MODEL_ERROR as NO_MODEL_ERROR_TEXT } from "../../../packages/jie-platform/no-model-error.ts";
+import { JiePlatformErrorMessages } from "@cuzfrog/jie-platform";
 
 const stubArtifacts: ArtifactStore = {
   write: async () => ({ key: "", created_at: "" }),
@@ -48,7 +48,7 @@ export const replayEnvelopes = (
   return { tui, bus };
 };
 
-export const NO_MODEL_ERROR = NO_MODEL_ERROR_TEXT;
+export const NO_MODEL_ERROR = JiePlatformErrorMessages.NO_MODEL_ERROR;
 
 export const attachNoModelBody = (
   bus: EventManager,

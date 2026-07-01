@@ -2,7 +2,7 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import { getModel as piGetModel, getModels as piGetModels, getProviders as piGetProviders } from "@earendil-works/pi-ai";
 import { loadModelsConfig, type ResolvedModelsConfig, type ResolvedProviderConfig } from "./load-models";
 import type { AuthStore } from "./auth-store";
-import { JiePlatformError } from "../domain-types";
+import { JiePlatformError } from "../types";
 
 export interface ModelRegistry {
   providers(): string[];
@@ -67,10 +67,9 @@ class PiModelRegistry implements ModelRegistry {
     const entry = auth[provider];
     if (entry !== undefined) {
       if (entry.type === "api_key") return entry.key;
-      throw new JiePlatformError(
-        "oauth_not_supported",
-        `OAuth credentials for '${provider}' are not supported in v1; use 'jie login --api-key' or 'jie --api-key' instead`,
-      );
+      throw new JiePlatformError("OAUTH_NOT_SUPPORTED", {
+        detail: `OAuth credentials for '${provider}' are not supported in v1; use 'jie login --api-key' or 'jie --api-key' instead`,
+      });
     }
     const customProvider = this.custom.providers.get(provider);
     if (customProvider !== undefined) {

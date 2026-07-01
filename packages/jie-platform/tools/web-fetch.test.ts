@@ -1,5 +1,5 @@
 import { createWebFetchTool } from "./web-fetch";
-import { JiePlatformError } from "../domain-types";
+import { JiePlatformError } from "../types";
 
 let server: ReturnType<typeof Bun.serve>;
 let baseUrl: string;
@@ -69,7 +69,7 @@ describe("web_fetch", () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("unsupported_scheme");
+    expect((caught as JiePlatformError).code).toBe("UNSUPPORTED_SCHEME");
   });
 
   test("follows redirect to /html", async () => {
@@ -120,7 +120,7 @@ describe("web_fetch", () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("unsupported_content_type");
+    expect((caught as JiePlatformError).code).toBe("UNSUPPORTED_CONTENT_TYPE");
     expect((caught as Error).message).toContain("application/octet-stream");
   });
 

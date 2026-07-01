@@ -3,7 +3,7 @@ import {
   createWebSearchTool,
   type WebSearchProvider,
 } from "./web-search";
-import { JiePlatformError } from "../domain-types";
+import { JiePlatformError } from "../types";
 
 function stubProvider(results: { title: string; url: string; snippet: string }[]): WebSearchProvider {
   return { async search() { return results; } };
@@ -69,9 +69,9 @@ describe("web_search", () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("web_search_failed");
+    expect((caught as JiePlatformError).code).toBe("WEB_SEARCH_FAILED");
     expect((caught as Error).message).toBe(
-      "web_search_failed: provider_returned_no_results",
+      "Web search failed: provider_returned_no_results",
     );
   });
 
@@ -83,8 +83,8 @@ describe("web_search", () => {
     } catch (error) {
       caught = error;
     }
-    expect((caught as JiePlatformError).code).toBe("web_search_failed");
-    expect((caught as Error).message).toBe("web_search_failed: http_429");
+    expect((caught as JiePlatformError).code).toBe("WEB_SEARCH_FAILED");
+    expect((caught as Error).message).toBe("Web search failed: http_429");
   });
 
   test("provider returns results: content is numbered list", async () => {

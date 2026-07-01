@@ -1,8 +1,8 @@
 import {
   AgentsRail,
-  _agentsRailFromStateForTest,
-  _buildSelectItemsForTest,
-  _projectRailItemsForTest,
+  _agentsRailFromState,
+  _buildSelectItems,
+  _projectRailItems,
   type RailItem,
 } from "./agents-rail";
 import type { AgentId, AgentUiState, TuiState } from "../state";
@@ -50,7 +50,7 @@ describe("projectRailItems", () => {
       ],
       null,
     );
-    const items = _projectRailItemsForTest(state.agents);
+    const items = _projectRailItems(state.agents);
     expect(items).toHaveLength(2);
     expect(items[0]).toEqual<RailItem>({
       agentId: AGENT_ID_1,
@@ -69,7 +69,7 @@ describe("projectRailItems", () => {
   });
 
   test("returns empty array when state has no agents", () => {
-    expect(_projectRailItemsForTest(new Map())).toEqual([]);
+    expect(_projectRailItems(new Map())).toEqual([]);
   });
 });
 
@@ -79,7 +79,7 @@ describe("buildAgentSelectItems", () => {
       { agentId: AGENT_ID_1, agentKey: "general-1", role: "general", isLeader: true, status: "busy" },
       { agentId: AGENT_ID_2, agentKey: "researcher-1", role: "researcher", isLeader: false, status: "idle" },
     ];
-    const out = _buildSelectItemsForTest(items);
+    const out = _buildSelectItems(items);
     expect(out[0].label).toBe("● ★ general-1");
     expect(out[0].description).toBe("general");
     expect(out[0].value).toBe(AGENT_ID_1);
@@ -155,7 +155,7 @@ describe("agentsRailFromState", () => {
       ],
       AGENT_ID_2,
     );
-    const rail = _agentsRailFromStateForTest(state);
+    const rail = _agentsRailFromState(state);
     expect(rail.getSelectedAgentId()).toBe(AGENT_ID_2);
     const lines = rail.render(40).join("\n");
     expect(lines).toContain("general-1");

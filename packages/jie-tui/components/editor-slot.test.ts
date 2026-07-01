@@ -1,5 +1,5 @@
 import { EditorSlot, editorSlotFromCommands } from "./editor-slot";
-import { createTestTui } from "../test";
+import { createTestTuiWithTerminal } from "../test";
 import type { SlashCommand } from "@earendil-works/pi-tui";
 
 const COMMANDS: SlashCommand[] = [
@@ -14,34 +14,34 @@ const COMMANDS: SlashCommand[] = [
 
 describe("EditorSlot", () => {
   test("renders editor with empty text", () => {
-    const tui = createTestTui();
+    const { tui } = createTestTuiWithTerminal();
     const slot = new EditorSlot(tui, { basePath: process.cwd() });
     const lines = slot.render(80);
     expect(lines.length).toBeGreaterThan(0);
   });
 
   test("getText returns empty string initially", () => {
-    const tui = createTestTui();
+    const { tui } = createTestTuiWithTerminal();
     const slot = new EditorSlot(tui, { basePath: process.cwd() });
     expect(slot.getText()).toBe("");
   });
 
   test("setText then getText round-trips", () => {
-    const tui = createTestTui();
+    const { tui } = createTestTuiWithTerminal();
     const slot = new EditorSlot(tui, { basePath: process.cwd() });
     slot.setText("hello world");
     expect(slot.getText()).toBe("hello world");
   });
 
   test("render reflects the typed text", () => {
-    const tui = createTestTui();
+    const { tui } = createTestTuiWithTerminal();
     const slot = new EditorSlot(tui, { basePath: process.cwd() });
     slot.setText("a sample prompt");
     expect(slot.render(80).join("\n")).toContain("a sample prompt");
   });
 
   test("onSubmit fires with submitted text", () => {
-    const tui = createTestTui();
+    const { tui } = createTestTuiWithTerminal();
     let captured: string | null = null;
     const slot = new EditorSlot(tui, {
       basePath: process.cwd(),
@@ -55,7 +55,7 @@ describe("EditorSlot", () => {
   });
 
   test("onChange fires with new text", () => {
-    const tui = createTestTui();
+    const { tui } = createTestTuiWithTerminal();
     let captured: string | null = null;
     const slot = new EditorSlot(tui, {
       basePath: process.cwd(),
@@ -70,7 +70,7 @@ describe("EditorSlot", () => {
 
 describe("editorSlotFromCommands", () => {
   test("constructs a slot with the given commands", () => {
-    const tui = createTestTui();
+    const { tui } = createTestTuiWithTerminal();
     const slot = editorSlotFromCommands(tui, process.cwd(), COMMANDS);
     slot.setText("/lo");
     expect(slot.render(80).join("\n")).toContain("/lo");

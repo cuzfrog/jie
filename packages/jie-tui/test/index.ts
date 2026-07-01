@@ -1,1 +1,1 @@
-export { createTestTui, createTestTuiWithTerminal, type TestTuiWithTerminal } from "./test-support";
+export { createTestTuiWithTerminal, type TestTuiWithTerminal } from "./test-support";

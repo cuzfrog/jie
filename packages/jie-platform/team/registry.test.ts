@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTeamRegistry } from "./registry";
-import { JiePlatformError } from "../domain-types";
+import { JiePlatformError } from "../types";
 
 function writeTeam(rootDir: string, id: string, leader: string): void {
   const teamDir = join(rootDir, id);
@@ -109,7 +109,7 @@ describe("createTeamRegistry", () => {
         caught = error;
       }
       expect(caught).toBeInstanceOf(JiePlatformError);
-      expect((caught as JiePlatformError).code).toBe("invalid_team_id");
+      expect((caught as JiePlatformError).code).toBe("INVALID_TEAM_ID");
     });
 
     test("loadTeam throws JiePlatformError with code 'team_not_found' when id is absent", () => {
@@ -121,7 +121,7 @@ describe("createTeamRegistry", () => {
         caught = error;
       }
       expect(caught).toBeInstanceOf(JiePlatformError);
-      expect((caught as JiePlatformError).code).toBe("team_not_found");
+      expect((caught as JiePlatformError).code).toBe("TEAM_NOT_FOUND");
     });
   });
 

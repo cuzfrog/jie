@@ -1,7 +1,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { isValidTeamId, loadMinimalTeam, loadTeamFromDir } from "./loader";
-import { JiePlatformError } from "../domain-types";
+import { JiePlatformError } from "../types";
 import type { Team } from "./types";
 
 const BUILTIN_MINIMAL_TEAM_ID = "minimal";
@@ -49,7 +49,7 @@ export function createTeamRegistry(options: TeamRegistryOptions): TeamRegistry {
         return loadMinimalTeam();
       }
       if (!isValidTeamId(teamId)) {
-        throw new JiePlatformError("invalid_team_id", `invalid team_id: ${teamId}`);
+        throw new JiePlatformError("INVALID_TEAM_ID", { detail: `invalid team_id: ${teamId}` });
       }
       const projectDir = projectTeamsDir();
       if (projectDir !== null && existsSync(join(projectDir, teamId, "TEAM.md"))) {
@@ -58,7 +58,7 @@ export function createTeamRegistry(options: TeamRegistryOptions): TeamRegistry {
       if (isUserTeam(teamId)) {
         return loadTeamFromDir(join(userTeamsDir, teamId));
       }
-      throw new JiePlatformError("team_not_found", `team '${teamId}' not found`);
+      throw new JiePlatformError("TEAM_NOT_FOUND", { detail: `team '${teamId}' not found` });
     },
     isInstalled(id) {
       return isMinimal(id) || isProjectTeam(id) || isUserTeam(id);

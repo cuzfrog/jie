@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getModels as piGetModels } from "@earendil-works/pi-ai";
 import type { Api, Model, OpenAICompletionsCompat, OpenAIResponsesCompat, AnthropicMessagesCompat } from "@earendil-works/pi-ai";
+import { JiePlatformError } from "../types";
 
 export interface RawModelsConfig {
   providers?: Record<string, RawProviderConfig>;
@@ -90,16 +91,23 @@ function readModelsFile(path: string): RawModelsConfig | null {
     text = readFileSync(path, "utf-8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
-    throw new Error(`models.json at ${path}: ${(error as Error).message}`);
+    throw new JiePlatformError("INVALID_CONFIG", {
+      detail: `models.json at ${path}: ${(error as Error).message}`,
+      cause: error as Error,
+    });
   }
   try {
     const parsed = JSON.parse(text);
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error("expected a JSON object");
+      throw new JiePlatformError("INVALID_CONFIG", { detail: `models.json at ${path}: expected a JSON object` });
     }
     return parsed as RawModelsConfig;
   } catch (error) {
-    throw new Error(`models.json at ${path}: ${(error as Error).message}`);
+    if (error instanceof JiePlatformError) throw error;
+    throw new JiePlatformError("INVALID_CONFIG", {
+      detail: `models.json at ${path}: ${(error as Error).message}`,
+      cause: error as Error,
+    });
   }
 }
 
@@ -147,7 +155,9 @@ function resolveConfig(raw: RawModelsConfig): ResolvedModelsConfig {
 
   for (const [providerId, rawCfg] of Object.entries(raw.providers)) {
     if (typeof rawCfg.baseUrl !== "string" || rawCfg.baseUrl === "") {
-      throw new Error(`models.json: provider '${providerId}': baseUrl is required`);
+      throw new JiePlatformError("INVALID_CONFIG", {
+        detail: `models.json: provider '${providerId}': baseUrl is required`,
+      });
     }
     const api = resolveApi(providerId, rawCfg.api);
     const headers: Record<string, string> = {};
@@ -191,7 +201,9 @@ function resolveConfig(raw: RawModelsConfig): ResolvedModelsConfig {
 function resolveApi(providerId: string, declared: string | undefined): Api {
   if (declared !== undefined && declared !== "") {
     if (!KNOWN_APIS.has(declared as Api)) {
-      throw new Error(`models.json: provider '${providerId}': unknown api '${declared}'`);
+      throw new JiePlatformError("INVALID_CONFIG", {
+        detail: `models.json: provider '${providerId}': unknown api '${declared}'`,
+      });
     }
     return declared as Api;
   }
@@ -202,7 +214,9 @@ function resolveApi(providerId: string, declared: string | undefined): Api {
   if (builtinProbe !== undefined && builtinProbe.length > 0 && builtinProbe[0] !== undefined) {
     return builtinProbe[0].api;
   }
-  throw new Error(`models.json: provider '${providerId}': api is required for new providers`);
+  throw new JiePlatformError("INVALID_CONFIG", {
+    detail: `models.json: provider '${providerId}': api is required for new providers`,
+  });
 }
 
 function buildModel(
@@ -215,7 +229,9 @@ function buildModel(
   authHeader: boolean,
 ): Model<Api> {
   if (typeof raw.id !== "string" || raw.id === "") {
-    throw new Error(`models.json: provider '${providerId}': model.id is required`);
+    throw new JiePlatformError("INVALID_CONFIG", {
+      detail: `models.json: provider '${providerId}': model.id is required`,
+    });
   }
   const mergedCompat = { ...providerCompat, ...(raw.compat ?? {}) } as ResolvedProviderConfig["compat"];
   const cost = {

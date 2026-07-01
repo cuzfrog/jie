@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Settings, RawSettings } from "./types";
+import { JiePlatformError } from "../types";
 
 const TEAM_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
 const DEFAULT_TEAM_ERROR = (value: unknown): string => `invalid defaultTeam: ${value}`;
@@ -40,24 +41,26 @@ function validateSettings(raw: RawSettings, source: string): Settings {
 
   if ("defaultProvider" in raw && raw.defaultProvider !== undefined) {
     if (typeof raw.defaultProvider !== "string") {
-      throw new Error(`${source}: defaultProvider must be a string`);
+      throw new JiePlatformError("INVALID_CONFIG", { detail: `${source}: defaultProvider must be a string` });
     }
     result.defaultProvider = raw.defaultProvider;
   }
 
   if ("defaultModel" in raw && raw.defaultModel !== undefined) {
     if (typeof raw.defaultModel !== "string") {
-      throw new Error(`${source}: defaultModel must be a string`);
+      throw new JiePlatformError("INVALID_CONFIG", { detail: `${source}: defaultModel must be a string` });
     }
     result.defaultModel = raw.defaultModel;
   }
 
   if ("defaultTeam" in raw && raw.defaultTeam !== undefined) {
     if (typeof raw.defaultTeam !== "string") {
-      throw new Error(`${source}: defaultTeam must be a string`);
+      throw new JiePlatformError("INVALID_CONFIG", { detail: `${source}: defaultTeam must be a string` });
     }
     if (!TEAM_ID_PATTERN.test(raw.defaultTeam)) {
-      throw new Error(`${source}: ${DEFAULT_TEAM_ERROR(raw.defaultTeam)}`);
+      throw new JiePlatformError("INVALID_CONFIG", {
+        detail: `${source}: ${DEFAULT_TEAM_ERROR(raw.defaultTeam)}`,
+      });
     }
     result.defaultTeam = raw.defaultTeam;
   }

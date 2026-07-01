@@ -1,6 +1,6 @@
 import { createWriteArtifactTool } from "./write-artifact";
 import { createArtifactStore, createStorage } from "../storage";
-import { JiePlatformError } from "../domain-types";
+import { JiePlatformError } from "../types";
 
 function makeStore() {
   const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
@@ -31,7 +31,7 @@ describe("write_artifact", () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("invalid_artifact_key");
+    expect((caught as JiePlatformError).code).toBe("INVALID_ARTIFACT_KEY");
   });
 
   test("content > 5 MiB -> artifact_too_large", async () => {
@@ -44,6 +44,6 @@ describe("write_artifact", () => {
     } catch (error) {
       caught = error;
     }
-    expect((caught as JiePlatformError).code).toBe("artifact_too_large");
+    expect((caught as JiePlatformError).code).toBe("ARTIFACT_TOO_LARGE");
   });
 });

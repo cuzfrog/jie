@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createBashTool } from "./bash";
-import { JiePlatformError } from "../domain-types";
+import { JiePlatformError } from "../types";
 
 describe("bash", () => {
   let workspace: string;
@@ -83,7 +83,7 @@ describe("bash", () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("workdir_escape");
+    expect((caught as JiePlatformError).code).toBe("WORKDIR_ESCAPE");
   });
 
   test("shell is /bin/sh (POSIX constructs work)", async () => {

@@ -1,6 +1,6 @@
 import { SqliteStorage } from "./sqlite-storage";
 import { SqliteArtifactStore, InMemoryArtifactStore } from "./artifact-store";
-import { JiePlatformError } from "../domain-types";
+import { JiePlatformError } from "../types";
 
 function makeStore(): SqliteArtifactStore {
   return new SqliteArtifactStore(new SqliteStorage(":memory:"));
@@ -68,8 +68,8 @@ describe("SqliteArtifactStore", () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("invalid_artifact_key");
-    expect((caught as Error).message).toBe("invalid_artifact_key: bad space");
+    expect((caught as JiePlatformError).code).toBe("INVALID_ARTIFACT_KEY");
+    expect((caught as Error).message).toBe("Invalid artifact key: bad space");
   });
 
   test("write rejects content over 5 MiB with typed error artifact_too_large", async () => {
@@ -82,9 +82,9 @@ describe("SqliteArtifactStore", () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("artifact_too_large");
+    expect((caught as JiePlatformError).code).toBe("ARTIFACT_TOO_LARGE");
     expect((caught as Error).message).toBe(
-      `artifact_too_large: ${huge.length}`,
+      `Artifact content exceeds the maximum allowed size: ${huge.length}`,
     );
   });
 

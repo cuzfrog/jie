@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createReadFileTool } from "./read-file";
-import { JiePlatformError } from "../domain-types";
+import { JiePlatformError } from "../types";
 
 describe("read_file", () => {
   let workspace: string;
@@ -93,7 +93,7 @@ describe("read_file", () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("unsupported_encoding");
+    expect((caught as JiePlatformError).code).toBe("UNSUPPORTED_ENCODING");
   });
 
   test("path outside the workspace -> path_escape", async () => {
@@ -104,7 +104,7 @@ describe("read_file", () => {
     } catch (error) {
       caught = error;
     }
-    expect((caught as JiePlatformError).code).toBe("path_escape");
+    expect((caught as JiePlatformError).code).toBe("PATH_ESCAPE");
   });
 
   test("missing file -> file_not_found", async () => {
@@ -115,7 +115,7 @@ describe("read_file", () => {
     } catch (error) {
       caught = error;
     }
-    expect((caught as JiePlatformError).code).toBe("file_not_found");
+    expect((caught as JiePlatformError).code).toBe("FILE_NOT_FOUND");
   });
 
   test("path is a directory -> is_a_directory", async () => {
@@ -127,6 +127,6 @@ describe("read_file", () => {
     } catch (error) {
       caught = error;
     }
-    expect((caught as JiePlatformError).code).toBe("is_a_directory");
+    expect((caught as JiePlatformError).code).toBe("IS_A_DIRECTORY");
   });
 });

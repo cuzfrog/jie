@@ -81,16 +81,15 @@ function buildSelectItems(items: ReadonlyArray<RailItem>): SelectItem[] {
   });
 }
 
-export function _projectRailItemsForTest(agents: ReadonlyMap<AgentId, AgentUiState>): RailItem[] {
-  return projectRailItems(agents);
-}
+export {
+  projectRailItems as _projectRailItems,
+  buildSelectItems as _buildSelectItems,
+};
 
-export function _buildSelectItemsForTest(items: ReadonlyArray<RailItem>): SelectItem[] {
-  return buildSelectItems(items);
-}
-
-export function _agentsRailFromStateForTest(state: TuiState): AgentsRail {
+function agentsRailFromState(state: TuiState): AgentsRail {
   const rail = new AgentsRail();
   rail.setItems(projectRailItems(state.agents), state.focusedAgentId);
   return rail;
 }
+
+export { agentsRailFromState as _agentsRailFromState };

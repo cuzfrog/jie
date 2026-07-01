@@ -1,7 +1,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types";
-import { JiePlatformError } from "../domain-types";
+import { JiePlatformError, JiePlatformErrorMessages } from "../types";
 import { mapErrno, resolveWithinWorkspace } from "./path-utils";
 
 const DEFAULT_LINE_CAP = 2000;
@@ -17,12 +17,12 @@ export interface ReadFileDeps {
   workspaceRoot: string;
 }
 
-const ERRNO_MAP: Record<string, string> = {
-  ENOENT: "file_not_found",
-  ENOTDIR: "path_escape",
-  EACCES: "permission_denied",
-  EISDIR: "is_a_directory",
-  EIO: "i_o_error",
+const ERRNO_MAP: Record<string, keyof typeof JiePlatformErrorMessages> = {
+  ENOENT: "FILE_NOT_FOUND",
+  ENOTDIR: "PATH_ESCAPE",
+  EACCES: "PERMISSION_DENIED",
+  EISDIR: "IS_A_DIRECTORY",
+  EIO: "IO_ERROR",
 };
 
 interface ReadFileInput {
@@ -66,10 +66,7 @@ export function createReadFileTool(dependencies: ReadFileDeps): Tool<ReadFileInp
         throw mapErrno(error, ERRNO_MAP);
       }
       if (stat.isDirectory()) {
-        throw new JiePlatformError(
-          "is_a_directory",
-          `is_a_directory: ${input.path}`,
-        );
+        throw new JiePlatformError("IS_A_DIRECTORY", { detail: input.path });
       }
 
       let bytes: Uint8Array;
@@ -82,10 +79,7 @@ export function createReadFileTool(dependencies: ReadFileDeps): Tool<ReadFileInp
       try {
         new TextDecoder("utf-8", { fatal: true }).decode(bytes);
       } catch {
-        throw new JiePlatformError(
-          "unsupported_encoding",
-          `unsupported_encoding: ${input.path}`,
-        );
+        throw new JiePlatformError("UNSUPPORTED_ENCODING", { detail: input.path });
       }
 
       const text = new TextDecoder("utf-8", { ignoreBOM: true }).decode(bytes);

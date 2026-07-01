@@ -1,8 +1,8 @@
 import { Loader, Text } from "@earendil-works/pi-tui";
-import { createTestTui } from "../test";
+import { createTestTuiWithTerminal } from "../test";
 import {
   StatusBar,
-  _statusBarContextFromStateForTest,
+  _statusBarContextFromState,
   type StatusBarContext,
   type StatusBarModel,
 } from "./status-bar";
@@ -31,7 +31,7 @@ function makeContext(overrides: Partial<StatusBarContext> = {}): StatusBarContex
 
 describe("StatusBar", () => {
   test("setModel updates cwdLine and hintLine text", () => {
-    const tui = createTestTui();
+    const { tui } = createTestTuiWithTerminal();
     const bar = new StatusBar(tui);
     bar.setModel(makeModel(), makeContext());
     const rendered = bar.render(120);
@@ -41,7 +41,7 @@ describe("StatusBar", () => {
   });
 
   test("renders three children when focused agent is busy (text + hint + loader)", () => {
-    const tui = createTestTui();
+    const { tui } = createTestTuiWithTerminal();
     const bar = new StatusBar(tui);
     bar.setModel(makeModel(), makeContext({ focusedStatus: "busy" }));
     expect(bar.children.length).toBe(3);
@@ -50,7 +50,7 @@ describe("StatusBar", () => {
   });
 
   test("renders two children when focused agent is idle (no loader)", () => {
-    const tui = createTestTui();
+    const { tui } = createTestTuiWithTerminal();
     const bar = new StatusBar(tui);
     bar.setModel(makeModel(), makeContext({ focusedStatus: "idle" }));
     expect(bar.children.length).toBe(2);
@@ -59,14 +59,14 @@ describe("StatusBar", () => {
   });
 
   test("renders two children when no focused agent", () => {
-    const tui = createTestTui();
+    const { tui } = createTestTuiWithTerminal();
     const bar = new StatusBar(tui);
     bar.setModel(makeModel(), makeContext({ focusedStatus: null, focusedAgentKey: null }));
     expect(bar.children.length).toBe(2);
   });
 
   test("switches loader on when status changes idle → busy", () => {
-    const tui = createTestTui();
+    const { tui } = createTestTuiWithTerminal();
     const bar = new StatusBar(tui);
     bar.setModel(makeModel(), makeContext({ focusedStatus: "idle" }));
     expect(bar.children.length).toBe(2);
@@ -76,7 +76,7 @@ describe("StatusBar", () => {
   });
 
   test("removes loader on busy → idle", () => {
-    const tui = createTestTui();
+    const { tui } = createTestTuiWithTerminal();
     const bar = new StatusBar(tui);
     bar.setModel(makeModel(), makeContext({ focusedStatus: "busy" }));
     expect(bar.children.length).toBe(3);
@@ -85,7 +85,7 @@ describe("StatusBar", () => {
   });
 
   test("hint text reflects rail visibility", () => {
-    const tui = createTestTui();
+    const { tui } = createTestTuiWithTerminal();
     const bar = new StatusBar(tui);
     bar.setModel(makeModel(), makeContext({ showRail: false }));
     expect(bar.render(120).join("\n")).toContain("ctrl+left for agents");
@@ -94,14 +94,14 @@ describe("StatusBar", () => {
   });
 
   test("model text shows em-dash when provider or modelId is empty", () => {
-    const tui = createTestTui();
+    const { tui } = createTestTuiWithTerminal();
     const bar = new StatusBar(tui);
     bar.setModel(makeModel({ provider: "", modelId: "" }), makeContext());
     expect(bar.render(120).join("\n")).toContain("—");
   });
 
   test("model text omits effort when empty", () => {
-    const tui = createTestTui();
+    const { tui } = createTestTuiWithTerminal();
     const bar = new StatusBar(tui);
     bar.setModel(makeModel({ effort: "" }), makeContext());
     const flat = bar.render(120).join("\n");
@@ -110,7 +110,7 @@ describe("StatusBar", () => {
   });
 
   test("render delegates to container and does not mutate children", () => {
-    const tui = createTestTui();
+    const { tui } = createTestTuiWithTerminal();
     const bar = new StatusBar(tui);
     bar.setModel(makeModel(), makeContext({ focusedStatus: "busy" }));
     const before = bar.children.length;
@@ -143,7 +143,7 @@ describe("statusBarContextFromState", () => {
       errorBanner: null,
       showTeamRailPanel: true,
     };
-    expect(_statusBarContextFromStateForTest(state)).toEqual({
+    expect(_statusBarContextFromState(state)).toEqual({
       focusedStatus: "busy",
       focusedAgentKey: "general-1",
       teamId: "default",
@@ -161,7 +161,7 @@ describe("statusBarContextFromState", () => {
       errorBanner: null,
       showTeamRailPanel: false,
     };
-    expect(_statusBarContextFromStateForTest(state)).toEqual({
+    expect(_statusBarContextFromState(state)).toEqual({
       focusedStatus: null,
       focusedAgentKey: null,
       teamId: null,
@@ -179,6 +179,6 @@ describe("statusBarContextFromState", () => {
       errorBanner: null,
       showTeamRailPanel: false,
     };
-    expect(_statusBarContextFromStateForTest(state).showRail).toBe(false);
+    expect(_statusBarContextFromState(state).showRail).toBe(false);
   });
 });

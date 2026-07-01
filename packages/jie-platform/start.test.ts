@@ -21,6 +21,9 @@ import {
 import { createTeamRegistry } from "./team";
 import { createToolRegistry } from "./tools";
 import { createArtifactStore, createMemoryManager, createStorage } from "./storage";
+import { JiePlatformErrorMessages } from "./types";
+
+const NO_MODEL_ERROR = JiePlatformErrorMessages.NO_MODEL_ERROR;
 
 const settingsStore = vi.mocked<SettingsStore>({
   load: vi.fn(),
@@ -123,7 +126,7 @@ describe("createJiePlatform", () => {
       expect(payload.agents[0]!.is_leader).toBe(true);
     });
 
-    test("model pre-check: no model in soul or settings allows construction (body reports error on prompt)", async () => {
+    test("model pre-check: no model in soul or settings throws NO_MODEL_ERROR", async () => {
       settingsStore.load.mockReturnValueOnce({});
       const filePath = join(workspace, "no-model.db");
       const storage = createStorage({ type: "sqlite", filePath });
@@ -140,9 +143,9 @@ describe("createJiePlatform", () => {
         artifactStore,
         memoryManager: createMemoryManager(storage),
       };
-      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
-      expect(handle.team.id).toBe("minimal");
-      await handle.stop();
+      await expect(
+        createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps),
+      ).rejects.toThrow(NO_MODEL_ERROR);
     });
 
     test("handle.stop() detaches all bus subscriptions", async () => {
