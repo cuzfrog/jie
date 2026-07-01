@@ -33,7 +33,7 @@ export interface TuiCommandHandler {
 
 export function createTuiCommandHandler(deps: CommandHandlerDeps): TuiCommandHandler {
   const handle = (text: string): void => {
-    deps.dispatch(Actions.clearTransientMessage());
+    deps.dispatch(Actions.clearBanners());
     const parts = text.split(/\s+/);
     const rawName = parts[0]!;
     const name = rawName.startsWith("/") ? rawName.slice(1) : rawName;

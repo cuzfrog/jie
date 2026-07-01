@@ -9,6 +9,7 @@ export const ActionTypes = {
   CLEAR_TRANSIENT_MESSAGE: "[ui] transient clear",
   SET_ERROR_MESSAGE: "[ui] set error banner",
   CLEAR_ERROR_MESSAGE: "[ui] error clear",
+  CLEAR_BANNERS: "[ui] clear all banners",
   SET_PENDING_QUIT: "[ui] pending quit confirmation",
 } as const;
 
@@ -27,6 +28,7 @@ const toggleTeamRail = createAction(ActionTypes.TOGGLE_TEAM_RAIL);
 const clearTuiState = createAction(ActionTypes.CLEAR_TUI_STATE);
 const clearTransientMessage = createAction(ActionTypes.CLEAR_TRANSIENT_MESSAGE);
 const clearErrorMessage = createAction(ActionTypes.CLEAR_ERROR_MESSAGE);
+const clearBanners = createAction(ActionTypes.CLEAR_BANNERS);
 
 export const Actions = {
   receiveEvent: (event: AnyEventEnvelope) => createAction(ActionTypes.RECEIVE_EVENT, event),
@@ -37,6 +39,7 @@ export const Actions = {
 	clearTransientMessage: () => clearTransientMessage,
 	setErrorMessage: (text: string) => createAction(ActionTypes.SET_ERROR_MESSAGE, { text }),
 	clearErrorMessage: () => clearErrorMessage,
+	clearBanners: () => clearBanners,
 	setPendingQuit: (on: boolean) => createAction(ActionTypes.SET_PENDING_QUIT, { on }),
 } as const;
 

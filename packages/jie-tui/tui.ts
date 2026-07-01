@@ -115,8 +115,7 @@ export function createTui(options: CreateTUIOptions): Tui {
   };
 
   const handleSubmit = (text: string): void => {
-    dispatch(Actions.clearTransientMessage());
-    dispatch(Actions.clearErrorMessage());
+    dispatch(Actions.clearBanners());
     const trimmed = text.trim();
     if (trimmed.startsWith("/")) {
       commandHandler.handle(trimmed);

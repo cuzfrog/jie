@@ -95,6 +95,7 @@ function makeDeps(): DepsHandle {
     else if (action.type === ActionTypes.SET_ERROR_MESSAGE) state = { ...state, errorBanner: action.payload.text };
     else if (action.type === ActionTypes.CLEAR_TRANSIENT_MESSAGE) state = { ...state, transientMessage: null };
     else if (action.type === ActionTypes.CLEAR_ERROR_MESSAGE) state = { ...state, errorBanner: null };
+    else if (action.type === ActionTypes.CLEAR_BANNERS) state = { ...state, transientMessage: null, errorBanner: null };
     else if (action.type === ActionTypes.CLEAR_TUI_STATE) state = INITIAL_TUI_STATE;
   });
   const requestQuit = vi.fn();
@@ -107,11 +108,11 @@ function makeDeps(): DepsHandle {
 }
 
 describe("createTuiCommandHandler", () => {
-  test("handle('/help') clears transient then sets a reply message", () => {
+  test("handle('/help') clears banners then sets a reply message", () => {
     const { deps, dispatch } = makeDeps();
     const handler: TuiCommandHandler = createTuiCommandHandler(deps);
     handler.handle("/help");
-    expect(dispatch).toHaveBeenCalledWith(Actions.clearTransientMessage());
+    expect(dispatch).toHaveBeenCalledWith(Actions.clearBanners());
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("/clear")));
   });
 
@@ -119,7 +120,7 @@ describe("createTuiCommandHandler", () => {
     const { deps, dispatch } = makeDeps();
     const handler = createTuiCommandHandler(deps);
     handler.handle("/clear");
-    expect(dispatch).toHaveBeenCalledWith(Actions.clearTransientMessage());
+    expect(dispatch).toHaveBeenCalledWith(Actions.clearBanners());
     expect(dispatch).toHaveBeenCalledWith(Actions.clearTuiState());
   });
 
@@ -144,11 +145,11 @@ describe("createTuiCommandHandler", () => {
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/nope")));
   });
 
-  test("handle clears transient before each invocation", () => {
+  test("handle clears banners before each invocation", () => {
     const { deps, dispatch } = makeDeps();
     const handler = createTuiCommandHandler(deps);
     handler.handle("/help");
-    expect(dispatch.mock.calls[0]?.[0]).toEqual(Actions.clearTransientMessage());
+    expect(dispatch.mock.calls[0]?.[0]).toEqual(Actions.clearBanners());
   });
 });
 
@@ -164,6 +165,7 @@ function makeDiskWriteHarness(): DiskWriteHarness {
     else if (action.type === ActionTypes.SET_ERROR_MESSAGE) state = { ...state, errorBanner: action.payload.text };
     else if (action.type === ActionTypes.CLEAR_TRANSIENT_MESSAGE) state = { ...state, transientMessage: null };
     else if (action.type === ActionTypes.CLEAR_ERROR_MESSAGE) state = { ...state, errorBanner: null };
+    else if (action.type === ActionTypes.CLEAR_BANNERS) state = { ...state, transientMessage: null, errorBanner: null };
     else if (action.type === ActionTypes.CLEAR_TUI_STATE) state = INITIAL_TUI_STATE;
   });
   const deps: CommandHandlerDeps = {

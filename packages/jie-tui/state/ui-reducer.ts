@@ -17,6 +17,8 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
       return reduceUiError(state, action.payload.text);
     case ActionTypes.CLEAR_ERROR_MESSAGE:
       return reduceUiErrorClear(state);
+    case ActionTypes.CLEAR_BANNERS:
+      return reduceUiBannersClear(state);
     case ActionTypes.SET_PENDING_QUIT:
       return { ...state, pendingQuit: action.payload.on };
     default:
@@ -69,4 +71,8 @@ function reduceUiError(state: TuiState, text: string): TuiState {
 
 function reduceUiErrorClear(state: TuiState): TuiState {
   return { ...state, errorBanner: null };
+}
+
+function reduceUiBannersClear(state: TuiState): TuiState {
+  return { ...state, transientMessage: null, errorBanner: null };
 }
