@@ -16,9 +16,10 @@ describe("write_artifact", () => {
       makeEmptyContext(),
     );
     expect(result.content).toBe("Stored artifact at task/plan (5 chars)");
-    const details = result.details as { key: string; created_at: string };
-    expect(details.key).toBe("task/plan");
-    expect(typeof details.created_at).toBe("string");
+    expect(result.details).toMatchObject({
+      key: "task/plan",
+      created_at: expect.any(String),
+    });
   });
 
   test("invalid key -> invalid_artifact_key", async () => {
