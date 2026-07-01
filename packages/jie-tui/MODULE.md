@@ -4,5 +4,8 @@ sealed:
   - index.ts
   - tui.test.ts
   - tui.ts
+  - command-handler.test.ts
+  - command-handler.ts
+  - keyboard.test.ts
+  - keyboard.ts
 ---
-

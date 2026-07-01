@@ -1,8 +1,8 @@
-import { matchesKey, ProcessTerminal, TUI, type Terminal } from "@earendil-works/pi-tui";
+import { ProcessTerminal, TUI, type Terminal } from "@earendil-works/pi-tui";
 import { Events, type EventEnvelope, type EventManager, type EventType, type Sender } from "@cuzfrog/jie-platform/event";
 import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduce } from "./state";
-import { runCommand } from "./commands";
-import { handleKeyInput } from "./keyboard";
+import { createTuiCommandHandler } from "./command-handler";
+import { createKeyboardHandler } from "./keyboard";
 import { createGitService, type GitService } from "./git-service";
 import { buildView, type BuildViewOpts } from "./components";
 
@@ -40,10 +40,9 @@ export function createTui(options: CreateTUIOptions): Tui {
     git: gitService.getSnapshot(),
   };
 
-  const dispatch = (action: ReturnType<typeof Actions[keyof typeof Actions]>, render: () => void = () => {}): void => {
+  const dispatch = (action: ReturnType<typeof Actions[keyof typeof Actions]>): void => {
     if (stopped) return;
     state = reduce(state, action);
-    render();
   };
 
   const isBusy = (): boolean => {
@@ -53,27 +52,7 @@ export function createTui(options: CreateTUIOptions): Tui {
     return false;
   };
 
-  const emitTransient = (text: string): void => dispatch(Actions.setTransientMessage(text));
-  const emitError = (text: string): void => dispatch(Actions.setErrorMessage(text));
-
-  const handleSlashCommand = (text: string): void => {
-    dispatch(Actions.clearTransientMessage());
-    const outcome = runCommand(text);
-    switch (outcome.kind) {
-      case "clearState":
-        dispatch(Actions.clearTuiState());
-        return;
-      case "stop":
-        requestQuit();
-        return;
-      case "reply":
-        emitTransient(outcome.text);
-        return;
-      case "error":
-        emitError(outcome.text);
-        return;
-    }
-  };
+  let resolveStart: (() => void) | null = null;
 
   const requestQuit = (): void => {
     if (isBusy()) {
@@ -94,15 +73,21 @@ export function createTui(options: CreateTUIOptions): Tui {
     dispatch(Actions.setPendingQuit(false));
   };
 
+  const commandHandler = createTuiCommandHandler({
+    getState: () => state,
+    dispatch,
+    requestQuit,
+  });
+
   const publishPrompt = (text: string): void => {
     if (state.teamId === null || state.focusedAgentId === null) {
-      emitError("No team loaded; run `/team <id>` to load a team.");
+      dispatch(Actions.setErrorMessage("No team loaded; run `/team <id>` to load a team."));
       return;
     }
     const focused = state.agents.get(state.focusedAgentId);
     const targetKey = focused?.agentKey ?? (state.leaderAgentId !== null ? state.agents.get(state.leaderAgentId)?.agentKey : undefined);
     if (targetKey === undefined) {
-      emitError("No focused agent; press ctrl+left to reveal the rail.");
+      dispatch(Actions.setErrorMessage("No focused agent; press ctrl+left to reveal the rail."));
       return;
     }
     const sender: Sender = { kind: "user" };
@@ -114,7 +99,7 @@ export function createTui(options: CreateTUIOptions): Tui {
     dispatch(Actions.clearErrorMessage());
     const trimmed = text.trim();
     if (trimmed.startsWith("/")) {
-      handleSlashCommand(trimmed);
+      commandHandler.handle(trimmed);
       return;
     }
     publishPrompt(trimmed);
@@ -148,8 +133,6 @@ export function createTui(options: CreateTUIOptions): Tui {
     for (const unsub of busUnsubscribes) unsub();
   };
 
-  let resolveStart: (() => void) | null = null;
-
   const start = (): Promise<void> => {
     return new Promise<void>((resolve) => {
       const terminal = options.terminal ?? new ProcessTerminal();
@@ -167,55 +150,17 @@ export function createTui(options: CreateTUIOptions): Tui {
         requestRender();
       };
 
-      let lastEscapeAt = 0;
-      let lastCtrlDAt = 0;
-      const ESC_WINDOW_MS = 300;
-      const CTRL_D_WINDOW_MS = 500;
-      const now = (): number => Date.now();
-
-      tui.addInputListener((data) => {
-        if (state.pendingQuit) {
-          if (data === "y" || data === "Y") {
-            confirmQuit();
-            renderAll();
-            return { consume: true };
-          }
-          if (data === "n" || data === "N" || data === "\r" || data === "\n") {
-            cancelQuit();
-            renderAll();
-            return { consume: true };
-          }
-        }
-        if (matchesKey(data, "escape")) {
-          const at = now();
-          if (at - lastEscapeAt <= ESC_WINDOW_MS && state.teamId !== null) {
-            options.eventManager.publish(Events.interruptTeam({ kind: "system" }, state.teamId));
-            lastEscapeAt = 0;
-            return { consume: true };
-          }
-          lastEscapeAt = at;
-          return { consume: false };
-        }
-        if (matchesKey(data, "ctrl+d")) {
-          const at = now();
-          if (at - lastCtrlDAt <= CTRL_D_WINDOW_MS) {
-            requestQuit();
-            renderAll();
-            lastCtrlDAt = 0;
-            return { consume: true };
-          }
-          lastCtrlDAt = at;
-          return { consume: true };
-        }
-        if (matchesKey(data, "ctrl+c")) {
-          renderAll();
-          return { consume: true };
-        }
-        const hit = handleKeyInput(data);
-        if (hit === undefined) return undefined;
-        dispatch(hit.action, renderAll);
-        return { consume: true };
+      const keyboardHandler = createKeyboardHandler({
+        eventManager: options.eventManager,
+        getState: () => state,
+        dispatch,
+        confirmQuit,
+        cancelQuit,
+        requestQuit,
+        render: renderAll,
       });
+
+      tui.addInputListener((data) => keyboardHandler.handle(data));
 
       resolveStart = (): void => {
         unsubscribeBus();
