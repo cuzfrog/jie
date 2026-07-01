@@ -112,7 +112,7 @@ A single `jie` process can host multiple teams' bodies. Team-specific channels a
 | `agent.stream.end` | LLM response complete |
 | `agent.tool.call` | Tool invocation about to execute |
 | `agent.tool.result` | Tool execution completed |
-| `agent.queue.update` | Agent's in-memory prompt queue changed (enqueue or dequeue) |
+| `agent.prompt.queue.update` | Agent's in-memory prompt queue changed (enqueue or dequeue) |
 | `agent.turn.start` | Agent began a turn (pi-agent `turn_start` bridged to bus; consumed by the CLI's `-p` idle gate and the TUI's busy/idle derivation) |
 | `agent.idle` | Agent entered idle state |
 
@@ -157,7 +157,7 @@ type PlatformEventPayload<T extends PlatformEventType> =
   T extends 'agent.stream.end'     ? { stream_id: number; total_chunks: number } :
   T extends 'agent.tool.call'      ? { tool_call_id: string; name: string; input: string; input_truncated: boolean } :
   T extends 'agent.tool.result'    ? { tool_call_id: string; name: string; output: string | null; output_truncated: boolean; duration_ms: number; error: string | null } :
-  T extends 'agent.queue.update'   ? { prompts: string[] } :
+  T extends 'agent.prompt.queue.update'   ? { prompts: string[] } :
   T extends 'agent.turn.start'     ? { } :
   T extends 'agent.idle'           ? { } :
   // Topic-published events (notify's `event_type` from the LLM, team-defined
@@ -178,7 +178,7 @@ type PlatformEventType =
   | 'agent.stream.end'
   | 'agent.tool.call'
   | 'agent.tool.result'
-  | 'agent.queue.update'
+  | 'agent.prompt.queue.update'
   | 'agent.turn.start'
   | 'agent.idle';
 ```

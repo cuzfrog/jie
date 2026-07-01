@@ -161,19 +161,32 @@ The trace's stubbed manager responses for `task done` are substring-asserted, no
 
 **Observable outputs.**
 
-- After step 3, the editor area shows `1 prompt queued` with the next-prompt preview text including the substring `Also write me a haiku about it in the same file` (exact punctuation is implementation-defined; full prompt text fits within the 100-char truncation window per `tui-state.md` "agent.queue.update").
-- The indicator disappears when the queued prompt is picked up — the disappearing frame is taken **after** `state.agents[leader].status === "busy"` and the `agent.queue.update {prompts: []}` envelope is processed. The 50 ms `lastIdleAt` debounce hides any `agent.idle` → `agent.turn.start` flicker.
+- After step 3, the editor area shows `1 prompt queued` with the next-prompt preview text including the substring `Also write me a haiku about it in the same file` (exact punctuation is implementation-defined; full prompt text fits within the 100-char truncation window per `tui-state.md` "agent.prompt.queue.update").
+- The indicator disappears when the queued prompt is picked up — the disappearing frame is taken **after** `state.agents[leader].status === "busy"` and the `agent.prompt.queue.update {prompts: []}` envelope is processed. The 50 ms `lastIdleAt` debounce hides any `agent.idle` → `agent.turn.start` flicker.
 - `notes.md` ends with the description followed by the haiku (description first because the second prompt says `in the same file` after the description was already written).
 - Final exit code: 0.
 
-**Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t5.jsonl`. Envelope schema per `tui.md` "Wire-format contract". Includes two user prompts, two `agent.turn.start` events, and the `agent.queue.update` envelopes in this exact order: `agent.queue.update {prompts: ["Also write me a haiku..."]}` arrives while prompt 1 is busy; then `agent.idle` (prompt 1 done); then `agent.queue.update {prompts: []}`; then `agent.turn.start` for prompt 2; then the second turn's stream and `agent.idle` close. The order pins the disappearing-frame assertion.
+**Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t5.jsonl`. Envelope schema per `tui.md` "Wire-format contract". Includes two user prompts, two `agent.turn.start` events, and the `agent.prompt.queue.update` envelopes in this exact order: `agent.prompt.queue.update {prompts: ["Also write me a haiku..."]}` arrives while prompt 1 is busy; then `agent.idle` (prompt 1 done); then `agent.prompt.queue.update {prompts: []}`; then `agent.turn.start` for prompt 2; then the second turn's stream and `agent.idle` close. The order pins the disappearing-frame assertion.
 
 ## Scenario T6: queued prompts from agent
+
 1. Run `jie` under a directory with a team consisting of 2 agents: manager and worker. A TUI opens.
-2. The user prompt to the manager: "send 5 math tasks to the worker 1 per message"
+2. The user prompt to the manager: "send 5 math tasks to the worker 1 per message".
 3. The manager uses tool `notify` 5 times to send 5 messages, then becomes idle.
-4. The worker receives the messages via subscriptino 1 by 1; while the worker is busy with 1 message, rest messages queue up in the worker's prompt queue.
+4. The worker receives the messages via subscription 1 by 1; while the worker is busy with 1 message, the rest of the messages queue up in the worker's prompt queue.
 5. The worker processes these messages 1 by 1 in multiple turns, then becomes idle.
+
+**Preconditions.** Reuses the team-A fixture from T2 (`tests/e2e/tui/fixtures/t2-fixture/`). The manager publishes via `notify` with topic `task`; the worker's `subscribe: [task]` (per `manager.md` / `worker.md` frontmatter) receives the messages. The user's TUI focus starts on the manager (default: leader).
+
+**Inputs.** User prompt + `Enter`. The fixture's JSONL provides canned manager outputs for the `notify` calls.
+
+**Observable outputs.**
+
+- After step 3: `state.agents[my-team:manager-1].status === "idle"`. The chat pane for the manager shows the 5 `notify` tool cards (one per `task` message).
+- During step 4: each `notify`-sourced message arrives on `custom.{teamId}.task`. The worker body enqueues the message on its in-memory prompt queue and publishes `agent.prompt.queue.update { prompts: [<task-1>, <task-2>, ...] }`. The TUI subscribes; cycling focus to the worker (`Ctrl+↓`) shows the editor-area indicator `N prompt(s) queued` with the next-task preview.
+- After step 5: the worker has produced 5 turns (one per task) and is idle; `state.agents[my-team:worker-1].status === "idle"`; `state.agents[my-team:worker-1].currentTurn === null` after the last task completes.
+
+**Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t6.jsonl`. Envelope schema per `tui.md` "Wire-format contract". Includes one `system.team.loaded` (manager + worker), one user prompt to the manager, 5 `agent.tool.call` / `agent.tool.result` envelopes for the manager's `notify` calls, 5 `custom.{teamId}.task` events, and per-task `agent.turn.start` / `agent.stream.*` / `agent.tool.*` / `agent.idle` envelopes from the worker. The `agent.prompt.queue.update` envelopes from the worker carry the running queue depth: `{ prompts: [<task-1>] }` while the worker is busy with task 1, `{ prompts: [<task-2>, ..., <task-5>] }` while task 1 is in flight, decrementing as the worker drains the queue.
 
 ## Out of v0.2 TUI scope (still archived)
 

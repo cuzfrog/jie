@@ -39,7 +39,7 @@ The event-bus subject scheme distinguishes platform-managed subjects from client
 | Agent's own key | `custom.{team_id}.{agent_key}` | Direct-addressing; the agent with this key auto-subscribes; `notify` publishes via `Events.custom`. The TUI also reaches a specific agent via `Events.userPrompt(sender, teamId, prompt, targetAgentKey)`. |
 | Domain topic | `custom.{team_id}.{topic}` | `notify` tool publishes via `Events.custom`; agents subscribe via `subscribe:` frontmatter (the platform prefixes `custom.{team_id}.` at body construction). |
 | Team roster | `{team_id}.team.loaded` | Platform publishes via `Events.teamLoaded`; one-shot per team load. |
-| Platform events | `agent.stream.chunk`, `agent.stream.end`, `agent.tool.call`, `agent.tool.result`, `agent.queue.update`, `agent.turn.start`, `agent.idle` | Un-scoped; `team_id` in the envelope. |
+| Platform events | `agent.stream.chunk`, `agent.stream.end`, `agent.tool.call`, `agent.tool.result`, `agent.prompt.queue.update`, `agent.turn.start`, `agent.idle` | Un-scoped; `team_id` in the envelope. |
 
 The team-blueprint author writes unscoped names (`leader.prompt`, `leader-1`, `task.recorded`) in `.md` frontmatter and in `notify` calls. The platform prefixes `custom.{team_id}.` at body construction (for `notify`-driven subscriptions and direct addressing) and at publish time (for `notify`). The two platform-managed subjects (`{team_id}.leader.prompt`, `{team_id}.team.loaded`) use the un-prefixed `{team_id}.` form. The agent's view is un-scoped; the bus's view is team-scoped (with `custom.` prefix for client-defined topics). This scheme is Day 2+ ready: a second team's bodies will not see the first team's events on the un-scoped platform subjects because the envelope's `team_id` disambiguates.
 

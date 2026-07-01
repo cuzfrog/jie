@@ -25,6 +25,7 @@ type EventDefinitions = {
     text: string;
   }>;
   "agent.stream.end": EventDef<AgentSender, { stream_id: number; total_chunks: number }>;
+  "agent.prompt.queue.update": EventDef<AgentSender, { prompts: string[] }>;
   "user.prompt": EventDef<UserSender, { teamId: string; agentKey: string; prompt: string }>;
   "system.team.loaded": EventDef<SystemSender, {
     teamId: string;
@@ -71,6 +72,8 @@ export const Events = {
     createEvent("agent.stream.chunk", sender, { stream_id, seq, block_type, text }),
   agentStreamEnd: (sender: AgentSender, stream_id: number, total_chunks: number): EventEnvelope<"agent.stream.end"> =>
     createEvent("agent.stream.end", sender, { stream_id, total_chunks }),
+  agentPromptQueueUpdate: (sender: AgentSender, prompts: string[]): EventEnvelope<"agent.prompt.queue.update"> =>
+    createEvent("agent.prompt.queue.update", sender, { prompts }),
   userPrompt: (sender: UserSender, teamId: string, prompt: string, agentKey: string): EventEnvelope<"user.prompt"> =>
     createEvent("user.prompt", sender, { teamId, prompt, agentKey }),
   teamLoaded: (sender: SystemSender, teamId: string, agents: Array<{ role: string; agent_key: string; is_leader: boolean }>): EventEnvelope<"system.team.loaded"> =>

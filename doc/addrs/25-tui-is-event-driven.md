@@ -48,7 +48,7 @@ The TUI's information needs (per `doc/specs/jie-platform/ui/tui.md`) fall into t
 | Busy/idle indicators | `agent.turn.start`, `agent.idle` (and the alternation contract per ADR 22) | **Yes**. |
 | Live LLM output | `agent.stream.chunk`, `agent.stream.end` | **Yes**. |
 | Tool telemetry | `agent.tool.call`, `agent.tool.result` | **Yes**. |
-| Queue indicator | `agent.queue.update` | **Yes**. |
+| Queue indicator | `agent.prompt.queue.update` | **Yes**. |
 
 The `team.loaded` event payload carries `is_leader` (added in the round-6 update). The TUI's agents-panel-at-boot story is satisfied by this event; no per-body `agent.idle` at startup is needed (per ADR 22).
 
@@ -73,5 +73,5 @@ The exact shape of the derived state is the TUI's concern (per `ui/tui.md` "Layo
 - The `team.loaded` event payload is `{ team_id, agents: [{ role, agent_key, is_leader }] }` — `is_leader` is included for the TUI's agents panel. The TUI's per-team roster is built from this event for every loaded team (the TUI subscribes to the per-process subject and filters by active `team_id`).
 - The TUI's state shape and rendering are its own concern (see `ui/tui.md` "Layout", "Rendering", "Screen-update model"). The platform's contract is: "every visible state has a bus event".
 - Test fixtures for the TUI can replay a recorded event stream without instantiating bodies (see `ui/tui.md` "Snapshot / replay tests"). This is a strong testing benefit and is the foundation of the v0.2 TUI test plan (`00-tui-user-scenarios.md` T1–T5).
-- The `agent.queue.update` event is the queue indicator's source. The TUI does not poll the body's in-memory queue (which `AgentBody.peekQueue()` would have exposed; the dead-code removal in stage-2 cleanup drops that method).
+- The `agent.prompt.queue.update` event is the queue indicator's source. The TUI does not poll the body's in-memory queue (which `AgentBody.peekQueue()` would have exposed; the dead-code removal in stage-2 cleanup drops that method).
 - The multi-team design (`loadTeam`, `bodies()`, `teamId`) is captured in `addrs/19-multi-team-coexistence.md` and ships in v0.2 with the TUI's `/team` slash command.

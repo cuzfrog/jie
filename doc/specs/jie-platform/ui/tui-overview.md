@@ -1,17 +1,18 @@
-# TUI
+# TUI Overview
 
-The team's user-facing cockpit. Lives in `packages/jie-tui/`. Observes all agent activity; sends user prompts to agents. This parent spec documents only the **information surface** the TUI consumes/generates and the **invariants** it must hold. See the focused child docs for layout, keybindings, theme, and the reducer data model:
+The team's user-facing cockpit. Lives in `packages/jie-tui/`. Observes all agent activity; sends user prompts to agents. This parent doc captures the **information surface** the TUI consumes/generates and the **invariants** it must hold. Layout, keybindings, theme, and the reducer data model live in dedicated child docs:
 
 - `tui-layout.md` — spatial design.
 - `tui-shortcuts.md` — keybinding matrix.
-- `tui-pi-reference.md` — pi theme tokens.
 - `tui-state.md` — `TuiState` shape and reducer rules.
+- `tui-pi-reference.md` — pi theme tokens.
+- `tui-user-scenarios.md` — T1–T6 acceptance scenarios.
 
 ## Contract
 
 The TUI runs in the same OS process as jie-platform agent harness, and communicate with jie-platform only via events.
 
-**`roles` is required.** It is the canonical team roster — the list of role identifiers parsed from the team blueprint's `.md` filename stems (excluding `TEAM.md`), sorted alphabetically by stem. `TEAM.md` is **not** the source of roles; it only declares the leader (and is optional for single-agent teams). The CLI (or any host process) computes the sorted list from the team-blueprint loader's output and passes it to `createTui` before starting the team. The TUI uses `roles` to render the initial agents-panel at boot, before any events have arrived. Live state updates come from the `agent.turn.start` / `agent.idle` alternation and from `agent.stream.chunk` / `agent.tool.*` events as they fire (per the Event-Order Contract in `03-event-system.md`; the body does not publish `agent.idle` at startup — ADR 22).
+**Initial state.** The TUI's agents-panel-at-boot story is satisfied by the platform's synchronous `system.team.loaded` event: `createJiePlatform` publishes it before returning to the caller (per `start.ts`), so by the time `tui.start()` mounts the `Container`, `state.agents` is already populated and the rail / chat pane reflect the team's roster. The earlier `roles: string[]` bootstrap parameter on `createTui` was retired; the platform event is the source of truth. Live state updates come from `agent.turn.start` / `agent.idle` / `agent.prompt.queue.update` (per the Event-Order Contract in `03-event-system.md`; the body does not publish `agent.idle` at startup — ADR 22).
 
 ## Inputs
 
@@ -80,11 +81,11 @@ In the in-process deployment (v1 default), the leader and all agents run in the 
 - The TUI never encounters a "leader offline" state — if the leader stops, the process has crashed. (The TUI's "agent is alive" check is the presence of the leader in a recent `system.team.loaded` event; absence of `system.team.loaded` for an agent is the "I have not seen this team" case, which can also arise from a fresh process that has not yet received the event, or a team that was never loaded in this process.)
 - Prompt input is always available. During a work-unit-in-flight, prompts are queued per the leader's memory behavior (see `08-memory.md`).
 
-When the user submits a prompt while the leader is busy, the prompt is queued at the platform layer (per `08-memory.md` "Prompt Queue"). v0.2 does **not** surface the queue depth to the TUI — the `agent.queue.update` event was removed in v0.2, and the footer omits a queue indicator. The prompt reaches the leader when its current turn completes; the TUI shows the next `agent.turn.start` and the leader's response as they arrive.
+When the user submits a prompt while the leader is busy, the prompt is queued at the platform layer (per `08-memory.md` "Prompt Queue"). The body publishes `agent.prompt.queue.update { prompts: [...] }` whenever its in-memory prompt queue changes (per `03-event-system.md`); the TUI consumes the envelope and renders the queue depth in the editor area as `N prompt(s) queued` with the next-prompt preview (truncated to 100 chars). The prompt reaches the leader when its current turn completes; the TUI shows the next `agent.turn.start` and the leader's response as they arrive.
 
 The prompt queue is in-memory only — lost on process restart (acceptable for v1).
 
-**Queue-pickup flicker.** v0.2 does not debounce the `agent.idle` → `agent.turn.start` transition — both events update `agent.status` independently and the chat-pane's working indicator re-evaluates each render. If a future revision needs to mask a brief `idle` window, the fix lives in the working-indicator component (a render-side concern), not in the reducer.
+**Queue-pickup flicker.** v0.2 does not debounce the `agent.idle` → `agent.turn.start` transition — both events update `agent.status` independently and the chat-pane's working indicator re-evaluates each render. If a future revision needs to mask a brief `idle` window, the fix lives in the working-indicator component (a render-side concern), not in the reducer. The TUI subscribes to `agent.prompt.queue.update` and applies the same rule: the queue preview hides on the next `agent.turn.start`; the body emits `agent.prompt.queue.update { prompts: [] }` immediately before the `agent.turn.start`, so the editor-area indicator clears in the same render frame as the working indicator appears.
 
 ## Slash Commands
 
@@ -158,15 +159,17 @@ The two never run in parallel: `pi-tui` is single-threaded; the event loop yield
 2. Verify the terminal is at least 60 columns wide. If not, log `terminal too narrow for TUI; need at least 60 columns, got <N>` to stderr and return a non-zero exit code.
 3. Verify the locale is UTF-8 (heuristic: `process.env.LANG` or `LC_ALL` contains `UTF-8` or `utf8`). If not, log `TUI requires a UTF-8 locale; set LANG=en_US.UTF-8` to stderr and exit non-zero. The TUI does **not** fall back to ASCII glyphs (`★`, `▌`); the user is expected to set a UTF-8 locale.
 4. Construct a `ProcessTerminal` and a `TUI` rooted on it.
-5. Subscribe to all platform topics (`system.team.loaded`, `system.team.interrupted`, `system.error`, `user.prompt`, `agent.turn.start`, `agent.idle`, `agent.stream.chunk`, `agent.stream.end`, `agent.tool.call`, `agent.tool.result`). The reducer filters by `envelope.sender.identity.teamId` so multi-team events flow through the same subscription.
-6. Build the initial state from the `roles` bootstrap list and from the next `system.team.loaded` event.
+5. Subscribe to all platform topics (`system.team.loaded`, `system.team.interrupted`, `system.error`, `user.prompt`, `agent.turn.start`, `agent.idle`, `agent.stream.chunk`, `agent.stream.end`, `agent.tool.call`, `agent.tool.result`, `agent.prompt.queue.update`). The reducer filters by `envelope.sender.identity.teamId` so multi-team events flow through the same subscription. `agent.prompt.queue.update` is per-agent; the editor-area indicator surfaces the focused agent's queue depth.
+6. Build the initial state. The platform's `system.team.loaded` has already been published by `createJiePlatform` (synchronously, before `tui.start()` mounts); by the time the `Container` mounts, the reducer's `state.agents` map reflects the team's roster. The earlier `roles` bootstrap is gone.
 7. Mount the `Container` (`AgentsRail`, `ChatPane`, `Editor`, `Footer`) and call `tui.start()`.
 
-**TUI shutdown.** `createTui` returns `never`; the only exit paths are:
+**TUI shutdown.** `createTui` returns a `Tui` handle (see `tui.ts`). The only exit paths are:
 
-- `Ctrl+D` (or `/exit`) — call `handle.stop()` (10 s bounded), then `tui.stop()`, then call the injected `CreateTUIOptions.exit(0)`. If a turn is in flight, the TUI's prompt area renders `A turn is in flight; exit anyway? [y/N]` (default N) and re-prompts on `Enter` until y or N. The TUI's own subscriptions (per-team + per-process) are not torn down explicitly; the OS process exit on `CreateTUIOptions.exit` cleans them up. The TUI does not own the process lifecycle beyond calling `exit()`; the CLI's `jie` (no flags) returns immediately after `createTui(...)` because the TUI is `never` (the TUI owns the process lifecycle once started).
+- `Ctrl+D` (or `/exit`) — call the same internal quit path: `tui.stop()` (10 s bounded), then resolve the `start()` promise. If a turn is in flight, the TUI's prompt area renders `A turn is in flight; exit anyway? [y/N]` (default N) and re-prompts on `Enter` until y or N. The TUI's own subscriptions (per-team + per-process) are not torn down explicitly; the OS process exit (driven by the CLI) cleans them up.
 - `Esc Esc` (or `Ctrl+C`) — publish `Events.interruptTeam({ kind: "tui" }, active_team_id)` (envelope topic `system.team.interrupted`). The body subscribes to this topic and reacts by firing its `AbortController`, which cancels the in-flight LLM call. The TUI does **not** exit on this path; only the turn is interrupted. The TUI's `Editor` is **not** cleared by `Esc Esc`; the user must press `Esc` once to clear the input.
-- `handle.stop()` from a programmatic source (currently none in v0.2; the TUI exits on its own keypresses) — same as `Ctrl+D`.
+- `tui.stop()` from a programmatic source (the test harness or the CLI's `jie` no-flags entry) — same as `Ctrl+D`.
+
+The CLI's `jie` (no flags) calls `createTui(...)` and lets the TUI own the loop. The TUI resolves `start()` when the user quits; the CLI's process exits on the resolution.
 
 ## Screen-update model
 

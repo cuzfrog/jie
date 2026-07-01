@@ -5,8 +5,8 @@ import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduc
 import { buildView, type BuildViewOpts } from "./components/build-view";
 
 export interface CreateTUIOptions {
-  bus: EventManager;
-  artifacts: ArtifactStore;
+  eventManager: EventManager;
+  artifactStore: ArtifactStore;
   roles: string[];
   cwd?: string;
   branch?: string;
@@ -116,7 +116,7 @@ export function createTui(options: CreateTUIOptions): Tui {
       return;
     }
     const sender: Sender = { kind: "user" };
-    options.bus.publish(Events.userPrompt(sender, state.teamId, text, targetKey));
+    options.eventManager.publish(Events.userPrompt(sender, state.teamId, text, targetKey));
   };
 
   const handleSubmit = (text: string): void => {
@@ -148,7 +148,7 @@ export function createTui(options: CreateTUIOptions): Tui {
   };
   const busUnsubscribes: Array<() => void> = [];
   for (const topic of subscribedTopics) {
-    busUnsubscribes.push(options.bus.subscribe(topic, onBusEvent as (env: EventEnvelope<EventType>) => void));
+    busUnsubscribes.push(options.eventManager.subscribe(topic, onBusEvent as (env: EventEnvelope<EventType>) => void));
   }
   let busUnsubscribed = false;
   const unsubscribeBus = (): void => {

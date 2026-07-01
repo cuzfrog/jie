@@ -1,9 +1,8 @@
 # TUI Layout (v0.2)
 
-The v0.2 prototype's spatial design. Sibling of `tui-shortcuts.md` (keybindings)
-and `tui-pi-reference.md` (theme tokens). The parent spec is `tui.md`; this
-doc captures only the layout decisions made in the prototype and not yet
-pinned at the parent level.
+The v0.2 prototype's spatial design. Sibling of `tui-shortcuts.md` (keybindings),
+`tui-state.md` (data model), and `tui-pi-reference.md` (theme tokens). The
+parent doc is `tui-overview.md`; this doc captures the layout decisions.
 
 Example:
 ```text

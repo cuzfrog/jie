@@ -15,8 +15,8 @@ export const startTuiOn = (
   preload: ReadonlyArray<EventEnvelope<EventType>>,
 ): Tui => {
   const opts: CreateTUIOptions = {
-    bus,
-    artifacts: stubArtifacts,
+    eventManager: bus,
+    artifactStore: stubArtifacts,
     roles: [],
     cols: 80,
     rows: 30,

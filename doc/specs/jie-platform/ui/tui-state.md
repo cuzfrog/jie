@@ -22,6 +22,7 @@ Per CLAUDE.md, serialized events use snake_case on the wire; TypeScript identifi
 | `input_truncated` | `card.inputTruncated` | `agent.tool.call` |
 | `output_truncated` | `card.outputTruncated` | `agent.tool.result` |
 | `stream_id` | `turn.streamId` | `agent.stream.chunk` |
+| `prompts` | `agent.queue` | `agent.prompt.queue.update` |
 
 The composite runtime key is `AgentId = \`${teamId}:${agentKey}\`` (see `00-overview.md` glossary). The reducer's `state.agents` map is keyed by `AgentId`, not by `agentKey`, to disambiguate agents across coexisting teams.
 
@@ -71,6 +72,10 @@ Dedupe by `tool_call_id`: if a card with the same id already exists, no-op (hand
 
 Replace in place by `tool_call_id`. **Out-of-order delivery is a no-op** — the matching call has not arrived yet. The defensive `output === null && error === null` case renders as `✓ <name>  <ms>ms` with an empty body (treat as a tool success with no visible output).
 
+### `agent.prompt.queue.update`
+
+Replace `agent.queue = payload.prompts` (snapshot semantics — the body publishes the full queue, not a delta). Cross-team guard: foreign-team events no-op. The editor-area indicator reads `state.agents[focused].queue` and renders `N prompt(s) queued` + next-prompt preview (truncated to 100 chars) when non-empty. The indicator clears when the body publishes `{ prompts: [] }` immediately before `agent.turn.start`.
+
 ### `system.error`
 
 Set `state.errorBanner = { text: <composed> }` where `<composed>` is either `event.payload.error` or, if any agent has a `lastStopReason`, `[stop: <stopReason>] <error>`. Distinct from transient messages: errors persist until cleared. Used to surface errors the user must explicitly clear (most prominently the no-model-selected error).
@@ -103,5 +108,5 @@ History is not rotated by size or count in v0.2. The renderer slices to its visi
 
 - **Per-block / per-card `expanded` state.** Expansion is a render concern, not a state concern. The `ToolCard` and `MessageView` components own their own expanded/collapsed state. Earlier drafts of this spec tracked `expanded` on `Card` and `Block`; it was removed because it duplicated the component's job.
 - **In-memory event buffer / replay.** Lives outside the reducer; the platform owns replay.
-- **Queue depth on a leader.** Earlier drafts carried a `state.queue` for prompt-queue indicators; the v0.2 footer omits it and the field was removed from the state shape.
+- **Queue depth on a leader.** Earlier drafts carried a `state.queue` for prompt-queue indicators; the v0.2 footer does **not** show it. The queue is per-agent (`state.agents[id].queue`), and the editor-area indicator (T5 / T6) surfaces it for the focused agent. The footer remains queue-free.
 - **Queue-pickup flicker debounce.** Earlier drafts kept `lastIdleAt` on the agent slot for a 50 ms "still busy" window. The v0.2 implementation lets `agent.idle` then `agent.turn.start` show as separate transitions; if a future revision needs to mask a brief `idle` window, the fix lives in the chat-pane's working-indicator component (a render-side concern), not in the reducer.
