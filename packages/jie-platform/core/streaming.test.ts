@@ -1,5 +1,8 @@
-import { createEventManager, type EventManager, type Sender } from "../event";
+import { createEventManager, type EventManager, type Sender, type EventEnvelope } from "../event";
 import { makeStreamPublisher } from "./streaming";
+
+type ChunkPayload = EventEnvelope<"agent.stream.chunk">["payload"];
+type StreamEndPayload = EventEnvelope<"agent.stream.end">["payload"];
 
 describe("makeStreamPublisher", () => {
   let events: EventManager;
@@ -18,7 +21,7 @@ describe("makeStreamPublisher", () => {
 
   test("emits agent.stream.chunk when text delta reaches 64 chars", () => {
     const stream = makeStream();
-    const chunks: object[] = [];
+    const chunks: ChunkPayload[] = [];
     events.subscribe("agent.stream.chunk", (env) => {
       chunks.push(env.payload);
     });
@@ -35,7 +38,7 @@ describe("makeStreamPublisher", () => {
 
   test("block_type change flushes the prior block before appending the new one", () => {
     const stream = makeStream();
-    const chunks: object[] = [];
+    const chunks: ChunkPayload[] = [];
     events.subscribe("agent.stream.chunk", (env) => {
       chunks.push(env.payload);
     });
@@ -43,12 +46,12 @@ describe("makeStreamPublisher", () => {
     stream.append("text", "hello");
     stream.append("thinking", "world");
     expect(chunks.length).toBeGreaterThanOrEqual(1);
-    expect((chunks[0] as { block_type: string }).block_type).toBe("text");
+    expect(chunks[0]?.block_type).toBe("text");
   });
 
   test("endStream publishes agent.stream.end with stream_id and total_chunks", () => {
     const stream = makeStream();
-    const ends: object[] = [];
+    const ends: StreamEndPayload[] = [];
     events.subscribe("agent.stream.end", (env) => {
       ends.push(env.payload);
     });
