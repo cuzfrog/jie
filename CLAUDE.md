@@ -88,6 +88,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 - do not shorten variables, function names. E.g. use `agentEvent` for type `AgentEvent` instead of `event` or `env` to avoid confusion.
 - do not add comments unless the code itself cannot tell, decisions should be captured in docs or addrs.
 - do not skip tests, problems must be resolved, if a test is invalid, it should be removed.
+- do not ignore tech debt you encountered, record them as Github issues so later other agents can analyze and fix.
 
 ## Best practices
 - write down your plan before execution.
