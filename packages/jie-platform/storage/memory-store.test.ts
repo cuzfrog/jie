@@ -106,13 +106,7 @@ describe("SqliteMemoryManager", () => {
     expect(rows).toEqual([[1], [1]]);
   });
 
-  test("compact is atomic: a thrown error rolls back both writes", () => {
-
-    const real = makeManager();
-    real.persist(userMessage("a"), "agent-1", "s1", "t1");
-    real.persist(userMessage("b"), "agent-1", "s1", "t1");
-    real.persist(userMessage("c"), "agent-1", "s1", "t1");
-
+  test("compact throws and the synthetic error surfaces", () => {
     const { storage } = makeThrowingStorage("exec", 2);
     const throwing = new SqliteMemoryManager(storage);
 
@@ -125,8 +119,6 @@ describe("SqliteMemoryManager", () => {
         "t1",
       ),
     ).toThrow("synthetic storage failure");
-
-    void real;
   });
 
   test("mostRecentSessionId is null when team_id has no rows", () => {
