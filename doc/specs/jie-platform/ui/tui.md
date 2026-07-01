@@ -9,18 +9,7 @@ The team's user-facing cockpit. Lives in `packages/jie-tui/`. Observes all agent
 
 ## Contract
 
-```typescript
-import type { EventBus } from "@cuzfrog/jie-platform";
-import type { ArtifactStore } from "@cuzfrog/jie-platform";
-
-function createTui(options: {
-  bus: EventBus;
-  artifacts: ArtifactStore;
-  roles: string[];
-}): void;
-```
-
-The TUI runs in the same OS process as all agents and shares the `EventBus` and `ArtifactStore`.
+The TUI runs in the same OS process as jie-platform agent harness, and communicate with jie-platform only via events.
 
 **`roles` is required.** It is the canonical team roster — the list of role identifiers parsed from the team blueprint's `.md` filename stems (excluding `TEAM.md`), sorted alphabetically by stem. `TEAM.md` is **not** the source of roles; it only declares the leader (and is optional for single-agent teams). The CLI (or any host process) computes the sorted list from the team-blueprint loader's output and passes it to `createTui` before starting the team. The TUI uses `roles` to render the initial agents-panel at boot, before any events have arrived. Live state updates come from the `agent.turn.start` / `agent.idle` alternation and from `agent.stream.chunk` / `agent.tool.*` events as they fire (per the Event-Order Contract in `03-event-system.md`; the body does not publish `agent.idle` at startup — ADR 22).
 
