@@ -1,5 +1,6 @@
 import { createTui, type CreateTUIOptions, type Tui } from "./tui";
 import { createEventManager, type EventManager } from "@cuzfrog/jie-platform/event";
+import { withTTY } from "../../tests/support";
 
 function makeStubBus(): EventManager {
   return createEventManager();
@@ -18,16 +19,6 @@ function makeOptions(overrides: Partial<CreateTUIOptions> = {}): CreateTUIOption
     ...overrides,
   };
 }
-
-const withTTY = (value: boolean, action: () => void): void => {
-  const original = process.stdin.isTTY;
-  Object.defineProperty(process.stdin, "isTTY", { value, configurable: true });
-  try {
-    action();
-  } finally {
-    Object.defineProperty(process.stdin, "isTTY", { value: original, configurable: true });
-  }
-};
 
 describe("createTui — v0.2 surface", () => {
   test("throws when not on a TTY", () => {

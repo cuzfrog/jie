@@ -2,21 +2,12 @@ import { createEventManager, Events, type EventEnvelope, type EventManager, type
 import { createTui, type Tui, type CreateTUIOptions } from "@cuzfrog/jie-tui";
 import type { ArtifactStore } from "@cuzfrog/jie-platform/storage";
 import { JiePlatformErrorMessages } from "@cuzfrog/jie-platform";
+import { withTTY } from "../../support";
 
 const stubArtifacts: ArtifactStore = {
   write: async () => ({ key: "", created_at: "" }),
   read: async () => null,
   list: async () => [],
-};
-
-export const withTTY = (value: boolean, action: () => void): void => {
-  const original = process.stdin.isTTY;
-  Object.defineProperty(process.stdin, "isTTY", { value, configurable: true });
-  try {
-    action();
-  } finally {
-    Object.defineProperty(process.stdin, "isTTY", { value: original, configurable: true });
-  }
 };
 
 export const startTuiOn = (

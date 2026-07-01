@@ -1,4 +1,4 @@
-import { createTestTuiWithTerminal } from "../test";
+import { createTestTuiWithTerminal } from "../../../tests/support";
 import {
   StatusBar,
   _statusBarContextFromState,

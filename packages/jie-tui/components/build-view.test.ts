@@ -1,6 +1,6 @@
 import { Container } from "@earendil-works/pi-tui";
 import { INITIAL_TUI_STATE } from "../state";
-import { createTestTuiWithTerminal } from "../test";
+import { createTestTuiWithTerminal } from "../../../tests/support";
 import { buildView } from "./build-view";
 import { AgentsRail } from "./agents-rail";
 import { ChatPane } from "./chat-pane";
