@@ -115,21 +115,15 @@ describe("SqliteMemoryManager", () => {
     const { storage } = makeThrowingStorage("exec", 2);
     const throwing = new SqliteMemoryManager(storage);
 
-    let caught: unknown;
-    try {
+    expect(() =>
       throwing.compact(
         [1, 2],
         summaryMessage("sum"),
         "agent-1",
         "s1",
         "t1",
-      );
-    } catch (error) {
-      caught = error;
-    }
-    expect((caught as Error | undefined)?.message).toBe(
-      "synthetic storage failure",
-    );
+      ),
+    ).toThrow("synthetic storage failure");
 
     void real;
   });
