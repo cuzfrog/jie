@@ -3,12 +3,12 @@ import {
   createEventManager,
   type EventManager,
 } from "./event-manager";
-import { Events, type EventEnvelope, type Sender } from "./events";
+import { Events, type EventEnvelope, type EventType, type Sender } from "./events";
 
-function collect(bus: EventBus, subject: string): unknown[] {
-  const out: unknown[] = [];
+function collect<T extends EventType>(bus: EventBus, subject: T): EventEnvelope<T>[] {
+  const out: EventEnvelope<T>[] = [];
   bus.subscribe(subject, (_s, p) => {
-    out.push(p);
+    out.push(p as EventEnvelope<T>);
   });
   return out;
 }
@@ -28,7 +28,7 @@ describe("createEventManager — envelope stamping", () => {
     const events: EventManager = createEventManager(bus);
     events.publish(Events.agentTurnStart(agentSender));
     expect(received).toHaveLength(1);
-    const env = received[0] as EventEnvelope<"agent.turn.start">;
+    const env = received[0]!;
     expect(env.version).toBe(1);
     expect(env.topic).toBe("agent.turn.start");
     expect(env.sender).toEqual(agentSender);
@@ -40,7 +40,7 @@ describe("createEventManager — envelope stamping", () => {
     const received = collect(bus, "user.prompt");
     const events: EventManager = createEventManager(bus);
     events.publish(Events.userPrompt(userSender, "t1", "hello", "general-1"));
-    const env = received[0] as EventEnvelope<"user.prompt">;
+    const env = received[0]!;
     expect(env.payload).toEqual({ teamId: "t1", agentKey: "general-1", prompt: "hello" });
   });
 
@@ -49,7 +49,7 @@ describe("createEventManager — envelope stamping", () => {
     const received = collect(bus, "agent.idle");
     const events: EventManager = createEventManager(bus);
     events.publish(Events.agentIdle(agentSender, "stop"));
-    const env = received[0] as EventEnvelope<"agent.idle">;
+    const env = received[0]!;
     expect(env.payload).toBe("stop");
   });
 
@@ -58,7 +58,7 @@ describe("createEventManager — envelope stamping", () => {
     const received = collect(bus, "system.team.loaded");
     const events: EventManager = createEventManager(bus);
     events.publish(Events.teamLoaded(systemSender, "t1", []));
-    const env = received[0] as EventEnvelope<"system.team.loaded">;
+    const env = received[0]!;
     expect(env.sender.kind).toBe("system");
     expect(env.topic).toBe("system.team.loaded");
   });
@@ -79,7 +79,7 @@ describe("createEventManager — topic shape", () => {
     const events: EventManager = createEventManager(bus);
     events.publish(Events.userPrompt(userSender, "t1", "hi", "general-1"));
     expect(received).toHaveLength(1);
-    const env = received[0] as EventEnvelope<"user.prompt">;
+    const env = received[0]!;
     expect(env.topic).toBe("user.prompt");
     expect(env.sender).toEqual(userSender);
     expect(env.payload).toEqual({ teamId: "t1", agentKey: "general-1", prompt: "hi" });
@@ -91,7 +91,7 @@ describe("createEventManager — topic shape", () => {
     const events: EventManager = createEventManager(bus);
     events.publish(Events.userPrompt(userSender, "t1", "go", "worker-2"));
     expect(received).toHaveLength(1);
-    const env = received[0] as EventEnvelope<"user.prompt">;
+    const env = received[0]!;
     expect(env.topic).toBe("user.prompt");
     expect(env.payload).toEqual({ teamId: "t1", agentKey: "worker-2", prompt: "go" });
   });
@@ -102,7 +102,7 @@ describe("createEventManager — topic shape", () => {
     const events: EventManager = createEventManager(bus);
     events.publish(Events.teamLoaded(systemSender, "t1", [{ role: "leader", agent_key: "leader-1", is_leader: true }]));
     expect(received).toHaveLength(1);
-    const env = received[0] as EventEnvelope<"system.team.loaded">;
+    const env = received[0]!;
     expect(env.topic).toBe("system.team.loaded");
   });
 
@@ -112,7 +112,7 @@ describe("createEventManager — topic shape", () => {
     const events: EventManager = createEventManager(bus);
     events.publish(Events.interruptTeam(systemSender, "t1"));
     expect(received).toHaveLength(1);
-    const env = received[0] as EventEnvelope<"system.team.interrupted">;
+    const env = received[0]!;
     expect(env.topic).toBe("system.team.interrupted");
   });
 
@@ -122,7 +122,7 @@ describe("createEventManager — topic shape", () => {
     const events: EventManager = createEventManager(bus);
     events.publish(Events.custom(agentSender, "t1.task", "x"));
     expect(received).toHaveLength(1);
-    const env = received[0] as { topic: string; payload: unknown };
+    const env = received[0]!;
     expect(env.topic).toBe("custom.t1.task");
     expect(env.payload).toEqual({ message: "x", truncated: false });
   });
@@ -134,7 +134,7 @@ describe("createEventManager — subscribe", () => {
     const events: EventManager = createEventManager(bus);
     const received: EventEnvelope<"user.prompt">[] = [];
     const off = events.subscribe("user.prompt", (e) => {
-      received.push(e as EventEnvelope<"user.prompt">);
+      received.push(e);
     });
     events.publish(Events.userPrompt(userSender, "t1", "hello", "general-1"));
     expect(received).toHaveLength(1);
@@ -150,7 +150,7 @@ describe("createEventManager — subscribe", () => {
     const events: EventManager = createEventManager(bus);
     const received: EventEnvelope<"agent.stream.chunk">[] = [];
     events.subscribe("agent.stream.chunk", (e) => {
-      received.push(e as EventEnvelope<"agent.stream.chunk">);
+      received.push(e);
     });
     events.publish(Events.agentStreamChunk(agentSender, 1, 1, "text", "hello"));
     expect(received).toHaveLength(1);
@@ -160,9 +160,9 @@ describe("createEventManager — subscribe", () => {
   test("subscribe to a custom-prefixed topic receives the wrapped envelope", () => {
     const bus = createEventBus();
     const events: EventManager = createEventManager(bus);
-    const received: { topic: string; payload: unknown }[] = [];
+    const received: EventEnvelope<`custom.${string}`>[] = [];
     events.subscribe("custom.t1.task.recorded", (e) => {
-      received.push(e as unknown as { topic: string; payload: unknown });
+      received.push(e);
     });
     events.publish(Events.custom(agentSender, "t1.task.recorded", "go"));
     expect(received).toHaveLength(1);
@@ -188,7 +188,7 @@ describe("createEventManager — stream events pass through", () => {
     const received = collect(bus, "agent.stream.chunk");
     const events: EventManager = createEventManager(bus);
     events.publish(Events.agentStreamChunk(agentSender, 7, 3, "thinking", "reasoning..."));
-    const env = received[0] as EventEnvelope<"agent.stream.chunk">;
+    const env = received[0]!;
     expect(env.payload).toEqual({
       stream_id: 7,
       seq: 3,
@@ -202,7 +202,7 @@ describe("createEventManager — stream events pass through", () => {
     const received = collect(bus, "agent.stream.end");
     const events: EventManager = createEventManager(bus);
     events.publish(Events.agentStreamEnd(agentSender, 7, 5));
-    const env = received[0] as EventEnvelope<"agent.stream.end">;
+    const env = received[0]!;
     expect(env.payload).toEqual({ stream_id: 7, total_chunks: 5 });
   });
 });
@@ -213,7 +213,7 @@ describe("createEventManager — tool payload pass-through", () => {
     const received = collect(bus, "agent.tool.call");
     const events: EventManager = createEventManager(bus);
     events.publish(Events.agentToolCall(agentSender, "c1", "bash", '{"command":"ls"}'));
-    const env = received[0] as EventEnvelope<"agent.tool.call">;
+    const env = received[0]!;
     expect(env.payload).toEqual({
       tool_call_id: "c1",
       name: "bash",
@@ -227,7 +227,7 @@ describe("createEventManager — tool payload pass-through", () => {
     const received = collect(bus, "agent.tool.call");
     const events: EventManager = createEventManager(bus);
     events.publish(Events.agentToolCall(agentSender, "c1", "bash", "x".repeat(8000)));
-    const env = received[0] as EventEnvelope<"agent.tool.call">;
+    const env = received[0]!;
     expect(env.payload.input_truncated).toBe(true);
     expect(env.payload.input).toContain("chars truncated");
     expect(env.payload.input.length).toBeLessThan(8000);
@@ -238,7 +238,7 @@ describe("createEventManager — tool payload pass-through", () => {
     const received = collect(bus, "agent.tool.result");
     const events: EventManager = createEventManager(bus);
     events.publish(Events.agentToolResult(agentSender, "c1", "bash", null, 100, "boom"));
-    const env = received[0] as EventEnvelope<"agent.tool.result">;
+    const env = received[0]!;
     expect(env.payload.output).toBeNull();
     expect(env.payload.output_truncated).toBe(false);
     expect(env.payload.error).toBe("boom");
@@ -249,7 +249,7 @@ describe("createEventManager — tool payload pass-through", () => {
     const received = collect(bus, "agent.tool.result");
     const events: EventManager = createEventManager(bus);
     events.publish(Events.agentToolResult(agentSender, "c1", "bash", "y".repeat(8000), 100, null));
-    const env = received[0] as EventEnvelope<"agent.tool.result">;
+    const env = received[0]!;
     expect(env.payload.output_truncated).toBe(true);
     expect(env.payload.output).toContain("chars truncated");
   });
