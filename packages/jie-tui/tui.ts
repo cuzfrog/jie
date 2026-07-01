@@ -139,12 +139,12 @@ export function createTui(options: CreateTUIOptions): Tui {
     "agent.tool.result",
   ] as const;
 
-  const onBusEvent = (env: AnyEventEnvelope): void => {
-    dispatch(Actions.receiveEvent(env));
+  const onBusEvent = (env: EventEnvelope<EventType>): void => {
+    dispatch(Actions.receiveEvent(env as AnyEventEnvelope));
   };
   const busUnsubscribes: Array<() => void> = [];
   for (const topic of subscribedTopics) {
-    busUnsubscribes.push(options.eventManager.subscribe(topic, onBusEvent as (env: EventEnvelope<EventType>) => void));
+    busUnsubscribes.push(options.eventManager.subscribe(topic, onBusEvent));
   }
   let busUnsubscribed = false;
   const unsubscribeBus = (): void => {
