@@ -35,7 +35,7 @@ const withTTY = (value: boolean, action: () => void): void => {
   }
 };
 
-describe("tui.start() with virtual terminal", () => {
+describe("createTui — start()", () => {
   test("mounts a TUI loop and produces a frame", async () => {
     withTTY(true, async () => {
       const { tui: vt, terminal } = createTestTuiWithTerminal(80, 30);
