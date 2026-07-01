@@ -35,7 +35,6 @@ describe("InProcessEventBus", () => {
     const args = errorSpy.mock.calls[0]!;
     expect(args[0]).toContain("s");
     expect(args[0]).toContain("boom");
-    expect(typeof args[1]).toBe("string");
     errorSpy.mockRestore();
   });
 

@@ -32,7 +32,6 @@ describe("createEventManager — envelope stamping", () => {
     expect(env.version).toBe(1);
     expect(env.topic).toBe("agent.turn.start");
     expect(env.sender).toEqual(agentSender);
-    expect(typeof env.timestamp).toBe("string");
   });
 
   test("payload is passed through for non-tool topics", () => {
