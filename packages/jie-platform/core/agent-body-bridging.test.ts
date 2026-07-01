@@ -1,7 +1,7 @@
-import type { Agent, AgentEvent as PiAgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
+import type { Agent, AgentEvent as PiAgentEvent, AgentMessage, AfterToolCallContext, BeforeToolCallContext } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, AssistantMessageEvent } from "@earendil-works/pi-ai";
 import { createAgentBody, type AgentBody, type CreateAgentBodyOptions } from "./agent-body";
-import { createEventManager, type EventManager } from "../event";
+import { createEventManager, type EventManager, type EventEnvelope, type EventType } from "../event";
 
 import {
   createArtifactStore,
@@ -103,7 +103,7 @@ function makeArtifacts(): ArtifactStore {
   return createArtifactStore(storage);
 }
 
-function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: CreateAgentBodyOptions; events: EventManager; subscribeSubject: (topic: string, cb: (subject: string, payload: object) => void) => () => void } {
+function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: CreateAgentBodyOptions; events: EventManager; subscribeSubject: <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void) => () => void } {
   const events: EventManager = createEventManager();
   const artifactStore = makeArtifacts();
   const registry = createToolRegistry({
@@ -126,13 +126,9 @@ function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: Crea
     model: {},
     ...overrides,
   };
-  const subscribeSubject = (topic: string, cb: (subject: string, payload: object) => void): (() => void) => {
-    const seen = new Map<string, object[]>();
+  const subscribeSubject = <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void): (() => void) => {
     const off = events.subscribe(topic, (env) => {
-      const arr = seen.get(topic) ?? [];
-      arr.push(env);
-      seen.set(topic, arr);
-      cb(topic, env);
+      cb(env);
     });
     return off;
   };
@@ -148,10 +144,10 @@ describe("AgentBody — pi-agent event bridging", () => {
     body = undefined;
   });
 
-  function capturedEvents(topic: string, subscribeSubject: (topic: string, cb: (subject: string, payload: object) => void) => () => void): object[] {
-    const out: object[] = [];
-    subscribeSubject(topic, (_s, p) => {
-      out.push(p);
+  function capturedEvents<T extends EventType>(topic: T, subscribeSubject: <U extends EventType>(topic: U, cb: (env: EventEnvelope<U>) => void) => () => void): EventEnvelope<T>[] {
+    const out: EventEnvelope<T>[] = [];
+    subscribeSubject(topic, (env) => {
+      out.push(env);
     });
     return out;
   }
@@ -167,7 +163,7 @@ describe("AgentBody — pi-agent event bridging", () => {
     body = createAgentBody({ ...opts, createAgent: result.factory });
     fireEvent!({ type: "turn_start" });
     expect(turnStart).toHaveLength(1);
-    const env = turnStart[0] as { topic: string; payload: object };
+    const env = turnStart[0]!;
     expect(env.topic).toBe("agent.turn.start");
     expect(env.payload).toBeNull();
   });
@@ -183,7 +179,7 @@ describe("AgentBody — pi-agent event bridging", () => {
     body = createAgentBody({ ...opts, createAgent: result.factory });
     fireEvent!({ type: "agent_end", messages: [] });
     expect(idle).toHaveLength(1);
-    const env = idle[0] as { topic: string; payload: unknown };
+    const env = idle[0]!;
     expect(env.topic).toBe("agent.idle");
     expect(env.payload).toBe("stop");
   });
@@ -215,13 +211,13 @@ describe("AgentBody — pi-agent event bridging", () => {
 
   test("start() does not emit agent.turn.start or agent.idle", async () => {
     const { opts, subscribeSubject } = makeOpts();
-    const idleEvents: object[] = [];
-    const turnStartEvents: object[] = [];
-    subscribeSubject("agent.idle", (_s, p) => idleEvents.push(p));
-    subscribeSubject("agent.turn.start", (_s, p) => turnStartEvents.push(p));
+    const idleEvents: unknown[] = [];
+    const turnStartEvents: unknown[] = [];
+    subscribeSubject("agent.idle", (env) => idleEvents.push(env));
+    subscribeSubject("agent.turn.start", (env) => turnStartEvents.push(env));
     const result = makeFakeAgentFactory({ onEvent: () => {} });
     body = createAgentBody({ ...opts, createAgent: result.factory });
-    await (body as unknown as { start: () => Promise<void> }).start();
+    await body.start();
     expect(idleEvents).toHaveLength(0);
     expect(turnStartEvents).toHaveLength(0);
   });
@@ -248,7 +244,7 @@ describe("AgentBody — pi-agent event bridging", () => {
       assistantMessageEvent: amEvent,
     });
     expect(chunks).toHaveLength(1);
-    expect((chunks[0] as { payload: object }).payload).toMatchObject({
+    expect(chunks[0]?.payload).toMatchObject({
       stream_id: 1,
       seq: 0,
       block_type: "text",
@@ -285,8 +281,8 @@ describe("AgentBody — pi-agent event bridging", () => {
     if (hook === undefined) {
       throw new Error("beforeToolCall hook not captured");
     }
-    await hook({
-      assistantMessage: { role: "assistant", content: [] } as unknown as AssistantMessage,
+    const ctx: BeforeToolCallContext = {
+      assistantMessage: { role: "assistant", content: [] },
       toolCall: {
         type: "toolCall",
         id: "call_x",
@@ -294,10 +290,11 @@ describe("AgentBody — pi-agent event bridging", () => {
         arguments: { command: "ls" },
       },
       args: { command: "ls" },
-      context: {} as never,
-    });
+      context: {},
+    };
+    await hook(ctx);
     expect(calls).toHaveLength(1);
-    expect((calls[0] as { payload: object }).payload).toMatchObject({
+    expect(calls[0]?.payload).toMatchObject({
       tool_call_id: "call_x",
       name: "bash",
     });
@@ -317,9 +314,9 @@ describe("AgentBody — pi-agent event bridging", () => {
 
   test("afterToolCall hook publishes agent.tool.result with the Jie ToolResult shape", async () => {
     const { opts, subscribeSubject } = makeOpts();
-    const results: object[] = [];
-    subscribeSubject("agent.tool.result", (_s, p) => {
-      results.push(p);
+    const results: EventEnvelope<"agent.tool.result">[] = [];
+    subscribeSubject("agent.tool.result", (env) => {
+      results.push(env);
     });
     const result = makeFakeAgentFactory();
     body = createAgentBody({ ...opts, createAgent: result.factory });
@@ -328,8 +325,8 @@ describe("AgentBody — pi-agent event bridging", () => {
     if (hook === undefined) {
       throw new Error("afterToolCall hook not captured");
     }
-    await hook({
-      assistantMessage: { role: "assistant", content: [] } as unknown as AssistantMessage,
+    const ctx: AfterToolCallContext = {
+      assistantMessage: { role: "assistant", content: [] },
       toolCall: {
         type: "toolCall",
         id: "call_r",
@@ -337,17 +334,18 @@ describe("AgentBody — pi-agent event bridging", () => {
         arguments: {},
       },
       args: {},
-      context: {} as never,
+      context: {},
       result: {
         content: [{ type: "text", text: "hello" }],
         details: { foo: 1 },
         terminate: false,
       },
       isError: false,
-    });
+    };
+    await hook(ctx);
     expect(results).toHaveLength(1);
-    const env = results[0] as { payload: { output: string; error: string | null } };
-    expect(JSON.parse(env.payload.output)).toEqual({
+    const env = results[0]!;
+    expect(JSON.parse(env.payload.output!)).toEqual({
       content: "hello",
       details: { foo: 1 },
       terminate: false,
@@ -356,32 +354,33 @@ describe("AgentBody — pi-agent event bridging", () => {
 
   test("afterToolCall: multi-block content serializes as JSON array", async () => {
     const { opts, subscribeSubject } = makeOpts();
-    const results: object[] = [];
-    subscribeSubject("agent.tool.result", (_s, p) => {
-      results.push(p);
+    const results: EventEnvelope<"agent.tool.result">[] = [];
+    subscribeSubject("agent.tool.result", (env) => {
+      results.push(env);
     });
     const result = makeFakeAgentFactory();
     body = createAgentBody({ ...opts, createAgent: result.factory });
     const captured = result.lastOpts();
     const hook = captured?.afterToolCall;
     if (hook === undefined) throw new Error("afterToolCall hook not captured");
-    await hook({
-      assistantMessage: { role: "assistant", content: [] } as unknown as AssistantMessage,
+    const ctx: AfterToolCallContext = {
+      assistantMessage: { role: "assistant", content: [] },
       toolCall: { type: "toolCall", id: "call_m", name: "noop", arguments: {} },
       args: {},
-      context: {} as never,
+      context: {},
       result: {
         content: [
           { type: "text", text: "a" },
-          { type: "image", data: "x" } as never,
+          { type: "image", data: "x" },
         ],
         details: { ok: true },
         terminate: true,
       },
       isError: false,
-    });
-    const env = results[0] as { payload: { output: string } };
-    expect(JSON.parse(env.payload.output)).toEqual({
+    };
+    await hook(ctx);
+    const env = results[0]!;
+    expect(JSON.parse(env.payload.output!)).toEqual({
       content: [
         { type: "text", text: "a" },
         { type: "image", data: "x" },
@@ -393,29 +392,30 @@ describe("AgentBody — pi-agent event bridging", () => {
 
   test("afterToolCall on error: output null, error carries message", async () => {
     const { opts, subscribeSubject } = makeOpts();
-    const results: object[] = [];
-    subscribeSubject("agent.tool.result", (_s, p) => {
-      results.push(p);
+    const results: EventEnvelope<"agent.tool.result">[] = [];
+    subscribeSubject("agent.tool.result", (env) => {
+      results.push(env);
     });
     const result = makeFakeAgentFactory();
     body = createAgentBody({ ...opts, createAgent: result.factory });
     const captured = result.lastOpts();
     const hook = captured?.afterToolCall;
     if (hook === undefined) throw new Error("afterToolCall hook not captured");
-    await hook({
-      assistantMessage: { role: "assistant", content: [] } as unknown as AssistantMessage,
+    const ctx: AfterToolCallContext = {
+      assistantMessage: { role: "assistant", content: [] },
       toolCall: { type: "toolCall", id: "call_e", name: "noop", arguments: {} },
       args: {},
-      context: {} as never,
+      context: {},
       result: {
         content: [{ type: "text", text: "boom" }],
         details: {},
         terminate: false,
       },
       isError: true,
-    });
+    };
+    await hook(ctx);
     expect(results).toHaveLength(1);
-    const env = results[0] as { payload: { output: string | null; error: string | null } };
+    const env = results[0]!;
     expect(env.payload.output).toBeNull();
     expect(env.payload.error).toBe("boom");
   });
