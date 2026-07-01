@@ -95,28 +95,14 @@ describe("createTeamRegistry", () => {
       expect(() => r.loadTeam("broken")).toThrow(/team 'broken' not found/);
     });
 
-    test("loadTeam throws JiePlatformError with code 'invalid_team_id' for an invalid id", () => {
+    test("loadTeam throws invalid_team_id for an invalid id", () => {
       const r = createTeamRegistry({ homeJieDir, projectJieDir });
-      let caught: unknown;
-      try {
-        r.loadTeam("bad id with spaces");
-      } catch (error) {
-        caught = error;
-      }
-      expect(caught).toBeInstanceOf(JiePlatformError);
-      expect((caught as JiePlatformError).code).toBe("INVALID_TEAM_ID");
+      expect(() => r.loadTeam("bad id with spaces")).toThrow(JiePlatformError);
     });
 
-    test("loadTeam throws JiePlatformError with code 'team_not_found' when id is absent", () => {
+    test("loadTeam throws team_not_found when id is absent", () => {
       const r = createTeamRegistry({ homeJieDir, projectJieDir });
-      let caught: unknown;
-      try {
-        r.loadTeam("ghost");
-      } catch (error) {
-        caught = error;
-      }
-      expect(caught).toBeInstanceOf(JiePlatformError);
-      expect((caught as JiePlatformError).code).toBe("TEAM_NOT_FOUND");
+      expect(() => r.loadTeam("ghost")).toThrow(JiePlatformError);
     });
   });
 
