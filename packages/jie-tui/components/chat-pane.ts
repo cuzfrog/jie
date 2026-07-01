@@ -8,55 +8,83 @@ const PROMPT_GAP = 1;
 export class ChatPane extends Container {
   private agent: AgentUiState | null;
   private readonly toolCards: Map<string, ToolCard>;
+  private readonly messageViews: Map<number, MessageView>;
+  private cachedLines: string[] | null = null;
+  private cachedWidth = -1;
 
   constructor() {
     super();
     this.agent = null;
     this.toolCards = new Map();
+    this.messageViews = new Map();
   }
 
   setAgent(agent: AgentUiState | null): void {
     this.agent = agent;
-    this.toolCards.clear();
+    this.cachedLines = null;
+    this.rebuildChildren();
   }
 
   render(width: number): string[] {
-    this.clear();
-    if (this.agent === null) return [];
-    for (const turn of this.agent.history) {
-      this.renderTurn(turn, width);
+    if (this.cachedLines !== null && this.cachedWidth === width) {
+      return this.cachedLines;
     }
-    if (this.agent.currentTurn !== null) {
-      this.renderTurn(this.agent.currentTurn, width);
-    }
-    return super.render(width);
+    this.cachedWidth = width;
+    this.cachedLines = super.render(width);
+    return this.cachedLines;
   }
 
-  private renderTurn(turn: MessageTurn, width: number): void {
+  invalidate(): void {
+    this.cachedLines = null;
+  }
+
+  private rebuildChildren(): void {
+    this.clear();
+    this.toolCards.clear();
+    this.messageViews.clear();
+    if (this.agent === null) return;
+    for (const turn of this.agent.history) {
+      this.appendTurn(turn);
+    }
+    if (this.agent.currentTurn !== null) {
+      this.appendTurn(this.agent.currentTurn);
+    }
+  }
+
+  private appendTurn(turn: MessageTurn): void {
     this.addChild(new Spacer(PROMPT_GAP));
     this.addChild(new Text("› " + turn.userPrompt));
     for (const card of turn.cards) {
-      this.renderCard(card, width);
+      this.appendCard(card);
     }
-    for (const block of turn.blocks) {
-      const view = new MessageView();
+    for (let i = 0; i < turn.blocks.length; i++) {
+      const block = turn.blocks[i];
+      if (block === undefined) continue;
+      let view = this.messageViews.get(i);
+      if (view === undefined) {
+        view = new MessageView();
+        this.messageViews.set(i, view);
+      }
       view.setBlock(block);
-      view.render(width).forEach((line) => this.addChild(new Text(line)));
+      this.addChild(view);
     }
   }
 
-  private renderCard(card: MessageCard, width: number): void {
+  private appendCard(card: MessageCard): void {
     if (card.kind === "toolCall") {
       const tc = new ToolCard();
       tc.setCard(card);
-      tc.render(width).forEach((line) => this.addChild(new Text(line)));
+      this.addChild(tc);
       this.toolCards.set(card.callId, tc);
       return;
     }
-    const tc = this.toolCards.get(card.callId) ?? new ToolCard();
+    let tc = this.toolCards.get(card.callId);
+    if (tc === undefined) {
+      tc = new ToolCard();
+      this.toolCards.set(card.callId, tc);
+    }
     tc.setCard(card);
-    tc.render(width).forEach((line) => this.addChild(new Text(line)));
-    this.toolCards.set(card.callId, tc);
+    this.addChild(tc);
   }
 }
 

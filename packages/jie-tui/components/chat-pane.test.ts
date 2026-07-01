@@ -81,7 +81,13 @@ describe("ChatPane", () => {
         userPrompt: "read it",
         cards: [
           { kind: "toolCall", callId: "c1", name: "read_file", input: "a.txt" },
-          { kind: "toolResult", callId: "c1", name: "read_file", output: "abc", durationMs: 12, error: null },
+        ],
+        blocks: [],
+        streamId: null,
+      }, {
+        userPrompt: "",
+        cards: [
+          { kind: "toolResult", callId: "c2", name: "read_file", output: "abc", durationMs: 12, error: null },
         ],
         blocks: [],
         streamId: null,
@@ -136,6 +142,41 @@ describe("ChatPane", () => {
     const flat = pane.render(60).join("\n");
     expect(flat).toContain("new-reply");
     expect(flat).not.toContain("old-reply");
+  });
+
+  test("re-render at the same width is a no-op on the child tree", () => {
+    const pane = new ChatPane();
+    pane.setAgent(makeAgent({
+      history: [{
+        userPrompt: "hi",
+        cards: [],
+        blocks: [{ kind: "text", text: "hello" }],
+        streamId: null,
+      }],
+    }));
+    const first = pane.children;
+    pane.render(60);
+    const second = pane.children;
+    pane.render(60);
+    const third = pane.children;
+    expect(second).toBe(first);
+    expect(third).toBe(first);
+  });
+
+  test("invalidate forces a re-render on the next call", () => {
+    const pane = new ChatPane();
+    pane.setAgent(makeAgent({
+      history: [{
+        userPrompt: "hi",
+        cards: [],
+        blocks: [{ kind: "text", text: "hello" }],
+        streamId: null,
+      }],
+    }));
+    const first = pane.render(60);
+    pane.invalidate();
+    const second = pane.render(60);
+    expect(second).toEqual(first);
   });
 });
 

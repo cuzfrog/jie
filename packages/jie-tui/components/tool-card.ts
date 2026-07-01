@@ -7,6 +7,8 @@ const TOOL_INPUT_MAX_LINES = 4;
 export class ToolCard implements Component {
   private readonly container: Container;
   private card: MessageCard | null;
+  private cachedLines: string[] | null = null;
+  private cachedWidth = -1;
 
   constructor() {
     this.container = new Container();
@@ -15,11 +17,27 @@ export class ToolCard implements Component {
 
   setCard(card: MessageCard): void {
     this.card = card;
+    this.cachedLines = null;
   }
 
   render(width: number): string[] {
+    if (this.cachedLines !== null && this.cachedWidth === width) {
+      return this.cachedLines;
+    }
+    this.cachedWidth = width;
+    this.rebuildChildren(width);
+    this.cachedLines = this.container.render(width);
+    return this.cachedLines;
+  }
+
+  invalidate(): void {
+    this.cachedLines = null;
+    this.container.invalidate();
+  }
+
+  private rebuildChildren(width: number): void {
     this.container.clear();
-    if (this.card === null) return [];
+    if (this.card === null) return;
     const card = this.card;
     this.container.addChild(new Text(this.headerLine(card)));
     if (card.kind === "toolCall") {
@@ -41,12 +59,6 @@ export class ToolCard implements Component {
         }
       }
     }
-    this.container.invalidate();
-    return this.container.render(width);
-  }
-
-  invalidate(): void {
-    this.container.invalidate();
   }
 
   private headerLine(card: MessageCard): string {
