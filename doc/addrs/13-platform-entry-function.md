@@ -71,7 +71,7 @@ The handle is intentionally minimal. All team-level state (teamId, the bodies, t
 2. Bounded wait up to `timeoutMs` (default 10s) for all bodies to settle.
 3. On timeout: force-exit the process. On graceful: close `Storage`, terminate MCP subprocesses, return.
 
-**Day 2+ lifecycle-changing call: `loadTeam(teamId)`** (per `ui/tui.md` "Team" and ADR 19). v1 does not ship this method — the platform only loads the startup team, and the handle's public surface is `{ bus, stop }`. The Day 2+ design:
+**Day 2+ lifecycle-changing call: `loadTeam(teamId)`** (per `ui/tui-overview.md` "Boundary with the platform" and ADR 19). v1 does not ship this method — the platform only loads the startup team, and the handle's public surface is `{ bus, stop }`. The Day 2+ design:
 
 1. If the team is already in `loadedTeams`, return immediately. The previously-active team is not stopped or destroyed — it keeps running with its state intact.
 2. If the team is not loaded, parse the blueprint per `10-configuration.md` "Team Selection" rules; resolve each `AgentSoul.model`; construct bodies (with `is_leader` per the loader's leader identification); call `body.start()` on each.

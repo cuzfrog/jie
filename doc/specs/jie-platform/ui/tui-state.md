@@ -1,6 +1,6 @@
 # TUI State and Reducer (v0.2)
 
-The shape of the TUI's derived state and the action-by-action rules that mutate it. Sibling of `tui-layout.md` (spatial design), `tui-shortcuts.md` (keybindings), and `tui-pi-reference.md` (theme tokens). The parent spec is `tui.md`; this doc captures only the data model and the reducer contract.
+The shape of the TUI's derived state and the action-by-action rules that mutate it. Sibling of `tui-layout.md` (spatial design), `tui-shortcuts.md` (keybindings), and `tui-pi-reference.md` (theme tokens). The parent spec is `tui-overview.md`; this doc captures only the data model and the reducer contract.
 
 The state shape, action union, and reducer implementations live in `packages/jie-tui/state/` (`state.ts`, `actions.ts`, `event-reducer.ts`, `ui-reducer.ts`, `reducer.ts`). This spec is the contract they satisfy; code shapes are not duplicated here.
 

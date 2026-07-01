@@ -15,7 +15,7 @@ This surfaced contradictions across the spec:
 | `06-agent-model.md` "AgentSoul" interface | `name:` wins, stem fallback |
 | `06-agent-model.md` Frontmatter fields table | `name:` wins, stem fallback |
 | `06-agent-model.md` "Blueprint Loading" prose | stem only |
-| `ui/tui.md` `roles: string[]` parameter | stem only |
+| `ui/tui.md` `roles: string[]` parameter (now removed; see `ui/tui-overview.md` "Boundary with the platform") | stem only |
 
 Two camps in the same file. The TypeScript interface and the frontmatter table were the newer, more precise claims; the prose and the TUI parameter were the older, looser claims. They never converged.
 
@@ -52,7 +52,7 @@ The `team-blueprint loader` in `packages/jie-platform/team/loader.ts` is the sin
 - `06-agent-model.md` "AgentSoul" and "Frontmatter fields" reflect the canonical rule.
 - `00-user-scenarios.md` frontmatter examples in scenarios 2, 3, and 7 drop the `name:` field.
 - The team-blueprint loader in `packages/jie-platform/team/loader.ts` no longer reads a `name:` field. The role is `path.parse(file).name` (filename without extension). Duplicate-stem detection is added as a parse-time validation.
-- `ui/tui.md` `roles: string[]` is already correct (says "filename stems"); no change.
+- `ui/tui-overview.md` no longer takes a `roles` bootstrap parameter (the platform's `system.team.loaded` is the source of truth).
 - `00-overview.md` glossary entries for **Soul**, **Agent**, **Agent Key** remain accurate (they refer to "role" without specifying the source); no change.
 - No new ADR-grade dep or runtime change.
 - If a future Day 2+ team author needs to rename a role without renaming the file, the answer is "rename the file" (or the team can ship a build step that generates the `.md` files from a higher-level template). The platform does not own a rename primitive.

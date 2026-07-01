@@ -93,7 +93,7 @@ The old team's leader body is not destroyed on swap, so its in-memory prompt que
 - The CLI's `createApp` orchestrator (in `packages/jie-cli/app.ts`) subscribes to the startup team's `team.loaded` event before calling `createJiePlatform`, captures the team info from the event, and passes it to `runPrint`. The orchestrator does not call `loadTeam` or read `bodies()` (they don't exist on the public surface).
 - `doc/addrs/13-platform-entry-function.md` — `JiePlatform` is `{ bus, stop }`; the multi-team section (ADR 19 above) is the Day 2+ reference.
 - `doc/addrs/25-tui-is-event-driven.md` — section 1 ("TUI's permitted surface on `JieHandle`") lists `bus`, `stop` for v1, with a Day 2+ note for `loadTeam` / `bodies()` / `teamId`.
-- `doc/specs/jie-platform/06-agent-model.md` and `doc/specs/jie-platform/ui/tui.md` — references to `loadTeam` / `bodies()` are rewritten as "Day 2+ multi-team, see ADR 19".
+- `doc/specs/jie-platform/06-agent-model.md` and `doc/specs/jie-platform/ui/tui-overview.md` — references to `loadTeam` / `bodies()` are rewritten as "Day 2+ multi-team, see ADR 19".
 - `doc/specs/jie-platform/09-deployment.md` Startup Sequence — the "Branch by mode" step uses the v1 handle's `bus` and `stop`; the multi-team step (load additional teams) is moved to a Day 2+ reference.
 - `00-user-scenarios.md` and `11-monitoring.md` — unchanged (v1 is single-team; the v1 surface is what those documents describe).
 - `backlog.md` — the multi-team design is the Day 2+ reference target.

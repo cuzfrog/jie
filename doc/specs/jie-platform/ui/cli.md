@@ -36,7 +36,7 @@ jie [--team <id>]
 6. (MCP server connection — Day 2+. Per ADR 15, MCP client integration is out of scope for v0.2; this step is a no-op in v0.2.)
 7. Instantiate and start `AgentBody` for each role.
 8. Import `jie-tui`, pass `EventBus`, start TUI. (v0.2: real `createTui`; the v1 stub `throw "TUI not implemented"` has been removed.) The TUI's role stems and per-agent roster come from the `system.team.loaded` event on the bus (per ADR 25).
-9. TUI is the main event loop — renders agent streams, tool calls, pipeline events. User prompts are published as `EventEnvelope` envelopes with topic `user.prompt` via `Events.userPrompt({ kind: "tui" }, active_team_id, prompt, leader_agent_key)` (or with a different `agentKey` for direct addressing) — the TUI fills every envelope field per the wire-format contract in `02-protocol-stack.md` "Prompt Ingress" and `ui/tui.md` "Prompt Sending".
+9. TUI is the main event loop — renders agent streams, tool calls, pipeline events. User prompts are published as `EventEnvelope` envelopes with topic `user.prompt` via `Events.userPrompt({ kind: "tui" }, active_team_id, prompt, leader_agent_key)` (or with a different `agentKey` for direct addressing) — the TUI fills every envelope field per the wire-format contract in `02-protocol-stack.md` "Prompt Ingress" and `ui/tui-overview.md` "Role".
 10. Block until TUI exits or SIGINT. Graceful shutdown (10s bounded) stops all loaded teams.
 
 **Exit codes:** 0 (normal exit), 1 (config error, team not found, model pre-check failure, agent load failure).

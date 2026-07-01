@@ -130,7 +130,7 @@ The event-order contract is what makes option B correct. The contract is recorde
 - `06-agent-model.md` — `AgentBody.start()` ordering drops the `agent.idle` publish. "Event Bridging" notes the alternation under `turn_start` and `agent_end` rows.
 - `09-deployment.md` — Startup Sequence step 8/9: handle publishes `team.loaded` after all `body.start()` calls. "Graceful Shutdown" notes that `stop()` is the only lifecycle primitive with internal "bodies settled" bookkeeping; the CLI does not consume it.
 - `ui/cli.md` `jie -p` — step 7 rewrite with the local idle gate snippet; cites the Event-Order Contract.
-- `ui/tui.md` — "Agent Discovery" sources the agents-panel from `{team_id}.team.loaded` for each loaded team. "Degraded States" notes the new source. Other sections unchanged.
+- `ui/tui-overview.md` — "Boundary with the platform" sources the agents-panel from `{team_id}.team.loaded` for each loaded team. Other sections unchanged.
 - `11-monitoring.md` — "Agent Status" table rewrite: alive = `team.loaded`; busy = `turn_start` (or recent stream/tool activity); idle = default + no `turn_start` observed yet, or `agent.idle` with no subsequent `turn_start`.
 - `backlog.md` — new item: "Day-2 NATS per-body `seq` for cross-subject reorder protection".
 - All cross-references to "the body publishes `agent.idle` at startup" are removed. The TUI's agents-panel-at-boot story moves to `team.loaded`.

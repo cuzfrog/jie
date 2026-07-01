@@ -66,8 +66,8 @@ the rail.
 
 The body never hosts a status bar. The leader's status, queue depth, and
 prompt-queue pickup are surfaced either in the rail (when visible) or in
-the footer. See `tui.md` for the older status-bar design (superseded by
-this layout for v0.2).
+the footer. The earlier status-bar design was superseded by this layout
+for v0.2.
 
 ## Chat and rail
 

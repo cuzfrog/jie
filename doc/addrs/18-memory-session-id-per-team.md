@@ -59,7 +59,7 @@ The map is a private `Map<team_id, session_id>` field of `createJiePlatform` (cl
 - `06-agent-model.md` pi-agent Integration Contract — `sessionId` row's comment updated from "per-process-run ULID" to "per-team ULID".
 - `09-deployment.md` Startup Sequence — body construction lists `session_id` (resolved by the handle per `08-memory.md` "Restore") in the parameters.
 - `10-configuration.md` "Team Swap" — `Map<agent_key, session_id>` → `Map<team_id, session_id>`; "body mints" → "handle mints"; consult is per-team, not per-body.
-- `ui/tui.md` "Model and Team Hot-Swap" — same updates as `10-configuration.md`; primary key reference updated to `(team_id, agent_key, session_id, seq)` per ADR 17.
+- `ui/tui-user-scenarios.md` T3 — same updates as `10-configuration.md`; primary key reference updated to `(team_id, agent_key, session_id, seq)` per ADR 17.
 - ADR 13 — "per body" → "per team"; the platform's internal `Map<team_id, session_id>` (a closure field of `createJiePlatform`, not a public field of `JiePlatform`) is the source of truth for the session id.
 - ADR 17 — `JieHandle map` section updated from `Map<(team_id, agent_key), session_id>` to `Map<team_id, session_id>` with a refinement note (the per-`agent_key` half of the key was redundant).
 - `--resume` and `--continue` semantics unchanged at the user surface (per-team, scoped to the current `team_id`). The `--resume <id>` validation continues to check that the named `session_id` has rows for the current `team_id`; mismatches exit 1.
