@@ -2,7 +2,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createBashTool } from "./bash";
-import { JiePlatformError } from "../types";
 import { makeEmptyContext } from "./_test-context";
 
 describe("bash", () => {
@@ -22,11 +21,7 @@ describe("bash", () => {
     expect(result.content).toContain("exit_code: 0");
     expect(result.content).toContain("--- stdout ---");
     expect(result.content).toContain("hello");
-    const details = result.details as {
-      exitCode: number;
-      truncated: { stdout: boolean; stderr: boolean };
-    };
-    expect(details).toEqual({
+    expect(result.details).toEqual({
       exitCode: 0,
       truncated: { stdout: false, stderr: false },
     });
@@ -37,8 +32,7 @@ describe("bash", () => {
     const result = await tool.execute({ command: "exit 7" }, makeEmptyContext());
     expect(result.content).toContain("exit_code: 7");
     expect(result.content).toContain("(command failed)");
-    const details = result.details as { exitCode: number };
-    expect(details.exitCode).toBe(7);
+    expect(result.details).toMatchObject({ exitCode: 7 });
   });
 
   test("stderr is captured in the stderr section; empty sections omitted", async () => {
@@ -74,17 +68,9 @@ describe("bash", () => {
 
   test("workdir outside the workspace is rejected with workdir_escape", async () => {
     const tool = createBashTool({ workspaceRoot: workspace });
-    let caught: unknown;
-    try {
-      await tool.execute(
-        { command: "echo bad", workdir: "/tmp" },
-        makeEmptyContext(),
-      );
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("WORKDIR_ESCAPE");
+    await expect(
+      tool.execute({ command: "echo bad", workdir: "/tmp" }, makeEmptyContext()),
+    ).rejects.toMatchObject({ code: "WORKDIR_ESCAPE" });
   });
 
   test("shell is /bin/sh (POSIX constructs work)", async () => {
@@ -103,8 +89,9 @@ describe("bash", () => {
       makeEmptyContext(),
     );
     expect(result.content).toContain("[truncated to 32 KiB]");
-    const details = result.details as { truncated: { stdout: boolean } };
-    expect(details.truncated.stdout).toBe(true);
+    expect(result.details).toMatchObject({
+      truncated: { stdout: true },
+    });
   });
 
   test("non-zero exit code from a `false` command has no stdout/stderr", async () => {
