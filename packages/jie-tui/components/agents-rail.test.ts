@@ -120,9 +120,10 @@ describe("AgentsRail", () => {
 
   test("falls back to index 0 when focused agent is unknown", () => {
     const rail = new AgentsRail(20);
+    const GHOST: AgentId = "ghost:missing";
     rail.setItems(
       [{ agentId: AGENT_ID_1, agentKey: "general-1", role: "general", isLeader: true, status: "idle" }],
-      "ghost:missing" as AgentId,
+      GHOST,
     );
     expect(rail.getSelectedAgentId()).toBe(AGENT_ID_1);
   });
