@@ -81,15 +81,14 @@ function buildSelectItems(items: ReadonlyArray<RailItem>): SelectItem[] {
   });
 }
 
-export {
-  projectRailItems as _projectRailItems,
-  buildSelectItems as _buildSelectItems,
-};
-
 function agentsRailFromState(state: TuiState): AgentsRail {
   const rail = new AgentsRail();
   rail.setItems(projectRailItems(state.agents), state.focusedAgentId);
   return rail;
 }
 
-export { agentsRailFromState as _agentsRailFromState };
+export {
+  projectRailItems as _projectRailItems,
+  buildSelectItems as _buildSelectItems,
+  agentsRailFromState as _agentsRailFromState,
+};
