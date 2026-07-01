@@ -1,0 +1,20 @@
+---
+sealed:
+  - agents-rail.ts
+  - agents-rail.test.ts
+  - build-view.ts
+  - build-view.test.ts
+  - chat-pane.ts
+  - chat-pane.test.ts
+  - confirm-exit-overlay.ts
+  - confirm-exit-overlay.test.ts
+  - editor-slot.ts
+  - editor-slot.test.ts
+  - message-view.ts
+  - message-view.test.ts
+  - status-bar.ts
+  - status-bar.test.ts
+  - themes.ts
+  - tool-card.ts
+  - tool-card.test.ts
+---
