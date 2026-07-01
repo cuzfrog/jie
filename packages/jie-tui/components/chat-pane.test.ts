@@ -20,58 +20,45 @@ function makeAgent(overrides: Partial<AgentUiState> = {}): AgentUiState {
 }
 
 describe("ChatPane", () => {
-  test("renders empty for null agent", () => {
+  test.each([
+    { name: "null agent", agent: null },
+    { name: "agent with no turns", agent: makeAgent() },
+  ])("renders empty for $name", ({ agent }) => {
     const pane = new ChatPane();
-    pane.setAgent(null);
+    pane.setAgent(agent);
     expect(pane.render(60)).toEqual([]);
   });
 
-  test("renders empty when agent has no turns", () => {
-    const pane = new ChatPane();
-    pane.setAgent(makeAgent());
-    expect(pane.render(60)).toEqual([]);
-  });
-
-  test("renders the user prompt with a chevron prefix", () => {
-    const pane = new ChatPane();
-    pane.setAgent(makeAgent({
-      history: [{
-        userPrompt: "Tell me a joke",
-        cards: [],
-        blocks: [],
-        streamId: null,
-      }],
-    }));
-    const flat = pane.render(60).join("\n");
-    expect(flat).toContain("› Tell me a joke");
-  });
-
-  test("renders message block text", () => {
-    const pane = new ChatPane();
-    pane.setAgent(makeAgent({
+  test.each([
+    {
+      name: "the user prompt with a chevron prefix",
+      history: [{ userPrompt: "Tell me a joke", cards: [], blocks: [], streamId: null }],
+      expected: "› Tell me a joke",
+    },
+    {
+      name: "message block text",
       history: [{
         userPrompt: "hi",
         cards: [],
         blocks: [{ kind: "text", text: "hello there" }],
         streamId: null,
       }],
-    }));
-    const flat = pane.render(60).join("\n");
-    expect(flat).toContain("hello there");
-  });
-
-  test("renders tool call card with its name", () => {
-    const pane = new ChatPane();
-    pane.setAgent(makeAgent({
+      expected: "hello there",
+    },
+    {
+      name: "tool call card with its name",
       history: [{
         userPrompt: "read it",
         cards: [{ kind: "toolCall", callId: "c1", name: "read_file", input: "a.txt" }],
         blocks: [],
         streamId: null,
       }],
-    }));
-    const flat = pane.render(60).join("\n");
-    expect(flat).toContain("● read_file");
+      expected: "● read_file",
+    },
+  ])("renders $name", ({ history, expected }) => {
+    const pane = new ChatPane();
+    pane.setAgent(makeAgent({ history }));
+    expect(pane.render(60).join("\n")).toContain(expected);
   });
 
   test("renders tool result card with success glyph", () => {
