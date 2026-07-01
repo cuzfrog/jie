@@ -1,4 +1,11 @@
-import { CombinedAutocompleteProvider, Container, Editor, type AutocompleteItem, type SlashCommand, type TUI } from "@earendil-works/pi-tui";
+import {
+  CombinedAutocompleteProvider,
+  Container,
+  Editor,
+  type AutocompleteItem,
+  type SlashCommand,
+  type TUI,
+} from "@earendil-works/pi-tui";
 import { editorTheme } from "./themes";
 
 export interface EditorSlotOptions {

@@ -84,7 +84,13 @@ export function statusBarContextFromState(state: TuiState): StatusBarContext {
   };
 }
 
-export function statusBarModelFromOpts(opts: { cwd: string; branch: string; provider: string; modelId: string; effort: string }): StatusBarModel {
+export function statusBarModelFromOpts(opts: {
+  cwd: string;
+  branch: string;
+  provider: string;
+  modelId: string;
+  effort: string;
+}): StatusBarModel {
   return {
     cwd: opts.cwd,
     branch: opts.branch,
