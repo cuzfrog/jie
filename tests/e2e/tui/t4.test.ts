@@ -2,7 +2,7 @@ import { createEventManager, type EventEnvelope } from "@cuzfrog/jie-platform/ev
 import { attachNoModelBody, loadFixture, NO_MODEL_ERROR, startTuiOn } from "./harness";
 
 describe("T4 — first-time setup (TUI flow)", () => {
-  test("team loads, first prompt raises an error banner about missing model", () => {
+  test("first prompt raises an error banner about missing model", () => {
     const bus = createEventManager();
     const teamLoaded: EventEnvelope<"system.team.loaded"> = {
       version: 1,
@@ -13,11 +13,26 @@ describe("T4 — first-time setup (TUI flow)", () => {
       payload: { teamId: "my-team", agents: [{ role: "general", agent_key: "general-1", is_leader: true }] },
     };
     const tui = startTuiOn(bus, [teamLoaded]);
-    const stop = attachNoModelBody(bus, "my-team", "general-1", "general");
+    attachNoModelBody(bus, "my-team", "general-1", "general");
     tui.submit("Tell me a joke");
     const state = tui.getState();
     expect(state.errorBanner).toBe(`[stop: error] ${NO_MODEL_ERROR}`);
-    stop();
+  });
+
+  test("stop() unsubscribes from the bus", () => {
+    const bus = createEventManager();
+    const teamLoaded: EventEnvelope<"system.team.loaded"> = {
+      version: 1,
+      type: "system.team.loaded",
+      topic: "system.team.loaded",
+      sender: { kind: "system" },
+      timestamp: new Date().toISOString(),
+      payload: { teamId: "my-team", agents: [{ role: "general", agent_key: "general-1", is_leader: true }] },
+    };
+    const tui = startTuiOn(bus, [teamLoaded]);
+    expect(bus.subscriberCount("system.team.loaded")).toBe(1);
+    tui.stop();
+    expect(bus.subscriberCount("system.team.loaded")).toBe(0);
   });
 
   test("error clears on the next user prompt and the response streams", async () => {
