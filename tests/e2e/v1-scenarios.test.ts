@@ -149,7 +149,6 @@ async function assertLlmReachable(): Promise<void> {
     );
   }
 }
-await assertLlmReachable();
 
 /** Writes the fixture's `models.json` content to `{dir}/.jie/models.json`. */
 function writeModelsJsonTo(dir: string): void {
@@ -177,10 +176,12 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
   let writeOut: ReturnType<typeof vi.spyOn> | undefined;
   let writeErr: ReturnType<typeof vi.spyOn> | undefined;
 
+  beforeAll(async () => {
+    await assertLlmReachable();
+  });
+
   beforeEach(() => {
     workspace = mkdtempSync(join(tmpdir(), "jie-e2e-"));
-    // Redirect HOME so the CLI does not pick up the user's real
-    // `~/.jie/auth.json` / `~/.jie/models.json`.
     prevHome = process.env.HOME;
     const fakeHome = join(workspace, "home");
     mkdirSync(fakeHome, { recursive: true });
@@ -317,8 +318,6 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
   test(
     "Scenario 3: first-time setup → 'no model' error, then setup, then success",
     async () => {
-      // First call: no models.json, no settings, no team. The CLI
-      // should exit 1 with the "No model has been selected" message.
       writeErr?.mockReset();
       const code1 = await main(
         printArgv({ instruction: "Tell me a joke", timeout: 5 }),
@@ -331,14 +330,9 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
           .join("") ?? "";
       expect(stderr1).toContain(NO_MODEL_ERROR);
 
-      // Simulate `jie model lm-studio/qwen3.5-2b` and the user
-      // creating `.jie/models.json` with the provider config.
       writeModelsJsonTo(workspace);
       writeSettingsJson(workspace);
 
-      // Final call: with .jie/models.json and .jie/settings.json,
-      // the CLI should resolve the model through the registry and
-      // stream a response. No hooks needed.
       writeOut?.mockReset();
       writeOut?.mockImplementation(() => true);
       const code2 = await main(
