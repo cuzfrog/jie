@@ -41,6 +41,7 @@
 ### Test
 - use mocks for unit test. See @doc/HOW_TO_MOCK.md
 - tests should align with the test target file. E.g. a test `function1.test.ts` should test and only test `function1.ts`. If `function1.test.ts` is testing `index.ts`, it a smell of coding principle violation. Unit tests should not test dependencies.
+- when a private function is large that requires unit test, re-export it with `_` prefix and comment it with `//visibleForTesting`.
 - do not import `bun:test`, all test utilities have been added to global namespace and is compatible with `vi`.
 
 ### Single file layout (ordered from top to bottom)

@@ -143,6 +143,20 @@ export function createTui(options: CreateTUIOptions): Tui {
     "agent.tool.result",
   ] as const;
 
+  const onBusEvent = (env: AnyEventEnvelope): void => {
+    dispatch(Actions.receiveEvent(env));
+  };
+  const busUnsubscribes: Array<() => void> = [];
+  for (const topic of subscribedTopics) {
+    busUnsubscribes.push(options.bus.subscribe(topic, onBusEvent as (env: EventEnvelope<EventType>) => void));
+  }
+  let busUnsubscribed = false;
+  const unsubscribeBus = (): void => {
+    if (busUnsubscribed) return;
+    busUnsubscribed = true;
+    for (const unsub of busUnsubscribes) unsub();
+  };
+
   let resolveStart: (() => void) | null = null;
 
   const start = (): Promise<void> => {
@@ -169,20 +183,8 @@ export function createTui(options: CreateTUIOptions): Tui {
         return undefined;
       });
 
-      const onBusEvent = (env: AnyEventEnvelope): void => {
-        dispatch(Actions.receiveEvent(env), requestRender);
-      };
-      const subscriptions: Array<() => void> = [];
-      for (const topic of subscribedTopics) {
-        subscriptions.push(options.bus.subscribe(topic, onBusEvent as (env: EventEnvelope<EventType>) => void));
-      }
-
-      const cleanup = (): void => {
-        for (const unsub of subscriptions) unsub();
-      };
-
       resolveStart = (): void => {
-        cleanup();
+        unsubscribeBus();
         tui.stop();
         resolveStart = null;
         resolve();
@@ -191,7 +193,7 @@ export function createTui(options: CreateTUIOptions): Tui {
       try {
         tui.start();
       } catch (error) {
-        cleanup();
+        unsubscribeBus();
         resolveStart = null;
         throw error;
       }
@@ -203,6 +205,7 @@ export function createTui(options: CreateTUIOptions): Tui {
     submit: (text: string): void => handleSubmit(text),
     stop: (): void => {
       stopped = true;
+      unsubscribeBus();
       if (resolveStart !== null) {
         resolveStart();
       }

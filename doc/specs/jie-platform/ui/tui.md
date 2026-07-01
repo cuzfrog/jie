@@ -140,6 +140,7 @@ The TUI consumes:
 - `TUI`, `Container` — the root render tree.
 - `ProcessTerminal` — the production `Terminal` impl (raw mode on `process.stdin`/`stdout`).
 - `VirtualTerminal` — the test `Terminal` impl (backed by `@xterm/headless`).
+  - `drainInput(maxMs)` — no-op wait. The harness has no real input source: input arrives synchronously via `sendInput()`. `drainInput` honors `maxMs` only as a bound so callers can time-limit the loop. Tests call `sendInput()` before the drain resolves, or pass `maxMs: 0` to skip the wait.
 - `Editor` — the bottom input line (multi-line, slash autocomplete, paste handling, history).
 - `SelectList` with `fuzzyFilter` — the `/team` picker.
 - `Loader` — the busy indicator (the spinner frame in the chat-pane working indicator; v0.2 does not use `CancellableLoader` directly — the TUI's `Esc Esc` path publishes a bus event, the body's `AbortController` does the cancel, and the spinner is just a `Loader`).
