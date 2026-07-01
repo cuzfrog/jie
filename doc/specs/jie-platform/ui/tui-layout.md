@@ -195,8 +195,8 @@ left:   "0%/200k" (stats)     hint     right: "(<provider>) <modelId> | <effort>
   event when it exists.
 - **Hint** (left): a single short string describing the most useful
   rail-state-dependent shortcut. In `muted`. Two values:
-  - hidden: `←← for agents`
-  - visible: `ctl+↑↓ switch agent  ←← close agents`
+  - hidden: `ctrl+left for agents`
+  - visible: `ctrl+↑↓ switch agent  ctrl+left close agents`
 
   See `tui-shortcuts.md` for the full keymap — this hint is a one-line
   reminder, not the keymap.
@@ -243,19 +243,3 @@ These mappings live here (not in `tui-pi-reference.md`) because they are jie-spe
   out; the user can cycle with `Ctrl+↑/↓` to inspect other agents.
 - Floating tool overlays / modal prompts — out; the editor is the only
   input surface.
-
-## File layout
-
-```
-packages/jie-tui/
-  renderer.ts     # render(state, cols, rows, opts) → string[]
-  reducer.ts      # reduce(state, envelope) → state
-  state.ts        # TuiState + agent/turn/card types
-  events.ts       # EventEnvelope factory helpers
-  bin/run.ts      # interactive prototype driver (uses pi-tui TUI)
-  test/
-    renderer.test.ts
-    reducer.test.ts
-```
-
-The prototype under `tmp/tui-prototype/` (when present) was an earlier exploration and is not authoritative.
