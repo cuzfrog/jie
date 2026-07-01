@@ -153,79 +153,95 @@ describe("loadTeamFromDir — typed error codes", () => {
     );
   }
 
-  test("invalid_team_id", () => {
-    expectCode(
-      () => parseTeamFromManifests({}, { teamId: "bad id!" }),
-      "INVALID_TEAM_ID",
-    );
-  });
+  function setupFiles(files: Record<string, string>): void {
+    for (const [name, content] of Object.entries(files)) writeFileSync(join(dir, name), content);
+  }
 
-  test("invalid_role", () => {
-    writeFileSync(join(dir, "bad role.md"), "---\ntools:\n  - bash\n---\n");
-    expectCode(() => loadTeamFromDir(dir), "INVALID_ROLE");
-  });
-
-  test("invalid_frontmatter", () => {
-    writeFileSync(join(dir, "general.md"), "no frontmatter here\n");
-    expectCode(() => loadTeamFromDir(dir), "INVALID_FRONTMATTER");
-  });
-
-  test("missing_required_field", () => {
-    writeFileSync(join(dir, "general.md"), "---\nrole: general\n---\n");
-    expectCode(() => loadTeamFromDir(dir), "MISSING_REQUIRED_FIELD");
-  });
-
-  test("invalid_field_type (tools not a list)", () => {
-    writeFileSync(join(dir, "general.md"), "---\ntools: bash\n---\n");
-    expectCode(() => loadTeamFromDir(dir), "INVALID_FIELD_TYPE");
-  });
-
-  test("subscribe_rejects_platform_topic", () => {
-    writeFileSync(
-      join(dir, "general.md"),
-      "---\ntools:\n  - bash\nsubscribe:\n  - agent.stream.chunk\n---\n",
-    );
-    expectCode(() => loadTeamFromDir(dir), "SUBSCRIBE_REJECTS_PLATFORM_TOPIC");
-  });
-
-  test("invalid_model_string", () => {
-    writeFileSync(
-      join(dir, "general.md"),
-      "---\ntools:\n  - bash\nmodel: no-slash\n---\n",
-    );
-    expectCode(() => loadTeamFromDir(dir), "INVALID_MODEL_STRING");
-  });
-
-  test("leader_required (multi-agent, no TEAM.md leader)", () => {
-    writeFileSync(join(dir, "a.md"), "---\ntools:\n  - bash\n---\n");
-    writeFileSync(join(dir, "b.md"), "---\ntools:\n  - bash\n---\n");
-    writeFileSync(
-      join(dir, "TEAM.md"),
-      "---\nleader: \"\"\n---\n",
-    );
-    expectCode(() => loadTeamFromDir(dir), "LEADER_REQUIRED");
-  });
-
-  test("team_file_required (multi-agent, no TEAM.md via parseTeamFromManifests)", () => {
-    expectCode(
-      () => parseTeamFromManifests(
+  test.each([
+    {
+      name: "invalid_team_id",
+      setup: () => undefined,
+      act: () => parseTeamFromManifests({}, { teamId: "bad id!" }),
+      code: "INVALID_TEAM_ID",
+    },
+    {
+      name: "invalid_role (filename has space)",
+      setup: () => setupFiles({ "bad role.md": "---\ntools:\n  - bash\n---\n" }),
+      act: () => loadTeamFromDir(dir),
+      code: "INVALID_ROLE",
+    },
+    {
+      name: "invalid_frontmatter (missing ---)",
+      setup: () => setupFiles({ "general.md": "no frontmatter here\n" }),
+      act: () => loadTeamFromDir(dir),
+      code: "INVALID_FRONTMATTER",
+    },
+    {
+      name: "missing_required_field (no tools)",
+      setup: () => setupFiles({ "general.md": "---\nrole: general\n---\n" }),
+      act: () => loadTeamFromDir(dir),
+      code: "MISSING_REQUIRED_FIELD",
+    },
+    {
+      name: "invalid_field_type (tools not a list)",
+      setup: () => setupFiles({ "general.md": "---\ntools: bash\n---\n" }),
+      act: () => loadTeamFromDir(dir),
+      code: "INVALID_FIELD_TYPE",
+    },
+    {
+      name: "subscribe_rejects_platform_topic",
+      setup: () => setupFiles({
+        "general.md": "---\ntools:\n  - bash\nsubscribe:\n  - agent.stream.chunk\n---\n",
+      }),
+      act: () => loadTeamFromDir(dir),
+      code: "SUBSCRIBE_REJECTS_PLATFORM_TOPIC",
+    },
+    {
+      name: "invalid_model_string (no slash)",
+      setup: () => setupFiles({ "general.md": "---\ntools:\n  - bash\nmodel: no-slash\n---\n" }),
+      act: () => loadTeamFromDir(dir),
+      code: "INVALID_MODEL_STRING",
+    },
+    {
+      name: "leader_required (multi-agent, empty leader)",
+      setup: () => setupFiles({
+        "a.md": "---\ntools:\n  - bash\n---\n",
+        "b.md": "---\ntools:\n  - bash\n---\n",
+        "TEAM.md": "---\nleader: \"\"\n---\n",
+      }),
+      act: () => loadTeamFromDir(dir),
+      code: "LEADER_REQUIRED",
+    },
+    {
+      name: "team_file_required (no TEAM.md, parseTeamFromManifests)",
+      setup: () => undefined,
+      act: () => parseTeamFromManifests(
         { "a.md": "---\ntools:\n  - bash\n---\n", "b.md": "---\ntools:\n  - bash\n---\n" },
         { teamId: "t" },
       ),
-      "TEAM_FILE_REQUIRED",
-    );
-  });
-
-  test("leader_unknown (TEAM.md leader refers to missing role, multi-agent)", () => {
-    writeFileSync(join(dir, "TEAM.md"), "---\nleader: ghost\n---\n");
-    writeFileSync(join(dir, "a.md"), "---\ntools:\n  - bash\n---\n");
-    writeFileSync(join(dir, "b.md"), "---\ntools:\n  - bash\n---\n");
-    expectCode(() => loadTeamFromDir(dir), "LEADER_UNKNOWN");
-  });
-
-  test("leader_mismatch (single-agent, TEAM.md leader differs)", () => {
-    writeFileSync(join(dir, "TEAM.md"), "---\nleader: wrong\n---\n");
-    writeFileSync(join(dir, "general.md"), "---\ntools:\n  - bash\n---\n");
-    expectCode(() => loadTeamFromDir(dir), "LEADER_MISMATCH");
+      code: "TEAM_FILE_REQUIRED",
+    },
+    {
+      name: "leader_unknown (TEAM.md leader refers to missing role)",
+      setup: () => setupFiles({
+        "TEAM.md": "---\nleader: ghost\n---\n",
+        "a.md": "---\ntools:\n  - bash\n---\n",
+        "b.md": "---\ntools:\n  - bash\n---\n",
+      }),
+      act: () => loadTeamFromDir(dir),
+      code: "LEADER_UNKNOWN",
+    },
+    {
+      name: "leader_mismatch (single-agent, TEAM.md leader differs)",
+      setup: () => setupFiles({
+        "TEAM.md": "---\nleader: wrong\n---\n",
+        "general.md": "---\ntools:\n  - bash\n---\n",
+      }),
+      act: () => loadTeamFromDir(dir),
+      code: "LEADER_MISMATCH",
+    },
+  ])("$name", ({ setup, act, code }) => {
+    setup();
+    expectCode(act, code);
   });
 });
