@@ -61,31 +61,19 @@ describe("SqliteArtifactStore", () => {
 
   test("write rejects invalid key with typed error invalid_artifact_key", async () => {
     const store = makeStore();
-    let caught: unknown;
-    try {
-      await store.write("bad space", "x");
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("INVALID_ARTIFACT_KEY");
-    expect((caught as Error).message).toBe("Invalid artifact key: bad space");
+    await expect(store.write("bad space", "x")).rejects.toMatchObject({
+      code: "INVALID_ARTIFACT_KEY",
+      message: "Invalid artifact key: bad space",
+    });
   });
 
   test("write rejects content over 5 MiB with typed error artifact_too_large", async () => {
     const store = makeStore();
     const huge = "x".repeat(5 * 1024 * 1024 + 1);
-    let caught: unknown;
-    try {
-      await store.write("k", huge);
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("ARTIFACT_TOO_LARGE");
-    expect((caught as Error).message).toBe(
-      `Artifact content exceeds the maximum allowed size: ${huge.length}`,
-    );
+    await expect(store.write("k", huge)).rejects.toMatchObject({
+      code: "ARTIFACT_TOO_LARGE",
+      message: `Artifact content exceeds the maximum allowed size: ${huge.length}`,
+    });
   });
 
   test("write accepts content exactly at 5 MiB", async () => {
