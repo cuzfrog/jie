@@ -183,27 +183,30 @@ describe("createEventManager — subscribe", () => {
 });
 
 describe("createEventManager — stream events pass through", () => {
-  test("agent.stream.chunk payload is preserved", () => {
+  test.each([
+    {
+      name: "agent.stream.chunk",
+      topic: "agent.stream.chunk",
+      publish: () => Events.agentStreamChunk(agentSender, 7, 3, "thinking", "reasoning..."),
+      expected: {
+        stream_id: 7,
+        seq: 3,
+        block_type: "thinking",
+        text: "reasoning...",
+      },
+    },
+    {
+      name: "agent.stream.end",
+      topic: "agent.stream.end",
+      publish: () => Events.agentStreamEnd(agentSender, 7, 5),
+      expected: { stream_id: 7, total_chunks: 5 },
+    },
+  ])("$name payload is preserved", ({ topic, publish, expected }) => {
     const bus = createEventBus();
-    const received = collect(bus, "agent.stream.chunk");
+    const received = collect(bus, topic as "agent.stream.chunk" | "agent.stream.end");
     const events: EventManager = createEventManager(bus);
-    events.publish(Events.agentStreamChunk(agentSender, 7, 3, "thinking", "reasoning..."));
-    const env = received[0]!;
-    expect(env.payload).toEqual({
-      stream_id: 7,
-      seq: 3,
-      block_type: "thinking",
-      text: "reasoning...",
-    });
-  });
-
-  test("agent.stream.end payload is preserved", () => {
-    const bus = createEventBus();
-    const received = collect(bus, "agent.stream.end");
-    const events: EventManager = createEventManager(bus);
-    events.publish(Events.agentStreamEnd(agentSender, 7, 5));
-    const env = received[0]!;
-    expect(env.payload).toEqual({ stream_id: 7, total_chunks: 5 });
+    events.publish(publish());
+    expect(received[0]!.payload).toEqual(expected);
   });
 });
 
