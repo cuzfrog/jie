@@ -107,7 +107,7 @@ describe("notify — topic validation", () => {
     );
   });
 
-  test("rejects prompt longer than EVENT_TEXT_TRUNCATION_BYTES (#93)", async () => {
+  test("rejects prompt longer than EVENT_TEXT_TRUNCATION_BYTES", async () => {
     const { events, received } = makeHarness();
     const tool = createNotifyTool({ eventManager: events });
     const oversized = "x".repeat(4097);

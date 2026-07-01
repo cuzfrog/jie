@@ -303,7 +303,7 @@ describe("AgentBody — pi-agent event bridging", () => {
     });
   });
 
-  test("subscribe listener accepts (event, signal) per pi-agent contract (#51)", () => {
+  test("subscribe listener accepts (event, signal) per pi-agent contract", () => {
     const { opts } = makeOpts();
     let subscribeArgCount: number | undefined;
     const result = makeFakeAgentFactory({
@@ -315,7 +315,7 @@ describe("AgentBody — pi-agent event bridging", () => {
     expect(subscribeArgCount).toBe(2);
   });
 
-  test("afterToolCall hook publishes agent.tool.result with the Jie ToolResult shape (#50)", async () => {
+  test("afterToolCall hook publishes agent.tool.result with the Jie ToolResult shape", async () => {
     const { opts, subscribeSubject } = makeOpts();
     const results: object[] = [];
     subscribeSubject("agent.tool.result", (_s, p) => {
@@ -354,7 +354,7 @@ describe("AgentBody — pi-agent event bridging", () => {
     });
   });
 
-  test("afterToolCall: multi-block content serializes as JSON array (#50)", async () => {
+  test("afterToolCall: multi-block content serializes as JSON array", async () => {
     const { opts, subscribeSubject } = makeOpts();
     const results: object[] = [];
     subscribeSubject("agent.tool.result", (_s, p) => {
@@ -391,7 +391,7 @@ describe("AgentBody — pi-agent event bridging", () => {
     });
   });
 
-  test("afterToolCall on error: output null, error carries message (#50 unchanged path)", async () => {
+  test("afterToolCall on error: output null, error carries message", async () => {
     const { opts, subscribeSubject } = makeOpts();
     const results: object[] = [];
     subscribeSubject("agent.tool.result", (_s, p) => {

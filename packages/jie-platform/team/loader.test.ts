@@ -137,7 +137,7 @@ describe("isValidTeamId", () => {
   });
 });
 
-describe("loadTeamFromDir — typed error codes (issue #65)", () => {
+describe("loadTeamFromDir — typed error codes", () => {
   let dir: string;
 
   beforeEach(() => {

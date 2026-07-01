@@ -193,7 +193,7 @@ describe("JieAgentBody — start() subscriptions", () => {
     b2.stop();
   });
 
-  test("ingestCustom drops self-published events (fix #92: avoid feedback loop)", async () => {
+  test("ingestCustom drops self-published events (avoids feedback loop)", async () => {
     body.stop();
     const b2 = h.makeBody({
       soul: makeSoul({ subscriptions: ["task.recorded"] }),
@@ -416,7 +416,7 @@ describe("JieAgentBody — handlePiAgentEvent (stream bridge)", () => {
     }
   });
 
-  test("message_end with non-assistant role: stream.endStream is NOT called (#51)", () => {
+  test("message_end with non-assistant role: stream.endStream is NOT called", () => {
     const body = h.makeBody();
     body.handlePiAgentEvent({
       type: "message_end",
