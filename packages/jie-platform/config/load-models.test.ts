@@ -97,103 +97,77 @@ describe("loadModelsConfig", () => {
     expect(result.models.find((m) => m.id === "local-1")).toBeDefined();
   });
 
-  test("$ENV interpolation in apiKey", () => {
+  test.each([
+    {
+      name: "$ENV interpolation in apiKey",
+      providerName: "anthropic",
+      provider: {
+        baseUrl: "https://api.anthropic.com",
+        api: "anthropic-messages",
+        apiKey: "$ANTHROPIC_TEST_KEY",
+        models: [{ id: "claude-test" }],
+      },
+      env: { ANTHROPIC_TEST_KEY: "sk-test-123" },
+      check: (result: ReturnType<typeof loadModelsConfig>) =>
+        expect(result.providers.get("anthropic")?.apiKey).toBe("sk-test-123"),
+    },
+    {
+      name: "${ENV} interpolation in headers",
+      providerName: "custom",
+      provider: {
+        baseUrl: "https://example.com",
+        api: "openai-completions",
+        apiKey: "x",
+        headers: { "x-org-id": "${TEST_ORG_ID}" },
+        models: [],
+      },
+      env: { TEST_ORG_ID: "org-42" },
+      check: (result: ReturnType<typeof loadModelsConfig>) =>
+        expect(result.providers.get("custom")?.headers["x-org-id"]).toBe("org-42"),
+    },
+    {
+      name: "${ENV} interpolation in baseUrl",
+      providerName: "nvidia",
+      provider: {
+        baseUrl: "${TEST_BASE_URL}",
+        api: "openai-completions",
+        apiKey: "x",
+        models: [],
+      },
+      env: { TEST_BASE_URL: "https://integrate.api.nvidia.com/v1" },
+      check: (result: ReturnType<typeof loadModelsConfig>) =>
+        expect(result.providers.get("nvidia")?.baseUrl).toBe("https://integrate.api.nvidia.com/v1"),
+    },
+    {
+      name: "${ENV} interpolation in model.id and model.name",
+      providerName: "nvidia",
+      provider: {
+        baseUrl: "https://example.com",
+        api: "openai-completions",
+        apiKey: "x",
+        models: [{ id: "${TEST_MODEL_ID}", name: "${TEST_MODEL_NAME}" }],
+      },
+      env: {
+        TEST_MODEL_ID: "nvidia/nemotron-3-nano-30b-a3b",
+        TEST_MODEL_NAME: "Nemotron 3 Nano",
+      },
+      check: (result: ReturnType<typeof loadModelsConfig>) => {
+        expect(result.models[0]?.id).toBe("nvidia/nemotron-3-nano-30b-a3b");
+        expect(result.models[0]?.name).toBe("Nemotron 3 Nano");
+      },
+    },
+  ])("$name", ({ providerName, provider, env, check }) => {
     mkdirSync(homeJieDir, { recursive: true });
     writeFileSync(
       join(homeJieDir, "models.json"),
-      JSON.stringify({
-        providers: {
-          anthropic: {
-            baseUrl: "https://api.anthropic.com",
-            api: "anthropic-messages",
-            apiKey: "$ANTHROPIC_TEST_KEY",
-            models: [{ id: "claude-test" }],
-          },
-        },
-      }),
+      JSON.stringify({ providers: { [providerName]: provider } }),
     );
-    process.env.ANTHROPIC_TEST_KEY = "sk-test-123";
+    for (const [k, v] of Object.entries(env)) process.env[k] = v;
     try {
       const result = loadModelsConfig(homeJieDir, projectJieDir);
-      expect(result.providers.get("anthropic")?.apiKey).toBe("sk-test-123");
+      check(result);
     } finally {
-      delete process.env.ANTHROPIC_TEST_KEY;
-    }
-  });
-
-  test("${ENV} interpolation in headers", () => {
-    mkdirSync(homeJieDir, { recursive: true });
-    writeFileSync(
-      join(homeJieDir, "models.json"),
-      JSON.stringify({
-        providers: {
-          custom: {
-            baseUrl: "https://example.com",
-            api: "openai-completions",
-            apiKey: "x",
-            headers: { "x-org-id": "${TEST_ORG_ID}" },
-            models: [],
-          },
-        },
-      }),
-    );
-    process.env.TEST_ORG_ID = "org-42";
-    try {
-      const result = loadModelsConfig(homeJieDir, projectJieDir);
-      expect(result.providers.get("custom")?.headers["x-org-id"]).toBe("org-42");
-    } finally {
-      delete process.env.TEST_ORG_ID;
-    }
-  });
-
-  test("${ENV} interpolation in baseUrl", () => {
-    mkdirSync(homeJieDir, { recursive: true });
-    writeFileSync(
-      join(homeJieDir, "models.json"),
-      JSON.stringify({
-        providers: {
-          nvidia: {
-            baseUrl: "${TEST_BASE_URL}",
-            api: "openai-completions",
-            apiKey: "x",
-            models: [],
-          },
-        },
-      }),
-    );
-    process.env.TEST_BASE_URL = "https://integrate.api.nvidia.com/v1";
-    try {
-      const result = loadModelsConfig(homeJieDir, projectJieDir);
-      expect(result.providers.get("nvidia")?.baseUrl).toBe("https://integrate.api.nvidia.com/v1");
-    } finally {
-      delete process.env.TEST_BASE_URL;
-    }
-  });
-
-  test("${ENV} interpolation in model.id and model.name", () => {
-    mkdirSync(homeJieDir, { recursive: true });
-    writeFileSync(
-      join(homeJieDir, "models.json"),
-      JSON.stringify({
-        providers: {
-          nvidia: {
-            baseUrl: "https://example.com",
-            api: "openai-completions",
-            apiKey: "x",
-            models: [{ id: "${TEST_MODEL_ID}", name: "${TEST_MODEL_NAME}" }],
-          },
-        },
-      }),
-    );
-    process.env.TEST_MODEL_ID = "nvidia/nemotron-3-nano-30b-a3b";
-    process.env.TEST_MODEL_NAME = "Nemotron 3 Nano";
-    try {
-      const result = loadModelsConfig(homeJieDir, projectJieDir);
-      expect(result.models[0]?.id).toBe("nvidia/nemotron-3-nano-30b-a3b");
-      expect(result.models[0]?.name).toBe("Nemotron 3 Nano");
-    } finally {
-      delete process.env.TEST_MODEL_ID;
-      delete process.env.TEST_MODEL_NAME;
+      for (const k of Object.keys(env)) delete process.env[k];
     }
   });
 
