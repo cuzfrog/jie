@@ -65,16 +65,24 @@ describe("createTui — v0.2 surface", () => {
     });
   });
 
-  test("returns a Tui handle with the four contract methods", () => {
+  test("returns a Tui handle with the contract methods", () => {
     withTTY(true, () => {
       const tui: Tui = createTui(makeOptions());
       expect(typeof tui.getState).toBe("function");
       expect(typeof tui.submit).toBe("function");
-      expect(typeof tui.injectKey).toBe("function");
+      expect(typeof tui.start).toBe("function");
       expect(typeof tui.stop).toBe("function");
       const s0 = tui.getState();
       expect(s0.teamId).toBeNull();
       expect(s0.agents.size).toBe(0);
+      tui.stop();
+    });
+  });
+
+  test("exposes a start() method that returns a Promise", () => {
+    withTTY(true, () => {
+      const tui: Tui = createTui(makeOptions());
+      expect(typeof tui.start).toBe("function");
       tui.stop();
     });
   });

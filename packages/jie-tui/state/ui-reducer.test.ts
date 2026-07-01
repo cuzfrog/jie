@@ -58,13 +58,13 @@ describe("cycleAgent", () => {
 });
 
 describe("transient", () => {
-  test("sets transientMessage with shownAt", () => {
-    const state = reduce(INITIAL_TUI_STATE, Actions.setTransientMessage("logged in to nvidia", 42));
-    expect(state.transientMessage).toEqual({ text: "logged in to nvidia", shownAt: 42 });
+  test("sets transientMessage text", () => {
+    const state = reduce(INITIAL_TUI_STATE, Actions.setTransientMessage("logged in to nvidia"));
+    expect(state.transientMessage).toEqual({ text: "logged in to nvidia" });
   });
 
   test("clearTransientMessage nulls transientMessage", () => {
-    const state0 = reduce(INITIAL_TUI_STATE, Actions.setTransientMessage("x", 1));
+    const state0 = reduce(INITIAL_TUI_STATE, Actions.setTransientMessage("x"));
     const state1 = reduce(state0, Actions.clearTransientMessage());
     expect(state1.transientMessage).toBeNull();
   });
@@ -72,9 +72,8 @@ describe("transient", () => {
 
 describe("error", () => {
   test("sets errorBanner; clearErrorMessage nulls it", () => {
-    const state0 = reduce(INITIAL_TUI_STATE, Actions.setErrorMessage("No model selected", 1));
+    const state0 = reduce(INITIAL_TUI_STATE, Actions.setErrorMessage("No model selected"));
     expect(state0.errorBanner?.text).toBe("No model selected");
-    expect(state0.errorBanner?.raisedAt).toBe(1);
     const state1 = reduce(state0, Actions.clearErrorMessage());
     expect(state1.errorBanner).toBeNull();
   });
@@ -83,8 +82,8 @@ describe("error", () => {
 describe("clear", () => {
   test("resets agents, transient, and error", () => {
     let state = loadedTeam([{ role: "general", agent_key: "general-1", is_leader: true }]);
-    state = reduce(state, Actions.setErrorMessage("e", 1));
-    state = reduce(state, Actions.setTransientMessage("t", 1));
+    state = reduce(state, Actions.setErrorMessage("e"));
+    state = reduce(state, Actions.setTransientMessage("t"));
     const cleared = reduce(state, Actions.clearTuiState());
     expect(cleared.agents.size).toBe(0);
     expect(cleared.leaderAgentId).toBeNull();

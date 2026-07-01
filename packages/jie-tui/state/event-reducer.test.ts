@@ -68,7 +68,7 @@ describe("reduceTurnStart", () => {
 
   test("clears the error banner (T4 path)", () => {
     let state = loadedState();
-    state = { ...state, errorBanner: { text: "No model", raisedAt: 1 } };
+    state = { ...state, errorBanner: { text: "No model" } };
     const state2 = reduce(state, Events.agentTurnStart(AGENT_SENDER));
     expect(state2.errorBanner).toBeNull();
     expect(state2.agents.get("my-team:general-1")?.status).toBe("busy");
@@ -83,14 +83,13 @@ describe("reduceTurnStart", () => {
 });
 
 describe("reduceIdle", () => {
-  test("sets status idle and stamps lastIdleAt with a positive timestamp", () => {
+  test("sets status idle and stamps lastStopReason", () => {
     let state = loadedState();
     state = reduce(state, Events.agentTurnStart(AGENT_SENDER));
     const state2 = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
     const agent = state2.agents.get("my-team:general-1");
     expect(agent?.status).toBe("idle");
-    expect(typeof agent?.lastIdleAt).toBe("number");
-    expect(agent?.lastIdleAt).toBeGreaterThan(0);
+    expect(agent?.lastStopReason).toBe("stop");
   });
 
   test("rejects idle events from a foreign team", () => {
@@ -108,7 +107,7 @@ describe("reduceStreamChunk", () => {
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 2, "text", "world"));
     const agent = state.agents.get("my-team:general-1");
     expect(agent?.currentTurn?.blocks).toEqual([
-      { kind: "text", text: "Hello world", expanded: false },
+      { kind: "text", text: "Hello world" },
     ]);
   });
 
@@ -119,7 +118,7 @@ describe("reduceStreamChunk", () => {
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 3, "thinking", "I think"));
     const agent = state.agents.get("my-team:general-1");
     expect(agent?.currentTurn?.blocks.length).toBe(2);
-    expect(agent?.currentTurn?.blocks[1]).toEqual({ kind: "thinking", text: "I think", expanded: false });
+    expect(agent?.currentTurn?.blocks[1]).toEqual({ kind: "thinking", text: "I think" });
   });
 
   test("opens a new block when stream_id changes", () => {

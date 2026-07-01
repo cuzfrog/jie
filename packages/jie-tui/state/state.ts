@@ -19,13 +19,11 @@ export interface MessageCard {
   readonly outputTruncated?: boolean;
   readonly durationMs?: number;
   readonly error?: string | null;
-  readonly expanded: boolean;
 }
 
 export interface MessageBlock {
   readonly kind: "text" | "thinking";
   readonly text: string;
-  readonly expanded: boolean;
 }
 
 export interface MessageTurn {
@@ -44,21 +42,18 @@ export interface AgentUiState {
   readonly role: string;
   readonly isLeader: boolean;
   readonly status: AgentStatus;
-  readonly lastIdleAt: number;
-  readonly lastStopReason: StopReason | null;
   readonly model: ModelReference | null;
   readonly history: MessageTurn[];
   readonly currentTurn: MessageTurn | null;
+  readonly lastStopReason: StopReason | null;
 }
 
 export interface TransientMessage {
   readonly text: string;
-  readonly shownAt: number;
 }
 
 export interface ErrorBanner {
   readonly text: string;
-  readonly raisedAt: number;
 }
 
 export interface TuiState {
@@ -71,7 +66,7 @@ export interface TuiState {
   readonly showTeamRailPanel: boolean;
 }
 
-export const INITIAL_TUI_STATE:TuiState = Object.freeze({
+export const INITIAL_TUI_STATE: TuiState = Object.freeze({
   teamId: null,
   leaderAgentId: null,
   agents: new Map(),

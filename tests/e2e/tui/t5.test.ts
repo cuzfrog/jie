@@ -14,11 +14,18 @@ describe("T5 — second prompt after the first turn", () => {
     expect(allTurns.length).toBeGreaterThanOrEqual(2);
   });
 
-  test("frame renders both prompts and the haiku response", async () => {
+  test("state captures both prompts and the haiku response", async () => {
     const envelopes = await loadFixture("t5");
     const { tui } = replayEnvelopes(envelopes);
-    const frame = tui.frame();
-    expect(frame.some((l) => l.includes("Research the history of J"))).toBe(true);
-    expect(frame.some((l) => l.includes("haiku"))).toBe(true);
+    const state = tui.getState();
+    const agent = state.agents.get("my-team:general-1");
+    const allTurns = [
+      ...(agent?.history ?? []),
+      ...(agent?.currentTurn !== null && agent?.currentTurn !== undefined ? [agent.currentTurn] : []),
+    ];
+    const allPrompts = allTurns.map((t) => t.userPrompt).join("\n");
+    expect(allPrompts).toContain("Research the history of J");
+    const allBlocks = allTurns.flatMap((t) => t.blocks).map((b) => b.text).join("\n");
+    expect(allBlocks).toContain("haiku");
   });
 });

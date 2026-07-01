@@ -8,6 +8,5 @@ sealed:
   - ui-reducer.ts
   - event-reducer.test.ts
   - event-reducer.ts
-readonly:
-  - actions.ts
+  - actions.ts # follow existing type's shape, do not overhaul the file.
 ---

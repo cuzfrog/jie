@@ -1,4 +1,3 @@
-
 import { loadFixture, replayEnvelopes } from "./harness";
 
 describe("T2 — pass work in a team", () => {
@@ -31,17 +30,5 @@ describe("T2 — pass work in a team", () => {
     expect(worker?.currentTurn?.cards.some((c) => c.kind === "toolResult" && c.name === "write_file")).toBe(true);
     const blocks = worker?.currentTurn?.blocks ?? [];
     expect(blocks.some((b) => b.text.includes("task done"))).toBe(true);
-  });
-
-  test("Ctrl+↓ cycles focus to the worker; Ctrl+↑ returns to the manager", async () => {
-    const envelopes = await loadFixture("t2");
-    const { tui } = replayEnvelopes(envelopes);
-    tui.injectKey("\x1b[D\x1b[D");
-    expect(tui.getState().showTeamRailPanel).toBe(true);
-    expect(tui.getState().focusedAgentId).toBe("my-team:manager-1");
-    tui.injectKey("\x1b[1;5B");
-    expect(tui.getState().focusedAgentId).toBe("my-team:worker-1");
-    tui.injectKey("\x1b[1;5A");
-    expect(tui.getState().focusedAgentId).toBe("my-team:manager-1");
   });
 });

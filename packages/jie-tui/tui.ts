@@ -1,8 +1,9 @@
+import { matchesKey, ProcessTerminal, TUI, type Terminal } from "@earendil-works/pi-tui";
 import type { EventManager, Sender } from "@cuzfrog/jie-platform/event";
 import { Events } from "@cuzfrog/jie-platform/event";
 import type { ArtifactStore } from "@cuzfrog/jie-platform/storage";
 import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduce } from "./state";
-import { render, type RenderOptions } from "./renderer";
+import { buildView, type BuildViewOpts } from "./components/build-view";
 
 export interface CreateTUIOptions {
   bus: EventManager;
@@ -15,13 +16,13 @@ export interface CreateTUIOptions {
   provider?: string;
   modelId?: string;
   effort?: string;
+  terminal?: Terminal;
 }
 
 export interface Tui {
   getState: () => TuiState;
-  frame: () => string[];
   submit: (text: string) => void;
-  injectKey: (data: string) => void;
+  start: () => Promise<void>;
   stop: () => void;
 }
 
@@ -66,11 +67,12 @@ export function createTui(options: CreateTUIOptions): Tui {
   let stopped = false;
   const cwd = options.cwd ?? process.cwd();
   const branch = options.branch ?? detectBranch(cwd);
-  const cols = options.cols ?? DEFAULT_COLS;
-  const rows = options.rows ?? 30;
-  const renderOpts: RenderOptions = {
-    cols, rows, cwd, branch,
-    provider: options.provider, modelId: options.modelId, effort: options.effort,
+  const buildViewOpts: BuildViewOpts = {
+    cwd,
+    branch,
+    provider: options.provider ?? "",
+    modelId: options.modelId ?? "",
+    effort: options.effort ?? "",
   };
 
   const dispatch = (action: ReturnType<typeof Actions[keyof typeof Actions]>): void => {
@@ -78,8 +80,8 @@ export function createTui(options: CreateTUIOptions): Tui {
     state = reduce(state, action);
   };
 
-  const emitTransient = (text: string): void => dispatch(Actions.setTransientMessage(text, Date.now()));
-  const emitError = (text: string): void => dispatch(Actions.setErrorMessage(text, Date.now()));
+  const emitTransient = (text: string): void => dispatch(Actions.setTransientMessage(text));
+  const emitError = (text: string): void => dispatch(Actions.setErrorMessage(text));
 
   const handleSlashCommand = (text: string): boolean => {
     dispatch(Actions.clearTransientMessage());
@@ -133,77 +135,80 @@ export function createTui(options: CreateTUIOptions): Tui {
     dispatch(Actions.receiveEvent(env));
   };
 
-  options.bus.subscribe("system.team.loaded", onBusEvent);
-  options.bus.subscribe("system.team.interrupted", onBusEvent);
-  options.bus.subscribe("system.error", onBusEvent);
-  options.bus.subscribe("user.prompt", onBusEvent);
-  options.bus.subscribe("agent.turn.start", onBusEvent);
-  options.bus.subscribe("agent.idle", onBusEvent);
-  options.bus.subscribe("agent.stream.chunk", onBusEvent);
-  options.bus.subscribe("agent.stream.end", onBusEvent);
-  options.bus.subscribe("agent.tool.call", onBusEvent);
-  options.bus.subscribe("agent.tool.result", onBusEvent);
+  const subscriptions: Array<() => void> = [];
+  subscriptions.push(options.bus.subscribe("system.team.loaded", onBusEvent));
+  subscriptions.push(options.bus.subscribe("system.team.interrupted", onBusEvent));
+  subscriptions.push(options.bus.subscribe("system.error", onBusEvent));
+  subscriptions.push(options.bus.subscribe("user.prompt", onBusEvent));
+  subscriptions.push(options.bus.subscribe("agent.turn.start", onBusEvent));
+  subscriptions.push(options.bus.subscribe("agent.idle", onBusEvent));
+  subscriptions.push(options.bus.subscribe("agent.stream.chunk", onBusEvent));
+  subscriptions.push(options.bus.subscribe("agent.stream.end", onBusEvent));
+  subscriptions.push(options.bus.subscribe("agent.tool.call", onBusEvent));
+  subscriptions.push(options.bus.subscribe("agent.tool.result", onBusEvent));
 
-  let leftArrowCount = 0;
+  const start = (): Promise<void> => {
+    return new Promise<void>((resolve) => {
+      const terminal = options.terminal ?? new ProcessTerminal();
+      const tui = new TUI(terminal);
+      const { root } = buildView(state, buildViewOpts, tui);
+      tui.addChild(root);
 
-  const handleOneKey = (data: string): void => {
-    if (stopped) return;
-    if (data === "\x04") {
-      stopped = true;
-      return;
-    }
-    if (data === "\x1b[D") {
-      leftArrowCount += 1;
-      if (leftArrowCount >= 2) {
-        leftArrowCount = 0;
-        dispatch(Actions.toggleTeamRail());
-      }
-      return;
-    }
-    leftArrowCount = 0;
-    if (data === "\x1b[1;5A") {
-      dispatch(Actions.switchCycleAgent(-1));
-      return;
-    }
-    if (data === "\x1b[1;5B") {
-      dispatch(Actions.switchCycleAgent(1));
-      return;
-    }
-    if (data === "\x14") {
-      dispatch(Actions.toggleThinkingBlock());
-      return;
-    }
-    if (data === "\x0f") {
-      dispatch(Actions.toggleToolCallBlock());
-      return;
-    }
-  };
-
-  const injectKey = (data: string): void => {
-    if (stopped) return;
-    let i = 0;
-    while (i < data.length) {
-      if (data[i] === "\x1b" && i + 1 < data.length && data[i + 1] === "[") {
-        const match = data.slice(i).match(/^\x1b\[[0-9;]*[A-Za-z]/);
-        if (match !== null) {
-          handleOneKey(match[0]);
-          i += match[0].length;
-          continue;
+      tui.addInputListener((data) => {
+        if (matchesKey(data, "ctrl+left")) {
+          dispatch(Actions.toggleTeamRail());
+          tui.requestRender();
+          return { consume: true };
         }
-      }
-      handleOneKey(data[i]!);
-      i += 1;
-    }
+        if (matchesKey(data, "ctrl+up")) {
+          dispatch(Actions.switchCycleAgent(-1));
+          tui.requestRender();
+          return { consume: true };
+        }
+        if (matchesKey(data, "ctrl+down")) {
+          dispatch(Actions.switchCycleAgent(1));
+          tui.requestRender();
+          return { consume: true };
+        }
+        return undefined;
+      });
+
+      for (const unsub of subscriptions) unsub();
+      subscriptions.length = 0;
+      const wrappedOnBusEvent = (env: AnyEventEnvelope): void => {
+        onBusEvent(env);
+        tui.requestRender();
+      };
+      subscriptions.push(options.bus.subscribe("system.team.loaded", wrappedOnBusEvent));
+      subscriptions.push(options.bus.subscribe("system.team.interrupted", wrappedOnBusEvent));
+      subscriptions.push(options.bus.subscribe("system.error", wrappedOnBusEvent));
+      subscriptions.push(options.bus.subscribe("user.prompt", wrappedOnBusEvent));
+      subscriptions.push(options.bus.subscribe("agent.turn.start", wrappedOnBusEvent));
+      subscriptions.push(options.bus.subscribe("agent.idle", wrappedOnBusEvent));
+      subscriptions.push(options.bus.subscribe("agent.stream.chunk", wrappedOnBusEvent));
+      subscriptions.push(options.bus.subscribe("agent.stream.end", wrappedOnBusEvent));
+      subscriptions.push(options.bus.subscribe("agent.tool.call", wrappedOnBusEvent));
+      subscriptions.push(options.bus.subscribe("agent.tool.result", wrappedOnBusEvent));
+
+      tui.start();
+      const stopWatch = setInterval(() => {
+        if (stopped) {
+          tui.stop();
+          clearInterval(stopWatch);
+          for (const unsub of subscriptions) unsub();
+          resolve();
+        }
+      }, 100);
+    });
   };
 
   return {
     getState: (): TuiState => state,
-    frame: (): string[] => render(state, renderOpts, Date.now()).lines,
     submit: (text: string): void => handleSubmit(text),
-    injectKey,
     stop: (): void => {
       stopped = true;
     },
+    start,
   };
 }
 

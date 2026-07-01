@@ -48,7 +48,7 @@ function reduceTeamLoaded(state: TuiState, event: EventEnvelope<"system.team.loa
 function reduceSystemError(state: TuiState, event: EventEnvelope<"system.error">): TuiState {
   const stopReason = findRecentStopReason(state);
   const text = stopReason === null ? event.payload.error : `[stop: ${stopReason}] ${event.payload.error}`;
-  return { ...state, errorBanner: { text, raisedAt: Date.now() } };
+  return { ...state, errorBanner: { text } };
 }
 
 function findRecentStopReason(state: TuiState): string | null {
@@ -98,7 +98,7 @@ function reduceIdle(state: TuiState, event: EventEnvelope<"agent.idle">): TuiSta
   const existing = state.agents.get(agentId);
   if (existing === undefined) return state;
   const newAgents = new Map(state.agents);
-  newAgents.set(agentId, { ...existing, status: "idle", lastIdleAt: Date.now(), lastStopReason: event.payload });
+  newAgents.set(agentId, { ...existing, status: "idle", lastStopReason: event.payload });
   return { ...state, agents: newAgents };
 }
 
@@ -115,11 +115,11 @@ function reduceStreamChunk(state: TuiState, event: EventEnvelope<"agent.stream.c
   const blocks = [...existing.currentTurn.blocks];
   const last = blocks[blocks.length - 1];
   if (existing.currentTurn.streamId !== stream_id) {
-    blocks.push({ kind: block_type, text, expanded: false });
+    blocks.push({ kind: block_type, text });
   } else if (last !== undefined && last.kind === block_type) {
     blocks[blocks.length - 1] = { ...last, text: last.text + text };
   } else {
-    blocks.push({ kind: block_type, text, expanded: false });
+    blocks.push({ kind: block_type, text });
   }
   const newAgents = new Map(state.agents);
   newAgents.set(agentId, { ...existing, currentTurn: { ...existing.currentTurn, blocks, streamId: stream_id } });
@@ -143,7 +143,6 @@ function reduceToolCall(state: TuiState, event: EventEnvelope<"agent.tool.call">
     name,
     input,
     inputTruncated: input_truncated,
-    expanded: false,
   };
   const newAgents = new Map(state.agents);
   newAgents.set(agentId, { ...existing, currentTurn: { ...existing.currentTurn, cards: [...existing.currentTurn.cards, toolCallCard] } });
@@ -171,7 +170,6 @@ function reduceToolResult(state: TuiState, event: EventEnvelope<"agent.tool.resu
     outputTruncated: output_truncated,
     durationMs: duration_ms,
     error,
-    expanded: false,
   };
   cards[index] = toolResultCard;
   const newAgents = new Map(state.agents);
@@ -187,7 +185,6 @@ function emptyAgent(agentId: AgentId, teamId: string, agentKey: string, role: st
     role,
     isLeader,
     status: "idle",
-    lastIdleAt: 0,
     lastStopReason: null,
     model: null,
     history: [],
