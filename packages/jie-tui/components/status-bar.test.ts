@@ -1,5 +1,5 @@
 import { Loader, Text } from "@earendil-works/pi-tui";
-import { createTestTui } from "../test/test-support";
+import { createTestTui } from "../test";
 import {
   StatusBar,
   statusBarContextFromState,

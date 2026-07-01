@@ -1,7 +1,7 @@
 import { createTui, type CreateTUIOptions, type Tui } from "./tui";
 import { createEventManager, Events, type EventManager } from "@cuzfrog/jie-platform/event";
 import type { ArtifactStore } from "@cuzfrog/jie-platform/storage";
-import { createTestTuiWithTerminal } from "./test/test-support";
+import { createTestTuiWithTerminal } from "./test";
 
 function makeStubBus(): EventManager {
   return createEventManager();

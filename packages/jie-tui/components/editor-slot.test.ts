@@ -1,5 +1,5 @@
 import { EditorSlot, editorSlotFromCommands } from "./editor-slot";
-import { createTestTui } from "../test/test-support";
+import { createTestTui } from "../test";
 import type { SlashCommand } from "@earendil-works/pi-tui";
 
 const COMMANDS: SlashCommand[] = [
