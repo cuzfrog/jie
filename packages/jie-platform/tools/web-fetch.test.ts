@@ -1,5 +1,6 @@
 import { createWebFetchTool } from "./web-fetch";
 import { JiePlatformError } from "../types";
+import { makeEmptyContext } from "./_test-context";
 
 let server: ReturnType<typeof Bun.serve>;
 let baseUrl: string;
@@ -64,7 +65,7 @@ describe("web_fetch", () => {
     const tool = createWebFetchTool();
     let caught: unknown;
     try {
-      await tool.execute({ url: "file:///etc/passwd" }, {} as never);
+      await tool.execute({ url: "file:///etc/passwd" }, makeEmptyContext());
     } catch (error) {
       caught = error;
     }
@@ -74,14 +75,14 @@ describe("web_fetch", () => {
 
   test("follows redirect to /html", async () => {
     const tool = createWebFetchTool();
-    const result = await tool.execute({ url: `${baseUrl}/redirect` }, {} as never);
+    const result = await tool.execute({ url: `${baseUrl}/redirect` }, makeEmptyContext());
     expect(result.content).toContain("Hi");
     expect(result.content).not.toContain("x()");
   });
 
   test("parses text/html; strips script/style/nav/header/footer; decodes entities", async () => {
     const tool = createWebFetchTool();
-    const result = await tool.execute({ url: `${baseUrl}/html` }, {} as never);
+    const result = await tool.execute({ url: `${baseUrl}/html` }, makeEmptyContext());
     expect(result.content).toContain("Hi");
     expect(result.content).toContain("Para");
     expect(result.content).not.toContain("x()");
@@ -93,7 +94,7 @@ describe("web_fetch", () => {
 
   test("decodes HTML entities (Tom &amp; Jerry, &lt;3, &#x2603;)", async () => {
     const tool = createWebFetchTool();
-    const result = await tool.execute({ url: `${baseUrl}/entities` }, {} as never);
+    const result = await tool.execute({ url: `${baseUrl}/entities` }, makeEmptyContext());
     expect(result.content).toContain("Tom & Jerry");
     expect(result.content).toContain("\"cheese\"");
     expect(result.content).toContain("☃");
@@ -101,13 +102,13 @@ describe("web_fetch", () => {
 
   test("text/plain returned verbatim", async () => {
     const tool = createWebFetchTool();
-    const result = await tool.execute({ url: `${baseUrl}/plain` }, {} as never);
+    const result = await tool.execute({ url: `${baseUrl}/plain` }, makeEmptyContext());
     expect(result.content).toBe("plain text");
   });
 
   test("application/json returned verbatim", async () => {
     const tool = createWebFetchTool();
-    const result = await tool.execute({ url: `${baseUrl}/json` }, {} as never);
+    const result = await tool.execute({ url: `${baseUrl}/json` }, makeEmptyContext());
     expect(result.content).toBe('{"k":1}');
   });
 
@@ -115,7 +116,7 @@ describe("web_fetch", () => {
     const tool = createWebFetchTool();
     let caught: unknown;
     try {
-      await tool.execute({ url: `${baseUrl}/binary` }, {} as never);
+      await tool.execute({ url: `${baseUrl}/binary` }, makeEmptyContext());
     } catch (error) {
       caught = error;
     }
@@ -126,7 +127,7 @@ describe("web_fetch", () => {
 
   test("5 MiB cap: response > 5 MiB is truncated, truncated=true", async () => {
     const tool = createWebFetchTool();
-    const result = await tool.execute({ url: `${baseUrl}/huge` }, {} as never);
+    const result = await tool.execute({ url: `${baseUrl}/huge` }, makeEmptyContext());
     const details = result.details as { truncated: boolean; status: number };
     expect(details.truncated).toBe(true);
     expect(details.status).toBe(200);
@@ -136,7 +137,7 @@ describe("web_fetch", () => {
     const tool = createWebFetchTool();
     let caught: unknown;
     try {
-      await tool.execute({ url: `${baseUrl}/redirect-loop` }, {} as never);
+      await tool.execute({ url: `${baseUrl}/redirect-loop` }, makeEmptyContext());
     } catch (error) {
       caught = error;
     }
@@ -146,7 +147,7 @@ describe("web_fetch", () => {
 
   test("status: 200 in details; non-2xx returned with the body", async () => {
     const tool = createWebFetchTool();
-    const result = await tool.execute({ url: `${baseUrl}/plain` }, {} as never);
+    const result = await tool.execute({ url: `${baseUrl}/plain` }, makeEmptyContext());
     const details = result.details as { status: number; truncated: boolean };
     expect(details.status).toBe(200);
     expect(details.truncated).toBe(false);

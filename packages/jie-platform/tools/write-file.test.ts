@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createWriteFileTool } from "./write-file";
 import { JiePlatformError } from "../types";
+import { makeEmptyContext } from "./_test-context";
 
 describe("write_file", () => {
   let workspace: string;
@@ -26,7 +27,7 @@ describe("write_file", () => {
     const tool = createWriteFileTool({ workspaceRoot: workspace });
     const result = await tool.execute(
       { path: "a.txt", content: "hello" },
-      {} as never,
+      makeEmptyContext(),
     );
     expect(result.content).toBe("Successfully wrote 5 bytes to a.txt");
     expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("hello");
@@ -35,7 +36,7 @@ describe("write_file", () => {
   test("overwrites an existing file (idempotent)", async () => {
     writeFileSync(join(workspace, "a.txt"), "old");
     const tool = createWriteFileTool({ workspaceRoot: workspace });
-    await tool.execute({ path: "a.txt", content: "new" }, {} as never);
+    await tool.execute({ path: "a.txt", content: "new" }, makeEmptyContext());
     expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("new");
   });
 
@@ -43,7 +44,7 @@ describe("write_file", () => {
     const tool = createWriteFileTool({ workspaceRoot: workspace });
     await tool.execute(
       { path: "deep/nested/dir/a.txt", content: "x" },
-      {} as never,
+      makeEmptyContext(),
     );
     expect(existsSync(join(workspace, "deep/nested/dir/a.txt"))).toBe(true);
   });
@@ -53,7 +54,7 @@ describe("write_file", () => {
     const huge = "x".repeat(5 * 1024 * 1024 + 1);
     let caught: unknown;
     try {
-      await tool.execute({ path: "a.txt", content: huge }, {} as never);
+      await tool.execute({ path: "a.txt", content: huge }, makeEmptyContext());
     } catch (error) {
       caught = error;
     }
@@ -67,7 +68,7 @@ describe("write_file", () => {
     const max = "x".repeat(5 * 1024 * 1024);
     const result = await tool.execute(
       { path: "a.txt", content: max },
-      {} as never,
+      makeEmptyContext(),
     );
     expect(result.content).toBe(`Successfully wrote ${max.length} bytes to a.txt`);
   });
@@ -78,7 +79,7 @@ describe("write_file", () => {
     try {
       await tool.execute(
         { path: "/etc/cant-touch-this", content: "x" },
-        {} as never,
+        makeEmptyContext(),
       );
     } catch (error) {
       caught = error;
@@ -93,7 +94,7 @@ describe("write_file", () => {
     try {
       await tool.execute(
         { path: "subdir", content: "x" },
-        {} as never,
+        makeEmptyContext(),
       );
     } catch (error) {
       caught = error;
@@ -105,7 +106,7 @@ describe("write_file", () => {
     const tool = createWriteFileTool({ workspaceRoot: workspace });
     const result = await tool.execute(
       { path: "a.txt", content: "hello" },
-      {} as never,
+      makeEmptyContext(),
     );
     const details = result.details as {
       path: string;

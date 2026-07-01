@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createReadFileTool } from "./read-file";
 import { JiePlatformError } from "../types";
+import { makeEmptyContext } from "./_test-context";
 
 describe("read_file", () => {
   let workspace: string;
@@ -18,7 +19,7 @@ describe("read_file", () => {
   test("reads a small file", async () => {
     writeFileSync(join(workspace, "a.txt"), "hello\nworld\n");
     const tool = createReadFileTool({ workspaceRoot: workspace });
-    const result = await tool.execute({ path: "a.txt" }, {} as never);
+    const result = await tool.execute({ path: "a.txt" }, makeEmptyContext());
     expect(result.content).toBe("hello\nworld\n");
     expect(result.details).toEqual({ truncated: { content: false } });
   });
@@ -26,21 +27,21 @@ describe("read_file", () => {
   test("offset=0 is clamped to 1", async () => {
     writeFileSync(join(workspace, "a.txt"), "a\nb\nc\n");
     const tool = createReadFileTool({ workspaceRoot: workspace });
-    const result = await tool.execute({ path: "a.txt", offset: 0 }, {} as never);
+    const result = await tool.execute({ path: "a.txt", offset: 0 }, makeEmptyContext());
     expect(result.content).toBe("a\nb\nc\n");
   });
 
   test("offset=N reads from line N (1-indexed)", async () => {
     writeFileSync(join(workspace, "a.txt"), "a\nb\nc\nd\n");
     const tool = createReadFileTool({ workspaceRoot: workspace });
-    const result = await tool.execute({ path: "a.txt", offset: 2 }, {} as never);
+    const result = await tool.execute({ path: "a.txt", offset: 2 }, makeEmptyContext());
     expect(result.content).toBe("b\nc\nd\n");
   });
 
   test("limit=0 is treated as unset (default truncation applies)", async () => {
     writeFileSync(join(workspace, "a.txt"), "a\nb\nc\n");
     const tool = createReadFileTool({ workspaceRoot: workspace });
-    const result = await tool.execute({ path: "a.txt", limit: 0 }, {} as never);
+    const result = await tool.execute({ path: "a.txt", limit: 0 }, makeEmptyContext());
     expect(result.content).toBe("a\nb\nc\n");
   });
 
@@ -49,7 +50,7 @@ describe("read_file", () => {
     const tool = createReadFileTool({ workspaceRoot: workspace });
     const result = await tool.execute(
       { path: "a.txt", limit: 2 },
-      {} as never,
+      makeEmptyContext(),
     );
     expect(result.content).toBe("a\nb\n");
   });
@@ -57,7 +58,7 @@ describe("read_file", () => {
   test("offset beyond EOF returns empty content and truncated=false", async () => {
     writeFileSync(join(workspace, "a.txt"), "a\nb\n");
     const tool = createReadFileTool({ workspaceRoot: workspace });
-    const result = await tool.execute({ path: "a.txt", offset: 99 }, {} as never);
+    const result = await tool.execute({ path: "a.txt", offset: 99 }, makeEmptyContext());
     expect(result.content).toBe("");
     expect(result.details).toEqual({ truncated: { content: false } });
   });
@@ -65,7 +66,7 @@ describe("read_file", () => {
   test("UTF-8 BOM is preserved at offset=1", async () => {
     writeFileSync(join(workspace, "a.txt"), "\uFEFFhello\n");
     const tool = createReadFileTool({ workspaceRoot: workspace });
-    const result = await tool.execute({ path: "a.txt" }, {} as never);
+    const result = await tool.execute({ path: "a.txt" }, makeEmptyContext());
     expect(result.content.startsWith("\uFEFF")).toBe(true);
   });
 
@@ -75,7 +76,7 @@ describe("read_file", () => {
     );
     writeFileSync(join(workspace, "big.txt"), big);
     const tool = createReadFileTool({ workspaceRoot: workspace });
-    const result = await tool.execute({ path: "big.txt" }, {} as never);
+    const result = await tool.execute({ path: "big.txt" }, makeEmptyContext());
     expect(result.content).toContain("line-1");
     expect(result.content).toContain("line-2000");
     expect(result.content).not.toContain("line-2001");
@@ -88,7 +89,7 @@ describe("read_file", () => {
     const tool = createReadFileTool({ workspaceRoot: workspace });
     let caught: unknown;
     try {
-      await tool.execute({ path: "bad.bin" }, {} as never);
+      await tool.execute({ path: "bad.bin" }, makeEmptyContext());
     } catch (error) {
       caught = error;
     }
@@ -100,7 +101,7 @@ describe("read_file", () => {
     const tool = createReadFileTool({ workspaceRoot: workspace });
     let caught: unknown;
     try {
-      await tool.execute({ path: "/etc/passwd" }, {} as never);
+      await tool.execute({ path: "/etc/passwd" }, makeEmptyContext());
     } catch (error) {
       caught = error;
     }
@@ -111,7 +112,7 @@ describe("read_file", () => {
     const tool = createReadFileTool({ workspaceRoot: workspace });
     let caught: unknown;
     try {
-      await tool.execute({ path: "missing.txt" }, {} as never);
+      await tool.execute({ path: "missing.txt" }, makeEmptyContext());
     } catch (error) {
       caught = error;
     }
@@ -123,7 +124,7 @@ describe("read_file", () => {
     const tool = createReadFileTool({ workspaceRoot: workspace });
     let caught: unknown;
     try {
-      await tool.execute({ path: "subdir" }, {} as never);
+      await tool.execute({ path: "subdir" }, makeEmptyContext());
     } catch (error) {
       caught = error;
     }

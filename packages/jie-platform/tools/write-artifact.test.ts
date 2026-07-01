@@ -1,6 +1,7 @@
 import { createWriteArtifactTool } from "./write-artifact";
 import { createArtifactStore, createStorage } from "../storage";
 import { JiePlatformError } from "../types";
+import { makeEmptyContext } from "./_test-context";
 
 function makeStore() {
   const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
@@ -13,7 +14,7 @@ describe("write_artifact", () => {
     const tool = createWriteArtifactTool({ artifactStore: store });
     const result = await tool.execute(
       { key: "task/plan", content: "hello" },
-      {} as never,
+      makeEmptyContext(),
     );
     expect(result.content).toBe("Stored artifact at task/plan (5 chars)");
     const details = result.details as { key: string; created_at: string };
@@ -26,7 +27,7 @@ describe("write_artifact", () => {
     const tool = createWriteArtifactTool({ artifactStore: store });
     let caught: unknown;
     try {
-      await tool.execute({ key: "bad space", content: "x" }, {} as never);
+      await tool.execute({ key: "bad space", content: "x" }, makeEmptyContext());
     } catch (error) {
       caught = error;
     }
@@ -40,7 +41,7 @@ describe("write_artifact", () => {
     const huge = "x".repeat(5 * 1024 * 1024 + 1);
     let caught: unknown;
     try {
-      await tool.execute({ key: "k", content: huge }, {} as never);
+      await tool.execute({ key: "k", content: huge }, makeEmptyContext());
     } catch (error) {
       caught = error;
     }

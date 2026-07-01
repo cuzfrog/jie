@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createBashTool } from "./bash";
 import { JiePlatformError } from "../types";
+import { makeEmptyContext } from "./_test-context";
 
 describe("bash", () => {
   let workspace: string;
@@ -17,7 +18,7 @@ describe("bash", () => {
 
   test("runs a simple command in the workspace root", async () => {
     const tool = createBashTool({ workspaceRoot: workspace });
-    const result = await tool.execute({ command: "echo hello" }, {} as never);
+    const result = await tool.execute({ command: "echo hello" }, makeEmptyContext());
     expect(result.content).toContain("exit_code: 0");
     expect(result.content).toContain("--- stdout ---");
     expect(result.content).toContain("hello");
@@ -33,7 +34,7 @@ describe("bash", () => {
 
   test("non-zero exit code is reported in text, not a tool error", async () => {
     const tool = createBashTool({ workspaceRoot: workspace });
-    const result = await tool.execute({ command: "exit 7" }, {} as never);
+    const result = await tool.execute({ command: "exit 7" }, makeEmptyContext());
     expect(result.content).toContain("exit_code: 7");
     expect(result.content).toContain("(command failed)");
     const details = result.details as { exitCode: number };
@@ -44,7 +45,7 @@ describe("bash", () => {
     const tool = createBashTool({ workspaceRoot: workspace });
     const result = await tool.execute(
       { command: "echo to-out; echo to-err >&2" },
-      {} as never,
+      makeEmptyContext(),
     );
     expect(result.content).toContain("to-out");
     expect(result.content).toContain("to-err");
@@ -53,7 +54,7 @@ describe("bash", () => {
 
   test("stdout-only command: stderr section is omitted", async () => {
     const tool = createBashTool({ workspaceRoot: workspace });
-    const result = await tool.execute({ command: "echo only-out" }, {} as never);
+    const result = await tool.execute({ command: "echo only-out" }, makeEmptyContext());
     expect(result.content).toContain("only-out");
     expect(result.content).not.toContain("--- stderr ---");
   });
@@ -65,7 +66,7 @@ describe("bash", () => {
     const tool = createBashTool({ workspaceRoot: workspace });
     const result = await tool.execute(
       { command: "pwd; cat marker", workdir: "sub" },
-      {} as never,
+      makeEmptyContext(),
     );
     expect(result.content).toContain(sub);
     expect(result.content).toContain("x");
@@ -77,7 +78,7 @@ describe("bash", () => {
     try {
       await tool.execute(
         { command: "echo bad", workdir: "/tmp" },
-        {} as never,
+        makeEmptyContext(),
       );
     } catch (error) {
       caught = error;
@@ -90,7 +91,7 @@ describe("bash", () => {
     const tool = createBashTool({ workspaceRoot: workspace });
     const result = await tool.execute(
       { command: "if true; then echo yes; fi" },
-      {} as never,
+      makeEmptyContext(),
     );
     expect(result.content).toContain("yes");
   });
@@ -99,7 +100,7 @@ describe("bash", () => {
     const tool = createBashTool({ workspaceRoot: workspace });
     const result = await tool.execute(
       { command: "yes A | head -c 40000" },
-      {} as never,
+      makeEmptyContext(),
     );
     expect(result.content).toContain("[truncated to 32 KiB]");
     const details = result.details as { truncated: { stdout: boolean } };
@@ -108,7 +109,7 @@ describe("bash", () => {
 
   test("non-zero exit code from a `false` command has no stdout/stderr", async () => {
     const tool = createBashTool({ workspaceRoot: workspace });
-    const result = await tool.execute({ command: "false" }, {} as never);
+    const result = await tool.execute({ command: "false" }, makeEmptyContext());
     expect(result.content).toContain("exit_code: 1");
     expect(result.content).not.toContain("--- stdout ---");
     expect(result.content).not.toContain("--- stderr ---");
@@ -119,7 +120,7 @@ describe("bash", () => {
     const ac = new AbortController();
     const resultPromise = tool.execute(
       { command: "sleep 5" },
-      {} as never,
+      makeEmptyContext(),
       ac.signal,
     );
     setTimeout(() => ac.abort(), 50);

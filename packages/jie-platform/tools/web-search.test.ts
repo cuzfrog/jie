@@ -4,6 +4,7 @@ import {
   type WebSearchProvider,
 } from "./web-search";
 import { JiePlatformError } from "../types";
+import { makeEmptyContext } from "./_test-context";
 
 function stubProvider(results: { title: string; url: string; snippet: string }[]): WebSearchProvider {
   return { async search() { return results; } };
@@ -24,8 +25,8 @@ describe("web_search", () => {
         },
       },
     });
-    await tool.execute({ query: "x", maxResults: 0 }, {} as never);
-    await tool.execute({ query: "y", maxResults: -1 }, {} as never);
+    await tool.execute({ query: "x", maxResults: 0 }, makeEmptyContext());
+    await tool.execute({ query: "y", maxResults: -1 }, makeEmptyContext());
     expect(seen).toEqual([5, 5]);
   });
 
@@ -40,7 +41,7 @@ describe("web_search", () => {
       },
     });
     try {
-      await tool.execute({ query: "x", maxResults: 100 }, {} as never);
+      await tool.execute({ query: "x", maxResults: 100 }, makeEmptyContext());
     } catch {
     }
     expect(received).toBe(20);
@@ -50,7 +51,7 @@ describe("web_search", () => {
     const tool = createWebSearchTool({ provider: stubProvider([]) });
     let caught: unknown;
     try {
-      await tool.execute({ query: "x" }, {} as never);
+      await tool.execute({ query: "x" }, makeEmptyContext());
     } catch (error) {
       caught = error;
     }
@@ -65,7 +66,7 @@ describe("web_search", () => {
     const tool = createWebSearchTool({ provider: failingProvider("http_429") });
     let caught: unknown;
     try {
-      await tool.execute({ query: "x" }, {} as never);
+      await tool.execute({ query: "x" }, makeEmptyContext());
     } catch (error) {
       caught = error;
     }
@@ -80,7 +81,7 @@ describe("web_search", () => {
         { title: "Second", url: "https://b", snippet: "snip b" },
       ]),
     });
-    const result = await tool.execute({ query: "x" }, {} as never);
+    const result = await tool.execute({ query: "x" }, makeEmptyContext());
     expect(result.content).toContain("1. First");
     expect(result.content).toContain("https://a");
     expect(result.content).toContain("2. Second");
@@ -90,7 +91,7 @@ describe("web_search", () => {
     const tool = createWebSearchTool({
       provider: stubProvider([{ title: "t", url: "u", snippet: "s" }]),
     });
-    const result = await tool.execute({ query: "x" }, {} as never);
+    const result = await tool.execute({ query: "x" }, makeEmptyContext());
     expect(result.terminate).toBeUndefined();
   });
 });
