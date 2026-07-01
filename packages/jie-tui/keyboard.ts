@@ -2,12 +2,12 @@ import { Events, type EventManager } from "@cuzfrog/jie-platform/event";
 import { matchesKey, type KeyId } from "@earendil-works/pi-tui";
 import { Actions, type Action, type TuiState } from "./state";
 
-export interface Keybinding {
+interface Keybinding {
   readonly combo: KeyId;
   readonly build: () => Action;
 }
 
-export interface KeyHandlerResult {
+interface KeyHandlerResult {
   readonly action: Action;
   readonly consume: true;
 }
