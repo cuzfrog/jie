@@ -60,6 +60,29 @@ describe("reduceUserPrompt", () => {
   });
 });
 
+describe("reduceModelAssigned", () => {
+  test("populates focused agent's model", () => {
+    const state = reduce(loadedState(), Events.agentModelAssigned(AGENT_SENDER, "openai", "gpt-4", "high"));
+    expect(state.agents.get("my-team:general-1")?.model).toEqual({
+      provider: "openai",
+      id: "gpt-4",
+      effort: "high",
+    });
+  });
+
+  test("ignores events for a foreign team", () => {
+    const state = loadedState();
+    const foreign: AgentSender = { kind: "agent", identity: { teamId: "other-team", agentRole: "general", agentKey: "general-1" } };
+    const state2 = reduce(state, Events.agentModelAssigned(foreign, "anthropic", "claude", "low"));
+    expect(state2.agents.get("my-team:general-1")?.model).toBeNull();
+  });
+
+  test("ignores events before any team is loaded", () => {
+    const state = reduce(INITIAL_TUI_STATE, Events.agentModelAssigned(AGENT_SENDER, "openai", "gpt-4", "high"));
+    expect(state).toBe(INITIAL_TUI_STATE);
+  });
+});
+
 describe("reduceTurnStart", () => {
   test("sets focused agent status to busy", () => {
     const state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER));

@@ -1,11 +1,12 @@
 import { type EventEnvelope } from "@cuzfrog/jie-platform/event";
-import type { AgentId, AgentUiState, MessageCard, TuiState, MessageTurn } from "./state";
+import type { AgentId, AgentUiState, MessageCard, ModelReference, TuiState, MessageTurn } from "./state";
 import type { AnyEventEnvelope } from "./actions";
 
 export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
   if (event.type === "system.team.loaded") return reduceTeamLoaded(state, event);
   if (event.type === "system.error") return reduceSystemError(state, event);
   if (event.type === "user.prompt") return reduceUserPrompt(state, event);
+  if (event.type === "agent.model.assigned") return reduceModelAssigned(state, event);
   if (event.type === "agent.turn.start") return reduceTurnStart(state, event);
   if (event.type === "agent.idle") return reduceIdle(state, event);
   if (event.type === "agent.stream.chunk") return reduceStreamChunk(state, event);
@@ -73,6 +74,21 @@ function reduceUserPrompt(state: TuiState, event: EventEnvelope<"user.prompt">):
   }
   newAgents.set(agentId, { ...existing, currentTurn: freshTurn(event.payload.prompt) });
   return { ...state, agents: newAgents };
+}
+
+function reduceModelAssigned(state: TuiState, event: EventEnvelope<"agent.model.assigned">): TuiState {
+  if (state.teamId === null) return state;
+  if (event.sender.kind !== "agent") return state;
+  if (event.sender.identity.teamId !== state.teamId) return state;
+  const agentId = composeAgentId(event.sender.identity.teamId, event.sender.identity.agentKey);
+  const existing = state.agents.get(agentId);
+  if (existing === undefined) return state;
+  const model: ModelReference = {
+    provider: event.payload.provider,
+    id: event.payload.model,
+    effort: event.payload.effort,
+  };
+  return withAgent(state, agentId, { ...existing, model });
 }
 
 function reduceTurnStart(state: TuiState, event: EventEnvelope<"agent.turn.start">): TuiState {

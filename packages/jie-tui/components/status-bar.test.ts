@@ -11,9 +11,6 @@ function makeModel(overrides: Partial<StatusBarModel> = {}): StatusBarModel {
   return {
     cwd: "/home/cuz/workspace/jie",
     git: { branch: "main", dirty: false, ahead: 0, behind: 0 },
-    provider: "openai",
-    modelId: "gpt-4",
-    effort: "high",
     ...overrides,
   };
 }
@@ -24,6 +21,7 @@ function makeContext(overrides: Partial<StatusBarContext> = {}): StatusBarContex
     focusedAgentKey: "general-1",
     teamId: "default",
     showRail: false,
+    focusedModel: { provider: "openai", id: "gpt-4", effort: "high" },
     ...overrides,
   };
 }
@@ -93,20 +91,20 @@ describe("StatusBar", () => {
     expect(bar.render(120).join("\n")).toContain("ctrl+left close agents");
   });
 
-  test("model text shows em-dash when provider or modelId is empty", () => {
+  test("model text shows em-dash when focusedModel is null", () => {
     const { tui } = createTestTuiWithTerminal();
     const bar = new StatusBar(tui);
-    bar.setModel(makeModel({ provider: "", modelId: "" }), makeContext());
+    bar.setModel(makeModel(), makeContext({ focusedModel: null }));
     expect(bar.render(120).join("\n")).toContain("—");
   });
 
-  test("model text omits effort when empty", () => {
+  test("model text shows provider, model id, and effort", () => {
     const { tui } = createTestTuiWithTerminal();
     const bar = new StatusBar(tui);
-    bar.setModel(makeModel({ effort: "" }), makeContext());
+    bar.setModel(makeModel(), makeContext({ focusedModel: { provider: "openai", id: "gpt-4", effort: "high" } }));
     const flat = bar.render(120).join("\n");
     expect(flat).toContain("(openai) gpt-4");
-    expect(flat).not.toContain("|");
+    expect(flat).toContain("| high");
   });
 
   test("render delegates to container and does not mutate children", () => {
@@ -129,7 +127,7 @@ describe("statusBarContextFromState", () => {
       role: "general",
       isLeader: true,
       status: "busy",
-      model: null,
+      model: { provider: "openai", id: "gpt-4", effort: "high" },
       history: [],
       currentTurn: null,
       lastStopReason: null,
@@ -148,6 +146,7 @@ describe("statusBarContextFromState", () => {
       focusedAgentKey: "general-1",
       teamId: "default",
       showRail: true,
+      focusedModel: { provider: "openai", id: "gpt-4", effort: "high" },
     });
   });
 
@@ -166,6 +165,7 @@ describe("statusBarContextFromState", () => {
       focusedAgentKey: null,
       teamId: null,
       showRail: false,
+      focusedModel: null,
     });
   });
 

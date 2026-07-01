@@ -11,9 +11,6 @@ export interface CreateTUIOptions {
   cwd?: string;
   gitService?: GitService;
   rows?: number;
-  provider?: string;
-  modelId?: string;
-  effort?: string;
   terminal?: Terminal;
 }
 
@@ -41,9 +38,6 @@ export function createTui(options: CreateTUIOptions): Tui {
   const buildViewOpts: BuildViewOpts = {
     cwd,
     git: gitService.getSnapshot(),
-    provider: options.provider ?? "",
-    modelId: options.modelId ?? "",
-    effort: options.effort ?? "",
   };
 
   const dispatch = (action: ReturnType<typeof Actions[keyof typeof Actions]>, render: () => void = () => {}): void => {
@@ -105,6 +99,7 @@ export function createTui(options: CreateTUIOptions): Tui {
     "system.team.interrupted",
     "system.error",
     "user.prompt",
+    "agent.model.assigned",
     "agent.turn.start",
     "agent.idle",
     "agent.stream.chunk",

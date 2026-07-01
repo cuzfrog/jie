@@ -10,9 +10,6 @@ import { ConfirmExitOverlay } from "./confirm-exit-overlay";
 export interface BuildViewOpts {
   cwd: string;
   git: GitSnapshot;
-  provider: string;
-  modelId: string;
-  effort: string;
 }
 
 export interface BuildViewResult {

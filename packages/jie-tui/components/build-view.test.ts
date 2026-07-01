@@ -8,7 +8,7 @@ import { EditorSlot } from "./editor-slot";
 import { StatusBar } from "./status-bar";
 import { ConfirmExitOverlay } from "./confirm-exit-overlay";
 
-const OPTS = { cwd: "", git: { branch: "", dirty: false, ahead: 0, behind: 0 }, provider: "", modelId: "", effort: "" };
+const OPTS = { cwd: "", git: { branch: "", dirty: false, ahead: 0, behind: 0 } };
 
 describe("buildView", () => {
   test("returns a Container root", () => {

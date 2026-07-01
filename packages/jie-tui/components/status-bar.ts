@@ -1,13 +1,10 @@
 import { Container, Loader, Text, type TUI } from "@earendil-works/pi-tui";
-import type { AgentStatus, TuiState } from "../state";
+import type { AgentStatus, ModelReference, TuiState } from "../state";
 import type { GitSnapshot } from "../git-service";
 
 export interface StatusBarModel {
   cwd: string;
   git: GitSnapshot;
-  provider: string;
-  modelId: string;
-  effort: string;
 }
 
 export interface StatusBarContext {
@@ -15,6 +12,7 @@ export interface StatusBarContext {
   focusedAgentKey: string | null;
   teamId: string | null;
   showRail: boolean;
+  focusedModel: ModelReference | null;
 }
 
 export class StatusBar extends Container {
@@ -41,7 +39,7 @@ export class StatusBar extends Container {
     this.cwdLine.setText(`${leftSide}  ${rightSide}`);
 
     const hintText = this.hintText(context);
-    const modelText = this.modelText(model);
+    const modelText = this.modelText(context.focusedModel);
     this.hintLine.setText(`${hintText}  ${modelText}`);
 
     this.syncLoader(context.focusedStatus);
@@ -56,10 +54,9 @@ export class StatusBar extends Container {
     return "ctrl+left for agents";
   }
 
-  private modelText(model: StatusBarModel): string {
-    if (model.provider === "" || model.modelId === "") return "—";
-    const effort = model.effort === "" ? "" : ` | ${model.effort}`;
-    return `(${model.provider}) ${model.modelId}${effort}`;
+  private modelText(model: ModelReference | null): string {
+    if (model === null) return "—";
+    return `(${model.provider}) ${model.id} | ${model.effort}`;
   }
 
   private syncLoader(status: AgentStatus | null): void {
@@ -87,6 +84,7 @@ function statusBarContextFromState(state: TuiState): StatusBarContext {
     focusedAgentKey: focused?.agentKey ?? null,
     teamId: state.teamId,
     showRail: state.showTeamRailPanel,
+    focusedModel: focused?.model ?? null,
   };
 }
 
