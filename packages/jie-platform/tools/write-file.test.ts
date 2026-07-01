@@ -96,14 +96,10 @@ describe("write_file", () => {
       { path: "a.txt", content: "hello" },
       makeEmptyContext(),
     );
-    const details = result.details as {
-      path: string;
-      bytesWritten: number;
-      createdAt: string;
-    };
-    expect(details.path).toBe("a.txt");
-    expect(details.bytesWritten).toBe(5);
-    expect(typeof details.createdAt).toBe("string");
-    expect(new Date(details.createdAt).getTime()).toBeGreaterThan(0);
+    expect(result.details).toMatchObject({
+      path: "a.txt",
+      bytesWritten: 5,
+      createdAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    });
   });
 });
