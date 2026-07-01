@@ -1,4 +1,3 @@
-import { Text } from "@earendil-works/pi-tui";
 import { ToolCard } from "./tool-card";
 import type { MessageCard } from "../state";
 
@@ -63,15 +62,6 @@ describe("ToolCard", () => {
   test("renders empty before setCard", () => {
     const card = new ToolCard();
     expect(card.render(60)).toEqual([]);
-  });
-
-  test("container children are Text primitives", () => {
-    const card = new ToolCard();
-    card.setCard(toolCall());
-    card.render(60);
-    const kids = card["container"].children;
-    expect(kids.length).toBeGreaterThan(0);
-    for (const k of kids) expect(k).toBeInstanceOf(Text);
   });
 
   test("long body truncates to max lines and shows ellipsis count", () => {

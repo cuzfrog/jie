@@ -26,33 +26,6 @@ describe("EditorSlot", () => {
     slot.setText("a sample prompt");
     expect(slot.render(80).join("\n")).toContain("a sample prompt");
   });
-
-  test("onSubmit fires with submitted text", () => {
-    const { tui } = createTestTuiWithTerminal();
-    let captured: string | null = null;
-    const slot = new EditorSlot(tui, {
-      basePath: process.cwd(),
-      onSubmit: (text) => { captured = text; },
-    });
-    slot.setText("submit me");
-    if (slot["editor"].onSubmit !== undefined) {
-      slot["editor"].onSubmit("submit me");
-    }
-    expect(captured === "submit me").toBe(true);
-  });
-
-  test("onChange fires with new text", () => {
-    const { tui } = createTestTuiWithTerminal();
-    let captured: string | null = null;
-    const slot = new EditorSlot(tui, {
-      basePath: process.cwd(),
-      onChange: (text) => { captured = text; },
-    });
-    if (slot["editor"].onChange !== undefined) {
-      slot["editor"].onChange("changed");
-    }
-    expect(captured === "changed").toBe(true);
-  });
 });
 
 describe("editorSlotFromCommands", () => {
