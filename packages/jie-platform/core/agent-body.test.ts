@@ -5,7 +5,7 @@ import type {
 } from "@earendil-works/pi-agent-core";
 import { createAgentBody, type CreateAgentBodyOptions } from "./agent-body";
 import { JieAgentBody } from "./jie-agent-body";
-import { createEventManager, type EventManager } from "../event";
+import { createEventManager, type EventManager, type EventEnvelope, type EventType } from "../event";
 import {
   createArtifactStore,
   createMemoryManager,
@@ -39,12 +39,7 @@ function makeNoopTool(): Tool {
   };
 }
 
-interface AgentEventLike {
-  event_type: string;
-  payload: Record<string, unknown>;
-}
-
-function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: CreateAgentBodyOptions; events: EventManager; subscribeSubject: (topic: string, cb: (subject: string, payload: object) => void) => () => void } {
+function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: CreateAgentBodyOptions; events: EventManager; subscribeSubject: <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void) => () => void } {
   const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
   const events: EventManager = createEventManager();
   const artifactStore = createArtifactStore(storage);
@@ -68,8 +63,8 @@ function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: Crea
     model: { provider: "anthropic", id: "claude-sonnet-4" },
     ...overrides,
   };
-  const subscribeSubject = (topic: string, cb: (subject: string, payload: object) => void): (() => void) => {
-    return events.subscribe(topic, (env) => cb(topic, env));
+  const subscribeSubject = <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void): (() => void) => {
+    return events.subscribe(topic, (env) => cb(env));
   };
   return { opts, events, subscribeSubject };
 }
@@ -176,16 +171,16 @@ describe("createAgentBody — wiring", () => {
     createAgentBody({ ...opts, createAgent: cap.factory });
     const hook = cap.lastOpts()?.beforeToolCall;
     if (hook === undefined) throw new Error("beforeToolCall hook not provided");
-    const received: AgentEventLike[] = [];
-    subscribeSubject("agent.tool.call", (_s, p) => {
-      received.push(p as AgentEventLike);
+    const received: EventEnvelope<"agent.tool.call">[] = [];
+    subscribeSubject("agent.tool.call", (env) => {
+      received.push(env);
     });
     await hook({
       toolCall: { id: "c1", name: "bash" },
       args: { command: "ls" },
     } as never);
     expect(received).toHaveLength(1);
-    const payload = received[0]!.payload as { input: string; input_truncated: boolean };
+    const payload = received[0]!.payload;
     expect(typeof payload.input).toBe("string");
     expect(payload.input_truncated).toBe(false);
   });
@@ -196,15 +191,15 @@ describe("createAgentBody — wiring", () => {
     createAgentBody({ ...opts, createAgent: cap.factory });
     const hook = cap.lastOpts()?.beforeToolCall;
     if (hook === undefined) throw new Error("beforeToolCall hook not provided");
-    const received: AgentEventLike[] = [];
-    subscribeSubject("agent.tool.call", (_s, p) => {
-      received.push(p as AgentEventLike);
+    const received: EventEnvelope<"agent.tool.call">[] = [];
+    subscribeSubject("agent.tool.call", (env) => {
+      received.push(env);
     });
     await hook({
       toolCall: { id: "c1", name: "bash" },
       args: { command: "x".repeat(8000) },
     } as never);
-    const payload = received[0]!.payload as { input: string; input_truncated: boolean };
+    const payload = received[0]!.payload;
     expect(payload.input_truncated).toBe(true);
     expect(payload.input).toContain("chars truncated");
     expect(payload.input.length).toBeLessThan(8000);
