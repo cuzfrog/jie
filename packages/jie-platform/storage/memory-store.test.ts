@@ -87,8 +87,9 @@ describe("SqliteMemoryManager", () => {
     m.compact([1, 2], summaryMessage("sum"), "agent-1", "s1", "t1");
     const restored = await m.restore("agent-1", "s1", "t1");
     expect(restored).toHaveLength(2);
-    expect((restored[0] as { content: string }).content).toBe("c");
-    expect((restored[1] as { role: string }).role).toBe("compactionSummary");
+    const [first, second] = restored as Array<{ role: string; content: unknown }>;
+    expect(first.content).toBe("c");
+    expect(second.role).toBe("compactionSummary");
   });
 
   test("compact flips compacted=1 on the seq range", () => {
@@ -171,9 +172,8 @@ describe("SqliteMemoryManager", () => {
     const m = makeManager();
     m.persist(assistantMessage("hello"), "agent-1", "s1", "t1");
     const restored = await m.restore("agent-1", "s1", "t1");
-    expect((restored[0] as { content: Array<{ type: string; text: string }> }).content[0]?.text).toBe(
-      "hello",
-    );
+    const content = (restored[0] as { content: Array<{ type: string; text: string }> }).content;
+    expect(content[0]?.text).toBe("hello");
   });
 });
 
