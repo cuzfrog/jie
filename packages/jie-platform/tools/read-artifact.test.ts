@@ -14,14 +14,11 @@ describe("read_artifact", () => {
     const tool = createReadArtifactTool({ artifactStore: store });
     const result = await tool.execute({ key: "k" }, makeEmptyContext());
     expect(result.content).toBe("body");
-    const details = result.details as {
-      key: string;
-      content: string;
-      created_at: string;
-    };
-    expect(details.key).toBe("k");
-    expect(details.content).toBe("body");
-    expect(typeof details.created_at).toBe("string");
+    expect(result.details).toEqual({
+      key: "k",
+      content: "body",
+      created_at: expect.any(String),
+    });
   });
 
   test("miss: LLM content is 'Artifact not found: <key>'; details is null", async () => {
