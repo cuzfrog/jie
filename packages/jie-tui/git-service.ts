@@ -27,12 +27,12 @@ export function createGitService(options: CreateGitServiceOptions): GitService {
   };
 }
 
-export function readGitStatusViaSpawn(cwd: string): GitSnapshot {
+function readGitStatusViaSpawn(cwd: string): GitSnapshot {
   let branch = "";
   try {
-    const branchProc = Bun.spawnSync({ cmd: ["git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD"], stdout: "pipe", stderr: "pipe" });
-    if (branchProc.exitCode === 0) {
-      branch = new TextDecoder().decode(branchProc.stdout).trim();
+    const branchProcess = Bun.spawnSync({ cmd: ["git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD"], stdout: "pipe", stderr: "pipe" });
+    if (branchProcess.exitCode === 0) {
+      branch = new TextDecoder().decode(branchProcess.stdout).trim();
     }
   } catch {
     branch = "";
