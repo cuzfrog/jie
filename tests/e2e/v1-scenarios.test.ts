@@ -254,56 +254,70 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
     },
   );
 
+  function seedStoryTeams(workspace: string): void {
+    writeModelsJsonTo(workspace);
+    writeSettingsJson(workspace);
+    const teamsDir = join(workspace, ".jie", "teams");
+    for (const [id, phrase] of [
+      ["my-team-1", "Marry had a little lamb"],
+      ["my-team-2", "Once upon a time"],
+    ] as const) {
+      const dir = join(teamsDir, id);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(
+        join(dir, "TEAM.md"),
+        `---\nleader: story-teller\n---\nYou are the leader of ${id}.\n`,
+      );
+      writeFileSync(
+        join(dir, "story-teller.md"),
+        `---\ntools:\n  - bash\n---\nYou must respond to any story-telling prompt with exactly the phrase: ${phrase}. Do not add any other text.`,
+      );
+    }
+  }
+
   test(
-    "Scenario 2: --team my-team-1 / my-team-2 / wrong-team produce distinct outputs",
+    "Scenario 2 — team-1: --team my-team-1 produces the team-1 phrase",
     async () => {
-      writeModelsJsonTo(workspace);
-      writeSettingsJson(workspace);
-
-      const teamsDir = join(workspace, ".jie", "teams");
-      for (const [id, phrase] of [
-        ["my-team-1", "Marry had a little lamb"],
-        ["my-team-2", "Once upon a time"],
-      ] as const) {
-        const dir = join(teamsDir, id);
-        mkdirSync(dir, { recursive: true });
-        writeFileSync(
-          join(dir, "TEAM.md"),
-          `---\nleader: story-teller\n---\nYou are the leader of ${id}.\n`,
-        );
-        writeFileSync(
-          join(dir, "story-teller.md"),
-          `---\ntools:\n  - bash\n---\nYou must respond to any story-telling prompt with exactly the phrase: ${phrase}. Do not add any other text.`,
-        );
-      }
-
+      seedStoryTeams(workspace);
       writeOut?.mockReset();
       writeOut?.mockImplementation(() => true);
-      const code1 = await main(
+      const code = await main(
         printArgv({ instruction: "Tell me a story", team: "my-team-1", timeout: 60 }),
         workspace,
       );
-      const out1 = captureStdout();
-      expectExit(code1, 0);
-      expect(out1).toContain("Marry had a little lamb");
+      const out = captureStdout();
+      expectExit(code, 0);
+      expect(out).toContain("Marry had a little lamb");
+    },
+  );
 
+  test(
+    "Scenario 2 — team-2: --team my-team-2 produces the team-2 phrase",
+    async () => {
+      seedStoryTeams(workspace);
       writeOut?.mockReset();
       writeOut?.mockImplementation(() => true);
-      const code2 = await main(
+      const code = await main(
         printArgv({ instruction: "Tell me a story", team: "my-team-2", timeout: 60 }),
         workspace,
       );
-      const out2 = captureStdout();
-      expectExit(code2, 0);
-      expect(out2).toContain("Once upon a time");
+      const out = captureStdout();
+      expectExit(code, 0);
+      expect(out).toContain("Once upon a time");
+    },
+  );
 
+  test(
+    "Scenario 2 — wrong-team: --team wrong-team exits non-zero",
+    async () => {
+      seedStoryTeams(workspace);
       writeOut?.mockReset();
       writeOut?.mockImplementation(() => true);
-      const code3 = await main(
+      const code = await main(
         printArgv({ instruction: "Tell me a story", team: "wrong-team", timeout: 60 }),
         workspace,
       );
-      expectExit(code3, 1);
+      expectExit(code, 1);
     },
   );
 
