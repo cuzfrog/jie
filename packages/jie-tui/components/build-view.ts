@@ -1,5 +1,6 @@
 import { Container, Spacer, Text, type TUI } from "@earendil-works/pi-tui";
 import type { TuiState } from "../state";
+import type { GitSnapshot } from "../git-service";
 import { StatusBar } from "./status-bar";
 import { AgentsRail } from "./agents-rail";
 import { ChatPane, chatPaneFromAgent } from "./chat-pane";
@@ -8,7 +9,7 @@ import { ConfirmExitOverlay } from "./confirm-exit-overlay";
 
 export interface BuildViewOpts {
   cwd: string;
-  branch: string;
+  git: GitSnapshot;
   provider: string;
   modelId: string;
   effort: string;

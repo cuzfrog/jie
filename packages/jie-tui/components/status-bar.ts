@@ -1,9 +1,10 @@
 import { Container, Loader, Text, type TUI } from "@earendil-works/pi-tui";
 import type { AgentStatus, TuiState } from "../state";
+import type { GitSnapshot } from "../git-service";
 
 export interface StatusBarModel {
   cwd: string;
-  branch: string;
+  git: GitSnapshot;
   provider: string;
   modelId: string;
   effort: string;
@@ -33,7 +34,8 @@ export class StatusBar extends Container {
   }
 
   setModel(model: StatusBarModel, context: StatusBarContext): void {
-    const leftSide = model.branch === "" ? model.cwd : `${model.cwd} (${model.branch})`;
+    const branchPart = model.git.branch === "" ? "" : ` (${model.git.branch}${model.git.dirty ? "*" : ""})`;
+    const leftSide = `${model.cwd}${branchPart}`;
     const focusedKey = context.focusedAgentKey ?? "—";
     const rightSide = context.teamId === null ? `no-team:${focusedKey}` : `${context.teamId}:${focusedKey}`;
     this.cwdLine.setText(`${leftSide}  ${rightSide}`);

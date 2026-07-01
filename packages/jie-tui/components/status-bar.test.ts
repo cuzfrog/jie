@@ -10,7 +10,7 @@ import type { AgentUiState, TuiState } from "../state";
 function makeModel(overrides: Partial<StatusBarModel> = {}): StatusBarModel {
   return {
     cwd: "/home/cuz/workspace/jie",
-    branch: "main",
+    git: { branch: "main", dirty: false, ahead: 0, behind: 0 },
     provider: "openai",
     modelId: "gpt-4",
     effort: "high",

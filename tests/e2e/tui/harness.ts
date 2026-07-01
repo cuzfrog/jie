@@ -11,7 +11,6 @@ export const startTuiOn = (
     eventManager: bus,
     rows: 30,
     cwd: "/tmp",
-    branch: "main",
   };
   const tuiHandle: { current: Tui | null } = { current: null };
   withTTY(true, () => { tuiHandle.current = createTui(opts); });

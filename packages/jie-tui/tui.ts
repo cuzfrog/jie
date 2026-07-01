@@ -3,12 +3,13 @@ import { Events, type EventEnvelope, type EventManager, type EventType, type Sen
 import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduce } from "./state";
 import { runCommand } from "./commands";
 import { handleKeyInput } from "./keyboard";
+import { createGitService, type GitService } from "./git-service";
 import { buildView, type BuildViewOpts } from "./components";
 
 export interface CreateTUIOptions {
   eventManager: EventManager;
   cwd?: string;
-  branch?: string;
+  gitService?: GitService;
   rows?: number;
   provider?: string;
   modelId?: string;
@@ -36,10 +37,10 @@ export function createTui(options: CreateTUIOptions): Tui {
   let state: TuiState = INITIAL_TUI_STATE;
   let stopped = false;
   const cwd = options.cwd ?? process.cwd();
-  const branch = options.branch ?? detectBranch(cwd);
+  const gitService: GitService = options.gitService ?? createGitService({ cwd });
   const buildViewOpts: BuildViewOpts = {
     cwd,
-    branch,
+    git: gitService.getSnapshot(),
     provider: options.provider ?? "",
     modelId: options.modelId ?? "",
     effort: options.effort ?? "",
@@ -175,16 +176,6 @@ export function createTui(options: CreateTUIOptions): Tui {
     },
     start,
   };
-}
-
-function detectBranch(cwd: string): string {
-  try {
-    const spawn = Bun.spawnSync({ cmd: ["git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD"], stdout: "pipe", stderr: "pipe" });
-    if (spawn.exitCode !== 0) return "";
-    return new TextDecoder().decode(spawn.stdout).trim();
-  } catch {
-    return "";
-  }
 }
 
 function isUtf8(): boolean {
