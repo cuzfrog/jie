@@ -1,4 +1,5 @@
-import { Agent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
+import { Agent, type AgentMessage, type AgentTool, type ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { AgentSoul } from "../team";
 import type { ExecutionContext, ToolRegistry } from "../tools";
@@ -18,7 +19,7 @@ export interface CreateAgentBodyOptions {
   sessionId: string;
   toolRegistry: ToolRegistry;
   getApiKey: (provider: string) => Promise<string | undefined> | string | undefined;
-  model: unknown;
+  model: Model<Api> | undefined;
   createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
 }
 
@@ -83,10 +84,10 @@ export function createAgentBody(options: CreateAgentBodyOptions): AgentBody {
   });
   agent.state.systemPrompt = options.soul.systemPrompt;
   if (options.model !== undefined) {
-    agent.state.model = options.model as never;
-    const assigned = readModelAssignment(options.model);
-    if (assigned !== null) {
-      options.eventManager.publish(Events.agentModelAssigned(sender, assigned.provider, assigned.modelId, assigned.effort));
+    agent.state.model = options.model;
+    const effort = agentEffort(agent.state.thinkingLevel);
+    if (effort !== null) {
+      options.eventManager.publish(Events.agentModelAssigned(sender, options.model.provider, options.model.id, effort));
     }
   }
   agent.state.tools = adaptedTools;
@@ -144,13 +145,11 @@ function extractToolError(context: {
   return text.length > 0 ? text : "tool error";
 }
 
-function readModelAssignment(model: unknown): { provider: string; modelId: string; effort: "low" | "medium" | "high" | "max" } | null {
-  if (model === null || typeof model !== "object") return null;
-  const m = model as { provider?: unknown; id?: unknown; effort?: unknown };
-  if (typeof m.provider !== "string" || typeof m.id !== "string") return null;
-  const effort = m.effort;
-  if (effort !== "low" && effort !== "medium" && effort !== "high" && effort !== "max") return null;
-  return { provider: m.provider, modelId: m.id, effort };
+function agentEffort(thinkingLevel: ThinkingLevel): "low" | "medium" | "high" | "max" | null {
+  if (thinkingLevel === "low" || thinkingLevel === "medium" || thinkingLevel === "high" || thinkingLevel === "xhigh") {
+    return thinkingLevel === "xhigh" ? "max" : thinkingLevel;
+  }
+  return null;
 }
 
 interface JieToolResult {
