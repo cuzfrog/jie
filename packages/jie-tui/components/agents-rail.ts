@@ -75,8 +75,8 @@ function buildSelectItems(items: ReadonlyArray<RailItem>): SelectItem[] {
     const leaderMarker = item.isLeader ? LEADER_GLYPH : NON_LEADER_GLYPH;
     return {
       value: item.agentId,
-      label: `${glyph}${leaderMarker}${item.agentKey}`,
-      description: item.role,
+      label: `${glyph}${leaderMarker}${item.role}`,
+      description: item.agentKey,
     };
   });
 }

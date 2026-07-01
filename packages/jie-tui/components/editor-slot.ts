@@ -18,10 +18,12 @@ export interface EditorSlotOptions {
 
 export class EditorSlot extends Container {
   private readonly editor: Editor;
+  private readonly placeholderText: string;
 
   constructor(tui: TUI, opts: EditorSlotOptions) {
     super();
     this.editor = new Editor(tui, editorTheme);
+    this.placeholderText = "type a prompt...";
     const provider = new CombinedAutocompleteProvider(
       opts.commands === undefined ? undefined : [...opts.commands],
       opts.basePath,
@@ -41,7 +43,11 @@ export class EditorSlot extends Container {
   }
 
   render(width: number): string[] {
-    return this.editor.render(width);
+    const lines = this.editor.render(width);
+    if (this.editor.getText() === "" && lines.length > 0) {
+      return [this.placeholderText, ...lines.slice(1)];
+    }
+    return lines;
   }
 
   invalidate(): void {

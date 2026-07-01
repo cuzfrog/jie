@@ -40,7 +40,7 @@ export class StatusBar extends Container {
 
     const hintText = this.hintText(context);
     const modelText = this.modelText(context.focusedModel);
-    this.hintLine.setText(`${hintText}  ${modelText}`);
+    this.hintLine.setText(`0%/200k  ${hintText}  ${modelText}`);
 
     this.syncLoader(context.focusedStatus);
   }

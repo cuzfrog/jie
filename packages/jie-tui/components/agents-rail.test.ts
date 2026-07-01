@@ -81,10 +81,10 @@ describe("buildAgentSelectItems", () => {
       { agentId: AGENT_ID_2, agentKey: "researcher-1", role: "researcher", isLeader: false, status: "idle" },
     ];
     const out = _buildSelectItems(items);
-    expect(out[0].label).toBe("● ★ general-1");
-    expect(out[0].description).toBe("general");
+    expect(out[0].label).toBe("● ★ general");
+    expect(out[0].description).toBe("general-1");
     expect(out[0].value).toBe(AGENT_ID_1);
-    expect(out[1].label).toBe("○   researcher-1");
+    expect(out[1].label).toBe("○   researcher");
   });
 });
 
@@ -100,8 +100,8 @@ describe("AgentsRail", () => {
     );
     const lines = rail.render(40);
     const flat = lines.join("\n");
-    expect(flat).toContain("general-1");
-    expect(flat).toContain("researcher-1");
+    expect(flat).toContain("general");
+    expect(flat).toContain("researcher");
     expect(flat).toContain("●");
     expect(flat).toContain("○");
   });
@@ -160,7 +160,7 @@ describe("agentsRailFromState", () => {
     const rail = _agentsRailFromState(state);
     expect(rail.getSelectedAgentId()).toBe(AGENT_ID_2);
     const lines = rail.render(40).join("\n");
-    expect(lines).toContain("general-1");
-    expect(lines).toContain("researcher-1");
+    expect(lines).toContain("general");
+    expect(lines).toContain("researcher");
   });
 });
