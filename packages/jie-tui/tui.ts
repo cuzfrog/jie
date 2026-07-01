@@ -1,6 +1,7 @@
 import { ProcessTerminal, TUI, type Terminal } from "@earendil-works/pi-tui";
 import { Events, type EventEnvelope, type EventManager, type EventType, type Sender } from "@cuzfrog/jie-platform/event";
 import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduce } from "./state";
+import { runCommand } from "./commands";
 import { handleKeyInput } from "./keyboard";
 import { buildView, type BuildViewOpts } from "./components";
 
@@ -32,29 +33,6 @@ export function createTui(options: CreateTUIOptions): Tui {
     throw new Error("TUI requires a UTF-8 locale; set LANG=en_US.UTF-8");
   }
 
-  const replyForSlashCommand = (text: string): string | null => {
-    const parts = text.split(/\s+/);
-    const command = parts[0]!;
-    switch (command) {
-      case "/help":
-        return "type a prompt...  /clear /help /exit /team /model /login /logout";
-      case "/login":
-        return "/login: provider picker not wired in v0.2.0 MVP. Use `jie login --provider <id> --api-key <key>` then restart.";
-      case "/logout":
-        return "/logout: not wired in v0.2.0 MVP. Use `jie logout [<provider>].";
-      case "/model":
-        return "/model: not wired in v0.2.0 MVP. Use `jie model <provider>/<modelId>`.";
-      case "/team": {
-        const argument = parts[1];
-        if (argument === undefined) return "/team <id>: picker not wired in v0.2.0 MVP. Use `jie team <id>` then restart.";
-        if (argument === "--unset") return "/team --unset: not wired in v0.2.0 MVP. Use `jie team --unset`.";
-        return teamNotInstalledReply(argument);
-      }
-      default:
-        return null;
-    }
-  };
-
   let state: TuiState = INITIAL_TUI_STATE;
   let stopped = false;
   const cwd = options.cwd ?? process.cwd();
@@ -76,25 +54,23 @@ export function createTui(options: CreateTUIOptions): Tui {
   const emitTransient = (text: string): void => dispatch(Actions.setTransientMessage(text));
   const emitError = (text: string): void => dispatch(Actions.setErrorMessage(text));
 
-  const handleSlashCommand = (text: string): boolean => {
+  const handleSlashCommand = (text: string): void => {
     dispatch(Actions.clearTransientMessage());
-    const parts = text.split(/\s+/);
-    const command = parts[0]!;
-    if (command === "/clear") {
-      dispatch(Actions.clearTuiState());
-      return true;
+    const outcome = runCommand(text);
+    switch (outcome.kind) {
+      case "clearState":
+        dispatch(Actions.clearTuiState());
+        return;
+      case "stop":
+        stopped = true;
+        return;
+      case "reply":
+        emitTransient(outcome.text);
+        return;
+      case "error":
+        emitError(outcome.text);
+        return;
     }
-    if (command === "/exit") {
-      stopped = true;
-      return true;
-    }
-    const reply = replyForSlashCommand(text);
-    if (reply === null) {
-      emitError(`unknown slash command: ${command}`);
-      return true;
-    }
-    emitTransient(reply);
-    return true;
   };
 
   const publishPrompt = (text: string): void => {
@@ -213,8 +189,4 @@ function detectBranch(cwd: string): string {
 
 function isUtf8(): boolean {
   return /utf-?8/i.test(process.env.LANG ?? process.env.LC_ALL ?? "");
-}
-
-function teamNotInstalledReply(argument: string): string {
-  return `team '${argument}' is not installed; checked .jie/teams/${argument}/ and ~/.jie/teams/${argument}/`;
 }
