@@ -14,6 +14,35 @@ import { createToolRegistry, type Tool, type ToolResult } from "../tools";
 import type { AgentSoul } from "../team";
 import { Type } from "typebox";
 
+function makeAssistantMessage(overrides: Partial<AssistantMessage> = {}): AssistantMessage {
+  return {
+    role: "assistant",
+    content: [],
+    api: "anthropic-messages",
+    provider: "anthropic",
+    model: "claude-sonnet-4",
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason: "stop",
+    timestamp: 0,
+    ...overrides,
+  };
+}
+
+function makeAgentContext(overrides: Partial<{ systemPrompt: string; messages: AgentMessage[] }> = {}): { systemPrompt: string; messages: AgentMessage[] } {
+  return {
+    systemPrompt: "",
+    messages: [],
+    ...overrides,
+  };
+}
+
 function makeSoul(): AgentSoul {
   return {
     role: "general",
@@ -282,7 +311,7 @@ describe("AgentBody — pi-agent event bridging", () => {
       throw new Error("beforeToolCall hook not captured");
     }
     const ctx: BeforeToolCallContext = {
-      assistantMessage: { role: "assistant", content: [] },
+      assistantMessage: makeAssistantMessage(),
       toolCall: {
         type: "toolCall",
         id: "call_x",
@@ -290,7 +319,7 @@ describe("AgentBody — pi-agent event bridging", () => {
         arguments: { command: "ls" },
       },
       args: { command: "ls" },
-      context: {},
+      context: makeAgentContext(),
     };
     await hook(ctx);
     expect(calls).toHaveLength(1);
@@ -326,7 +355,7 @@ describe("AgentBody — pi-agent event bridging", () => {
       throw new Error("afterToolCall hook not captured");
     }
     const ctx: AfterToolCallContext = {
-      assistantMessage: { role: "assistant", content: [] },
+      assistantMessage: makeAssistantMessage(),
       toolCall: {
         type: "toolCall",
         id: "call_r",
@@ -334,7 +363,7 @@ describe("AgentBody — pi-agent event bridging", () => {
         arguments: {},
       },
       args: {},
-      context: {},
+      context: makeAgentContext(),
       result: {
         content: [{ type: "text", text: "hello" }],
         details: { foo: 1 },
@@ -364,14 +393,14 @@ describe("AgentBody — pi-agent event bridging", () => {
     const hook = captured?.afterToolCall;
     if (hook === undefined) throw new Error("afterToolCall hook not captured");
     const ctx: AfterToolCallContext = {
-      assistantMessage: { role: "assistant", content: [] },
+      assistantMessage: makeAssistantMessage(),
       toolCall: { type: "toolCall", id: "call_m", name: "noop", arguments: {} },
       args: {},
-      context: {},
+      context: makeAgentContext(),
       result: {
         content: [
           { type: "text", text: "a" },
-          { type: "image", data: "x" },
+          { type: "image", data: "x", mimeType: "image/png" },
         ],
         details: { ok: true },
         terminate: true,
@@ -383,7 +412,7 @@ describe("AgentBody — pi-agent event bridging", () => {
     expect(JSON.parse(env.payload.output!)).toEqual({
       content: [
         { type: "text", text: "a" },
-        { type: "image", data: "x" },
+        { type: "image", data: "x", mimeType: "image/png" },
       ],
       details: { ok: true },
       terminate: true,
@@ -402,10 +431,10 @@ describe("AgentBody — pi-agent event bridging", () => {
     const hook = captured?.afterToolCall;
     if (hook === undefined) throw new Error("afterToolCall hook not captured");
     const ctx: AfterToolCallContext = {
-      assistantMessage: { role: "assistant", content: [] },
+      assistantMessage: makeAssistantMessage(),
       toolCall: { type: "toolCall", id: "call_e", name: "noop", arguments: {} },
       args: {},
-      context: {},
+      context: makeAgentContext(),
       result: {
         content: [{ type: "text", text: "boom" }],
         details: {},

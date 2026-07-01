@@ -173,8 +173,8 @@ function writeSettingsJson(workspace: string): void {
 describe("v1 user-scenarios — real LLM end-to-end", () => {
   let workspace: string;
   let prevHome: string | undefined;
-  let writeOut: ReturnType<typeof vi.spyOn> | undefined;
-  let writeErr: ReturnType<typeof vi.spyOn> | undefined;
+  let writeOut: ReturnType<typeof vi.spyOn<typeof process.stdout, "write">> | undefined;
+  let writeErr: ReturnType<typeof vi.spyOn<typeof console, "error">> | undefined;
 
   beforeAll(async () => {
     await assertLlmReachable();

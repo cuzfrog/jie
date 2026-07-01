@@ -104,9 +104,7 @@ describe("web_fetch", () => {
 
   test("redirect loop (>= 20) surfaces redirect_exhausted or final non-html error", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
-    fetchSpy.mockImplementationOnce(() => {
-      throw new Error("redirect loop exceeded");
-    });
+    fetchSpy.mockRejectedValueOnce(new Error("redirect loop exceeded"));
     const tool = createWebFetchTool();
     await expect(
       tool.execute({ url: "https://example.test/redirect-loop" }, makeEmptyContext()),

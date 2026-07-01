@@ -1,5 +1,5 @@
 import { ChatPane, chatPaneFromAgent } from "./chat-pane";
-import type { AgentUiState } from "../state";
+import type { AgentUiState, MessageTurn } from "../state";
 
 const AGENT_ID = "default:general-1" as const;
 
@@ -29,7 +29,7 @@ describe("ChatPane", () => {
     expect(pane.render(60)).toEqual([]);
   });
 
-  test.each([
+  test.each<{ name: string; history: MessageTurn[]; expected: string }>([
     {
       name: "the user prompt with a chevron prefix",
       history: [{ userPrompt: "Tell me a joke", cards: [], blocks: [], streamId: null }],

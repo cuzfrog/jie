@@ -4,7 +4,7 @@ import {
   createArtifactStore,
   createStorage,
 } from "../storage";
-import { createToolRegistry } from "./tool-registry";
+import { createToolRegistry, type ToolRegistry } from "./tool-registry";
 import type { Tool, ToolResult } from "./types";
 
 function makeTool(name: string): Tool {
