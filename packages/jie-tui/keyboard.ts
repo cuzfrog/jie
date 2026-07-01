@@ -108,7 +108,6 @@ export function createKeyboardHandler(deps: KeyboardHandlerDeps, opts: KeyboardH
     const hit = handleKeyInput(data, bindings);
     if (hit === undefined) return undefined;
     deps.dispatch(hit.action);
-    deps.render();
     return { consume: true };
   };
 

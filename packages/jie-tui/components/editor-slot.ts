@@ -50,13 +50,13 @@ export class EditorSlot extends Container {
 
   render(width: number): string[] {
     const lines = this.editor.render(width);
-    const empty = this.editor.getText() === "" && lines.length > 0;
-    const head = empty ? this.placeholderText : (lines[0] ?? "");
-    const tail = empty ? lines.slice(1) : lines.slice(1);
-    if (this.queueIndicator === null) {
-      return [head, ...tail];
-    }
-    return [head, this.queueIndicator, ...tail];
+    const isEmpty = this.editor.getText() === "";
+    const indicator: string[] = this.queueIndicator === null ? [] : [this.queueIndicator];
+    if (!isEmpty) return [...indicator, ...lines];
+    const firstLine = lines[0] ?? "";
+    const rest = lines.slice(1);
+    const body = firstLine === "" ? rest : [firstLine, ...rest];
+    return [...indicator, this.placeholderText, ...body];
   }
 
   invalidate(): void {

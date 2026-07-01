@@ -3,6 +3,8 @@ import type { AuthStore, Settings, SettingsStore, Scope } from "@cuzfrog/jie-pla
 import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
 import { Actions, type Action, type TuiState } from "./state";
 
+const KNOWN_PROVIDERS: ReadonlySet<string> = new Set<string>(getProviders());
+
 export type CommandOutcome =
   | { readonly kind: "reply"; readonly text: string }
   | { readonly kind: "error"; readonly text: string }
@@ -27,88 +29,6 @@ export interface CommandHandlerDeps {
 
 export interface TuiCommandHandler {
   handle: (text: string) => void;
-}
-
-const HELP_TEXT = "type a prompt...  /clear /help /exit /team /model /login /logout";
-
-const helpCommand: SlashCommand = {
-  name: "help",
-  run: () => ({ kind: "reply", text: HELP_TEXT }),
-};
-
-const clearCommand: SlashCommand = {
-  name: "clear",
-  run: () => ({ kind: "clearState" }),
-};
-
-const exitCommand: SlashCommand = {
-  name: "exit",
-  run: () => ({ kind: "stop" }),
-};
-
-const teamCommand: SlashCommand = {
-  name: "team",
-  run: (args) => {
-    const argument = args[0];
-    if (argument === undefined) {
-      return { kind: "reply", text: "/team <id>: picker not wired in v0.2.0 MVP. Use `jie team <id>` then restart." };
-    }
-    if (argument === "--unset") {
-      return { kind: "reply", text: "/team --unset: not wired in v0.2.0 MVP. Use `jie team --unset`." };
-    }
-    return {
-      kind: "reply",
-      text: `team '${argument}' is not installed; checked .jie/teams/${argument}/ and ~/.jie/teams/${argument}/`,
-    };
-  },
-};
-
-const loginCommand: SlashCommand = {
-  name: "login",
-  run: () => ({
-    kind: "reply",
-    text: "/login: provider picker not wired in v0.2.0 MVP. Use `jie login --provider <id> --api-key <key>` then restart.",
-  }),
-};
-
-const logoutCommand: SlashCommand = {
-  name: "logout",
-  run: () => ({
-    kind: "reply",
-    text: "/logout: not wired in v0.2.0 MVP. Use `jie logout [<provider>].",
-  }),
-};
-
-const modelCommand: SlashCommand = {
-  name: "model",
-  run: () => ({
-    kind: "reply",
-    text: "/model: not wired in v0.2.0 MVP. Use `jie model <provider>/<modelId>`.",
-  }),
-};
-
-const COMMANDS: ReadonlyMap<string, SlashCommand> = new Map<string, SlashCommand>([
-  [helpCommand.name, helpCommand],
-  [clearCommand.name, clearCommand],
-  [exitCommand.name, exitCommand],
-  [teamCommand.name, teamCommand],
-  [loginCommand.name, loginCommand],
-  [logoutCommand.name, logoutCommand],
-  [modelCommand.name, modelCommand],
-]);
-
-const UNKNOWN_REPLY = (name: string): CommandOutcome => ({
-  kind: "error",
-  text: `unknown slash command: ${name}`,
-});
-
-export function runCommand(input: string): CommandOutcome {
-  const parts = input.split(/\s+/);
-  const rawName = parts[0]!;
-  const name = rawName.startsWith("/") ? rawName.slice(1) : rawName;
-  const slashCommand = COMMANDS.get(name);
-  if (slashCommand === undefined) return UNKNOWN_REPLY(rawName);
-  return slashCommand.run(parts.slice(1));
 }
 
 export function createTuiCommandHandler(deps: CommandHandlerDeps): TuiCommandHandler {
@@ -146,20 +66,74 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): TuiCommandHan
   return { handle };
 }
 
-function tryDiskWrite(
-  name: string,
-  args: ReadonlyArray<string>,
-  deps: CommandHandlerDeps,
-): { kind: "reply"; text: string } | { kind: "error"; text: string } | null {
-  if (name === "login") {
+export function runCommand(input: string): CommandOutcome {
+  const parts = input.split(/\s+/);
+  const rawName = parts[0]!;
+  const name = rawName.startsWith("/") ? rawName.slice(1) : rawName;
+  const slashCommand = COMMANDS.get(name);
+  if (slashCommand === undefined) return UNKNOWN_REPLY(rawName);
+  return slashCommand.run(parts.slice(1));
+}
+
+const HELP_TEXT = "type a prompt...  /clear /help /exit /team /model /login /logout";
+
+const helpCommand: SlashCommand = {
+  name: "help",
+  run: () => ({ kind: "reply", text: HELP_TEXT }),
+};
+
+const clearCommand: SlashCommand = {
+  name: "clear",
+  run: () => ({ kind: "clearState" }),
+};
+
+const exitCommand: SlashCommand = {
+  name: "exit",
+  run: () => ({ kind: "stop" }),
+};
+
+const teamCommand: SlashCommand = {
+  name: "team",
+  run: (args) => {
+    const argument = args[0];
+    if (argument === undefined) {
+      return { kind: "reply", text: "/team <id>: pass a team id" };
+    }
+    if (argument === "--unset") {
+      return { kind: "reply", text: "/team --unset" };
+    }
+    return {
+      kind: "reply",
+      text: `team '${argument}' is not installed; checked .jie/teams/${argument}/ and ~/.jie/teams/${argument}/`,
+    };
+  },
+};
+
+const COMMANDS: ReadonlyMap<string, SlashCommand> = new Map<string, SlashCommand>([
+  [helpCommand.name, helpCommand],
+  [clearCommand.name, clearCommand],
+  [exitCommand.name, exitCommand],
+  [teamCommand.name, teamCommand],
+]);
+
+const UNKNOWN_REPLY = (name: string): CommandOutcome => ({
+  kind: "error",
+  text: `unknown slash command: ${name}`,
+});
+
+type InterceptResult = { kind: "reply"; text: string } | { kind: "error"; text: string } | null;
+type InterceptFn = (args: ReadonlyArray<string>, deps: CommandHandlerDeps) => InterceptResult;
+
+const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn>([
+  ["login", (args, deps) => {
     if (deps.authStore === undefined) return null;
     if (args.length !== 2) return { kind: "error", text: "/login <provider> <apiKey>" };
     const [provider, apiKey] = args;
     if (provider === undefined || apiKey === undefined) return { kind: "error", text: "/login <provider> <apiKey>" };
     deps.authStore.write(deps.authStore.setProvider(deps.authStore.load(), provider, apiKey));
     return { kind: "reply", text: `logged in to ${provider}` };
-  }
-  if (name === "logout") {
+  }],
+  ["logout", (args, deps) => {
     if (deps.authStore === undefined) return null;
     if (args.length === 0) {
       deps.authStore.write(deps.authStore.clear());
@@ -168,8 +142,8 @@ function tryDiskWrite(
     const provider = args[0]!;
     deps.authStore.write(deps.authStore.removeProvider(deps.authStore.load(), provider));
     return { kind: "reply", text: `logged out of ${provider}` };
-  }
-  if (name === "model") {
+  }],
+  ["model", (args, deps) => {
     if (deps.settingsStore === undefined) return null;
     if (args.length !== 1) return { kind: "error", text: "/model <provider>/<modelId>" };
     const arg = args[0]!;
@@ -177,14 +151,13 @@ function tryDiskWrite(
     if (slash === -1) return { kind: "error", text: `/model: invalid '${arg}' (expected <provider>/<modelId>)` };
     const provider = arg.slice(0, slash);
     const modelId = arg.slice(slash + 1);
-    const known = new Set<string>(getProviders() as readonly string[]);
-    if (!known.has(provider)) return { kind: "error", text: `unknown provider: ${provider}` };
+    if (!KNOWN_PROVIDERS.has(provider)) return { kind: "error", text: `unknown provider: ${provider}` };
     const existing = deps.settingsStore.load();
     const next: Settings = { ...existing, defaultProvider: provider, defaultModel: modelId };
     deps.settingsStore.write(next, deps.settingsScope ?? "global");
     return { kind: "reply", text: `default model set to ${provider}/${modelId}` };
-  }
-  if (name === "team") {
+  }],
+  ["team", (args, deps) => {
     if (args[0] === "--unset") {
       if (deps.settingsStore === undefined) return null;
       deps.settingsStore.unsetDefaultTeam();
@@ -196,8 +169,14 @@ function tryDiskWrite(
       const installed = deps.teamRegistry?.listInstalled() ?? [];
       return { kind: "reply", text: `defaultTeam: ${merged.defaultTeam ?? "unset"} | installed: ${installed.join(", ")}` };
     }
-  }
-  return null;
+    return null;
+  }],
+]);
+
+function tryDiskWrite(name: string, args: ReadonlyArray<string>, deps: CommandHandlerDeps): InterceptResult {
+  const fn = INTERCEPTS.get(name);
+  if (fn === undefined) return null;
+  return fn(args, deps);
 }
 
 function tryLoadTeam(
@@ -211,7 +190,7 @@ function tryLoadTeam(
   const argument = args[0];
   if (argument === undefined || argument === "--unset") return null;
   if (!teamRegistry.isInstalled(argument)) return null;
-  void loadTeam(argument).catch((error: unknown) => {
+  void loadTeam(argument).catch((error) => {
     console.error(`loadTeam(${argument}) failed:`, error);
   });
   return { kind: "reply", text: `switching to team '${argument}'…` };

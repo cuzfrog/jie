@@ -6,6 +6,7 @@ import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduc
 import { createTuiCommandHandler } from "./command-handler";
 import { createKeyboardHandler } from "./keyboard";
 import { createGitService, type GitService } from "./git-service";
+import { formatQueueIndicator } from "./format";
 import { buildView, type BuildViewOpts } from "./components";
 
 export interface CreateTUIOptions {
@@ -45,11 +46,15 @@ export function createTui(options: CreateTUIOptions): Tui {
   const buildViewOpts: BuildViewOpts = {
     cwd,
     git: gitService.getSnapshot(),
+    refreshGit: () => { buildViewOpts.git = gitService.getSnapshot(); },
   };
+
+  let renderRef: (() => void) | null = null;
 
   const dispatch = (action: ReturnType<typeof Actions[keyof typeof Actions]>): void => {
     if (stopped) return;
     state = reduce(state, action);
+    if (renderRef !== null) renderRef();
   };
 
   const isBusy = (): boolean => {
@@ -160,6 +165,7 @@ export function createTui(options: CreateTUIOptions): Tui {
         if (confirmExit.isVisible() !== state.pendingQuit) {
           confirmExit.setVisible(state.pendingQuit);
         }
+        if (buildViewOpts.refreshGit !== undefined) buildViewOpts.refreshGit();
         const focused = state.focusedAgentId === null ? null : state.agents.get(state.focusedAgentId) ?? null;
         chatPane.setAgent(focused);
         editor.setQueueIndicator(formatQueueIndicator(focused?.queue ?? null));
@@ -167,6 +173,7 @@ export function createTui(options: CreateTUIOptions): Tui {
         statusBar.setFromOptsAndState(buildViewOpts, state);
         requestRender();
       };
+      renderRef = renderAll;
 
       const keyboardHandler = createKeyboardHandler({
         eventManager: options.eventManager,
@@ -213,14 +220,4 @@ export function createTui(options: CreateTUIOptions): Tui {
 
 function isUtf8(): boolean {
   return /utf-?8/i.test(process.env.LANG ?? process.env.LC_ALL ?? "");
-}
-
-const QUEUE_PREVIEW_MAX_CHARS = 100;
-
-function formatQueueIndicator(queue: ReadonlyArray<string> | null): string | null {
-  if (queue === null || queue.length === 0) return null;
-  const next = queue[0] ?? "";
-  const preview = next.length > QUEUE_PREVIEW_MAX_CHARS ? `${next.slice(0, QUEUE_PREVIEW_MAX_CHARS)}…` : next;
-  const suffix = queue.length === 1 ? "prompt" : "prompts";
-  return `${queue.length} ${suffix} queued  > ${preview}`;
 }

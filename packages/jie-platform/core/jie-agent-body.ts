@@ -61,6 +61,7 @@ export class JieAgentBody implements AgentBody {
           const next = this.queue.shift()!;
           this.agent.followUp(next);
         }
+        this.eventManager.publish(Events.agentPromptQueueUpdate(agentSender, this.queue.map(userPromptText)));
         return;
       }
       case "agent_end": {
@@ -73,6 +74,7 @@ export class JieAgentBody implements AgentBody {
           const next = this.queue.shift()!;
           this.agent.followUp(next);
         }
+        this.eventManager.publish(Events.agentPromptQueueUpdate(agentSender, this.queue.map(userPromptText)));
         return;
       }
       case "message_start":
@@ -176,10 +178,21 @@ export class JieAgentBody implements AgentBody {
     };
     if (this.agent.state.isStreaming) {
       this.queue.push(message);
+      this.eventManager.publish(Events.agentPromptQueueUpdate(this.sender, this.queue.map(userPromptText)));
     } else {
       void this.agent.prompt(message);
     }
   }
+}
+
+function userPromptText(message: AgentMessage): string {
+  if (message.role !== "user") return "";
+  const content = message.content;
+  if (typeof content === "string") return content;
+  return content
+    .filter((part): part is { type: "text"; text: string } => part.type === "text")
+    .map((part) => part.text)
+    .join("");
 }
 
 function readFinalStopReason(event: Extract<PiAgentEvent, { type: "agent_end" }> | Extract<PiAgentEvent, { type: "turn_end" }>): { stopReason: StopReason; isError: boolean; errorMessage: string | null } {

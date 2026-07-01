@@ -1,6 +1,7 @@
 import { Container, Spacer, Text, type TUI } from "@earendil-works/pi-tui";
 import type { TuiState } from "../state";
 import type { GitSnapshot } from "../git-service";
+import { formatQueueIndicator } from "../format";
 import { StatusBar } from "./status-bar";
 import { AgentsRail } from "./agents-rail";
 import { ChatPane, chatPaneFromAgent } from "./chat-pane";
@@ -10,6 +11,7 @@ import { ConfirmExitOverlay } from "./confirm-exit-overlay";
 export interface BuildViewOpts {
   cwd: string;
   git: GitSnapshot;
+  refreshGit?: () => void;
 }
 
 export interface BuildViewResult {
@@ -33,7 +35,7 @@ export function buildView(state: TuiState, opts: BuildViewOpts, tui: TUI): Build
 
   const editor = new EditorSlot(tui, { basePath: opts.cwd });
   editor.setText("");
-  editor.setQueueIndicator(queueIndicatorText(focused?.queue ?? null));
+  editor.setQueueIndicator(formatQueueIndicator(focused?.queue ?? null));
 
   const confirmExit = new ConfirmExitOverlay();
   confirmExit.setVisible(state.pendingQuit);
@@ -51,14 +53,4 @@ export function buildView(state: TuiState, opts: BuildViewOpts, tui: TUI): Build
   root.addChild(new Text(""));
 
   return { root, rail, chatPane, editor, statusBar, confirmExit };
-}
-
-const QUEUE_PREVIEW_MAX_CHARS = 100;
-
-function queueIndicatorText(queue: ReadonlyArray<string> | null): string | null {
-  if (queue === null || queue.length === 0) return null;
-  const next = queue[0] ?? "";
-  const preview = next.length > QUEUE_PREVIEW_MAX_CHARS ? `${next.slice(0, QUEUE_PREVIEW_MAX_CHARS)}…` : next;
-  const suffix = queue.length === 1 ? "prompt" : "prompts";
-  return `${queue.length} ${suffix} queued  > ${preview}`;
 }

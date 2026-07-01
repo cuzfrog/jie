@@ -61,12 +61,6 @@ describe("runCommand", () => {
     if (out.kind === "reply") expect(out.text).toContain("/team <id>");
   });
 
-  test("/team --unset returns reply about not-wired state", () => {
-    const out = runCommand("/team --unset");
-    expect(out.kind).toBe("reply");
-    if (out.kind === "reply") expect(out.text).toContain("--unset");
-  });
-
   test("/team foo returns reply about a team not being installed", () => {
     const out = runCommand("/team foo");
     expect(out.kind).toBe("reply");
@@ -74,24 +68,6 @@ describe("runCommand", () => {
       expect(out.text).toContain("foo");
       expect(out.text).toContain("not installed");
     }
-  });
-
-  test("/login returns reply pointing users at the CLI subcommand", () => {
-    const out = runCommand("/login");
-    expect(out.kind).toBe("reply");
-    if (out.kind === "reply") expect(out.text).toContain("jie login");
-  });
-
-  test("/logout returns reply pointing users at the CLI subcommand", () => {
-    const out = runCommand("/logout");
-    expect(out.kind).toBe("reply");
-    if (out.kind === "reply") expect(out.text).toContain("jie logout");
-  });
-
-  test("/model returns reply pointing users at the CLI subcommand", () => {
-    const out = runCommand("/model");
-    expect(out.kind).toBe("reply");
-    if (out.kind === "reply") expect(out.text).toContain("jie model");
   });
 
   test("unknown slash command returns error outcome", () => {

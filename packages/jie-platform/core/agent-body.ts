@@ -84,6 +84,10 @@ export function createAgentBody(options: CreateAgentBodyOptions): AgentBody {
   agent.state.systemPrompt = options.soul.systemPrompt;
   if (options.model !== undefined) {
     agent.state.model = options.model as never;
+    const assigned = readModelAssignment(options.model);
+    if (assigned !== null) {
+      options.eventManager.publish(Events.agentModelAssigned(sender, assigned.provider, assigned.modelId, assigned.effort));
+    }
   }
   agent.state.tools = adaptedTools;
 
@@ -138,6 +142,15 @@ function extractToolError(context: {
     .filter((t): t is string => typeof t === "string")
     .join("\n");
   return text.length > 0 ? text : "tool error";
+}
+
+function readModelAssignment(model: unknown): { provider: string; modelId: string; effort: "low" | "medium" | "high" | "max" } | null {
+  if (model === null || typeof model !== "object") return null;
+  const m = model as { provider?: unknown; id?: unknown; effort?: unknown };
+  if (typeof m.provider !== "string" || typeof m.id !== "string") return null;
+  const effort = m.effort;
+  if (effort !== "low" && effort !== "medium" && effort !== "high" && effort !== "max") return null;
+  return { provider: m.provider, modelId: m.id, effort };
 }
 
 interface JieToolResult {
