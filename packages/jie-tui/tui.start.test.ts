@@ -44,8 +44,9 @@ describe("tui.start() with virtual terminal", () => {
       await new Promise((r) => setTimeout(r, 50));
       tuiHandle.stop();
       await started;
-      expect(typeof terminal.columns).toBe("number");
-      expect(typeof terminal.rows).toBe("number");
+      expect(terminal.columns).toBe(80);
+      expect(terminal.rows).toBe(30);
+      expect(terminal.getViewport().length).toBe(30);
       void vt;
     });
   });
