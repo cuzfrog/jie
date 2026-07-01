@@ -3,7 +3,6 @@ import {
   createWebSearchTool,
   type WebSearchProvider,
 } from "./web-search";
-import { JiePlatformError } from "../types";
 import { makeEmptyContext } from "./_test-context";
 
 function stubProvider(results: { title: string; url: string; snippet: string }[]): WebSearchProvider {
@@ -36,42 +35,32 @@ describe("web_search", () => {
       provider: {
         async search(_q, max) {
           received = max;
-          return [];
+          return [{ title: "t", url: "u", snippet: "s" }];
         },
       },
     });
-    try {
-      await tool.execute({ query: "x", maxResults: 100 }, makeEmptyContext());
-    } catch {
-    }
+    await tool.execute({ query: "x", maxResults: 100 }, makeEmptyContext());
     expect(received).toBe(20);
   });
 
   test("provider returns zero results -> web_search_failed: provider_returned_no_results", async () => {
     const tool = createWebSearchTool({ provider: stubProvider([]) });
-    let caught: unknown;
-    try {
-      await tool.execute({ query: "x" }, makeEmptyContext());
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("WEB_SEARCH_FAILED");
-    expect((caught as Error).message).toBe(
-      "Web search failed: provider_returned_no_results",
-    );
+    await expect(
+      tool.execute({ query: "x" }, makeEmptyContext()),
+    ).rejects.toMatchObject({
+      code: "WEB_SEARCH_FAILED",
+      message: "Web search failed: provider_returned_no_results",
+    });
   });
 
   test("provider throws http_429 -> web_search_failed: http_429", async () => {
     const tool = createWebSearchTool({ provider: failingProvider("http_429") });
-    let caught: unknown;
-    try {
-      await tool.execute({ query: "x" }, makeEmptyContext());
-    } catch (error) {
-      caught = error;
-    }
-    expect((caught as JiePlatformError).code).toBe("WEB_SEARCH_FAILED");
-    expect((caught as Error).message).toBe("Web search failed: http_429");
+    await expect(
+      tool.execute({ query: "x" }, makeEmptyContext()),
+    ).rejects.toMatchObject({
+      code: "WEB_SEARCH_FAILED",
+      message: "Web search failed: http_429",
+    });
   });
 
   test("provider returns results: content is numbered list", async () => {
