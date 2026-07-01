@@ -3,7 +3,7 @@ import type { EditorTheme, MarkdownTheme, SelectListTheme } from "@earendil-work
 
 const chalk = new Chalk({ level: 3 });
 
-const HEX = {
+const COLORS = {
   accent: "#8abeb7",
   border: "#5f87ff",
   borderAccent: "#00d7ff",
@@ -15,44 +15,44 @@ const HEX = {
   dim: "#666666",
   text: "#d4d4d4",
   thinkingText: "#808080",
-  mdHeading: "#f0c674",
-  mdLink: "#81a2be",
-  mdLinkUrl: "#666666",
-  mdCode: "#8abeb7",
-  mdCodeBlock: "#b5bd68",
-  mdCodeBlockBorder: "#808080",
-  mdQuote: "#808080",
-  mdQuoteBorder: "#808080",
-  mdHr: "#808080",
-  mdListBullet: "#8abeb7",
+  markdownHeading: "#f0c674",
+  markdownLink: "#81a2be",
+  markdownLinkUrl: "#666666",
+  markdownCode: "#8abeb7",
+  markdownCodeBlock: "#b5bd68",
+  markdownCodeBlockBorder: "#808080",
+  markdownQuote: "#808080",
+  markdownQuoteBorder: "#808080",
+  markdownHr: "#808080",
+  markdownListBullet: "#8abeb7",
 } as const;
 
 export const selectListTheme: SelectListTheme = {
-  selectedPrefix: (text: string): string => chalk.hex(HEX.accent)(text),
-  selectedText: (text: string): string => chalk.hex(HEX.accent).bold(text),
-  description: (text: string): string => chalk.hex(HEX.muted)(text),
-  scrollInfo: (text: string): string => chalk.hex(HEX.muted)(text),
-  noMatch: (text: string): string => chalk.hex(HEX.muted)(text),
+  selectedPrefix: (text: string): string => chalk.hex(COLORS.accent)(text),
+  selectedText: (text: string): string => chalk.hex(COLORS.accent).bold(text),
+  description: (text: string): string => chalk.hex(COLORS.muted)(text),
+  scrollInfo: (text: string): string => chalk.hex(COLORS.muted)(text),
+  noMatch: (text: string): string => chalk.hex(COLORS.muted)(text),
 };
 
 export const markdownTheme: MarkdownTheme = {
-  heading: (text: string): string => chalk.hex(HEX.mdHeading).bold(text),
-  link: (text: string): string => chalk.hex(HEX.mdLink).underline(text),
-  linkUrl: (text: string): string => chalk.hex(HEX.mdLinkUrl)(text),
-  code: (text: string): string => chalk.hex(HEX.mdCode)(text),
-  codeBlock: (text: string): string => chalk.hex(HEX.mdCodeBlock)(text),
-  codeBlockBorder: (text: string): string => chalk.hex(HEX.mdCodeBlockBorder)(text),
-  quote: (text: string): string => chalk.hex(HEX.mdQuote).italic(text),
-  quoteBorder: (text: string): string => chalk.hex(HEX.mdQuoteBorder)(text),
-  hr: (text: string): string => chalk.hex(HEX.mdHr)(text),
-  listBullet: (text: string): string => chalk.hex(HEX.mdListBullet)(text),
-  bold: (text: string): string => chalk.hex(HEX.text).bold(text),
-  italic: (text: string): string => chalk.hex(HEX.text).italic(text),
-  strikethrough: (text: string): string => chalk.hex(HEX.text).strikethrough(text),
-  underline: (text: string): string => chalk.hex(HEX.text).underline(text),
+  heading: (text: string): string => chalk.hex(COLORS.markdownHeading).bold(text),
+  link: (text: string): string => chalk.hex(COLORS.markdownLink).underline(text),
+  linkUrl: (text: string): string => chalk.hex(COLORS.markdownLinkUrl)(text),
+  code: (text: string): string => chalk.hex(COLORS.markdownCode)(text),
+  codeBlock: (text: string): string => chalk.hex(COLORS.markdownCodeBlock)(text),
+  codeBlockBorder: (text: string): string => chalk.hex(COLORS.markdownCodeBlockBorder)(text),
+  quote: (text: string): string => chalk.hex(COLORS.markdownQuote).italic(text),
+  quoteBorder: (text: string): string => chalk.hex(COLORS.markdownQuoteBorder)(text),
+  hr: (text: string): string => chalk.hex(COLORS.markdownHr)(text),
+  listBullet: (text: string): string => chalk.hex(COLORS.markdownListBullet)(text),
+  bold: (text: string): string => chalk.hex(COLORS.text).bold(text),
+  italic: (text: string): string => chalk.hex(COLORS.text).italic(text),
+  strikethrough: (text: string): string => chalk.hex(COLORS.text).strikethrough(text),
+  underline: (text: string): string => chalk.hex(COLORS.text).underline(text),
 };
 
 export const editorTheme: EditorTheme = {
-  borderColor: (text: string): string => chalk.hex(HEX.borderMuted)(text),
+  borderColor: (text: string): string => chalk.hex(COLORS.borderMuted)(text),
   selectList: selectListTheme,
 };
