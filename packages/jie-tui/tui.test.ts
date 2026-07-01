@@ -1,23 +1,18 @@
 import { createTui, type CreateTUIOptions, type Tui } from "./tui";
 import { createEventManager, type EventManager } from "@cuzfrog/jie-platform/event";
-import type { ArtifactStore } from "@cuzfrog/jie-platform/storage";
 
 function makeStubBus(): EventManager {
   return createEventManager();
 }
 
-function makeStubArtifacts(): ArtifactStore {
-  return {
-    write: async () => ({ key: "", created_at: "" }),
-    read: async () => null,
-    list: async () => [],
-  };
-}
-
 function makeOptions(overrides: Partial<CreateTUIOptions> = {}): CreateTUIOptions {
   return {
     bus: makeStubBus(),
-    artifacts: makeStubArtifacts(),
+    artifacts: {
+      write: async () => ({ key: "", created_at: "" }),
+      read: async () => null,
+      list: async () => [],
+    },
     roles: [],
     cols: 80,
     ...overrides,
