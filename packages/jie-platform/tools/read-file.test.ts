@@ -2,7 +2,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createReadFileTool } from "./read-file";
-import { JiePlatformError } from "../types";
 import { makeEmptyContext } from "./_test-context";
 
 describe("read_file", () => {
@@ -80,54 +79,36 @@ describe("read_file", () => {
     expect(result.content).toContain("line-1");
     expect(result.content).toContain("line-2000");
     expect(result.content).not.toContain("line-2001");
-    const details = result.details as { truncated: { content: boolean } };
-    expect(details.truncated.content).toBe(true);
+    expect(result.details).toEqual({ truncated: { content: true } });
   });
 
   test("non-UTF-8 bytes -> unsupported_encoding", async () => {
     writeFileSync(join(workspace, "bad.bin"), Buffer.from([0xff, 0xfe, 0xfd]));
     const tool = createReadFileTool({ workspaceRoot: workspace });
-    let caught: unknown;
-    try {
-      await tool.execute({ path: "bad.bin" }, makeEmptyContext());
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("UNSUPPORTED_ENCODING");
+    await expect(
+      tool.execute({ path: "bad.bin" }, makeEmptyContext()),
+    ).rejects.toMatchObject({ code: "UNSUPPORTED_ENCODING" });
   });
 
   test("path outside the workspace -> path_escape", async () => {
     const tool = createReadFileTool({ workspaceRoot: workspace });
-    let caught: unknown;
-    try {
-      await tool.execute({ path: "/etc/passwd" }, makeEmptyContext());
-    } catch (error) {
-      caught = error;
-    }
-    expect((caught as JiePlatformError).code).toBe("PATH_ESCAPE");
+    await expect(
+      tool.execute({ path: "/etc/passwd" }, makeEmptyContext()),
+    ).rejects.toMatchObject({ code: "PATH_ESCAPE" });
   });
 
   test("missing file -> file_not_found", async () => {
     const tool = createReadFileTool({ workspaceRoot: workspace });
-    let caught: unknown;
-    try {
-      await tool.execute({ path: "missing.txt" }, makeEmptyContext());
-    } catch (error) {
-      caught = error;
-    }
-    expect((caught as JiePlatformError).code).toBe("FILE_NOT_FOUND");
+    await expect(
+      tool.execute({ path: "missing.txt" }, makeEmptyContext()),
+    ).rejects.toMatchObject({ code: "FILE_NOT_FOUND" });
   });
 
   test("path is a directory -> is_a_directory", async () => {
     mkdirSync(join(workspace, "subdir"));
     const tool = createReadFileTool({ workspaceRoot: workspace });
-    let caught: unknown;
-    try {
-      await tool.execute({ path: "subdir" }, makeEmptyContext());
-    } catch (error) {
-      caught = error;
-    }
-    expect((caught as JiePlatformError).code).toBe("IS_A_DIRECTORY");
+    await expect(
+      tool.execute({ path: "subdir" }, makeEmptyContext()),
+    ).rejects.toMatchObject({ code: "IS_A_DIRECTORY" });
   });
 });
