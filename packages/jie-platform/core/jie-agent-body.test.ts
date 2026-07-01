@@ -35,7 +35,7 @@ function makeFakeAgent(overrides: Partial<{
     isStreaming: overrides.isStreaming ?? false,
     model: overrides.model ?? {},
   };
-  const prompt = vi.fn(async () => {});
+  const prompt = vi.fn(async (_message: AgentMessage | AgentMessage[]) => {});
   const followUp = vi.fn(() => {});
   const steer = vi.fn(() => {});
   const cont = vi.fn(async () => {});
@@ -295,11 +295,11 @@ describe("JieAgentBody — prompt ingress format", () => {
     const body = h.makeBody();
     await body.start();
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "hello", "general-1"));
-    const calls = h.prompt.mock.calls as Array<[AgentMessage]>;
-    expect(calls.length).toBeGreaterThan(0);
-    const synthetic = calls[0]![0] as { role: string; content: string };
+    expect(h.prompt.mock.calls.length).toBeGreaterThan(0);
+    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
     expect(synthetic.role).toBe("user");
-    expect(synthetic.content).toBe("[user]: hello");
+    const content = (synthetic as { content: unknown }).content;
+    expect(content).toBe("[user]: hello");
     body.stop();
   });
 
@@ -309,9 +309,9 @@ describe("JieAgentBody — prompt ingress format", () => {
     });
     await body.start();
     h.events.publish(Events.custom({ kind: "agent", identity: { teamId: "t1", agentRole: "researcher", agentKey: "researcher-1" } }, "t1.task.researched", "report"));
-    const calls = h.prompt.mock.calls as Array<[AgentMessage]>;
-    const synthetic = calls[0]![0] as { content: string };
-    expect(synthetic.content).toBe(
+    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
+    const content = (synthetic as { content: unknown }).content;
+    expect(content).toBe(
       "[researcher-1 on 'task.researched']: report",
     );
     body.stop();
