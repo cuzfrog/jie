@@ -121,6 +121,12 @@ const UNKNOWN_REPLY = (name: string): CommandOutcome => ({
 type InterceptResult = { kind: "reply"; text: string } | { kind: "error"; text: string } | null;
 type InterceptFn = (args: ReadonlyArray<string>, deps: CommandHandlerDeps) => InterceptResult;
 
+function runIntercepts(name: string, args: ReadonlyArray<string>, deps: CommandHandlerDeps): InterceptResult {
+  const fn = INTERCEPTS.get(name);
+  if (fn === undefined) return null;
+  return fn(args, deps);
+}
+
 const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn>([
   ["login", (args, deps) => {
     if (deps.authStore === undefined) return null;
@@ -176,9 +182,3 @@ const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn
     return { kind: "reply", text: `switching to team '${argument}'…` };
   }],
 ]);
-
-function runIntercepts(name: string, args: ReadonlyArray<string>, deps: CommandHandlerDeps): InterceptResult {
-  const fn = INTERCEPTS.get(name);
-  if (fn === undefined) return null;
-  return fn(args, deps);
-}
