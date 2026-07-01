@@ -1,5 +1,7 @@
-import { Actions, type Action, type TuiState } from "./state";
+import { getProviders } from "@earendil-works/pi-ai";
+import type { AuthStore, Settings, SettingsStore, Scope } from "@cuzfrog/jie-platform/config";
 import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
+import { Actions, type Action, type TuiState } from "./state";
 
 export type CommandOutcome =
   | { readonly kind: "reply"; readonly text: string }
@@ -18,6 +20,9 @@ export interface CommandHandlerDeps {
   readonly requestQuit: () => void;
   readonly teamRegistry?: TeamRegistry;
   readonly loadTeam?: (teamId: string) => Promise<void>;
+  readonly authStore?: AuthStore;
+  readonly settingsStore?: SettingsStore;
+  readonly settingsScope?: Scope;
 }
 
 export interface TuiCommandHandler {
@@ -109,12 +114,18 @@ export function runCommand(input: string): CommandOutcome {
 export function createTuiCommandHandler(deps: CommandHandlerDeps): TuiCommandHandler {
   const handle = (text: string): void => {
     deps.dispatch(Actions.clearTransientMessage());
-    const teamOutcome = tryLoadTeam(text, deps.teamRegistry, deps.loadTeam);
-    if (teamOutcome !== null) {
-      if (teamOutcome.kind === "reply") deps.dispatch(Actions.setTransientMessage(teamOutcome.text));
-      else if (teamOutcome.kind === "error") deps.dispatch(Actions.setErrorMessage(teamOutcome.text));
+    const parts = text.split(/\s+/);
+    const rawName = parts[0]!;
+    const name = rawName.startsWith("/") ? rawName.slice(1) : rawName;
+    const args = parts.slice(1);
+
+    const intercepted = tryDiskWrite(name, args, deps) ?? tryLoadTeam(name, args, deps.teamRegistry, deps.loadTeam);
+    if (intercepted !== null) {
+      if (intercepted.kind === "reply") deps.dispatch(Actions.setTransientMessage(intercepted.text));
+      else deps.dispatch(Actions.setErrorMessage(intercepted.text));
       return;
     }
+
     const outcome = runCommand(text);
     switch (outcome.kind) {
       case "clearState":
@@ -135,15 +146,69 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): TuiCommandHan
   return { handle };
 }
 
+function tryDiskWrite(
+  name: string,
+  args: ReadonlyArray<string>,
+  deps: CommandHandlerDeps,
+): { kind: "reply"; text: string } | { kind: "error"; text: string } | null {
+  if (name === "login") {
+    if (deps.authStore === undefined) return null;
+    if (args.length !== 2) return { kind: "error", text: "/login <provider> <apiKey>" };
+    const [provider, apiKey] = args;
+    if (provider === undefined || apiKey === undefined) return { kind: "error", text: "/login <provider> <apiKey>" };
+    deps.authStore.write(deps.authStore.setProvider(deps.authStore.load(), provider, apiKey));
+    return { kind: "reply", text: `logged in to ${provider}` };
+  }
+  if (name === "logout") {
+    if (deps.authStore === undefined) return null;
+    if (args.length === 0) {
+      deps.authStore.write(deps.authStore.clear());
+      return { kind: "reply", text: "logged out of all providers" };
+    }
+    const provider = args[0]!;
+    deps.authStore.write(deps.authStore.removeProvider(deps.authStore.load(), provider));
+    return { kind: "reply", text: `logged out of ${provider}` };
+  }
+  if (name === "model") {
+    if (deps.settingsStore === undefined) return null;
+    if (args.length !== 1) return { kind: "error", text: "/model <provider>/<modelId>" };
+    const arg = args[0]!;
+    const slash = arg.indexOf("/");
+    if (slash === -1) return { kind: "error", text: `/model: invalid '${arg}' (expected <provider>/<modelId>)` };
+    const provider = arg.slice(0, slash);
+    const modelId = arg.slice(slash + 1);
+    const known = new Set<string>(getProviders() as readonly string[]);
+    if (!known.has(provider)) return { kind: "error", text: `unknown provider: ${provider}` };
+    const existing = deps.settingsStore.load();
+    const next: Settings = { ...existing, defaultProvider: provider, defaultModel: modelId };
+    deps.settingsStore.write(next, deps.settingsScope ?? "global");
+    return { kind: "reply", text: `default model set to ${provider}/${modelId}` };
+  }
+  if (name === "team") {
+    if (args[0] === "--unset") {
+      if (deps.settingsStore === undefined) return null;
+      deps.settingsStore.unsetDefaultTeam();
+      return { kind: "reply", text: "default team unset; takes effect on next `jie` invocation" };
+    }
+    if (args.length === 0) {
+      if (deps.settingsStore === undefined) return null;
+      const merged = deps.settingsStore.load();
+      const installed = deps.teamRegistry?.listInstalled() ?? [];
+      return { kind: "reply", text: `defaultTeam: ${merged.defaultTeam ?? "unset"} | installed: ${installed.join(", ")}` };
+    }
+  }
+  return null;
+}
+
 function tryLoadTeam(
-  text: string,
+  name: string,
+  args: ReadonlyArray<string>,
   teamRegistry: TeamRegistry | undefined,
   loadTeam: ((teamId: string) => Promise<void>) | undefined,
 ): { kind: "reply"; text: string } | { kind: "error"; text: string } | null {
+  if (name !== "team") return null;
   if (teamRegistry === undefined || loadTeam === undefined) return null;
-  if (!text.startsWith("/team")) return null;
-  const parts = text.split(/\s+/);
-  const argument = parts[1];
+  const argument = args[0];
   if (argument === undefined || argument === "--unset") return null;
   if (!teamRegistry.isInstalled(argument)) return null;
   void loadTeam(argument).catch((error: unknown) => {

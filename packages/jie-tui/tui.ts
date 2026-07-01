@@ -1,5 +1,6 @@
 import { ProcessTerminal, TUI, type Terminal } from "@earendil-works/pi-tui";
 import { Events, type EventEnvelope, type EventManager, type EventType, type Sender } from "@cuzfrog/jie-platform/event";
+import { type AuthStore, type Scope, type SettingsStore } from "@cuzfrog/jie-platform/config";
 import { type TeamRegistry } from "@cuzfrog/jie-platform/team";
 import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduce } from "./state";
 import { createTuiCommandHandler } from "./command-handler";
@@ -11,6 +12,9 @@ export interface CreateTUIOptions {
   eventManager: EventManager;
   teamRegistry?: TeamRegistry;
   loadTeam?: (teamId: string) => Promise<void>;
+  authStore?: AuthStore;
+  settingsStore?: SettingsStore;
+  settingsScope?: Scope;
   cwd?: string;
   gitService?: GitService;
   rows?: number;
@@ -82,6 +86,9 @@ export function createTui(options: CreateTUIOptions): Tui {
     requestQuit,
     teamRegistry: options.teamRegistry,
     loadTeam: options.loadTeam,
+    authStore: options.authStore,
+    settingsStore: options.settingsStore,
+    settingsScope: options.settingsScope,
   });
 
   const publishPrompt = (text: string): void => {
