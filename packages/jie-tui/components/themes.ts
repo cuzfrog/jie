@@ -3,30 +3,6 @@ import type { EditorTheme, MarkdownTheme, SelectListTheme } from "@earendil-work
 
 const chalk = new Chalk({ level: 3 });
 
-const COLORS = {
-  accent: "#8abeb7",
-  border: "#5f87ff",
-  borderAccent: "#00d7ff",
-  borderMuted: "#505050",
-  success: "#b5bd68",
-  error: "#cc6666",
-  warning: "#ffff00",
-  muted: "#808080",
-  dim: "#666666",
-  text: "#d4d4d4",
-  thinkingText: "#808080",
-  markdownHeading: "#f0c674",
-  markdownLink: "#81a2be",
-  markdownLinkUrl: "#666666",
-  markdownCode: "#8abeb7",
-  markdownCodeBlock: "#b5bd68",
-  markdownCodeBlockBorder: "#808080",
-  markdownQuote: "#808080",
-  markdownQuoteBorder: "#808080",
-  markdownHr: "#808080",
-  markdownListBullet: "#8abeb7",
-} as const;
-
 export const selectListTheme: SelectListTheme = {
   selectedPrefix: (text: string): string => chalk.hex(COLORS.accent)(text),
   selectedText: (text: string): string => chalk.hex(COLORS.accent).bold(text),
@@ -56,3 +32,27 @@ export const editorTheme: EditorTheme = {
   borderColor: (text: string): string => chalk.hex(COLORS.borderMuted)(text),
   selectList: selectListTheme,
 };
+
+const COLORS = {
+  accent: "#8abeb7",
+  border: "#5f87ff",
+  borderAccent: "#00d7ff",
+  borderMuted: "#505050",
+  success: "#b5bd68",
+  error: "#cc6666",
+  warning: "#ffff00",
+  muted: "#808080",
+  dim: "#666666",
+  text: "#d4d4d4",
+  thinkingText: "#808080",
+  markdownHeading: "#f0c674",
+  markdownLink: "#81a2be",
+  markdownLinkUrl: "#666666",
+  markdownCode: "#8abeb7",
+  markdownCodeBlock: "#b5bd68",
+  markdownCodeBlockBorder: "#808080",
+  markdownQuote: "#808080",
+  markdownQuoteBorder: "#808080",
+  markdownHr: "#808080",
+  markdownListBullet: "#8abeb7",
+} as const;
