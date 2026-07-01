@@ -37,27 +37,13 @@ const withTTY = (value: boolean, action: () => void): void => {
 describe("createTui — v0.2 surface", () => {
   test("throws when not on a TTY", () => {
     withTTY(false, () => {
-      let caught: unknown;
-      try {
-        createTui(makeOptions());
-      } catch (error) {
-        caught = error;
-      }
-      expect(caught).toBeInstanceOf(Error);
-      expect((caught as Error).message).toMatch(/interactive terminal/);
+      expect(() => createTui(makeOptions())).toThrow(/interactive terminal/);
     });
   });
 
   test("throws when terminal is too narrow", () => {
     withTTY(true, () => {
-      let caught: unknown;
-      try {
-        createTui(makeOptions({ cols: 40 }));
-      } catch (error) {
-        caught = error;
-      }
-      expect(caught).toBeInstanceOf(Error);
-      expect((caught as Error).message).toMatch(/too narrow/);
+      expect(() => createTui(makeOptions({ cols: 40 }))).toThrow(/too narrow/);
     });
   });
 

@@ -256,7 +256,7 @@ describe("AgentBody — pi-agent event bridging", () => {
     });
   });
 
-  test("message_end persists the message via memory.persist", () => {
+  test("message_end persists the message via memory.persist", async () => {
     const { opts } = makeOpts();
     const result = makeFakeAgentFactory({
       onEvent: (l) => {
@@ -271,11 +271,8 @@ describe("AgentBody — pi-agent event bridging", () => {
     } as unknown as AssistantMessage;
     fireEvent!({ type: "message_start", message: msg });
     fireEvent!({ type: "message_end", message: msg });
-    const restored = opts.memory.restore("general-1", "s1", "t1");
-
-    return restored.then((rows) => {
-      expect(rows.length).toBe(1);
-    });
+    const restored = await opts.memory.restore("general-1", "s1", "t1");
+    expect(restored.length).toBe(1);
   });
 
   test("beforeToolCall hook publishes agent.tool.call", async () => {

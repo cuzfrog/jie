@@ -35,7 +35,7 @@ describe("InProcessEventBus", () => {
     const args = errorSpy.mock.calls[0]!;
     expect(args[0]).toContain("s");
     expect(args[0]).toContain("boom");
-    expect(args[1]).toBeString();
+    expect(typeof args[1]).toBe("string");
     errorSpy.mockRestore();
   });
 
@@ -105,7 +105,6 @@ describe("InProcessEventBus", () => {
   });
 
   test("publish is depth-first synchronous: nested subscribers complete before outer publish returns", () => {
-
     const bus = createEventBus();
     const events: string[] = [];
 
