@@ -1,4 +1,4 @@
-import { Container, Spacer, Text } from "@earendil-works/pi-tui";
+import { Container } from "@earendil-works/pi-tui";
 import { INITIAL_TUI_STATE } from "../state";
 import { createTestTuiWithTerminal } from "../test";
 import { buildView } from "./build-view";
@@ -27,16 +27,13 @@ describe("buildView", () => {
     expect(result.confirmExit).toBeInstanceOf(ConfirmExitOverlay);
   });
 
-  test("rail + chat + editor + statusBar + confirmExit are children of root", () => {
+  test("root children include each exposed component by reference", () => {
     const { tui } = createTestTuiWithTerminal();
     const result = buildView(INITIAL_TUI_STATE, OPTS, tui);
-    const classes = result.root.children.map((c) => c.constructor.name);
-    expect(classes).toContain(AgentsRail.name);
-    expect(classes).toContain(ChatPane.name);
-    expect(classes).toContain(EditorSlot.name);
-    expect(classes).toContain(StatusBar.name);
-    expect(classes).toContain(ConfirmExitOverlay.name);
-    expect(classes).toContain(Spacer.name);
-    expect(classes).toContain(Text.name);
+    expect(result.root.children).toContain(result.rail);
+    expect(result.root.children).toContain(result.chatPane);
+    expect(result.root.children).toContain(result.editor);
+    expect(result.root.children).toContain(result.statusBar);
+    expect(result.root.children).toContain(result.confirmExit);
   });
 });

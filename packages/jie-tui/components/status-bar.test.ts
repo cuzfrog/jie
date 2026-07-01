@@ -1,4 +1,3 @@
-import { Loader, Text } from "@earendil-works/pi-tui";
 import { createTestTuiWithTerminal } from "../test";
 import {
   StatusBar,
@@ -40,22 +39,20 @@ describe("StatusBar", () => {
     expect(flat).toContain("default:general-1");
   });
 
-  test("renders three children when focused agent is busy (text + hint + loader)", () => {
+  test("renders the loader glyph when focused agent is busy", () => {
     const { tui } = createTestTuiWithTerminal();
     const bar = new StatusBar(tui);
     bar.setModel(makeModel(), makeContext({ focusedStatus: "busy" }));
     expect(bar.children.length).toBe(3);
-    const kinds = bar.children.map((c) => c.constructor.name);
-    expect(kinds).toEqual([Text.name, Text.name, Loader.name]);
+    expect(bar.render(120).join("\n")).toContain("…");
   });
 
-  test("renders two children when focused agent is idle (no loader)", () => {
+  test("omits the loader glyph when focused agent is idle", () => {
     const { tui } = createTestTuiWithTerminal();
     const bar = new StatusBar(tui);
     bar.setModel(makeModel(), makeContext({ focusedStatus: "idle" }));
     expect(bar.children.length).toBe(2);
-    const kinds = bar.children.map((c) => c.constructor.name);
-    expect(kinds).toEqual([Text.name, Text.name]);
+    expect(bar.render(120).join("\n")).not.toContain("…");
   });
 
   test("renders two children when no focused agent", () => {
@@ -70,9 +67,10 @@ describe("StatusBar", () => {
     const bar = new StatusBar(tui);
     bar.setModel(makeModel(), makeContext({ focusedStatus: "idle" }));
     expect(bar.children.length).toBe(2);
+    expect(bar.render(120).join("\n")).not.toContain("…");
     bar.setModel(makeModel(), makeContext({ focusedStatus: "busy" }));
     expect(bar.children.length).toBe(3);
-    expect(bar.children[2]).toBeInstanceOf(Loader);
+    expect(bar.render(120).join("\n")).toContain("…");
   });
 
   test("removes loader on busy → idle", () => {
@@ -80,8 +78,10 @@ describe("StatusBar", () => {
     const bar = new StatusBar(tui);
     bar.setModel(makeModel(), makeContext({ focusedStatus: "busy" }));
     expect(bar.children.length).toBe(3);
+    expect(bar.render(120).join("\n")).toContain("…");
     bar.setModel(makeModel(), makeContext({ focusedStatus: "idle" }));
     expect(bar.children.length).toBe(2);
+    expect(bar.render(120).join("\n")).not.toContain("…");
   });
 
   test("hint text reflects rail visibility", () => {
