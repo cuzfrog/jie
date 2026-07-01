@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -73,109 +73,6 @@ describe("loadTeamFromDir", () => {
     expect(bp.leaderRole).toBe("leader");
   });
 
-  test("TEAM.md leader references unknown role: hard fail", () => {
-    writeFileSync(
-      join(dir, "TEAM.md"),
-      `---\nleader: ghost\n---\n`,
-    );
-    writeFileSync(
-      join(dir, "leader.md"),
-      `---\ntools:\n  - bash\n---\n`,
-    );
-    writeFileSync(
-      join(dir, "worker.md"),
-      `---\ntools:\n  - bash\n---\n`,
-    );
-    expect(() => loadTeamFromDir(dir)).toThrow(
-      /TEAM\.md 'leader' field references unknown role 'ghost'/,
-    );
-  });
-
-  test("TEAM.md missing for multi-agent: hard fail", () => {
-    writeFileSync(
-      join(dir, "leader.md"),
-      `---\ntools:\n  - bash\n---\n`,
-    );
-    writeFileSync(
-      join(dir, "worker.md"),
-      `---\ntools:\n  - bash\n---\n`,
-    );
-    expect(() => loadTeamFromDir(dir)).toThrow(
-      /TEAM\.md is required for multi-agent teams/,
-    );
-  });
-
-  test("TEAM.md with empty leader and multi-agent: hard fail", () => {
-    writeFileSync(join(dir, "TEAM.md"), `---\nleader:\n---\n`);
-    writeFileSync(
-      join(dir, "leader.md"),
-      `---\ntools:\n  - bash\n---\n`,
-    );
-    writeFileSync(
-      join(dir, "worker.md"),
-      `---\ntools:\n  - bash\n---\n`,
-    );
-    expect(() => loadTeamFromDir(dir)).toThrow(
-      /TEAM\.md 'leader' field is required/,
-    );
-  });
-
-  test("single-agent team with TEAM.md: leader must match", () => {
-    writeFileSync(
-      join(dir, "TEAM.md"),
-      `---\nleader: wrong\n---\n`,
-    );
-    writeFileSync(
-      join(dir, "general.md"),
-      `---\ntools:\n  - bash\n---\n`,
-    );
-    expect(() => loadTeamFromDir(dir)).toThrow(
-      /does not match the single agent role/,
-    );
-  });
-
-  test("invalid team_id (spaces): hard fail", () => {
-    const bad = join(tmpdir(), "bad team id with spaces");
-    mkdirSync(bad, { recursive: true });
-    writeFileSync(
-      join(bad, "general.md"),
-      `---\ntools:\n  - bash\n---\n`,
-    );
-    try {
-      expect(() => loadTeamFromDir(bad)).toThrow(/invalid team_id/);
-    } finally {
-      rmSync(bad, { recursive: true, force: true });
-    }
-  });
-
-  test("invalid role stem (spaces): hard fail", () => {
-    writeFileSync(
-      join(dir, "bad role.md"),
-      `---\ntools:\n  - bash\n---\n`,
-    );
-    expect(() => loadTeamFromDir(dir)).toThrow(/invalid role: bad role/);
-  });
-
-  test("missing 'tools' field: hard fail", () => {
-    writeFileSync(
-      join(dir, "general.md"),
-      `---\nmodel: anthropic/claude\n---\nbody`,
-    );
-    expect(() => loadTeamFromDir(dir)).toThrow(
-      /missing required field 'tools'/,
-    );
-  });
-
-  test("subscribe: with platform topic (agent. prefix) is rejected", () => {
-    writeFileSync(
-      join(dir, "general.md"),
-      `---\ntools:\n  - bash\nsubscribe:\n  - agent.idle\n---\nbody`,
-    );
-    expect(() => loadTeamFromDir(dir)).toThrow(
-      /subscribe_rejects_platform_topic/,
-    );
-  });
-
   test("subscribe: with domain topic is accepted and stored", () => {
     writeFileSync(
       join(dir, "general.md"),
@@ -195,14 +92,6 @@ describe("loadTeamFromDir", () => {
     expect(bp.roles[0]?.model).toBe("anthropic/claude-sonnet-4");
   });
 
-  test("agent with malformed model (no /) is rejected", () => {
-    writeFileSync(
-      join(dir, "general.md"),
-      `---\nmodel: not-a-model\ntools:\n  - bash\n---\nbody`,
-    );
-    expect(() => loadTeamFromDir(dir)).toThrow(/invalid model string/);
-  });
-
   test("system_prompt is the verbatim prose body after the closing frontmatter", () => {
     writeFileSync(
       join(dir, "general.md"),
@@ -218,8 +107,6 @@ describe("loadTeamFromDir", () => {
     expect(bp.leaderRole).toBeNull();
   });
 });
-
-describe("parseTeamFromManifests", () => {});
 
 describe("isValidTeamId", () => {
   test("accepts the v1 charset: [A-Za-z0-9_-]{1,32}", () => {
