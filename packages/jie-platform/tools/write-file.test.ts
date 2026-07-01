@@ -9,7 +9,6 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createWriteFileTool } from "./write-file";
-import { JiePlatformError } from "../types";
 import { makeEmptyContext } from "./_test-context";
 
 describe("write_file", () => {
@@ -52,15 +51,12 @@ describe("write_file", () => {
   test("content over 5 MiB -> file_too_large", async () => {
     const tool = createWriteFileTool({ workspaceRoot: workspace });
     const huge = "x".repeat(5 * 1024 * 1024 + 1);
-    let caught: unknown;
-    try {
-      await tool.execute({ path: "a.txt", content: huge }, makeEmptyContext());
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("FILE_TOO_LARGE");
-    expect((caught as Error).message).toBe(`File content exceeds the maximum allowed size: ${huge.length}`);
+    await expect(
+      tool.execute({ path: "a.txt", content: huge }, makeEmptyContext()),
+    ).rejects.toMatchObject({
+      code: "FILE_TOO_LARGE",
+      message: `File content exceeds the maximum allowed size: ${huge.length}`,
+    });
   });
 
   test("content exactly at 5 MiB is accepted", async () => {
@@ -75,31 +71,23 @@ describe("write_file", () => {
 
   test("path outside the workspace -> path_escape", async () => {
     const tool = createWriteFileTool({ workspaceRoot: workspace });
-    let caught: unknown;
-    try {
-      await tool.execute(
+    await expect(
+      tool.execute(
         { path: "/etc/cant-touch-this", content: "x" },
         makeEmptyContext(),
-      );
-    } catch (error) {
-      caught = error;
-    }
-    expect((caught as JiePlatformError).code).toBe("PATH_ESCAPE");
+      ),
+    ).rejects.toMatchObject({ code: "PATH_ESCAPE" });
   });
 
   test("path is a directory -> is_a_directory", async () => {
     mkdirSync(join(workspace, "subdir"));
     const tool = createWriteFileTool({ workspaceRoot: workspace });
-    let caught: unknown;
-    try {
-      await tool.execute(
+    await expect(
+      tool.execute(
         { path: "subdir", content: "x" },
         makeEmptyContext(),
-      );
-    } catch (error) {
-      caught = error;
-    }
-    expect((caught as JiePlatformError).code).toBe("IS_A_DIRECTORY");
+      ),
+    ).rejects.toMatchObject({ code: "IS_A_DIRECTORY" });
   });
 
   test("details carries path, bytes_written, created_at", async () => {
