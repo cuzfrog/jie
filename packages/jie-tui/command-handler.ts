@@ -39,7 +39,7 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): TuiCommandHan
     const name = rawName.startsWith("/") ? rawName.slice(1) : rawName;
     const args = parts.slice(1);
 
-    const intercepted = tryDiskWrite(name, args, deps) ?? tryLoadTeam(name, args, deps.teamRegistry, deps.loadTeam);
+    const intercepted = runIntercepts(name, args, deps);
     if (intercepted !== null) {
       if (intercepted.kind === "reply") deps.dispatch(Actions.setTransientMessage(intercepted.text));
       else deps.dispatch(Actions.setErrorMessage(intercepted.text));
@@ -98,9 +98,6 @@ const teamCommand: SlashCommand = {
     const argument = args[0];
     if (argument === undefined) {
       return { kind: "reply", text: "/team <id>: pass a team id" };
-    }
-    if (argument === "--unset") {
-      return { kind: "reply", text: "/team --unset" };
     }
     return {
       kind: "reply",
@@ -169,29 +166,19 @@ const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn
       const installed = deps.teamRegistry?.listInstalled() ?? [];
       return { kind: "reply", text: `defaultTeam: ${merged.defaultTeam ?? "unset"} | installed: ${installed.join(", ")}` };
     }
-    return null;
+    const argument = args[0];
+    if (argument === undefined) return null;
+    if (deps.teamRegistry === undefined || deps.loadTeam === undefined) return null;
+    if (!deps.teamRegistry.isInstalled(argument)) return null;
+    void deps.loadTeam(argument).catch((error) => {
+      console.error(`loadTeam(${argument}) failed:`, error);
+    });
+    return { kind: "reply", text: `switching to team '${argument}'…` };
   }],
 ]);
 
-function tryDiskWrite(name: string, args: ReadonlyArray<string>, deps: CommandHandlerDeps): InterceptResult {
+function runIntercepts(name: string, args: ReadonlyArray<string>, deps: CommandHandlerDeps): InterceptResult {
   const fn = INTERCEPTS.get(name);
   if (fn === undefined) return null;
   return fn(args, deps);
-}
-
-function tryLoadTeam(
-  name: string,
-  args: ReadonlyArray<string>,
-  teamRegistry: TeamRegistry | undefined,
-  loadTeam: ((teamId: string) => Promise<void>) | undefined,
-): { kind: "reply"; text: string } | { kind: "error"; text: string } | null {
-  if (name !== "team") return null;
-  if (teamRegistry === undefined || loadTeam === undefined) return null;
-  const argument = args[0];
-  if (argument === undefined || argument === "--unset") return null;
-  if (!teamRegistry.isInstalled(argument)) return null;
-  void loadTeam(argument).catch((error) => {
-    console.error(`loadTeam(${argument}) failed:`, error);
-  });
-  return { kind: "reply", text: `switching to team '${argument}'…` };
 }
