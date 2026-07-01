@@ -28,7 +28,7 @@
 
 ## Code Conventions
 
-- No `any`, `unknown` types, code must be strongly typed. No enums, No inline imports (all imports must be at the top).
+- No `any`, `unknown` types, no unsafe `as`, code must be strongly typed. No enums, No inline imports (all imports must be at the top).
 - Use interfaces for OOP abstractions.
 - Prefer plain function over arrow functions.
 - Use only erasable TypeScript syntax compatible with Node strip-only mode in TypeScript. Do not use constructor parameter properties, `enum`, `namespace`/`module`, `import =`, `export =`, or other TypeScript constructs that require JavaScript emit. Use explicit fields and constructor assignments instead of parameter properties.
