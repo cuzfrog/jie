@@ -1,5 +1,6 @@
 import { createReadArtifactTool } from "./read-artifact";
 import { createArtifactStore, createStorage } from "../storage";
+import { makeEmptyContext } from "./_test-context";
 
 function makeStore() {
   const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
@@ -11,22 +12,19 @@ describe("read_artifact", () => {
     const store = makeStore();
     await store.write("k", "body");
     const tool = createReadArtifactTool({ artifactStore: store });
-    const result = await tool.execute({ key: "k" }, {} as never);
+    const result = await tool.execute({ key: "k" }, makeEmptyContext());
     expect(result.content).toBe("body");
-    const details = result.details as {
-      key: string;
-      content: string;
-      created_at: string;
-    };
-    expect(details.key).toBe("k");
-    expect(details.content).toBe("body");
-    expect(typeof details.created_at).toBe("string");
+    expect(result.details).toEqual({
+      key: "k",
+      content: "body",
+      created_at: expect.any(String),
+    });
   });
 
   test("miss: LLM content is 'Artifact not found: <key>'; details is null", async () => {
     const store = makeStore();
     const tool = createReadArtifactTool({ artifactStore: store });
-    const result = await tool.execute({ key: "missing" }, {} as never);
+    const result = await tool.execute({ key: "missing" }, makeEmptyContext());
     expect(result.content).toBe("Artifact not found: missing");
     expect(result.details).toBeNull();
   });

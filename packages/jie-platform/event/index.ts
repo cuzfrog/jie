@@ -1,3 +1,3 @@
 export { type EventManager, createEventManager } from "./event-manager";
-export type { EventEnvelope, Sender } from "./events";
-export { Events } from "./events";
+export type { EventEnvelope, EventType, Sender, AgentSender, UserSender, SystemSender } from "./events";
+export { Events, EVENT_TEXT_TRUNCATION_BYTES } from "./events";

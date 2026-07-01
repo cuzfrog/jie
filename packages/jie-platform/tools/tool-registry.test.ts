@@ -171,17 +171,8 @@ describe("createToolRegistry", () => {
 });
 
 describe("createToolRegistry — built-in installation", () => {
-  function makePopulatedReg(): ToolRegistry {
-    const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
-    return createToolRegistry({
-      workspaceRoot: "/tmp",
-      eventManager: createEventManager(),
-      artifactStore: createArtifactStore(storage),
-    });
-  }
-
   test("populated registry: list() contains all 8 built-ins", () => {
-    const reg = makePopulatedReg();
+    const reg = makeReg();
     const names = reg.list().map((t) => t.name).sort();
     expect(names).toEqual([
       "bash",
@@ -195,17 +186,12 @@ describe("createToolRegistry — built-in installation", () => {
     ]);
   });
 
-  test("populated registry: resolve('bash') returns the installed bash tool", () => {
-    const reg = makePopulatedReg();
-    const matches = reg.resolve("bash");
-    expect(matches).toHaveLength(1);
-    expect(matches[0]!.name).toBe("bash");
-  });
-
-  test("populated registry: resolve('read_file') returns the installed read_file tool", () => {
-    const reg = makePopulatedReg();
-    const matches = reg.resolve("read_file");
-    expect(matches).toHaveLength(1);
-    expect(matches[0]!.name).toBe("read_file");
+  test("populated registry: resolve() returns the matching installed tool for each built-in", () => {
+    const reg = makeReg();
+    for (const name of ["bash", "read_file", "write_file", "notify", "web_search", "web_fetch", "read_artifact", "write_artifact"]) {
+      const matches = reg.resolve(name);
+      expect(matches).toHaveLength(1);
+      expect(matches[0]!.name).toBe(name);
+    }
   });
 });

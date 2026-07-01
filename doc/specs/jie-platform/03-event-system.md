@@ -80,11 +80,11 @@ Events.custom(sender, clientTopic, payload)
 
 `Events.userPrompt(sender, teamId, prompt, targetAgentKey)` — one factory covers both the leader and direct-addressed paths. The caller resolves "the leader" to the leader's `agent_key` (captured from the `team.loaded` event) before calling, so the factory takes the target's `agent_key` directly. The bus topic is `team.{teamId}.agent.{agentKey}.prompt`; the payload is `{ teamId, agentKey, prompt }`. Every body auto-subscribes to its own subject (matched by `agent_key`), so the prompt reaches exactly the targeted agent.
 
-`Events.custom(sender, clientTopic, payload)` — the runtime topic factory for client-defined subjects. The bus topic is `custom.{clientTopic}` (the `custom.` prefix marks client-defined subjects, distinct from the platform's `team.{teamId}.…` namespace). The envelope payload is `{ clientTopic, payload }`, preserving the caller's clientTopic alongside the inner payload. `notify` uses this to publish to team-scoped domain topics (e.g., `Events.custom(sender, "t1.task.recorded", { prompt, source })` → bus topic `custom.t1.task.recorded`).
+`Events.custom(sender, clientTopic, payload)` — the runtime topic factory for client-defined subjects. The bus topic is `custom.{clientTopic}` (the `custom.` prefix marks client-defined subjects, distinct from the platform's `team.{teamId}.…` namespace). The envelope payload is the `payload` string verbatim. `notify` uses this to publish to team-scoped domain topics (e.g., `Events.custom(sender, "t1.task.recorded", prompt)` → bus topic `custom.t1.task.recorded`, payload `prompt`).
 
 `EventPayloadMap` is the source of truth for typed payloads but is **not exported**. It describes the wire form — what flows on the bus. Callers pre-stringify tool args via `JSON.stringify`; the manager validates length and re-truncates if the caller's string exceeds the cap (overriding `*_truncated`). The truncation logic lives inside `EventManager` (file-private).
 
-**Topic interpolation.** Event-type keys in `EventPayloadMap` may include `{placeholder}` segments. The factory substitutes each placeholder from the payload via `resolveTopic`. For example, `"team.{teamId}.agent.{agentKey}.prompt"` resolves to `"team.t1.agent.general-1.prompt"` when `teamId: "t1"` and `agentKey: "general-1"` are in the payload; `"custom.{clientTopic}"` resolves to `"custom.t1.task"` when `clientTopic: "t1.task"` is in the payload. The resolver is pure — it reads only the payload, never the sender.
+**Topic interpolation.** Event-type keys in `EventPayloadMap` may include `{placeholder}` segments. The factory substitutes each placeholder from the payload via `resolveTopic`. For example, `"team.{teamId}.agent.{agentKey}.prompt"` resolves to `"team.t1.agent.general-1.prompt"` when `teamId: "t1"` and `agentKey: "general-1"` are in the payload. The resolver is pure — it reads only the payload, never the sender.
 
 **`JiePlatform.events: EventManager`** is the public handle. Consumers never touch the underlying `EventBus` directly.
 
@@ -112,7 +112,7 @@ A single `jie` process can host multiple teams' bodies. Team-specific channels a
 | `agent.stream.end` | LLM response complete |
 | `agent.tool.call` | Tool invocation about to execute |
 | `agent.tool.result` | Tool execution completed |
-| `agent.queue.update` | Agent's in-memory prompt queue changed (enqueue or dequeue) |
+| `agent.prompt.queue.update` | Agent's in-memory prompt queue changed (enqueue or dequeue) |
 | `agent.turn.start` | Agent began a turn (pi-agent `turn_start` bridged to bus; consumed by the CLI's `-p` idle gate and the TUI's busy/idle derivation) |
 | `agent.idle` | Agent entered idle state |
 
@@ -139,9 +139,9 @@ interface EventEnvelope<T extends string = string> {
 
 `payload` is a discriminated union keyed on `topic` for known topics, and `Record<string, unknown>` for runtime topics. The platform defines infrastructure event payloads; the team blueprint defines domain event payloads.
 
-**Wire format — the bus payload IS the envelope.** Every publisher on the bus (body, TUI, CLI) constructs and publishes a full `EventEnvelope` envelope. The bus's `publish(subject, payload)` second argument is the envelope; the bus's `subscribe` callback receives `(subject, envelope)`. There is no shorthand or partial-publish path. When a body publishes via `notify`, the body fills `payload: { clientTopic, payload: { prompt, source } }` (via `Events.custom`) and the envelope's `topic` is `custom.{teamId}.{topic}`; `sender` is `{ kind: "agent", identity: { teamId, agentRole, agentKey } }`. When the CLI publishes a leader prompt, it fills `sender: { kind: "cli" }` and uses `Events.userPrompt(sender, teamId, prompt, leaderAgentKey)` — the sender is the publisher, not the target. The full per-publisher wire-format contract is in `02-protocol-stack.md` "Prompt Ingress" and `06-agent-model.md` `notify` step 2.
+**Wire format — the bus payload IS the envelope.** Every publisher on the bus (body, TUI, CLI) constructs and publishes a full `EventEnvelope` envelope. The bus's `publish(subject, payload)` second argument is the envelope; the bus's `subscribe` callback receives `(subject, envelope)`. There is no shorthand or partial-publish path. When a body publishes via `notify`, the body fills `payload: <prompt-string>` (via `Events.custom`) and the envelope's `topic` is `custom.{teamId}.{topic}`; `sender` is `{ kind: "agent", identity: { teamId, agentRole, agentKey } }`. When the CLI publishes a leader prompt, it fills `sender: { kind: "cli" }` and uses `Events.userPrompt(sender, teamId, prompt, leaderAgentKey)` — the sender is the publisher, not the target. The full per-publisher wire-format contract is in `02-protocol-stack.md` "Prompt Ingress" and `06-agent-model.md` `notify` step 2.
 
-**Reading the envelope at a subscriber.** A subscriber reads `envelope.payload` (the inner data) for the event-type-specific fields (e.g., `envelope.payload.prompt` for `leader.prompt`, `envelope.payload.payload.source` for self-receipt filtering on `notify`-sourced events). `envelope.sender` carries the publisher's identity; agents use `envelope.sender.identity.agentKey` for self-receipt filtering (per `06-agent-model.md` "Built-in Tool: `notify`" step 3). The body's subscription callback for `notify`-sourced events reads `envelope.payload.payload.source` (nested under `clientTopic` and `payload`) and compares it to the body's own `agent_key`.
+**Reading the envelope at a subscriber.** A subscriber reads `envelope.payload` (the inner data) for the event-type-specific fields (e.g., `envelope.payload.prompt` for `leader.prompt`, `envelope.payload` for the prompt text of a `notify`-sourced event). `envelope.sender` carries the publisher's identity; agents use `envelope.sender.identity.agentKey` for self-receipt filtering (per `06-agent-model.md` "Built-in Tool: `notify`" step 3). The body's subscription callback for `notify`-sourced events reads `envelope.sender.identity.agentKey` and compares it to the body's own `agent_key`.
 
 **Sender kinds.** Three variants:
 - `{ kind: "agent", identity }` — a body publishes. `identity` carries `teamId`, `agentRole`, `agentKey`.
@@ -157,19 +157,19 @@ type PlatformEventPayload<T extends PlatformEventType> =
   T extends 'agent.stream.end'     ? { stream_id: number; total_chunks: number } :
   T extends 'agent.tool.call'      ? { tool_call_id: string; name: string; input: string; input_truncated: boolean } :
   T extends 'agent.tool.result'    ? { tool_call_id: string; name: string; output: string | null; output_truncated: boolean; duration_ms: number; error: string | null } :
-  T extends 'agent.queue.update'   ? { prompts: string[] } :
+  T extends 'agent.prompt.queue.update'   ? { prompts: string[] } :
   T extends 'agent.turn.start'     ? { } :
   T extends 'agent.idle'           ? { } :
   // Topic-published events (notify's `event_type` from the LLM, team-defined
   // domain events): the platform does not validate the payload shape. Bodies
-  // publish `{ prompt, source }` (per the `notify` tool's contract); observers
-  // read the inner fields defensively. The catch-all is the type-level
+  // publish the prompt string (per the `notify` tool's contract); observers
+  // read the inner field defensively. The catch-all is the type-level
   // approximation; the actual domain payload is opaque to the platform.
-  T extends string                 ? { prompt: string; source: string } :
+  T extends string                 ? string :
   never;
 ```
 
-**Type-narrowing boundary.** Direct-addressed user prompts travel on `custom.{team_id}.{agent_key}` (the `Events.custom` envelope shape). The envelope payload is `{ clientTopic, payload: { prompt } }`; the receiving body reads `envelope.payload.payload.prompt` to get the prompt text (no `source` field, because the TUI/CLI is not an agent). The body formats the synthetic `user` message by the actual presence of a `source` field in the unwrapped inner payload (per `06-agent-model.md` "Prompt Ingress & Queuing"). The platform's own event payloads are precisely typed. `notify`-sourced events publish through `Events.custom` with `payload: { prompt, source }`; the receiving agent unwraps the `payload` field to read `prompt` and `source`. Domain event types (`notify`'s `event_type` from the LLM) carry their domain data inside the inner `payload` of the `Events.custom` envelope. The platform's only validation is the envelope (version, sender, timestamp) and the platform's own event payloads.
+**Type-narrowing boundary.** User prompts (leader and direct-addressed) travel on `team.{teamId}.agent.{agentKey}.prompt` via `Events.userPrompt`; TUI/CLI direct addressing is the same factory call, distinguished by `sender.kind`. The receiving body reads `envelope.payload.prompt` to get the prompt text; the synthetic `user` message is formatted as `[user]: {prompt}` (no source, because the TUI/CLI is not an agent). `notify`-sourced events travel on `custom.{teamId}.{topic}` via `Events.custom`; the payload is a single string (the prompt text), and the synthetic `user` message is formatted as `[{source_agent_key} on '{topic}']: {prompt}` — the topic here is the unscoped name from the publisher's `notify` call. The body distinguishes user-prompt from `notify` ingress by the topic shape (`team.…` vs `custom.…`), not by payload shape. The platform's own event payloads are precisely typed. Domain event types (`notify`'s `event_type` from the LLM) ride on `custom.{clientTopic}` via `Events.custom` with an opaque string payload. The platform's only validation is the envelope (version, sender, timestamp) and the platform's own event payloads.
 
 ```typescript
 type PlatformEventType =
@@ -178,7 +178,7 @@ type PlatformEventType =
   | 'agent.stream.end'
   | 'agent.tool.call'
   | 'agent.tool.result'
-  | 'agent.queue.update'
+  | 'agent.prompt.queue.update'
   | 'agent.turn.start'
   | 'agent.idle';
 ```
@@ -266,9 +266,9 @@ When an agent transitions from `busy` to `idle` (work unit complete, terminal ev
 
 ## Inter-Agent Messaging
 
-The `notify` tool (see `06-agent-model.md`) is the sole inter-agent communication channel. The team's view: the LLM supplies `{ topic, prompt, source }` and the platform publishes via `Events.custom(sender, "{team_id}.{topic}", { prompt, source })` to the bus topic `custom.{team_id}.{topic}`. Every agent auto-subscribes to `custom.{team_id}.{agent_key}` (the platform prefixes at body construction), enabling direct addressing. Domain topic subscriptions are declared in the agent's `.md` frontmatter `subscribe:` field (unscoped in the author's view; the platform prefixes `custom.{team_id}.` at body construction).
+The `notify` tool (see `06-agent-model.md`) is the sole inter-agent communication channel. The team's view: the LLM supplies `{ topic, prompt }` and the platform publishes via `Events.custom(sender, "{team_id}.{topic}", prompt)` to the bus topic `custom.{team_id}.{topic}`. Every agent auto-subscribes to `custom.{team_id}.{agent_key}` (the platform prefixes at body construction), enabling direct addressing. Domain topic subscriptions are declared in the agent's `.md` frontmatter `subscribe:` field (unscoped in the author's view; the platform prefixes `custom.{team_id}.` at body construction).
 
-Self-receipt filtering is done in `AgentBody`'s subscription callback — if the event's `source` (read from `envelope.payload.payload.source` after unwrapping the `Events.custom` envelope) matches the agent's own `agent_key`, the callback skips processing. This keeps the `EventBus` transport-agnostic; a future `NatsEventBus` would not need agent-identity awareness.
+Self-receipt filtering is done in `AgentBody`'s subscription callback — if `envelope.sender.identity.agentKey` matches the agent's own `agent_key`, the callback skips processing. This keeps the `EventBus` transport-agnostic; a future `NatsEventBus` would not need agent-identity awareness.
 
 The `notify` tool is a regular tool — it does not control the LLM loop. The LLM decides when the turn is complete via `stopReason`.
 

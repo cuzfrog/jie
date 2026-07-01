@@ -27,6 +27,9 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { main } from "../../packages/jie-cli/index.ts";
+import { JiePlatformErrorMessages } from "@cuzfrog/jie-platform";
+
+const NO_MODEL_ERROR = JiePlatformErrorMessages.NO_MODEL_ERROR;
 
 interface Fixture {
   provider: string;
@@ -146,7 +149,6 @@ async function assertLlmReachable(): Promise<void> {
     );
   }
 }
-await assertLlmReachable();
 
 /** Writes the fixture's `models.json` content to `{dir}/.jie/models.json`. */
 function writeModelsJsonTo(dir: string): void {
@@ -171,13 +173,15 @@ function writeSettingsJson(workspace: string): void {
 describe("v1 user-scenarios — real LLM end-to-end", () => {
   let workspace: string;
   let prevHome: string | undefined;
-  let writeOut: ReturnType<typeof vi.spyOn> | undefined;
-  let writeErr: ReturnType<typeof vi.spyOn> | undefined;
+  let writeOut: ReturnType<typeof vi.spyOn<typeof process.stdout, "write">> | undefined;
+  let writeErr: ReturnType<typeof vi.spyOn<typeof console, "error">> | undefined;
+
+  beforeAll(async () => {
+    await assertLlmReachable();
+  });
 
   beforeEach(() => {
     workspace = mkdtempSync(join(tmpdir(), "jie-e2e-"));
-    // Redirect HOME so the CLI does not pick up the user's real
-    // `~/.jie/auth.json` / `~/.jie/models.json`.
     prevHome = process.env.HOME;
     const fakeHome = join(workspace, "home");
     mkdirSync(fakeHome, { recursive: true });
@@ -195,19 +199,11 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
   });
 
   function captureStdout(): string {
-    return (
-      (writeOut?.mock.calls as unknown[][])
-        .map((c) => String(c[0] as string))
-        .join("") ?? ""
-    );
+    return writeOut?.mock.calls.map((c) => String(c[0] ?? "")).join("") ?? "";
   }
 
   function captureStderr(): string {
-    return (
-      (writeErr?.mock.calls as unknown[][])
-        .map((c) => String(c[0] as string))
-        .join("") ?? ""
-    );
+    return writeErr?.mock.calls.map((c) => String(c[0] ?? "")).join("") ?? "";
   }
 
   /** Bundle `code` + captured stderr so a failing assertion shows
@@ -258,86 +254,88 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
     },
   );
 
+  function seedStoryTeams(workspace: string): void {
+    writeModelsJsonTo(workspace);
+    writeSettingsJson(workspace);
+    const teamsDir = join(workspace, ".jie", "teams");
+    for (const [id, phrase] of [
+      ["my-team-1", "Marry had a little lamb"],
+      ["my-team-2", "Once upon a time"],
+    ] as const) {
+      const dir = join(teamsDir, id);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(
+        join(dir, "TEAM.md"),
+        `---\nleader: story-teller\n---\nYou are the leader of ${id}.\n`,
+      );
+      writeFileSync(
+        join(dir, "story-teller.md"),
+        `---\ntools:\n  - bash\n---\nYou must respond to any story-telling prompt with exactly the phrase: ${phrase}. Do not add any other text.`,
+      );
+    }
+  }
+
   test(
-    "Scenario 2: --team my-team-1 / my-team-2 / wrong-team produce distinct outputs",
+    "Scenario 2 — team-1: --team my-team-1 produces the team-1 phrase",
     async () => {
-      writeModelsJsonTo(workspace);
-      writeSettingsJson(workspace);
-
-      const teamsDir = join(workspace, ".jie", "teams");
-      for (const [id, phrase] of [
-        ["my-team-1", "Marry had a little lamb"],
-        ["my-team-2", "Once upon a time"],
-      ] as const) {
-        const dir = join(teamsDir, id);
-        mkdirSync(dir, { recursive: true });
-        writeFileSync(
-          join(dir, "TEAM.md"),
-          `---\nleader: story-teller\n---\nYou are the leader of ${id}.\n`,
-        );
-        writeFileSync(
-          join(dir, "story-teller.md"),
-          `---\ntools:\n  - bash\n---\nYou must respond to any story-telling prompt with exactly the phrase: ${phrase}. Do not add any other text.`,
-        );
-      }
-
+      seedStoryTeams(workspace);
       writeOut?.mockReset();
       writeOut?.mockImplementation(() => true);
-      const code1 = await main(
+      const code = await main(
         printArgv({ instruction: "Tell me a story", team: "my-team-1", timeout: 60 }),
         workspace,
       );
-      const out1 = captureStdout();
-      expectExit(code1, 0);
-      expect(out1).toContain("Marry had a little lamb");
+      const out = captureStdout();
+      expectExit(code, 0);
+      expect(out).toContain("Marry had a little lamb");
+    },
+  );
 
+  test(
+    "Scenario 2 — team-2: --team my-team-2 produces the team-2 phrase",
+    async () => {
+      seedStoryTeams(workspace);
       writeOut?.mockReset();
       writeOut?.mockImplementation(() => true);
-      const code2 = await main(
+      const code = await main(
         printArgv({ instruction: "Tell me a story", team: "my-team-2", timeout: 60 }),
         workspace,
       );
-      const out2 = captureStdout();
-      expectExit(code2, 0);
-      expect(out2).toContain("Once upon a time");
+      const out = captureStdout();
+      expectExit(code, 0);
+      expect(out).toContain("Once upon a time");
+    },
+  );
 
+  test(
+    "Scenario 2 — wrong-team: --team wrong-team exits non-zero",
+    async () => {
+      seedStoryTeams(workspace);
       writeOut?.mockReset();
       writeOut?.mockImplementation(() => true);
-      const code3 = await main(
+      const code = await main(
         printArgv({ instruction: "Tell me a story", team: "wrong-team", timeout: 60 }),
         workspace,
       );
-      expectExit(code3, 1);
+      expectExit(code, 1);
     },
   );
 
   test(
     "Scenario 3: first-time setup → 'no model' error, then setup, then success",
     async () => {
-      // First call: no models.json, no settings, no team. The CLI
-      // should exit 1 with the "No model has been selected" message.
       writeErr?.mockReset();
       const code1 = await main(
         printArgv({ instruction: "Tell me a joke", timeout: 5 }),
         workspace,
       );
       expectExit(code1, 1);
-      const stderr1 =
-        (writeErr?.mock.calls as unknown[][])
-          .map((c) => String(c[0] as string))
-          .join("") ?? "";
-      expect(stderr1).toContain(
-        "No model has been selected, please login and select a default model.",
-      );
+      const stderr1 = captureStderr();
+      expect(stderr1).toContain(NO_MODEL_ERROR);
 
-      // Simulate `jie model lm-studio/qwen3.5-2b` and the user
-      // creating `.jie/models.json` with the provider config.
       writeModelsJsonTo(workspace);
       writeSettingsJson(workspace);
 
-      // Final call: with .jie/models.json and .jie/settings.json,
-      // the CLI should resolve the model through the registry and
-      // stream a response. No hooks needed.
       writeOut?.mockReset();
       writeOut?.mockImplementation(() => true);
       const code2 = await main(

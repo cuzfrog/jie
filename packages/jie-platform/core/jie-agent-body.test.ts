@@ -1,6 +1,6 @@
 import { type Agent, type AgentMessage } from "@earendil-works/pi-agent-core";
 import { JieAgentBody } from "./jie-agent-body";
-import { createEventManager, type EventManager } from "../event";
+import { createEventManager, Events, type EventManager } from "../event";
 import type { MemoryManager } from "../storage";
 import type { AgentSoul } from "../team";
 import type { StreamPublisher } from "./streaming";
@@ -20,9 +20,10 @@ function makeSoul(overrides: Partial<AgentSoul> = {}): AgentSoul {
 function makeFakeAgent(overrides: Partial<{
   messages: AgentMessage[];
   isStreaming: boolean;
+  model: unknown;
 }> = {}): {
   agent: Agent;
-  state: { messages: AgentMessage[]; isStreaming: boolean };
+  state: { messages: AgentMessage[]; isStreaming: boolean; model: unknown };
   prompt: ReturnType<typeof vi.fn>;
   followUp: ReturnType<typeof vi.fn>;
   steer: ReturnType<typeof vi.fn>;
@@ -32,8 +33,9 @@ function makeFakeAgent(overrides: Partial<{
   const state = {
     messages: overrides.messages ?? [],
     isStreaming: overrides.isStreaming ?? false,
+    model: overrides.model ?? {},
   };
-  const prompt = vi.fn(async () => {});
+  const prompt = vi.fn(async (_message: AgentMessage | AgentMessage[]) => {});
   const followUp = vi.fn(() => {});
   const steer = vi.fn(() => {});
   const cont = vi.fn(async () => {});
@@ -159,26 +161,20 @@ describe("JieAgentBody — start() subscriptions", () => {
     body.stop();
   });
 
-  test("subscribes to team.{teamId}.agent.{agentKey}.prompt", async () => {
+  test("subscribes to the static user.prompt topic", async () => {
     await body.start();
     let received = false;
-    h.events.subscribe("team.t1.agent.general-1.prompt", () => {
+    h.events.subscribe("user.prompt", () => {
       received = true;
     });
-    h.events.publish({
-      version: 1,
-      topic: "team.t1.agent.general-1.prompt",
-      sender: { kind: "cli" },
-      timestamp: new Date().toISOString(),
-      payload: { teamId: "t1", agentKey: "general-1", prompt: "hi" },
-    });
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "hi", "general-1"));
     expect(received).toBe(true);
   });
 
-  test("each body subscribes to its own agent prompt subject", async () => {
+  test("each body subscribes to the shared user.prompt subject and filters by agentKey", async () => {
     const b2 = h.makeBody({ agentKey: "worker-1" });
     await b2.start();
-    expect(h.events.subscriberCount("team.t1.agent.worker-1.prompt")).toBe(1);
+    expect(h.events.subscriberCount("user.prompt")).toBe(1);
     b2.stop();
   });
 
@@ -192,14 +188,38 @@ describe("JieAgentBody — start() subscriptions", () => {
     h.events.subscribe("custom.t1.task.recorded", () => {
       received = true;
     });
-    h.events.publish({
-      version: 1,
-      topic: "custom.t1.task.recorded",
-      sender: { kind: "agent", identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" } },
-      timestamp: new Date().toISOString(),
-      payload: { clientTopic: "t1.task.recorded", payload: { prompt: "task", source: "x" } },
-    });
+    h.events.publish(Events.custom({ kind: "agent", identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" } }, "t1.task.recorded", "task"));
     expect(received).toBe(true);
+    b2.stop();
+  });
+
+  test("ingestCustom drops self-published events (avoids feedback loop)", async () => {
+    body.stop();
+    const b2 = h.makeBody({
+      soul: makeSoul({ subscriptions: ["task.recorded"] }),
+    });
+    await b2.start();
+    h.events.publish(Events.custom(
+      { kind: "agent", identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" } },
+      "t1.task.recorded",
+      "do X",
+    ));
+    expect(h.prompt.mock.calls.length).toBe(0);
+    b2.stop();
+  });
+
+  test("ingestCustom still dispatches events from a different agent", async () => {
+    body.stop();
+    const b2 = h.makeBody({
+      soul: makeSoul({ subscriptions: ["task.recorded"] }),
+    });
+    await b2.start();
+    h.events.publish(Events.custom(
+      { kind: "agent", identity: { teamId: "t1", agentRole: "leader", agentKey: "leader-1" } },
+      "t1.task.recorded",
+      "do X",
+    ));
+    expect(h.prompt.mock.calls.length).toBe(1);
     b2.stop();
   });
 });
@@ -274,36 +294,24 @@ describe("JieAgentBody — prompt ingress format", () => {
   test("`agent.prompt` (no source) is formatted as `[user]: <prompt>`", async () => {
     const body = h.makeBody();
     await body.start();
-    h.events.publish({
-      version: 1,
-      topic: "team.t1.agent.general-1.prompt",
-      sender: { kind: "cli" },
-      timestamp: new Date().toISOString(),
-      payload: { teamId: "t1", agentKey: "general-1", prompt: "hello" },
-    });
-    const calls = h.prompt.mock.calls as Array<[AgentMessage]>;
-    expect(calls.length).toBeGreaterThan(0);
-    const synthetic = calls[0]![0] as { role: string; content: string };
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "hello", "general-1"));
+    expect(h.prompt.mock.calls.length).toBeGreaterThan(0);
+    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
     expect(synthetic.role).toBe("user");
-    expect(synthetic.content).toBe("[user]: hello");
+    const content = (synthetic as { content: unknown }).content;
+    expect(content).toBe("[user]: hello");
     body.stop();
   });
 
-  test("notify-sourced event (with source) is formatted as `[<source> on '<topic>']: <prompt>`", async () => {
+  test("notify-sourced event is formatted as `[<agentKey> on '<topic>']: <prompt>`", async () => {
     const body = h.makeBody({
       soul: makeSoul({ subscriptions: ["task.researched"] }),
     });
     await body.start();
-    h.events.publish({
-      version: 1,
-      topic: "custom.t1.task.researched",
-      sender: { kind: "agent", identity: { teamId: "t1", agentRole: "researcher", agentKey: "researcher-1" } },
-      timestamp: new Date().toISOString(),
-      payload: { clientTopic: "t1.task.researched", payload: { prompt: "report", source: "researcher-1" } },
-    });
-    const calls = h.prompt.mock.calls as Array<[AgentMessage]>;
-    const synthetic = calls[0]![0] as { content: string };
-    expect(synthetic.content).toBe(
+    h.events.publish(Events.custom({ kind: "agent", identity: { teamId: "t1", agentRole: "researcher", agentKey: "researcher-1" } }, "t1.task.researched", "report"));
+    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
+    const content = (synthetic as { content: unknown }).content;
+    expect(content).toBe(
       "[researcher-1 on 'task.researched']: report",
     );
     body.stop();
@@ -365,74 +373,50 @@ describe("JieAgentBody — handlePiAgentEvent (stream bridge)", () => {
     expect(h.endStream).toHaveBeenCalled();
   });
 
-  test("message_end with assistant: memory.persist is called", async () => {
-    const body = h.makeBody();
-    body.handlePiAgentEvent({
-      type: "message_end",
-      message: {
-        role: "assistant",
-        content: [{ type: "text", text: "x" }],
-      } as unknown as AgentMessage,
-    });
-    await Promise.resolve();
-    expect(h.persisted.length).toBe(1);
+  test("message_end: memory.persist is called for every message role (no role check)", async () => {
+    const cases: Array<{ name: string; message: Record<string, unknown> }> = [
+      {
+        name: "assistant",
+        message: { role: "assistant", content: [{ type: "text", text: "x" }] },
+      },
+      {
+        name: "user",
+        message: { role: "user", content: "hi" },
+      },
+      {
+        name: "toolResult",
+        message: {
+          role: "toolResult",
+          toolCallId: "call_x",
+          content: "ok",
+          isError: false,
+          timestamp: Date.now(),
+        },
+      },
+      {
+        name: "custom",
+        message: {
+          role: "custom",
+          customType: "test",
+          content: "x",
+          display: false,
+          timestamp: Date.now(),
+        },
+      },
+    ];
+    for (const { message } of cases) {
+      const body = h.makeBody();
+      body.handlePiAgentEvent({
+        type: "message_end",
+        message: message as unknown as AgentMessage,
+      });
+      await Promise.resolve();
+      expect(h.persisted.length).toBe(1);
+      h.persisted.length = 0;
+    }
   });
 
-  test("message_end with custom role: memory.persist is called (no role check)", async () => {
-    const body = h.makeBody();
-    body.handlePiAgentEvent({
-      type: "message_end",
-      message: {
-        role: "custom",
-        customType: "test",
-        content: "x",
-        display: false,
-        timestamp: Date.now(),
-      } as unknown as AgentMessage,
-    });
-    await Promise.resolve();
-    expect(h.persisted.length).toBe(1);
-  });
-
-  test("message_end with user role: memory.persist is called (#49)", async () => {
-    const body = h.makeBody();
-    body.handlePiAgentEvent({
-      type: "message_end",
-      message: {
-        role: "user",
-        content: "hi",
-      } as unknown as AgentMessage,
-    });
-    await Promise.resolve();
-    expect(h.persisted.length).toBe(1);
-  });
-
-  test("message_end with toolResult role: memory.persist is called (#49)", async () => {
-    const body = h.makeBody();
-    body.handlePiAgentEvent({
-      type: "message_end",
-      message: {
-        role: "toolResult",
-        toolCallId: "call_x",
-        content: "ok",
-        isError: false,
-        timestamp: Date.now(),
-      } as unknown as AgentMessage,
-    });
-    await Promise.resolve();
-    expect(h.persisted.length).toBe(1);
-  });
-
-  test("message_end with assistant: stream.endStream is called (#51)", () => {
-    const body = h.makeBody();
-    body.handlePiAgentEvent({
-      type: "message_end",
-      message: { role: "assistant", content: [] } as unknown as AgentMessage,
-    });
-    expect(h.endStream).toHaveBeenCalled();
-  });
-
-  test("message_end with non-assistant role: stream.endStream is NOT called (#51)", () => {
+  test("message_end with non-assistant role: stream.endStream is NOT called", () => {
     const body = h.makeBody();
     body.handlePiAgentEvent({
       type: "message_end",
@@ -448,13 +432,7 @@ describe("JieAgentBody — handlePiAgentEvent (stream bridge)", () => {
     const body = h.makeBody();
     await body.start();
     h.state.isStreaming = true;
-    h.events.publish({
-      topic: "team.t1.agent.general-1.prompt",
-      payload: { prompt: "queued msg" },
-      sender: { kind: "cli" },
-      version: 1,
-      timestamp: new Date().toISOString(),
-    });
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "queued msg", "general-1"));
     expect(h.followUp.mock.calls.length).toBe(0);
     expect(h.prompt.mock.calls.length).toBe(0);
     h.state.isStreaming = false;
@@ -468,6 +446,59 @@ describe("JieAgentBody — handlePiAgentEvent (stream bridge)", () => {
     body.handlePiAgentEvent({ type: "agent_end", messages: [] });
     expect(h.followUp.mock.calls.length).toBe(0);
     expect(h.prompt.mock.calls.length).toBe(0);
+  });
+
+  test("turn_end does NOT publish agent.idle (fix #89: avoid spurious idle on sub-turns)", () => {
+    const h = makeHarness();
+    const body = h.makeBody();
+    let idleCount = 0;
+    h.events.subscribe("agent.idle", () => {
+      idleCount += 1;
+    });
+    body.handlePiAgentEvent({
+      type: "turn_end",
+      message: { role: "assistant", content: [] } as unknown as AgentMessage,
+      toolResults: [],
+    });
+    expect(idleCount).toBe(0);
+  });
+
+  test("turn_end drains the queue via followUp (no idle publish) (#89)", async () => {
+    const h = makeHarness();
+    const body = h.makeBody();
+    await body.start();
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "queued msg", "general-1"));
+    h.state.isStreaming = false;
+    body.handlePiAgentEvent({
+      type: "turn_end",
+      message: { role: "assistant", content: [] } as unknown as AgentMessage,
+      toolResults: [],
+    });
+    expect(h.followUp.mock.calls.length).toBe(1);
+    expect(h.prompt.mock.calls.length).toBe(0);
+  });
+
+  test("agent_end publishes agent.idle exactly once per run (#89)", () => {
+    const h = makeHarness();
+    const body = h.makeBody();
+    let idleCount = 0;
+    h.events.subscribe("agent.idle", () => {
+      idleCount += 1;
+    });
+    body.handlePiAgentEvent({
+      type: "turn_end",
+      message: { role: "assistant", content: [] } as unknown as AgentMessage,
+      toolResults: [],
+    });
+    body.handlePiAgentEvent({
+      type: "turn_end",
+      message: { role: "assistant", content: [] } as unknown as AgentMessage,
+      toolResults: [],
+    });
+    expect(idleCount).toBe(0);
+    body.handlePiAgentEvent({ type: "agent_end", messages: [] });
+    expect(idleCount).toBe(1);
   });
 });
 
@@ -488,18 +519,18 @@ describe("JieAgentBody — addExternalCleanup + stop()", () => {
     const h = makeHarness();
     const body = h.makeBody();
     await body.start();
-    expect(h.events.subscriberCount("team.t1.agent.general-1.prompt")).toBe(1);
+    expect(h.events.subscriberCount("user.prompt")).toBe(1);
     body.stop();
-    expect(h.events.subscriberCount("team.t1.agent.general-1.prompt")).toBe(0);
+    expect(h.events.subscriberCount("user.prompt")).toBe(0);
   });
 
   test("start() is idempotent (second call does not re-subscribe)", async () => {
     const h = makeHarness();
     const body = h.makeBody();
     await body.start();
-    const countAfterFirst = h.events.subscriberCount("team.t1.agent.general-1.prompt");
+    const countAfterFirst = h.events.subscriberCount("user.prompt");
     await body.start();
-    const countAfterSecond = h.events.subscriberCount("team.t1.agent.general-1.prompt");
+    const countAfterSecond = h.events.subscriberCount("user.prompt");
     expect(countAfterFirst).toBe(countAfterSecond);
     body.stop();
   });

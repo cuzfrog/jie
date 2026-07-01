@@ -1,6 +1,6 @@
 import { createWriteArtifactTool } from "./write-artifact";
 import { createArtifactStore, createStorage } from "../storage";
-import { JiePlatformError } from "../domain-types";
+import { makeEmptyContext } from "./_test-context";
 
 function makeStore() {
   const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
@@ -13,37 +13,29 @@ describe("write_artifact", () => {
     const tool = createWriteArtifactTool({ artifactStore: store });
     const result = await tool.execute(
       { key: "task/plan", content: "hello" },
-      {} as never,
+      makeEmptyContext(),
     );
     expect(result.content).toBe("Stored artifact at task/plan (5 chars)");
-    const details = result.details as { key: string; created_at: string };
-    expect(details.key).toBe("task/plan");
-    expect(typeof details.created_at).toBe("string");
+    expect(result.details).toMatchObject({
+      key: "task/plan",
+      created_at: expect.any(String),
+    });
   });
 
   test("invalid key -> invalid_artifact_key", async () => {
     const store = makeStore();
     const tool = createWriteArtifactTool({ artifactStore: store });
-    let caught: unknown;
-    try {
-      await tool.execute({ key: "bad space", content: "x" }, {} as never);
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("invalid_artifact_key");
+    await expect(
+      tool.execute({ key: "bad space", content: "x" }, makeEmptyContext()),
+    ).rejects.toMatchObject({ code: "INVALID_ARTIFACT_KEY" });
   });
 
   test("content > 5 MiB -> artifact_too_large", async () => {
     const store = makeStore();
     const tool = createWriteArtifactTool({ artifactStore: store });
     const huge = "x".repeat(5 * 1024 * 1024 + 1);
-    let caught: unknown;
-    try {
-      await tool.execute({ key: "k", content: huge }, {} as never);
-    } catch (error) {
-      caught = error;
-    }
-    expect((caught as JiePlatformError).code).toBe("artifact_too_large");
+    await expect(
+      tool.execute({ key: "k", content: huge }, makeEmptyContext()),
+    ).rejects.toMatchObject({ code: "ARTIFACT_TOO_LARGE" });
   });
 });

@@ -2,7 +2,7 @@ import { realpathSync } from "node:fs";
 import { resolve, isAbsolute } from "node:path";
 import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types";
-import { JiePlatformError } from "../domain-types";
+import { JiePlatformError } from "../types";
 
 const STREAM_CAP = 32 * 1024;
 const TRUNCATION_MARKER = "[truncated to 32 KiB]";
@@ -123,10 +123,7 @@ export function createBashTool(dependencies: BashDeps): Tool<BashInput> {
       ]);
 
       if (timedOut) {
-        throw new JiePlatformError(
-          "command_timed_out",
-          `command_timed_out: ${input.command}`,
-        );
+        throw new JiePlatformError("COMMAND_TIMED_OUT", { detail: input.command });
       }
 
       const out = captureStream(stdoutBuf, STREAM_CAP);
@@ -169,10 +166,7 @@ function resolveWorkdir(
   }
   const rootReal = realpathSync(workspaceRoot);
   if (real !== rootReal && !real.startsWith(rootReal + "/")) {
-    throw new JiePlatformError(
-      "workdir_escape",
-      `workdir_escape: ${workdir}`,
-    );
+    throw new JiePlatformError("WORKDIR_ESCAPE", { detail: workdir });
   }
   return real;
 }

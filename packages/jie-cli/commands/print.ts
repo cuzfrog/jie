@@ -1,5 +1,5 @@
 import type { JiePlatform } from "@cuzfrog/jie-platform";
-import { Events, type EventManager, type Sender } from "@cuzfrog/jie-platform/event";
+import { Events, type EventEnvelope, type EventManager } from "@cuzfrog/jie-platform/event";
 import type { ParsedArgsMap } from "../cli-flags";
 
 export type PrintArgs = ParsedArgsMap["print"];
@@ -12,7 +12,7 @@ export async function runPrint(
   agentKeys: string[],
   args: PrintArgs,
 ): Promise<number> {
-  handle.events.subscribe("agent.stream.chunk", (envelope: { sender: Sender; payload: { text: string; seq: number } }) => {
+  handle.events.subscribe("agent.stream.chunk", (envelope) => {
     if (envelope.sender.kind !== "agent") return;
     if (envelope.sender.identity.teamId !== teamId) return;
     if (envelope.sender.identity.agentRole !== leaderRole) return;
@@ -24,7 +24,7 @@ export async function runPrint(
     }
   });
 
-  handle.events.publish(Events.userPrompt({ kind: "cli" }, teamId, args.instruction, leaderKey));
+  handle.events.publish(Events.userPrompt({ kind: "user" }, teamId, args.instruction, leaderKey));
 
   try {
     await setupIdleGate(handle.events, agentKeys, args.timeout);
@@ -59,7 +59,7 @@ function setupIdleGate(events: EventManager, agentKeys: string[], timeoutSec: nu
       ? setTimeout(() => reject(new Error("timeout")), timeoutSec * 1000)
       : undefined;
 
-  const agentKeyOf = (envelope: { sender: Sender }): string | null =>
+  const agentKeyOf = (envelope: EventEnvelope<"agent.turn.start"> | EventEnvelope<"agent.idle">): string | null =>
     envelope.sender.kind === "agent" ? envelope.sender.identity.agentKey : null;
 
   const evaluate = (): void => {

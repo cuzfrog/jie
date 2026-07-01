@@ -1,5 +1,5 @@
 import type { Storage } from "./storage";
-import { JiePlatformError } from "../domain-types";
+import { JiePlatformError } from "../types";
 
 export interface ArtifactStore {
 
@@ -26,19 +26,13 @@ const ARTIFACT_CONTENT_MAX = 5 * 1024 * 1024;
 
 function validateArtifactKey(key: string): void {
   if (!ARTIFACT_KEY_PATTERN.test(key)) {
-    throw new JiePlatformError(
-      "invalid_artifact_key",
-      `invalid_artifact_key: ${key}`,
-    );
+    throw new JiePlatformError("INVALID_ARTIFACT_KEY", { detail: key });
   }
 }
 
 function validateArtifactContent(content: string): void {
   if (content.length > ARTIFACT_CONTENT_MAX) {
-    throw new JiePlatformError(
-      "artifact_too_large",
-      `artifact_too_large: ${content.length}`,
-    );
+    throw new JiePlatformError("ARTIFACT_TOO_LARGE", { detail: `${content.length}` });
   }
 }
 

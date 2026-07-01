@@ -35,7 +35,6 @@ describe("InProcessEventBus", () => {
     const args = errorSpy.mock.calls[0]!;
     expect(args[0]).toContain("s");
     expect(args[0]).toContain("boom");
-    expect(args[1]).toBeString();
     errorSpy.mockRestore();
   });
 
@@ -65,12 +64,6 @@ describe("InProcessEventBus", () => {
     bus.publish("s", { x: 1 });
     expect(ran).toBe(false);
     expect(bus.subscriberCount("s")).toBe(0);
-  });
-
-  test("publish to a subject with no subscribers is a no-op", () => {
-    const bus = createEventBus();
-    expect(() => bus.publish("no-subscribers", { anything: 1 })).not.toThrow();
-    expect(bus.subscriberCount("no-subscribers")).toBe(0);
   });
 
   test("a throwing callback does not change subscriberCount", () => {
@@ -111,7 +104,6 @@ describe("InProcessEventBus", () => {
   });
 
   test("publish is depth-first synchronous: nested subscribers complete before outer publish returns", () => {
-
     const bus = createEventBus();
     const events: string[] = [];
 

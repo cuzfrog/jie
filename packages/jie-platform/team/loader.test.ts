@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -7,7 +7,7 @@ import {
   loadTeamFromDir,
   parseTeamFromManifests,
 } from "./loader";
-import { JiePlatformError } from "../domain-types";
+import type { JiePlatformErrorCode } from "../types";
 
 describe("loadMinimalTeam", () => {
   test("returns one soul with role 'general' and leaderRole 'general'", () => {
@@ -73,119 +73,6 @@ describe("loadTeamFromDir", () => {
     expect(bp.leaderRole).toBe("leader");
   });
 
-  test("TEAM.md leader references unknown role: hard fail", () => {
-    writeFileSync(
-      join(dir, "TEAM.md"),
-      `---\nleader: ghost\n---\n`,
-    );
-    writeFileSync(
-      join(dir, "leader.md"),
-      `---\ntools:\n  - bash\n---\n`,
-    );
-    writeFileSync(
-      join(dir, "worker.md"),
-      `---\ntools:\n  - bash\n---\n`,
-    );
-    expect(() => loadTeamFromDir(dir)).toThrow(
-      /TEAM\.md 'leader' field references unknown role 'ghost'/,
-    );
-  });
-
-  test("TEAM.md missing for multi-agent: hard fail", () => {
-    writeFileSync(
-      join(dir, "leader.md"),
-      `---\ntools:\n  - bash\n---\n`,
-    );
-    writeFileSync(
-      join(dir, "worker.md"),
-      `---\ntools:\n  - bash\n---\n`,
-    );
-    expect(() => loadTeamFromDir(dir)).toThrow(
-      /TEAM\.md is required for multi-agent teams/,
-    );
-  });
-
-  test("TEAM.md with empty leader and multi-agent: hard fail", () => {
-    writeFileSync(join(dir, "TEAM.md"), `---\nleader:\n---\n`);
-    writeFileSync(
-      join(dir, "leader.md"),
-      `---\ntools:\n  - bash\n---\n`,
-    );
-    writeFileSync(
-      join(dir, "worker.md"),
-      `---\ntools:\n  - bash\n---\n`,
-    );
-    expect(() => loadTeamFromDir(dir)).toThrow(
-      /TEAM\.md 'leader' field is required/,
-    );
-  });
-
-  test("single-agent team with TEAM.md: leader must match", () => {
-    writeFileSync(
-      join(dir, "TEAM.md"),
-      `---\nleader: wrong\n---\n`,
-    );
-    writeFileSync(
-      join(dir, "general.md"),
-      `---\ntools:\n  - bash\n---\n`,
-    );
-    expect(() => loadTeamFromDir(dir)).toThrow(
-      /does not match the single agent role/,
-    );
-  });
-
-  test("duplicate role stem detection is defensive (the OS prevents exact-name duplicates)", () => {
-
-    writeFileSync(
-      join(dir, "general.md"),
-      `---\ntools:\n  - bash\n---\n`,
-    );
-    const bp = loadTeamFromDir(dir);
-    expect(bp.roles.map((r) => r.role)).toEqual(["general"]);
-  });
-
-  test("invalid team_id (spaces): hard fail", () => {
-    const bad = join(tmpdir(), "bad team id with spaces");
-    mkdirSync(bad, { recursive: true });
-    writeFileSync(
-      join(bad, "general.md"),
-      `---\ntools:\n  - bash\n---\n`,
-    );
-    try {
-      expect(() => loadTeamFromDir(bad)).toThrow(/invalid team_id/);
-    } finally {
-      rmSync(bad, { recursive: true, force: true });
-    }
-  });
-
-  test("invalid role stem (spaces): hard fail", () => {
-    writeFileSync(
-      join(dir, "bad role.md"),
-      `---\ntools:\n  - bash\n---\n`,
-    );
-    expect(() => loadTeamFromDir(dir)).toThrow(/invalid role: bad role/);
-  });
-
-  test("missing 'tools' field: hard fail", () => {
-    writeFileSync(
-      join(dir, "general.md"),
-      `---\nmodel: anthropic/claude\n---\nbody`,
-    );
-    expect(() => loadTeamFromDir(dir)).toThrow(
-      /missing required field 'tools'/,
-    );
-  });
-
-  test("subscribe: with platform topic (agent. prefix) is rejected", () => {
-    writeFileSync(
-      join(dir, "general.md"),
-      `---\ntools:\n  - bash\nsubscribe:\n  - agent.idle\n---\nbody`,
-    );
-    expect(() => loadTeamFromDir(dir)).toThrow(
-      /subscribe_rejects_platform_topic/,
-    );
-  });
-
   test("subscribe: with domain topic is accepted and stored", () => {
     writeFileSync(
       join(dir, "general.md"),
@@ -205,14 +92,6 @@ describe("loadTeamFromDir", () => {
     expect(bp.roles[0]?.model).toBe("anthropic/claude-sonnet-4");
   });
 
-  test("agent with malformed model (no /) is rejected", () => {
-    writeFileSync(
-      join(dir, "general.md"),
-      `---\nmodel: not-a-model\ntools:\n  - bash\n---\nbody`,
-    );
-    expect(() => loadTeamFromDir(dir)).toThrow(/invalid model string/);
-  });
-
   test("system_prompt is the verbatim prose body after the closing frontmatter", () => {
     writeFileSync(
       join(dir, "general.md"),
@@ -226,20 +105,6 @@ describe("loadTeamFromDir", () => {
     const bp = loadTeamFromDir(dir);
     expect(bp.roles).toEqual([]);
     expect(bp.leaderRole).toBeNull();
-  });
-});
-
-describe("parseTeamFromManifests", () => {
-  test("delegates to the same parser used for user teams (no special-casing)", () => {
-    const bp = parseTeamFromManifests(
-      {
-        "TEAM.md": `---\nleader: general\n---\n`,
-        "general.md": `---\ntools:\n  - bash\n---\nbody`,
-      },
-      { teamId: "minimal" },
-    );
-    expect(bp.leaderRole).toBe("general");
-    expect(bp.roles[0]?.role).toBe("general");
   });
 });
 
@@ -272,7 +137,7 @@ describe("isValidTeamId", () => {
   });
 });
 
-describe("loadTeamFromDir — typed error codes (issue #65)", () => {
+describe("loadTeamFromDir — typed error codes", () => {
   let dir: string;
 
   beforeEach(() => {
@@ -282,90 +147,101 @@ describe("loadTeamFromDir — typed error codes (issue #65)", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  function expectCode(fn: () => unknown, code: string): void {
-    try {
-      fn();
-    } catch (error) {
-      expect(error).toBeInstanceOf(JiePlatformError);
-      expect((error as JiePlatformError).code).toBe(code);
-      return;
-    }
-    throw new Error(`expected throw with code '${code}', got no throw`);
+  function expectCode(fn: () => unknown, code: JiePlatformErrorCode): void {
+    expect(fn).toThrow(
+      expect.objectContaining({ code }),
+    );
   }
 
-  test("invalid_team_id", () => {
-    expectCode(
-      () => parseTeamFromManifests({}, { teamId: "bad id!" }),
-      "invalid_team_id",
-    );
-  });
+  function setupFiles(files: Record<string, string>): void {
+    for (const [name, content] of Object.entries(files)) writeFileSync(join(dir, name), content);
+  }
 
-  test("invalid_role", () => {
-    writeFileSync(join(dir, "bad role.md"), "---\ntools:\n  - bash\n---\n");
-    expectCode(() => loadTeamFromDir(dir), "invalid_role");
-  });
-
-  test("invalid_frontmatter", () => {
-    writeFileSync(join(dir, "general.md"), "no frontmatter here\n");
-    expectCode(() => loadTeamFromDir(dir), "invalid_frontmatter");
-  });
-
-  test("missing_required_field", () => {
-    writeFileSync(join(dir, "general.md"), "---\nrole: general\n---\n");
-    expectCode(() => loadTeamFromDir(dir), "missing_required_field");
-  });
-
-  test("invalid_field_type (tools not a list)", () => {
-    writeFileSync(join(dir, "general.md"), "---\ntools: bash\n---\n");
-    expectCode(() => loadTeamFromDir(dir), "invalid_field_type");
-  });
-
-  test("subscribe_rejects_platform_topic", () => {
-    writeFileSync(
-      join(dir, "general.md"),
-      "---\ntools:\n  - bash\nsubscribe:\n  - agent.stream.chunk\n---\n",
-    );
-    expectCode(() => loadTeamFromDir(dir), "subscribe_rejects_platform_topic");
-  });
-
-  test("invalid_model_string", () => {
-    writeFileSync(
-      join(dir, "general.md"),
-      "---\ntools:\n  - bash\nmodel: no-slash\n---\n",
-    );
-    expectCode(() => loadTeamFromDir(dir), "invalid_model_string");
-  });
-
-  test("leader_required (multi-agent, no TEAM.md leader)", () => {
-    writeFileSync(join(dir, "a.md"), "---\ntools:\n  - bash\n---\n");
-    writeFileSync(join(dir, "b.md"), "---\ntools:\n  - bash\n---\n");
-    writeFileSync(
-      join(dir, "TEAM.md"),
-      "---\nleader: \"\"\n---\n",
-    );
-    expectCode(() => loadTeamFromDir(dir), "leader_required");
-  });
-
-  test("team_file_required (multi-agent, no TEAM.md via parseTeamFromManifests)", () => {
-    expectCode(
-      () => parseTeamFromManifests(
+  test.each([
+    {
+      name: "invalid_team_id",
+      setup: () => undefined,
+      act: () => parseTeamFromManifests({}, { teamId: "bad id!" }),
+      code: "INVALID_TEAM_ID",
+    },
+    {
+      name: "invalid_role (filename has space)",
+      setup: () => setupFiles({ "bad role.md": "---\ntools:\n  - bash\n---\n" }),
+      act: () => loadTeamFromDir(dir),
+      code: "INVALID_ROLE",
+    },
+    {
+      name: "invalid_frontmatter (missing ---)",
+      setup: () => setupFiles({ "general.md": "no frontmatter here\n" }),
+      act: () => loadTeamFromDir(dir),
+      code: "INVALID_FRONTMATTER",
+    },
+    {
+      name: "missing_required_field (no tools)",
+      setup: () => setupFiles({ "general.md": "---\nrole: general\n---\n" }),
+      act: () => loadTeamFromDir(dir),
+      code: "MISSING_REQUIRED_FIELD",
+    },
+    {
+      name: "invalid_field_type (tools not a list)",
+      setup: () => setupFiles({ "general.md": "---\ntools: bash\n---\n" }),
+      act: () => loadTeamFromDir(dir),
+      code: "INVALID_FIELD_TYPE",
+    },
+    {
+      name: "subscribe_rejects_platform_topic",
+      setup: () => setupFiles({
+        "general.md": "---\ntools:\n  - bash\nsubscribe:\n  - agent.stream.chunk\n---\n",
+      }),
+      act: () => loadTeamFromDir(dir),
+      code: "SUBSCRIBE_REJECTS_PLATFORM_TOPIC",
+    },
+    {
+      name: "invalid_model_string (no slash)",
+      setup: () => setupFiles({ "general.md": "---\ntools:\n  - bash\nmodel: no-slash\n---\n" }),
+      act: () => loadTeamFromDir(dir),
+      code: "INVALID_MODEL_STRING",
+    },
+    {
+      name: "leader_required (multi-agent, empty leader)",
+      setup: () => setupFiles({
+        "a.md": "---\ntools:\n  - bash\n---\n",
+        "b.md": "---\ntools:\n  - bash\n---\n",
+        "TEAM.md": "---\nleader: \"\"\n---\n",
+      }),
+      act: () => loadTeamFromDir(dir),
+      code: "LEADER_REQUIRED",
+    },
+    {
+      name: "team_file_required (no TEAM.md, parseTeamFromManifests)",
+      setup: () => undefined,
+      act: () => parseTeamFromManifests(
         { "a.md": "---\ntools:\n  - bash\n---\n", "b.md": "---\ntools:\n  - bash\n---\n" },
         { teamId: "t" },
       ),
-      "team_file_required",
-    );
-  });
-
-  test("leader_unknown (TEAM.md leader refers to missing role, multi-agent)", () => {
-    writeFileSync(join(dir, "TEAM.md"), "---\nleader: ghost\n---\n");
-    writeFileSync(join(dir, "a.md"), "---\ntools:\n  - bash\n---\n");
-    writeFileSync(join(dir, "b.md"), "---\ntools:\n  - bash\n---\n");
-    expectCode(() => loadTeamFromDir(dir), "leader_unknown");
-  });
-
-  test("leader_mismatch (single-agent, TEAM.md leader differs)", () => {
-    writeFileSync(join(dir, "TEAM.md"), "---\nleader: wrong\n---\n");
-    writeFileSync(join(dir, "general.md"), "---\ntools:\n  - bash\n---\n");
-    expectCode(() => loadTeamFromDir(dir), "leader_mismatch");
+      code: "TEAM_FILE_REQUIRED",
+    },
+    {
+      name: "leader_unknown (TEAM.md leader refers to missing role)",
+      setup: () => setupFiles({
+        "TEAM.md": "---\nleader: ghost\n---\n",
+        "a.md": "---\ntools:\n  - bash\n---\n",
+        "b.md": "---\ntools:\n  - bash\n---\n",
+      }),
+      act: () => loadTeamFromDir(dir),
+      code: "LEADER_UNKNOWN",
+    },
+    {
+      name: "leader_mismatch (single-agent, TEAM.md leader differs)",
+      setup: () => setupFiles({
+        "TEAM.md": "---\nleader: wrong\n---\n",
+        "general.md": "---\ntools:\n  - bash\n---\n",
+      }),
+      act: () => loadTeamFromDir(dir),
+      code: "LEADER_MISMATCH",
+    },
+  ])("$name", ({ setup, act, code }) => {
+    setup();
+    expectCode(act, code);
   });
 });

@@ -11,7 +11,7 @@ function makeManager(): SqliteMemoryManager {
 }
 
 function userMessage(text: string): AgentMessage {
-  return { role: "user", content: text, timestamp: Date.now() } as unknown as AgentMessage;
+  return { role: "user", content: text, timestamp: Date.now() };
 }
 
 function assistantMessage(text: string): AgentMessage {
@@ -19,7 +19,7 @@ function assistantMessage(text: string): AgentMessage {
     role: "assistant",
     content: [{ type: "text", text }],
     timestamp: Date.now(),
-  } as unknown as AgentMessage;
+  } as AgentMessage;
 }
 
 function summaryMessage(text: string): AgentMessage {
@@ -28,7 +28,7 @@ function summaryMessage(text: string): AgentMessage {
     summary: text,
     tokensBefore: 1000,
     timestamp: Date.now(),
-  } as unknown as AgentMessage;
+  } as AgentMessage;
 }
 
 function makeThrowingStorage(failOn: "exec", callIndex: number): {
@@ -87,8 +87,9 @@ describe("SqliteMemoryManager", () => {
     m.compact([1, 2], summaryMessage("sum"), "agent-1", "s1", "t1");
     const restored = await m.restore("agent-1", "s1", "t1");
     expect(restored).toHaveLength(2);
-    expect((restored[0] as { content: string }).content).toBe("c");
-    expect((restored[1] as { role: string }).role).toBe("compactionSummary");
+    const [first, second] = restored as Array<{ role: string; content: unknown }>;
+    expect(first.content).toBe("c");
+    expect(second.role).toBe("compactionSummary");
   });
 
   test("compact flips compacted=1 on the seq range", () => {
@@ -105,33 +106,19 @@ describe("SqliteMemoryManager", () => {
     expect(rows).toEqual([[1], [1]]);
   });
 
-  test("compact is atomic: a thrown error rolls back both writes", () => {
-
-    const real = makeManager();
-    real.persist(userMessage("a"), "agent-1", "s1", "t1");
-    real.persist(userMessage("b"), "agent-1", "s1", "t1");
-    real.persist(userMessage("c"), "agent-1", "s1", "t1");
-
+  test("compact throws and the synthetic error surfaces", () => {
     const { storage } = makeThrowingStorage("exec", 2);
     const throwing = new SqliteMemoryManager(storage);
 
-    let caught: unknown;
-    try {
+    expect(() =>
       throwing.compact(
         [1, 2],
         summaryMessage("sum"),
         "agent-1",
         "s1",
         "t1",
-      );
-    } catch (error) {
-      caught = error;
-    }
-    expect((caught as Error | undefined)?.message).toBe(
-      "synthetic storage failure",
-    );
-
-    void real;
+      ),
+    ).toThrow("synthetic storage failure");
   });
 
   test("mostRecentSessionId is null when team_id has no rows", () => {
@@ -177,9 +164,8 @@ describe("SqliteMemoryManager", () => {
     const m = makeManager();
     m.persist(assistantMessage("hello"), "agent-1", "s1", "t1");
     const restored = await m.restore("agent-1", "s1", "t1");
-    expect((restored[0] as { content: Array<{ type: string; text: string }> }).content[0]?.text).toBe(
-      "hello",
-    );
+    const content = (restored[0] as { content: Array<{ type: string; text: string }> }).content;
+    expect(content[0]?.text).toBe("hello");
   });
 });
 

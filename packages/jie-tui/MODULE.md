@@ -2,5 +2,7 @@
 sealed:
   - index.test.ts
   - index.ts
-  - package.json
+  - tui.test.ts
+  - tui.ts
 ---
+

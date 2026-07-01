@@ -13,6 +13,9 @@ import {
 import { createTeamRegistry } from "./team";
 import { createToolRegistry } from "./tools";
 import { createArtifactStore, createMemoryManager, createStorage } from "./storage";
+import { JiePlatformErrorMessages } from "./types";
+
+const NO_MODEL_ERROR = JiePlatformErrorMessages.NO_MODEL_ERROR;
 
 const settingsStore = vi.mocked<SettingsStore>({
   load: vi.fn(),
@@ -87,8 +90,8 @@ describe("createJiePlatform", () => {
         },
         deps,
       );
-      const events: EventEnvelope<string>[] = [];
-      handle.events.subscribe("team.minimal.agent.general-1.prompt", (env) => {
+      const events: EventEnvelope<"user.prompt">[] = [];
+      handle.events.subscribe("user.prompt", (env) => {
         events.push(env);
       });
       expect(events).toHaveLength(0);
@@ -96,8 +99,8 @@ describe("createJiePlatform", () => {
 
     test("team.loaded is published once at start; the event carries is_leader per agent", async () => {
       const deps = makeDeps(workspace, homeJieDir);
-      const events: EventEnvelope<string>[] = [];
-      deps.eventManager.subscribe("team.minimal.loaded", (env) => {
+      const events: EventEnvelope<"system.team.loaded">[] = [];
+      deps.eventManager.subscribe("system.team.loaded", (env) => {
         events.push(env);
       });
       await createJiePlatform(
@@ -110,12 +113,11 @@ describe("createJiePlatform", () => {
       );
       expect(events).toHaveLength(1);
       const env = events[0]!;
-      const payload = env.payload as { agents: Array<{ role: string; is_leader: boolean }> };
-      expect(payload.agents).toHaveLength(1);
-      expect(payload.agents[0]!.is_leader).toBe(true);
+      expect(env.payload.agents).toHaveLength(1);
+      expect(env.payload.agents[0]!.is_leader).toBe(true);
     });
 
-    test("model pre-check: no model in soul or settings throws", async () => {
+    test("model pre-check: no model in soul or settings throws NO_MODEL_ERROR", async () => {
       settingsStore.load.mockReturnValueOnce({});
       const filePath = join(workspace, "no-model.db");
       const storage = createStorage({ type: "sqlite", filePath });
@@ -134,7 +136,7 @@ describe("createJiePlatform", () => {
       };
       await expect(
         createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps),
-      ).rejects.toThrow(/No model has been selected/);
+      ).rejects.toThrow(NO_MODEL_ERROR);
     });
 
     test("handle.stop() detaches all bus subscriptions", async () => {
@@ -147,9 +149,9 @@ describe("createJiePlatform", () => {
         },
         deps,
       );
-      expect(deps.eventManager.subscriberCount("team.minimal.agent.general-1.prompt")).toBeGreaterThan(0);
+      expect(deps.eventManager.subscriberCount("user.prompt")).toBeGreaterThan(0);
       await handle.stop();
-      expect(deps.eventManager.subscriberCount("team.minimal.agent.general-1.prompt")).toBe(0);
+      expect(deps.eventManager.subscriberCount("user.prompt")).toBe(0);
     });
   });
 
@@ -231,8 +233,8 @@ describe("createJiePlatform", () => {
       writeFileSync(join(userTeam, "TEAM.md"), "---\n---\n");
 
       const deps = makeDeps(workspace, homeJieDir);
-      const events: EventEnvelope<string>[] = [];
-      deps.eventManager.subscribe("team.ghost.loaded", (env) => {
+      const events: EventEnvelope<"system.team.loaded">[] = [];
+      deps.eventManager.subscribe("system.team.loaded", (env) => {
         events.push(env);
       });
       const handle = await createJiePlatform(
@@ -240,8 +242,7 @@ describe("createJiePlatform", () => {
         deps,
       );
       expect(events).toHaveLength(1);
-      const payload = events[0]!.payload as { agents: unknown[] };
-      expect(payload.agents).toEqual([]);
+      expect(events[0]!.payload.agents).toEqual([]);
       await handle.stop();
     });
   });

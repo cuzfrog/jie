@@ -10,6 +10,7 @@ import {
   type MemoryManager,
   type Storage,
 } from "./storage";
+import { JiePlatformError } from "./types";
 
 export interface CreateJiePlatformOptions {
   workspace: string;
@@ -58,6 +59,9 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
       const isLeader = soul.role === blueprint.leaderRole;
       const agentKey = `${soul.role}-1`;
       const resolvedModel = resolveSoulModel(soul, dependencies.settingsStore, resolveModel);
+      if (resolvedModel === undefined) {
+        throw new JiePlatformError("NO_MODEL_ERROR");
+      }
       out.push(
         createAgentBody({
           agentKey,
@@ -111,17 +115,14 @@ function publishTeamLoaded(events: EventManager, teamId: string, blueprint: Team
     agent_key: `${r.role}-1`,
     is_leader: r.role === blueprint.leaderRole,
   }));
-  events.publish(Events.teamLoaded({ kind: "cli" }, teamId, agents));
+  events.publish(Events.teamLoaded({ kind: "system" }, teamId, agents));
 }
-
-const NO_MODEL_ERROR =
-  "No model has been selected, please login and select a default model.";
 
 function defaultResolveModel(registry: ModelRegistry): (provider: string, modelId: string) => Model<Api> {
   return (provider: string, modelId: string): Model<Api> => {
     const resolved = registry.resolve(provider, modelId);
     if (resolved === undefined) {
-      throw new Error(NO_MODEL_ERROR);
+      throw new JiePlatformError("NO_MODEL_ERROR");
     }
     return resolved;
   };
@@ -131,7 +132,7 @@ function resolveSoulModel(
   soul: AgentSoul,
   settingsStore: SettingsStore,
   resolveModel: (provider: string, modelId: string) => Model<Api>,
-): Model<Api> {
+): Model<Api> | undefined {
 
   const settings = settingsStore.load();
   const modelStr = soul.model !== "" ? soul.model : (
@@ -139,12 +140,12 @@ function resolveSoulModel(
       ? `${settings.defaultProvider}/${settings.defaultModel}`
       : ""
   );
-  if (modelStr === "") {
-    throw new Error(NO_MODEL_ERROR);
-  }
+  if (modelStr === "") return undefined;
   const slash = modelStr.indexOf("/");
   if (slash === -1) {
-    throw new Error(`invalid model string: ${modelStr}`);
+    throw new JiePlatformError("INVALID_MODEL_STRING", {
+      detail: `invalid model string: ${modelStr}`,
+    });
   }
   const provider = modelStr.slice(0, slash);
   const modelId = modelStr.slice(slash + 1);
@@ -158,7 +159,9 @@ function resolveSessionId(
 ): string {
   if (options.resumeSessionId !== undefined) {
     if (!memory.hasSession(teamId, options.resumeSessionId)) {
-      throw new Error(`unknown session_id: ${options.resumeSessionId}`);
+      throw new JiePlatformError("UNKNOWN_SESSION", {
+        detail: `unknown session_id: ${options.resumeSessionId}`,
+      });
     }
     return options.resumeSessionId;
   }

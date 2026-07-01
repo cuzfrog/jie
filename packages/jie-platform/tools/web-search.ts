@@ -1,6 +1,6 @@
 import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types";
-import { JiePlatformError } from "../domain-types";
+import { JiePlatformError } from "../types";
 
 const WEB_SEARCH_DESCRIPTION = `web_search(query, max_results?): Run a web search and return up to max_results
 results (default 5; max 20 — values above 20 are silently clamped). Each
@@ -50,17 +50,16 @@ export function createWebSearchTool(dependencies: WebSearchDeps): Tool<WebSearch
       try {
         results = await dependencies.provider.search(input.query, max);
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        throw new JiePlatformError(
-          "web_search_failed",
-          `web_search_failed: ${message}`,
-        );
+        const cause = error instanceof Error ? error : new Error(String(error));
+        throw new JiePlatformError("WEB_SEARCH_FAILED", {
+          detail: cause.message,
+          cause,
+        });
       }
       if (results.length === 0) {
-        throw new JiePlatformError(
-          "web_search_failed",
-          "web_search_failed: provider_returned_no_results",
-        );
+        throw new JiePlatformError("WEB_SEARCH_FAILED", {
+          detail: "provider_returned_no_results",
+        });
       }
       const lines = results.map(
         (r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`,

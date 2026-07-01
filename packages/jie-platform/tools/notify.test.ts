@@ -1,19 +1,13 @@
 import {
   createEventManager,
+  type EventEnvelope,
   type EventManager,
 } from "../event";
 import type { ArtifactStore } from "../storage";
 import type { ExecutionContext } from "./types";
 import { createNotifyTool } from "./notify";
-import { JiePlatformError } from "../domain-types";
 
-interface NotifyEnvelope {
-  version: 1;
-  topic: string;
-  sender: { kind: "agent"; identity: { teamId: string; agentRole?: string; agentKey?: string } } | { kind: "cli" } | { kind: "tui" };
-  timestamp: string;
-  payload: { clientTopic: string; payload: { prompt: string; source: string } };
-}
+type NotifyEnvelope = EventEnvelope<`custom.${string}`>;
 
 function makeCtx(): ExecutionContext {
   return {
@@ -46,7 +40,7 @@ function makeHarness(): Harness {
   const events = createEventManager();
   const received: Array<{ subject: string; env: NotifyEnvelope }> = [];
   events.subscribe("custom.t1.task", (env) => {
-    received.push({ subject: env.topic, env: env as unknown as NotifyEnvelope });
+    received.push({ subject: env.topic, env });
   });
   return { events, received };
 }
@@ -55,61 +49,65 @@ describe("notify — topic validation", () => {
   test("rejects empty topic with notify_invalid_topic: empty", async () => {
     const { events } = makeHarness();
     const tool = createNotifyTool({ eventManager: events });
-    let caught: unknown;
-    try {
-      await tool.execute({ topic: "", prompt: "x" }, makeCtx());
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("notify_invalid_topic");
-    expect((caught as Error).message).toBe("notify_invalid_topic: empty");
+    await expect(tool.execute({ topic: "", prompt: "x" }, makeCtx())).rejects.toMatchObject({
+      code: "NOTIFY_INVALID_TOPIC",
+      message: "Invalid topic for notify: empty",
+    });
   });
 
   test("rejects topic starting with `agent.`", async () => {
     const { events } = makeHarness();
     const tool = createNotifyTool({ eventManager: events });
-    let caught: unknown;
-    try {
-      await tool.execute({ topic: "agent.idle", prompt: "x" }, makeCtx());
-    } catch (error) {
-      caught = error;
-    }
-    expect((caught as JiePlatformError).code).toBe("notify_invalid_topic");
-    expect((caught as Error).message).toBe(
-      "notify_invalid_topic: starts_with_agent_prefix",
-    );
+    await expect(
+      tool.execute({ topic: "agent.idle", prompt: "x" }, makeCtx()),
+    ).rejects.toMatchObject({
+      code: "NOTIFY_INVALID_TOPIC",
+      message: "Invalid topic for notify: starts_with_agent_prefix",
+    });
   });
 
   test("rejects topic starting with the body's team_id", async () => {
     const { events } = makeHarness();
     const tool = createNotifyTool({ eventManager: events });
     const ctx = makeCtx();
-    let caught: unknown;
-    try {
-      await tool.execute({ topic: `${ctx.teamId}.task`, prompt: "x" }, ctx);
-    } catch (error) {
-      caught = error;
-    }
-    expect((caught as JiePlatformError).code).toBe("notify_invalid_topic");
-    expect((caught as Error).message).toBe(
-      "notify_invalid_topic: starts_with_team_prefix",
-    );
+    await expect(
+      tool.execute({ topic: `${ctx.teamId}.task`, prompt: "x" }, ctx),
+    ).rejects.toMatchObject({
+      code: "NOTIFY_INVALID_TOPIC",
+      message: "Invalid topic for notify: starts_with_team_prefix",
+    });
   });
 
   test("rejects topic containing a null byte", async () => {
     const { events } = makeHarness();
     const tool = createNotifyTool({ eventManager: events });
-    let caught: unknown;
-    try {
-      await tool.execute({ topic: "bad\0topic", prompt: "x" }, makeCtx());
-    } catch (error) {
-      caught = error;
-    }
-    expect((caught as JiePlatformError).code).toBe("notify_invalid_topic");
-    expect((caught as Error).message).toBe(
-      "notify_invalid_topic: contains_null_byte",
-    );
+    await expect(
+      tool.execute({ topic: "bad\0topic", prompt: "x" }, makeCtx()),
+    ).rejects.toMatchObject({
+      code: "NOTIFY_INVALID_TOPIC",
+      message: "Invalid topic for notify: contains_null_byte",
+    });
+  });
+
+  test("rejects prompt longer than EVENT_TEXT_TRUNCATION_BYTES", async () => {
+    const { events, received } = makeHarness();
+    const tool = createNotifyTool({ eventManager: events });
+    const oversized = "x".repeat(4097);
+    await expect(
+      tool.execute({ topic: "task", prompt: oversized }, makeCtx()),
+    ).rejects.toMatchObject({
+      code: "NOTIFY_PROMPT_TOO_LONG",
+      message: "Notify prompt exceeds the maximum allowed size: prompt length 4097 exceeds max 4096",
+    });
+    expect(received).toHaveLength(0);
+  });
+
+  test("accepts prompt exactly at EVENT_TEXT_TRUNCATION_BYTES", async () => {
+    const { events, received } = makeHarness();
+    const tool = createNotifyTool({ eventManager: events });
+    const at = "x".repeat(4096);
+    await tool.execute({ topic: "task", prompt: at }, makeCtx());
+    expect(received).toHaveLength(1);
   });
 });
 
@@ -134,36 +132,19 @@ describe("notify — valid publish path", () => {
       expect(env.sender.identity.agentRole).toBe("leader");
       expect(env.sender.identity.agentKey).toBe("leader-1");
     }
-    expect(env.payload).toEqual({
-      clientTopic: "t1.task",
-      payload: { prompt: "hello", source: "leader-1" },
-    });
+    expect(env.payload).toEqual({ message: "hello", truncated: false });
     const ts = new Date(env.timestamp).getTime();
     expect(ts).toBeGreaterThanOrEqual(before);
     expect(ts).toBeLessThanOrEqual(after);
   });
 
-  test("LLM-facing content reflects the published topic", async () => {
-    const events = createEventManager();
-    events.subscribe("custom.t1.task", () => {});
-    const tool = createNotifyTool({ eventManager: events });
-
-    const result = await tool.execute(
-      { topic: "task", prompt: "x" },
-      makeCtx(),
-    );
-    expect(result.content).toBe("Notification published on 'task'");
-    expect(result.terminate).toBeUndefined();
-  });
-
-  test("LLM-facing content is identical whether peers are listening or not", async () => {
-    const { events } = makeHarness();
-    const tool = createNotifyTool({ eventManager: events });
-    const result = await tool.execute(
+  test("LLM-facing content is identical whether peers are listening or not; never terminates", async () => {
+    const result = await createNotifyTool({ eventManager: createEventManager() }).execute(
       { topic: "ghost", prompt: "x" },
       makeCtx(),
     );
     expect(result.content).toBe("Notification published on 'ghost'");
+    expect(result.terminate).toBeUndefined();
   });
 
   test("`details = { topic }` is returned for afterToolCall hooks", async () => {

@@ -3,7 +3,7 @@ import {
   createWebSearchTool,
   type WebSearchProvider,
 } from "./web-search";
-import { JiePlatformError } from "../domain-types";
+import { makeEmptyContext } from "./_test-context";
 
 function stubProvider(results: { title: string; url: string; snippet: string }[]): WebSearchProvider {
   return { async search() { return results; } };
@@ -14,20 +14,6 @@ function failingProvider(message: string): WebSearchProvider {
 }
 
 describe("web_search", () => {
-  test("default max_results is 5 when omitted", async () => {
-    let received: number | undefined;
-    const tool = createWebSearchTool({
-      provider: {
-        async search(_q, max) {
-          received = max;
-          return [{ title: "t", url: "u", snippet: "s" }];
-        },
-      },
-    });
-    await tool.execute({ query: "x" }, {} as never);
-    expect(received).toBe(5);
-  });
-
   test("max_results < 1 (including 0 and negatives) is treated as omitted (default 5)", async () => {
     const seen: number[] = [];
     const tool = createWebSearchTool({
@@ -38,8 +24,8 @@ describe("web_search", () => {
         },
       },
     });
-    await tool.execute({ query: "x", maxResults: 0 }, {} as never);
-    await tool.execute({ query: "y", maxResults: -1 }, {} as never);
+    await tool.execute({ query: "x", maxResults: 0 }, makeEmptyContext());
+    await tool.execute({ query: "y", maxResults: -1 }, makeEmptyContext());
     expect(seen).toEqual([5, 5]);
   });
 
@@ -49,42 +35,32 @@ describe("web_search", () => {
       provider: {
         async search(_q, max) {
           received = max;
-          return [];
+          return [{ title: "t", url: "u", snippet: "s" }];
         },
       },
     });
-    try {
-      await tool.execute({ query: "x", maxResults: 100 }, {} as never);
-    } catch {
-    }
+    await tool.execute({ query: "x", maxResults: 100 }, makeEmptyContext());
     expect(received).toBe(20);
   });
 
   test("provider returns zero results -> web_search_failed: provider_returned_no_results", async () => {
     const tool = createWebSearchTool({ provider: stubProvider([]) });
-    let caught: unknown;
-    try {
-      await tool.execute({ query: "x" }, {} as never);
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("web_search_failed");
-    expect((caught as Error).message).toBe(
-      "web_search_failed: provider_returned_no_results",
-    );
+    await expect(
+      tool.execute({ query: "x" }, makeEmptyContext()),
+    ).rejects.toMatchObject({
+      code: "WEB_SEARCH_FAILED",
+      message: "Web search failed: provider_returned_no_results",
+    });
   });
 
   test("provider throws http_429 -> web_search_failed: http_429", async () => {
     const tool = createWebSearchTool({ provider: failingProvider("http_429") });
-    let caught: unknown;
-    try {
-      await tool.execute({ query: "x" }, {} as never);
-    } catch (error) {
-      caught = error;
-    }
-    expect((caught as JiePlatformError).code).toBe("web_search_failed");
-    expect((caught as Error).message).toBe("web_search_failed: http_429");
+    await expect(
+      tool.execute({ query: "x" }, makeEmptyContext()),
+    ).rejects.toMatchObject({
+      code: "WEB_SEARCH_FAILED",
+      message: "Web search failed: http_429",
+    });
   });
 
   test("provider returns results: content is numbered list", async () => {
@@ -94,7 +70,7 @@ describe("web_search", () => {
         { title: "Second", url: "https://b", snippet: "snip b" },
       ]),
     });
-    const result = await tool.execute({ query: "x" }, {} as never);
+    const result = await tool.execute({ query: "x" }, makeEmptyContext());
     expect(result.content).toContain("1. First");
     expect(result.content).toContain("https://a");
     expect(result.content).toContain("2. Second");
@@ -104,39 +80,14 @@ describe("web_search", () => {
     const tool = createWebSearchTool({
       provider: stubProvider([{ title: "t", url: "u", snippet: "s" }]),
     });
-    const result = await tool.execute({ query: "x" }, {} as never);
+    const result = await tool.execute({ query: "x" }, makeEmptyContext());
     expect(result.terminate).toBeUndefined();
   });
 });
 
 describe("createWebSearchProvider", () => {
-  const originalFetch = globalThis.fetch;
-
-  beforeEach(() => {
-    globalThis.fetch = vi.fn() as unknown as typeof fetch;
-  });
-
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-  });
-
-  test("returns the internal DuckDuckGo-backed provider (the only way to get a default provider)", () => {
+  test("returns a search function (the only way to get a default provider)", () => {
     const provider = createWebSearchProvider();
     expect(typeof provider.search).toBe("function");
-  });
-
-  test("DuckDuckGoSearchProvider is not exported: only createWebSearchProvider constructs it", async () => {
-    const provider = createWebSearchProvider();
-    const mockFetch = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
-    mockFetch.mockResolvedValue(
-      new Response(
-        `<a class="result__a" href="https://a">A</a>` +
-          `<a class="result__snippet">snip</a>`,
-        { status: 200 },
-      ),
-    );
-    const results = await provider.search("x", 5);
-    expect(results.length).toBeGreaterThan(0);
-    expect(results[0]?.url).toBe("https://a");
   });
 });

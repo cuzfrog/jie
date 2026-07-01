@@ -1,7 +1,7 @@
 import { Type } from "typebox";
-import { Events, type EventManager, type Sender } from "../event";
+import { EVENT_TEXT_TRUNCATION_BYTES, Events, type EventManager, type Sender } from "../event";
 import type { ExecutionContext, Tool, ToolResult } from "./types";
-import { JiePlatformError } from "../domain-types";
+import { JiePlatformError } from "../types";
 
 const NOTIFY_DESCRIPTION = `notify({ topic, prompt }): Publish a message to the team-scoped event bus on
 \`{team_id}.{topic}\`. The receiving agent (any agent whose \`subscribe:\` field
@@ -58,10 +58,13 @@ export function createNotifyTool(dependencies: NotifyDeps): Tool<NotifyInput> {
     ): Promise<ToolResult> {
       const reason = validateTopic(input.topic, executionContext.teamId);
       if (reason !== null) {
-        throw new JiePlatformError(
-          "notify_invalid_topic",
-          `notify_invalid_topic: ${reason}`,
-        );
+        throw new JiePlatformError("NOTIFY_INVALID_TOPIC", { detail: reason });
+      }
+
+      if (input.prompt.length > EVENT_TEXT_TRUNCATION_BYTES) {
+        throw new JiePlatformError("NOTIFY_PROMPT_TOO_LONG", {
+          detail: `prompt length ${input.prompt.length} exceeds max ${EVENT_TEXT_TRUNCATION_BYTES}`,
+        });
       }
 
       const clientTopic = `${executionContext.teamId}.${input.topic}`;
@@ -69,7 +72,7 @@ export function createNotifyTool(dependencies: NotifyDeps): Tool<NotifyInput> {
         kind: "agent",
         identity: { teamId: executionContext.teamId, agentRole: executionContext.agentRole, agentKey: executionContext.agentKey },
       };
-      const envelope = Events.custom(sender, clientTopic, { prompt: input.prompt, source: executionContext.agentKey });
+      const envelope = Events.custom(sender, clientTopic, input.prompt);
       dependencies.eventManager.publish(envelope);
 
       return {

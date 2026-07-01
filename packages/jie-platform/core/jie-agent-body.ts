@@ -3,9 +3,11 @@ import {
   type AgentMessage,
   type AgentEvent as PiAgentEvent,
 } from "@earendil-works/pi-agent-core";
+import type { AssistantMessage, UserMessage } from "@earendil-works/pi-ai";
+import type { StopReason } from "@earendil-works/pi-ai";
 import type { MemoryManager } from "../storage";
 import type { AgentSoul } from "../team";
-import { Events, type EventManager, type Sender } from "../event";
+import { Events, type AgentSender, type EventManager } from "../event";
 import type { StreamPublisher } from "./streaming";
 import type { AgentBody } from "./agent-body";
 
@@ -18,7 +20,7 @@ export class JieAgentBody implements AgentBody {
   private readonly memory: MemoryManager;
   private readonly agent: Agent;
   private readonly stream: StreamPublisher;
-  private readonly sender: Sender;
+  private readonly sender: AgentSender;
   private readonly queue: AgentMessage[] = [];
   private readonly unsubscribers: Array<() => void> = [];
   private readonly externalCleanups: Array<() => void> = [];
@@ -49,18 +51,30 @@ export class JieAgentBody implements AgentBody {
   }
 
   handlePiAgentEvent(event: PiAgentEvent): void {
+    const agentSender = this.sender;
     switch (event.type) {
       case "turn_start":
-        this.eventManager.publish(Events.agentTurnStart(this.sender));
+        this.eventManager.publish(Events.agentTurnStart(agentSender));
         return;
-      case "agent_end":
-        this.eventManager.publish(Events.agentIdle(this.sender));
+      case "turn_end": {
         if (this.queue.length > 0) {
           const next = this.queue.shift()!;
-          this.publishQueueSnapshot();
           this.agent.followUp(next);
         }
         return;
+      }
+      case "agent_end": {
+        const final = readFinalStopReason(event);
+        this.eventManager.publish(Events.agentIdle(agentSender, final.stopReason));
+        if (final.isError && final.errorMessage !== null) {
+          this.eventManager.publish(Events.systemError({ kind: "system" }, final.errorMessage));
+        }
+        if (this.queue.length > 0) {
+          const next = this.queue.shift()!;
+          this.agent.followUp(next);
+        }
+        return;
+      }
       case "message_start":
         this.stream.beginStream();
         return;
@@ -74,11 +88,11 @@ export class JieAgentBody implements AgentBody {
         return;
       }
       case "message_end":
-        if ((event.message as { role?: string }).role === "assistant") {
+        if (event.message.role === "assistant") {
           this.stream.endStream();
         }
         this.memory.persist(
-          event.message as unknown as AgentMessage,
+          event.message,
           this.agentKey,
           this.sessionId,
           this.teamId,
@@ -107,7 +121,7 @@ export class JieAgentBody implements AgentBody {
     if (restored.length > 0) {
       this.agent.state.messages = restored;
       const last = restored[restored.length - 1]!;
-      const lastRole = (last as { role: string }).role;
+      const lastRole = last.role;
       if (lastRole === "user" || lastRole === "toolResult") {
         await this.agent.continue();
       }
@@ -115,7 +129,6 @@ export class JieAgentBody implements AgentBody {
 
     while (this.queue.length > 0) {
       const next = this.queue.shift()!;
-      this.publishQueueSnapshot();
       await this.agent.prompt(next);
     }
   }
@@ -128,65 +141,58 @@ export class JieAgentBody implements AgentBody {
   }
 
   private registerSubscriptions(): void {
-    const ownPromptSubject = `team.${this.teamId}.agent.${this.agentKey}.prompt`;
     this.unsubscribers.push(
-      this.eventManager.subscribe(ownPromptSubject, (env) => {
-        this.ingestEvent(this.agentKey, env);
+      this.eventManager.subscribe("user.prompt", (env) => {
+        if (env.payload.teamId !== this.teamId || env.payload.agentKey !== this.agentKey) return;
+        this.ingestUserPrompt(env.payload);
       }),
     );
     for (const topic of this.soul.subscriptions) {
       this.unsubscribers.push(
         this.eventManager.subscribe(`custom.${this.teamId}.${topic}`, (env) => {
-          this.ingestEvent(topic, env);
+          this.ingestCustom(topic, env.sender, env.payload);
         }),
       );
     }
   }
 
-  private ingestEvent(topic: string, env: { payload: unknown }): void {
-    const innerPayload = unwrapIngressPayload(env.payload);
-    const source = innerPayload.source;
-    const prompt = innerPayload.prompt ?? "";
-    const synthetic = source
+  private ingestUserPrompt(payload: { teamId: string; agentKey: string; prompt: string }): void {
+    this.dispatchIngress("user", null, payload.prompt);
+  }
+
+  private ingestCustom(topic: string, sender: AgentSender, payload: { message: string; truncated: boolean }): void {
+    if (sender.identity.agentKey === this.agentKey) return;
+    this.dispatchIngress(topic, sender.identity.agentKey, payload.message);
+  }
+
+  private dispatchIngress(topic: string, source: string | null, prompt: string): void {
+    const synthetic = source !== null
       ? `[${source} on '${topic}']: ${prompt}`
       : `[user]: ${prompt}`;
-    const message: AgentMessage = {
+    const message: UserMessage = {
       role: "user",
       content: synthetic,
       timestamp: Date.now(),
-    } as unknown as AgentMessage;
+    };
     if (this.agent.state.isStreaming) {
       this.queue.push(message);
-      this.publishQueueSnapshot();
     } else {
       void this.agent.prompt(message);
     }
   }
-
-  private publishQueueSnapshot(): void {
-    this.eventManager.publish(Events.agentQueueUpdate(
-      this.sender,
-      this.queue.map((m) => formatSynthetic(m)),
-    ));
-  }
 }
 
-function formatSynthetic(message: AgentMessage): string {
-  return String((message as { content: unknown }).content);
-}
-
-function unwrapIngressPayload(payload: unknown): { prompt?: string; source?: string } {
-  if (payload === null || typeof payload !== "object") return {};
-  const outer = payload as Record<string, unknown>;
-  if ("payload" in outer && typeof outer.payload === "object" && outer.payload !== null) {
-    const inner = outer.payload as Record<string, unknown>;
-    return {
-      prompt: typeof inner.prompt === "string" ? inner.prompt : undefined,
-      source: typeof inner.source === "string" ? inner.source : undefined,
-    };
+function readFinalStopReason(event: Extract<PiAgentEvent, { type: "agent_end" }> | Extract<PiAgentEvent, { type: "turn_end" }>): { stopReason: StopReason; isError: boolean; errorMessage: string | null } {
+  const candidates: AgentMessage[] = event.type === "agent_end" ? event.messages : [event.message];
+  let lastAssistant: AssistantMessage | undefined;
+  for (let i = candidates.length - 1; i >= 0; i -= 1) {
+    const message = candidates[i];
+    if (message !== undefined && message.role === "assistant") {
+      lastAssistant = message;
+      break;
+    }
   }
-  return {
-    prompt: typeof outer.prompt === "string" ? outer.prompt : undefined,
-    source: typeof outer.source === "string" ? outer.source : undefined,
-  };
+  const stopReason: StopReason = lastAssistant?.stopReason ?? "stop";
+  const isError = stopReason === "error" || stopReason === "aborted";
+  return { stopReason, isError, errorMessage: lastAssistant?.errorMessage ?? null };
 }

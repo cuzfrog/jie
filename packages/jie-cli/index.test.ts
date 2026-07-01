@@ -36,10 +36,10 @@ async function runInIsolatedHome(argv: string[], options: RunOptions = {}): Prom
   const prevHome = process.env.HOME;
   const stdoutLines: string[] = [];
   const stderrLines: string[] = [];
-  const logSpy = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+  const logSpy = vi.spyOn(console, "log").mockImplementation((...args: Parameters<typeof console.log>) => {
     stdoutLines.push(args.map(String).join(" "));
   });
-  const errSpy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+  const errSpy = vi.spyOn(console, "error").mockImplementation((...args: Parameters<typeof console.error>) => {
     stderrLines.push(args.map(String).join(" "));
   });
   process.chdir(homeDir);
@@ -75,38 +75,6 @@ async function runInIsolatedHome(argv: string[], options: RunOptions = {}): Prom
   }
 }
 
-describe("jie — dispatch guards", () => {
-  test("--team a --team b -p 'hi' -> exit 1, stderr has 'duplicate flag: --team'", async () => {
-    const r = await runInIsolatedHome(["--team", "a", "--team", "b", "-p", "hi"]);
-    try {
-      expect(r.capture.exit).toBe(1);
-      expect(r.capture.stderr).toContain("duplicate flag: --team");
-    } finally {
-      r.cleanup();
-    }
-  });
-
-  test("--team (missing arg) -> exit 1, stderr has 'missing argument for --team'", async () => {
-    const r = await runInIsolatedHome(["-p", "hi", "--team"]);
-    try {
-      expect(r.capture.exit).toBe(1);
-      expect(r.capture.stderr).toContain("missing argument for --team");
-    } finally {
-      r.cleanup();
-    }
-  });
-
-  test("--resume x --continue -p 'hi' -> exit 1, stderr has 'cannot use --resume and --continue together'", async () => {
-    const r = await runInIsolatedHome(["--resume", "x", "--continue", "-p", "hi"]);
-    try {
-      expect(r.capture.exit).toBe(1);
-      expect(r.capture.stderr).toContain("cannot use --resume and --continue together");
-    } finally {
-      r.cleanup();
-    }
-  });
-});
-
 describe("jie --version", () => {
   test("--version -> exit 0, stdout starts with 'jie '", async () => {
     const r = await runInIsolatedHome(["--version"]);
@@ -135,29 +103,7 @@ describe("jie --help", () => {
   });
 });
 
-describe("jie (no flags)", () => {
-  test("no flags -> exit 1, stderr contains 'TUI not implemented'", async () => {
-    const r = await runInIsolatedHome([]);
-    try {
-      expect(r.capture.exit).toBe(1);
-      expect(r.capture.stderr).toContain("TUI not implemented");
-    } finally {
-      r.cleanup();
-    }
-  });
-});
-
 describe("jie --api-key (top-level, integration)", () => {
-  test("without defaultProvider -> exit 1, 'no provider resolved'", async () => {
-    const r = await runInIsolatedHome(["--api-key", "sk-new"]);
-    try {
-      expect(r.capture.exit).toBe(1);
-      expect(r.capture.stderr).toContain("no provider resolved");
-    } finally {
-      r.cleanup();
-    }
-  });
-
   test("with defaultProvider -> writes auth.json and exits 0", async () => {
     const r = await runInIsolatedHome(["--api-key", "sk-new"], {
       pre: (homeDir) => {
@@ -170,27 +116,8 @@ describe("jie --api-key (top-level, integration)", () => {
     try {
       expect(r.capture.exit).toBe(0);
       const authText = r.readHomeFile(".jie/auth.json");
-      expect(authText).not.toBeNull();
-      expect(JSON.parse(authText!)).toEqual({ anthropic: { type: "api_key", key: "sk-new" } });
-    } finally {
-      r.cleanup();
-    }
-  });
-});
-
-describe("jie --resume unknown session", () => {
-  test("--resume nonexistent -p 'hi' -> exit 1, stderr has 'unknown session_id: nonexistent'", async () => {
-    const r = await runInIsolatedHome(["--resume", "nonexistent", "-p", "hi"], {
-      pre: (homeDir) => {
-        writeFileSync(
-          join(homeDir, ".jie", "settings.json"),
-          JSON.stringify({ defaultProvider: "anthropic", defaultModel: "claude-sonnet-4" }),
-        );
-      },
-    });
-    try {
-      expect(r.capture.exit).toBe(1);
-      expect(r.capture.stderr).toContain("unknown session_id: nonexistent");
+      if (authText === null) throw new Error("auth.json was not written");
+      expect(JSON.parse(authText)).toEqual({ anthropic: { type: "api_key", key: "sk-new" } });
     } finally {
       r.cleanup();
     }

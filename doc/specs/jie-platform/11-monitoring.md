@@ -28,7 +28,7 @@ The TUI derives agent status from the following (after ADR 22 — the body no lo
 
 The "still busy" derivation in the `busy` row above is what the body-side alternation (Event-Order Contract — see `03-event-system.md`) makes reliable: a body's `agent.idle` is always preceded by an `agent.turn.start` for the same turn, so the TUI's per-body state machine cannot observe `agent.idle` without a preceding `agent.turn.start` having been seen.
 
-The TUI does not need a heartbeat interval — it observes events as they arrive on the bus. Since everything is in-process, there is no network partition or missed-event concern. For the queue-pickup flicker (a brief `agent.idle` between turns when the body picks up the next queued prompt), the TUI should debounce: `agent.idle` followed by `agent.turn.start` for the same body within ~50 ms is "still busy". See `ui/tui.md` "Degraded States".
+The TUI does not need a heartbeat interval — it observes events as they arrive on the bus. Since everything is in-process, there is no network partition or missed-event concern. For the queue-pickup flicker (a brief `agent.idle` between turns when the body picks up the next queued prompt), the TUI should debounce: `agent.idle` followed by `agent.turn.start` for the same body within ~50 ms is "still busy". See `ui/tui-state.md` "Out of scope for v0.2" (queue-pickup debounce).
 
 ## Error Surfacing
 

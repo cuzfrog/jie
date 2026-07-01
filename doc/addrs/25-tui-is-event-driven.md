@@ -36,11 +36,11 @@ The TUI does not read `body.model`, `body.soul.system_prompt`, `body.soul.tools`
 
 The CLI's `createApp` orchestrator captures the team info (`teamId`, `leaderRole`, `leaderKey`) from the `team.loaded` event and passes it to `runPrint`; the TUI does the same (subscribes to the bus, captures from the event, filters platform events by `team_id` from the envelope).
 
-**v1 → v0.2 promotion.** v0.2 ships multi-team in the TUI (per `ui/tui.md` "Multi-team" and `00-tui-user-scenarios.md` T3). The handle gains `teamId`, `bodies()`, and `loadTeam` in v0.2. The TUI is the only caller of `loadTeam`; the v1 CLI's `-p` mode keeps its single-team shape and does not adopt the new methods. The Day 2+ design (formerly in the v1 "Day 2+ multi-team addition" paragraph below) is the v0.2 design; the ADR is updated.
+**v1 → v0.2 promotion.** v0.2 ships multi-team in the TUI (per `ui/tui-overview.md` "Boundary with the platform" and `ui/tui-user-scenarios.md` T3). The handle gains `teamId`, `bodies()`, and `loadTeam` in v0.2. The TUI is the only caller of `loadTeam`; the v1 CLI's `-p` mode keeps its single-team shape and does not adopt the new methods. The Day 2+ design (formerly in the v1 "Day 2+ multi-team addition" paragraph below) is the v0.2 design; the ADR is updated.
 
 ### 2. The platform publishes enough information for the TUI to render
 
-The TUI's information needs (per `doc/specs/jie-platform/ui/tui.md`) fall into three categories:
+The TUI's information needs (per `doc/specs/jie-platform/ui/tui-overview.md`) fall into three categories:
 
 | TUI panel | Bus event(s) | Sufficient today? |
 |---|---|---|
@@ -48,7 +48,7 @@ The TUI's information needs (per `doc/specs/jie-platform/ui/tui.md`) fall into t
 | Busy/idle indicators | `agent.turn.start`, `agent.idle` (and the alternation contract per ADR 22) | **Yes**. |
 | Live LLM output | `agent.stream.chunk`, `agent.stream.end` | **Yes**. |
 | Tool telemetry | `agent.tool.call`, `agent.tool.result` | **Yes**. |
-| Queue indicator | `agent.queue.update` | **Yes**. |
+| Queue indicator | `agent.prompt.queue.update` | **Yes**. |
 
 The `team.loaded` event payload carries `is_leader` (added in the round-6 update). The TUI's agents-panel-at-boot story is satisfied by this event; no per-body `agent.idle` at startup is needed (per ADR 22).
 
@@ -56,7 +56,7 @@ The `team.loaded` event payload carries `is_leader` (added in the round-6 update
 
 The TUI maintains a derived state, updated on each event. The render reads the derived state. This makes the renderer single-threaded (no need to lock against live bodies) and the derived state trivially testable (no need to mock `AgentBody`).
 
-The exact shape of the derived state is the TUI's concern (per `ui/tui.md` "Layout is intentionally unspecified here"). The platform's only contract is: every piece of state the TUI displays has a corresponding bus event.
+The exact shape of the derived state is the TUI's concern (per `ui/tui-state.md` "Reducer rules"). The platform's only contract is: every piece of state the TUI displays has a corresponding bus event.
 
 ## Rationale
 
@@ -69,9 +69,9 @@ The exact shape of the derived state is the TUI's concern (per `ui/tui.md` "Layo
 ## Consequences
 
 - `JiePlatform` in v0.2 is `{ bus, teamId, bodies(), loadTeam, stop }`. The TUI's permitted v0.2 surface is the bus, the multi-team view methods, and the shutdown method. The CLI's `createApp` orchestrator captures the team info from the `team.loaded` event; the TUI does the same.
-- The v0.2 TUI's `stop()` semantics: iterates every loaded team's bodies and stops them. In-flight turns are **not** awaited (per `09-deployment.md` step 4 limitation, kept in v0.2; revisit in v0.3). The TUI's `Ctrl+C` path publishes a synthetic interrupt event (per `ui/tui.md` "Input loop and concurrency") and does not call `stop`; the TUI exits only on `Ctrl+D` or `/exit`.
+- The v0.2 TUI's `stop()` semantics: iterates every loaded team's bodies and stops them. In-flight turns are **not** awaited (per `09-deployment.md` step 4 limitation, kept in v0.2; revisit in v0.3). The TUI's `Ctrl+C` path publishes a synthetic interrupt event (per `ui/tui-shortcuts.md` "Esc×2 vs Ctrl+C") and does not call `stop`; the TUI exits only on `Ctrl+D` or `/exit`.
 - The `team.loaded` event payload is `{ team_id, agents: [{ role, agent_key, is_leader }] }` — `is_leader` is included for the TUI's agents panel. The TUI's per-team roster is built from this event for every loaded team (the TUI subscribes to the per-process subject and filters by active `team_id`).
-- The TUI's state shape and rendering are its own concern (see `ui/tui.md` "Layout", "Rendering", "Screen-update model"). The platform's contract is: "every visible state has a bus event".
-- Test fixtures for the TUI can replay a recorded event stream without instantiating bodies (see `ui/tui.md` "Snapshot / replay tests"). This is a strong testing benefit and is the foundation of the v0.2 TUI test plan (`00-tui-user-scenarios.md` T1–T5).
-- The `agent.queue.update` event is the queue indicator's source. The TUI does not poll the body's in-memory queue (which `AgentBody.peekQueue()` would have exposed; the dead-code removal in stage-2 cleanup drops that method).
+- The TUI's state shape and rendering are its own concern (see `ui/tui-state.md` "Reducer rules" and `ui/tui-layout.md`). The platform's contract is: "every visible state has a bus event".
+- Test fixtures for the TUI can replay a recorded event stream without instantiating bodies (see `ui/tui-overview.md` "Test strategy"). This is a strong testing benefit and is the foundation of the v0.2 TUI test plan (`ui/tui-user-scenarios.md` T1–T5).
+- The `agent.prompt.queue.update` event is the queue indicator's source. The TUI does not poll the body's in-memory queue (which `AgentBody.peekQueue()` would have exposed; the dead-code removal in stage-2 cleanup drops that method).
 - The multi-team design (`loadTeam`, `bodies()`, `teamId`) is captured in `addrs/19-multi-team-coexistence.md` and ships in v0.2 with the TUI's `/team` slash command.

@@ -1,0 +1,12 @@
+---
+sealed:
+  - index.ts
+  - state.ts
+  - reducer.test.ts
+  - reducer.ts
+  - ui-reducer.test.ts
+  - ui-reducer.ts
+  - event-reducer.test.ts
+  - event-reducer.ts
+  - actions.ts # follow existing type's shape, do not overhaul the file.
+---

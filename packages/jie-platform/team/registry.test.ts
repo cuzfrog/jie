@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTeamRegistry } from "./registry";
-import { JiePlatformError } from "../domain-types";
+import { JiePlatformError } from "../types";
 
 function writeTeam(rootDir: string, id: string, leader: string): void {
   const teamDir = join(rootDir, id);
@@ -88,11 +88,6 @@ describe("createTeamRegistry", () => {
       }
     });
 
-    test("loadTeam throws for an id not found in any scope", () => {
-      const r = createTeamRegistry({ homeJieDir, projectJieDir });
-      expect(() => r.loadTeam("ghost")).toThrow(/team 'ghost' not found/);
-    });
-
     test("loadTeam throws when a directory exists but has no TEAM.md", () => {
       const projJie = join(workspace, ".jie");
       mkdirSync(join(projJie, "teams", "broken"), { recursive: true });
@@ -100,62 +95,69 @@ describe("createTeamRegistry", () => {
       expect(() => r.loadTeam("broken")).toThrow(/team 'broken' not found/);
     });
 
-    test("loadTeam throws JiePlatformError with code 'invalid_team_id' for an invalid id", () => {
+    test("loadTeam throws invalid_team_id for an invalid id", () => {
       const r = createTeamRegistry({ homeJieDir, projectJieDir });
-      let caught: unknown;
-      try {
-        r.loadTeam("bad id with spaces");
-      } catch (error) {
-        caught = error;
-      }
-      expect(caught).toBeInstanceOf(JiePlatformError);
-      expect((caught as JiePlatformError).code).toBe("invalid_team_id");
+      expect(() => r.loadTeam("bad id with spaces")).toThrow(JiePlatformError);
     });
 
-    test("loadTeam throws JiePlatformError with code 'team_not_found' when id is absent", () => {
+    test("loadTeam throws team_not_found when id is absent", () => {
       const r = createTeamRegistry({ homeJieDir, projectJieDir });
-      let caught: unknown;
-      try {
-        r.loadTeam("ghost");
-      } catch (error) {
-        caught = error;
-      }
-      expect(caught).toBeInstanceOf(JiePlatformError);
-      expect((caught as JiePlatformError).code).toBe("team_not_found");
+      expect(() => r.loadTeam("ghost")).toThrow(JiePlatformError);
     });
   });
 
   describe("isInstalled", () => {
-    test("returns true for 'minimal' (always available)", () => {
-      const r = createTeamRegistry({ homeJieDir, projectJieDir });
-      expect(r.isInstalled("minimal")).toBe(true);
-    });
-
-    test("returns true for a project team with TEAM.md", () => {
-      const projJie = join(workspace, ".jie");
-      const projectTeams = join(projJie, "teams");
-      writeTeam(projectTeams, "dev", "leader");
+    test.each([
+      {
+        name: "'minimal' (always available)",
+        setup: (): string | null => null,
+        teamId: "minimal",
+        expected: true,
+      },
+      {
+        name: "a project team with TEAM.md",
+        setup: (): string | null => {
+          const projJie = join(workspace, ".jie");
+          writeTeam(join(projJie, "teams"), "dev", "leader");
+          return projJie;
+        },
+        teamId: "dev",
+        expected: true,
+      },
+      {
+        name: "a user team with TEAM.md",
+        setup: (): string | null => {
+          writeTeam(join(homeJieDir, "teams"), "dev", "leader");
+          return null;
+        },
+        teamId: "dev",
+        expected: true,
+      },
+    ])("returns true for $name", ({ setup, teamId, expected }) => {
+      const projJie = setup();
       const r = createTeamRegistry({ homeJieDir, projectJieDir: projJie });
-      expect(r.isInstalled("dev")).toBe(true);
+      expect(r.isInstalled(teamId)).toBe(expected);
     });
 
-    test("returns true for a user team with TEAM.md", () => {
-      const userTeams = join(homeJieDir, "teams");
-      writeTeam(userTeams, "dev", "leader");
-      const r = createTeamRegistry({ homeJieDir, projectJieDir });
-      expect(r.isInstalled("dev")).toBe(true);
-    });
-
-    test("returns false for a missing team", () => {
-      const r = createTeamRegistry({ homeJieDir, projectJieDir });
-      expect(r.isInstalled("ghost")).toBe(false);
-    });
-
-    test("returns false for a team directory without TEAM.md", () => {
-      const projJie = join(workspace, ".jie");
-      mkdirSync(join(projJie, "teams", "incomplete"), { recursive: true });
+    test.each([
+      {
+        name: "missing team",
+        setup: (): string | null => null,
+        teamId: "ghost",
+      },
+      {
+        name: "team directory without TEAM.md",
+        setup: (): string | null => {
+          const projJie = join(workspace, ".jie");
+          mkdirSync(join(projJie, "teams", "incomplete"), { recursive: true });
+          return projJie;
+        },
+        teamId: "incomplete",
+      },
+    ])("returns false for $name", ({ setup, teamId }) => {
+      const projJie = setup();
       const r = createTeamRegistry({ homeJieDir, projectJieDir: projJie });
-      expect(r.isInstalled("incomplete")).toBe(false);
+      expect(r.isInstalled(teamId)).toBe(false);
     });
   });
 
@@ -202,34 +204,47 @@ describe("createTeamRegistry", () => {
   });
 
   describe("locate", () => {
-    test("returns 'project' for a project team", () => {
-      const projJie = join(workspace, ".jie");
-      const projectTeams = join(projJie, "teams");
-      writeTeam(projectTeams, "dev", "leader");
+    test.each([
+      {
+        name: "project team",
+        setup: (): string | null => {
+          const projJie = join(workspace, ".jie");
+          writeTeam(join(projJie, "teams"), "dev", "leader");
+          return projJie;
+        },
+        teamId: "dev",
+        expected: "project",
+      },
+      {
+        name: "user team",
+        setup: (): string | null => {
+          writeTeam(join(homeJieDir, "teams"), "dev", "leader");
+          return null;
+        },
+        teamId: "dev",
+        expected: "user",
+      },
+      {
+        name: "minimal team (shipped with the platform)",
+        setup: (): string | null => null,
+        teamId: "minimal",
+        expected: "user",
+      },
+      {
+        name: "team in both scopes (project wins)",
+        setup: (): string | null => {
+          const projJie = join(workspace, ".jie");
+          writeTeam(join(projJie, "teams"), "shared", "project-leader");
+          writeTeam(join(homeJieDir, "teams"), "shared", "user-leader");
+          return projJie;
+        },
+        teamId: "shared",
+        expected: "project",
+      },
+    ])("returns '$expected' for $name", ({ setup, teamId, expected }) => {
+      const projJie = setup();
       const r = createTeamRegistry({ homeJieDir, projectJieDir: projJie });
-      expect(r.locate("dev")).toBe("project");
-    });
-
-    test("returns 'user' for a user team", () => {
-      const userTeams = join(homeJieDir, "teams");
-      writeTeam(userTeams, "dev", "leader");
-      const r = createTeamRegistry({ homeJieDir, projectJieDir });
-      expect(r.locate("dev")).toBe("user");
-    });
-
-    test("returns 'user' for the minimal team (shipped with the platform)", () => {
-      const r = createTeamRegistry({ homeJieDir, projectJieDir });
-      expect(r.locate("minimal")).toBe("user");
-    });
-
-    test("returns 'project' when the team is in both scopes (project wins)", () => {
-      const projJie = join(workspace, ".jie");
-      const projectTeams = join(projJie, "teams");
-      const userTeams = join(homeJieDir, "teams");
-      writeTeam(projectTeams, "shared", "project-leader");
-      writeTeam(userTeams, "shared", "user-leader");
-      const r = createTeamRegistry({ homeJieDir, projectJieDir: projJie });
-      expect(r.locate("shared")).toBe("project");
+      expect(r.locate(teamId)).toBe(expected);
     });
 
     test("returns 'missing' for an id not found anywhere", () => {

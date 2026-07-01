@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createModelRegistry } from "./model-registry";
 import type { AuthStore } from "./auth-store";
-import { JiePlatformError } from "../domain-types";
+import { JiePlatformError } from "../types";
 
 const authStore = vi.mocked<AuthStore>({
   load: vi.fn(),
@@ -68,8 +68,10 @@ describe("ModelRegistry", () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("oauth_not_supported");
-    expect((caught as JiePlatformError).message).toContain("anthropic");
+    expect(caught).toMatchObject({
+      code: "OAUTH_NOT_SUPPORTED",
+      message: expect.stringContaining("anthropic"),
+    });
   });
 
   test("auth.json takes precedence over models.json for a built-in provider override", () => {
