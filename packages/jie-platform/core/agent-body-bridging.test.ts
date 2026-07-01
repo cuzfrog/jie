@@ -188,22 +188,6 @@ describe("AgentBody — pi-agent event bridging", () => {
     expect(env.payload).toBe("stop");
   });
 
-  test("body-side alternation: turn_start always precedes agent.idle", () => {
-    const { opts, subscribeSubject } = makeOpts();
-    const events: string[] = [];
-    subscribeSubject("agent.turn.start", () => events.push("turn_start"));
-    subscribeSubject("agent.idle", () => events.push("idle"));
-    const result = makeFakeAgentFactory({
-      onEvent: (l) => {
-        fireEvent = l;
-      },
-    });
-    body = createAgentBody({ ...opts, createAgent: result.factory });
-    fireEvent!({ type: "turn_start" });
-    fireEvent!({ type: "agent_end", messages: [] });
-    expect(events).toEqual(["turn_start", "idle"]);
-  });
-
   test("3 turns alternate strictly: turn_start, idle, turn_start, idle, ...", () => {
     const { opts, subscribeSubject } = makeOpts();
     const events: string[] = [];

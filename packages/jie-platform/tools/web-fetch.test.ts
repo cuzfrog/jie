@@ -124,11 +124,6 @@ describe("web_fetch", () => {
     expect((caught as Error).message).toContain("application/octet-stream");
   });
 
-  test("missing content-type is treated as application/octet-stream (Bun's HTTP server auto-sets a content-type, so this is verified by the binary case)", async () => {
-
-    expect(true).toBe(true);
-  });
-
   test("5 MiB cap: response > 5 MiB is truncated, truncated=true", async () => {
     const tool = createWebFetchTool();
     const result = await tool.execute({ url: `${baseUrl}/huge` }, {} as never);

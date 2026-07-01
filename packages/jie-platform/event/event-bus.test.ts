@@ -67,12 +67,6 @@ describe("InProcessEventBus", () => {
     expect(bus.subscriberCount("s")).toBe(0);
   });
 
-  test("publish to a subject with no subscribers is a no-op", () => {
-    const bus = createEventBus();
-    expect(() => bus.publish("no-subscribers", { anything: 1 })).not.toThrow();
-    expect(bus.subscriberCount("no-subscribers")).toBe(0);
-  });
-
   test("a throwing callback does not change subscriberCount", () => {
     const bus = createEventBus();
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});

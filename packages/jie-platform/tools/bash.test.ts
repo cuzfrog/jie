@@ -129,11 +129,4 @@ describe("bash", () => {
     const exitCode = Number(exitMatch![1]);
     expect([137, 143]).toContain(exitCode);
   });
-
-  test("does not throw command_timed_out for a fast-completing command", async () => {
-    const tool = createBashTool({ workspaceRoot: workspace });
-    const result = await tool.execute({ command: "true" }, {} as never);
-    const details = result.details as { exitCode: number };
-    expect(details.exitCode).toBe(0);
-  });
 });

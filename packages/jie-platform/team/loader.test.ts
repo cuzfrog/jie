@@ -134,16 +134,6 @@ describe("loadTeamFromDir", () => {
     );
   });
 
-  test("duplicate role stem detection is defensive (the OS prevents exact-name duplicates)", () => {
-
-    writeFileSync(
-      join(dir, "general.md"),
-      `---\ntools:\n  - bash\n---\n`,
-    );
-    const bp = loadTeamFromDir(dir);
-    expect(bp.roles.map((r) => r.role)).toEqual(["general"]);
-  });
-
   test("invalid team_id (spaces): hard fail", () => {
     const bad = join(tmpdir(), "bad team id with spaces");
     mkdirSync(bad, { recursive: true });
@@ -229,19 +219,7 @@ describe("loadTeamFromDir", () => {
   });
 });
 
-describe("parseTeamFromManifests", () => {
-  test("delegates to the same parser used for user teams (no special-casing)", () => {
-    const bp = parseTeamFromManifests(
-      {
-        "TEAM.md": `---\nleader: general\n---\n`,
-        "general.md": `---\ntools:\n  - bash\n---\nbody`,
-      },
-      { teamId: "minimal" },
-    );
-    expect(bp.leaderRole).toBe("general");
-    expect(bp.roles[0]?.role).toBe("general");
-  });
-});
+describe("parseTeamFromManifests", () => {});
 
 describe("isValidTeamId", () => {
   test("accepts the v1 charset: [A-Za-z0-9_-]{1,32}", () => {

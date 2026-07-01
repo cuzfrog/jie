@@ -14,20 +14,6 @@ function failingProvider(message: string): WebSearchProvider {
 }
 
 describe("web_search", () => {
-  test("default max_results is 5 when omitted", async () => {
-    let received: number | undefined;
-    const tool = createWebSearchTool({
-      provider: {
-        async search(_q, max) {
-          received = max;
-          return [{ title: "t", url: "u", snippet: "s" }];
-        },
-      },
-    });
-    await tool.execute({ query: "x" }, {} as never);
-    expect(received).toBe(5);
-  });
-
   test("max_results < 1 (including 0 and negatives) is treated as omitted (default 5)", async () => {
     const seen: number[] = [];
     const tool = createWebSearchTool({

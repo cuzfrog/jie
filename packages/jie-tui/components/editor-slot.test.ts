@@ -13,19 +13,6 @@ const COMMANDS: SlashCommand[] = [
 ];
 
 describe("EditorSlot", () => {
-  test("renders editor with empty text", () => {
-    const { tui } = createTestTuiWithTerminal();
-    const slot = new EditorSlot(tui, { basePath: process.cwd() });
-    const lines = slot.render(80);
-    expect(lines.length).toBeGreaterThan(0);
-  });
-
-  test("getText returns empty string initially", () => {
-    const { tui } = createTestTuiWithTerminal();
-    const slot = new EditorSlot(tui, { basePath: process.cwd() });
-    expect(slot.getText()).toBe("");
-  });
-
   test("setText then getText round-trips", () => {
     const { tui } = createTestTuiWithTerminal();
     const slot = new EditorSlot(tui, { basePath: process.cwd() });

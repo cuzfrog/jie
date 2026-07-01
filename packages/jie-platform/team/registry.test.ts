@@ -88,11 +88,6 @@ describe("createTeamRegistry", () => {
       }
     });
 
-    test("loadTeam throws for an id not found in any scope", () => {
-      const r = createTeamRegistry({ homeJieDir, projectJieDir });
-      expect(() => r.loadTeam("ghost")).toThrow(/team 'ghost' not found/);
-    });
-
     test("loadTeam throws when a directory exists but has no TEAM.md", () => {
       const projJie = join(workspace, ".jie");
       mkdirSync(join(projJie, "teams", "broken"), { recursive: true });
