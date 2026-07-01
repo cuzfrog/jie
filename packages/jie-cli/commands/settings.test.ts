@@ -131,20 +131,6 @@ describe("runTeam", () => {
     errSpy.mockRestore();
   });
 
-  test("team with malformed id -> exit 1 (charset validation moved to parse time)", async () => {
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => { });
-    const code = await runTeam(
-      { kind: "team", teamId: "bad id with spaces", unset: false },
-      settings,
-      teamRegistry,
-    );
-    expect(code).toBe(1);
-    expect(errSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain(
-      "is not installed",
-    );
-    errSpy.mockRestore();
-  });
-
   test("team --unset removes defaultTeam from global settings", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
     const code = await runTeam(

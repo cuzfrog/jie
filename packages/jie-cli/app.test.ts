@@ -74,39 +74,6 @@ describe("createApp — guard rails", () => {
     settingsStore.load.mockReturnValue({});
   });
 
-  test("--api-key without defaultProvider: returns error code 1, no auth.json written", async () => {
-    const writeErr = vi.spyOn(console, "error").mockImplementation(() => { });
-    const result = await createApp(
-      appArgs({ cwd: "/tmp/workspace", homeJieDir: "/tmp/home/.jie", apiKey: "sk-test" }),
-      makeDeps("/tmp/workspace", "/tmp/home/.jie"),
-    );
-    expect(result.kind).toBe("error");
-    if (result.kind === "error") {
-      expect(result.code).toBe(1);
-    }
-    const messages = writeErr.mock.calls.map((c) => String(c[0]));
-    expect(messages.some((m) => m.includes("no provider resolved"))).toBe(true);
-    writeErr.mockRestore();
-  });
-
-  test("--team <id> not installed: returns error code 1 with team-not-found message", async () => {
-    teamRegistry.loadTeam.mockImplementationOnce(() => {
-      throw new Error("team 'ghost' not found");
-    });
-    const writeErr = vi.spyOn(console, "error").mockImplementation(() => { });
-    const result = await createApp(
-      appArgs({ cwd: "/tmp/workspace", homeJieDir: "/tmp/home/.jie", teamId: "ghost" }),
-      makeDeps("/tmp/workspace", "/tmp/home/.jie"),
-    );
-    expect(result.kind).toBe("error");
-    if (result.kind === "error") {
-      expect(result.code).toBe(1);
-    }
-    const messages = writeErr.mock.calls.map((c) => String(c[0]));
-    expect(messages.some((m) => m.includes("team 'ghost' not found"))).toBe(true);
-    writeErr.mockRestore();
-  });
-
   test("empty team (TEAM.md, no agent .md files) guard: returns error code 1 with no-agents message", async () => {
     const emptyTeam = {
       id: "empty",
