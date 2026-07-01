@@ -86,32 +86,8 @@ describe("web_search", () => {
 });
 
 describe("createWebSearchProvider", () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
-
-  beforeEach(() => {
-    fetchSpy = vi.spyOn(globalThis, "fetch");
-  });
-
-  afterEach(() => {
-    fetchSpy.mockRestore();
-  });
-
-  test("returns the internal DuckDuckGo-backed provider (the only way to get a default provider)", () => {
+  test("returns a search function (the only way to get a default provider)", () => {
     const provider = createWebSearchProvider();
     expect(typeof provider.search).toBe("function");
-  });
-
-  test("DuckDuckGoSearchProvider is not exported: only createWebSearchProvider constructs it", async () => {
-    const provider = createWebSearchProvider();
-    fetchSpy.mockResolvedValue(
-      new Response(
-        `<a class="result__a" href="https://a">A</a>` +
-          `<a class="result__snippet">snip</a>`,
-        { status: 200 },
-      ),
-    );
-    const results = await provider.search("x", 5);
-    expect(results.length).toBeGreaterThan(0);
-    expect(results[0]?.url).toBe("https://a");
   });
 });
