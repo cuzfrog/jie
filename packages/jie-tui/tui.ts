@@ -216,6 +216,9 @@ export function createTui(options: CreateTUIOptions): Tui {
       if (resolveStart !== null) {
         resolveStart();
       }
+      renderRef = null;
+      resolveStart = null;
+      lastGitRefreshAt = 0;
     },
     start,
   };
