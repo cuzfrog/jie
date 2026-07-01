@@ -300,7 +300,7 @@ describe("loadModelsConfig", () => {
     expect(model?.reasoning).toBe(true);
     expect(model?.contextWindow).toBe(131528);
     expect(model?.maxTokens).toBe(40960);
-    expect((model?.compat as { maxTokensField?: string })?.maxTokensField).toBe("max_completion_tokens");
+    expect((model?.compat as Record<string, unknown>).maxTokensField).toBe("max_completion_tokens");
   });
 });
 
