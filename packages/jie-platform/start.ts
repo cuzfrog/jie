@@ -33,24 +33,25 @@ export interface JiePlatformDeps {
 
 export interface JiePlatform {
   events: EventManager;
+  teamId: string;
   team: { id: string; agents: Array<{ role: string; agentKey: string; isLeader: boolean }> };
+  bodies: () => Map<string, AgentBody[]>;
+  loadTeam: (teamId: string) => Promise<void>;
   stop: () => Promise<void>;
 }
 
 export async function createJiePlatform(options: CreateJiePlatformOptions, dependencies: JiePlatformDeps): Promise<JiePlatform> {
   const resolveModel = defaultResolveModel(dependencies.modelRegistry);
-  const resolvedTeamId = options.teamId ?? "minimal";
-
   const sessionIds = new Map<string, string>();
   const loadedTeams = new Map<string, AgentBody[]>();
   const teamRosters = new Map<string, JiePlatform["team"]["agents"]>();
 
-  async function loadAndStartTeam(teamId: string): Promise<AgentBody[]> {
+  async function loadTeam(teamId: string): Promise<void> {
     const existing = loadedTeams.get(teamId);
-    if (existing !== undefined) return existing;
+    if (existing !== undefined) return;
 
     const blueprint: Team = dependencies.teamRegistry.loadTeam(teamId);
-    const sessionId = resolveSessionId(dependencies.memoryManager, options, teamId);
+    const sessionId = resolveSessionId(dependencies.memoryManager, options, teamId, sessionIds);
     sessionIds.set(teamId, sessionId);
 
     const out: AgentBody[] = [];
@@ -85,18 +86,32 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
     loadedTeams.set(teamId, out);
     teamRosters.set(teamId, roster);
     publishTeamLoaded(dependencies.eventManager, teamId, blueprint);
-    return out;
   }
 
-  await loadAndStartTeam(resolvedTeamId);
+  const initialTeamId = options.teamId ?? "minimal";
+  await loadTeam(initialTeamId);
+
+  let activeTeamId = initialTeamId;
 
   const handle: JiePlatform = {
     events: dependencies.eventManager,
-    team: {
-      id: resolvedTeamId,
-      agents: teamRosters.get(resolvedTeamId) ?? [],
+    get teamId(): string {
+      return activeTeamId;
     },
-    stop: async () => {
+    team: {
+      get id(): string {
+        return activeTeamId;
+      },
+      get agents(): JiePlatform["team"]["agents"] {
+        return teamRosters.get(activeTeamId) ?? [];
+      },
+    },
+    bodies: (): Map<string, AgentBody[]> => new Map(loadedTeams),
+    loadTeam: async (teamId: string): Promise<void> => {
+      await loadTeam(teamId);
+      activeTeamId = teamId;
+    },
+    stop: async (): Promise<void> => {
       const allBodies: AgentBody[] = [];
       for (const bodies of loadedTeams.values()) {
         allBodies.push(...bodies);
@@ -156,7 +171,9 @@ function resolveSessionId(
   memory: MemoryManager,
   options: CreateJiePlatformOptions,
   teamId: string,
+  existingSessionIds: ReadonlyMap<string, string>,
 ): string {
+  if (existingSessionIds.has(teamId)) return existingSessionIds.get(teamId)!;
   if (options.resumeSessionId !== undefined) {
     if (!memory.hasSession(teamId, options.resumeSessionId)) {
       throw new JiePlatformError("UNKNOWN_SESSION", {

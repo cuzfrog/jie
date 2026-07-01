@@ -1,5 +1,6 @@
 import { ProcessTerminal, TUI, type Terminal } from "@earendil-works/pi-tui";
 import { Events, type EventEnvelope, type EventManager, type EventType, type Sender } from "@cuzfrog/jie-platform/event";
+import { type TeamRegistry } from "@cuzfrog/jie-platform/team";
 import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduce } from "./state";
 import { createTuiCommandHandler } from "./command-handler";
 import { createKeyboardHandler } from "./keyboard";
@@ -8,6 +9,8 @@ import { buildView, type BuildViewOpts } from "./components";
 
 export interface CreateTUIOptions {
   eventManager: EventManager;
+  teamRegistry?: TeamRegistry;
+  loadTeam?: (teamId: string) => Promise<void>;
   cwd?: string;
   gitService?: GitService;
   rows?: number;
@@ -77,6 +80,8 @@ export function createTui(options: CreateTUIOptions): Tui {
     getState: () => state,
     dispatch,
     requestQuit,
+    teamRegistry: options.teamRegistry,
+    loadTeam: options.loadTeam,
   });
 
   const publishPrompt = (text: string): void => {

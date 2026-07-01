@@ -246,4 +246,73 @@ describe("createJiePlatform", () => {
       await handle.stop();
     });
   });
+
+  describe("loadTeam (v0.2 multi-team)", () => {
+    function installTeam(dir: string, teamId: string, role: string, leaderRole: string = role): void {
+      const teamDir = join(dir, "teams", teamId);
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(
+        join(teamDir, "TEAM.md"),
+        `---\nleader: ${leaderRole}\n---\n`,
+      );
+      writeFileSync(
+        join(teamDir, `${role}.md`),
+        "---\ntools:\n  - bash\nmodel: anthropic/claude-sonnet-4-5\n---\n",
+      );
+    }
+
+    test("loadTeam installs a second team and switches active team", async () => {
+      installTeam(homeJieDir, "alpha", "general");
+      installTeam(homeJieDir, "beta", "researcher");
+      const deps = makeDeps(workspace, homeJieDir);
+      const events: EventEnvelope<"system.team.loaded">[] = [];
+      deps.eventManager.subscribe("system.team.loaded", (env) => {
+        events.push(env);
+      });
+      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "alpha" }, deps);
+      expect(handle.teamId).toBe("alpha");
+      expect(events.map((e) => e.payload.teamId)).toEqual(["alpha"]);
+
+      await handle.loadTeam("beta");
+      expect(handle.teamId).toBe("beta");
+      expect(handle.team.id).toBe("beta");
+      expect(events.map((e) => e.payload.teamId)).toEqual(["alpha", "beta"]);
+
+      const all = handle.bodies();
+      expect(all.has("alpha")).toBe(true);
+      expect(all.has("beta")).toBe(true);
+      expect(all.get("alpha")?.length).toBeGreaterThan(0);
+      expect(all.get("beta")?.length).toBeGreaterThan(0);
+
+      await handle.stop();
+    });
+
+    test("loadTeam is idempotent: calling twice does not re-publish or re-create bodies", async () => {
+      installTeam(homeJieDir, "alpha", "general");
+      const deps = makeDeps(workspace, homeJieDir);
+      const events: EventEnvelope<"system.team.loaded">[] = [];
+      deps.eventManager.subscribe("system.team.loaded", (env) => {
+        events.push(env);
+      });
+      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "alpha" }, deps);
+      await handle.loadTeam("alpha");
+      await handle.loadTeam("alpha");
+      expect(events.filter((e) => e.payload.teamId === "alpha")).toHaveLength(1);
+      await handle.stop();
+    });
+
+    test("the previously-active team's bodies continue running after a switch", async () => {
+      installTeam(homeJieDir, "alpha", "general");
+      installTeam(homeJieDir, "beta", "researcher");
+      const deps = makeDeps(workspace, homeJieDir);
+      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "alpha" }, deps);
+      await handle.loadTeam("beta");
+      const all = handle.bodies();
+      const alphaBodies = all.get("alpha") ?? [];
+      const betaBodies = all.get("beta") ?? [];
+      expect(alphaBodies.length).toBeGreaterThan(0);
+      expect(betaBodies.length).toBeGreaterThan(0);
+      await handle.stop();
+    });
+  });
 });

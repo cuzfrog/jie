@@ -1,4 +1,5 @@
 import { Actions, type Action, type TuiState } from "./state";
+import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
 
 export type CommandOutcome =
   | { readonly kind: "reply"; readonly text: string }
@@ -15,6 +16,8 @@ export interface CommandHandlerDeps {
   readonly getState: () => TuiState;
   readonly dispatch: (action: Action) => void;
   readonly requestQuit: () => void;
+  readonly teamRegistry?: TeamRegistry;
+  readonly loadTeam?: (teamId: string) => Promise<void>;
 }
 
 export interface TuiCommandHandler {
@@ -106,6 +109,12 @@ export function runCommand(input: string): CommandOutcome {
 export function createTuiCommandHandler(deps: CommandHandlerDeps): TuiCommandHandler {
   const handle = (text: string): void => {
     deps.dispatch(Actions.clearTransientMessage());
+    const teamOutcome = tryLoadTeam(text, deps.teamRegistry, deps.loadTeam);
+    if (teamOutcome !== null) {
+      if (teamOutcome.kind === "reply") deps.dispatch(Actions.setTransientMessage(teamOutcome.text));
+      else if (teamOutcome.kind === "error") deps.dispatch(Actions.setErrorMessage(teamOutcome.text));
+      return;
+    }
     const outcome = runCommand(text);
     switch (outcome.kind) {
       case "clearState":
@@ -124,4 +133,21 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): TuiCommandHan
   };
 
   return { handle };
+}
+
+function tryLoadTeam(
+  text: string,
+  teamRegistry: TeamRegistry | undefined,
+  loadTeam: ((teamId: string) => Promise<void>) | undefined,
+): { kind: "reply"; text: string } | { kind: "error"; text: string } | null {
+  if (teamRegistry === undefined || loadTeam === undefined) return null;
+  if (!text.startsWith("/team")) return null;
+  const parts = text.split(/\s+/);
+  const argument = parts[1];
+  if (argument === undefined || argument === "--unset") return null;
+  if (!teamRegistry.isInstalled(argument)) return null;
+  void loadTeam(argument).catch((error: unknown) => {
+    console.error(`loadTeam(${argument}) failed:`, error);
+  });
+  return { kind: "reply", text: `switching to team '${argument}'…` };
 }
