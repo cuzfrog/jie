@@ -19,11 +19,13 @@ export interface EditorSlotOptions {
 export class EditorSlot extends Container {
   private readonly editor: Editor;
   private readonly placeholderText: string;
+  private queueIndicator: string | null;
 
   constructor(tui: TUI, opts: EditorSlotOptions) {
     super();
     this.editor = new Editor(tui, editorTheme);
     this.placeholderText = "type a prompt...";
+    this.queueIndicator = null;
     const provider = new CombinedAutocompleteProvider(
       opts.commands === undefined ? undefined : [...opts.commands],
       opts.basePath,
@@ -42,12 +44,19 @@ export class EditorSlot extends Container {
     return this.editor.getText();
   }
 
+  setQueueIndicator(text: string | null): void {
+    this.queueIndicator = text;
+  }
+
   render(width: number): string[] {
     const lines = this.editor.render(width);
-    if (this.editor.getText() === "" && lines.length > 0) {
-      return [this.placeholderText, ...lines.slice(1)];
+    const empty = this.editor.getText() === "" && lines.length > 0;
+    const head = empty ? this.placeholderText : (lines[0] ?? "");
+    const tail = empty ? lines.slice(1) : lines.slice(1);
+    if (this.queueIndicator === null) {
+      return [head, ...tail];
     }
-    return lines;
+    return [head, this.queueIndicator, ...tail];
   }
 
   invalidate(): void {

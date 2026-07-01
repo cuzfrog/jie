@@ -26,6 +26,24 @@ describe("EditorSlot", () => {
     slot.setText("a sample prompt");
     expect(slot.render(80).join("\n")).toContain("a sample prompt");
   });
+
+  test("renders the queue indicator with the next-prompt preview when non-empty", () => {
+    const { tui } = createTestTuiWithTerminal();
+    const slot = new EditorSlot(tui, { basePath: process.cwd() });
+    slot.setQueueIndicator("2 prompts queued  > Also write me a haiku");
+    const flat = slot.render(80).join("\n");
+    expect(flat).toContain("2 prompts queued");
+    expect(flat).toContain("Also write me a haiku");
+  });
+
+  test("clears the queue indicator when set to null", () => {
+    const { tui } = createTestTuiWithTerminal();
+    const slot = new EditorSlot(tui, { basePath: process.cwd() });
+    slot.setQueueIndicator("1 prompt queued  > alpha");
+    slot.setQueueIndicator(null);
+    const flat = slot.render(80).join("\n");
+    expect(flat).not.toContain("queued");
+  });
 });
 
 describe("editorSlotFromCommands", () => {

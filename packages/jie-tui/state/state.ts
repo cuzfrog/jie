@@ -43,6 +43,7 @@ export interface AgentUiState {
   readonly isLeader: boolean;
   readonly status: AgentStatus;
   readonly model: ModelReference | null;
+  readonly queue: ReadonlyArray<string>;
   readonly history: MessageTurn[];
   readonly currentTurn: MessageTurn | null;
   readonly lastStopReason: StopReason | null;

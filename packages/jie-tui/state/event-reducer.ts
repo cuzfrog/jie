@@ -7,6 +7,7 @@ export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
   if (event.type === "system.error") return reduceSystemError(state, event);
   if (event.type === "user.prompt") return reduceUserPrompt(state, event);
   if (event.type === "agent.model.assigned") return reduceModelAssigned(state, event);
+  if (event.type === "agent.prompt.queue.update") return reduceQueueUpdate(state, event);
   if (event.type === "agent.turn.start") return reduceTurnStart(state, event);
   if (event.type === "agent.idle") return reduceIdle(state, event);
   if (event.type === "agent.stream.chunk") return reduceStreamChunk(state, event);
@@ -89,6 +90,16 @@ function reduceModelAssigned(state: TuiState, event: EventEnvelope<"agent.model.
     effort: event.payload.effort,
   };
   return withAgent(state, agentId, { ...existing, model });
+}
+
+function reduceQueueUpdate(state: TuiState, event: EventEnvelope<"agent.prompt.queue.update">): TuiState {
+  if (state.teamId === null) return state;
+  if (event.sender.kind !== "agent") return state;
+  if (event.sender.identity.teamId !== state.teamId) return state;
+  const agentId = composeAgentId(event.sender.identity.teamId, event.sender.identity.agentKey);
+  const existing = state.agents.get(agentId);
+  if (existing === undefined) return state;
+  return withAgent(state, agentId, { ...existing, queue: event.payload.prompts });
 }
 
 function reduceTurnStart(state: TuiState, event: EventEnvelope<"agent.turn.start">): TuiState {
@@ -209,6 +220,7 @@ function emptyAgent(agentId: AgentId, teamId: string, agentKey: string, role: st
     status: "idle",
     lastStopReason: null,
     model: null,
+    queue: [],
     history: [],
     currentTurn: null,
   };

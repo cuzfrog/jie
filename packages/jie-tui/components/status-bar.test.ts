@@ -128,6 +128,7 @@ describe("statusBarContextFromState", () => {
       isLeader: true,
       status: "busy",
       model: { provider: "openai", id: "gpt-4", effort: "high" },
+      queue: [],
       history: [],
       currentTurn: null,
       lastStopReason: null,

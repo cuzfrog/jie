@@ -12,6 +12,7 @@ function makeAgent(overrides: Partial<AgentUiState> = {}): AgentUiState {
     isLeader: true,
     status: "idle",
     model: null,
+    queue: [],
     history: [],
     currentTurn: null,
     lastStopReason: null,
