@@ -1,13 +1,10 @@
 import { matchesKey, ProcessTerminal, TUI, type Terminal } from "@earendil-works/pi-tui";
 import { Events, type EventEnvelope, type EventManager, type EventType, type Sender } from "@cuzfrog/jie-platform/event";
-import type { ArtifactStore } from "@cuzfrog/jie-platform/storage";
 import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduce } from "./state";
-import { buildView, type BuildViewOpts } from "./components/build-view";
+import { buildView, type BuildViewOpts } from "./components";
 
 export interface CreateTUIOptions {
   eventManager: EventManager;
-  artifactStore: ArtifactStore;
-  roles: string[];
   cwd?: string;
   branch?: string;
   cols?: number;

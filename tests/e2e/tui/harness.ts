@@ -1,14 +1,7 @@
 import { createEventManager, Events, type EventEnvelope, type EventManager, type Sender, type EventType } from "@cuzfrog/jie-platform/event";
 import { createTui, type Tui, type CreateTUIOptions } from "@cuzfrog/jie-tui";
-import type { ArtifactStore } from "@cuzfrog/jie-platform/storage";
 import { JiePlatformErrorMessages } from "@cuzfrog/jie-platform";
 import { withTTY } from "../../support";
-
-const stubArtifacts: ArtifactStore = {
-  write: async () => ({ key: "", created_at: "" }),
-  read: async () => null,
-  list: async () => [],
-};
 
 export const startTuiOn = (
   bus: EventManager,
@@ -16,8 +9,6 @@ export const startTuiOn = (
 ): Tui => {
   const opts: CreateTUIOptions = {
     eventManager: bus,
-    artifactStore: stubArtifacts,
-    roles: [],
     cols: 80,
     rows: 30,
     cwd: "/tmp",

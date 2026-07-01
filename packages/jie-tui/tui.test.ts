@@ -9,12 +9,6 @@ function makeStubBus(): EventManager {
 function makeOptions(overrides: Partial<CreateTUIOptions> = {}): CreateTUIOptions {
   return {
     eventManager: makeStubBus(),
-    artifactStore: {
-      write: async () => ({ key: "", created_at: "" }),
-      read: async () => null,
-      list: async () => [],
-    },
-    roles: [],
     cols: 80,
     ...overrides,
   };
