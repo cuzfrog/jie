@@ -2,7 +2,7 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { join } from "node:path";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { createEventManager, type Sender } from "./event";
+import { createEventManager, type EventEnvelope } from "./event";
 import { createJiePlatform } from "./start";
 import {
   createModelRegistry,
@@ -14,14 +14,6 @@ import { createTeamRegistry } from "./team";
 import { createToolRegistry } from "./tools";
 import { createArtifactStore, createMemoryManager, createStorage } from "./storage";
 import { JiePlatformErrorMessages } from "./types";
-
-interface CapturedEvent {
-  topic: string;
-  sender: Sender;
-  payload: unknown;
-  version: number;
-  timestamp: string;
-}
 
 const NO_MODEL_ERROR = JiePlatformErrorMessages.NO_MODEL_ERROR;
 
@@ -98,18 +90,18 @@ describe("createJiePlatform", () => {
         },
         deps,
       );
-      const events: CapturedEvent[] = [];
+      const events: EventEnvelope<"user.prompt">[] = [];
       handle.events.subscribe("user.prompt", (env) => {
-        events.push(env as unknown as CapturedEvent);
+        events.push(env);
       });
       expect(events).toHaveLength(0);
     });
 
     test("team.loaded is published once at start; the event carries is_leader per agent", async () => {
       const deps = makeDeps(workspace, homeJieDir);
-      const events: CapturedEvent[] = [];
+      const events: EventEnvelope<"system.team.loaded">[] = [];
       deps.eventManager.subscribe("system.team.loaded", (env) => {
-        events.push(env as unknown as CapturedEvent);
+        events.push(env);
       });
       await createJiePlatform(
         {
@@ -121,9 +113,8 @@ describe("createJiePlatform", () => {
       );
       expect(events).toHaveLength(1);
       const env = events[0]!;
-      const payload = env.payload as { agents: Array<{ role: string; is_leader: boolean }> };
-      expect(payload.agents).toHaveLength(1);
-      expect(payload.agents[0]!.is_leader).toBe(true);
+      expect(env.payload.agents).toHaveLength(1);
+      expect(env.payload.agents[0]!.is_leader).toBe(true);
     });
 
     test("model pre-check: no model in soul or settings throws NO_MODEL_ERROR", async () => {
@@ -242,17 +233,16 @@ describe("createJiePlatform", () => {
       writeFileSync(join(userTeam, "TEAM.md"), "---\n---\n");
 
       const deps = makeDeps(workspace, homeJieDir);
-      const events: CapturedEvent[] = [];
+      const events: EventEnvelope<"system.team.loaded">[] = [];
       deps.eventManager.subscribe("system.team.loaded", (env) => {
-        events.push(env as unknown as CapturedEvent);
+        events.push(env);
       });
       const handle = await createJiePlatform(
         { workspace, homeJieDir, teamId: "ghost" },
         deps,
       );
       expect(events).toHaveLength(1);
-      const payload = events[0]!.payload as { agents: unknown[] };
-      expect(payload.agents).toEqual([]);
+      expect(events[0]!.payload.agents).toEqual([]);
       await handle.stop();
     });
   });
