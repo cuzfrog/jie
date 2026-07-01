@@ -68,8 +68,10 @@ describe("ModelRegistry", () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(JiePlatformError);
-    expect((caught as JiePlatformError).code).toBe("OAUTH_NOT_SUPPORTED");
-    expect((caught as JiePlatformError).message).toContain("anthropic");
+    expect(caught).toMatchObject({
+      code: "OAUTH_NOT_SUPPORTED",
+      message: expect.stringContaining("anthropic"),
+    });
   });
 
   test("auth.json takes precedence over models.json for a built-in provider override", () => {
