@@ -73,7 +73,7 @@ code-lens               (standalone — no jie dependencies)
 
 `jie-platform/index.ts` re-exports all public types: `AgentBody`, `AgentSoul`, `EventBus`, `Tool`, `ToolRegistry`, `ArtifactStore`, `MemoryManager`, `ExecutionContext`.
 
-`jie-tui/index.ts` exports the TUI component function: `startTUI(options: { bus: EventBus, artifacts: ArtifactStore, roles: string[] })`.
+`jie-tui/index.ts` exports the TUI component function: `createTui(options: { bus: EventBus, artifacts: ArtifactStore, roles: string[] })`.
 
 ## `jie-platform` Runtime Dependencies
 

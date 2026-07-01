@@ -1,5 +1,5 @@
 import { createEventManager, Events, type EventEnvelope, type EventManager, type Sender, type EventType } from "@cuzfrog/jie-platform/event";
-import { startTUI, type Tui, type StartTUIOptions } from "@cuzfrog/jie-tui";
+import { createTui, type Tui, type CreateTUIOptions } from "@cuzfrog/jie-tui";
 import type { ArtifactStore } from "@cuzfrog/jie-platform/storage";
 import { NO_MODEL_ERROR as NO_MODEL_ERROR_TEXT } from "../../../packages/jie-platform/no-model-error.ts";
 
@@ -23,7 +23,7 @@ export const startTuiOn = (
   bus: EventManager,
   preload: ReadonlyArray<EventEnvelope<EventType>>,
 ): Tui => {
-  const opts: StartTUIOptions = {
+  const opts: CreateTUIOptions = {
     bus,
     artifacts: stubArtifacts,
     roles: [],
@@ -33,7 +33,7 @@ export const startTuiOn = (
     branch: "main",
   };
   const tuiHandle: { current: Tui | null } = { current: null };
-  withTTY(true, () => { tuiHandle.current = startTUI(opts); });
+  withTTY(true, () => { tuiHandle.current = createTui(opts); });
   const tui = tuiHandle.current;
   if (tui === null) throw new Error("TUI handle not initialized");
   for (const env of preload) bus.publish(env);

@@ -26,7 +26,7 @@ ADR 11 already settles the package-boundary question for jie-team. What remains 
 
 ### TUI: stub in v1
 
-`packages/jie-tui/index.ts` exports a `startTUI` function whose body throws `Error("TUI not implemented in v1 MVP")`. The function exists so the CLI can import the type and call the entry; the runtime behavior is a deliberate fail. The `monorepo-structure.md` TUI description remains the long-term contract; v1 ships the contract, not the implementation.
+`packages/jie-tui/index.ts` exports a `createTui` function whose body throws `Error("TUI not implemented in v1 MVP")`. The function exists so the CLI can import the type and call the entry; the runtime behavior is a deliberate fail. The `monorepo-structure.md` TUI description remains the long-term contract; v1 ships the contract, not the implementation.
 
 A working TUI is a separate project — UI library choice, keybinding design, agent-panel rendering, queue-update indicator, slash-command autocomplete, all of which are out of scope for "ship the platform's runtime". Stubbing the TUI lets the platform's runtime be tested end-to-end via `-p` mode and unit tests, without blocking on TUI design.
 

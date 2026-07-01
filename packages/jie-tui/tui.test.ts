@@ -1,4 +1,4 @@
-import { startTUI, type StartTUIOptions, type Tui } from ".";
+import { createTui, type CreateTUIOptions, type Tui } from ".";
 import type { EventManager } from "@cuzfrog/jie-platform/event";
 import type { ArtifactStore } from "@cuzfrog/jie-platform/storage";
 
@@ -18,7 +18,7 @@ function makeStubArtifacts(): ArtifactStore {
   } as unknown as ArtifactStore;
 }
 
-function makeOptions(overrides: Partial<StartTUIOptions> = {}): StartTUIOptions {
+function makeOptions(overrides: Partial<CreateTUIOptions> = {}): CreateTUIOptions {
   return {
     bus: makeStubBus(),
     artifacts: makeStubArtifacts(),
@@ -38,12 +38,12 @@ const withTTY = (value: boolean, action: () => void): void => {
   }
 };
 
-describe("startTUI — v0.2 surface", () => {
+describe("createTui — v0.2 surface", () => {
   test("throws when not on a TTY", () => {
     withTTY(false, () => {
       let caught: unknown;
       try {
-        startTUI(makeOptions());
+        createTui(makeOptions());
       } catch (error) {
         caught = error;
       }
@@ -56,7 +56,7 @@ describe("startTUI — v0.2 surface", () => {
     withTTY(true, () => {
       let caught: unknown;
       try {
-        startTUI(makeOptions({ cols: 40 }));
+        createTui(makeOptions({ cols: 40 }));
       } catch (error) {
         caught = error;
       }
@@ -67,7 +67,7 @@ describe("startTUI — v0.2 surface", () => {
 
   test("returns a Tui handle with the four contract methods", () => {
     withTTY(true, () => {
-      const tui: Tui = startTUI(makeOptions());
+      const tui: Tui = createTui(makeOptions());
       expect(typeof tui.getState).toBe("function");
       expect(typeof tui.submit).toBe("function");
       expect(typeof tui.injectKey).toBe("function");

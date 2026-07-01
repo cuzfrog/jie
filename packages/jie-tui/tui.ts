@@ -4,7 +4,7 @@ import type { ArtifactStore } from "@cuzfrog/jie-platform/storage";
 import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduce } from "./state";
 import { render, type RenderOptions } from "./renderer";
 
-export interface StartTUIOptions {
+export interface CreateTUIOptions {
   bus: EventManager;
   artifacts: ArtifactStore;
   roles: string[];
@@ -28,7 +28,7 @@ export interface Tui {
 const DEFAULT_COLS = 80;
 const MIN_COLS = 60;
 
-export function startTUI(options: StartTUIOptions): Tui {
+export function createTui(options: CreateTUIOptions): Tui {
   if (process.stdin.isTTY !== true) {
     throw new Error("TUI requires an interactive terminal; use `jie -p` for scripts.");
   }

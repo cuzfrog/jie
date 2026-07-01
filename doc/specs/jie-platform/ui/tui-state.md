@@ -164,7 +164,7 @@ Set `state.transientMessage = null`. The Editor's `onSubmit` publishes this afte
 
 ### `ui.error`
 
-Set `state.errorBanner = { text: payload.text, raisedAt: payload.shownAt }`. The envelope carries the timestamp (the subscriber wrapper stamps `Date.now()` before publishing). Used by `startTUI` to surface errors that the user must explicitly clear — most prominently the no-model-selected error from T4 step 3 (`No model has been selected, please login and select a default model.`). Distinct from `ui.transient`: errors persist until cleared.
+Set `state.errorBanner = { text: payload.text, raisedAt: payload.shownAt }`. The envelope carries the timestamp (the subscriber wrapper stamps `Date.now()` before publishing). Used by `createTui` to surface errors that the user must explicitly clear — most prominently the no-model-selected error from T4 step 3 (`No model has been selected, please login and select a default model.`). Distinct from `ui.transient`: errors persist until cleared.
 
 ### `ui.error.clear`
 

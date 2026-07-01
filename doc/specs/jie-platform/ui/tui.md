@@ -13,7 +13,7 @@ The team's user-facing cockpit. Lives in `packages/jie-tui/`. Observes all agent
 import type { EventBus } from "@cuzfrog/jie-platform";
 import type { ArtifactStore } from "@cuzfrog/jie-platform";
 
-function startTUI(options: {
+function createTui(options: {
   bus: EventBus;
   artifacts: ArtifactStore;
   roles: string[];
@@ -22,7 +22,7 @@ function startTUI(options: {
 
 The TUI runs in the same OS process as all agents and shares the `EventBus` and `ArtifactStore`.
 
-**`roles` is required.** It is the canonical team roster — the list of role identifiers parsed from the team blueprint's `.md` filename stems (excluding `TEAM.md`), sorted alphabetically by stem. `TEAM.md` is **not** the source of roles; it only declares the leader (and is optional for single-agent teams). The CLI (or any host process) computes the sorted list from the team-blueprint loader's output and passes it to `startTUI` before starting the team. The TUI uses `roles` to render the initial agents-panel at boot, before any events have arrived. Live state updates come from the `agent.turn.start` / `agent.idle` alternation and from `agent.stream.chunk` / `agent.tool.*` events as they fire (per the Event-Order Contract in `03-event-system.md`; the body does not publish `agent.idle` at startup — ADR 22).
+**`roles` is required.** It is the canonical team roster — the list of role identifiers parsed from the team blueprint's `.md` filename stems (excluding `TEAM.md`), sorted alphabetically by stem. `TEAM.md` is **not** the source of roles; it only declares the leader (and is optional for single-agent teams). The CLI (or any host process) computes the sorted list from the team-blueprint loader's output and passes it to `createTui` before starting the team. The TUI uses `roles` to render the initial agents-panel at boot, before any events have arrived. Live state updates come from the `agent.turn.start` / `agent.idle` alternation and from `agent.stream.chunk` / `agent.tool.*` events as they fire (per the Event-Order Contract in `03-event-system.md`; the body does not publish `agent.idle` at startup — ADR 22).
 
 ## Inputs
 
@@ -162,7 +162,7 @@ The TUI's event loop has two concurrent sources of work:
 
 The two never run in parallel: `pi-tui` is single-threaded; the event loop yields between callbacks. The TUI does **not** introduce `setImmediate` or `queueMicrotask` of its own.
 
-**TUI startup.** `startTUI` does, in order:
+**TUI startup.** `createTui` does, in order:
 
 1. Verify `process.stdin.isTTY` is true. If not, log `TUI requires an interactive terminal; use \`jie -p\` for scripts.` to stderr and return a non-zero exit code. The CLI's `jie` (no flags) then exits 1.
 2. Verify the terminal is at least 60 columns wide. If not, log `terminal too narrow for TUI; need at least 60 columns, got <N>` to stderr and return a non-zero exit code.
@@ -172,9 +172,9 @@ The two never run in parallel: `pi-tui` is single-threaded; the event loop yield
 6. Build the initial state from the `roles` bootstrap list and from the next `system.teams` event.
 7. Mount the `Container` (`AgentsRail`, `ChatPane`, `Editor`, `Footer`) and call `tui.start()`.
 
-**TUI shutdown.** `startTUI` returns `never`; the only exit paths are:
+**TUI shutdown.** `createTui` returns `never`; the only exit paths are:
 
-- `Ctrl+D` (or `/exit`) — call `handle.stop()` (10 s bounded), then `tui.stop()`, then call the injected `StartTUIOptions.exit(0)`. If a turn is in flight, the TUI's prompt area renders `A turn is in flight; exit anyway? [y/N]` (default N) and re-prompts on `Enter` until y or N. The TUI's own subscriptions (per-team + per-process) are not torn down explicitly; the OS process exit on `StartTUIOptions.exit` cleans them up. The TUI does not own the process lifecycle beyond calling `exit()`; the CLI's `jie` (no flags) returns immediately after `startTUI(...)` because the TUI is `never` (the TUI owns the process lifecycle once started).
+- `Ctrl+D` (or `/exit`) — call `handle.stop()` (10 s bounded), then `tui.stop()`, then call the injected `CreateTUIOptions.exit(0)`. If a turn is in flight, the TUI's prompt area renders `A turn is in flight; exit anyway? [y/N]` (default N) and re-prompts on `Enter` until y or N. The TUI's own subscriptions (per-team + per-process) are not torn down explicitly; the OS process exit on `CreateTUIOptions.exit` cleans them up. The TUI does not own the process lifecycle beyond calling `exit()`; the CLI's `jie` (no flags) returns immediately after `createTui(...)` because the TUI is `never` (the TUI owns the process lifecycle once started).
 - `Esc Esc` (or `Ctrl+C`) — publish a synthetic interrupt on `system.teams.{active_team_id}.control.interrupt` via `Events.custom({ kind: "tui" }, "control.interrupt", "interrupt")`. The body subscribes to this topic (per the v0.2 platform change: every body adds `control.interrupt` to its per-team subscription list at startup) and reacts by firing its `AbortController`, which cancels the in-flight LLM call. The TUI does **not** exit on this path; only the turn is interrupted. The TUI's `Editor` is **not** cleared by `Esc Esc`; the user must press `Esc` once to clear the input.
 - `handle.stop()` from a programmatic source (currently none in v0.2; the TUI exits on its own keypresses) — same as `Ctrl+D`.
 

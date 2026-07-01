@@ -145,7 +145,7 @@ The trace's stubbed manager responses for `task done` are substring-asserted, no
 - After step 6: conversation area streams the joke; `state.errorBanner` is `null` (cleared by the `agent.turn.start` rule per `tui-state.md`, which fires when the body picks up the user's second prompt).
 - Final exit code: 0.
 
-**Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t4.jsonl`. Envelope schema per `tui.md` "Wire-format contract". Includes a `system.teams`, the no-model error path (synthesized `ui.error` envelope published by `startTUI` before forwarding the prompt), a slash-command sequence (synthesized `ui.transient` envelopes, not from the platform bus), and a normal prompt / response. The trace's order: `system.teams` → user prompt → `ui.error { text: "No model..." }` → `ui.error.clear` → `/login` slash command → `ui.transient { text: "logged in to nvidia" }` → `ui.transient.clear` → `/model` slash command → `ui.transient { text: "default model set to nvidia/<modelId>" }` → user prompt → stream.
+**Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t4.jsonl`. Envelope schema per `tui.md` "Wire-format contract". Includes a `system.teams`, the no-model error path (synthesized `ui.error` envelope published by `createTui` before forwarding the prompt), a slash-command sequence (synthesized `ui.transient` envelopes, not from the platform bus), and a normal prompt / response. The trace's order: `system.teams` → user prompt → `ui.error { text: "No model..." }` → `ui.error.clear` → `/login` slash command → `ui.transient { text: "logged in to nvidia" }` → `ui.transient.clear` → `/model` slash command → `ui.transient { text: "default model set to nvidia/<modelId>" }` → user prompt → stream.
 
 ## Scenario T5: queued prompts
 
