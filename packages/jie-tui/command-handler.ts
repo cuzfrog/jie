@@ -11,7 +11,7 @@ export type CommandOutcome =
   | { readonly kind: "clearState" }
   | { readonly kind: "stop" };
 
-export interface SlashCommand {
+interface SlashCommand {
   readonly name: string;
   readonly run: (args: ReadonlyArray<string>) => CommandOutcome;
 }
