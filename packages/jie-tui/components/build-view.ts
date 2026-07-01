@@ -1,7 +1,7 @@
 import { Container, Spacer, Text, type TUI } from "@earendil-works/pi-tui";
 import type { TuiState } from "../state";
-import { StatusBar, statusBarContextFromState, statusBarModelFromOpts } from "./status-bar";
-import { AgentsRail, projectRailItems } from "./agents-rail";
+import { StatusBar } from "./status-bar";
+import { AgentsRail } from "./agents-rail";
 import { ChatPane, chatPaneFromAgent } from "./chat-pane";
 import { EditorSlot } from "./editor-slot";
 import { ConfirmExitOverlay } from "./confirm-exit-overlay";
@@ -25,10 +25,10 @@ export interface BuildViewResult {
 
 export function buildView(state: TuiState, opts: BuildViewOpts, tui: TUI): BuildViewResult {
   const statusBar = new StatusBar(tui);
-  statusBar.setModel(statusBarModelFromOpts(opts), statusBarContextFromState(state));
+  statusBar.setFromOptsAndState(opts, state);
 
   const rail = new AgentsRail();
-  rail.setItems(projectRailItems(state.agents), state.focusedAgentId);
+  rail.setItemsFromState(state);
 
   const focused = state.focusedAgentId === null ? null : state.agents.get(state.focusedAgentId) ?? null;
   const chatPane = chatPaneFromAgent(focused);

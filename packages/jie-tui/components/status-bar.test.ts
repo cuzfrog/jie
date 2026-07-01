@@ -2,8 +2,7 @@ import { Loader, Text } from "@earendil-works/pi-tui";
 import { createTestTui } from "../test";
 import {
   StatusBar,
-  statusBarContextFromState,
-  statusBarModelFromOpts,
+  _statusBarContextFromStateForTest,
   type StatusBarContext,
   type StatusBarModel,
 } from "./status-bar";
@@ -144,7 +143,7 @@ describe("statusBarContextFromState", () => {
       errorBanner: null,
       showTeamRailPanel: true,
     };
-    expect(statusBarContextFromState(state)).toEqual({
+    expect(_statusBarContextFromStateForTest(state)).toEqual({
       focusedStatus: "busy",
       focusedAgentKey: "general-1",
       teamId: "default",
@@ -162,7 +161,7 @@ describe("statusBarContextFromState", () => {
       errorBanner: null,
       showTeamRailPanel: false,
     };
-    expect(statusBarContextFromState(state)).toEqual({
+    expect(_statusBarContextFromStateForTest(state)).toEqual({
       focusedStatus: null,
       focusedAgentKey: null,
       teamId: null,
@@ -180,13 +179,6 @@ describe("statusBarContextFromState", () => {
       errorBanner: null,
       showTeamRailPanel: false,
     };
-    expect(statusBarContextFromState(state).showRail).toBe(false);
-  });
-});
-
-describe("statusBarModelFromOpts", () => {
-  test("returns the same shape as input", () => {
-    const opts = { cwd: "/x", branch: "b", provider: "p", modelId: "m", effort: "e" };
-    expect(statusBarModelFromOpts(opts)).toEqual(opts);
+    expect(_statusBarContextFromStateForTest(state).showRail).toBe(false);
   });
 });

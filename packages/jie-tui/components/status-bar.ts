@@ -45,6 +45,10 @@ export class StatusBar extends Container {
     this.syncLoader(context.focusedStatus);
   }
 
+  setFromOptsAndState(opts: StatusBarModel, state: TuiState): void {
+    this.setModel(opts, statusBarContextFromState(state));
+  }
+
   private hintText(context: StatusBarContext): string {
     if (context.showRail) return "ctrl+↑↓ switch agent  ctrl+left close agents";
     return "ctrl+left for agents";
@@ -74,7 +78,7 @@ export class StatusBar extends Container {
   }
 }
 
-export function statusBarContextFromState(state: TuiState): StatusBarContext {
+function statusBarContextFromState(state: TuiState): StatusBarContext {
   const focused = state.focusedAgentId === null ? null : state.agents.get(state.focusedAgentId);
   return {
     focusedStatus: focused?.status ?? null,
@@ -84,18 +88,4 @@ export function statusBarContextFromState(state: TuiState): StatusBarContext {
   };
 }
 
-export function statusBarModelFromOpts(opts: {
-  cwd: string;
-  branch: string;
-  provider: string;
-  modelId: string;
-  effort: string;
-}): StatusBarModel {
-  return {
-    cwd: opts.cwd,
-    branch: opts.branch,
-    provider: opts.provider,
-    modelId: opts.modelId,
-    effort: opts.effort,
-  };
-}
+export const _statusBarContextFromStateForTest = statusBarContextFromState;

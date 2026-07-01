@@ -3,6 +3,10 @@ import type { AgentId, AgentUiState, TuiState } from "../state";
 import { selectListTheme } from "./themes";
 
 const RAIL_MAX_VISIBLE = 20;
+const BUSY_GLYPH = "● ";
+const IDLE_GLYPH = "○ ";
+const LEADER_GLYPH = "★ ";
+const NON_LEADER_GLYPH = "  ";
 
 export interface RailItem {
   readonly agentId: AgentId;
@@ -10,32 +14,6 @@ export interface RailItem {
   readonly role: string;
   readonly isLeader: boolean;
   readonly status: "idle" | "busy";
-}
-
-export function projectRailItems(agents: ReadonlyMap<AgentId, AgentUiState>): RailItem[] {
-  const items: RailItem[] = [];
-  for (const agent of agents.values()) {
-    items.push({
-      agentId: agent.agentId,
-      agentKey: agent.agentKey,
-      role: agent.role,
-      isLeader: agent.isLeader,
-      status: agent.status,
-    });
-  }
-  return items;
-}
-
-export function buildAgentSelectItems(items: ReadonlyArray<RailItem>): SelectItem[] {
-  return items.map((item) => {
-    const glyph = item.status === "busy" ? "● " : "○ ";
-    const leaderMarker = item.isLeader ? "★ " : "  ";
-    return {
-      value: item.agentId,
-      label: `${glyph}${leaderMarker}${item.agentKey}`,
-      description: item.role,
-    };
-  });
 }
 
 export class AgentsRail extends Container {
@@ -49,7 +27,7 @@ export class AgentsRail extends Container {
   }
 
   setItems(railItems: ReadonlyArray<RailItem>, focusedAgentId: AgentId | null): void {
-    const selectItems = buildAgentSelectItems(railItems);
+    const selectItems = buildSelectItems(railItems);
     this.items = new SelectList(selectItems, this.maxVisible, selectListTheme);
     if (railItems.length === 0) return;
     const focusedIndex = focusedAgentId === null
@@ -57,6 +35,10 @@ export class AgentsRail extends Container {
       : railItems.findIndex((i) => i.agentId === focusedAgentId);
     const safeIndex = focusedIndex >= 0 ? focusedIndex : 0;
     this.items.setSelectedIndex(safeIndex);
+  }
+
+  setItemsFromState(state: TuiState): void {
+    this.setItems(projectRailItems(state.agents), state.focusedAgentId);
   }
 
   getSelectedAgentId(): AgentId | null {
@@ -73,8 +55,42 @@ export class AgentsRail extends Container {
   }
 }
 
-export function agentsRailFromState(state: TuiState, maxVisible?: number): AgentsRail {
-  const rail = new AgentsRail(maxVisible);
+function projectRailItems(agents: ReadonlyMap<AgentId, AgentUiState>): RailItem[] {
+  const items: RailItem[] = [];
+  for (const agent of agents.values()) {
+    items.push({
+      agentId: agent.agentId,
+      agentKey: agent.agentKey,
+      role: agent.role,
+      isLeader: agent.isLeader,
+      status: agent.status,
+    });
+  }
+  return items;
+}
+
+function buildSelectItems(items: ReadonlyArray<RailItem>): SelectItem[] {
+  return items.map((item) => {
+    const glyph = item.status === "busy" ? BUSY_GLYPH : IDLE_GLYPH;
+    const leaderMarker = item.isLeader ? LEADER_GLYPH : NON_LEADER_GLYPH;
+    return {
+      value: item.agentId,
+      label: `${glyph}${leaderMarker}${item.agentKey}`,
+      description: item.role,
+    };
+  });
+}
+
+export function _projectRailItemsForTest(agents: ReadonlyMap<AgentId, AgentUiState>): RailItem[] {
+  return projectRailItems(agents);
+}
+
+export function _buildSelectItemsForTest(items: ReadonlyArray<RailItem>): SelectItem[] {
+  return buildSelectItems(items);
+}
+
+export function _agentsRailFromStateForTest(state: TuiState): AgentsRail {
+  const rail = new AgentsRail();
   rail.setItems(projectRailItems(state.agents), state.focusedAgentId);
   return rail;
 }
