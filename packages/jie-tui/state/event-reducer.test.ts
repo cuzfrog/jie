@@ -1,7 +1,6 @@
 import { Events, type AgentSender, type SystemSender, type UserSender } from "@cuzfrog/jie-platform/event";
-import { Actions } from "./actions";
 import { INITIAL_TUI_STATE, type TuiState } from "./state";
-import { reduce } from "./reducer";
+import { reduce } from "./event-reducer";
 
 const SYSTEM_SENDER: SystemSender = { kind: "system" };
 const USER_SENDER: UserSender = { kind: "user" };
@@ -10,20 +9,20 @@ const STREAM_SENDER: AgentSender = AGENT_SENDER;
 const TOOL_SENDER: AgentSender = AGENT_SENDER;
 
 function loadedState(): TuiState {
-  return reduce(INITIAL_TUI_STATE, Actions.receiveEvent(Events.teamLoaded(SYSTEM_SENDER, "my-team", [
+  return reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, "my-team", [
     { role: "general", agent_key: "general-1", is_leader: true },
-  ])));
+  ]));
 }
 
 function promptedState(): TuiState {
-  return reduce(loadedState(), Actions.receiveEvent(Events.userPrompt(USER_SENDER, "my-team", "hi", "general-1")));
+  return reduce(loadedState(), Events.userPrompt(USER_SENDER, "my-team", "hi", "general-1"));
 }
 
 describe("reduceTeamLoaded", () => {
   test("seeds agents and focuses the leader", () => {
-    const state = reduce(INITIAL_TUI_STATE, Actions.receiveEvent(Events.teamLoaded(SYSTEM_SENDER, "my-team", [
+    const state = reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, "my-team", [
       { role: "general", agent_key: "general-1", is_leader: true },
-    ])));
+    ]));
     expect(state.teamId).toBe("my-team");
     expect(state.agents.size).toBe(1);
     expect(state.leaderAgentId).toBe("my-team:general-1");
@@ -31,12 +30,12 @@ describe("reduceTeamLoaded", () => {
   });
 
   test("team switch resets the agent map and clears leader focus from prior team", () => {
-    const state1 = reduce(INITIAL_TUI_STATE, Actions.receiveEvent(Events.teamLoaded(SYSTEM_SENDER, "my-team-1", [
+    const state1 = reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, "my-team-1", [
       { role: "general", agent_key: "general-1", is_leader: true },
-    ])));
-    const state2 = reduce(state1, Actions.receiveEvent(Events.teamLoaded(SYSTEM_SENDER, "my-team-2", [
+    ]));
+    const state2 = reduce(state1, Events.teamLoaded(SYSTEM_SENDER, "my-team-2", [
       { role: "general", agent_key: "general-1", is_leader: true },
-    ])));
+    ]));
     expect(state2.teamId).toBe("my-team-2");
     expect(state2.agents.size).toBe(1);
     expect(state2.agents.has("my-team-2:general-1")).toBe(true);
@@ -45,10 +44,10 @@ describe("reduceTeamLoaded", () => {
   });
 
   test("non-leader agent is recorded but leader flag stays false", () => {
-    const state = reduce(INITIAL_TUI_STATE, Actions.receiveEvent(Events.teamLoaded(SYSTEM_SENDER, "my-team", [
+    const state = reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, "my-team", [
       { role: "manager", agent_key: "manager-1", is_leader: true },
       { role: "worker", agent_key: "worker-1", is_leader: false },
-    ])));
+    ]));
     expect(state.leaderAgentId).toBe("my-team:manager-1");
     expect(state.agents.get("my-team:worker-1")?.isLeader).toBe(false);
   });
@@ -56,30 +55,29 @@ describe("reduceTeamLoaded", () => {
 
 describe("reduceUserPrompt", () => {
   test("starts a fresh turn when none is in flight", () => {
-    const state = reduce(loadedState(), Actions.receiveEvent(Events.userPrompt(USER_SENDER, "my-team", "hello", "general-1")));
+    const state = reduce(loadedState(), Events.userPrompt(USER_SENDER, "my-team", "hello", "general-1"));
     expect(state.agents.get("my-team:general-1")?.currentTurn?.userPrompt).toBe("hello");
   });
 });
 
 describe("reduceTurnStart", () => {
   test("sets focused agent status to busy", () => {
-    const state = reduce(loadedState(), Actions.receiveEvent(Events.agentTurnStart(AGENT_SENDER)));
+    const state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER));
     expect(state.agents.get("my-team:general-1")?.status).toBe("busy");
   });
 
   test("clears the error banner (T4 path)", () => {
     let state = loadedState();
-    state = reduce(state, Actions.setErrorMessage("No model", 1));
-    expect(state.errorBanner?.text).toBe("No model");
-    const state2 = reduce(state, Actions.receiveEvent(Events.agentTurnStart(AGENT_SENDER)));
+    state = { ...state, errorBanner: { text: "No model", raisedAt: 1 } };
+    const state2 = reduce(state, Events.agentTurnStart(AGENT_SENDER));
     expect(state2.errorBanner).toBeNull();
     expect(state2.agents.get("my-team:general-1")?.status).toBe("busy");
   });
 
   test("rejects events from a foreign team (cross-team guard)", () => {
     const state = loadedState();
-    const foreign: Parameters<typeof Events.agentTurnStart>[0] = { kind: "agent", identity: { teamId: "other-team", agentRole: "general", agentKey: "general-1" } };
-    const state2 = reduce(state, Actions.receiveEvent(Events.agentTurnStart(foreign)));
+    const foreign: AgentSender = { kind: "agent", identity: { teamId: "other-team", agentRole: "general", agentKey: "general-1" } };
+    const state2 = reduce(state, Events.agentTurnStart(foreign));
     expect(state2).toBe(state);
   });
 });
@@ -87,8 +85,8 @@ describe("reduceTurnStart", () => {
 describe("reduceIdle", () => {
   test("sets status idle and stamps lastIdleAt with a positive timestamp", () => {
     let state = loadedState();
-    state = reduce(state, Actions.receiveEvent(Events.agentTurnStart(AGENT_SENDER)));
-    const state2 = reduce(state, Actions.receiveEvent(Events.agentIdle(AGENT_SENDER, "stop")));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER));
+    const state2 = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
     const agent = state2.agents.get("my-team:general-1");
     expect(agent?.status).toBe("idle");
     expect(typeof agent?.lastIdleAt).toBe("number");
@@ -97,8 +95,8 @@ describe("reduceIdle", () => {
 
   test("rejects idle events from a foreign team", () => {
     const state = loadedState();
-    const foreign: Parameters<typeof Events.agentIdle>[0] = { kind: "agent", identity: { teamId: "other-team", agentRole: "general", agentKey: "general-1" } };
-    const state2 = reduce(state, Actions.receiveEvent(Events.agentIdle(foreign, "stop")));
+    const foreign: AgentSender = { kind: "agent", identity: { teamId: "other-team", agentRole: "general", agentKey: "general-1" } };
+    const state2 = reduce(state, Events.agentIdle(foreign, "stop"));
     expect(state2).toBe(state);
   });
 });
@@ -106,8 +104,8 @@ describe("reduceIdle", () => {
 describe("reduceStreamChunk", () => {
   test("appends to the current block of the same type", () => {
     let state = promptedState();
-    state = reduce(state, Actions.receiveEvent(Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "Hello ")));
-    state = reduce(state, Actions.receiveEvent(Events.agentStreamChunk(STREAM_SENDER, 1, 2, "text", "world")));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "Hello "));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 2, "text", "world"));
     const agent = state.agents.get("my-team:general-1");
     expect(agent?.currentTurn?.blocks).toEqual([
       { kind: "text", text: "Hello world", expanded: false },
@@ -116,9 +114,9 @@ describe("reduceStreamChunk", () => {
 
   test("opens a new block when block_type changes", () => {
     let state = promptedState();
-    state = reduce(state, Actions.receiveEvent(Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "Hello ")));
-    state = reduce(state, Actions.receiveEvent(Events.agentStreamChunk(STREAM_SENDER, 1, 2, "text", "world")));
-    state = reduce(state, Actions.receiveEvent(Events.agentStreamChunk(STREAM_SENDER, 1, 3, "thinking", "I think")));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "Hello "));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 2, "text", "world"));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 3, "thinking", "I think"));
     const agent = state.agents.get("my-team:general-1");
     expect(agent?.currentTurn?.blocks.length).toBe(2);
     expect(agent?.currentTurn?.blocks[1]).toEqual({ kind: "thinking", text: "I think", expanded: false });
@@ -126,9 +124,9 @@ describe("reduceStreamChunk", () => {
 
   test("opens a new block when stream_id changes", () => {
     let state = promptedState();
-    state = reduce(state, Actions.receiveEvent(Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "first ")));
-    state = reduce(state, Actions.receiveEvent(Events.agentStreamChunk(STREAM_SENDER, 1, 2, "text", "turn")));
-    state = reduce(state, Actions.receiveEvent(Events.agentStreamChunk(STREAM_SENDER, 2, 1, "text", "second")));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "first "));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 2, "text", "turn"));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 2, 1, "text", "second"));
     const agent = state.agents.get("my-team:general-1");
     expect(agent?.currentTurn?.blocks.length).toBe(2);
     expect(agent?.currentTurn?.blocks[1]?.text).toBe("second");
@@ -136,8 +134,8 @@ describe("reduceStreamChunk", () => {
 
   test("rejects events from a foreign team", () => {
     const state = promptedState();
-    const foreign: Parameters<typeof Events.agentStreamChunk>[0] = { kind: "agent", identity: { teamId: "other-team", agentRole: "general", agentKey: "general-1" } };
-    const state2 = reduce(state, Actions.receiveEvent(Events.agentStreamChunk(foreign, 1, 1, "text", "x")));
+    const foreign: AgentSender = { kind: "agent", identity: { teamId: "other-team", agentRole: "general", agentKey: "general-1" } };
+    const state2 = reduce(state, Events.agentStreamChunk(foreign, 1, 1, "text", "x"));
     expect(state2).toBe(state);
   });
 });
@@ -145,8 +143,8 @@ describe("reduceStreamChunk", () => {
 describe("reduceToolCall + reduceToolResult", () => {
   test("a tool.call followed by a matching tool.result produces a single result card", () => {
     let state = promptedState();
-    state = reduce(state, Actions.receiveEvent(Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls")));
-    state = reduce(state, Actions.receiveEvent(Events.agentToolResult(TOOL_SENDER, "c1", "bash", "out", 12, null)));
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", "out", 12, null));
     const agent = state.agents.get("my-team:general-1");
     expect(agent?.currentTurn?.cards.length).toBe(1);
     const card = agent?.currentTurn?.cards[0];
@@ -163,15 +161,15 @@ describe("reduceToolCall + reduceToolResult", () => {
   test("a tool.result with no matching tool.call is rejected (no phantom card)", () => {
     let state = promptedState();
     const before = state.agents.get("my-team:general-1")?.currentTurn?.cards.length ?? 0;
-    const after = reduce(state, Actions.receiveEvent(Events.agentToolResult(TOOL_SENDER, "c2", "bash", "out", 5, null)));
+    const after = reduce(state, Events.agentToolResult(TOOL_SENDER, "c2", "bash", "out", 5, null));
     expect(after).toBe(state);
     expect(after.agents.get("my-team:general-1")?.currentTurn?.cards.length).toBe(before);
   });
 
   test("an error result carries the error message and nulls the output", () => {
     let state = promptedState();
-    state = reduce(state, Actions.receiveEvent(Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls")));
-    state = reduce(state, Actions.receiveEvent(Events.agentToolResult(TOOL_SENDER, "c1", "bash", null, 5, "boom")));
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", null, 5, "boom"));
     const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
     if (card?.kind === "toolResult") {
       expect(card.output).toBeNull();
@@ -181,8 +179,8 @@ describe("reduceToolCall + reduceToolResult", () => {
 
   test("rejects events from a foreign team", () => {
     const state = promptedState();
-    const foreign: Parameters<typeof Events.agentToolCall>[0] = { kind: "agent", identity: { teamId: "other-team", agentRole: "general", agentKey: "general-1" } };
-    const state2 = reduce(state, Actions.receiveEvent(Events.agentToolCall(foreign, "c1", "bash", "x")));
+    const foreign: AgentSender = { kind: "agent", identity: { teamId: "other-team", agentRole: "general", agentKey: "general-1" } };
+    const state2 = reduce(state, Events.agentToolCall(foreign, "c1", "bash", "x"));
     expect(state2).toBe(state);
   });
 });
