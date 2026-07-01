@@ -1,6 +1,7 @@
-import { matchesKey, ProcessTerminal, TUI, type Terminal } from "@earendil-works/pi-tui";
+import { ProcessTerminal, TUI, type Terminal } from "@earendil-works/pi-tui";
 import { Events, type EventEnvelope, type EventManager, type EventType, type Sender } from "@cuzfrog/jie-platform/event";
 import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduce } from "./state";
+import { handleKeyInput } from "./keyboard";
 import { buildView, type BuildViewOpts } from "./components";
 
 export interface CreateTUIOptions {
@@ -163,19 +164,10 @@ export function createTui(options: CreateTUIOptions): Tui {
       const requestRender = (): void => tui.requestRender();
 
       tui.addInputListener((data) => {
-        if (matchesKey(data, "ctrl+left")) {
-          dispatch(Actions.toggleTeamRail(), requestRender);
-          return { consume: true };
-        }
-        if (matchesKey(data, "ctrl+up")) {
-          dispatch(Actions.switchCycleAgent(-1), requestRender);
-          return { consume: true };
-        }
-        if (matchesKey(data, "ctrl+down")) {
-          dispatch(Actions.switchCycleAgent(1), requestRender);
-          return { consume: true };
-        }
-        return undefined;
+        const hit = handleKeyInput(data);
+        if (hit === undefined) return undefined;
+        dispatch(hit.action, requestRender);
+        return { consume: true };
       });
 
       resolveStart = (): void => {
