@@ -102,45 +102,42 @@ describe("loadMergedSettings", () => {
     expect(result.defaultTeam).toBe("my-team-1");
   });
 
-  test("rejects defaultTeam with invalid characters", () => {
+  test.each([
+    {
+      name: "defaultTeam with invalid characters",
+      field: "defaultTeam",
+      value: "bad team!",
+      match: /invalid defaultTeam/,
+    },
+    {
+      name: "defaultTeam longer than 32 characters",
+      field: "defaultTeam",
+      value: "a".repeat(33),
+      match: /invalid defaultTeam/,
+    },
+    {
+      name: "non-string defaultProvider",
+      field: "defaultProvider",
+      value: 42,
+      match: /defaultProvider must be a string/,
+    },
+    {
+      name: "non-string defaultModel",
+      field: "defaultModel",
+      value: true,
+      match: /defaultModel must be a string/,
+    },
+    {
+      name: "non-string defaultTeam",
+      field: "defaultTeam",
+      value: 42,
+      match: /defaultTeam must be a string/,
+    },
+  ])("rejects $name with code INVALID_CONFIG", ({ field, value, match }) => {
     const home = track(freshDir("jie-home-"));
-    writeJson(join(home, "settings.json"), { defaultTeam: "bad team!" });
+    writeJson(join(home, "settings.json"), { [field]: value });
     expect(() => loadMergedSettings(home, null)).toThrow(
-      expect.objectContaining({ code: "INVALID_CONFIG", message: expect.stringMatching(/invalid defaultTeam/) }),
-    );
-  });
-
-  test("rejects defaultTeam longer than 32 characters", () => {
-    const home = track(freshDir("jie-home-"));
-    writeJson(join(home, "settings.json"), {
-      defaultTeam: "a".repeat(33),
-    });
-    expect(() => loadMergedSettings(home, null)).toThrow(
-      expect.objectContaining({ code: "INVALID_CONFIG", message: expect.stringMatching(/invalid defaultTeam/) }),
-    );
-  });
-
-  test("rejects non-string defaultProvider", () => {
-    const home = track(freshDir("jie-home-"));
-    writeJson(join(home, "settings.json"), { defaultProvider: 42 });
-    expect(() => loadMergedSettings(home, null)).toThrow(
-      expect.objectContaining({ code: "INVALID_CONFIG", message: expect.stringMatching(/defaultProvider must be a string/) }),
-    );
-  });
-
-  test("rejects non-string defaultModel", () => {
-    const home = track(freshDir("jie-home-"));
-    writeJson(join(home, "settings.json"), { defaultModel: true });
-    expect(() => loadMergedSettings(home, null)).toThrow(
-      expect.objectContaining({ code: "INVALID_CONFIG", message: expect.stringMatching(/defaultModel must be a string/) }),
-    );
-  });
-
-  test("rejects non-string defaultTeam", () => {
-    const home = track(freshDir("jie-home-"));
-    writeJson(join(home, "settings.json"), { defaultTeam: 42 });
-    expect(() => loadMergedSettings(home, null)).toThrow(
-      expect.objectContaining({ code: "INVALID_CONFIG", message: expect.stringMatching(/defaultTeam must be a string/) }),
+      expect.objectContaining({ code: "INVALID_CONFIG", message: expect.stringMatching(match) }),
     );
   });
 });
