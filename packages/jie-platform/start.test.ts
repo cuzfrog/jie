@@ -3,14 +3,6 @@ import { join } from "node:path";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createEventManager, type Sender } from "./event";
-
-interface CapturedEvent {
-  topic: string;
-  sender: Sender;
-  payload: unknown;
-  version: number;
-  timestamp: string;
-}
 import { createJiePlatform } from "./start";
 import {
   createModelRegistry,
@@ -22,6 +14,14 @@ import { createTeamRegistry } from "./team";
 import { createToolRegistry } from "./tools";
 import { createArtifactStore, createMemoryManager, createStorage } from "./storage";
 import { JiePlatformErrorMessages } from "./types";
+
+interface CapturedEvent {
+  topic: string;
+  sender: Sender;
+  payload: unknown;
+  version: number;
+  timestamp: string;
+}
 
 const NO_MODEL_ERROR = JiePlatformErrorMessages.NO_MODEL_ERROR;
 

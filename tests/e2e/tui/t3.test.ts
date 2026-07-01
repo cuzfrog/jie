@@ -1,4 +1,3 @@
-
 import { loadFixture, replayEnvelopes } from "./harness";
 
 describe("T3 — switch teams", () => {

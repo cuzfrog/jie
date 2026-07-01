@@ -39,6 +39,11 @@ function makeNoopTool(): Tool {
   };
 }
 
+interface AgentEventLike {
+  event_type: string;
+  payload: Record<string, unknown>;
+}
+
 function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: CreateAgentBodyOptions; events: EventManager; subscribeSubject: (topic: string, cb: (subject: string, payload: object) => void) => () => void } {
   const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
   const events: EventManager = createEventManager();
@@ -221,8 +226,3 @@ describe("createAgentBody — wiring", () => {
     body.stop();
   });
 });
-
-interface AgentEventLike {
-  event_type: string;
-  payload: Record<string, unknown>;
-}
