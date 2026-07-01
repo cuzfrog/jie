@@ -65,10 +65,10 @@ export class ToolCard implements Component {
     if (card.kind === "toolCall") {
       return `● ${card.name}`;
     }
-    const ok = card.error === null || card.error === undefined;
-    const glyph = ok ? "✓" : "✗";
-    const ms = card.durationMs !== undefined ? `  ${card.durationMs}ms` : "";
-    return `${glyph} ${card.name}${ms}`;
+    const succeeded = card.error === null || card.error === undefined;
+    const glyph = succeeded ? "✓" : "✗";
+    const durationLabel = card.durationMs !== undefined ? `  ${card.durationMs}ms` : "";
+    return `${glyph} ${card.name}${durationLabel}`;
   }
 
   private truncatedBodyLines(text: string, width: number, maxLines: number): string[] {

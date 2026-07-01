@@ -53,7 +53,7 @@ function reduceClear(state: TuiState): TuiState {
 }
 
 function reduceUiTransient(state: TuiState, text: string): TuiState {
-  return { ...state, transientMessage: { text } };
+  return { ...state, transientMessage: text };
 }
 
 function reduceUiTransientClear(state: TuiState): TuiState {
@@ -61,7 +61,7 @@ function reduceUiTransientClear(state: TuiState): TuiState {
 }
 
 function reduceUiError(state: TuiState, text: string): TuiState {
-  return { ...state, errorBanner: { text } };
+  return { ...state, errorBanner: text };
 }
 
 function reduceUiErrorClear(state: TuiState): TuiState {

@@ -48,21 +48,13 @@ export interface AgentUiState {
   readonly lastStopReason: StopReason | null;
 }
 
-export interface TransientMessage {
-  readonly text: string;
-}
-
-export interface ErrorBanner {
-  readonly text: string;
-}
-
 export interface TuiState {
   readonly teamId: string | null;
   readonly leaderAgentId: AgentId | null;
   readonly agents: ReadonlyMap<AgentId, AgentUiState>;
   readonly focusedAgentId: AgentId | null;
-  readonly transientMessage: TransientMessage | null;
-  readonly errorBanner: ErrorBanner | null;
+  readonly transientMessage: string | null;
+  readonly errorBanner: string | null;
   readonly showTeamRailPanel: boolean;
 }
 

@@ -32,21 +32,21 @@ export class StatusBar extends Container {
     this.addChild(this.hintLine);
   }
 
-  setModel(model: StatusBarModel, ctx: StatusBarContext): void {
+  setModel(model: StatusBarModel, context: StatusBarContext): void {
     const leftSide = model.branch === "" ? model.cwd : `${model.cwd} (${model.branch})`;
-    const focusedKey = ctx.focusedAgentKey ?? "—";
-    const rightSide = ctx.teamId === null ? `no-team:${focusedKey}` : `${ctx.teamId}:${focusedKey}`;
+    const focusedKey = context.focusedAgentKey ?? "—";
+    const rightSide = context.teamId === null ? `no-team:${focusedKey}` : `${context.teamId}:${focusedKey}`;
     this.cwdLine.setText(`${leftSide}  ${rightSide}`);
 
-    const hintText = this.hintText(ctx);
+    const hintText = this.hintText(context);
     const modelText = this.modelText(model);
     this.hintLine.setText(`${hintText}  ${modelText}`);
 
-    this.syncLoader(ctx.focusedStatus);
+    this.syncLoader(context.focusedStatus);
   }
 
-  private hintText(ctx: StatusBarContext): string {
-    if (ctx.showRail) return "ctrl+↑↓ switch agent  ctrl+left close agents";
+  private hintText(context: StatusBarContext): string {
+    if (context.showRail) return "ctrl+↑↓ switch agent  ctrl+left close agents";
     return "ctrl+left for agents";
   }
 

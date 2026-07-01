@@ -82,7 +82,7 @@ describe("cycleAgent", () => {
 describe("transient", () => {
   test("sets transientMessage text", () => {
     const state = reduce(INITIAL_TUI_STATE, Actions.setTransientMessage("logged in to nvidia"));
-    expect(state.transientMessage).toEqual({ text: "logged in to nvidia" });
+    expect(state.transientMessage).toBe("logged in to nvidia");
   });
 
   test("clearTransientMessage nulls transientMessage", () => {
@@ -95,7 +95,7 @@ describe("transient", () => {
 describe("error", () => {
   test("sets errorBanner; clearErrorMessage nulls it", () => {
     const state0 = reduce(INITIAL_TUI_STATE, Actions.setErrorMessage("No model selected"));
-    expect(state0.errorBanner?.text).toBe("No model selected");
+    expect(state0.errorBanner).toBe("No model selected");
     const state1 = reduce(state0, Actions.clearErrorMessage());
     expect(state1.errorBanner).toBeNull();
   });

@@ -16,7 +16,7 @@ describe("T4 — first-time setup (TUI flow)", () => {
     const stop = attachNoModelBody(bus, "my-team", "general-1", "general");
     tui.submit("Tell me a joke");
     const state = tui.getState();
-    expect(state.errorBanner?.text).toBe(`[stop: error] ${NO_MODEL_ERROR}`);
+    expect(state.errorBanner).toBe(`[stop: error] ${NO_MODEL_ERROR}`);
     stop();
   });
 
@@ -29,7 +29,7 @@ describe("T4 — first-time setup (TUI flow)", () => {
     const tui = startTuiOn(bus, [teamLoaded]);
     const stop = attachNoModelBody(bus, "my-team", "general-1", "general");
     tui.submit("Tell me a joke");
-    expect(tui.getState().errorBanner?.text).toBe(`[stop: error] ${NO_MODEL_ERROR}`);
+    expect(tui.getState().errorBanner).toBe(`[stop: error] ${NO_MODEL_ERROR}`);
     stop();
     bus.publish(userPrompt);
     for (const env of rest) bus.publish(env);

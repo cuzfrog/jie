@@ -5,9 +5,7 @@ export type {
   MessageBlock,
   MessageCard,
   EffortLevel,
-  ErrorBanner,
   ModelReference,
-  TransientMessage,
   MessageTurn,
   TuiState,
 } from "./state";

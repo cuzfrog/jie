@@ -1,5 +1,5 @@
 import { AgentsRail, agentsRailFromState, buildAgentSelectItems, projectRailItems, type RailItem } from "./agents-rail";
-import type { AgentUiState, TuiState } from "../state";
+import type { AgentId, AgentUiState, TuiState } from "../state";
 
 const AGENT_ID_1 = "default:general-1" as const;
 const AGENT_ID_2 = "default:researcher-1" as const;
@@ -116,7 +116,7 @@ describe("AgentsRail", () => {
     const rail = new AgentsRail(20);
     rail.setItems(
       [{ agentId: AGENT_ID_1, agentKey: "general-1", role: "general", isLeader: true, status: "idle" }],
-      "ghost:missing" as never,
+      "ghost:missing" as AgentId,
     );
     expect(rail.getSelectedAgentId()).toBe(AGENT_ID_1);
   });

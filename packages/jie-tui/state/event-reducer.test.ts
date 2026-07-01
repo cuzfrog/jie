@@ -66,9 +66,9 @@ describe("reduceTurnStart", () => {
     expect(state.agents.get("my-team:general-1")?.status).toBe("busy");
   });
 
-  test("clears the error banner (T4 path)", () => {
+  test("clears the error banner when the next turn starts", () => {
     let state = loadedState();
-    state = { ...state, errorBanner: { text: "No model" } };
+    state = { ...state, errorBanner: "No model" };
     const state2 = reduce(state, Events.agentTurnStart(AGENT_SENDER));
     expect(state2.errorBanner).toBeNull();
     expect(state2.agents.get("my-team:general-1")?.status).toBe("busy");

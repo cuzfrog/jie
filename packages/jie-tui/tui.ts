@@ -1,6 +1,5 @@
 import { matchesKey, ProcessTerminal, TUI, type Terminal } from "@earendil-works/pi-tui";
-import type { EventEnvelope, EventManager, EventType, Sender } from "@cuzfrog/jie-platform/event";
-import { Events } from "@cuzfrog/jie-platform/event";
+import { Events, type EventEnvelope, type EventManager, type EventType, type Sender } from "@cuzfrog/jie-platform/event";
 import type { ArtifactStore } from "@cuzfrog/jie-platform/storage";
 import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduce } from "./state";
 import { buildView, type BuildViewOpts } from "./components/build-view";
@@ -75,9 +74,10 @@ export function createTui(options: CreateTUIOptions): Tui {
     effort: options.effort ?? "",
   };
 
-  const dispatch = (action: ReturnType<typeof Actions[keyof typeof Actions]>): void => {
+  const dispatch = (action: ReturnType<typeof Actions[keyof typeof Actions]>, render: () => void = () => {}): void => {
     if (stopped) return;
     state = reduce(state, action);
+    render();
   };
 
   const emitTransient = (text: string): void => dispatch(Actions.setTransientMessage(text));
@@ -130,11 +130,6 @@ export function createTui(options: CreateTUIOptions): Tui {
     publishPrompt(trimmed);
   };
 
-  const onBusEvent = (env: AnyEventEnvelope): void => {
-    if (stopped) return;
-    dispatch(Actions.receiveEvent(env));
-  };
-
   const subscribedTopics = [
     "system.team.loaded",
     "system.team.interrupted",
@@ -156,33 +151,30 @@ export function createTui(options: CreateTUIOptions): Tui {
       const tui = new TUI(terminal);
       const { root } = buildView(state, buildViewOpts, tui);
       tui.addChild(root);
+      const requestRender = (): void => tui.requestRender();
 
       tui.addInputListener((data) => {
         if (matchesKey(data, "ctrl+left")) {
-          dispatch(Actions.toggleTeamRail());
-          tui.requestRender();
+          dispatch(Actions.toggleTeamRail(), requestRender);
           return { consume: true };
         }
         if (matchesKey(data, "ctrl+up")) {
-          dispatch(Actions.switchCycleAgent(-1));
-          tui.requestRender();
+          dispatch(Actions.switchCycleAgent(-1), requestRender);
           return { consume: true };
         }
         if (matchesKey(data, "ctrl+down")) {
-          dispatch(Actions.switchCycleAgent(1));
-          tui.requestRender();
+          dispatch(Actions.switchCycleAgent(1), requestRender);
           return { consume: true };
         }
         return undefined;
       });
 
-      const onRenderEvent = (env: EventEnvelope<EventType>): void => {
-        onBusEvent(env as AnyEventEnvelope);
-        tui.requestRender();
+      const onBusEvent = (env: AnyEventEnvelope): void => {
+        dispatch(Actions.receiveEvent(env), requestRender);
       };
       const subscriptions: Array<() => void> = [];
       for (const topic of subscribedTopics) {
-        subscriptions.push(options.bus.subscribe(topic, onRenderEvent));
+        subscriptions.push(options.bus.subscribe(topic, onBusEvent as (env: EventEnvelope<EventType>) => void));
       }
 
       const cleanup = (): void => {

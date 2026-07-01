@@ -60,31 +60,31 @@ export class ChatPane extends Container {
     for (let i = 0; i < turn.blocks.length; i++) {
       const block = turn.blocks[i];
       if (block === undefined) continue;
-      let view = this.messageViews.get(i);
-      if (view === undefined) {
-        view = new MessageView();
-        this.messageViews.set(i, view);
+      let messageView = this.messageViews.get(i);
+      if (messageView === undefined) {
+        messageView = new MessageView();
+        this.messageViews.set(i, messageView);
       }
-      view.setBlock(block);
-      this.addChild(view);
+      messageView.setBlock(block);
+      this.addChild(messageView);
     }
   }
 
   private appendCard(card: MessageCard): void {
     if (card.kind === "toolCall") {
-      const tc = new ToolCard();
-      tc.setCard(card);
-      this.addChild(tc);
-      this.toolCards.set(card.callId, tc);
+      const toolCard = new ToolCard();
+      toolCard.setCard(card);
+      this.addChild(toolCard);
+      this.toolCards.set(card.callId, toolCard);
       return;
     }
-    let tc = this.toolCards.get(card.callId);
-    if (tc === undefined) {
-      tc = new ToolCard();
-      this.toolCards.set(card.callId, tc);
+    let toolCard = this.toolCards.get(card.callId);
+    if (toolCard === undefined) {
+      toolCard = new ToolCard();
+      this.toolCards.set(card.callId, toolCard);
     }
-    tc.setCard(card);
-    this.addChild(tc);
+    toolCard.setCard(card);
+    this.addChild(toolCard);
   }
 }
 
