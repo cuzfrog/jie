@@ -8,7 +8,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { editorTheme } from "./themes";
 
-export interface EditorSlotOptions {
+interface EditorSlotOptions {
   readonly basePath: string;
   readonly fdPath?: string | null;
   readonly commands?: ReadonlyArray<AutocompleteItem | SlashCommand>;
