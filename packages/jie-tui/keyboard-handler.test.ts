@@ -1,51 +1,6 @@
-import { createKeyboardHandler, DEFAULT_KEYBINDINGS, handleKeyInput, type KeyboardHandler, type KeyboardHandlerDeps } from "./keyboard";
+import { createKeyboardHandler, type KeyboardHandler, type KeyboardHandlerDeps } from "./keyboard-handler";
 import { Actions, ActionTypes, INITIAL_TUI_STATE, type Action, type TuiState } from "./state";
 import { createEventManager, type EventManager } from "@cuzfrog/jie-platform/event";
-
-describe("handleKeyInput", () => {
-  test("ctrl+left dispatches toggleTeamRail", () => {
-    const hit = handleKeyInput("\x1b[1;5D", DEFAULT_KEYBINDINGS);
-    expect(hit).toBeDefined();
-    expect(hit!.consume).toBe(true);
-    expect(hit!.action).toEqual(Actions.toggleTeamRail());
-  });
-
-  test("ctrl+up dispatches switchCycleAgent(-1)", () => {
-    const hit = handleKeyInput("\x1b[1;5A", DEFAULT_KEYBINDINGS);
-    expect(hit).toBeDefined();
-    expect(hit!.action).toEqual(Actions.switchCycleAgent(-1));
-  });
-
-  test("ctrl+down dispatches switchCycleAgent(+1)", () => {
-    const hit = handleKeyInput("\x1b[1;5B", DEFAULT_KEYBINDINGS);
-    expect(hit).toBeDefined();
-    expect(hit!.action).toEqual(Actions.switchCycleAgent(1));
-  });
-
-  test("unmatched key returns undefined", () => {
-    expect(handleKeyInput("plain text", DEFAULT_KEYBINDINGS)).toBeUndefined();
-  });
-
-  test("empty input returns undefined", () => {
-    expect(handleKeyInput("", DEFAULT_KEYBINDINGS)).toBeUndefined();
-  });
-
-  test("custom bindings override the defaults", () => {
-    const hit = handleKeyInput("\x1b[1;5D", [
-      { combo: "ctrl+left", build: () => Actions.clearTuiState() },
-    ]);
-    expect(hit).toBeDefined();
-    expect(hit!.action.type).toBe(ActionTypes.CLEAR_TUI_STATE);
-  });
-
-  test("first match wins", () => {
-    const hit = handleKeyInput("\x1b[1;5D", [
-      { combo: "ctrl+left", build: () => Actions.toggleTeamRail() },
-      { combo: "ctrl+left", build: () => Actions.switchCycleAgent(1) },
-    ]);
-    expect(hit!.action.type).toBe(ActionTypes.TOGGLE_TEAM_RAIL);
-  });
-});
 
 interface DepsHandle {
   deps: KeyboardHandlerDeps;

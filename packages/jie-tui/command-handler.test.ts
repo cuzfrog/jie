@@ -1,6 +1,5 @@
 import {
   createTuiCommandHandler,
-  runCommand,
   type CommandHandlerDeps,
   type TuiCommandHandler,
 } from "./command-handler";
@@ -37,50 +36,6 @@ const SETTINGS_DEFAULT: Settings = {
   defaultModel: "claude-sonnet-4-5",
 };
 
-describe("runCommand", () => {
-  test("/help returns reply with the help banner", () => {
-    const out = runCommand("/help");
-    expect(out.kind).toBe("reply");
-    if (out.kind === "reply") {
-      expect(out.text).toContain("/clear");
-      expect(out.text).toContain("/team");
-    }
-  });
-
-  test("/clear returns clearState outcome", () => {
-    expect(runCommand("/clear").kind).toBe("clearState");
-  });
-
-  test("/exit returns stop outcome", () => {
-    expect(runCommand("/exit").kind).toBe("stop");
-  });
-
-  test("/team with no argument returns reply prompting for an id", () => {
-    const out = runCommand("/team");
-    expect(out.kind).toBe("reply");
-    if (out.kind === "reply") expect(out.text).toContain("/team <id>");
-  });
-
-  test("/team foo returns reply about a team not being installed", () => {
-    const out = runCommand("/team foo");
-    expect(out.kind).toBe("reply");
-    if (out.kind === "reply") {
-      expect(out.text).toContain("foo");
-      expect(out.text).toContain("not installed");
-    }
-  });
-
-  test("unknown slash command returns error outcome", () => {
-    const out = runCommand("/nope");
-    expect(out.kind).toBe("error");
-    if (out.kind === "error") expect(out.text).toContain("/nope");
-  });
-
-  test("trailing whitespace does not break command parsing", () => {
-    expect(runCommand("/help   ").kind).toBe("reply");
-  });
-});
-
 interface DepsHandle {
   deps: CommandHandlerDeps;
   getState: () => TuiState;
@@ -103,11 +58,21 @@ function makeDeps(): DepsHandle {
     getState: () => state,
     dispatch,
     requestQuit,
+    teamRegistry,
+    loadTeam,
+    authStore,
+    settingsStore,
+    settingsScope: "global" as Scope,
   };
   return { deps, getState: () => state, dispatch, requestQuit };
 }
 
 describe("createTuiCommandHandler", () => {
+  beforeEach(() => {
+    settingsStore.load.mockReturnValue(SETTINGS_DEFAULT);
+    teamRegistry.listInstalled.mockReturnValue([]);
+  });
+
   test("handle('/help') clears banners then sets a reply message", () => {
     const { deps, dispatch } = makeDeps();
     const handler: TuiCommandHandler = createTuiCommandHandler(deps);
@@ -131,11 +96,11 @@ describe("createTuiCommandHandler", () => {
     expect(requestQuit).toHaveBeenCalledTimes(1);
   });
 
-  test("handle('/team') sets a reply message prompting for an id", () => {
+  test("handle('/team') reports the current default and installed list", () => {
     const { deps, dispatch } = makeDeps();
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team");
-    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("/team <id>")));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("defaultTeam: ")));
   });
 
   test("handle('/nope') sets an error message", () => {
@@ -153,34 +118,6 @@ describe("createTuiCommandHandler", () => {
   });
 });
 
-interface DiskWriteHarness {
-  deps: CommandHandlerDeps;
-  dispatch: ReturnType<typeof vi.fn>;
-}
-
-function makeDiskWriteHarness(): DiskWriteHarness {
-  let state: TuiState = { ...INITIAL_TUI_STATE, agents: new Map(INITIAL_TUI_STATE.agents) };
-  const dispatch = vi.fn((action: Action) => {
-    if (action.type === ActionTypes.SET_TRANSIENT_MESSAGE) state = { ...state, transientMessage: action.payload.text };
-    else if (action.type === ActionTypes.SET_ERROR_MESSAGE) state = { ...state, errorBanner: action.payload.text };
-    else if (action.type === ActionTypes.CLEAR_TRANSIENT_MESSAGE) state = { ...state, transientMessage: null };
-    else if (action.type === ActionTypes.CLEAR_ERROR_MESSAGE) state = { ...state, errorBanner: null };
-    else if (action.type === ActionTypes.CLEAR_BANNERS) state = { ...state, transientMessage: null, errorBanner: null };
-    else if (action.type === ActionTypes.CLEAR_TUI_STATE) state = INITIAL_TUI_STATE;
-  });
-  const deps: CommandHandlerDeps = {
-    getState: () => state,
-    dispatch,
-    requestQuit: vi.fn(),
-    teamRegistry,
-    loadTeam,
-    authStore,
-    settingsStore,
-    settingsScope: "global" as Scope,
-  };
-  return { deps, dispatch };
-}
-
 describe("createTuiCommandHandler — /login", () => {
   beforeEach(() => {
     authStore.load.mockReturnValue({});
@@ -188,7 +125,7 @@ describe("createTuiCommandHandler — /login", () => {
 
   test("/login <provider> <apiKey> writes provider to authStore and replies", () => {
     authStore.setProvider.mockReturnValue({ anthropic: { type: "api_key", key: ANTHROPIC_KEY } });
-    const { deps, dispatch } = makeDiskWriteHarness();
+    const { deps, dispatch } = makeDeps();
     const handler = createTuiCommandHandler(deps);
     handler.handle("/login anthropic sk-test-anthropic");
 
@@ -198,7 +135,7 @@ describe("createTuiCommandHandler — /login", () => {
   });
 
   test("/login with wrong arity sets an error message and does not write", () => {
-    const { deps, dispatch } = makeDiskWriteHarness();
+    const { deps, dispatch } = makeDeps();
     const handler = createTuiCommandHandler(deps);
     handler.handle("/login anthropic");
 
@@ -210,7 +147,7 @@ describe("createTuiCommandHandler — /login", () => {
 describe("createTuiCommandHandler — /logout", () => {
   test("/logout with no args clears all providers and replies", () => {
     authStore.clear.mockReturnValue({});
-    const { deps, dispatch } = makeDiskWriteHarness();
+    const { deps, dispatch } = makeDeps();
     const handler = createTuiCommandHandler(deps);
     handler.handle("/logout");
 
@@ -221,7 +158,7 @@ describe("createTuiCommandHandler — /logout", () => {
 
   test("/logout <provider> removes one provider and replies", () => {
     authStore.removeProvider.mockReturnValue({});
-    const { deps, dispatch } = makeDiskWriteHarness();
+    const { deps, dispatch } = makeDeps();
     const handler = createTuiCommandHandler(deps);
     handler.handle("/logout anthropic");
 
@@ -237,7 +174,7 @@ describe("createTuiCommandHandler — /model", () => {
   });
 
   test("/model <provider>/<modelId> validates and writes to settings", () => {
-    const { deps, dispatch } = makeDiskWriteHarness();
+    const { deps, dispatch } = makeDeps();
     const handler = createTuiCommandHandler(deps);
     handler.handle("/model openai/gpt-4o");
 
@@ -246,7 +183,7 @@ describe("createTuiCommandHandler — /model", () => {
   });
 
   test("/model without slash sets an error", () => {
-    const { deps, dispatch } = makeDiskWriteHarness();
+    const { deps, dispatch } = makeDeps();
     const handler = createTuiCommandHandler(deps);
     handler.handle("/model just-a-string");
 
@@ -255,7 +192,7 @@ describe("createTuiCommandHandler — /model", () => {
   });
 
   test("/model <unknown>/<id> sets an error about unknown provider", () => {
-    const { deps, dispatch } = makeDiskWriteHarness();
+    const { deps, dispatch } = makeDeps();
     const handler = createTuiCommandHandler(deps);
     handler.handle("/model no-such-provider/gpt-4o");
 
@@ -264,7 +201,7 @@ describe("createTuiCommandHandler — /model", () => {
   });
 
   test("/model with wrong arity sets an error", () => {
-    const { deps, dispatch } = makeDiskWriteHarness();
+    const { deps, dispatch } = makeDeps();
     const handler = createTuiCommandHandler(deps);
     handler.handle("/model");
 
@@ -279,7 +216,7 @@ describe("createTuiCommandHandler — /team", () => {
   });
 
   test("/team --unset calls settingsStore.unsetDefaultTeam and replies", () => {
-    const { deps, dispatch } = makeDiskWriteHarness();
+    const { deps, dispatch } = makeDeps();
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team --unset");
 
@@ -290,7 +227,7 @@ describe("createTuiCommandHandler — /team", () => {
   test("/team (no args) replies with defaultTeam and installed list", () => {
     settingsStore.load.mockReturnValue({ ...SETTINGS_DEFAULT, defaultTeam: "alpha" });
     teamRegistry.listInstalled.mockReturnValue(["minimal", "alpha", "beta"]);
-    const { deps, dispatch } = makeDiskWriteHarness();
+    const { deps, dispatch } = makeDeps();
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team");
 
@@ -301,7 +238,7 @@ describe("createTuiCommandHandler — /team", () => {
   test("/team (no args) reports 'unset' when no defaultTeam is configured", () => {
     settingsStore.load.mockReturnValue({});
     teamRegistry.listInstalled.mockReturnValue(["minimal"]);
-    const { deps, dispatch } = makeDiskWriteHarness();
+    const { deps, dispatch } = makeDeps();
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team");
 
@@ -310,7 +247,7 @@ describe("createTuiCommandHandler — /team", () => {
 
   test("/team <id> when team is installed dispatches loadTeam and replies", async () => {
     teamRegistry.isInstalled.mockReturnValue(true);
-    const { deps, dispatch } = makeDiskWriteHarness();
+    const { deps, dispatch } = makeDeps();
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team alpha");
 
@@ -322,7 +259,7 @@ describe("createTuiCommandHandler — /team", () => {
 
   test("/team <id> when team is NOT installed falls through to stub reply", () => {
     teamRegistry.isInstalled.mockReturnValue(false);
-    const { deps, dispatch } = makeDiskWriteHarness();
+    const { deps, dispatch } = makeDeps();
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team ghost");
 

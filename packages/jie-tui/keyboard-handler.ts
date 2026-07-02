@@ -7,28 +7,11 @@ interface Keybinding {
   readonly build: () => Action;
 }
 
-interface KeyHandlerResult {
-  readonly action: Action;
-  readonly consume: true;
-}
-
-export const DEFAULT_KEYBINDINGS: ReadonlyArray<Keybinding> = [
+const DEFAULT_KEYBINDINGS: ReadonlyArray<Keybinding> = [
   { combo: "ctrl+left", build: () => Actions.toggleTeamRail() },
   { combo: "ctrl+up", build: () => Actions.switchCycleAgent(-1) },
   { combo: "ctrl+down", build: () => Actions.switchCycleAgent(1) },
 ];
-
-export function handleKeyInput(
-  data: string,
-  bindings: ReadonlyArray<Keybinding> = DEFAULT_KEYBINDINGS,
-): KeyHandlerResult | undefined {
-  for (const binding of bindings) {
-    if (matchesKey(data, binding.combo)) {
-      return { action: binding.build(), consume: true };
-    }
-  }
-  return undefined;
-}
 
 export interface KeyboardHandlerDeps {
   readonly eventManager: EventManager;
@@ -45,7 +28,6 @@ export interface KeyboardHandler {
 }
 
 export interface KeyboardHandlerOptions {
-  readonly bindings?: ReadonlyArray<Keybinding>;
   readonly now?: () => number;
 }
 
@@ -53,7 +35,7 @@ const DEFAULT_ESC_WINDOW_MS = 300;
 const DEFAULT_CTRL_D_WINDOW_MS = 500;
 
 export function createKeyboardHandler(deps: KeyboardHandlerDeps, opts: KeyboardHandlerOptions = {}): KeyboardHandler {
-  const bindings = opts.bindings ?? DEFAULT_KEYBINDINGS;
+  const bindings = DEFAULT_KEYBINDINGS;
   const now = opts.now ?? Date.now;
   const escWindowMs = DEFAULT_ESC_WINDOW_MS;
   const ctrlDWindowMs = DEFAULT_CTRL_D_WINDOW_MS;
@@ -105,11 +87,20 @@ export function createKeyboardHandler(deps: KeyboardHandlerDeps, opts: KeyboardH
       return { consume: true };
     }
 
-    const hit = handleKeyInput(data, bindings);
-    if (hit === undefined) return undefined;
-    deps.dispatch(hit.action);
+    const action = handleKeyInput(data, bindings);
+    if (action === undefined) return undefined;
+    deps.dispatch(action);
     return { consume: true };
   };
 
   return { handle };
+}
+
+function handleKeyInput(data: string, keyBindings: ReadonlyArray<Keybinding>): Action | undefined {
+  for (const binding of keyBindings) {
+    if (matchesKey(data, binding.combo)) {
+      return binding.build();
+    }
+  }
+  return undefined;
 }

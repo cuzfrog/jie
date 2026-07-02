@@ -4,18 +4,21 @@ import { type AuthStore, type Scope, type SettingsStore } from "@cuzfrog/jie-pla
 import { type TeamRegistry } from "@cuzfrog/jie-platform/team";
 import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduce } from "./state";
 import { createTuiCommandHandler } from "./command-handler";
-import { createKeyboardHandler } from "./keyboard";
+import { createKeyboardHandler } from "./keyboard-handler";
 import { createGitService, type GitService } from "./git-service";
 import { formatQueueIndicator } from "./format";
 import { buildView, type BuildViewOpts } from "./components";
 
-export interface CreateTUIOptions {
+export interface TuiDeps {
   eventManager: EventManager;
-  teamRegistry?: TeamRegistry;
-  loadTeam?: (teamId: string) => Promise<void>;
-  authStore?: AuthStore;
-  settingsStore?: SettingsStore;
-  settingsScope?: Scope;
+  teamRegistry: TeamRegistry;
+  loadTeam: (teamId: string) => Promise<void>;
+  authStore: AuthStore;
+  settingsStore: SettingsStore;
+  settingsScope: Scope;
+}
+
+export interface CreateTUIOptions {
   cwd?: string;
   gitService?: GitService;
   rows?: number;
@@ -32,7 +35,7 @@ export interface Tui {
 const MIN_COLS = 60;
 const GIT_REFRESH_MIN_INTERVAL_MS = 500;
 
-export function createTui(options: CreateTUIOptions): Tui {
+export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
   if (process.stdin.isTTY !== true) {
     throw new Error("TUI requires an interactive terminal; use `jie -p` for scripts.");
   }
@@ -92,11 +95,11 @@ export function createTui(options: CreateTUIOptions): Tui {
     getState: () => state,
     dispatch,
     requestQuit,
-    teamRegistry: options.teamRegistry,
-    loadTeam: options.loadTeam,
-    authStore: options.authStore,
-    settingsStore: options.settingsStore,
-    settingsScope: options.settingsScope,
+    teamRegistry: deps.teamRegistry,
+    loadTeam: deps.loadTeam,
+    authStore: deps.authStore,
+    settingsStore: deps.settingsStore,
+    settingsScope: deps.settingsScope,
   });
 
   const publishPrompt = (text: string): void => {
@@ -111,7 +114,7 @@ export function createTui(options: CreateTUIOptions): Tui {
       return;
     }
     const sender: Sender = { kind: "user" };
-    options.eventManager.publish(Events.userPrompt(sender, state.teamId, text, targetKey));
+    deps.eventManager.publish(Events.userPrompt(sender, state.teamId, text, targetKey));
   };
 
   const handleSubmit = (text: string): void => {
@@ -144,7 +147,7 @@ export function createTui(options: CreateTUIOptions): Tui {
   };
   const busUnsubscribes: Array<() => void> = [];
   for (const topic of subscribedTopics) {
-    busUnsubscribes.push(options.eventManager.subscribe(topic, onBusEvent));
+    busUnsubscribes.push(deps.eventManager.subscribe(topic, onBusEvent));
   }
   let busUnsubscribed = false;
   const unsubscribeBus = (): void => {
@@ -178,7 +181,7 @@ export function createTui(options: CreateTUIOptions): Tui {
       renderRef = renderAll;
 
       const keyboardHandler = createKeyboardHandler({
-        eventManager: options.eventManager,
+        eventManager: deps.eventManager,
         getState: () => state,
         dispatch,
         confirmQuit,

@@ -5,7 +5,7 @@ import { Actions, type Action, type TuiState } from "./state";
 
 const KNOWN_PROVIDERS: ReadonlySet<string> = new Set<string>(getProviders());
 
-export type CommandOutcome =
+type CommandOutcome =
   | { readonly kind: "reply"; readonly text: string }
   | { readonly kind: "error"; readonly text: string }
   | { readonly kind: "clearState" }
@@ -20,11 +20,11 @@ export interface CommandHandlerDeps {
   readonly getState: () => TuiState;
   readonly dispatch: (action: Action) => void;
   readonly requestQuit: () => void;
-  readonly teamRegistry?: TeamRegistry;
-  readonly loadTeam?: (teamId: string) => Promise<void>;
-  readonly authStore?: AuthStore;
-  readonly settingsStore?: SettingsStore;
-  readonly settingsScope?: Scope;
+  readonly teamRegistry: TeamRegistry;
+  readonly loadTeam: (teamId: string) => Promise<void>;
+  readonly authStore: AuthStore;
+  readonly settingsStore: SettingsStore;
+  readonly settingsScope: Scope;
 }
 
 export interface TuiCommandHandler {
@@ -66,7 +66,7 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): TuiCommandHan
   return { handle };
 }
 
-export function runCommand(input: string): CommandOutcome {
+function runCommand(input: string): CommandOutcome {
   const parts = input.split(/\s+/);
   const rawName = parts[0]!;
   const name = rawName.startsWith("/") ? rawName.slice(1) : rawName;
@@ -129,7 +129,6 @@ function runIntercepts(name: string, args: ReadonlyArray<string>, deps: CommandH
 
 const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn>([
   ["login", (args, deps) => {
-    if (deps.authStore === undefined) return null;
     if (args.length !== 2) return { kind: "error", text: "/login <provider> <apiKey>" };
     const [provider, apiKey] = args;
     if (provider === undefined || apiKey === undefined) return { kind: "error", text: "/login <provider> <apiKey>" };
@@ -137,7 +136,6 @@ const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn
     return { kind: "reply", text: `logged in to ${provider}` };
   }],
   ["logout", (args, deps) => {
-    if (deps.authStore === undefined) return null;
     if (args.length === 0) {
       deps.authStore.write(deps.authStore.clear());
       return { kind: "reply", text: "logged out of all providers" };
@@ -147,7 +145,6 @@ const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn
     return { kind: "reply", text: `logged out of ${provider}` };
   }],
   ["model", (args, deps) => {
-    if (deps.settingsStore === undefined) return null;
     if (args.length !== 1) return { kind: "error", text: "/model <provider>/<modelId>" };
     const arg = args[0]!;
     const slash = arg.indexOf("/");
@@ -157,24 +154,21 @@ const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn
     if (!KNOWN_PROVIDERS.has(provider)) return { kind: "error", text: `unknown provider: ${provider}` };
     const existing = deps.settingsStore.load();
     const next: Settings = { ...existing, defaultProvider: provider, defaultModel: modelId };
-    deps.settingsStore.write(next, deps.settingsScope ?? "global");
+    deps.settingsStore.write(next, deps.settingsScope);
     return { kind: "reply", text: `default model set to ${provider}/${modelId}` };
   }],
   ["team", (args, deps) => {
     if (args[0] === "--unset") {
-      if (deps.settingsStore === undefined) return null;
       deps.settingsStore.unsetDefaultTeam();
       return { kind: "reply", text: "default team unset; takes effect on next `jie` invocation" };
     }
     if (args.length === 0) {
-      if (deps.settingsStore === undefined) return null;
       const merged = deps.settingsStore.load();
-      const installed = deps.teamRegistry?.listInstalled() ?? [];
+      const installed = deps.teamRegistry.listInstalled();
       return { kind: "reply", text: `defaultTeam: ${merged.defaultTeam ?? "unset"} | installed: ${installed.join(", ")}` };
     }
     const argument = args[0];
     if (argument === undefined) return null;
-    if (deps.teamRegistry === undefined || deps.loadTeam === undefined) return null;
     if (!deps.teamRegistry.isInstalled(argument)) return null;
     void deps.loadTeam(argument).catch((error) => {
       console.error(`loadTeam(${argument}) failed:`, error);

@@ -1,19 +1,55 @@
 import { createEventManager, Events, type EventEnvelope, type EventManager, type Sender, type EventType } from "@cuzfrog/jie-platform/event";
-import { createTui, type Tui, type CreateTUIOptions } from "@cuzfrog/jie-tui";
+import { createTui, type Tui, type TuiDeps, type CreateTUIOptions } from "@cuzfrog/jie-tui";
+import type { AuthStore, SettingsStore, Scope } from "@cuzfrog/jie-platform/config";
+import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
 import { JiePlatformErrorMessages } from "@cuzfrog/jie-platform";
 import { withTTY } from "../../support";
+
+const noopAsync = (): Promise<void> => Promise.resolve();
+
+const stubAuthStore: AuthStore = {
+  load: () => ({}),
+  write: () => {},
+  setProvider: (auth) => auth,
+  removeProvider: (auth) => auth,
+  clear: () => ({}),
+};
+
+const stubSettingsStore: SettingsStore = {
+  load: () => ({}),
+  write: () => {},
+  unsetDefaultTeam: () => {},
+};
+
+const stubTeamRegistry: TeamRegistry = {
+  loadTeam: () => undefined as never,
+  isInstalled: () => false,
+  listInstalled: () => [],
+  locate: () => "missing",
+};
+
+function makeDeps(bus: EventManager, options: CreateTUIOptions = {}): { deps: TuiDeps; options: CreateTUIOptions } {
+  return {
+    deps: {
+      eventManager: bus,
+      teamRegistry: stubTeamRegistry,
+      loadTeam: noopAsync,
+      authStore: stubAuthStore,
+      settingsStore: stubSettingsStore,
+      settingsScope: "global" as Scope,
+    },
+    options,
+  };
+}
 
 export const startTuiOn = (
   bus: EventManager,
   preload: ReadonlyArray<EventEnvelope<EventType>>,
+  options: CreateTUIOptions = {},
 ): Tui => {
-  const opts: CreateTUIOptions = {
-    eventManager: bus,
-    rows: 30,
-    cwd: "/tmp",
-  };
+  const { deps, options: opts } = makeDeps(bus, options);
   const tuiHandle: { current: Tui | null } = { current: null };
-  withTTY(true, () => { tuiHandle.current = createTui(opts); });
+  withTTY(true, () => { tuiHandle.current = createTui(deps, opts); });
   const tui = tuiHandle.current;
   if (tui === null) throw new Error("TUI handle not initialized");
   for (const env of preload) bus.publish(env);
