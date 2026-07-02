@@ -44,7 +44,6 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
   }
 
   let state: TuiState = INITIAL_TUI_STATE;
-  let stopped = false;
   const cwd = options.cwd ?? process.cwd();
   const gitService: GitService = options.gitService ?? createGitService({ cwd });
   let lastGitRefreshAt = 0;
@@ -55,10 +54,12 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
     cachedGit = gitService.getSnapshot();
   };
 
+  const lifecycle: { stopped: boolean; resolveStart: (() => void) | null } = { stopped: false, resolveStart: null };
+
   let renderRef: (() => void) | null = null;
 
   const dispatch = (action: ReturnType<typeof Actions[keyof typeof Actions]>): void => {
-    if (stopped) return;
+    if (lifecycle.stopped) return;
     state = reduce(state, action);
     if (renderRef !== null) renderRef();
   };
@@ -70,21 +71,19 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
     return false;
   };
 
-  let resolveStart: (() => void) | null = null;
-
   const requestQuit = (): void => {
     if (isBusy()) {
       dispatch(Actions.setPendingQuit(true));
       return;
     }
-    stopped = true;
-    if (resolveStart !== null) resolveStart();
+    lifecycle.stopped = true;
+    lifecycle.resolveStart?.();
   };
 
   const confirmQuit = (): void => {
     dispatch(Actions.setPendingQuit(false));
-    stopped = true;
-    if (resolveStart !== null) resolveStart();
+    lifecycle.stopped = true;
+    lifecycle.resolveStart?.();
   };
 
   const cancelQuit = (): void => {
@@ -192,10 +191,10 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
 
       tui.addInputListener((data) => keyboardHandler.handle(data));
 
-      resolveStart = (): void => {
+      lifecycle.resolveStart = (): void => {
         unsubscribeBus();
         tui.stop();
-        resolveStart = null;
+        lifecycle.resolveStart = null;
         resolve();
       };
 
@@ -203,7 +202,7 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
         tui.start();
       } catch (error) {
         unsubscribeBus();
-        resolveStart = null;
+        lifecycle.resolveStart = null;
         throw error;
       }
     });
@@ -213,13 +212,11 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
     getState: (): TuiState => state,
     submit: (text: string): void => handleSubmit(text),
     stop: (): void => {
-      stopped = true;
+      lifecycle.stopped = true;
       unsubscribeBus();
-      if (resolveStart !== null) {
-        resolveStart();
-      }
+      lifecycle.resolveStart?.();
       renderRef = null;
-      resolveStart = null;
+      lifecycle.resolveStart = null;
       lastGitRefreshAt = 0;
     },
     start,
