@@ -98,14 +98,13 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
       dispatch(Actions.setErrorMessage("No team loaded; run `/team <id>` to load a team."));
       return;
     }
-    const focused = TuiStateSelectors.getFocusedAgent(state);
-    const targetKey = focused?.agentKey ?? (state.leaderAgentId !== null ? state.agents.get(state.leaderAgentId)?.agentKey : undefined);
-    if (targetKey === undefined) {
+    const target = TuiStateSelectors.getTargetAgentForPrompt(state);
+    if (target === null) {
       dispatch(Actions.setErrorMessage("No focused agent; press ctrl+left to reveal the rail."));
       return;
     }
     const sender: Sender = { kind: "user" };
-    deps.eventManager.publish(Events.userPrompt(sender, state.teamId, text, targetKey));
+    deps.eventManager.publish(Events.userPrompt(sender, state.teamId, text, target.agentKey));
   };
 
   const handleSubmit = (text: string): void => {
