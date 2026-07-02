@@ -9,8 +9,6 @@ export interface GitService {
   getSnapshot: () => GitSnapshot;
 }
 
-export const EMPTY_GIT_SNAPSHOT: GitSnapshot = { branch: "", dirty: false, ahead: 0, behind: 0 };
-
 export interface CreateGitServiceOptions {
   readonly cwd: string;
   readonly readGitStatus?: (cwd: string) => GitSnapshot;

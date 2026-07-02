@@ -1,4 +1,4 @@
-import { createGitService, EMPTY_GIT_SNAPSHOT, type GitSnapshot } from "./git-service";
+import { createGitService, type GitSnapshot } from "./git-service";
 
 describe("createGitService", () => {
   test("getSnapshot returns what the injected reader returns", () => {
@@ -18,9 +18,5 @@ describe("createGitService", () => {
     });
     expect(svc.getSnapshot().branch).toBe("b1");
     expect(svc.getSnapshot().branch).toBe("b2");
-  });
-
-  test("EMPTY_GIT_SNAPSHOT has the documented zero values", () => {
-    expect(EMPTY_GIT_SNAPSHOT).toEqual({ branch: "", dirty: false, ahead: 0, behind: 0 });
   });
 });
