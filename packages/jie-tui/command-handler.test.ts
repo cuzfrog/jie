@@ -4,7 +4,7 @@ import {
   type TuiCommandHandler,
 } from "./command-handler";
 import { Actions, ActionTypes, INITIAL_TUI_STATE, type Action, type TuiState } from "./state";
-import type { AuthStore, Settings, SettingsStore, Scope } from "@cuzfrog/jie-platform/config";
+import type { AuthStore, Settings, SettingsStore } from "@cuzfrog/jie-platform/config";
 import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
 
 const authStore = vi.mocked<AuthStore>({
@@ -62,7 +62,7 @@ function makeDeps(): DepsHandle {
     loadTeam,
     authStore,
     settingsStore,
-    settingsScope: "global" as Scope,
+    settingsScope: "global",
   };
   return { deps, getState: () => state, dispatch, requestQuit };
 }

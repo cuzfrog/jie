@@ -45,13 +45,12 @@ function makeDeps(): DepsHandle {
 }
 
 describe("createKeyboardHandler — pendingQuit branch", () => {
-  test("'y' calls confirmQuit and renders", () => {
+  test("'y' calls confirmQuit", () => {
     const h = makeDeps();
     h.setState({ pendingQuit: true });
     const handler: KeyboardHandler = createKeyboardHandler(h.deps);
     const out = handler.handle("y");
     expect(h.confirmQuit).toHaveBeenCalledTimes(1);
-    expect(h.render).toHaveBeenCalledTimes(1);
     expect(out?.consume).toBe(true);
   });
 
@@ -62,13 +61,12 @@ describe("createKeyboardHandler — pendingQuit branch", () => {
     expect(h.confirmQuit).toHaveBeenCalledTimes(1);
   });
 
-  test("'n' calls cancelQuit and renders", () => {
+  test("'n' calls cancelQuit", () => {
     const h = makeDeps();
     h.setState({ pendingQuit: true });
     const handler = createKeyboardHandler(h.deps);
     const out = handler.handle("n");
     expect(h.cancelQuit).toHaveBeenCalledTimes(1);
-    expect(h.render).toHaveBeenCalledTimes(1);
     expect(out?.consume).toBe(true);
   });
 
@@ -140,7 +138,6 @@ describe("createKeyboardHandler — Ctrl+D×2 quit", () => {
     handler.handle("\x04");
     handler.handle("\x04");
     expect(h.requestQuit).toHaveBeenCalledTimes(1);
-    expect(h.render).toHaveBeenCalledTimes(1);
   });
 
   test("single Ctrl+D does NOT call requestQuit", () => {

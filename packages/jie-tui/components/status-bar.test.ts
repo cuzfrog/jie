@@ -1,11 +1,5 @@
 import { createTestTuiWithTerminal } from "../../../tests/support";
-import {
-  StatusBar,
-  _statusBarContextFromState,
-  type StatusBarContext,
-  type StatusBarModel,
-} from "./status-bar";
-import type { AgentUiState, TuiState } from "../state";
+import { StatusBar, type StatusBarContext, type StatusBarModel } from "./status-bar";
 
 function makeModel(overrides: Partial<StatusBarModel> = {}): StatusBarModel {
   return {
@@ -115,74 +109,5 @@ describe("StatusBar", () => {
     const lines = bar.render(120);
     expect(lines.length).toBeGreaterThan(0);
     expect(bar.children.length).toBe(before);
-  });
-});
-
-describe("statusBarContextFromState", () => {
-  test("extracts focused agent status and key", () => {
-    const agent: AgentUiState = {
-      agentId: "default:general-1",
-      teamId: "default",
-      agentKey: "general-1",
-      role: "general",
-      isLeader: true,
-      status: "busy",
-      model: { provider: "openai", id: "gpt-4", effort: "high" },
-      queue: [],
-      history: [],
-      currentTurn: null,
-      lastStopReason: null,
-    };
-    const state: TuiState = {
-      teamId: "default",
-      leaderAgentId: "default:general-1",
-      agents: new Map([["default:general-1", agent]]),
-      focusedAgentId: "default:general-1",
-      transientMessage: null,
-      errorBanner: null,
-      showTeamRailPanel: true,
-      pendingQuit: false,
-    };
-    expect(_statusBarContextFromState(state)).toEqual({
-      focusedStatus: "busy",
-      focusedAgentKey: "general-1",
-      teamId: "default",
-      showRail: true,
-      focusedModel: { provider: "openai", id: "gpt-4", effort: "high" },
-    });
-  });
-
-  test("returns nulls when no focused agent", () => {
-    const state: TuiState = {
-      teamId: null,
-      leaderAgentId: null,
-      agents: new Map(),
-      focusedAgentId: null,
-      transientMessage: null,
-      errorBanner: null,
-      showTeamRailPanel: false,
-      pendingQuit: false,
-    };
-    expect(_statusBarContextFromState(state)).toEqual({
-      focusedStatus: null,
-      focusedAgentKey: null,
-      teamId: null,
-      showRail: false,
-      focusedModel: null,
-    });
-  });
-
-  test("reflects showTeamRailPanel flag", () => {
-    const state: TuiState = {
-      teamId: "t1",
-      leaderAgentId: null,
-      agents: new Map(),
-      focusedAgentId: null,
-      transientMessage: null,
-      errorBanner: null,
-      showTeamRailPanel: false,
-      pendingQuit: false,
-    };
-    expect(_statusBarContextFromState(state).showRail).toBe(false);
   });
 });

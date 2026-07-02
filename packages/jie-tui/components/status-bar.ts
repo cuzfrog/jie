@@ -1,6 +1,8 @@
 import { Container, Loader, Text, type TUI } from "@earendil-works/pi-tui";
-import { type AgentStatus, type ModelReference, type TuiState, TuiStateSelectors } from "../state";
+import { type AgentStatus, type ModelReference } from "../state";
 import type { GitSnapshot } from "../git-service";
+
+const PLACEHOLDER_TOKEN_USAGE = "0%/200k";
 
 export interface StatusBarModel {
   cwd: string;
@@ -40,13 +42,9 @@ export class StatusBar extends Container {
 
     const hintText = this.hintText(context);
     const modelText = this.modelText(context.focusedModel);
-    this.hintLine.setText(`0%/200k  ${hintText}  ${modelText}`);
+    this.hintLine.setText(`${PLACEHOLDER_TOKEN_USAGE}  ${hintText}  ${modelText}`);
 
     this.syncLoader(context.focusedStatus);
-  }
-
-  setFromOptsAndState(opts: StatusBarModel, state: TuiState): void {
-    this.setModel(opts, statusBarContextFromState(state));
   }
 
   private hintText(context: StatusBarContext): string {
@@ -76,16 +74,3 @@ export class StatusBar extends Container {
     }
   }
 }
-
-function statusBarContextFromState(state: TuiState): StatusBarContext {
-  const focused = TuiStateSelectors.getFocusedAgent(state);
-  return {
-    focusedStatus: focused?.status ?? null,
-    focusedAgentKey: focused?.agentKey ?? null,
-    teamId: state.teamId,
-    showRail: state.showTeamRailPanel,
-    focusedModel: focused?.model ?? null,
-  };
-}
-
-export { statusBarContextFromState as _statusBarContextFromState };

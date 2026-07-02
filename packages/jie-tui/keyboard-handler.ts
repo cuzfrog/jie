@@ -49,12 +49,10 @@ export function createKeyboardHandler(deps: KeyboardHandlerDeps, opts: KeyboardH
     if (state.pendingQuit) {
       if (data === "y" || data === "Y") {
         deps.confirmQuit();
-        deps.render();
         return { consume: true };
       }
       if (data === "n" || data === "N" || data === "\r" || data === "\n") {
         deps.cancelQuit();
-        deps.render();
         return { consume: true };
       }
     }
@@ -74,7 +72,6 @@ export function createKeyboardHandler(deps: KeyboardHandlerDeps, opts: KeyboardH
       const at = now();
       if (at - lastCtrlDAt <= ctrlDWindowMs) {
         deps.requestQuit();
-        deps.render();
         lastCtrlDAt = 0;
         return { consume: true };
       }

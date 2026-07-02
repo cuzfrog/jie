@@ -92,25 +92,10 @@ const exitCommand: SlashCommand = {
   run: () => ({ kind: "stop" }),
 };
 
-const teamCommand: SlashCommand = {
-  name: "team",
-  run: (args) => {
-    const argument = args[0];
-    if (argument === undefined) {
-      return { kind: "reply", text: "/team <id>: pass a team id" };
-    }
-    return {
-      kind: "reply",
-      text: `team '${argument}' is not installed; checked .jie/teams/${argument}/ and ~/.jie/teams/${argument}/`,
-    };
-  },
-};
-
 const COMMANDS: ReadonlyMap<string, SlashCommand> = new Map<string, SlashCommand>([
   [helpCommand.name, helpCommand],
   [clearCommand.name, clearCommand],
   [exitCommand.name, exitCommand],
-  [teamCommand.name, teamCommand],
 ]);
 
 const UNKNOWN_REPLY = (name: string): CommandOutcome => ({
@@ -167,9 +152,13 @@ const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn
       const installed = deps.teamRegistry.listInstalled();
       return { kind: "reply", text: `defaultTeam: ${merged.defaultTeam ?? "unset"} | installed: ${installed.join(", ")}` };
     }
-    const argument = args[0];
-    if (argument === undefined) return null;
-    if (!deps.teamRegistry.isInstalled(argument)) return null;
+    const argument = args[0]!;
+    if (!deps.teamRegistry.isInstalled(argument)) {
+      return {
+        kind: "reply",
+        text: `team '${argument}' is not installed; checked .jie/teams/${argument}/ and ~/.jie/teams/${argument}/`,
+      };
+    }
     void deps.loadTeam(argument).catch((error) => {
       console.error(`loadTeam(${argument}) failed:`, error);
     });

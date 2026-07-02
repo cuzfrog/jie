@@ -7,7 +7,7 @@ import { createTuiCommandHandler } from "./command-handler";
 import { createKeyboardHandler } from "./keyboard-handler";
 import { createGitService, type GitService } from "./git-service";
 import { formatQueueIndicator } from "./format";
-import { buildView, type BuildViewOpts } from "./components";
+import { buildView } from "./components";
 
 export interface TuiDeps {
   eventManager: EventManager;
@@ -48,11 +48,11 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
   const cwd = options.cwd ?? process.cwd();
   const gitService: GitService = options.gitService ?? createGitService({ cwd });
   let lastGitRefreshAt = 0;
-  const buildViewOpts: BuildViewOpts = { cwd, git: gitService.getSnapshot() };
+  let cachedGit = gitService.getSnapshot();
   const refreshGitIfStale = (now: number): void => {
     if (now - lastGitRefreshAt < GIT_REFRESH_MIN_INTERVAL_MS) return;
     lastGitRefreshAt = now;
-    buildViewOpts.git = gitService.getSnapshot();
+    cachedGit = gitService.getSnapshot();
   };
 
   let renderRef: (() => void) | null = null;
@@ -163,7 +163,7 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
         throw new Error(`terminal too narrow for TUI; need at least ${MIN_COLS} columns, got ${terminal.columns}`);
       }
       const tui = new TUI(terminal);
-      const { root, rail, chatPane, editor, statusBar, confirmExit } = buildView(state, buildViewOpts, tui);
+      const { root, rail, chatPane, editor, statusBar, confirmExit } = buildView(state, { cwd }, tui);
       tui.addChild(root);
       const requestRender = (): void => tui.requestRender();
       const renderAll = (): void => {
@@ -175,7 +175,16 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
         chatPane.setAgent(focused);
         editor.setQueueIndicator(formatQueueIndicator(focused?.queue ?? null));
         rail.setItemsFromState(state);
-        statusBar.setFromOptsAndState(buildViewOpts, state);
+        statusBar.setModel(
+          { cwd, git: cachedGit },
+          {
+            focusedStatus: focused?.status ?? null,
+            focusedAgentKey: focused?.agentKey ?? null,
+            teamId: state.teamId,
+            showRail: state.showTeamRailPanel,
+            focusedModel: focused?.model ?? null,
+          },
+        );
         requestRender();
       };
       renderRef = renderAll;

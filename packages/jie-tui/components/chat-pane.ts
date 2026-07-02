@@ -20,6 +20,7 @@ export class ChatPane extends Container {
   }
 
   setAgent(agent: AgentUiState | null): void {
+    if (this.agent === agent) return;
     this.agent = agent;
     this.cachedLines = null;
     this.rebuildChildren();

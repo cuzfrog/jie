@@ -1,7 +1,5 @@
 import { Container, Spacer, Text, type TUI } from "@earendil-works/pi-tui";
 import { type TuiState, TuiStateSelectors } from "../state";
-import type { GitSnapshot } from "../git-service";
-import { formatQueueIndicator } from "../format";
 import { StatusBar } from "./status-bar";
 import { AgentsRail } from "./agents-rail";
 import { ChatPane, chatPaneFromAgent } from "./chat-pane";
@@ -10,7 +8,6 @@ import { ConfirmExitOverlay } from "./confirm-exit-overlay";
 
 export interface BuildViewOpts {
   cwd: string;
-  git: GitSnapshot;
 }
 
 export interface BuildViewResult {
@@ -24,7 +21,6 @@ export interface BuildViewResult {
 
 export function buildView(state: TuiState, opts: BuildViewOpts, tui: TUI): BuildViewResult {
   const statusBar = new StatusBar(tui);
-  statusBar.setFromOptsAndState(opts, state);
 
   const rail = new AgentsRail();
   rail.setItemsFromState(state);
@@ -33,8 +29,6 @@ export function buildView(state: TuiState, opts: BuildViewOpts, tui: TUI): Build
   const chatPane = chatPaneFromAgent(focused);
 
   const editor = new EditorSlot(tui, { basePath: opts.cwd });
-  editor.setText("");
-  editor.setQueueIndicator(formatQueueIndicator(focused?.queue ?? null));
 
   const confirmExit = new ConfirmExitOverlay();
   confirmExit.setVisible(state.pendingQuit);

@@ -19,21 +19,30 @@ export interface RailItem {
 export class AgentsRail extends Container {
   private items: SelectList;
   private readonly maxVisible: number;
+  private railItems: ReadonlyArray<RailItem>;
+  private selectedIndex: number;
 
   constructor(maxVisible: number = RAIL_MAX_VISIBLE) {
     super();
     this.maxVisible = maxVisible;
+    this.railItems = [];
+    this.selectedIndex = 0;
     this.items = new SelectList([], this.maxVisible, selectListTheme);
   }
 
   setItems(railItems: ReadonlyArray<RailItem>, focusedAgentId: AgentId | null): void {
+    this.railItems = railItems;
     const selectItems = buildSelectItems(railItems);
     this.items = new SelectList(selectItems, this.maxVisible, selectListTheme);
-    if (railItems.length === 0) return;
+    if (railItems.length === 0) {
+      this.selectedIndex = 0;
+      return;
+    }
     const focusedIndex = focusedAgentId === null
       ? 0
       : railItems.findIndex((i) => i.agentId === focusedAgentId);
     const safeIndex = focusedIndex >= 0 ? focusedIndex : 0;
+    this.selectedIndex = safeIndex;
     this.items.setSelectedIndex(safeIndex);
   }
 
@@ -42,8 +51,7 @@ export class AgentsRail extends Container {
   }
 
   getSelectedAgentId(): AgentId | null {
-    const item = this.items.getSelectedItem();
-    return item === null ? null : (item.value as AgentId);
+    return this.railItems[this.selectedIndex]?.agentId ?? null;
   }
 
   render(width: number): string[] {
