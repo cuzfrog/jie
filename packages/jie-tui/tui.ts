@@ -117,34 +117,22 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
     publishPrompt(trimmed);
   };
 
-  const subscribedTopics = [
-    "system.team.loaded",
-    "system.team.interrupted",
-    "system.error",
-    "user.prompt",
-    "agent.model.assigned",
-    "agent.prompt.queue.update",
-    "agent.turn.start",
-    "agent.idle",
-    "agent.stream.chunk",
-    "agent.stream.end",
-    "agent.tool.call",
-    "agent.tool.result",
-  ] as const;
-
-  const onBusEvent = (env: EventEnvelope<EventType>): void => {
-    dispatch(Actions.receiveEvent(env as AnyEventEnvelope));
+  const subscribeToBus = (): (() => void) => {
+    const onBusEvent = (env: EventEnvelope<EventType>): void => {
+      dispatch(Actions.receiveEvent(env as AnyEventEnvelope));
+    };
+    const busUnsubscribes: Array<() => void> = [];
+    for (const topic of SUBSCRIBED_TOPICS) {
+      busUnsubscribes.push(deps.eventManager.subscribe(topic, onBusEvent));
+    }
+    let busUnsubscribed = false;
+    return (): void => {
+      if (busUnsubscribed) return;
+      busUnsubscribed = true;
+      for (const unsub of busUnsubscribes) unsub();
+    };
   };
-  const busUnsubscribes: Array<() => void> = [];
-  for (const topic of subscribedTopics) {
-    busUnsubscribes.push(deps.eventManager.subscribe(topic, onBusEvent));
-  }
-  let busUnsubscribed = false;
-  const unsubscribeBus = (): void => {
-    if (busUnsubscribed) return;
-    busUnsubscribed = true;
-    for (const unsub of busUnsubscribes) unsub();
-  };
+  const unsubscribeBus = subscribeToBus();
 
   const start = (): Promise<void> => {
     return new Promise<void>((resolve) => {
@@ -155,7 +143,6 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
       const tui = new TUI(terminal);
       const { root, rail, chatPane, editor, statusBar, confirmExit } = buildView(state, { cwd }, tui);
       tui.addChild(root);
-      const requestRender = (): void => tui.requestRender();
       const projectView = (view: BuildViewResult): void => {
         if (view.confirmExit.isVisible() !== state.pendingQuit) {
           view.confirmExit.setVisible(state.pendingQuit);
@@ -169,7 +156,7 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
       };
       const renderAll = (): void => {
         projectView({ root, rail, chatPane, editor, statusBar, confirmExit });
-        requestRender();
+        tui.requestRender();
       };
       lifecycle.render = renderAll;
       lifecycle.commandHandler = createTuiCommandHandler({
@@ -231,3 +218,18 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
 function isUtf8(): boolean {
   return /utf-?8/i.test(process.env.LANG ?? process.env.LC_ALL ?? "");
 }
+
+const SUBSCRIBED_TOPICS = [
+  "system.team.loaded",
+  "system.team.interrupted",
+  "system.error",
+  "user.prompt",
+  "agent.model.assigned",
+  "agent.prompt.queue.update",
+  "agent.turn.start",
+  "agent.idle",
+  "agent.stream.chunk",
+  "agent.stream.end",
+  "agent.tool.call",
+  "agent.tool.result",
+] as const;

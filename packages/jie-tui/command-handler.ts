@@ -120,53 +120,61 @@ function formatTeamListReply(defaultTeam: string | null, installed: ReadonlyArra
   return `defaultTeam: ${defaultTeam ?? "unset"} | installed: ${installed.join(", ")}`;
 }
 
+function interceptLogin(args: ReadonlyArray<string>, deps: CommandHandlerDeps): InterceptResult {
+  if (args.length !== 2) return { kind: "error", text: "/login <provider> <apiKey>" };
+  const [provider, apiKey] = args;
+  if (provider === undefined || apiKey === undefined) return { kind: "error", text: "/login <provider> <apiKey>" };
+  deps.authStore.saveAuthConfig(deps.authStore.setProvider(deps.authStore.load(), provider, apiKey));
+  return { kind: "reply", text: `logged in to ${provider}` };
+}
+
+function interceptLogout(args: ReadonlyArray<string>, deps: CommandHandlerDeps): InterceptResult {
+  if (args.length === 0) {
+    deps.authStore.saveAuthConfig(deps.authStore.clear());
+    return { kind: "reply", text: "logged out of all providers" };
+  }
+  const provider = args[0]!;
+  deps.authStore.saveAuthConfig(deps.authStore.removeProvider(deps.authStore.load(), provider));
+  return { kind: "reply", text: `logged out of ${provider}` };
+}
+
+function interceptModel(args: ReadonlyArray<string>, deps: CommandHandlerDeps): InterceptResult {
+  if (args.length !== 1) return { kind: "error", text: "/model <provider>/<modelId>" };
+  const parsed = parseModelArg(args[0]!);
+  if (parsed.kind === "error") return parsed;
+  const existing = deps.settingsStore.load();
+  const next: Settings = { ...existing, defaultProvider: parsed.provider, defaultModel: parsed.modelId };
+  deps.settingsStore.write(next, deps.settingsScope);
+  return { kind: "reply", text: `default model set to ${parsed.provider}/${parsed.modelId}` };
+}
+
+function interceptTeam(args: ReadonlyArray<string>, deps: CommandHandlerDeps): InterceptResult {
+  if (args[0] === "--unset") {
+    deps.settingsStore.unsetDefaultTeam();
+    return { kind: "reply", text: "default team unset; takes effect on next `jie` invocation" };
+  }
+  if (args.length === 0) {
+    const merged = deps.settingsStore.load();
+    const installed = deps.teamRegistry.listInstalled();
+    return { kind: "reply", text: formatTeamListReply(merged.defaultTeam ?? null, installed) };
+  }
+  const argument = args[0]!;
+  if (!deps.teamRegistry.isInstalled(argument)) {
+    return {
+      kind: "reply",
+      text: `team '${argument}' is not installed; checked .jie/teams/${argument}/ and ~/.jie/teams/${argument}/`,
+    };
+  }
+  void deps.loadTeam(argument).catch((error: unknown) => {
+    const reason = error instanceof Error ? error.message : String(error);
+    deps.dispatch(Actions.setErrorMessage(`loadTeam(${argument}) failed: ${reason}`));
+  });
+  return { kind: "reply", text: `switching to team '${argument}'…` };
+}
+
 const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn>([
-  ["login", (args, deps) => {
-    if (args.length !== 2) return { kind: "error", text: "/login <provider> <apiKey>" };
-    const [provider, apiKey] = args;
-    if (provider === undefined || apiKey === undefined) return { kind: "error", text: "/login <provider> <apiKey>" };
-    deps.authStore.saveAuthConfig(deps.authStore.setProvider(deps.authStore.load(), provider, apiKey));
-    return { kind: "reply", text: `logged in to ${provider}` };
-  }],
-  ["logout", (args, deps) => {
-    if (args.length === 0) {
-      deps.authStore.saveAuthConfig(deps.authStore.clear());
-      return { kind: "reply", text: "logged out of all providers" };
-    }
-    const provider = args[0]!;
-    deps.authStore.saveAuthConfig(deps.authStore.removeProvider(deps.authStore.load(), provider));
-    return { kind: "reply", text: `logged out of ${provider}` };
-  }],
-  ["model", (args, deps) => {
-    if (args.length !== 1) return { kind: "error", text: "/model <provider>/<modelId>" };
-    const parsed = parseModelArg(args[0]!);
-    if (parsed.kind === "error") return parsed;
-    const existing = deps.settingsStore.load();
-    const next: Settings = { ...existing, defaultProvider: parsed.provider, defaultModel: parsed.modelId };
-    deps.settingsStore.write(next, deps.settingsScope);
-    return { kind: "reply", text: `default model set to ${parsed.provider}/${parsed.modelId}` };
-  }],
-  ["team", (args, deps) => {
-    if (args[0] === "--unset") {
-      deps.settingsStore.unsetDefaultTeam();
-      return { kind: "reply", text: "default team unset; takes effect on next `jie` invocation" };
-    }
-    if (args.length === 0) {
-      const merged = deps.settingsStore.load();
-      const installed = deps.teamRegistry.listInstalled();
-      return { kind: "reply", text: formatTeamListReply(merged.defaultTeam ?? null, installed) };
-    }
-    const argument = args[0]!;
-    if (!deps.teamRegistry.isInstalled(argument)) {
-      return {
-        kind: "reply",
-        text: `team '${argument}' is not installed; checked .jie/teams/${argument}/ and ~/.jie/teams/${argument}/`,
-      };
-    }
-    void deps.loadTeam(argument).catch((error: unknown) => {
-      const reason = error instanceof Error ? error.message : String(error);
-      deps.dispatch(Actions.setErrorMessage(`loadTeam(${argument}) failed: ${reason}`));
-    });
-    return { kind: "reply", text: `switching to team '${argument}'…` };
-  }],
+  ["login", interceptLogin],
+  ["logout", interceptLogout],
+  ["model", interceptModel],
+  ["team", interceptTeam],
 ]);
