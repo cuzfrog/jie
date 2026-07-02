@@ -8,4 +8,6 @@ sealed:
   - command-handler.ts
   - keyboard.test.ts
   - keyboard.ts
+  - git-service.test.ts
+  - git-service.ts
 ---

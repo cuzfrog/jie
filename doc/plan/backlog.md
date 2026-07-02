@@ -1,12 +1,28 @@
-# Platform Backlog
+# jie-platform Backlog (Day 2+)
 
-Items prioritized by Day N. Day 2+ items are not implemented in v1; they re-enter the test plan as the platform grows.
+Items deferred from v0.2 and v1 milestones. Each entry references its origin spec/plan and the v0.2 milestone it would unblock.
 
-## v1 surface (not in this backlog)
+## Items deferred from v0.2 TUI
 
-The v1 acceptance surface is in `00-user-scenarios.md` (three scenarios). Tests for those scenarios are the v1 deliverable; this backlog covers deferred features.
+| Item | Origin | v0.2 reference |
+|---|---|---|
+| TUI a11y / theme customization | v0.2 plan "Out of scope" | `doc/plan/jie-platform/v0.2-mvp-tui.md` |
+| vim-style keybindings (Day 2+ add-on) | v0.2 plan "Out of scope" | `doc/plan/jie-platform/v0.2-mvp-tui.md` |
+| TUI snapshot corpus expansion (recorded from live e2e runs) | v0.2 plan "Out of scope" | `doc/plan/jie-platform/v0.2-mvp-tui.md` |
+| Multi-process team visibility (NATS) | v0.2 plan "Out of scope" | `doc/plan/jie-platform/v0.2-mvp-tui.md`, ADR 19 |
 
-## Backlog items
+## Items deferred from earlier milestones
+
+| Item | Origin |
+|---|---|
+| MCP client integration | `doc/specs/jie-platform/10-configuration.md` "MCP Server Configuration"; ADR 15 |
+| jie-team dev team (`specs/jie-team/`) | `00-user-scenarios-archive.md` Scenario 2 |
+| jie npm publish / install script / `jie upgrade` | v0.2 plan "Out of scope" (backlog #20) |
+| Cross-process team visibility (NATS) | ADR 19 (Day 2+) |
+| LLM-driven recording of event traces (vs hand-recorded fixtures) | v0.2 plan "Snapshot / replay tests" |
+| Hand-rolled raw-mode renderer / Ink / blessed | v0.2 plan "Library" decision; pi-tui is locked in |
+
+
 
 | # | Item | Priority |
 |---|---|---|

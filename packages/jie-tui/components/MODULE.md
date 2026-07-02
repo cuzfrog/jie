@@ -14,7 +14,9 @@ sealed:
   - message-view.test.ts
   - status-bar.ts
   - status-bar.test.ts
+  - themes.test.ts
   - themes.ts
   - tool-card.ts
   - tool-card.test.ts
+  - index.ts
 ---
