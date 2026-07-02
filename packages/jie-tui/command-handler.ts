@@ -107,6 +107,19 @@ function runIntercepts(name: string, args: ReadonlyArray<string>, deps: CommandH
   return fn(args, deps);
 }
 
+function parseModelArg(arg: string): { kind: "ok"; provider: string; modelId: string } | { kind: "error"; text: string } {
+  const slash = arg.indexOf("/");
+  if (slash === -1) return { kind: "error", text: `/model: invalid '${arg}' (expected <provider>/<modelId>)` };
+  const provider = arg.slice(0, slash);
+  const modelId = arg.slice(slash + 1);
+  if (!KNOWN_PROVIDERS.has(provider)) return { kind: "error", text: `unknown provider: ${provider}` };
+  return { kind: "ok", provider, modelId };
+}
+
+function formatTeamListReply(defaultTeam: string | null, installed: ReadonlyArray<string>): string {
+  return `defaultTeam: ${defaultTeam ?? "unset"} | installed: ${installed.join(", ")}`;
+}
+
 const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn>([
   ["login", (args, deps) => {
     if (args.length !== 2) return { kind: "error", text: "/login <provider> <apiKey>" };
@@ -126,16 +139,12 @@ const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn
   }],
   ["model", (args, deps) => {
     if (args.length !== 1) return { kind: "error", text: "/model <provider>/<modelId>" };
-    const arg = args[0]!;
-    const slash = arg.indexOf("/");
-    if (slash === -1) return { kind: "error", text: `/model: invalid '${arg}' (expected <provider>/<modelId>)` };
-    const provider = arg.slice(0, slash);
-    const modelId = arg.slice(slash + 1);
-    if (!KNOWN_PROVIDERS.has(provider)) return { kind: "error", text: `unknown provider: ${provider}` };
+    const parsed = parseModelArg(args[0]!);
+    if (parsed.kind === "error") return parsed;
     const existing = deps.settingsStore.load();
-    const next: Settings = { ...existing, defaultProvider: provider, defaultModel: modelId };
+    const next: Settings = { ...existing, defaultProvider: parsed.provider, defaultModel: parsed.modelId };
     deps.settingsStore.write(next, deps.settingsScope);
-    return { kind: "reply", text: `default model set to ${provider}/${modelId}` };
+    return { kind: "reply", text: `default model set to ${parsed.provider}/${parsed.modelId}` };
   }],
   ["team", (args, deps) => {
     if (args[0] === "--unset") {
@@ -145,7 +154,7 @@ const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn
     if (args.length === 0) {
       const merged = deps.settingsStore.load();
       const installed = deps.teamRegistry.listInstalled();
-      return { kind: "reply", text: `defaultTeam: ${merged.defaultTeam ?? "unset"} | installed: ${installed.join(", ")}` };
+      return { kind: "reply", text: formatTeamListReply(merged.defaultTeam ?? null, installed) };
     }
     const argument = args[0]!;
     if (!deps.teamRegistry.isInstalled(argument)) {
@@ -154,8 +163,9 @@ const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn
         text: `team '${argument}' is not installed; checked .jie/teams/${argument}/ and ~/.jie/teams/${argument}/`,
       };
     }
-    void deps.loadTeam(argument).catch((error) => {
-      console.error(`loadTeam(${argument}) failed:`, error);
+    void deps.loadTeam(argument).catch((error: unknown) => {
+      const reason = error instanceof Error ? error.message : String(error);
+      deps.dispatch(Actions.setErrorMessage(`loadTeam(${argument}) failed: ${reason}`));
     });
     return { kind: "reply", text: `switching to team '${argument}'…` };
   }],
