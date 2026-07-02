@@ -16,6 +16,43 @@ export interface RailItem {
   readonly status: "idle" | "busy";
 }
 
+function projectRailItems(agents: ReadonlyMap<AgentId, AgentUiState>): RailItem[] {
+  const items: RailItem[] = [];
+  for (const agent of agents.values()) {
+    items.push({
+      agentId: agent.agentId,
+      agentKey: agent.agentKey,
+      role: agent.role,
+      isLeader: agent.isLeader,
+      status: agent.status,
+    });
+  }
+  return items;
+}
+
+function railItemsEqual(a: ReadonlyArray<RailItem>, b: ReadonlyArray<RailItem>): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i]!.agentKey !== b[i]!.agentKey) return false;
+    if (a[i]!.role !== b[i]!.role) return false;
+    if (a[i]!.isLeader !== b[i]!.isLeader) return false;
+    if (a[i]!.status !== b[i]!.status) return false;
+  }
+  return true;
+}
+
+function buildSelectItems(items: ReadonlyArray<RailItem>): SelectItem[] {
+  return items.map((item) => {
+    const glyph = item.status === "busy" ? BUSY_GLYPH : IDLE_GLYPH;
+    const leaderMarker = item.isLeader ? LEADER_GLYPH : NON_LEADER_GLYPH;
+    return {
+      value: item.agentId,
+      label: `${glyph}${leaderMarker}${item.role}`,
+      description: item.agentKey,
+    };
+  });
+}
+
 export class AgentsRail extends Container {
   private items: SelectList;
   private readonly maxVisible: number;
@@ -66,43 +103,6 @@ export class AgentsRail extends Container {
   invalidate(): void {
     this.items.invalidate();
   }
-}
-
-function projectRailItems(agents: ReadonlyMap<AgentId, AgentUiState>): RailItem[] {
-  const items: RailItem[] = [];
-  for (const agent of agents.values()) {
-    items.push({
-      agentId: agent.agentId,
-      agentKey: agent.agentKey,
-      role: agent.role,
-      isLeader: agent.isLeader,
-      status: agent.status,
-    });
-  }
-  return items;
-}
-
-function railItemsEqual(a: ReadonlyArray<RailItem>, b: ReadonlyArray<RailItem>): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i += 1) {
-    if (a[i]!.agentKey !== b[i]!.agentKey) return false;
-    if (a[i]!.role !== b[i]!.role) return false;
-    if (a[i]!.isLeader !== b[i]!.isLeader) return false;
-    if (a[i]!.status !== b[i]!.status) return false;
-  }
-  return true;
-}
-
-function buildSelectItems(items: ReadonlyArray<RailItem>): SelectItem[] {
-  return items.map((item) => {
-    const glyph = item.status === "busy" ? BUSY_GLYPH : IDLE_GLYPH;
-    const leaderMarker = item.isLeader ? LEADER_GLYPH : NON_LEADER_GLYPH;
-    return {
-      value: item.agentId,
-      label: `${glyph}${leaderMarker}${item.role}`,
-      description: item.agentKey,
-    };
-  });
 }
 
 function agentsRailFromState(state: TuiState): AgentsRail {
