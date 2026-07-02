@@ -16,17 +16,30 @@ export interface RailItem {
   readonly status: "idle" | "busy";
 }
 
+function railItemsEqual(a: ReadonlyArray<RailItem>, b: ReadonlyArray<RailItem>): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i]!.agentKey !== b[i]!.agentKey) return false;
+    if (a[i]!.role !== b[i]!.role) return false;
+    if (a[i]!.isLeader !== b[i]!.isLeader) return false;
+    if (a[i]!.status !== b[i]!.status) return false;
+  }
+  return true;
+}
+
 export class AgentsRail extends Container {
   private items: SelectList;
   private readonly maxVisible: number;
   private railItems: ReadonlyArray<RailItem>;
   private selectedIndex: number;
+  private lastFocusedAgentId: AgentId | null;
 
   constructor(maxVisible: number = RAIL_MAX_VISIBLE) {
     super();
     this.maxVisible = maxVisible;
     this.railItems = [];
     this.selectedIndex = 0;
+    this.lastFocusedAgentId = null;
     this.items = new SelectList([], this.maxVisible, selectListTheme);
   }
 
@@ -47,7 +60,10 @@ export class AgentsRail extends Container {
   }
 
   setItemsFromState(state: TuiState): void {
-    this.setItems(projectRailItems(state.agents), state.focusedAgentId);
+    const nextItems = projectRailItems(state.agents);
+    if (railItemsEqual(this.railItems, nextItems) && this.lastFocusedAgentId === state.focusedAgentId) return;
+    this.lastFocusedAgentId = state.focusedAgentId;
+    this.setItems(nextItems, state.focusedAgentId);
   }
 
   getSelectedAgentId(): AgentId | null {

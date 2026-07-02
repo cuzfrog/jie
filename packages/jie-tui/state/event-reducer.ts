@@ -155,15 +155,7 @@ function reduceToolResult(state: TuiState, event: EventEnvelope<"agent.tool.resu
   const cards = [...agent.currentTurn.cards];
   const index = cards.findIndex((card) => card.kind === "toolCall" && card.callId === tool_call_id);
   if (index === -1) return state;
-  cards[index] = {
-    kind: "toolResult",
-    callId: tool_call_id,
-    name,
-    output,
-    outputTruncated: output_truncated,
-    durationMs: duration_ms,
-    error,
-  };
+  cards[index] = { kind: "toolResult", callId: tool_call_id, name, output, outputTruncated: output_truncated, durationMs: duration_ms, error };
   const next: AgentUiState = { ...agent, currentTurn: { ...agent.currentTurn, cards } };
   return withAgent(state, agentId, next);
 }
@@ -189,19 +181,7 @@ function withAgent(state: TuiState, agentId: AgentId, agent: AgentUiState, extra
 }
 
 function emptyAgent(agentId: AgentId, teamId: string, agentKey: string, role: string, isLeader: boolean): AgentUiState {
-  return {
-    agentId,
-    teamId,
-    agentKey,
-    role,
-    isLeader,
-    status: "idle",
-    lastStopReason: null,
-    model: null,
-    queue: [],
-    history: [],
-    currentTurn: null,
-  };
+  return { agentId, teamId, agentKey, role, isLeader, status: "idle", lastStopReason: null, model: null, queue: [], history: [], currentTurn: null };
 }
 
 function freshTurn(userPrompt: string): MessageTurn {

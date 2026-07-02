@@ -40,11 +40,7 @@ function readGitStatusViaSpawn(cwd: string): GitSnapshot {
 
 function isDirty(cwd: string): boolean {
   try {
-    const proc = Bun.spawnSync({
-      cmd: ["git", "-C", cwd, "status", "--porcelain"],
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const proc = Bun.spawnSync({ cmd: ["git", "-C", cwd, "status", "--porcelain"], stdout: "pipe", stderr: "pipe" });
     if (proc.exitCode !== 0) return false;
     return new TextDecoder().decode(proc.stdout).trim() !== "";
   } catch {
@@ -54,11 +50,7 @@ function isDirty(cwd: string): boolean {
 
 function aheadBehind(cwd: string): { readonly ahead: number; readonly behind: number } {
   try {
-    const proc = Bun.spawnSync({
-      cmd: ["git", "-C", cwd, "rev-list", "--left-right", "--count", "HEAD...@{u}"],
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const proc = Bun.spawnSync({ cmd: ["git", "-C", cwd, "rev-list", "--left-right", "--count", "HEAD...@{u}"], stdout: "pipe", stderr: "pipe" });
     if (proc.exitCode !== 0) return { ahead: 0, behind: 0 };
     const decoded = new TextDecoder().decode(proc.stdout).trim();
     if (decoded === "") return { ahead: 0, behind: 0 };
