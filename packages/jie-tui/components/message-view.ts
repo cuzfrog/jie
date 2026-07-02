@@ -21,9 +21,3 @@ export class MessageView implements Component {
     this.markdown.invalidate();
   }
 }
-
-export function messageViewFromBlock(block: MessageBlock): MessageView {
-  const view = new MessageView();
-  view.setBlock(block);
-  return view;
-}

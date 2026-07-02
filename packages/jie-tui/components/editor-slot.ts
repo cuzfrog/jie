@@ -59,7 +59,3 @@ export class EditorSlot extends Container {
     this.editor.invalidate();
   }
 }
-
-export function editorSlotFromCommands(tui: TUI, basePath: string, commands: ReadonlyArray<SlashCommand>): EditorSlot {
-  return new EditorSlot(tui, { basePath, commands });
-}
