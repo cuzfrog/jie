@@ -6,7 +6,6 @@ import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduc
 import { createTuiCommandHandler, type TuiCommandHandler } from "./command-handler";
 import { createKeyboardHandler } from "./keyboard-handler";
 import { createGitService, type GitService } from "./git-service";
-import { formatQueueIndicator } from "./format";
 import { buildView, type BuildViewResult } from "./components";
 
 export interface TuiDeps {
@@ -233,3 +232,13 @@ const SUBSCRIBED_TOPICS = [
   "agent.tool.call",
   "agent.tool.result",
 ] as const;
+
+const QUEUE_PREVIEW_MAX_CHARS = 100;
+
+function formatQueueIndicator(queue: ReadonlyArray<string> | null): string | null {
+  if (queue === null || queue.length === 0) return null;
+  const next = queue[0] ?? "";
+  const preview = next.length > QUEUE_PREVIEW_MAX_CHARS ? `${next.slice(0, QUEUE_PREVIEW_MAX_CHARS)}…` : next;
+  const suffix = queue.length === 1 ? "prompt" : "prompts";
+  return `${queue.length} ${suffix} queued  > ${preview}`;
+}
