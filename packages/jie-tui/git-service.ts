@@ -18,12 +18,8 @@ export interface CreateGitServiceOptions {
 
 export function createGitService(options: CreateGitServiceOptions): GitService {
   const read = options.readGitStatus ?? readGitStatusViaSpawn;
-  let cached: GitSnapshot = read(options.cwd);
   return {
-    getSnapshot: (): GitSnapshot => {
-      cached = read(options.cwd);
-      return cached;
-    },
+    getSnapshot: (): GitSnapshot => read(options.cwd),
   };
 }
 
