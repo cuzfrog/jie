@@ -1,16 +1,5 @@
-import { EditorSlot, editorSlotFromCommands } from "./editor-slot";
+import { EditorSlot } from "./editor-slot";
 import { createTestTuiWithTerminal } from "../../../tests/support";
-import type { SlashCommand } from "@earendil-works/pi-tui";
-
-const COMMANDS: SlashCommand[] = [
-  { name: "/login", description: "log in" },
-  { name: "/logout", description: "log out" },
-  { name: "/model", description: "set model" },
-  { name: "/team", description: "set team" },
-  { name: "/clear", description: "clear chat" },
-  { name: "/help", description: "show help" },
-  { name: "/exit", description: "exit" },
-];
 
 describe("EditorSlot", () => {
   test("setText then getText round-trips", () => {
@@ -43,14 +32,5 @@ describe("EditorSlot", () => {
     slot.setQueueIndicator(null);
     const flat = slot.render(80).join("\n");
     expect(flat).not.toContain("queued");
-  });
-});
-
-describe("editorSlotFromCommands", () => {
-  test("constructs a slot with the given commands", () => {
-    const { tui } = createTestTuiWithTerminal();
-    const slot = editorSlotFromCommands(tui, process.cwd(), COMMANDS);
-    slot.setText("/lo");
-    expect(slot.render(80).join("\n")).toContain("/lo");
   });
 });

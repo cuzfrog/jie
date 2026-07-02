@@ -1,4 +1,4 @@
-import { ChatPane, chatPaneFromAgent } from "./chat-pane";
+import { ChatPane } from "./chat-pane";
 import type { AgentUiState, MessageTurn } from "../state";
 
 const AGENT_ID = "default:general-1" as const;
@@ -165,19 +165,5 @@ describe("ChatPane", () => {
     pane.invalidate();
     const second = pane.render(60);
     expect(second).toEqual(first);
-  });
-});
-
-describe("chatPaneFromAgent", () => {
-  test("constructs a pane already populated with the agent", () => {
-    const pane = chatPaneFromAgent(makeAgent({
-      history: [{
-        userPrompt: "hi",
-        cards: [],
-        blocks: [],
-        streamId: null,
-      }],
-    }));
-    expect(pane.render(60).join("\n")).toContain("› hi");
   });
 });

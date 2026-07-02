@@ -1,4 +1,4 @@
-import { MessageView, messageViewFromBlock } from "./message-view";
+import { MessageView } from "./message-view";
 import type { MessageBlock } from "../state";
 
 function textBlock(text: string): MessageBlock {
@@ -53,12 +53,5 @@ describe("MessageView", () => {
     const flat = view.render(80).join("\n");
     expect(flat).toContain("second");
     expect(flat).not.toContain("first");
-  });
-});
-
-describe("messageViewFromBlock", () => {
-  test("constructs a view whose first render shows the block", () => {
-    const view = messageViewFromBlock(textBlock("hi"));
-    expect(view.render(40).join("\n")).toContain("hi");
   });
 });

@@ -1,4 +1,4 @@
-import { ConfirmExitOverlay, confirmExitOverlayFromState } from "./confirm-exit-overlay";
+import { ConfirmExitOverlay } from "./confirm-exit-overlay";
 
 describe("ConfirmExitOverlay", () => {
   test("renders nothing when hidden", () => {
@@ -28,14 +28,6 @@ describe("ConfirmExitOverlay", () => {
     overlay.setVisible(true);
     expect(overlay.render(60).length).toBeGreaterThan(0);
     overlay.setVisible(false);
-    expect(overlay.render(60)).toEqual([]);
-  });
-});
-
-describe("confirmExitOverlayFromState", () => {
-  test("constructs a hidden overlay", () => {
-    const overlay = confirmExitOverlayFromState();
-    expect(overlay.isVisible()).toBe(false);
     expect(overlay.render(60)).toEqual([]);
   });
 });
