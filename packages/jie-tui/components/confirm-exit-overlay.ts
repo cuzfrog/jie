@@ -28,7 +28,3 @@ export class ConfirmExitOverlay extends Container {
     super.invalidate();
   }
 }
-
-export function confirmExitOverlayFromState(): ConfirmExitOverlay {
-  return new ConfirmExitOverlay();
-}
