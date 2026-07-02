@@ -175,16 +175,7 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
         chatPane.setAgent(focused);
         editor.setQueueIndicator(formatQueueIndicator(focused?.queue ?? null));
         rail.setItemsFromState(state);
-        statusBar.setModel(
-          { cwd, git: cachedGit },
-          {
-            focusedStatus: focused?.status ?? null,
-            focusedAgentKey: focused?.agentKey ?? null,
-            teamId: state.teamId,
-            showRail: state.showTeamRailPanel,
-            focusedModel: focused?.model ?? null,
-          },
-        );
+        statusBar.update({ cwd, git: cachedGit }, state);
         requestRender();
       };
       renderRef = renderAll;
