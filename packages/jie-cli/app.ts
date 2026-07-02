@@ -55,7 +55,7 @@ export async function createApp(
       );
       return { kind: "error", code: 1 };
     }
-    dependencies.authStore.write(
+    dependencies.authStore.saveAuthConfig(
       dependencies.authStore.setProvider(dependencies.authStore.load(), provider, args.apiKey),
     );
     console.log(`logged in to ${provider}`);

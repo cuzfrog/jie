@@ -9,7 +9,7 @@ import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
 
 const authStore = vi.mocked<AuthStore>({
   load: vi.fn(),
-  write: vi.fn(),
+  saveAuthConfig: vi.fn(),
   setProvider: vi.fn(),
   removeProvider: vi.fn(),
   clear: vi.fn(),
@@ -130,7 +130,7 @@ describe("createTuiCommandHandler — /login", () => {
     handler.handle("/login anthropic sk-test-anthropic");
 
     expect(authStore.setProvider).toHaveBeenCalledWith(expect.anything(), "anthropic", ANTHROPIC_KEY);
-    expect(authStore.write).toHaveBeenCalledWith({ anthropic: { type: "api_key", key: ANTHROPIC_KEY } });
+    expect(authStore.saveAuthConfig).toHaveBeenCalledWith({ anthropic: { type: "api_key", key: ANTHROPIC_KEY } });
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("logged in to anthropic")));
   });
 
@@ -139,7 +139,7 @@ describe("createTuiCommandHandler — /login", () => {
     const handler = createTuiCommandHandler(deps);
     handler.handle("/login anthropic");
 
-    expect(authStore.write).not.toHaveBeenCalled();
+    expect(authStore.saveAuthConfig).not.toHaveBeenCalled();
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/login <provider> <apiKey>")));
   });
 });
@@ -152,7 +152,7 @@ describe("createTuiCommandHandler — /logout", () => {
     handler.handle("/logout");
 
     expect(authStore.clear).toHaveBeenCalled();
-    expect(authStore.write).toHaveBeenCalledWith({});
+    expect(authStore.saveAuthConfig).toHaveBeenCalledWith({});
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("logged out of all providers")));
   });
 
@@ -163,7 +163,7 @@ describe("createTuiCommandHandler — /logout", () => {
     handler.handle("/logout anthropic");
 
     expect(authStore.removeProvider).toHaveBeenCalledWith(expect.anything(), "anthropic");
-    expect(authStore.write).toHaveBeenCalledWith({});
+    expect(authStore.saveAuthConfig).toHaveBeenCalledWith({});
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("logged out of anthropic")));
   });
 });

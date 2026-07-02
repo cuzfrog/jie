@@ -24,7 +24,7 @@ describe("AuthStore", () => {
   test("write() creates ~/.jie/auth.json with mode 0o600 and valid JSON", () => {
     const store = makeAuthStore(homeJieDir);
     const auth = { anthropic: { type: "api_key" as const, key: "sk-test" } };
-    store.write(auth);
+    store.saveAuthConfig(auth);
 
     const path = join(homeJieDir, "auth.json");
     expect(existsSync(path)).toBe(true);
@@ -35,7 +35,7 @@ describe("AuthStore", () => {
 
   test("write() then load() round-trips", () => {
     const store = makeAuthStore(homeJieDir);
-    store.write({ anthropic: { type: "api_key", key: "sk-a" } });
+    store.saveAuthConfig({ anthropic: { type: "api_key", key: "sk-a" } });
     expect(store.load()).toEqual({ anthropic: { type: "api_key", key: "sk-a" } });
   });
 

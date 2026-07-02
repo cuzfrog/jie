@@ -33,7 +33,7 @@ When rules in different documents conflict, context rules win, in below order. R
 - Prefer plain function over arrow functions.
 - Public types, contract, methods, higher-level abstractions should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers. See below section `Single file layout`.
 - Inline oneline trivial functions.
-- Imports from a module without specific file, e.g., `import { foo } from "../module"`. Not `"../module/index.ts"`. For siblings in the immediate directory, directly import from the sibling, e.g. `import { foo } from "./foo"`.
+- Consolidate imports into one statement: do not split `import { a } from 'x'; import { type b } from 'x';` into two.
 - Code identifiers (variables, parameters, class fields, function names) use camelCase. Names must be full words, no abbreviations beyond common ones (id, url, db, ts, cwd, pid, ctx, deps). Only serialized events/messages use snake_case. Module-level compile-time constants (e.g. `DEFAULT_COLS`, `MAX_RETRIES`) use SCREAMING_SNAKE_CASE.
 - Keep code in one line if the line is < 140 chars. Do not break into multiple lines if the line is < 140 chars.
 - Use `as const` for tuples and object-literals. Do not use `// @ts-expect-error` or `// @ts-ignore`, fix the type.
@@ -71,7 +71,7 @@ When rules in different documents conflict, context rules win, in below order. R
 Minimal visibility or public surface of a type or a module. This ensures loose coupling and separation of concerns. If this is violated, e.g. a type or a module exposes multiple functions, it usually means the design is wrong.
 - A *module* is a directory containing code. The `MODULE.md` lives at the module's root and gates its branching point in the tree.
 - A single file should ideally have only 1 exported function and necessary types, all other things in the file should be file private. For unit testing complex logic, use `export as` at the file bottom with `_` prefix to the function, meaning only "visible for testing" (the underscore signals "internal seam", not part of the public API).
-- All imports must be from a module (without explicit `index.ts`), must NOT import from a specific file. For the same source module, consolidate into one import statement: do not split `import { a } from 'x'; import { b } from 'x';` into two.
+- - External imports must be from a module without specific file, e.g., `import { foo } from "../module"`. Not `"../module/index.ts"`. Refer to `Module gates` glossary. For siblings in the immediate directory, directly import from the sibling, e.g. `import { foo } from "./foo"`. For internal files, imports from specific files within the same module are allowed.
 - In each module, search `MODULE.md`. You must follow its specifications. You cannot change the visibility. Any new exposure must be discussed with the user. If you are blocked, ask the user to review and manually add the exports. `sealed` files can still be edited, just no new exports.
 - Cross boundary domain types, config types, global DTOs are exempted from the visibility rule.
 

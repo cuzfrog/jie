@@ -5,7 +5,7 @@ type AuthJson = Record<string, { type: "api_key"; key: string }>;
 
 const auth = vi.mocked<AuthStore>({
   load: vi.fn(),
-  write: vi.fn(),
+  saveAuthConfig: vi.fn(),
   setProvider: vi.fn(),
   removeProvider: vi.fn(),
   clear: vi.fn(),
@@ -36,7 +36,7 @@ describe("runLogin", () => {
     );
     expect(code).toBe(0);
     expect(auth.setProvider).toHaveBeenCalledWith({}, "anthropic", "sk-test");
-    expect(auth.write).toHaveBeenCalledWith({ anthropic: { type: "api_key", key: "sk-test" } });
+    expect(auth.saveAuthConfig).toHaveBeenCalledWith({ anthropic: { type: "api_key", key: "sk-test" } });
     expect(logSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain("logged in to anthropic");
     logSpy.mockRestore();
   });
@@ -47,7 +47,7 @@ describe("runLogin", () => {
     expect(code).toBe(1);
     expect(auth.load).not.toHaveBeenCalled();
     expect(auth.setProvider).not.toHaveBeenCalled();
-    expect(auth.write).not.toHaveBeenCalled();
+    expect(auth.saveAuthConfig).not.toHaveBeenCalled();
     errSpy.mockRestore();
   });
 
@@ -60,7 +60,7 @@ describe("runLogin", () => {
     );
     expect(code).toBe(0);
     expect(auth.setProvider).toHaveBeenCalledWith(existing, "anthropic", "sk-a");
-    expect(auth.write).toHaveBeenCalledWith({
+    expect(auth.saveAuthConfig).toHaveBeenCalledWith({
       openai: { type: "api_key", key: "sk-o" },
       anthropic: { type: "api_key", key: "sk-a" },
     });
@@ -88,7 +88,7 @@ describe("runLogout", () => {
     const code = await runLogout({ kind: "logout", provider: "anthropic" }, auth);
     expect(code).toBe(0);
     expect(auth.removeProvider).toHaveBeenCalledWith(initial, "anthropic");
-    expect(auth.write).toHaveBeenCalledWith({ openai: { type: "api_key", key: "sk-o" } });
+    expect(auth.saveAuthConfig).toHaveBeenCalledWith({ openai: { type: "api_key", key: "sk-o" } });
   });
 
   test("logout (no provider) clears all entries", async () => {
@@ -96,7 +96,7 @@ describe("runLogout", () => {
     const code = await runLogout({ kind: "logout" }, auth);
     expect(code).toBe(0);
     expect(auth.clear).toHaveBeenCalled();
-    expect(auth.write).toHaveBeenCalledWith({});
+    expect(auth.saveAuthConfig).toHaveBeenCalledWith({});
   });
 
   test("logout a missing provider is a no-op on the result but still writes", async () => {
@@ -112,7 +112,7 @@ describe("runLogout", () => {
     const code = await runLogout({ kind: "logout", provider: "ghost" }, auth);
     expect(code).toBe(0);
     expect(auth.removeProvider).toHaveBeenCalledWith(initial, "ghost");
-    expect(auth.write).toHaveBeenCalledWith({ openai: { type: "api_key", key: "sk-o" } });
+    expect(auth.saveAuthConfig).toHaveBeenCalledWith({ openai: { type: "api_key", key: "sk-o" } });
   });
 });
 
@@ -133,13 +133,13 @@ describe("runApiKey (top-level --api-key)", () => {
     expect(code).toBe(0);
     expect(settings.load).toHaveBeenCalled();
     expect(auth.setProvider).toHaveBeenCalledWith({}, "anthropic", "sk-new");
-    expect(auth.write).toHaveBeenCalledWith({ anthropic: { type: "api_key", key: "sk-new" } });
+    expect(auth.saveAuthConfig).toHaveBeenCalledWith({ anthropic: { type: "api_key", key: "sk-new" } });
   });
 
   test("--api-key without defaultProvider -> exit 1, no auth.json written", async () => {
     settings.load.mockReturnValueOnce({});
     const code = await runApiKey({ kind: "apiKey", apiKey: "sk-new" }, settings, auth);
     expect(code).toBe(1);
-    expect(auth.write).not.toHaveBeenCalled();
+    expect(auth.saveAuthConfig).not.toHaveBeenCalled();
   });
 });

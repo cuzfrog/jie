@@ -7,7 +7,7 @@ import { JiePlatformError } from "../types";
 
 const authStore = vi.mocked<AuthStore>({
   load: vi.fn(),
-  write: vi.fn(),
+  saveAuthConfig: vi.fn(),
   setProvider: vi.fn(),
   removeProvider: vi.fn(),
   clear: vi.fn(),

@@ -112,16 +112,16 @@ const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn
     if (args.length !== 2) return { kind: "error", text: "/login <provider> <apiKey>" };
     const [provider, apiKey] = args;
     if (provider === undefined || apiKey === undefined) return { kind: "error", text: "/login <provider> <apiKey>" };
-    deps.authStore.write(deps.authStore.setProvider(deps.authStore.load(), provider, apiKey));
+    deps.authStore.saveAuthConfig(deps.authStore.setProvider(deps.authStore.load(), provider, apiKey));
     return { kind: "reply", text: `logged in to ${provider}` };
   }],
   ["logout", (args, deps) => {
     if (args.length === 0) {
-      deps.authStore.write(deps.authStore.clear());
+      deps.authStore.saveAuthConfig(deps.authStore.clear());
       return { kind: "reply", text: "logged out of all providers" };
     }
     const provider = args[0]!;
-    deps.authStore.write(deps.authStore.removeProvider(deps.authStore.load(), provider));
+    deps.authStore.saveAuthConfig(deps.authStore.removeProvider(deps.authStore.load(), provider));
     return { kind: "reply", text: `logged out of ${provider}` };
   }],
   ["model", (args, deps) => {

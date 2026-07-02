@@ -12,7 +12,7 @@ export async function runLogin(
     );
     return 1;
   }
-  auth.write(auth.setProvider(auth.load(), parsed.provider, parsed.apiKey));
+  auth.saveAuthConfig(auth.setProvider(auth.load(), parsed.provider, parsed.apiKey));
   console.log(`logged in to ${parsed.provider}`);
   return 0;
 }
@@ -22,10 +22,10 @@ export async function runLogout(
   auth: AuthStore,
 ): Promise<number> {
   if (parsed.provider !== undefined) {
-    auth.write(auth.removeProvider(auth.load(), parsed.provider));
+    auth.saveAuthConfig(auth.removeProvider(auth.load(), parsed.provider));
     console.log(`logged out of ${parsed.provider}`);
   } else {
-    auth.write(auth.clear());
+    auth.saveAuthConfig(auth.clear());
     console.log("logged out of all providers");
   }
   return 0;
@@ -43,7 +43,7 @@ export async function runApiKey(
     );
     return 1;
   }
-  auth.write(auth.setProvider(auth.load(), provider, parsed.apiKey));
+  auth.saveAuthConfig(auth.setProvider(auth.load(), provider, parsed.apiKey));
   console.log(`logged in to ${provider}`);
   return 0;
 }

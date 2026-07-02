@@ -9,7 +9,7 @@ const noopAsync = (): Promise<void> => Promise.resolve();
 
 const stubAuthStore: AuthStore = {
   load: () => ({}),
-  write: () => {},
+  saveAuthConfig: () => {},
   setProvider: (auth) => auth,
   removeProvider: (auth) => auth,
   clear: () => ({}),
