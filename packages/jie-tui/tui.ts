@@ -2,7 +2,7 @@ import { ProcessTerminal, TUI, type Terminal } from "@earendil-works/pi-tui";
 import { Events, type EventEnvelope, type EventManager, type EventType, type Sender } from "@cuzfrog/jie-platform/event";
 import { type AuthStore, type Scope, type SettingsStore } from "@cuzfrog/jie-platform/config";
 import { type TeamRegistry } from "@cuzfrog/jie-platform/team";
-import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduce } from "./state";
+import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduce, TuiStateSelectors } from "./state";
 import { createTuiCommandHandler } from "./command-handler";
 import { createKeyboardHandler } from "./keyboard-handler";
 import { createGitService, type GitService } from "./git-service";
@@ -107,7 +107,7 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
       dispatch(Actions.setErrorMessage("No team loaded; run `/team <id>` to load a team."));
       return;
     }
-    const focused = state.agents.get(state.focusedAgentId);
+    const focused = TuiStateSelectors.getFocusedAgent(state);
     const targetKey = focused?.agentKey ?? (state.leaderAgentId !== null ? state.agents.get(state.leaderAgentId)?.agentKey : undefined);
     if (targetKey === undefined) {
       dispatch(Actions.setErrorMessage("No focused agent; press ctrl+left to reveal the rail."));
@@ -171,7 +171,7 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
           confirmExit.setVisible(state.pendingQuit);
         }
         refreshGitIfStale(Date.now());
-        const focused = state.focusedAgentId === null ? null : state.agents.get(state.focusedAgentId) ?? null;
+        const focused = TuiStateSelectors.getFocusedAgent(state);
         chatPane.setAgent(focused);
         editor.setQueueIndicator(formatQueueIndicator(focused?.queue ?? null));
         rail.setItemsFromState(state);

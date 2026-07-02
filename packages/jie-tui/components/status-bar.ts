@@ -1,5 +1,5 @@
 import { Container, Loader, Text, type TUI } from "@earendil-works/pi-tui";
-import type { AgentStatus, ModelReference, TuiState } from "../state";
+import { type AgentStatus, type ModelReference, type TuiState, TuiStateSelectors } from "../state";
 import type { GitSnapshot } from "../git-service";
 
 export interface StatusBarModel {
@@ -78,7 +78,7 @@ export class StatusBar extends Container {
 }
 
 function statusBarContextFromState(state: TuiState): StatusBarContext {
-  const focused = state.focusedAgentId === null ? null : state.agents.get(state.focusedAgentId);
+  const focused = TuiStateSelectors.getFocusedAgent(state);
   return {
     focusedStatus: focused?.status ?? null,
     focusedAgentKey: focused?.agentKey ?? null,

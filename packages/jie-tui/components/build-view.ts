@@ -1,5 +1,5 @@
 import { Container, Spacer, Text, type TUI } from "@earendil-works/pi-tui";
-import type { TuiState } from "../state";
+import { type TuiState, TuiStateSelectors } from "../state";
 import type { GitSnapshot } from "../git-service";
 import { formatQueueIndicator } from "../format";
 import { StatusBar } from "./status-bar";
@@ -29,7 +29,7 @@ export function buildView(state: TuiState, opts: BuildViewOpts, tui: TUI): Build
   const rail = new AgentsRail();
   rail.setItemsFromState(state);
 
-  const focused = state.focusedAgentId === null ? null : state.agents.get(state.focusedAgentId) ?? null;
+  const focused = TuiStateSelectors.getFocusedAgent(state);
   const chatPane = chatPaneFromAgent(focused);
 
   const editor = new EditorSlot(tui, { basePath: opts.cwd });
