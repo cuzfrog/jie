@@ -49,8 +49,7 @@ function reduceTeamLoaded(state: TuiState, event: EventEnvelope<"system.team.loa
 
 function reduceSystemError(state: TuiState, event: EventEnvelope<"system.error">): TuiState {
   const stopReason = findRecentStopReason(state);
-  const text = stopReason === null ? event.payload.error : `[stop: ${stopReason}] ${event.payload.error}`;
-  return { ...state, errorBanner: text };
+  return { ...state, errorBanner: formatSystemError(stopReason, event.payload.error) };
 }
 
 function findRecentStopReason(state: TuiState): string | null {
@@ -58,6 +57,10 @@ function findRecentStopReason(state: TuiState): string | null {
     if (agent.lastStopReason !== null) return agent.lastStopReason;
   }
   return null;
+}
+
+function formatSystemError(stopReason: string | null, error: string): string {
+  return stopReason === null ? error : `[stop: ${stopReason}] ${error}`;
 }
 
 function reduceUserPrompt(state: TuiState, event: EventEnvelope<"user.prompt">): TuiState {
@@ -68,8 +71,7 @@ function reduceUserPrompt(state: TuiState, event: EventEnvelope<"user.prompt">):
   if (existing === undefined) return state;
   const newAgents = new Map(state.agents);
   const turn = existing.currentTurn;
-  const hasContent = turn !== null && (turn.cards.length > 0 || turn.blocks.some((block) => block.text.length > 0));
-  if (hasContent) {
+  if (turnIsPopulated(turn)) {
     newAgents.set(agentId, { ...existing, history: [...existing.history, turn!], currentTurn: freshTurn(event.payload.prompt) });
     return { ...state, agents: newAgents };
   }
@@ -191,9 +193,14 @@ function freshTurn(userPrompt: string): MessageTurn {
 function rotateTurnIfPopulated(agent: AgentUiState): AgentUiState {
   if (agent.currentTurn === null) return agent;
   const turn = agent.currentTurn;
-  const hasContent = turn.cards.length > 0 || turn.blocks.some((block) => block.text.length > 0);
-  if (!hasContent) return agent;
+  if (!turnIsPopulated(turn)) return agent;
   return { ...agent, history: [...agent.history, turn], currentTurn: { userPrompt: "", cards: [], blocks: [], streamId: null } };
+}
+
+function turnIsPopulated(turn: MessageTurn | null): boolean {
+  if (turn === null) return false;
+  if (turn.cards.length > 0) return true;
+  return turn.blocks.some((block) => block.text.length > 0);
 }
 
 function composeAgentId(teamId: string, agentKey: string): AgentId {

@@ -71,7 +71,7 @@ function runCommand(input: string): CommandOutcome {
   const rawName = parts[0]!;
   const name = rawName.startsWith("/") ? rawName.slice(1) : rawName;
   const slashCommand = COMMANDS.get(name);
-  if (slashCommand === undefined) return UNKNOWN_REPLY(rawName);
+  if (slashCommand === undefined) return { kind: "error", text: `unknown slash command: ${rawName}` };
   return slashCommand.run(parts.slice(1));
 }
 
@@ -97,11 +97,6 @@ const COMMANDS: ReadonlyMap<string, SlashCommand> = new Map<string, SlashCommand
   [clearCommand.name, clearCommand],
   [exitCommand.name, exitCommand],
 ]);
-
-const UNKNOWN_REPLY = (name: string): CommandOutcome => ({
-  kind: "error",
-  text: `unknown slash command: ${name}`,
-});
 
 type InterceptResult = { kind: "reply"; text: string } | { kind: "error"; text: string } | null;
 type InterceptFn = (args: ReadonlyArray<string>, deps: CommandHandlerDeps) => InterceptResult;

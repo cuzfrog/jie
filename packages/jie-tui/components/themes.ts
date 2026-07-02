@@ -1,8 +1,6 @@
 import { Chalk } from "chalk";
 import type { EditorTheme, MarkdownTheme, SelectListTheme } from "@earendil-works/pi-tui";
 
-const chalk = new Chalk({ level: 3 });
-
 export const selectListTheme: SelectListTheme = {
   selectedPrefix: (text: string): string => chalk.hex(COLORS.accent)(text),
   selectedText: (text: string): string => chalk.hex(COLORS.accent).bold(text),
@@ -32,6 +30,8 @@ export const editorTheme: EditorTheme = {
   borderColor: (text: string): string => chalk.hex(COLORS.borderMuted)(text),
   selectList: selectListTheme,
 };
+
+const chalk = new Chalk({ level: 3 });
 
 const COLORS = {
   accent: "#8abeb7",

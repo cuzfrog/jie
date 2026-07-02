@@ -43,10 +43,10 @@ export const Actions = {
 	setPendingQuit: (on: boolean) => createAction(ActionTypes.SET_PENDING_QUIT, { on }),
 } as const;
 
+export type Action = ReturnType<typeof Actions[keyof typeof Actions]>;
+
 function createAction<T extends ActionType>(type: T): ActionDef<T, undefined>;
 function createAction<T extends ActionType, P>(type: T, payload: P): ActionDef<T, P>;
 function createAction<T extends ActionType, P>(type: T, payload?: P): ActionDef<T, P | undefined> {
   return Object.freeze({ type, payload });
 }
-
-export type Action = ReturnType<typeof Actions[keyof typeof Actions]>;
