@@ -7,7 +7,7 @@ import { createTuiCommandHandler, type TuiCommandHandler } from "./command-handl
 import { createKeyboardHandler } from "./keyboard-handler";
 import { createGitService, type GitService } from "./git-service";
 import { formatQueueIndicator } from "./format";
-import { buildView } from "./components";
+import { buildView, type BuildViewResult } from "./components";
 
 export interface TuiDeps {
   eventManager: EventManager;
@@ -157,16 +157,19 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
       const { root, rail, chatPane, editor, statusBar, confirmExit } = buildView(state, { cwd }, tui);
       tui.addChild(root);
       const requestRender = (): void => tui.requestRender();
-      const renderAll = (): void => {
-        if (confirmExit.isVisible() !== state.pendingQuit) {
-          confirmExit.setVisible(state.pendingQuit);
+      const projectView = (view: BuildViewResult): void => {
+        if (view.confirmExit.isVisible() !== state.pendingQuit) {
+          view.confirmExit.setVisible(state.pendingQuit);
         }
         refreshGitIfStale(Date.now());
         const focused = TuiStateSelectors.getFocusedAgent(state);
-        chatPane.setAgent(focused);
-        editor.setQueueIndicator(formatQueueIndicator(focused?.queue ?? null));
-        rail.setItemsFromState(state);
-        statusBar.update({ cwd, git: cachedGit }, state);
+        view.chatPane.setAgent(focused);
+        view.editor.setQueueIndicator(formatQueueIndicator(focused?.queue ?? null));
+        view.rail.setItemsFromState(state);
+        view.statusBar.update({ cwd, git: cachedGit }, state);
+      };
+      const renderAll = (): void => {
+        projectView({ root, rail, chatPane, editor, statusBar, confirmExit });
         requestRender();
       };
       lifecycle.render = renderAll;
