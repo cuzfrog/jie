@@ -1,1 +1,1 @@
-export { buildView, type BuildViewOpts } from "./build-view";
+export { buildView, type BuildViewOpts, type BuildViewResult } from "./build-view";
