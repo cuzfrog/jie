@@ -16,6 +16,8 @@ function makeContext(overrides: Partial<StatusBarContext> = {}): StatusBarContex
     teamId: "default",
     showRail: false,
     focusedModel: { provider: "openai", id: "gpt-4", effort: "high" },
+    transientMessage: null,
+    errorBanner: null,
     ...overrides,
   };
 }
@@ -35,7 +37,7 @@ describe("StatusBar", () => {
     const { tui } = createTestTuiWithTerminal();
     const bar = new StatusBar(tui);
     bar.setModel(makeModel(), makeContext({ focusedStatus: "busy" }));
-    expect(bar.children.length).toBe(3);
+    expect(bar.children.length).toBe(4);
     expect(bar.render(120).join("\n")).toContain("…");
   });
 
@@ -43,25 +45,25 @@ describe("StatusBar", () => {
     const { tui } = createTestTuiWithTerminal();
     const bar = new StatusBar(tui);
     bar.setModel(makeModel(), makeContext({ focusedStatus: "idle" }));
-    expect(bar.children.length).toBe(2);
+    expect(bar.children.length).toBe(3);
     expect(bar.render(120).join("\n")).not.toContain("…");
   });
 
-  test("renders two children when no focused agent", () => {
+  test("renders three children when no focused agent", () => {
     const { tui } = createTestTuiWithTerminal();
     const bar = new StatusBar(tui);
     bar.setModel(makeModel(), makeContext({ focusedStatus: null, focusedAgentKey: null }));
-    expect(bar.children.length).toBe(2);
+    expect(bar.children.length).toBe(3);
   });
 
   test("switches loader on when status changes idle → busy", () => {
     const { tui } = createTestTuiWithTerminal();
     const bar = new StatusBar(tui);
     bar.setModel(makeModel(), makeContext({ focusedStatus: "idle" }));
-    expect(bar.children.length).toBe(2);
+    expect(bar.children.length).toBe(3);
     expect(bar.render(120).join("\n")).not.toContain("…");
     bar.setModel(makeModel(), makeContext({ focusedStatus: "busy" }));
-    expect(bar.children.length).toBe(3);
+    expect(bar.children.length).toBe(4);
     expect(bar.render(120).join("\n")).toContain("…");
   });
 
@@ -69,10 +71,10 @@ describe("StatusBar", () => {
     const { tui } = createTestTuiWithTerminal();
     const bar = new StatusBar(tui);
     bar.setModel(makeModel(), makeContext({ focusedStatus: "busy" }));
-    expect(bar.children.length).toBe(3);
+    expect(bar.children.length).toBe(4);
     expect(bar.render(120).join("\n")).toContain("…");
     bar.setModel(makeModel(), makeContext({ focusedStatus: "idle" }));
-    expect(bar.children.length).toBe(2);
+    expect(bar.children.length).toBe(3);
     expect(bar.render(120).join("\n")).not.toContain("…");
   });
 

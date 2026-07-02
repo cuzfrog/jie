@@ -1,5 +1,5 @@
 import { Container, Spacer, Text } from "@earendil-works/pi-tui";
-import type { AgentUiState, MessageCard, MessageTurn } from "../state";
+import type { AgentUiState, MessageBlock, MessageCard, MessageTurn } from "../state";
 import { MessageView } from "./message-view";
 import { ToolCard } from "./tool-card";
 
@@ -53,13 +53,21 @@ export class ChatPane extends Container {
   }
 
   private appendTurn(turn: MessageTurn): void {
-    this.addChild(new Spacer(PROMPT_GAP));
-    this.addChild(new Text("› " + turn.userPrompt));
+    this.appendPrompt(turn.userPrompt);
     for (const card of turn.cards) {
       this.appendCard(card);
     }
-    for (let i = 0; i < turn.blocks.length; i++) {
-      const block = turn.blocks[i];
+    this.appendBlocks(turn.blocks);
+  }
+
+  private appendPrompt(userPrompt: string): void {
+    this.addChild(new Spacer(PROMPT_GAP));
+    this.addChild(new Text("› " + userPrompt));
+  }
+
+  private appendBlocks(blocks: ReadonlyArray<MessageBlock>): void {
+    for (let i = 0; i < blocks.length; i++) {
+      const block = blocks[i];
       if (block === undefined) continue;
       let messageView = this.messageViews.get(i);
       if (messageView === undefined) {

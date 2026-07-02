@@ -15,11 +15,14 @@ export interface StatusBarContext {
   teamId: string | null;
   showRail: boolean;
   focusedModel: ModelReference | null;
+  transientMessage: string | null;
+  errorBanner: string | null;
 }
 
 export class StatusBar extends Container {
   private readonly cwdLine: Text;
   private readonly hintLine: Text;
+  private readonly bannerLine: Text;
   private loader: Loader | null;
   private readonly tui: TUI;
 
@@ -27,24 +30,31 @@ export class StatusBar extends Container {
     super();
     this.cwdLine = new Text("");
     this.hintLine = new Text("");
+    this.bannerLine = new Text("");
     this.loader = null;
     this.tui = tui;
+    this.addChild(this.bannerLine);
     this.addChild(this.cwdLine);
     this.addChild(this.hintLine);
   }
 
   setModel(model: StatusBarModel, context: StatusBarContext): void {
+    this.bannerLine.setText(context.errorBanner ?? context.transientMessage ?? "");
+    this.cwdLine.setText(this.formatCwdLine(model, context));
+    this.hintLine.setText(this.formatHintLine(context));
+    this.syncLoader(context.focusedStatus);
+  }
+
+  private formatCwdLine(model: StatusBarModel, context: StatusBarContext): string {
     const branchPart = model.git.branch === "" ? "" : ` (${model.git.branch}${model.git.dirty ? "*" : ""})`;
     const leftSide = `${model.cwd}${branchPart}`;
     const focusedKey = context.focusedAgentKey ?? "—";
     const rightSide = context.teamId === null ? `no-team:${focusedKey}` : `${context.teamId}:${focusedKey}`;
-    this.cwdLine.setText(`${leftSide}  ${rightSide}`);
+    return `${leftSide}  ${rightSide}`;
+  }
 
-    const hintText = this.hintText(context);
-    const modelText = this.modelText(context.focusedModel);
-    this.hintLine.setText(`${PLACEHOLDER_TOKEN_USAGE}  ${hintText}  ${modelText}`);
-
-    this.syncLoader(context.focusedStatus);
+  private formatHintLine(context: StatusBarContext): string {
+    return `${PLACEHOLDER_TOKEN_USAGE}  ${this.hintText(context)}  ${this.modelText(context.focusedModel)}`;
   }
 
   update(model: StatusBarModel, state: TuiState): void {
@@ -55,6 +65,8 @@ export class StatusBar extends Container {
       teamId: state.teamId,
       showRail: state.showTeamRailPanel,
       focusedModel: focused?.model ?? null,
+      transientMessage: state.transientMessage,
+      errorBanner: state.errorBanner,
     });
   }
 

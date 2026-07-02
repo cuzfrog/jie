@@ -1,6 +1,10 @@
-import { Events, type EventManager } from "@cuzfrog/jie-platform/event";
+import { Events, type EventEnvelope, type EventType } from "@cuzfrog/jie-platform/event";
 import { matchesKey, type KeyId } from "@earendil-works/pi-tui";
 import { Actions, type Action, type TuiState } from "./state";
+
+interface EventPublisher {
+  publish<T extends EventType>(event: EventEnvelope<T>): void;
+}
 
 interface Keybinding {
   readonly combo: KeyId;
@@ -14,7 +18,7 @@ const DEFAULT_KEYBINDINGS: ReadonlyArray<Keybinding> = [
 ];
 
 export interface KeyboardHandlerDeps {
-  readonly eventManager: EventManager;
+  readonly eventManager: EventPublisher;
   readonly getState: () => TuiState;
   readonly dispatch: (action: Action) => void;
   readonly confirmQuit: () => void;
