@@ -3,7 +3,7 @@ import { Events, type EventEnvelope, type EventManager, type EventType, type Sen
 import { type AuthStore, type Scope, type SettingsStore } from "@cuzfrog/jie-platform/config";
 import { type TeamRegistry } from "@cuzfrog/jie-platform/team";
 import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduce, TuiStateSelectors } from "./state";
-import { createTuiCommandHandler } from "./command-handler";
+import { createTuiCommandHandler, type TuiCommandHandler } from "./command-handler";
 import { createKeyboardHandler } from "./keyboard-handler";
 import { createGitService, type GitService } from "./git-service";
 import { formatQueueIndicator } from "./format";
@@ -54,14 +54,17 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
     cachedGit = gitService.getSnapshot();
   };
 
-  const lifecycle: { stopped: boolean; resolveStart: (() => void) | null } = { stopped: false, resolveStart: null };
-
-  let renderRef: (() => void) | null = null;
+  const lifecycle: { stopped: boolean; resolveStart: (() => void) | null; render: (() => void) | null; commandHandler: TuiCommandHandler | null } = {
+    stopped: false,
+    resolveStart: null,
+    render: null,
+    commandHandler: null,
+  };
 
   const dispatch = (action: ReturnType<typeof Actions[keyof typeof Actions]>): void => {
     if (lifecycle.stopped) return;
     state = reduce(state, action);
-    if (renderRef !== null) renderRef();
+    lifecycle.render?.();
   };
 
   const isBusy = (): boolean => {
@@ -90,17 +93,6 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
     dispatch(Actions.setPendingQuit(false));
   };
 
-  const commandHandler = createTuiCommandHandler({
-    getState: () => state,
-    dispatch,
-    requestQuit,
-    teamRegistry: deps.teamRegistry,
-    loadTeam: deps.loadTeam,
-    authStore: deps.authStore,
-    settingsStore: deps.settingsStore,
-    settingsScope: deps.settingsScope,
-  });
-
   const publishPrompt = (text: string): void => {
     if (state.teamId === null || state.focusedAgentId === null) {
       dispatch(Actions.setErrorMessage("No team loaded; run `/team <id>` to load a team."));
@@ -120,7 +112,7 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
     dispatch(Actions.clearBanners());
     const trimmed = text.trim();
     if (trimmed.startsWith("/")) {
-      commandHandler.handle(trimmed);
+      lifecycle.commandHandler?.handle(trimmed);
       return;
     }
     publishPrompt(trimmed);
@@ -177,7 +169,17 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
         statusBar.update({ cwd, git: cachedGit }, state);
         requestRender();
       };
-      renderRef = renderAll;
+      lifecycle.render = renderAll;
+      lifecycle.commandHandler = createTuiCommandHandler({
+        getState: () => state,
+        dispatch,
+        requestQuit,
+        teamRegistry: deps.teamRegistry,
+        loadTeam: deps.loadTeam,
+        authStore: deps.authStore,
+        settingsStore: deps.settingsStore,
+        settingsScope: deps.settingsScope,
+      });
 
       const keyboardHandler = createKeyboardHandler({
         eventManager: deps.eventManager,
@@ -215,7 +217,8 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
       lifecycle.stopped = true;
       unsubscribeBus();
       lifecycle.resolveStart?.();
-      renderRef = null;
+      lifecycle.render = null;
+      lifecycle.commandHandler = null;
       lifecycle.resolveStart = null;
       lastGitRefreshAt = 0;
     },
