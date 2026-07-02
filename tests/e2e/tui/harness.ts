@@ -2,6 +2,7 @@ import { createEventManager, Events, type EventEnvelope, type EventManager, type
 import { createTui, type Tui, type TuiDeps, type CreateTUIOptions } from "@cuzfrog/jie-tui";
 import type { AuthStore, SettingsStore, Scope } from "@cuzfrog/jie-platform/config";
 import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
+import type { GitService, GitSnapshot } from "@cuzfrog/jie-platform/services";
 import { JiePlatformErrorMessages } from "@cuzfrog/jie-platform";
 import { withTTY } from "../../support";
 
@@ -28,13 +29,20 @@ const stubTeamRegistry: TeamRegistry = {
   locate: () => "missing",
 };
 
-function makeDeps(bus: EventManager, options: CreateTUIOptions = {}): { deps: TuiDeps; options: CreateTUIOptions } {
+const stubGitSnapshot: GitSnapshot = { branch: "", dirty: false, ahead: 0, behind: 0 };
+
+const stubGitService: GitService = {
+  getSnapshot: () => stubGitSnapshot,
+};
+
+function makeDeps(bus: EventManager, options: CreateTUIOptions): { deps: TuiDeps; options: CreateTUIOptions } {
   return {
     deps: {
       eventManager: bus,
       teamRegistry: stubTeamRegistry,
       loadTeam: noopAsync,
       authStore: stubAuthStore,
+      gitService: stubGitService,
       settingsStore: stubSettingsStore,
       settingsScope: "global" as Scope,
     },
@@ -45,9 +53,10 @@ function makeDeps(bus: EventManager, options: CreateTUIOptions = {}): { deps: Tu
 export const startTuiOn = (
   bus: EventManager,
   preload: ReadonlyArray<EventEnvelope<EventType>>,
-  options: CreateTUIOptions = {},
+  options: Omit<CreateTUIOptions, "cwd"> = {},
 ): Tui => {
-  const { deps, options: opts } = makeDeps(bus, options);
+  const opts: CreateTUIOptions = { ...options, cwd: process.cwd() };
+  const { deps } = makeDeps(bus, opts);
   const tuiHandle: { current: Tui | null } = { current: null };
   withTTY(true, () => { tuiHandle.current = createTui(deps, opts); });
   const tui = tuiHandle.current;

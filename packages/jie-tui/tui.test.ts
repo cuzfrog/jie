@@ -1,7 +1,8 @@
-import { createTui, type Tui, type TuiDeps } from "./tui";
+import { createTui, type CreateTUIOptions, type Tui, type TuiDeps } from "./tui";
 import { createEventManager, Events, type EventManager } from "@cuzfrog/jie-platform/event";
 import type { AuthStore, SettingsStore, Scope } from "@cuzfrog/jie-platform/config";
 import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
+import type { GitService } from "@cuzfrog/jie-platform/services";
 import { createTestTuiWithTerminal, withTTY } from "../../tests/support";
 
 const authStore = vi.mocked<AuthStore>({
@@ -25,7 +26,13 @@ const teamRegistry = vi.mocked<TeamRegistry>({
   locate: vi.fn(),
 });
 
+const gitService = vi.mocked<GitService>({
+  getSnapshot: vi.fn(),
+});
+
 const loadTeam = vi.fn<() => Promise<void>>(() => Promise.resolve());
+
+const stubOptions: CreateTUIOptions = { cwd: process.cwd() };
 
 function makeDeps(overrides: Partial<TuiDeps> = {}): TuiDeps {
   return {
@@ -33,6 +40,7 @@ function makeDeps(overrides: Partial<TuiDeps> = {}): TuiDeps {
     teamRegistry,
     loadTeam,
     authStore,
+    gitService,
     settingsStore,
     settingsScope: "global" as Scope,
     ...overrides,
@@ -44,15 +52,19 @@ function makeStubBus(): EventManager {
 }
 
 describe("createTui — v0.2 surface", () => {
+  beforeEach(() => {
+    gitService.getSnapshot.mockReturnValue({ branch: "", dirty: false, ahead: 0, behind: 0 });
+  });
+
   test("throws when not on a TTY", () => {
     withTTY(false, () => {
-      expect(() => createTui(makeDeps())).toThrow(/interactive terminal/);
+      expect(() => createTui(makeDeps(), stubOptions)).toThrow(/interactive terminal/);
     });
   });
 
   test("returns a Tui handle with the contract methods", () => {
     withTTY(true, () => {
-      const tui: Tui = createTui(makeDeps());
+      const tui: Tui = createTui(makeDeps(), stubOptions);
       const s0 = tui.getState();
       expect(s0.teamId).toBeNull();
       expect(s0.agents.size).toBe(0);
@@ -62,10 +74,14 @@ describe("createTui — v0.2 surface", () => {
 });
 
 describe("createTui — start()", () => {
+  beforeEach(() => {
+    gitService.getSnapshot.mockReturnValue({ branch: "", dirty: false, ahead: 0, behind: 0 });
+  });
+
   test("throws when terminal is too narrow", () => {
     withTTY(true, () => {
       const { terminal } = createTestTuiWithTerminal(40, 30);
-      const tuiHandle = createTui(makeDeps(), { terminal });
+      const tuiHandle = createTui(makeDeps(), { cwd: process.cwd(), terminal });
       expect(() => tuiHandle.start()).toThrow(/too narrow/);
     });
   });
@@ -73,7 +89,7 @@ describe("createTui — start()", () => {
   test("mounts a TUI loop and produces a frame", async () => {
     withTTY(true, async () => {
       const { tui: vt, terminal } = createTestTuiWithTerminal(80, 30);
-      const tuiHandle: Tui = createTui(makeDeps(), { terminal });
+      const tuiHandle: Tui = createTui(makeDeps(), { cwd: process.cwd(), terminal });
       const started = tuiHandle.start();
       await new Promise((r) => setTimeout(r, 50));
       tuiHandle.stop();
@@ -89,7 +105,7 @@ describe("createTui — start()", () => {
     withTTY(true, async () => {
       const bus: EventManager = createEventManager();
       const { terminal } = createTestTuiWithTerminal(80, 30);
-      const tuiHandle = createTui(makeDeps({ eventManager: bus }), { terminal });
+      const tuiHandle = createTui(makeDeps({ eventManager: bus }), { cwd: process.cwd(), terminal });
       const started = tuiHandle.start();
       await new Promise((r) => setTimeout(r, 50));
       bus.publish(Events.teamLoaded({ kind: "system" }, "demo", [
