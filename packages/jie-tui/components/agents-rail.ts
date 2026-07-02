@@ -16,17 +16,6 @@ export interface RailItem {
   readonly status: "idle" | "busy";
 }
 
-function railItemsEqual(a: ReadonlyArray<RailItem>, b: ReadonlyArray<RailItem>): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i += 1) {
-    if (a[i]!.agentKey !== b[i]!.agentKey) return false;
-    if (a[i]!.role !== b[i]!.role) return false;
-    if (a[i]!.isLeader !== b[i]!.isLeader) return false;
-    if (a[i]!.status !== b[i]!.status) return false;
-  }
-  return true;
-}
-
 export class AgentsRail extends Container {
   private items: SelectList;
   private readonly maxVisible: number;
@@ -91,6 +80,17 @@ function projectRailItems(agents: ReadonlyMap<AgentId, AgentUiState>): RailItem[
     });
   }
   return items;
+}
+
+function railItemsEqual(a: ReadonlyArray<RailItem>, b: ReadonlyArray<RailItem>): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i]!.agentKey !== b[i]!.agentKey) return false;
+    if (a[i]!.role !== b[i]!.role) return false;
+    if (a[i]!.isLeader !== b[i]!.isLeader) return false;
+    if (a[i]!.status !== b[i]!.status) return false;
+  }
+  return true;
 }
 
 function buildSelectItems(items: ReadonlyArray<RailItem>): SelectItem[] {
