@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createEventManager, type EventEnvelope } from "./event";
-import { createJiePlatform } from "./start";
+import { createJiePlatform } from "./jie-platform";
 import {
   createModelRegistry,
   type AuthStore,
