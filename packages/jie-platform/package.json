@@ -8,6 +8,7 @@
     "./event": "./event/index.ts",
     "./team": "./team/index.ts",
     "./tools": "./tools/index.ts",
+    "./services": "./services/index.ts",
     "./storage": "./storage/index.ts"
   },
   "dependencies": {

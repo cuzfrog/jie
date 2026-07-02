@@ -5,7 +5,7 @@ import { type TeamRegistry } from "@cuzfrog/jie-platform/team";
 import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduce, TuiStateSelectors } from "./state";
 import { createTuiCommandHandler, type TuiCommandHandler } from "./command-handler";
 import { createKeyboardHandler } from "./keyboard-handler";
-import { createGitService, type GitService } from "./git-service";
+import { type GitService } from "@cuzfrog/jie-platform/services";
 import { buildView, type BuildViewResult } from "./components";
 
 export interface TuiDeps {
@@ -13,13 +13,13 @@ export interface TuiDeps {
   teamRegistry: TeamRegistry;
   loadTeam: (teamId: string) => Promise<void>;
   authStore: AuthStore;
+  gitService: GitService;
   settingsStore: SettingsStore;
   settingsScope: Scope;
 }
 
 export interface CreateTUIOptions {
-  cwd?: string;
-  gitService?: GitService;
+  cwd: string;
   rows?: number;
   terminal?: Terminal;
 }
@@ -34,7 +34,7 @@ export interface Tui {
 const MIN_COLS = 60;
 const GIT_REFRESH_MIN_INTERVAL_MS = 500;
 
-export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
+export function createTui(deps: TuiDeps, options: CreateTUIOptions): Tui {
   if (process.stdin.isTTY !== true) {
     throw new Error("TUI requires an interactive terminal; use `jie -p` for scripts.");
   }
@@ -43,8 +43,8 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions = {}): Tui {
   }
 
   let state: TuiState = INITIAL_TUI_STATE;
-  const cwd = options.cwd ?? process.cwd();
-  const gitService: GitService = options.gitService ?? createGitService({ cwd });
+  const cwd = options.cwd;
+  const gitService: GitService = deps.gitService;
   let lastGitRefreshAt = 0;
   let cachedGit = gitService.getSnapshot();
   const refreshGitIfStale = (now: number): void => {
