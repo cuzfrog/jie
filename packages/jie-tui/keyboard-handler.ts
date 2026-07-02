@@ -51,36 +51,22 @@ export function createKeyboardHandler(deps: KeyboardHandlerDeps, opts: KeyboardH
     const state = deps.getState();
 
     if (state.pendingQuit) {
-      if (data === "y" || data === "Y") {
-        deps.confirmQuit();
-        return { consume: true };
-      }
-      if (data === "n" || data === "N" || data === "\r" || data === "\n") {
-        deps.cancelQuit();
-        return { consume: true };
-      }
+      const consumed = tryResolvePendingQuit(data, deps);
+      if (consumed !== null) return consumed;
     }
 
     if (matchesKey(data, "escape")) {
       const at = now();
-      if (at - lastEscapeAt <= escWindowMs && state.teamId !== null) {
-        deps.eventManager.publish(Events.interruptTeam({ kind: "system" }, state.teamId));
-        lastEscapeAt = 0;
-        return { consume: true };
-      }
-      lastEscapeAt = at;
-      return { consume: false };
+      const consumed = tryDoubleEscTeamInterrupt(deps, state, lastEscapeAt, at, escWindowMs);
+      lastEscapeAt = consumed.newLastEscapeAt ?? at;
+      return { consume: consumed.consume };
     }
 
     if (matchesKey(data, "ctrl+d")) {
       const at = now();
-      if (at - lastCtrlDAt <= ctrlDWindowMs) {
-        deps.requestQuit();
-        lastCtrlDAt = 0;
-        return { consume: true };
-      }
-      lastCtrlDAt = at;
-      return { consume: true };
+      const consumed = tryDoubleCtrlDQuit(deps, lastCtrlDAt, at, ctrlDWindowMs);
+      lastCtrlDAt = consumed.newLastCtrlDAt ?? at;
+      return { consume: consumed.consume };
     }
 
     if (matchesKey(data, "ctrl+c")) {
@@ -104,4 +90,45 @@ function handleKeyInput(data: string, keyBindings: ReadonlyArray<Keybinding>): A
     }
   }
   return undefined;
+}
+
+type TryResult = { consume: boolean; newLastEscapeAt?: number; newLastCtrlDAt?: number };
+
+function tryResolvePendingQuit(data: string, deps: KeyboardHandlerDeps): { consume: true } | null {
+  if (data === "y" || data === "Y") {
+    deps.confirmQuit();
+    return { consume: true };
+  }
+  if (data === "n" || data === "N" || data === "\r" || data === "\n") {
+    deps.cancelQuit();
+    return { consume: true };
+  }
+  return null;
+}
+
+function tryDoubleEscTeamInterrupt(
+  deps: KeyboardHandlerDeps,
+  state: TuiState,
+  lastEscapeAt: number,
+  now: number,
+  escWindowMs: number,
+): TryResult {
+  if (now - lastEscapeAt <= escWindowMs && state.teamId !== null) {
+    deps.eventManager.publish(Events.interruptTeam({ kind: "system" }, state.teamId));
+    return { consume: true, newLastEscapeAt: 0 };
+  }
+  return { consume: false, newLastEscapeAt: now };
+}
+
+function tryDoubleCtrlDQuit(
+  deps: KeyboardHandlerDeps,
+  lastCtrlDAt: number,
+  now: number,
+  ctrlDWindowMs: number,
+): TryResult {
+  if (now - lastCtrlDAt <= ctrlDWindowMs) {
+    deps.requestQuit();
+    return { consume: true, newLastCtrlDAt: 0 };
+  }
+  return { consume: true, newLastCtrlDAt: now };
 }
