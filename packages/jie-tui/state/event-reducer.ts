@@ -80,24 +80,18 @@ function reduceUserPrompt(state: TuiState, event: EventEnvelope<"user.prompt">):
 }
 
 function reduceModelAssigned(state: TuiState, event: EventEnvelope<"agent.model.assigned">): TuiState {
-  if (state.teamId === null) return state;
-  if (event.sender.kind !== "agent") return state;
-  if (event.sender.identity.teamId !== state.teamId) return state;
-  const agentId = composeAgentId(event.sender.identity.teamId, event.sender.identity.agentKey);
-  const existing = state.agents.get(agentId);
-  if (existing === undefined) return state;
+  const resolved = resolveAgent(state, event);
+  if (resolved === null) return state;
+  const { agentId, agent } = resolved;
   const model: ModelReference = { provider: event.payload.provider, id: event.payload.model, effort: event.payload.effort };
-  return withAgent(state, agentId, { ...existing, model });
+  return withAgent(state, agentId, { ...agent, model });
 }
 
 function reduceQueueUpdate(state: TuiState, event: EventEnvelope<"agent.prompt.queue.update">): TuiState {
-  if (state.teamId === null) return state;
-  if (event.sender.kind !== "agent") return state;
-  if (event.sender.identity.teamId !== state.teamId) return state;
-  const agentId = composeAgentId(event.sender.identity.teamId, event.sender.identity.agentKey);
-  const existing = state.agents.get(agentId);
-  if (existing === undefined) return state;
-  return withAgent(state, agentId, { ...existing, queue: event.payload.prompts });
+  const resolved = resolveAgent(state, event);
+  if (resolved === null) return state;
+  const { agentId, agent } = resolved;
+  return withAgent(state, agentId, { ...agent, queue: event.payload.prompts });
 }
 
 function reduceTurnStart(state: TuiState, event: EventEnvelope<"agent.turn.start">): TuiState {
@@ -165,7 +159,13 @@ function reduceToolResult(state: TuiState, event: EventEnvelope<"agent.tool.resu
 function resolveAgent(
   state: TuiState,
   event: EventEnvelope<
-    "agent.turn.start" | "agent.idle" | "agent.stream.chunk" | "agent.tool.call" | "agent.tool.result"
+    | "agent.model.assigned"
+    | "agent.prompt.queue.update"
+    | "agent.turn.start"
+    | "agent.idle"
+    | "agent.stream.chunk"
+    | "agent.tool.call"
+    | "agent.tool.result"
   >,
 ): { agentId: AgentId; agent: AgentUiState } | null {
   if (state.teamId === null) return null;
