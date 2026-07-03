@@ -1,4 +1,4 @@
-import { createKeyboardHandler, type KeyboardHandler, type KeyboardHandlerDeps } from "./keyboard-handler";
+import { createKeyboardHandler, type KeyboardHandlerDeps } from "./keyboard-handler";
 import { Actions, createStateStore, type StateStore, type TuiState } from "./state";
 import { createEventManager, type EventManager } from "@cuzfrog/jie-platform/event";
 
@@ -7,16 +7,15 @@ interface DepsHandle {
   setState: (next: Partial<TuiState>) => void;
   eventManager: EventManager;
   dispatch: ReturnType<typeof vi.fn>;
-  confirmQuit: ReturnType<typeof vi.fn>;
-  cancelQuit: ReturnType<typeof vi.fn>;
-  requestQuit: ReturnType<typeof vi.fn>;
-  render: ReturnType<typeof vi.fn>;
 }
 
 function makeDeps(): DepsHandle {
   const baseStore = createStateStore();
   let current: TuiState = baseStore.getState();
-  const dispatch = vi.fn();
+  const dispatch = vi.fn((action: Parameters<StateStore["dispatch"]>[0]) => {
+    baseStore.dispatch(action);
+    current = baseStore.getState();
+  });
   const stateStore: StateStore = {
     getState: () => current,
     dispatch: (action) => { dispatch(action); },
@@ -32,74 +31,18 @@ function makeDeps(): DepsHandle {
       return false;
     },
   };
-  const confirmQuit = vi.fn(() => { current = { ...current, pendingQuit: false }; });
-  const cancelQuit = vi.fn(() => { current = { ...current, pendingQuit: false }; });
-  const requestQuit = vi.fn();
-  const render = vi.fn();
   const eventManager: EventManager = createEventManager();
   const deps: KeyboardHandlerDeps = {
     eventManager,
     stateStore,
-    confirmQuit,
-    cancelQuit,
-    requestQuit,
-    render,
   };
   return {
     deps,
     setState: (next) => { current = { ...current, ...next }; },
     eventManager,
     dispatch,
-    confirmQuit,
-    cancelQuit,
-    requestQuit,
-    render,
   };
 }
-
-describe("createKeyboardHandler — pendingQuit branch", () => {
-  test("'y' calls confirmQuit", () => {
-    const h = makeDeps();
-    h.setState({ pendingQuit: true });
-    const handler: KeyboardHandler = createKeyboardHandler(h.deps);
-    const out = handler.handle("y");
-    expect(h.confirmQuit).toHaveBeenCalledTimes(1);
-    expect(out?.consume).toBe(true);
-  });
-
-  test("'Y' (uppercase) also calls confirmQuit", () => {
-    const h = makeDeps();
-    h.setState({ pendingQuit: true });
-    createKeyboardHandler(h.deps).handle("Y");
-    expect(h.confirmQuit).toHaveBeenCalledTimes(1);
-  });
-
-  test("'n' calls cancelQuit", () => {
-    const h = makeDeps();
-    h.setState({ pendingQuit: true });
-    const handler = createKeyboardHandler(h.deps);
-    const out = handler.handle("n");
-    expect(h.cancelQuit).toHaveBeenCalledTimes(1);
-    expect(out?.consume).toBe(true);
-  });
-
-  test("Enter calls cancelQuit", () => {
-    const h = makeDeps();
-    h.setState({ pendingQuit: true });
-    createKeyboardHandler(h.deps).handle("\r");
-    expect(h.cancelQuit).toHaveBeenCalledTimes(1);
-  });
-
-  test("an unrelated key while pendingQuit does NOT call confirm/cancel and falls through", () => {
-    const h = makeDeps();
-    h.setState({ pendingQuit: true });
-    const out = createKeyboardHandler(h.deps).handle("x");
-    expect(h.confirmQuit).not.toHaveBeenCalled();
-    expect(h.cancelQuit).not.toHaveBeenCalled();
-    expect(h.dispatch).not.toHaveBeenCalled();
-    expect(out).toBeUndefined();
-  });
-});
 
 describe("createKeyboardHandler — Esc Esc interrupt", () => {
   test("Esc twice within window publishes interrupt", () => {
@@ -145,38 +88,37 @@ describe("createKeyboardHandler — Esc Esc interrupt", () => {
 });
 
 describe("createKeyboardHandler — Ctrl+D×2 quit", () => {
-  test("Ctrl+D twice within window calls requestQuit", () => {
+  test("Ctrl+D twice within window dispatches requestQuit", () => {
     const h = makeDeps();
     const handler = createKeyboardHandler(h.deps, { now: () => 1000 });
     handler.handle("\x04");
     handler.handle("\x04");
-    expect(h.requestQuit).toHaveBeenCalledTimes(1);
+    expect(h.dispatch).toHaveBeenCalledWith(Actions.requestQuit());
   });
 
-  test("single Ctrl+D does NOT call requestQuit", () => {
+  test("single Ctrl+D does NOT dispatch requestQuit", () => {
     const h = makeDeps();
     createKeyboardHandler(h.deps, { now: () => 1000 }).handle("\x04");
-    expect(h.requestQuit).not.toHaveBeenCalled();
+    expect(h.dispatch).not.toHaveBeenCalledWith(Actions.requestQuit());
   });
 
-  test("Ctrl+D twice outside window does NOT call requestQuit", () => {
+  test("Ctrl+D twice outside window does NOT dispatch requestQuit", () => {
     let t = 1000;
     const h = makeDeps();
     const handler = createKeyboardHandler(h.deps, { now: () => t });
     handler.handle("\x04");
     t = 2000;
     handler.handle("\x04");
-    expect(h.requestQuit).not.toHaveBeenCalled();
+    expect(h.dispatch).not.toHaveBeenCalledWith(Actions.requestQuit());
   });
 });
 
 describe("createKeyboardHandler — Ctrl+C", () => {
-  test("Ctrl+C renders without dispatching", () => {
+  test("Ctrl+C dispatches requestRender", () => {
     const h = makeDeps();
     const handler = createKeyboardHandler(h.deps);
     const out = handler.handle("\x03");
-    expect(h.render).toHaveBeenCalledTimes(1);
-    expect(h.dispatch).not.toHaveBeenCalled();
+    expect(h.dispatch).toHaveBeenCalledWith(Actions.requestRender());
     expect(out?.consume).toBe(true);
   });
 });

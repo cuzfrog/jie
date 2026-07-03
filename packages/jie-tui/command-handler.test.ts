@@ -40,7 +40,6 @@ interface DepsHandle {
   deps: CommandHandlerDeps;
   getState: () => TuiState;
   dispatch: ReturnType<typeof vi.fn>;
-  requestQuit: ReturnType<typeof vi.fn>;
 }
 
 function makeDeps(): DepsHandle {
@@ -65,17 +64,15 @@ function makeDeps(): DepsHandle {
       return false;
     },
   };
-  const requestQuit = vi.fn();
   const deps: CommandHandlerDeps = {
     stateStore,
-    requestQuit,
     teamRegistry,
     loadTeam,
     authStore,
     settingsStore,
     settingsScope: "global",
   };
-  return { deps, getState: () => current, dispatch, requestQuit };
+  return { deps, getState: () => current, dispatch };
 }
 
 describe("createTuiCommandHandler", () => {
@@ -100,11 +97,11 @@ describe("createTuiCommandHandler", () => {
     expect(dispatch).toHaveBeenCalledWith(Actions.clearTuiState());
   });
 
-  test("handle('/exit') calls requestQuit", () => {
-    const { deps, requestQuit } = makeDeps();
+  test("handle('/exit') dispatches requestQuit", () => {
+    const { deps, dispatch } = makeDeps();
     const handler = createTuiCommandHandler(deps);
     handler.handle("/exit");
-    expect(requestQuit).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith(Actions.requestQuit());
   });
 
   test("handle('/team') reports the current default and installed list", () => {

@@ -29,6 +29,17 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
       return { ...state, transientMessage: null, errorBanner: null };
     case ActionTypes.SET_PENDING_QUIT:
       return { ...state, pendingQuit: action.payload.on };
+    case ActionTypes.REQUEST_QUIT:
+      if (state.pendingQuit) return state;
+      return { ...state, pendingQuit: true };
+    case ActionTypes.CONFIRM_QUIT:
+      if (!state.pendingQuit) return state;
+      return { ...state, pendingQuit: false };
+    case ActionTypes.CANCEL_QUIT:
+      if (!state.pendingQuit) return state;
+      return { ...state, pendingQuit: false };
+    case ActionTypes.REQUEST_RENDER:
+      return state;
     default:
       return state;
   }

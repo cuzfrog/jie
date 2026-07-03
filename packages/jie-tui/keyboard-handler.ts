@@ -20,10 +20,6 @@ const DEFAULT_KEYBINDINGS: ReadonlyArray<Keybinding> = [
 export interface KeyboardHandlerDeps {
   readonly eventManager: EventPublisher;
   readonly stateStore: StateStore;
-  readonly confirmQuit: () => void;
-  readonly cancelQuit: () => void;
-  readonly requestQuit: () => void;
-  readonly render: () => void;
 }
 
 export interface KeyboardHandler {
@@ -49,11 +45,6 @@ export function createKeyboardHandler(deps: KeyboardHandlerDeps, opts: KeyboardH
   const handle = (data: string): { consume: boolean } | undefined => {
     const state = deps.stateStore.getState();
 
-    if (state.pendingQuit) {
-      const consumed = tryResolvePendingQuit(data, deps);
-      if (consumed !== null) return consumed;
-    }
-
     if (matchesKey(data, "escape")) {
       const at = now();
       const consumed = tryDoubleEscInterrupt(deps, state, lastEscapeAt, at, escWindowMs);
@@ -69,7 +60,7 @@ export function createKeyboardHandler(deps: KeyboardHandlerDeps, opts: KeyboardH
     }
 
     if (matchesKey(data, "ctrl+c")) {
-      deps.render();
+      deps.stateStore.dispatch(Actions.requestRender());
       return { consume: true };
     }
 
@@ -93,18 +84,6 @@ function handleKeyInput(data: string, keyBindings: ReadonlyArray<Keybinding>): A
 
 type TryResult = { consume: boolean; newLastEscapeAt?: number; newLastCtrlDAt?: number };
 
-function tryResolvePendingQuit(data: string, deps: KeyboardHandlerDeps): { consume: true } | null {
-  if (data === "y" || data === "Y") {
-    deps.confirmQuit();
-    return { consume: true };
-  }
-  if (data === "n" || data === "N" || data === "\r" || data === "\n") {
-    deps.cancelQuit();
-    return { consume: true };
-  }
-  return null;
-}
-
 function tryDoubleEscInterrupt(
   deps: KeyboardHandlerDeps,
   state: TuiState,
@@ -126,7 +105,7 @@ function tryDoubleCtrlDQuit(
   ctrlDWindowMs: number,
 ): TryResult {
   if (now - lastCtrlDAt <= ctrlDWindowMs) {
-    deps.requestQuit();
+    deps.stateStore.dispatch(Actions.requestQuit());
     return { consume: true, newLastCtrlDAt: 0 };
   }
   return { consume: true, newLastCtrlDAt: now };

@@ -18,7 +18,6 @@ interface SlashCommand {
 
 export interface CommandHandlerDeps {
   readonly stateStore: StateStore;
-  readonly requestQuit: () => void;
   readonly teamRegistry: TeamRegistry;
   readonly loadTeam: (teamId: string) => Promise<void>;
   readonly authStore: AuthStore;
@@ -51,7 +50,7 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): TuiCommandHan
         deps.stateStore.dispatch(Actions.clearTuiState());
         return;
       case "stop":
-        deps.requestQuit();
+        deps.stateStore.dispatch(Actions.requestQuit());
         return;
       case "reply":
         deps.stateStore.dispatch(Actions.setTransientMessage(outcome.text));
