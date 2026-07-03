@@ -12,12 +12,27 @@ export interface GitService {
 export interface CreateGitServiceOptions {
   readonly cwd: string;
   readonly readGitStatus?: (cwd: string) => GitSnapshot;
+  readonly minIntervalMs?: number;
+  readonly now?: () => number;
 }
+
+const DEFAULT_MIN_INTERVAL_MS = 5000;
 
 export function createGitService(options: CreateGitServiceOptions): GitService {
   const read = options.readGitStatus ?? readGitStatusViaSpawn;
+  const minIntervalMs = options.minIntervalMs ?? DEFAULT_MIN_INTERVAL_MS;
+  const now = options.now ?? Date.now;
+  let lastRefreshedAt = -Infinity;
+  let cached: GitSnapshot = { branch: "", dirty: false, ahead: 0, behind: 0 };
   return {
-    getSnapshot: (): GitSnapshot => read(options.cwd),
+    getSnapshot: (): GitSnapshot => {
+      const t = now();
+      if (t - lastRefreshedAt >= minIntervalMs) {
+        lastRefreshedAt = t;
+        cached = read(options.cwd);
+      }
+      return cached;
+    },
   };
 }
 

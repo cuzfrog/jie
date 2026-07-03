@@ -32,7 +32,6 @@ export interface Tui {
 }
 
 const MIN_COLS = 60;
-const GIT_REFRESH_MIN_INTERVAL_MS = 500;
 
 export function createTui(deps: TuiDeps, options: CreateTUIOptions): Tui {
   if (process.stdin.isTTY !== true) {
@@ -45,13 +44,6 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions): Tui {
   let state: TuiState = INITIAL_TUI_STATE;
   const cwd = options.cwd;
   const gitService: GitService = deps.gitService;
-  let lastGitRefreshAt = 0;
-  let cachedGit = gitService.getSnapshot();
-  const refreshGitIfStale = (now: number): void => {
-    if (now - lastGitRefreshAt < GIT_REFRESH_MIN_INTERVAL_MS) return;
-    lastGitRefreshAt = now;
-    cachedGit = gitService.getSnapshot();
-  };
 
   const lifecycle: { stopped: boolean; resolveStart: (() => void) | null; render: (() => void) | null; commandHandler: TuiCommandHandler | null } = {
     stopped: false,
@@ -146,12 +138,11 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions): Tui {
         if (view.confirmExit.isVisible() !== state.pendingQuit) {
           view.confirmExit.setVisible(state.pendingQuit);
         }
-        refreshGitIfStale(Date.now());
         const focused = TuiStateSelectors.getFocusedAgent(state);
         view.chatPane.setAgent(focused);
         view.editor.setQueueIndicator(formatQueueIndicator(focused?.queue ?? null));
         view.rail.setItemsFromState(state);
-        view.statusBar.update({ cwd, git: cachedGit }, state);
+        view.statusBar.update({ cwd, git: gitService.getSnapshot() }, state);
       };
       const renderAll = (): void => {
         projectView({ root, rail, chatPane, editor, statusBar, confirmExit });
@@ -208,7 +199,6 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions): Tui {
       lifecycle.render = null;
       lifecycle.commandHandler = null;
       lifecycle.resolveStart = null;
-      lastGitRefreshAt = 0;
     },
     start,
   };
