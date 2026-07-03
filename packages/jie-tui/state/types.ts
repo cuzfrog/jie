@@ -59,14 +59,3 @@ export interface TuiState {
   readonly showTeamRailPanel: boolean;
   readonly pendingQuit: boolean;
 }
-
-export const INITIAL_TUI_STATE: TuiState = Object.freeze({
-  teamId: null,
-  leaderAgentId: null,
-  agents: new Map(),
-  focusedAgentId: null,
-  transientMessage: null,
-  errorBanner: null,
-  showTeamRailPanel: false,
-  pendingQuit: false,
-} as const);

@@ -1,5 +1,5 @@
 import { Container, Spacer, Text, type TUI } from "@earendil-works/pi-tui";
-import { type TuiState, TuiStateSelectors } from "../state";
+import type { StateStore } from "../state";
 import { StatusBar } from "./status-bar";
 import { AgentsRail } from "./agents-rail";
 import { ChatPane, chatPaneFromAgent } from "./chat-pane";
@@ -19,13 +19,14 @@ export interface BuildViewResult {
   readonly confirmExit: ConfirmExitOverlay;
 }
 
-export function buildView(state: TuiState, opts: BuildViewOpts, tui: TUI): BuildViewResult {
+export function buildView(stateStore: StateStore, opts: BuildViewOpts, tui: TUI): BuildViewResult {
   const statusBar = new StatusBar(tui);
 
+  const state = stateStore.getState();
   const rail = new AgentsRail();
   rail.setItemsFromState(state);
 
-  const focused = TuiStateSelectors.getFocusedAgent(state);
+  const focused = stateStore.getFocusedAgent();
   const chatPane = chatPaneFromAgent(focused);
 
   const editor = new EditorSlot(tui, { basePath: opts.cwd });

@@ -1,5 +1,5 @@
 import { type EventEnvelope } from "@cuzfrog/jie-platform/event";
-import type { AgentId, AgentUiState, MessageCard, ModelReference, TuiState, MessageTurn } from "./state";
+import type { AgentId, AgentUiState, MessageCard, ModelReference, TuiState, MessageTurn } from "./types";
 import type { AnyEventEnvelope } from "./actions";
 
 export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {

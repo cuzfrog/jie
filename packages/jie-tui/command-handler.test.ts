@@ -3,7 +3,7 @@ import {
   type CommandHandlerDeps,
   type TuiCommandHandler,
 } from "./command-handler";
-import { Actions, ActionTypes, INITIAL_TUI_STATE, type Action, type StateStore, type TuiState } from "./state";
+import { Actions, createStateStore, type StateStore, type TuiState } from "./state";
 import type { AuthStore, Settings, SettingsStore } from "@cuzfrog/jie-platform/config";
 import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
 
@@ -44,19 +44,26 @@ interface DepsHandle {
 }
 
 function makeDeps(): DepsHandle {
-  let current: TuiState = { ...INITIAL_TUI_STATE, agents: new Map(INITIAL_TUI_STATE.agents) };
-  const dispatch = vi.fn((action: Action) => {
-    if (action.type === ActionTypes.SET_TRANSIENT_MESSAGE) current = { ...current, transientMessage: action.payload.text };
-    else if (action.type === ActionTypes.SET_ERROR_MESSAGE) current = { ...current, errorBanner: action.payload.text };
-    else if (action.type === ActionTypes.CLEAR_TRANSIENT_MESSAGE) current = { ...current, transientMessage: null };
-    else if (action.type === ActionTypes.CLEAR_ERROR_MESSAGE) current = { ...current, errorBanner: null };
-    else if (action.type === ActionTypes.CLEAR_BANNERS) current = { ...current, transientMessage: null, errorBanner: null };
-    else if (action.type === ActionTypes.CLEAR_TUI_STATE) current = INITIAL_TUI_STATE;
+  const baseStore = createStateStore();
+  let current: TuiState = baseStore.getState();
+  const dispatch = vi.fn((action: Parameters<StateStore["dispatch"]>[0]) => {
+    baseStore.dispatch(action);
+    current = baseStore.getState();
   });
   const stateStore: StateStore = {
     getState: () => current,
     dispatch: (action) => { dispatch(action); },
     subscribe: vi.fn(() => (): void => undefined),
+    getFocusedAgent: () => {
+      if (current.focusedAgentId === null) return null;
+      return current.agents.get(current.focusedAgentId) ?? null;
+    },
+    isBusy: () => {
+      for (const agent of current.agents.values()) {
+        if (agent.status === "busy") return true;
+      }
+      return false;
+    },
   };
   const requestQuit = vi.fn();
   const deps: CommandHandlerDeps = {

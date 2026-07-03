@@ -1,10 +1,10 @@
 import { Actions } from "./actions";
-import { INITIAL_TUI_STATE } from "./state";
+import { createStateStore } from "./state-store";
 import { reduce } from "./reducer";
 
 describe("reduce — dispatch router", () => {
   test("returns state unchanged for an unknown bus topic", () => {
-    const state = INITIAL_TUI_STATE;
+    const state = createStateStore().getState();
     const same = reduce(state, Actions.receiveEvent({
       version: 1,
       type: "system.interrupted",

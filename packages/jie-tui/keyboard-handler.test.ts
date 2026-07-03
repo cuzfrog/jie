@@ -1,5 +1,5 @@
 import { createKeyboardHandler, type KeyboardHandler, type KeyboardHandlerDeps } from "./keyboard-handler";
-import { Actions, INITIAL_TUI_STATE, type StateStore, type TuiState } from "./state";
+import { Actions, createStateStore, type StateStore, type TuiState } from "./state";
 import { createEventManager, type EventManager } from "@cuzfrog/jie-platform/event";
 
 interface DepsHandle {
@@ -14,12 +14,23 @@ interface DepsHandle {
 }
 
 function makeDeps(): DepsHandle {
-  let current: TuiState = { ...INITIAL_TUI_STATE, agents: new Map(INITIAL_TUI_STATE.agents) };
+  const baseStore = createStateStore();
+  let current: TuiState = baseStore.getState();
   const dispatch = vi.fn();
   const stateStore: StateStore = {
     getState: () => current,
     dispatch: (action) => { dispatch(action); },
     subscribe: vi.fn(() => (): void => undefined),
+    getFocusedAgent: () => {
+      if (current.focusedAgentId === null) return null;
+      return current.agents.get(current.focusedAgentId) ?? null;
+    },
+    isBusy: () => {
+      for (const agent of current.agents.values()) {
+        if (agent.status === "busy") return true;
+      }
+      return false;
+    },
   };
   const confirmQuit = vi.fn(() => { current = { ...current, pendingQuit: false }; });
   const cancelQuit = vi.fn(() => { current = { ...current, pendingQuit: false }; });

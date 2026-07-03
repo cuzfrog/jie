@@ -1,8 +1,11 @@
 import { Events } from "@cuzfrog/jie-platform/event";
 import { Actions } from "./actions";
-import { INITIAL_TUI_STATE, type TuiState } from "./state";
+import type { TuiState } from "./types";
+import { createStateStore } from "./state-store";
 import { reduce as reduceEvent } from "./event-reducer";
 import { reduceUiAction } from "./ui-reducer";
+
+const INITIAL_TUI_STATE = createStateStore().getState();
 
 const SYSTEM_SENDER: Parameters<typeof Events.teamLoaded>[0] = { kind: "system" };
 

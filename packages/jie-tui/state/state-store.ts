@@ -1,19 +1,28 @@
-import type { TuiState } from "./state";
+import type { TuiState, AgentUiState } from "./types";
 import { reduce } from "./reducer";
 import type { Action } from "./actions";
+
+const INITIAL_TUI_STATE: TuiState = Object.freeze({
+  teamId: null,
+  leaderAgentId: null,
+  agents: new Map(),
+  focusedAgentId: null,
+  transientMessage: null,
+  errorBanner: null,
+  showTeamRailPanel: false,
+  pendingQuit: false,
+} as const);
 
 export interface StateStore {
   getState: () => TuiState;
   dispatch: (action: Action) => void;
   subscribe: (listener: () => void) => () => void;
+  getFocusedAgent: () => AgentUiState | null;
+  isBusy: () => boolean;
 }
 
-export interface CreateStateStoreOptions {
-  readonly initialState: TuiState;
-}
-
-export function createStateStore(options: CreateStateStoreOptions): StateStore {
-  let state: TuiState = options.initialState;
+export function createStateStore(): StateStore {
+  let state: TuiState = INITIAL_TUI_STATE;
   const listeners = new Set<() => void>();
   return {
     getState: () => state,
@@ -26,6 +35,16 @@ export function createStateStore(options: CreateStateStoreOptions): StateStore {
       return (): void => {
         listeners.delete(listener);
       };
+    },
+    getFocusedAgent: () => {
+      if (state.focusedAgentId === null) return null;
+      return state.agents.get(state.focusedAgentId) ?? null;
+    },
+    isBusy: () => {
+      for (const agent of state.agents.values()) {
+        if (agent.status === "busy") return true;
+      }
+      return false;
     },
   };
 }

@@ -2,7 +2,7 @@ import { ProcessTerminal, TUI, type Terminal } from "@earendil-works/pi-tui";
 import { Events, type EventEnvelope, type EventManager, type EventType, type Sender } from "@cuzfrog/jie-platform/event";
 import { type AuthStore, type Scope, type SettingsStore } from "@cuzfrog/jie-platform/config";
 import { type TeamRegistry } from "@cuzfrog/jie-platform/team";
-import { type AnyEventEnvelope, type TuiState, Actions, createStateStore, INITIAL_TUI_STATE, TuiStateSelectors, type StateStore } from "./state";
+import { type AnyEventEnvelope, type TuiState, Actions, createStateStore, type StateStore } from "./state";
 import { createTuiCommandHandler, type TuiCommandHandler } from "./command-handler";
 import { createKeyboardHandler, type KeyboardHandler } from "./keyboard-handler";
 import { type GitService } from "@cuzfrog/jie-platform/services";
@@ -68,9 +68,9 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions): Tui {
   }
   const terminal = options.terminal ?? new ProcessTerminal();
   const tui = new TUI(terminal);
-  const view = buildView(INITIAL_TUI_STATE, { cwd: options.cwd }, tui);
+  const stateStore = createStateStore();
+  const view = buildView(stateStore, { cwd: options.cwd }, tui);
   tui.addChild(view.root);
-  const stateStore = createStateStore({ initialState: INITIAL_TUI_STATE });
   const piTui = new PiTui({
     terminal,
     tui,
@@ -185,16 +185,8 @@ class PiTui implements Tui {
     this.tui.stop();
   }
 
-  private isBusy(): boolean {
-    const state = this.stateStore.getState();
-    for (const agent of state.agents.values()) {
-      if (agent.status === "busy") return true;
-    }
-    return false;
-  }
-
   private requestQuit(): void {
-    if (this.isBusy()) {
+    if (this.stateStore.isBusy()) {
       this.stateStore.dispatch(Actions.setPendingQuit(true));
       return;
     }
@@ -216,7 +208,7 @@ class PiTui implements Tui {
       this.stateStore.dispatch(Actions.setErrorMessage("No team loaded; run `/team <id>` to load a team."));
       return;
     }
-    const target = TuiStateSelectors.getFocusedAgent(state);
+    const target = this.stateStore.getFocusedAgent();
     if (target === null) {
       this.stateStore.dispatch(Actions.setErrorMessage("Team has no agent to address; load a valid team with `/team <id>`."));
       return;
@@ -230,11 +222,11 @@ class PiTui implements Tui {
     if (view.confirmExit.isVisible() !== state.pendingQuit) {
       view.confirmExit.setVisible(state.pendingQuit);
     }
-    const focused = TuiStateSelectors.getFocusedAgent(state);
+    const focused = this.stateStore.getFocusedAgent();
     view.chatPane.setAgent(focused);
     view.editor.setQueueIndicator(formatQueueIndicator(focused?.queue ?? null));
     view.rail.setItemsFromState(state);
-    view.statusBar.update({ cwd: this.cwd, git: this.services.gitService.getSnapshot() }, state);
+    view.statusBar.update({ cwd: this.cwd, git: this.services.gitService.getSnapshot() }, this.stateStore);
   }
 
   private renderAll(): void {

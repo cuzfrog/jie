@@ -1,7 +1,7 @@
 ---
 sealed:
   - index.ts
-  - state.ts
+  - types.ts
   - state-store.test.ts
   - state-store.ts
   - reducer.test.ts

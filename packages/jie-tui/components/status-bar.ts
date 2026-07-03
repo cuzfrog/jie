@@ -1,5 +1,5 @@
 import { Container, Loader, Text, type TUI } from "@earendil-works/pi-tui";
-import { TuiStateSelectors, type AgentStatus, type ModelReference, type TuiState } from "../state";
+import { type AgentStatus, type ModelReference, type StateStore } from "../state";
 import type { GitSnapshot } from "@cuzfrog/jie-platform/services";
 
 const PLACEHOLDER_TOKEN_USAGE = "0%/200k";
@@ -57,8 +57,9 @@ export class StatusBar extends Container {
     return `${PLACEHOLDER_TOKEN_USAGE}  ${this.hintText(context)}  ${this.modelText(context.focusedModel)}`;
   }
 
-  update(model: StatusBarModel, state: TuiState): void {
-    const focused = TuiStateSelectors.getFocusedAgent(state);
+  update(model: StatusBarModel, stateStore: StateStore): void {
+    const state = stateStore.getState();
+    const focused = stateStore.getFocusedAgent();
     this.setModel(model, {
       focusedStatus: focused?.status ?? null,
       focusedAgentKey: focused?.agentKey ?? null,
