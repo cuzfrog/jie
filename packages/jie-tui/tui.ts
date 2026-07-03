@@ -156,7 +156,7 @@ class PiTui implements Tui {
       this.stop();
       return;
     }
-    this.renderAll();
+    this.render();
   }
 
   private publishPrompt(text: string): void {
@@ -174,7 +174,7 @@ class PiTui implements Tui {
     this.eventManager.publish(Events.userPrompt(sender, state.teamId, text, target.agentKey));
   }
 
-  private renderAll(): void {
+  private render(): void {
     const state = this.stateStore.getState();
     const focused = this.stateStore.getFocusedAgent();
     this.view.chatPane.setAgent(focused);
