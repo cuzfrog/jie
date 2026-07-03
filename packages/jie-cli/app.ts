@@ -1,6 +1,7 @@
 import { createJiePlatform, type JiePlatform } from "@cuzfrog/jie-platform";
-import type { AuthStore, Settings, ModelRegistry, SettingsStore } from "@cuzfrog/jie-platform/config";
+import type { AuthStore, Scope, Settings, ModelRegistry, SettingsStore } from "@cuzfrog/jie-platform/config";
 import type { EventManager } from "@cuzfrog/jie-platform/event";
+import type { GitService } from "@cuzfrog/jie-platform/services";
 import type { ArtifactStore, MemoryManager, Storage } from "@cuzfrog/jie-platform/storage";
 import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
 import type { ToolRegistry } from "@cuzfrog/jie-platform/tools";
@@ -15,6 +16,8 @@ export interface AppDeps {
   readonly toolRegistry: ToolRegistry;
   readonly artifactStore: ArtifactStore;
   readonly memoryManager: MemoryManager;
+  readonly gitService: GitService;
+  readonly defaultScope: Scope;
 }
 
 export interface App {

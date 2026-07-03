@@ -1,10 +1,8 @@
 import { runPrint } from "./print";
 
 interface JiePlatformStub {
-  events: {
-    subscribe: ReturnType<typeof vi.fn>;
-    publish: ReturnType<typeof vi.fn>;
-  };
+  subscribe: ReturnType<typeof vi.fn>;
+  userPrompt: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
 }
 
@@ -14,40 +12,31 @@ type AgentEnvelope = {
 };
 type Handler = (env: AgentEnvelope) => void;
 
-function makeHandle(): { handle: JiePlatformStub; events: JiePlatformStub["events"] } {
-  const events = {
-    subscribe: vi.fn(),
-    publish: vi.fn(),
-  };
+function makeHandle(): { handle: JiePlatformStub; subscribes: Map<string, Handler> } {
+  const subscribes = new Map<string, Handler>();
   const handle: JiePlatformStub = {
-    events,
+    subscribe: vi.fn((topic: string, cb: Handler) => {
+      subscribes.set(topic, cb);
+      return () => {};
+    }),
+    userPrompt: vi.fn(),
     stop: vi.fn().mockResolvedValue(undefined),
   };
-  return { handle, events };
-}
-
-function captureHandlers(events: JiePlatformStub["events"]): Map<string, Handler> {
-  const handlers = new Map<string, Handler>();
-  events.subscribe.mockImplementation((topic: string, cb: Handler) => {
-    handlers.set(topic, cb);
-    return () => {};
-  });
-  return handlers;
+  return { handle, subscribes };
 }
 
 describe("runPrint", () => {
   test("happy path: subscribes to agent.stream.chunk, publishes leader.prompt, waits for agent.idle, then stop()s", async () => {
-    const { handle, events } = makeHandle();
+    const { handle, subscribes } = makeHandle();
     const teamId = "t1";
     const leaderKey = "general-1";
-    const handlers = captureHandlers(events);
 
     setImmediate(() => {
-      handlers.get("agent.turn.start")?.({
+      subscribes.get("agent.turn.start")?.({
         sender: { kind: "agent", teamId, agentKey: leaderKey },
         payload: {},
       });
-      handlers.get("agent.idle")?.({
+      subscribes.get("agent.idle")?.({
         sender: { kind: "agent", teamId, agentKey: leaderKey },
         payload: {},
       });
@@ -61,23 +50,13 @@ describe("runPrint", () => {
       { kind: "print", instruction: "hi", team: undefined, timeout: 30, json: false, apiKey: undefined, resume: undefined, continueLast: false },
     );
     expect(code).toBe(0);
-    expect(events.subscribe).toHaveBeenCalledWith("agent.stream.chunk", expect.any(Function));
-    expect(events.subscribe).toHaveBeenCalledWith("agent.turn.start", expect.any(Function));
-    expect(events.subscribe).toHaveBeenCalledWith("agent.idle", expect.any(Function));
-    expect(events.publish).toHaveBeenCalledWith(
-      expect.objectContaining({
-        topic: "user.prompt",
-        payload: expect.objectContaining({ teamId: "t1", agentKey: "general-1", prompt: "hi" }),
-        sender: expect.objectContaining({ kind: "user" }),
-      }),
-    );
+    expect(handle.subscribe).toHaveBeenCalledWith("agent.stream.chunk", expect.any(Function));
+    expect(handle.userPrompt).toHaveBeenCalledWith(leaderKey, "hi");
     expect(handle.stop).toHaveBeenCalled();
   });
 
   test("timeout: returns 3 and stops the handle", async () => {
-    const { handle, events } = makeHandle();
-    events.subscribe.mockReturnValue(() => {});
-
+    const { handle } = makeHandle();
     const code = await runPrint(
       handle as never,
       "t1",
@@ -90,29 +69,28 @@ describe("runPrint", () => {
   });
 
   test("worker busy while leader idles: gate does NOT open until worker idles", async () => {
-    const { handle, events } = makeHandle();
+    const { handle, subscribes } = makeHandle();
     const teamId = "t1";
     const leaderKey = "general-1";
     const workerKey = "worker-1";
-    const handlers = captureHandlers(events);
 
     setImmediate(() => {
-      handlers.get("agent.turn.start")?.({
+      subscribes.get("agent.turn.start")?.({
         sender: { kind: "agent", teamId, agentKey: leaderKey },
         payload: {},
       });
-      handlers.get("agent.turn.start")?.({
+      subscribes.get("agent.turn.start")?.({
         sender: { kind: "agent", teamId, agentKey: workerKey },
         payload: {},
       });
       setTimeout(() => {
-        handlers.get("agent.idle")?.({
+        subscribes.get("agent.idle")?.({
           sender: { kind: "agent", teamId, agentKey: leaderKey },
           payload: {},
         });
       }, 10);
       setTimeout(() => {
-        handlers.get("agent.idle")?.({
+        subscribes.get("agent.idle")?.({
           sender: { kind: "agent", teamId, agentKey: workerKey },
           payload: {},
         });
@@ -133,24 +111,23 @@ describe("runPrint", () => {
   });
 
   test("agents unknown to the gate are ignored: a stray worker-idle does not resolve early", async () => {
-    const { handle, events } = makeHandle();
+    const { handle, subscribes } = makeHandle();
     const teamId = "t1";
     const leaderKey = "general-1";
-    const handlers = captureHandlers(events);
 
     setImmediate(() => {
-      handlers.get("agent.turn.start")?.({
+      subscribes.get("agent.turn.start")?.({
         sender: { kind: "agent", teamId, agentKey: leaderKey },
         payload: {},
       });
       setTimeout(() => {
-        handlers.get("agent.idle")?.({
+        subscribes.get("agent.idle")?.({
           sender: { kind: "agent", teamId, agentKey: "ghost-1" },
           payload: {},
         });
       }, 5);
       setTimeout(() => {
-        handlers.get("agent.idle")?.({
+        subscribes.get("agent.idle")?.({
           sender: { kind: "agent", teamId, agentKey: leaderKey },
           payload: {},
         });
@@ -171,11 +148,10 @@ describe("runPrint", () => {
   });
 
   test("agent.stream.chunk: only the leader's chunks are written; foreign-team and non-leader chunks are dropped", async () => {
-    const { handle, events } = makeHandle();
+    const { handle, subscribes } = makeHandle();
     const teamId = "t1";
     const leaderKey = "general-1";
     const workerKey = "worker-1";
-    const handlers = captureHandlers(events);
 
     const writes: string[] = [];
     const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
@@ -184,23 +160,23 @@ describe("runPrint", () => {
     });
 
     setImmediate(() => {
-      handlers.get("agent.stream.chunk")?.({
+      subscribes.get("agent.stream.chunk")?.({
         sender: { kind: "agent", teamId, agentKey: leaderKey },
         payload: { text: "leader-1", seq: 0, block_type: "text" },
       });
-      handlers.get("agent.stream.chunk")?.({
+      subscribes.get("agent.stream.chunk")?.({
         sender: { kind: "agent", teamId, agentKey: workerKey },
         payload: { text: "worker-1", seq: 0, block_type: "text" },
       });
-      handlers.get("agent.stream.chunk")?.({
+      subscribes.get("agent.stream.chunk")?.({
         sender: { kind: "agent", teamId: "other-team", agentKey: leaderKey },
         payload: { text: "other-team", seq: 0, block_type: "text" },
       });
-      handlers.get("agent.stream.chunk")?.({
+      subscribes.get("agent.stream.chunk")?.({
         sender: { kind: "user" },
         payload: { text: "user-text", seq: 0, block_type: "text" },
       });
-      handlers.get("agent.idle")?.({
+      subscribes.get("agent.idle")?.({
         sender: { kind: "agent", teamId, agentKey: leaderKey },
         payload: {},
       });

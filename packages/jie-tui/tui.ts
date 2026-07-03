@@ -1,21 +1,12 @@
 import { ProcessTerminal, TUI, type Terminal } from "@earendil-works/pi-tui";
-import { Events, type EventEnvelope, type EventManager, type EventType, type Sender } from "@cuzfrog/jie-platform/event";
-import { type AuthStore, type Scope, type SettingsStore } from "@cuzfrog/jie-platform/config";
-import { type TeamRegistry } from "@cuzfrog/jie-platform/team";
-import { type AnyEventEnvelope, type TuiState, Actions, createStateStore, type StateStore } from "./state";
+import type { AnyEventEnvelope, EventEnvelope, EventType, JiePlatform } from "@cuzfrog/jie-platform";
+import { type TuiState, Actions, createStateStore, type StateStore } from "./state";
 import { createTuiCommandHandler, type TuiCommandHandler } from "./command-handler";
 import { createKeyboardHandler, type KeyboardHandler } from "./keyboard-handler";
-import { type GitService } from "@cuzfrog/jie-platform/services";
 import { buildView, type BuildViewResult } from "./components";
 
 export interface TuiDeps {
-  readonly eventManager: EventManager;
-  readonly teamRegistry: TeamRegistry;
-  readonly loadTeam: (teamId: string) => Promise<void>;
-  readonly authStore: AuthStore;
-  readonly gitService: GitService;
-  readonly settingsStore: SettingsStore;
-  readonly settingsScope: Scope;
+  readonly platform: JiePlatform;
 }
 
 export interface CreateTUIOptions {
@@ -47,14 +38,10 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions): Tui {
   tui.addChild(view.root);
   const commandHandler = createTuiCommandHandler({
     stateStore,
-    teamRegistry: deps.teamRegistry,
-    loadTeam: deps.loadTeam,
-    authStore: deps.authStore,
-    settingsStore: deps.settingsStore,
-    settingsScope: deps.settingsScope,
+    platform: deps.platform,
   });
   const keyboardHandler = createKeyboardHandler({
-    eventManager: deps.eventManager,
+    platform: deps.platform,
     stateStore,
   });
   const piTui = new PiTui({
@@ -63,8 +50,7 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions): Tui {
     view,
     cwd: options.cwd,
     stateStore,
-    eventManager: deps.eventManager,
-    gitService: deps.gitService,
+    platform: deps.platform,
     commandHandler,
     keyboardHandler,
   });
@@ -77,8 +63,7 @@ interface PiTuiCtorOptions {
   readonly view: BuildViewResult;
   readonly cwd: string;
   readonly stateStore: StateStore;
-  readonly eventManager: EventManager;
-  readonly gitService: GitService;
+  readonly platform: JiePlatform;
   readonly commandHandler: TuiCommandHandler;
   readonly keyboardHandler: KeyboardHandler;
 }
@@ -89,8 +74,7 @@ class PiTui implements Tui {
   private readonly tui: TUI;
   private readonly view: BuildViewResult;
   private readonly cwd: string;
-  private readonly eventManager: EventManager;
-  private readonly gitService: GitService;
+  private readonly platform: JiePlatform;
   private readonly commandHandler: TuiCommandHandler;
   private readonly keyboardHandler: KeyboardHandler;
   private readonly unsubscribeBus: () => void;
@@ -103,11 +87,10 @@ class PiTui implements Tui {
     this.tui = opts.tui;
     this.view = opts.view;
     this.cwd = opts.cwd;
-    this.eventManager = opts.eventManager;
-    this.gitService = opts.gitService;
+    this.platform = opts.platform;
     this.commandHandler = opts.commandHandler;
     this.keyboardHandler = opts.keyboardHandler;
-    this.unsubscribeBus = subscribeToBus(this.eventManager, (env) => this.stateStore.dispatch(Actions.receiveEvent(env)));
+    this.unsubscribeBus = subscribeToBus(this.platform, (env) => this.stateStore.dispatch(Actions.receiveEvent(env as AnyEventEnvelope)));
     this.unsubscribeRender = this.stateStore.subscribe(() => this.onStateChange());
   }
 
@@ -170,8 +153,7 @@ class PiTui implements Tui {
       this.stateStore.dispatch(Actions.setErrorMessage("Team has no agent to address; load a valid team with `/team <id>`."));
       return;
     }
-    const sender: Sender = { kind: "user" };
-    this.eventManager.publish(Events.userPrompt(sender, state.teamId, text, target.agentKey));
+    this.platform.userPrompt(target.agentKey, text);
   }
 
   private render(): void {
@@ -180,15 +162,15 @@ class PiTui implements Tui {
     this.view.chatPane.setAgent(focused);
     this.view.editor.setQueueIndicator(formatQueueIndicator(focused?.queue ?? null));
     this.view.rail.setItemsFromState(state);
-    this.view.statusBar.update({ cwd: this.cwd, git: this.gitService.getSnapshot() }, this.stateStore);
+    this.view.statusBar.update({ cwd: this.cwd, git: this.platform.getGitStatus() }, this.stateStore);
     this.tui.requestRender();
   }
 }
 
-function subscribeToBus(eventManager: EventManager, onEvent: (env: AnyEventEnvelope) => void): () => void {
+function subscribeToBus(platform: JiePlatform, onEvent: (env: EventEnvelope<EventType>) => void): () => void {
   const busUnsubscribes: Array<() => void> = [];
   for (const topic of SUBSCRIBED_TOPICS) {
-    busUnsubscribes.push(eventManager.subscribe(topic, (env: EventEnvelope<EventType>) => onEvent(env as AnyEventEnvelope)));
+    busUnsubscribes.push(platform.subscribe(topic, onEvent));
   }
   let busUnsubscribed = false;
   return (): void => {
@@ -202,7 +184,7 @@ function isUtf8(): boolean {
   return /utf-?8/i.test(process.env.LANG ?? process.env.LC_ALL ?? "");
 }
 
-const SUBSCRIBED_TOPICS: ReadonlyArray<EventType> = [
+const SUBSCRIBED_TOPICS = [
   "system.team.loaded",
   "system.interrupted",
   "system.error",
@@ -215,7 +197,7 @@ const SUBSCRIBED_TOPICS: ReadonlyArray<EventType> = [
   "agent.stream.end",
   "agent.tool.call",
   "agent.tool.result",
-];
+] as const;
 
 const QUEUE_PREVIEW_MAX_CHARS = 100;
 

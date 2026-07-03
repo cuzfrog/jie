@@ -4,37 +4,47 @@ import {
   type TuiCommandHandler,
 } from "./command-handler";
 import { Actions, createStateStore, type StateStore, type TuiState } from "./state";
-import type { AuthStore, Settings, SettingsStore } from "@cuzfrog/jie-platform/config";
-import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
-
-const authStore = vi.mocked<AuthStore>({
-  load: vi.fn(),
-  saveAuthConfig: vi.fn(),
-  setProvider: vi.fn(),
-  removeProvider: vi.fn(),
-  clear: vi.fn(),
-});
-
-const settingsStore = vi.mocked<SettingsStore>({
-  load: vi.fn(),
-  write: vi.fn(),
-  unsetDefaultTeam: vi.fn(),
-});
-
-const teamRegistry = vi.mocked<TeamRegistry>({
-  parseTeamManifest: vi.fn(),
-  isInstalled: vi.fn(),
-  listInstalled: vi.fn(),
-  locate: vi.fn(),
-});
-
-const loadTeam = vi.fn<() => Promise<void>>(() => Promise.resolve());
+import type { JiePlatform } from "@cuzfrog/jie-platform";
 
 const ANTHROPIC_KEY = "sk-test-anthropic";
-const SETTINGS_DEFAULT: Settings = {
-  defaultProvider: "anthropic",
-  defaultModel: "claude-sonnet-4-5",
-};
+
+function makePlatform(): {
+  platform: JiePlatform;
+  login: ReturnType<typeof vi.fn>;
+  logout: ReturnType<typeof vi.fn>;
+  setDefaultModel: ReturnType<typeof vi.fn>;
+  unsetDefaultTeam: ReturnType<typeof vi.fn>;
+  getDefaultTeam: ReturnType<typeof vi.fn>;
+  getDefaultModel: ReturnType<typeof vi.fn>;
+  listInstalledTeams: ReturnType<typeof vi.fn>;
+  loadTeam: ReturnType<typeof vi.fn>;
+} {
+  const login = vi.fn();
+  const logout = vi.fn();
+  const setDefaultModel = vi.fn();
+  const unsetDefaultTeam = vi.fn();
+  const getDefaultTeam = vi.fn(() => null as string | null);
+  const getDefaultModel = vi.fn(() => null as { provider: string; modelId: string } | null);
+  const listInstalledTeams = vi.fn(() => [] as ReadonlyArray<string>);
+  const loadTeam = vi.fn<() => Promise<void>>(() => Promise.resolve());
+  const platform = {
+    team: { id: "minimal", agents: [] },
+    loadTeam,
+    stop: vi.fn<() => Promise<void>>(() => Promise.resolve()),
+    subscribe: vi.fn(),
+    userPrompt: vi.fn(),
+    interrupt: vi.fn(),
+    login,
+    logout,
+    setDefaultModel,
+    unsetDefaultTeam,
+    getDefaultTeam,
+    getDefaultModel,
+    listInstalledTeams,
+    getGitStatus: vi.fn(() => ({ branch: "", dirty: false, ahead: 0, behind: 0 })),
+  };
+  return { platform: platform as unknown as JiePlatform, login, logout, setDefaultModel, unsetDefaultTeam, getDefaultTeam, getDefaultModel, listInstalledTeams, loadTeam };
+}
 
 interface DepsHandle {
   deps: CommandHandlerDeps;
@@ -42,7 +52,7 @@ interface DepsHandle {
   dispatch: ReturnType<typeof vi.fn>;
 }
 
-function makeDeps(): DepsHandle {
+function makeDeps(platform: JiePlatform): DepsHandle {
   const baseStore = createStateStore();
   let current: TuiState = baseStore.getState();
   const dispatch = vi.fn((action: Parameters<StateStore["dispatch"]>[0]) => {
@@ -66,23 +76,15 @@ function makeDeps(): DepsHandle {
   };
   const deps: CommandHandlerDeps = {
     stateStore,
-    teamRegistry,
-    loadTeam,
-    authStore,
-    settingsStore,
-    settingsScope: "global",
+    platform,
   };
   return { deps, getState: () => current, dispatch };
 }
 
 describe("createTuiCommandHandler", () => {
-  beforeEach(() => {
-    settingsStore.load.mockReturnValue(SETTINGS_DEFAULT);
-    teamRegistry.listInstalled.mockReturnValue([]);
-  });
-
   test("handle('/help') clears banners then sets a reply message", () => {
-    const { deps, dispatch } = makeDeps();
+    const { platform } = makePlatform();
+    const { deps, dispatch } = makeDeps(platform);
     const handler: TuiCommandHandler = createTuiCommandHandler(deps);
     handler.handle("/help");
     expect(dispatch).toHaveBeenCalledWith(Actions.clearBanners());
@@ -90,7 +92,8 @@ describe("createTuiCommandHandler", () => {
   });
 
   test("handle('/clear') dispatches clearTuiState", () => {
-    const { deps, dispatch } = makeDeps();
+    const { platform } = makePlatform();
+    const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/clear");
     expect(dispatch).toHaveBeenCalledWith(Actions.clearBanners());
@@ -98,28 +101,35 @@ describe("createTuiCommandHandler", () => {
   });
 
   test("handle('/exit') dispatches requestQuit", () => {
-    const { deps, dispatch } = makeDeps();
+    const { platform } = makePlatform();
+    const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/exit");
     expect(dispatch).toHaveBeenCalledWith(Actions.requestQuit());
   });
 
   test("handle('/team') reports the current default and installed list", () => {
-    const { deps, dispatch } = makeDeps();
+    const { platform, getDefaultTeam, listInstalledTeams } = makePlatform();
+    getDefaultTeam.mockReturnValue("alpha");
+    listInstalledTeams.mockReturnValue(["minimal", "alpha", "beta"]);
+    const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team");
-    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("defaultTeam: ")));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringMatching(/alpha/)));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringMatching(/minimal.*alpha.*beta/)));
   });
 
   test("handle('/nope') sets an error message", () => {
-    const { deps, dispatch } = makeDeps();
+    const { platform } = makePlatform();
+    const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/nope");
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/nope")));
   });
 
   test("handle clears banners before each invocation", () => {
-    const { deps, dispatch } = makeDeps();
+    const { platform } = makePlatform();
+    const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/help");
     expect(dispatch.mock.calls[0]?.[0]).toEqual(Actions.clearBanners());
@@ -127,152 +137,144 @@ describe("createTuiCommandHandler", () => {
 });
 
 describe("createTuiCommandHandler — /login", () => {
-  beforeEach(() => {
-    authStore.load.mockReturnValue({});
-  });
-
   test("/login <provider> <apiKey> writes provider to authStore and replies", () => {
-    authStore.setProvider.mockReturnValue({ anthropic: { type: "api_key", key: ANTHROPIC_KEY } });
-    const { deps, dispatch } = makeDeps();
+    const { platform, login } = makePlatform();
+    login.mockImplementation(() => undefined);
+    const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
-    handler.handle("/login anthropic sk-test-anthropic");
-
-    expect(authStore.setProvider).toHaveBeenCalledWith(expect.anything(), "anthropic", ANTHROPIC_KEY);
-    expect(authStore.saveAuthConfig).toHaveBeenCalledWith({ anthropic: { type: "api_key", key: ANTHROPIC_KEY } });
+    handler.handle("/login anthropic " + ANTHROPIC_KEY);
+    expect(login).toHaveBeenCalledWith("anthropic", ANTHROPIC_KEY);
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("logged in to anthropic")));
   });
 
   test("/login with wrong arity sets an error message and does not write", () => {
-    const { deps, dispatch } = makeDeps();
+    const { platform, login } = makePlatform();
+    const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/login anthropic");
-
-    expect(authStore.saveAuthConfig).not.toHaveBeenCalled();
+    expect(login).not.toHaveBeenCalled();
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/login <provider> <apiKey>")));
+  });
+
+  test("/login surfaces platform errors as error messages", () => {
+    const { platform, login } = makePlatform();
+    login.mockImplementation(() => { throw new Error("auth failed"); });
+    const { deps, dispatch } = makeDeps(platform);
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("/login anthropic " + ANTHROPIC_KEY);
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/login failed")));
   });
 });
 
 describe("createTuiCommandHandler — /logout", () => {
-  test("/logout with no args clears all providers and replies", () => {
-    authStore.clear.mockReturnValue({});
-    const { deps, dispatch } = makeDeps();
+  test("/logout with no args calls platform.logout() with no provider and replies", () => {
+    const { platform, logout } = makePlatform();
+    const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/logout");
-
-    expect(authStore.clear).toHaveBeenCalled();
-    expect(authStore.saveAuthConfig).toHaveBeenCalledWith({});
+    expect(logout).toHaveBeenCalledWith(undefined);
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("logged out of all providers")));
   });
 
   test("/logout <provider> removes one provider and replies", () => {
-    authStore.removeProvider.mockReturnValue({});
-    const { deps, dispatch } = makeDeps();
+    const { platform, logout } = makePlatform();
+    const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/logout anthropic");
-
-    expect(authStore.removeProvider).toHaveBeenCalledWith(expect.anything(), "anthropic");
-    expect(authStore.saveAuthConfig).toHaveBeenCalledWith({});
+    expect(logout).toHaveBeenCalledWith("anthropic");
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("logged out of anthropic")));
   });
 });
 
 describe("createTuiCommandHandler — /model", () => {
-  beforeEach(() => {
-    settingsStore.load.mockReturnValue(SETTINGS_DEFAULT);
-  });
-
   test("/model <provider>/<modelId> validates and writes to settings", () => {
-    const { deps, dispatch } = makeDeps();
+    const { platform, setDefaultModel } = makePlatform();
+    const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/model openai/gpt-4o");
-
-    expect(settingsStore.write).toHaveBeenCalledWith({ defaultProvider: "openai", defaultModel: "gpt-4o" }, "global");
+    expect(setDefaultModel).toHaveBeenCalledWith("openai", "gpt-4o");
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("default model set to openai/gpt-4o")));
   });
 
   test("/model without slash sets an error", () => {
-    const { deps, dispatch } = makeDeps();
+    const { platform, setDefaultModel } = makePlatform();
+    const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/model just-a-string");
-
-    expect(settingsStore.write).not.toHaveBeenCalled();
+    expect(setDefaultModel).not.toHaveBeenCalled();
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("invalid")));
   });
 
-  test("/model <unknown>/<id> sets an error about unknown provider", () => {
-    const { deps, dispatch } = makeDeps();
+  test("/model surfaces UNKNOWN_PROVIDER from the platform", () => {
+    const { platform, setDefaultModel } = makePlatform();
+    setDefaultModel.mockImplementation(() => { throw new Error("Unknown provider: no-such-provider"); });
+    const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/model no-such-provider/gpt-4o");
-
-    expect(settingsStore.write).not.toHaveBeenCalled();
-    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("unknown provider")));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/model failed")));
   });
 
   test("/model with wrong arity sets an error", () => {
-    const { deps, dispatch } = makeDeps();
+    const { platform, setDefaultModel } = makePlatform();
+    const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/model");
-
-    expect(settingsStore.write).not.toHaveBeenCalled();
+    expect(setDefaultModel).not.toHaveBeenCalled();
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/model <provider>/<modelId>")));
   });
 });
 
 describe("createTuiCommandHandler — /team", () => {
-  beforeEach(() => {
-    settingsStore.load.mockReturnValue(SETTINGS_DEFAULT);
-  });
-
-  test("/team --unset calls settingsStore.unsetDefaultTeam and replies", () => {
-    const { deps, dispatch } = makeDeps();
+  test("/team --unset calls platform.unsetDefaultTeam and replies", () => {
+    const { platform, unsetDefaultTeam } = makePlatform();
+    const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team --unset");
-
-    expect(settingsStore.unsetDefaultTeam).toHaveBeenCalledTimes(1);
+    expect(unsetDefaultTeam).toHaveBeenCalledTimes(1);
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("default team unset")));
   });
 
   test("/team (no args) replies with defaultTeam and installed list", () => {
-    settingsStore.load.mockReturnValue({ ...SETTINGS_DEFAULT, defaultTeam: "alpha" });
-    teamRegistry.listInstalled.mockReturnValue(["minimal", "alpha", "beta"]);
-    const { deps, dispatch } = makeDeps();
+    const { platform, getDefaultTeam, listInstalledTeams } = makePlatform();
+    getDefaultTeam.mockReturnValue("alpha");
+    listInstalledTeams.mockReturnValue(["minimal", "alpha", "beta"]);
+    const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team");
-
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringMatching(/alpha/)));
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringMatching(/minimal.*alpha.*beta/)));
   });
 
   test("/team (no args) reports 'unset' when no defaultTeam is configured", () => {
-    settingsStore.load.mockReturnValue({});
-    teamRegistry.listInstalled.mockReturnValue(["minimal"]);
-    const { deps, dispatch } = makeDeps();
+    const { platform, getDefaultTeam, listInstalledTeams } = makePlatform();
+    getDefaultTeam.mockReturnValue(null);
+    listInstalledTeams.mockReturnValue(["minimal"]);
+    const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team");
-
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("unset")));
   });
 
-  test("/team <id> when team is installed dispatches loadTeam and replies", async () => {
-    teamRegistry.isInstalled.mockReturnValue(true);
-    const { deps, dispatch } = makeDeps();
+  test("/team <id> dispatches loadTeam and replies", async () => {
+    const { platform, loadTeam } = makePlatform();
+    loadTeam.mockResolvedValue(undefined);
+    const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team alpha");
-
-    expect(teamRegistry.isInstalled).toHaveBeenCalledWith("alpha");
     await new Promise((r) => setImmediate(r));
     expect(loadTeam).toHaveBeenCalledWith("alpha");
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("switching to team 'alpha'")));
   });
 
-  test("/team <id> when team is NOT installed falls through to stub reply", () => {
-    teamRegistry.isInstalled.mockReturnValue(false);
-    const { deps, dispatch } = makeDeps();
+  test("/team <id> surfaces TEAM_NOT_FOUND as a generic 'not found' message", async () => {
+    const { platform, loadTeam } = makePlatform();
+    const error = Object.assign(new Error("Team not found: ghost"), { code: "TEAM_NOT_FOUND" });
+    loadTeam.mockRejectedValue(error);
+    const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team ghost");
-
-    expect(loadTeam).not.toHaveBeenCalled();
-    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("ghost")));
-    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("not installed")));
+    await new Promise((r) => setImmediate(r));
+    expect(loadTeam).toHaveBeenCalledWith("ghost");
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("team 'ghost' not found"));
   });
 });

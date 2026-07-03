@@ -32,6 +32,7 @@ export const JiePlatformErrorMessages = {
   INVALID_FIELD_TYPE: "Field type mismatch",
   MISSING_REQUIRED_FIELD: "Required field missing",
   INVALID_MODEL_STRING: "Invalid model string",
+  UNKNOWN_PROVIDER: "Unknown provider",
   LEADER_REQUIRED: "TEAM.md leader is required",
   LEADER_MISMATCH: "TEAM.md leader does not match the only agent",
   LEADER_UNKNOWN: "TEAM.md leader references unknown role",

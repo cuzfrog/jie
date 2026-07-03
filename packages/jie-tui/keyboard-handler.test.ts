@@ -1,11 +1,10 @@
 import { createKeyboardHandler, type KeyboardHandlerDeps } from "./keyboard-handler";
 import { Actions, createStateStore, type StateStore, type TuiState } from "./state";
-import { createEventManager, type EventManager } from "@cuzfrog/jie-platform/event";
 
 interface DepsHandle {
   deps: KeyboardHandlerDeps;
   setState: (next: Partial<TuiState>) => void;
-  eventManager: EventManager;
+  interrupt: ReturnType<typeof vi.fn>;
   dispatch: ReturnType<typeof vi.fn>;
 }
 
@@ -31,53 +30,47 @@ function makeDeps(): DepsHandle {
       return false;
     },
   };
-  const eventManager: EventManager = createEventManager();
+  const interrupt = vi.fn();
   const deps: KeyboardHandlerDeps = {
-    eventManager,
+    platform: { interrupt },
     stateStore,
   };
   return {
     deps,
     setState: (next) => { current = { ...current, ...next }; },
-    eventManager,
+    interrupt,
     dispatch,
   };
 }
 
 describe("createKeyboardHandler — Esc Esc interrupt", () => {
-  test("Esc twice within window publishes interrupt", () => {
+  test("Esc twice within window calls platform.interrupt()", () => {
     const h = makeDeps();
     h.setState({ teamId: "default" });
     const handler = createKeyboardHandler(h.deps, { now: () => 1000 });
-    const published: Array<{ topic: string }> = [];
-    h.eventManager.subscribe("system.interrupted", (e) => published.push({ topic: e.topic }));
     handler.handle("\x1b");
     handler.handle("\x1b");
-    expect(published).toHaveLength(1);
+    expect(h.interrupt).toHaveBeenCalledTimes(1);
   });
 
-  test("Esc twice outside window does NOT publish", () => {
+  test("Esc twice outside window does NOT call platform.interrupt()", () => {
     let t = 1000;
     const h = makeDeps();
     h.setState({ teamId: "default" });
     const handler = createKeyboardHandler(h.deps, { now: () => t });
-    const published: Array<{ topic: string }> = [];
-    h.eventManager.subscribe("system.interrupted", (e) => published.push({ topic: e.topic }));
     handler.handle("\x1b");
     t = 2000;
     handler.handle("\x1b");
-    expect(published).toHaveLength(0);
+    expect(h.interrupt).not.toHaveBeenCalled();
   });
 
-  test("Esc twice but no team loaded does NOT publish", () => {
+  test("Esc twice but no team loaded does NOT call platform.interrupt()", () => {
     const h = makeDeps();
     h.setState({ teamId: null });
     const handler = createKeyboardHandler(h.deps, { now: () => 1000 });
-    const published: Array<{ topic: string }> = [];
-    h.eventManager.subscribe("system.interrupted", (e) => published.push({ topic: e.topic }));
     handler.handle("\x1b");
     handler.handle("\x1b");
-    expect(published).toHaveLength(0);
+    expect(h.interrupt).not.toHaveBeenCalled();
   });
 
   test("single Esc returns consume: false", () => {

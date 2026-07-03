@@ -13,6 +13,7 @@ import {
 import { createTeamRegistry } from "./team";
 import { createToolRegistry } from "./tools";
 import { createArtifactStore, createMemoryManager, createStorage } from "./storage";
+import { type GitService } from "./services";
 
 const NO_MODEL_ERROR = "No model has been selected";
 
@@ -30,10 +31,16 @@ const authStore = vi.mocked<AuthStore>({
   clear: vi.fn(),
 });
 
+const gitService = vi.mocked<GitService>({
+  getSnapshot: vi.fn(),
+});
+
 const DEFAULT_SETTINGS: Settings = {
   defaultProvider: "anthropic",
   defaultModel: "claude-sonnet-4-5",
 };
+
+const EMPTY_GIT_SNAPSHOT = { branch: "", dirty: false, ahead: 0, behind: 0 };
 
 function makeDeps(workspace: string, homeJieDir: string, filePath: string = ":memory:") {
   const projectJieDir = join(workspace, ".jie");
@@ -45,6 +52,7 @@ function makeDeps(workspace: string, homeJieDir: string, filePath: string = ":me
     eventManager: events,
     artifactStore,
   });
+  gitService.getSnapshot.mockReturnValue(EMPTY_GIT_SNAPSHOT);
   return {
     eventManager: events,
     settingsStore,
@@ -54,6 +62,9 @@ function makeDeps(workspace: string, homeJieDir: string, filePath: string = ":me
     toolRegistry,
     artifactStore,
     memoryManager: createMemoryManager(storage),
+    authStore,
+    gitService,
+    defaultScope: "global" as const,
   };
 }
 
@@ -79,7 +90,7 @@ describe("createJiePlatform", () => {
   });
 
   describe("happy path (minimal team)", () => {
-    test("starts the minimal team; events is the manager wrapping the bus from deps", async () => {
+    test("starts the minimal team; subscribe receives user.prompt events", async () => {
       const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform(
         {
@@ -90,9 +101,7 @@ describe("createJiePlatform", () => {
         deps,
       );
       const events: EventEnvelope<"user.prompt">[] = [];
-      handle.events.subscribe("user.prompt", (env) => {
-        events.push(env);
-      });
+      handle.subscribe("user.prompt", (env) => events.push(env));
       expect(events).toHaveLength(0);
     });
 
@@ -132,6 +141,9 @@ describe("createJiePlatform", () => {
         toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events, artifactStore }),
         artifactStore,
         memoryManager: createMemoryManager(storage),
+        authStore,
+        gitService,
+        defaultScope: "global" as const,
       };
       await expect(
         createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps),
@@ -170,6 +182,9 @@ describe("createJiePlatform", () => {
         toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events1, artifactStore: artifactStore1 }),
         artifactStore: artifactStore1,
         memoryManager: createMemoryManager(storage1),
+        authStore,
+        gitService,
+        defaultScope: "global" as const,
       };
       const h1 = await createJiePlatform(
         { workspace, homeJieDir, teamId: "minimal" },
@@ -196,6 +211,9 @@ describe("createJiePlatform", () => {
         toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events2, artifactStore: artifactStore2 }),
         artifactStore: artifactStore2,
         memoryManager: createMemoryManager(storage2),
+        authStore,
+        gitService,
+        defaultScope: "global" as const,
       };
       const h2 = await createJiePlatform(
         { workspace, homeJieDir, teamId: "minimal", resumeSessionId: sessionId },
@@ -215,6 +233,9 @@ describe("createJiePlatform", () => {
         toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events3, artifactStore: artifactStore3 }),
         artifactStore: artifactStore3,
         memoryManager: createMemoryManager(storage3),
+        authStore,
+        gitService,
+        defaultScope: "global" as const,
       };
       await expect(
         createJiePlatform(
@@ -291,6 +312,196 @@ describe("createJiePlatform", () => {
       await handle.loadTeam("alpha");
       await handle.loadTeam("alpha");
       expect(events.filter((e) => e.payload.teamId === "alpha")).toHaveLength(1);
+      await handle.stop();
+    });
+  });
+});
+
+describe("JiePlatform — facade methods", () => {
+  let workspace: string;
+  let homeJieDir: string;
+
+  beforeEach(() => {
+    workspace = mkdtempSync(join(tmpdir(), "jie-facade-"));
+    homeJieDir = mkdtempSync(join(tmpdir(), "jie-facade-home-"));
+    settingsStore.load.mockReturnValue(DEFAULT_SETTINGS);
+    authStore.load.mockReturnValue({});
+    gitService.getSnapshot.mockReturnValue(EMPTY_GIT_SNAPSHOT);
+  });
+
+  afterEach(() => {
+    rmSync(workspace, { recursive: true, force: true });
+    rmSync(homeJieDir, { recursive: true, force: true });
+  });
+
+  describe("subscribe", () => {
+    test("forwards events on the requested topic only", async () => {
+      const deps = makeDeps(workspace, homeJieDir);
+      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
+      const seen: string[] = [];
+      handle.subscribe("system.interrupted", (env) => seen.push(env.type));
+      deps.eventManager.publish({ type: "system.interrupted", topic: "system.interrupted", version: 1, sender: { kind: "system" }, timestamp: new Date().toISOString(), payload: null });
+      deps.eventManager.publish({ type: "system.error", topic: "system.error", version: 1, sender: { kind: "system" }, timestamp: new Date().toISOString(), payload: { error: "boom" } });
+      expect(seen).toEqual(["system.interrupted"]);
+      await handle.stop();
+    });
+
+    test("returns an unsubscribe function that detaches the subscription", async () => {
+      const deps = makeDeps(workspace, homeJieDir);
+      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
+      const seen: string[] = [];
+      const unsubscribe = handle.subscribe("system.interrupted", (env) => seen.push(env.type));
+      unsubscribe();
+      deps.eventManager.publish({ type: "system.interrupted", topic: "system.interrupted", version: 1, sender: { kind: "system" }, timestamp: new Date().toISOString(), payload: null });
+      expect(seen).toEqual([]);
+      await handle.stop();
+    });
+  });
+
+  describe("userPrompt", () => {
+    test("publishes a user.prompt event addressed to the given agent on the active team", async () => {
+      const deps = makeDeps(workspace, homeJieDir);
+      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
+      const events: EventEnvelope<"user.prompt">[] = [];
+      deps.eventManager.subscribe("user.prompt", (env) => events.push(env));
+      handle.userPrompt("general-1", "hello");
+      expect(events).toHaveLength(1);
+      expect(events[0]!.payload).toEqual({ teamId: "minimal", agentKey: "general-1", prompt: "hello" });
+      expect(events[0]!.sender).toEqual({ kind: "user" });
+      await handle.stop();
+    });
+  });
+
+  describe("interrupt", () => {
+    test("publishes a system.interrupted event", async () => {
+      const deps = makeDeps(workspace, homeJieDir);
+      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
+      const events: EventEnvelope<"system.interrupted">[] = [];
+      deps.eventManager.subscribe("system.interrupted", (env) => events.push(env));
+      handle.interrupt();
+      expect(events).toHaveLength(1);
+      expect(events[0]!.sender).toEqual({ kind: "system" });
+      await handle.stop();
+    });
+  });
+
+  describe("login", () => {
+    test("writes the provider key via authStore", async () => {
+      const deps = makeDeps(workspace, homeJieDir);
+      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
+      authStore.load.mockReturnValue({});
+      authStore.setProvider.mockReturnValue({ anthropic: { type: "api_key", key: "sk-test" } });
+      handle.login("anthropic", "sk-test");
+      expect(authStore.setProvider).toHaveBeenCalledWith({}, "anthropic", "sk-test");
+      expect(authStore.saveAuthConfig).toHaveBeenCalledWith({ anthropic: { type: "api_key", key: "sk-test" } });
+      await handle.stop();
+    });
+  });
+
+  describe("logout", () => {
+    test("with no provider, clears all providers", async () => {
+      const deps = makeDeps(workspace, homeJieDir);
+      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
+      authStore.clear.mockReturnValue({});
+      handle.logout();
+      expect(authStore.clear).toHaveBeenCalled();
+      expect(authStore.saveAuthConfig).toHaveBeenCalledWith({});
+      expect(authStore.removeProvider).not.toHaveBeenCalled();
+      await handle.stop();
+    });
+
+    test("with a provider, removes only that provider", async () => {
+      const deps = makeDeps(workspace, homeJieDir);
+      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
+      authStore.load.mockReturnValue({ anthropic: { type: "api_key", key: "sk-test" } });
+      authStore.removeProvider.mockReturnValue({});
+      handle.logout("anthropic");
+      expect(authStore.removeProvider).toHaveBeenCalledWith(expect.anything(), "anthropic");
+      expect(authStore.saveAuthConfig).toHaveBeenCalledWith({});
+      expect(authStore.clear).not.toHaveBeenCalled();
+      await handle.stop();
+    });
+  });
+
+  describe("setDefaultModel", () => {
+    test("writes the new model with the default scope for known providers", async () => {
+      const deps = makeDeps(workspace, homeJieDir, ":memory:");
+      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
+      settingsStore.load.mockReturnValue({});
+      handle.setDefaultModel("anthropic", "claude-sonnet-4-5");
+      expect(settingsStore.write).toHaveBeenCalledWith(
+        { defaultProvider: "anthropic", defaultModel: "claude-sonnet-4-5" },
+        "global",
+      );
+      await handle.stop();
+    });
+
+    test("throws UNKNOWN_PROVIDER for an unknown provider", async () => {
+      const deps = makeDeps(workspace, homeJieDir);
+      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
+      expect(() => handle.setDefaultModel("no-such-provider", "x")).toThrow(/Unknown provider/);
+      expect(settingsStore.write).not.toHaveBeenCalled();
+      await handle.stop();
+    });
+
+    test("uses project scope when defaultScope is project", async () => {
+      const deps = makeDeps(workspace, homeJieDir);
+      const projectDeps = { ...deps, defaultScope: "project" as const };
+      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, projectDeps);
+      settingsStore.load.mockReturnValue({});
+      handle.setDefaultModel("anthropic", "claude-sonnet-4-5");
+      expect(settingsStore.write).toHaveBeenCalledWith(expect.anything(), "project");
+      await handle.stop();
+    });
+  });
+
+  describe("unsetDefaultTeam", () => {
+    test("delegates to settingsStore.unsetDefaultTeam", async () => {
+      const deps = makeDeps(workspace, homeJieDir);
+      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
+      handle.unsetDefaultTeam();
+      expect(settingsStore.unsetDefaultTeam).toHaveBeenCalledTimes(1);
+      await handle.stop();
+    });
+  });
+
+  describe("getDefaultTeam / getDefaultModel", () => {
+    test("returns the configured default team and model", async () => {
+      const deps = makeDeps(workspace, homeJieDir);
+      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
+      settingsStore.load.mockReturnValue({ defaultTeam: "alpha", defaultProvider: "anthropic", defaultModel: "claude-sonnet-4-5" });
+      expect(handle.getDefaultTeam()).toBe("alpha");
+      expect(handle.getDefaultModel()).toEqual({ provider: "anthropic", modelId: "claude-sonnet-4-5" });
+      await handle.stop();
+    });
+
+    test("returns null when no defaults are configured", async () => {
+      const deps = makeDeps(workspace, homeJieDir);
+      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
+      settingsStore.load.mockReturnValue({});
+      expect(handle.getDefaultTeam()).toBeNull();
+      expect(handle.getDefaultModel()).toBeNull();
+      await handle.stop();
+    });
+  });
+
+  describe("listInstalledTeams", () => {
+    test("delegates to teamRegistry.listInstalled", async () => {
+      const deps = makeDeps(workspace, homeJieDir);
+      const spy = vi.spyOn(deps.teamRegistry, "listInstalled").mockReturnValue(["minimal", "alpha", "beta"]);
+      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
+      expect(handle.listInstalledTeams()).toEqual(["minimal", "alpha", "beta"]);
+      spy.mockRestore();
+      await handle.stop();
+    });
+  });
+
+  describe("getGitStatus", () => {
+    test("returns the cached git snapshot from gitService", async () => {
+      const deps = makeDeps(workspace, homeJieDir);
+      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
+      gitService.getSnapshot.mockReturnValue({ branch: "main", dirty: true, ahead: 2, behind: 0 });
+      expect(handle.getGitStatus()).toEqual({ branch: "main", dirty: true, ahead: 2, behind: 0 });
       await handle.stop();
     });
   });

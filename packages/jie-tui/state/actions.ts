@@ -1,4 +1,4 @@
-import type { EventEnvelope, EventType } from "@cuzfrog/jie-platform/event";
+import type { AnyEventEnvelope } from "@cuzfrog/jie-platform";
 
 export const ActionTypes = {
   RECEIVE_EVENT: "[bus] receive event from event bus",
@@ -20,10 +20,6 @@ interface ActionDef<T extends ActionType, P> {
   readonly type: T,
   readonly payload: P,
 }
-
-export type AnyEventEnvelope = {
-  [K in EventType]: EventEnvelope<K>;
-}[EventType];
 
 const toggleTeamRail = createAction(ActionTypes.TOGGLE_TEAM_RAIL);
 const clearTuiState = createAction(ActionTypes.CLEAR_TUI_STATE);

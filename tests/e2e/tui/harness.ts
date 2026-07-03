@@ -1,49 +1,40 @@
 import { createEventManager, Events, type EventEnvelope, type EventManager, type AgentSender, type EventType } from "@cuzfrog/jie-platform/event";
 import { createTui, type Tui, type TuiDeps, type CreateTUIOptions } from "@cuzfrog/jie-tui";
-import type { AuthStore, SettingsStore, Scope } from "@cuzfrog/jie-platform/config";
-import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
-import type { GitService, GitSnapshot } from "@cuzfrog/jie-platform/services";
+import type { GitSnapshot, JiePlatform } from "@cuzfrog/jie-platform";
 import { withTTY } from "../../support";
 
 const noopAsync = (): Promise<void> => Promise.resolve();
 
-const stubAuthStore: AuthStore = {
-  load: () => ({}),
-  saveAuthConfig: () => {},
-  setProvider: (auth) => auth,
-  removeProvider: (auth) => auth,
-  clear: () => ({}),
-};
-
-const stubSettingsStore: SettingsStore = {
-  load: () => ({}),
-  write: () => {},
-  unsetDefaultTeam: () => {},
-};
-
-const stubTeamRegistry: TeamRegistry = {
-  parseTeamManifest: () => undefined as never,
-  isInstalled: () => false,
-  listInstalled: () => [],
-  locate: () => "missing",
-};
-
 const stubGitSnapshot: GitSnapshot = { branch: "", dirty: false, ahead: 0, behind: 0 };
 
-const stubGitService: GitService = {
-  getSnapshot: () => stubGitSnapshot,
-};
+function makePlatform(bus: EventManager, initialTeamId: string): JiePlatform {
+  const team: { id: string; agents: ReadonlyArray<never> } = { id: initialTeamId, agents: [] };
+  return {
+    team: team as unknown as JiePlatform["team"],
+    loadTeam: async (id: string) => {
+      (team as { id: string }).id = id;
+    },
+    stop: noopAsync,
+    subscribe: <T extends EventType>(topic: T, cb: (event: EventEnvelope<T>) => void) => bus.subscribe(topic, cb),
+    userPrompt: (agentKey: string, text: string) => {
+      bus.publish(Events.userPrompt({ kind: "user" }, team.id, text, agentKey));
+    },
+    interrupt: () => undefined,
+    login: () => undefined,
+    logout: () => undefined,
+    setDefaultModel: () => undefined,
+    unsetDefaultTeam: () => undefined,
+    getDefaultTeam: () => null,
+    getDefaultModel: () => null,
+    listInstalledTeams: () => [],
+    getGitStatus: () => stubGitSnapshot,
+  };
+}
 
-function makeDeps(bus: EventManager, options: CreateTUIOptions): { deps: TuiDeps; options: CreateTUIOptions } {
+function makeDeps(bus: EventManager, options: CreateTUIOptions, initialTeamId: string = "minimal"): { deps: TuiDeps; options: CreateTUIOptions } {
   return {
     deps: {
-      eventManager: bus,
-      teamRegistry: stubTeamRegistry,
-      loadTeam: noopAsync,
-      authStore: stubAuthStore,
-      gitService: stubGitService,
-      settingsStore: stubSettingsStore,
-      settingsScope: "global" as Scope,
+      platform: makePlatform(bus, initialTeamId),
     },
     options,
   };
@@ -55,7 +46,18 @@ export const startTuiOn = (
   options: Omit<CreateTUIOptions, "cwd"> = {},
 ): Tui => {
   const opts: CreateTUIOptions = { ...options, cwd: process.cwd() };
-  const { deps } = makeDeps(bus, opts);
+  const initialTeamId = (() => {
+    for (const e of preload) {
+      if (e.type !== "system.team.loaded") continue;
+      const payload = e.payload;
+      if (payload !== null && typeof payload === "object" && "teamId" in payload) {
+        const teamId = (payload as { teamId: unknown }).teamId;
+        if (typeof teamId === "string") return teamId;
+      }
+    }
+    return "minimal";
+  })();
+  const { deps } = makeDeps(bus, opts, initialTeamId);
   const tuiHandle: { current: Tui | null } = { current: null };
   withTTY(true, () => { tuiHandle.current = createTui(deps, opts); });
   const tui = tuiHandle.current;

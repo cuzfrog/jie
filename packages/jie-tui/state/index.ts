@@ -9,5 +9,6 @@ export type {
   MessageTurn,
   TuiState,
 } from "./types";
-export { Actions, ActionTypes, type Action, type AnyEventEnvelope } from "./actions";
+export { Actions, ActionTypes, type Action } from "./actions";
+export type { AnyEventEnvelope } from "@cuzfrog/jie-platform";
 export { type StateStore, createStateStore } from "./state-store";

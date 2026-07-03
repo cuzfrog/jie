@@ -41,8 +41,22 @@ export interface JiePlatformDeps {
 }
 
 export interface JiePlatform {
-  bus:  EventBus;
+  events: {
+    subscribe: <T extends EventType>(topic: T, callback: (env: EventEnvelope<T>) => void) => () => void;
+    userPrompt: (agentKey: string, text: string) => void;
+    interrupt: () => void;
+  };
+  team: { id: string; agents: ReadonlyArray<AgentIdentity> };
+  loadTeam: (teamId: string) => Promise<void>;
   stop: (timeoutMs?: number) => Promise<void>;
+  login: (provider: string, apiKey: string) => void;
+  logout: (provider?: string) => void;
+  setDefaultModel: (provider: string, modelId: string) => void;
+  unsetDefaultTeam: () => void;
+  getDefaultTeam: () => string | null;
+  getDefaultModel: () => { provider: string; modelId: string } | null;
+  listInstalledTeams: () => ReadonlyArray<string>;
+  getGitStatus: () => GitSnapshot;
 }
 
 export function createJiePlatform(

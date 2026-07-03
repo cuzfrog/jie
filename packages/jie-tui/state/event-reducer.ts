@@ -1,22 +1,24 @@
-import { type EventEnvelope } from "@cuzfrog/jie-platform/event";
+import type { AnyEventEnvelope } from "@cuzfrog/jie-platform";
 import type { AgentId, AgentUiState, MessageCard, ModelReference, TuiState, MessageTurn } from "./types";
-import type { AnyEventEnvelope } from "./actions";
 
 export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
-  if (event.type === "system.team.loaded") return reduceTeamLoaded(state, event);
-  if (event.type === "system.error") return reduceSystemError(state, event);
-  if (event.type === "user.prompt") return reduceUserPrompt(state, event);
-  if (event.type === "agent.model.assigned") return reduceModelAssigned(state, event);
-  if (event.type === "agent.prompt.queue.update") return reduceQueueUpdate(state, event);
-  if (event.type === "agent.turn.start") return reduceTurnStart(state, event);
-  if (event.type === "agent.idle") return reduceIdle(state, event);
-  if (event.type === "agent.stream.chunk") return reduceStreamChunk(state, event);
-  if (event.type === "agent.tool.call") return reduceToolCall(state, event);
-  if (event.type === "agent.tool.result") return reduceToolResult(state, event);
-  return state;
+  switch (event.type) {
+    case "system.team.loaded": return reduceTeamLoaded(state, event);
+    case "system.error": return reduceSystemError(state, event);
+    case "user.prompt": return reduceUserPrompt(state, event);
+    case "agent.model.assigned": return reduceModelAssigned(state, event);
+    case "agent.prompt.queue.update": return reduceQueueUpdate(state, event);
+    case "agent.turn.start": return reduceTurnStart(state, event);
+    case "agent.idle": return reduceIdle(state, event);
+    case "agent.stream.chunk": return reduceStreamChunk(state, event);
+    case "agent.tool.call": return reduceToolCall(state, event);
+    case "agent.tool.result": return reduceToolResult(state, event);
+    default: return state;
+  }
 }
 
-function reduceTeamLoaded(state: TuiState, event: EventEnvelope<"system.team.loaded">): TuiState {
+function reduceTeamLoaded(state: TuiState, event: AnyEventEnvelope): TuiState {
+  if (event.type !== "system.team.loaded") return state;
   const { teamId, agents } = event.payload;
   const newAgents = new Map(state.agents);
   let leaderId: AgentId | null = state.leaderAgentId;
@@ -47,7 +49,8 @@ function reduceTeamLoaded(state: TuiState, event: EventEnvelope<"system.team.loa
   return { ...state, teamId, leaderAgentId: leaderId, focusedAgentId: focused, agents: newAgents };
 }
 
-function reduceSystemError(state: TuiState, event: EventEnvelope<"system.error">): TuiState {
+function reduceSystemError(state: TuiState, event: AnyEventEnvelope): TuiState {
+  if (event.type !== "system.error") return state;
   const stopReason = findRecentStopReason(state);
   return { ...state, errorBanner: formatSystemError(stopReason, event.payload.error) };
 }
@@ -63,7 +66,8 @@ function formatSystemError(stopReason: string | null, error: string): string {
   return stopReason === null ? error : `[stop: ${stopReason}] ${error}`;
 }
 
-function reduceUserPrompt(state: TuiState, event: EventEnvelope<"user.prompt">): TuiState {
+function reduceUserPrompt(state: TuiState, event: AnyEventEnvelope): TuiState {
+  if (event.type !== "user.prompt") return state;
   if (state.teamId === null) return state;
   if (event.payload.teamId !== state.teamId) return state;
   const agentId = composeAgentId(event.payload.teamId, event.payload.agentKey);
@@ -79,22 +83,24 @@ function reduceUserPrompt(state: TuiState, event: EventEnvelope<"user.prompt">):
   return { ...state, agents: newAgents };
 }
 
-function reduceModelAssigned(state: TuiState, event: EventEnvelope<"agent.model.assigned">): TuiState {
+function reduceModelAssigned(state: TuiState, event: AnyEventEnvelope): TuiState {
   const resolved = resolveAgent(state, event);
   if (resolved === null) return state;
+  if (event.type !== "agent.model.assigned") return state;
   const { agentId, agent } = resolved;
   const model: ModelReference = { provider: event.payload.provider, id: event.payload.model, effort: event.payload.effort };
   return withAgent(state, agentId, { ...agent, model });
 }
 
-function reduceQueueUpdate(state: TuiState, event: EventEnvelope<"agent.prompt.queue.update">): TuiState {
+function reduceQueueUpdate(state: TuiState, event: AnyEventEnvelope): TuiState {
   const resolved = resolveAgent(state, event);
   if (resolved === null) return state;
+  if (event.type !== "agent.prompt.queue.update") return state;
   const { agentId, agent } = resolved;
   return withAgent(state, agentId, { ...agent, queue: event.payload.prompts });
 }
 
-function reduceTurnStart(state: TuiState, event: EventEnvelope<"agent.turn.start">): TuiState {
+function reduceTurnStart(state: TuiState, event: AnyEventEnvelope): TuiState {
   const resolved = resolveAgent(state, event);
   if (resolved === null) return state;
   const { agentId, agent } = resolved;
@@ -103,17 +109,19 @@ function reduceTurnStart(state: TuiState, event: EventEnvelope<"agent.turn.start
   return withAgent(state, agentId, next, { errorBanner: null });
 }
 
-function reduceIdle(state: TuiState, event: EventEnvelope<"agent.idle">): TuiState {
+function reduceIdle(state: TuiState, event: AnyEventEnvelope): TuiState {
   const resolved = resolveAgent(state, event);
   if (resolved === null) return state;
+  if (event.type !== "agent.idle") return state;
   const { agentId, agent } = resolved;
   const next: AgentUiState = { ...agent, status: "idle", lastStopReason: event.payload };
   return withAgent(state, agentId, next);
 }
 
-function reduceStreamChunk(state: TuiState, event: EventEnvelope<"agent.stream.chunk">): TuiState {
+function reduceStreamChunk(state: TuiState, event: AnyEventEnvelope): TuiState {
   const resolved = resolveAgent(state, event);
   if (resolved === null) return state;
+  if (event.type !== "agent.stream.chunk") return state;
   const { agentId, agent } = resolved;
   if (agent.currentTurn === null) return state;
   const { stream_id, block_type, text } = event.payload;
@@ -130,9 +138,10 @@ function reduceStreamChunk(state: TuiState, event: EventEnvelope<"agent.stream.c
   return withAgent(state, agentId, next);
 }
 
-function reduceToolCall(state: TuiState, event: EventEnvelope<"agent.tool.call">): TuiState {
+function reduceToolCall(state: TuiState, event: AnyEventEnvelope): TuiState {
   const resolved = resolveAgent(state, event);
   if (resolved === null) return state;
+  if (event.type !== "agent.tool.call") return state;
   const { agentId, agent } = resolved;
   if (agent.currentTurn === null) return state;
   const { tool_call_id, name, input, input_truncated } = event.payload;
@@ -142,9 +151,10 @@ function reduceToolCall(state: TuiState, event: EventEnvelope<"agent.tool.call">
   return withAgent(state, agentId, next);
 }
 
-function reduceToolResult(state: TuiState, event: EventEnvelope<"agent.tool.result">): TuiState {
+function reduceToolResult(state: TuiState, event: AnyEventEnvelope): TuiState {
   const resolved = resolveAgent(state, event);
   if (resolved === null) return state;
+  if (event.type !== "agent.tool.result") return state;
   const { agentId, agent } = resolved;
   if (agent.currentTurn === null) return state;
   const { tool_call_id, name, output, output_truncated, duration_ms, error } = event.payload;
@@ -158,15 +168,7 @@ function reduceToolResult(state: TuiState, event: EventEnvelope<"agent.tool.resu
 
 function resolveAgent(
   state: TuiState,
-  event: EventEnvelope<
-    | "agent.model.assigned"
-    | "agent.prompt.queue.update"
-    | "agent.turn.start"
-    | "agent.idle"
-    | "agent.stream.chunk"
-    | "agent.tool.call"
-    | "agent.tool.result"
-  >,
+  event: AnyEventEnvelope,
 ): { agentId: AgentId; agent: AgentUiState } | null {
   if (state.teamId === null) return null;
   if (event.sender.kind !== "agent") return null;

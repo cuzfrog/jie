@@ -12,6 +12,7 @@ import {
 } from "@cuzfrog/jie-platform/storage";
 import { type TeamRegistry } from "@cuzfrog/jie-platform/team";
 import { createToolRegistry } from "@cuzfrog/jie-platform/tools";
+import { type GitService } from "@cuzfrog/jie-platform/services";
 import { join } from "node:path";
 import { createApp, type AppArgs, type AppDeps } from "./app";
 
@@ -36,11 +37,16 @@ const teamRegistry = vi.mocked<TeamRegistry>({
   locate: vi.fn(),
 });
 
+const gitService = vi.mocked<GitService>({
+  getSnapshot: vi.fn(),
+});
+
 function makeDeps(workspace: string, homeJieDir: string): AppDeps {
   const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
   const projectJieDir = join(workspace, ".jie");
   const events = createEventManager();
   const artifactStore = createArtifactStore(storage);
+  gitService.getSnapshot.mockReturnValue({ branch: "", dirty: false, ahead: 0, behind: 0 });
 
   return {
     authStore,
@@ -52,6 +58,8 @@ function makeDeps(workspace: string, homeJieDir: string): AppDeps {
     toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events, artifactStore }),
     artifactStore,
     memoryManager: createMemoryManager(storage),
+    gitService,
+    defaultScope: "global",
   };
 }
 

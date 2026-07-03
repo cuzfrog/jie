@@ -52,6 +52,9 @@ export interface EventEnvelope<T extends EventType> {
   readonly timestamp: string;
   readonly payload: EventDefinitions[T]["payload"];
 }
+export type AnyEventEnvelope = {
+  [K in EventType]: EventEnvelope<K>;
+}[EventType];
 
 export const EVENT_TEXT_TRUNCATION_BYTES: number = 4 * 1024;
 const EVENT_TEXT_TRUNCATION_MARKER = "...[%d chars truncated]...";

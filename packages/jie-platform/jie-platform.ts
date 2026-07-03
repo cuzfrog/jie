@@ -1,15 +1,17 @@
+import { getProviders } from "@earendil-works/pi-ai";
 import { ulid } from "ulid";
 import { type Api, type Model } from "@earendil-works/pi-ai";
 import { type AgentBody, type AgentIdentity, createAgentBody } from "./core";
-import { type EventManager, Events } from "./event";
+import { type EventEnvelope, type EventManager, type EventType, Events } from "./event";
 import { type AgentSoul, type TeamBlueprint, type TeamRegistry } from "./team";
-import { type ModelRegistry, type SettingsStore } from "./config";
+import { type AuthStore, type ModelRegistry, type Scope, type Settings, type SettingsStore } from "./config";
 import { type ToolRegistry } from "./tools";
 import {
   type ArtifactStore,
   type MemoryManager,
   type Storage,
 } from "./storage";
+import { type GitService, type GitSnapshot } from "./services";
 import { JiePlatformError } from "./jie-platform-errors";
 
 export interface CreateJiePlatformOptions {
@@ -29,20 +31,36 @@ export interface JiePlatformDeps {
   readonly toolRegistry: ToolRegistry;
   readonly artifactStore: ArtifactStore;
   readonly memoryManager: MemoryManager;
+  readonly authStore: AuthStore;
+  readonly gitService: GitService;
+  readonly defaultScope: Scope;
 }
 
 export interface JiePlatform {
-  readonly events: EventManager;
   readonly team: {
     readonly id: string;
     readonly agents: ReadonlyArray<AgentIdentity>;
   };
   readonly loadTeam: (teamId: string) => Promise<void>;
   readonly stop: () => Promise<void>;
+
+  readonly subscribe: <T extends EventType>(topic: T, callback: (event: EventEnvelope<T>) => void) => () => void;
+  readonly userPrompt: (agentKey: string, text: string) => void;
+  readonly interrupt: () => void;
+
+  readonly login: (provider: string, apiKey: string) => void;
+  readonly logout: (provider?: string) => void;
+  readonly setDefaultModel: (provider: string, modelId: string) => void;
+  readonly unsetDefaultTeam: () => void;
+  readonly getDefaultTeam: () => string | null;
+  readonly getDefaultModel: () => { readonly provider: string; readonly modelId: string } | null;
+  readonly listInstalledTeams: () => ReadonlyArray<string>;
+  readonly getGitStatus: () => GitSnapshot;
 }
 
 export async function createJiePlatform(options: CreateJiePlatformOptions, dependencies: JiePlatformDeps): Promise<JiePlatform> {
   const resolveModel = defaultResolveModel(dependencies.modelRegistry);
+  const knownProviders = new Set<string>(getProviders() as ReadonlyArray<string>);
   const sessionIds = new Map<string, string>();
   const loadedTeams = new Map<string, AgentBody[]>();
 
@@ -91,7 +109,6 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
   let activeTeamId = initialTeamId;
 
   const handle: JiePlatform = {
-    events: dependencies.eventManager,
     team: {
       get id(): string {
         return activeTeamId;
@@ -112,6 +129,56 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
         allBodies.push(...bodies);
       }
       for (const b of allBodies) b.stop();
+    },
+
+    subscribe(topic, callback) {
+      return dependencies.eventManager.subscribe(topic, callback);
+    },
+    userPrompt(agentKey, text) {
+      const sender = { kind: "user" } as const;
+      dependencies.eventManager.publish(Events.userPrompt(sender, activeTeamId, text, agentKey));
+    },
+    interrupt() {
+      dependencies.eventManager.publish(Events.interrupt({ kind: "system" }));
+    },
+
+    login(provider, apiKey) {
+      const next = dependencies.authStore.setProvider(dependencies.authStore.load(), provider, apiKey);
+      dependencies.authStore.saveAuthConfig(next);
+    },
+    logout(provider) {
+      if (provider === undefined) {
+        dependencies.authStore.saveAuthConfig(dependencies.authStore.clear());
+        return;
+      }
+      const next = dependencies.authStore.removeProvider(dependencies.authStore.load(), provider);
+      dependencies.authStore.saveAuthConfig(next);
+    },
+    setDefaultModel(provider, modelId) {
+      if (!knownProviders.has(provider)) {
+        throw new JiePlatformError("UNKNOWN_PROVIDER", { detail: provider });
+      }
+      const existing = dependencies.settingsStore.load();
+      const next: Settings = { ...existing, defaultProvider: provider, defaultModel: modelId };
+      dependencies.settingsStore.write(next, dependencies.defaultScope);
+    },
+    unsetDefaultTeam() {
+      dependencies.settingsStore.unsetDefaultTeam();
+    },
+    getDefaultTeam() {
+      const settings = dependencies.settingsStore.load();
+      return settings.defaultTeam ?? null;
+    },
+    getDefaultModel() {
+      const settings = dependencies.settingsStore.load();
+      if (settings.defaultProvider === undefined || settings.defaultModel === undefined) return null;
+      return { provider: settings.defaultProvider, modelId: settings.defaultModel };
+    },
+    listInstalledTeams() {
+      return dependencies.teamRegistry.listInstalled();
+    },
+    getGitStatus() {
+      return dependencies.gitService.getSnapshot();
     },
   };
 

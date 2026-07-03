@@ -15,6 +15,7 @@ import {
 } from "@cuzfrog/jie-platform/storage";
 import { createTeamRegistry } from "@cuzfrog/jie-platform/team";
 import { createToolRegistry } from "@cuzfrog/jie-platform/tools";
+import { createGitService } from "@cuzfrog/jie-platform/services";
 import { createApp } from "./app";
 import { parseFlags, type ParsedArgs } from "./cli-flags";
 import {
@@ -124,6 +125,8 @@ function buildPlatformDeps(cwd: string, homeJieDir: string, projectJieDir: strin
     toolRegistry,
     artifactStore,
     memoryManager,
+    gitService: createGitService({ cwd }),
+    defaultScope: (projectJieDir === null ? "global" : "project") as "global" | "project",
   };
 }
 

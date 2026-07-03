@@ -1,9 +1,5 @@
-import { getProviders } from "@earendil-works/pi-ai";
-import type { AuthStore, Settings, SettingsStore, Scope } from "@cuzfrog/jie-platform/config";
-import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
+import type { JiePlatform } from "@cuzfrog/jie-platform";
 import { Actions, type StateStore } from "./state";
-
-const KNOWN_PROVIDERS: ReadonlySet<string> = new Set<string>(getProviders());
 
 type CommandOutcome =
   | { readonly kind: "reply"; readonly text: string }
@@ -18,11 +14,7 @@ interface SlashCommand {
 
 export interface CommandHandlerDeps {
   readonly stateStore: StateStore;
-  readonly teamRegistry: TeamRegistry;
-  readonly loadTeam: (teamId: string) => Promise<void>;
-  readonly authStore: AuthStore;
-  readonly settingsStore: SettingsStore;
-  readonly settingsScope: Scope;
+  readonly platform: JiePlatform;
 }
 
 export interface TuiCommandHandler {
@@ -110,7 +102,6 @@ function parseModelArg(arg: string): { kind: "ok"; provider: string; modelId: st
   if (slash === -1) return { kind: "error", text: `/model: invalid '${arg}' (expected <provider>/<modelId>)` };
   const provider = arg.slice(0, slash);
   const modelId = arg.slice(slash + 1);
-  if (!KNOWN_PROVIDERS.has(provider)) return { kind: "error", text: `unknown provider: ${provider}` };
   return { kind: "ok", provider, modelId };
 }
 
@@ -122,51 +113,63 @@ function interceptLogin(args: ReadonlyArray<string>, deps: CommandHandlerDeps): 
   if (args.length !== 2) return { kind: "error", text: "/login <provider> <apiKey>" };
   const [provider, apiKey] = args;
   if (provider === undefined || apiKey === undefined) return { kind: "error", text: "/login <provider> <apiKey>" };
-  deps.authStore.saveAuthConfig(deps.authStore.setProvider(deps.authStore.load(), provider, apiKey));
+  try {
+    deps.platform.login(provider, apiKey);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return { kind: "error", text: `/login failed: ${reason}` };
+  }
   return { kind: "reply", text: `logged in to ${provider}` };
 }
 
 function interceptLogout(args: ReadonlyArray<string>, deps: CommandHandlerDeps): InterceptResult {
-  if (args.length === 0) {
-    deps.authStore.saveAuthConfig(deps.authStore.clear());
-    return { kind: "reply", text: "logged out of all providers" };
+  const provider = args[0];
+  try {
+    deps.platform.logout(provider);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return { kind: "error", text: `/logout failed: ${reason}` };
   }
-  const provider = args[0]!;
-  deps.authStore.saveAuthConfig(deps.authStore.removeProvider(deps.authStore.load(), provider));
-  return { kind: "reply", text: `logged out of ${provider}` };
+  return { kind: "reply", text: provider === undefined ? "logged out of all providers" : `logged out of ${provider}` };
 }
 
 function interceptModel(args: ReadonlyArray<string>, deps: CommandHandlerDeps): InterceptResult {
   if (args.length !== 1) return { kind: "error", text: "/model <provider>/<modelId>" };
   const parsed = parseModelArg(args[0]!);
   if (parsed.kind === "error") return parsed;
-  const existing = deps.settingsStore.load();
-  const next: Settings = { ...existing, defaultProvider: parsed.provider, defaultModel: parsed.modelId };
-  deps.settingsStore.write(next, deps.settingsScope);
+  try {
+    deps.platform.setDefaultModel(parsed.provider, parsed.modelId);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return { kind: "error", text: `/model failed: ${reason}` };
+  }
   return { kind: "reply", text: `default model set to ${parsed.provider}/${parsed.modelId}` };
 }
 
 function interceptTeam(args: ReadonlyArray<string>, deps: CommandHandlerDeps): InterceptResult {
   if (args[0] === "--unset") {
-    deps.settingsStore.unsetDefaultTeam();
+    try {
+      deps.platform.unsetDefaultTeam();
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      return { kind: "error", text: `/team --unset failed: ${reason}` };
+    }
     return { kind: "reply", text: "default team unset; takes effect on next `jie` invocation" };
   }
   if (args.length === 0) {
-    const merged = deps.settingsStore.load();
-    const installed = deps.teamRegistry.listInstalled();
-    return { kind: "reply", text: formatTeamListReply(merged.defaultTeam ?? null, installed) };
+    const defaultTeam = deps.platform.getDefaultTeam();
+    const installed = deps.platform.listInstalledTeams();
+    return { kind: "reply", text: formatTeamListReply(defaultTeam, installed) };
   }
   const argument = args[0]!;
-  if (!deps.teamRegistry.isInstalled(argument)) {
-    return {
-      kind: "reply",
-      text: `team '${argument}' is not installed; checked .jie/teams/${argument}/ and ~/.jie/teams/${argument}/`,
-    };
-  }
-  void deps.loadTeam(argument).catch((error: unknown) => {
-    const reason = error instanceof Error ? error.message : String(error);
-    deps.stateStore.dispatch(Actions.setErrorMessage(`loadTeam(${argument}) failed: ${reason}`));
-  });
+  void deps.platform.loadTeam(argument).then(
+    () => undefined,
+    (error: unknown) => {
+      const code = error instanceof Error && "code" in error ? (error as { code?: unknown }).code : undefined;
+      const message = code === "TEAM_NOT_FOUND" ? `team '${argument}' not found` : `loadTeam(${argument}) failed`;
+      deps.stateStore.dispatch(Actions.setErrorMessage(message));
+    },
+  );
   return { kind: "reply", text: `switching to team '${argument}'…` };
 }
 

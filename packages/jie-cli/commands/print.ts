@@ -1,5 +1,4 @@
 import type { JiePlatform } from "@cuzfrog/jie-platform";
-import { Events, type EventEnvelope, type EventManager } from "@cuzfrog/jie-platform/event";
 import type { ParsedArgsMap } from "../cli-flags";
 
 export type PrintArgs = ParsedArgsMap["print"];
@@ -11,7 +10,7 @@ export async function runPrint(
   agentKeys: ReadonlyArray<string>,
   args: PrintArgs,
 ): Promise<number> {
-  handle.events.subscribe("agent.stream.chunk", (envelope) => {
+  handle.subscribe("agent.stream.chunk", (envelope) => {
     if (envelope.sender.kind !== "agent") return;
     if (envelope.sender.teamId !== teamId) return;
     if (envelope.sender.agentKey !== leaderAgentKey) return;
@@ -23,10 +22,10 @@ export async function runPrint(
     }
   });
 
-  handle.events.publish(Events.userPrompt({ kind: "user" }, teamId, args.instruction, leaderAgentKey));
+  handle.userPrompt(leaderAgentKey, args.instruction);
 
   try {
-    await setupIdleGate(handle.events, agentKeys, args.timeout);
+    await setupIdleGate(handle, agentKeys, args.timeout);
   } catch (error) {
     if (!args.json) process.stdout.write("\n");
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -43,42 +42,38 @@ export async function runPrint(
   return 0;
 }
 
-function setupIdleGate(events: EventManager, agentKeys: ReadonlyArray<string>, timeoutSec: number): Promise<void> {
+function setupIdleGate(handle: JiePlatform, agentKeys: ReadonlyArray<string>, timeoutSec: number): Promise<void> {
   const state = new Map<string, "busy" | "idle">();
   for (const agentKey of agentKeys) state.set(agentKey, "idle");
 
-  let resolve!: () => void;
-  let reject!: (error: Error) => void;
-  const promise = new Promise<void>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  const timer =
-    timeoutSec > 0
-      ? setTimeout(() => reject(new Error("timeout")), timeoutSec * 1000)
-      : undefined;
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
 
-  const agentKeyOf = (envelope: EventEnvelope<"agent.turn.start"> | EventEnvelope<"agent.idle">): string | null =>
-    envelope.sender.kind === "agent" ? envelope.sender.agentKey : null;
+    const unsubTurnStart = handle.subscribe("agent.turn.start", (envelope) => {
+      if (envelope.sender.kind !== "agent") return;
+      if (!state.has(envelope.sender.agentKey)) return;
+      state.set(envelope.sender.agentKey, "busy");
+    });
+    const unsubIdle = handle.subscribe("agent.idle", (envelope) => {
+      if (envelope.sender.kind !== "agent") return;
+      if (!state.has(envelope.sender.agentKey)) return;
+      state.set(envelope.sender.agentKey, "idle");
+      if ([...state.values()].every((v) => v === "idle")) finish(undefined);
+    });
 
-  const evaluate = (): void => {
-    if (timer !== undefined) clearTimeout(timer);
-    unsubTurnStart();
-    unsubIdle();
-    resolve();
-  };
+    const timer =
+      timeoutSec > 0
+        ? setTimeout(() => finish(new Error("timeout")), timeoutSec * 1000)
+        : undefined;
 
-  const unsubTurnStart = events.subscribe("agent.turn.start", (envelope) => {
-    const agentKey = agentKeyOf(envelope);
-    if (agentKey !== null && state.has(agentKey)) state.set(agentKey, "busy");
-  });
-  const unsubIdle = events.subscribe("agent.idle", (envelope) => {
-    const agentKey = agentKeyOf(envelope);
-    if (agentKey !== null && state.has(agentKey)) {
-      state.set(agentKey, "idle");
-      if ([...state.values()].every((v) => v === "idle")) evaluate();
+    function finish(result: Error | undefined): void {
+      if (settled) return;
+      settled = true;
+      if (timer !== undefined) clearTimeout(timer);
+      unsubTurnStart();
+      unsubIdle();
+      if (result === undefined) resolve();
+      else reject(result);
     }
   });
-
-  return promise;
 }

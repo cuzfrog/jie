@@ -1,9 +1,8 @@
-import { Events, type EventEnvelope, type EventType } from "@cuzfrog/jie-platform/event";
 import { matchesKey, type KeyId } from "@earendil-works/pi-tui";
 import { Actions, type Action, type StateStore, type TuiState } from "./state";
 
-interface EventPublisher {
-  publish<T extends EventType>(event: EventEnvelope<T>): void;
+interface Interrupter {
+  readonly interrupt: () => void;
 }
 
 interface Keybinding {
@@ -18,7 +17,7 @@ const DEFAULT_KEYBINDINGS: ReadonlyArray<Keybinding> = [
 ];
 
 export interface KeyboardHandlerDeps {
-  readonly eventManager: EventPublisher;
+  readonly platform: Interrupter;
   readonly stateStore: StateStore;
 }
 
@@ -92,7 +91,7 @@ function tryDoubleEscInterrupt(
   escWindowMs: number,
 ): TryResult {
   if (now - lastEscapeAt <= escWindowMs && state.teamId !== null) {
-    deps.eventManager.publish(Events.interrupt({ kind: "system" }));
+    deps.platform.interrupt();
     return { consume: true, newLastEscapeAt: 0 };
   }
   return { consume: false, newLastEscapeAt: now };
