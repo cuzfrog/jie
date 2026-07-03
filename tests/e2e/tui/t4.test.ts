@@ -1,5 +1,5 @@
 import { createEventManager, type EventEnvelope } from "@cuzfrog/jie-platform/event";
-import { attachNoModelBody, loadFixture, NO_MODEL_ERROR, startTuiOn } from "./harness";
+import { attachNoModelBody, loadFixture, startTuiOn } from "./harness";
 
 describe("T4 — first-time setup (TUI flow)", () => {
   test("first prompt raises an error banner about missing model", () => {
@@ -13,10 +13,10 @@ describe("T4 — first-time setup (TUI flow)", () => {
       payload: { teamId: "my-team", agents: [{ role: "general", agent_key: "general-1", is_leader: true }] },
     };
     const tui = startTuiOn(bus, [teamLoaded]);
-    attachNoModelBody(bus, "my-team", "general-1", "general");
+    attachNoModelBody(bus, "my-team", "general-1");
     tui.submit("Tell me a joke");
     const state = tui.getState();
-    expect(state.errorBanner).toBe(`[stop: error] ${NO_MODEL_ERROR}`);
+    expect(state.errorBanner).toBe(`[stop: error] No model has been selected`);
   });
 
   test("stop() unsubscribes from the bus", () => {
@@ -42,9 +42,9 @@ describe("T4 — first-time setup (TUI flow)", () => {
     const rest = envelopes.slice(2);
     const bus = createEventManager();
     const tui = startTuiOn(bus, [teamLoaded]);
-    const stop = attachNoModelBody(bus, "my-team", "general-1", "general");
+    const stop = attachNoModelBody(bus, "my-team", "general-1");
     tui.submit("Tell me a joke");
-    expect(tui.getState().errorBanner).toBe(`[stop: error] ${NO_MODEL_ERROR}`);
+    expect(tui.getState().errorBanner).toBe(`[stop: error] No model has been selected`);
     stop();
     bus.publish(userPrompt);
     for (const env of rest) bus.publish(env);

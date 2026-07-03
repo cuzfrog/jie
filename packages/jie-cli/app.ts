@@ -20,7 +20,6 @@ export interface AppDeps {
 export interface App {
   readonly handle: JiePlatform;
   readonly teamId: string;
-  readonly leaderRole: string;
   readonly leaderKey: string;
   readonly agentKeys: ReadonlyArray<string>;
   readonly settings: Settings;
@@ -104,7 +103,6 @@ export async function createApp(
     app: {
       handle,
       teamId,
-      leaderRole: leader.role,
       leaderKey: leader.agentKey,
       agentKeys: agents.map((agent) => agent.agentKey),
       settings,

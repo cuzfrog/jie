@@ -128,9 +128,8 @@ describe("notify — valid publish path", () => {
     expect(env.topic).toBe("custom.t1.task");
     expect(env.sender.kind).toBe("agent");
     if (env.sender.kind === "agent") {
-      expect(env.sender.identity.teamId).toBe("t1");
-      expect(env.sender.identity.agentRole).toBe("leader");
-      expect(env.sender.identity.agentKey).toBe("leader-1");
+      expect(env.sender.teamId).toBe("t1");
+      expect(env.sender.agentKey).toBe("leader-1");
     }
     expect(env.payload).toEqual({ message: "hello", truncated: false });
     const ts = new Date(env.timestamp).getTime();

@@ -7,7 +7,7 @@ const INITIAL_TUI_STATE = createStateStore().getState();
 
 const SYSTEM_SENDER: SystemSender = { kind: "system" };
 const USER_SENDER: UserSender = { kind: "user" };
-const AGENT_SENDER: AgentSender = { kind: "agent", identity: { teamId: "my-team", agentRole: "general", agentKey: "general-1" } };
+const AGENT_SENDER: AgentSender = { kind: "agent", teamId: "my-team", agentKey: "general-1" };
 const STREAM_SENDER: AgentSender = AGENT_SENDER;
 const TOOL_SENDER: AgentSender = AGENT_SENDER;
 
@@ -75,7 +75,7 @@ describe("reduceModelAssigned", () => {
 
   test("ignores events for a foreign team", () => {
     const state = loadedState();
-    const foreign: AgentSender = { kind: "agent", identity: { teamId: "other-team", agentRole: "general", agentKey: "general-1" } };
+    const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
     const state2 = reduce(state, Events.agentModelAssigned(foreign, "anthropic", "claude", "low"));
     expect(state2.agents.get("my-team:general-1")?.model).toBeNull();
   });
@@ -101,13 +101,13 @@ describe("reduceQueueUpdate", () => {
 
   test("ignores events for a foreign team", () => {
     const state = loadedState();
-    const foreign: AgentSender = { kind: "agent", identity: { teamId: "other-team", agentRole: "general", agentKey: "general-1" } };
+    const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
     const state2 = reduce(state, Events.agentPromptQueueUpdate(foreign, ["x"]));
     expect(state2.agents.get("my-team:general-1")?.queue).toEqual([]);
   });
 
   test("ignores events for an unknown agent in the loaded team", () => {
-    const stranger: AgentSender = { kind: "agent", identity: { teamId: "my-team", agentRole: "general", agentKey: "ghost" } };
+    const stranger: AgentSender = { kind: "agent", teamId: "my-team", agentKey: "ghost" };
     const state = reduce(loadedState(), Events.agentPromptQueueUpdate(stranger, ["x"]));
     expect(state.agents.get("my-team:general-1")?.queue).toEqual([]);
   });
@@ -134,7 +134,7 @@ describe("reduceTurnStart", () => {
 
   test("rejects events from a foreign team (cross-team guard)", () => {
     const state = loadedState();
-    const foreign: AgentSender = { kind: "agent", identity: { teamId: "other-team", agentRole: "general", agentKey: "general-1" } };
+    const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
     const state2 = reduce(state, Events.agentTurnStart(foreign));
     expect(state2).toBe(state);
   });
@@ -152,7 +152,7 @@ describe("reduceIdle", () => {
 
   test("rejects idle events from a foreign team", () => {
     const state = loadedState();
-    const foreign: AgentSender = { kind: "agent", identity: { teamId: "other-team", agentRole: "general", agentKey: "general-1" } };
+    const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
     const state2 = reduce(state, Events.agentIdle(foreign, "stop"));
     expect(state2).toBe(state);
   });
@@ -191,7 +191,7 @@ describe("reduceStreamChunk", () => {
 
   test("rejects events from a foreign team", () => {
     const state = promptedState();
-    const foreign: AgentSender = { kind: "agent", identity: { teamId: "other-team", agentRole: "general", agentKey: "general-1" } };
+    const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
     const state2 = reduce(state, Events.agentStreamChunk(foreign, 1, 1, "text", "x"));
     expect(state2).toBe(state);
   });
@@ -236,7 +236,7 @@ describe("reduceToolCall + reduceToolResult", () => {
 
   test("rejects events from a foreign team", () => {
     const state = promptedState();
-    const foreign: AgentSender = { kind: "agent", identity: { teamId: "other-team", agentRole: "general", agentKey: "general-1" } };
+    const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
     const state2 = reduce(state, Events.agentToolCall(foreign, "c1", "bash", "x"));
     expect(state2).toBe(state);
   });

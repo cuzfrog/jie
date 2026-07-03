@@ -27,9 +27,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { main } from "../../packages/jie-cli/index.ts";
-import { JiePlatformErrorMessages } from "@cuzfrog/jie-platform";
 
-const NO_MODEL_ERROR = JiePlatformErrorMessages.NO_MODEL_ERROR;
+const NO_MODEL_ERROR = "No model has been selected";
 
 interface Fixture {
   provider: string;

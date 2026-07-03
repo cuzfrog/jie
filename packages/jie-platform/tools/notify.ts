@@ -1,5 +1,5 @@
 import { Type } from "typebox";
-import { EVENT_TEXT_TRUNCATION_BYTES, Events, type EventManager, type Sender } from "../event";
+import { EVENT_TEXT_TRUNCATION_BYTES, Events, type AgentSender, type EventManager } from "../event";
 import type { ExecutionContext, Tool, ToolResult } from "./types";
 import { JiePlatformError } from "../types";
 
@@ -68,10 +68,7 @@ export function createNotifyTool(dependencies: NotifyDeps): Tool<NotifyInput> {
       }
 
       const clientTopic = `${executionContext.teamId}.${input.topic}`;
-      const sender: Sender = {
-        kind: "agent",
-        identity: { teamId: executionContext.teamId, agentRole: executionContext.agentRole, agentKey: executionContext.agentKey },
-      };
+      const sender: AgentSender = { kind: "agent", teamId: executionContext.teamId, agentKey: executionContext.agentKey };
       const envelope = Events.custom(sender, clientTopic, input.prompt);
       dependencies.eventManager.publish(envelope);
 

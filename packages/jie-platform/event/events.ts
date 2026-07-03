@@ -38,13 +38,7 @@ type EventDefinitions = {
 }
 export type EventType = keyof EventDefinitions;
 
-export interface AgentIdentity {
-  readonly teamId: string;
-  readonly agentRole: string;
-  readonly agentKey: string;
-}
-
-export interface AgentSender { readonly kind: "agent"; readonly identity: AgentIdentity };
+export interface AgentSender { readonly kind: "agent"; readonly teamId: string; readonly agentKey: string};
 export interface UserSender { readonly kind: "user" };
 export interface SystemSender { readonly kind: "system" };
 export type Sender = AgentSender | UserSender | SystemSender;

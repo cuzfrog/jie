@@ -44,10 +44,7 @@ export class JieAgentBody implements AgentBody {
     this.memory = deps.memory;
     this.agent = deps.agent;
     this.stream = deps.streamPublisher;
-    this.sender = {
-      kind: "agent",
-      identity: { teamId: this.teamId, agentRole: this.soul.role, agentKey: this.agentKey },
-    };
+    this.sender = { kind: "agent", teamId: this.teamId, agentKey: this.agentKey };
   }
 
   handlePiAgentEvent(event: PiAgentEvent): void {
@@ -163,8 +160,8 @@ export class JieAgentBody implements AgentBody {
   }
 
   private ingestCustom(topic: string, sender: AgentSender, payload: { message: string; truncated: boolean }): void {
-    if (sender.identity.agentKey === this.agentKey) return;
-    this.dispatchIngress(topic, sender.identity.agentKey, payload.message);
+    if (sender.agentKey === this.agentKey) return;
+    this.dispatchIngress(topic, sender.agentKey, payload.message);
   }
 
   private dispatchIngress(topic: string, source: string | null, prompt: string): void {

@@ -7,15 +7,14 @@ export type PrintArgs = ParsedArgsMap["print"];
 export async function runPrint(
   handle: JiePlatform,
   teamId: string,
-  leaderRole: string,
-  leaderKey: string,
+  leaderAgentKey: string,
   agentKeys: ReadonlyArray<string>,
   args: PrintArgs,
 ): Promise<number> {
   handle.events.subscribe("agent.stream.chunk", (envelope) => {
     if (envelope.sender.kind !== "agent") return;
-    if (envelope.sender.identity.teamId !== teamId) return;
-    if (envelope.sender.identity.agentRole !== leaderRole) return;
+    if (envelope.sender.teamId !== teamId) return;
+    if (envelope.sender.agentKey !== leaderAgentKey) return;
     const text = envelope.payload.text;
     if (args.json) {
       process.stdout.write(JSON.stringify({ chunk: text, seq: envelope.payload.seq }) + "\n");
@@ -24,7 +23,7 @@ export async function runPrint(
     }
   });
 
-  handle.events.publish(Events.userPrompt({ kind: "user" }, teamId, args.instruction, leaderKey));
+  handle.events.publish(Events.userPrompt({ kind: "user" }, teamId, args.instruction, leaderAgentKey));
 
   try {
     await setupIdleGate(handle.events, agentKeys, args.timeout);
@@ -60,7 +59,7 @@ function setupIdleGate(events: EventManager, agentKeys: ReadonlyArray<string>, t
       : undefined;
 
   const agentKeyOf = (envelope: EventEnvelope<"agent.turn.start"> | EventEnvelope<"agent.idle">): string | null =>
-    envelope.sender.kind === "agent" ? envelope.sender.identity.agentKey : null;
+    envelope.sender.kind === "agent" ? envelope.sender.agentKey : null;
 
   const evaluate = (): void => {
     if (timer !== undefined) clearTimeout(timer);

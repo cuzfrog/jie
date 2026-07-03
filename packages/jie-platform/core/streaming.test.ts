@@ -1,4 +1,4 @@
-import { createEventManager, type EventManager, type Sender, type EventEnvelope } from "../event";
+import { createEventManager, type EventManager, type AgentSender, type Sender, type EventEnvelope } from "../event";
 import { makeStreamPublisher } from "./streaming";
 
 type ChunkPayload = EventEnvelope<"agent.stream.chunk">["payload"];
@@ -7,9 +7,8 @@ type StreamEndPayload = EventEnvelope<"agent.stream.end">["payload"];
 describe("makeStreamPublisher", () => {
   let events: EventManager;
   const agentKey = "general-1";
-  const agentRole = "general";
   const teamId = "t1";
-  const sender: Sender = { kind: "agent", identity: { teamId, agentRole, agentKey } };
+  const sender: AgentSender = { kind: "agent", teamId, agentKey };
 
   beforeEach(() => {
     events = createEventManager();

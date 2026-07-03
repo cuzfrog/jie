@@ -170,8 +170,8 @@ function resolveAgent(
 ): { agentId: AgentId; agent: AgentUiState } | null {
   if (state.teamId === null) return null;
   if (event.sender.kind !== "agent") return null;
-  if (event.sender.identity.teamId !== state.teamId) return null;
-  const agentId = composeAgentId(event.sender.identity.teamId, event.sender.identity.agentKey);
+  if (event.sender.teamId !== state.teamId) return null;
+  const agentId = composeAgentId(event.sender.teamId, event.sender.agentKey);
   const agent = state.agents.get(agentId);
   return agent === undefined ? null : { agentId, agent };
 }

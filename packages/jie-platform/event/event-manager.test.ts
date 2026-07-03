@@ -15,7 +15,8 @@ function collect<T extends EventType>(bus: EventBus, subject: T): EventEnvelope<
 
 const agentSender: Sender = {
   kind: "agent",
-  identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" },
+  teamId: "t1",
+  agentKey: "general-1",
 };
 
 const systemSender: Sender = { kind: "system" };

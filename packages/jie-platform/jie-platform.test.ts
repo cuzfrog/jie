@@ -13,9 +13,8 @@ import {
 import { createTeamRegistry } from "./team";
 import { createToolRegistry } from "./tools";
 import { createArtifactStore, createMemoryManager, createStorage } from "./storage";
-import { JiePlatformErrorMessages } from "./types";
 
-const NO_MODEL_ERROR = JiePlatformErrorMessages.NO_MODEL_ERROR;
+const NO_MODEL_ERROR = "No model has been selected";
 
 const settingsStore = vi.mocked<SettingsStore>({
   load: vi.fn(),
@@ -277,17 +276,12 @@ describe("createJiePlatform", () => {
       expect(handle.teamId).toBe("beta");
       expect(handle.team.id).toBe("beta");
       expect(events.map((e) => e.payload.teamId)).toEqual(["alpha", "beta"]);
-
-      const all = handle.bodies();
-      expect(all.has("alpha")).toBe(true);
-      expect(all.has("beta")).toBe(true);
-      expect(all.get("alpha")?.length).toBeGreaterThan(0);
-      expect(all.get("beta")?.length).toBeGreaterThan(0);
+      expect(handle.team.agents.length).toBeGreaterThan(0);
 
       await handle.stop();
     });
 
-    test("loadTeam is idempotent: calling twice does not re-publish or re-create bodies", async () => {
+    test("loadTeam is idempotent: calling twice does not re-publish the team.loaded event", async () => {
       installTeam(homeJieDir, "alpha", "general");
       const deps = makeDeps(workspace, homeJieDir);
       const events: EventEnvelope<"system.team.loaded">[] = [];
@@ -298,20 +292,6 @@ describe("createJiePlatform", () => {
       await handle.loadTeam("alpha");
       await handle.loadTeam("alpha");
       expect(events.filter((e) => e.payload.teamId === "alpha")).toHaveLength(1);
-      await handle.stop();
-    });
-
-    test("the previously-active team's bodies continue running after a switch", async () => {
-      installTeam(homeJieDir, "alpha", "general");
-      installTeam(homeJieDir, "beta", "researcher");
-      const deps = makeDeps(workspace, homeJieDir);
-      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "alpha" }, deps);
-      await handle.loadTeam("beta");
-      const all = handle.bodies();
-      const alphaBodies = all.get("alpha") ?? [];
-      const betaBodies = all.get("beta") ?? [];
-      expect(alphaBodies.length).toBeGreaterThan(0);
-      expect(betaBodies.length).toBeGreaterThan(0);
       await handle.stop();
     });
   });

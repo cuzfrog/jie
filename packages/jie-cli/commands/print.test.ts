@@ -9,7 +9,7 @@ interface JiePlatformStub {
 }
 
 type AgentEnvelope = {
-  sender: { kind: string; identity?: { teamId?: string; agentRole?: string; agentKey?: string } };
+  sender: { kind: string; teamId?: string; agentKey?: string };
   payload: Record<string, unknown>;
 };
 type Handler = (env: AgentEnvelope) => void;
@@ -39,17 +39,16 @@ describe("runPrint", () => {
   test("happy path: subscribes to agent.stream.chunk, publishes leader.prompt, waits for agent.idle, then stop()s", async () => {
     const { handle, events } = makeHandle();
     const teamId = "t1";
-    const leaderRole = "general";
     const leaderKey = "general-1";
     const handlers = captureHandlers(events);
 
     setImmediate(() => {
       handlers.get("agent.turn.start")?.({
-        sender: { kind: "agent", identity: { teamId, agentRole: leaderRole, agentKey: leaderKey } },
+        sender: { kind: "agent", teamId, agentKey: leaderKey },
         payload: {},
       });
       handlers.get("agent.idle")?.({
-        sender: { kind: "agent", identity: { teamId, agentRole: leaderRole, agentKey: leaderKey } },
+        sender: { kind: "agent", teamId, agentKey: leaderKey },
         payload: {},
       });
     });
@@ -57,7 +56,6 @@ describe("runPrint", () => {
     const code = await runPrint(
       handle as never,
       teamId,
-      leaderRole,
       leaderKey,
       [leaderKey],
       { kind: "print", instruction: "hi", team: undefined, timeout: 30, json: false, apiKey: undefined, resume: undefined, continueLast: false },
@@ -83,7 +81,6 @@ describe("runPrint", () => {
     const code = await runPrint(
       handle as never,
       "t1",
-      "general",
       "general-1",
       ["general-1"],
       { kind: "print", instruction: "hi", team: undefined, timeout: 0.05, json: false, apiKey: undefined, resume: undefined, continueLast: false },
@@ -101,22 +98,22 @@ describe("runPrint", () => {
 
     setImmediate(() => {
       handlers.get("agent.turn.start")?.({
-        sender: { kind: "agent", identity: { teamId, agentRole: "general", agentKey: leaderKey } },
+        sender: { kind: "agent", teamId, agentKey: leaderKey },
         payload: {},
       });
       handlers.get("agent.turn.start")?.({
-        sender: { kind: "agent", identity: { teamId, agentRole: "worker", agentKey: workerKey } },
+        sender: { kind: "agent", teamId, agentKey: workerKey },
         payload: {},
       });
       setTimeout(() => {
         handlers.get("agent.idle")?.({
-          sender: { kind: "agent", identity: { teamId, agentRole: "general", agentKey: leaderKey } },
+          sender: { kind: "agent", teamId, agentKey: leaderKey },
           payload: {},
         });
       }, 10);
       setTimeout(() => {
         handlers.get("agent.idle")?.({
-          sender: { kind: "agent", identity: { teamId, agentRole: "worker", agentKey: workerKey } },
+          sender: { kind: "agent", teamId, agentKey: workerKey },
           payload: {},
         });
       }, 30);
@@ -126,7 +123,6 @@ describe("runPrint", () => {
     const code = await runPrint(
       handle as never,
       teamId,
-      "general",
       leaderKey,
       [leaderKey, workerKey],
       { kind: "print", instruction: "hi", team: undefined, timeout: 2, json: false, apiKey: undefined, resume: undefined, continueLast: false },
@@ -144,18 +140,18 @@ describe("runPrint", () => {
 
     setImmediate(() => {
       handlers.get("agent.turn.start")?.({
-        sender: { kind: "agent", identity: { teamId, agentRole: "general", agentKey: leaderKey } },
+        sender: { kind: "agent", teamId, agentKey: leaderKey },
         payload: {},
       });
       setTimeout(() => {
         handlers.get("agent.idle")?.({
-          sender: { kind: "agent", identity: { teamId, agentRole: "ghost", agentKey: "ghost-1" } },
+          sender: { kind: "agent", teamId, agentKey: "ghost-1" },
           payload: {},
         });
       }, 5);
       setTimeout(() => {
         handlers.get("agent.idle")?.({
-          sender: { kind: "agent", identity: { teamId, agentRole: "general", agentKey: leaderKey } },
+          sender: { kind: "agent", teamId, agentKey: leaderKey },
           payload: {},
         });
       }, 30);
@@ -165,7 +161,6 @@ describe("runPrint", () => {
     const code = await runPrint(
       handle as never,
       teamId,
-      "general",
       leaderKey,
       [leaderKey],
       { kind: "print", instruction: "hi", team: undefined, timeout: 2, json: false, apiKey: undefined, resume: undefined, continueLast: false },
@@ -173,5 +168,57 @@ describe("runPrint", () => {
     const elapsed = Date.now() - start;
     expect(code).toBe(0);
     expect(elapsed).toBeGreaterThanOrEqual(25);
+  });
+
+  test("agent.stream.chunk: only the leader's chunks are written; foreign-team and non-leader chunks are dropped", async () => {
+    const { handle, events } = makeHandle();
+    const teamId = "t1";
+    const leaderKey = "general-1";
+    const workerKey = "worker-1";
+    const handlers = captureHandlers(events);
+
+    const writes: string[] = [];
+    const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    });
+
+    setImmediate(() => {
+      handlers.get("agent.stream.chunk")?.({
+        sender: { kind: "agent", teamId, agentKey: leaderKey },
+        payload: { text: "leader-1", seq: 0, block_type: "text" },
+      });
+      handlers.get("agent.stream.chunk")?.({
+        sender: { kind: "agent", teamId, agentKey: workerKey },
+        payload: { text: "worker-1", seq: 0, block_type: "text" },
+      });
+      handlers.get("agent.stream.chunk")?.({
+        sender: { kind: "agent", teamId: "other-team", agentKey: leaderKey },
+        payload: { text: "other-team", seq: 0, block_type: "text" },
+      });
+      handlers.get("agent.stream.chunk")?.({
+        sender: { kind: "user" },
+        payload: { text: "user-text", seq: 0, block_type: "text" },
+      });
+      handlers.get("agent.idle")?.({
+        sender: { kind: "agent", teamId, agentKey: leaderKey },
+        payload: {},
+      });
+    });
+
+    const code = await runPrint(
+      handle as never,
+      teamId,
+      leaderKey,
+      [leaderKey],
+      { kind: "print", instruction: "hi", team: undefined, timeout: 5, json: false, apiKey: undefined, resume: undefined, continueLast: false },
+    );
+    expect(code).toBe(0);
+    const concatenated = writes.join("");
+    expect(concatenated).toContain("leader-1");
+    expect(concatenated).not.toContain("worker-1");
+    expect(concatenated).not.toContain("other-team");
+    expect(concatenated).not.toContain("user-text");
+    stdoutSpy.mockRestore();
   });
 });

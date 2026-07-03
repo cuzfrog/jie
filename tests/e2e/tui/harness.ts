@@ -1,9 +1,8 @@
-import { createEventManager, Events, type EventEnvelope, type EventManager, type Sender, type EventType } from "@cuzfrog/jie-platform/event";
+import { createEventManager, Events, type EventEnvelope, type EventManager, type AgentSender, type EventType } from "@cuzfrog/jie-platform/event";
 import { createTui, type Tui, type TuiDeps, type CreateTUIOptions } from "@cuzfrog/jie-tui";
 import type { AuthStore, SettingsStore, Scope } from "@cuzfrog/jie-platform/config";
 import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
 import type { GitService, GitSnapshot } from "@cuzfrog/jie-platform/services";
-import { JiePlatformErrorMessages } from "@cuzfrog/jie-platform";
 import { withTTY } from "../../support";
 
 const noopAsync = (): Promise<void> => Promise.resolve();
@@ -73,21 +72,18 @@ export const replayEnvelopes = (
   return { tui, bus };
 };
 
-export const NO_MODEL_ERROR = JiePlatformErrorMessages.NO_MODEL_ERROR;
-
 export const attachNoModelBody = (
   bus: EventManager,
   teamId: string,
   agentKey: string,
-  role: string,
 ): (() => void) => {
-  const agentSender: Sender = { kind: "agent", identity: { teamId, agentRole: role, agentKey } };
+  const agentSender: AgentSender = { kind: "agent", teamId, agentKey };
   const unsubscribe = bus.subscribe("user.prompt", (env) => {
     if (env.payload === null || typeof env.payload !== "object") return;
     const payload = env.payload as { teamId?: unknown; agentKey?: unknown };
     if (payload.teamId !== teamId || payload.agentKey !== agentKey) return;
     bus.publish(Events.agentIdle(agentSender, "error"));
-    bus.publish(Events.systemError({ kind: "system" }, NO_MODEL_ERROR));
+    bus.publish(Events.systemError({ kind: "system" }, "No model has been selected"));
   });
   return unsubscribe;
 };

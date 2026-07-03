@@ -1,12 +1,12 @@
-import { Agent, type AgentMessage, type AgentTool, type ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { Api, Model } from "@earendil-works/pi-ai";
+import { Agent, type AgentMessage, type AgentTool, type AgentToolResult, type ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { Api, Model, TextContent } from "@earendil-works/pi-ai";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { AgentSoul } from "../team";
 import type { ExecutionContext, ToolRegistry } from "../tools";
 import { adaptToolToAgent } from "./tool-adapter";
 import { makeStreamPublisher } from "./streaming";
 import { JieAgentBody } from "./jie-agent-body";
-import { Events, type EventManager, type Sender } from "../event";
+import { Events, type AgentSender, type EventManager } from "../event";
 
 export interface CreateAgentBodyOptions {
   readonly agentKey: string;
@@ -29,10 +29,7 @@ export interface AgentBody {
 }
 
 export function createAgentBody(options: CreateAgentBodyOptions): AgentBody {
-  const sender: Sender = {
-    kind: "agent",
-    identity: { teamId: options.teamId, agentRole: options.soul.role, agentKey: options.agentKey },
-  };
+  const sender: AgentSender = { kind: "agent", teamId: options.teamId, agentKey: options.agentKey };
   const streamPublisher = makeStreamPublisher(options.eventManager, sender);
 
   const executionContext: ExecutionContext = {
@@ -132,15 +129,13 @@ function defaultAgentFactory(agentOptions: ConstructorParameters<typeof Agent>[0
 
 function extractToolError(context: {
   isError: boolean;
-  result: unknown;
+  result: AgentToolResult<unknown> | undefined;
 }): string | null {
   if (!context.isError) return null;
   if (context.result === undefined) return "tool error";
-  const content = (context.result as { content?: Array<{ text?: string }> }).content;
-  if (!Array.isArray(content)) return "tool error";
-  const text = content
+  const text = context.result.content
+    .filter((c): c is TextContent => c.type === "text")
     .map((c) => c.text)
-    .filter((t): t is string => typeof t === "string")
     .join("\n");
   return text.length > 0 ? text : "tool error";
 }
@@ -158,20 +153,15 @@ interface JieToolResult {
   terminate?: boolean;
 }
 
-function jieToolResultOf(piResult: unknown): JieToolResult {
-  const r = piResult as {
-    content?: Array<{ type: string; text?: string }>;
-    details?: unknown;
-    terminate?: boolean;
-  };
-  const block = r.content;
+function jieToolResultOf(piResult: AgentToolResult<unknown>): JieToolResult {
+  const block = piResult.content;
   const content =
-    Array.isArray(block) && block.length === 1 && block[0]?.type === "text"
-      ? (block[0].text ?? "")
-      : (block ?? "");
+    block.length === 1 && block[0]?.type === "text"
+      ? block[0].text
+      : block;
   return {
     content,
-    details: r.details,
-    terminate: r.terminate ?? false,
+    details: piResult.details,
+    terminate: piResult.terminate ?? false,
   };
 }

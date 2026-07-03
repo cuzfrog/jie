@@ -187,7 +187,7 @@ describe("JieAgentBody — start() subscriptions", () => {
     h.events.subscribe("custom.t1.task.recorded", () => {
       received = true;
     });
-    h.events.publish(Events.custom({ kind: "agent", identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" } }, "t1.task.recorded", "task"));
+    h.events.publish(Events.custom({ kind: "agent", teamId: "t1", agentKey: "general-1" }, "t1.task.recorded", "task"));
     expect(received).toBe(true);
     b2.stop();
   });
@@ -199,7 +199,7 @@ describe("JieAgentBody — start() subscriptions", () => {
     });
     await b2.start();
     h.events.publish(Events.custom(
-      { kind: "agent", identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" } },
+      { kind: "agent", teamId: "t1", agentKey: "general-1" },
       "t1.task.recorded",
       "do X",
     ));
@@ -214,7 +214,7 @@ describe("JieAgentBody — start() subscriptions", () => {
     });
     await b2.start();
     h.events.publish(Events.custom(
-      { kind: "agent", identity: { teamId: "t1", agentRole: "leader", agentKey: "leader-1" } },
+      { kind: "agent", teamId: "t1", agentKey: "leader-1" },
       "t1.task.recorded",
       "do X",
     ));
@@ -307,7 +307,7 @@ describe("JieAgentBody — prompt ingress format", () => {
       soul: makeSoul({ subscribe: ["task.researched"] }),
     });
     await body.start();
-    h.events.publish(Events.custom({ kind: "agent", identity: { teamId: "t1", agentRole: "researcher", agentKey: "researcher-1" } }, "t1.task.researched", "report"));
+    h.events.publish(Events.custom({ kind: "agent", teamId: "t1", agentKey: "researcher-1" }, "t1.task.researched", "report"));
     const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
     const content = (synthetic as { content: unknown }).content;
     expect(content).toBe(

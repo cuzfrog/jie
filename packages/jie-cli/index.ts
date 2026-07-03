@@ -92,7 +92,7 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<numb
         dependencies,
       );
       if (result.kind === "error") return result.code;
-      return runPrint(result.app.handle, result.app.teamId, result.app.leaderRole, result.app.leaderKey, result.app.agentKeys, args);
+      return runPrint(result.app.handle, result.app.teamId, result.app.leaderKey, result.app.agentKeys, args);
     }
   }
 }

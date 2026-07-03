@@ -38,7 +38,6 @@ export interface JiePlatform {
     readonly id: string;
     readonly agents: ReadonlyArray<{ readonly role: string; readonly agentKey: string; readonly isLeader: boolean }>;
   };
-  readonly bodies: () => ReadonlyMap<string, ReadonlyArray<AgentBody>>;
   readonly loadTeam: (teamId: string) => Promise<void>;
   readonly stop: () => Promise<void>;
 }
@@ -109,7 +108,6 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
         return teamRosters.get(activeTeamId) ?? [];
       },
     },
-    bodies: (): Map<string, AgentBody[]> => new Map(loadedTeams),
     loadTeam: async (teamId: string): Promise<void> => {
       await loadTeam(teamId);
       activeTeamId = teamId;

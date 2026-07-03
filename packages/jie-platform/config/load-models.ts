@@ -13,7 +13,6 @@ export interface RawProviderConfig {
   readonly api?: string;
   readonly apiKey?: string;
   readonly headers?: Record<string, string>;
-  readonly authHeader?: boolean;
   readonly compat?: Record<string, unknown>;
   readonly models?: ReadonlyArray<RawModelConfig>;
   readonly modelOverrides?: Record<string, RawModelOverride>;
@@ -53,7 +52,6 @@ export interface ResolvedProviderConfig {
   readonly api: Api;
   readonly apiKey: string;
   readonly headers: Record<string, string>;
-  readonly authHeader: boolean;
   readonly compat: OpenAICompletionsCompat | OpenAIResponsesCompat | AnthropicMessagesCompat | Record<string, never>;
 }
 
@@ -133,7 +131,6 @@ function mergeProviderConfig(base: RawProviderConfig | undefined, override: RawP
     api: override.api ?? base.api,
     apiKey: override.apiKey ?? base.apiKey,
     headers: { ...(base.headers ?? {}), ...(override.headers ?? {}) },
-    authHeader: override.authHeader ?? base.authHeader,
     compat: { ...(base.compat ?? {}), ...(override.compat ?? {}) },
     models: mergeModelArrays(base.models, override.models),
     modelOverrides: { ...(base.modelOverrides ?? {}), ...(override.modelOverrides ?? {}) },
@@ -166,7 +163,6 @@ function resolveConfig(raw: RawModelsConfig): ResolvedModelsConfig {
     }
     const compat = (rawCfg.compat ?? {}) as ResolvedProviderConfig["compat"];
     const apiKey = resolveValue(rawCfg.apiKey ?? "", `provider '${providerId}' apiKey`);
-    const authHeader = rawCfg.authHeader ?? true;
     const baseUrl = resolveValue(rawCfg.baseUrl, `provider '${providerId}' baseUrl`);
 
     providers.set(providerId, {
@@ -175,7 +171,6 @@ function resolveConfig(raw: RawModelsConfig): ResolvedModelsConfig {
       api,
       apiKey,
       headers,
-      authHeader,
       compat,
     });
 
@@ -189,7 +184,6 @@ function resolveConfig(raw: RawModelsConfig): ResolvedModelsConfig {
           { ...rawM, id: resolvedId, name: rawM.name === undefined ? undefined : resolveValue(rawM.name, `provider '${providerId}' model.name`) },
           compat,
           headers,
-          authHeader,
         );
         models.push(model);
       }
@@ -226,7 +220,6 @@ function buildModel(
   raw: RawModelConfig,
   providerCompat: ResolvedProviderConfig["compat"],
   providerHeaders: Record<string, string>,
-  authHeader: boolean,
 ): Model<Api> {
   if (typeof raw.id !== "string" || raw.id === "") {
     throw new JiePlatformError("INVALID_CONFIG", {
@@ -254,7 +247,6 @@ function buildModel(
   };
   if (Object.keys(providerHeaders).length > 0) result.headers = providerHeaders;
   if (Object.keys(mergedCompat).length > 0) result.compat = mergedCompat as never;
-  if (authHeader === false) (result as unknown as { __authHeader?: boolean }).__authHeader = false;
   return result;
 }
 
