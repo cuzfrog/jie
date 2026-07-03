@@ -26,7 +26,7 @@ export interface CommandHandlerDeps {
 }
 
 export interface TuiCommandHandler {
-  handle: (text: string) => void;
+  readonly handle: (text: string) => void;
 }
 
 export function createTuiCommandHandler(deps: CommandHandlerDeps): TuiCommandHandler {

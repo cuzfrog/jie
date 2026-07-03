@@ -48,9 +48,9 @@ export const JiePlatformErrorMessages = {
 export type JiePlatformErrorCode = keyof typeof JiePlatformErrorMessages;
 
 export interface JiePlatformErrorOptions {
-  detail?: string;
-  cause?: Error;
-  data?: Record<string, unknown>;
+  readonly detail?: string;
+  readonly cause?: Error;
+  readonly data?: Record<string, unknown>;
 }
 
 export class JiePlatformError extends Error {

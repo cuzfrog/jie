@@ -5,61 +5,61 @@ import type { Api, Model, OpenAICompletionsCompat, OpenAIResponsesCompat, Anthro
 import { JiePlatformError } from "../types";
 
 export interface RawModelsConfig {
-  providers?: Record<string, RawProviderConfig>;
+  readonly providers?: Record<string, RawProviderConfig>;
 }
 
 export interface RawProviderConfig {
-  baseUrl?: string;
-  api?: string;
-  apiKey?: string;
-  headers?: Record<string, string>;
-  authHeader?: boolean;
-  compat?: Record<string, unknown>;
-  models?: RawModelConfig[];
-  modelOverrides?: Record<string, RawModelOverride>;
+  readonly baseUrl?: string;
+  readonly api?: string;
+  readonly apiKey?: string;
+  readonly headers?: Record<string, string>;
+  readonly authHeader?: boolean;
+  readonly compat?: Record<string, unknown>;
+  readonly models?: ReadonlyArray<RawModelConfig>;
+  readonly modelOverrides?: Record<string, RawModelOverride>;
 }
 
 export interface RawModelConfig {
-  id: string;
-  name?: string;
-  api?: string;
-  reasoning?: boolean;
-  input?: ("text" | "image")[];
-  contextWindow?: number;
-  maxTokens?: number;
-  cost?: {
-    input?: number;
-    output?: number;
-    cacheRead?: number;
-    cacheWrite?: number;
+  readonly id: string;
+  readonly name?: string;
+  readonly api?: string;
+  readonly reasoning?: boolean;
+  readonly input?: ReadonlyArray<"text" | "image">;
+  readonly contextWindow?: number;
+  readonly maxTokens?: number;
+  readonly cost?: {
+    readonly input?: number;
+    readonly output?: number;
+    readonly cacheRead?: number;
+    readonly cacheWrite?: number;
   };
-  compat?: Record<string, unknown>;
+  readonly compat?: Record<string, unknown>;
 }
 
 export interface RawModelOverride {
-  name?: string;
-  reasoning?: boolean;
-  input?: ("text" | "image")[];
-  contextWindow?: number;
-  maxTokens?: number;
-  compat?: Record<string, unknown>;
-  headers?: Record<string, string>;
-  cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
+  readonly name?: string;
+  readonly reasoning?: boolean;
+  readonly input?: ReadonlyArray<"text" | "image">;
+  readonly contextWindow?: number;
+  readonly maxTokens?: number;
+  readonly compat?: Record<string, unknown>;
+  readonly headers?: Record<string, string>;
+  readonly cost?: { readonly input?: number; readonly output?: number; readonly cacheRead?: number; readonly cacheWrite?: number };
 }
 
 export interface ResolvedProviderConfig {
-  provider: string;
-  baseUrl: string;
-  api: Api;
-  apiKey: string;
-  headers: Record<string, string>;
-  authHeader: boolean;
-  compat: OpenAICompletionsCompat | OpenAIResponsesCompat | AnthropicMessagesCompat | Record<string, never>;
+  readonly provider: string;
+  readonly baseUrl: string;
+  readonly api: Api;
+  readonly apiKey: string;
+  readonly headers: Record<string, string>;
+  readonly authHeader: boolean;
+  readonly compat: OpenAICompletionsCompat | OpenAIResponsesCompat | AnthropicMessagesCompat | Record<string, never>;
 }
 
 export interface ResolvedModelsConfig {
-  providers: Map<string, ResolvedProviderConfig>;
-  models: Model<Api>[];
+  readonly providers: ReadonlyMap<string, ResolvedProviderConfig>;
+  readonly models: ReadonlyArray<Model<Api>>;
 }
 
 const KNOWN_APIS: ReadonlySet<Api> = new Set<Api>([
@@ -140,7 +140,7 @@ function mergeProviderConfig(base: RawProviderConfig | undefined, override: RawP
   };
 }
 
-function mergeModelArrays(base: RawModelConfig[] | undefined, override: RawModelConfig[] | undefined): RawModelConfig[] | undefined {
+function mergeModelArrays(base: ReadonlyArray<RawModelConfig> | undefined, override: ReadonlyArray<RawModelConfig> | undefined): RawModelConfig[] | undefined {
   if (base === undefined && override === undefined) return undefined;
   const result = new Map<string, RawModelConfig>();
   for (const m of base ?? []) result.set(m.id, m);
@@ -247,7 +247,7 @@ function buildModel(
     provider: providerId,
     baseUrl,
     reasoning: raw.reasoning ?? false,
-    input: raw.input ?? ["text"],
+    input: [...(raw.input ?? ["text"])],
     cost,
     contextWindow: raw.contextWindow ?? 128000,
     maxTokens: raw.maxTokens ?? 16384,

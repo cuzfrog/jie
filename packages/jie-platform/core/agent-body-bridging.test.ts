@@ -50,7 +50,6 @@ function makeSoul(): AgentSoul {
     systemPrompt: "you are a general assistant",
     tools: ["noop"],
     subscribe: [],
-    subscriptions: [],
   };
 }
 

@@ -13,31 +13,34 @@ import {
 import { JiePlatformError } from "./types";
 
 export interface CreateJiePlatformOptions {
-  workspace: string;
-  homeJieDir: string;
-  teamId?: string;
-  resumeSessionId?: string;
-  continueLastSession?: boolean;
+  readonly workspace: string;
+  readonly homeJieDir: string;
+  readonly teamId?: string;
+  readonly resumeSessionId?: string;
+  readonly continueLastSession?: boolean;
 }
 
 export interface JiePlatformDeps {
-  eventManager: EventManager;
-  settingsStore: SettingsStore;
-  storage: Storage;
-  teamRegistry: TeamRegistry;
-  modelRegistry: ModelRegistry;
-  toolRegistry: ToolRegistry;
-  artifactStore: ArtifactStore;
-  memoryManager: MemoryManager;
+  readonly eventManager: EventManager;
+  readonly settingsStore: SettingsStore;
+  readonly storage: Storage;
+  readonly teamRegistry: TeamRegistry;
+  readonly modelRegistry: ModelRegistry;
+  readonly toolRegistry: ToolRegistry;
+  readonly artifactStore: ArtifactStore;
+  readonly memoryManager: MemoryManager;
 }
 
 export interface JiePlatform {
-  events: EventManager;
-  teamId: string;
-  team: { id: string; agents: Array<{ role: string; agentKey: string; isLeader: boolean }> };
-  bodies: () => Map<string, AgentBody[]>;
-  loadTeam: (teamId: string) => Promise<void>;
-  stop: () => Promise<void>;
+  readonly events: EventManager;
+  readonly teamId: string;
+  readonly team: {
+    readonly id: string;
+    readonly agents: ReadonlyArray<{ readonly role: string; readonly agentKey: string; readonly isLeader: boolean }>;
+  };
+  readonly bodies: () => ReadonlyMap<string, ReadonlyArray<AgentBody>>;
+  readonly loadTeam: (teamId: string) => Promise<void>;
+  readonly stop: () => Promise<void>;
 }
 
 export async function createJiePlatform(options: CreateJiePlatformOptions, dependencies: JiePlatformDeps): Promise<JiePlatform> {
@@ -55,7 +58,7 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
     sessionIds.set(teamId, sessionId);
 
     const out: AgentBody[] = [];
-    const roster: JiePlatform["team"]["agents"] = [];
+    const roster: Array<{ role: string; agentKey: string; isLeader: boolean }> = [];
     for (const soul of blueprint.roles) {
       const isLeader = soul.role === blueprint.leaderRole;
       const agentKey = `${soul.role}-1`;

@@ -2,26 +2,26 @@ import type { TSchema } from "typebox";
 import type { ArtifactStore } from "../storage";
 
 export interface ExecutionContext {
-  sessionId: string;
-  teamId: string;
-  agentKey: string;
-  agentRole: string;
-  artifactStore: ArtifactStore;
+  readonly sessionId: string;
+  readonly teamId: string;
+  readonly agentKey: string;
+  readonly agentRole: string;
+  readonly artifactStore: ArtifactStore;
 }
 
 export interface ToolResult {
-  content: string;
-  details?: unknown;
-  terminate?: boolean;
+  readonly content: string;
+  readonly details?: unknown;
+  readonly terminate?: boolean;
 }
 
 export interface Tool<TInput = unknown> {
-  name: string;
-  description: string;
-  label: string;
-  timeout?: number;
-  parameters: TSchema;
-  execute: (
+  readonly name: string;
+  readonly description: string;
+  readonly label: string;
+  readonly timeout?: number;
+  readonly parameters: TSchema;
+  readonly execute: (
     input: TInput,
     executionContext: ExecutionContext,
     signal?: AbortSignal,

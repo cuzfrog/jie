@@ -14,11 +14,11 @@ const INITIAL_TUI_STATE: TuiState = Object.freeze({
 } as const);
 
 export interface StateStore {
-  getState: () => TuiState;
-  dispatch: (action: Action) => void;
-  subscribe: (listener: () => void) => () => void;
-  getFocusedAgent: () => AgentUiState | null;
-  isBusy: () => boolean;
+  readonly getState: () => TuiState;
+  readonly dispatch: (action: Action) => void;
+  readonly subscribe: (listener: () => void) => () => void;
+  readonly getFocusedAgent: () => AgentUiState | null;
+  readonly isBusy: () => boolean;
 }
 
 export function createStateStore(): StateStore {

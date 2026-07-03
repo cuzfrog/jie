@@ -7,15 +7,15 @@ import type { TeamBlueprint } from "./types";
 const BUILTIN_MINIMAL_TEAM_ID = "minimal";
 
 export interface TeamRegistryOptions {
-  homeJieDir: string;
-  projectJieDir: string | null;
+  readonly homeJieDir: string;
+  readonly projectJieDir: string | null;
 }
 
 export interface TeamRegistry {
-  parseTeamManifest(teamId?: string): TeamBlueprint;
-  isInstalled(teamId: string): boolean;
-  listInstalled(): string[];
-  locate(teamId: string): "project" | "user" | "missing";
+  readonly parseTeamManifest: (teamId?: string) => TeamBlueprint;
+  readonly isInstalled: (teamId: string) => boolean;
+  readonly listInstalled: () => string[];
+  readonly locate: (teamId: string) => "project" | "user" | "missing";
 }
 
 export function createTeamRegistry(options: TeamRegistryOptions): TeamRegistry {

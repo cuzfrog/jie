@@ -1,9 +1,9 @@
 import type { OAuthCredentials } from "@earendil-works/pi-ai";
 
 export interface Settings {
-  defaultProvider?: string;
-  defaultModel?: string;
-  defaultTeam?: string;
+  readonly defaultProvider?: string;
+  readonly defaultModel?: string;
+  readonly defaultTeam?: string;
 }
 
 export type RawSettings = Record<string, unknown>;
@@ -15,11 +15,11 @@ export type AuthEntry =
 export type AuthJson = Record<string, AuthEntry>;
 
 export interface McpServerConfig {
-  transport: "stdio" | "http";
-  command?: string;
-  args?: string[];
-  url?: string;
-  auth?: {
-    tokenEnv?: string;
+  readonly transport: "stdio" | "http";
+  readonly command?: string;
+  readonly args?: ReadonlyArray<string>;
+  readonly url?: string;
+  readonly auth?: {
+    readonly tokenEnv?: string;
   };
 }

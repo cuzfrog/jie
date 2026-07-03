@@ -39,24 +39,24 @@ type EventDefinitions = {
 export type EventType = keyof EventDefinitions;
 
 export interface AgentIdentity {
-  teamId: string;
-  agentRole: string;
-  agentKey: string;
+  readonly teamId: string;
+  readonly agentRole: string;
+  readonly agentKey: string;
 }
 
-export interface AgentSender { kind: "agent"; identity: AgentIdentity };
-export interface UserSender { kind: "user" };
-export interface SystemSender { kind: "system" };
+export interface AgentSender { readonly kind: "agent"; readonly identity: AgentIdentity };
+export interface UserSender { readonly kind: "user" };
+export interface SystemSender { readonly kind: "system" };
 export type Sender = AgentSender | UserSender | SystemSender;
 
 /** Use `Events.*` to create event. */
 export interface EventEnvelope<T extends EventType> {
-  version: 1;
-  type: T;
-  topic: string;
-  sender: EventDefinitions[T]["sender"];
-  timestamp: string;
-  payload: EventDefinitions[T]["payload"];
+  readonly version: 1;
+  readonly type: T;
+  readonly topic: string;
+  readonly sender: EventDefinitions[T]["sender"];
+  readonly timestamp: string;
+  readonly payload: EventDefinitions[T]["payload"];
 }
 
 export const EVENT_TEXT_TRUNCATION_BYTES: number = 4 * 1024;

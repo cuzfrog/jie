@@ -1,15 +1,24 @@
 
 export interface ParsedArgsMap {
-  print: { kind: "print"; instruction: string; team?: string; timeout: number; json: boolean; apiKey?: string; resume?: string; continueLast: boolean };
-  version: { kind: "version" };
-  help: { kind: "help" };
-  login: { kind: "login"; provider?: string; apiKey?: string };
-  logout: { kind: "logout"; provider?: string };
-  model: { kind: "model"; provider: string; modelId: string };
-  team: { kind: "team"; teamId?: string; unset: boolean };
-  apiKey: { kind: "apiKey"; apiKey: string };
-  tui: { kind: "tui"; team?: string };
-  error: { kind: "error"; message: string };
+  readonly print: {
+    readonly kind: "print";
+    readonly instruction: string;
+    readonly team?: string;
+    readonly timeout: number;
+    readonly json: boolean;
+    readonly apiKey?: string;
+    readonly resume?: string;
+    readonly continueLast: boolean;
+  };
+  readonly version: { readonly kind: "version" };
+  readonly help: { readonly kind: "help" };
+  readonly login: { readonly kind: "login"; readonly provider?: string; readonly apiKey?: string };
+  readonly logout: { readonly kind: "logout"; readonly provider?: string };
+  readonly model: { readonly kind: "model"; readonly provider: string; readonly modelId: string };
+  readonly team: { readonly kind: "team"; readonly teamId?: string; readonly unset: boolean };
+  readonly apiKey: { readonly kind: "apiKey"; readonly apiKey: string };
+  readonly tui: { readonly kind: "tui"; readonly team?: string };
+  readonly error: { readonly kind: "error"; readonly message: string };
 }
 export type ParsedArgs = ParsedArgsMap[keyof ParsedArgsMap];
 

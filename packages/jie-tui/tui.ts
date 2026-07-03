@@ -25,10 +25,10 @@ export interface CreateTUIOptions {
 }
 
 export interface Tui {
-  getState: () => TuiState;
-  submit: (text: string) => void;
-  start: () => Promise<void>;
-  stop: () => void;
+  readonly getState: () => TuiState;
+  readonly submit: (text: string) => void;
+  readonly start: () => Promise<void>;
+  readonly stop: () => void;
 }
 
 const MIN_COLS = 60;

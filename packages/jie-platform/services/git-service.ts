@@ -6,7 +6,7 @@ export interface GitSnapshot {
 }
 
 export interface GitService {
-  getSnapshot: () => GitSnapshot;
+  readonly getSnapshot: () => GitSnapshot;
 }
 
 export interface CreateGitServiceOptions {

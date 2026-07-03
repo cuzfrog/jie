@@ -22,7 +22,6 @@ describe("loadMinimalTeam", () => {
     const soul = bp.roles[0]!;
     expect(soul.tools).toEqual(["bash", "read_file", "write_file"]);
     expect(soul.subscribe).toEqual([]);
-    expect(soul.subscriptions).toEqual([]);
   });
 
   test("the general soul has a non-empty system_prompt and no model pinned", () => {
@@ -80,7 +79,6 @@ describe("loadTeamFromDir", () => {
     );
     const bp = loadTeamFromDir(dir);
     expect(bp.roles[0]?.subscribe).toEqual(["task.recorded"]);
-    expect(bp.roles[0]?.subscriptions).toEqual(["task.recorded"]);
   });
 
   test("agent with model field is parsed; model format validated", () => {

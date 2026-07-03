@@ -37,7 +37,7 @@ function readSettingsFile(path: string): RawSettings | null {
 }
 
 function validateSettings(raw: RawSettings, source: string): Settings {
-  const result: Settings = {};
+  const result: { -readonly [K in keyof Settings]: Settings[K] } = {};
 
   if ("defaultProvider" in raw && raw.defaultProvider !== undefined) {
     if (typeof raw.defaultProvider !== "string") {

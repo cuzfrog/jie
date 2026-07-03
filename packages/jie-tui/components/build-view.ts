@@ -6,7 +6,7 @@ import { ChatPane, chatPaneFromAgent } from "./chat-pane";
 import { EditorSlot } from "./editor-slot";
 
 export interface BuildViewOpts {
-  cwd: string;
+  readonly cwd: string;
 }
 
 export interface BuildViewResult {

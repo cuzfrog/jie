@@ -9,23 +9,23 @@ import { JieAgentBody } from "./jie-agent-body";
 import { Events, type EventManager, type Sender } from "../event";
 
 export interface CreateAgentBodyOptions {
-  agentKey: string;
-  teamId: string;
-  soul: AgentSoul;
-  isLeader: boolean;
-  eventManager: EventManager;
-  artifactStore: ArtifactStore;
-  memory: MemoryManager;
-  sessionId: string;
-  toolRegistry: ToolRegistry;
-  getApiKey: (provider: string) => Promise<string | undefined> | string | undefined;
-  model: Model<Api> | undefined;
-  createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
+  readonly agentKey: string;
+  readonly teamId: string;
+  readonly soul: AgentSoul;
+  readonly isLeader: boolean;
+  readonly eventManager: EventManager;
+  readonly artifactStore: ArtifactStore;
+  readonly memory: MemoryManager;
+  readonly sessionId: string;
+  readonly toolRegistry: ToolRegistry;
+  readonly getApiKey: (provider: string) => Promise<string | undefined> | string | undefined;
+  readonly model: Model<Api> | undefined;
+  readonly createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
 }
 
 export interface AgentBody {
-  start(): Promise<void>;
-  stop(): void;
+  readonly start: () => Promise<void>;
+  readonly stop: () => void;
 }
 
 export function createAgentBody(options: CreateAgentBodyOptions): AgentBody {

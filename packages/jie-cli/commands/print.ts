@@ -9,7 +9,7 @@ export async function runPrint(
   teamId: string,
   leaderRole: string,
   leaderKey: string,
-  agentKeys: string[],
+  agentKeys: ReadonlyArray<string>,
   args: PrintArgs,
 ): Promise<number> {
   handle.events.subscribe("agent.stream.chunk", (envelope) => {
@@ -44,7 +44,7 @@ export async function runPrint(
   return 0;
 }
 
-function setupIdleGate(events: EventManager, agentKeys: string[], timeoutSec: number): Promise<void> {
+function setupIdleGate(events: EventManager, agentKeys: ReadonlyArray<string>, timeoutSec: number): Promise<void> {
   const state = new Map<string, "busy" | "idle">();
   for (const agentKey of agentKeys) state.set(agentKey, "idle");
 

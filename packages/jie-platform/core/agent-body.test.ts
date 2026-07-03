@@ -38,7 +38,6 @@ function makeSoul(overrides: Partial<AgentSoul> = {}): AgentSoul {
     systemPrompt: "you are a general assistant",
     tools: ["noop"],
     subscribe: [],
-    subscriptions: [],
     ...overrides,
   };
 }

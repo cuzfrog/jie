@@ -149,7 +149,7 @@ export class JieAgentBody implements AgentBody {
         this.ingestUserPrompt(env.payload);
       }),
     );
-    for (const topic of this.soul.subscriptions) {
+    for (const topic of this.soul.subscribe) {
       this.unsubscribers.push(
         this.eventManager.subscribe(`custom.${this.teamId}.${topic}`, (env) => {
           this.ingestCustom(topic, env.sender, env.payload);

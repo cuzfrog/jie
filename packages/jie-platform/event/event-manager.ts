@@ -7,7 +7,7 @@ export interface EventManager {
   /** returns an unsubscribe function */
   subscribe<T extends EventType>(eventType: T, callback: (event: EventEnvelope<T>) => void): () => void;
   subscribe(eventType: string, callback: (event: EventEnvelope<EventType>) => void): () => void;
-  subscriberCount(subject: string): number;
+  readonly subscriberCount: (subject: string) => number;
 }
 
 export function createEventManager(bus: EventBus = createEventBus()): EventManager {

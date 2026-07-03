@@ -1,15 +1,13 @@
-
 export interface AgentSoul {
-  role: string;
-  model: string;
-  systemPrompt: string;
-  tools: string[];
-  subscribe: string[];
-  subscriptions: string[];
+  readonly role: string;
+  readonly model: string;
+  readonly systemPrompt: string;
+  readonly tools: ReadonlyArray<string>;
+  readonly subscribe: ReadonlyArray<string>;
 }
 
 export interface TeamBlueprint {
-  id: string;
-  roles: AgentSoul[];
-  leaderRole: string | null;
+  readonly id: string;
+  readonly roles: ReadonlyArray<AgentSoul>;
+  readonly leaderRole: string | null;
 }

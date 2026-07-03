@@ -16,10 +16,8 @@ export function isValidTeamId(id: string): boolean {
 }
 
 export interface ParseTeamOptions {
-
-  teamId: string;
-
-  sourceDir?: string;
+  readonly teamId: string;
+  readonly sourceDir?: string;
 }
 
 export function parseTeamFromManifests(
@@ -250,7 +248,6 @@ function parseAgentFile(
     systemPrompt: body,
     tools,
     subscribe,
-    subscriptions: [...subscribe],
   };
 }
 

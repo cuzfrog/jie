@@ -6,39 +6,39 @@ import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
 import type { ToolRegistry } from "@cuzfrog/jie-platform/tools";
 
 export interface AppDeps {
-  authStore: AuthStore;
-  settingsStore: SettingsStore;
-  eventManager: EventManager;
-  storage: Storage;
-  teamRegistry: TeamRegistry;
-  modelRegistry: ModelRegistry;
-  toolRegistry: ToolRegistry;
-  artifactStore: ArtifactStore;
-  memoryManager: MemoryManager;
+  readonly authStore: AuthStore;
+  readonly settingsStore: SettingsStore;
+  readonly eventManager: EventManager;
+  readonly storage: Storage;
+  readonly teamRegistry: TeamRegistry;
+  readonly modelRegistry: ModelRegistry;
+  readonly toolRegistry: ToolRegistry;
+  readonly artifactStore: ArtifactStore;
+  readonly memoryManager: MemoryManager;
 }
 
 export interface App {
-  handle: JiePlatform;
-  teamId: string;
-  leaderRole: string;
-  leaderKey: string;
-  agentKeys: string[];
-  settings: Settings;
+  readonly handle: JiePlatform;
+  readonly teamId: string;
+  readonly leaderRole: string;
+  readonly leaderKey: string;
+  readonly agentKeys: ReadonlyArray<string>;
+  readonly settings: Settings;
 }
 
 export type AppCreationResult =
-  | { kind: "ok"; app: App }
-  | { kind: "error"; code: number };
+  | { readonly kind: "ok"; readonly app: App }
+  | { readonly kind: "error"; readonly code: number };
 
 export interface AppArgs {
-  kind: "print" | "tui";
-  cwd: string;
-  homeJieDir: string;
-  projectJieDir: string | null;
-  teamId?: string;
-  apiKey?: string;
-  resume?: string;
-  continueLast?: boolean;
+  readonly kind: "print" | "tui";
+  readonly cwd: string;
+  readonly homeJieDir: string;
+  readonly projectJieDir: string | null;
+  readonly teamId?: string;
+  readonly apiKey?: string;
+  readonly resume?: string;
+  readonly continueLast?: boolean;
 }
 
 export async function createApp(

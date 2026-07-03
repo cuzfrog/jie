@@ -5,18 +5,18 @@ import type { GitSnapshot } from "@cuzfrog/jie-platform/services";
 const PLACEHOLDER_TOKEN_USAGE = "0%/200k";
 
 export interface StatusBarModel {
-  cwd: string;
-  git: GitSnapshot;
+  readonly cwd: string;
+  readonly git: GitSnapshot;
 }
 
 export interface StatusBarContext {
-  focusedStatus: AgentStatus | null;
-  focusedAgentKey: string | null;
-  teamId: string | null;
-  showRail: boolean;
-  focusedModel: ModelReference | null;
-  transientMessage: string | null;
-  errorBanner: string | null;
+  readonly focusedStatus: AgentStatus | null;
+  readonly focusedAgentKey: string | null;
+  readonly teamId: string | null;
+  readonly showRail: boolean;
+  readonly focusedModel: ModelReference | null;
+  readonly transientMessage: string | null;
+  readonly errorBanner: string | null;
 }
 
 export class StatusBar extends Container {

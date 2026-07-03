@@ -12,7 +12,6 @@ function makeSoul(overrides: Partial<AgentSoul> = {}): AgentSoul {
     systemPrompt: "you are a general assistant",
     tools: [],
     subscribe: [],
-    subscriptions: [],
     ...overrides,
   };
 }
@@ -181,7 +180,7 @@ describe("JieAgentBody — start() subscriptions", () => {
   test("subscribes to each topic in soul.subscriptions", async () => {
     body.stop();
     const b2 = h.makeBody({
-      soul: makeSoul({ subscriptions: ["task.recorded"] }),
+      soul: makeSoul({ subscribe: ["task.recorded"] }),
     });
     await b2.start();
     let received = false;
@@ -196,7 +195,7 @@ describe("JieAgentBody — start() subscriptions", () => {
   test("ingestCustom drops self-published events (avoids feedback loop)", async () => {
     body.stop();
     const b2 = h.makeBody({
-      soul: makeSoul({ subscriptions: ["task.recorded"] }),
+      soul: makeSoul({ subscribe: ["task.recorded"] }),
     });
     await b2.start();
     h.events.publish(Events.custom(
@@ -211,7 +210,7 @@ describe("JieAgentBody — start() subscriptions", () => {
   test("ingestCustom still dispatches events from a different agent", async () => {
     body.stop();
     const b2 = h.makeBody({
-      soul: makeSoul({ subscriptions: ["task.recorded"] }),
+      soul: makeSoul({ subscribe: ["task.recorded"] }),
     });
     await b2.start();
     h.events.publish(Events.custom(
@@ -305,7 +304,7 @@ describe("JieAgentBody — prompt ingress format", () => {
 
   test("notify-sourced event is formatted as `[<agentKey> on '<topic>']: <prompt>`", async () => {
     const body = h.makeBody({
-      soul: makeSoul({ subscriptions: ["task.researched"] }),
+      soul: makeSoul({ subscribe: ["task.researched"] }),
     });
     await body.start();
     h.events.publish(Events.custom({ kind: "agent", identity: { teamId: "t1", agentRole: "researcher", agentKey: "researcher-1" } }, "t1.task.researched", "report"));

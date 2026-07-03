@@ -1,7 +1,8 @@
 import type { AuthStore, SettingsStore } from "@cuzfrog/jie-platform/config";
 import { runApiKey, runLogin, runLogout } from "./auth";
 
-type AuthJson = Record<string, { type: "api_key"; key: string }>;
+type ApiKeyEntry = { type: "api_key"; key: string };
+type ApiKeyAuth = Record<string, ApiKeyEntry>;
 
 const auth = vi.mocked<AuthStore>({
   load: vi.fn(),
@@ -20,12 +21,10 @@ const settings = vi.mocked<SettingsStore>({
 describe("runLogin", () => {
   beforeEach(() => {
     auth.load.mockReturnValue({});
-    auth.setProvider.mockImplementation(
-      (current: AuthJson, provider: string, key: string): AuthJson => ({
-        ...current,
-        [provider]: { type: "api_key", key },
-      }),
-    );
+    auth.setProvider.mockImplementation((current, provider, key) => ({
+      ...current,
+      [provider]: { type: "api_key", key },
+    }));
   });
 
   test("login --provider anthropic --api-key sk-test calls load -> setProvider -> write with the right args and prints success", async () => {
@@ -52,8 +51,8 @@ describe("runLogin", () => {
   });
 
   test("login merges with existing entries (passes the loaded auth to setProvider)", async () => {
-    const existing: AuthJson = { openai: { type: "api_key", key: "sk-o" } };
-    auth.load.mockReturnValueOnce(existing);
+    const existing: ApiKeyAuth = { openai: { type: "api_key", key: "sk-o" } };
+    auth.load.mockReturnValueOnce(existing as never);
     const code = await runLogin(
       { kind: "login", provider: "anthropic", apiKey: "sk-a" },
       auth,
@@ -73,18 +72,16 @@ describe("runLogout", () => {
   });
 
   test("logout anthropic removes only the anthropic entry", async () => {
-    const initial: AuthJson = {
+    const initial: ApiKeyAuth = {
       anthropic: { type: "api_key", key: "sk-a" },
       openai: { type: "api_key", key: "sk-o" },
     };
-    auth.load.mockReturnValueOnce(initial);
-    auth.removeProvider.mockImplementation(
-      (current: AuthJson, provider: string): AuthJson => {
-        const next = { ...current };
-        delete next[provider as keyof typeof next];
-        return next as AuthJson;
-      },
-    );
+    auth.load.mockReturnValueOnce(initial as never);
+    auth.removeProvider.mockImplementation((current, provider) => {
+      const next = { ...current };
+      delete next[provider as keyof typeof next];
+      return next;
+    });
     const code = await runLogout({ kind: "logout", provider: "anthropic" }, auth);
     expect(code).toBe(0);
     expect(auth.removeProvider).toHaveBeenCalledWith(initial, "anthropic");
@@ -100,15 +97,13 @@ describe("runLogout", () => {
   });
 
   test("logout a missing provider is a no-op on the result but still writes", async () => {
-    const initial: AuthJson = { openai: { type: "api_key", key: "sk-o" } };
-    auth.load.mockReturnValueOnce(initial);
-    auth.removeProvider.mockImplementation(
-      (current: AuthJson, provider: string): AuthJson => {
-        const next = { ...current };
-        delete next[provider as keyof typeof next];
-        return next as AuthJson;
-      },
-    );
+    const initial: ApiKeyAuth = { openai: { type: "api_key", key: "sk-o" } };
+    auth.load.mockReturnValueOnce(initial as never);
+    auth.removeProvider.mockImplementation((current, provider) => {
+      const next = { ...current };
+      delete next[provider as keyof typeof next];
+      return next;
+    });
     const code = await runLogout({ kind: "logout", provider: "ghost" }, auth);
     expect(code).toBe(0);
     expect(auth.removeProvider).toHaveBeenCalledWith(initial, "ghost");
@@ -119,12 +114,10 @@ describe("runLogout", () => {
 describe("runApiKey (top-level --api-key)", () => {
   beforeEach(() => {
     auth.load.mockReturnValue({});
-    auth.setProvider.mockImplementation(
-      (current: AuthJson, provider: string, key: string): AuthJson => ({
-        ...current,
-        [provider]: { type: "api_key", key },
-      }),
-    );
+    auth.setProvider.mockImplementation((current, provider, key) => ({
+      ...current,
+      [provider]: { type: "api_key", key },
+    }));
   });
 
   test("--api-key sk-new writes auth.json for defaultProvider and exits 0", async () => {
