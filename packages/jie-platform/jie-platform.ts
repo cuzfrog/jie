@@ -45,7 +45,7 @@ export interface JiePlatform {
   readonly stop: () => Promise<void>;
 
   readonly subscribe: <T extends EventType>(topic: T, callback: (event: EventEnvelope<T>) => void) => () => void;
-  readonly userPrompt: (agentKey: string, text: string) => void;
+  readonly prompt: (agentKey: string, text: string) => void;
   readonly interrupt: () => void;
 
   readonly login: (provider: string, apiKey: string) => void;
@@ -134,7 +134,7 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
     subscribe(topic, callback) {
       return dependencies.eventManager.subscribe(topic, callback);
     },
-    userPrompt(agentKey, text) {
+    prompt(agentKey, text) {
       const sender = { kind: "user" } as const;
       dependencies.eventManager.publish(Events.userPrompt(sender, activeTeamId, text, agentKey));
     },

@@ -16,7 +16,7 @@ function makePlatform(bus: EventManager, initialTeamId: string): JiePlatform {
     },
     stop: noopAsync,
     subscribe: <T extends EventType>(topic: T, cb: (event: EventEnvelope<T>) => void) => bus.subscribe(topic, cb),
-    userPrompt: (agentKey: string, text: string) => {
+    prompt: (agentKey: string, text: string) => {
       bus.publish(Events.userPrompt({ kind: "user" }, team.id, text, agentKey));
     },
     interrupt: () => undefined,

@@ -364,7 +364,7 @@ describe("JiePlatform — facade methods", () => {
       const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
       const events: EventEnvelope<"user.prompt">[] = [];
       deps.eventManager.subscribe("user.prompt", (env) => events.push(env));
-      handle.userPrompt("general-1", "hello");
+      handle.prompt("general-1", "hello");
       expect(events).toHaveLength(1);
       expect(events[0]!.payload).toEqual({ teamId: "minimal", agentKey: "general-1", prompt: "hello" });
       expect(events[0]!.sender).toEqual({ kind: "user" });

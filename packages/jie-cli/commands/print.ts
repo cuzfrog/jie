@@ -22,7 +22,7 @@ export async function runPrint(
     }
   });
 
-  handle.userPrompt(leaderAgentKey, args.instruction);
+  handle.prompt(leaderAgentKey, args.instruction);
 
   try {
     await setupIdleGate(handle, agentKeys, args.timeout);
