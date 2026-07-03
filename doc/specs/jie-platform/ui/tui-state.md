@@ -30,7 +30,7 @@ Editor-internal state (`inputBuffer`, `inputHistory`, `historyIndex`) lives on p
 
 ## Actions
 
-The reducer takes `Action = ReceiveEvent | ToggleTeamRail | SwitchCycleAgent | ClearTuiState | SetTransientMessage | ClearTransientMessage | SetErrorMessage | ClearErrorMessage` (defined in `packages/jie-tui/state/actions.ts`). Bus envelope types are **not** the action type — `tui.ts` wraps every bus envelope in `Actions.receiveEvent(envelope)` before dispatch. UI-local events (rail toggle, cycle, transient, error, clear) are dispatched directly.
+The reducer takes `Action = ReceiveEvent | ToggleTeamRail | SwitchCycleAgent | ClearTuiState | SetTransientMessage | ClearTransientMessage | SetErrorMessage | ClearErrorMessage | RequestQuit | RequestRender` (defined in `packages/jie-tui/state/actions.ts`). Bus envelope types are **not** the action type — `tui.ts` wraps every bus envelope in `Actions.receiveEvent(envelope)` before dispatch. UI-local events (rail toggle, cycle, transient, error, clear, quit, render) are dispatched directly.
 
 This split exists because the bus event taxonomy is the platform's contract (other consumers may subscribe to the same topic); UI actions are the TUI's local vocabulary. Keeping them as separate action types prevents accidentally publishing UI actions to the bus and keeps the reducer testable with literal action objects.
 
@@ -89,6 +89,8 @@ Set `state.errorBanner = { text: <composed> }` where `<composed>` is either `eve
 - `Actions.setErrorMessage(text)` — distinct from transient: persists until cleared.
 - `Actions.clearErrorMessage()` — dispatched on the next `Enter` and on `agent.turn.start`.
 - `Actions.clearTuiState()` — clear `agents`, `leaderAgentId`, `focusedAgentId`, `transientMessage`, `errorBanner`. Memory rows on disk are untouched. Used by the `/clear` slash command.
+- `Actions.requestQuit()` — set `state.pendingQuit = true` (idempotent). The host subscribes to the state store and, when this flag flips, resolves the start promise and tears down the input loop. No busy-vs-idle branch: a turn in flight is interrupted on quit, not confirmed.
+- `Actions.requestRender()` — no state change, but the subscriber fires anyway. Used by `Ctrl+C` and any "force a redraw" path so render stays single-sourced through the state-subscribe line.
 
 ## Per-agent streaming isolation
 

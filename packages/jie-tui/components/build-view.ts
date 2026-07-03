@@ -4,7 +4,6 @@ import { StatusBar } from "./status-bar";
 import { AgentsRail } from "./agents-rail";
 import { ChatPane, chatPaneFromAgent } from "./chat-pane";
 import { EditorSlot } from "./editor-slot";
-import { ConfirmExitOverlay } from "./confirm-exit-overlay";
 
 export interface BuildViewOpts {
   cwd: string;
@@ -16,7 +15,6 @@ export interface BuildViewResult {
   readonly chatPane: ChatPane;
   readonly editor: EditorSlot;
   readonly statusBar: StatusBar;
-  readonly confirmExit: ConfirmExitOverlay;
 }
 
 export function buildView(stateStore: StateStore, opts: BuildViewOpts, tui: TUI): BuildViewResult {
@@ -31,9 +29,6 @@ export function buildView(stateStore: StateStore, opts: BuildViewOpts, tui: TUI)
 
   const editor = new EditorSlot(tui, { basePath: opts.cwd });
 
-  const confirmExit = new ConfirmExitOverlay();
-  confirmExit.setVisible(state.pendingQuit);
-
   const root = new Container();
   root.addChild(rail);
   root.addChild(new Spacer(1));
@@ -43,8 +38,7 @@ export function buildView(stateStore: StateStore, opts: BuildViewOpts, tui: TUI)
   root.addChild(new Spacer(1));
   root.addChild(statusBar);
   root.addChild(new Spacer(1));
-  root.addChild(confirmExit);
   root.addChild(new Text(""));
 
-  return { root, rail, chatPane, editor, statusBar, confirmExit };
+  return { root, rail, chatPane, editor, statusBar };
 }

@@ -6,7 +6,6 @@ import { AgentsRail } from "./agents-rail";
 import { ChatPane } from "./chat-pane";
 import { EditorSlot } from "./editor-slot";
 import { StatusBar } from "./status-bar";
-import { ConfirmExitOverlay } from "./confirm-exit-overlay";
 
 const OPTS = { cwd: "" };
 
@@ -24,7 +23,6 @@ describe("buildView", () => {
     expect(result.chatPane).toBeInstanceOf(ChatPane);
     expect(result.editor).toBeInstanceOf(EditorSlot);
     expect(result.statusBar).toBeInstanceOf(StatusBar);
-    expect(result.confirmExit).toBeInstanceOf(ConfirmExitOverlay);
   });
 
   test("root children include each exposed component by reference", () => {
@@ -34,6 +32,5 @@ describe("buildView", () => {
     expect(result.root.children).toContain(result.chatPane);
     expect(result.root.children).toContain(result.editor);
     expect(result.root.children).toContain(result.statusBar);
-    expect(result.root.children).toContain(result.confirmExit);
   });
 });

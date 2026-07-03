@@ -89,14 +89,13 @@ class PiTui implements Tui {
   private readonly tui: TUI;
   private readonly view: BuildViewResult;
   private readonly cwd: string;
-  readonly eventManager: EventManager;
-  readonly gitService: GitService;
+  private readonly eventManager: EventManager;
+  private readonly gitService: GitService;
   private readonly commandHandler: TuiCommandHandler;
   private readonly keyboardHandler: KeyboardHandler;
   private readonly unsubscribeBus: () => void;
   private readonly unsubscribeRender: () => void;
   private resolveStart: (() => void) | null = null;
-  private lastPendingQuit = false;
 
   constructor(opts: PiTuiCtorOptions) {
     this.stateStore = opts.stateStore;
@@ -153,13 +152,10 @@ class PiTui implements Tui {
   }
 
   private onStateChange(): void {
-    const state = this.stateStore.getState();
-    if (!this.lastPendingQuit && state.pendingQuit) {
-      this.resolveStart?.();
-      this.stateStore.dispatch(Actions.setPendingQuit(false));
+    if (this.stateStore.getState().pendingQuit) {
+      this.stop();
       return;
     }
-    this.lastPendingQuit = state.pendingQuit;
     this.renderAll();
   }
 
@@ -180,9 +176,6 @@ class PiTui implements Tui {
 
   private renderAll(): void {
     const state = this.stateStore.getState();
-    if (this.view.confirmExit.isVisible() !== state.pendingQuit) {
-      this.view.confirmExit.setVisible(state.pendingQuit);
-    }
     const focused = this.stateStore.getFocusedAgent();
     this.view.chatPane.setAgent(focused);
     this.view.editor.setQueueIndicator(formatQueueIndicator(focused?.queue ?? null));

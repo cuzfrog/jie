@@ -15,7 +15,6 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
         focusedAgentId: null,
         transientMessage: null,
         errorBanner: null,
-        pendingQuit: false,
       };
     case ActionTypes.SET_TRANSIENT_MESSAGE:
       return { ...state, transientMessage: action.payload.text };
@@ -27,17 +26,9 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
       return { ...state, errorBanner: null };
     case ActionTypes.CLEAR_BANNERS:
       return { ...state, transientMessage: null, errorBanner: null };
-    case ActionTypes.SET_PENDING_QUIT:
-      return { ...state, pendingQuit: action.payload.on };
     case ActionTypes.REQUEST_QUIT:
       if (state.pendingQuit) return state;
       return { ...state, pendingQuit: true };
-    case ActionTypes.CONFIRM_QUIT:
-      if (!state.pendingQuit) return state;
-      return { ...state, pendingQuit: false };
-    case ActionTypes.CANCEL_QUIT:
-      if (!state.pendingQuit) return state;
-      return { ...state, pendingQuit: false };
     case ActionTypes.REQUEST_RENDER:
       return state;
     default:

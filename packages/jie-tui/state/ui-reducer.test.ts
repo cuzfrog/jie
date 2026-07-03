@@ -106,17 +106,17 @@ describe("error", () => {
 });
 
 describe("pendingQuit", () => {
-  test("setPendingQuit(true) sets the flag; setPendingQuit(false) clears it", () => {
-    const state0 = reduceUiAction(INITIAL_TUI_STATE, Actions.setPendingQuit(true));
+  test("requestQuit sets the flag; second requestQuit is a no-op", () => {
+    const state0 = reduceUiAction(INITIAL_TUI_STATE, Actions.requestQuit());
     expect(state0.pendingQuit).toBe(true);
-    const state1 = reduceUiAction(state0, Actions.setPendingQuit(false));
-    expect(state1.pendingQuit).toBe(false);
+    const state1 = reduceUiAction(state0, Actions.requestQuit());
+    expect(state1).toBe(state0);
   });
 
-  test("clearTuiState clears pendingQuit", () => {
-    const state0 = reduceUiAction(INITIAL_TUI_STATE, Actions.setPendingQuit(true));
+  test("clearTuiState does not touch pendingQuit", () => {
+    const state0 = reduceUiAction(INITIAL_TUI_STATE, Actions.requestQuit());
     const state1 = reduceUiAction(state0, Actions.clearTuiState());
-    expect(state1.pendingQuit).toBe(false);
+    expect(state1.pendingQuit).toBe(true);
   });
 });
 

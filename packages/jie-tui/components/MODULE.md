@@ -6,8 +6,6 @@ sealed:
   - build-view.test.ts
   - chat-pane.ts
   - chat-pane.test.ts
-  - confirm-exit-overlay.ts
-  - confirm-exit-overlay.test.ts
   - editor-slot.ts
   - editor-slot.test.ts
   - message-view.ts

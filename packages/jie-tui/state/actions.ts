@@ -10,10 +10,7 @@ export const ActionTypes = {
   SET_ERROR_MESSAGE: "[ui] set error banner",
   CLEAR_ERROR_MESSAGE: "[ui] error clear",
   CLEAR_BANNERS: "[ui] clear all banners",
-  SET_PENDING_QUIT: "[ui] pending quit confirmation",
   REQUEST_QUIT: "[ui] request quit",
-  CONFIRM_QUIT: "[ui] confirm quit",
-  CANCEL_QUIT: "[ui] cancel quit",
   REQUEST_RENDER: "[ui] request render",
 } as const;
 
@@ -44,10 +41,7 @@ export const Actions = {
 	setErrorMessage: (text: string) => createAction(ActionTypes.SET_ERROR_MESSAGE, { text }),
 	clearErrorMessage: () => clearErrorMessage,
 	clearBanners: () => clearBanners,
-	setPendingQuit: (on: boolean) => createAction(ActionTypes.SET_PENDING_QUIT, { on }),
 	requestQuit: () => createAction(ActionTypes.REQUEST_QUIT),
-	confirmQuit: () => createAction(ActionTypes.CONFIRM_QUIT),
-	cancelQuit: () => createAction(ActionTypes.CANCEL_QUIT),
 	requestRender: () => createAction(ActionTypes.REQUEST_RENDER),
 } as const;
 

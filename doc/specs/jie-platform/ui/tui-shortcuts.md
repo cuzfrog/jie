@@ -15,7 +15,6 @@ The TUI is keyboard-driven. All keybindings are global (handled by the input lis
 | `Ctrl+O`       | Expand / collapse all tool cards in this agent's history      | focused agent has at least one tool card   |
 | `Ctrl+C`       | Clear the editor if non-empty; otherwise quit the TUI         | editor focused                             |
 | `Ctrl+D` (twice, within 500 ms) | Quit the TUI                                   | always                                     |
-| `Ctrl+D` (when busy) | Confirm exit: render `A turn is in flight; exit anyway? [y/N]` (default N); `Enter` re-prompts until y or N | focused agent is `busy` |
 
 ## Rail-visible only
 
@@ -56,6 +55,6 @@ Slash commands are typed at the editor prompt (no key chord). Each starts with `
 | `/team --unset` | Clear `defaultTeam` from settings; takes effect on next `jie` invocation | `default team unset` |
 | `/clear` | Clear `state.agents`, `leaderAgentId`, `focusedAgentId`, `transientMessage`, `errorBanner`. Memory rows on disk untouched | none |
 | `/help` | Open an overlay rendering the keymap from this doc | none |
-| `/exit` | Same as `Ctrl+D` (twice within 500 ms). Honors the busy-state confirmation | none |
+| `/exit` | Same as `Ctrl+D` (twice within 500 ms). No busy-state branch | none |
 
 `/clear` and `/help` are listed here for the first time; they are new in v0.2.
