@@ -7,7 +7,7 @@ import {
   loadTeamFromDir,
   parseTeamFromManifests,
 } from "./parser";
-import type { JiePlatformErrorCode } from "../types";
+import type { JiePlatformErrorCode } from "../jie-platform-errors";
 
 describe("loadMinimalTeam", () => {
   test("returns one soul with role 'general' and leaderRole 'general'", () => {

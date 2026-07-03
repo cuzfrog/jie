@@ -5,7 +5,6 @@ import type {
 } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { createAgentBody, type CreateAgentBodyOptions } from "./agent-body";
-import { JieAgentBody } from "./jie-agent-body";
 import { createEventManager, type EventManager, type EventEnvelope, type EventType } from "../event";
 import {
   createArtifactStore,
@@ -174,10 +173,13 @@ describe("createAgentBody — wiring", () => {
   test("returned body's identity matches the options", () => {
     const { opts } = makeOpts({ agentKey: "leader-1", isLeader: true, sessionId: "sess-x" });
     const cap = makeFakeAgentFactory();
-    const body = createAgentBody({ ...opts, createAgent: cap.factory }) as JieAgentBody;
-    const identity = body as unknown as { agentKey: string; teamId: string };
-    expect(identity.agentKey).toBe("leader-1");
-    expect(identity.teamId).toBe("t1");
+    const body = createAgentBody({ ...opts, createAgent: cap.factory });
+    expect(body.identity).toEqual({
+      teamId: "t1",
+      role: "general",
+      agentKey: "leader-1",
+      isLeader: true,
+    });
   });
 
   test("beforeToolCall shapes tool args into wire form (short input → input_truncated=false)", async () => {

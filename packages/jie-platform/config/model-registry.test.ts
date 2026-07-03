@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createModelRegistry } from "./model-registry";
 import type { AuthStore } from "./auth-store";
-import { JiePlatformError } from "../types";
+import { JiePlatformError } from "../jie-platform-errors";
 
 const authStore = vi.mocked<AuthStore>({
   load: vi.fn(),

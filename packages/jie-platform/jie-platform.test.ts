@@ -269,11 +269,10 @@ describe("createJiePlatform", () => {
         events.push(env);
       });
       const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "alpha" }, deps);
-      expect(handle.teamId).toBe("alpha");
+      expect(handle.team.id).toBe("alpha");
       expect(events.map((e) => e.payload.teamId)).toEqual(["alpha"]);
 
       await handle.loadTeam("beta");
-      expect(handle.teamId).toBe("beta");
       expect(handle.team.id).toBe("beta");
       expect(events.map((e) => e.payload.teamId)).toEqual(["alpha", "beta"]);
       expect(handle.team.agents.length).toBeGreaterThan(0);

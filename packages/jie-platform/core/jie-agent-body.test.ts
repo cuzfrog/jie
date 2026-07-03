@@ -110,6 +110,7 @@ function makeHarness(): Harness {
       agentKey: overrides.agentKey ?? "general-1",
       teamId: "t1",
       soul: overrides.soul ?? makeSoul(),
+      isLeader: false,
       sessionId: overrides.sessionId ?? "s1",
       eventManager: events,
       memory,

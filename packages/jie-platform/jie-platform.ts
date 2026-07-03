@@ -1,6 +1,6 @@
 import { ulid } from "ulid";
 import { type Api, type Model } from "@earendil-works/pi-ai";
-import { type AgentBody, createAgentBody } from "./core";
+import { type AgentBody, type AgentIdentity, createAgentBody } from "./core";
 import { type EventManager, Events } from "./event";
 import { type AgentSoul, type TeamBlueprint, type TeamRegistry } from "./team";
 import { type ModelRegistry, type SettingsStore } from "./config";
@@ -10,7 +10,7 @@ import {
   type MemoryManager,
   type Storage,
 } from "./storage";
-import { JiePlatformError } from "./types";
+import { JiePlatformError } from "./jie-platform-errors";
 
 export interface CreateJiePlatformOptions {
   readonly workspace: string;
@@ -33,10 +33,9 @@ export interface JiePlatformDeps {
 
 export interface JiePlatform {
   readonly events: EventManager;
-  readonly teamId: string;
   readonly team: {
     readonly id: string;
-    readonly agents: ReadonlyArray<{ readonly role: string; readonly agentKey: string; readonly isLeader: boolean }>;
+    readonly agents: ReadonlyArray<AgentIdentity>;
   };
   readonly loadTeam: (teamId: string) => Promise<void>;
   readonly stop: () => Promise<void>;
@@ -46,7 +45,6 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
   const resolveModel = defaultResolveModel(dependencies.modelRegistry);
   const sessionIds = new Map<string, string>();
   const loadedTeams = new Map<string, AgentBody[]>();
-  const teamRosters = new Map<string, JiePlatform["team"]["agents"]>();
 
   async function loadTeam(teamId: string): Promise<void> {
     const existing = loadedTeams.get(teamId);
@@ -57,7 +55,6 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
     sessionIds.set(teamId, sessionId);
 
     const out: AgentBody[] = [];
-    const roster: Array<{ role: string; agentKey: string; isLeader: boolean }> = [];
     for (const soul of blueprint.roles) {
       const isLeader = soul.role === blueprint.leaderRole;
       const agentKey = `${soul.role}-1`;
@@ -80,13 +77,11 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
           model: resolvedModel,
         }),
       );
-      roster.push({ role: soul.role, agentKey, isLeader });
     }
     for (const body of out) {
       await body.start();
     }
     loadedTeams.set(teamId, out);
-    teamRosters.set(teamId, roster);
     publishTeamLoaded(dependencies.eventManager, teamId, blueprint);
   }
 
@@ -97,15 +92,14 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
 
   const handle: JiePlatform = {
     events: dependencies.eventManager,
-    get teamId(): string {
-      return activeTeamId;
-    },
     team: {
       get id(): string {
         return activeTeamId;
       },
-      get agents(): JiePlatform["team"]["agents"] {
-        return teamRosters.get(activeTeamId) ?? [];
+      get agents(): ReadonlyArray<AgentIdentity> {
+        const bodies = loadedTeams.get(activeTeamId);
+        if (bodies === undefined) return [];
+        return bodies.map((b) => b.identity);
       },
     },
     loadTeam: async (teamId: string): Promise<void> => {

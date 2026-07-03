@@ -1,7 +1,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { isValidTeamId, loadMinimalTeam, loadTeamFromDir } from "./parser";
-import { JiePlatformError } from "../types";
+import { JiePlatformError } from "../jie-platform-errors";
 import type { TeamBlueprint } from "./types";
 
 const BUILTIN_MINIMAL_TEAM_ID = "minimal";

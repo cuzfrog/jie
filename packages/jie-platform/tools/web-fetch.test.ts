@@ -1,5 +1,5 @@
 import { createWebFetchTool } from "./web-fetch";
-import { JiePlatformError } from "../types";
+import { JiePlatformError } from "../jie-platform-errors";
 import { makeEmptyContext } from "./_test-context";
 
 const HTML_BODY =

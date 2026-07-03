@@ -1,5 +1,5 @@
 import type { Storage } from "./storage";
-import { JiePlatformError } from "../types";
+import { JiePlatformError } from "../jie-platform-errors";
 
 export interface ArtifactStore {
   readonly write: (

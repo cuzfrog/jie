@@ -9,9 +9,10 @@ import type { MemoryManager } from "../storage";
 import type { AgentSoul } from "../team";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { StreamPublisher } from "./streaming";
-import type { AgentBody } from "./agent-body";
+import type { AgentBody, AgentIdentity } from "./agent-body";
 
 export class JieAgentBody implements AgentBody {
+  readonly identity: AgentIdentity;
   private readonly agentKey: string;
   private readonly teamId: string;
   private readonly soul: AgentSoul;
@@ -30,12 +31,19 @@ export class JieAgentBody implements AgentBody {
     agentKey: string;
     teamId: string;
     soul: AgentSoul;
+    isLeader: boolean;
     sessionId: string;
     eventManager: EventManager;
     memory: MemoryManager;
     agent: Agent;
     streamPublisher: StreamPublisher;
   }) {
+    this.identity = {
+      teamId: deps.teamId,
+      role: deps.soul.role,
+      agentKey: deps.agentKey,
+      isLeader: deps.isLeader,
+    };
     this.agentKey = deps.agentKey;
     this.teamId = deps.teamId;
     this.soul = deps.soul;

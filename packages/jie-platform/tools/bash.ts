@@ -2,7 +2,7 @@ import { realpathSync } from "node:fs";
 import { resolve, isAbsolute } from "node:path";
 import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types";
-import { JiePlatformError } from "../types";
+import { JiePlatformError } from "../jie-platform-errors";
 
 const STREAM_CAP = 32 * 1024;
 const TRUNCATION_MARKER = "[truncated to 32 KiB]";

@@ -23,7 +23,15 @@ export interface CreateAgentBodyOptions {
   readonly createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
 }
 
+export interface AgentIdentity {
+  readonly teamId: string;
+  readonly role: string;
+  readonly agentKey: string;
+  readonly isLeader: boolean;
+}
+
 export interface AgentBody {
+  readonly identity: AgentIdentity;
   readonly start: () => Promise<void>;
   readonly stop: () => void;
 }
@@ -93,6 +101,7 @@ export function createAgentBody(options: CreateAgentBodyOptions): AgentBody {
     agentKey: options.agentKey,
     teamId: options.teamId,
     soul: options.soul,
+    isLeader: options.isLeader,
     sessionId: options.sessionId,
     eventManager: options.eventManager,
     memory: options.memory,
