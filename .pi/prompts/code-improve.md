@@ -7,7 +7,7 @@ description: Improve code quality, resolve technical debt, reduce code entropy, 
 Improve code quality, resolve technical debt, reduce code entropy, so that next stage implementation can be easier.
 
 ## What you do
-- Adhere to @AGENTS.md.
+- Adhere to @CLAUDE.md.
 - Analyze the code and documents. Suppose you are going to add more features from next stages, think about what makes the code hard to change?
 - Discuss with the me upon blocking or important issues. Offer your solutions. Be honest, if the my idea does not make sense, push back. Ask me questions if you need to.
 - Use the temporary file `tmp/improvement-plan.md` to capture the implementation plan and execute the plan.
