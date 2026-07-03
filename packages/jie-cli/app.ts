@@ -63,7 +63,7 @@ export async function createApp(
 
   let teamId: string;
   try {
-    teamId = dependencies.teamRegistry.loadTeam(args.teamId ?? settings.defaultTeam).id;
+    teamId = dependencies.teamRegistry.parseTeamManifest(args.teamId ?? settings.defaultTeam).id;
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     return { kind: "error", code: 1 };

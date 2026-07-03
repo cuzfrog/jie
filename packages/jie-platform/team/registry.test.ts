@@ -36,14 +36,14 @@ describe("createTeamRegistry", () => {
   describe("loadTeam", () => {
     test("loadTeam('minimal') returns the built-in minimal team", () => {
       const r = createTeamRegistry({ homeJieDir, projectJieDir });
-      const team = r.loadTeam("minimal");
+      const team = r.parseTeamManifest("minimal");
       expect(team.leaderRole).toBe("general");
       expect(team.roles).toHaveLength(1);
     });
 
     test("loadTeam(undefined) returns the built-in minimal team (fallback)", () => {
       const r = createTeamRegistry({ homeJieDir, projectJieDir });
-      const team = r.loadTeam();
+      const team = r.parseTeamManifest();
       expect(team.leaderRole).toBe("general");
     });
 
@@ -52,7 +52,7 @@ describe("createTeamRegistry", () => {
       const projectTeams = join(projJie, "teams");
       writeTeam(projectTeams, "dev", "project-leader");
       const r = createTeamRegistry({ homeJieDir, projectJieDir: projJie });
-      const team = r.loadTeam("dev");
+      const team = r.parseTeamManifest("dev");
       expect(team.leaderRole).toBe("project-leader");
     });
 
@@ -60,7 +60,7 @@ describe("createTeamRegistry", () => {
       const userTeams = join(homeJieDir, "teams");
       writeTeam(userTeams, "dev", "user-leader");
       const r = createTeamRegistry({ homeJieDir, projectJieDir });
-      const team = r.loadTeam("dev");
+      const team = r.parseTeamManifest("dev");
       expect(team.leaderRole).toBe("user-leader");
     });
 
@@ -71,7 +71,7 @@ describe("createTeamRegistry", () => {
       writeTeam(projectTeams, "shared", "project-leader");
       writeTeam(userTeams, "shared", "user-leader");
       const r = createTeamRegistry({ homeJieDir, projectJieDir: projJie });
-      const team = r.loadTeam("shared");
+      const team = r.parseTeamManifest("shared");
       expect(team.leaderRole).toBe("project-leader");
     });
 
@@ -81,7 +81,7 @@ describe("createTeamRegistry", () => {
       try {
         writeTeam(join(projJie, "teams"), "dev", "walkup-leader");
         const r = createTeamRegistry({ homeJieDir, projectJieDir: projJie });
-        const team = r.loadTeam("dev");
+        const team = r.parseTeamManifest("dev");
         expect(team.leaderRole).toBe("walkup-leader");
       } finally {
         rmSync(projectRoot, { recursive: true, force: true });
@@ -92,17 +92,17 @@ describe("createTeamRegistry", () => {
       const projJie = join(workspace, ".jie");
       mkdirSync(join(projJie, "teams", "broken"), { recursive: true });
       const r = createTeamRegistry({ homeJieDir, projectJieDir: projJie });
-      expect(() => r.loadTeam("broken")).toThrow(/team 'broken' not found/);
+      expect(() => r.parseTeamManifest("broken")).toThrow(/team 'broken' not found/);
     });
 
     test("loadTeam throws invalid_team_id for an invalid id", () => {
       const r = createTeamRegistry({ homeJieDir, projectJieDir });
-      expect(() => r.loadTeam("bad id with spaces")).toThrow(JiePlatformError);
+      expect(() => r.parseTeamManifest("bad id with spaces")).toThrow(JiePlatformError);
     });
 
     test("loadTeam throws team_not_found when id is absent", () => {
       const r = createTeamRegistry({ homeJieDir, projectJieDir });
-      expect(() => r.loadTeam("ghost")).toThrow(JiePlatformError);
+      expect(() => r.parseTeamManifest("ghost")).toThrow(JiePlatformError);
     });
   });
 

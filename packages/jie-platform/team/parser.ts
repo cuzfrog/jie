@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { parse as parseYaml } from "yaml";
-import type { AgentSoul, Team } from "./types";
+import type { AgentSoul, TeamBlueprint } from "./types";
 import { JiePlatformError } from "../types";
 import MINIMAL_TEAM_MD from "./minimal/TEAM.md" with { type: "text" };
 import MINIMAL_GENERAL_MD from "./minimal/general.md" with { type: "text" };
@@ -25,7 +25,7 @@ export interface ParseTeamOptions {
 export function parseTeamFromManifests(
   manifests: Record<string, string>,
   options: ParseTeamOptions,
-): Team {
+): TeamBlueprint {
   const { teamId, sourceDir = "" } = options;
 
   if (!TEAM_ID_PATTERN.test(teamId)) {
@@ -118,7 +118,7 @@ export function parseTeamFromManifests(
   return { id: teamId, roles, leaderRole };
 }
 
-export function loadTeamFromDir(dirPath: string): Team {
+export function loadTeamFromDir(dirPath: string): TeamBlueprint {
   const teamId = basename(dirPath);
   const manifests: Record<string, string> = {};
   for (const entry of readdirSync(dirPath).sort()) {
@@ -133,7 +133,7 @@ export function loadTeamFromDir(dirPath: string): Team {
   });
 }
 
-export function loadMinimalTeam(): Team {
+export function loadMinimalTeam(): TeamBlueprint {
   return parseTeamFromManifests(
     {
       "TEAM.md": MINIMAL_TEAM_MD,

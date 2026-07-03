@@ -2,7 +2,7 @@ import { ulid } from "ulid";
 import { type Api, type Model } from "@earendil-works/pi-ai";
 import { type AgentBody, createAgentBody } from "./core";
 import { type EventManager, Events } from "./event";
-import { type AgentSoul, type Team, type TeamRegistry } from "./team";
+import { type AgentSoul, type TeamBlueprint, type TeamRegistry } from "./team";
 import { type ModelRegistry, type SettingsStore } from "./config";
 import { type ToolRegistry } from "./tools";
 import {
@@ -50,7 +50,7 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
     const existing = loadedTeams.get(teamId);
     if (existing !== undefined) return;
 
-    const blueprint: Team = dependencies.teamRegistry.loadTeam(teamId);
+    const blueprint: TeamBlueprint = dependencies.teamRegistry.parseTeamManifest(teamId);
     const sessionId = resolveSessionId(dependencies.memoryManager, options, teamId, sessionIds);
     sessionIds.set(teamId, sessionId);
 
@@ -123,7 +123,7 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
   return handle;
 }
 
-function publishTeamLoaded(events: EventManager, teamId: string, blueprint: Team): void {
+function publishTeamLoaded(events: EventManager, teamId: string, blueprint: TeamBlueprint): void {
   const sorted = [...blueprint.roles].sort((a, b) => a.role.localeCompare(b.role));
   const agents = sorted.map((r) => ({
     role: r.role,

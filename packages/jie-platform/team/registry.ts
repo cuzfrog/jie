@@ -1,26 +1,20 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { isValidTeamId, loadMinimalTeam, loadTeamFromDir } from "./loader";
+import { isValidTeamId, loadMinimalTeam, loadTeamFromDir } from "./parser";
 import { JiePlatformError } from "../types";
-import type { Team } from "./types";
+import type { TeamBlueprint } from "./types";
 
 const BUILTIN_MINIMAL_TEAM_ID = "minimal";
 
 export interface TeamRegistryOptions {
-
   homeJieDir: string;
-
   projectJieDir: string | null;
 }
 
 export interface TeamRegistry {
-
-  loadTeam(teamId?: string): Team;
-
+  parseTeamManifest(teamId?: string): TeamBlueprint;
   isInstalled(teamId: string): boolean;
-
   listInstalled(): string[];
-
   locate(teamId: string): "project" | "user" | "missing";
 }
 
@@ -44,7 +38,7 @@ export function createTeamRegistry(options: TeamRegistryOptions): TeamRegistry {
   }
 
   return {
-    loadTeam(teamId) {
+    parseTeamManifest(teamId) {
       if (teamId === undefined || isMinimal(teamId)) {
         return loadMinimalTeam();
       }

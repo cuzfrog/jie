@@ -23,7 +23,7 @@ const stubSettingsStore: SettingsStore = {
 };
 
 const stubTeamRegistry: TeamRegistry = {
-  loadTeam: () => undefined as never,
+  parseTeamManifest: () => undefined as never,
   isInstalled: () => false,
   listInstalled: () => [],
   locate: () => "missing",

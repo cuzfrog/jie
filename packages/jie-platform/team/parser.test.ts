@@ -6,7 +6,7 @@ import {
   loadMinimalTeam,
   loadTeamFromDir,
   parseTeamFromManifests,
-} from "./loader";
+} from "./parser";
 import type { JiePlatformErrorCode } from "../types";
 
 describe("loadMinimalTeam", () => {

@@ -8,7 +8,7 @@ export interface AgentSoul {
   subscriptions: string[];
 }
 
-export interface Team {
+export interface TeamBlueprint {
   id: string;
   roles: AgentSoul[];
   leaderRole: string | null;

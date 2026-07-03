@@ -22,7 +22,7 @@ const settingsStore = vi.mocked<SettingsStore>({
 });
 
 const teamRegistry = vi.mocked<TeamRegistry>({
-  loadTeam: vi.fn(),
+  parseTeamManifest: vi.fn(),
   isInstalled: vi.fn(),
   listInstalled: vi.fn(),
   locate: vi.fn(),

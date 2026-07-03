@@ -30,7 +30,7 @@ const settingsStore = vi.mocked<SettingsStore>({
 });
 
 const teamRegistry = vi.mocked<TeamRegistry>({
-  loadTeam: vi.fn(),
+  parseTeamManifest: vi.fn(),
   isInstalled: vi.fn(),
   listInstalled: vi.fn(),
   locate: vi.fn(),
@@ -80,7 +80,7 @@ describe("createApp — guard rails", () => {
       leaderRole: "general",
       roles: [],
     };
-    teamRegistry.loadTeam.mockReturnValue(emptyTeam);
+    teamRegistry.parseTeamManifest.mockReturnValue(emptyTeam);
     const writeErr = vi.spyOn(console, "error").mockImplementation(() => { });
     const result = await createApp(
       appArgs({ cwd: "/tmp/workspace", homeJieDir: "/tmp/home/.jie", teamId: "empty" }),
