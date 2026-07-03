@@ -2,26 +2,26 @@ import { ProcessTerminal, TUI, type Terminal } from "@earendil-works/pi-tui";
 import { Events, type EventEnvelope, type EventManager, type EventType, type Sender } from "@cuzfrog/jie-platform/event";
 import { type AuthStore, type Scope, type SettingsStore } from "@cuzfrog/jie-platform/config";
 import { type TeamRegistry } from "@cuzfrog/jie-platform/team";
-import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduce, TuiStateSelectors } from "./state";
+import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduce, TuiStateSelectors, type Action } from "./state";
 import { createTuiCommandHandler, type TuiCommandHandler } from "./command-handler";
-import { createKeyboardHandler } from "./keyboard-handler";
+import { createKeyboardHandler, type KeyboardHandler } from "./keyboard-handler";
 import { type GitService } from "@cuzfrog/jie-platform/services";
 import { buildView, type BuildViewResult } from "./components";
 
 export interface TuiDeps {
-  eventManager: EventManager;
-  teamRegistry: TeamRegistry;
-  loadTeam: (teamId: string) => Promise<void>;
-  authStore: AuthStore;
-  gitService: GitService;
-  settingsStore: SettingsStore;
-  settingsScope: Scope;
+  readonly eventManager: EventManager;
+  readonly teamRegistry: TeamRegistry;
+  readonly loadTeam: (teamId: string) => Promise<void>;
+  readonly authStore: AuthStore;
+  readonly gitService: GitService;
+  readonly settingsStore: SettingsStore;
+  readonly settingsScope: Scope;
 }
 
 export interface CreateTUIOptions {
-  cwd: string;
-  rows?: number;
-  terminal?: Terminal;
+  readonly cwd: string;
+  readonly rows?: number;
+  readonly terminal?: Terminal;
 }
 
 export interface Tui {
@@ -31,7 +31,33 @@ export interface Tui {
   stop: () => void;
 }
 
-const MIN_COLS = 60;
+interface TuiOps {
+  readonly getState: () => TuiState;
+  readonly dispatch: (action: Action) => void;
+  readonly requestQuit: () => void;
+  readonly confirmQuit: () => void;
+  readonly cancelQuit: () => void;
+  readonly render: () => void;
+}
+
+interface TuiRuntimeServices {
+  readonly eventManager: EventManager;
+  readonly gitService: GitService;
+}
+
+interface PiTuiCtorOptions {
+  readonly terminal: Terminal;
+  readonly tui: TUI;
+  readonly view: BuildViewResult;
+  readonly cwd: string;
+  readonly services: TuiRuntimeServices;
+}
+
+interface PiTuiBindings {
+  readonly commandHandler: TuiCommandHandler;
+  readonly keyboardHandler: KeyboardHandler;
+  readonly unsubscribeBus: () => void;
+}
 
 export function createTui(deps: TuiDeps, options: CreateTUIOptions): Tui {
   if (process.stdin.isTTY !== true) {
@@ -40,167 +66,201 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions): Tui {
   if (!isUtf8()) {
     throw new Error("TUI requires a UTF-8 locale; set LANG=en_US.UTF-8");
   }
+  const terminal = options.terminal ?? new ProcessTerminal();
+  const tui = new TUI(terminal);
+  const view = buildView(INITIAL_TUI_STATE, { cwd: options.cwd }, tui);
+  tui.addChild(view.root);
+  const piTui = new PiTui({
+    terminal,
+    tui,
+    view,
+    cwd: options.cwd,
+    services: { eventManager: deps.eventManager, gitService: deps.gitService },
+  });
+  const ops = piTui.getOps();
+  const commandHandler = createTuiCommandHandler({
+    getState: ops.getState,
+    dispatch: ops.dispatch,
+    requestQuit: ops.requestQuit,
+    teamRegistry: deps.teamRegistry,
+    loadTeam: deps.loadTeam,
+    authStore: deps.authStore,
+    settingsStore: deps.settingsStore,
+    settingsScope: deps.settingsScope,
+  });
+  const keyboardHandler = createKeyboardHandler({
+    eventManager: deps.eventManager,
+    getState: ops.getState,
+    dispatch: ops.dispatch,
+    confirmQuit: ops.confirmQuit,
+    cancelQuit: ops.cancelQuit,
+    requestQuit: ops.requestQuit,
+    render: ops.render,
+  });
+  const unsubscribeBus = subscribeToBus(deps.eventManager, (env) => ops.dispatch(Actions.receiveEvent(env)));
+  piTui.bind({ commandHandler, keyboardHandler, unsubscribeBus });
+  return piTui;
+}
 
-  let state: TuiState = INITIAL_TUI_STATE;
-  const cwd = options.cwd;
-  const gitService: GitService = deps.gitService;
+const MIN_COLS = 60;
 
-  const lifecycle: { stopped: boolean; resolveStart: (() => void) | null; render: (() => void) | null; commandHandler: TuiCommandHandler | null } = {
-    stopped: false,
-    resolveStart: null,
-    render: null,
-    commandHandler: null,
-  };
+class PiTui implements Tui {
+  private state: TuiState = INITIAL_TUI_STATE;
+  private readonly terminal: Terminal;
+  private readonly tui: TUI;
+  private readonly view: BuildViewResult;
+  private readonly cwd: string;
+  private readonly services: TuiRuntimeServices;
+  private readonly ops: TuiOps;
+  private commandHandler: TuiCommandHandler = noopCommandHandler;
+  private keyboardHandler: KeyboardHandler = noopKeyboardHandler;
+  private unsubscribeBus: () => void = noopUnsubscribe;
+  private stopped = false;
+  private resolveStart: (() => void) | null = null;
 
-  const dispatch = (action: ReturnType<typeof Actions[keyof typeof Actions]>): void => {
-    if (lifecycle.stopped) return;
-    state = reduce(state, action);
-    lifecycle.render?.();
-  };
+  constructor(opts: PiTuiCtorOptions) {
+    this.terminal = opts.terminal;
+    this.tui = opts.tui;
+    this.view = opts.view;
+    this.cwd = opts.cwd;
+    this.services = opts.services;
+    this.ops = {
+      getState: () => this.state,
+      dispatch: (action) => this.dispatch(action),
+      requestQuit: () => this.requestQuit(),
+      confirmQuit: () => this.confirmQuit(),
+      cancelQuit: () => this.cancelQuit(),
+      render: () => this.renderAll(),
+    };
+  }
 
-  const isBusy = (): boolean => {
-    for (const agent of state.agents.values()) {
-      if (agent.status === "busy") return true;
-    }
-    return false;
-  };
+  bind(bindings: PiTuiBindings): void {
+    this.commandHandler = bindings.commandHandler;
+    this.keyboardHandler = bindings.keyboardHandler;
+    this.unsubscribeBus = bindings.unsubscribeBus;
+  }
 
-  const requestQuit = (): void => {
-    if (isBusy()) {
-      dispatch(Actions.setPendingQuit(true));
-      return;
-    }
-    lifecycle.stopped = true;
-    lifecycle.resolveStart?.();
-  };
+  getOps(): TuiOps {
+    return this.ops;
+  }
 
-  const confirmQuit = (): void => {
-    dispatch(Actions.setPendingQuit(false));
-    lifecycle.stopped = true;
-    lifecycle.resolveStart?.();
-  };
+  getState(): TuiState {
+    return this.state;
+  }
 
-  const cancelQuit = (): void => {
-    dispatch(Actions.setPendingQuit(false));
-  };
-
-  const publishPrompt = (text: string): void => {
-    if (state.teamId === null || state.focusedAgentId === null) {
-      dispatch(Actions.setErrorMessage("No team loaded; run `/team <id>` to load a team."));
-      return;
-    }
-    const target = TuiStateSelectors.getTargetAgentForPrompt(state);
-    if (target === null) {
-      dispatch(Actions.setErrorMessage("No focused agent; press ctrl+left to reveal the rail."));
-      return;
-    }
-    const sender: Sender = { kind: "user" };
-    deps.eventManager.publish(Events.userPrompt(sender, state.teamId, text, target.agentKey));
-  };
-
-  const handleSubmit = (text: string): void => {
-    dispatch(Actions.clearBanners());
+  submit(text: string): void {
+    this.dispatch(Actions.clearBanners());
     const trimmed = text.trim();
     if (trimmed.startsWith("/")) {
-      lifecycle.commandHandler?.handle(trimmed);
+      this.commandHandler.handle(trimmed);
       return;
     }
-    publishPrompt(trimmed);
-  };
+    this.publishPrompt(trimmed);
+  }
 
-  const subscribeToBus = (): (() => void) => {
-    const onBusEvent = (env: EventEnvelope<EventType>): void => {
-      dispatch(Actions.receiveEvent(env as AnyEventEnvelope));
-    };
-    const busUnsubscribes: Array<() => void> = [];
-    for (const topic of SUBSCRIBED_TOPICS) {
-      busUnsubscribes.push(deps.eventManager.subscribe(topic, onBusEvent));
-    }
-    let busUnsubscribed = false;
-    return (): void => {
-      if (busUnsubscribed) return;
-      busUnsubscribed = true;
-      for (const unsub of busUnsubscribes) unsub();
-    };
-  };
-  const unsubscribeBus = subscribeToBus();
-
-  const start = (): Promise<void> => {
+  start(): Promise<void> {
     return new Promise<void>((resolve) => {
-      const terminal = options.terminal ?? new ProcessTerminal();
-      if (terminal.columns < MIN_COLS) {
-        throw new Error(`terminal too narrow for TUI; need at least ${MIN_COLS} columns, got ${terminal.columns}`);
+      if (this.terminal.columns < MIN_COLS) {
+        throw new Error(`terminal too narrow for TUI; need at least ${MIN_COLS} columns, got ${this.terminal.columns}`);
       }
-      const tui = new TUI(terminal);
-      const { root, rail, chatPane, editor, statusBar, confirmExit } = buildView(state, { cwd }, tui);
-      tui.addChild(root);
-      const projectView = (view: BuildViewResult): void => {
-        if (view.confirmExit.isVisible() !== state.pendingQuit) {
-          view.confirmExit.setVisible(state.pendingQuit);
-        }
-        const focused = TuiStateSelectors.getFocusedAgent(state);
-        view.chatPane.setAgent(focused);
-        view.editor.setQueueIndicator(formatQueueIndicator(focused?.queue ?? null));
-        view.rail.setItemsFromState(state);
-        view.statusBar.update({ cwd, git: gitService.getSnapshot() }, state);
-      };
-      const renderAll = (): void => {
-        projectView({ root, rail, chatPane, editor, statusBar, confirmExit });
-        tui.requestRender();
-      };
-      lifecycle.render = renderAll;
-      lifecycle.commandHandler = createTuiCommandHandler({
-        getState: () => state,
-        dispatch,
-        requestQuit,
-        teamRegistry: deps.teamRegistry,
-        loadTeam: deps.loadTeam,
-        authStore: deps.authStore,
-        settingsStore: deps.settingsStore,
-        settingsScope: deps.settingsScope,
-      });
-
-      const keyboardHandler = createKeyboardHandler({
-        eventManager: deps.eventManager,
-        getState: () => state,
-        dispatch,
-        confirmQuit,
-        cancelQuit,
-        requestQuit,
-        render: renderAll,
-      });
-
-      tui.addInputListener((data) => keyboardHandler.handle(data));
-
-      lifecycle.resolveStart = (): void => {
-        unsubscribeBus();
-        tui.stop();
-        lifecycle.resolveStart = null;
+      this.tui.addInputListener((data) => this.keyboardHandler.handle(data));
+      this.resolveStart = (): void => {
+        this.resolveStart = null;
         resolve();
       };
-
       try {
-        tui.start();
+        this.tui.start();
       } catch (error) {
-        unsubscribeBus();
-        lifecycle.resolveStart = null;
+        this.resolveStart = null;
         throw error;
       }
     });
-  };
+  }
 
-  return {
-    getState: (): TuiState => state,
-    submit: (text: string): void => handleSubmit(text),
-    stop: (): void => {
-      lifecycle.stopped = true;
-      unsubscribeBus();
-      lifecycle.resolveStart?.();
-      lifecycle.render = null;
-      lifecycle.commandHandler = null;
-      lifecycle.resolveStart = null;
-    },
-    start,
+  stop(): void {
+    this.stopped = true;
+    this.unsubscribeBus();
+    this.resolveStart?.();
+    this.tui.stop();
+  }
+
+  private dispatch(action: Action): void {
+    if (this.stopped) return;
+    this.state = reduce(this.state, action);
+    this.renderAll();
+  }
+
+  private isBusy(): boolean {
+    for (const agent of this.state.agents.values()) {
+      if (agent.status === "busy") return true;
+    }
+    return false;
+  }
+
+  private requestQuit(): void {
+    if (this.isBusy()) {
+      this.dispatch(Actions.setPendingQuit(true));
+      return;
+    }
+    this.stopped = true;
+    this.resolveStart?.();
+  }
+
+  private confirmQuit(): void {
+    this.dispatch(Actions.setPendingQuit(false));
+    this.stopped = true;
+    this.resolveStart?.();
+  }
+
+  private cancelQuit(): void {
+    this.dispatch(Actions.setPendingQuit(false));
+  }
+
+  private publishPrompt(text: string): void {
+    if (this.state.teamId === null || this.state.focusedAgentId === null) {
+      this.dispatch(Actions.setErrorMessage("No team loaded; run `/team <id>` to load a team."));
+      return;
+    }
+    const target = TuiStateSelectors.getFocusedAgent(this.state);
+    if (target === null) {
+      this.dispatch(Actions.setErrorMessage("Team has no agent to address; load a valid team with `/team <id>`."));
+      return;
+    }
+    const sender: Sender = { kind: "user" };
+    this.services.eventManager.publish(Events.userPrompt(sender, this.state.teamId, text, target.agentKey));
+  }
+
+  private projectView(view: BuildViewResult): void {
+    if (view.confirmExit.isVisible() !== this.state.pendingQuit) {
+      view.confirmExit.setVisible(this.state.pendingQuit);
+    }
+    const focused = TuiStateSelectors.getFocusedAgent(this.state);
+    view.chatPane.setAgent(focused);
+    view.editor.setQueueIndicator(formatQueueIndicator(focused?.queue ?? null));
+    view.rail.setItemsFromState(this.state);
+    view.statusBar.update({ cwd: this.cwd, git: this.services.gitService.getSnapshot() }, this.state);
+  }
+
+  private renderAll(): void {
+    this.projectView(this.view);
+    this.tui.requestRender();
+  }
+}
+
+const noopCommandHandler: TuiCommandHandler = { handle: () => undefined };
+const noopKeyboardHandler: KeyboardHandler = { handle: () => undefined };
+const noopUnsubscribe = (): void => undefined;
+
+function subscribeToBus(eventManager: EventManager, onEvent: (env: AnyEventEnvelope) => void): () => void {
+  const busUnsubscribes: Array<() => void> = [];
+  for (const topic of SUBSCRIBED_TOPICS) {
+    busUnsubscribes.push(eventManager.subscribe(topic, (env: EventEnvelope<EventType>) => onEvent(env as AnyEventEnvelope)));
+  }
+  let busUnsubscribed = false;
+  return (): void => {
+    if (busUnsubscribed) return;
+    busUnsubscribed = true;
+    for (const unsub of busUnsubscribes) unsub();
   };
 }
 
@@ -208,7 +268,7 @@ function isUtf8(): boolean {
   return /utf-?8/i.test(process.env.LANG ?? process.env.LC_ALL ?? "");
 }
 
-const SUBSCRIBED_TOPICS = [
+const SUBSCRIBED_TOPICS: ReadonlyArray<EventType> = [
   "system.team.loaded",
   "system.interrupted",
   "system.error",
@@ -221,7 +281,7 @@ const SUBSCRIBED_TOPICS = [
   "agent.stream.end",
   "agent.tool.call",
   "agent.tool.result",
-] as const;
+];
 
 const QUEUE_PREVIEW_MAX_CHARS = 100;
 
