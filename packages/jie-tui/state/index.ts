@@ -9,6 +9,5 @@ export type {
   MessageTurn,
   TuiState,
 } from "./types";
-export { reduce } from "./reducer";
 export { Actions, ActionTypes, type Action, type AnyEventEnvelope } from "./actions";
 export { type StateStore, createStateStore } from "./state-store";
