@@ -32,7 +32,7 @@ type EventDefinitions = {
     teamId: string;
     agents: Array<{ role: string; agent_key: string; is_leader: boolean }>;
   }>;
-  "system.team.interrupted": EventDef<SystemSender, { teamId: string }>;
+  "system.interrupted": EventDef<SystemSender>;
   "system.error": EventDef<SystemSender, { error: string }>;
   [topic: `custom.${string}`]: EventDef<AgentSender, { message: string, truncated: boolean }>;
 }
@@ -81,8 +81,8 @@ export const Events = {
     createEvent("user.prompt", sender, { teamId, prompt, agentKey }),
   teamLoaded: (sender: SystemSender, teamId: string, agents: Array<{ role: string; agent_key: string; is_leader: boolean }>): EventEnvelope<"system.team.loaded"> =>
     createEvent("system.team.loaded", sender, { teamId, agents }),
-  interruptTeam: (sender: SystemSender, teamId: string): EventEnvelope<"system.team.interrupted"> =>
-    createEvent("system.team.interrupted", sender, { teamId }),
+  interrupt: (sender: SystemSender): EventEnvelope<"system.interrupted"> =>
+    createEvent("system.interrupted", sender),
   systemError: (sender: SystemSender, error: string): EventEnvelope<"system.error"> =>
     createEvent("system.error", sender, { error }),
   custom(sender: AgentSender, clientTopic: string, message: string): EventEnvelope<`custom.${string}`> {

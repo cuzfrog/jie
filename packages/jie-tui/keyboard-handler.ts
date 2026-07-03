@@ -57,7 +57,7 @@ export function createKeyboardHandler(deps: KeyboardHandlerDeps, opts: KeyboardH
 
     if (matchesKey(data, "escape")) {
       const at = now();
-      const consumed = tryDoubleEscTeamInterrupt(deps, state, lastEscapeAt, at, escWindowMs);
+      const consumed = tryDoubleEscInterrupt(deps, state, lastEscapeAt, at, escWindowMs);
       lastEscapeAt = consumed.newLastEscapeAt ?? at;
       return { consume: consumed.consume };
     }
@@ -106,7 +106,7 @@ function tryResolvePendingQuit(data: string, deps: KeyboardHandlerDeps): { consu
   return null;
 }
 
-function tryDoubleEscTeamInterrupt(
+function tryDoubleEscInterrupt(
   deps: KeyboardHandlerDeps,
   state: TuiState,
   lastEscapeAt: number,
@@ -114,7 +114,7 @@ function tryDoubleEscTeamInterrupt(
   escWindowMs: number,
 ): TryResult {
   if (now - lastEscapeAt <= escWindowMs && state.teamId !== null) {
-    deps.eventManager.publish(Events.interruptTeam({ kind: "system" }, state.teamId));
+    deps.eventManager.publish(Events.interrupt({ kind: "system" }));
     return { consume: true, newLastEscapeAt: 0 };
   }
   return { consume: false, newLastEscapeAt: now };

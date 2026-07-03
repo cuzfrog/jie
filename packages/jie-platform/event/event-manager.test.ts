@@ -105,14 +105,14 @@ describe("createEventManager — topic shape", () => {
     expect(env.topic).toBe("system.team.loaded");
   });
 
-  test("interruptTeam publishes to 'system.team.interrupted'", () => {
+  test("interrupt publishes to 'system.interrupted'", () => {
     const bus = createEventBus();
-    const received = collect(bus, "system.team.interrupted");
+    const received = collect(bus, "system.interrupted");
     const events: EventManager = createEventManager(bus);
-    events.publish(Events.interruptTeam(systemSender, "t1"));
+    events.publish(Events.interrupt(systemSender));
     expect(received).toHaveLength(1);
     const env = received[0]!;
-    expect(env.topic).toBe("system.team.interrupted");
+    expect(env.topic).toBe("system.interrupted");
   });
 
   test("custom prefixes the clientTopic with custom.", () => {

@@ -89,12 +89,12 @@ describe("createKeyboardHandler — pendingQuit branch", () => {
 });
 
 describe("createKeyboardHandler — Esc Esc interrupt", () => {
-  test("Esc twice within window publishes interruptTeam", () => {
+  test("Esc twice within window publishes interrupt", () => {
     const h = makeDeps();
     h.setState({ teamId: "default" });
     const handler = createKeyboardHandler(h.deps, { now: () => 1000 });
     const published: Array<{ topic: string }> = [];
-    h.eventManager.subscribe("system.team.interrupted", (e) => published.push({ topic: e.topic }));
+    h.eventManager.subscribe("system.interrupted", (e) => published.push({ topic: e.topic }));
     handler.handle("\x1b");
     handler.handle("\x1b");
     expect(published).toHaveLength(1);
@@ -106,7 +106,7 @@ describe("createKeyboardHandler — Esc Esc interrupt", () => {
     h.setState({ teamId: "default" });
     const handler = createKeyboardHandler(h.deps, { now: () => t });
     const published: Array<{ topic: string }> = [];
-    h.eventManager.subscribe("system.team.interrupted", (e) => published.push({ topic: e.topic }));
+    h.eventManager.subscribe("system.interrupted", (e) => published.push({ topic: e.topic }));
     handler.handle("\x1b");
     t = 2000;
     handler.handle("\x1b");
@@ -118,7 +118,7 @@ describe("createKeyboardHandler — Esc Esc interrupt", () => {
     h.setState({ teamId: null });
     const handler = createKeyboardHandler(h.deps, { now: () => 1000 });
     const published: Array<{ topic: string }> = [];
-    h.eventManager.subscribe("system.team.interrupted", (e) => published.push({ topic: e.topic }));
+    h.eventManager.subscribe("system.interrupted", (e) => published.push({ topic: e.topic }));
     handler.handle("\x1b");
     handler.handle("\x1b");
     expect(published).toHaveLength(0);

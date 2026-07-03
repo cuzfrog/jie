@@ -7,11 +7,11 @@ describe("reduce — dispatch router", () => {
     const state = INITIAL_TUI_STATE;
     const same = reduce(state, Actions.receiveEvent({
       version: 1,
-      type: "system.team.interrupted",
-      topic: "system.team.interrupted",
+      type: "system.interrupted",
+      topic: "system.interrupted",
       sender: { kind: "system" },
       timestamp: "2026-06-27T12:00:00.000Z",
-      payload: { teamId: "my-team" },
+      payload: null,
     }));
     expect(same).toBe(state);
   });
