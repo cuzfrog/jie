@@ -1,5 +1,5 @@
 import { createKeyboardHandler, type KeyboardHandler, type KeyboardHandlerDeps } from "./keyboard-handler";
-import { Actions, ActionTypes, INITIAL_TUI_STATE, type Action, type TuiState } from "./state";
+import { Actions, INITIAL_TUI_STATE, type StateStore, type TuiState } from "./state";
 import { createEventManager, type EventManager } from "@cuzfrog/jie-platform/event";
 
 interface DepsHandle {
@@ -14,19 +14,21 @@ interface DepsHandle {
 }
 
 function makeDeps(): DepsHandle {
-  let state: TuiState = { ...INITIAL_TUI_STATE, agents: new Map(INITIAL_TUI_STATE.agents) };
-  const dispatch = vi.fn((action: Action) => {
-    if (action.type === ActionTypes.SET_PENDING_QUIT) state = { ...state, pendingQuit: action.payload.on };
-  });
-  const confirmQuit = vi.fn(() => { state = { ...state, pendingQuit: false }; });
-  const cancelQuit = vi.fn(() => { state = { ...state, pendingQuit: false }; });
+  let current: TuiState = { ...INITIAL_TUI_STATE, agents: new Map(INITIAL_TUI_STATE.agents) };
+  const dispatch = vi.fn();
+  const stateStore: StateStore = {
+    getState: () => current,
+    dispatch: (action) => { dispatch(action); },
+    subscribe: vi.fn(() => (): void => undefined),
+  };
+  const confirmQuit = vi.fn(() => { current = { ...current, pendingQuit: false }; });
+  const cancelQuit = vi.fn(() => { current = { ...current, pendingQuit: false }; });
   const requestQuit = vi.fn();
   const render = vi.fn();
   const eventManager: EventManager = createEventManager();
   const deps: KeyboardHandlerDeps = {
     eventManager,
-    getState: () => state,
-    dispatch,
+    stateStore,
     confirmQuit,
     cancelQuit,
     requestQuit,
@@ -34,7 +36,7 @@ function makeDeps(): DepsHandle {
   };
   return {
     deps,
-    setState: (next) => { state = { ...state, ...next }; },
+    setState: (next) => { current = { ...current, ...next }; },
     eventManager,
     dispatch,
     confirmQuit,

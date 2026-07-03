@@ -2,6 +2,8 @@
 sealed:
   - index.ts
   - state.ts
+  - state-store.test.ts
+  - state-store.ts
   - reducer.test.ts
   - reducer.ts
   - ui-reducer.test.ts

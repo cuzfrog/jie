@@ -3,7 +3,7 @@ import {
   type CommandHandlerDeps,
   type TuiCommandHandler,
 } from "./command-handler";
-import { Actions, ActionTypes, INITIAL_TUI_STATE, type Action, type TuiState } from "./state";
+import { Actions, ActionTypes, INITIAL_TUI_STATE, type Action, type StateStore, type TuiState } from "./state";
 import type { AuthStore, Settings, SettingsStore } from "@cuzfrog/jie-platform/config";
 import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
 
@@ -44,19 +44,23 @@ interface DepsHandle {
 }
 
 function makeDeps(): DepsHandle {
-  let state: TuiState = { ...INITIAL_TUI_STATE, agents: new Map(INITIAL_TUI_STATE.agents) };
+  let current: TuiState = { ...INITIAL_TUI_STATE, agents: new Map(INITIAL_TUI_STATE.agents) };
   const dispatch = vi.fn((action: Action) => {
-    if (action.type === ActionTypes.SET_TRANSIENT_MESSAGE) state = { ...state, transientMessage: action.payload.text };
-    else if (action.type === ActionTypes.SET_ERROR_MESSAGE) state = { ...state, errorBanner: action.payload.text };
-    else if (action.type === ActionTypes.CLEAR_TRANSIENT_MESSAGE) state = { ...state, transientMessage: null };
-    else if (action.type === ActionTypes.CLEAR_ERROR_MESSAGE) state = { ...state, errorBanner: null };
-    else if (action.type === ActionTypes.CLEAR_BANNERS) state = { ...state, transientMessage: null, errorBanner: null };
-    else if (action.type === ActionTypes.CLEAR_TUI_STATE) state = INITIAL_TUI_STATE;
+    if (action.type === ActionTypes.SET_TRANSIENT_MESSAGE) current = { ...current, transientMessage: action.payload.text };
+    else if (action.type === ActionTypes.SET_ERROR_MESSAGE) current = { ...current, errorBanner: action.payload.text };
+    else if (action.type === ActionTypes.CLEAR_TRANSIENT_MESSAGE) current = { ...current, transientMessage: null };
+    else if (action.type === ActionTypes.CLEAR_ERROR_MESSAGE) current = { ...current, errorBanner: null };
+    else if (action.type === ActionTypes.CLEAR_BANNERS) current = { ...current, transientMessage: null, errorBanner: null };
+    else if (action.type === ActionTypes.CLEAR_TUI_STATE) current = INITIAL_TUI_STATE;
   });
+  const stateStore: StateStore = {
+    getState: () => current,
+    dispatch: (action) => { dispatch(action); },
+    subscribe: vi.fn(() => (): void => undefined),
+  };
   const requestQuit = vi.fn();
   const deps: CommandHandlerDeps = {
-    getState: () => state,
-    dispatch,
+    stateStore,
     requestQuit,
     teamRegistry,
     loadTeam,
@@ -64,7 +68,7 @@ function makeDeps(): DepsHandle {
     settingsStore,
     settingsScope: "global",
   };
-  return { deps, getState: () => state, dispatch, requestQuit };
+  return { deps, getState: () => current, dispatch, requestQuit };
 }
 
 describe("createTuiCommandHandler", () => {

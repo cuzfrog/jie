@@ -1,6 +1,6 @@
 import { Events, type EventEnvelope, type EventType } from "@cuzfrog/jie-platform/event";
 import { matchesKey, type KeyId } from "@earendil-works/pi-tui";
-import { Actions, type Action, type TuiState } from "./state";
+import { Actions, type Action, type StateStore, type TuiState } from "./state";
 
 interface EventPublisher {
   publish<T extends EventType>(event: EventEnvelope<T>): void;
@@ -19,8 +19,7 @@ const DEFAULT_KEYBINDINGS: ReadonlyArray<Keybinding> = [
 
 export interface KeyboardHandlerDeps {
   readonly eventManager: EventPublisher;
-  readonly getState: () => TuiState;
-  readonly dispatch: (action: Action) => void;
+  readonly stateStore: StateStore;
   readonly confirmQuit: () => void;
   readonly cancelQuit: () => void;
   readonly requestQuit: () => void;
@@ -48,7 +47,7 @@ export function createKeyboardHandler(deps: KeyboardHandlerDeps, opts: KeyboardH
   let lastCtrlDAt = 0;
 
   const handle = (data: string): { consume: boolean } | undefined => {
-    const state = deps.getState();
+    const state = deps.stateStore.getState();
 
     if (state.pendingQuit) {
       const consumed = tryResolvePendingQuit(data, deps);
@@ -76,7 +75,7 @@ export function createKeyboardHandler(deps: KeyboardHandlerDeps, opts: KeyboardH
 
     const action = handleKeyInput(data, bindings);
     if (action === undefined) return undefined;
-    deps.dispatch(action);
+    deps.stateStore.dispatch(action);
     return { consume: true };
   };
 

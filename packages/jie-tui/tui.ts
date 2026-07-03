@@ -2,7 +2,7 @@ import { ProcessTerminal, TUI, type Terminal } from "@earendil-works/pi-tui";
 import { Events, type EventEnvelope, type EventManager, type EventType, type Sender } from "@cuzfrog/jie-platform/event";
 import { type AuthStore, type Scope, type SettingsStore } from "@cuzfrog/jie-platform/config";
 import { type TeamRegistry } from "@cuzfrog/jie-platform/team";
-import { type AnyEventEnvelope, type TuiState, Actions, INITIAL_TUI_STATE, reduce, TuiStateSelectors, type Action } from "./state";
+import { type AnyEventEnvelope, type TuiState, Actions, createStateStore, INITIAL_TUI_STATE, TuiStateSelectors, type StateStore } from "./state";
 import { createTuiCommandHandler, type TuiCommandHandler } from "./command-handler";
 import { createKeyboardHandler, type KeyboardHandler } from "./keyboard-handler";
 import { type GitService } from "@cuzfrog/jie-platform/services";
@@ -32,12 +32,10 @@ export interface Tui {
 }
 
 interface TuiOps {
-  readonly getState: () => TuiState;
-  readonly dispatch: (action: Action) => void;
+  readonly render: () => void;
   readonly requestQuit: () => void;
   readonly confirmQuit: () => void;
   readonly cancelQuit: () => void;
-  readonly render: () => void;
 }
 
 interface TuiRuntimeServices {
@@ -50,6 +48,7 @@ interface PiTuiCtorOptions {
   readonly tui: TUI;
   readonly view: BuildViewResult;
   readonly cwd: string;
+  readonly stateStore: StateStore;
   readonly services: TuiRuntimeServices;
 }
 
@@ -57,6 +56,7 @@ interface PiTuiBindings {
   readonly commandHandler: TuiCommandHandler;
   readonly keyboardHandler: KeyboardHandler;
   readonly unsubscribeBus: () => void;
+  readonly unsubscribeRender: () => void;
 }
 
 export function createTui(deps: TuiDeps, options: CreateTUIOptions): Tui {
@@ -70,17 +70,18 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions): Tui {
   const tui = new TUI(terminal);
   const view = buildView(INITIAL_TUI_STATE, { cwd: options.cwd }, tui);
   tui.addChild(view.root);
+  const stateStore = createStateStore({ initialState: INITIAL_TUI_STATE });
   const piTui = new PiTui({
     terminal,
     tui,
     view,
     cwd: options.cwd,
+    stateStore,
     services: { eventManager: deps.eventManager, gitService: deps.gitService },
   });
   const ops = piTui.getOps();
   const commandHandler = createTuiCommandHandler({
-    getState: ops.getState,
-    dispatch: ops.dispatch,
+    stateStore,
     requestQuit: ops.requestQuit,
     teamRegistry: deps.teamRegistry,
     loadTeam: deps.loadTeam,
@@ -90,22 +91,22 @@ export function createTui(deps: TuiDeps, options: CreateTUIOptions): Tui {
   });
   const keyboardHandler = createKeyboardHandler({
     eventManager: deps.eventManager,
-    getState: ops.getState,
-    dispatch: ops.dispatch,
+    stateStore,
     confirmQuit: ops.confirmQuit,
     cancelQuit: ops.cancelQuit,
     requestQuit: ops.requestQuit,
     render: ops.render,
   });
-  const unsubscribeBus = subscribeToBus(deps.eventManager, (env) => ops.dispatch(Actions.receiveEvent(env)));
-  piTui.bind({ commandHandler, keyboardHandler, unsubscribeBus });
+  const unsubscribeBus = subscribeToBus(deps.eventManager, (env) => stateStore.dispatch(Actions.receiveEvent(env)));
+  const unsubscribeRender = stateStore.subscribe(() => piTui.getOps().render());
+  piTui.bind({ commandHandler, keyboardHandler, unsubscribeBus, unsubscribeRender });
   return piTui;
 }
 
 const MIN_COLS = 60;
 
 class PiTui implements Tui {
-  private state: TuiState = INITIAL_TUI_STATE;
+  private readonly stateStore: StateStore;
   private readonly terminal: Terminal;
   private readonly tui: TUI;
   private readonly view: BuildViewResult;
@@ -115,22 +116,21 @@ class PiTui implements Tui {
   private commandHandler: TuiCommandHandler = noopCommandHandler;
   private keyboardHandler: KeyboardHandler = noopKeyboardHandler;
   private unsubscribeBus: () => void = noopUnsubscribe;
-  private stopped = false;
+  private unsubscribeRender: () => void = noopUnsubscribe;
   private resolveStart: (() => void) | null = null;
 
   constructor(opts: PiTuiCtorOptions) {
+    this.stateStore = opts.stateStore;
     this.terminal = opts.terminal;
     this.tui = opts.tui;
     this.view = opts.view;
     this.cwd = opts.cwd;
     this.services = opts.services;
     this.ops = {
-      getState: () => this.state,
-      dispatch: (action) => this.dispatch(action),
+      render: () => this.renderAll(),
       requestQuit: () => this.requestQuit(),
       confirmQuit: () => this.confirmQuit(),
       cancelQuit: () => this.cancelQuit(),
-      render: () => this.renderAll(),
     };
   }
 
@@ -138,6 +138,7 @@ class PiTui implements Tui {
     this.commandHandler = bindings.commandHandler;
     this.keyboardHandler = bindings.keyboardHandler;
     this.unsubscribeBus = bindings.unsubscribeBus;
+    this.unsubscribeRender = bindings.unsubscribeRender;
   }
 
   getOps(): TuiOps {
@@ -145,11 +146,11 @@ class PiTui implements Tui {
   }
 
   getState(): TuiState {
-    return this.state;
+    return this.stateStore.getState();
   }
 
   submit(text: string): void {
-    this.dispatch(Actions.clearBanners());
+    this.stateStore.dispatch(Actions.clearBanners());
     const trimmed = text.trim();
     if (trimmed.startsWith("/")) {
       this.commandHandler.handle(trimmed);
@@ -178,20 +179,15 @@ class PiTui implements Tui {
   }
 
   stop(): void {
-    this.stopped = true;
     this.unsubscribeBus();
+    this.unsubscribeRender();
     this.resolveStart?.();
     this.tui.stop();
   }
 
-  private dispatch(action: Action): void {
-    if (this.stopped) return;
-    this.state = reduce(this.state, action);
-    this.renderAll();
-  }
-
   private isBusy(): boolean {
-    for (const agent of this.state.agents.values()) {
+    const state = this.stateStore.getState();
+    for (const agent of state.agents.values()) {
       if (agent.status === "busy") return true;
     }
     return false;
@@ -199,46 +195,46 @@ class PiTui implements Tui {
 
   private requestQuit(): void {
     if (this.isBusy()) {
-      this.dispatch(Actions.setPendingQuit(true));
+      this.stateStore.dispatch(Actions.setPendingQuit(true));
       return;
     }
-    this.stopped = true;
     this.resolveStart?.();
   }
 
   private confirmQuit(): void {
-    this.dispatch(Actions.setPendingQuit(false));
-    this.stopped = true;
+    this.stateStore.dispatch(Actions.setPendingQuit(false));
     this.resolveStart?.();
   }
 
   private cancelQuit(): void {
-    this.dispatch(Actions.setPendingQuit(false));
+    this.stateStore.dispatch(Actions.setPendingQuit(false));
   }
 
   private publishPrompt(text: string): void {
-    if (this.state.teamId === null || this.state.focusedAgentId === null) {
-      this.dispatch(Actions.setErrorMessage("No team loaded; run `/team <id>` to load a team."));
+    const state = this.stateStore.getState();
+    if (state.teamId === null || state.focusedAgentId === null) {
+      this.stateStore.dispatch(Actions.setErrorMessage("No team loaded; run `/team <id>` to load a team."));
       return;
     }
-    const target = TuiStateSelectors.getFocusedAgent(this.state);
+    const target = TuiStateSelectors.getFocusedAgent(state);
     if (target === null) {
-      this.dispatch(Actions.setErrorMessage("Team has no agent to address; load a valid team with `/team <id>`."));
+      this.stateStore.dispatch(Actions.setErrorMessage("Team has no agent to address; load a valid team with `/team <id>`."));
       return;
     }
     const sender: Sender = { kind: "user" };
-    this.services.eventManager.publish(Events.userPrompt(sender, this.state.teamId, text, target.agentKey));
+    this.services.eventManager.publish(Events.userPrompt(sender, state.teamId, text, target.agentKey));
   }
 
   private projectView(view: BuildViewResult): void {
-    if (view.confirmExit.isVisible() !== this.state.pendingQuit) {
-      view.confirmExit.setVisible(this.state.pendingQuit);
+    const state = this.stateStore.getState();
+    if (view.confirmExit.isVisible() !== state.pendingQuit) {
+      view.confirmExit.setVisible(state.pendingQuit);
     }
-    const focused = TuiStateSelectors.getFocusedAgent(this.state);
+    const focused = TuiStateSelectors.getFocusedAgent(state);
     view.chatPane.setAgent(focused);
     view.editor.setQueueIndicator(formatQueueIndicator(focused?.queue ?? null));
-    view.rail.setItemsFromState(this.state);
-    view.statusBar.update({ cwd: this.cwd, git: this.services.gitService.getSnapshot() }, this.state);
+    view.rail.setItemsFromState(state);
+    view.statusBar.update({ cwd: this.cwd, git: this.services.gitService.getSnapshot() }, state);
   }
 
   private renderAll(): void {

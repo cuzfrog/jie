@@ -1,7 +1,7 @@
 import { getProviders } from "@earendil-works/pi-ai";
 import type { AuthStore, Settings, SettingsStore, Scope } from "@cuzfrog/jie-platform/config";
 import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
-import { Actions, type Action, type TuiState } from "./state";
+import { Actions, type StateStore } from "./state";
 
 const KNOWN_PROVIDERS: ReadonlySet<string> = new Set<string>(getProviders());
 
@@ -17,8 +17,7 @@ interface SlashCommand {
 }
 
 export interface CommandHandlerDeps {
-  readonly getState: () => TuiState;
-  readonly dispatch: (action: Action) => void;
+  readonly stateStore: StateStore;
   readonly requestQuit: () => void;
   readonly teamRegistry: TeamRegistry;
   readonly loadTeam: (teamId: string) => Promise<void>;
@@ -33,7 +32,7 @@ export interface TuiCommandHandler {
 
 export function createTuiCommandHandler(deps: CommandHandlerDeps): TuiCommandHandler {
   const handle = (text: string): void => {
-    deps.dispatch(Actions.clearBanners());
+    deps.stateStore.dispatch(Actions.clearBanners());
     const parts = text.split(/\s+/);
     const rawName = parts[0]!;
     const name = rawName.startsWith("/") ? rawName.slice(1) : rawName;
@@ -41,24 +40,24 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): TuiCommandHan
 
     const intercepted = runIntercepts(name, args, deps);
     if (intercepted !== null) {
-      if (intercepted.kind === "reply") deps.dispatch(Actions.setTransientMessage(intercepted.text));
-      else deps.dispatch(Actions.setErrorMessage(intercepted.text));
+      if (intercepted.kind === "reply") deps.stateStore.dispatch(Actions.setTransientMessage(intercepted.text));
+      else deps.stateStore.dispatch(Actions.setErrorMessage(intercepted.text));
       return;
     }
 
     const outcome = runCommand(text);
     switch (outcome.kind) {
       case "clearState":
-        deps.dispatch(Actions.clearTuiState());
+        deps.stateStore.dispatch(Actions.clearTuiState());
         return;
       case "stop":
         deps.requestQuit();
         return;
       case "reply":
-        deps.dispatch(Actions.setTransientMessage(outcome.text));
+        deps.stateStore.dispatch(Actions.setTransientMessage(outcome.text));
         return;
       case "error":
-        deps.dispatch(Actions.setErrorMessage(outcome.text));
+        deps.stateStore.dispatch(Actions.setErrorMessage(outcome.text));
         return;
     }
   };
@@ -167,7 +166,7 @@ function interceptTeam(args: ReadonlyArray<string>, deps: CommandHandlerDeps): I
   }
   void deps.loadTeam(argument).catch((error: unknown) => {
     const reason = error instanceof Error ? error.message : String(error);
-    deps.dispatch(Actions.setErrorMessage(`loadTeam(${argument}) failed: ${reason}`));
+    deps.stateStore.dispatch(Actions.setErrorMessage(`loadTeam(${argument}) failed: ${reason}`));
   });
   return { kind: "reply", text: `switching to team '${argument}'…` };
 }
