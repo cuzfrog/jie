@@ -188,7 +188,7 @@ function isUtf8(): boolean {
 
 const SUBSCRIBED_TOPICS = [
   "system.team.loaded",
-  "system.interrupted",
+  "agent.interrupt",
   "system.error",
   "user.prompt",
   "agent.model.assigned",

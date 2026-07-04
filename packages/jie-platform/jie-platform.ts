@@ -44,7 +44,7 @@ export interface JiePlatform {
   stop(): Promise<void>;
 
   prompt(teamId: string, agentKey: string, text: string): void;
-  interrupt(): void;
+  interrupt(teamId: string, agentKey: string): void;
 
   subscribe<T extends EventType>(topic: T, callback: (event: EventEnvelope<T>) => void): () => void;
   execute<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>>;
@@ -73,8 +73,8 @@ export async function createJiePlatform(options: JiePlatformOptions, deps: JiePl
     prompt(teamId, agentKey, text) {
       deps.eventManager.publish(Events.userPrompt({ kind: "user" }, teamId, text, agentKey));
     },
-    interrupt() {
-      deps.eventManager.publish(Events.interrupt({ kind: "system" }));
+    interrupt(teamId, agentKey) {
+      deps.eventManager.publish(Events.agentInterrupt({ kind: "user" }, teamId, agentKey));
     },
     execute<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>> {
       return deps.commandExecutor.execute(command);

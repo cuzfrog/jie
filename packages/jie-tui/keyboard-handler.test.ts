@@ -44,19 +44,30 @@ function makeDeps(): DepsHandle {
 }
 
 describe("createKeyboardHandler — Esc Esc interrupt", () => {
-  test("Esc twice within window calls platform.interrupt()", () => {
+  test("Esc twice within window calls platform.interrupt(teamId, agentKey) for the focused agent", () => {
     const h = makeDeps();
-    h.setState({ teamId: "default" });
+    h.setState({
+      teamId: "default",
+      leaderAgentId: "default:general-1",
+      focusedAgentId: "default:general-1",
+      agents: new Map([["default:general-1", { agentId: "default:general-1", teamId: "default", agentKey: "general-1", role: "general", isLeader: true, status: "busy", model: null, queue: [], history: [], currentTurn: null, lastStopReason: null }]]),
+    });
     const handler = createKeyboardHandler(h.deps, { now: () => 1000 });
     handler.handle("\x1b");
     handler.handle("\x1b");
     expect(h.interrupt).toHaveBeenCalledTimes(1);
+    expect(h.interrupt).toHaveBeenCalledWith("default", "general-1");
   });
 
   test("Esc twice outside window does NOT call platform.interrupt()", () => {
     let t = 1000;
     const h = makeDeps();
-    h.setState({ teamId: "default" });
+    h.setState({
+      teamId: "default",
+      leaderAgentId: "default:general-1",
+      focusedAgentId: "default:general-1",
+      agents: new Map([["default:general-1", { agentId: "default:general-1", teamId: "default", agentKey: "general-1", role: "general", isLeader: true, status: "busy", model: null, queue: [], history: [], currentTurn: null, lastStopReason: null }]]),
+    });
     const handler = createKeyboardHandler(h.deps, { now: () => t });
     handler.handle("\x1b");
     t = 2000;
@@ -67,6 +78,15 @@ describe("createKeyboardHandler — Esc Esc interrupt", () => {
   test("Esc twice but no team loaded does NOT call platform.interrupt()", () => {
     const h = makeDeps();
     h.setState({ teamId: null });
+    const handler = createKeyboardHandler(h.deps, { now: () => 1000 });
+    handler.handle("\x1b");
+    handler.handle("\x1b");
+    expect(h.interrupt).not.toHaveBeenCalled();
+  });
+
+  test("Esc twice but no focused agent does NOT call platform.interrupt()", () => {
+    const h = makeDeps();
+    h.setState({ teamId: "default", focusedAgentId: null });
     const handler = createKeyboardHandler(h.deps, { now: () => 1000 });
     handler.handle("\x1b");
     handler.handle("\x1b");

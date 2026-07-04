@@ -2,7 +2,7 @@ import { matchesKey, type KeyId } from "@earendil-works/pi-tui";
 import { Actions, type Action, type StateStore, type TuiState } from "./state";
 
 interface Interrupter {
-  readonly interrupt: () => void;
+  readonly interrupt: (teamId: string, agentKey: string) => void;
 }
 
 interface Keybinding {
@@ -90,11 +90,13 @@ function tryDoubleEscInterrupt(
   now: number,
   escWindowMs: number,
 ): TryResult {
-  if (now - lastEscapeAt <= escWindowMs && state.teamId !== null) {
-    deps.platform.interrupt();
-    return { consume: true, newLastEscapeAt: 0 };
+  if (now - lastEscapeAt > escWindowMs || state.teamId === null || state.focusedAgentId === null) {
+    return { consume: false, newLastEscapeAt: now };
   }
-  return { consume: false, newLastEscapeAt: now };
+  const focused = state.agents.get(state.focusedAgentId);
+  if (focused === undefined) return { consume: false, newLastEscapeAt: now };
+  deps.platform.interrupt(focused.teamId, focused.agentKey);
+  return { consume: true, newLastEscapeAt: 0 };
 }
 
 function tryDoubleCtrlDQuit(

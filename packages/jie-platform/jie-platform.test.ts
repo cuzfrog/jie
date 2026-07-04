@@ -2,7 +2,7 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { join } from "node:path";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { createEventManager, type EventEnvelope } from "./event";
+import { createEventManager, Events, type EventEnvelope } from "./event";
 import { createJiePlatform } from "./jie-platform";
 import { createCommandExecutor } from "./command";
 import {
@@ -352,10 +352,10 @@ describe("JiePlatform — execute(commands)", () => {
       const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
       const seen: string[] = [];
-      handle.subscribe("system.interrupted", (env) => seen.push(env.type));
-      deps.eventManager.publish({ type: "system.interrupted", topic: "system.interrupted", version: 1, sender: { kind: "system" }, timestamp: new Date().toISOString(), payload: null });
-      deps.eventManager.publish({ type: "system.error", topic: "system.error", version: 1, sender: { kind: "system" }, timestamp: new Date().toISOString(), payload: { error: "boom" } });
-      expect(seen).toEqual(["system.interrupted"]);
+      handle.subscribe("agent.interrupt", (env) => seen.push(env.type));
+      deps.eventManager.publish(Events.agentInterrupt({ kind: "user" }, "t1", "general-1"));
+      deps.eventManager.publish(Events.systemError({ kind: "system" }, "boom"));
+      expect(seen).toEqual(["agent.interrupt"]);
       await handle.stop();
     });
 
@@ -363,9 +363,9 @@ describe("JiePlatform — execute(commands)", () => {
       const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
       const seen: string[] = [];
-      const unsubscribe = handle.subscribe("system.interrupted", (env) => seen.push(env.type));
+      const unsubscribe = handle.subscribe("agent.interrupt", (env) => seen.push(env.type));
       unsubscribe();
-      deps.eventManager.publish({ type: "system.interrupted", topic: "system.interrupted", version: 1, sender: { kind: "system" }, timestamp: new Date().toISOString(), payload: null });
+      deps.eventManager.publish(Events.agentInterrupt({ kind: "user" }, "t1", "general-1"));
       expect(seen).toEqual([]);
       await handle.stop();
     });
@@ -386,14 +386,15 @@ describe("JiePlatform — execute(commands)", () => {
   });
 
   describe("interrupt", () => {
-    test("publishes a system.interrupted event", async () => {
+    test("publishes an agent.interrupt event addressed to the given agent", async () => {
       const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
-      const events: EventEnvelope<"system.interrupted">[] = [];
-      deps.eventManager.subscribe("system.interrupted", (env) => events.push(env));
-      handle.interrupt();
+      const events: EventEnvelope<"agent.interrupt">[] = [];
+      deps.eventManager.subscribe("agent.interrupt", (env) => events.push(env));
+      handle.interrupt("minimal", "general-1");
       expect(events).toHaveLength(1);
-      expect(events[0]!.sender).toEqual({ kind: "system" });
+      expect(events[0]!.sender).toEqual({ kind: "user" });
+      expect(events[0]!.payload).toEqual({ teamId: "minimal", agentKey: "general-1" });
       await handle.stop();
     });
   });

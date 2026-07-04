@@ -106,14 +106,16 @@ describe("createEventManager — topic shape", () => {
     expect(env.topic).toBe("system.team.loaded");
   });
 
-  test("interrupt publishes to 'system.interrupted'", () => {
+  test("agentInterrupt publishes to 'agent.interrupt' with teamId/agentKey in payload", () => {
     const bus = createEventBus();
-    const received = collect(bus, "system.interrupted");
+    const received = collect(bus, "agent.interrupt");
     const events: EventManager = createEventManager(bus);
-    events.publish(Events.interrupt(systemSender));
+    events.publish(Events.agentInterrupt(userSender, "t1", "general-1"));
     expect(received).toHaveLength(1);
     const env = received[0]!;
-    expect(env.topic).toBe("system.interrupted");
+    expect(env.topic).toBe("agent.interrupt");
+    expect(env.sender).toEqual(userSender);
+    expect(env.payload).toEqual({ teamId: "t1", agentKey: "general-1" });
   });
 
   test("custom prefixes the clientTopic with custom.", () => {
