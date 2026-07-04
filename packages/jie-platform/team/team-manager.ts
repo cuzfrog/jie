@@ -27,11 +27,11 @@ export interface TeamManagerDeps {
 }
 
 export interface TeamManager {
-  readonly load: (teamId?: string) => Promise<ReadonlyArray<AgentIdentity>>;
-  readonly listInstalled: () => string[];
-  readonly locate: (teamId: string) => TeamBlueprintLocation;
-  readonly agents: (teamId: string) => ReadonlyArray<AgentIdentity>;
-  readonly stop: () => void;
+  load(teamId?: string): Promise<ReadonlyArray<AgentIdentity>>;
+  listInstalled(): string[];
+  locate(teamId: string): TeamBlueprintLocation;
+  agents(teamId: string): ReadonlyArray<AgentIdentity>;
+  stop(): void;
 }
 
 export function createTeamManager(options: TeamManagerOptions, deps: TeamManagerDeps): TeamManager {
@@ -43,7 +43,7 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
   const loadedTeams = new Map<string, AgentBody[]>();
   const sessionIds = new Map<string, string>();
 
-  async function load(teamId?: string): Promise<ReadonlyArray<AgentIdentity>> {
+  async function loadImpl(teamId?: string): Promise<ReadonlyArray<AgentIdentity>> {
     const resolvedId = teamId ?? "minimal";
     const existing = loadedTeams.get(resolvedId);
     if (existing !== undefined) {
@@ -142,7 +142,7 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
   }
 
   return {
-    load,
+    load: (teamId?: string) => Promise.resolve().then(() => loadImpl(teamId)),
     listInstalled() {
       return teamRegistry.listInstalled();
     },

@@ -106,14 +106,14 @@ describe("createTeamManager — lifecycle", () => {
       expect(second).toEqual(first);
     });
 
-    test("load throws for an unknown team id", () => {
+    test("load rejects for an unknown team id", async () => {
       const { manager } = makeManager(workspace, homeJieDir, null);
-      expect(() => manager.load("ghost")).toThrow(/team 'ghost' not found/);
+      await expect(manager.load("ghost")).rejects.toThrow(/team 'ghost' not found/);
     });
 
-    test("load throws for an invalid team id without touching the disk", () => {
+    test("load rejects for an invalid team id without touching the disk", async () => {
       const { manager } = makeManager(workspace, homeJieDir, null);
-      expect(() => manager.load("bad id with spaces")).toThrow();
+      await expect(manager.load("bad id with spaces")).rejects.toThrow();
     });
 
     test("load builds bodies for every role in the blueprint", async () => {
