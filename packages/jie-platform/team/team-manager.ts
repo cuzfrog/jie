@@ -30,6 +30,7 @@ export interface TeamManager {
   load(teamId?: string): Promise<TeamIdentity>;
   loadAll(): Promise<ReadonlyMap<string, TeamIdentity>>;
   listInstalled(): string[];
+  listLoaded(): ReadonlyMap<string, TeamIdentity>;
   locate(teamId: string): TeamBlueprintLocation;
   agents(teamId: string): ReadonlyArray<AgentIdentity>;
   stop(): void;
@@ -144,6 +145,14 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
     return (loadedTeams.get(teamId) ?? []).map((b) => b.identity);
   }
 
+  function listLoaded(): ReadonlyMap<string, TeamIdentity> {
+    const result = new Map<string, TeamIdentity>();
+    for (const [id, bodies] of loadedTeams) {
+      result.set(id, { id, agents: bodies.map((b) => b.identity) });
+    }
+    return result;
+  }
+
   function stop(): void {
     for (const bodies of loadedTeams.values()) {
       for (const b of bodies) b.stop();
@@ -156,6 +165,7 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
     listInstalled() {
       return teamRegistry.listInstalled();
     },
+    listLoaded,
     locate(id) {
       return teamRegistry.locate(id);
     },

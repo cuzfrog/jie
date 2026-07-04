@@ -147,6 +147,21 @@ describe("createTeamManager — lifecycle", () => {
     });
   });
 
+  describe("listLoaded", () => {
+    test("is empty before any team is loaded", () => {
+      const { manager } = makeManager(workspace, homeJieDir, null);
+      expect(manager.listLoaded()).toEqual(new Map());
+    });
+
+    test("reflects the loaded teams after load()", async () => {
+      const { manager } = makeManager(workspace, homeJieDir, null);
+      await manager.load("minimal");
+      const loaded = manager.listLoaded();
+      expect(loaded.get("minimal")?.id).toBe("minimal");
+      expect(loaded.get("minimal")?.agents).toHaveLength(1);
+    });
+  });
+
   describe("listInstalled / locate (registry pass-through)", () => {
     test("listInstalled includes 'minimal' when nothing else is installed", () => {
       const { manager } = makeManager(workspace, homeJieDir, null);

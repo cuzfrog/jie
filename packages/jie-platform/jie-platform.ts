@@ -52,22 +52,15 @@ export interface JiePlatform {
 
 export async function createJiePlatform(options: JiePlatformOptions, deps: JiePlatformDeps = buildJiePlatformDeps(options)): Promise<JiePlatform> {
   const settingsSnapshot: Settings = deps.settingsStore.load();
-  let teams: ReadonlyMap<string, TeamIdentity> = new Map();
-  let startPromise: Promise<void> | null = null;
 
   const handle: JiePlatform = {
     get teams(): ReadonlyMap<string, TeamIdentity> {
-      return teams;
+      return deps.teamManager.listLoaded();
     },
     settings: settingsSnapshot,
 
-    start(): Promise<void> {
-      if (startPromise === null) {
-        startPromise = (async (): Promise<void> => {
-          teams = await deps.teamManager.loadAll();
-        })();
-      }
-      return startPromise;
+    start: async (): Promise<void> => {
+      await deps.teamManager.loadAll();
     },
 
     stop: async (): Promise<void> => {
