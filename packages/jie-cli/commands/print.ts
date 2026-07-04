@@ -1,27 +1,79 @@
 import type { JiePlatform } from "@cuzfrog/jie-platform";
-import type { PrintResult } from "@cuzfrog/jie-platform/command";
 import type { ParsedArgsMap } from "../cli-flags";
 
 export type PrintArgs = ParsedArgsMap["print"];
 
-export async function runPrint(handle: JiePlatform, args: PrintArgs): Promise<number> {
-  const result: PrintResult = await handle.command("print", {
-    instruction: args.instruction,
-    timeout: args.timeout,
-    json: args.json,
+export async function runPrint(
+  handle: JiePlatform,
+  teamId: string,
+  leaderAgentKey: string,
+  agentKeys: ReadonlyArray<string>,
+  args: PrintArgs,
+): Promise<number> {
+  handle.subscribe("agent.stream.chunk", (envelope) => {
+    if (envelope.sender.kind !== "agent") return;
+    if (envelope.sender.teamId !== teamId) return;
+    if (envelope.sender.agentKey !== leaderAgentKey) return;
+    const text = envelope.payload.text;
+    if (args.json) {
+      process.stdout.write(JSON.stringify({ chunk: text, seq: envelope.payload.seq }) + "\n");
+    } else {
+      process.stdout.write(text);
+    }
   });
-  return mapPrintResult(result, args.timeout);
+
+  handle.prompt(leaderAgentKey, args.instruction);
+
+  try {
+    await setupIdleGate(handle, agentKeys, args.timeout);
+  } catch (error) {
+    if (!args.json) process.stdout.write("\n");
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage === "timeout") {
+      console.error(`no response from team within ${args.timeout}s`);
+    } else {
+      console.error(errorMessage);
+    }
+    await handle.stop();
+    return 3;
+  }
+  if (!args.json) process.stdout.write("\n");
+  await handle.stop();
+  return 0;
 }
 
-function mapPrintResult(result: PrintResult, timeoutSec: number): number {
-  switch (result.kind) {
-    case "ok":
-      return 0;
-    case "timeout":
-      console.error(`no response from team within ${timeoutSec}s`);
-      return 3;
-    case "error":
-      console.error(result.message);
-      return 1;
-  }
+function setupIdleGate(handle: JiePlatform, agentKeys: ReadonlyArray<string>, timeoutSec: number): Promise<void> {
+  const state = new Map<string, "busy" | "idle">();
+  for (const agentKey of agentKeys) state.set(agentKey, "idle");
+
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+
+    const unsubTurnStart = handle.subscribe("agent.turn.start", (envelope) => {
+      if (envelope.sender.kind !== "agent") return;
+      if (!state.has(envelope.sender.agentKey)) return;
+      state.set(envelope.sender.agentKey, "busy");
+    });
+    const unsubIdle = handle.subscribe("agent.idle", (envelope) => {
+      if (envelope.sender.kind !== "agent") return;
+      if (!state.has(envelope.sender.agentKey)) return;
+      state.set(envelope.sender.agentKey, "idle");
+      if ([...state.values()].every((v) => v === "idle")) finish(undefined);
+    });
+
+    const timer =
+      timeoutSec > 0
+        ? setTimeout(() => finish(new Error("timeout")), timeoutSec * 1000)
+        : undefined;
+
+    function finish(result: Error | undefined): void {
+      if (settled) return;
+      settled = true;
+      if (timer !== undefined) clearTimeout(timer);
+      unsubTurnStart();
+      unsubIdle();
+      if (result === undefined) resolve();
+      else reject(result);
+    }
+  });
 }

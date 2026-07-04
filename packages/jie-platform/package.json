@@ -3,7 +3,6 @@
   "type": "module",
   "exports": {
     ".": "./index.ts",
-    "./command": "./command/index.ts",
     "./config": "./config/index.ts",
     "./core": "./core/index.ts",
     "./event": "./event/index.ts",

@@ -1,74 +1,200 @@
 import { runPrint } from "./print";
-import type { PrintResult } from "@cuzfrog/jie-platform/command";
 
-function makeHandle(result: PrintResult): {
-  handle: { command: ReturnType<typeof vi.fn> };
-  command: ReturnType<typeof vi.fn>;
-} {
-  const command = vi.fn().mockResolvedValue(result);
-  return {
-    handle: { command },
-    command,
-  };
+interface JiePlatformStub {
+  subscribe: ReturnType<typeof vi.fn>;
+  userPrompt: ReturnType<typeof vi.fn>;
+  stop: ReturnType<typeof vi.fn>;
 }
 
-const baseArgs = (overrides: Partial<Parameters<typeof runPrint>[1]> = {}): Parameters<typeof runPrint>[1] => ({
-  kind: "print",
-  instruction: "hi",
-  team: undefined,
-  timeout: 30,
-  json: false,
-  apiKey: undefined,
-  resume: undefined,
-  continueLast: false,
-  ...overrides,
-});
+type AgentEnvelope = {
+  sender: { kind: string; teamId?: string; agentKey?: string };
+  payload: Record<string, unknown>;
+};
+type Handler = (env: AgentEnvelope) => void;
+
+function makeHandle(): { handle: JiePlatformStub; subscribes: Map<string, Handler> } {
+  const subscribes = new Map<string, Handler>();
+  const handle: JiePlatformStub = {
+    subscribe: vi.fn((topic: string, cb: Handler) => {
+      subscribes.set(topic, cb);
+      return () => {};
+    }),
+    userPrompt: vi.fn(),
+    stop: vi.fn().mockResolvedValue(undefined),
+  };
+  return { handle, subscribes };
+}
 
 describe("runPrint", () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
-  });
+  test("happy path: subscribes to agent.stream.chunk, publishes leader.prompt, waits for agent.idle, then stop()s", async () => {
+    const { handle, subscribes } = makeHandle();
+    const teamId = "t1";
+    const leaderKey = "general-1";
 
-  test("ok result -> exit code 0", async () => {
-    const { handle, command } = makeHandle({ kind: "ok" });
+    setImmediate(() => {
+      subscribes.get("agent.turn.start")?.({
+        sender: { kind: "agent", teamId, agentKey: leaderKey },
+        payload: {},
+      });
+      subscribes.get("agent.idle")?.({
+        sender: { kind: "agent", teamId, agentKey: leaderKey },
+        payload: {},
+      });
+    });
+
     const code = await runPrint(
       handle as never,
-      baseArgs({ instruction: "hello" }),
+      teamId,
+      leaderKey,
+      [leaderKey],
+      { kind: "print", instruction: "hi", team: undefined, timeout: 30, json: false, apiKey: undefined, resume: undefined, continueLast: false },
     );
     expect(code).toBe(0);
-    expect(command).toHaveBeenCalledWith("print", { instruction: "hello", timeout: 30, json: false });
+    expect(handle.subscribe).toHaveBeenCalledWith("agent.stream.chunk", expect.any(Function));
+    expect(handle.userPrompt).toHaveBeenCalledWith(leaderKey, "hi");
+    expect(handle.stop).toHaveBeenCalled();
   });
 
-  test("timeout result -> exit code 3 with stderr message", async () => {
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const { handle } = makeHandle({ kind: "timeout" });
+  test("timeout: returns 3 and stops the handle", async () => {
+    const { handle } = makeHandle();
     const code = await runPrint(
       handle as never,
-      baseArgs({ timeout: 7 }),
+      "t1",
+      "general-1",
+      ["general-1"],
+      { kind: "print", instruction: "hi", team: undefined, timeout: 0.05, json: false, apiKey: undefined, resume: undefined, continueLast: false },
     );
     expect(code).toBe(3);
-    expect(errSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain("no response from team within 7s");
-    errSpy.mockRestore();
+    expect(handle.stop).toHaveBeenCalled();
   });
 
-  test("error result -> exit code 1 with stderr message", async () => {
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const { handle } = makeHandle({ kind: "error", message: "no leader" });
+  test("worker busy while leader idles: gate does NOT open until worker idles", async () => {
+    const { handle, subscribes } = makeHandle();
+    const teamId = "t1";
+    const leaderKey = "general-1";
+    const workerKey = "worker-1";
+
+    setImmediate(() => {
+      subscribes.get("agent.turn.start")?.({
+        sender: { kind: "agent", teamId, agentKey: leaderKey },
+        payload: {},
+      });
+      subscribes.get("agent.turn.start")?.({
+        sender: { kind: "agent", teamId, agentKey: workerKey },
+        payload: {},
+      });
+      setTimeout(() => {
+        subscribes.get("agent.idle")?.({
+          sender: { kind: "agent", teamId, agentKey: leaderKey },
+          payload: {},
+        });
+      }, 10);
+      setTimeout(() => {
+        subscribes.get("agent.idle")?.({
+          sender: { kind: "agent", teamId, agentKey: workerKey },
+          payload: {},
+        });
+      }, 30);
+    });
+
+    const start = Date.now();
     const code = await runPrint(
       handle as never,
-      baseArgs(),
+      teamId,
+      leaderKey,
+      [leaderKey, workerKey],
+      { kind: "print", instruction: "hi", team: undefined, timeout: 2, json: false, apiKey: undefined, resume: undefined, continueLast: false },
     );
-    expect(code).toBe(1);
-    expect(errSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain("no leader");
-    errSpy.mockRestore();
+    const elapsed = Date.now() - start;
+    expect(code).toBe(0);
+    expect(elapsed).toBeGreaterThanOrEqual(25);
   });
 
-  test("json flag is forwarded to the dispatcher", async () => {
-    const { handle, command } = makeHandle({ kind: "ok" });
-    await runPrint(
+  test("agents unknown to the gate are ignored: a stray worker-idle does not resolve early", async () => {
+    const { handle, subscribes } = makeHandle();
+    const teamId = "t1";
+    const leaderKey = "general-1";
+
+    setImmediate(() => {
+      subscribes.get("agent.turn.start")?.({
+        sender: { kind: "agent", teamId, agentKey: leaderKey },
+        payload: {},
+      });
+      setTimeout(() => {
+        subscribes.get("agent.idle")?.({
+          sender: { kind: "agent", teamId, agentKey: "ghost-1" },
+          payload: {},
+        });
+      }, 5);
+      setTimeout(() => {
+        subscribes.get("agent.idle")?.({
+          sender: { kind: "agent", teamId, agentKey: leaderKey },
+          payload: {},
+        });
+      }, 30);
+    });
+
+    const start = Date.now();
+    const code = await runPrint(
       handle as never,
-      baseArgs({ json: true, instruction: "x" }),
+      teamId,
+      leaderKey,
+      [leaderKey],
+      { kind: "print", instruction: "hi", team: undefined, timeout: 2, json: false, apiKey: undefined, resume: undefined, continueLast: false },
     );
-    expect(command).toHaveBeenCalledWith("print", { instruction: "x", timeout: 30, json: true });
+    const elapsed = Date.now() - start;
+    expect(code).toBe(0);
+    expect(elapsed).toBeGreaterThanOrEqual(25);
+  });
+
+  test("agent.stream.chunk: only the leader's chunks are written; foreign-team and non-leader chunks are dropped", async () => {
+    const { handle, subscribes } = makeHandle();
+    const teamId = "t1";
+    const leaderKey = "general-1";
+    const workerKey = "worker-1";
+
+    const writes: string[] = [];
+    const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    });
+
+    setImmediate(() => {
+      subscribes.get("agent.stream.chunk")?.({
+        sender: { kind: "agent", teamId, agentKey: leaderKey },
+        payload: { text: "leader-1", seq: 0, block_type: "text" },
+      });
+      subscribes.get("agent.stream.chunk")?.({
+        sender: { kind: "agent", teamId, agentKey: workerKey },
+        payload: { text: "worker-1", seq: 0, block_type: "text" },
+      });
+      subscribes.get("agent.stream.chunk")?.({
+        sender: { kind: "agent", teamId: "other-team", agentKey: leaderKey },
+        payload: { text: "other-team", seq: 0, block_type: "text" },
+      });
+      subscribes.get("agent.stream.chunk")?.({
+        sender: { kind: "user" },
+        payload: { text: "user-text", seq: 0, block_type: "text" },
+      });
+      subscribes.get("agent.idle")?.({
+        sender: { kind: "agent", teamId, agentKey: leaderKey },
+        payload: {},
+      });
+    });
+
+    const code = await runPrint(
+      handle as never,
+      teamId,
+      leaderKey,
+      [leaderKey],
+      { kind: "print", instruction: "hi", team: undefined, timeout: 5, json: false, apiKey: undefined, resume: undefined, continueLast: false },
+    );
+    expect(code).toBe(0);
+    const concatenated = writes.join("");
+    expect(concatenated).toContain("leader-1");
+    expect(concatenated).not.toContain("worker-1");
+    expect(concatenated).not.toContain("other-team");
+    expect(concatenated).not.toContain("user-text");
+    stdoutSpy.mockRestore();
   });
 });
