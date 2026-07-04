@@ -1,6 +1,6 @@
-
 import type { AgentIdentity } from "../core";
 import type { GitSnapshot } from "../services";
+import type { ModelIdentity } from "../types";
 
 interface CommandDef<A, R = null> {
   args: A;
@@ -10,15 +10,12 @@ interface CommandDef<A, R = null> {
 interface CommandTypeMap {
   login: CommandDef<{ provider: string; apiKey: string }, null>;
   logout: CommandDef<{ provider?: string }, null>;
-  setDefaultModel: CommandDef<{ provider: string; modelId: string }, null>;
-  getDefaultModel: CommandDef<{}, { provider: string; modelId: string } | null>;
+  setDefaultModel: CommandDef<ModelIdentity, null>;
+  getDefaultModel: CommandDef<{}, ModelIdentity | null>;
   unsetDefaultTeam: CommandDef<{}, null>;
   setDefaultTeam: CommandDef<{ teamId: string }, null>;
-  team: CommandDef<
-    { teamId?: string },
-    | { kind: "info"; defaultTeam: string | null; installed: ReadonlyArray<string> }
-    | { kind: "switched"; teamId: string; agents: ReadonlyArray<AgentIdentity> }
-  >;
+  getTeamInfo: CommandDef<{}, { defaultTeam: string | null; installed: ReadonlyArray<string> }>;
+  switchTeam: CommandDef<{ teamId: string }, ReadonlyArray<AgentIdentity>>;
   getGitStatus: CommandDef<{}, GitSnapshot>;
 }
 

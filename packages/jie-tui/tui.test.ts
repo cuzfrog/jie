@@ -1,6 +1,5 @@
 import { createTui, type Tui, type TuiDeps } from "./tui";
-import type { AnyEventEnvelope, EventEnvelope, EventType } from "@cuzfrog/jie-platform";
-import { createEventManager, Events, type EventManager } from "@cuzfrog/jie-platform/event";
+import { createEventManager, Events, type EventManager, type AnyEventEnvelope, type EventEnvelope, type EventType } from "@cuzfrog/jie-platform/event";
 import { createTestTuiWithTerminal, withTTY } from "../../tests/support";
 
 const EMPTY_GIT = { branch: "", dirty: false, ahead: 0, behind: 0 };

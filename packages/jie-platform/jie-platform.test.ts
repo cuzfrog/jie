@@ -264,16 +264,16 @@ describe("createJiePlatform", () => {
       expect(handle.team.id).toBe("alpha");
       expect(events.map((e) => e.payload.teamId)).toEqual(["alpha"]);
 
-      const result = await handle.execute({ name: "team", teamId: "beta" });
-      if (result.kind !== "switched") throw new Error("expected switched");
+      const result = await handle.execute({ name: "switchTeam", teamId: "beta" });
+      expect(Array.isArray(result)).toBe(true);
       expect(handle.team.id).toBe("beta");
       expect(events.map((e) => e.payload.teamId)).toEqual(["alpha", "beta"]);
-      expect(result.agents.length).toBeGreaterThan(0);
+      expect(result.length).toBeGreaterThan(0);
 
       await handle.stop();
     });
 
-    test("execute({ name: 'team', teamId }) is idempotent: calling twice does not re-publish", async () => {
+    test("execute({ name: 'switchTeam', teamId }) is idempotent: calling twice does not re-publish", async () => {
       installTeam(homeJieDir, "alpha", "general");
       const deps = makeDeps(workspace, homeJieDir);
       const events: EventEnvelope<"system.team.loaded">[] = [];
@@ -281,8 +281,8 @@ describe("createJiePlatform", () => {
         events.push(env);
       });
       const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "alpha" }, deps);
-      await handle.execute({ name: "team", teamId: "alpha" });
-      await handle.execute({ name: "team", teamId: "alpha" });
+      await handle.execute({ name: "switchTeam", teamId: "alpha" });
+      await handle.execute({ name: "switchTeam", teamId: "alpha" });
       expect(events.filter((e) => e.payload.teamId === "alpha")).toHaveLength(1);
       await handle.stop();
     });
@@ -447,17 +447,14 @@ describe("JiePlatform — execute(commands)", () => {
     });
   });
 
-  describe("execute(team - no args)", () => {
+  describe("execute(getTeamInfo)", () => {
     test("returns defaultTeam + installed list", async () => {
       const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
       const tr = deps.teamRegistry;
       const spy = vi.spyOn(tr, "listInstalled").mockReturnValue(["minimal", "alpha", "beta"]);
-      const result = await handle.execute({ name: "team" });
-      expect(result.kind).toBe("info");
-      if (result.kind === "info") {
-        expect(result.installed).toEqual(["minimal", "alpha", "beta"]);
-      }
+      const result = await handle.execute({ name: "getTeamInfo" });
+      expect(result.installed).toEqual(["minimal", "alpha", "beta"]);
       spy.mockRestore();
       await handle.stop();
     });

@@ -58,13 +58,13 @@ describe("runModel", () => {
 });
 
 describe("runTeam", () => {
-  test("dispatches setDefaultTeam when teamId is given", async () => {
+  test("dispatches switchTeam when teamId is given", async () => {
     const { platform, execute } = makePlatform();
-    execute.mockImplementationOnce(async () => null);
+    execute.mockImplementationOnce(async () => []);
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
     const code = await runTeam({ kind: "team", teamId: "dev", unset: false }, platform);
     expect(code).toBe(0);
-    expect(execute).toHaveBeenCalledWith({ name: "setDefaultTeam", teamId: "dev" });
+    expect(execute).toHaveBeenCalledWith({ name: "switchTeam", teamId: "dev" });
     logSpy.mockRestore();
   });
 

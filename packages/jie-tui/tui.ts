@@ -1,5 +1,6 @@
 import { ProcessTerminal, TUI, type Terminal } from "@earendil-works/pi-tui";
-import type { AnyEventEnvelope, EventEnvelope, EventType, JiePlatform } from "@cuzfrog/jie-platform";
+import type { AnyEventEnvelope, EventEnvelope, EventType } from "@cuzfrog/jie-platform/event";
+import type { JiePlatform } from "@cuzfrog/jie-platform";
 import { type TuiState, Actions, createStateStore, type StateStore } from "./state";
 import { createTuiCommandHandler, type TuiCommandHandler } from "./command-handler";
 import { createKeyboardHandler, type KeyboardHandler } from "./keyboard-handler";

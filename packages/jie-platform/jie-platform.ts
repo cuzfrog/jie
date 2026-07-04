@@ -12,6 +12,7 @@ import {
 } from "./storage";
 import { JiePlatformError } from "./jie-platform-errors";
 import { type Command, type CommandExecutor, type CommandName, type CommandResult } from "./command";
+import { type TeamIdentity } from "./types";
 
 export interface CreateJiePlatformOptions {
   readonly workspace: string;
@@ -34,10 +35,7 @@ export interface JiePlatformDeps {
 }
 
 export interface JiePlatform {
-  readonly team: {
-    readonly id: string;
-    readonly agents: ReadonlyArray<AgentIdentity>;
-  };
+  readonly team: TeamIdentity;
   stop(): Promise<void>;
 
   subscribe<T extends EventType>(topic: T, callback: (event: EventEnvelope<T>) => void): () => void;
@@ -131,15 +129,16 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
   };
 
   async function runCommand<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>> {
-    if (command.name === "team") {
-      const teamCommand = command as Command<"team">;
-      if (teamCommand.teamId !== undefined) {
-        const agents = await loadTeam(teamCommand.teamId);
-        activeTeamId = teamCommand.teamId;
-        return { kind: "switched", teamId: teamCommand.teamId, agents } as CommandResult<T>;
+    switch (command.name) {
+      case "switchTeam": {
+        const c = command as Command<"switchTeam">;
+        const agents = await loadTeam(c.teamId);
+        activeTeamId = c.teamId;
+        return agents as CommandResult<T>;
       }
+      default:
+        return await dependencies.commandExecutor.execute(command);
     }
-    return (await dependencies.commandExecutor.execute(command)) as CommandResult<T>;
   }
 
   return handle;

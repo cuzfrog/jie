@@ -1,6 +1,7 @@
 import { createEventManager, Events, type EventEnvelope, type EventManager, type AgentSender, type EventType } from "@cuzfrog/jie-platform/event";
 import { createTui, type Tui, type TuiDeps, type CreateTUIOptions } from "@cuzfrog/jie-tui";
-import type { GitSnapshot, JiePlatform } from "@cuzfrog/jie-platform";
+import type { JiePlatform } from "@cuzfrog/jie-platform";
+import type { GitSnapshot } from "@cuzfrog/jie-platform/services";
 import { withTTY } from "../../support";
 
 const noopAsync = (): Promise<void> => Promise.resolve();
@@ -9,25 +10,30 @@ const stubGitSnapshot: GitSnapshot = { branch: "", dirty: false, ahead: 0, behin
 
 function makePlatform(bus: EventManager, initialTeamId: string): JiePlatform {
   const team: { id: string; agents: ReadonlyArray<never> } = { id: initialTeamId, agents: [] };
+  const execute: JiePlatform["execute"] = async (cmd) => {
+    switch (cmd.name) {
+      case "switchTeam": {
+        const c = cmd as { name: "switchTeam"; teamId: string };
+        team.id = c.teamId;
+        return [];
+      }
+      case "getTeamInfo":
+        return { defaultTeam: null, installed: [] };
+      case "getGitStatus":
+        return stubGitSnapshot;
+      default:
+        return null;
+    }
+  };
   return {
-    team: team as unknown as JiePlatform["team"],
+    team,
     stop: noopAsync,
     subscribe: <T extends EventType>(topic: T, cb: (event: EventEnvelope<T>) => void) => bus.subscribe(topic, cb),
     prompt: (agentKey: string, text: string) => {
       bus.publish(Events.userPrompt({ kind: "user" }, team.id, text, agentKey));
     },
     interrupt: () => undefined,
-    execute: (async (cmd: { name: string } & Record<string, unknown>) => {
-      if (cmd.name === "getGitStatus") return stubGitSnapshot;
-      if (cmd.name === "team" && "teamId" in cmd && typeof cmd.teamId === "string") {
-        team.id = cmd.teamId;
-        return { kind: "switched" as const, teamId: cmd.teamId, agents: [] };
-      }
-      if (cmd.name === "team") {
-        return { kind: "info" as const, defaultTeam: null, installed: [] };
-      }
-      return null;
-    }) as unknown as JiePlatform["execute"],
+    execute,
   };
 }
 

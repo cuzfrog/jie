@@ -95,7 +95,6 @@ describe("createTuiCommandHandler", () => {
   test("handle('/team') reports the current default and installed list", async () => {
     const { platform, execute } = makePlatform();
     execute.mockImplementationOnce(async () => ({
-      kind: "info" as const,
       defaultTeam: "alpha",
       installed: ["minimal", "alpha", "beta"],
     }));
@@ -103,7 +102,7 @@ describe("createTuiCommandHandler", () => {
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team");
     await new Promise((r) => setImmediate(r));
-    expect(execute).toHaveBeenCalledWith({ name: "team" });
+    expect(execute).toHaveBeenCalledWith({ name: "getTeamInfo" });
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringMatching(/alpha/)));
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringMatching(/minimal.*alpha.*beta/)));
   });
@@ -230,7 +229,6 @@ describe("createTuiCommandHandler — /team", () => {
   test("/team (no args) replies with defaultTeam and installed list", async () => {
     const { platform, execute } = makePlatform();
     execute.mockImplementationOnce(async () => ({
-      kind: "info" as const,
       defaultTeam: "alpha",
       installed: ["minimal", "alpha", "beta"],
     }));
@@ -238,7 +236,7 @@ describe("createTuiCommandHandler — /team", () => {
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team");
     await new Promise((r) => setImmediate(r));
-    expect(execute).toHaveBeenCalledWith({ name: "team" });
+    expect(execute).toHaveBeenCalledWith({ name: "getTeamInfo" });
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringMatching(/alpha/)));
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringMatching(/minimal.*alpha.*beta/)));
   });
@@ -246,7 +244,6 @@ describe("createTuiCommandHandler — /team", () => {
   test("/team (no args) reports 'unset' when no defaultTeam is configured", async () => {
     const { platform, execute } = makePlatform();
     execute.mockImplementationOnce(async () => ({
-      kind: "info" as const,
       defaultTeam: null,
       installed: ["minimal"],
     }));
@@ -264,7 +261,7 @@ describe("createTuiCommandHandler — /team", () => {
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team alpha");
     await new Promise((r) => setImmediate(r));
-    expect(execute).toHaveBeenCalledWith({ name: "team", teamId: "alpha" });
+    expect(execute).toHaveBeenCalledWith({ name: "switchTeam", teamId: "alpha" });
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("loaded team 'alpha'")));
   });
 
@@ -277,7 +274,7 @@ describe("createTuiCommandHandler — /team", () => {
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team ghost");
     await new Promise((r) => setImmediate(r));
-    expect(execute).toHaveBeenCalledWith({ name: "team", teamId: "ghost" });
+    expect(execute).toHaveBeenCalledWith({ name: "switchTeam", teamId: "ghost" });
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("team 'ghost' not found"));
   });
 });

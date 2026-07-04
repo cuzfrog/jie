@@ -1,4 +1,4 @@
-import type { AnyEventEnvelope } from "@cuzfrog/jie-platform";
+import type { AnyEventEnvelope } from "@cuzfrog/jie-platform/event";
 
 export const ActionTypes = {
   RECEIVE_EVENT: "[bus] receive event from event bus",

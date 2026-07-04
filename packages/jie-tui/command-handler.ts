@@ -153,11 +153,9 @@ function interceptTeam(args: ReadonlyArray<string>, deps: CommandHandlerDeps): I
     return { kind: "reply", text: "default team unset; takes effect on next `jie` invocation" };
   }
   if (args.length === 0) {
-    void deps.platform.execute({ name: "team" })
+    void deps.platform.execute({ name: "getTeamInfo" })
       .then((info) => {
-        if (info.kind === "info") {
-          deps.stateStore.dispatch(Actions.setTransientMessage(formatTeamListReply(info.defaultTeam, info.installed)));
-        }
+        deps.stateStore.dispatch(Actions.setTransientMessage(formatTeamListReply(info.defaultTeam, info.installed)));
       }, (error: unknown) => {
         const reason = error instanceof Error ? error.message : String(error);
         deps.stateStore.dispatch(Actions.setErrorMessage(`/team failed: ${reason}`));
@@ -165,7 +163,7 @@ function interceptTeam(args: ReadonlyArray<string>, deps: CommandHandlerDeps): I
     return { kind: "reply", text: "loading team list…" };
   }
   const argument = args[0]!;
-  void deps.platform.execute({ name: "team", teamId: argument })
+  void deps.platform.execute({ name: "switchTeam", teamId: argument })
     .then(() => undefined, (error: unknown) => {
       const code = error instanceof JiePlatformError ? error.code : undefined;
       const message = code === "TEAM_NOT_FOUND" ? `team '${argument}' not found` : `loadTeam(${argument}) failed`;

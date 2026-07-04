@@ -23,8 +23,7 @@ export async function runTeam(
   platform: JiePlatform,
 ): Promise<number> {
   if (parsed.teamId === undefined && !parsed.unset) {
-    const info = await platform.execute({ name: "team" });
-    if (info.kind !== "info") return 0;
+    const info = await platform.execute({ name: "getTeamInfo" });
     console.log(`defaultTeam: ${info.defaultTeam ?? "unset"}`);
     console.log(`installed: ${info.installed.join(", ")}`);
     return 0;
@@ -36,7 +35,7 @@ export async function runTeam(
   }
   const teamId = parsed.teamId!;
   try {
-    await platform.execute({ name: "setDefaultTeam", teamId });
+    await platform.execute({ name: "switchTeam", teamId });
   } catch (error) {
     if (error instanceof JiePlatformError && error.code === "TEAM_NOT_FOUND") {
       console.error(
@@ -46,6 +45,6 @@ export async function runTeam(
     }
     throw error;
   }
-  console.log(`default team set to ${teamId}`);
+  console.log(`loaded team '${teamId}'`);
   return 0;
 }
