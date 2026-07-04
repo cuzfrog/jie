@@ -142,19 +142,23 @@ Unknown frontmatter fields are tolerated (warned, ignored), matching the platfor
 
 The `model:` field is optional. When absent, the platform falls through to the user's global default — see `10-configuration.md` "Model Resolution" for the full chain. The `AgentSoul.model` value is always a resolved `<provider>/<modelId>` string by the time the soul is constructed; the frontmatter field is just the agent's *explicit override* slot.
 
-If a model string is present but malformed (no `/` separator), the platform fails at startup with `invalid model string: <value>` citing the agent's role. The error is part of the startup pre-check (run by `startJie`) (see "Startup Pre-Check" below).
+If a model string is present but malformed (no `/` separator), the team-load for that team publishes a `system.error` event with `invalid model string: <value>` citing the agent's role, and the team is omitted from the loaded map (see "Team Loading" below).
 
-### Startup Pre-Check
+### Team Loading
 
-`startJie` walks every agent in the blueprint before constructing any `AgentSoul`. For each agent it attempts to resolve a concrete `(provider, modelId)`. If any agent fails, startup exits 1 with a single error message:
+`createJiePlatform` returns a handle whose `teams` map is empty until `handle.start()` resolves. `start()` calls `TeamManager.loadAll()`, which iterates every installed team (`registry.listInstalled()` always includes the built-in `"minimal"`), calls `loadImpl(id)` per team, and aggregates the successes into the `teams` map.
 
-```
-No model has been selected, please login and select a default model.
-```
+A team fails to load when:
 
-(Matches the user scenario 6 expected error. The platform's CLI maps from the internal "no `defaultProvider` and no per-agent `model:`" condition to this user-facing message.)
+- No `model:` is set in the soul AND no `defaultProvider` / `defaultModel` is in merged settings (the soul's `resolveSoulModel` throws `JiePlatformError("NO_MODEL_ERROR")`).
+- The model's `(provider, modelId)` cannot be resolved by the model's registry.
+- The manifest fails to parse (missing `.md`, malformed YAML, invalid team id, etc.).
 
-This is a hard fail — no partial startup, no agent constructed. `startJie` does not surface a "missing model" error at LLM-call time; that class of error is caught here.
+Per failure, `loadAll` catches the error, publishes `system.error` with a message of the form `team '<id>' failed to load: <reason>`, and continues with the next team. The CLI's `createApp` subscribes to `system.error` and surfaces it as a warning before reading `teams`. The build-in minimal team is always installed (the registry seeds it in `listInstalled`), so a degraded environment still has at least one usable team to fall back to.
+
+`UNKNOWN_SESSION` (the only error from `--resume <id>` validation per ADR 20) is re-thrown by `loadAll` because the user explicitly asked for that session and silent fallback would hide the typo. `await handle.start()` rejects with `unknown session_id: <value>`; the CLI's catch returns exit 1.
+
+A team that has no `model:` and no settings default still publishes `system.error`; it does NOT block startup. The CLI's `resolveTeam(handle.teams, requestedTeam)` falls back to the minimal team when present, and exits 1 with `team '<id>' has no agents to run; check the team manifest` if even `"minimal"` is missing from the loaded map.
 
 ### Platform Auto-Wiring
 
@@ -777,7 +781,7 @@ Memory has two write paths in the body, both unconditional:
 - **`message_end` → `persist`**: On every `message_end` from pi-agent, the body calls `memory.persist(message, agent_key, session_id, team_id)` — write-through to SQLite. No role check; the listener does not special-case summaries.
 - **`transformContext` wrapper → `compact`**: The body passes a wrapped `transformContext` to pi-agent. The wrapper calls the inner `transformContext`, diffs input vs. output for newly-added `CompactionSummaryMessage` entries, and calls `memory.compact(range, summary, agent_key, session_id, team_id)` for each. The wrapper is invariant across days: in v1 the inner is identity (no compaction → wrapper is a no-op); in Day 2+ the inner is pi-agent's actual compaction logic (or a custom implementation) and the wrapper persists the produced summaries. Compaction is trigger-agnostic — `/compact` slash command, pi-agent's auto-threshold, or Day 2+ team hooks all funnel through `transformContext` and the wrapper persists.
 
-Memory is durable and session-scoped. The `session_id` is supplied by the platform at construction (per ADR 18 and ADR 20). Without `--resume` or `--continue`, a new process run mints a fresh `session_id` (ULID via `ulid@2.3.0`) and the agent starts with a clean conversation. With `--resume <id>`, the named `session_id` is validated and used; `memory.restore()` returns prior rows for that session. With `--continue`, the most-recent `session_id` for the current `team_id` is used; `memory.restore()` returns prior rows for that session.
+Memory is durable and session-scoped. The `session_id` is supplied by the platform at construction (per ADR 18 and ADR 20). Without `--resume`, a new process run mints a fresh `session_id` (ULID via `ulid@2.3.0`) and the agent starts with a clean conversation. With `--resume <id>`, the named `session_id` is validated and used; `memory.restore()` returns prior rows for that session.
 
 `memory.compact()` writes the summary row and the raw range's `compacted=1` flag updates in a single `Storage.transaction()`. The `compactionSummary` role's row is owned exclusively by `compact()`; `persist()` does not write summaries because pi-agent does not emit `message_end` for `CompactionSummaryMessage` injected by `transformContext`. See `08-memory.md` "Compact" and "Integration with pi-agent" for the full contract.
 

@@ -164,7 +164,7 @@ class PiTui implements Tui {
       this.stateStore.dispatch(Actions.setErrorMessage("Team has no agent to address; load a valid team with `/team <id>`."));
       return;
     }
-    this.platform.prompt(target.agentKey, text);
+    this.platform.prompt(state.teamId, target.agentKey, text);
   }
 
 }

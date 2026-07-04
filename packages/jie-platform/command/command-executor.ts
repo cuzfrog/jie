@@ -1,5 +1,4 @@
 import { getProviders } from "@earendil-works/pi-ai";
-import { type AgentIdentity } from "../core";
 import { type AuthStore } from "../config";
 import { type Settings, type Scope, type SettingsStore } from "../config";
 import { JiePlatformError } from "../jie-platform-errors";
@@ -13,7 +12,6 @@ export interface CommandExecutorDeps {
   readonly teamManager: TeamManager;
   readonly gitService: GitService;
   readonly defaultScope: Scope;
-  loadActiveTeam(teamId: string): Promise<ReadonlyArray<AgentIdentity>>;
 }
 
 type Handler<N extends CommandName> = (command: Command<N>) => CommandResult<N> | Promise<CommandResult<N>>;
@@ -88,12 +86,6 @@ export function createCommandExecutor(deps: CommandExecutorDeps): CommandExecuto
         defaultTeam: settings.defaultTeam ?? null,
         installed: deps.teamManager.listInstalled(),
       };
-    },
-    switchTeam: async (command) => {
-      if (deps.teamManager.locate(command.teamId) === null) {
-        throw new JiePlatformError("TEAM_NOT_FOUND", { detail: `team '${command.teamId}' not found` });
-      }
-      return await deps.loadActiveTeam(command.teamId);
     },
     getGitStatus: () => deps.gitService.getSnapshot(),
   };

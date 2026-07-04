@@ -22,7 +22,7 @@ export async function runPrint(
     }
   });
 
-  handle.prompt(leaderAgentKey, args.instruction);
+  handle.prompt(teamId, leaderAgentKey, args.instruction);
 
   try {
     await setupIdleGate(handle, agentKeys, args.timeout);

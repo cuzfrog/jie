@@ -63,7 +63,7 @@ The five v0.2 TUI scenarios ship as `tests/e2e/tui/fixtures/<scenario>.jsonl` pl
 
 ## Flag parity
 
-`jie [--team <id>] [--api-key <k>] [--resume <id> | --continue]` opens the TUI. The TUI uses the same `createApp` orchestrator that `-p` uses; the only difference is the final render surface. The TUI does not accept `-p`, `--json`, or `--timeout`.
+`jie [--team <id>] [--api-key <k>] [--resume <id>]` opens the TUI. The TUI uses the same `createApp` orchestrator that `-p` uses; the only difference is the final render surface. The TUI does not accept `-p`, `--json`, or `--timeout`.
 
 ## Where to look
 

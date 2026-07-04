@@ -69,7 +69,7 @@ Platform tunables (stream chunk size, flush interval) are hard-coded in v1; no c
 
 ### First-Run Credentials and Model
 
-The platform does not assume a model or provider. The first `jie` invocation in a fresh environment — before the user has run `jie login` and `jie model` — fails fast at the model pre-check with a clear pointer to the right command. Expected sequence on a clean machine:
+The platform does not assume a model or provider. The first `jie` invocation in a fresh environment — before the user has run `jie login` and `jie model` — surfaces a `system.error` event per team whose soul has no explicit `model:` and no settings fallback, and the affected team is omitted from `handle.teams`. The CLI's `createApp` forwards the warning to stderr and continues; the user's minimal team still runs (its soul has a default model reference, but a soul-level `model:` is preferable). Expected sequence on a clean machine:
 
 ```bash
 jie login                              # one-time: pick a provider, OAuth or paste API key → ~/.jie/auth.json

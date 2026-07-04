@@ -47,11 +47,11 @@ describe("runPrint", () => {
       teamId,
       leaderKey,
       [leaderKey],
-      { kind: "print", instruction: "hi", team: undefined, timeout: 30, json: false, apiKey: undefined, resume: undefined, continueLast: false },
+      { kind: "print", instruction: "hi", team: undefined, timeout: 30, json: false, apiKey: undefined, resume: undefined },
     );
     expect(code).toBe(0);
     expect(handle.subscribe).toHaveBeenCalledWith("agent.stream.chunk", expect.any(Function));
-    expect(handle.prompt).toHaveBeenCalledWith(leaderKey, "hi");
+    expect(handle.prompt).toHaveBeenCalledWith(teamId, leaderKey, "hi");
     expect(handle.stop).toHaveBeenCalled();
   });
 
@@ -62,7 +62,7 @@ describe("runPrint", () => {
       "t1",
       "general-1",
       ["general-1"],
-      { kind: "print", instruction: "hi", team: undefined, timeout: 0.05, json: false, apiKey: undefined, resume: undefined, continueLast: false },
+      { kind: "print", instruction: "hi", team: undefined, timeout: 0.05, json: false, apiKey: undefined, resume: undefined },
     );
     expect(code).toBe(3);
     expect(handle.stop).toHaveBeenCalled();
@@ -103,7 +103,7 @@ describe("runPrint", () => {
       teamId,
       leaderKey,
       [leaderKey, workerKey],
-      { kind: "print", instruction: "hi", team: undefined, timeout: 2, json: false, apiKey: undefined, resume: undefined, continueLast: false },
+      { kind: "print", instruction: "hi", team: undefined, timeout: 2, json: false, apiKey: undefined, resume: undefined },
     );
     const elapsed = Date.now() - start;
     expect(code).toBe(0);
@@ -140,7 +140,7 @@ describe("runPrint", () => {
       teamId,
       leaderKey,
       [leaderKey],
-      { kind: "print", instruction: "hi", team: undefined, timeout: 2, json: false, apiKey: undefined, resume: undefined, continueLast: false },
+      { kind: "print", instruction: "hi", team: undefined, timeout: 2, json: false, apiKey: undefined, resume: undefined },
     );
     const elapsed = Date.now() - start;
     expect(code).toBe(0);
@@ -187,7 +187,7 @@ describe("runPrint", () => {
       teamId,
       leaderKey,
       [leaderKey],
-      { kind: "print", instruction: "hi", team: undefined, timeout: 5, json: false, apiKey: undefined, resume: undefined, continueLast: false },
+      { kind: "print", instruction: "hi", team: undefined, timeout: 5, json: false, apiKey: undefined, resume: undefined },
     );
     expect(code).toBe(0);
     const concatenated = writes.join("");

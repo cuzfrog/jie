@@ -163,13 +163,13 @@ function interceptTeam(args: ReadonlyArray<string>, deps: CommandHandlerDeps): I
     return { kind: "reply", text: "loading team list…" };
   }
   const argument = args[0]!;
-  void deps.platform.execute({ name: "switchTeam", teamId: argument })
+  void deps.platform.execute({ name: "setDefaultTeam", teamId: argument })
     .then(() => undefined, (error: unknown) => {
       const code = error instanceof JiePlatformError ? error.code : undefined;
-      const message = code === "TEAM_NOT_FOUND" ? `team '${argument}' not found` : `loadTeam(${argument}) failed`;
+      const message = code === "TEAM_NOT_FOUND" ? `team '${argument}' not found` : `setDefaultTeam(${argument}) failed`;
       deps.stateStore.dispatch(Actions.setErrorMessage(message));
     });
-  return { kind: "reply", text: `loaded team '${argument}'` };
+  return { kind: "reply", text: `default team set to '${argument}'; restart jie to take effect` };
 }
 
 const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn>([

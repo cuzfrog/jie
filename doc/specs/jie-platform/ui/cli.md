@@ -4,12 +4,11 @@ The `jie` binary is the single entry point for all user interaction. It runs as 
 
 ## Flag Parsing Rules
 
-The hand-rolled CLI parser applies these rules uniformly to every flag across `jie`, `jie -p`, `jie login`, `jie logout`, `jie model`, `jie team`, and the resume/continue variants:
+The hand-rolled CLI parser applies these rules uniformly to every flag across `jie`, `jie -p`, `jie login`, `jie logout`, `jie model`, `jie team`:
 
-- **Duplicate flag is an error.** If the same flag appears more than once on the command line (e.g. `jie -p "..." --team alpha --team beta`, or `jie --api-key k1 --api-key k2`), the CLI exits 1 with `duplicate flag: --<flag>` and does not start the team. The user fixes the command line and re-runs. The "last one wins" shell convention is **not** used; the CLI surfaces the duplicate rather than silently picking one. This applies to every flag — including `--team`, `--api-key`, `--timeout`, `--json`, `--resume`, `--continue`, and the subcommand flags.
+- **Duplicate flag is an error.** If the same flag appears more than once on the command line (e.g. `jie -p "..." --team alpha --team beta`, or `jie --api-key k1 --api-key k2`), the CLI exits 1 with `duplicate flag: --<flag>` and does not start the team. The user fixes the command line and re-runs. The "last one wins" shell convention is **not** used; the CLI surfaces the duplicate rather than silently picking one. This applies to every flag — including `--team`, `--api-key`, `--timeout`, `--json`, `--resume`, and the subcommand flags.
 - **Missing required argument is an error.** If a flag that requires an argument (e.g. `--team <id>`, `--api-key <key>`, `--resume <session_id>`, `--model <provider>/<modelId>`) is given without the argument, the CLI exits 1 with `missing argument for --<flag>`.
 - **Flag ordering is normalized before any side effect.** The CLI parses all flags into a normalized record before executing any side-effecting step. `--api-key <key>` writes `auth.json` before the rest of the flow runs, regardless of position on the command line. `jie -p "..." --api-key <key>` and `jie --api-key <key> -p "..."` behave identically: the API key is in `auth.json` before `-p` resolves the model and starts the LLM call. This is a hard rule — without it, `-p` would race against the just-written credential.
-- **`--resume` and `--continue` are mutually exclusive.** Per `jie --resume / jie --continue` below.
 
 ## Config Discovery
 
@@ -24,7 +23,7 @@ jie [--team <id>]
 ```
 
 **Behavior:**
-1. Walk up from CWD to find `.jie/`. Load `.jie/settings.json` if present; deep-merge with `~/.jie/settings.json`. If absent, the platform still proceeds — the model pre-check in step 6 will fail with a clear pointer to `jie model` if any agent has no explicit `model:`.
+1. Walk up from CWD to find `.jie/`. Load `.jie/settings.json` if present; deep-merge with `~/.jie/settings.json`. If absent, the platform still proceeds — model resolution falls through to the per-team `system.error` event during `handle.start()` (see `06-agent-model.md` "Team Loading").
 2. Validate `settings.json`. On error → exit 1.
 3. Resolve team:
    - If `--team <id>` is given → use `<id>`; hard fail if not installed.
@@ -32,14 +31,14 @@ jie [--team <id>]
    - Else pick first-available user team alphabetically across `.jie/teams/*` and `~/.jie/teams/*`.
    - Else use the platform's built-in minimal team (`packages/jie-platform/team/built-in/minimal-team.ts`, see `minimal-team.md`). The platform always has a runnable team.
 4. Open `ArtifactStore` (SQLite at the `.jie/storage.db` discovered by walking up from CWD — same walk as settings/team lookup per `10-configuration.md` "Discovery"; create `.jie/` at the walk's root if absent). On failure → exit 1.
-5. **Model pre-check**: walk every agent in the blueprint and resolve `(provider, modelId)`. If any agent fails (no `model:` in its `.md`, and the merged `settings.json` does not provide a resolvable default), startup exits 1 with one error listing every unresolved agent.
+5. `createJiePlatform` returns the handle. The CLI subscribes to `system.error` (which surfaces per-team load failures during `start()`), then `await handle.start()` triggers `TeamManager.loadAll()`. Teams whose souls fail to resolve publish `system.error` and are omitted from `handle.teams`; the CLI's `resolveTeam` falls back to `"minimal"` if the requested id is missing. The CLI does **not** fail-fast on missing models — it WARNs and proceeds with whatever loaded.
 6. (MCP server connection — Day 2+. Per ADR 15, MCP client integration is out of scope for v0.2; this step is a no-op in v0.2.)
 7. Instantiate and start `AgentBody` for each role.
 8. Import `jie-tui`, pass the `JiePlatform` facade, start TUI. The TUI's `createTui(deps, options)` takes `deps = { platform: JiePlatform }` and reads `platform.events.subscribe(...)`, `platform.userPrompt(...)`, `platform.interrupt()`, `platform.loadTeam(...)`, `platform.getGitStatus()`, and the slash-command operations directly from the facade. The TUI's role stems and per-agent roster come from the `system.team.loaded` event on the bus (per ADR 25).
 9. TUI is the main event loop — renders agent streams, tool calls, pipeline events. User prompts flow through `platform.userPrompt(agentKey, prompt)`, which derives `teamId` from `platform.team.id` and constructs the `user.prompt` envelope per the wire-format contract in `02-protocol-stack.md` "Prompt Ingress" and `ui/tui-overview.md` "Role".
 10. Block until TUI exits or SIGINT. Graceful shutdown (10s bounded) stops all loaded teams.
 
-**Exit codes:** 0 (normal exit), 1 (config error, team not found, model pre-check failure, agent load failure).
+**Exit codes:** 0 (normal exit), 1 (config error, team not found, agent load failure, `--resume <id>` validation failure, fallback team missing).
 
 ---
 
@@ -65,10 +64,10 @@ jie --print <instruction> [--team <id>] [--timeout <seconds>] [--json]
 ### Behavior
 
 1. Walk up from CWD to find `.jie/`. Load `.jie/settings.json` if present; deep-merge with `~/.jie/settings.json`.
-2. Validate `settings.json`. Resolve team (applying `--team <id>` override if given). Open `ArtifactStore` at the `.jie/storage.db` discovered by walking up from CWD (same walk as settings/team lookup per `10-configuration.md` "Discovery"; create `.jie/` at the walk's root if absent). MCP server connection: skipped in v0.2 (Day 2+). (Same as `jie` steps 2–6, including the model pre-check.)
-3. Instantiate and start `AgentBody` for each role. The handle publishes `system.team.loaded` for the startup team once all bodies' `start()` returns (per ADR 22).
-4. Resolve the leader's role from the loaded team's `TEAM.md` (`leader:` field) and the per-role `agent_key` for that role (per v1's `{role}-{N}` convention: `<leader_role>-1`). Subscribe to `agent.stream.chunk` events; filter for `sender.identity.teamId === <startup_team_id> && sender.identity.agentRole === <leader_role>`. (The `agent.stream.end` event is published at the end of every LLM stream by the leader — the CLI does **not** subscribe to it; the local idle gate is the source of truth for "work done", not a stream-end check.)
-5. **Set up the local idle gate.** After `createJiePlatform()` returns and bodies are started, the CLI uses the `system.team.loaded` event payload's `agents` array to build the gate's initial state. **If the `system.team.loaded` event's `agents` array is empty** (the loaded team has no agents — possible if the team directory has no `.md` files, per the "empty team" rule in `06-agent-model.md` "Parse Errors"), the CLI exits 1 with `team '<id>' has no agents to run; check the team manifest` and does not enter the gate. Otherwise, for each loaded body, the gate's state is initialized to `'idle'` (the default state per the Event-Order Contract). The CLI then subscribes to the `agent.turn.start` and `agent.idle` topics on `handle.bus`. On every event, the CLI updates the corresponding body's state and evaluates the gate. The gate is a local state machine — it lives in CLI code, not on the platform.
+2. Validate `settings.json`. Resolve team (applying `--team <id>` override if given). Open `ArtifactStore` at the `.jie/storage.db` discovered by walking up from CWD (same walk as settings/team lookup per `10-configuration.md` "Discovery"; create `.jie/` at the walk's root if absent). MCP server connection: skipped in v0.2 (Day 2+). `createJiePlatform` returns a handle whose `teams` map is empty until `handle.start()` resolves.
+3. `await handle.start()` triggers `TeamManager.loadAll()`. Per loaded team, the handle publishes `system.team.loaded` once all bodies' `start()` returns (per ADR 22). Per failed team, the platform publishes `system.error` with `team '<id>' failed to load: <reason>`; the CLI's `createApp` forwards that to stderr as a warning and continues.
+4. Resolve the leader's role from the chosen `TeamIdentity.agents` array (`agent.isLeader === true`; fallback to first agent per `createApp.pickLeader`). Get the per-role `agent_key` for that role (per v1's `{role}-{N}` convention: `<leader_role>-1`). Subscribe to `agent.stream.chunk` events; filter for `sender.identity.teamId === <startup_team_id> && sender.identity.agentRole === <leader_role>`. (The `agent.stream.end` event is published at the end of every LLM stream by the leader — the CLI does **not** subscribe to it; the local idle gate is the source of truth for "work done", not a stream-end check.)
+5. **Set up the local idle gate.** After `handle.start()` resolves, the CLI uses the resolved team's `TeamIdentity.agents` array to build the gate's initial state. **If the resolved `TeamIdentity.agents` array is empty** (the loaded team has no agents — possible if the team directory has no `.md` files, per the "empty team" rule in `06-agent-model.md` "Parse Errors"), the CLI exits 1 with `team '<id>' has no agents to run; check the team manifest` and does not enter the gate. Otherwise, for each loaded body, the gate's state is initialized to `'idle'` (the default state per the Event-Order Contract). The CLI then subscribes to the `agent.turn.start` and `agent.idle` topics on `handle.bus`. On every event, the CLI updates the corresponding body's state and evaluates the gate. The gate is a local state machine — it lives in CLI code, not on the platform.
 6. Publish the `EventEnvelope` (topic `user.prompt`) via `Events.userPrompt({ kind: "cli" }, startup_team_id, "<instruction>", leader_agent_key)`. The envelope's `topic` is `user.prompt`; `payload` is `{ teamId: startup_team_id, agentKey: leader_agent_key, prompt: "<instruction>" }`; `sender` is `{ kind: "cli" }` (the CLI is the publisher, not the target); `version` is `1`; `timestamp` is the current ISO 8601 string. The CLI fills every envelope field — there is no shorthand or partial-publish path. The full wire-format contract is in `03-event-system.md` "Event Envelope" and `02-protocol-stack.md` "Prompt Ingress".
 7. Print each stream chunk from the leader to stdout as it arrives.
 8. **Wait for the idle gate to open.** The gate opens when "for all loaded bodies, the state is `'idle'`". Because the gate is initialized with all bodies in the `'idle'` state, the gate does **not** open until at least one body has transitioned `'idle'` → `'busy'` → `'idle'` (every `'busy'` is preceded by a `'turn_start'` for the same body, and every `'idle'` is preceded by a `'busy'` — see the Event-Order Contract in `03-event-system.md`). The CLI awaits the gate (or `--timeout`, whichever fires first). On gate open: print final newline, call `handle.stop()`, exit 0. On timeout: `handle.stop()`, exit 3 with stderr message `"no response from team within {timeout}s"`. `--timeout` is the upper bound on the wait (default 300s; 0 = no timeout).
@@ -151,7 +150,7 @@ This mirrors pi's `getPackageDir()` / `VERSION` pattern (`@earendil-works/pi-cod
 jie --help
 ```
 
-Prints usage summary, subcommands (`-p`, `--print`, `login`, `logout`, `model`, `team`, `--resume`, `--continue`, `--version`, `--help`), exits 0. Does not load config.
+Prints usage summary, subcommands (`-p`, `--print`, `login`, `logout`, `model`, `team`, `--resume`, `--version`, `--help`), exits 0. Does not load config.
 
 ---
 
@@ -280,37 +279,22 @@ This flag is the `jie login --provider <id> --api-key <key>` flow inlined as a t
 5. Print `logged in to <provider>` to stdout.
 6. If `--api-key` is the only CLI flag, exit 0. Otherwise, continue with the remaining flags (e.g., `-p "..."`); the rest of this command's flow reads the just-written credential from `auth.json` via the standard chain (`10-configuration.md` Credentials Resolution Order).
 
-## `jie --resume [<session_id>]` / `jie --continue`
+## `jie --resume <session_id>`
 
 Continue a previous session. The `session_id` is passed to every `AgentBody` at construction, overriding the default "mint a new `session_id`" behavior (`08-memory.md`). The body calls `memory.restore(agent_key, session_id, team_id)` and resumes from the prior `memory_turns` rows for its `(team_id, agent_key)` pair.
 
 ```
 jie --resume <session_id>        # resume a specific session
-jie --continue                    # resume the most recent session for the current CWD's team
 ```
 
 ### Behavior
 
-The CLI does not run session-id SQL itself. It passes intent via `StartJieOptions` and `startJie` does the work (per ADR 20):
+The CLI does not run session-id SQL itself. It passes intent via `JiePlatformOptions` and the platform's `createJiePlatform` does the work (per ADR 20):
 
-- **`--resume <session_id>`**: CLI sets `StartJieOptions.resumeSessionId = <id>`. `startJie` validates via `memory.hasSession(team_id, session_id)`. If `false` → exit 1: `unknown session_id: <value>`. If `true` → `startJie` uses the value and records it in the handle's `Map<team_id, session_id>`.
-- **`--continue`**: CLI sets `StartJieOptions.continueLastSession = true`. `startJie` queries `memory.mostRecentSessionId(team_id)` — a single SQL statement against `memory_turns` scoped to the current team's `team_id`:
+- **`--resume <session_id>`**: CLI sets `JiePlatformOptions.resumeSessionId = <id>`. The platform validates via `memory.hasSession(team_id, session_id)`. If `false` → exit 1: `unknown session_id: <value>`. If `true` → the platform records the value in its `Map<team_id, session_id>` and threads it to every body.
+- **No flag**: `createJiePlatform` mints a fresh `session_id` and records it in the platform's `Map<team_id, session_id>`.
 
-  ```sql
-  SELECT session_id
-  FROM memory_turns
-  WHERE team_id = ?
-  GROUP BY session_id
-  ORDER BY MAX(created_at) DESC
-  LIMIT 1;
-  ```
+The TUI does not have a slash-command equivalent: opening `jie` (without `--resume`) starts a new session. The platform keeps each team's bodies running once started, so team-to-team conversation history persists mid-process across the team's lifetime.
 
-  The `idx_memory_turns_team_session_created` index on `(team_id, session_id, created_at)` makes this an index-only scan. The lookup is CWD-scoped — there is no cross-CWD session index in v1. The algorithm does not distinguish "liveness" states — a session with one row and a session with thousands are both valid candidates; the most recent by `MAX(created_at)` wins. If no rows match (no prior session in this CWD's DB for the current team), `startJie` emits **WARN to stderr** (`no prior session in this directory; starting a new session`) and mints a fresh `session_id` (ULID via `ulid@2.3.0`) per `08-memory.md` "Restore" and ADR 18. `--continue` is non-fatal: the absence of a prior session is not an error.
-- **Neither flag**: `startJie` mints a fresh `session_id` and records it in the handle's `Map<team_id, session_id>`.
-
-The TUI does not have a slash-command equivalent: opening `jie` (without `--resume`/`--continue`) starts a new session. The TUI's team-swap behavior preserves conversation history mid-session without these flags (see `10-configuration.md` "Team Swap"); `--resume`/`--continue` are for cross-process-run continuation.
-
-**Mutually exclusive.** `--resume` and `--continue` are alternative ways to specify a `session_id`; combining them is a user error. If both flags appear on the same command line, the CLI exits 1 with: `cannot use --resume and --continue together`. The user removes one and re-runs. The CLI does not silently pick one (no last-flag-wins, no `--resume` precedence over `--continue`).
-
-**Exit codes:** 0 (success, including the `--continue` no-prior-session WARN-and-proceed case), 1 (unknown session_id for `--resume`, `memory_turns` read error, `--resume` and `--continue` both given).
+**Exit codes:** 0 (success); 1 (unknown session_id for `--resume`, `memory_turns` read error).
 

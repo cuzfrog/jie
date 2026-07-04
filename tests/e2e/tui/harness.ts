@@ -17,14 +17,15 @@ interface TestBus {
 }
 
 function makePlatform(publish: Publish, subscribe: Subscribe, initialTeamId: string): JiePlatform {
-  const team: { id: string; agents: ReadonlyArray<never> } = { id: initialTeamId, agents: [] };
+  const teams = new Map<string, { id: string; agents: ReadonlyArray<never> }>([
+    [initialTeamId, { id: initialTeamId, agents: [] }],
+  ]);
   const execute: JiePlatform["execute"] = async (cmd) => {
     switch (cmd.name) {
-      case "switchTeam": {
-        const c = cmd as { name: "switchTeam"; teamId: string };
-        team.id = c.teamId;
-        return [];
-      }
+      case "setDefaultTeam":
+        return null;
+      case "unsetDefaultTeam":
+        return null;
       case "getTeamInfo":
         return { defaultTeam: null, installed: [] };
       case "getGitStatus":
@@ -34,11 +35,13 @@ function makePlatform(publish: Publish, subscribe: Subscribe, initialTeamId: str
     }
   };
   return {
-    team,
+    teams,
+    settings: {},
+    start: noopAsync,
     stop: noopAsync,
     subscribe,
-    prompt: (agentKey: string, text: string) => {
-      publish(Events.userPrompt({ kind: "user" }, team.id, text, agentKey));
+    prompt: (teamId: string, agentKey: string, text: string) => {
+      publish(Events.userPrompt({ kind: "user" }, teamId, text, agentKey));
     },
     interrupt: () => undefined,
     execute,

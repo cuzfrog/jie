@@ -44,12 +44,8 @@ interface PrintArgv {
   json?: boolean;
   apiKey?: string;
   resume?: string;
-  continueLast?: boolean;
 }
 
-/** Builds the argv for `jie -p "<instruction>" [...]` from a
- *  `PrintArgv` shape. Mirrors the field-to-flag mapping in
- *  `cli-flags.ts:parsePrint`. */
 function printArgv(p: PrintArgv): string[] {
   const argv: string[] = ["-p", p.instruction];
   if (p.team !== undefined) argv.push("--team", p.team);
@@ -57,7 +53,6 @@ function printArgv(p: PrintArgv): string[] {
   if (p.json === true) argv.push("--json");
   if (p.apiKey !== undefined) argv.push("--api-key", p.apiKey);
   if (p.resume !== undefined) argv.push("--resume", p.resume);
-  if (p.continueLast === true) argv.push("--continue");
   return argv;
 }
 

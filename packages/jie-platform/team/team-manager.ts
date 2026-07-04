@@ -9,12 +9,12 @@ import { type ModelRegistry } from "../config";
 import { type ToolRegistry } from "../tools";
 import { type AgentSoul, type TeamBlueprint, type TeamBlueprintLocation } from "./types";
 import { type TeamRegistry, createTeamRegistry } from "./registry";
+import type { TeamIdentity } from "../types";
 
 export interface TeamManagerOptions {
   readonly homeJieDir: string;
   readonly projectJieDir: string | null;
   readonly resumeSessionId?: string;
-  readonly continueLastSession?: boolean;
 }
 
 export interface TeamManagerDeps {
@@ -27,7 +27,8 @@ export interface TeamManagerDeps {
 }
 
 export interface TeamManager {
-  load(teamId?: string): Promise<ReadonlyArray<AgentIdentity>>;
+  load(teamId?: string): Promise<TeamIdentity>;
+  loadAll(): Promise<ReadonlyMap<string, TeamIdentity>>;
   listInstalled(): string[];
   locate(teamId: string): TeamBlueprintLocation;
   agents(teamId: string): ReadonlyArray<AgentIdentity>;
@@ -43,11 +44,11 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
   const loadedTeams = new Map<string, AgentBody[]>();
   const sessionIds = new Map<string, string>();
 
-  async function loadImpl(teamId?: string): Promise<ReadonlyArray<AgentIdentity>> {
+  async function loadImpl(teamId?: string): Promise<TeamIdentity> {
     const resolvedId = teamId ?? "minimal";
     const existing = loadedTeams.get(resolvedId);
     if (existing !== undefined) {
-      return existing.map((b) => b.identity);
+      return { id: resolvedId, agents: existing.map((b) => b.identity) };
     }
     const blueprint: TeamBlueprint = teamRegistry.parseTeamManifest(resolvedId);
     const sessionId = resolveSessionId(resolvedId);
@@ -78,7 +79,23 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
     }
     loadedTeams.set(resolvedId, bodies);
     publishTeamLoaded(resolvedId, blueprint);
-    return bodies.map((b) => b.identity);
+    return { id: resolvedId, agents: bodies.map((b) => b.identity) };
+  }
+
+  async function loadAll(): Promise<ReadonlyMap<string, TeamIdentity>> {
+    const teams = new Map<string, TeamIdentity>();
+    for (const id of teamRegistry.listInstalled()) {
+      try {
+        const team = await loadImpl(id);
+        teams.set(team.id, team);
+      } catch (error) {
+        if (error instanceof JiePlatformError && error.code === "UNKNOWN_SESSION") throw error;
+        const message = error instanceof Error ? error.message : String(error);
+        eventManager.publish(Events.systemError({ kind: "system" }, `team '${id}' failed to load: ${message}`));
+        continue;
+      }
+    }
+    return teams;
   }
 
   function resolveSessionId(teamId: string): string {
@@ -91,14 +108,6 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
         });
       }
       return options.resumeSessionId;
-    }
-    if (options.continueLastSession === true) {
-      const recent = memoryManager.mostRecentSessionId(teamId);
-      if (recent === null) {
-        console.warn("no prior session in this directory; starting a new session");
-        return ulid();
-      }
-      return recent;
     }
     return ulid();
   }
@@ -143,6 +152,7 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
 
   return {
     load: (teamId?: string) => Promise.resolve().then(() => loadImpl(teamId)),
+    loadAll,
     listInstalled() {
       return teamRegistry.listInstalled();
     },

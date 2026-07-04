@@ -1,4 +1,4 @@
-import { JiePlatformError, type AgentIdentity, type JiePlatform } from "@cuzfrog/jie-platform";
+import { JiePlatformError, type AgentIdentity, type JiePlatform, type Settings, type TeamIdentity } from "@cuzfrog/jie-platform";
 import { createApp, type AppArgs } from "./app";
 
 function appArgs(partial: Partial<AppArgs> = {}): AppArgs {
@@ -10,21 +10,18 @@ function appArgs(partial: Partial<AppArgs> = {}): AppArgs {
     teamId: undefined,
     apiKey: undefined,
     resume: undefined,
-    continueLast: false,
     ...partial,
   };
 }
 
-function makeMockPlatform(overrides: Partial<{
-  teamId: string;
-  agents: ReadonlyArray<AgentIdentity>;
+function makeMockPlatform(teams: ReadonlyMap<string, TeamIdentity>, overrides: Partial<{
   execute: JiePlatform["execute"];
+  settings: Settings;
 }> = {}): JiePlatform {
   return {
-    team: {
-      id: overrides.teamId ?? "minimal",
-      agents: overrides.agents ?? [],
-    },
+    teams,
+    settings: overrides.settings ?? {},
+    start: vi.fn(async () => { }),
     stop: vi.fn(async () => { }),
     subscribe: vi.fn(() => () => { }),
     prompt: vi.fn(),
@@ -33,11 +30,22 @@ function makeMockPlatform(overrides: Partial<{
   };
 }
 
+function makeAgents(items: ReadonlyArray<{ role: string; isLeader?: boolean }>): ReadonlyArray<AgentIdentity> {
+  return items.map((i, idx) => ({
+    teamId: "minimal",
+    role: i.role,
+    agentKey: `${i.role}-1`,
+    isLeader: i.isLeader ?? idx === 0,
+  }));
+}
+
 describe("createApp — guard rails", () => {
-  test("empty team guard: platform throws EMPTY_TEAM, createApp returns error code 1 with the message", async () => {
-    const createPlatform = vi.fn(async () => {
-      throw new JiePlatformError("EMPTY_TEAM", { detail: "team 'empty' has no agents to run; check the team manifest" });
-    });
+  test("requested team is missing and no minimal fallback: returns error code 1", async () => {
+    const teams = new Map<string, TeamIdentity>([
+      ["ghost", { id: "ghost", agents: makeAgents([{ role: "general" }]) }],
+    ]);
+    const platform = makeMockPlatform(teams);
+    const createPlatform = vi.fn(async () => platform);
     const writeErr = vi.spyOn(console, "error").mockImplementation(() => { });
     const result = await createApp(
       appArgs({ teamId: "empty" }),
@@ -47,37 +55,57 @@ describe("createApp — guard rails", () => {
     if (result.kind === "error") {
       expect(result.code).toBe(1);
     }
-    const messages = writeErr.mock.calls.map((c) => String(c[0]));
-    expect(messages.some((m) => m.includes("no agents to run"))).toBe(true);
+    expect(writeErr).toHaveBeenCalled();
     writeErr.mockRestore();
   });
 
-  test("no-leader guard: platform throws NO_LEADER, createApp returns error code 1", async () => {
-    const createPlatform = vi.fn(async () => {
-      throw new JiePlatformError("NO_LEADER", { detail: "team 'lonely' has no leader; check TEAM.md's 'leader:' field" });
-    });
-    const writeErr = vi.spyOn(console, "error").mockImplementation(() => { });
+  test("missing requested team falls back to minimal with a warning", async () => {
+    const teams = new Map<string, TeamIdentity>([
+      ["minimal", { id: "minimal", agents: makeAgents([{ role: "general" }]) }],
+    ]);
+    const platform = makeMockPlatform(teams, { settings: { defaultTeam: "minimal" } });
+    const createPlatform = vi.fn(async () => platform);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => { });
     const result = await createApp(
-      appArgs({ teamId: "lonely" }),
+      appArgs({ teamId: "missing" }),
       createPlatform,
     );
+    expect(result.kind).toBe("ok");
+    if (result.kind === "ok") {
+      expect(result.app.teamId).toBe("minimal");
+    }
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  test("leader-less team throws NO_LEADER on createApp", async () => {
+    const lonely = makeAgents([]);
+    const teams = new Map<string, TeamIdentity>([
+      ["minimal", { id: "minimal", agents: lonely }],
+    ]);
+    const platform = makeMockPlatform(teams);
+    const createPlatform = vi.fn(async () => platform);
+    const writeErr = vi.spyOn(console, "error").mockImplementation(() => { });
+    const result = await createApp(appArgs(), createPlatform);
     expect(result.kind).toBe("error");
     if (result.kind === "error") {
       expect(result.code).toBe(1);
     }
-    const messages = writeErr.mock.calls.map((c) => String(c[0]));
-    expect(messages.some((m) => m.includes("no leader"))).toBe(true);
+    expect(writeErr).toHaveBeenCalled();
     writeErr.mockRestore();
   });
 
   test("happy path: platform returns team with leader, createApp returns ok with leaderKey/agentKeys", async () => {
-    const platform = makeMockPlatform({
-      teamId: "minimal",
-      agents: [
-        { teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true },
-        { teamId: "minimal", role: "helper", agentKey: "helper-1", isLeader: false },
-      ],
-    });
+    const teams = new Map<string, TeamIdentity>([
+      ["minimal", {
+        id: "minimal",
+        agents: makeAgents([
+          { role: "general", isLeader: true },
+          { role: "helper", isLeader: false },
+        ]),
+      }],
+    ]);
+    const platform = makeMockPlatform(teams, { settings: { defaultTeam: "minimal" } });
     const createPlatform = vi.fn(async () => platform);
     const result = await createApp(appArgs(), createPlatform);
     expect(result.kind).toBe("ok");
@@ -89,7 +117,10 @@ describe("createApp — guard rails", () => {
   });
 
   test("apiKey: setApiKey NO_DEFAULT_PROVIDER surfaces friendly error and stops platform", async () => {
-    const platform = makeMockPlatform({
+    const teams = new Map<string, TeamIdentity>([
+      ["minimal", { id: "minimal", agents: makeAgents([{ role: "general" }]) }],
+    ]);
+    const platform = makeMockPlatform(teams, {
       execute: vi.fn(async () => {
         throw new JiePlatformError("NO_DEFAULT_PROVIDER", {
           detail: "run 'jie model <provider>/<modelId>' first, or use 'jie login --provider <id> --api-key <key>'",

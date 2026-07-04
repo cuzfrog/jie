@@ -35,7 +35,7 @@ export async function runTeam(
   }
   const teamId = parsed.teamId!;
   try {
-    await platform.execute({ name: "switchTeam", teamId });
+    await platform.execute({ name: "setDefaultTeam", teamId });
   } catch (error) {
     if (error instanceof JiePlatformError && error.code === "TEAM_NOT_FOUND") {
       console.error(
@@ -45,6 +45,6 @@ export async function runTeam(
     }
     throw error;
   }
-  console.log(`loaded team '${teamId}'`);
+  console.log(`default team set to '${teamId}'`);
   return 0;
 }

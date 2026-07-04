@@ -1,10 +1,13 @@
-import { JiePlatformError, type JiePlatform } from "@cuzfrog/jie-platform";
+import { JiePlatformError, type JiePlatform, type Settings, type TeamIdentity } from "@cuzfrog/jie-platform";
 import { runModel, runTeam } from "./settings";
 
 function makePlatform(): { platform: JiePlatform; execute: ReturnType<typeof vi.fn> } {
   const execute = vi.fn(async () => null);
+  const settings: Settings = {};
+  const teams = new Map<string, TeamIdentity>();
   const platform = {
-    team: { id: "minimal", agents: [] },
+    teams,
+    settings,
     stop: vi.fn<() => Promise<void>>(() => Promise.resolve()),
     subscribe: vi.fn(),
     prompt: vi.fn(),
@@ -58,13 +61,13 @@ describe("runModel", () => {
 });
 
 describe("runTeam", () => {
-  test("dispatches switchTeam when teamId is given", async () => {
+  test("dispatches setDefaultTeam when teamId is given", async () => {
     const { platform, execute } = makePlatform();
-    execute.mockImplementationOnce(async () => []);
+    execute.mockImplementationOnce(async () => null);
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
     const code = await runTeam({ kind: "team", teamId: "dev", unset: false }, platform);
     expect(code).toBe(0);
-    expect(execute).toHaveBeenCalledWith({ name: "switchTeam", teamId: "dev" });
+    expect(execute).toHaveBeenCalledWith({ name: "setDefaultTeam", teamId: "dev" });
     logSpy.mockRestore();
   });
 
@@ -93,7 +96,6 @@ describe("runTeam", () => {
   test("prints defaultTeam and installed list when no arg", async () => {
     const { platform, execute } = makePlatform();
     execute.mockImplementationOnce(async () => ({
-      kind: "info" as const,
       defaultTeam: "dev",
       installed: ["minimal", "alpha", "beta"],
     }));
@@ -109,7 +111,6 @@ describe("runTeam", () => {
   test("prints defaultTeam: unset when none is set", async () => {
     const { platform, execute } = makePlatform();
     execute.mockImplementationOnce(async () => ({
-      kind: "info" as const,
       defaultTeam: null,
       installed: ["minimal"],
     }));

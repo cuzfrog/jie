@@ -254,15 +254,15 @@ describe("createTuiCommandHandler — /team", () => {
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("unset")));
   });
 
-  test("/team <id> dispatches team switch and replies 'loaded team'", async () => {
+  test("/team <id> dispatches setDefaultTeam and replies 'default team set'", async () => {
     const { platform, execute } = makePlatform();
     execute.mockImplementation(async () => undefined);
     const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team alpha");
     await new Promise((r) => setImmediate(r));
-    expect(execute).toHaveBeenCalledWith({ name: "switchTeam", teamId: "alpha" });
-    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("loaded team 'alpha'")));
+    expect(execute).toHaveBeenCalledWith({ name: "setDefaultTeam", teamId: "alpha" });
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("default team set to 'alpha'")));
   });
 
   test("/team <id> surfaces TEAM_NOT_FOUND as 'not found' message", async () => {
@@ -274,7 +274,7 @@ describe("createTuiCommandHandler — /team", () => {
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team ghost");
     await new Promise((r) => setImmediate(r));
-    expect(execute).toHaveBeenCalledWith({ name: "switchTeam", teamId: "ghost" });
+    expect(execute).toHaveBeenCalledWith({ name: "setDefaultTeam", teamId: "ghost" });
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("team 'ghost' not found"));
   });
 });

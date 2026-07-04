@@ -58,7 +58,7 @@ For v1, three fields are recognized. Other fields are tolerated and ignored (for
 
 **Unknown field policy.** Unrecognized top-level fields in `settings.json` are tolerated (warned, ignored) so future Jie versions can land new settings without breaking old files. Unrecognized *values* for recognized fields follow the same policy where it makes sense — e.g. `defaultProvider: "not-a-real-provider"` is WARN+ignore (treat the field as absent; model resolution falls through to per-agent `model:`, and if none, surfaces "No model has been selected" at startup pre-check). `jie model <provider>/<modelId>` similarly warns but still writes the user's choice. Shape errors (e.g. `defaultProvider: 42`, `defaultTeam: ["foo"]`) remain a hard fail — those are malformed JSON, not unfamiliar values.
 
-The TypeScript type consumed by the platform (per `StartJieOptions.settings` in `addrs/15-platform-entry-function.md`):
+The TypeScript type consumed by the platform (loaded by `SettingsStore` at startup; surfaced on `JiePlatform.settings` per ADR 13):
 
 ```typescript
 // packages/jie-platform/types/settings.ts
@@ -246,10 +246,10 @@ MCP servers are configured in `.jie/mcp.json` (project-level; `~/.jie/mcp.json` 
 | `url` | string | Required for http transport. |
 | `auth.token_env` | string | Optional. Name of an env var containing a bearer token. **This is the MCP server's auth token, not the LLM provider's API key** — `auth.json` is the sole LLM credential source in v1 (per ADR 21); the no-env-var rule does not apply to MCP server auth. |
 
-The TypeScript type consumed by the platform (per `StartJieOptions.mcpServers` in `addrs/15-platform-entry-function.md`):
+The TypeScript type consumed by the platform (forward-looking — used by `createJiePlatform` once the MCP client lands per ADR 15):
 
 ```typescript
-// packages/jie-platform/types/mcp.ts (forward-looking — used by startJie once the MCP client lands)
+// packages/jie-platform/types/mcp.ts (forward-looking — used by createJiePlatform once the MCP client lands)
 
 export interface McpServerConfig {
   transport:  'stdio' | 'http';
@@ -332,13 +332,13 @@ A model's `(provider, modelId)` tuple is resolved at startup, before any `AgentS
 |1 | `model: <provider>/<modelId>` in agent `.md` frontmatter | Always wins when present. Team author pinned this agent explicitly. |
 |2 | Merged settings: `defaultProvider` + `defaultModel` | Agent has no `model:`; user has set both fields. |
 |3 | Merged settings: `defaultProvider` only | Agent has no `model:`; user has set only the provider. Model id is taken from `@earendil-works/pi-ai`'s `defaultModelPerProvider[defaultProvider]`. |
-|4 | (none) | **Hard fail** at startup pre-check — see `06-agent-model.md` "Startup Pre-Check". |
+|4 | (none) | **No** model resolved; `TeamManager.loadAll()` publishes `system.error` with `team '<id>' failed to load: NO_MODEL_ERROR` and the team is omitted from `handle.teams` — see `06-agent-model.md` "Team Loading". |
 
 The platform delegates the per-provider fallback in step3 to `pi-ai`'s built-in `defaultModelPerProvider` table. Jie does not maintain its own default-model table; if `pi-ai` ships an updated default for a provider, Jie inherits it on the next release with no spec change.
 
-`AgentSoul.model` is still a required field at the *type* level — it just may be inherited from settings rather than declared in the agent's `.md`. The startup pre-check (run by `startJie` during team construction) guarantees that by the time an `AgentSoul` is constructed, `soul.model` is a non-empty `<provider>/<modelId>` string. The platform's `getApiKey(provider)` resolver returns the entry from `auth.json` for the resolved provider (per ADR 21); pi-ai's `getEnvApiKey` is no longer used.
+`AgentSoul.model` is still a required field at the *type* level — it just may be inherited from settings rather than declared in the agent's `.md`. When a soul fails to resolve (row 4 above), the team is omitted from the loaded map rather than blocking startup — `handle.teams` carries only teams whose souls were successfully resolved. The platform's `getApiKey(provider)` resolver returns the entry from `auth.json` for the resolved provider (per ADR 21); pi-ai's `getEnvApiKey` is no longer used.
 
-`startJie` also performs the per-agent model pre-check (see `06-agent-model.md` "Startup Pre-Check"): if any agent fails to resolve a `(provider, modelId)` against the merged settings, startup fails with one error listing every unresolved agent.
+Per-team model resolution is owned by `TeamManager.loadImpl` (called from `loadAll` during `handle.start()`); failures publish `system.error` rather than aborting startup, per `06-agent-model.md` "Team Loading".
 
 ## CLI / TUI Surface
 

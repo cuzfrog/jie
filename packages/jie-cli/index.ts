@@ -32,7 +32,7 @@ export async function main(argv: string[], cwd: string = process.cwd()): Promise
 async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<number> {
   const homeJieDir = join(homeDir, ".jie");
   const projectJieDir = findProjectJieDir(cwd);
-  const platformOptions = { workspace: cwd, homeJieDir, projectJieDir };
+  const platformOptions = { cwd, homeJieDir, projectJieDir };
   switch (args.kind) {
     case "help":
       printHelp();
@@ -80,7 +80,6 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<numb
         teamId: args.team,
         apiKey: args.apiKey,
         resume: args.resume,
-        continueLast: args.continueLast,
       });
       if (result.kind === "error") return result.code;
       return runPrint(result.app.handle, result.app.teamId, result.app.leaderKey, result.app.agentKeys, args);
@@ -93,7 +92,7 @@ function printHelp(): void {
 
 Usage:
   jie -p "<instruction>" [--team <id>] [--timeout <s>] [--json]
-                 [--api-key <key>] [--resume <id> | --continue]
+                 [--api-key <key>] [--resume <id>]
   jie --print "<instruction>" ...
 
   jie login --provider <id> --api-key <key>
@@ -102,7 +101,7 @@ Usage:
   jie team [<id>] | [--unset]
 
   jie --api-key <key>
-  jie --resume <session_id> | --continue
+  jie --resume <session_id>
 
   jie [--team <id>]                  # interactive TUI (not in v1 MVP)
   jie --version

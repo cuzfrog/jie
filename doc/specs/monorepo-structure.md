@@ -106,7 +106,7 @@ The platform's runtime dep set is small and fixed. Bun provides most of what the
 
 **No MCP SDK in v1.** Per ADR 15, MCP client integration is Day 2. `@modelcontextprotocol/sdk@1.29.0` (the standard) is **not** a v1 dep. The `mcp.json` schema in `10-configuration.md` is forward-looking; the platform's `startJie` does not load it in v1.
 
-**No CLI / utility libraries.** No `commander` / `yargs` / `lodash` / `picomatch` / `inquirer` / `chalk`. The v1 CLI surface is small (`-p`, `--team`, `--api-key`, `--resume`, `--continue`, `--version`, `--help`, plus `login` / `logout` / `model` / `team` subcommands); a 20-line manual parser over `Bun.argv` is smaller than the dep. Settings deep-merge is three top-level scalar fields; an 8-line function is smaller than `lodash.merge`. If the CLI grows, the swap to `commander` is a single-file change.
+**No CLI / utility libraries.** No `commander` / `yargs` / `lodash` / `picomatch` / `inquirer` / `chalk`. The v1 CLI surface is small (`-p`, `--team`, `--api-key`, `--resume`, `--version`, `--help`, plus `login` / `logout` / `model` / `team` subcommands); a 20-line manual parser over `Bun.argv` is smaller than the dep. Settings deep-merge is three top-level scalar fields; an 8-line function is smaller than `lodash.merge`. If the CLI grows, the swap to `commander` is a single-file change.
 
 ## Umbrella Package
 

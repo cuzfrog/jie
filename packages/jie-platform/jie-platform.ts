@@ -1,9 +1,8 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { type AgentIdentity } from "./core";
 import { type EventEnvelope, type EventManager, type EventType, Events, createEventManager } from "./event";
 import { type TeamManager, createTeamManager } from "./team";
-import { type ModelRegistry, type SettingsStore, makeAuthStore, makeSettingsStore, createModelRegistry } from "./config";
+import { type ModelRegistry, type Settings, type SettingsStore, makeAuthStore, makeSettingsStore, createModelRegistry } from "./config";
 import { type ToolRegistry, createToolRegistry } from "./tools";
 import {
   type ArtifactStore,
@@ -16,14 +15,13 @@ import {
 import { type Command, type CommandExecutor, type CommandName, type CommandResult, createCommandExecutor } from "./command";
 import { createGitService } from "./services";
 import { type TeamIdentity } from "./types";
+import type { Scope } from "./config";
 
 export interface JiePlatformOptions {
-  readonly workspace: string;
+  readonly cwd: string;
   readonly homeJieDir: string;
   readonly projectJieDir: string | null;
-  readonly teamId?: string;
   readonly resumeSessionId?: string;
-  readonly continueLastSession?: boolean;
 }
 
 export interface JiePlatformDeps {
@@ -36,69 +34,65 @@ export interface JiePlatformDeps {
   readonly artifactStore: ArtifactStore;
   readonly memoryManager: MemoryManager;
   readonly commandExecutor: CommandExecutor;
+  readonly defaultScope: Scope;
 }
 
 export interface JiePlatform {
-  readonly team: TeamIdentity;
+  readonly teams: ReadonlyMap<string, TeamIdentity>;
+  readonly settings: Settings;
+  start(): Promise<void>;
   stop(): Promise<void>;
 
-  subscribe<T extends EventType>(topic: T, callback: (event: EventEnvelope<T>) => void): () => void;
-  prompt(agentKey: string, text: string): void;
+  prompt(teamId: string, agentKey: string, text: string): void;
   interrupt(): void;
+
+  subscribe<T extends EventType>(topic: T, callback: (event: EventEnvelope<T>) => void): () => void;
   execute<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>>;
 }
 
-export async function createJiePlatform(options: JiePlatformOptions, dependencies: JiePlatformDeps = buildJiePlatformDeps(options)): Promise<JiePlatform> {
-  const initialTeamId = options.teamId ?? dependencies.settingsStore.load().defaultTeam ?? "minimal";
-  let activeTeamId = initialTeamId;
-  await dependencies.teamManager.load(activeTeamId);
+export async function createJiePlatform(options: JiePlatformOptions, deps: JiePlatformDeps = buildJiePlatformDeps(options)): Promise<JiePlatform> {
+  const settingsSnapshot: Settings = deps.settingsStore.load();
+  let teams: ReadonlyMap<string, TeamIdentity> = new Map();
+  let startPromise: Promise<void> | null = null;
 
   const handle: JiePlatform = {
-    team: {
-      get id(): string {
-        return activeTeamId;
-      },
-      get agents(): ReadonlyArray<AgentIdentity> {
-        return dependencies.teamManager.agents(activeTeamId);
-      },
+    get teams(): ReadonlyMap<string, TeamIdentity> {
+      return teams;
     },
+    settings: settingsSnapshot,
+
+    start(): Promise<void> {
+      if (startPromise === null) {
+        startPromise = (async (): Promise<void> => {
+          teams = await deps.teamManager.loadAll();
+        })();
+      }
+      return startPromise;
+    },
+
     stop: async (): Promise<void> => {
-      dependencies.teamManager.stop();
+      deps.teamManager.stop();
     },
 
     subscribe(topic, callback) {
-      return dependencies.eventManager.subscribe(topic, callback);
+      return deps.eventManager.subscribe(topic, callback);
     },
-    prompt(agentKey, text) {
-      const sender = { kind: "user" } as const;
-      dependencies.eventManager.publish(Events.userPrompt(sender, activeTeamId, text, agentKey));
+    prompt(teamId, agentKey, text) {
+      deps.eventManager.publish(Events.userPrompt({ kind: "user" }, teamId, text, agentKey));
     },
     interrupt() {
-      dependencies.eventManager.publish(Events.interrupt({ kind: "system" }));
+      deps.eventManager.publish(Events.interrupt({ kind: "system" }));
     },
     execute<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>> {
-      return runCommand(command);
+      return deps.commandExecutor.execute(command);
     },
   };
-
-  async function runCommand<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>> {
-    const c: Command = command;
-    switch (c.name) {
-      case "switchTeam": {
-        const agents = await dependencies.teamManager.load(c.teamId);
-        activeTeamId = c.teamId;
-        return agents;
-      }
-      default:
-        return await dependencies.commandExecutor.execute(c);
-    }
-  }
 
   return handle;
 }
 
 function buildJiePlatformDeps(options: JiePlatformOptions): JiePlatformDeps {
-  const cwd = options.workspace;
+  const cwd = options.cwd;
   const homeJieDir = options.homeJieDir;
   const projectJieDir = options.projectJieDir;
   mkdirSync(homeJieDir, { recursive: true, mode: 0o755 });
@@ -120,7 +114,7 @@ function buildJiePlatformDeps(options: JiePlatformOptions): JiePlatformDeps {
   const settingsStore = makeSettingsStore(cwd, homeJieDir, projectJieDir);
   const defaultScope: "global" | "project" = projectJieDir === null ? "global" : "project";
   const teamManager = createTeamManager(
-    { homeJieDir, projectJieDir, resumeSessionId: options.resumeSessionId, continueLastSession: options.continueLastSession },
+    { homeJieDir, projectJieDir, resumeSessionId: options.resumeSessionId },
     { eventManager, settingsStore, modelRegistry, toolRegistry, artifactStore, memoryManager },
   );
   const commandExecutor = createCommandExecutor({
@@ -129,7 +123,6 @@ function buildJiePlatformDeps(options: JiePlatformOptions): JiePlatformDeps {
     teamManager,
     gitService,
     defaultScope,
-    loadActiveTeam: () => Promise.resolve([]),
   });
   return {
     eventManager,
@@ -141,5 +134,6 @@ function buildJiePlatformDeps(options: JiePlatformOptions): JiePlatformDeps {
     artifactStore,
     memoryManager,
     commandExecutor,
+    defaultScope,
   };
 }

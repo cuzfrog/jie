@@ -1,8 +1,10 @@
 import {
   createJiePlatform,
   JiePlatformError,
+  type AgentIdentity,
   type JiePlatform,
   type JiePlatformOptions,
+  type TeamIdentity,
 } from "@cuzfrog/jie-platform";
 
 export interface App {
@@ -24,7 +26,6 @@ export interface AppArgs {
   readonly teamId?: string;
   readonly apiKey?: string;
   readonly resume?: string;
-  readonly continueLast?: boolean;
 }
 
 export async function createApp(
@@ -34,13 +35,16 @@ export async function createApp(
   let handle: JiePlatform;
   try {
     handle = await createPlatform({
-      workspace: args.cwd,
+      cwd: args.cwd,
       homeJieDir: args.homeJieDir,
       projectJieDir: args.projectJieDir,
-      teamId: args.teamId,
       resumeSessionId: args.resume,
-      continueLastSession: args.continueLast,
     });
+    handle.subscribe("system.error", (envelope) => {
+      if (envelope.payload === null) return;
+      console.warn(`jie: ${envelope.payload.error}`);
+    });
+    await handle.start();
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     return { kind: "error", code: 1 };
@@ -60,15 +64,48 @@ export async function createApp(
     }
   }
 
-  const agents = handle.team.agents;
-  const leader = agents.find((a) => a.isLeader) ?? agents[0]!;
+  const requestedTeam = args.teamId ?? handle.settings.defaultTeam ?? "minimal";
+  let team: TeamIdentity;
+  let agents: ReadonlyArray<AgentIdentity>;
+  let leader: AgentIdentity;
+  try {
+    team = resolveTeam(handle.teams, requestedTeam);
+    agents = team.agents;
+    leader = pickLeader(agents);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    await handle.stop();
+    return { kind: "error", code: 1 };
+  }
   return {
     kind: "ok",
     app: {
       handle,
-      teamId: handle.team.id,
+      teamId: team.id,
       leaderKey: leader.agentKey,
       agentKeys: agents.map((a) => a.agentKey),
     },
   };
+}
+
+function resolveTeam(teams: ReadonlyMap<string, TeamIdentity>, requested: string): TeamIdentity {
+  const found = teams.get(requested);
+  if (found !== undefined) return found;
+  const fallback = teams.get("minimal");
+  if (fallback !== undefined) {
+    console.warn(`team '${requested}' is not loaded; falling back to 'minimal'`);
+    return fallback;
+  }
+  throw new JiePlatformError("EMPTY_TEAM", {
+    detail: `team '${requested}' is not loaded and no 'minimal' fallback is available`,
+  });
+}
+
+function pickLeader(agents: ReadonlyArray<AgentIdentity>): AgentIdentity {
+  const leader = agents.find((a) => a.isLeader);
+  if (leader !== undefined) return leader;
+  if (agents.length > 0) return agents[0]!;
+  throw new JiePlatformError("NO_LEADER", {
+    detail: "team has no agents to designate a leader",
+  });
 }

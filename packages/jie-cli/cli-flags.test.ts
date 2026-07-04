@@ -91,7 +91,6 @@ describe("parseFlags — -p", () => {
       json: false,
       apiKey: undefined,
       resume: undefined,
-      continueLast: false,
     });
   });
 
@@ -104,7 +103,6 @@ describe("parseFlags — -p", () => {
       json: false,
       apiKey: undefined,
       resume: undefined,
-      continueLast: false,
     });
   });
 
@@ -117,7 +115,6 @@ describe("parseFlags — -p", () => {
       json: false,
       apiKey: undefined,
       resume: undefined,
-      continueLast: false,
     });
   });
 
@@ -130,7 +127,6 @@ describe("parseFlags — -p", () => {
       json: false,
       apiKey: undefined,
       resume: undefined,
-      continueLast: false,
     });
   });
 
@@ -161,7 +157,6 @@ describe("parseFlags — -p", () => {
       json: false,
       apiKey: "sk-x",
       resume: undefined,
-      continueLast: false,
     });
   });
 
@@ -169,14 +164,10 @@ describe("parseFlags — -p", () => {
     expect(parseFlags(["-p", "x", "--resume", "abc"])).toMatchObject({ resume: "abc" });
   });
 
-  test("-p with --continue", () => {
-    expect(parseFlags(["-p", "x", "--continue"])).toMatchObject({ continueLast: true });
-  });
-
-  test("-p with both --resume and --continue -> error", () => {
-    expect(parseFlags(["-p", "x", "--resume", "a", "--continue"])).toEqual({
+  test("--continue is rejected as an unknown flag", () => {
+    expect(parseFlags(["-p", "x", "--continue"])).toEqual({
       kind: "error",
-      message: "cannot use --resume and --continue together",
+      message: "unknown flag: --continue",
     });
   });
 

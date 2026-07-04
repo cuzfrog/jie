@@ -85,21 +85,23 @@ describe("createTeamManager — lifecycle", () => {
   });
 
   describe("load", () => {
-    test("load('minimal') returns the agent identities for the built-in team", async () => {
+    test("load('minimal') returns the built-in team's identity", async () => {
       const { manager } = makeManager(workspace, homeJieDir, null);
-      const identities = await manager.load("minimal");
-      expect(identities).toHaveLength(1);
-      expect(identities[0]?.role).toBe("general");
-      expect(identities[0]?.isLeader).toBe(true);
+      const team = await manager.load("minimal");
+      expect(team.id).toBe("minimal");
+      expect(team.agents).toHaveLength(1);
+      expect(team.agents[0]?.role).toBe("general");
+      expect(team.agents[0]?.isLeader).toBe(true);
     });
 
     test("load(undefined) defaults to the built-in team", async () => {
       const { manager } = makeManager(workspace, homeJieDir, null);
-      const identities = await manager.load();
-      expect(identities[0]?.role).toBe("general");
+      const team = await manager.load();
+      expect(team.id).toBe("minimal");
+      expect(team.agents[0]?.role).toBe("general");
     });
 
-    test("load is idempotent: a second call returns identities for the same team without rebuilding", async () => {
+    test("load is idempotent: a second call returns the same identity without rebuilding", async () => {
       const { manager } = makeManager(workspace, homeJieDir, null);
       const first = await manager.load("minimal");
       const second = await manager.load("minimal");
@@ -123,10 +125,10 @@ describe("createTeamManager — lifecycle", () => {
       mkdirSync(join(projectTeams, "dev"), { recursive: true });
       writeFileSync(join(projectTeams, "dev", "worker.md"), `---\ntools:\n  - bash\n---\nworker`);
       const { manager } = makeManager(workspace, homeJieDir, projJie);
-      const identities = await manager.load("dev");
-      expect(identities).toHaveLength(2);
-      const leader = identities.find((i) => i.role === "leader");
-      const worker = identities.find((i) => i.role === "worker");
+      const team = await manager.load("dev");
+      expect(team.agents).toHaveLength(2);
+      const leader = team.agents.find((i) => i.role === "leader");
+      const worker = team.agents.find((i) => i.role === "worker");
       expect(leader?.isLeader).toBe(true);
       expect(worker?.isLeader).toBe(false);
     });
@@ -135,8 +137,8 @@ describe("createTeamManager — lifecycle", () => {
   describe("agents", () => {
     test("returns the loaded team's identities", async () => {
       const { manager } = makeManager(workspace, homeJieDir, null);
-      const identities = await manager.load("minimal");
-      expect(manager.agents("minimal")).toEqual(identities);
+      const team = await manager.load("minimal");
+      expect(manager.agents("minimal")).toEqual(team.agents);
     });
 
     test("returns an empty array for a team that hasn't been loaded", () => {

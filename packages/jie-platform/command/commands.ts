@@ -1,4 +1,3 @@
-import type { AgentIdentity } from "../core";
 import type { GitSnapshot } from "../services";
 import type { ModelIdentity } from "../types";
 
@@ -16,7 +15,6 @@ interface CommandTypeMap {
   unsetDefaultTeam: CommandDef<{}, null>;
   setDefaultTeam: CommandDef<{ teamId: string }, null>;
   getTeamInfo: CommandDef<{}, { defaultTeam: string | null; installed: ReadonlyArray<string> }>;
-  switchTeam: CommandDef<{ teamId: string }, ReadonlyArray<AgentIdentity>>;
   getGitStatus: CommandDef<{}, GitSnapshot>;
 }
 
