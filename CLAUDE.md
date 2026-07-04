@@ -31,7 +31,7 @@ When rules in different documents conflict, context rules win, in below order. R
 ## Code Conventions
 - No `any`, `unknown` types, no unsafe `as`, code must be strongly typed. No `enum` keyword.
 - Prefer plain function over arrow functions.
-- Fields default to be `readonly`.
+- Fields default to be `readonly`. On an interface, use methods instead of field arrow functions, methods are natively readonly.
 - Public types, contract, methods, higher-level abstractions should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers. See below section `Single file layout`.
 - Inline oneline trivial functions.
 - Consolidate imports into one statement: do not split `import { a } from 'x'; import { type b } from 'x';` into two.
@@ -67,6 +67,7 @@ When rules in different documents conflict, context rules win, in below order. R
 - A responsibility should belong to an earlier performer. E.g. if type `Config` can parse the configuration into ready-to-use types, it shouldn't pass raw strings to its clients. A producer's return type is the one its consumer can use directly — no further parsing, validation, or normalization.
 - Logic should be put in pure functions as much as possible. A function is pure when it has no I/O, no state, no dependency on external data, and no side effect on its arguments. Any side effect, e.g. IO, should be limited to the edge layers with minimal logic. This makes the code easier to test where a module's dependencies are mockable in tests so that unit tests can be done with mocks without creating actual dependency.
 - A feature cannot ship by deferring an NFR(non-functional requirement); the NFR must be met in the same change. Do not be scared of change scopes, divide and conquer. Maintain good code architecture, follow context rules even if changes are big.
+- No cyclical dependencies.
 
 #### Module visibility
 Minimal visibility or public surface of a type or a module. This ensures loose coupling and separation of concerns. If this is violated, e.g. a type or a module exposes multiple functions, it usually means the design is wrong. Do not add `export` unless it's proven neccessary.
