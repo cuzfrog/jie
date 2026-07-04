@@ -3,12 +3,12 @@ type EventCallback = (subject: string, payload: object) => void;
 /** Low level primitive behind `EventManager`. */
 export interface EventBus {
 
-  readonly publish: (subject: string, payload: object) => void;
+  publish(subject: string, payload: object): void;
 
   /** returns an unsubscribe function */
-  readonly subscribe: (subject: string, callback: EventCallback) => () => void;
+  subscribe(subject: string, callback: EventCallback): () => void;
 
-  readonly subscriberCount: (subject: string) => number;
+  subscriberCount(subject: string): number;
 }
 
 export function createEventBus(): EventBus {

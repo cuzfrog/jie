@@ -5,10 +5,10 @@ import type { AuthStore } from "./auth-store";
 import { JiePlatformError } from "../jie-platform-errors";
 
 export interface ModelRegistry {
-  readonly providers: () => ReadonlyArray<string>;
-  readonly resolve: (provider: string, modelId: string) => Model<Api> | undefined;
-  readonly listModels: (provider: string) => ReadonlyArray<Model<Api>>;
-  readonly getApiKey: (provider: string) => string | undefined;
+  providers(): ReadonlyArray<string>;
+  resolve(provider: string, modelId: string): Model<Api> | undefined;
+  listModels(provider: string): ReadonlyArray<Model<Api>>;
+  getApiKey(provider: string): string | undefined;
 }
 
 export function createModelRegistry(

@@ -2,9 +2,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { isValidTeamId, loadMinimalTeam, loadTeamFromDir } from "./parser";
 import { JiePlatformError } from "../jie-platform-errors";
-import type { TeamBlueprint } from "./types";
-
-const BUILTIN_MINIMAL_TEAM_ID = "minimal";
+import { BUILTIN_MINIMAL_TEAM_ID, type TeamBlueprint } from "./types";
 
 export interface TeamRegistryOptions {
   readonly homeJieDir: string;
@@ -12,10 +10,10 @@ export interface TeamRegistryOptions {
 }
 
 export interface TeamRegistry {
-  readonly parseTeamManifest: (teamId?: string) => TeamBlueprint;
-  readonly isInstalled: (teamId: string) => boolean;
-  readonly listInstalled: () => string[];
-  readonly locate: (teamId: string) => "project" | "user" | "missing";
+  parseTeamManifest(teamId?: string): TeamBlueprint;
+  isInstalled(teamId: string): boolean;
+  listInstalled(): string[];
+  locate(teamId: string): "builtin" | "project" | "user" | "missing";
 }
 
 export function createTeamRegistry(options: TeamRegistryOptions): TeamRegistry {
@@ -37,6 +35,11 @@ export function createTeamRegistry(options: TeamRegistryOptions): TeamRegistry {
     return existsSync(join(userTeamsDir, id, "TEAM.md"));
   }
 
+  function parseFromDir(dir: string): TeamBlueprint {
+    const blueprint = loadTeamFromDir(dir);
+    return blueprint.roles.length === 0 ? loadMinimalTeam() : blueprint;
+  }
+
   return {
     parseTeamManifest(teamId) {
       if (teamId === undefined || isMinimal(teamId)) {
@@ -46,13 +49,11 @@ export function createTeamRegistry(options: TeamRegistryOptions): TeamRegistry {
         throw new JiePlatformError("INVALID_TEAM_ID", { detail: `invalid team_id: ${teamId}` });
       }
       const projectDir = projectTeamsDir();
-      if (projectDir !== null && existsSync(join(projectDir, teamId, "TEAM.md"))) {
-        const blueprint = loadTeamFromDir(join(projectDir, teamId));
-        return blueprint.roles.length === 0 ? loadMinimalTeam() : blueprint;
+      if (projectDir !== null && isProjectTeam(teamId)) {
+        return parseFromDir(join(projectDir, teamId));
       }
       if (isUserTeam(teamId)) {
-        const blueprint = loadTeamFromDir(join(userTeamsDir, teamId));
-        return blueprint.roles.length === 0 ? loadMinimalTeam() : blueprint;
+        return parseFromDir(join(userTeamsDir, teamId));
       }
       throw new JiePlatformError("TEAM_NOT_FOUND", { detail: `team '${teamId}' not found` });
     },
@@ -78,7 +79,7 @@ export function createTeamRegistry(options: TeamRegistryOptions): TeamRegistry {
       return [...ids].sort();
     },
     locate(id) {
-      if (isMinimal(id)) return "user";
+      if (isMinimal(id)) return "builtin";
       if (isProjectTeam(id)) return "project";
       if (isUserTeam(id)) return "user";
       return "missing";

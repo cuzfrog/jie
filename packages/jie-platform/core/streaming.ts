@@ -6,9 +6,9 @@ const STREAM_FLUSH_MS = 200;
 export type BlockType = "text" | "thinking";
 
 export interface StreamPublisher {
-  readonly beginStream: () => void;
-  readonly append: (blockType: BlockType, delta: string) => void;
-  readonly endStream: () => { readonly streamId: number; readonly totalChunks: number };
+  beginStream(): void;
+  append(blockType: BlockType, delta: string): void;
+  endStream(): { readonly streamId: number; readonly totalChunks: number };
 }
 
 export function makeStreamPublisher(events: EventManager, sender: AgentSender): StreamPublisher {

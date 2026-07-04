@@ -5,6 +5,8 @@ sealed:
   - parser.ts
   - registry.test.ts
   - registry.ts
+  - team-manager.test.ts
+  - team-manager.ts
   - text.d.ts
   - types.ts
 ---

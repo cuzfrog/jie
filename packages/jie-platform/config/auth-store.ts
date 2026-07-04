@@ -4,11 +4,11 @@ import { join } from "node:path";
 import type { AuthJson } from "./types";
 
 export interface AuthStore {
-  readonly load: () => AuthJson;
-  readonly saveAuthConfig: (auth: AuthJson) => void;
-  readonly setProvider: (auth: AuthJson, provider: string, key: string) => AuthJson;
-  readonly removeProvider: (auth: AuthJson, provider: string) => AuthJson;
-  readonly clear: () => AuthJson;
+  load(): AuthJson;
+  saveAuthConfig(auth: AuthJson): void;
+  setProvider(auth: AuthJson, provider: string, key: string): AuthJson;
+  removeProvider(auth: AuthJson, provider: string): AuthJson;
+  clear(): AuthJson;
 }
 
 export function makeAuthStore(homeJieDir: string): AuthStore {

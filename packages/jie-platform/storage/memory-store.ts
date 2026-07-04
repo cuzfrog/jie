@@ -13,30 +13,30 @@ interface TurnRecord {
 }
 
 export interface MemoryManager {
-  readonly persist: (
+  persist(
     message: AgentMessage,
     agentKey: string,
     sessionId: string,
     teamId: string,
-  ) => void;
+  ): void;
 
-  readonly compact: (
+  compact(
     compactedSeqRange: [number, number],
     summary: AgentMessage,
     agentKey: string,
     sessionId: string,
     teamId: string,
-  ) => void;
+  ): void;
 
-  readonly restore: (
+  restore(
     agentKey: string,
     sessionId: string,
     teamId: string,
-  ) => Promise<AgentMessage[]>;
+  ): Promise<AgentMessage[]>;
 
-  readonly mostRecentSessionId: (teamId: string) => string | null;
+  mostRecentSessionId(teamId: string): string | null;
 
-  readonly hasSession: (teamId: string, sessionId: string) => boolean;
+  hasSession(teamId: string, sessionId: string): boolean;
 }
 
 export function createMemoryManager(storage: Storage): MemoryManager {

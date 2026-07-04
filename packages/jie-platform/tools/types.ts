@@ -21,9 +21,9 @@ export interface Tool<TInput = unknown> {
   readonly label: string;
   readonly timeout?: number;
   readonly parameters: TSchema;
-  readonly execute: (
+  execute(
     input: TInput,
     executionContext: ExecutionContext,
     signal?: AbortSignal,
-  ) => Promise<ToolResult>;
+  ): Promise<ToolResult>;
 }

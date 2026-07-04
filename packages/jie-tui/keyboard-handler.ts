@@ -22,7 +22,7 @@ export interface KeyboardHandlerDeps {
 }
 
 export interface KeyboardHandler {
-  readonly handle: (data: string) => { readonly consume: boolean } | undefined;
+  handle(data: string): { readonly consume: boolean } | undefined;
 }
 
 export interface KeyboardHandlerOptions {

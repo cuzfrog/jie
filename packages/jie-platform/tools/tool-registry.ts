@@ -11,9 +11,9 @@ import type { EventManager } from "../event";
 import type { ArtifactStore } from "../storage";
 
 export interface ToolRegistry {
-  readonly register: (name: string, tool: Tool) => void;
-  readonly resolve: (spec: string) => Tool[];
-  readonly list: () => Tool[];
+  register(name: string, tool: Tool): void;
+  resolve(spec: string): Tool[];
+  list(): Tool[];
 }
 
 interface CreateToolRegistryParams {

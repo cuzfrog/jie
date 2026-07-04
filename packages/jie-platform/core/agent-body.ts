@@ -18,7 +18,7 @@ export interface CreateAgentBodyOptions {
   readonly memory: MemoryManager;
   readonly sessionId: string;
   readonly toolRegistry: ToolRegistry;
-  readonly getApiKey: (provider: string) => Promise<string | undefined> | string | undefined;
+  getApiKey(provider: string): Promise<string | undefined> | string | undefined;
   readonly model: Model<Api> | undefined;
   readonly createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
 }
@@ -32,8 +32,8 @@ export interface AgentIdentity {
 
 export interface AgentBody {
   readonly identity: AgentIdentity;
-  readonly start: () => Promise<void>;
-  readonly stop: () => void;
+  start(): Promise<void>;
+  stop(): void;
 }
 
 export function createAgentBody(options: CreateAgentBodyOptions): AgentBody {

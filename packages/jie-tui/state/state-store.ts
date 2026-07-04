@@ -14,33 +14,35 @@ const INITIAL_TUI_STATE: TuiState = Object.freeze({
 } as const);
 
 export interface StateStore {
-  readonly getState: () => TuiState;
-  readonly dispatch: (action: Action) => void;
-  readonly subscribe: (listener: () => void) => () => void;
-  readonly getFocusedAgent: () => AgentUiState | null;
-  readonly isBusy: () => boolean;
+  getState(): TuiState;
+  dispatch(action: Action): void;
+  subscribe(listener: () => void): () => void;
+  getFocusedAgent(): AgentUiState | null;
+  isBusy(): boolean;
 }
 
 export function createStateStore(): StateStore {
   let state: TuiState = INITIAL_TUI_STATE;
   const listeners = new Set<() => void>();
   return {
-    getState: () => state,
-    dispatch: (action) => {
+    getState(): TuiState {
+      return state;
+    },
+    dispatch(action: Action): void {
       state = reduce(state, action);
       for (const listener of listeners) listener();
     },
-    subscribe: (listener) => {
+    subscribe(listener: () => void): () => void {
       listeners.add(listener);
       return (): void => {
         listeners.delete(listener);
       };
     },
-    getFocusedAgent: () => {
+    getFocusedAgent(): AgentUiState | null {
       if (state.focusedAgentId === null) return null;
       return state.agents.get(state.focusedAgentId) ?? null;
     },
-    isBusy: () => {
+    isBusy(): boolean {
       for (const agent of state.agents.values()) {
         if (agent.status === "busy") return true;
       }

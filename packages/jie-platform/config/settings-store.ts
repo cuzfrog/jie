@@ -7,9 +7,9 @@ import type { Settings, RawSettings } from "./types";
 export type Scope = "project" | "global";
 
 export interface SettingsStore {
-  readonly load: () => Settings;
-  readonly write: (settings: Settings, scope: Scope) => void;
-  readonly unsetDefaultTeam: () => void;
+  load(): Settings;
+  write(settings: Settings, scope: Scope): void;
+  unsetDefaultTeam(): void;
 }
 
 export function makeSettingsStore(

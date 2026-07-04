@@ -11,7 +11,7 @@ import {
   type Settings,
   type SettingsStore,
 } from "./config";
-import { createTeamRegistry } from "./team";
+import { createTeamManager } from "./team";
 import { createToolRegistry } from "./tools";
 import { createArtifactStore, createMemoryManager, createStorage } from "./storage";
 import { type GitService, type GitSnapshot } from "./services";
@@ -52,11 +52,16 @@ function makeDeps(workspace: string, homeJieDir: string, filePath: string = ":me
     artifactStore,
   });
   gitService.getSnapshot.mockReturnValue(EMPTY_GIT_SNAPSHOT);
-  const teamRegistry = createTeamRegistry({ homeJieDir, projectJieDir });
+  const modelRegistry = createModelRegistry(homeJieDir, projectJieDir, authStore);
+  const memoryManager = createMemoryManager(storage);
+  const teamManager = createTeamManager(
+    { homeJieDir, projectJieDir },
+    { eventManager: events, settingsStore, modelRegistry, toolRegistry, artifactStore, memoryManager },
+  );
   const commandExecutor = createCommandExecutor({
     authStore,
     settingsStore,
-    teamRegistry,
+    teamManager,
     gitService,
     defaultScope: "global",
     loadActiveTeam: () => Promise.resolve([]),
@@ -65,8 +70,8 @@ function makeDeps(workspace: string, homeJieDir: string, filePath: string = ":me
     eventManager: events,
     settingsStore,
     storage,
-    teamRegistry,
-    modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
+    teamManager,
+    modelRegistry,
     toolRegistry,
     artifactStore,
     memoryManager: createMemoryManager(storage),
@@ -161,13 +166,19 @@ describe("createJiePlatform", () => {
       const events1 = createEventManager();
       const artifactStore1 = createArtifactStore(storage1);
       const memoryManager1 = createMemoryManager(storage1);
+      const base1 = makeDeps(workspace, homeJieDir, ":memory:");
+      const teamManager1 = createTeamManager(
+        { homeJieDir, projectJieDir: join(workspace, ".jie") },
+        { eventManager: events1, settingsStore, modelRegistry: base1.modelRegistry, toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events1, artifactStore: artifactStore1 }), artifactStore: artifactStore1, memoryManager: memoryManager1 },
+      );
       const deps1 = {
-        ...makeDeps(workspace, homeJieDir, ":memory:"),
+        ...base1,
         storage: storage1,
         memoryManager: memoryManager1,
         eventManager: events1,
         artifactStore: artifactStore1,
         toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events1, artifactStore: artifactStore1 }),
+        teamManager: teamManager1,
       };
       const h1 = await createJiePlatform(
         { workspace, homeJieDir, teamId: "minimal" },
@@ -180,13 +191,20 @@ describe("createJiePlatform", () => {
       const storage2 = createStorage({ type: "sqlite", filePath });
       const events2 = createEventManager();
       const artifactStore2 = createArtifactStore(storage2);
+      const memoryManager2 = createMemoryManager(storage2);
+      const base2 = makeDeps(workspace, homeJieDir, ":memory:");
+      const teamManager2 = createTeamManager(
+        { homeJieDir, projectJieDir: join(workspace, ".jie"), resumeSessionId: sessionId },
+        { eventManager: events2, settingsStore, modelRegistry: base2.modelRegistry, toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events2, artifactStore: artifactStore2 }), artifactStore: artifactStore2, memoryManager: memoryManager2 },
+      );
       const deps2 = {
-        ...makeDeps(workspace, homeJieDir, ":memory:"),
+        ...base2,
         storage: storage2,
-        memoryManager: createMemoryManager(storage2),
+        memoryManager: memoryManager2,
         eventManager: events2,
         artifactStore: artifactStore2,
         toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events2, artifactStore: artifactStore2 }),
+        teamManager: teamManager2,
       };
       const h2 = await createJiePlatform(
         { workspace, homeJieDir, teamId: "minimal", resumeSessionId: sessionId },
@@ -197,13 +215,20 @@ describe("createJiePlatform", () => {
       const storage3 = createStorage({ type: "sqlite", filePath });
       const events3 = createEventManager();
       const artifactStore3 = createArtifactStore(storage3);
+      const memoryManager3 = createMemoryManager(storage3);
+      const base3 = makeDeps(workspace, homeJieDir, ":memory:");
+      const teamManager3 = createTeamManager(
+        { homeJieDir, projectJieDir: join(workspace, ".jie"), resumeSessionId: "not-a-real-id" },
+        { eventManager: events3, settingsStore, modelRegistry: base3.modelRegistry, toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events3, artifactStore: artifactStore3 }), artifactStore: artifactStore3, memoryManager: memoryManager3 },
+      );
       const deps3 = {
-        ...makeDeps(workspace, homeJieDir, ":memory:"),
+        ...base3,
         storage: storage3,
-        memoryManager: createMemoryManager(storage3),
+        memoryManager: memoryManager3,
         eventManager: events3,
         artifactStore: artifactStore3,
         toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events3, artifactStore: artifactStore3 }),
+        teamManager: teamManager3,
       };
       await expect(
         createJiePlatform(
@@ -451,8 +476,8 @@ describe("JiePlatform — execute(commands)", () => {
     test("returns defaultTeam + installed list", async () => {
       const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
-      const tr = deps.teamRegistry;
-      const spy = vi.spyOn(tr, "listInstalled").mockReturnValue(["minimal", "alpha", "beta"]);
+      const tm = deps.teamManager;
+      const spy = vi.spyOn(tm, "listInstalled").mockReturnValue(["minimal", "alpha", "beta"]);
       const result = await handle.execute({ name: "getTeamInfo" });
       expect(result.installed).toEqual(["minimal", "alpha", "beta"]);
       spy.mockRestore();

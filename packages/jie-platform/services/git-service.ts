@@ -6,7 +6,7 @@ export interface GitSnapshot {
 }
 
 export interface GitService {
-  readonly getSnapshot: () => GitSnapshot;
+  getSnapshot(): GitSnapshot;
 }
 
 export interface CreateGitServiceOptions {
@@ -25,7 +25,7 @@ export function createGitService(options: CreateGitServiceOptions): GitService {
   let lastRefreshedAt = -Infinity;
   let cached: GitSnapshot = { branch: "", dirty: false, ahead: 0, behind: 0 };
   return {
-    getSnapshot: (): GitSnapshot => {
+    getSnapshot(): GitSnapshot {
       const t = now();
       if (t - lastRefreshedAt >= minIntervalMs) {
         lastRefreshedAt = t;

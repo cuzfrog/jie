@@ -1,10 +1,8 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { type Api, type Model } from "@earendil-works/pi-ai";
-import { ulid } from "ulid";
-import { type AgentBody, type AgentIdentity, createAgentBody } from "./core";
+import { type AgentIdentity } from "./core";
 import { type EventEnvelope, type EventManager, type EventType, Events, createEventManager } from "./event";
-import { type AgentSoul, type TeamBlueprint, type TeamRegistry, createTeamRegistry } from "./team";
+import { type TeamManager, createTeamManager } from "./team";
 import { type ModelRegistry, type SettingsStore, makeAuthStore, makeSettingsStore, createModelRegistry } from "./config";
 import { type ToolRegistry, createToolRegistry } from "./tools";
 import {
@@ -15,7 +13,6 @@ import {
   createMemoryManager,
   createStorage,
 } from "./storage";
-import { JiePlatformError } from "./jie-platform-errors";
 import { type Command, type CommandExecutor, type CommandName, type CommandResult, createCommandExecutor } from "./command";
 import { createGitService } from "./services";
 import { type TeamIdentity } from "./types";
@@ -32,7 +29,7 @@ export interface JiePlatformDeps {
   readonly eventManager: EventManager;
   readonly settingsStore: SettingsStore;
   readonly storage: Storage;
-  readonly teamRegistry: TeamRegistry;
+  readonly teamManager: TeamManager;
   readonly modelRegistry: ModelRegistry;
   readonly toolRegistry: ToolRegistry;
   readonly artifactStore: ArtifactStore;
@@ -51,55 +48,9 @@ export interface JiePlatform {
 }
 
 export async function createJiePlatform(options: JiePlatformOptions, dependencies: JiePlatformDeps = buildJiePlatformDeps(options)): Promise<JiePlatform> {
-  const resolveModel = defaultResolveModel(dependencies.modelRegistry);
-  const sessionIds = new Map<string, string>();
-  const loadedTeams = new Map<string, AgentBody[]>();
-
-  async function loadTeam(teamId: string): Promise<ReadonlyArray<AgentIdentity>> {
-    const existing = loadedTeams.get(teamId);
-    let bodies: AgentBody[];
-    if (existing !== undefined) {
-      bodies = existing;
-    } else {
-      const blueprint: TeamBlueprint = dependencies.teamRegistry.parseTeamManifest(teamId);
-      const sessionId = resolveSessionId(dependencies.memoryManager, options, teamId, sessionIds);
-      sessionIds.set(teamId, sessionId);
-      const out: AgentBody[] = [];
-      for (const soul of blueprint.roles) {
-        const isLeader = soul.role === blueprint.leaderRole;
-        const agentKey = `${soul.role}-1`;
-        const resolvedModel = resolveSoulModel(soul, dependencies.settingsStore, resolveModel);
-        if (resolvedModel === undefined) continue;
-        out.push(
-          createAgentBody({
-            agentKey,
-            teamId,
-            soul,
-            isLeader,
-            eventManager: dependencies.eventManager,
-            artifactStore: dependencies.artifactStore,
-            memory: dependencies.memoryManager,
-            sessionId,
-            toolRegistry: dependencies.toolRegistry,
-            getApiKey: async (provider: string) => dependencies.modelRegistry.getApiKey(provider),
-            model: resolvedModel,
-          }),
-        );
-      }
-      for (const body of out) {
-        await body.start();
-      }
-      bodies = out;
-      loadedTeams.set(teamId, out);
-      publishTeamLoaded(dependencies.eventManager, teamId, blueprint);
-    }
-    activeTeamId = teamId;
-    return bodies.map((b) => b.identity);
-  }
-
   const initialTeamId = options.teamId ?? dependencies.settingsStore.load().defaultTeam ?? "minimal";
   let activeTeamId = initialTeamId;
-  await loadTeam(initialTeamId);
+  await dependencies.teamManager.load(activeTeamId);
 
   const handle: JiePlatform = {
     team: {
@@ -107,16 +58,11 @@ export async function createJiePlatform(options: JiePlatformOptions, dependencie
         return activeTeamId;
       },
       get agents(): ReadonlyArray<AgentIdentity> {
-        const bodies = loadedTeams.get(activeTeamId) ?? [];
-        return bodies.map((b) => b.identity);
+        return dependencies.teamManager.agents(activeTeamId);
       },
     },
     stop: async (): Promise<void> => {
-      const allBodies: AgentBody[] = [];
-      for (const bodies of loadedTeams.values()) {
-        allBodies.push(...bodies);
-      }
-      for (const b of allBodies) b.stop();
+      dependencies.teamManager.stop();
     },
 
     subscribe(topic, callback) {
@@ -138,7 +84,7 @@ export async function createJiePlatform(options: JiePlatformOptions, dependencie
     const c: Command = command;
     switch (c.name) {
       case "switchTeam": {
-        const agents = await loadTeam(c.teamId);
+        const agents = await dependencies.teamManager.load(c.teamId);
         activeTeamId = c.teamId;
         return agents;
       }
@@ -160,7 +106,6 @@ function buildJiePlatformDeps(options: JiePlatformOptions): JiePlatformDeps {
     type: "sqlite",
     filePath: join(homeJieDir, "storage.db"),
   });
-  const teamRegistry = createTeamRegistry({ homeJieDir, projectJieDir });
   const authStore = makeAuthStore(homeJieDir);
   const modelRegistry = createModelRegistry(homeJieDir, projectJieDir, authStore);
   const memoryManager = createMemoryManager(storage);
@@ -173,10 +118,14 @@ function buildJiePlatformDeps(options: JiePlatformOptions): JiePlatformDeps {
   const gitService = createGitService({ cwd });
   const settingsStore = makeSettingsStore(cwd, homeJieDir, projectJieDir);
   const defaultScope: "global" | "project" = projectJieDir === null ? "global" : "project";
+  const teamManager = createTeamManager(
+    { homeJieDir, projectJieDir, resumeSessionId: options.resumeSessionId, continueLastSession: options.continueLastSession },
+    { eventManager, settingsStore, modelRegistry, toolRegistry, artifactStore, memoryManager },
+  );
   const commandExecutor = createCommandExecutor({
     authStore,
     settingsStore,
-    teamRegistry,
+    teamManager,
     gitService,
     defaultScope,
     loadActiveTeam: () => Promise.resolve([]),
@@ -185,7 +134,7 @@ function buildJiePlatformDeps(options: JiePlatformOptions): JiePlatformDeps {
     eventManager,
     settingsStore,
     storage,
-    teamRegistry,
+    teamManager,
     modelRegistry,
     toolRegistry,
     artifactStore,
@@ -203,75 +152,4 @@ function findProjectJieDir(cwd: string): string | null {
     if (parent === current) return null;
     current = parent;
   }
-}
-
-function publishTeamLoaded(events: EventManager, teamId: string, blueprint: TeamBlueprint): void {
-  const sorted = [...blueprint.roles].sort((a, b) => a.role.localeCompare(b.role));
-  const agents = sorted.map((r) => ({
-    role: r.role,
-    agent_key: `${r.role}-1`,
-    is_leader: r.role === blueprint.leaderRole,
-  }));
-  events.publish(Events.teamLoaded({ kind: "system" }, teamId, agents));
-}
-
-function defaultResolveModel(registry: ModelRegistry): (provider: string, modelId: string) => Model<Api> {
-  return (provider: string, modelId: string): Model<Api> => {
-    const resolved = registry.resolve(provider, modelId);
-    if (resolved === undefined) {
-      throw new JiePlatformError("NO_MODEL_ERROR");
-    }
-    return resolved;
-  };
-}
-
-function resolveSoulModel(
-  soul: AgentSoul,
-  settingsStore: SettingsStore,
-  resolveModel: (provider: string, modelId: string) => Model<Api>,
-): Model<Api> | undefined {
-
-  const settings = settingsStore.load();
-  const hasSettingsModel = settings.defaultProvider !== undefined && settings.defaultModel !== undefined;
-  if (soul.model === "" && !hasSettingsModel) {
-    throw new JiePlatformError("NO_MODEL_ERROR");
-  }
-  const modelStr = soul.model !== "" ? soul.model : `${settings.defaultProvider}/${settings.defaultModel}`;
-  const slash = modelStr.indexOf("/");
-  if (slash === -1) return undefined;
-  const provider = modelStr.slice(0, slash);
-  const modelId = modelStr.slice(slash + 1);
-  try {
-    return resolveModel(provider, modelId);
-  } catch {
-    return undefined;
-  }
-}
-
-function resolveSessionId(
-  memory: MemoryManager,
-  options: JiePlatformOptions,
-  teamId: string,
-  existingSessionIds: ReadonlyMap<string, string>,
-): string {
-  if (existingSessionIds.has(teamId)) return existingSessionIds.get(teamId)!;
-  if (options.resumeSessionId !== undefined) {
-    if (!memory.hasSession(teamId, options.resumeSessionId)) {
-      throw new JiePlatformError("UNKNOWN_SESSION", {
-        detail: `unknown session_id: ${options.resumeSessionId}`,
-      });
-    }
-    return options.resumeSessionId;
-  }
-  if (options.continueLastSession === true) {
-    const recent = memory.mostRecentSessionId(teamId);
-    if (recent === null) {
-      console.warn(
-        "no prior session in this directory; starting a new session",
-      );
-      return ulid();
-    }
-    return recent;
-  }
-  return ulid();
 }

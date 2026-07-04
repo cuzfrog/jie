@@ -33,21 +33,21 @@ describe("createTeamRegistry", () => {
     rmSync(homeJieDir, { recursive: true, force: true });
   });
 
-  describe("loadTeam", () => {
-    test("loadTeam('minimal') returns the built-in minimal team", () => {
+  describe("parseTeamManifest", () => {
+    test("parseTeamManifest('minimal') returns the built-in minimal team", () => {
       const r = createTeamRegistry({ homeJieDir, projectJieDir });
       const team = r.parseTeamManifest("minimal");
       expect(team.leaderRole).toBe("general");
       expect(team.roles).toHaveLength(1);
     });
 
-    test("loadTeam(undefined) returns the built-in minimal team (fallback)", () => {
+    test("parseTeamManifest(undefined) returns the built-in minimal team (fallback)", () => {
       const r = createTeamRegistry({ homeJieDir, projectJieDir });
       const team = r.parseTeamManifest();
       expect(team.leaderRole).toBe("general");
     });
 
-    test("loadTeam loads from project scope when present", () => {
+    test("parseTeamManifest loads from project scope when present", () => {
       const projJie = join(workspace, ".jie");
       const projectTeams = join(projJie, "teams");
       writeTeam(projectTeams, "dev", "project-leader");
@@ -56,7 +56,7 @@ describe("createTeamRegistry", () => {
       expect(team.leaderRole).toBe("project-leader");
     });
 
-    test("loadTeam loads from user scope when not in project scope", () => {
+    test("parseTeamManifest loads from user scope when not in project scope", () => {
       const userTeams = join(homeJieDir, "teams");
       writeTeam(userTeams, "dev", "user-leader");
       const r = createTeamRegistry({ homeJieDir, projectJieDir });
@@ -64,7 +64,7 @@ describe("createTeamRegistry", () => {
       expect(team.leaderRole).toBe("user-leader");
     });
 
-    test("loadTeam prefers project scope over user scope (project wins)", () => {
+    test("parseTeamManifest prefers project scope over user scope (project wins)", () => {
       const projJie = join(workspace, ".jie");
       const projectTeams = join(projJie, "teams");
       const userTeams = join(homeJieDir, "teams");
@@ -75,32 +75,19 @@ describe("createTeamRegistry", () => {
       expect(team.leaderRole).toBe("project-leader");
     });
 
-    test("loadTeam uses the provided projectJieDir (no walk-up)", () => {
-      const projectRoot = mkdtempSync(join(tmpdir(), "jie-team-reg-walkup-"));
-      const projJie = join(projectRoot, ".jie");
-      try {
-        writeTeam(join(projJie, "teams"), "dev", "walkup-leader");
-        const r = createTeamRegistry({ homeJieDir, projectJieDir: projJie });
-        const team = r.parseTeamManifest("dev");
-        expect(team.leaderRole).toBe("walkup-leader");
-      } finally {
-        rmSync(projectRoot, { recursive: true, force: true });
-      }
-    });
-
-    test("loadTeam throws when a directory exists but has no TEAM.md", () => {
+    test("parseTeamManifest throws when a directory exists but has no TEAM.md", () => {
       const projJie = join(workspace, ".jie");
       mkdirSync(join(projJie, "teams", "broken"), { recursive: true });
       const r = createTeamRegistry({ homeJieDir, projectJieDir: projJie });
       expect(() => r.parseTeamManifest("broken")).toThrow(/team 'broken' not found/);
     });
 
-    test("loadTeam throws invalid_team_id for an invalid id", () => {
+    test("parseTeamManifest throws invalid_team_id for an invalid id", () => {
       const r = createTeamRegistry({ homeJieDir, projectJieDir });
       expect(() => r.parseTeamManifest("bad id with spaces")).toThrow(JiePlatformError);
     });
 
-    test("loadTeam throws team_not_found when id is absent", () => {
+    test("parseTeamManifest throws team_not_found when id is absent", () => {
       const r = createTeamRegistry({ homeJieDir, projectJieDir });
       expect(() => r.parseTeamManifest("ghost")).toThrow(JiePlatformError);
     });
@@ -228,7 +215,7 @@ describe("createTeamRegistry", () => {
         name: "minimal team (shipped with the platform)",
         setup: (): string | null => null,
         teamId: "minimal",
-        expected: "user",
+        expected: "builtin",
       },
       {
         name: "team in both scopes (project wins)",

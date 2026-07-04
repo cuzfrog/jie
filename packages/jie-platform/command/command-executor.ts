@@ -4,22 +4,22 @@ import { type AuthStore } from "../config";
 import { type Settings, type Scope, type SettingsStore } from "../config";
 import { JiePlatformError } from "../jie-platform-errors";
 import { type GitService } from "../services";
-import { type TeamRegistry } from "../team";
+import { type TeamManager } from "../team";
 import type { Command, CommandName, CommandResult } from "./commands";
 
 export interface CommandExecutorDeps {
   readonly authStore: AuthStore;
   readonly settingsStore: SettingsStore;
-  readonly teamRegistry: TeamRegistry;
+  readonly teamManager: TeamManager;
   readonly gitService: GitService;
   readonly defaultScope: Scope;
-  readonly loadActiveTeam: (teamId: string) => Promise<ReadonlyArray<AgentIdentity>>;
+  loadActiveTeam(teamId: string): Promise<ReadonlyArray<AgentIdentity>>;
 }
 
 type Handler<N extends CommandName> = (command: Command<N>) => CommandResult<N> | Promise<CommandResult<N>>;
 
 export interface CommandExecutor {
-  readonly execute: <T extends CommandName>(command: Command<T>) => Promise<CommandResult<T>>;
+  execute<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>>;
 }
 
 export function createCommandExecutor(deps: CommandExecutorDeps): CommandExecutor {
@@ -73,10 +73,10 @@ export function createCommandExecutor(deps: CommandExecutorDeps): CommandExecuto
       return null;
     },
     setDefaultTeam: (command) => {
-      if (!deps.teamRegistry.isInstalled(command.teamId)) {
+      if (!deps.teamManager.isInstalled(command.teamId)) {
         throw new JiePlatformError("TEAM_NOT_FOUND", { detail: `team '${command.teamId}' not found` });
       }
-      const loc = deps.teamRegistry.locate(command.teamId);
+      const loc = deps.teamManager.locate(command.teamId);
       const existing = deps.settingsStore.load();
       const next: Settings = { ...existing, defaultTeam: command.teamId };
       deps.settingsStore.write(next, loc === "project" ? "project" : "global");
@@ -86,11 +86,11 @@ export function createCommandExecutor(deps: CommandExecutorDeps): CommandExecuto
       const settings = deps.settingsStore.load();
       return {
         defaultTeam: settings.defaultTeam ?? null,
-        installed: deps.teamRegistry.listInstalled(),
+        installed: deps.teamManager.listInstalled(),
       };
     },
     switchTeam: async (command) => {
-      if (!deps.teamRegistry.isInstalled(command.teamId)) {
+      if (!deps.teamManager.isInstalled(command.teamId)) {
         throw new JiePlatformError("TEAM_NOT_FOUND", { detail: `team '${command.teamId}' not found` });
       }
       return await deps.loadActiveTeam(command.teamId);

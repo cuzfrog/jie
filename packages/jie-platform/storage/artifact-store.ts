@@ -2,18 +2,18 @@ import type { Storage } from "./storage";
 import { JiePlatformError } from "../jie-platform-errors";
 
 export interface ArtifactStore {
-  readonly write: (
+  write(
     key: string,
     content: string,
-  ) => Promise<{ readonly key: string; readonly created_at: string }>;
+  ): Promise<{ readonly key: string; readonly created_at: string }>;
 
-  readonly read: (key: string) => Promise<{
+  read(key: string): Promise<{
     readonly key: string;
     readonly content: string;
     readonly created_at: string;
   } | null>;
 
-  readonly list: (prefix: string) => Promise<ReadonlyArray<{ readonly key: string; readonly created_at: string }>>;
+  list(prefix: string): Promise<ReadonlyArray<{ readonly key: string; readonly created_at: string }>>;
 }
 
 export function createArtifactStore(storage: Storage): ArtifactStore {
