@@ -31,7 +31,7 @@ When rules in different documents conflict, context rules win, in below order. R
 ## Code Conventions
 - No `any`, `unknown` types, no unsafe `as`, code must be strongly typed. No `enum` keyword.
 - Prefer plain function over arrow functions.
-- Fields default to be `readonly`. On an interface, use methods instead of field arrow functions, methods are natively readonly.
+- Fields default to be `readonly` in public types. On an interface, use methods instead of field arrow functions, methods are natively readonly.
 - Public types, contract, methods, higher-level abstractions should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers. See below section `Single file layout`.
 - Inline oneline trivial functions.
 - Consolidate imports into one statement: do not split `import { a } from 'x'; import { type b } from 'x';` into two.
