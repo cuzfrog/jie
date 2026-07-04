@@ -132,12 +132,10 @@ describe("createJiePlatform", () => {
       expect(env.payload.agents[0]!.is_leader).toBe(true);
     });
 
-    test("model pre-check: no model in soul or settings loads with no bodies but no error", async () => {
+    test("model pre-check: no model in soul or settings rejects with NO_MODEL_ERROR", async () => {
       settingsStore.load.mockReturnValueOnce({});
       const deps = makeDeps(workspace, homeJieDir);
-      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
-      expect(handle.team.agents).toEqual([]);
-      await handle.stop();
+      await expect(createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps)).rejects.toThrow(/No model has been selected/);
     });
 
     test("handle.stop() detaches all bus subscriptions", async () => {

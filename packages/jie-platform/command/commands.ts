@@ -20,5 +20,9 @@ interface CommandTypeMap {
 }
 
 export type CommandName = keyof CommandTypeMap;
-export type Command<T extends CommandName> = { name: T } & CommandTypeMap[T]["args"];
 export type CommandResult<T extends CommandName> = CommandTypeMap[T]["result"];
+
+type CommandUnion = {
+  [K in CommandName]: { name: K } & CommandTypeMap[K]["args"];
+}[CommandName];
+export type Command<T extends CommandName = CommandName> = Extract<CommandUnion, { name: T }>;

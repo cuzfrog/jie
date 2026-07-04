@@ -2,7 +2,7 @@ import type { AgentIdentity } from "./core";
 
 export interface ModelIdentity {
     readonly provider: string;
-    readonly id: string;
+    readonly modelId: string;
 }
 
 export interface TeamIdentity {

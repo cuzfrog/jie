@@ -43,20 +43,18 @@ export interface UserSender { readonly kind: "user" };
 export interface SystemSender { readonly kind: "system" };
 export type Sender = AgentSender | UserSender | SystemSender;
 
-type EventEnvelopeUnion = {
-  [K in EventType]: {
-    readonly version: 1;
-    readonly type: K;
-    readonly topic: string;
-    readonly sender: EventDefinitions[K]["sender"];
-    readonly timestamp: string;
-    readonly payload: EventDefinitions[K]["payload"];
-  };
-}[EventType];
-
 /** Use `Events.*` to create event. */
-export type EventEnvelope<T extends EventType = EventType> = Extract<EventEnvelopeUnion, { type: T }>;
-export type AnyEventEnvelope = EventEnvelope;
+export interface EventEnvelope<T extends EventType> {
+  readonly version: 1;
+  readonly type: T;
+  readonly topic: string;
+  readonly sender: EventDefinitions[T]["sender"];
+  readonly timestamp: string;
+  readonly payload: EventDefinitions[T]["payload"];
+}
+export type AnyEventEnvelope = {
+  [K in EventType]: EventEnvelope<K>;
+}[EventType];
 
 export const EVENT_TEXT_TRUNCATION_BYTES: number = 4 * 1024;
 const EVENT_TEXT_TRUNCATION_MARKER = "...[%d chars truncated]...";

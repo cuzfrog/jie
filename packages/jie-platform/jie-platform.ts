@@ -129,15 +129,15 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
   };
 
   async function runCommand<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>> {
-    switch (command.name) {
+    const c: Command = command;
+    switch (c.name) {
       case "switchTeam": {
-        const c = command as Command<"switchTeam">;
         const agents = await loadTeam(c.teamId);
         activeTeamId = c.teamId;
-        return agents as CommandResult<T>;
+        return agents;
       }
       default:
-        return await dependencies.commandExecutor.execute(command);
+        return await dependencies.commandExecutor.execute(c);
     }
   }
 
@@ -171,12 +171,11 @@ function resolveSoulModel(
 ): Model<Api> | undefined {
 
   const settings = settingsStore.load();
-  const modelStr = soul.model !== "" ? soul.model : (
-    settings.defaultProvider !== undefined && settings.defaultModel !== undefined
-      ? `${settings.defaultProvider}/${settings.defaultModel}`
-      : ""
-  );
-  if (modelStr === "") return undefined;
+  const hasSettingsModel = settings.defaultProvider !== undefined && settings.defaultModel !== undefined;
+  if (soul.model === "" && !hasSettingsModel) {
+    throw new JiePlatformError("NO_MODEL_ERROR");
+  }
+  const modelStr = soul.model !== "" ? soul.model : `${settings.defaultProvider}/${settings.defaultModel}`;
   const slash = modelStr.indexOf("/");
   if (slash === -1) return undefined;
   const provider = modelStr.slice(0, slash);
