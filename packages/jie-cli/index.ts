@@ -32,7 +32,7 @@ export async function main(argv: string[], cwd: string = process.cwd()): Promise
 async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<number> {
   const homeJieDir = join(homeDir, ".jie");
   const projectJieDir = findProjectJieDir(cwd);
-  const platformOptions = { workspace: cwd, homeJieDir };
+  const platformOptions = { workspace: cwd, homeJieDir, projectJieDir };
   switch (args.kind) {
     case "help":
       printHelp();

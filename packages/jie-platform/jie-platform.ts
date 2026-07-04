@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { type AgentIdentity } from "./core";
 import { type EventEnvelope, type EventManager, type EventType, Events, createEventManager } from "./event";
 import { type TeamManager, createTeamManager } from "./team";
@@ -20,6 +20,7 @@ import { type TeamIdentity } from "./types";
 export interface JiePlatformOptions {
   readonly workspace: string;
   readonly homeJieDir: string;
+  readonly projectJieDir: string | null;
   readonly teamId?: string;
   readonly resumeSessionId?: string;
   readonly continueLastSession?: boolean;
@@ -99,7 +100,7 @@ export async function createJiePlatform(options: JiePlatformOptions, dependencie
 function buildJiePlatformDeps(options: JiePlatformOptions): JiePlatformDeps {
   const cwd = options.workspace;
   const homeJieDir = options.homeJieDir;
-  const projectJieDir = findProjectJieDir(cwd);
+  const projectJieDir = options.projectJieDir;
   mkdirSync(homeJieDir, { recursive: true, mode: 0o755 });
   const eventManager = createEventManager();
   const storage = createStorage({
@@ -141,15 +142,4 @@ function buildJiePlatformDeps(options: JiePlatformOptions): JiePlatformDeps {
     memoryManager,
     commandExecutor,
   };
-}
-
-function findProjectJieDir(cwd: string): string | null {
-  let current = cwd;
-  for (;;) {
-    const candidate = join(current, ".jie");
-    if (existsSync(candidate)) return candidate;
-    const parent = dirname(current);
-    if (parent === current) return null;
-    current = parent;
-  }
 }

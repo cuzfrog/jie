@@ -36,6 +36,7 @@ export async function createApp(
     handle = await createPlatform({
       workspace: args.cwd,
       homeJieDir: args.homeJieDir,
+      projectJieDir: args.projectJieDir,
       teamId: args.teamId,
       resumeSessionId: args.resume,
       continueLastSession: args.continueLast,
