@@ -10,22 +10,17 @@ function makePlatform(bus: EventManager = createEventManager()) {
   const platform = {
     events: bus,
     team: { id: "minimal", agents: [] },
-    loadTeam: vi.fn<() => Promise<void>>(() => Promise.resolve()),
     stop: vi.fn<() => Promise<void>>(() => Promise.resolve()),
     subscribe: vi.fn(<T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void) => {
       subscribeHandlers.set(topic, cb as (env: AnyEventEnvelope) => void);
       return bus.subscribe(topic, cb);
     }),
-    userPrompt: vi.fn(),
+    prompt: vi.fn(),
     interrupt: vi.fn(),
-    login: vi.fn(),
-    logout: vi.fn(),
-    setDefaultModel: vi.fn(),
-    unsetDefaultTeam: vi.fn(),
-    getDefaultTeam: vi.fn(() => null),
-    getDefaultModel: vi.fn(() => null),
-    listInstalledTeams: vi.fn(() => []),
-    getGitStatus: vi.fn(() => EMPTY_GIT),
+    execute: vi.fn(async (cmd: { name: string } & Record<string, unknown>) => {
+      if (cmd.name === "getGitStatus") return EMPTY_GIT;
+      return null;
+    }),
   };
   return { platform: platform as unknown as Parameters<typeof createTui>[0]["platform"], bus, subscribeHandlers };
 }

@@ -139,7 +139,18 @@ class PiTui implements Tui {
       this.stop();
       return;
     }
-    this.render();
+    void this.render();
+  }
+
+  private async render(): Promise<void> {
+    const state = this.stateStore.getState();
+    const focused = this.stateStore.getFocusedAgent();
+    this.view.chatPane.setAgent(focused);
+    this.view.editor.setQueueIndicator(formatQueueIndicator(focused?.queue ?? null));
+    this.view.rail.setItemsFromState(state);
+    const git = await this.platform.execute({ name: "getGitStatus" });
+    this.view.statusBar.update({ cwd: this.cwd, git }, this.stateStore);
+    this.tui.requestRender();
   }
 
   private publishPrompt(text: string): void {
@@ -156,15 +167,6 @@ class PiTui implements Tui {
     this.platform.prompt(target.agentKey, text);
   }
 
-  private render(): void {
-    const state = this.stateStore.getState();
-    const focused = this.stateStore.getFocusedAgent();
-    this.view.chatPane.setAgent(focused);
-    this.view.editor.setQueueIndicator(formatQueueIndicator(focused?.queue ?? null));
-    this.view.rail.setItemsFromState(state);
-    this.view.statusBar.update({ cwd: this.cwd, git: this.platform.getGitStatus() }, this.stateStore);
-    this.tui.requestRender();
-  }
 }
 
 function subscribeToBus(platform: JiePlatform, onEvent: (env: EventEnvelope<EventType>) => void): () => void {

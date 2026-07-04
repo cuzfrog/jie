@@ -1,180 +1,122 @@
-import type { SettingsStore } from "@cuzfrog/jie-platform/config";
-import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
+import { JiePlatformError, type JiePlatform } from "@cuzfrog/jie-platform";
 import { runModel, runTeam } from "./settings";
 
-const settings = vi.mocked<SettingsStore>({
-  load: vi.fn(),
-  write: vi.fn(),
-  unsetDefaultTeam: vi.fn(),
-});
-
-const teamRegistry = vi.mocked<TeamRegistry>({
-  parseTeamManifest: vi.fn(),
-  isInstalled: vi.fn(),
-  listInstalled: vi.fn(),
-  locate: vi.fn(),
-});
+function makePlatform(): { platform: JiePlatform; execute: ReturnType<typeof vi.fn> } {
+  const execute = vi.fn(async () => null);
+  const platform = {
+    team: { id: "minimal", agents: [] },
+    stop: vi.fn<() => Promise<void>>(() => Promise.resolve()),
+    subscribe: vi.fn(),
+    prompt: vi.fn(),
+    interrupt: vi.fn(),
+    execute,
+  };
+  return { platform: platform as unknown as JiePlatform, execute };
+}
 
 describe("runModel", () => {
-  beforeEach(() => {
-    settings.load.mockReturnValue({});
-  });
-
-  test("writes global settings when no project .jie/ is found", async () => {
+  test("dispatches setDefaultModel and prints success", async () => {
+    const { platform, execute } = makePlatform();
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
     const code = await runModel(
       { kind: "model", provider: "anthropic", modelId: "claude-opus-4" },
-      null,
-      settings,
+      platform,
     );
     expect(code).toBe(0);
-    expect(settings.write).toHaveBeenCalledWith(
-      { defaultProvider: "anthropic", defaultModel: "claude-opus-4" },
-      "global",
-    );
-    expect(logSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain(
-      "default model set to anthropic/claude-opus-4",
-    );
+    expect(execute).toHaveBeenCalledWith({
+      name: "setDefaultModel",
+      provider: "anthropic",
+      modelId: "claude-opus-4",
+    });
     logSpy.mockRestore();
   });
 
-  test("writes project settings when projectJieDir is provided", async () => {
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
-    const code = await runModel(
-      { kind: "model", provider: "anthropic", modelId: "claude-opus-4" },
-      "/some/project/.jie",
-      settings,
-    );
-    expect(code).toBe(0);
-    expect(settings.write).toHaveBeenCalledWith(
-      { defaultProvider: "anthropic", defaultModel: "claude-opus-4" },
-      "project",
-    );
-    logSpy.mockRestore();
-  });
-
-  test("warns to stderr for unknown providers but still writes the setting", async () => {
+  test("rejects when execute throws UNKNOWN_PROVIDER", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => {
+      throw new JiePlatformError("UNKNOWN_PROVIDER", { detail: "ghost-provider" });
+    });
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => { });
     const code = await runModel(
       { kind: "model", provider: "ghost-provider", modelId: "ghost-model" },
-      null,
-      settings,
+      platform,
     );
-    expect(code).toBe(0);
-    expect(errSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain(
-      "unknown provider: ghost-provider",
-    );
-    expect(settings.write).toHaveBeenCalledWith(
-      { defaultProvider: "ghost-provider", defaultModel: "ghost-model" },
-      "global",
-    );
+    expect(code).toBe(1);
+    expect(errSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain("unknown provider: ghost-provider");
     errSpy.mockRestore();
+  });
+
+  test("rethrows unexpected errors", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => {
+      throw new Error("disk full");
+    });
+    await expect(
+      runModel({ kind: "model", provider: "anthropic", modelId: "x" }, platform),
+    ).rejects.toThrow(/disk full/);
   });
 });
 
 describe("runTeam", () => {
-  beforeEach(() => {
-    settings.load.mockReturnValue({});
-    teamRegistry.isInstalled.mockReturnValue(false);
-    teamRegistry.locate.mockReturnValue("user");
-    teamRegistry.listInstalled.mockReturnValue([]);
-  });
-
-  test("team dev (installed globally) writes defaultTeam to global settings", async () => {
-    teamRegistry.isInstalled.mockReturnValueOnce(true);
-    teamRegistry.locate.mockReturnValueOnce("user");
+  test("dispatches setDefaultTeam when teamId is given", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => null);
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
-    const code = await runTeam(
-      { kind: "team", teamId: "dev", unset: false },
-      settings,
-      teamRegistry,
-    );
+    const code = await runTeam({ kind: "team", teamId: "dev", unset: false }, platform);
     expect(code).toBe(0);
-    expect(settings.write).toHaveBeenCalledWith(
-      { defaultTeam: "dev" },
-      "global",
-    );
-    expect(logSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain(
-      "default team set to dev",
-    );
+    expect(execute).toHaveBeenCalledWith({ name: "setDefaultTeam", teamId: "dev" });
     logSpy.mockRestore();
   });
 
-  test("team dev (installed in project) writes defaultTeam to project settings", async () => {
-    teamRegistry.isInstalled.mockReturnValueOnce(true);
-    teamRegistry.locate.mockReturnValueOnce("project");
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
-    const code = await runTeam(
-      { kind: "team", teamId: "dev", unset: false },
-      settings,
-      teamRegistry,
-    );
-    expect(code).toBe(0);
-    expect(settings.write).toHaveBeenCalledWith(
-      { defaultTeam: "dev" },
-      "project",
-    );
-    logSpy.mockRestore();
-  });
-
-  test("team ghost (not installed) -> exit 1", async () => {
+  test("rejects when execute throws TEAM_NOT_FOUND", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => {
+      throw new JiePlatformError("TEAM_NOT_FOUND", { detail: "team 'ghost' not found" });
+    });
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => { });
-    const code = await runTeam(
-      { kind: "team", teamId: "ghost", unset: false },
-      settings,
-      teamRegistry,
-    );
+    const code = await runTeam({ kind: "team", teamId: "ghost", unset: false }, platform);
     expect(code).toBe(1);
-    expect(errSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain(
-      "is not installed",
-    );
+    expect(errSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain("is not installed");
     errSpy.mockRestore();
   });
 
-  test("team --unset removes defaultTeam from global settings", async () => {
+  test("dispatches unsetDefaultTeam when --unset", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => null);
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
-    const code = await runTeam(
-      { kind: "team", unset: true },
-      settings,
-      teamRegistry,
-    );
+    const code = await runTeam({ kind: "team", unset: true }, platform);
     expect(code).toBe(0);
-    expect(settings.unsetDefaultTeam).toHaveBeenCalled();
-    expect(settings.write).not.toHaveBeenCalled();
-    expect(logSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain(
-      "default team unset",
-    );
+    expect(execute).toHaveBeenCalledWith({ name: "unsetDefaultTeam" });
     logSpy.mockRestore();
   });
 
-  test("team (no arg) prints defaultTeam and installed list", async () => {
-    settings.load.mockReturnValueOnce({ defaultProvider: "p", defaultModel: "m", defaultTeam: "dev" });
-    teamRegistry.listInstalled.mockReturnValueOnce(["dev"]);
+  test("prints defaultTeam and installed list when no arg", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => ({
+      kind: "info" as const,
+      defaultTeam: "dev",
+      installed: ["minimal", "alpha", "beta"],
+    }));
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
-    const code = await runTeam(
-      { kind: "team", unset: false },
-      settings,
-      teamRegistry,
-    );
+    const code = await runTeam({ kind: "team", unset: false }, platform);
     expect(code).toBe(0);
     const out = logSpy.mock.calls.map((c) => String(c[0])).join("|");
     expect(out).toContain("defaultTeam: dev");
     expect(out).toContain("installed:");
-    expect(out).toContain("dev");
     logSpy.mockRestore();
   });
 
-  test("team (no arg) prints defaultTeam: unset when no defaultTeam is set", async () => {
+  test("prints defaultTeam: unset when none is set", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => ({
+      kind: "info" as const,
+      defaultTeam: null,
+      installed: ["minimal"],
+    }));
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
-    const code = await runTeam(
-      { kind: "team", unset: false },
-      settings,
-      teamRegistry,
-    );
+    const code = await runTeam({ kind: "team", unset: false }, platform);
     expect(code).toBe(0);
-    expect(logSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain(
-      "defaultTeam: unset",
-    );
+    expect(logSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain("defaultTeam: unset");
     logSpy.mockRestore();
   });
 });

@@ -4,6 +4,7 @@ import {
   type AuthStore,
   type SettingsStore,
 } from "@cuzfrog/jie-platform/config";
+import { createCommandExecutor } from "@cuzfrog/jie-platform/command";
 import { createEventManager } from "@cuzfrog/jie-platform/event";
 import {
   createArtifactStore,
@@ -59,6 +60,14 @@ function makeDeps(workspace: string, homeJieDir: string): AppDeps {
     artifactStore,
     memoryManager: createMemoryManager(storage),
     gitService,
+    commandExecutor: createCommandExecutor({
+      authStore,
+      settingsStore,
+      teamRegistry,
+      gitService,
+      defaultScope: "global",
+      loadActiveTeam: () => Promise.resolve([]),
+    }),
     defaultScope: "global",
   };
 }

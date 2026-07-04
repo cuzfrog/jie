@@ -1,18 +1,17 @@
-import { getProviders } from "@earendil-works/pi-ai";
-import { ulid } from "ulid";
 import { type Api, type Model } from "@earendil-works/pi-ai";
+import { ulid } from "ulid";
 import { type AgentBody, type AgentIdentity, createAgentBody } from "./core";
 import { type EventEnvelope, type EventManager, type EventType, Events } from "./event";
 import { type AgentSoul, type TeamBlueprint, type TeamRegistry } from "./team";
-import { type AuthStore, type ModelRegistry, type Scope, type Settings, type SettingsStore } from "./config";
+import { type ModelRegistry, type SettingsStore } from "./config";
 import { type ToolRegistry } from "./tools";
 import {
   type ArtifactStore,
   type MemoryManager,
   type Storage,
 } from "./storage";
-import { type GitService, type GitSnapshot } from "./services";
 import { JiePlatformError } from "./jie-platform-errors";
+import { type Command, type CommandExecutor, type CommandName, type CommandResult } from "./command";
 
 export interface CreateJiePlatformOptions {
   readonly workspace: string;
@@ -31,9 +30,7 @@ export interface JiePlatformDeps {
   readonly toolRegistry: ToolRegistry;
   readonly artifactStore: ArtifactStore;
   readonly memoryManager: MemoryManager;
-  readonly authStore: AuthStore;
-  readonly gitService: GitService;
-  readonly defaultScope: Scope;
+  readonly commandExecutor: CommandExecutor;
 }
 
 export interface JiePlatform {
@@ -41,72 +38,64 @@ export interface JiePlatform {
     readonly id: string;
     readonly agents: ReadonlyArray<AgentIdentity>;
   };
-  readonly loadTeam: (teamId: string) => Promise<void>;
-  readonly stop: () => Promise<void>;
+  stop(): Promise<void>;
 
-  readonly subscribe: <T extends EventType>(topic: T, callback: (event: EventEnvelope<T>) => void) => () => void;
-  readonly prompt: (agentKey: string, text: string) => void;
-  readonly interrupt: () => void;
-
-  readonly login: (provider: string, apiKey: string) => void;
-  readonly logout: (provider?: string) => void;
-  readonly setDefaultModel: (provider: string, modelId: string) => void;
-  readonly unsetDefaultTeam: () => void;
-  readonly getDefaultTeam: () => string | null;
-  readonly getDefaultModel: () => { readonly provider: string; readonly modelId: string } | null;
-  readonly listInstalledTeams: () => ReadonlyArray<string>;
-  readonly getGitStatus: () => GitSnapshot;
+  subscribe<T extends EventType>(topic: T, callback: (event: EventEnvelope<T>) => void): () => void;
+  prompt(agentKey: string, text: string): void;
+  interrupt(): void;
+  execute<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>>;
 }
 
 export async function createJiePlatform(options: CreateJiePlatformOptions, dependencies: JiePlatformDeps): Promise<JiePlatform> {
   const resolveModel = defaultResolveModel(dependencies.modelRegistry);
-  const knownProviders = new Set<string>(getProviders() as ReadonlyArray<string>);
   const sessionIds = new Map<string, string>();
   const loadedTeams = new Map<string, AgentBody[]>();
 
-  async function loadTeam(teamId: string): Promise<void> {
+  async function loadTeam(teamId: string): Promise<ReadonlyArray<AgentIdentity>> {
     const existing = loadedTeams.get(teamId);
-    if (existing !== undefined) return;
-
-    const blueprint: TeamBlueprint = dependencies.teamRegistry.parseTeamManifest(teamId);
-    const sessionId = resolveSessionId(dependencies.memoryManager, options, teamId, sessionIds);
-    sessionIds.set(teamId, sessionId);
-
-    const out: AgentBody[] = [];
-    for (const soul of blueprint.roles) {
-      const isLeader = soul.role === blueprint.leaderRole;
-      const agentKey = `${soul.role}-1`;
-      const resolvedModel = resolveSoulModel(soul, dependencies.settingsStore, resolveModel);
-      if (resolvedModel === undefined) {
-        throw new JiePlatformError("NO_MODEL_ERROR");
+    let bodies: AgentBody[];
+    if (existing !== undefined) {
+      bodies = existing;
+    } else {
+      const blueprint: TeamBlueprint = dependencies.teamRegistry.parseTeamManifest(teamId);
+      const sessionId = resolveSessionId(dependencies.memoryManager, options, teamId, sessionIds);
+      sessionIds.set(teamId, sessionId);
+      const out: AgentBody[] = [];
+      for (const soul of blueprint.roles) {
+        const isLeader = soul.role === blueprint.leaderRole;
+        const agentKey = `${soul.role}-1`;
+        const resolvedModel = resolveSoulModel(soul, dependencies.settingsStore, resolveModel);
+        if (resolvedModel === undefined) continue;
+        out.push(
+          createAgentBody({
+            agentKey,
+            teamId,
+            soul,
+            isLeader,
+            eventManager: dependencies.eventManager,
+            artifactStore: dependencies.artifactStore,
+            memory: dependencies.memoryManager,
+            sessionId,
+            toolRegistry: dependencies.toolRegistry,
+            getApiKey: async (provider: string) => dependencies.modelRegistry.getApiKey(provider),
+            model: resolvedModel,
+          }),
+        );
       }
-      out.push(
-        createAgentBody({
-          agentKey,
-          teamId,
-          soul,
-          isLeader,
-          eventManager: dependencies.eventManager,
-          artifactStore: dependencies.artifactStore,
-          memory: dependencies.memoryManager,
-          sessionId,
-          toolRegistry: dependencies.toolRegistry,
-          getApiKey: async (provider: string) => dependencies.modelRegistry.getApiKey(provider),
-          model: resolvedModel,
-        }),
-      );
+      for (const body of out) {
+        await body.start();
+      }
+      bodies = out;
+      loadedTeams.set(teamId, out);
+      publishTeamLoaded(dependencies.eventManager, teamId, blueprint);
     }
-    for (const body of out) {
-      await body.start();
-    }
-    loadedTeams.set(teamId, out);
-    publishTeamLoaded(dependencies.eventManager, teamId, blueprint);
+    activeTeamId = teamId;
+    return bodies.map((b) => b.identity);
   }
 
   const initialTeamId = options.teamId ?? "minimal";
-  await loadTeam(initialTeamId);
-
   let activeTeamId = initialTeamId;
+  await loadTeam(initialTeamId);
 
   const handle: JiePlatform = {
     team: {
@@ -114,14 +103,9 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
         return activeTeamId;
       },
       get agents(): ReadonlyArray<AgentIdentity> {
-        const bodies = loadedTeams.get(activeTeamId);
-        if (bodies === undefined) return [];
+        const bodies = loadedTeams.get(activeTeamId) ?? [];
         return bodies.map((b) => b.identity);
       },
-    },
-    loadTeam: async (teamId: string): Promise<void> => {
-      await loadTeam(teamId);
-      activeTeamId = teamId;
     },
     stop: async (): Promise<void> => {
       const allBodies: AgentBody[] = [];
@@ -141,46 +125,22 @@ export async function createJiePlatform(options: CreateJiePlatformOptions, depen
     interrupt() {
       dependencies.eventManager.publish(Events.interrupt({ kind: "system" }));
     },
-
-    login(provider, apiKey) {
-      const next = dependencies.authStore.setProvider(dependencies.authStore.load(), provider, apiKey);
-      dependencies.authStore.saveAuthConfig(next);
-    },
-    logout(provider) {
-      if (provider === undefined) {
-        dependencies.authStore.saveAuthConfig(dependencies.authStore.clear());
-        return;
-      }
-      const next = dependencies.authStore.removeProvider(dependencies.authStore.load(), provider);
-      dependencies.authStore.saveAuthConfig(next);
-    },
-    setDefaultModel(provider, modelId) {
-      if (!knownProviders.has(provider)) {
-        throw new JiePlatformError("UNKNOWN_PROVIDER", { detail: provider });
-      }
-      const existing = dependencies.settingsStore.load();
-      const next: Settings = { ...existing, defaultProvider: provider, defaultModel: modelId };
-      dependencies.settingsStore.write(next, dependencies.defaultScope);
-    },
-    unsetDefaultTeam() {
-      dependencies.settingsStore.unsetDefaultTeam();
-    },
-    getDefaultTeam() {
-      const settings = dependencies.settingsStore.load();
-      return settings.defaultTeam ?? null;
-    },
-    getDefaultModel() {
-      const settings = dependencies.settingsStore.load();
-      if (settings.defaultProvider === undefined || settings.defaultModel === undefined) return null;
-      return { provider: settings.defaultProvider, modelId: settings.defaultModel };
-    },
-    listInstalledTeams() {
-      return dependencies.teamRegistry.listInstalled();
-    },
-    getGitStatus() {
-      return dependencies.gitService.getSnapshot();
+    execute<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>> {
+      return runCommand(command);
     },
   };
+
+  async function runCommand<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>> {
+    if (command.name === "team") {
+      const teamCommand = command as Command<"team">;
+      if (teamCommand.teamId !== undefined) {
+        const agents = await loadTeam(teamCommand.teamId);
+        activeTeamId = teamCommand.teamId;
+        return { kind: "switched", teamId: teamCommand.teamId, agents } as CommandResult<T>;
+      }
+    }
+    return (await dependencies.commandExecutor.execute(command)) as CommandResult<T>;
+  }
 
   return handle;
 }
@@ -219,14 +179,14 @@ function resolveSoulModel(
   );
   if (modelStr === "") return undefined;
   const slash = modelStr.indexOf("/");
-  if (slash === -1) {
-    throw new JiePlatformError("INVALID_MODEL_STRING", {
-      detail: `invalid model string: ${modelStr}`,
-    });
-  }
+  if (slash === -1) return undefined;
   const provider = modelStr.slice(0, slash);
   const modelId = modelStr.slice(slash + 1);
-  return resolveModel(provider, modelId);
+  try {
+    return resolveModel(provider, modelId);
+  } catch {
+    return undefined;
+  }
 }
 
 function resolveSessionId(

@@ -1,4 +1,4 @@
-import type { JiePlatform } from "@cuzfrog/jie-platform";
+import { JiePlatformError, type JiePlatform } from "@cuzfrog/jie-platform";
 import { Actions, type StateStore } from "./state";
 
 type CommandOutcome =
@@ -113,23 +113,21 @@ function interceptLogin(args: ReadonlyArray<string>, deps: CommandHandlerDeps): 
   if (args.length !== 2) return { kind: "error", text: "/login <provider> <apiKey>" };
   const [provider, apiKey] = args;
   if (provider === undefined || apiKey === undefined) return { kind: "error", text: "/login <provider> <apiKey>" };
-  try {
-    deps.platform.login(provider, apiKey);
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    return { kind: "error", text: `/login failed: ${reason}` };
-  }
+  void deps.platform.execute({ name: "login", provider, apiKey })
+    .then(() => undefined, (error: unknown) => {
+      const reason = error instanceof Error ? error.message : String(error);
+      deps.stateStore.dispatch(Actions.setErrorMessage(`/login failed: ${reason}`));
+    });
   return { kind: "reply", text: `logged in to ${provider}` };
 }
 
 function interceptLogout(args: ReadonlyArray<string>, deps: CommandHandlerDeps): InterceptResult {
   const provider = args[0];
-  try {
-    deps.platform.logout(provider);
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    return { kind: "error", text: `/logout failed: ${reason}` };
-  }
+  void deps.platform.execute({ name: "logout", provider })
+    .then(() => undefined, (error: unknown) => {
+      const reason = error instanceof Error ? error.message : String(error);
+      deps.stateStore.dispatch(Actions.setErrorMessage(`/logout failed: ${reason}`));
+    });
   return { kind: "reply", text: provider === undefined ? "logged out of all providers" : `logged out of ${provider}` };
 }
 
@@ -137,40 +135,43 @@ function interceptModel(args: ReadonlyArray<string>, deps: CommandHandlerDeps): 
   if (args.length !== 1) return { kind: "error", text: "/model <provider>/<modelId>" };
   const parsed = parseModelArg(args[0]!);
   if (parsed.kind === "error") return parsed;
-  try {
-    deps.platform.setDefaultModel(parsed.provider, parsed.modelId);
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    return { kind: "error", text: `/model failed: ${reason}` };
-  }
+  void deps.platform.execute({ name: "setDefaultModel", provider: parsed.provider, modelId: parsed.modelId })
+    .then(() => undefined, (error: unknown) => {
+      const reason = error instanceof Error ? error.message : String(error);
+      deps.stateStore.dispatch(Actions.setErrorMessage(`/model failed: ${reason}`));
+    });
   return { kind: "reply", text: `default model set to ${parsed.provider}/${parsed.modelId}` };
 }
 
 function interceptTeam(args: ReadonlyArray<string>, deps: CommandHandlerDeps): InterceptResult {
   if (args[0] === "--unset") {
-    try {
-      deps.platform.unsetDefaultTeam();
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      return { kind: "error", text: `/team --unset failed: ${reason}` };
-    }
+    void deps.platform.execute({ name: "unsetDefaultTeam" })
+      .then(() => undefined, (error: unknown) => {
+        const reason = error instanceof Error ? error.message : String(error);
+        deps.stateStore.dispatch(Actions.setErrorMessage(`/team --unset failed: ${reason}`));
+      });
     return { kind: "reply", text: "default team unset; takes effect on next `jie` invocation" };
   }
   if (args.length === 0) {
-    const defaultTeam = deps.platform.getDefaultTeam();
-    const installed = deps.platform.listInstalledTeams();
-    return { kind: "reply", text: formatTeamListReply(defaultTeam, installed) };
+    void deps.platform.execute({ name: "team" })
+      .then((info) => {
+        if (info.kind === "info") {
+          deps.stateStore.dispatch(Actions.setTransientMessage(formatTeamListReply(info.defaultTeam, info.installed)));
+        }
+      }, (error: unknown) => {
+        const reason = error instanceof Error ? error.message : String(error);
+        deps.stateStore.dispatch(Actions.setErrorMessage(`/team failed: ${reason}`));
+      });
+    return { kind: "reply", text: "loading team list…" };
   }
   const argument = args[0]!;
-  void deps.platform.loadTeam(argument).then(
-    () => undefined,
-    (error: unknown) => {
-      const code = error instanceof Error && "code" in error ? (error as { code?: unknown }).code : undefined;
+  void deps.platform.execute({ name: "team", teamId: argument })
+    .then(() => undefined, (error: unknown) => {
+      const code = error instanceof JiePlatformError ? error.code : undefined;
       const message = code === "TEAM_NOT_FOUND" ? `team '${argument}' not found` : `loadTeam(${argument}) failed`;
       deps.stateStore.dispatch(Actions.setErrorMessage(message));
-    },
-  );
-  return { kind: "reply", text: `switching to team '${argument}'…` };
+    });
+  return { kind: "reply", text: `loaded team '${argument}'` };
 }
 
 const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn>([

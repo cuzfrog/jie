@@ -11,23 +11,23 @@ function makePlatform(bus: EventManager, initialTeamId: string): JiePlatform {
   const team: { id: string; agents: ReadonlyArray<never> } = { id: initialTeamId, agents: [] };
   return {
     team: team as unknown as JiePlatform["team"],
-    loadTeam: async (id: string) => {
-      (team as { id: string }).id = id;
-    },
     stop: noopAsync,
     subscribe: <T extends EventType>(topic: T, cb: (event: EventEnvelope<T>) => void) => bus.subscribe(topic, cb),
     prompt: (agentKey: string, text: string) => {
       bus.publish(Events.userPrompt({ kind: "user" }, team.id, text, agentKey));
     },
     interrupt: () => undefined,
-    login: () => undefined,
-    logout: () => undefined,
-    setDefaultModel: () => undefined,
-    unsetDefaultTeam: () => undefined,
-    getDefaultTeam: () => null,
-    getDefaultModel: () => null,
-    listInstalledTeams: () => [],
-    getGitStatus: () => stubGitSnapshot,
+    execute: (async (cmd: { name: string } & Record<string, unknown>) => {
+      if (cmd.name === "getGitStatus") return stubGitSnapshot;
+      if (cmd.name === "team" && "teamId" in cmd && typeof cmd.teamId === "string") {
+        team.id = cmd.teamId;
+        return { kind: "switched" as const, teamId: cmd.teamId, agents: [] };
+      }
+      if (cmd.name === "team") {
+        return { kind: "info" as const, defaultTeam: null, installed: [] };
+      }
+      return null;
+    }) as unknown as JiePlatform["execute"],
   };
 }
 

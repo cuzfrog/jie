@@ -1,10 +1,12 @@
 import { createJiePlatform, type JiePlatform } from "@cuzfrog/jie-platform";
-import type { AuthStore, Scope, Settings, ModelRegistry, SettingsStore } from "@cuzfrog/jie-platform/config";
+import type { AuthStore, Settings, ModelRegistry, SettingsStore } from "@cuzfrog/jie-platform/config";
 import type { EventManager } from "@cuzfrog/jie-platform/event";
 import type { GitService } from "@cuzfrog/jie-platform/services";
 import type { ArtifactStore, MemoryManager, Storage } from "@cuzfrog/jie-platform/storage";
 import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
 import type { ToolRegistry } from "@cuzfrog/jie-platform/tools";
+import type { CommandExecutor } from "@cuzfrog/jie-platform/command";
+import { type Scope } from "@cuzfrog/jie-platform/config";
 
 export interface AppDeps {
   readonly authStore: AuthStore;
@@ -17,6 +19,7 @@ export interface AppDeps {
   readonly artifactStore: ArtifactStore;
   readonly memoryManager: MemoryManager;
   readonly gitService: GitService;
+  readonly commandExecutor: CommandExecutor;
   readonly defaultScope: Scope;
 }
 
@@ -57,9 +60,8 @@ export async function createApp(
       );
       return { kind: "error", code: 1 };
     }
-    dependencies.authStore.saveAuthConfig(
-      dependencies.authStore.setProvider(dependencies.authStore.load(), provider, args.apiKey),
-    );
+    const next = dependencies.authStore.setProvider(dependencies.authStore.load(), provider, args.apiKey);
+    dependencies.authStore.saveAuthConfig(next);
     console.log(`logged in to ${provider}`);
   }
 

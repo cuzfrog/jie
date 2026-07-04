@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createEventManager, type EventEnvelope } from "./event";
 import { createJiePlatform } from "./jie-platform";
+import { createCommandExecutor } from "./command";
 import {
   createModelRegistry,
   type AuthStore,
@@ -13,9 +14,7 @@ import {
 import { createTeamRegistry } from "./team";
 import { createToolRegistry } from "./tools";
 import { createArtifactStore, createMemoryManager, createStorage } from "./storage";
-import { type GitService } from "./services";
-
-const NO_MODEL_ERROR = "No model has been selected";
+import { type GitService, type GitSnapshot } from "./services";
 
 const settingsStore = vi.mocked<SettingsStore>({
   load: vi.fn(),
@@ -40,7 +39,7 @@ const DEFAULT_SETTINGS: Settings = {
   defaultModel: "claude-sonnet-4-5",
 };
 
-const EMPTY_GIT_SNAPSHOT = { branch: "", dirty: false, ahead: 0, behind: 0 };
+const EMPTY_GIT_SNAPSHOT: GitSnapshot = { branch: "", dirty: false, ahead: 0, behind: 0 };
 
 function makeDeps(workspace: string, homeJieDir: string, filePath: string = ":memory:") {
   const projectJieDir = join(workspace, ".jie");
@@ -53,18 +52,25 @@ function makeDeps(workspace: string, homeJieDir: string, filePath: string = ":me
     artifactStore,
   });
   gitService.getSnapshot.mockReturnValue(EMPTY_GIT_SNAPSHOT);
+  const teamRegistry = createTeamRegistry({ homeJieDir, projectJieDir });
+  const commandExecutor = createCommandExecutor({
+    authStore,
+    settingsStore,
+    teamRegistry,
+    gitService,
+    defaultScope: "global",
+    loadActiveTeam: () => Promise.resolve([]),
+  });
   return {
     eventManager: events,
     settingsStore,
     storage,
-    teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
+    teamRegistry,
     modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
     toolRegistry,
     artifactStore,
     memoryManager: createMemoryManager(storage),
-    authStore,
-    gitService,
-    defaultScope: "global" as const,
+    commandExecutor,
   };
 }
 
@@ -103,6 +109,7 @@ describe("createJiePlatform", () => {
       const events: EventEnvelope<"user.prompt">[] = [];
       handle.subscribe("user.prompt", (env) => events.push(env));
       expect(events).toHaveLength(0);
+      await handle.stop();
     });
 
     test("team.loaded is published once at start; the event carries is_leader per agent", async () => {
@@ -125,29 +132,12 @@ describe("createJiePlatform", () => {
       expect(env.payload.agents[0]!.is_leader).toBe(true);
     });
 
-    test("model pre-check: no model in soul or settings throws NO_MODEL_ERROR", async () => {
+    test("model pre-check: no model in soul or settings loads with no bodies but no error", async () => {
       settingsStore.load.mockReturnValueOnce({});
-      const filePath = join(workspace, "no-model.db");
-      const storage = createStorage({ type: "sqlite", filePath });
-      const projectJieDir = join(workspace, ".jie");
-      const events = createEventManager();
-      const artifactStore = createArtifactStore(storage);
-      const deps = {
-        eventManager: events,
-        settingsStore,
-        storage,
-        teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
-        modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
-        toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events, artifactStore }),
-        artifactStore,
-        memoryManager: createMemoryManager(storage),
-        authStore,
-        gitService,
-        defaultScope: "global" as const,
-      };
-      await expect(
-        createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps),
-      ).rejects.toThrow(NO_MODEL_ERROR);
+      const deps = makeDeps(workspace, homeJieDir);
+      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
+      expect(handle.team.agents).toEqual([]);
+      await handle.stop();
     });
 
     test("handle.stop() detaches all bus subscriptions", async () => {
@@ -169,33 +159,23 @@ describe("createJiePlatform", () => {
   describe("session id resolution", () => {
     test("resumeSessionId: valid id is used; invalid id rejects with 'unknown session_id:'", async () => {
       const filePath = join(workspace, "resume.db");
-      const projectJieDir = join(workspace, ".jie");
       const storage1 = createStorage({ type: "sqlite", filePath });
       const events1 = createEventManager();
       const artifactStore1 = createArtifactStore(storage1);
+      const memoryManager1 = createMemoryManager(storage1);
       const deps1 = {
-        eventManager: events1,
-        settingsStore,
+        ...makeDeps(workspace, homeJieDir, ":memory:"),
         storage: storage1,
-        teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
-        modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
-        toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events1, artifactStore: artifactStore1 }),
+        memoryManager: memoryManager1,
+        eventManager: events1,
         artifactStore: artifactStore1,
-        memoryManager: createMemoryManager(storage1),
-        authStore,
-        gitService,
-        defaultScope: "global" as const,
+        toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events1, artifactStore: artifactStore1 }),
       };
       const h1 = await createJiePlatform(
         { workspace, homeJieDir, teamId: "minimal" },
         deps1,
       );
-      createMemoryManager(createStorage({ type: "sqlite", filePath })).persist(
-        STUB_MESSAGE,
-        "general-1",
-        "test-session-id",
-        "minimal",
-      );
+      memoryManager1.persist(STUB_MESSAGE, "general-1", "test-session-id", "minimal");
       await h1.stop();
       const sessionId = "test-session-id";
 
@@ -203,17 +183,12 @@ describe("createJiePlatform", () => {
       const events2 = createEventManager();
       const artifactStore2 = createArtifactStore(storage2);
       const deps2 = {
-        eventManager: events2,
-        settingsStore,
+        ...makeDeps(workspace, homeJieDir, ":memory:"),
         storage: storage2,
-        teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
-        modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
-        toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events2, artifactStore: artifactStore2 }),
-        artifactStore: artifactStore2,
         memoryManager: createMemoryManager(storage2),
-        authStore,
-        gitService,
-        defaultScope: "global" as const,
+        eventManager: events2,
+        artifactStore: artifactStore2,
+        toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events2, artifactStore: artifactStore2 }),
       };
       const h2 = await createJiePlatform(
         { workspace, homeJieDir, teamId: "minimal", resumeSessionId: sessionId },
@@ -225,17 +200,12 @@ describe("createJiePlatform", () => {
       const events3 = createEventManager();
       const artifactStore3 = createArtifactStore(storage3);
       const deps3 = {
-        eventManager: events3,
-        settingsStore,
+        ...makeDeps(workspace, homeJieDir, ":memory:"),
         storage: storage3,
-        teamRegistry: createTeamRegistry({ homeJieDir, projectJieDir }),
-        modelRegistry: createModelRegistry(homeJieDir, projectJieDir, authStore),
-        toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events3, artifactStore: artifactStore3 }),
-        artifactStore: artifactStore3,
         memoryManager: createMemoryManager(storage3),
-        authStore,
-        gitService,
-        defaultScope: "global" as const,
+        eventManager: events3,
+        artifactStore: artifactStore3,
+        toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events3, artifactStore: artifactStore3 }),
       };
       await expect(
         createJiePlatform(
@@ -243,6 +213,7 @@ describe("createJiePlatform", () => {
           deps3,
         ),
       ).rejects.toThrow(/unknown session_id: not-a-real-id/);
+
     });
   });
 
@@ -267,7 +238,7 @@ describe("createJiePlatform", () => {
     });
   });
 
-  describe("loadTeam (v0.2 multi-team)", () => {
+  describe("team switch via execute", () => {
     function installTeam(dir: string, teamId: string, role: string, leaderRole: string = role): void {
       const teamDir = join(dir, "teams", teamId);
       mkdirSync(teamDir, { recursive: true });
@@ -281,7 +252,7 @@ describe("createJiePlatform", () => {
       );
     }
 
-    test("loadTeam installs a second team and switches active team", async () => {
+    test("execute({ name: 'team', teamId }) installs and switches active team", async () => {
       installTeam(homeJieDir, "alpha", "general");
       installTeam(homeJieDir, "beta", "researcher");
       const deps = makeDeps(workspace, homeJieDir);
@@ -293,15 +264,16 @@ describe("createJiePlatform", () => {
       expect(handle.team.id).toBe("alpha");
       expect(events.map((e) => e.payload.teamId)).toEqual(["alpha"]);
 
-      await handle.loadTeam("beta");
+      const result = await handle.execute({ name: "team", teamId: "beta" });
+      if (result.kind !== "switched") throw new Error("expected switched");
       expect(handle.team.id).toBe("beta");
       expect(events.map((e) => e.payload.teamId)).toEqual(["alpha", "beta"]);
-      expect(handle.team.agents.length).toBeGreaterThan(0);
+      expect(result.agents.length).toBeGreaterThan(0);
 
       await handle.stop();
     });
 
-    test("loadTeam is idempotent: calling twice does not re-publish the team.loaded event", async () => {
+    test("execute({ name: 'team', teamId }) is idempotent: calling twice does not re-publish", async () => {
       installTeam(homeJieDir, "alpha", "general");
       const deps = makeDeps(workspace, homeJieDir);
       const events: EventEnvelope<"system.team.loaded">[] = [];
@@ -309,15 +281,15 @@ describe("createJiePlatform", () => {
         events.push(env);
       });
       const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "alpha" }, deps);
-      await handle.loadTeam("alpha");
-      await handle.loadTeam("alpha");
+      await handle.execute({ name: "team", teamId: "alpha" });
+      await handle.execute({ name: "team", teamId: "alpha" });
       expect(events.filter((e) => e.payload.teamId === "alpha")).toHaveLength(1);
       await handle.stop();
     });
   });
 });
 
-describe("JiePlatform — facade methods", () => {
+describe("JiePlatform — execute(commands)", () => {
   let workspace: string;
   let homeJieDir: string;
 
@@ -358,7 +330,7 @@ describe("JiePlatform — facade methods", () => {
     });
   });
 
-  describe("userPrompt", () => {
+  describe("prompt", () => {
     test("publishes a user.prompt event addressed to the given agent on the active team", async () => {
       const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
@@ -385,25 +357,25 @@ describe("JiePlatform — facade methods", () => {
     });
   });
 
-  describe("login", () => {
+  describe("execute(login)", () => {
     test("writes the provider key via authStore", async () => {
       const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
       authStore.load.mockReturnValue({});
       authStore.setProvider.mockReturnValue({ anthropic: { type: "api_key", key: "sk-test" } });
-      handle.login("anthropic", "sk-test");
+      await handle.execute({ name: "login", provider: "anthropic", apiKey: "sk-test" });
       expect(authStore.setProvider).toHaveBeenCalledWith({}, "anthropic", "sk-test");
       expect(authStore.saveAuthConfig).toHaveBeenCalledWith({ anthropic: { type: "api_key", key: "sk-test" } });
       await handle.stop();
     });
   });
 
-  describe("logout", () => {
+  describe("execute(logout)", () => {
     test("with no provider, clears all providers", async () => {
       const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
       authStore.clear.mockReturnValue({});
-      handle.logout();
+      await handle.execute({ name: "logout" });
       expect(authStore.clear).toHaveBeenCalled();
       expect(authStore.saveAuthConfig).toHaveBeenCalledWith({});
       expect(authStore.removeProvider).not.toHaveBeenCalled();
@@ -415,7 +387,7 @@ describe("JiePlatform — facade methods", () => {
       const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
       authStore.load.mockReturnValue({ anthropic: { type: "api_key", key: "sk-test" } });
       authStore.removeProvider.mockReturnValue({});
-      handle.logout("anthropic");
+      await handle.execute({ name: "logout", provider: "anthropic" });
       expect(authStore.removeProvider).toHaveBeenCalledWith(expect.anything(), "anthropic");
       expect(authStore.saveAuthConfig).toHaveBeenCalledWith({});
       expect(authStore.clear).not.toHaveBeenCalled();
@@ -423,12 +395,12 @@ describe("JiePlatform — facade methods", () => {
     });
   });
 
-  describe("setDefaultModel", () => {
+  describe("execute(setDefaultModel)", () => {
     test("writes the new model with the default scope for known providers", async () => {
-      const deps = makeDeps(workspace, homeJieDir, ":memory:");
+      const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
       settingsStore.load.mockReturnValue({});
-      handle.setDefaultModel("anthropic", "claude-sonnet-4-5");
+      await handle.execute({ name: "setDefaultModel", provider: "anthropic", modelId: "claude-sonnet-4-5" });
       expect(settingsStore.write).toHaveBeenCalledWith(
         { defaultProvider: "anthropic", defaultModel: "claude-sonnet-4-5" },
         "global",
@@ -439,69 +411,65 @@ describe("JiePlatform — facade methods", () => {
     test("throws UNKNOWN_PROVIDER for an unknown provider", async () => {
       const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
-      expect(() => handle.setDefaultModel("no-such-provider", "x")).toThrow(/Unknown provider/);
+      await expect(handle.execute({ name: "setDefaultModel", provider: "no-such-provider", modelId: "x" })).rejects.toThrow(/Unknown provider/);
       expect(settingsStore.write).not.toHaveBeenCalled();
-      await handle.stop();
-    });
-
-    test("uses project scope when defaultScope is project", async () => {
-      const deps = makeDeps(workspace, homeJieDir);
-      const projectDeps = { ...deps, defaultScope: "project" as const };
-      const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, projectDeps);
-      settingsStore.load.mockReturnValue({});
-      handle.setDefaultModel("anthropic", "claude-sonnet-4-5");
-      expect(settingsStore.write).toHaveBeenCalledWith(expect.anything(), "project");
       await handle.stop();
     });
   });
 
-  describe("unsetDefaultTeam", () => {
+  describe("execute(unsetDefaultTeam)", () => {
     test("delegates to settingsStore.unsetDefaultTeam", async () => {
       const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
-      handle.unsetDefaultTeam();
+      await handle.execute({ name: "unsetDefaultTeam" });
       expect(settingsStore.unsetDefaultTeam).toHaveBeenCalledTimes(1);
       await handle.stop();
     });
   });
 
-  describe("getDefaultTeam / getDefaultModel", () => {
-    test("returns the configured default team and model", async () => {
+  describe("execute(getDefaultModel)", () => {
+    test("returns the configured default model", async () => {
       const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
-      settingsStore.load.mockReturnValue({ defaultTeam: "alpha", defaultProvider: "anthropic", defaultModel: "claude-sonnet-4-5" });
-      expect(handle.getDefaultTeam()).toBe("alpha");
-      expect(handle.getDefaultModel()).toEqual({ provider: "anthropic", modelId: "claude-sonnet-4-5" });
+      settingsStore.load.mockReturnValueOnce({ defaultProvider: "anthropic", defaultModel: "claude-sonnet-4-5" });
+      const result = await handle.execute({ name: "getDefaultModel" });
+      expect(result).toEqual({ provider: "anthropic", modelId: "claude-sonnet-4-5" });
       await handle.stop();
     });
 
     test("returns null when no defaults are configured", async () => {
       const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
-      settingsStore.load.mockReturnValue({});
-      expect(handle.getDefaultTeam()).toBeNull();
-      expect(handle.getDefaultModel()).toBeNull();
+      settingsStore.load.mockReturnValueOnce({});
+      const result = await handle.execute({ name: "getDefaultModel" });
+      expect(result).toBeNull();
       await handle.stop();
     });
   });
 
-  describe("listInstalledTeams", () => {
-    test("delegates to teamRegistry.listInstalled", async () => {
+  describe("execute(team - no args)", () => {
+    test("returns defaultTeam + installed list", async () => {
       const deps = makeDeps(workspace, homeJieDir);
-      const spy = vi.spyOn(deps.teamRegistry, "listInstalled").mockReturnValue(["minimal", "alpha", "beta"]);
       const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
-      expect(handle.listInstalledTeams()).toEqual(["minimal", "alpha", "beta"]);
+      const tr = deps.teamRegistry;
+      const spy = vi.spyOn(tr, "listInstalled").mockReturnValue(["minimal", "alpha", "beta"]);
+      const result = await handle.execute({ name: "team" });
+      expect(result.kind).toBe("info");
+      if (result.kind === "info") {
+        expect(result.installed).toEqual(["minimal", "alpha", "beta"]);
+      }
       spy.mockRestore();
       await handle.stop();
     });
   });
 
-  describe("getGitStatus", () => {
+  describe("execute(getGitStatus)", () => {
     test("returns the cached git snapshot from gitService", async () => {
       const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform({ workspace, homeJieDir, teamId: "minimal" }, deps);
-      gitService.getSnapshot.mockReturnValue({ branch: "main", dirty: true, ahead: 2, behind: 0 });
-      expect(handle.getGitStatus()).toEqual({ branch: "main", dirty: true, ahead: 2, behind: 0 });
+      gitService.getSnapshot.mockReturnValueOnce({ branch: "main", dirty: true, ahead: 2, behind: 0 });
+      const result = await handle.execute({ name: "getGitStatus" });
+      expect(result).toEqual({ branch: "main", dirty: true, ahead: 2, behind: 0 });
       await handle.stop();
     });
   });

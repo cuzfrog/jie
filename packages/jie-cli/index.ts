@@ -2,11 +2,13 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { createJiePlatform, type JiePlatform } from "@cuzfrog/jie-platform";
 import {
   createModelRegistry,
   makeAuthStore,
   makeSettingsStore,
 } from "@cuzfrog/jie-platform/config";
+import { createCommandExecutor } from "@cuzfrog/jie-platform/command";
 import { createEventManager } from "@cuzfrog/jie-platform/event";
 import {
   createArtifactStore,
@@ -16,7 +18,7 @@ import {
 import { createTeamRegistry } from "@cuzfrog/jie-platform/team";
 import { createToolRegistry } from "@cuzfrog/jie-platform/tools";
 import { createGitService } from "@cuzfrog/jie-platform/services";
-import { createApp } from "./app";
+import { createApp, type AppDeps } from "./app";
 import { parseFlags, type ParsedArgs } from "./cli-flags";
 import {
   runApiKey,
@@ -55,27 +57,31 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<numb
     case "error":
       console.error(args.message);
       return 1;
-    case "login": {
-      const authStore = makeAuthStore(homeJieDir);
-      return runLogin(args, authStore);
-    }
-    case "logout": {
-      const authStore = makeAuthStore(homeJieDir);
-      return runLogout(args, authStore);
-    }
-    case "apiKey": {
-      const authStore = makeAuthStore(homeJieDir);
-      const settingsStore = makeSettingsStore(cwd, homeJieDir, projectJieDir);
-      return runApiKey(args, settingsStore, authStore);
-    }
-    case "model": {
-      const settingsStore = makeSettingsStore(cwd, homeJieDir, projectJieDir);
-      return runModel(args, projectJieDir, settingsStore);
-    }
+    case "login":
+    case "logout":
+    case "apiKey":
+    case "model":
     case "team": {
-      const teamRegistry = createTeamRegistry({ homeJieDir, projectJieDir });
-      const settingsStore = makeSettingsStore(cwd, homeJieDir, projectJieDir);
-      return runTeam(args, settingsStore, teamRegistry);
+      const deps = buildPlatformDeps(cwd, homeJieDir, projectJieDir);
+      let platform: JiePlatform;
+      try {
+        platform = await createJiePlatform({ workspace: cwd, homeJieDir }, deps);
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : String(error));
+        return 1;
+      }
+      switch (args.kind) {
+        case "login":
+          return runLogin(args, platform);
+        case "logout":
+          return runLogout(args, platform);
+        case "apiKey":
+          return runApiKey(args, platform);
+        case "model":
+          return runModel(args, platform);
+        case "team":
+          return runTeam(args, platform);
+      }
     }
     case "print": {
       const dependencies = buildPlatformDeps(cwd, homeJieDir, projectJieDir);
@@ -98,7 +104,7 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<numb
   }
 }
 
-function buildPlatformDeps(cwd: string, homeJieDir: string, projectJieDir: string | null) {
+function buildPlatformDeps(cwd: string, homeJieDir: string, projectJieDir: string | null): AppDeps {
   mkdirSync(homeJieDir, { recursive: true, mode: 0o755 });
   const storage = createStorage({
     type: "sqlite",
@@ -115,9 +121,20 @@ function buildPlatformDeps(cwd: string, homeJieDir: string, projectJieDir: strin
     eventManager: events,
     artifactStore,
   });
+  const gitService = createGitService({ cwd });
+  const settingsStore = makeSettingsStore(cwd, homeJieDir, projectJieDir);
+  const defaultScope = (projectJieDir === null ? "global" : "project") as "global" | "project";
+  const commandExecutor = createCommandExecutor({
+    authStore,
+    settingsStore,
+    teamRegistry,
+    gitService,
+    defaultScope,
+    loadActiveTeam: () => Promise.resolve([]),
+  });
   return {
     authStore,
-    settingsStore: makeSettingsStore(cwd, homeJieDir, projectJieDir),
+    settingsStore,
     eventManager: events,
     storage,
     teamRegistry,
@@ -125,8 +142,9 @@ function buildPlatformDeps(cwd: string, homeJieDir: string, projectJieDir: strin
     toolRegistry,
     artifactStore,
     memoryManager,
-    gitService: createGitService({ cwd }),
-    defaultScope: (projectJieDir === null ? "global" : "project") as "global" | "project",
+    gitService,
+    commandExecutor,
+    defaultScope,
   };
 }
 

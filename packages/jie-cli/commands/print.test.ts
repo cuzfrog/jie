@@ -2,7 +2,7 @@ import { runPrint } from "./print";
 
 interface JiePlatformStub {
   subscribe: ReturnType<typeof vi.fn>;
-  userPrompt: ReturnType<typeof vi.fn>;
+  prompt: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
 }
 
@@ -19,7 +19,7 @@ function makeHandle(): { handle: JiePlatformStub; subscribes: Map<string, Handle
       subscribes.set(topic, cb);
       return () => {};
     }),
-    userPrompt: vi.fn(),
+    prompt: vi.fn(),
     stop: vi.fn().mockResolvedValue(undefined),
   };
   return { handle, subscribes };
@@ -51,7 +51,7 @@ describe("runPrint", () => {
     );
     expect(code).toBe(0);
     expect(handle.subscribe).toHaveBeenCalledWith("agent.stream.chunk", expect.any(Function));
-    expect(handle.userPrompt).toHaveBeenCalledWith(leaderKey, "hi");
+    expect(handle.prompt).toHaveBeenCalledWith(leaderKey, "hi");
     expect(handle.stop).toHaveBeenCalled();
   });
 
