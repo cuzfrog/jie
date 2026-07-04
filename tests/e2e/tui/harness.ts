@@ -1,6 +1,7 @@
 import { createEventManager, Events, type EventEnvelope, type EventManager, type AgentSender, type EventType } from "@cuzfrog/jie-platform/event";
 import { createTui, type Tui, type TuiDeps, type CreateTUIOptions } from "@cuzfrog/jie-tui";
-import type { GitSnapshot, JiePlatform } from "@cuzfrog/jie-platform";
+import type { JiePlatform } from "@cuzfrog/jie-platform";
+import type { GitSnapshot } from "@cuzfrog/jie-platform/services";
 import { withTTY } from "../../support";
 
 const noopAsync = (): Promise<void> => Promise.resolve();
@@ -20,15 +21,16 @@ function makePlatform(bus: EventManager, initialTeamId: string): JiePlatform {
       bus.publish(Events.userPrompt({ kind: "user" }, team.id, text, agentKey));
     },
     interrupt: () => undefined,
-    login: () => undefined,
-    logout: () => undefined,
-    setDefaultModel: () => undefined,
-    unsetDefaultTeam: () => undefined,
     getDefaultTeam: () => null,
     getDefaultModel: () => null,
     listInstalledTeams: () => [],
     getGitStatus: () => stubGitSnapshot,
+    command: stubCommandDispatcher,
   };
+}
+
+function stubCommandDispatcher(): Promise<never> {
+  return Promise.reject(new Error("command dispatcher is not stubbed in e2e harness"));
 }
 
 function makeDeps(bus: EventManager, options: CreateTUIOptions, initialTeamId: string = "minimal"): { deps: TuiDeps; options: CreateTUIOptions } {

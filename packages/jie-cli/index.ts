@@ -6,6 +6,7 @@ import {
   createModelRegistry,
   makeAuthStore,
   makeSettingsStore,
+  type Scope,
 } from "@cuzfrog/jie-platform/config";
 import { createEventManager } from "@cuzfrog/jie-platform/event";
 import {
@@ -16,7 +17,7 @@ import {
 import { createTeamRegistry } from "@cuzfrog/jie-platform/team";
 import { createToolRegistry } from "@cuzfrog/jie-platform/tools";
 import { createGitService } from "@cuzfrog/jie-platform/services";
-import { createApp } from "./app";
+import { createApp, type AppDeps } from "./app";
 import { parseFlags, type ParsedArgs } from "./cli-flags";
 import {
   runApiKey,
@@ -93,12 +94,12 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<numb
         dependencies,
       );
       if (result.kind === "error") return result.code;
-      return runPrint(result.app.handle, result.app.teamId, result.app.leaderKey, result.app.agentKeys, args);
+      return runPrint(result.app.handle, args);
     }
   }
 }
 
-function buildPlatformDeps(cwd: string, homeJieDir: string, projectJieDir: string | null) {
+function buildPlatformDeps(cwd: string, homeJieDir: string, projectJieDir: string | null): AppDeps {
   mkdirSync(homeJieDir, { recursive: true, mode: 0o755 });
   const storage = createStorage({
     type: "sqlite",
@@ -126,7 +127,7 @@ function buildPlatformDeps(cwd: string, homeJieDir: string, projectJieDir: strin
     artifactStore,
     memoryManager,
     gitService: createGitService({ cwd }),
-    defaultScope: (projectJieDir === null ? "global" : "project") as "global" | "project",
+    defaultScope: (projectJieDir === null ? "global" : "project") as Scope,
   };
 }
 
