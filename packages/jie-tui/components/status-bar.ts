@@ -1,6 +1,6 @@
 import { Container, Loader, Text, type TUI } from "@earendil-works/pi-tui";
 import { type AgentStatus, type ModelReference, type StateStore } from "../state";
-import type { GitSnapshot } from "@cuzfrog/jie-platform/services";
+import type { GitSnapshot } from "@cuzfrog/jie-platform";
 
 const PLACEHOLDER_TOKEN_USAGE = "0%/200k";
 

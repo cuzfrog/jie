@@ -1,4 +1,4 @@
-import { Events } from "@cuzfrog/jie-platform/event";
+import { Events } from "@cuzfrog/jie-platform";
 import { Actions } from "./actions";
 import type { TuiState } from "./types";
 import { createStateStore } from "./state-store";

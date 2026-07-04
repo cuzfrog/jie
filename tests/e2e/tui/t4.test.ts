@@ -1,9 +1,8 @@
-import { createEventManager, type EventEnvelope } from "@cuzfrog/jie-platform/event";
-import { attachNoModelBody, loadFixture, startTuiOn } from "./harness";
+import { type EventEnvelope } from "@cuzfrog/jie-platform";
+import { attachNoModelBody, loadFixture, replayEnvelopes } from "./harness";
 
 describe("T4 — first-time setup (TUI flow)", () => {
   test("first prompt raises an error banner about missing model", () => {
-    const bus = createEventManager();
     const teamLoaded: EventEnvelope<"system.team.loaded"> = {
       version: 1,
       type: "system.team.loaded",
@@ -12,7 +11,7 @@ describe("T4 — first-time setup (TUI flow)", () => {
       timestamp: new Date().toISOString(),
       payload: { teamId: "my-team", agents: [{ role: "general", agent_key: "general-1", is_leader: true }] },
     };
-    const tui = startTuiOn(bus, [teamLoaded]);
+    const { tui, bus } = replayEnvelopes([teamLoaded]);
     attachNoModelBody(bus, "my-team", "general-1");
     tui.submit("Tell me a joke");
     const state = tui.getState();
@@ -20,7 +19,7 @@ describe("T4 — first-time setup (TUI flow)", () => {
   });
 
   test("stop() unsubscribes from the bus", () => {
-    const bus = createEventManager();
+    const { tui, bus } = replayEnvelopes([]);
     const teamLoaded: EventEnvelope<"system.team.loaded"> = {
       version: 1,
       type: "system.team.loaded",
@@ -29,7 +28,7 @@ describe("T4 — first-time setup (TUI flow)", () => {
       timestamp: new Date().toISOString(),
       payload: { teamId: "my-team", agents: [{ role: "general", agent_key: "general-1", is_leader: true }] },
     };
-    const tui = startTuiOn(bus, [teamLoaded]);
+    bus.publish(teamLoaded);
     expect(bus.subscriberCount("system.team.loaded")).toBe(1);
     tui.stop();
     expect(bus.subscriberCount("system.team.loaded")).toBe(0);
@@ -40,8 +39,7 @@ describe("T4 — first-time setup (TUI flow)", () => {
     const teamLoaded = envelopes[0]!;
     const userPrompt = envelopes[1]!;
     const rest = envelopes.slice(2);
-    const bus = createEventManager();
-    const tui = startTuiOn(bus, [teamLoaded]);
+    const { tui, bus } = replayEnvelopes([teamLoaded]);
     const stop = attachNoModelBody(bus, "my-team", "general-1");
     tui.submit("Tell me a joke");
     expect(tui.getState().errorBanner).toBe(`[stop: error] No model has been selected`);

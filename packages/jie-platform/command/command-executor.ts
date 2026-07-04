@@ -42,6 +42,18 @@ export function createCommandExecutor(deps: CommandExecutorDeps): CommandExecuto
       );
       return null;
     },
+    setApiKey: (command) => {
+      const settings = deps.settingsStore.load();
+      if (settings.defaultProvider === undefined) {
+        throw new JiePlatformError("NO_DEFAULT_PROVIDER", {
+          detail: "run 'jie model <provider>/<modelId>' first, or use 'jie login --provider <id> --api-key <key>'",
+        });
+      }
+      deps.authStore.saveAuthConfig(
+        deps.authStore.setProvider(deps.authStore.load(), settings.defaultProvider, command.apiKey),
+      );
+      return null;
+    },
     setDefaultModel: (command) => {
       if (!knownProviders.has(command.provider)) {
         throw new JiePlatformError("UNKNOWN_PROVIDER", { detail: command.provider });

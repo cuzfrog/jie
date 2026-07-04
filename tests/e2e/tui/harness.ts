@@ -1,14 +1,22 @@
-import { createEventManager, Events, type EventEnvelope, type EventManager, type AgentSender, type EventType } from "@cuzfrog/jie-platform/event";
+import { Events, type EventEnvelope, type AgentSender, type EventType, type GitSnapshot, type JiePlatform } from "@cuzfrog/jie-platform";
 import { createTui, type Tui, type TuiDeps, type CreateTUIOptions } from "@cuzfrog/jie-tui";
-import type { JiePlatform } from "@cuzfrog/jie-platform";
-import type { GitSnapshot } from "@cuzfrog/jie-platform/services";
 import { withTTY } from "../../support";
 
 const noopAsync = (): Promise<void> => Promise.resolve();
 
 const stubGitSnapshot: GitSnapshot = { branch: "", dirty: false, ahead: 0, behind: 0 };
 
-function makePlatform(bus: EventManager, initialTeamId: string): JiePlatform {
+type Publish = <T extends EventType>(env: EventEnvelope<T>) => void;
+type Subscribe = <T extends EventType>(topic: T, cb: (event: EventEnvelope<T>) => void) => () => void;
+type SubscriberCount = (subject: string) => number;
+
+interface TestBus {
+  publish: Publish;
+  subscribe: Subscribe;
+  subscriberCount: SubscriberCount;
+}
+
+function makePlatform(publish: Publish, subscribe: Subscribe, initialTeamId: string): JiePlatform {
   const team: { id: string; agents: ReadonlyArray<never> } = { id: initialTeamId, agents: [] };
   const execute: JiePlatform["execute"] = async (cmd) => {
     switch (cmd.name) {
@@ -28,26 +36,49 @@ function makePlatform(bus: EventManager, initialTeamId: string): JiePlatform {
   return {
     team,
     stop: noopAsync,
-    subscribe: <T extends EventType>(topic: T, cb: (event: EventEnvelope<T>) => void) => bus.subscribe(topic, cb),
+    subscribe,
     prompt: (agentKey: string, text: string) => {
-      bus.publish(Events.userPrompt({ kind: "user" }, team.id, text, agentKey));
+      publish(Events.userPrompt({ kind: "user" }, team.id, text, agentKey));
     },
     interrupt: () => undefined,
     execute,
   };
 }
 
-function makeDeps(bus: EventManager, options: CreateTUIOptions, initialTeamId: string = "minimal"): { deps: TuiDeps; options: CreateTUIOptions } {
+function makeBus(): TestBus {
+  const handlers = new Map<EventType, Set<(env: EventEnvelope<EventType>) => void>>();
+  const publish: Publish = (env) => {
+    const subs = handlers.get(env.type);
+    if (subs === undefined) return;
+    for (const cb of subs) cb(env as EventEnvelope<EventType>);
+  };
+  const subscribe: Subscribe = (topic, cb) => {
+    let subs = handlers.get(topic);
+    if (subs === undefined) {
+      subs = new Set();
+      handlers.set(topic, subs);
+    }
+    subs.add(cb as (env: EventEnvelope<EventType>) => void);
+    return () => {
+      const current = handlers.get(topic);
+      if (current !== undefined) current.delete(cb as (env: EventEnvelope<EventType>) => void);
+    };
+  };
+  const subscriberCount: SubscriberCount = (subject) => handlers.get(subject as EventType)?.size ?? 0;
+  return { publish, subscribe, subscriberCount };
+}
+
+function makeDeps(bus: TestBus, options: CreateTUIOptions, initialTeamId: string = "minimal"): { deps: TuiDeps; options: CreateTUIOptions } {
   return {
     deps: {
-      platform: makePlatform(bus, initialTeamId),
+      platform: makePlatform(bus.publish, bus.subscribe, initialTeamId),
     },
     options,
   };
 }
 
 export const startTuiOn = (
-  bus: EventManager,
+  bus: TestBus,
   preload: ReadonlyArray<EventEnvelope<EventType>>,
   options: Omit<CreateTUIOptions, "cwd"> = {},
 ): Tui => {
@@ -74,14 +105,14 @@ export const startTuiOn = (
 
 export const replayEnvelopes = (
   envelopes: ReadonlyArray<EventEnvelope<EventType>>,
-): { tui: Tui; bus: EventManager } => {
-  const bus = createEventManager();
+): { tui: Tui; bus: TestBus } => {
+  const bus = makeBus();
   const tui = startTuiOn(bus, envelopes);
   return { tui, bus };
 };
 
 export const attachNoModelBody = (
-  bus: EventManager,
+  bus: TestBus,
   teamId: string,
   agentKey: string,
 ): (() => void) => {

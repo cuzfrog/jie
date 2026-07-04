@@ -1,18 +1,22 @@
 import { createTui, type Tui, type TuiDeps } from "./tui";
-import { createEventManager, Events, type EventManager, type AnyEventEnvelope, type EventEnvelope, type EventType } from "@cuzfrog/jie-platform/event";
+import { Events, type AnyEventEnvelope, type EventEnvelope, type EventType } from "@cuzfrog/jie-platform";
 import { createTestTuiWithTerminal, withTTY } from "../../tests/support";
 
 const EMPTY_GIT = { branch: "", dirty: false, ahead: 0, behind: 0 };
 
-function makePlatform(bus: EventManager = createEventManager()) {
-  const subscribeHandlers = new Map<EventType, (env: AnyEventEnvelope) => void>();
+type TopicHandler = (env: AnyEventEnvelope) => void;
+
+function makePlatform() {
+  const subscribeHandlers = new Map<EventType, TopicHandler>();
   const platform = {
-    events: bus,
     team: { id: "minimal", agents: [] },
     stop: vi.fn<() => Promise<void>>(() => Promise.resolve()),
     subscribe: vi.fn(<T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void) => {
-      subscribeHandlers.set(topic, cb as (env: AnyEventEnvelope) => void);
-      return bus.subscribe(topic, cb);
+      const handler = cb as TopicHandler;
+      subscribeHandlers.set(topic, handler);
+      return () => {
+        if (subscribeHandlers.get(topic) === handler) subscribeHandlers.delete(topic);
+      };
     }),
     prompt: vi.fn(),
     interrupt: vi.fn(),
@@ -21,11 +25,15 @@ function makePlatform(bus: EventManager = createEventManager()) {
       return null;
     }),
   };
-  return { platform: platform as unknown as Parameters<typeof createTui>[0]["platform"], bus, subscribeHandlers };
+  const publish = <T extends EventType>(env: EventEnvelope<T>): void => {
+    const handler = subscribeHandlers.get(env.type);
+    if (handler !== undefined) handler(env as AnyEventEnvelope);
+  };
+  return { platform: platform as unknown as Parameters<typeof createTui>[0]["platform"], publish };
 }
 
-function makeDeps(overrides: { bus?: EventManager; platform?: Parameters<typeof createTui>[0]["platform"] } = {}): TuiDeps {
-  const { platform } = makePlatform(overrides.bus);
+function makeDeps(overrides: { platform?: Parameters<typeof createTui>[0]["platform"] } = {}): TuiDeps {
+  const { platform } = makePlatform();
   return { platform: overrides.platform ?? platform };
 }
 
@@ -73,12 +81,12 @@ describe("createTui — start()", () => {
 
   test("loads a team, renders the rail, then exits cleanly", async () => {
     withTTY(true, async () => {
-      const { bus, platform } = makePlatform();
+      const { platform, publish } = makePlatform();
       const { terminal } = createTestTuiWithTerminal(80, 30);
       const tuiHandle = createTui({ platform }, { cwd: process.cwd(), terminal });
       const started = tuiHandle.start();
       await new Promise((r) => setTimeout(r, 50));
-      bus.publish(Events.teamLoaded({ kind: "system" }, "demo", [
+      publish(Events.teamLoaded({ kind: "system" }, "demo", [
         { role: "general", agent_key: "general-1", is_leader: true },
       ]));
       await new Promise((r) => setTimeout(r, 50));

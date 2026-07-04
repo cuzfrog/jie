@@ -1,34 +1,15 @@
-import { createJiePlatform, type JiePlatform } from "@cuzfrog/jie-platform";
-import type { AuthStore, Settings, ModelRegistry, SettingsStore } from "@cuzfrog/jie-platform/config";
-import type { EventManager } from "@cuzfrog/jie-platform/event";
-import type { GitService } from "@cuzfrog/jie-platform/services";
-import type { ArtifactStore, MemoryManager, Storage } from "@cuzfrog/jie-platform/storage";
-import type { TeamRegistry } from "@cuzfrog/jie-platform/team";
-import type { ToolRegistry } from "@cuzfrog/jie-platform/tools";
-import type { CommandExecutor } from "@cuzfrog/jie-platform/command";
-import { type Scope } from "@cuzfrog/jie-platform/config";
-
-export interface AppDeps {
-  readonly authStore: AuthStore;
-  readonly settingsStore: SettingsStore;
-  readonly eventManager: EventManager;
-  readonly storage: Storage;
-  readonly teamRegistry: TeamRegistry;
-  readonly modelRegistry: ModelRegistry;
-  readonly toolRegistry: ToolRegistry;
-  readonly artifactStore: ArtifactStore;
-  readonly memoryManager: MemoryManager;
-  readonly gitService: GitService;
-  readonly commandExecutor: CommandExecutor;
-  readonly defaultScope: Scope;
-}
+import {
+  createJiePlatform,
+  JiePlatformError,
+  type JiePlatform,
+  type JiePlatformOptions,
+} from "@cuzfrog/jie-platform";
 
 export interface App {
   readonly handle: JiePlatform;
   readonly teamId: string;
   readonly leaderKey: string;
   readonly agentKeys: ReadonlyArray<string>;
-  readonly settings: Settings;
 }
 
 export type AppCreationResult =
@@ -48,69 +29,45 @@ export interface AppArgs {
 
 export async function createApp(
   args: AppArgs,
-  dependencies: AppDeps,
+  createPlatform: (options: JiePlatformOptions) => Promise<JiePlatform> = createJiePlatform,
 ): Promise<AppCreationResult> {
-  const settings: Settings = dependencies.settingsStore.load();
-
-  if (args.apiKey !== undefined) {
-    const provider = settings.defaultProvider;
-    if (provider === undefined) {
-      console.error(
-        "no provider resolved; run 'jie model <provider>/<modelId>' first, or use 'jie login --provider <id> --api-key <key>' to set the key for a specific provider",
-      );
-      return { kind: "error", code: 1 };
-    }
-    const next = dependencies.authStore.setProvider(dependencies.authStore.load(), provider, args.apiKey);
-    dependencies.authStore.saveAuthConfig(next);
-    console.log(`logged in to ${provider}`);
-  }
-
-  let teamId: string;
-  try {
-    teamId = dependencies.teamRegistry.parseTeamManifest(args.teamId ?? settings.defaultTeam).id;
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    return { kind: "error", code: 1 };
-  }
-
   let handle: JiePlatform;
   try {
-    handle = await createJiePlatform(
-      {
-        workspace: args.cwd,
-        homeJieDir: args.homeJieDir,
-        teamId,
-        resumeSessionId: args.resume,
-        continueLastSession: args.continueLast,
-      },
-      dependencies,
-    );
+    handle = await createPlatform({
+      workspace: args.cwd,
+      homeJieDir: args.homeJieDir,
+      teamId: args.teamId,
+      resumeSessionId: args.resume,
+      continueLastSession: args.continueLast,
+    });
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     return { kind: "error", code: 1 };
+  }
+
+  if (args.apiKey !== undefined) {
+    try {
+      await handle.execute({ name: "setApiKey", apiKey: args.apiKey });
+    } catch (error) {
+      if (error instanceof JiePlatformError && error.code === "NO_DEFAULT_PROVIDER") {
+        console.error(error.message);
+        await handle.stop();
+        return { kind: "error", code: 1 };
+      }
+      await handle.stop();
+      throw error;
+    }
   }
 
   const agents = handle.team.agents;
-  if (agents.length === 0) {
-    console.error(`team '${teamId}' has no agents to run; check the team manifest`);
-    await handle.stop();
-    return { kind: "error", code: 1 };
-  }
-  const leader = agents.find((agent) => agent.isLeader) ?? agents[0]!;
-  if (leader.role === "") {
-    console.error(`team '${teamId}' has no leader; check TEAM.md's 'leader:' field`);
-    await handle.stop();
-    return { kind: "error", code: 1 };
-  }
-
+  const leader = agents.find((a) => a.isLeader) ?? agents[0]!;
   return {
     kind: "ok",
     app: {
       handle,
-      teamId,
+      teamId: handle.team.id,
       leaderKey: leader.agentKey,
-      agentKeys: agents.map((agent) => agent.agentKey),
-      settings,
+      agentKeys: agents.map((a) => a.agentKey),
     },
   };
 }

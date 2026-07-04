@@ -44,6 +44,10 @@ export const JiePlatformErrorMessages = {
   UNKNOWN_SESSION: "Unknown session_id",
 
   INVALID_CONFIG: "Invalid configuration",
+
+  NO_DEFAULT_PROVIDER: "No default provider is set",
+  EMPTY_TEAM: "Team has no agents to run",
+  NO_LEADER: "Team has no leader",
 } as const;
 
 export type JiePlatformErrorCode = keyof typeof JiePlatformErrorMessages;

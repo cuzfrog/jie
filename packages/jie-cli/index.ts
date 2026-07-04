@@ -1,24 +1,12 @@
 #!/usr/bin/env bun
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { createJiePlatform, type JiePlatform } from "@cuzfrog/jie-platform";
 import {
-  createModelRegistry,
-  makeAuthStore,
-  makeSettingsStore,
-} from "@cuzfrog/jie-platform/config";
-import { createCommandExecutor } from "@cuzfrog/jie-platform/command";
-import { createEventManager } from "@cuzfrog/jie-platform/event";
-import {
-  createArtifactStore,
-  createMemoryManager,
-  createStorage,
-} from "@cuzfrog/jie-platform/storage";
-import { createTeamRegistry } from "@cuzfrog/jie-platform/team";
-import { createToolRegistry } from "@cuzfrog/jie-platform/tools";
-import { createGitService } from "@cuzfrog/jie-platform/services";
-import { createApp, type AppDeps } from "./app";
+  createJiePlatform,
+  type JiePlatform,
+} from "@cuzfrog/jie-platform";
+import { createApp } from "./app";
 import { parseFlags, type ParsedArgs } from "./cli-flags";
 import {
   runApiKey,
@@ -44,6 +32,7 @@ export async function main(argv: string[], cwd: string = process.cwd()): Promise
 async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<number> {
   const homeJieDir = join(homeDir, ".jie");
   const projectJieDir = findProjectJieDir(cwd);
+  const platformOptions = { workspace: cwd, homeJieDir };
   switch (args.kind) {
     case "help":
       printHelp();
@@ -62,10 +51,9 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<numb
     case "apiKey":
     case "model":
     case "team": {
-      const deps = buildPlatformDeps(cwd, homeJieDir, projectJieDir);
       let platform: JiePlatform;
       try {
-        platform = await createJiePlatform({ workspace: cwd, homeJieDir }, deps);
+        platform = await createJiePlatform(platformOptions);
       } catch (error) {
         console.error(error instanceof Error ? error.message : String(error));
         return 1;
@@ -84,68 +72,20 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<numb
       }
     }
     case "print": {
-      const dependencies = buildPlatformDeps(cwd, homeJieDir, projectJieDir);
-      const result = await createApp(
-        {
-          kind: "print",
-          cwd,
-          homeJieDir,
-          projectJieDir,
-          teamId: args.team,
-          apiKey: args.apiKey,
-          resume: args.resume,
-          continueLast: args.continueLast,
-        },
-        dependencies,
-      );
+      const result = await createApp({
+        kind: "print",
+        cwd,
+        homeJieDir,
+        projectJieDir,
+        teamId: args.team,
+        apiKey: args.apiKey,
+        resume: args.resume,
+        continueLast: args.continueLast,
+      });
       if (result.kind === "error") return result.code;
       return runPrint(result.app.handle, result.app.teamId, result.app.leaderKey, result.app.agentKeys, args);
     }
   }
-}
-
-function buildPlatformDeps(cwd: string, homeJieDir: string, projectJieDir: string | null): AppDeps {
-  mkdirSync(homeJieDir, { recursive: true, mode: 0o755 });
-  const storage = createStorage({
-    type: "sqlite",
-    filePath: join(homeJieDir, "storage.db"),
-  });
-  const teamRegistry = createTeamRegistry({ homeJieDir, projectJieDir });
-  const authStore = makeAuthStore(homeJieDir);
-  const modelRegistry = createModelRegistry(homeJieDir, projectJieDir, authStore);
-  const memoryManager = createMemoryManager(storage);
-  const artifactStore = createArtifactStore(storage);
-  const events = createEventManager();
-  const toolRegistry = createToolRegistry({
-    workspaceRoot: cwd,
-    eventManager: events,
-    artifactStore,
-  });
-  const gitService = createGitService({ cwd });
-  const settingsStore = makeSettingsStore(cwd, homeJieDir, projectJieDir);
-  const defaultScope = (projectJieDir === null ? "global" : "project") as "global" | "project";
-  const commandExecutor = createCommandExecutor({
-    authStore,
-    settingsStore,
-    teamRegistry,
-    gitService,
-    defaultScope,
-    loadActiveTeam: () => Promise.resolve([]),
-  });
-  return {
-    authStore,
-    settingsStore,
-    eventManager: events,
-    storage,
-    teamRegistry,
-    modelRegistry,
-    toolRegistry,
-    artifactStore,
-    memoryManager,
-    gitService,
-    commandExecutor,
-    defaultScope,
-  };
 }
 
 function printHelp(): void {

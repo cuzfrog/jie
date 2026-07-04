@@ -47,10 +47,12 @@ export function createTeamRegistry(options: TeamRegistryOptions): TeamRegistry {
       }
       const projectDir = projectTeamsDir();
       if (projectDir !== null && existsSync(join(projectDir, teamId, "TEAM.md"))) {
-        return loadTeamFromDir(join(projectDir, teamId));
+        const blueprint = loadTeamFromDir(join(projectDir, teamId));
+        return blueprint.roles.length === 0 ? loadMinimalTeam() : blueprint;
       }
       if (isUserTeam(teamId)) {
-        return loadTeamFromDir(join(userTeamsDir, teamId));
+        const blueprint = loadTeamFromDir(join(userTeamsDir, teamId));
+        return blueprint.roles.length === 0 ? loadMinimalTeam() : blueprint;
       }
       throw new JiePlatformError("TEAM_NOT_FOUND", { detail: `team '${teamId}' not found` });
     },

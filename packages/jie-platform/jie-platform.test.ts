@@ -216,7 +216,7 @@ describe("createJiePlatform", () => {
   });
 
   describe("empty team (no .md files)", () => {
-    test("team.loaded is published with empty agents array", async () => {
+    test("team.loaded is published with the minimal team fallback", async () => {
       const userTeam = join(homeJieDir, "teams", "ghost");
       mkdirSync(userTeam, { recursive: true });
       writeFileSync(join(userTeam, "TEAM.md"), "---\n---\n");
@@ -231,7 +231,9 @@ describe("createJiePlatform", () => {
         deps,
       );
       expect(events).toHaveLength(1);
-      expect(events[0]!.payload.agents).toEqual([]);
+      expect(events[0]!.payload.teamId).toBe("ghost");
+      expect(events[0]!.payload.agents.map((a) => a.role)).toEqual(["general"]);
+      expect(events[0]!.payload.agents.some((a) => a.is_leader)).toBe(true);
       await handle.stop();
     });
   });
