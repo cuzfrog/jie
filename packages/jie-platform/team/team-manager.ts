@@ -7,7 +7,7 @@ import { type ArtifactStore, type MemoryManager } from "../storage";
 import { type SettingsStore } from "../config";
 import { type ModelRegistry } from "../config";
 import { type ToolRegistry } from "../tools";
-import { type AgentSoul, type TeamBlueprint } from "./types";
+import { type AgentSoul, type TeamBlueprint, type TeamBlueprintLocation } from "./types";
 import { type TeamRegistry, createTeamRegistry } from "./registry";
 
 export interface TeamManagerOptions {
@@ -28,9 +28,8 @@ export interface TeamManagerDeps {
 
 export interface TeamManager {
   readonly load: (teamId?: string) => Promise<ReadonlyArray<AgentIdentity>>;
-  readonly isInstalled: (teamId: string) => boolean;
   readonly listInstalled: () => string[];
-  readonly locate: (teamId: string) => "builtin" | "project" | "user" | "missing";
+  readonly locate: (teamId: string) => TeamBlueprintLocation;
   readonly agents: (teamId: string) => ReadonlyArray<AgentIdentity>;
   readonly stop: () => void;
 }
@@ -144,9 +143,6 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
 
   return {
     load,
-    isInstalled(id) {
-      return teamRegistry.isInstalled(id);
-    },
     listInstalled() {
       return teamRegistry.listInstalled();
     },

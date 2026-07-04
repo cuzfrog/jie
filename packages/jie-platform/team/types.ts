@@ -11,5 +11,6 @@ export interface TeamBlueprint {
   readonly roles: ReadonlyArray<AgentSoul>;
   readonly leaderRole: string | null;
 }
+export type TeamBlueprintLocation = "builtin" | "project" | "user" | null;
 
 export const BUILTIN_MINIMAL_TEAM_ID = "minimal";

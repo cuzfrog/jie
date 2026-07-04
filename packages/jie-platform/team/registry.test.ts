@@ -93,61 +93,6 @@ describe("createTeamRegistry", () => {
     });
   });
 
-  describe("isInstalled", () => {
-    test.each([
-      {
-        name: "'minimal' (always available)",
-        setup: (): string | null => null,
-        teamId: "minimal",
-        expected: true,
-      },
-      {
-        name: "a project team with TEAM.md",
-        setup: (): string | null => {
-          const projJie = join(workspace, ".jie");
-          writeTeam(join(projJie, "teams"), "dev", "leader");
-          return projJie;
-        },
-        teamId: "dev",
-        expected: true,
-      },
-      {
-        name: "a user team with TEAM.md",
-        setup: (): string | null => {
-          writeTeam(join(homeJieDir, "teams"), "dev", "leader");
-          return null;
-        },
-        teamId: "dev",
-        expected: true,
-      },
-    ])("returns true for $name", ({ setup, teamId, expected }) => {
-      const projJie = setup();
-      const r = createTeamRegistry({ homeJieDir, projectJieDir: projJie });
-      expect(r.isInstalled(teamId)).toBe(expected);
-    });
-
-    test.each([
-      {
-        name: "missing team",
-        setup: (): string | null => null,
-        teamId: "ghost",
-      },
-      {
-        name: "team directory without TEAM.md",
-        setup: (): string | null => {
-          const projJie = join(workspace, ".jie");
-          mkdirSync(join(projJie, "teams", "incomplete"), { recursive: true });
-          return projJie;
-        },
-        teamId: "incomplete",
-      },
-    ])("returns false for $name", ({ setup, teamId }) => {
-      const projJie = setup();
-      const r = createTeamRegistry({ homeJieDir, projectJieDir: projJie });
-      expect(r.isInstalled(teamId)).toBe(false);
-    });
-  });
-
   describe("listInstalled", () => {
     test("includes 'minimal' when nothing is installed", () => {
       const r = createTeamRegistry({ homeJieDir, projectJieDir });
@@ -234,9 +179,9 @@ describe("createTeamRegistry", () => {
       expect(r.locate(teamId)).toBe(expected);
     });
 
-    test("returns 'missing' for an id not found anywhere", () => {
+    test("returns null for an id not found anywhere", () => {
       const r = createTeamRegistry({ homeJieDir, projectJieDir });
-      expect(r.locate("ghost")).toBe("missing");
+      expect(r.locate("ghost")).toBeNull();
     });
   });
 });

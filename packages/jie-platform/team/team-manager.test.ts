@@ -106,14 +106,14 @@ describe("createTeamManager — lifecycle", () => {
       expect(second).toEqual(first);
     });
 
-    test("load throws for an unknown team id", async () => {
+    test("load throws for an unknown team id", () => {
       const { manager } = makeManager(workspace, homeJieDir, null);
-      await expect(manager.load("ghost")).rejects.toThrow(/team 'ghost' not found/);
+      expect(() => manager.load("ghost")).toThrow(/team 'ghost' not found/);
     });
 
-    test("load throws for an invalid team id without touching the disk", async () => {
+    test("load throws for an invalid team id without touching the disk", () => {
       const { manager } = makeManager(workspace, homeJieDir, null);
-      await expect(manager.load("bad id with spaces")).rejects.toThrow();
+      expect(() => manager.load("bad id with spaces")).toThrow();
     });
 
     test("load builds bodies for every role in the blueprint", async () => {
@@ -145,12 +145,7 @@ describe("createTeamManager — lifecycle", () => {
     });
   });
 
-  describe("isInstalled / listInstalled / locate (registry pass-through)", () => {
-    test("isInstalled returns true for the minimal team", () => {
-      const { manager } = makeManager(workspace, homeJieDir, null);
-      expect(manager.isInstalled("minimal")).toBe(true);
-    });
-
+  describe("listInstalled / locate (registry pass-through)", () => {
     test("listInstalled includes 'minimal' when nothing else is installed", () => {
       const { manager } = makeManager(workspace, homeJieDir, null);
       expect(manager.listInstalled()).toEqual(["minimal"]);

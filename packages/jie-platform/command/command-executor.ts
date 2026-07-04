@@ -73,10 +73,10 @@ export function createCommandExecutor(deps: CommandExecutorDeps): CommandExecuto
       return null;
     },
     setDefaultTeam: (command) => {
-      if (!deps.teamManager.isInstalled(command.teamId)) {
+      const loc = deps.teamManager.locate(command.teamId);
+      if (loc === null) {
         throw new JiePlatformError("TEAM_NOT_FOUND", { detail: `team '${command.teamId}' not found` });
       }
-      const loc = deps.teamManager.locate(command.teamId);
       const existing = deps.settingsStore.load();
       const next: Settings = { ...existing, defaultTeam: command.teamId };
       deps.settingsStore.write(next, loc === "project" ? "project" : "global");
@@ -90,7 +90,7 @@ export function createCommandExecutor(deps: CommandExecutorDeps): CommandExecuto
       };
     },
     switchTeam: async (command) => {
-      if (!deps.teamManager.isInstalled(command.teamId)) {
+      if (deps.teamManager.locate(command.teamId) === null) {
         throw new JiePlatformError("TEAM_NOT_FOUND", { detail: `team '${command.teamId}' not found` });
       }
       return await deps.loadActiveTeam(command.teamId);
