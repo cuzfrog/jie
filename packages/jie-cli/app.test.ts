@@ -59,23 +59,23 @@ describe("createApp — guard rails", () => {
     writeErr.mockRestore();
   });
 
-  test("missing requested team falls back to minimal with a warning", async () => {
+  test("requested team missing: returns error code 1, even when minimal fallback exists", async () => {
     const teams = new Map<string, TeamIdentity>([
       ["minimal", { id: "minimal", agents: makeAgents([{ role: "general" }]) }],
     ]);
     const platform = makeMockPlatform(teams, { settings: { defaultTeam: "minimal" } });
     const createPlatform = vi.fn(async () => platform);
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => { });
+    const writeErr = vi.spyOn(console, "error").mockImplementation(() => { });
     const result = await createApp(
       appArgs({ teamId: "missing" }),
       createPlatform,
     );
-    expect(result.kind).toBe("ok");
-    if (result.kind === "ok") {
-      expect(result.app.teamId).toBe("minimal");
+    expect(result.kind).toBe("error");
+    if (result.kind === "error") {
+      expect(result.code).toBe(1);
     }
-    expect(warnSpy).toHaveBeenCalled();
-    warnSpy.mockRestore();
+    expect(writeErr).toHaveBeenCalled();
+    writeErr.mockRestore();
   });
 
   test("leader-less team throws NO_LEADER on createApp", async () => {

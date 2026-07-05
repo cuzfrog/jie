@@ -42,7 +42,7 @@ export async function createApp(
       resumeSessionId: args.resume,
     });
     handle.subscribe("system.error", (envelope) => {
-      console.warn(`jie: ${envelope.payload.error}`);
+      console.error(`jie: ${envelope.payload.error}`);
     });
     await handle.start();
   } catch (error) {
@@ -90,17 +90,12 @@ function toApp(handle: JiePlatform, requestedTeam: string | undefined): App {
   };
 }
 
-function resolveTeam(teams: ReadonlyMap<string, TeamIdentity>, requested: string | undefined): TeamIdentity {
+function resolveTeam(teams: ReadonlyMap<string, TeamIdentity>, requested?: string): TeamIdentity {
   if (requested !== undefined) {
     const found = teams.get(requested);
     if (found !== undefined) return found;
-    const fallback = teams.get(BUILTIN_MINIMAL_TEAM_ID);
-    if (fallback !== undefined) {
-      console.warn(`team '${requested}' is not loaded; falling back to '${BUILTIN_MINIMAL_TEAM_ID}'`);
-      return fallback;
-    }
     throw new JiePlatformError("EMPTY_TEAM", {
-      detail: `team '${requested}' is not loaded and no '${BUILTIN_MINIMAL_TEAM_ID}' fallback is available`,
+      detail: `requested team '${requested}' is not loaded`,
     });
   }
   const def = teams.get(BUILTIN_MINIMAL_TEAM_ID);
