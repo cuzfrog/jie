@@ -1,22 +1,3 @@
-/**
- * End-to-end v1 user-scenario tests.
- *
- * Drives the full `jie -p` pipeline against a real LLM. The LLM
- * config comes from `tests/e2e/fixtures/models.json`; the test
- * copies it into the test workspace (project scope) and runs the
- * v1 user scenarios. The CLI's `ModelRegistry` resolves the
- * provider/model from the workspace, exercising the same code
- * path the user takes via `.jie/models.json` (issue #20).
- *
- * Required env vars (provided by `setenv` for local dev and by
- * the CI workflow for GitHub Models):
- *   JIE_E2E_BASE_URL, JIE_E2E_API_KEY, JIE_E2E_MODEL
- *
- * The suite hard-fails at module load if any of those are unset,
- * and again at module load if the LLM endpoint is unreachable.
- * There is no skip-on-unreachable path; e2e must be backed by a
- * real LLM in every environment that runs it.
- */
 import {
   mkdirSync,
   mkdtempSync,
@@ -26,7 +7,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { main } from "../../packages/jie-cli/index.ts";
+import { main } from "../../../packages/jie-cli/index.ts";
+import { loadMockExpectations } from "../../mock-llm-backend";
+import expectations from "./v1-scenarios.llm.ts";
 
 const NO_MODEL_ERROR = "No model has been selected";
 
@@ -56,7 +39,7 @@ function printArgv(p: PrintArgv): string[] {
   return argv;
 }
 
-const FIXTURE_PATH = join(import.meta.dir, "fixtures", "models.json");
+const FIXTURE_PATH = join(import.meta.dir, "..", "fixtures", "models.json");
 
 /** Required env vars. The CI workflow and `setenv` (for local dev)
  *  must populate these. Failing here keeps the e2e suite honest:
@@ -172,6 +155,7 @@ describe("v1 user-scenarios — real LLM end-to-end", () => {
 
   beforeAll(async () => {
     await assertLlmReachable();
+    await loadMockExpectations(expectations);
   });
 
   beforeEach(() => {
