@@ -15,7 +15,7 @@ import {
 import { type Command, type CommandExecutor, type CommandName, type CommandResult, createCommandExecutor } from "./command";
 import { createGitService } from "./services";
 import { type TeamIdentity } from "./types";
-import type { Scope } from "./config";
+import type { SettingScope } from "./config";
 
 export interface JiePlatformOptions {
   readonly cwd: string;
@@ -34,7 +34,7 @@ export interface JiePlatformDeps {
   readonly artifactStore: ArtifactStore;
   readonly memoryManager: MemoryManager;
   readonly commandExecutor: CommandExecutor;
-  readonly defaultScope: Scope;
+  readonly defaultScope: SettingScope;
 }
 
 export interface JiePlatform {

@@ -1,6 +1,6 @@
 import { getProviders } from "@earendil-works/pi-ai";
 import { type AuthStore } from "../config";
-import { type Settings, type Scope, type SettingsStore } from "../config";
+import { type Settings, type SettingScope, type SettingsStore } from "../config";
 import { JiePlatformError } from "../jie-platform-errors";
 import { type GitService } from "../services";
 import { type TeamManager } from "../team";
@@ -11,7 +11,7 @@ export interface CommandExecutorDeps {
   readonly settingsStore: SettingsStore;
   readonly teamManager: TeamManager;
   readonly gitService: GitService;
-  readonly defaultScope: Scope;
+  readonly defaultScope: SettingScope;
 }
 
 type Handler<N extends CommandName> = (command: Command<N>) => CommandResult<N> | Promise<CommandResult<N>>;
