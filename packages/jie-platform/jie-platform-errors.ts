@@ -46,7 +46,7 @@ export const JiePlatformErrorMessages = {
   INVALID_CONFIG: "Invalid configuration",
 
   NO_DEFAULT_PROVIDER: "No default provider is set",
-  EMPTY_TEAM: "Team has no agents to run",
+  NO_TEAM: "No team is defined",
   NO_LEADER: "Team has no leader",
 } as const;
 

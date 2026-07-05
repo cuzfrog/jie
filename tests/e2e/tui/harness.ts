@@ -17,9 +17,6 @@ interface TestBus {
 }
 
 function makePlatform(publish: Publish, subscribe: Subscribe, initialTeamId: string): JiePlatform {
-  const teams = new Map<string, { id: string; agents: ReadonlyArray<never> }>([
-    [initialTeamId, { id: initialTeamId, agents: [] }],
-  ]);
   const execute: JiePlatform["execute"] = async (cmd) => {
     switch (cmd.name) {
       case "setDefaultTeam":
@@ -35,8 +32,11 @@ function makePlatform(publish: Publish, subscribe: Subscribe, initialTeamId: str
     }
   };
   return {
-    teams,
     settings: {},
+    resolveTeam: async (teamId?: string) => {
+      const id = teamId ?? initialTeamId;
+      return { id, leaderKey: `${id}-leader`, agents: [] };
+    },
     start: noopAsync,
     stop: noopAsync,
     subscribe,

@@ -1,3 +1,4 @@
+import type { JiePlatform, TeamIdentity } from "@cuzfrog/jie-platform";
 import { runPrint } from "./print";
 
 interface JiePlatformStub {
@@ -25,11 +26,22 @@ function makeHandle(): { handle: JiePlatformStub; subscribes: Map<string, Handle
   return { handle, subscribes };
 }
 
+function makeTeam(teamId: string, agentKeys: ReadonlyArray<string>, leaderKey: string): TeamIdentity {
+  return {
+    id: teamId,
+    leaderKey,
+    agents: agentKeys.map((k) => ({ teamId, role: k, agentKey: k, isLeader: k === leaderKey })),
+  };
+}
+
+const baseArgs = { kind: "print", instruction: "hi", team: undefined, timeout: 30, json: false, apiKey: undefined, resume: undefined } as const;
+
 describe("runPrint", () => {
   test("happy path: subscribes to agent.stream.chunk, publishes leader.prompt, waits for agent.idle, then stop()s", async () => {
     const { handle, subscribes } = makeHandle();
     const teamId = "t1";
     const leaderKey = "general-1";
+    const team = makeTeam(teamId, [leaderKey], leaderKey);
 
     setImmediate(() => {
       subscribes.get("agent.turn.start")?.({
@@ -42,13 +54,7 @@ describe("runPrint", () => {
       });
     });
 
-    const code = await runPrint(
-      handle as never,
-      teamId,
-      leaderKey,
-      [leaderKey],
-      { kind: "print", instruction: "hi", team: undefined, timeout: 30, json: false, apiKey: undefined, resume: undefined },
-    );
+    const code = await runPrint(handle as unknown as JiePlatform, team, baseArgs);
     expect(code).toBe(0);
     expect(handle.subscribe).toHaveBeenCalledWith("agent.stream.chunk", expect.any(Function));
     expect(handle.prompt).toHaveBeenCalledWith(teamId, leaderKey, "hi");
@@ -57,12 +63,11 @@ describe("runPrint", () => {
 
   test("timeout: returns 3 and stops the handle", async () => {
     const { handle } = makeHandle();
+    const team = makeTeam("t1", ["general-1"], "general-1");
     const code = await runPrint(
-      handle as never,
-      "t1",
-      "general-1",
-      ["general-1"],
-      { kind: "print", instruction: "hi", team: undefined, timeout: 0.05, json: false, apiKey: undefined, resume: undefined },
+      handle as unknown as JiePlatform,
+      team,
+      { ...baseArgs, timeout: 0.05 },
     );
     expect(code).toBe(3);
     expect(handle.stop).toHaveBeenCalled();
@@ -73,6 +78,7 @@ describe("runPrint", () => {
     const teamId = "t1";
     const leaderKey = "general-1";
     const workerKey = "worker-1";
+    const team = makeTeam(teamId, [leaderKey, workerKey], leaderKey);
 
     setImmediate(() => {
       subscribes.get("agent.turn.start")?.({
@@ -98,13 +104,7 @@ describe("runPrint", () => {
     });
 
     const start = Date.now();
-    const code = await runPrint(
-      handle as never,
-      teamId,
-      leaderKey,
-      [leaderKey, workerKey],
-      { kind: "print", instruction: "hi", team: undefined, timeout: 2, json: false, apiKey: undefined, resume: undefined },
-    );
+    const code = await runPrint(handle as unknown as JiePlatform, team, { ...baseArgs, timeout: 2 });
     const elapsed = Date.now() - start;
     expect(code).toBe(0);
     expect(elapsed).toBeGreaterThanOrEqual(25);
@@ -114,6 +114,7 @@ describe("runPrint", () => {
     const { handle, subscribes } = makeHandle();
     const teamId = "t1";
     const leaderKey = "general-1";
+    const team = makeTeam(teamId, [leaderKey], leaderKey);
 
     setImmediate(() => {
       subscribes.get("agent.turn.start")?.({
@@ -135,13 +136,7 @@ describe("runPrint", () => {
     });
 
     const start = Date.now();
-    const code = await runPrint(
-      handle as never,
-      teamId,
-      leaderKey,
-      [leaderKey],
-      { kind: "print", instruction: "hi", team: undefined, timeout: 2, json: false, apiKey: undefined, resume: undefined },
-    );
+    const code = await runPrint(handle as unknown as JiePlatform, team, { ...baseArgs, timeout: 2 });
     const elapsed = Date.now() - start;
     expect(code).toBe(0);
     expect(elapsed).toBeGreaterThanOrEqual(25);
@@ -152,6 +147,7 @@ describe("runPrint", () => {
     const teamId = "t1";
     const leaderKey = "general-1";
     const workerKey = "worker-1";
+    const team = makeTeam(teamId, [leaderKey], leaderKey);
 
     const writes: string[] = [];
     const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
@@ -182,13 +178,7 @@ describe("runPrint", () => {
       });
     });
 
-    const code = await runPrint(
-      handle as never,
-      teamId,
-      leaderKey,
-      [leaderKey],
-      { kind: "print", instruction: "hi", team: undefined, timeout: 5, json: false, apiKey: undefined, resume: undefined },
-    );
+    const code = await runPrint(handle as unknown as JiePlatform, team, { ...baseArgs, timeout: 5 });
     expect(code).toBe(0);
     const concatenated = writes.join("");
     expect(concatenated).toContain("leader-1");

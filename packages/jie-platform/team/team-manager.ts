@@ -1,15 +1,15 @@
 import { ulid } from "ulid";
 import type { Api, Model } from "@earendil-works/pi-ai";
-import { type AgentBody, type AgentIdentity, createAgentBody } from "../core";
+import { type AgentBody, createAgentBody } from "../core";
 import { type EventManager, Events } from "../event";
 import { JiePlatformError } from "../jie-platform-errors";
 import { type ArtifactStore, type MemoryManager } from "../storage";
-import { type SettingsStore } from "../config";
+import { type Settings, type SettingsStore } from "../config";
 import { type ModelRegistry } from "../config";
 import { type ToolRegistry } from "../tools";
-import { type AgentSoul, type TeamBlueprint, type TeamBlueprintLocation } from "./types";
+import { type AgentSoul, type TeamBlueprint, type TeamBlueprintLocation, BUILTIN_MINIMAL_TEAM_ID } from "./types";
 import { type TeamRegistry, createTeamRegistry } from "./registry";
-import type { TeamIdentity } from "../types";
+import type { AgentIdentity, TeamIdentity } from "../types";
 
 export interface TeamManagerOptions {
   readonly homeJieDir: string;
@@ -27,7 +27,9 @@ export interface TeamManagerDeps {
 }
 
 export interface TeamManager {
-  load(teamId?: string): Promise<TeamIdentity>;
+  /** Only resolve a loaded team */
+  resolve(teamId?: string): Promise<TeamIdentity>;
+  /** Load and start agents */
   loadAll(): Promise<ReadonlyMap<string, TeamIdentity>>;
   listInstalled(): string[];
   listLoaded(): ReadonlyMap<string, TeamIdentity>;
@@ -45,26 +47,34 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
   const loadedTeams = new Map<string, AgentBody[]>();
   const sessionIds = new Map<string, string>();
 
-  async function loadImpl(teamId?: string): Promise<TeamIdentity> {
-    const resolvedId = teamId ?? "minimal";
-    const existing = loadedTeams.get(resolvedId);
+  async function resolveImpl(teamId?: string): Promise<TeamIdentity> {
+    const requested = resolveRequestedTeam(settingsStore.load(), teamId);
+    const existing = loadedTeams.get(requested);
     if (existing !== undefined) {
-      return { id: resolvedId, agents: existing.map((b) => b.identity) };
+      return toTeamIdentity(requested, existing);
     }
-    const blueprint: TeamBlueprint = teamRegistry.parseTeamManifest(resolvedId);
-    const sessionId = resolveSessionId(resolvedId);
-    sessionIds.set(resolvedId, sessionId);
+    throw new JiePlatformError("NO_TEAM", {
+      detail: `requested team '${requested}' is not loaded`,
+    });
+  }
+
+  async function loadImpl(id: string): Promise<TeamIdentity> {
+    const existing = loadedTeams.get(id);
+    if (existing !== undefined) {
+      return toTeamIdentity(id, existing);
+    }
+    const blueprint: TeamBlueprint = teamRegistry.parseTeamManifest(id);
+    const sessionId = resolveSessionId(id);
+    sessionIds.set(id, sessionId);
     const bodies: AgentBody[] = [];
     for (const soul of blueprint.roles) {
-      const isLeader = soul.role === blueprint.leaderRole;
-      const agentKey = `${soul.role}-1`;
       const resolvedModel = resolveSoulModel(soul);
       if (resolvedModel === undefined) continue;
       const body = createAgentBody({
-        agentKey,
-        teamId: resolvedId,
+        agentKey: `${soul.role}-1`, // TODO: multiple agents per role
+        teamId: id,
         soul,
-        isLeader,
+        isLeader: soul.role === blueprint.leaderRole,
         eventManager,
         artifactStore,
         memory: memoryManager,
@@ -78,9 +88,9 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
     for (const body of bodies) {
       await body.start();
     }
-    loadedTeams.set(resolvedId, bodies);
-    publishTeamLoaded(resolvedId, blueprint);
-    return { id: resolvedId, agents: bodies.map((b) => b.identity) };
+    loadedTeams.set(id, bodies);
+    publishTeamLoaded(id, blueprint);
+    return toTeamIdentity(id, bodies);
   }
 
   async function loadAll(): Promise<ReadonlyMap<string, TeamIdentity>> {
@@ -148,7 +158,7 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
   function listLoaded(): ReadonlyMap<string, TeamIdentity> {
     const result = new Map<string, TeamIdentity>();
     for (const [id, bodies] of loadedTeams) {
-      result.set(id, { id, agents: bodies.map((b) => b.identity) });
+      result.set(id, toTeamIdentity(id, bodies));
     }
     return result;
   }
@@ -160,7 +170,7 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
   }
 
   return {
-    load: (teamId?: string) => Promise.resolve().then(() => loadImpl(teamId)),
+    resolve: (teamId?: string) => Promise.resolve().then(() => resolveImpl(teamId)),
     loadAll,
     listInstalled() {
       return teamRegistry.listInstalled();
@@ -172,4 +182,19 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
     agents,
     stop,
   };
+}
+
+function resolveRequestedTeam(settings: Settings | undefined, teamId?: string): string {
+  return teamId ?? settings?.defaultTeam ?? BUILTIN_MINIMAL_TEAM_ID;
+}
+
+function toTeamIdentity(id: string, bodies: AgentBody[]): TeamIdentity {
+  const identities = bodies.map((b) => b.identity);
+  const leader = identities.find((a) => a.isLeader);
+  if (leader === undefined) {
+    throw new JiePlatformError("NO_LEADER", {
+      detail: `team '${id}' has no agent marked as leader`,
+    });
+  }
+  return { id, leaderKey: leader.agentKey, agents: identities };
 }

@@ -5,8 +5,8 @@ import { dirname, join } from "node:path";
 import {
   createJiePlatform,
   type JiePlatform,
+  type JiePlatformOptions,
 } from "@cuzfrog/jie-platform";
-import { createApp } from "./app";
 import { parseFlags, type ParsedArgs } from "./cli-flags";
 import {
   runApiKey,
@@ -32,7 +32,6 @@ export async function main(argv: string[], cwd: string = process.cwd()): Promise
 async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<number> {
   const homeJieDir = join(homeDir, ".jie");
   const projectJieDir = findProjectJieDir(cwd);
-  const platformOptions = { cwd, homeJieDir, projectJieDir };
   switch (args.kind) {
     case "help":
       printHelp();
@@ -53,7 +52,7 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<numb
     case "team": {
       let platform: JiePlatform;
       try {
-        platform = await createJiePlatform(platformOptions);
+        platform = await createJiePlatform({ cwd, homeJieDir, projectJieDir });
       } catch (error) {
         console.error(error instanceof Error ? error.message : String(error));
         return 1;
@@ -72,19 +71,42 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<numb
       }
     }
     case "print": {
-      const result = await createApp({
-        kind: "print",
+      const handle = await bootPlatform({
         cwd,
         homeJieDir,
         projectJieDir,
-        teamId: args.team,
-        apiKey: args.apiKey,
-        resume: args.resume,
+        resumeSessionId: args.resume,
       });
-      if (result.kind === "error") return result.code;
-      return runPrint(result.app.handle, result.app.teamId, result.app.leaderKey, result.app.agentKeys, args);
+      const team = await handle.resolveTeam(args.team);
+      if (args.apiKey !== undefined) {
+        try {
+          await handle.execute({ name: "setApiKey", apiKey: args.apiKey });
+        } catch (error) {
+          console.error(error instanceof Error ? error.message : String(error));
+          await handle.stop();
+          return 1;
+        }
+      }
+      return runPrint(handle, team, args);
     }
   }
+}
+
+async function bootPlatform(
+  args: {
+    readonly cwd: string;
+    readonly homeJieDir: string;
+    readonly projectJieDir: string | null;
+    readonly resumeSessionId?: string;
+  },
+  createPlatform: (options: JiePlatformOptions) => Promise<JiePlatform> = createJiePlatform,
+): Promise<JiePlatform> {
+  const handle = await createPlatform(args);
+  handle.subscribe("system.error", (envelope) => {
+    console.error(`jie: ${envelope.payload.error}`);
+  });
+  await handle.start();
+  return handle;
 }
 
 function printHelp(): void {

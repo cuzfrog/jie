@@ -38,8 +38,10 @@ export interface JiePlatformDeps {
 }
 
 export interface JiePlatform {
-  readonly teams: ReadonlyMap<string, TeamIdentity>;
   readonly settings: Settings;
+
+  resolveTeam(teamId?: string): Promise<TeamIdentity>;
+
   start(): Promise<void>;
   stop(): Promise<void>;
 
@@ -54,10 +56,9 @@ export async function createJiePlatform(options: JiePlatformOptions, deps: JiePl
   const settingsSnapshot: Settings = deps.settingsStore.load();
 
   const handle: JiePlatform = {
-    get teams(): ReadonlyMap<string, TeamIdentity> {
-      return deps.teamManager.listLoaded();
-    },
     settings: settingsSnapshot,
+
+    resolveTeam: (teamId?: string) => deps.teamManager.resolve(teamId),
 
     start: async (): Promise<void> => {
       await deps.teamManager.loadAll();

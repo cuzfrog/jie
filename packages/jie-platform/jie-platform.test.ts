@@ -158,7 +158,7 @@ describe("createJiePlatform", () => {
       await handle.start();
       expect(errors).toHaveLength(1);
       expect(errors[0]!.payload.error).toMatch(/team 'minimal' failed to load/);
-      expect(handle.teams.get("minimal")).toBeUndefined();
+      await expect(handle.resolveTeam("minimal")).rejects.toThrow();
     });
 
     test("handle.stop() detaches all bus subscriptions", async () => {
@@ -306,7 +306,7 @@ describe("createJiePlatform", () => {
       });
       const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
       await handle.start();
-      expect(handle.teams.get("alpha")).toBeDefined();
+      expect(await handle.resolveTeam("alpha")).toBeDefined();
       expect(events.map((e) => e.payload.teamId)).toContain("alpha");
       await handle.stop();
     });

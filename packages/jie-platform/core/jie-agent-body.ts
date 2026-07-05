@@ -9,7 +9,8 @@ import type { MemoryManager } from "../storage";
 import type { AgentSoul } from "../team";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { StreamPublisher } from "./streaming";
-import type { AgentBody, AgentIdentity } from "./agent-body";
+import type { AgentBody } from "./agent-body";
+import type { AgentIdentity } from "../types";
 
 export class JieAgentBody implements AgentBody {
   readonly identity: AgentIdentity;

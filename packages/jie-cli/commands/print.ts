@@ -1,19 +1,18 @@
-import type { JiePlatform } from "@cuzfrog/jie-platform";
+import type { JiePlatform, TeamIdentity } from "@cuzfrog/jie-platform";
 import type { ParsedArgsMap } from "../cli-flags";
 
 export type PrintArgs = ParsedArgsMap["print"];
 
 export async function runPrint(
   handle: JiePlatform,
-  teamId: string,
-  leaderAgentKey: string,
-  agentKeys: ReadonlyArray<string>,
+  team: TeamIdentity,
   args: PrintArgs,
 ): Promise<number> {
+  const agentKeys = team.agents.map((a) => a.agentKey);
   handle.subscribe("agent.stream.chunk", (envelope) => {
     if (envelope.sender.kind !== "agent") return;
-    if (envelope.sender.teamId !== teamId) return;
-    if (envelope.sender.agentKey !== leaderAgentKey) return;
+    if (envelope.sender.teamId !== team.id) return;
+    if (envelope.sender.agentKey !== team.leaderKey) return;
     const text = envelope.payload.text;
     if (args.json) {
       process.stdout.write(JSON.stringify({ chunk: text, seq: envelope.payload.seq }) + "\n");
@@ -22,7 +21,7 @@ export async function runPrint(
     }
   });
 
-  handle.prompt(teamId, leaderAgentKey, args.instruction);
+  handle.prompt(team.id, team.leaderKey, args.instruction);
 
   try {
     await setupIdleGate(handle, agentKeys, args.timeout);

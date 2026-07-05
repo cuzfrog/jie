@@ -5,11 +5,9 @@ export {
     type JiePlatformErrorOptions,
 } from "./jie-platform-errors";
 
-export type { TeamIdentity, ModelIdentity } from "./types";
+export type { TeamIdentity, ModelIdentity, AgentIdentity } from "./types";
 
 export type { Settings, McpServerConfig, SettingScope } from "./config";
-
-export type { AgentIdentity } from "./core";
 
 export type { Command, CommandName, CommandResult } from "./command";
 

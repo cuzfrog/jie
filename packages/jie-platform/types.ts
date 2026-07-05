@@ -12,5 +12,6 @@ export interface AgentIdentity {
 
 export interface TeamIdentity {
     readonly id: string;
+    readonly leaderKey: string;
     readonly agents: ReadonlyArray<AgentIdentity>;
 }
