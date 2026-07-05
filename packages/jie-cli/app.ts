@@ -60,9 +60,8 @@ export async function createApp(
     }
   }
 
-  const requestedTeam = args.teamId ?? handle.settings.defaultTeam;
   try {
-    return { kind: "ok", app: toApp(handle, requestedTeam) };
+    return { kind: "ok", app: toApp(handle, args.teamId) };
   } catch (error) {
     return fail(error, handle);
   }
@@ -75,8 +74,8 @@ async function fail(error: unknown, handle: JiePlatform | null, rethrow: boolean
   return { kind: "error", code: 1 };
 }
 
-function toApp(handle: JiePlatform, requestedTeam?: string): App {
-  const team = resolveTeam(handle.teams, requestedTeam);
+function toApp(handle: JiePlatform, requestedTeam: string | undefined): App {
+  const team = resolveTeam(handle.teams, requestedTeam ?? handle.settings.defaultTeam);
   const leader = team.agents.find((a) => a.isLeader);
   if (leader === undefined) {
     throw new JiePlatformError("NO_LEADER", {
@@ -91,13 +90,24 @@ function toApp(handle: JiePlatform, requestedTeam?: string): App {
   };
 }
 
-function resolveTeam(teams: ReadonlyMap<string, TeamIdentity>, requested?: string): TeamIdentity {
-  const fallback = teams.get(requested || BUILTIN_MINIMAL_TEAM_ID);
-  if (fallback !== undefined) {
-    console.warn(`team '${requested}' is not loaded; falling back to '${BUILTIN_MINIMAL_TEAM_ID}'`);
-    return fallback;
+function resolveTeam(teams: ReadonlyMap<string, TeamIdentity>, requested: string | undefined): TeamIdentity {
+  if (requested !== undefined) {
+    const found = teams.get(requested);
+    if (found !== undefined) return found;
+    const fallback = teams.get(BUILTIN_MINIMAL_TEAM_ID);
+    if (fallback !== undefined) {
+      console.warn(`team '${requested}' is not loaded; falling back to '${BUILTIN_MINIMAL_TEAM_ID}'`);
+      return fallback;
+    }
+    throw new JiePlatformError("EMPTY_TEAM", {
+      detail: `team '${requested}' is not loaded and no '${BUILTIN_MINIMAL_TEAM_ID}' fallback is available`,
+    });
   }
-  throw new JiePlatformError("EMPTY_TEAM", {
-    detail: `team '${requested}' is not loaded and no '${BUILTIN_MINIMAL_TEAM_ID}' fallback is available`,
-  });
+  const def = teams.get(BUILTIN_MINIMAL_TEAM_ID);
+  if (def === undefined) {
+    throw new JiePlatformError("EMPTY_TEAM", {
+      detail: `no default '${BUILTIN_MINIMAL_TEAM_ID}' team is loaded`,
+    });
+  }
+  return def;
 }
