@@ -97,36 +97,44 @@ describe("createTeamManager — full surface", () => {
     rmSync(homeJieDir, { recursive: true, force: true });
   });
 
-  describe("loadAll", () => {
-    test("loads only the built-in minimal team when no user teams exist", async () => {
-      const { manager } = makeManager(workspace, homeJieDir, null);
-      const loaded = await manager.loadAll();
-      expect(loaded.has("minimal")).toBe(true);
-      expect(loaded.size).toBe(1);
-    });
-
-    test("publishes system.team.loaded for each team it loads", async () => {
-      const userTeams = join(homeJieDir, "teams");
-      writeTeam(userTeams, "alpha", "general");
+  describe("load", () => {
+    test("loads the built-in minimal team when no teamId is given", async () => {
       const { manager, eventManager } = makeManager(workspace, homeJieDir, null);
       const events = collectEvents(eventManager);
-      await manager.loadAll();
+      const team = await manager.load();
+      expect(team.id).toBe("minimal");
+      expect(team.leaderKey).toBe("general-1");
+      expect(team.agents).toHaveLength(1);
+      expect(team.agents[0]?.isLeader).toBe(true);
       const loadedIds = events.teamLoaded.map((e) => e.payload.teamId);
       expect(loadedIds).toContain("minimal");
-      expect(loadedIds).toContain("alpha");
     });
 
-    test("missing-model team: emits system.error and is omitted from the returned map", async () => {
-      settingsStore.load.mockReturnValue({});
-      const { manager, eventManager } = makeManager(workspace, homeJieDir, null);
-      const events = collectEvents(eventManager);
-      const loaded = await manager.loadAll();
-      expect(loaded.has("minimal")).toBe(false);
-      expect(events.systemError).toHaveLength(1);
-      expect(events.systemError[0]!.payload.error).toMatch(/team 'minimal' failed to load/);
+    test("uses defaultTeam from settings when no teamId is given", async () => {
+      const userTeams = join(homeJieDir, "teams");
+      writeTeam(userTeams, "dev", "leader");
+      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, defaultTeam: "dev" });
+      const { manager } = makeManager(workspace, homeJieDir, null);
+      const team = await manager.load();
+      expect(team.id).toBe("dev");
     });
 
-    test("UNKNOWN_SESSION propagates out of loadAll instead of being swallowed", async () => {
+    test("explicit teamId wins over defaultTeam and the built-in fallback", async () => {
+      const userTeams = join(homeJieDir, "teams");
+      writeTeam(userTeams, "alpha", "general");
+      writeTeam(userTeams, "beta", "general");
+      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, defaultTeam: "alpha" });
+      const { manager } = makeManager(workspace, homeJieDir, null);
+      const team = await manager.load("beta");
+      expect(team.id).toBe("beta");
+    });
+
+    test("throws when the requested team manifest is missing", async () => {
+      const { manager } = makeManager(workspace, homeJieDir, null);
+      expect(manager.load("ghost")).rejects.toThrow();
+    });
+
+    test("UNKNOWN_SESSION propagates out of load", async () => {
       const resumeManager = createTeamManager(
         { homeJieDir, projectJieDir: null, resumeSessionId: "not-a-real-id" },
         {
@@ -138,53 +146,28 @@ describe("createTeamManager — full surface", () => {
           memoryManager: createMemoryManager(createStorage({ type: "sqlite", filePath: ":memory:" })),
         },
       );
-      expect(resumeManager.loadAll()).rejects.toThrow(/unknown session_id/);
-    });
-  });
-
-  describe("resolve", () => {
-    test("returns the loaded minimal team's identity when no teamId is given", async () => {
-      const { manager } = makeManager(workspace, homeJieDir, null);
-      await manager.loadAll();
-      const team = await manager.resolve();
-      expect(team.id).toBe("minimal");
-      expect(team.leaderKey).toBe("general-1");
-      expect(team.agents).toHaveLength(1);
-      expect(team.agents[0]?.isLeader).toBe(true);
+      expect(resumeManager.load("minimal")).rejects.toThrow(/unknown session_id/);
     });
 
-    test("uses defaultTeam from settings when no teamId is given", async () => {
-      const userTeams = join(homeJieDir, "teams");
-      writeTeam(userTeams, "dev", "leader");
-      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, defaultTeam: "dev" });
-      const { manager } = makeManager(workspace, homeJieDir, null);
-      await manager.loadAll();
-      const team = await manager.resolve();
-      expect(team.id).toBe("dev");
+    test("second call to load() returns the cached identity without rebuilding", async () => {
+      const { manager, eventManager } = makeManager(workspace, homeJieDir, null);
+      const events = collectEvents(eventManager);
+      await manager.load("minimal");
+      await manager.load("minimal");
+      const minimalEvents = events.teamLoaded.filter((e) => e.payload.teamId === "minimal");
+      expect(minimalEvents).toHaveLength(1);
     });
 
-    test("explicit teamId wins over defaultTeam and the built-in fallback", async () => {
+    test("loads a second team without disturbing the first", async () => {
       const userTeams = join(homeJieDir, "teams");
       writeTeam(userTeams, "alpha", "general");
-      writeTeam(userTeams, "beta", "general");
-      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, defaultTeam: "alpha" });
-      const { manager } = makeManager(workspace, homeJieDir, null);
-      await manager.loadAll();
-      const team = await manager.resolve("beta");
-      expect(team.id).toBe("beta");
-    });
-
-    test("throws EMPTY_TEAM when the requested team is not loaded", async () => {
-      const { manager } = makeManager(workspace, homeJieDir, null);
-      await manager.loadAll();
-      expect(manager.resolve("ghost")).rejects.toThrow(/ghost.*not loaded/);
-    });
-
-    test("throws EMPTY_TEAM when no team is loaded at all", async () => {
-      settingsStore.load.mockReturnValue({});
-      const { manager } = makeManager(workspace, homeJieDir, null);
-      await manager.loadAll();
-      expect(manager.resolve()).rejects.toThrow();
+      const { manager, eventManager } = makeManager(workspace, homeJieDir, null);
+      const events = collectEvents(eventManager);
+      await manager.load("minimal");
+      await manager.load("alpha");
+      const loadedIds = events.teamLoaded.map((e) => e.payload.teamId);
+      expect(loadedIds).toContain("minimal");
+      expect(loadedIds).toContain("alpha");
     });
   });
 
@@ -230,16 +213,17 @@ describe("createTeamManager — full surface", () => {
   });
 
   describe("listLoaded", () => {
-    test("is empty before loadAll runs", () => {
+    test("is empty before any team is loaded", () => {
       const { manager } = makeManager(workspace, homeJieDir, null);
       expect(manager.listLoaded().size).toBe(0);
     });
 
-    test("reflects every team loadAll loaded", async () => {
+    test("reflects every team load has loaded", async () => {
       const userTeams = join(homeJieDir, "teams");
       writeTeam(userTeams, "alpha", "general");
       const { manager } = makeManager(workspace, homeJieDir, null);
-      await manager.loadAll();
+      await manager.load("minimal");
+      await manager.load("alpha");
       const loaded = manager.listLoaded();
       expect(loaded.has("minimal")).toBe(true);
       expect(loaded.has("alpha")).toBe(true);
@@ -250,15 +234,14 @@ describe("createTeamManager — full surface", () => {
   describe("agents", () => {
     test("returns the loaded team's identities", async () => {
       const { manager } = makeManager(workspace, homeJieDir, null);
-      await manager.loadAll();
+      await manager.load("minimal");
       const identities = manager.agents("minimal");
       expect(identities).toHaveLength(1);
       expect(identities[0]?.agentKey).toBe("general-1");
     });
 
-    test("returns an empty array for a team that wasn't loaded", async () => {
+    test("returns an empty array for a team that wasn't loaded", () => {
       const { manager } = makeManager(workspace, homeJieDir, null);
-      await manager.loadAll();
       expect(manager.agents("ghost")).toEqual([]);
     });
   });
@@ -269,9 +252,9 @@ describe("createTeamManager — full surface", () => {
       expect(() => manager.stop()).not.toThrow();
     });
 
-    test("can be called after loadAll without throwing", async () => {
+    test("can be called after load without throwing", async () => {
       const { manager } = makeManager(workspace, homeJieDir, null);
-      await manager.loadAll();
+      await manager.load("minimal");
       expect(() => manager.stop()).not.toThrow();
     });
   });

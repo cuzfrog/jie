@@ -77,7 +77,7 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<numb
         projectJieDir,
         resumeSessionId: args.resume,
       });
-      const team = await handle.resolveTeam(args.team);
+      const team = await handle.loadTeam(args.team);
       if (args.apiKey !== undefined) {
         try {
           await handle.execute({ name: "setApiKey", apiKey: args.apiKey });
@@ -105,7 +105,6 @@ async function bootPlatform(
   handle.subscribe("system.error", (envelope) => {
     console.error(`jie: ${envelope.payload.error}`);
   });
-  await handle.start();
   return handle;
 }
 

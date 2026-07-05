@@ -110,7 +110,7 @@ describe("createJiePlatform", () => {
   });
 
   describe("happy path (minimal team)", () => {
-    test("starts the minimal team; subscribe receives user.prompt events", async () => {
+    test("loadTeam loads the minimal team; subscribe receives user.prompt events", async () => {
       const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform(
         {
@@ -120,14 +120,14 @@ describe("createJiePlatform", () => {
         },
         deps,
       );
-      await handle.start();
+      await handle.loadTeam("minimal");
       const events: EventEnvelope<"user.prompt">[] = [];
       handle.subscribe("user.prompt", (env) => events.push(env));
       expect(events).toHaveLength(0);
       await handle.stop();
     });
 
-    test("team.loaded is published once at start; the event carries is_leader per agent", async () => {
+    test("team.loaded is published when loadTeam runs; the event carries is_leader per agent", async () => {
       const deps = makeDeps(workspace, homeJieDir);
       const events: EventEnvelope<"system.team.loaded">[] = [];
       deps.eventManager.subscribe("system.team.loaded", (env) => {
@@ -141,7 +141,7 @@ describe("createJiePlatform", () => {
         },
         deps,
       );
-      await handle.start();
+      await handle.loadTeam("minimal");
       expect(events).toHaveLength(1);
       const env = events[0]!;
       expect(env.payload.agents).toHaveLength(1);
@@ -149,16 +149,14 @@ describe("createJiePlatform", () => {
       await handle.stop();
     });
 
-    test("missing model: system.error is published and the team is omitted from teams", async () => {
+    test("missing model: loadTeam throws and the body is not constructed", async () => {
       settingsStore.load.mockReturnValue({});
       const deps = makeDeps(workspace, homeJieDir);
       const errors: EventEnvelope<"system.error">[] = [];
       deps.eventManager.subscribe("system.error", (env) => errors.push(env));
       const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
-      await handle.start();
-      expect(errors).toHaveLength(1);
-      expect(errors[0]!.payload.error).toMatch(/team 'minimal' failed to load/);
-      await expect(handle.resolveTeam("minimal")).rejects.toThrow();
+      expect(handle.loadTeam("minimal")).rejects.toThrow();
+      expect(errors).toHaveLength(0);
     });
 
     test("handle.stop() detaches all bus subscriptions", async () => {
@@ -171,7 +169,7 @@ describe("createJiePlatform", () => {
         },
         deps,
       );
-      await handle.start();
+      await handle.loadTeam("minimal");
       expect(deps.eventManager.subscriberCount("user.prompt")).toBeGreaterThan(0);
       await handle.stop();
       expect(deps.eventManager.subscriberCount("user.prompt")).toBe(0);
@@ -253,7 +251,7 @@ describe("createJiePlatform", () => {
         { cwd: workspace, homeJieDir, projectJieDir, resumeSessionId: "not-a-real-id" },
         deps3,
       );
-      await expect(h3.start()).rejects.toThrow(/unknown session_id: not-a-real-id/);
+      expect(h3.loadTeam("minimal")).rejects.toThrow(/unknown session_id: not-a-real-id/);
 
     });
   });
@@ -273,7 +271,7 @@ describe("createJiePlatform", () => {
         { cwd: workspace, homeJieDir, projectJieDir },
         deps,
       );
-      await handle.start();
+      await handle.loadTeam("ghost");
       const ghostEvent = events.find((e) => e.payload.teamId === "ghost");
       expect(ghostEvent).toBeDefined();
       expect(ghostEvent!.payload.agents.map((a) => a.role)).toEqual(["general"]);
@@ -305,8 +303,7 @@ describe("createJiePlatform", () => {
         events.push(env);
       });
       const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
-      await handle.start();
-      expect(await handle.resolveTeam("alpha")).toBeDefined();
+      expect(await handle.loadTeam("alpha")).toBeDefined();
       expect(events.map((e) => e.payload.teamId)).toContain("alpha");
       await handle.stop();
     });
@@ -315,7 +312,6 @@ describe("createJiePlatform", () => {
       installTeam(homeJieDir, "alpha", "general");
       const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
-      await handle.start();
       await handle.execute({ name: "setDefaultTeam", teamId: "alpha" });
       expect(settingsStore.write).toHaveBeenCalledWith(
         expect.objectContaining({ defaultTeam: "alpha" }),
@@ -454,7 +450,7 @@ describe("JiePlatform — execute(commands)", () => {
       const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
       const writeCallsBefore = settingsStore.write.mock.calls.length;
-      await expect(handle.execute({ name: "setDefaultModel", provider: "no-such-provider", modelId: "x" })).rejects.toThrow(/Unknown provider/);
+      expect(handle.execute({ name: "setDefaultModel", provider: "no-such-provider", modelId: "x" })).rejects.toThrow(/Unknown provider/);
       expect(settingsStore.write.mock.calls.length).toBe(writeCallsBefore);
       await handle.stop();
     });

@@ -27,10 +27,7 @@ export interface TeamManagerDeps {
 }
 
 export interface TeamManager {
-  /** Only resolve a loaded team */
-  resolve(teamId?: string): Promise<TeamIdentity>;
-  /** Load and start agents */
-  loadAll(): Promise<ReadonlyMap<string, TeamIdentity>>;
+  load(teamId?: string): Promise<TeamIdentity>;
   listInstalled(): string[];
   listLoaded(): ReadonlyMap<string, TeamIdentity>;
   locate(teamId: string): TeamBlueprintLocation;
@@ -47,32 +44,22 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
   const loadedTeams = new Map<string, AgentBody[]>();
   const sessionIds = new Map<string, string>();
 
-  async function resolveImpl(teamId?: string): Promise<TeamIdentity> {
+  async function loadImpl(teamId?: string): Promise<TeamIdentity> {
     const requested = resolveRequestedTeam(settingsStore.load(), teamId);
     const existing = loadedTeams.get(requested);
     if (existing !== undefined) {
       return toTeamIdentity(requested, existing);
     }
-    throw new JiePlatformError("NO_TEAM", {
-      detail: `requested team '${requested}' is not loaded`,
-    });
-  }
-
-  async function loadImpl(id: string): Promise<TeamIdentity> {
-    const existing = loadedTeams.get(id);
-    if (existing !== undefined) {
-      return toTeamIdentity(id, existing);
-    }
-    const blueprint: TeamBlueprint = teamRegistry.parseTeamManifest(id);
-    const sessionId = resolveSessionId(id);
-    sessionIds.set(id, sessionId);
+    const blueprint: TeamBlueprint = teamRegistry.parseTeamManifest(requested);
+    const sessionId = resolveSessionId(requested);
+    sessionIds.set(requested, sessionId);
     const bodies: AgentBody[] = [];
     for (const soul of blueprint.roles) {
       const resolvedModel = resolveSoulModel(soul);
       if (resolvedModel === undefined) continue;
       const body = createAgentBody({
         agentKey: `${soul.role}-1`, // TODO: multiple agents per role
-        teamId: id,
+        teamId: requested,
         soul,
         isLeader: soul.role === blueprint.leaderRole,
         eventManager,
@@ -88,25 +75,9 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
     for (const body of bodies) {
       await body.start();
     }
-    loadedTeams.set(id, bodies);
-    publishTeamLoaded(id, blueprint);
-    return toTeamIdentity(id, bodies);
-  }
-
-  async function loadAll(): Promise<ReadonlyMap<string, TeamIdentity>> {
-    const teams = new Map<string, TeamIdentity>();
-    for (const id of teamRegistry.listInstalled()) {
-      try {
-        const team = await loadImpl(id);
-        teams.set(team.id, team);
-      } catch (error) {
-        if (error instanceof JiePlatformError && error.code === "UNKNOWN_SESSION") throw error;
-        const message = error instanceof Error ? error.message : String(error);
-        eventManager.publish(Events.systemError({ kind: "system" }, `team '${id}' failed to load: ${message}`));
-        continue;
-      }
-    }
-    return teams;
+    loadedTeams.set(requested, bodies);
+    publishTeamLoaded(requested, blueprint);
+    return toTeamIdentity(requested, bodies);
   }
 
   function resolveSessionId(teamId: string): string {
@@ -170,8 +141,7 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
   }
 
   return {
-    resolve: (teamId?: string) => Promise.resolve().then(() => resolveImpl(teamId)),
-    loadAll,
+    load: loadImpl,
     listInstalled() {
       return teamRegistry.listInstalled();
     },

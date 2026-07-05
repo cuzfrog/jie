@@ -33,11 +33,10 @@ function makePlatform(publish: Publish, subscribe: Subscribe, initialTeamId: str
   };
   return {
     settings: {},
-    resolveTeam: async (teamId?: string) => {
+    loadTeam: async (teamId?: string) => {
       const id = teamId ?? initialTeamId;
       return { id, leaderKey: `${id}-leader`, agents: [] };
     },
-    start: noopAsync,
     stop: noopAsync,
     subscribe,
     prompt: (teamId: string, agentKey: string, text: string) => {
