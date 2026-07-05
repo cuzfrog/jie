@@ -1,7 +1,6 @@
 import {
   createJiePlatform,
   JiePlatformError,
-  type AgentIdentity,
   type JiePlatform,
   type JiePlatformOptions,
   type TeamIdentity,
@@ -28,6 +27,8 @@ export interface AppArgs {
   readonly resume?: string;
 }
 
+const BUILTIN_MINIMAL_TEAM_ID = "minimal";
+
 export async function createApp(
   args: AppArgs,
   createPlatform: (options: JiePlatformOptions) => Promise<JiePlatform> = createJiePlatform,
@@ -41,13 +42,11 @@ export async function createApp(
       resumeSessionId: args.resume,
     });
     handle.subscribe("system.error", (envelope) => {
-      if (envelope.payload === null) return;
       console.warn(`jie: ${envelope.payload.error}`);
     });
     await handle.start();
   } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    return { kind: "error", code: 1 };
+    return fail(error, null);
   }
 
   if (args.apiKey !== undefined) {
@@ -55,57 +54,50 @@ export async function createApp(
       await handle.execute({ name: "setApiKey", apiKey: args.apiKey });
     } catch (error) {
       if (error instanceof JiePlatformError && error.code === "NO_DEFAULT_PROVIDER") {
-        console.error(error.message);
-        await handle.stop();
-        return { kind: "error", code: 1 };
+        return fail(error, handle);
       }
-      await handle.stop();
-      throw error;
+      return fail(error, handle, true);
     }
   }
 
-  const requestedTeam = args.teamId ?? handle.settings.defaultTeam ?? "minimal";
-  let team: TeamIdentity;
-  let agents: ReadonlyArray<AgentIdentity>;
-  let leader: AgentIdentity;
+  const requestedTeam = args.teamId ?? handle.settings.defaultTeam;
   try {
-    team = resolveTeam(handle.teams, requestedTeam);
-    agents = team.agents;
-    leader = pickLeader(agents);
+    return { kind: "ok", app: toApp(handle, requestedTeam) };
   } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    await handle.stop();
-    return { kind: "error", code: 1 };
+    return fail(error, handle);
+  }
+}
+
+async function fail(error: unknown, handle: JiePlatform | null, rethrow: boolean = false): Promise<AppCreationResult> {
+  console.error(error instanceof Error ? error.message : String(error));
+  if (handle !== null) await handle.stop();
+  if (rethrow) throw error;
+  return { kind: "error", code: 1 };
+}
+
+function toApp(handle: JiePlatform, requestedTeam?: string): App {
+  const team = resolveTeam(handle.teams, requestedTeam);
+  const leader = team.agents.find((a) => a.isLeader);
+  if (leader === undefined) {
+    throw new JiePlatformError("NO_LEADER", {
+      detail: "team has no agents to designate a leader",
+    });
   }
   return {
-    kind: "ok",
-    app: {
-      handle,
-      teamId: team.id,
-      leaderKey: leader.agentKey,
-      agentKeys: agents.map((a) => a.agentKey),
-    },
+    handle,
+    teamId: team.id,
+    leaderKey: leader.agentKey,
+    agentKeys: team.agents.map((a) => a.agentKey),
   };
 }
 
-function resolveTeam(teams: ReadonlyMap<string, TeamIdentity>, requested: string): TeamIdentity {
-  const found = teams.get(requested);
-  if (found !== undefined) return found;
-  const fallback = teams.get("minimal");
+function resolveTeam(teams: ReadonlyMap<string, TeamIdentity>, requested?: string): TeamIdentity {
+  const fallback = teams.get(requested || BUILTIN_MINIMAL_TEAM_ID);
   if (fallback !== undefined) {
-    console.warn(`team '${requested}' is not loaded; falling back to 'minimal'`);
+    console.warn(`team '${requested}' is not loaded; falling back to '${BUILTIN_MINIMAL_TEAM_ID}'`);
     return fallback;
   }
   throw new JiePlatformError("EMPTY_TEAM", {
-    detail: `team '${requested}' is not loaded and no 'minimal' fallback is available`,
-  });
-}
-
-function pickLeader(agents: ReadonlyArray<AgentIdentity>): AgentIdentity {
-  const leader = agents.find((a) => a.isLeader);
-  if (leader !== undefined) return leader;
-  if (agents.length > 0) return agents[0]!;
-  throw new JiePlatformError("NO_LEADER", {
-    detail: "team has no agents to designate a leader",
+    detail: `team '${requested}' is not loaded and no '${BUILTIN_MINIMAL_TEAM_ID}' fallback is available`,
   });
 }

@@ -58,7 +58,11 @@ function setupIdleGate(handle: JiePlatform, agentKeys: ReadonlyArray<string>, ti
       if (envelope.sender.kind !== "agent") return;
       if (!state.has(envelope.sender.agentKey)) return;
       state.set(envelope.sender.agentKey, "idle");
-      if ([...state.values()].every((v) => v === "idle")) finish(undefined);
+      let allIdle = true;
+      for (const v of state.values()) {
+        if (v !== "idle") { allIdle = false; break; }
+      }
+      if (allIdle) finish(undefined);
     });
 
     const timer =
