@@ -120,7 +120,7 @@ describe("createJiePlatform", () => {
         },
         deps,
       );
-      await handle.loadTeam("minimal");
+      await handle.execute({ name: "team", teamId: "minimal" });
       const events: EventEnvelope<"user.prompt">[] = [];
       handle.subscribe("user.prompt", (env) => events.push(env));
       expect(events).toHaveLength(0);
@@ -141,7 +141,7 @@ describe("createJiePlatform", () => {
         },
         deps,
       );
-      await handle.loadTeam("minimal");
+      await handle.execute({ name: "team", teamId: "minimal" });
       expect(events).toHaveLength(1);
       const env = events[0]!;
       expect(env.payload.agents).toHaveLength(1);
@@ -155,7 +155,7 @@ describe("createJiePlatform", () => {
       const errors: EventEnvelope<"system.error">[] = [];
       deps.eventManager.subscribe("system.error", (env) => errors.push(env));
       const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
-      expect(handle.loadTeam("minimal")).rejects.toThrow();
+      expect(handle.execute({ name: "team", teamId: "minimal" })).rejects.toThrow();
       expect(errors).toHaveLength(0);
     });
 
@@ -169,7 +169,7 @@ describe("createJiePlatform", () => {
         },
         deps,
       );
-      await handle.loadTeam("minimal");
+      await handle.execute({ name: "team", teamId: "minimal" });
       expect(deps.eventManager.subscriberCount("user.prompt")).toBeGreaterThan(0);
       await handle.stop();
       expect(deps.eventManager.subscriberCount("user.prompt")).toBe(0);
@@ -177,6 +177,10 @@ describe("createJiePlatform", () => {
   });
 
   describe("session id resolution", () => {
+    function makeExecutor(teamManager: ReturnType<typeof createTeamManager>) {
+      return createCommandExecutor({ authStore, settingsStore, teamManager, gitService, defaultScope: "global" });
+    }
+
     test("resumeSessionId: valid id is used; invalid id rejects with 'unknown session_id:'", async () => {
       const filePath = join(workspace, "resume.db");
       const storage1 = createStorage({ type: "sqlite", filePath });
@@ -196,6 +200,7 @@ describe("createJiePlatform", () => {
         artifactStore: artifactStore1,
         toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events1, artifactStore: artifactStore1 }),
         teamManager: teamManager1,
+        commandExecutor: makeExecutor(teamManager1),
       };
       const h1 = await createJiePlatform(
         { cwd: workspace, homeJieDir, projectJieDir },
@@ -222,6 +227,7 @@ describe("createJiePlatform", () => {
         artifactStore: artifactStore2,
         toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events2, artifactStore: artifactStore2 }),
         teamManager: teamManager2,
+        commandExecutor: makeExecutor(teamManager2),
       };
       const h2 = await createJiePlatform(
         { cwd: workspace, homeJieDir, projectJieDir, resumeSessionId: sessionId },
@@ -246,12 +252,13 @@ describe("createJiePlatform", () => {
         artifactStore: artifactStore3,
         toolRegistry: createToolRegistry({ workspaceRoot: workspace, eventManager: events3, artifactStore: artifactStore3 }),
         teamManager: teamManager3,
+        commandExecutor: makeExecutor(teamManager3),
       };
       const h3 = await createJiePlatform(
         { cwd: workspace, homeJieDir, projectJieDir, resumeSessionId: "not-a-real-id" },
         deps3,
       );
-      expect(h3.loadTeam("minimal")).rejects.toThrow(/unknown session_id: not-a-real-id/);
+      expect(h3.execute({ name: "team", teamId: "minimal" })).rejects.toThrow(/unknown session_id: not-a-real-id/);
 
     });
   });
@@ -271,7 +278,7 @@ describe("createJiePlatform", () => {
         { cwd: workspace, homeJieDir, projectJieDir },
         deps,
       );
-      await handle.loadTeam("ghost");
+      await handle.execute({ name: "team", teamId: "ghost" });
       const ghostEvent = events.find((e) => e.payload.teamId === "ghost");
       expect(ghostEvent).toBeDefined();
       expect(ghostEvent!.payload.agents.map((a) => a.role)).toEqual(["general"]);
@@ -303,7 +310,7 @@ describe("createJiePlatform", () => {
         events.push(env);
       });
       const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
-      expect(await handle.loadTeam("alpha")).toBeDefined();
+      expect(await handle.execute({ name: "team", teamId: "alpha" })).toBeDefined();
       expect(events.map((e) => e.payload.teamId)).toContain("alpha");
       await handle.stop();
     });

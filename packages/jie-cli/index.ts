@@ -58,7 +58,7 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
   const handle = await bootPlatform({ cwd, homeJieDir, projectJieDir }, deps.createPlatform);
   switch (args.kind) {
     case "tui": {
-      await handle.loadTeam(args.team);
+      await handle.execute({ name: "team", teamId: args.team });
       const tui = deps.createTui({ cwd }, { platform: handle });
       await tui.start();
       await handle.stop();
@@ -75,7 +75,7 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
     case "team":
       return runTeam(args, handle);
     case "print": {
-      const team = await handle.loadTeam(args.team);
+      const team = await handle.execute({ name: "team", teamId: args.team });
       if (args.apiKey !== undefined) {
         try {
           await handle.execute({ name: "setApiKey", apiKey: args.apiKey });

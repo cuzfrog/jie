@@ -90,6 +90,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 - do not add comments unless the code itself cannot tell, decisions should be captured in `doc/specs/` or `doc/addrs/`.
 - do not skip tests, problems must be resolved.
 - do not ignore tech debt you encountered, record them as Github issues so later other agents can analyze and fix.
+- avoid worktrees.
 
 ## Best practices
 - write down your plan before execution.

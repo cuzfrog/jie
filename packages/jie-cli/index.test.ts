@@ -135,7 +135,6 @@ describe("jie --api-key (top-level, integration)", () => {
 
 interface FakePlatform {
   handle: JiePlatform;
-  loadTeam: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
   execute: ReturnType<typeof vi.fn>;
   subscribeCalls: EventType[];
@@ -143,25 +142,27 @@ interface FakePlatform {
 
 function makeFakePlatform(): FakePlatform {
   const subscribeCalls: EventType[] = [];
-  const loadTeam = vi.fn(async (teamId?: string): Promise<TeamIdentity> => ({
-    id: teamId ?? "minimal",
-    leaderKey: "general-1",
-    agents: [{
-      teamId: teamId ?? "minimal",
-      role: "general",
-      agentKey: "general-1",
-      isLeader: true,
-    }],
-  }));
   const stop = vi.fn(async (): Promise<void> => undefined);
   const execute = vi.fn(async (cmd: { name: string } & Record<string, unknown>): Promise<unknown> => {
     if (cmd.name === "setApiKey") throw new Error("setApiKey boom");
     if (cmd.name === "getDefaultModel") return { provider: "anthropic", modelId: "claude-sonnet-4-5" };
+    if (cmd.name === "team") {
+      const teamId = (cmd as { teamId?: string }).teamId ?? "minimal";
+      return {
+        id: teamId,
+        leaderKey: "general-1",
+        agents: [{
+          teamId,
+          role: "general",
+          agentKey: "general-1",
+          isLeader: true,
+        }],
+      } satisfies TeamIdentity;
+    }
     return null;
   });
   const handle = {
     settings: {},
-    loadTeam,
     stop,
     subscribe: <T extends EventType>(topic: T, _cb: (event: EventEnvelope<T>) => void) => {
       subscribeCalls.push(topic);
@@ -171,7 +172,7 @@ function makeFakePlatform(): FakePlatform {
     interrupt: vi.fn(),
     execute: execute as unknown as JiePlatform["execute"],
   } as unknown as JiePlatform;
-  return { handle, loadTeam, stop, execute, subscribeCalls };
+  return { handle, stop, execute, subscribeCalls };
 }
 
 interface CapturedRun {
@@ -218,7 +219,7 @@ describe("_run — tui", () => {
     const captured = captureRun(platform.handle);
     const exit = await captured.run({ kind: "tui" });
     expect(exit).toBe(0);
-    expect(captured.fakePlatform.loadTeam).toHaveBeenCalledWith(undefined);
+    expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: undefined });
     expect(captured.fakePlatform.stop).toHaveBeenCalledTimes(1);
     expect(captured.tuiCalls).toHaveLength(1);
     expect(captured.tuiCalls[0]?.options.cwd).toBe(process.cwd());
@@ -226,12 +227,12 @@ describe("_run — tui", () => {
     expect(captured.startCalls.value).toBe(1);
   });
 
-  test("tui boot: passes args.team to loadTeam", async () => {
+  test("tui boot: passes args.team to execute({name:'team'})", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform.handle);
     const exit = await captured.run({ kind: "tui", team: "alpha" });
     expect(exit).toBe(0);
-    expect(captured.fakePlatform.loadTeam).toHaveBeenCalledWith("alpha");
+    expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: "alpha" });
   });
 
   test("tui boot: subscribes to system.error before dispatching", async () => {
@@ -298,7 +299,7 @@ describe("_run — error/help/version bypass boot", () => {
 });
 
 describe("_run — print + apiKey", () => {
-  test("print without apiKey -> calls loadTeam, dispatches to runPrint (returns 3 on fake timeout)", async () => {
+  test("print without apiKey -> calls execute({name:'team'}), dispatches to runPrint (returns 3 on fake timeout)", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform.handle);
     const exit = await captured.run({
@@ -309,7 +310,7 @@ describe("_run — print + apiKey", () => {
       json: false,
     });
     expect(exit).toBe(3);
-    expect(captured.fakePlatform.loadTeam).toHaveBeenCalledWith("minimal");
+    expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: "minimal" });
     expect(captured.fakePlatform.stop).toHaveBeenCalledTimes(1);
   });
 

@@ -17,12 +17,16 @@ interface TestBus {
 }
 
 function makePlatform(publish: Publish, subscribe: Subscribe, initialTeamId: string): JiePlatform {
-  const execute: JiePlatform["execute"] = async (cmd) => {
+  const execute: JiePlatform["execute"] = (async (cmd: { name: string } & Record<string, unknown>) => {
     switch (cmd.name) {
       case "setDefaultTeam":
         return null;
       case "unsetDefaultTeam":
         return null;
+      case "team": {
+        const id = (cmd as { teamId?: string }).teamId ?? initialTeamId;
+        return { id, leaderKey: `${id}-leader`, agents: [] };
+      }
       case "getTeamInfo":
         return { defaultTeam: null, installed: [] };
       case "getGitStatus":
@@ -30,13 +34,9 @@ function makePlatform(publish: Publish, subscribe: Subscribe, initialTeamId: str
       default:
         return null;
     }
-  };
+  }) as JiePlatform["execute"];
   return {
     settings: {},
-    loadTeam: async (teamId?: string) => {
-      const id = teamId ?? initialTeamId;
-      return { id, leaderKey: `${id}-leader`, agents: [] };
-    },
     stop: noopAsync,
     subscribe,
     prompt: (teamId: string, agentKey: string, text: string) => {

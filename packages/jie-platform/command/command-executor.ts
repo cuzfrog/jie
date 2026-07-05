@@ -80,6 +80,7 @@ export function createCommandExecutor(deps: CommandExecutorDeps): CommandExecuto
       deps.settingsStore.write(next, loc === "project" ? "project" : "global");
       return null;
     },
+    team: (command) => deps.teamManager.load(command.teamId),
     getTeamInfo: () => {
       const settings = deps.settingsStore.load();
       return {

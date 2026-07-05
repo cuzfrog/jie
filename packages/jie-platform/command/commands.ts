@@ -1,5 +1,5 @@
 import type { GitSnapshot } from "../services";
-import type { ModelIdentity } from "../types";
+import type { ModelIdentity, TeamIdentity } from "../types";
 
 interface CommandDef<A, R = null> {
   args: A;
@@ -14,6 +14,7 @@ interface CommandTypeMap {
   getDefaultModel: CommandDef<{}, ModelIdentity | null>;
   unsetDefaultTeam: CommandDef<{}, null>;
   setDefaultTeam: CommandDef<{ teamId: string }, null>;
+  team: CommandDef<{ teamId?: string }, TeamIdentity>;
   getTeamInfo: CommandDef<{}, { defaultTeam: string | null; installed: ReadonlyArray<string> }>;
   getGitStatus: CommandDef<{}, GitSnapshot>;
 }

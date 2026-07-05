@@ -14,7 +14,6 @@ import {
 } from "./storage";
 import { type Command, type CommandExecutor, type CommandName, type CommandResult, createCommandExecutor } from "./command";
 import { createGitService } from "./services";
-import { type TeamIdentity } from "./types";
 import type { SettingScope } from "./config";
 
 export interface JiePlatformOptions {
@@ -40,8 +39,6 @@ export interface JiePlatformDeps {
 export interface JiePlatform {
   readonly settings: Settings;
 
-  loadTeam(teamId?: string): Promise<TeamIdentity>;
-
   stop(): Promise<void>;
 
   prompt(teamId: string, agentKey: string, text: string): void;
@@ -56,8 +53,6 @@ export async function createJiePlatform(options: JiePlatformOptions, deps: JiePl
 
   const handle: JiePlatform = {
     settings: settingsSnapshot,
-
-    loadTeam: (teamId?: string) => deps.teamManager.load(teamId),
 
     stop: async (): Promise<void> => {
       deps.teamManager.stop();
