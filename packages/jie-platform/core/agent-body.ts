@@ -7,6 +7,7 @@ import { adaptToolToAgent } from "./tool-adapter";
 import { makeStreamPublisher } from "./streaming";
 import { JieAgentBody } from "./jie-agent-body";
 import { Events, type AgentSender, type EventManager } from "../event";
+import type { AgentIdentity } from "../types";
 
 export interface CreateAgentBodyOptions {
   readonly agentKey: string;
@@ -21,13 +22,6 @@ export interface CreateAgentBodyOptions {
   getApiKey(provider: string): Promise<string | undefined> | string | undefined;
   readonly model: Model<Api> | undefined;
   readonly createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
-}
-
-export interface AgentIdentity {
-  readonly teamId: string;
-  readonly role: string;
-  readonly agentKey: string;
-  readonly isLeader: boolean;
 }
 
 export interface AgentBody {
