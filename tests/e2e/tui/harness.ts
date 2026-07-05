@@ -98,7 +98,7 @@ export const startTuiOn = (
   })();
   const { deps } = makeDeps(bus, opts, initialTeamId);
   const tuiHandle: { current: Tui | null } = { current: null };
-  withTTY(true, () => { tuiHandle.current = createTui(deps, opts); });
+  withTTY(true, () => { tuiHandle.current = createTui(opts, deps); });
   const tui = tuiHandle.current;
   if (tui === null) throw new Error("TUI handle not initialized");
   for (const env of preload) bus.publish(env);

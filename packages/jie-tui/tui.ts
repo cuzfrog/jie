@@ -7,12 +7,12 @@ import { buildView, type BuildViewResult } from "./components";
 
 export interface TuiDeps {
   readonly platform: JiePlatform;
+  readonly terminal?: Terminal;
 }
 
 export interface CreateTUIOptions {
   readonly cwd: string;
   readonly rows?: number;
-  readonly terminal?: Terminal;
 }
 
 export interface Tui {
@@ -24,14 +24,14 @@ export interface Tui {
 
 const MIN_COLS = 60;
 
-export function createTui(deps: TuiDeps, options: CreateTUIOptions): Tui {
+export function createTui(options: CreateTUIOptions, deps: TuiDeps): Tui {
   if (process.stdin.isTTY !== true) {
     throw new Error("TUI requires an interactive terminal; use `jie -p` for scripts.");
   }
   if (!isUtf8()) {
     throw new Error("TUI requires a UTF-8 locale; set LANG=en_US.UTF-8");
   }
-  const terminal = options.terminal ?? new ProcessTerminal();
+  const terminal = deps.terminal ?? new ProcessTerminal();
   const tui = new TUI(terminal);
   const stateStore = createStateStore();
   const view = buildView(stateStore, { cwd: options.cwd }, tui);

@@ -101,6 +101,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 Pre-action:
 - Before adding utility functions/logic, check existing utils for reuse.
 - Before adding logic to existing files, check if any coding principles are violated, if violated, propose refactoring first.
+- Before any semantic or logic change, update or add tests to ensure coverage.
 
 Post-action:
 - After file edit (semantic or logic change), run tests.

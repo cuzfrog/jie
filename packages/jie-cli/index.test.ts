@@ -9,6 +9,15 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type {
+  EventEnvelope,
+  EventType,
+  JiePlatform,
+  JiePlatformOptions,
+  TeamIdentity,
+} from "@cuzfrog/jie-platform";
+import type { CreateTUIOptions, Tui, TuiDeps } from "@cuzfrog/jie-tui";
+import { _run } from ".";
 import { main } from ".";
 
 interface Capture {
@@ -120,6 +129,279 @@ describe("jie --api-key (top-level, integration)", () => {
       expect(JSON.parse(authText)).toEqual({ anthropic: { type: "api_key", key: "sk-new" } });
     } finally {
       r.cleanup();
+    }
+  });
+});
+
+interface FakePlatform {
+  handle: JiePlatform;
+  loadTeam: ReturnType<typeof vi.fn>;
+  stop: ReturnType<typeof vi.fn>;
+  execute: ReturnType<typeof vi.fn>;
+  subscribeCalls: EventType[];
+}
+
+function makeFakePlatform(): FakePlatform {
+  const subscribeCalls: EventType[] = [];
+  const loadTeam = vi.fn(async (teamId?: string): Promise<TeamIdentity> => ({
+    id: teamId ?? "minimal",
+    leaderKey: "general-1",
+    agents: [{
+      teamId: teamId ?? "minimal",
+      role: "general",
+      agentKey: "general-1",
+      isLeader: true,
+    }],
+  }));
+  const stop = vi.fn(async (): Promise<void> => undefined);
+  const execute = vi.fn(async (cmd: { name: string } & Record<string, unknown>): Promise<unknown> => {
+    if (cmd.name === "setApiKey") throw new Error("setApiKey boom");
+    if (cmd.name === "getDefaultModel") return { provider: "anthropic", modelId: "claude-sonnet-4-5" };
+    return null;
+  });
+  const handle = {
+    settings: {},
+    loadTeam,
+    stop,
+    subscribe: <T extends EventType>(topic: T, _cb: (event: EventEnvelope<T>) => void) => {
+      subscribeCalls.push(topic);
+      return () => undefined;
+    },
+    prompt: vi.fn(),
+    interrupt: vi.fn(),
+    execute: execute as unknown as JiePlatform["execute"],
+  } as unknown as JiePlatform;
+  return { handle, loadTeam, stop, execute, subscribeCalls };
+}
+
+interface CapturedRun {
+  fakePlatform: FakePlatform;
+  tuiCalls: { options: CreateTUIOptions; deps: TuiDeps }[];
+  startCalls: { value: number };
+  run: (parsed: Parameters<typeof _run>[0]) => Promise<number>;
+}
+
+function captureRun(platform: JiePlatform): CapturedRun {
+  const fakePlatform = platform as unknown as FakePlatform;
+  const tuiCalls: { options: CreateTUIOptions; deps: TuiDeps }[] = [];
+  const startCalls = { value: 0 };
+  const createPlatform = vi.fn(async (_opts: JiePlatformOptions): Promise<JiePlatform> => platform);
+  const createTui = vi.fn((options: CreateTUIOptions, deps: TuiDeps): Tui => {
+    tuiCalls.push({ options, deps });
+    const tui: Tui = {
+      getState: () => ({
+        teamId: null,
+        leaderAgentId: null,
+        focusedAgentId: null,
+        agents: new Map(),
+        showTeamRailPanel: false,
+        pendingQuit: false,
+        transientMessage: null,
+        errorBanner: null,
+      }),
+      submit: () => undefined,
+      start: () => {
+        startCalls.value += 1;
+        return Promise.resolve();
+      },
+      stop: () => undefined,
+    };
+    return tui;
+  });
+  const run = (parsed: Parameters<typeof _run>[0]): Promise<number> => _run(parsed, process.cwd(), process.env.HOME ?? "/tmp", { createPlatform, createTui });
+  return { fakePlatform, tuiCalls, startCalls, run };
+}
+
+describe("_run — tui", () => {
+  test("tui boot: loads team, calls createTui({cwd},{platform}), awaits start, stops platform, returns 0", async () => {
+    const platform = makeFakePlatform();
+    const captured = captureRun(platform.handle);
+    const exit = await captured.run({ kind: "tui" });
+    expect(exit).toBe(0);
+    expect(captured.fakePlatform.loadTeam).toHaveBeenCalledWith(undefined);
+    expect(captured.fakePlatform.stop).toHaveBeenCalledTimes(1);
+    expect(captured.tuiCalls).toHaveLength(1);
+    expect(captured.tuiCalls[0]?.options.cwd).toBe(process.cwd());
+    expect(captured.tuiCalls[0]?.deps.platform).toBe(platform.handle);
+    expect(captured.startCalls.value).toBe(1);
+  });
+
+  test("tui boot: passes args.team to loadTeam", async () => {
+    const platform = makeFakePlatform();
+    const captured = captureRun(platform.handle);
+    const exit = await captured.run({ kind: "tui", team: "alpha" });
+    expect(exit).toBe(0);
+    expect(captured.fakePlatform.loadTeam).toHaveBeenCalledWith("alpha");
+  });
+
+  test("tui boot: subscribes to system.error before dispatching", async () => {
+    const platform = makeFakePlatform();
+    const captured = captureRun(platform.handle);
+    await captured.run({ kind: "tui" });
+    expect(platform.subscribeCalls).toContain("system.error");
+  });
+
+  test("tui boot: propagates createPlatform rejection via thrown error", async () => {
+    const platform = makeFakePlatform();
+    const run = (parsed: Parameters<typeof _run>[0]): Promise<number> =>
+      _run(parsed, process.cwd(), "/tmp", {
+        createPlatform: () => Promise.reject(new Error("boot blew up")),
+        createTui: vi.fn(),
+      });
+    expect(run({ kind: "tui" })).rejects.toThrow("boot blew up");
+    expect(platform.stop).not.toHaveBeenCalled();
+  });
+});
+
+describe("_run — error/help/version bypass boot", () => {
+  test("error kind -> prints message, exit 1, no platform boot", async () => {
+    let platformBoots = 0;
+    const platform = makeFakePlatform();
+    const run = (parsed: Parameters<typeof _run>[0]): Promise<number> =>
+      _run(parsed, process.cwd(), "/tmp", {
+        createPlatform: () => {
+          platformBoots += 1;
+          return Promise.resolve(platform.handle);
+        },
+        createTui: vi.fn(),
+      });
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const exit = await run({ kind: "error", message: "bad flag" });
+      expect(exit).toBe(1);
+      expect(platformBoots).toBe(0);
+    } finally {
+      errSpy.mockRestore();
+    }
+  });
+
+  test("version kind -> prints version, exit 0, no platform boot", async () => {
+    let platformBoots = 0;
+    const platform = makeFakePlatform();
+    const run = (parsed: Parameters<typeof _run>[0]): Promise<number> =>
+      _run(parsed, process.cwd(), "/tmp", {
+        createPlatform: () => {
+          platformBoots += 1;
+          return Promise.resolve(platform.handle);
+        },
+        createTui: vi.fn(),
+      });
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      const exit = await run({ kind: "version" });
+      expect(exit).toBe(0);
+      expect(platformBoots).toBe(0);
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+});
+
+describe("_run — print + apiKey", () => {
+  test("print without apiKey -> calls loadTeam, dispatches to runPrint (returns 3 on fake timeout)", async () => {
+    const platform = makeFakePlatform();
+    const captured = captureRun(platform.handle);
+    const exit = await captured.run({
+      kind: "print",
+      instruction: "hello",
+      team: "minimal",
+      timeout: 1,
+      json: false,
+    });
+    expect(exit).toBe(3);
+    expect(captured.fakePlatform.loadTeam).toHaveBeenCalledWith("minimal");
+    expect(captured.fakePlatform.stop).toHaveBeenCalledTimes(1);
+  });
+
+  test("print with failing setApiKey -> stops platform, returns 1", async () => {
+    const platform = makeFakePlatform();
+    const captured = captureRun(platform.handle);
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const exit = await captured.run({
+        kind: "print",
+        instruction: "hello",
+        timeout: 1,
+        json: false,
+        apiKey: "sk-fail",
+      });
+      expect(exit).toBe(1);
+      expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "setApiKey", apiKey: "sk-fail" });
+      expect(captured.fakePlatform.stop).toHaveBeenCalledTimes(1);
+    } finally {
+      errSpy.mockRestore();
+    }
+  });
+});
+
+describe("_run — dispatch to command handlers", () => {
+  test("login dispatches to runLogin (execute login command)", async () => {
+    const platform = makeFakePlatform();
+    platform.execute.mockImplementation(async (cmd: { name: string } & Record<string, unknown>) => {
+      if (cmd.name === "login") return null;
+      return null;
+    });
+    const captured = captureRun(platform.handle);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      const exit = await captured.run({ kind: "login", provider: "anthropic", apiKey: "sk-x" });
+      expect(exit).toBe(0);
+      expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "login", provider: "anthropic", apiKey: "sk-x" });
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  test("logout dispatches to runLogout", async () => {
+    const platform = makeFakePlatform();
+    const captured = captureRun(platform.handle);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      const exit = await captured.run({ kind: "logout", provider: "anthropic" });
+      expect(exit).toBe(0);
+      expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "logout", provider: "anthropic" });
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  test("apiKey dispatches to runApiKey which reads default model then logs in", async () => {
+    const platform = makeFakePlatform();
+    const captured = captureRun(platform.handle);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      const exit = await captured.run({ kind: "apiKey", apiKey: "sk-y" });
+      expect(exit).toBe(0);
+      expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "getDefaultModel" });
+      expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "login", provider: "anthropic", apiKey: "sk-y" });
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  test("model dispatches to runModel which calls setDefaultModel", async () => {
+    const platform = makeFakePlatform();
+    const captured = captureRun(platform.handle);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      const exit = await captured.run({ kind: "model", provider: "anthropic", modelId: "claude-sonnet-4-5" });
+      expect(exit).toBe(0);
+      expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "setDefaultModel", provider: "anthropic", modelId: "claude-sonnet-4-5" });
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  test("team with id dispatches to runTeam which calls setDefaultTeam", async () => {
+    const platform = makeFakePlatform();
+    const captured = captureRun(platform.handle);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    try {
+      const exit = await captured.run({ kind: "team", teamId: "minimal", unset: false });
+      expect(exit).toBe(0);
+      expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "setDefaultTeam", teamId: "minimal" });
+    } finally {
+      logSpy.mockRestore();
     }
   });
 });

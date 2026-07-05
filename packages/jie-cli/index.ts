@@ -7,6 +7,7 @@ import {
   type JiePlatform,
   type JiePlatformOptions,
 } from "@cuzfrog/jie-platform";
+import { type CreateTUIOptions, type Tui, type TuiDeps, createTui } from "@cuzfrog/jie-tui";
 import { parseFlags, type ParsedArgs } from "./cli-flags";
 import {
   runApiKey,
@@ -29,7 +30,18 @@ export async function main(argv: string[], cwd: string = process.cwd()): Promise
   }
 }
 
-async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<number> {
+interface RunDeps {
+  readonly createPlatform: (options: JiePlatformOptions) => Promise<JiePlatform>;
+  readonly createTui: (options: CreateTUIOptions, deps: TuiDeps) => Tui;
+}
+function buildRunDeps(_args: ParsedArgs): RunDeps {
+  return {
+    createPlatform: createJiePlatform,
+    createTui,
+  };
+}
+
+async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps = buildRunDeps(args)): Promise<number> {
   const homeJieDir = join(homeDir, ".jie");
   const projectJieDir = findProjectJieDir(cwd);
   switch (args.kind) {
@@ -39,44 +51,30 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<numb
     case "version":
       console.log(`jie ${VERSION}`);
       return 0;
-    case "tui":
-      console.error("TUI not implemented in v1 MVP; use jie -p");
-      return 1;
     case "error":
       console.error(args.message);
       return 1;
-    case "login":
-    case "logout":
-    case "apiKey":
-    case "model":
-    case "team": {
-      let platform: JiePlatform;
-      try {
-        platform = await createJiePlatform({ cwd, homeJieDir, projectJieDir });
-      } catch (error) {
-        console.error(error instanceof Error ? error.message : String(error));
-        return 1;
-      }
-      switch (args.kind) {
-        case "login":
-          return runLogin(args, platform);
-        case "logout":
-          return runLogout(args, platform);
-        case "apiKey":
-          return runApiKey(args, platform);
-        case "model":
-          return runModel(args, platform);
-        case "team":
-          return runTeam(args, platform);
-      }
+  }
+  const handle = await bootPlatform({ cwd, homeJieDir, projectJieDir }, deps.createPlatform);
+  switch (args.kind) {
+    case "tui": {
+      await handle.loadTeam(args.team);
+      const tui = deps.createTui({ cwd }, { platform: handle });
+      await tui.start();
+      await handle.stop();
+      return 0;
     }
+    case "login":
+      return runLogin(args, handle);
+    case "logout":
+      return runLogout(args, handle);
+    case "apiKey":
+      return runApiKey(args, handle);
+    case "model":
+      return runModel(args, handle);
+    case "team":
+      return runTeam(args, handle);
     case "print": {
-      const handle = await bootPlatform({
-        cwd,
-        homeJieDir,
-        projectJieDir,
-        resumeSessionId: args.resume,
-      });
       const team = await handle.loadTeam(args.team);
       if (args.apiKey !== undefined) {
         try {
@@ -93,20 +91,22 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string): Promise<numb
 }
 
 async function bootPlatform(
-  args: {
-    readonly cwd: string;
-    readonly homeJieDir: string;
-    readonly projectJieDir: string | null;
-    readonly resumeSessionId?: string;
-  },
-  createPlatform: (options: JiePlatformOptions) => Promise<JiePlatform> = createJiePlatform,
+  options: JiePlatformOptions,
+  createPlatform: (options: JiePlatformOptions) => Promise<JiePlatform>,
 ): Promise<JiePlatform> {
-  const handle = await createPlatform(args);
+  let handle: JiePlatform;
+  try {
+    handle = await createPlatform(options);
+  } catch (error) {
+    throw new CliBootError(error instanceof Error ? error.message : String(error));
+  }
   handle.subscribe("system.error", (envelope) => {
     console.error(`jie: ${envelope.payload.error}`);
   });
   return handle;
 }
+
+class CliBootError extends Error {}
 
 function printHelp(): void {
   console.log(`jie - The jie platform CLI
@@ -124,7 +124,7 @@ Usage:
   jie --api-key <key>
   jie --resume <session_id>
 
-  jie [--team <id>]                  # interactive TUI (not in v1 MVP)
+  jie [--team <id>]                  # interactive TUI
   jie --version
   jie --help
 `);
@@ -148,4 +148,8 @@ function findProjectJieDir(cwd: string): string | null {
 
 if (import.meta.main) {
   process.exit(await main(Bun.argv.slice(2)));
+}
+
+export {
+  run as _run,
 }

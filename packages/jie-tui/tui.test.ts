@@ -29,10 +29,10 @@ function makePlatform() {
     const handler = subscribeHandlers.get(env.type);
     if (handler !== undefined) handler(env as AnyEventEnvelope);
   };
-  return { platform: platform as unknown as Parameters<typeof createTui>[0]["platform"], publish };
+  return { platform: platform as unknown as TuiDeps["platform"], publish };
 }
 
-function makeDeps(overrides: { platform?: Parameters<typeof createTui>[0]["platform"] } = {}): TuiDeps {
+function makeDeps(overrides: { platform?: TuiDeps["platform"] } = {}): TuiDeps {
   const { platform } = makePlatform();
   return { platform: overrides.platform ?? platform };
 }
@@ -40,13 +40,13 @@ function makeDeps(overrides: { platform?: Parameters<typeof createTui>[0]["platf
 describe("createTui — v0.2 surface", () => {
   test("throws when not on a TTY", () => {
     withTTY(false, () => {
-      expect(() => createTui(makeDeps(), { cwd: process.cwd() })).toThrow(/interactive terminal/);
+      expect(() => createTui({ cwd: process.cwd() }, makeDeps())).toThrow(/interactive terminal/);
     });
   });
 
   test("returns a Tui handle with the contract methods", () => {
     withTTY(true, () => {
-      const tui: Tui = createTui(makeDeps(), { cwd: process.cwd() });
+      const tui: Tui = createTui({ cwd: process.cwd() }, makeDeps());
       const s0 = tui.getState();
       expect(s0.teamId).toBeNull();
       expect(s0.agents.size).toBe(0);
@@ -59,7 +59,7 @@ describe("createTui — start()", () => {
   test("throws when terminal is too narrow", () => {
     withTTY(true, () => {
       const { terminal } = createTestTuiWithTerminal(40, 30);
-      const tuiHandle = createTui(makeDeps(), { cwd: process.cwd(), terminal });
+      const tuiHandle = createTui({ cwd: process.cwd() }, { ...makeDeps(), terminal });
       expect(() => tuiHandle.start()).toThrow(/too narrow/);
     });
   });
@@ -67,7 +67,7 @@ describe("createTui — start()", () => {
   test("mounts a TUI loop and produces a frame", async () => {
     withTTY(true, async () => {
       const { tui: vt, terminal } = createTestTuiWithTerminal(80, 30);
-      const tuiHandle: Tui = createTui(makeDeps(), { cwd: process.cwd(), terminal });
+      const tuiHandle: Tui = createTui({ cwd: process.cwd() }, { ...makeDeps(), terminal });
       const started = tuiHandle.start();
       await new Promise((r) => setTimeout(r, 50));
       tuiHandle.stop();
@@ -83,7 +83,7 @@ describe("createTui — start()", () => {
     withTTY(true, async () => {
       const { platform, publish } = makePlatform();
       const { terminal } = createTestTuiWithTerminal(80, 30);
-      const tuiHandle = createTui({ platform }, { cwd: process.cwd(), terminal });
+      const tuiHandle = createTui({ cwd: process.cwd() }, { platform, terminal });
       const started = tuiHandle.start();
       await new Promise((r) => setTimeout(r, 50));
       publish(Events.teamLoaded({ kind: "system" }, "demo", [
