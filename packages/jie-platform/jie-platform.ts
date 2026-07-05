@@ -39,8 +39,6 @@ export interface JiePlatformDeps {
 export interface JiePlatform {
   readonly settings: Settings;
 
-  stop(): Promise<void>;
-
   prompt(teamId: string, agentKey: string, text: string): void;
   interrupt(teamId: string, agentKey: string): void;
 
@@ -53,10 +51,6 @@ export async function createJiePlatform(options: JiePlatformOptions, deps: JiePl
 
   const handle: JiePlatform = {
     settings: settingsSnapshot,
-
-    stop: async (): Promise<void> => {
-      deps.teamManager.stop();
-    },
 
     subscribe(topic, callback) {
       return deps.eventManager.subscribe(topic, callback);

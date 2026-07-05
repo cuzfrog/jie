@@ -124,7 +124,7 @@ describe("createJiePlatform", () => {
       const events: EventEnvelope<"user.prompt">[] = [];
       handle.subscribe("user.prompt", (env) => events.push(env));
       expect(events).toHaveLength(0);
-      await handle.stop();
+      await handle.execute({ name: "stop" });
     });
 
     test("team.loaded is published when loadTeam runs; the event carries is_leader per agent", async () => {
@@ -146,7 +146,7 @@ describe("createJiePlatform", () => {
       const env = events[0]!;
       expect(env.payload.agents).toHaveLength(1);
       expect(env.payload.agents[0]!.is_leader).toBe(true);
-      await handle.stop();
+      await handle.execute({ name: "stop" });
     });
 
     test("missing model: loadTeam throws and the body is not constructed", async () => {
@@ -159,7 +159,7 @@ describe("createJiePlatform", () => {
       expect(errors).toHaveLength(0);
     });
 
-    test("handle.stop() detaches all bus subscriptions", async () => {
+    test("execute({name:'stop'}) detaches all bus subscriptions", async () => {
       const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform(
         {
@@ -171,7 +171,7 @@ describe("createJiePlatform", () => {
       );
       await handle.execute({ name: "team", teamId: "minimal" });
       expect(deps.eventManager.subscriberCount("user.prompt")).toBeGreaterThan(0);
-      await handle.stop();
+      await handle.execute({ name: "stop" });
       expect(deps.eventManager.subscriberCount("user.prompt")).toBe(0);
     });
   });
@@ -207,7 +207,7 @@ describe("createJiePlatform", () => {
         deps1,
       );
       memoryManager1.persist(STUB_MESSAGE, "general-1", "test-session-id", "minimal");
-      await h1.stop();
+      await h1.execute({ name: "stop" });
       const sessionId = "test-session-id";
 
       const storage2 = createStorage({ type: "sqlite", filePath });
@@ -233,7 +233,7 @@ describe("createJiePlatform", () => {
         { cwd: workspace, homeJieDir, projectJieDir, resumeSessionId: sessionId },
         deps2,
       );
-      await h2.stop();
+      await h2.execute({ name: "stop" });
 
       const storage3 = createStorage({ type: "sqlite", filePath });
       const events3 = createEventManager();
@@ -283,7 +283,7 @@ describe("createJiePlatform", () => {
       expect(ghostEvent).toBeDefined();
       expect(ghostEvent!.payload.agents.map((a) => a.role)).toEqual(["general"]);
       expect(ghostEvent!.payload.agents.some((a) => a.is_leader)).toBe(true);
-      await handle.stop();
+      await handle.execute({ name: "stop" });
     });
   });
 
@@ -312,7 +312,7 @@ describe("createJiePlatform", () => {
       const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
       expect(await handle.execute({ name: "team", teamId: "alpha" })).toBeDefined();
       expect(events.map((e) => e.payload.teamId)).toContain("alpha");
-      await handle.stop();
+      await handle.execute({ name: "stop" });
     });
 
     test("execute({ name: 'setDefaultTeam', teamId }) persists the new default team", async () => {
@@ -324,7 +324,7 @@ describe("createJiePlatform", () => {
         expect.objectContaining({ defaultTeam: "alpha" }),
         expect.any(String),
       );
-      await handle.stop();
+      await handle.execute({ name: "stop" });
     });
   });
 });
@@ -359,7 +359,7 @@ describe("JiePlatform — execute(commands)", () => {
       deps.eventManager.publish(Events.agentInterrupt({ kind: "user" }, "t1", "general-1"));
       deps.eventManager.publish(Events.systemError({ kind: "system" }, "boom"));
       expect(seen).toEqual(["agent.interrupt"]);
-      await handle.stop();
+      await handle.execute({ name: "stop" });
     });
 
     test("returns an unsubscribe function that detaches the subscription", async () => {
@@ -370,7 +370,7 @@ describe("JiePlatform — execute(commands)", () => {
       unsubscribe();
       deps.eventManager.publish(Events.agentInterrupt({ kind: "user" }, "t1", "general-1"));
       expect(seen).toEqual([]);
-      await handle.stop();
+      await handle.execute({ name: "stop" });
     });
   });
 
@@ -384,7 +384,7 @@ describe("JiePlatform — execute(commands)", () => {
       expect(events).toHaveLength(1);
       expect(events[0]!.payload).toEqual({ teamId: "minimal", agentKey: "general-1", prompt: "hello" });
       expect(events[0]!.sender).toEqual({ kind: "user" });
-      await handle.stop();
+      await handle.execute({ name: "stop" });
     });
   });
 
@@ -398,7 +398,7 @@ describe("JiePlatform — execute(commands)", () => {
       expect(events).toHaveLength(1);
       expect(events[0]!.sender).toEqual({ kind: "user" });
       expect(events[0]!.payload).toEqual({ teamId: "minimal", agentKey: "general-1" });
-      await handle.stop();
+      await handle.execute({ name: "stop" });
     });
   });
 
@@ -411,7 +411,7 @@ describe("JiePlatform — execute(commands)", () => {
       await handle.execute({ name: "login", provider: "anthropic", apiKey: "sk-test" });
       expect(authStore.setProvider).toHaveBeenCalledWith({}, "anthropic", "sk-test");
       expect(authStore.saveAuthConfig).toHaveBeenCalledWith({ anthropic: { type: "api_key", key: "sk-test" } });
-      await handle.stop();
+      await handle.execute({ name: "stop" });
     });
   });
 
@@ -424,7 +424,7 @@ describe("JiePlatform — execute(commands)", () => {
       expect(authStore.clear).toHaveBeenCalled();
       expect(authStore.saveAuthConfig).toHaveBeenCalledWith({});
       expect(authStore.removeProvider).not.toHaveBeenCalled();
-      await handle.stop();
+      await handle.execute({ name: "stop" });
     });
 
     test("with a provider, removes only that provider", async () => {
@@ -436,7 +436,7 @@ describe("JiePlatform — execute(commands)", () => {
       expect(authStore.removeProvider).toHaveBeenCalledWith(expect.anything(), "anthropic");
       expect(authStore.saveAuthConfig).toHaveBeenCalledWith({});
       expect(authStore.clear).not.toHaveBeenCalled();
-      await handle.stop();
+      await handle.execute({ name: "stop" });
     });
   });
 
@@ -450,7 +450,7 @@ describe("JiePlatform — execute(commands)", () => {
         { defaultProvider: "anthropic", defaultModel: "claude-sonnet-4-5" },
         "global",
       );
-      await handle.stop();
+      await handle.execute({ name: "stop" });
     });
 
     test("throws UNKNOWN_PROVIDER for an unknown provider", async () => {
@@ -459,7 +459,7 @@ describe("JiePlatform — execute(commands)", () => {
       const writeCallsBefore = settingsStore.write.mock.calls.length;
       expect(handle.execute({ name: "setDefaultModel", provider: "no-such-provider", modelId: "x" })).rejects.toThrow(/Unknown provider/);
       expect(settingsStore.write.mock.calls.length).toBe(writeCallsBefore);
-      await handle.stop();
+      await handle.execute({ name: "stop" });
     });
   });
 
@@ -469,7 +469,7 @@ describe("JiePlatform — execute(commands)", () => {
       const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
       await handle.execute({ name: "unsetDefaultTeam" });
       expect(settingsStore.unsetDefaultTeam).toHaveBeenCalledTimes(1);
-      await handle.stop();
+      await handle.execute({ name: "stop" });
     });
   });
 
@@ -480,7 +480,7 @@ describe("JiePlatform — execute(commands)", () => {
       settingsStore.load.mockReturnValueOnce({ defaultProvider: "anthropic", defaultModel: "claude-sonnet-4-5" });
       const result = await handle.execute({ name: "getDefaultModel" });
       expect(result).toEqual({ provider: "anthropic", modelId: "claude-sonnet-4-5" });
-      await handle.stop();
+      await handle.execute({ name: "stop" });
     });
 
     test("returns null when no defaults are configured", async () => {
@@ -489,7 +489,7 @@ describe("JiePlatform — execute(commands)", () => {
       settingsStore.load.mockReturnValueOnce({});
       const result = await handle.execute({ name: "getDefaultModel" });
       expect(result).toBeNull();
-      await handle.stop();
+      await handle.execute({ name: "stop" });
     });
   });
 
@@ -502,7 +502,7 @@ describe("JiePlatform — execute(commands)", () => {
       const result = await handle.execute({ name: "getTeamInfo" });
       expect(result.installed).toEqual(["minimal", "alpha", "beta"]);
       spy.mockRestore();
-      await handle.stop();
+      await handle.execute({ name: "stop" });
     });
   });
 
@@ -513,7 +513,7 @@ describe("JiePlatform — execute(commands)", () => {
       gitService.getSnapshot.mockReturnValueOnce({ branch: "main", dirty: true, ahead: 2, behind: 0 });
       const result = await handle.execute({ name: "getGitStatus" });
       expect(result).toEqual({ branch: "main", dirty: true, ahead: 2, behind: 0 });
-      await handle.stop();
+      await handle.execute({ name: "stop" });
     });
   });
 });

@@ -33,11 +33,11 @@ export async function runPrint(
     } else {
       console.error(errorMessage);
     }
-    await handle.stop();
+    await handle.execute({ name: "stop" });
     return 3;
   }
   if (!args.json) process.stdout.write("\n");
-  await handle.stop();
+  await handle.execute({ name: "stop" });
   return 0;
 }
 

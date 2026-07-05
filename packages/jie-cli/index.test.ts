@@ -135,14 +135,12 @@ describe("jie --api-key (top-level, integration)", () => {
 
 interface FakePlatform {
   handle: JiePlatform;
-  stop: ReturnType<typeof vi.fn>;
   execute: ReturnType<typeof vi.fn>;
   subscribeCalls: EventType[];
 }
 
 function makeFakePlatform(): FakePlatform {
   const subscribeCalls: EventType[] = [];
-  const stop = vi.fn(async (): Promise<void> => undefined);
   const execute = vi.fn(async (cmd: { name: string } & Record<string, unknown>): Promise<unknown> => {
     if (cmd.name === "setApiKey") throw new Error("setApiKey boom");
     if (cmd.name === "getDefaultModel") return { provider: "anthropic", modelId: "claude-sonnet-4-5" };
@@ -163,7 +161,6 @@ function makeFakePlatform(): FakePlatform {
   });
   const handle = {
     settings: {},
-    stop,
     subscribe: <T extends EventType>(topic: T, _cb: (event: EventEnvelope<T>) => void) => {
       subscribeCalls.push(topic);
       return () => undefined;
@@ -172,7 +169,7 @@ function makeFakePlatform(): FakePlatform {
     interrupt: vi.fn(),
     execute: execute as unknown as JiePlatform["execute"],
   } as unknown as JiePlatform;
-  return { handle, stop, execute, subscribeCalls };
+  return { handle, execute, subscribeCalls };
 }
 
 interface CapturedRun {
@@ -220,7 +217,7 @@ describe("_run — tui", () => {
     const exit = await captured.run({ kind: "tui" });
     expect(exit).toBe(0);
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: undefined });
-    expect(captured.fakePlatform.stop).toHaveBeenCalledTimes(1);
+    expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "stop" });
     expect(captured.tuiCalls).toHaveLength(1);
     expect(captured.tuiCalls[0]?.options.cwd).toBe(process.cwd());
     expect(captured.tuiCalls[0]?.deps.platform).toBe(platform.handle);
@@ -250,7 +247,7 @@ describe("_run — tui", () => {
         createTui: vi.fn(),
       });
     expect(run({ kind: "tui" })).rejects.toThrow("boot blew up");
-    expect(platform.stop).not.toHaveBeenCalled();
+    expect(platform.execute).not.toHaveBeenCalledWith({ name: "stop" });
   });
 });
 
@@ -311,7 +308,7 @@ describe("_run — print + apiKey", () => {
     });
     expect(exit).toBe(3);
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: "minimal" });
-    expect(captured.fakePlatform.stop).toHaveBeenCalledTimes(1);
+    expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "stop" });
   });
 
   test("print with failing setApiKey -> stops platform, returns 1", async () => {
@@ -328,7 +325,7 @@ describe("_run — print + apiKey", () => {
       });
       expect(exit).toBe(1);
       expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "setApiKey", apiKey: "sk-fail" });
-      expect(captured.fakePlatform.stop).toHaveBeenCalledTimes(1);
+      expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "stop" });
     } finally {
       errSpy.mockRestore();
     }

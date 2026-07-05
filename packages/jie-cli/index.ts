@@ -61,7 +61,7 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
       await handle.execute({ name: "team", teamId: args.team });
       const tui = deps.createTui({ cwd }, { platform: handle });
       await tui.start();
-      await handle.stop();
+      await handle.execute({ name: "stop" });
       return 0;
     }
     case "login":
@@ -81,7 +81,7 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
           await handle.execute({ name: "setApiKey", apiKey: args.apiKey });
         } catch (error) {
           console.error(error instanceof Error ? error.message : String(error));
-          await handle.stop();
+          await handle.execute({ name: "stop" });
           return 1;
         }
       }

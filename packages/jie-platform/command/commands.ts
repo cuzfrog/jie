@@ -17,6 +17,7 @@ interface CommandTypeMap {
   team: CommandDef<{ teamId?: string }, TeamIdentity>;
   getTeamInfo: CommandDef<{}, { defaultTeam: string | null; installed: ReadonlyArray<string> }>;
   getGitStatus: CommandDef<{}, GitSnapshot>;
+  stop: CommandDef<{}, null>;
 }
 
 export type CommandName = keyof CommandTypeMap;

@@ -89,6 +89,10 @@ export function createCommandExecutor(deps: CommandExecutorDeps): CommandExecuto
       };
     },
     getGitStatus: () => deps.gitService.getSnapshot(),
+    stop: () => {
+      deps.teamManager.stop();
+      return null;
+    },
   };
 
   async function execute<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>> {

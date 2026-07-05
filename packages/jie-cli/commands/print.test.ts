@@ -4,7 +4,7 @@ import { runPrint } from "./print";
 interface JiePlatformStub {
   subscribe: ReturnType<typeof vi.fn>;
   prompt: ReturnType<typeof vi.fn>;
-  stop: ReturnType<typeof vi.fn>;
+  execute: ReturnType<typeof vi.fn>;
 }
 
 type AgentEnvelope = {
@@ -21,7 +21,7 @@ function makeHandle(): { handle: JiePlatformStub; subscribes: Map<string, Handle
       return () => {};
     }),
     prompt: vi.fn(),
-    stop: vi.fn().mockResolvedValue(undefined),
+    execute: vi.fn().mockResolvedValue(null),
   };
   return { handle, subscribes };
 }
@@ -58,7 +58,7 @@ describe("runPrint", () => {
     expect(code).toBe(0);
     expect(handle.subscribe).toHaveBeenCalledWith("agent.stream.chunk", expect.any(Function));
     expect(handle.prompt).toHaveBeenCalledWith(teamId, leaderKey, "hi");
-    expect(handle.stop).toHaveBeenCalled();
+    expect(handle.execute).toHaveBeenCalledWith({ name: "stop" });
   });
 
   test("timeout: returns 3 and stops the handle", async () => {
@@ -70,7 +70,7 @@ describe("runPrint", () => {
       { ...baseArgs, timeout: 0.05 },
     );
     expect(code).toBe(3);
-    expect(handle.stop).toHaveBeenCalled();
+    expect(handle.execute).toHaveBeenCalledWith({ name: "stop" });
   });
 
   test("worker busy while leader idles: gate does NOT open until worker idles", async () => {
