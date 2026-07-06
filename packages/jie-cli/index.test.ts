@@ -187,7 +187,7 @@ function captureRun(platform: JiePlatform): CapturedRun {
   const createTui = vi.fn((options: CreateTUIOptions, deps: TuiDeps): Tui => {
     tuiCalls.push({ options, deps });
     const tui: Tui = {
-      getState: () => ({
+      state: {
         teamId: null,
         leaderAgentId: null,
         focusedAgentId: null,
@@ -196,7 +196,7 @@ function captureRun(platform: JiePlatform): CapturedRun {
         pendingQuit: false,
         transientMessage: null,
         errorBanner: null,
-      }),
+      },
       submit: () => undefined,
       start: () => {
         startCalls.value += 1;

@@ -1,4 +1,4 @@
-import { JiePlatformError, type JiePlatform } from "@cuzfrog/jie-platform";
+import { Events, JiePlatformError, type JiePlatform } from "@cuzfrog/jie-platform";
 import { Actions, type StateStore } from "./state";
 
 type CommandOutcome =
@@ -163,13 +163,26 @@ function interceptTeam(args: ReadonlyArray<string>, deps: CommandHandlerDeps): I
     return { kind: "reply", text: "loading team list…" };
   }
   const argument = args[0]!;
-  void deps.platform.execute({ name: "setDefaultTeam", teamId: argument })
-    .then(() => undefined, (error: unknown) => {
-      const code = error instanceof JiePlatformError ? error.code : undefined;
-      const message = code === "TEAM_NOT_FOUND" ? `team '${argument}' not found` : `setDefaultTeam(${argument}) failed`;
-      deps.stateStore.dispatch(Actions.setErrorMessage(message));
+  void deps.platform.execute({ name: "team", teamId: argument })
+    .then((identity) => {
+      deps.stateStore.dispatch(
+        Actions.receiveEvent(
+          Events.teamLoaded(
+            { kind: "system" },
+            identity.id,
+            identity.agents.map((a) => ({ role: a.role, agent_key: a.agentKey, is_leader: a.isLeader })),
+          ),
+        ),
+      );
+    }, (error: unknown) => {
+      if (error instanceof JiePlatformError) {
+        deps.stateStore.dispatch(Actions.setErrorMessage(error.message));
+        return;
+      }
+      const reason = error instanceof Error ? error.message : String(error);
+      deps.stateStore.dispatch(Actions.setErrorMessage(`load team '${argument}' failed: ${reason}`));
     });
-  return { kind: "reply", text: `default team set to '${argument}'; restart jie to take effect` };
+  return { kind: "reply", text: `loading team '${argument}'` };
 }
 
 const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn>([

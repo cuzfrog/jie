@@ -36,7 +36,7 @@ When rules in different documents conflict, context rules win, in below order. R
 - Inline oneline trivial functions.
 - Consolidate imports into one statement: do not split `import { a } from 'x'; import { type b } from 'x';` into two.
 - Code identifiers (variables, parameters, class fields, function names) use camelCase. Names must be full words, no abbreviations beyond common ones (id, url, db, ts, cwd, pid, ctx, deps). Only serialized events/messages use snake_case. Module-level compile-time constants (e.g. `DEFAULT_COLS`, `MAX_RETRIES`) use SCREAMING_SNAKE_CASE.
-- Keep code in one line if the line is < 140 chars. Do not break into multiple lines if the line is < 140 chars.
+- Keep code in one line if the line is < 140 chars. Do not break into multiple lines if the line is < 140 chars. Ensure an empty line at the end of the file.
 - Use `as const` for tuples and object-literals. Do not use `// @ts-expect-error` or `// @ts-ignore`, fix the type.
 
 ### Test

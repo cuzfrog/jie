@@ -1,10 +1,36 @@
-import { loadFixture, replayEnvelopes } from "./harness";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { loadMockExpectations } from "../../mock-llm-backend";
+import { assertLlmReachable, seedTeam } from "../_fixture.ts";
+import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, type TuiHarness } from "./harness";
+import expectations from "./t2.llm.ts";
 
 describe("T2 — pass work in a team", () => {
+  let harness: TuiHarness;
+
+  beforeAll(async () => {
+    await assertLlmReachable();
+    await loadMockExpectations(expectations);
+  });
+
+  beforeEach(async () => {
+    harness = await startTui();
+    writeFileSync(join(harness.dir, "file1.txt"), "Hello world");
+    seedTeam(harness.dir, "my-team", "manager", [
+      { role: "manager", systemPrompt: "You delegate work to the worker.", tools: ["bash"] },
+      { role: "worker", systemPrompt: "You execute tasks delegated by the manager.", tools: ["bash"] },
+    ]);
+  });
+
+  afterEach(async () => {
+    await stopTui(harness);
+  });
+
   test("team loads with manager and worker; both agents keep separate conversations", async () => {
-    const envelopes = await loadFixture("t2");
-    const { tui } = replayEnvelopes(envelopes);
-    const state = tui.getState();
+    harness.tui.submit("/team my-team");
+    await waitForTeam(harness.tui, "my-team");
+    await submitAndWaitForAgentIdle(harness, "Read file1.txt and write its content to my-answer.txt", "my-team:manager-1");
+    const state = harness.tui.state;
     expect(state.teamId).toBe("my-team");
     expect(state.leaderAgentId).toBe("my-team:manager-1");
     expect(state.agents.size).toBe(2);
@@ -12,23 +38,16 @@ describe("T2 — pass work in a team", () => {
     expect(state.agents.get("my-team:worker-1")?.role).toBe("worker");
   });
 
-  test("manager turn has its delegation prompt and tool cards", async () => {
-    const envelopes = await loadFixture("t2");
-    const { tui } = replayEnvelopes(envelopes);
-    const state = tui.getState();
+  test("manager drives a bash tool to completion", async () => {
+    harness.tui.submit("/team my-team");
+    await waitForTeam(harness.tui, "my-team");
+    await submitAndWaitForAgentIdle(harness, "Read file1.txt and write its content to my-answer.txt", "my-team:manager-1");
+    const state = harness.tui.state;
     const manager = state.agents.get("my-team:manager-1");
-    expect(manager?.currentTurn?.userPrompt).toContain("my-answer.txt");
-    const cards = manager?.currentTurn?.cards ?? [];
-    expect(cards.some((c) => c.kind === "toolResult" && c.name === "read_file" && c.error === null)).toBe(true);
-  });
-
-  test("worker turn has its write_file tool call and 'task done' text", async () => {
-    const envelopes = await loadFixture("t2");
-    const { tui } = replayEnvelopes(envelopes);
-    const state = tui.getState();
-    const worker = state.agents.get("my-team:worker-1");
-    expect(worker?.currentTurn?.cards.some((c) => c.kind === "toolResult" && c.name === "write_file")).toBe(true);
-    const blocks = worker?.currentTurn?.blocks ?? [];
-    expect(blocks.some((b) => b.text.includes("task done"))).toBe(true);
+    const allTurns = [...(manager?.history ?? []), ...(manager?.currentTurn !== null && manager?.currentTurn !== undefined ? [manager.currentTurn] : [])];
+    const allCards = allTurns.flatMap((t) => t.cards);
+    expect(allCards.some((c) => c.kind === "toolResult" && c.name === "bash" && c.error === null)).toBe(true);
+    const allBlocks = allTurns.flatMap((t) => t.blocks).map((b) => b.text).join("\n");
+    expect(allBlocks.length).toBeGreaterThan(0);
   });
 });

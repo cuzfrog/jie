@@ -151,6 +151,26 @@ describe("selectExpectation", () => {
       )?.index,
     ).toBe(3);
   });
+
+  test("maxAssistantMessages excludes a rule once enough assistant messages exist", () => {
+    const r: Expectation[] = [
+      { match: { maxAssistantMessages: 0 }, responseChunks: [text("a"), finish("stop")] },
+      { match: {}, responseChunks: [text("b"), finish("stop")] },
+    ];
+    expect(selectExpectation(r, req({ messages: [{ role: "user", content: "x" }] }))?.index).toBe(0);
+    expect(
+      selectExpectation(
+        r,
+        req({
+          messages: [
+            { role: "user", content: "x" },
+            { role: "assistant", content: "first" },
+            { role: "user", content: "y" },
+          ],
+        }),
+      )?.index,
+    ).toBe(1);
+  });
 });
 
 describe("renderSseStream", () => {

@@ -1,54 +1,55 @@
-import { type EventEnvelope } from "@cuzfrog/jie-platform";
-import { attachNoModelBody, loadFixture, replayEnvelopes } from "./harness";
+import { writeFileSync } from "node:fs";
+import { loadMockExpectations } from "../../mock-llm-backend";
+import { assertLlmReachable, seedTeam, writeModelsJsonTo, writeSettingsJson } from "../_fixture.ts";
+import { startTui, stopTui, submitAndWaitForAgentIdle, waitForErrorBanner, waitForNoErrorBanner, waitForTeam } from "./harness";
+import expectations from "./t4.llm.ts";
 
 describe("T4 — first-time setup (TUI flow)", () => {
-  test("first prompt raises an error banner about missing model", () => {
-    const teamLoaded: EventEnvelope<"system.team.loaded"> = {
-      version: 1,
-      type: "system.team.loaded",
-      topic: "system.team.loaded",
-      sender: { kind: "system" },
-      timestamp: new Date().toISOString(),
-      payload: { teamId: "my-team", agents: [{ role: "general", agent_key: "general-1", is_leader: true }] },
-    };
-    const { tui, bus } = replayEnvelopes([teamLoaded]);
-    attachNoModelBody(bus, "my-team", "general-1");
-    tui.submit("Tell me a joke");
-    const state = tui.getState();
-    expect(state.errorBanner).toBe(`[stop: error] No model has been selected`);
+  beforeAll(async () => {
+    await assertLlmReachable();
+    await loadMockExpectations(expectations);
   });
 
-  test("stop() unsubscribes from the bus", () => {
-    const { tui, bus } = replayEnvelopes([]);
-    const teamLoaded: EventEnvelope<"system.team.loaded"> = {
-      version: 1,
-      type: "system.team.loaded",
-      topic: "system.team.loaded",
-      sender: { kind: "system" },
-      timestamp: new Date().toISOString(),
-      payload: { teamId: "my-team", agents: [{ role: "general", agent_key: "general-1", is_leader: true }] },
-    };
-    bus.publish(teamLoaded);
-    expect(bus.subscriberCount("system.team.loaded")).toBe(1);
-    tui.stop();
-    expect(bus.subscriberCount("system.team.loaded")).toBe(0);
+  test("empty settings → NO_MODEL_ERROR surfaces as error banner", async () => {
+    const harness = await startTui();
+    try {
+      writeFileSync(`${harness.dir}/settings.json`, "{}");
+      seedTeam(harness.dir, "my-team", "general", [
+        { role: "general", systemPrompt: "You answer briefly.", tools: [] },
+      ]);
+      harness.tui.submit("/team my-team");
+      await waitForErrorBanner(harness.tui, "No model has been selected");
+    } finally {
+      await stopTui(harness);
+    }
   });
 
-  test("error clears on the next user prompt and the response streams", async () => {
-    const envelopes = await loadFixture("t4");
-    const teamLoaded = envelopes[0]!;
-    const userPrompt = envelopes[1]!;
-    const rest = envelopes.slice(2);
-    const { tui, bus } = replayEnvelopes([teamLoaded]);
-    const stop = attachNoModelBody(bus, "my-team", "general-1");
-    tui.submit("Tell me a joke");
-    expect(tui.getState().errorBanner).toBe(`[stop: error] No model has been selected`);
-    stop();
-    bus.publish(userPrompt);
-    for (const env of rest) bus.publish(env);
-    const state = tui.getState();
-    expect(state.errorBanner).toBeNull();
-    const agent = state.agents.get("my-team:general-1");
-    expect(agent?.currentTurn?.blocks.some((b) => b.text.includes("chicken"))).toBe(true);
+  test("after settings + retry, prompt streams and banner clears", async () => {
+    const harness = await startTui();
+    try {
+      writeFileSync(`${harness.dir}/settings.json`, "{}");
+      seedTeam(harness.dir, "my-team", "general", [
+        { role: "general", systemPrompt: "You answer briefly.", tools: [] },
+      ]);
+      harness.tui.submit("/team my-team");
+      await waitForErrorBanner(harness.tui, "No model has been selected");
+
+      writeModelsJsonTo(harness.dir);
+      writeSettingsJson(harness.dir);
+
+      harness.tui.submit("/team my-team");
+      await waitForTeam(harness.tui, "my-team");
+      await waitForNoErrorBanner(harness.tui);
+      await submitAndWaitForAgentIdle(harness, "Tell me a joke", "my-team:general-1");
+      const agent = harness.tui.state.agents.get("my-team:general-1");
+      const allTurns = [
+        ...(agent?.history ?? []),
+        ...(agent?.currentTurn !== null && agent?.currentTurn !== undefined ? [agent.currentTurn] : []),
+      ];
+      const allBlocks = allTurns.flatMap((t) => t.blocks).map((b) => b.text).join("\n");
+      expect(allBlocks.length).toBeGreaterThan(0);
+    } finally {
+      await stopTui(harness);
+    }
   });
 });

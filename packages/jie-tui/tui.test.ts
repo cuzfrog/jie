@@ -47,7 +47,7 @@ describe("createTui — v0.2 surface", () => {
   test("returns a Tui handle with the contract methods", () => {
     withTTY(true, () => {
       const tui: Tui = createTui({ cwd: process.cwd() }, makeDeps());
-      const s0 = tui.getState();
+      const s0 = tui.state;
       expect(s0.teamId).toBeNull();
       expect(s0.agents.size).toBe(0);
       tui.stop();
@@ -92,7 +92,7 @@ describe("createTui — start()", () => {
       await new Promise((r) => setTimeout(r, 50));
       tuiHandle.stop();
       await started;
-      const state = tuiHandle.getState();
+      const state = tuiHandle.state;
       expect(state.teamId).toBe("demo");
       expect(state.agents.size).toBe(1);
     });

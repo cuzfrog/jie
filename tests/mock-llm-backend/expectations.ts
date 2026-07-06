@@ -21,6 +21,7 @@ export interface MatchRule {
   readonly toolName?: string;
   readonly model?: string;
   readonly minAssistantMessages?: number;
+  readonly maxAssistantMessages?: number;
 }
 
 export type ResponseChunk =
@@ -73,6 +74,11 @@ function ruleMatches(rule: MatchRule, req: ChatCompletionRequestBody): boolean {
     let count = 0;
     for (const m of req.messages) if (m.role === "assistant") count++;
     if (count < rule.minAssistantMessages) return false;
+  }
+  if (rule.maxAssistantMessages !== undefined) {
+    let count = 0;
+    for (const m of req.messages) if (m.role === "assistant") count++;
+    if (count > rule.maxAssistantMessages) return false;
   }
   if (rule.lastUserContains !== undefined) {
     if (!lastUserText(req).includes(rule.lastUserContains)) return false;

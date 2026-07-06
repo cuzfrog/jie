@@ -1,146 +1,190 @@
-import { Events, type EventEnvelope, type AgentSender, type EventType, type GitSnapshot, type JiePlatform } from "@cuzfrog/jie-platform";
-import { createTui, type Tui, type TuiDeps, type CreateTUIOptions } from "@cuzfrog/jie-tui";
-import { withTTY } from "../../support";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createJiePlatform, type JiePlatform } from "@cuzfrog/jie-platform";
+import { type CreateTUIOptions, type Tui, createTui } from "@cuzfrog/jie-tui";
+import { VirtualTerminal, withTTY } from "../../support";
+import { writeModelsJsonTo, writeSettingsJson } from "../_fixture.ts";
 
-const noopAsync = (): Promise<void> => Promise.resolve();
+type AgentId = `${string}:${string}`;
 
-const stubGitSnapshot: GitSnapshot = { branch: "", dirty: false, ahead: 0, behind: 0 };
+const LANG_DEFAULT = "en_US.UTF-8";
+const POLL_INTERVAL_MS = 10;
 
-type Publish = <T extends EventType>(env: EventEnvelope<T>) => void;
-type Subscribe = <T extends EventType>(topic: T, cb: (event: EventEnvelope<T>) => void) => () => void;
-type SubscriberCount = (subject: string) => number;
-
-interface TestBus {
-  publish: Publish;
-  subscribe: Subscribe;
-  subscriberCount: SubscriberCount;
+export interface TuiHarness {
+  readonly dir: string;
+  readonly tui: Tui;
+  readonly platform: JiePlatform;
+  readonly terminal: VirtualTerminal;
 }
 
-function makePlatform(publish: Publish, subscribe: Subscribe, initialTeamId: string): JiePlatform {
-  const execute: JiePlatform["execute"] = (async (cmd: { name: string } & Record<string, unknown>) => {
-    switch (cmd.name) {
-      case "setDefaultTeam":
-        return null;
-      case "unsetDefaultTeam":
-        return null;
-      case "team": {
-        const id = (cmd as { teamId?: string }).teamId ?? initialTeamId;
-        return { id, leaderKey: `${id}-leader`, agents: [] };
-      }
-      case "getTeamInfo":
-        return { defaultTeam: null, installed: [] };
-      case "getGitStatus":
-        return stubGitSnapshot;
-      default:
-        return null;
-    }
-  }) as JiePlatform["execute"];
-  return {
-    settings: {},
-    stop: noopAsync,
-    subscribe,
-    prompt: (teamId: string, agentKey: string, text: string) => {
-      publish(Events.userPrompt({ kind: "user" }, teamId, text, agentKey));
-    },
-    interrupt: () => undefined,
-    execute,
-  };
+export interface StartTuiOptions {
+  readonly terminal?: VirtualTerminal;
+  readonly rows?: number;
+  readonly cwd?: string;
 }
 
-function makeBus(): TestBus {
-  const handlers = new Map<EventType, Set<(env: EventEnvelope<EventType>) => void>>();
-  const publish: Publish = (env) => {
-    const subs = handlers.get(env.type);
-    if (subs === undefined) return;
-    for (const cb of subs) cb(env as EventEnvelope<EventType>);
-  };
-  const subscribe: Subscribe = (topic, cb) => {
-    let subs = handlers.get(topic);
-    if (subs === undefined) {
-      subs = new Set();
-      handlers.set(topic, subs);
-    }
-    subs.add(cb as (env: EventEnvelope<EventType>) => void);
-    return () => {
-      const current = handlers.get(topic);
-      if (current !== undefined) current.delete(cb as (env: EventEnvelope<EventType>) => void);
-    };
-  };
-  const subscriberCount: SubscriberCount = (subject) => handlers.get(subject as EventType)?.size ?? 0;
-  return { publish, subscribe, subscriberCount };
-}
-
-function makeDeps(bus: TestBus, options: CreateTUIOptions, initialTeamId: string = "minimal"): { deps: TuiDeps; options: CreateTUIOptions } {
-  return {
-    deps: {
-      platform: makePlatform(bus.publish, bus.subscribe, initialTeamId),
-    },
-    options,
-  };
-}
-
-export const startTuiOn = (
-  bus: TestBus,
-  preload: ReadonlyArray<EventEnvelope<EventType>>,
-  options: Omit<CreateTUIOptions, "cwd"> = {},
-): Tui => {
-  const opts: CreateTUIOptions = { ...options, cwd: process.cwd() };
-  const initialTeamId = (() => {
-    for (const e of preload) {
-      if (e.type !== "system.team.loaded") continue;
-      const payload = e.payload;
-      if (payload !== null && typeof payload === "object" && "teamId" in payload) {
-        const teamId = (payload as { teamId: unknown }).teamId;
-        if (typeof teamId === "string") return teamId;
-      }
-    }
-    return "minimal";
-  })();
-  const { deps } = makeDeps(bus, opts, initialTeamId);
-  const tuiHandle: { current: Tui | null } = { current: null };
-  withTTY(true, () => { tuiHandle.current = createTui(opts, deps); });
-  const tui = tuiHandle.current;
-  if (tui === null) throw new Error("TUI handle not initialized");
-  for (const env of preload) bus.publish(env);
-  return tui;
-};
-
-export const replayEnvelopes = (
-  envelopes: ReadonlyArray<EventEnvelope<EventType>>,
-): { tui: Tui; bus: TestBus } => {
-  const bus = makeBus();
-  const tui = startTuiOn(bus, envelopes);
-  return { tui, bus };
-};
-
-export const attachNoModelBody = (
-  bus: TestBus,
-  teamId: string,
-  agentKey: string,
-): (() => void) => {
-  const agentSender: AgentSender = { kind: "agent", teamId, agentKey };
-  const unsubscribe = bus.subscribe("user.prompt", (env) => {
-    if (env.payload === null || typeof env.payload !== "object") return;
-    const payload = env.payload as { teamId?: unknown; agentKey?: unknown };
-    if (payload.teamId !== teamId || payload.agentKey !== agentKey) return;
-    bus.publish(Events.agentIdle(agentSender, "error"));
-    bus.publish(Events.systemError({ kind: "system" }, "No model has been selected"));
+export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> {
+  const dir = mkdtempSync(join(tmpdir(), "jie-tui-e2e-"));
+  writeModelsJsonTo(dir);
+  writeSettingsJson(dir);
+  const prevLang = process.env.LANG;
+  process.env.LANG = LANG_DEFAULT;
+  const prevLangAll = process.env.LC_ALL;
+  process.env.LC_ALL = LANG_DEFAULT;
+  let platform: JiePlatform;
+  try {
+    platform = await createJiePlatform({ cwd: dir, homeJieDir: dir, projectJieDir: dir });
+  } catch (err) {
+    restoreLang(prevLang, prevLangAll);
+    rmSync(dir, { recursive: true, force: true });
+    throw err;
+  }
+  const terminal = opts.terminal ?? new VirtualTerminal(80, opts.rows ?? 24);
+  const tuiOptions: CreateTUIOptions = { cwd: opts.cwd ?? dir, rows: opts.rows ?? 24 };
+  let tui: Tui | undefined;
+  withTTY(true, () => {
+    tui = createTui(tuiOptions, { platform, terminal });
   });
-  return unsubscribe;
-};
+  if (tui === undefined) {
+    await platform.execute({ name: "stop" });
+    restoreLang(prevLang, prevLangAll);
+    rmSync(dir, { recursive: true, force: true });
+    throw new Error("createTui returned no instance");
+  }
+  void tui.start();
+  return {
+    dir,
+    tui,
+    platform,
+    terminal,
+  };
+}
 
-export const loadFixture = async (name: string): Promise<EventEnvelope<EventType>[]> => {
-  const path = `${import.meta.dir}/fixtures/${name}.jsonl`;
-  const file = Bun.file(path);
-  if (!(await file.exists())) {
-    throw new Error(`fixture not found: ${path}`);
+export async function stopTui(harness: TuiHarness): Promise<void> {
+  harness.tui.stop();
+  await harness.platform.execute({ name: "stop" });
+  rmSync(harness.dir, { recursive: true, force: true });
+}
+
+export function sendCmd(terminal: VirtualTerminal, text: string): void {
+  terminal.sendInput(text);
+}
+
+export function sendEnter(terminal: VirtualTerminal): void {
+  terminal.sendInput("\r");
+}
+
+export function sendLine(terminal: VirtualTerminal, text: string): void {
+  terminal.sendInput(text);
+  terminal.sendInput("\r");
+}
+
+async function waitFor(predicate: () => boolean, timeoutMs: number, label: string): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (predicate()) return;
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
   }
-  const text = await file.text();
-  const out: EventEnvelope<EventType>[] = [];
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed === "") continue;
-    out.push(JSON.parse(trimmed) as EventEnvelope<EventType>);
+  throw new Error(`waitFor timed out after ${timeoutMs}ms waiting for: ${label}`);
+}
+
+export async function waitForTeam(tui: Tui, teamId: string, timeoutMs = 60000): Promise<void> {
+  await waitFor(() => tui.state.teamId === teamId, timeoutMs, `team ${teamId}`);
+}
+
+export async function waitForAgentIdle(tui: Tui, agentId: AgentId, timeoutMs = 60000): Promise<void> {
+  await waitFor(
+    () => tui.state.agents.get(agentId)?.status === "idle",
+    timeoutMs,
+    `agent ${agentId} idle`,
+  );
+}
+
+export async function submitAndWaitForAgentIdle(
+  harness: TuiHarness,
+  prompt: string,
+  agentId: AgentId,
+  timeoutMs = 60000,
+): Promise<void> {
+  const before = harness.tui.state.agents.get(agentId);
+  const priorHistoryLen = before?.history.length ?? 0;
+  const priorCurrentBlocks = before?.currentTurn?.blocks.length ?? 0;
+  const priorCurrentCards = before?.currentTurn?.cards.length ?? 0;
+  harness.tui.submit(prompt);
+  await waitForPromptSettled(
+    harness.tui,
+    agentId,
+    priorHistoryLen,
+    priorCurrentBlocks,
+    priorCurrentCards,
+    timeoutMs,
+  );
+}
+
+async function waitForPromptSettled(
+  tui: Tui,
+  agentId: AgentId,
+  priorHistoryLen: number,
+  priorCurrentBlocks: number,
+  priorCurrentCards: number,
+  timeoutMs: number,
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const agent = tui.state.agents.get(agentId);
+    if (agent === undefined) {
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+      continue;
+    }
+    if (agent.status === "idle") {
+      const historyGrew = agent.history.length > priorHistoryLen;
+      const currentHasOutput =
+        (agent.currentTurn?.blocks.length ?? 0) > priorCurrentBlocks ||
+        (agent.currentTurn?.cards.length ?? 0) > priorCurrentCards;
+      const currentReplaced =
+        agent.currentTurn !== null &&
+        (agent.currentTurn.blocks.length > 0 || agent.currentTurn.cards.length > 0);
+      if (historyGrew && currentReplaced) return;
+      if (!historyGrew && currentHasOutput) return;
+    }
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
   }
-  return out;
-};
+  const agent = tui.state.agents.get(agentId);
+  throw new Error(
+    `submitAndWaitForAgentIdle timed out after ${timeoutMs}ms for agent ${agentId} (status=${agent?.status}, history=${agent?.history.length}, curBlocks=${agent?.currentTurn?.blocks.length}, curCards=${agent?.currentTurn?.cards.length})`,
+  );
+}
+
+export async function waitForTurnText(tui: Tui, agentId: AgentId, contains: string, timeoutMs = 60000): Promise<void> {
+  await waitFor(
+    () => {
+      const agent = tui.state.agents.get(agentId);
+      if (agent === undefined) return false;
+      const current = agent.currentTurn;
+      if (current === null) return false;
+      return current.blocks.some((b) => b.text.includes(contains));
+    },
+    timeoutMs,
+    `agent ${agentId} blocks contain '${contains}'`,
+  );
+}
+
+export async function waitForErrorBanner(tui: Tui, contains: string, timeoutMs = 60000): Promise<void> {
+  await waitFor(
+    () => tui.state.errorBanner !== null && tui.state.errorBanner.includes(contains),
+    timeoutMs,
+    `errorBanner contains '${contains}'`,
+  );
+}
+
+export async function waitForNoErrorBanner(tui: Tui, timeoutMs = 60000): Promise<void> {
+  await waitFor(() => tui.state.errorBanner === null, timeoutMs, "errorBanner cleared");
+}
+
+function restoreLang(prevLang: string | undefined, prevLangAll: string | undefined): void {
+  if (prevLang === undefined) delete process.env.LANG;
+  else process.env.LANG = prevLang;
+  if (prevLangAll === undefined) delete process.env.LC_ALL;
+  else process.env.LC_ALL = prevLangAll;
+}

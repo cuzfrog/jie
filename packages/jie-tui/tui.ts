@@ -16,7 +16,7 @@ export interface CreateTUIOptions {
 }
 
 export interface Tui {
-  getState(): TuiState;
+  readonly state: TuiState;
   submit(text: string): void;
   start(): Promise<void>;
   stop(): void;
@@ -94,7 +94,7 @@ class PiTui implements Tui {
     this.unsubscribeRender = this.stateStore.subscribe(() => this.onStateChange());
   }
 
-  getState(): TuiState {
+  get state(): TuiState {
     return this.stateStore.getState();
   }
 

@@ -254,18 +254,23 @@ describe("createTuiCommandHandler — /team", () => {
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("unset")));
   });
 
-  test("/team <id> dispatches setDefaultTeam and replies 'default team set'", async () => {
+  test("/team <id> dispatches team load and replies 'loading team'", async () => {
     const { platform, execute } = makePlatform();
-    execute.mockImplementation(async () => undefined);
+    execute.mockImplementationOnce(async () => ({
+      id: "alpha",
+      leaderKey: "general-1",
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true }],
+    }));
     const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team alpha");
     await new Promise((r) => setImmediate(r));
-    expect(execute).toHaveBeenCalledWith({ name: "setDefaultTeam", teamId: "alpha" });
-    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("default team set to 'alpha'")));
+    expect(execute).toHaveBeenCalledWith({ name: "team", teamId: "alpha" });
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("loading team 'alpha'")));
+    expect(dispatch.mock.calls.some(([a]) => a.type === "[bus] receive event from event bus")).toBe(true);
   });
 
-  test("/team <id> surfaces TEAM_NOT_FOUND as 'not found' message", async () => {
+  test("/team <id> surfaces the platform error's message verbatim", async () => {
     const { platform, execute } = makePlatform();
     execute.mockImplementation(async () => {
       throw new JiePlatformError("TEAM_NOT_FOUND", { detail: "team 'ghost' not found" });
@@ -274,7 +279,7 @@ describe("createTuiCommandHandler — /team", () => {
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team ghost");
     await new Promise((r) => setImmediate(r));
-    expect(execute).toHaveBeenCalledWith({ name: "setDefaultTeam", teamId: "ghost" });
-    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("team 'ghost' not found"));
+    expect(execute).toHaveBeenCalledWith({ name: "team", teamId: "ghost" });
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("ghost")));
   });
 });
