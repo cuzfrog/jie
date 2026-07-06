@@ -16,7 +16,6 @@ const settingsStore = vi.mocked<SettingsStore>({
   load: vi.fn(),
   setDefaultProvider: vi.fn(),
   setDefaultTeam: vi.fn(),
-  unsetDefaultTeam: vi.fn(),
 });
 
 const authStore = vi.mocked<AuthStore>({
@@ -120,6 +119,31 @@ describe("createTeamManager — full surface", () => {
       expect(team.id).toBe("dev");
     });
 
+    test("stale defaultTeam falls back to a first-available user team", async () => {
+      const userTeams = join(homeJieDir, "teams");
+      writeTeam(userTeams, "alpha", "general");
+      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, defaultTeam: "ghost" });
+      const { manager } = makeManager(workspace, homeJieDir, null);
+      const team = await manager.load();
+      expect(team.id).toBe("alpha");
+    });
+
+    test("stale defaultTeam with no user teams falls back to minimal", async () => {
+      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, defaultTeam: "ghost" });
+      const { manager } = makeManager(workspace, homeJieDir, null);
+      const team = await manager.load();
+      expect(team.id).toBe("minimal");
+    });
+
+    test("derived resolution never persists the auto-selected team", async () => {
+      const userTeams = join(homeJieDir, "teams");
+      writeTeam(userTeams, "alpha", "general");
+      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, defaultTeam: "ghost" });
+      const { manager } = makeManager(workspace, homeJieDir, null);
+      await manager.load();
+      expect(settingsStore.setDefaultTeam).not.toHaveBeenCalled();
+    });
+
     test("explicit teamId wins over defaultTeam and the built-in fallback", async () => {
       const userTeams = join(homeJieDir, "teams");
       writeTeam(userTeams, "alpha", "general");
@@ -130,7 +154,7 @@ describe("createTeamManager — full surface", () => {
       expect(team.id).toBe("beta");
     });
 
-    test("throws when the requested team manifest is missing", async () => {
+    test("throws when an explicitly requested team manifest is missing", async () => {
       const { manager } = makeManager(workspace, homeJieDir, null);
       expect(manager.load("ghost")).rejects.toThrow();
     });

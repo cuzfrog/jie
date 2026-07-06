@@ -9,7 +9,6 @@ export interface SettingsStore {
   load(): Settings;
   setDefaultProvider(provider: string, modelId: string): void;
   setDefaultTeam(teamId: string): void;
-  unsetDefaultTeam(): void;
 }
 
 export function makeSettingsStore(
@@ -46,15 +45,6 @@ export function makeSettingsStore(
       const path = location === "project" ? projectPath : globalPath;
       const next: Settings = { ...readSettingsFile(path), defaultTeam: teamId };
       writeSettingsFile(path, next);
-    },
-    unsetDefaultTeam(): void {
-      for (const path of [projectPath, globalPath]) {
-        const existing = readSettingsFile(path);
-        if (!("defaultTeam" in existing)) continue;
-        const { defaultTeam: _defaultTeam, ...rest } = existing;
-        void _defaultTeam;
-        writeSettingsFile(path, rest as Settings);
-      }
     },
   };
 }

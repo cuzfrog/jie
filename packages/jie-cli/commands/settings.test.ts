@@ -65,7 +65,7 @@ describe("runTeam", () => {
     const { platform, execute } = makePlatform();
     execute.mockImplementationOnce(async () => null);
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
-    const code = await runTeam({ kind: "team", teamId: "dev", unset: false }, platform);
+    const code = await runTeam({ kind: "team", teamId: "dev" }, platform);
     expect(code).toBe(0);
     expect(execute).toHaveBeenCalledWith({ name: "setDefaultTeam", teamId: "dev" });
     logSpy.mockRestore();
@@ -77,20 +77,10 @@ describe("runTeam", () => {
       throw new JiePlatformError("TEAM_NOT_FOUND", { detail: "team 'ghost' not found" });
     });
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => { });
-    const code = await runTeam({ kind: "team", teamId: "ghost", unset: false }, platform);
+    const code = await runTeam({ kind: "team", teamId: "ghost" }, platform);
     expect(code).toBe(1);
     expect(errSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain("is not installed");
     errSpy.mockRestore();
-  });
-
-  test("dispatches unsetDefaultTeam when --unset", async () => {
-    const { platform, execute } = makePlatform();
-    execute.mockImplementationOnce(async () => null);
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
-    const code = await runTeam({ kind: "team", unset: true }, platform);
-    expect(code).toBe(0);
-    expect(execute).toHaveBeenCalledWith({ name: "unsetDefaultTeam" });
-    logSpy.mockRestore();
   });
 
   test("prints defaultTeam and installed list when no arg", async () => {
@@ -100,7 +90,7 @@ describe("runTeam", () => {
       installed: ["minimal", "alpha", "beta"],
     }));
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
-    const code = await runTeam({ kind: "team", unset: false }, platform);
+    const code = await runTeam({ kind: "team" }, platform);
     expect(code).toBe(0);
     const out = logSpy.mock.calls.map((c) => String(c[0])).join("|");
     expect(out).toContain("defaultTeam: dev");
@@ -115,7 +105,7 @@ describe("runTeam", () => {
       installed: ["minimal"],
     }));
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
-    const code = await runTeam({ kind: "team", unset: false }, platform);
+    const code = await runTeam({ kind: "team" }, platform);
     expect(code).toBe(0);
     expect(logSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain("defaultTeam: unset");
     logSpy.mockRestore();

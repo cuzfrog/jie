@@ -4,7 +4,6 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
-  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -106,63 +105,5 @@ describe("SettingsStore", () => {
     } finally {
       rmSync(projectRoot, { recursive: true, force: true });
     }
-  });
-
-  test("unsetDefaultTeam removes defaultTeam from project settings", () => {
-    const projectJieDir = join(cwd, ".jie");
-    mkdirSync(projectJieDir, { recursive: true });
-    writeFileSync(
-      join(projectJieDir, "settings.json"),
-      JSON.stringify({ defaultProvider: "p", defaultModel: "m", defaultTeam: "dev" }),
-    );
-    const store = makeSettingsStore(cwd, homeJieDir, projectJieDir, () => null);
-    store.unsetDefaultTeam();
-    const after = JSON.parse(
-      readFileSync(join(projectJieDir, "settings.json"), "utf-8"),
-    );
-    expect(after).toEqual({ defaultProvider: "p", defaultModel: "m" });
-  });
-
-  test("unsetDefaultTeam removes defaultTeam from global settings when no project root", () => {
-    mkdirSync(homeJieDir, { recursive: true });
-    writeFileSync(
-      join(homeJieDir, "settings.json"),
-      JSON.stringify({ defaultProvider: "p", defaultModel: "m", defaultTeam: "dev" }),
-    );
-    const store = makeSettingsStore(cwd, homeJieDir, null, () => null);
-    store.unsetDefaultTeam();
-    const after = JSON.parse(
-      readFileSync(join(homeJieDir, "settings.json"), "utf-8"),
-    );
-    expect(after).toEqual({ defaultProvider: "p", defaultModel: "m" });
-  });
-
-  test("unsetDefaultTeam clears defaultTeam from both project and global files", () => {
-    const projectJieDir = join(cwd, ".jie");
-    mkdirSync(projectJieDir, { recursive: true });
-    mkdirSync(homeJieDir, { recursive: true });
-    writeFileSync(
-      join(projectJieDir, "settings.json"),
-      JSON.stringify({ defaultProvider: "p", defaultModel: "m", defaultTeam: "proj-team" }),
-    );
-    writeFileSync(
-      join(homeJieDir, "settings.json"),
-      JSON.stringify({ defaultProvider: "p", defaultModel: "m", defaultTeam: "user-team" }),
-    );
-    const store = makeSettingsStore(cwd, homeJieDir, projectJieDir, () => null);
-    store.unsetDefaultTeam();
-    expect(JSON.parse(readFileSync(join(projectJieDir, "settings.json"), "utf-8"))).toEqual({
-      defaultProvider: "p",
-      defaultModel: "m",
-    });
-    expect(JSON.parse(readFileSync(join(homeJieDir, "settings.json"), "utf-8"))).toEqual({
-      defaultProvider: "p",
-      defaultModel: "m",
-    });
-  });
-
-  test("unsetDefaultTeam is idempotent when no settings files exist", () => {
-    const store = makeSettingsStore(cwd, homeJieDir, null, () => null);
-    expect(() => store.unsetDefaultTeam()).not.toThrow();
   });
 });

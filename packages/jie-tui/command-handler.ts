@@ -144,14 +144,6 @@ function interceptModel(args: ReadonlyArray<string>, deps: CommandHandlerDeps): 
 }
 
 function interceptTeam(args: ReadonlyArray<string>, deps: CommandHandlerDeps): InterceptResult {
-  if (args[0] === "--unset") {
-    void deps.platform.execute({ name: "unsetDefaultTeam" })
-      .then(() => undefined, (error: unknown) => {
-        const reason = error instanceof Error ? error.message : String(error);
-        deps.stateStore.dispatch(Actions.setErrorMessage(`/team --unset failed: ${reason}`));
-      });
-    return { kind: "reply", text: "default team unset; takes effect on next `jie` invocation" };
-  }
   if (args.length === 0) {
     void deps.platform.execute({ name: "getTeamInfo" })
       .then((info) => {

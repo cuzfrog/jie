@@ -30,7 +30,6 @@ const settingsStore = vi.mocked<SettingsStore>({
   load: vi.fn(),
   setDefaultProvider: vi.fn(),
   setDefaultTeam: vi.fn(),
-  unsetDefaultTeam: vi.fn(),
 });
 
 const authStore = vi.mocked<AuthStore>({
@@ -124,7 +123,6 @@ describe("createJiePlatform", () => {
         { name: "setApiKey", apiKey: "sk-test" },
         { name: "setDefaultModel", provider: "anthropic", modelId: "claude-sonnet-4-5" },
         { name: "getDefaultModel" },
-        { name: "unsetDefaultTeam" },
         { name: "setDefaultTeam", teamId: "alpha" },
         { name: "team", teamId: "alpha" },
         { name: "getTeamInfo" },

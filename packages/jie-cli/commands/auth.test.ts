@@ -8,7 +8,6 @@ function makePlatform(): { platform: JiePlatform; execute: ReturnType<typeof vi.
         return null;
       case "login":
       case "logout":
-      case "unsetDefaultTeam":
       default:
         return null;
     }

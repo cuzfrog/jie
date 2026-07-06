@@ -22,18 +22,13 @@ export async function runTeam(
   parsed: ParsedArgsMap["team"],
   platform: JiePlatform,
 ): Promise<number> {
-  if (parsed.teamId === undefined && !parsed.unset) {
+  if (parsed.teamId === undefined) {
     const info = await platform.execute({ name: "getTeamInfo" });
     console.log(`defaultTeam: ${info.defaultTeam ?? "unset"}`);
     console.log(`installed: ${info.installed.join(", ")}`);
     return 0;
   }
-  if (parsed.unset) {
-    await platform.execute({ name: "unsetDefaultTeam" });
-    console.log("default team unset");
-    return 0;
-  }
-  const teamId = parsed.teamId!;
+  const teamId = parsed.teamId;
   try {
     await platform.execute({ name: "setDefaultTeam", teamId });
   } catch (error) {

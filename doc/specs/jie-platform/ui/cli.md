@@ -223,15 +223,13 @@ Manage the `defaultTeam` setting. Writes to settings.json.
 ```
 jie team <id>          # set defaultTeam to <id> (scope-aware); takes effect on next `jie` invocation
 jie team               # print current defaultTeam and installed teams
-jie team --unset       # clear defaultTeam (scope-aware); takes effect on next `jie` invocation
 ```
 
 ### Arguments
 
 | Flag | Default | Behavior |
 |---|---|---|
-| `<id>` | (required unless `--unset`) | Team id to select. Charset `[A-Za-z0-9_-]{1,32}`. |
-| `--unset` | — | Clear `defaultTeam` from settings. |
+| `<id>` | (required) | Team id to select. Charset `[A-Za-z0-9_-]{1,32}`. |
 
 ### Behavior — `jie team <id>`
 
@@ -249,13 +247,7 @@ The command does not start the team. The change takes effect on next `jie` invoc
 2. Scan `.jie/teams/*` and `~/.jie/teams/*`; list installed team ids (deduped, alphabetical).
 3. Exit 0.
 
-### Behavior — `jie team --unset`
-
-1. Determine scope: `.jie/settings.json` if it exists, else `~/.jie/settings.json`.
-2. Clear `defaultTeam` field (write back without it).
-3. Print `default team unset` and exit 0.
-
-Takes effect on next `jie` invocation. Mid-session clearing in the TUI is not supported — clearing `defaultTeam` while a team is running would leave the running team nameless; restart `jie` to land on first-available.
+There is no explicit unset command. A `defaultTeam` pointing at a removed blueprint is stale; at load the platform treats it as absent and falls back to the first installed user team, else the built-in minimal team. To change the default, run `jie team <id>` with a valid id.
 
 **Exit codes:** 0 (success or no-op), 1 (invalid id, team not installed, write error).
 

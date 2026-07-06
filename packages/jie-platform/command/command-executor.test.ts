@@ -15,7 +15,6 @@ const settingsStore = vi.mocked<SettingsStore>({
   load: vi.fn(),
   setDefaultProvider: vi.fn(),
   setDefaultTeam: vi.fn(),
-  unsetDefaultTeam: vi.fn(),
 });
 
 const teamManager = vi.mocked<TeamManager>({
@@ -157,15 +156,6 @@ describe("CommandExecutor", () => {
     });
   });
 
-  describe("unsetDefaultTeam", () => {
-    test("delegates to settingsStore.unsetDefaultTeam", async () => {
-      const executor = makeExecutor();
-      const result = await executor.execute({ name: "unsetDefaultTeam" });
-      expect(result).toBeNull();
-      expect(settingsStore.unsetDefaultTeam).toHaveBeenCalledTimes(1);
-    });
-  });
-
   describe("setDefaultTeam", () => {
     test("delegates to settingsStore.setDefaultTeam with the requested teamId", async () => {
       const executor = makeExecutor();
@@ -244,7 +234,6 @@ describe("CommandExecutor", () => {
         { name: "setApiKey", apiKey: "sk-test" },
         { name: "setDefaultModel", provider: "anthropic", modelId: "claude-sonnet-4-5" },
         { name: "getDefaultModel" },
-        { name: "unsetDefaultTeam" },
         { name: "setDefaultTeam", teamId: "alpha" },
         { name: "team", teamId: "alpha" },
         { name: "getTeamInfo" },

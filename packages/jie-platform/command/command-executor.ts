@@ -63,10 +63,6 @@ export function createCommandExecutor(deps: CommandExecutorDeps): CommandExecuto
       if (settings.defaultProvider === undefined || settings.defaultModel === undefined) return null;
       return { provider: settings.defaultProvider, modelId: settings.defaultModel };
     },
-    unsetDefaultTeam: () => {
-      deps.settingsStore.unsetDefaultTeam();
-      return null;
-    },
     setDefaultTeam: (command) => {
       deps.settingsStore.setDefaultTeam(command.teamId);
       return null;

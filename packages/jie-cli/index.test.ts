@@ -395,7 +395,7 @@ describe("_run — dispatch to command handlers", () => {
     const captured = captureRun(platform.handle);
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     try {
-      const exit = await captured.run({ kind: "team", teamId: "minimal", unset: false });
+      const exit = await captured.run({ kind: "team", teamId: "minimal" });
       expect(exit).toBe(0);
       expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "setDefaultTeam", teamId: "minimal" });
     } finally {

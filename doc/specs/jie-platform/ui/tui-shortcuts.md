@@ -52,7 +52,6 @@ Slash commands are typed at the editor prompt (no key chord). Each starts with `
 | `/model <provider>/<modelId>` | Validate and write to `~/.jie/settings.json` | `default model set to <provider>/<modelId>` |
 | `/team <id>` | If installed, switch the TUI's active team. If not installed, render the error in the input area; no team switch | `default team set` (only on direct write to settings) |
 | `/team` (no arg) | Open a `SelectList` over installed team IDs; selecting one is equivalent to `/team <id>` | none |
-| `/team --unset` | Clear `defaultTeam` from settings; takes effect on next `jie` invocation | `default team unset` |
 | `/clear` | Clear `state.agents`, `leaderAgentId`, `focusedAgentId`, `transientMessage`, `errorBanner`. Memory rows on disk untouched | none |
 | `/help` | Open an overlay rendering the keymap from this doc | none |
 | `/exit` | Same as `Ctrl+D` (twice within 500 ms). No busy-state branch | none |

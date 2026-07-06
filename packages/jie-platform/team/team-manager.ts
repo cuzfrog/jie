@@ -4,7 +4,7 @@ import { type AgentBody, createAgentBody } from "../core";
 import { type EventManager, Events } from "../event";
 import { JiePlatformError } from "../jie-platform-errors";
 import { type ArtifactStore, type MemoryManager } from "../storage";
-import { type Settings, type SettingsStore } from "../config";
+import { type SettingsStore } from "../config";
 import { type ModelRegistry } from "../config";
 import { type ToolRegistry } from "../tools";
 import { type AgentSoul, type TeamBlueprint, type TeamBlueprintLocation, BUILTIN_MINIMAL_TEAM_ID } from "./types";
@@ -45,7 +45,7 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
   const sessionIds = new Map<string, string>();
 
   async function loadImpl(teamId?: string): Promise<TeamIdentity> {
-    const requested = resolveRequestedTeam(settingsStore.load(), teamId);
+    const requested = resolveTeamId(teamId);
     const existing = loadedTeams.get(requested);
     if (existing !== undefined) {
       return toTeamIdentity(requested, existing);
@@ -78,6 +78,15 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
     loadedTeams.set(requested, bodies);
     publishTeamLoaded(requested, blueprint);
     return toTeamIdentity(requested, bodies);
+  }
+
+  function resolveTeamId(teamId?: string): string {
+    if (teamId !== undefined) return teamId;
+    const settings = settingsStore.load();
+    if (settings.defaultTeam !== undefined && teamRegistry.locate(settings.defaultTeam) !== null) {
+      return settings.defaultTeam;
+    }
+    return teamRegistry.listInstalled().find((id) => id !== BUILTIN_MINIMAL_TEAM_ID) ?? BUILTIN_MINIMAL_TEAM_ID;
   }
 
   function resolveSessionId(teamId: string): string {
@@ -152,10 +161,6 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
     agents,
     stop,
   };
-}
-
-function resolveRequestedTeam(settings: Settings | undefined, teamId?: string): string {
-  return teamId ?? settings?.defaultTeam ?? BUILTIN_MINIMAL_TEAM_ID;
 }
 
 function toTeamIdentity(id: string, bodies: AgentBody[]): TeamIdentity {

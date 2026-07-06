@@ -12,7 +12,6 @@ interface CommandTypeMap {
   setApiKey: CommandDef<{ apiKey: string }, null>;
   setDefaultModel: CommandDef<ModelIdentity, null>;
   getDefaultModel: CommandDef<{}, ModelIdentity | null>;
-  unsetDefaultTeam: CommandDef<{}, null>;
   setDefaultTeam: CommandDef<{ teamId: string }, null>;
   team: CommandDef<{ teamId?: string }, TeamIdentity>;
   getTeamInfo: CommandDef<{}, { defaultTeam: string | null; installed: ReadonlyArray<string> }>;

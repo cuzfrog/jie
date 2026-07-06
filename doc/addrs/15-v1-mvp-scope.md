@@ -39,7 +39,7 @@ A working TUI is a separate project — UI library choice, keybinding design, ag
 - `jie --version`, `jie --help`
 - `jie login` / `jie logout` (per `ui/cli.md`; the `jie login` interactive flow may be limited to `--provider <id> --api-key <key>` for headless use in v1)
 - `jie model <provider>/<modelId>` (per `ui/cli.md`)
-- `jie team <id>` / `jie team` / `jie team --unset` (per `ui/cli.md`)
+- `jie team <id>` / `jie team` (per `ui/cli.md`)
 - `jie --resume <session_id>` / `jie --continue`
 - `jie --api-key <key>`
 

@@ -217,15 +217,6 @@ describe("createTuiCommandHandler — /model", () => {
 });
 
 describe("createTuiCommandHandler — /team", () => {
-  test("/team --unset dispatches unsetDefaultTeam and replies", () => {
-    const { platform, execute } = makePlatform();
-    const { deps, dispatch } = makeDeps(platform);
-    const handler = createTuiCommandHandler(deps);
-    handler.handle("/team --unset");
-    expect(execute).toHaveBeenCalledWith({ name: "unsetDefaultTeam" });
-    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("default team unset")));
-  });
-
   test("/team (no args) replies with defaultTeam and installed list", async () => {
     const { platform, execute } = makePlatform();
     execute.mockImplementationOnce(async () => ({

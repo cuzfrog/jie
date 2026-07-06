@@ -119,7 +119,7 @@ Usage:
   jie login --provider <id> --api-key <key>
   jie logout [<provider>]
   jie model <provider>/<modelId>
-  jie team [<id>] | [--unset]
+  jie team [<id>]
 
   jie --api-key <key>
   jie --resume <session_id>

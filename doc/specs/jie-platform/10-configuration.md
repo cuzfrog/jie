@@ -135,10 +135,10 @@ If both project-local and global copies exist, project wins (matches the lookup 
 
 TUI hint on success: `default team set`.
 
-### Showing and Clearing
+### Showing and Resetting
 
 - `jie team` (no arg) / `/team` (no arg) — print the current `defaultTeam` from merged settings, plus the list of installed teams (project + global, deduped). TUI uses pi's selection-filter UI for picking.
-- `jie team --unset` / `/team --unset` — clear `defaultTeam` from settings. Scope rule: writes to `.jie/settings.json` if it exists, else `~/.jie/settings.json`. Takes effect on the next invocation; the TUI does not have an "unset" mid-session behavior (clearing `defaultTeam` mid-session would leave the running team without a name to fall back to — restart `jie` to land on first-available).
+- There is no explicit unset. A stale `defaultTeam` (its blueprint was removed) is treated as absent at team-load time and falls back to the first installed user team, else the built-in minimal team. `load()` does not persist this auto-selection; only `jie team <id>` / `/team <id>` writes `defaultTeam`.
 
 ## Workspace Inference
 
@@ -351,7 +351,6 @@ The commands that mutate persistent files:
 | `jie model <provider>/<modelId>` | `~/.jie/settings.json` | Splits on first `/`; sets `defaultProvider` and `defaultModel`. |
 | `jie team <id>` | `.jie/settings.json` or `~/.jie/settings.json` | Scope-aware: writes to the same scope as the team's install location. TUI hot-swaps the running team; CLI takes effect on next invocation. |
 | `jie team` (no arg) | (read-only) | Prints current `defaultTeam` and installed teams. |
-| `jie team --unset` | `.jie/settings.json` or `~/.jie/settings.json` | Clears `defaultTeam`. Takes effect on next invocation. |
 
 The `--team <id>` flag is a one-shot override for `jie` and `jie -p`; the TUI does not have a one-shot equivalent — use `/team <id>` for both persistence and hot-swap.
 

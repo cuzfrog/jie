@@ -14,7 +14,7 @@ export interface ParsedArgsMap {
   readonly login: { readonly kind: "login"; readonly provider?: string; readonly apiKey?: string };
   readonly logout: { readonly kind: "logout"; readonly provider?: string };
   readonly model: { readonly kind: "model"; readonly provider: string; readonly modelId: string };
-  readonly team: { readonly kind: "team"; readonly teamId?: string; readonly unset: boolean };
+  readonly team: { readonly kind: "team"; readonly teamId?: string };
   readonly apiKey: { readonly kind: "apiKey"; readonly apiKey: string };
   readonly tui: { readonly kind: "tui"; readonly team?: string };
   readonly error: { readonly kind: "error"; readonly message: string };
@@ -124,12 +124,11 @@ function parseModel(args: string[]): ParsedArgs {
 }
 
 function parseTeam(args: string[]): ParsedArgs {
-  if (args.length === 0) return { kind: "team", unset: false };
-  if (args[0] === "--unset") return { kind: "team", unset: true };
+  if (args.length === 0) return { kind: "team" };
   if (args[0]!.startsWith("-")) {
     return { kind: "error", message: `unknown flag: ${args[0]}` };
   }
-  return { kind: "team", teamId: args[0], unset: false };
+  return { kind: "team", teamId: args[0] };
 }
 
 function parsePrint(
