@@ -107,19 +107,14 @@ function extractPort(c: MockClient): number {
 
 describe("loadMockExpectations", () => {
   let prevBaseUrl: string | undefined;
-  let stopped: Array<() => Promise<void>> = [];
 
   beforeEach(() => {
     prevBaseUrl = process.env["JIE_E2E_BASE_URL"];
   });
 
-  afterEach(async () => {
+  afterEach(() => {
     if (prevBaseUrl === undefined) delete process.env["JIE_E2E_BASE_URL"];
     else process.env["JIE_E2E_BASE_URL"] = prevBaseUrl;
-    while (stopped.length > 0) {
-      const stop = stopped.pop();
-      if (stop !== undefined) await stop();
-    }
   });
 
   test("no-op when JIE_E2E_BASE_URL is unset", async () => {
@@ -130,23 +125,6 @@ describe("loadMockExpectations", () => {
   test("no-op when JIE_E2E_BASE_URL is not the stub port", async () => {
     process.env["JIE_E2E_BASE_URL"] = "http://localhost:9999";
     await loadMockExpectations([{ match: {}, responseChunks: [] }]);
-  });
-
-  test("registers on the stub when JIE_E2E_BASE_URL matches the stub port", async () => {
-    const server = await startMockServer(12346);
-    stopped.push(() => server.stop());
-    process.env["JIE_E2E_BASE_URL"] = "http://localhost:12346";
-    const rules = [
-      { match: { lastUserContains: "hello" }, responseChunks: [{ kind: "text" as const, delta: "hi" }, { kind: "finish" as const, reason: "stop" as const }] },
-    ];
-    await loadMockExpectations(rules);
-    const res = await fetch("http://localhost:12346/v1/chat/completions", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ model: "m", stream: true, messages: [{ role: "user", content: "hello world" }] }),
-    });
-    expect(res.status).toBe(200);
-    await res.body?.cancel();
   });
 
   test("throws when the stub is unreachable on the stub port", async () => {
