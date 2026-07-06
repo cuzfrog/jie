@@ -1,5 +1,5 @@
 import { MockClient, MockClientError, loadMockExpectations } from "./client.ts";
-import { createMockServer } from "./server.ts";
+import { startMockServer } from "./server.ts";
 
 describe("MockClient", () => {
   let stopped: Array<() => Promise<void>> = [];
@@ -12,7 +12,7 @@ describe("MockClient", () => {
   });
 
   async function freshClient(): Promise<MockClient> {
-    const server = createMockServer();
+    const server = await startMockServer(0);
     stopped.push(() => server.stop());
     const client = new MockClient(`http://localhost:${server.port}`);
     await client.health();
@@ -133,7 +133,7 @@ describe("loadMockExpectations", () => {
   });
 
   test("registers on the stub when JIE_E2E_BASE_URL matches the stub port", async () => {
-    const server = createMockServer({ port: 12346 });
+    const server = await startMockServer(12346);
     stopped.push(() => server.stop());
     process.env["JIE_E2E_BASE_URL"] = "http://localhost:12346";
     const rules = [

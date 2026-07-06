@@ -1,5 +1,5 @@
 import { writeFileSync } from "node:fs";
-import { loadMockExpectations } from "../../mock-llm-backend";
+import { loadMockExpectations } from "../../../packages/mock-llm-backend/index.ts";
 import { assertLlmReachable, seedTeam, writeModelsJsonTo, writeSettingsJson } from "../_fixture.ts";
 import { startTui, stopTui, submitAndWaitForAgentIdle, waitForErrorBanner, waitForNoErrorBanner, waitForTeam } from "./harness";
 import expectations from "./scenario-4.llm.ts";

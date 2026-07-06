@@ -1,4 +1,4 @@
-import { loadMockExpectations } from "../../mock-llm-backend";
+import { loadMockExpectations } from "../../../packages/mock-llm-backend/index.ts";
 import { assertLlmReachable, seedTeam } from "../_fixture.ts";
 import {
   startTui,

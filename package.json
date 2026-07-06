@@ -6,7 +6,7 @@
     "jie": "packages/jie-cli/index.ts"
   },
   "scripts": {
-    "mock:start": "bun run tests/mock-llm-backend/server.ts",
+    "mock:start": "bun run packages/mock-llm-backend/server.ts",
     "test:e2e:local": "set -a && . ./setenv && set +a && bun test --timeout=60000 tests/e2e",
     "test:e2e:mock": "JIE_E2E_BASE_URL=http://localhost:12346 JIE_E2E_API_KEY=dummy JIE_E2E_MODEL=dummy bun test --max-concurrency=1 tests/e2e"
   },

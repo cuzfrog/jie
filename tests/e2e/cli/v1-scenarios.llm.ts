@@ -1,4 +1,4 @@
-import type { Expectation } from "../../mock-llm-backend";
+import type { Expectation } from "../../../packages/mock-llm-backend";
 
 const expectations: Expectation[] = [
     {

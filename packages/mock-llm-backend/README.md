@@ -35,7 +35,7 @@ is a no-op when `JIE_E2E_BASE_URL` is not the stub port, so the suite
 runs unchanged against a real backend.
 
 ```ts
-import { loadMockExpectations } from "../../mock-llm-backend";
+import { loadMockExpectations } from "../../../packages/mock-llm-backend";
 import expectations from "./v1-scenarios.llm.ts";
 
 beforeAll(async () => {
@@ -90,20 +90,11 @@ error:
 ## SDK
 
 ```ts
-import { MockClient, loadMockExpectations } from "./mock-llm-backend";
+import { loadMockExpectations } from "../../../packages/mock-llm-backend";
 import expectations from "./v1-scenarios.llm.ts";
 
 // In a test's beforeAll — no-op unless JIE_E2E_BASE_URL points at the stub.
 await loadMockExpectations(expectations);
-
-// Or, when you need finer control:
-const c = new MockClient();
-await c.registerExpectations([
-  { match: { lastUserContains: "hi" }, responseChunks: [{ kind: "text", delta: "world" }, { kind: "finish", reason: "stop" }] },
-]);
-// ...drive the platform...
-const calls = await c.getCalls();
-await c.assertConsumedAll(rules); // throws if any rule was never matched
 ```
 
 ## File map

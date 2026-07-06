@@ -8,7 +8,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { main } from "../../../packages/jie-cli/index.ts";
-import { loadMockExpectations } from "../../mock-llm-backend";
+import { loadMockExpectations } from "../../../packages/mock-llm-backend/index.ts";
 import {
   assertLlmReachable,
   writeModelsJsonTo,
