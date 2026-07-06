@@ -110,6 +110,7 @@ export interface SeedRole {
   readonly systemPrompt: string;
   readonly tools?: ReadonlyArray<string>;
   readonly model?: string;
+  readonly subscribe?: ReadonlyArray<string>;
 }
 
 export function seedTeam(jieDir: string, teamId: string, leaderRole: string, roles: ReadonlyArray<SeedRole>): void {
@@ -123,9 +124,11 @@ export function seedTeam(jieDir: string, teamId: string, leaderRole: string, rol
     const tools = role.tools ?? [];
     const toolsYaml = tools.length === 0 ? "tools: []" : `tools:\n${tools.map((t) => `  - ${t}`).join("\n")}`;
     const modelLine = role.model !== undefined ? `model: ${role.model}\n` : "";
+    const subscribe = role.subscribe ?? [];
+    const subscribeYaml = subscribe.length === 0 ? "" : `\nsubscribe:\n${subscribe.map((t) => `  - ${t}`).join("\n")}`;
     writeFileSync(
       join(teamsDir, `${role.role}.md`),
-      `---\n${modelLine}${toolsYaml}\n---\n${role.systemPrompt}\n`,
+      `---\n${modelLine}${toolsYaml}${subscribeYaml}\n---\n${role.systemPrompt}\n`,
     );
   }
 }

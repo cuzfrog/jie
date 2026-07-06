@@ -90,7 +90,17 @@ async function waitFor(predicate: () => boolean, timeoutMs: number, label: strin
 }
 
 export async function waitForTeam(tui: Tui, teamId: string, timeoutMs = 60000): Promise<void> {
-  await waitFor(() => tui.state.teamId === teamId, timeoutMs, `team ${teamId}`);
+  await waitFor(
+    () => {
+      const s = tui.state;
+      if (s.errorBanner !== null) {
+        throw new Error(`team ${teamId} failed to load: ${s.errorBanner}`);
+      }
+      return s.teamId === teamId;
+    },
+    timeoutMs,
+    `team ${teamId}`,
+  );
 }
 
 export async function waitForAgentIdle(tui: Tui, agentId: AgentId, timeoutMs = 60000): Promise<void> {
@@ -99,6 +109,25 @@ export async function waitForAgentIdle(tui: Tui, agentId: AgentId, timeoutMs = 6
     timeoutMs,
     `agent ${agentId} idle`,
   );
+}
+
+export async function waitForAgentIdleCount(
+  harness: TuiHarness,
+  agentId: AgentId,
+  count: number,
+  timeoutMs = 60000,
+): Promise<void> {
+  let seen = 0;
+  const off = harness.platform.subscribe("agent.idle", (event) => {
+    if (event.sender.kind !== "agent") return;
+    if (`${event.sender.teamId}:${event.sender.agentKey}` !== agentId) return;
+    seen += 1;
+  });
+  try {
+    await waitFor(() => seen >= count, timeoutMs, `agent ${agentId} idle count >= ${count} (seen ${seen})`);
+  } finally {
+    off();
+  }
 }
 
 export async function submitAndWaitForAgentIdle(

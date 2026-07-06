@@ -1,9 +1,9 @@
-import { assertLlmReachable, seedTeam } from "../_fixture.ts";
 import { loadMockExpectations } from "../../mock-llm-backend";
+import { assertLlmReachable, seedTeam } from "../_fixture.ts";
 import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, type TuiHarness } from "./harness";
-import expectations from "./t1.llm.ts";
+import expectations from "./scenario-5.llm.ts";
 
-describe("T1 — simple agent", () => {
+describe("Scenario 5 — second prompt after the first turn", () => {
   let harness: TuiHarness;
 
   beforeAll(async () => {
@@ -22,24 +22,24 @@ describe("T1 — simple agent", () => {
     await stopTui(harness);
   });
 
-  test("team loads, prompt streams, idle closes; rail hidden by default", async () => {
+  test("state captures both prompts and the haiku response", async () => {
     harness.tui.submit("/team my-team");
     await waitForTeam(harness.tui, "my-team");
-    await submitAndWaitForAgentIdle(harness, "Tell me a story", "my-team:general-1");
-    const state = harness.tui.state;
-    expect(state.teamId).toBe("my-team");
-    expect(state.leaderAgentId).toBe("my-team:general-1");
-    expect(state.focusedAgentId).toBe("my-team:general-1");
-    expect(state.showTeamRailPanel).toBe(false);
-    const agent = state.agents.get("my-team:general-1");
+    await submitAndWaitForAgentIdle(harness, "Research the history of J", "my-team:general-1");
+    await submitAndWaitForAgentIdle(harness, "Tell me a haiku", "my-team:general-1");
+
+    const agent = harness.tui.state.agents.get("my-team:general-1");
+    expect(agent).toBeDefined();
     const allTurns = [
       ...(agent?.history ?? []),
       ...(agent?.currentTurn !== null && agent?.currentTurn !== undefined ? [agent.currentTurn] : []),
     ];
+    expect(allTurns.length).toBeGreaterThanOrEqual(2);
+    const allPrompts = allTurns.map((t) => t.userPrompt).join("\n");
+    expect(allPrompts).toContain("Research the history of J");
+    expect(allPrompts).toContain("Tell me a haiku");
     const allBlocks = allTurns.flatMap((t) => t.blocks).map((b) => b.text).join("\n");
     expect(allBlocks.length).toBeGreaterThan(0);
-    const allPrompts = allTurns.map((t) => t.userPrompt).join("\n");
-    expect(allPrompts).toContain("Tell me a story");
     expect(agent?.status).toBe("idle");
   });
 });

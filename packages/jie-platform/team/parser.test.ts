@@ -175,6 +175,12 @@ describe("loadTeamFromDir — typed error codes", () => {
       code: "INVALID_FRONTMATTER",
     },
     {
+      name: "tools list concatenated with sibling key is rejected (string tool name)",
+      setup: () => setupFiles({ "general.md": "---\ntools:\n  - bashsubscribe:\n  - task\n---\n" }),
+      act: () => loadTeamFromDir(dir),
+      code: "INVALID_FIELD_TYPE",
+    },
+    {
       name: "missing_required_field (no tools)",
       setup: () => setupFiles({ "general.md": "---\nrole: general\n---\n" }),
       act: () => loadTeamFromDir(dir),

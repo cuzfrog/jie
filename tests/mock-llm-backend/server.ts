@@ -22,7 +22,7 @@ type SessionMap = Map<string, SessionState>;
 
 const DEFAULT_SESSION = "__default__";
 
-let VERBOSE = (process.env["LOG"] ?? "").length > 0;
+let VERBOSE = (process.env["ENABLE_MOCK_LLM_SERVER_LOGGING"] ?? "").length > 0;
 
 function log(label: string, payload: unknown): void {
   if (!VERBOSE) return;

@@ -1,9 +1,9 @@
 import { loadMockExpectations } from "../../mock-llm-backend";
 import { assertLlmReachable, seedTeam } from "../_fixture.ts";
 import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, type TuiHarness } from "./harness";
-import expectations from "./t3.llm.ts";
+import expectations from "./scenario-3.llm.ts";
 
-describe("T3 — switch teams", () => {
+describe("Scenario 3 — switch teams", () => {
   let harness: TuiHarness;
 
   beforeAll(async () => {
