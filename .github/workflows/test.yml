@@ -29,7 +29,7 @@ jobs:
 
       - name: e2e (mock LLM stub)
         run: |
-          bun run tests/mock-llm-backend/server.ts &
+          bun run packages/mock-llm-backend/server.ts &
           MOCK_PID=$!
           trap "kill $MOCK_PID 2>/dev/null || true" EXIT
           # Wait for /health to be reachable, then run the suite.
