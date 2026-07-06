@@ -23,6 +23,8 @@ export interface Tui {
 }
 
 const MIN_COLS = 60;
+const ALT_SCREEN_ON = "\x1b[?1049h";
+const ALT_SCREEN_OFF = "\x1b[?1049l";
 
 export function createTui(options: CreateTUIOptions, deps: TuiDeps): Tui {
   if (process.stdin.isTTY !== true) {
@@ -36,6 +38,7 @@ export function createTui(options: CreateTUIOptions, deps: TuiDeps): Tui {
   const stateStore = createStateStore();
   const view = buildView(stateStore, { cwd: options.cwd }, tui);
   tui.addChild(view.root);
+  tui.setFocus(view.editor);
   const commandHandler = createTuiCommandHandler({
     stateStore,
     platform: deps.platform,
@@ -113,6 +116,7 @@ class PiTui implements Tui {
       if (this.terminal.columns < MIN_COLS) {
         throw new Error(`terminal too narrow for TUI; need at least ${MIN_COLS} columns, got ${this.terminal.columns}`);
       }
+      this.terminal.write(ALT_SCREEN_ON);
       this.tui.addInputListener((data) => this.keyboardHandler.handle(data));
       this.resolveStart = (): void => {
         this.resolveStart = null;
@@ -132,6 +136,7 @@ class PiTui implements Tui {
     this.unsubscribeRender();
     this.resolveStart?.();
     this.tui.stop();
+    this.terminal.write(ALT_SCREEN_OFF);
   }
 
   private onStateChange(): void {

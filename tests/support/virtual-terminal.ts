@@ -10,6 +10,7 @@ export class VirtualTerminal implements Terminal {
 	private resizeHandler?: () => void;
 	private _columns: number;
 	private _rows: number;
+	private writeLog: string[] = [];
 
 	constructor(columns = 80, rows = 24) {
 		this._columns = columns;
@@ -41,7 +42,16 @@ export class VirtualTerminal implements Terminal {
 	}
 
 	write(data: string): void {
+		this.writeLog.push(data);
 		this.xterm.write(data);
+	}
+
+	getWriteLog(): string[] {
+		return [...this.writeLog];
+	}
+
+	clearWriteLog(): void {
+		this.writeLog = [];
 	}
 
 	get columns(): number {

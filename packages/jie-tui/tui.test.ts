@@ -97,4 +97,34 @@ describe("createTui — start()", () => {
       expect(state.agents.size).toBe(1);
     });
   });
+
+  test("enterAlternateScreenBuffer on start, leaveAlternateScreenBuffer on stop", async () => {
+    withTTY(true, async () => {
+      const { terminal } = createTestTuiWithTerminal(80, 30);
+      const tuiHandle = createTui({ cwd: process.cwd() }, { ...makeDeps(), terminal });
+      const started = tuiHandle.start();
+      await new Promise((r) => setTimeout(r, 50));
+      const writesDuringStart = terminal.getWriteLog();
+      tuiHandle.stop();
+      await started;
+      const writesAfterStop = terminal.getWriteLog().slice(writesDuringStart.length);
+      expect(writesDuringStart.some((s) => s.includes("\x1b[?1049h"))).toBe(true);
+      expect(writesAfterStop.some((s) => s.includes("\x1b[?1049l"))).toBe(true);
+    });
+  });
+
+  test("keystrokes reach the editor through the focused component", async () => {
+    withTTY(true, async () => {
+      const { terminal } = createTestTuiWithTerminal(80, 30);
+      const tuiHandle = createTui({ cwd: process.cwd() }, { ...makeDeps(), terminal });
+      const started = tuiHandle.start();
+      await new Promise((r) => setTimeout(r, 50));
+      terminal.sendInput("hello");
+      await new Promise((r) => setTimeout(r, 50));
+      tuiHandle.stop();
+      await started;
+      const viewport = terminal.getViewport().join("\n");
+      expect(viewport).toContain("hello");
+    });
+  });
 });

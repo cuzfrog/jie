@@ -48,6 +48,10 @@ export class EditorSlot extends Container {
     this.queueIndicator = text;
   }
 
+  handleInput(data: string): void {
+    this.editor.handleInput(data);
+  }
+
   render(width: number): string[] {
     const lines = this.editor.render(width);
     const indicator: string[] = this.queueIndicator === null ? [] : [this.queueIndicator];
