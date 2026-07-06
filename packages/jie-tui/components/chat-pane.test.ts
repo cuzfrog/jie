@@ -132,7 +132,7 @@ describe("ChatPane", () => {
     expect(flat).not.toContain("old-reply");
   });
 
-  test("re-render at the same width is a no-op on the child tree", () => {
+  test("re-render at the same width produces the same lines", () => {
     const pane = new ChatPane();
     pane.setAgent(makeAgent({
       history: [{
@@ -142,13 +142,9 @@ describe("ChatPane", () => {
         streamId: null,
       }],
     }));
-    const first = pane.children;
-    pane.render(60);
-    const second = pane.children;
-    pane.render(60);
-    const third = pane.children;
-    expect(second).toBe(first);
-    expect(third).toBe(first);
+    const first = pane.render(60);
+    const second = pane.render(60);
+    expect(second).toEqual(first);
   });
 
   test("invalidate forces a re-render on the next call", () => {

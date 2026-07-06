@@ -8,7 +8,6 @@ const PROMPT_GAP = 1;
 export class ChatPane extends Container {
   private agent: AgentUiState | null;
   private readonly toolCards: Map<string, ToolCard>;
-  private readonly messageViews: Map<number, MessageView>;
   private cachedLines: string[] | null = null;
   private cachedWidth = -1;
 
@@ -16,7 +15,6 @@ export class ChatPane extends Container {
     super();
     this.agent = null;
     this.toolCards = new Map();
-    this.messageViews = new Map();
   }
 
   setAgent(agent: AgentUiState | null): void {
@@ -42,7 +40,6 @@ export class ChatPane extends Container {
   private rebuildChildren(): void {
     this.clear();
     this.toolCards.clear();
-    this.messageViews.clear();
     if (this.agent === null) return;
     for (const turn of this.agent.history) {
       this.appendTurn(turn);
@@ -66,14 +63,9 @@ export class ChatPane extends Container {
   }
 
   private appendBlocks(blocks: ReadonlyArray<MessageBlock>): void {
-    for (let i = 0; i < blocks.length; i++) {
-      const block = blocks[i];
+    for (const block of blocks) {
       if (block === undefined) continue;
-      let messageView = this.messageViews.get(i);
-      if (messageView === undefined) {
-        messageView = new MessageView();
-        this.messageViews.set(i, messageView);
-      }
+      const messageView = new MessageView();
       messageView.setBlock(block);
       this.addChild(messageView);
     }
