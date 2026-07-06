@@ -1,14 +1,14 @@
-
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { JiePlatformError } from "../jie-platform-errors";
+import { type TeamBlueprintLocation } from "../team";
 import { loadMergedSettings } from "./load-settings";
 import type { Settings, RawSettings } from "./types";
 
-export type SettingScope = "project" | "global";
-
 export interface SettingsStore {
   load(): Settings;
-  write(settings: Settings, scope: SettingScope): void;
+  setDefaultProvider(provider: string, modelId: string): void;
+  setDefaultTeam(teamId: string): void;
   unsetDefaultTeam(): void;
 }
 
@@ -16,7 +16,12 @@ export function makeSettingsStore(
   cwd: string,
   homeJieDir: string,
   projectJieDir: string | null,
+  locateTeam: (teamId: string) => TeamBlueprintLocation,
 ): SettingsStore {
+  const globalPath = join(homeJieDir, "settings.json");
+  const projectPath =
+    projectJieDir === null ? join(cwd, ".jie", "settings.json") : join(projectJieDir, "settings.json");
+
   return {
     load(): Settings {
       try {
@@ -25,33 +30,51 @@ export function makeSettingsStore(
         return {} as Settings;
       }
     },
-    write(settings, scope): void {
-      if (scope === "project") {
-        const target = projectJieDir ?? join(cwd, ".jie");
-        mkdirSync(target, { recursive: true, mode: 0o755 });
-        writeRawSettings(
-          join(target, "settings.json"),
-          settings as unknown as RawSettings,
-        );
-      } else {
-        mkdirSync(homeJieDir, { recursive: true, mode: 0o755 });
-        writeRawSettings(
-          join(homeJieDir, "settings.json"),
-          settings as unknown as RawSettings,
-        );
+    setDefaultProvider(provider, modelId): void {
+      const next: Settings = {
+        ...readSettingsFile(globalPath),
+        defaultProvider: provider,
+        defaultModel: modelId,
+      };
+      writeSettingsFile(globalPath, next);
+    },
+    setDefaultTeam(teamId): void {
+      const location = locateTeam(teamId);
+      if (location === null) {
+        throw new JiePlatformError("TEAM_NOT_FOUND", { detail: `team '${teamId}' not found` });
       }
+      const path = location === "project" ? projectPath : globalPath;
+      const next: Settings = { ...readSettingsFile(path), defaultTeam: teamId };
+      writeSettingsFile(path, next);
     },
     unsetDefaultTeam(): void {
-      const existing = this.load();
-      const { defaultTeam: _defaultTeam, ...rest } = existing;
-      void _defaultTeam;
-      const next: Settings = rest;
-      const scope: SettingScope = projectJieDir !== null ? "project" : "global";
-      this.write(next, scope);
+      for (const path of [projectPath, globalPath]) {
+        const existing = readSettingsFile(path);
+        if (!("defaultTeam" in existing)) continue;
+        const { defaultTeam: _defaultTeam, ...rest } = existing;
+        void _defaultTeam;
+        writeSettingsFile(path, rest as Settings);
+      }
     },
   };
 }
 
-function writeRawSettings(path: string, value: RawSettings): void {
-  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
+function readSettingsFile(path: string): Settings {
+  let text: string;
+  try {
+    text = readFileSync(path, "utf-8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return {} as Settings;
+    throw error;
+  }
+  try {
+    return JSON.parse(text) as Settings;
+  } catch {
+    return {} as Settings;
+  }
+}
+
+function writeSettingsFile(path: string, value: Settings): void {
+  mkdirSync(dirname(path), { recursive: true, mode: 0o755 });
+  writeFileSync(path, `${JSON.stringify(value as unknown as RawSettings, null, 2)}\n`, "utf-8");
 }

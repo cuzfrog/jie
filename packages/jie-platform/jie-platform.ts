@@ -14,7 +14,6 @@ import {
 } from "./storage";
 import { type Command, type CommandExecutor, type CommandName, type CommandResult, createCommandExecutor } from "./command";
 import { createGitService } from "./services";
-import type { SettingScope } from "./config";
 
 export interface JiePlatformOptions {
   readonly cwd: string;
@@ -33,7 +32,6 @@ export interface JiePlatformDeps {
   readonly artifactStore: ArtifactStore;
   readonly memoryManager: MemoryManager;
   readonly commandExecutor: CommandExecutor;
-  readonly defaultScope: SettingScope;
 }
 
 export interface JiePlatform {
@@ -89,9 +87,11 @@ function buildJiePlatformDeps(options: JiePlatformOptions): JiePlatformDeps {
     artifactStore,
   });
   const gitService = createGitService({ cwd });
-  const settingsStore = makeSettingsStore(cwd, homeJieDir, projectJieDir);
-  const defaultScope: "global" | "project" = projectJieDir === null ? "global" : "project";
-  const teamManager = createTeamManager(
+  let teamManager: TeamManager;
+  const settingsStore = makeSettingsStore(cwd, homeJieDir, projectJieDir, (teamId) =>
+    teamManager.locate(teamId),
+  );
+  teamManager = createTeamManager(
     { homeJieDir, projectJieDir, resumeSessionId: options.resumeSessionId },
     { eventManager, settingsStore, modelRegistry, toolRegistry, artifactStore, memoryManager },
   );
@@ -100,7 +100,6 @@ function buildJiePlatformDeps(options: JiePlatformOptions): JiePlatformDeps {
     settingsStore,
     teamManager,
     gitService,
-    defaultScope,
   });
   return {
     eventManager,
@@ -112,6 +111,5 @@ function buildJiePlatformDeps(options: JiePlatformOptions): JiePlatformDeps {
     artifactStore,
     memoryManager,
     commandExecutor,
-    defaultScope,
   };
 }

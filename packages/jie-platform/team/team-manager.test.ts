@@ -14,7 +14,8 @@ import { createToolRegistry } from "../tools";
 
 const settingsStore = vi.mocked<SettingsStore>({
   load: vi.fn(),
-  write: vi.fn(),
+  setDefaultProvider: vi.fn(),
+  setDefaultTeam: vi.fn(),
   unsetDefaultTeam: vi.fn(),
 });
 

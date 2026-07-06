@@ -1,6 +1,6 @@
 import { getProviders } from "@earendil-works/pi-ai";
 import { type AuthStore } from "../config";
-import { type Settings, type SettingScope, type SettingsStore } from "../config";
+import { type SettingsStore } from "../config";
 import { JiePlatformError } from "../jie-platform-errors";
 import { type GitService } from "../services";
 import { type TeamManager } from "../team";
@@ -11,7 +11,6 @@ export interface CommandExecutorDeps {
   readonly settingsStore: SettingsStore;
   readonly teamManager: TeamManager;
   readonly gitService: GitService;
-  readonly defaultScope: SettingScope;
 }
 
 type Handler<N extends CommandName> = (command: Command<N>) => CommandResult<N> | Promise<CommandResult<N>>;
@@ -56,9 +55,7 @@ export function createCommandExecutor(deps: CommandExecutorDeps): CommandExecuto
       if (!knownProviders.has(command.provider)) {
         throw new JiePlatformError("UNKNOWN_PROVIDER", { detail: command.provider });
       }
-      const existing = deps.settingsStore.load();
-      const next: Settings = { ...existing, defaultProvider: command.provider, defaultModel: command.modelId };
-      deps.settingsStore.write(next, deps.defaultScope);
+      deps.settingsStore.setDefaultProvider(command.provider, command.modelId);
       return null;
     },
     getDefaultModel: () => {
@@ -71,13 +68,7 @@ export function createCommandExecutor(deps: CommandExecutorDeps): CommandExecuto
       return null;
     },
     setDefaultTeam: (command) => {
-      const loc = deps.teamManager.locate(command.teamId);
-      if (loc === null) {
-        throw new JiePlatformError("TEAM_NOT_FOUND", { detail: `team '${command.teamId}' not found` });
-      }
-      const existing = deps.settingsStore.load();
-      const next: Settings = { ...existing, defaultTeam: command.teamId };
-      deps.settingsStore.write(next, loc === "project" ? "project" : "global");
+      deps.settingsStore.setDefaultTeam(command.teamId);
       return null;
     },
     team: (command) => deps.teamManager.load(command.teamId),

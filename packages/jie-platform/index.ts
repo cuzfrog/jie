@@ -7,7 +7,7 @@ export {
 
 export type { TeamIdentity, ModelIdentity, AgentIdentity } from "./types";
 
-export type { Settings, McpServerConfig, SettingScope } from "./config";
+export type { Settings, McpServerConfig } from "./config";
 
 export type { Command, CommandName, CommandResult } from "./command";
 

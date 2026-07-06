@@ -40,6 +40,7 @@ When rules in different documents conflict, context rules win, in below order. R
 - Use `as const` for tuples and object-literals. Do not use `// @ts-expect-error` or `// @ts-ignore`, fix the type.
 
 ### Test
+- Favor TDD, update/add tests before implementing actual logic.
 - use mocks for unit test. See @doc/HOW_TO_MOCK.md
 - unit tests should align with the test target file. E.g. a test `function1.test.ts` should test and only test `function1.ts`. If `function1.test.ts` is testing `index.ts`, it is a smell of coding principle violation. Unit tests should not test dependencies.
 - do not import `bun:test`, all test utilities have been added to global namespace and are compatible with `vi`.
