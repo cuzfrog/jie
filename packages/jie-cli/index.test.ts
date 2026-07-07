@@ -196,6 +196,7 @@ function captureRun(platform: JiePlatform): CapturedRun {
         pendingQuit: false,
         transientMessage: null,
         errorBanner: null,
+        editorText: "",
       },
       submit: () => undefined,
       start: () => {
