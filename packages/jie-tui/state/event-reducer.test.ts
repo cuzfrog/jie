@@ -1,5 +1,5 @@
 import { Events, type AgentSender, type SystemSender, type UserSender } from "@cuzfrog/jie-platform";
-import type { TuiState } from "./types";
+import type { TuiState } from "./state";
 import { createStateStore } from "./state-store";
 import { reduce } from "./event-reducer";
 

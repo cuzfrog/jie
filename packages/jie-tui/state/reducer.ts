@@ -1,5 +1,5 @@
 import { ActionTypes, type Action } from "./actions";
-import type { TuiState } from "./types";
+import type { TuiState } from "./state";
 import { reduce as reduceEvent } from "./event-reducer";
 import { reduceUiAction } from "./ui-reducer";
 

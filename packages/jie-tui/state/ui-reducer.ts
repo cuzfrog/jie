@@ -1,5 +1,5 @@
 import { ActionTypes, type Action } from "./actions";
-import type { TuiState } from "./types";
+import type { TuiState } from "./state";
 
 export function reduceUiAction(state: TuiState, action: Action): TuiState {
   switch (action.type) {

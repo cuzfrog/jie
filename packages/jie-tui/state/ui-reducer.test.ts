@@ -1,6 +1,6 @@
 import { Events } from "@cuzfrog/jie-platform";
 import { Actions } from "./actions";
-import type { TuiState } from "./types";
+import type { TuiState } from "./state";
 import { createStateStore } from "./state-store";
 import { reduce as reduceEvent } from "./event-reducer";
 import { reduceUiAction } from "./ui-reducer";

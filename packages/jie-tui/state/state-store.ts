@@ -1,4 +1,4 @@
-import type { TuiState, AgentUiState } from "./types";
+import type { TuiState, AgentUiState } from "./state";
 import { reduce } from "./reducer";
 import type { Action } from "./actions";
 

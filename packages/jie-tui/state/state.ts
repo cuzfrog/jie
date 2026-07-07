@@ -60,3 +60,8 @@ export interface TuiState {
   readonly pendingQuit: boolean;
   readonly editorText: string;
 }
+
+/** State selector functions */
+export const TuiState = {
+
+} as const;
