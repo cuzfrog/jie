@@ -1,6 +1,7 @@
 # TUI Keybinding Matrix
 
 The TUI is keyboard-driven. All keybindings are global (handled by the input listener, not the focused widget) unless noted. Some keys are conditional on the rail being visible or an agent being busy.
+- Must check conflicts in @key-shortcuts-conflicts.md
 
 ## Global
 
@@ -10,7 +11,7 @@ The TUI is keyboard-driven. All keybindings are global (handled by the input lis
 | `↑`            | Recall the previous prompt into the editor                    | editor focused, history non-empty          |
 | `↓`            | Recall the next prompt into the editor                        | editor focused, currently walking history  |
 | `Esc Esc`      | Interrupt the current agent run (abort the in-flight stream) | focused agent is `busy`                    |
-| `Ctrl+Left`    | Toggle the left rail (agents panel) on / off                 | always                                     |
+| `Shift+←`      | Toggle the left rail (agents panel) on / off                 | always                                     |
 | `Ctrl+T`       | Expand / collapse all thinking blocks in this agent's history | focused agent has at least one thinking block |
 | `Ctrl+O`       | Expand / collapse all tool cards in this agent's history      | focused agent has at least one tool card   |
 | `Ctrl+C`       | Clear the editor if non-empty; otherwise quit the TUI         | editor focused                             |
@@ -22,8 +23,8 @@ When `state.showTeamRailPanel === true`:
 
 | Key            | What it does                              | Active when                              |
 | -------------- | ----------------------------------------- | ---------------------------------------- |
-| `Ctrl+↑`       | Focus the previous agent in the rail      | rail visible, more than one agent        |
-| `Ctrl+↓`       | Focus the next agent in the rail          | rail visible, more than one agent        |
+| `Shift+↑`      | Focus the previous agent in the rail      | rail visible, more than one agent        |
+| `Shift+↓`      | Focus the next agent in the rail          | rail visible, more than one agent        |
 
 ## Esc×2 vs Ctrl+C
 

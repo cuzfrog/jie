@@ -4,6 +4,7 @@ The team's user-facing cockpit. Lives in `packages/jie-tui/`. Observes all agent
 
 - `tui-layout.md` — spatial design (rail, chat, editor, footer).
 - `tui-shortcuts.md` — keybinding matrix and slash commands.
+- `key-shortcuts-conflicts.md` — OS-reserved shortcuts (macOS, Linux, Windows) and how each TUI binding avoids or honors a conflict.
 - `tui-state.md` — `TuiState` shape and reducer rules per topic.
 - `tui-pi-reference.md` — pi theme tokens and component shapes we mirror.
 - `tui-user-scenarios.md` — T1–T6 acceptance scenarios with recorded traces.
@@ -69,6 +70,7 @@ The five v0.2 TUI scenarios ship as `tests/e2e/tui/fixtures/<scenario>.jsonl` pl
 
 - `tui-layout.md` — spatial design.
 - `tui-shortcuts.md` — keybinding matrix and slash commands.
+- `key-shortcuts-conflicts.md` — OS-reserved shortcuts and TUI conflict resolution.
 - `tui-state.md` — `TuiState` shape, reducer rules per topic, per-agent streaming isolation, editor → focused agent wiring.
 - `tui-pi-reference.md` — pi theme tokens and component shapes.
 - `tui-user-scenarios.md` — T1–T6 acceptance scenarios.
