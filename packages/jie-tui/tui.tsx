@@ -3,7 +3,7 @@ import { render } from "ink";
 import type { AnyEventEnvelope, EventEnvelope, EventType, JiePlatform } from "@cuzfrog/jie-platform";
 import { Actions, type TuiState, type StateStore, createStateStore } from "./state";
 import { createTuiCommandHandler, type TuiCommandHandler } from "./command-handler";
-import { App } from "./components/app/app";
+import { App } from "./components";
 
 export interface TuiDeps {
   readonly platform: JiePlatform;
@@ -99,13 +99,13 @@ class InkTui implements Tui {
         const stdin = this.deps.stdin ?? process.stdin;
         const stderr = this.deps.stderr;
         const instance = render(
-          App({
-            tui: this as unknown as Tui,
-            platform: this.deps.platform,
-            cwd: this.options.cwd,
-            gitBranch: this.deps.gitBranch ?? "",
-            gitDirty: this.deps.gitDirty ?? false,
-          }),
+          <App
+            tui={this as unknown as Tui}
+            platform={this.deps.platform}
+            cwd={this.options.cwd}
+            gitBranch={this.deps.gitBranch ?? ""}
+            gitDirty={this.deps.gitDirty ?? false}
+          />,
           { stdout, stdin, stderr, exitOnCtrlC: false, patchConsole: true },
         );
         this.inkInstance = instance;

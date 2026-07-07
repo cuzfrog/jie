@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useInput } from "ink";
-import { Actions, type StateStore, type TuiState } from "../../state";
+import { Actions, type StateStore, type TuiState } from "../state";
 import type { JiePlatform } from "@cuzfrog/jie-platform";
 
 export interface GlobalKeyBindingsProps {

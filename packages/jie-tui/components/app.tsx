@@ -1,11 +1,11 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Box, useApp as useInkApp, useStdout } from "ink";
-import type { Tui } from "../../tui";
-import type { TuiState, AgentUiState, StateStore } from "../../state";
-import { Actions } from "../../state";
+import type { Tui } from "../tui";
+import type { TuiState, AgentUiState, StateStore } from "../state";
+import { Actions } from "../state";
 import type { JiePlatform } from "@cuzfrog/jie-platform";
-import { TuiContext, type TuiContextValue } from "../context";
-import { Layout } from "../layout/layout";
+import { TuiContext, type TuiContextValue } from "./context";
+import { Layout } from "./layout/layout";
 import { GlobalKeyBindings } from "./global-keys";
 
 export interface AppProps {

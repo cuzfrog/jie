@@ -1,17 +1,15 @@
 ---
 sealed:
-  - app/app.tsx
-  - app/global-keys.tsx
-  - layout/layout.tsx
-  - layout/editor.tsx
-  - layout/footer.tsx
-  - chat/chat-pane.tsx
-  - chat/message-view.tsx
-  - chat/text-block.tsx
-  - chat/tool-card.tsx
-  - chat/working-indicator.tsx
-  - rail/agents-rail.tsx
+  - app.tsx
+  - app.test.tsx
+  - global-keys.tsx
+  - global-keys.test.tsx
+  - context.tsx
+  - context.test.tsx
   - themes.ts
-visible:
+  - themes.test.ts
   - index.ts
 ---
+
+# Design principles
+- view renders based on state; state changes are upon inputs/events
