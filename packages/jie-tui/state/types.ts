@@ -58,4 +58,5 @@ export interface TuiState {
   readonly errorBanner: string | null;
   readonly showTeamRailPanel: boolean;
   readonly pendingQuit: boolean;
+  readonly editorText: string;
 }

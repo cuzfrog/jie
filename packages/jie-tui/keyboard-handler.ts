@@ -11,9 +11,11 @@ interface Keybinding {
 }
 
 const DEFAULT_KEYBINDINGS: ReadonlyArray<Keybinding> = [
-  { combo: "ctrl+left", build: () => Actions.toggleTeamRail() },
+  { combo: "shift+left", build: () => Actions.toggleTeamRail() },
   { combo: "ctrl+up", build: () => Actions.switchCycleAgent(-1) },
   { combo: "ctrl+down", build: () => Actions.switchCycleAgent(1) },
+  { combo: "shift+up", build: () => Actions.switchCycleAgent(-1) },
+  { combo: "shift+down", build: () => Actions.switchCycleAgent(1) },
 ];
 
 export interface KeyboardHandlerDeps {
@@ -59,7 +61,12 @@ export function createKeyboardHandler(deps: KeyboardHandlerDeps, opts: KeyboardH
     }
 
     if (matchesKey(data, "ctrl+c")) {
-      deps.stateStore.dispatch(Actions.requestRender());
+      const editorText = state.editorText;
+      if (editorText !== "") {
+        deps.stateStore.dispatch(Actions.setEditorText(""));
+        return { consume: true };
+      }
+      deps.stateStore.dispatch(Actions.requestQuit());
       return { consume: true };
     }
 

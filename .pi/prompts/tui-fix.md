@@ -8,7 +8,7 @@ Fix tui problems, enhance tests.
 
 ## What you do
 - Adhere to @CLAUDE.md.
-- Analyze the code and documents. Ensure references and documents are consistent.
+- Analyze the code and read documents under `doc/specs/jie-platform/ui/`. Ensure references and documents are consistent.
 - Discuss with the me upon blocking or important issues. Offer your solutions. Be honest, if the my idea does not make sense, push back. Ask me questions if you need to.
 - Use the temporary file `tmp/improvement-plan-<short-description>.md` to capture the implementation plan and execute the plan.
 - Do not add comments to code.

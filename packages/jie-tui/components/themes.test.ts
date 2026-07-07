@@ -1,8 +1,12 @@
-import { editorTheme, markdownTheme, selectListTheme } from "./themes";
+import { Themes } from "./themes";
 
 function stripAnsi(s: string): string {
   return s.replace(/\x1b\[[0-9;]*m/g, "");
 }
+
+const selectListTheme = Themes.editorTheme.selectList;
+const markdownTheme = Themes.markdownTheme;
+const editorTheme = Themes.editorTheme;
 
 describe("themes — hex tokens match pi spec", () => {
   test("selectListTheme selectedPrefix uses accent #8abeb7", () => {

@@ -33,4 +33,16 @@ describe("EditorSlot", () => {
     const flat = slot.render(80).join("\n");
     expect(flat).not.toContain("queued");
   });
+
+  test("ghost placeholder is rendered inside the editor frame, not on its own line above", () => {
+    const { tui } = createTestTuiWithTerminal();
+    const slot = new EditorSlot(tui, { basePath: process.cwd() });
+    const lines = slot.render(80);
+    const flat = lines.join("\n");
+    const placeholderIdx = flat.indexOf("type a prompt");
+    const firstBorderIdx = flat.indexOf("─");
+    expect(placeholderIdx).toBeGreaterThan(-1);
+    expect(firstBorderIdx).toBeGreaterThan(-1);
+    expect(placeholderIdx).toBeGreaterThan(firstBorderIdx);
+  });
 });

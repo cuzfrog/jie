@@ -1,6 +1,6 @@
 import { Container, SelectList, type SelectItem } from "@earendil-works/pi-tui";
 import type { AgentId, AgentUiState, TuiState } from "../state";
-import { selectListTheme } from "./themes";
+import { Themes } from "./themes";
 
 const RAIL_MAX_VISIBLE = 20;
 const BUSY_GLYPH = "● ";
@@ -29,13 +29,13 @@ export class AgentsRail extends Container {
     this.railItems = [];
     this.selectedIndex = 0;
     this.lastFocusedAgentId = null;
-    this.items = new SelectList([], this.maxVisible, selectListTheme);
+    this.items = new SelectList([], this.maxVisible, Themes.editorTheme.selectList);
   }
 
   setItems(railItems: ReadonlyArray<RailItem>, focusedAgentId: AgentId | null): void {
     this.railItems = railItems;
     const selectItems = buildSelectItems(railItems);
-    this.items = new SelectList(selectItems, this.maxVisible, selectListTheme);
+    this.items = new SelectList(selectItems, this.maxVisible, Themes.editorTheme.selectList);
     if (railItems.length === 0) {
       this.selectedIndex = 0;
       return;

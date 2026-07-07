@@ -1,12 +1,12 @@
 import { Markdown, type Component } from "@earendil-works/pi-tui";
 import type { MessageBlock } from "../state";
-import { markdownTheme } from "./themes";
+import { Themes } from "./themes";
 
 export class MessageView implements Component {
   private markdown: Markdown;
 
   constructor() {
-    this.markdown = new Markdown("", 0, 0, markdownTheme);
+    this.markdown = new Markdown("", 0, 0, Themes.markdownTheme);
   }
 
   setBlock(block: MessageBlock): void {

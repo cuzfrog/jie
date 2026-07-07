@@ -1,7 +1,7 @@
 import { Chalk } from "chalk";
 import type { EditorTheme, MarkdownTheme, SelectListTheme } from "@earendil-works/pi-tui";
 
-export const selectListTheme: SelectListTheme = {
+const selectListTheme: SelectListTheme = {
   selectedPrefix: (text: string): string => chalk.hex(COLORS.accent)(text),
   selectedText: (text: string): string => chalk.hex(COLORS.accent).bold(text),
   description: (text: string): string => chalk.hex(COLORS.muted)(text),
@@ -9,7 +9,7 @@ export const selectListTheme: SelectListTheme = {
   noMatch: (text: string): string => chalk.hex(COLORS.muted)(text),
 };
 
-export const markdownTheme: MarkdownTheme = {
+const markdownTheme: MarkdownTheme = {
   heading: (text: string): string => chalk.hex(COLORS.markdownHeading).bold(text),
   link: (text: string): string => chalk.hex(COLORS.markdownLink).underline(text),
   linkUrl: (text: string): string => chalk.hex(COLORS.markdownLinkUrl)(text),
@@ -26,10 +26,28 @@ export const markdownTheme: MarkdownTheme = {
   underline: (text: string): string => chalk.hex(COLORS.text).underline(text),
 };
 
-export const editorTheme: EditorTheme = {
+interface JieEditorTheme extends EditorTheme {
+  placeholder: (text: string) => string;
+}
+
+const editorTheme: JieEditorTheme = {
   borderColor: (text: string): string => chalk.hex(COLORS.borderMuted)(text),
   selectList: selectListTheme,
+  placeholder: (text: string): string => chalk.hex(COLORS.dim)(text),
 };
+
+const footerTheme = {
+  accent: (text: string): string => chalk.hex(COLORS.accent)(text),
+  muted: (text: string): string => chalk.hex(COLORS.muted)(text),
+};
+
+// add additional themes for components above. Keep the object shape aligned with components hierarchy.
+// follow pi convention to pass themes to corresponding components
+export const Themes = {
+  markdownTheme,
+  editorTheme,
+  footerTheme,
+} as const;
 
 const chalk = new Chalk({ level: 3 });
 

@@ -127,20 +127,29 @@ describe("createKeyboardHandler — Ctrl+D×2 quit", () => {
 });
 
 describe("createKeyboardHandler — Ctrl+C", () => {
-  test("Ctrl+C dispatches requestRender", () => {
+  test("Ctrl+C with non-empty editor dispatches setEditorText('') which clears via reducer", () => {
+    const h = makeDeps();
+    h.setState({ editorText: "hello" });
+    const handler = createKeyboardHandler(h.deps);
+    const out = handler.handle("\x03");
+    expect(h.dispatch).toHaveBeenCalledWith(Actions.setEditorText(""));
+    expect(out?.consume).toBe(true);
+  });
+
+  test("Ctrl+C with empty editor dispatches requestQuit", () => {
     const h = makeDeps();
     const handler = createKeyboardHandler(h.deps);
     const out = handler.handle("\x03");
-    expect(h.dispatch).toHaveBeenCalledWith(Actions.requestRender());
+    expect(h.dispatch).toHaveBeenCalledWith(Actions.requestQuit());
     expect(out?.consume).toBe(true);
   });
 });
 
 describe("createKeyboardHandler — default keymap", () => {
-  test("ctrl+left dispatches toggleTeamRail", () => {
+  test("shift+left dispatches toggleTeamRail", () => {
     const h = makeDeps();
     const handler = createKeyboardHandler(h.deps);
-    const out = handler.handle("\x1b[1;5D");
+    const out = handler.handle("\x1b[1;2D");
     expect(h.dispatch).toHaveBeenCalledWith(Actions.toggleTeamRail());
     expect(out?.consume).toBe(true);
   });
@@ -149,6 +158,18 @@ describe("createKeyboardHandler — default keymap", () => {
     const h = makeDeps();
     createKeyboardHandler(h.deps).handle("\x1b[1;5A");
     expect(h.dispatch).toHaveBeenCalledWith(Actions.switchCycleAgent(-1));
+  });
+
+  test("shift+up dispatches switchCycleAgent(-1)", () => {
+    const h = makeDeps();
+    createKeyboardHandler(h.deps).handle("\x1b[1;2A");
+    expect(h.dispatch).toHaveBeenCalledWith(Actions.switchCycleAgent(-1));
+  });
+
+  test("shift+down dispatches switchCycleAgent(1)", () => {
+    const h = makeDeps();
+    createKeyboardHandler(h.deps).handle("\x1b[1;2B");
+    expect(h.dispatch).toHaveBeenCalledWith(Actions.switchCycleAgent(1));
   });
 
   test("unmatched key returns undefined", () => {

@@ -31,6 +31,8 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
       return { ...state, pendingQuit: true };
     case ActionTypes.REQUEST_RENDER:
       return state;
+    case ActionTypes.SET_EDITOR_TEXT:
+      return { ...state, editorText: action.payload.text };
     default:
       return state;
   }

@@ -11,8 +11,8 @@
       },
       "models": [
         {
-          "id": "qwen3.5-2b",
-          "name": "qwen3.5-2b",
+          "id": "minicpm5-1b",
+          "name": "minicpm5-1b",
           "reasoning": true,
           "input": ["text"],
           "contextWindow": 131528,

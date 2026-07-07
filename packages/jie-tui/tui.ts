@@ -154,22 +154,15 @@ class PiTui implements Tui {
     this.view.editor.setQueueIndicator(formatQueueIndicator(focused?.queue ?? null));
     this.view.rail.setItemsFromState(state);
     const git = await this.platform.execute({ name: "getGitStatus" });
-    this.view.statusBar.update({ cwd: this.cwd, git }, this.stateStore);
+    this.view.footer.update({ cwd: this.cwd, git }, this.stateStore);
     this.tui.requestRender();
   }
 
   private publishPrompt(text: string): void {
     const state = this.stateStore.getState();
-    if (state.teamId === null || state.focusedAgentId === null) {
-      this.stateStore.dispatch(Actions.setErrorMessage("No team loaded; run `/team <id>` to load a team."));
-      return;
-    }
     const target = this.stateStore.getFocusedAgent();
-    if (target === null) {
-      this.stateStore.dispatch(Actions.setErrorMessage("Team has no agent to address; load a valid team with `/team <id>`."));
-      return;
-    }
-    this.platform.prompt(state.teamId, target.agentKey, text);
+    if (target === null) return;
+    this.platform.prompt(state.teamId ?? target.teamId, target.agentKey, text);
   }
 
 }

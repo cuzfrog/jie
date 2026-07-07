@@ -10,6 +10,7 @@ export class ChatPane extends Container {
   private readonly toolCards: Map<string, ToolCard>;
   private cachedLines: string[] | null = null;
   private cachedWidth = -1;
+  private viewportHeight = 0;
 
   constructor() {
     super();
@@ -24,12 +25,25 @@ export class ChatPane extends Container {
     this.rebuildChildren();
   }
 
+  setViewportHeight(rows: number): void {
+    if (this.viewportHeight === rows) return;
+    this.viewportHeight = Math.max(0, rows);
+    this.cachedLines = null;
+  }
+
   render(width: number): string[] {
     if (this.cachedLines !== null && this.cachedWidth === width) {
       return this.cachedLines;
     }
     this.cachedWidth = width;
-    this.cachedLines = super.render(width);
+    const baseLines = super.render(width);
+    if (this.viewportHeight <= 0 || baseLines.length >= this.viewportHeight) {
+      this.cachedLines = baseLines;
+    } else {
+      const padded = [...baseLines];
+      while (padded.length < this.viewportHeight) padded.push("");
+      this.cachedLines = padded;
+    }
     return this.cachedLines;
   }
 

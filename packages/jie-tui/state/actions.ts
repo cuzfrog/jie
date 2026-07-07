@@ -12,6 +12,7 @@ export const ActionTypes = {
   CLEAR_BANNERS: "[ui] clear all banners",
   REQUEST_QUIT: "[ui] request quit",
   REQUEST_RENDER: "[ui] request render",
+  SET_EDITOR_TEXT: "[ui] set editor text",
 } as const;
 
 type ActionType = (typeof ActionTypes)[keyof typeof ActionTypes];
@@ -39,6 +40,7 @@ export const Actions = {
 	clearBanners: () => clearBanners,
 	requestQuit: () => createAction(ActionTypes.REQUEST_QUIT),
 	requestRender: () => createAction(ActionTypes.REQUEST_RENDER),
+	setEditorText: (text: string) => createAction(ActionTypes.SET_EDITOR_TEXT, { text }),
 } as const;
 
 export type Action = ReturnType<typeof Actions[keyof typeof Actions]>;

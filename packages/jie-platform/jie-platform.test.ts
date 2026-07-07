@@ -113,6 +113,16 @@ describe("createJiePlatform", () => {
     expect(handle.settings).toBe(customSettings);
   });
 
+  test("auto-loads a team and publishes system.team.loaded before resolving", async () => {
+    const deps = makeDeps(workspace, homeJieDir);
+    const seen: EventEnvelope<"system.team.loaded">[] = [];
+    deps.eventManager.subscribe("system.team.loaded", (env) => seen.push(env));
+    const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
+    expect(seen.length).toBeGreaterThanOrEqual(1);
+    expect(seen[0]!.payload.teamId).toBe("minimal");
+    void handle;
+  });
+
   describe("execute", () => {
     test("delegates every command to commandExecutor.execute with the same command", async () => {
       const deps = makeDeps(workspace, homeJieDir);

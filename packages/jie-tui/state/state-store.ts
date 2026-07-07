@@ -11,6 +11,7 @@ const INITIAL_TUI_STATE: TuiState = Object.freeze({
   errorBanner: null,
   showTeamRailPanel: false,
   pendingQuit: false,
+  editorText: "",
 } as const);
 
 export interface StateStore {
