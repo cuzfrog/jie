@@ -6,7 +6,6 @@
   },
   "dependencies": {
     "@cuzfrog/jie-platform": "workspace:*",
-    "@earendil-works/pi-tui": "catalog:",
     "chalk": "catalog:"
   },
   "devDependencies": {
