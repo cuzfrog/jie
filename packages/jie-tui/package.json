@@ -6,12 +6,14 @@
   },
   "dependencies": {
     "@cuzfrog/jie-platform": "workspace:*",
-    "chalk": "catalog:"
+    "ink": "catalog:",
+    "react": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "catalog:",
     "@types/node": "catalog:",
-    "@xterm/headless": "catalog:",
+    "@types/react": "catalog:",
+    "ink-testing-library": "catalog:",
     "typescript": "catalog:"
   }
 }

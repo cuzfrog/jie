@@ -1,13 +1,17 @@
-import { ProcessTerminal, TUI, type Terminal } from "@earendil-works/pi-tui";
+import type { WriteStream, ReadStream } from "node:tty";
+import { render } from "ink";
 import type { AnyEventEnvelope, EventEnvelope, EventType, JiePlatform } from "@cuzfrog/jie-platform";
-import { type TuiState, Actions, createStateStore, type StateStore } from "./state";
+import { Actions, type TuiState, type StateStore, createStateStore } from "./state";
 import { createTuiCommandHandler, type TuiCommandHandler } from "./command-handler";
-import { createKeyboardHandler, type KeyboardHandler } from "./keyboard-handler";
-import { buildView, type BuildViewResult } from "./components";
+import { App } from "./components/app/app";
 
 export interface TuiDeps {
   readonly platform: JiePlatform;
-  readonly terminal?: Terminal;
+  readonly stdin?: ReadStream;
+  readonly stdout?: WriteStream;
+  readonly stderr?: WriteStream;
+  readonly gitBranch?: string;
+  readonly gitDirty?: boolean;
 }
 
 export interface CreateTUIOptions {
@@ -27,74 +31,42 @@ const ALT_SCREEN_ON = "\x1b[?1049h";
 const ALT_SCREEN_OFF = "\x1b[?1049l";
 
 export function createTui(options: CreateTUIOptions, deps: TuiDeps): Tui {
-  if (process.stdin.isTTY !== true) {
+  if (process.stdin.isTTY !== true && deps.stdin === undefined) {
     throw new Error("TUI requires an interactive terminal; use `jie -p` for scripts.");
   }
   if (!isUtf8()) {
     throw new Error("TUI requires a UTF-8 locale; set LANG=en_US.UTF-8");
   }
-  const terminal = deps.terminal ?? new ProcessTerminal();
-  const tui = new TUI(terminal);
   const stateStore = createStateStore();
-  const view = buildView(stateStore, { cwd: options.cwd }, tui);
-  tui.addChild(view.root);
-  tui.setFocus(view.editor);
-  const commandHandler = createTuiCommandHandler({
-    stateStore,
-    platform: deps.platform,
-  });
-  const keyboardHandler = createKeyboardHandler({
-    platform: deps.platform,
-    stateStore,
-  });
-  const piTui = new PiTui({
-    terminal,
-    tui,
-    view,
-    cwd: options.cwd,
-    stateStore,
-    platform: deps.platform,
-    commandHandler,
-    keyboardHandler,
-  });
-  return piTui;
+  const commandHandler = createTuiCommandHandler({ stateStore, platform: deps.platform });
+  const tui = new InkTui(options, deps, stateStore, commandHandler);
+  (tui as unknown as { stateStore: StateStore }).stateStore = stateStore;
+  return tui;
 }
 
-interface PiTuiCtorOptions {
-  readonly terminal: Terminal;
-  readonly tui: TUI;
-  readonly view: BuildViewResult;
-  readonly cwd: string;
+class InkTui implements Tui {
+  private readonly options: CreateTUIOptions;
+  private readonly deps: TuiDeps;
   readonly stateStore: StateStore;
-  readonly platform: JiePlatform;
-  readonly commandHandler: TuiCommandHandler;
-  readonly keyboardHandler: KeyboardHandler;
-}
-
-class PiTui implements Tui {
-  private readonly stateStore: StateStore;
-  private readonly terminal: Terminal;
-  private readonly tui: TUI;
-  private readonly view: BuildViewResult;
-  private readonly cwd: string;
-  private readonly platform: JiePlatform;
   private readonly commandHandler: TuiCommandHandler;
-  private readonly keyboardHandler: KeyboardHandler;
   private readonly unsubscribeBus: () => void;
-  private readonly unsubscribeRender: () => void;
+  private inkInstance: ReturnType<typeof render> | null = null;
   private resolveStart: (() => void) | null = null;
+  private started = false;
 
-  constructor(opts: PiTuiCtorOptions) {
-    this.stateStore = opts.stateStore;
-    this.terminal = opts.terminal;
-    this.tui = opts.tui;
-    this.view = opts.view;
-    this.cwd = opts.cwd;
-    this.platform = opts.platform;
-    this.commandHandler = opts.commandHandler;
-    this.keyboardHandler = opts.keyboardHandler;
-    this.unsubscribeBus = subscribeToBus(this.platform, (env) => this.stateStore.dispatch(Actions.receiveEvent(env as AnyEventEnvelope)));
-    this.unsubscribeRender = this.stateStore.subscribe(() => this.onStateChange());
+  constructor(
+    options: CreateTUIOptions,
+    deps: TuiDeps,
+    stateStore: StateStore,
+    commandHandler: TuiCommandHandler,
+  ) {
+    this.options = options;
+    this.deps = deps;
+    this.stateStore = stateStore;
+    this.commandHandler = commandHandler;
+    this.unsubscribeBus = subscribeToBus(this.deps.platform, (env) => {
+      this.stateStore.dispatch(Actions.receiveEvent(env as AnyEventEnvelope));
+    });
   }
 
   get state(): TuiState {
@@ -113,17 +85,32 @@ class PiTui implements Tui {
 
   start(): Promise<void> {
     return new Promise<void>((resolve) => {
-      if (this.terminal.columns < MIN_COLS) {
-        throw new Error(`terminal too narrow for TUI; need at least ${MIN_COLS} columns, got ${this.terminal.columns}`);
+      const stdout = this.deps.stdout ?? process.stdout;
+      const cols = stdout.columns;
+      if (cols !== undefined && cols < MIN_COLS) {
+        throw new Error(`terminal too narrow for TUI; need at least ${MIN_COLS} columns, got ${cols}`);
       }
-      this.terminal.write(ALT_SCREEN_ON);
-      this.tui.addInputListener((data) => this.keyboardHandler.handle(data));
       this.resolveStart = (): void => {
         this.resolveStart = null;
         resolve();
       };
       try {
-        this.tui.start();
+        stdout.write(ALT_SCREEN_ON);
+        const stdin = this.deps.stdin ?? process.stdin;
+        const stderr = this.deps.stderr;
+        const instance = render(
+          App({
+            tui: this as unknown as Tui,
+            platform: this.deps.platform,
+            cwd: this.options.cwd,
+            gitBranch: this.deps.gitBranch ?? "",
+            gitDirty: this.deps.gitDirty ?? false,
+          }),
+          { stdout, stdin, stderr, exitOnCtrlC: false, patchConsole: true },
+        );
+        this.inkInstance = instance;
+        this.started = true;
+        void instance.waitUntilExit().then(() => this.resolveStart?.());
       } catch (error) {
         this.resolveStart = null;
         throw error;
@@ -132,51 +119,43 @@ class PiTui implements Tui {
   }
 
   stop(): void {
-    this.unsubscribeBus();
-    this.unsubscribeRender();
-    this.resolveStart?.();
-    this.tui.stop();
-    this.terminal.write(ALT_SCREEN_OFF);
-  }
-
-  private onStateChange(): void {
-    if (this.stateStore.getState().pendingQuit) {
-      this.stop();
-      return;
+    if (this.started && this.inkInstance !== null) {
+      try {
+        this.inkInstance.unmount();
+      } catch {
+        // ignore
+      }
+      this.inkInstance = null;
+      this.started = false;
     }
-    void this.render();
-  }
-
-  private async render(): Promise<void> {
-    const state = this.stateStore.getState();
-    const focused = this.stateStore.getFocusedAgent();
-    this.view.chatPane.setAgent(focused);
-    this.view.editor.setQueueIndicator(formatQueueIndicator(focused?.queue ?? null));
-    this.view.rail.setItemsFromState(state);
-    const git = await this.platform.execute({ name: "getGitStatus" });
-    this.view.footer.update({ cwd: this.cwd, git }, this.stateStore);
-    this.tui.requestRender();
+    this.unsubscribeBus();
+    this.resolveStart?.();
+    const stdout = this.deps.stdout ?? process.stdout;
+    stdout.write(ALT_SCREEN_OFF);
   }
 
   private publishPrompt(text: string): void {
     const state = this.stateStore.getState();
-    const target = this.stateStore.getFocusedAgent();
-    if (target === null) return;
-    this.platform.prompt(state.teamId ?? target.teamId, target.agentKey, text);
+    if (state.focusedAgentId === null) return;
+    const target = state.agents.get(state.focusedAgentId);
+    if (target === undefined) return;
+    this.deps.platform.prompt(target.teamId, target.agentKey, text);
   }
-
 }
 
-function subscribeToBus(platform: JiePlatform, onEvent: (env: EventEnvelope<EventType>) => void): () => void {
-  const busUnsubscribes: Array<() => void> = [];
+function subscribeToBus(
+  platform: JiePlatform,
+  onEvent: (env: EventEnvelope<EventType>) => void,
+): () => void {
+  const unsubscribes: Array<() => void> = [];
   for (const topic of SUBSCRIBED_TOPICS) {
-    busUnsubscribes.push(platform.subscribe(topic, onEvent));
+    unsubscribes.push(platform.subscribe(topic, onEvent));
   }
-  let busUnsubscribed = false;
+  let unsubscribed = false;
   return (): void => {
-    if (busUnsubscribed) return;
-    busUnsubscribed = true;
-    for (const unsub of busUnsubscribes) unsub();
+    if (unsubscribed) return;
+    unsubscribed = true;
+    for (const unsub of unsubscribes) unsub();
   };
 }
 
@@ -198,13 +177,3 @@ const SUBSCRIBED_TOPICS = [
   "agent.tool.call",
   "agent.tool.result",
 ] as const;
-
-const QUEUE_PREVIEW_MAX_CHARS = 100;
-
-function formatQueueIndicator(queue: ReadonlyArray<string> | null): string | null {
-  if (queue === null || queue.length === 0) return null;
-  const next = queue[0] ?? "";
-  const preview = next.length > QUEUE_PREVIEW_MAX_CHARS ? `${next.slice(0, QUEUE_PREVIEW_MAX_CHARS)}…` : next;
-  const suffix = queue.length === 1 ? "prompt" : "prompts";
-  return `${queue.length} ${suffix} queued  > ${preview}`;
-}

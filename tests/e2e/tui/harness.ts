@@ -1,9 +1,9 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PassThrough } from "node:stream";
 import { createJiePlatform, type JiePlatform } from "@cuzfrog/jie-platform";
 import { type CreateTUIOptions, type Tui, createTui } from "@cuzfrog/jie-tui";
-import { VirtualTerminal, withTTY } from "../../support";
 import { writeModelsJsonTo, writeSettingsJson } from "../_fixture.ts";
 
 type AgentId = `${string}:${string}`;
@@ -15,13 +15,22 @@ export interface TuiHarness {
   readonly dir: string;
   readonly tui: Tui;
   readonly platform: JiePlatform;
-  readonly terminal: VirtualTerminal;
+  readonly stdin: PassThrough;
+  readonly stdout: PassThrough;
 }
 
 export interface StartTuiOptions {
-  readonly terminal?: VirtualTerminal;
   readonly rows?: number;
   readonly cwd?: string;
+}
+
+class TestWritable extends PassThrough {
+  columns = 80;
+  rows = 30;
+}
+
+class TestReadable extends PassThrough {
+  isTTY = true;
 }
 
 export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> {
@@ -40,25 +49,18 @@ export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> 
     rmSync(dir, { recursive: true, force: true });
     throw err;
   }
-  const terminal = opts.terminal ?? new VirtualTerminal(80, opts.rows ?? 24);
-  const tuiOptions: CreateTUIOptions = { cwd: opts.cwd ?? dir, rows: opts.rows ?? 24 };
-  let tui: Tui | undefined;
-  withTTY(true, () => {
-    tui = createTui(tuiOptions, { platform, terminal });
-  });
-  if (tui === undefined) {
-    await platform.execute({ name: "stop" });
-    restoreLang(prevLang, prevLangAll);
-    rmSync(dir, { recursive: true, force: true });
-    throw new Error("createTui returned no instance");
-  }
-  void tui.start();
-  return {
-    dir,
-    tui,
+  const stdin = new TestReadable();
+  const stdout = new TestWritable();
+  stdout.rows = opts.rows ?? 30;
+  const tuiOptions: CreateTUIOptions = { cwd: opts.cwd ?? dir, rows: opts.rows ?? 30 };
+  const tui = createTui(tuiOptions, {
     platform,
-    terminal,
-  };
+    stdin: stdin as unknown as NodeJS.ReadStream,
+    stdout: stdout as unknown as NodeJS.WriteStream,
+    gitBranch: "main",
+    gitDirty: false,
+  });
+  return { dir, tui, platform, stdin, stdout };
 }
 
 export async function stopTui(harness: TuiHarness): Promise<void> {
@@ -67,17 +69,17 @@ export async function stopTui(harness: TuiHarness): Promise<void> {
   rmSync(harness.dir, { recursive: true, force: true });
 }
 
-export function sendCmd(terminal: VirtualTerminal, text: string): void {
-  terminal.sendInput(text);
+export function sendCmd(stdin: PassThrough, text: string): void {
+  stdin.write(text);
 }
 
-export function sendEnter(terminal: VirtualTerminal): void {
-  terminal.sendInput("\r");
+export function sendEnter(stdin: PassThrough): void {
+  stdin.write("\r");
 }
 
-export function sendLine(terminal: VirtualTerminal, text: string): void {
-  terminal.sendInput(text);
-  terminal.sendInput("\r");
+export function sendLine(stdin: PassThrough, text: string): void {
+  stdin.write(text);
+  stdin.write("\r");
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs: number, label: string): Promise<void> {
