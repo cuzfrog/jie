@@ -18,7 +18,6 @@ bun mock:start # to start the mock LLM backend
 bun test:e2e:mock # it sets JIE_E2E_BASE_URL=http://localhost:12346 for mock LLM backend
 ```
 - With mock LLM backend, test should be finished within 5s, do not increase timeout.
-- To debug e2e tests, you can enable mock LLM server logging by setting env var `ENABLE_MOCK_LLM_SERVER_LOGGING=true`
 
 ## Invoke jie CLI
 Setup:
@@ -30,3 +29,7 @@ bun link
 jie --version
 jie -p "Tell me a joke."
 ```
+
+## Logging
+- ENABLE_TUI_ACTION_LOGGING=true
+- ENABLE_MOCK_LLM_SERVER_LOGGING=true

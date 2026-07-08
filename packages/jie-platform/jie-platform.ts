@@ -43,6 +43,7 @@ export interface JiePlatform {
 
   subscribe<T extends EventType>(topic: T, callback: (event: EventEnvelope<T>) => void): () => void;
   execute<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>>;
+  /** visibleForTesting */
   loadedTeams(): ReadonlyArray<TeamIdentity>;
 }
 

@@ -2,7 +2,7 @@ import { JiePlatformError, type JiePlatform } from "@cuzfrog/jie-platform";
 import {
   createTuiCommandHandler,
   type CommandHandlerDeps,
-  type TuiCommandHandler,
+  type CommandHandler,
 } from "./command-handler";
 import { Actions, createStateStore, type StateStore, type TuiState } from "./state";
 
@@ -69,7 +69,7 @@ describe("createTuiCommandHandler", () => {
   test("handle('/help') clears banners then sets a reply message", () => {
     const { platform } = makePlatform();
     const { deps, dispatch } = makeDeps(platform);
-    const handler: TuiCommandHandler = createTuiCommandHandler(deps);
+    const handler: CommandHandler = createTuiCommandHandler(deps);
     handler.handle("/help");
     expect(dispatch).toHaveBeenCalledWith(Actions.clearBanners());
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("/clear")));

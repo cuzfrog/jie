@@ -1,11 +1,9 @@
 import { useEffect, useRef } from "react";
 import { useInput } from "ink";
-import { Actions, type StateStore, type TuiState } from "../state";
-import type { JiePlatform } from "@cuzfrog/jie-platform";
+import { useTuiContext } from "./context";
+import { Actions, type TuiState } from "../state";
 
 export interface GlobalKeyBindingsProps {
-  readonly stateStore: StateStore;
-  readonly platform: JiePlatform;
   readonly onToggleThinking: () => void;
   readonly onToggleToolCards: () => void;
   readonly now?: () => number;
@@ -15,12 +13,11 @@ const ESC_WINDOW_MS = 300;
 const CTRL_D_WINDOW_MS = 500;
 
 export function GlobalKeyBindings({
-  stateStore,
-  platform,
   onToggleThinking,
   onToggleToolCards,
   now = Date.now,
 }: GlobalKeyBindingsProps): null {
+  const { state, dispatch } = useTuiContext();
   const lastEscapeAt = useRef<number>(0);
   const lastCtrlDAt = useRef<number>(0);
 
@@ -32,24 +29,22 @@ export function GlobalKeyBindings({
   }, []);
 
   useInput((input, key) => {
-    const state = stateStore.getState();
-
     if (key.escape) {
       const at = now();
-      const consumed = tryDoubleEscInterrupt(state, platform, lastEscapeAt.current, at);
+      const consumed = tryDoubleEscInterrupt(state, dispatch, lastEscapeAt.current, at);
       lastEscapeAt.current = consumed ? 0 : at;
       return;
     }
 
     if (key.ctrl && input === "d") {
       const at = now();
-      const consumed = tryDoubleCtrlDQuit(stateStore, lastCtrlDAt.current, at);
+      const consumed = tryDoubleCtrlDQuit(dispatch, lastCtrlDAt.current, at);
       lastCtrlDAt.current = consumed ? 0 : at;
       return;
     }
 
     if (key.ctrl && input === "c") {
-      handleCtrlC(state, stateStore);
+      handleCtrlC(state, dispatch);
       return;
     }
 
@@ -64,27 +59,27 @@ export function GlobalKeyBindings({
     }
 
     if (key.shift && key.leftArrow) {
-      stateStore.dispatch(Actions.toggleTeamRail());
+      dispatch(Actions.toggleTeamRail());
       return;
     }
 
     if (key.ctrl && key.upArrow) {
-      stateStore.dispatch(Actions.switchCycleAgent(-1));
+      dispatch(Actions.switchCycleAgent(-1));
       return;
     }
 
     if (key.ctrl && key.downArrow) {
-      stateStore.dispatch(Actions.switchCycleAgent(1));
+      dispatch(Actions.switchCycleAgent(1));
       return;
     }
 
     if (key.shift && key.upArrow) {
-      stateStore.dispatch(Actions.switchCycleAgent(-1));
+      dispatch(Actions.switchCycleAgent(-1));
       return;
     }
 
     if (key.shift && key.downArrow) {
-      stateStore.dispatch(Actions.switchCycleAgent(1));
+      dispatch(Actions.switchCycleAgent(1));
       return;
     }
   });
@@ -94,7 +89,7 @@ export function GlobalKeyBindings({
 
 function tryDoubleEscInterrupt(
   state: TuiState,
-  platform: JiePlatform,
+  dispatch: (action: ReturnType<typeof Actions.requestInterrupt>) => void,
   lastEscapeAt: number,
   at: number,
 ): boolean {
@@ -102,22 +97,22 @@ function tryDoubleEscInterrupt(
   if (state.teamId === null || state.focusedAgentId === null) return false;
   const focused = state.agents.get(state.focusedAgentId);
   if (focused === undefined) return false;
-  platform.interrupt(focused.teamId, focused.agentKey);
+  dispatch(Actions.requestInterrupt(focused.teamId, focused.agentKey));
   return true;
 }
 
-function tryDoubleCtrlDQuit(stateStore: StateStore, lastCtrlDAt: number, at: number): boolean {
+function tryDoubleCtrlDQuit(dispatch: (action: ReturnType<typeof Actions.requestQuit>) => void, lastCtrlDAt: number, at: number): boolean {
   if (at - lastCtrlDAt <= CTRL_D_WINDOW_MS) {
-    stateStore.dispatch(Actions.requestQuit());
+    dispatch(Actions.requestQuit());
     return true;
   }
   return false;
 }
 
-function handleCtrlC(state: TuiState, stateStore: StateStore): void {
+function handleCtrlC(state: TuiState, dispatch: (action: ReturnType<typeof Actions.setEditorText | typeof Actions.requestQuit>) => void): void {
   if (state.editorText !== "") {
-    stateStore.dispatch(Actions.setEditorText(""));
+    dispatch(Actions.setEditorText(""));
     return;
   }
-  stateStore.dispatch(Actions.requestQuit());
+  dispatch(Actions.requestQuit());
 }

@@ -13,6 +13,9 @@ export const ActionTypes = {
   REQUEST_QUIT: "[ui] request quit",
   REQUEST_RENDER: "[ui] request render",
   SET_EDITOR_TEXT: "[ui] set editor text",
+  SUBMIT_EDITOR_TEXT: "[ui] submit editor text",
+  REQUEST_INTERRUPT: "[ui] request interrupt focused agent",
+  SET_ENVIRONMENT: "[ui] set environment",
 } as const;
 
 type ActionType = (typeof ActionTypes)[keyof typeof ActionTypes];
@@ -28,6 +31,7 @@ const clearTransientMessage = createAction(ActionTypes.CLEAR_TRANSIENT_MESSAGE);
 const clearErrorMessage = createAction(ActionTypes.CLEAR_ERROR_MESSAGE);
 const clearBanners = createAction(ActionTypes.CLEAR_BANNERS);
 
+// If parameters are <= 3, do not use object.
 export const Actions = {
   receiveEvent: (event: AnyEventEnvelope) => createAction(ActionTypes.RECEIVE_EVENT, event),
 	toggleTeamRail: () => toggleTeamRail,
@@ -41,6 +45,11 @@ export const Actions = {
 	requestQuit: () => createAction(ActionTypes.REQUEST_QUIT),
 	requestRender: () => createAction(ActionTypes.REQUEST_RENDER),
 	setEditorText: (text: string) => createAction(ActionTypes.SET_EDITOR_TEXT, { text }),
+	submitEditorText: (text: string) => createAction(ActionTypes.SUBMIT_EDITOR_TEXT, { text }),
+	requestInterrupt: (teamId: string, agentKey: string) =>
+		createAction(ActionTypes.REQUEST_INTERRUPT, { teamId, agentKey }),
+	setEnvironment: (cwd: string, gitBranch: string, gitDirty: boolean) =>
+		createAction(ActionTypes.SET_ENVIRONMENT, { cwd, gitBranch, gitDirty }),
 } as const;
 
 export type Action = ReturnType<typeof Actions[keyof typeof Actions]>;

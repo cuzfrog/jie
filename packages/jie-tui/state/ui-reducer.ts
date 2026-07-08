@@ -33,6 +33,17 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
       return state;
     case ActionTypes.SET_EDITOR_TEXT:
       return { ...state, editorText: action.payload.text };
+    case ActionTypes.SUBMIT_EDITOR_TEXT:
+      return state;
+    case ActionTypes.REQUEST_INTERRUPT:
+      return state;
+    case ActionTypes.SET_ENVIRONMENT:
+      return {
+        ...state,
+        cwd: action.payload.cwd,
+        gitBranch: action.payload.gitBranch,
+        gitDirty: action.payload.gitDirty,
+      };
     default:
       return state;
   }

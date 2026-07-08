@@ -2,7 +2,7 @@ import { Events } from "@cuzfrog/jie-platform";
 import { AgentsRail } from "./agents-rail";
 import { TuiContext } from "../context";
 import { Actions, createStateStore } from "../../state";
-import { makeContextValue, makeFakeTui, makePlatform, renderComponent } from "../../test-harness";
+import { makeContextValue, renderComponent } from "../../test-harness";
 
 declare const test: (name: string, fn: () => void | Promise<void>) => void;
 declare const describe: (name: string, fn: () => void) => void;
@@ -15,8 +15,8 @@ describe("AgentsRail", () => {
       { role: "helper", agent_key: "helper-1", is_leader: false },
       { role: "general", agent_key: "general-1", is_leader: true },
     ])));
-    const platform = makePlatform();
-    const ctx = makeContextValue({ state: stateStore.getState(), platform, tui: makeFakeTui(stateStore, platform) });
+    const state = stateStore.getState();
+    const ctx = makeContextValue({ stateStore, state });
     const { lastFrame, unmount } = renderComponent(
       <TuiContext.Provider value={ctx}><AgentsRail width={20} /></TuiContext.Provider>,
     );
@@ -34,8 +34,8 @@ describe("AgentsRail", () => {
     stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, "demo", [
       { role: "general", agent_key: "general-1", is_leader: true },
     ])));
-    const platform = makePlatform();
-    const ctx = makeContextValue({ state: stateStore.getState(), platform, tui: makeFakeTui(stateStore, platform) });
+    const state = stateStore.getState();
+    const ctx = makeContextValue({ stateStore, state });
     const { lastFrame, unmount } = renderComponent(
       <TuiContext.Provider value={ctx}><AgentsRail width={20} /></TuiContext.Provider>,
     );

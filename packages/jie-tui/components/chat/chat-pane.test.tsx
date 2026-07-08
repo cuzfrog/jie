@@ -2,7 +2,7 @@ import { Events } from "@cuzfrog/jie-platform";
 import { ChatPane } from "./chat-pane";
 import { TuiContext } from "../context";
 import { Actions, createStateStore } from "../../state";
-import { makeContextValue, makeFakeTui, makePlatform, renderComponent } from "../../test-harness";
+import { makeContextValue, renderComponent } from "../../test-harness";
 
 declare const test: (name: string, fn: () => void | Promise<void>) => void;
 declare const describe: (name: string, fn: () => void) => void;
@@ -27,8 +27,8 @@ describe("ChatPane", () => {
     stateStore.dispatch(Actions.receiveEvent(
       Events.agentStreamChunk({ kind: "agent", teamId: "demo", agentKey: "general-1" }, 1, 0, "text", "world"),
     ));
-    const platform = makePlatform();
-    const ctx = makeContextValue({ state: stateStore.getState(), platform, tui: makeFakeTui(stateStore, platform) });
+    const state = stateStore.getState();
+    const ctx = makeContextValue({ stateStore, state });
     const { lastFrame, unmount } = renderComponent(
       <TuiContext.Provider value={ctx}><ChatPane width={80} /></TuiContext.Provider>,
     );

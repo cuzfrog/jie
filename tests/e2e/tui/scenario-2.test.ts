@@ -2,7 +2,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadMockExpectations } from "../../../packages/mock-llm-backend/index.ts";
 import { assertLlmReachable, seedTeam } from "../_fixture.ts";
-import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, type TuiHarness } from "./harness";
+import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, sendLine, type TuiHarness } from "./harness";
 import expectations from "./scenario-2.llm.ts";
 
 describe("Scenario 2 — pass work in a team", () => {
@@ -27,7 +27,7 @@ describe("Scenario 2 — pass work in a team", () => {
   });
 
   test("team loads with manager and worker; both agents keep separate conversations", async () => {
-    harness.tui.submit("/team my-team");
+    sendLine(harness.stdin, "/team my-team");
     await waitForTeam(harness.tui, "my-team");
     await submitAndWaitForAgentIdle(harness, "Read file1.txt and write its content to my-answer.txt", "my-team:manager-1");
     const state = harness.tui.state;
@@ -39,7 +39,7 @@ describe("Scenario 2 — pass work in a team", () => {
   });
 
   test("manager drives a bash tool to completion", async () => {
-    harness.tui.submit("/team my-team");
+    sendLine(harness.stdin, "/team my-team");
     await waitForTeam(harness.tui, "my-team");
     await submitAndWaitForAgentIdle(harness, "Read file1.txt and write its content to my-answer.txt", "my-team:manager-1");
     const state = harness.tui.state;

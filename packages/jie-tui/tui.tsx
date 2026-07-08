@@ -1,9 +1,13 @@
+import { useEffect, useState } from "react";
 import type { WriteStream, ReadStream } from "node:tty";
 import { render } from "ink";
 import type { AnyEventEnvelope, EventEnvelope, EventType, JiePlatform } from "@cuzfrog/jie-platform";
-import { Actions, type TuiState, type StateStore, createStateStore } from "./state";
-import { createTuiCommandHandler, type TuiCommandHandler } from "./command-handler";
+import { Actions, type TuiState, type StateStore, createStateStore, type Action } from "./state";
+import { createTuiCommandHandler, type CommandHandler } from "./command-handler";
 import { App } from "./components";
+
+const SUBMIT_EDITOR_TEXT = Actions.submitEditorText("").type;
+const REQUEST_INTERRUPT = Actions.requestInterrupt("", "").type;
 
 export interface TuiDeps {
   readonly platform: JiePlatform;
@@ -20,8 +24,8 @@ export interface CreateTUIOptions {
 }
 
 export interface Tui {
+  /** visibleForTesting */
   readonly state: TuiState;
-  submit(text: string): void;
   start(): Promise<void>;
   stop(): void;
 }
@@ -39,48 +43,48 @@ export function createTui(options: CreateTUIOptions, deps: TuiDeps): Tui {
   }
   const stateStore = createStateStore();
   const commandHandler = createTuiCommandHandler({ stateStore, platform: deps.platform });
+  stateStore.dispatch(Actions.setEnvironment(options.cwd, deps.gitBranch ?? "", deps.gitDirty ?? false));
   const tui = new InkTui(options, deps, stateStore, commandHandler);
   (tui as unknown as { stateStore: StateStore }).stateStore = stateStore;
   return tui;
 }
 
 class InkTui implements Tui {
-  private readonly options: CreateTUIOptions;
   private readonly deps: TuiDeps;
-  readonly stateStore: StateStore;
-  private readonly commandHandler: TuiCommandHandler;
+  private readonly stateStore: StateStore;
+  private readonly commandHandler: CommandHandler;
   private readonly unsubscribeBus: () => void;
+  private readonly unsubscribeActions: () => void;
   private inkInstance: ReturnType<typeof render> | null = null;
   private resolveStart: (() => void) | null = null;
   private started = false;
 
   constructor(
-    options: CreateTUIOptions,
+    _options: CreateTUIOptions,
     deps: TuiDeps,
     stateStore: StateStore,
-    commandHandler: TuiCommandHandler,
+    commandHandler: CommandHandler,
   ) {
-    this.options = options;
     this.deps = deps;
     this.stateStore = stateStore;
     this.commandHandler = commandHandler;
     this.unsubscribeBus = subscribeToBus(this.deps.platform, (env) => {
       this.stateStore.dispatch(Actions.receiveEvent(env as AnyEventEnvelope));
     });
+    this.unsubscribeActions = stateStore.subscribe(async (action, afterState) => {
+      if (action.type === SUBMIT_EDITOR_TEXT) {
+        await this.handleSubmitEditorText(action.payload.text, afterState);
+        return;
+      }
+      if (action.type === REQUEST_INTERRUPT) {
+        this.deps.platform.interrupt(action.payload.teamId, action.payload.agentKey);
+        return;
+      }
+    });
   }
 
   get state(): TuiState {
     return this.stateStore.getState();
-  }
-
-  submit(text: string): void {
-    this.stateStore.dispatch(Actions.clearBanners());
-    const trimmed = text.trim();
-    if (trimmed.startsWith("/")) {
-      this.commandHandler.handle(trimmed);
-      return;
-    }
-    this.publishPrompt(trimmed);
   }
 
   start(): Promise<void> {
@@ -98,16 +102,17 @@ class InkTui implements Tui {
         stdout.write(ALT_SCREEN_ON);
         const stdin = this.deps.stdin ?? process.stdin;
         const stderr = this.deps.stderr;
-        const instance = render(
-          <App
-            tui={this as unknown as Tui}
-            platform={this.deps.platform}
-            cwd={this.options.cwd}
-            gitBranch={this.deps.gitBranch ?? ""}
-            gitDirty={this.deps.gitDirty ?? false}
-          />,
-          { stdout, stdin, stderr, exitOnCtrlC: false, patchConsole: true },
-        );
+        const AppHost = (): JSX.Element => {
+          const [snapshot, setSnapshot] = useState<TuiState>(this.stateStore.getState());
+          useEffect(
+            () => this.stateStore.subscribe(async () => {
+              setSnapshot(this.stateStore.getState());
+            }),
+            [],
+          );
+          return <App state={snapshot} dispatch={(a: Action) => this.stateStore.dispatch(a)} />;
+        };
+        const instance = render(<AppHost />, { stdout, stdin, stderr, exitOnCtrlC: false, patchConsole: true });
         this.inkInstance = instance;
         this.started = true;
         void instance.waitUntilExit().then(() => this.resolveStart?.());
@@ -129,17 +134,23 @@ class InkTui implements Tui {
       this.started = false;
     }
     this.unsubscribeBus();
+    this.unsubscribeActions();
     this.resolveStart?.();
     const stdout = this.deps.stdout ?? process.stdout;
     stdout.write(ALT_SCREEN_OFF);
   }
 
-  private publishPrompt(text: string): void {
-    const state = this.stateStore.getState();
-    if (state.focusedAgentId === null) return;
-    const target = state.agents.get(state.focusedAgentId);
+  private async handleSubmitEditorText(text: string, afterState: TuiState): Promise<void> {
+    this.stateStore.dispatch(Actions.clearBanners());
+    const trimmed = text.trim();
+    if (trimmed.startsWith("/")) {
+      this.commandHandler.handle(trimmed);
+      return;
+    }
+    if (afterState.focusedAgentId === null) return;
+    const target = afterState.agents.get(afterState.focusedAgentId);
     if (target === undefined) return;
-    this.deps.platform.prompt(target.teamId, target.agentKey, text);
+    this.deps.platform.prompt(target.teamId, target.agentKey, trimmed);
   }
 }
 

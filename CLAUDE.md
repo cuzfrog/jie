@@ -42,6 +42,7 @@ When rules in different documents conflict, context rules win, in below order. R
 ### Test
 - Favor TDD, update/add tests before implementing actual logic.
 - use mocks for unit test. See @doc/HOW_TO_MOCK.md
+- for e2e test, see @doc/DEVELOPMENT.md
 - unit tests should align with the test target file. E.g. a test `function1.test.ts` should test and only test `function1.ts`. If `function1.test.ts` is testing `index.ts`, it is a smell of coding principle violation. Unit tests should not test dependencies.
 - do not import `bun:test`, all test utilities have been added to global namespace and are compatible with `vi`.
 
@@ -75,7 +76,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 - A *module* is a directory containing code. The `MODULE.md` lives at the module's root and gates its branching point in the tree.
 - A single file should ideally have only 1 exported function and necessary types, all other things in the file should be file private. For unit testing complex logic, use `export as` at the file bottom with `_` prefix to the function, meaning only "visible for testing" (the underscore signals "internal seam", not part of the public API).
 - - External imports must be from a module without specific file, e.g., `import { foo } from "../module"`. Not `"../module/index.ts"`. Refer to `Module gates` glossary. For siblings in the immediate directory, directly import from the sibling, e.g. `import { foo } from "./foo"`. For internal files, imports from specific files within the same module are allowed.
-- In each module, search `MODULE.md`. You must follow its specifications. Any new exposure must be discussed with the user. If you are blocked, ask the user to review and manually add the exports.
+- In each module, search `MODULE.md`. You must follow its specifications. Any new exposure must be discussed with the user. If you are blocked, ask the user to review and manually add the exports. Check Module Gates glossary for the keyword meanings.
 - Cross boundary domain types, config types, global DTOs are exempted from the visibility rule.
 
 #### SOLID principles:

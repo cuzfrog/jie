@@ -50,6 +50,9 @@ export interface AgentUiState {
 }
 
 export interface TuiState {
+  readonly cwd: string | null;
+  readonly gitBranch: string | null;
+  readonly gitDirty: boolean;
   readonly teamId: string | null;
   readonly leaderAgentId: AgentId | null;
   readonly agents: ReadonlyMap<AgentId, AgentUiState>;
@@ -61,7 +64,19 @@ export interface TuiState {
   readonly editorText: string;
 }
 
-/** State selector functions */
-export const TuiState = {
+function getFocusedAgent(state: TuiState): AgentUiState | null {
+  if (state.focusedAgentId === null) return null;
+  return state.agents.get(state.focusedAgentId) ?? null;
+}
 
+function isBusy(state: TuiState): boolean {
+  for (const agent of state.agents.values()) {
+    if (agent.status === "busy") return true;
+  }
+  return false;
+}
+
+export const TuiState = {
+  getFocusedAgent,
+  isBusy,
 } as const;

@@ -1,20 +1,13 @@
 import { Box } from "ink";
-import type { StateStore } from "../../state";
-import { useTuiContext } from "../context";
-import { ChatPane } from "../chat/chat-pane";
-import { AgentsRail } from "../rail/agents-rail";
-import { railWidth } from "../themes";
-import { Editor } from "./editor";
-import { Footer } from "./footer";
+import { useTuiContext } from "./context";
+import { ChatPane } from "./chat";
+import { AgentsRail } from "./team-rail";
+import { railWidth } from "./themes";
+import { Editor, Footer } from "./panel";
 
 export interface LayoutProps {
   readonly columns: number;
   readonly rows: number;
-  readonly cwd: string;
-  readonly gitBranch: string;
-  readonly gitDirty: boolean;
-  readonly stateStore: StateStore;
-  readonly onSubmit: (text: string) => void;
 }
 
 const FOOTER_LINES = 2;
@@ -39,10 +32,10 @@ export function Layout(props: LayoutProps): JSX.Element {
         <ChatPane width={chatWidth} />
       </Box>
       <Box width="100%" height={editorHeight}>
-        <Editor stateStore={props.stateStore} onSubmit={props.onSubmit} />
+        <Editor />
       </Box>
       <Box width="100%" height={FOOTER_BORDER_LINES}><Box flexGrow={1} /></Box>
-      <Footer cwd={props.cwd} gitBranch={props.gitBranch} gitDirty={props.gitDirty} />
+      <Footer cwd={state.cwd ?? ""} gitBranch={state.gitBranch ?? ""} gitDirty={state.gitDirty} />
       <Box width="100%" height={FOOTER_LINES}><Box flexGrow={1} /></Box>
     </Box>
   );

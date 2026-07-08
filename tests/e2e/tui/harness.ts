@@ -1,3 +1,4 @@
+// e2e test do not wait for intermediate state, it's not reliable. Check the eventual state.
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -31,6 +32,18 @@ class TestWritable extends PassThrough {
 
 class TestReadable extends PassThrough {
   isTTY = true;
+  ref(): this { return this; }
+  unref(): this { return this; }
+  setRawMode(): this { return this; }
+  setEncoding(): this { return this; }
+  resume(): this {
+    super.resume();
+    return this;
+  }
+  pause(): this {
+    super.pause();
+    return this;
+  }
 }
 
 export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> {
@@ -60,6 +73,7 @@ export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> 
     gitBranch: "main",
     gitDirty: false,
   });
+  void tui.start();
   return { dir, tui, platform, stdin, stdout };
 }
 
@@ -93,13 +107,7 @@ async function waitFor(predicate: () => boolean, timeoutMs: number, label: strin
 
 export async function waitForTeam(tui: Tui, teamId: string, timeoutMs = 60000): Promise<void> {
   await waitFor(
-    () => {
-      const s = tui.state;
-      if (s.errorBanner !== null) {
-        throw new Error(`team ${teamId} failed to load: ${s.errorBanner}`);
-      }
-      return s.teamId === teamId;
-    },
+    () => tui.state.teamId === teamId,
     timeoutMs,
     `team ${teamId}`,
   );
@@ -142,7 +150,7 @@ export async function submitAndWaitForAgentIdle(
   const priorHistoryLen = before?.history.length ?? 0;
   const priorCurrentBlocks = before?.currentTurn?.blocks.length ?? 0;
   const priorCurrentCards = before?.currentTurn?.cards.length ?? 0;
-  harness.tui.submit(prompt);
+  sendLine(harness.stdin, prompt);
   await waitForPromptSettled(
     harness.tui,
     agentId,

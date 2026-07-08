@@ -1,13 +1,9 @@
 import { createContext, useContext } from "react";
-import type { TuiState, AgentUiState, StateStore } from "../state";
-import type { Tui } from "../tui";
-import type { JiePlatform } from "@cuzfrog/jie-platform";
+import type { TuiState, AgentUiState, Action } from "../state";
 
 export interface TuiContextValue {
-  readonly tui: Tui;
   readonly state: TuiState;
-  readonly stateStore: StateStore;
-  readonly platform: JiePlatform;
+  readonly dispatch: (action: Action) => void;
   readonly focusedAgent: AgentUiState | null;
   readonly thinkingExpanded: boolean;
   readonly toolCardsExpanded: boolean;

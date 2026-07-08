@@ -1,8 +1,8 @@
 import { Events } from "@cuzfrog/jie-platform";
 import { Layout } from "./layout";
-import { TuiContext } from "../context";
-import { Actions, createStateStore } from "../../state";
-import { makeContextValue, makeFakeTui, makePlatform, renderComponent } from "../../test-harness";
+import { TuiContext } from "./context";
+import { Actions, createStateStore } from "../state";
+import { makeContextValue, renderComponent } from "../test-harness";
 
 declare const test: (name: string, fn: () => void | Promise<void>) => void;
 declare const describe: (name: string, fn: () => void) => void;
@@ -15,21 +15,15 @@ function mountLayout(opts: { columns: number; rows: number; showRail: boolean })
   const stateStore = createStateStore();
   stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, "demo", [
     { role: "general", agent_key: "general-1", is_leader: true },
+    { role: "helper", agent_key: "helper-1", is_leader: false },
   ])));
+  stateStore.dispatch(Actions.setEnvironment("/tmp/proj", "main", false));
   if (opts.showRail) stateStore.dispatch(Actions.toggleTeamRail());
-  const platform = makePlatform();
-  const ctx = makeContextValue({ stateStore, platform, tui: makeFakeTui(stateStore, platform) });
+  const state = stateStore.getState();
+  const ctx = makeContextValue({ stateStore, state });
   const { lastFrame, unmount } = renderComponent(
     <TuiContext.Provider value={ctx}>
-      <Layout
-        columns={opts.columns}
-        rows={opts.rows}
-        cwd="/tmp/proj"
-        gitBranch="main"
-        gitDirty={false}
-        stateStore={stateStore}
-        onSubmit={() => undefined}
-      />
+      <Layout columns={opts.columns} rows={opts.rows} />
     </TuiContext.Provider>,
   );
   return { lastFrame, unmount };

@@ -9,3 +9,5 @@ export LOCAL_LLM_MODEL=minicpm5-1b
 export JIE_E2E_BASE_URL=${LOCAL_LLM_BASE_URL}/v1
 export JIE_E2E_API_KEY=not-needed
 export JIE_E2E_MODEL=${LOCAL_LLM_MODEL}
+
+export ENABLE_TUI_ACTION_LOGGING=true

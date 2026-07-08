@@ -1,17 +1,16 @@
 import { useState } from "react";
 import { Box, Text, useInput } from "ink";
-import { Actions, type StateStore } from "../../state";
+import { useTuiContext } from "../context";
+import { Actions } from "../../state";
 import { pickColor } from "../themes";
 
-export interface EditorProps {
-  readonly stateStore: StateStore;
-  readonly onSubmit: (text: string) => void;
-}
+export interface EditorProps {}
 
 const HISTORY_LIMIT = 100;
 const PLACEHOLDER = "type a prompt...";
 
-export function Editor({ stateStore, onSubmit }: EditorProps): JSX.Element {
+export function Editor(_props: EditorProps): JSX.Element {
+  const { dispatch } = useTuiContext();
   const [buffer, setBuffer] = useState<string>("");
   const [history, setHistory] = useState<ReadonlyArray<string>>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
@@ -26,8 +25,21 @@ export function Editor({ stateStore, onSubmit }: EditorProps): JSX.Element {
       setHistoryIndex(-1);
       setDraft("");
       setBuffer("");
-      stateStore.dispatch(Actions.setEditorText(""));
-      onSubmit(text);
+      dispatch(Actions.submitEditorText(text));
+      dispatch(Actions.setEditorText(""));
+      return;
+    }
+    if (input.endsWith("\r") && !key.ctrl && !key.meta) {
+      const head = input.slice(0, -1);
+      const next = buffer + head;
+      if (next.length === 0) return;
+      const hist = [next, ...history].slice(0, HISTORY_LIMIT);
+      setHistory(hist);
+      setHistoryIndex(-1);
+      setDraft("");
+      setBuffer("");
+      dispatch(Actions.submitEditorText(next));
+      dispatch(Actions.setEditorText(""));
       return;
     }
     if (key.upArrow && history.length > 0) {
@@ -36,7 +48,6 @@ export function Editor({ stateStore, onSubmit }: EditorProps): JSX.Element {
       if (historyIndex === -1) setDraft(buffer);
       setHistoryIndex(nextIndex);
       setBuffer(recalled);
-      stateStore.dispatch(Actions.setEditorText(recalled));
       return;
     }
     if (key.downArrow && historyIndex >= 0) {
@@ -44,20 +55,17 @@ export function Editor({ stateStore, onSubmit }: EditorProps): JSX.Element {
       const recalled = nextIndex < 0 ? draft : history[nextIndex] ?? "";
       setHistoryIndex(nextIndex);
       setBuffer(recalled);
-      stateStore.dispatch(Actions.setEditorText(recalled));
       return;
     }
     if (key.backspace || key.delete) {
       if (buffer.length === 0) return;
       const next = buffer.slice(0, -1);
       setBuffer(next);
-      stateStore.dispatch(Actions.setEditorText(next));
       return;
     }
     if (input.length > 0 && !key.ctrl && !key.meta) {
       const next = buffer + input;
       setBuffer(next);
-      stateStore.dispatch(Actions.setEditorText(next));
     }
   });
 

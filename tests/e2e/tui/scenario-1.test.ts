@@ -1,6 +1,6 @@
 import { assertLlmReachable, seedTeam } from "../_fixture.ts";
 import { loadMockExpectations } from "../../../packages/mock-llm-backend/index.ts";
-import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, type TuiHarness } from "./harness";
+import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, sendLine, type TuiHarness } from "./harness";
 import expectations from "./scenario-1.llm.ts";
 
 describe("Scenario 1 — simple agent", () => {
@@ -23,7 +23,7 @@ describe("Scenario 1 — simple agent", () => {
   });
 
   test("team loads, prompt streams, idle closes; rail hidden by default", async () => {
-    harness.tui.submit("/team my-team");
+    sendLine(harness.stdin, "/team my-team");
     await waitForTeam(harness.tui, "my-team");
     await submitAndWaitForAgentIdle(harness, "Tell me a story", "my-team:general-1");
     const state = harness.tui.state;

@@ -1,6 +1,7 @@
 import { Editor } from "./editor";
-import { Actions, createStateStore } from "../../state";
-import { renderComponent } from "../../test-harness";
+import { TuiContext } from "../context";
+import { createStateStore } from "../../state";
+import { makeContextValue, renderComponent } from "../../test-harness";
 
 declare const test: (name: string, fn: () => void | Promise<void>) => void;
 declare const describe: (name: string, fn: () => void) => void;
@@ -9,8 +10,9 @@ declare const expect: typeof import("bun:test").expect;
 describe("Editor", () => {
   test("renders the placeholder when buffer is empty", () => {
     const store = createStateStore();
+    const ctx = makeContextValue({ stateStore: store });
     const { lastFrame, unmount } = renderComponent(
-      <Editor stateStore={store} onSubmit={() => undefined} />,
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
     );
     expect(lastFrame()).toContain("type a prompt...");
     unmount();
@@ -18,10 +20,9 @@ describe("Editor", () => {
 
   test("renders the placeholder when state.editorText is empty", () => {
     const store = createStateStore();
-    store.dispatch(Actions.setEditorText("draft"));
-    store.dispatch(Actions.setEditorText(""));
+    const ctx = makeContextValue({ stateStore: store });
     const { lastFrame, unmount } = renderComponent(
-      <Editor stateStore={store} onSubmit={() => undefined} />,
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
     );
     expect(lastFrame()).toContain("type a prompt...");
     unmount();

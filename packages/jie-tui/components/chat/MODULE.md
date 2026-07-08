@@ -11,6 +11,3 @@ sealed:
   - working-indicator.tsx
   - working-indicator.test.tsx
 ---
-
-# Design principles
-- chat pane renders focused agent's turns; each turn is user prompt → tool cards → text/thinking blocks.

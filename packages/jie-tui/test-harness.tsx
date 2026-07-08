@@ -2,9 +2,8 @@ import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import { render as inkRender } from "ink";
 import { type AnyEventEnvelope, type EventEnvelope, type EventType, type JiePlatform } from "@cuzfrog/jie-platform";
-import { createStateStore, type StateStore } from "./state";
+import { TuiState, createStateStore, type StateStore } from "./state";
 import { type TuiContextValue } from "./components";
-import { type Tui } from "./tui";
 
 export class ReadableStdin extends EventEmitter {
   isTTY = true;
@@ -70,8 +69,7 @@ export interface ContextOverrides {
   readonly focusedAgent?: TuiContextValue["focusedAgent"];
   readonly thinkingExpanded?: boolean;
   readonly toolCardsExpanded?: boolean;
-  readonly platform?: JiePlatform;
-  readonly tui?: Tui;
+  readonly dispatch?: TuiContextValue["dispatch"];
   readonly setThinkingExpanded?: TuiContextValue["setThinkingExpanded"];
   readonly setToolCardsExpanded?: TuiContextValue["setToolCardsExpanded"];
 }
@@ -79,15 +77,11 @@ export interface ContextOverrides {
 export function makeContextValue(overrides: ContextOverrides = {}): TuiContextValue {
   const stateStore = overrides.stateStore ?? createStateStore();
   const state = overrides.state ?? stateStore.getState();
-  const focused = overrides.focusedAgent
-    ?? (state.focusedAgentId === null ? null : state.agents.get(state.focusedAgentId) ?? null);
-  const platform = overrides.platform ?? makePlatform();
+  const focusedAgent = overrides.focusedAgent ?? TuiState.getFocusedAgent(state);
   return {
-    tui: overrides.tui ?? makeFakeTui(stateStore, platform),
     state,
-    stateStore,
-    platform,
-    focusedAgent: focused,
+    dispatch: overrides.dispatch ?? ((action) => stateStore.dispatch(action)),
+    focusedAgent,
     thinkingExpanded: overrides.thinkingExpanded ?? false,
     toolCardsExpanded: overrides.toolCardsExpanded ?? false,
     setThinkingExpanded: overrides.setThinkingExpanded ?? ((): void => undefined),
@@ -111,19 +105,4 @@ export function makePlatform(): JiePlatform {
     execute: (async () => null) as JiePlatform["execute"],
     loadedTeams: () => [],
   };
-}
-
-export function makeFakeTui(stateStore: StateStore, _platform: JiePlatform): Tui & { readonly stateStore: StateStore } {
-  const fake: Tui & { readonly stateStore: StateStore } = {
-    state: stateStore.getState(),
-    submit: () => undefined,
-    start: () => Promise.resolve(),
-    stop: () => undefined,
-    stateStore,
-  } as Tui & { readonly stateStore: StateStore };
-  Object.defineProperty(fake, "state", {
-    get: () => stateStore.getState(),
-    enumerable: true,
-  });
-  return fake;
 }

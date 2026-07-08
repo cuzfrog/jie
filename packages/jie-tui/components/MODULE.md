@@ -13,3 +13,4 @@ sealed:
 
 # Design principles
 - view renders based on state; state changes are upon inputs/events
+- view should be pure without side-effect

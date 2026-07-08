@@ -17,11 +17,11 @@ export interface CommandHandlerDeps {
   readonly platform: JiePlatform;
 }
 
-export interface TuiCommandHandler {
+export interface CommandHandler {
   handle(text: string): void;
 }
 
-export function createTuiCommandHandler(deps: CommandHandlerDeps): TuiCommandHandler {
+export function createTuiCommandHandler(deps: CommandHandlerDeps): CommandHandler {
   const handle = (text: string): void => {
     deps.stateStore.dispatch(Actions.clearBanners());
     const parts = text.split(/\s+/);
