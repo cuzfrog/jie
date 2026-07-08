@@ -31,5 +31,4 @@ jie -p "Tell me a joke."
 ```
 
 ## Logging
-- ENABLE_TUI_ACTION_LOGGING=true
-- ENABLE_MOCK_LLM_SERVER_LOGGING=true
+Configure the level via env var `JIE_LOG_LEVEL`. Accepted values (case-insensitive): `SILLY`, `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`. When unset the logger is silent.

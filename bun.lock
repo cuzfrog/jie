@@ -36,6 +36,7 @@
         "@earendil-works/pi-agent-core": "catalog:",
         "@earendil-works/pi-ai": "catalog:",
         "node-html-parser": "catalog:",
+        "tslog": "catalog:",
         "typebox": "catalog:",
         "ulid": "catalog:",
         "yaml": "catalog:",
@@ -63,6 +64,9 @@
     },
     "packages/mock-llm-backend": {
       "name": "@cuzfrog/mock-llm-backend",
+      "dependencies": {
+        "tslog": "catalog:",
+      },
       "devDependencies": {
         "@types/bun": "catalog:",
         "@types/node": "catalog:",
@@ -82,6 +86,7 @@
     "node-html-parser": "6.1.13",
     "react": "18.3.1",
     "react-dom": "18.3.1",
+    "tslog": "4.11.0",
     "typebox": "1.1.38",
     "typescript": "5.9.3",
     "ulid": "2.3.0",
@@ -365,6 +370,8 @@
     "ts-algebra": ["ts-algebra@2.0.0", "", {}, "sha512-FPAhNPFMrkwz76P7cdjdmiShwMynZYN6SgOujD1urY4oNm80Ou9oMdmbR45LotcKOXoy7wSmHkRFE6Mxbrhefw=="],
 
     "tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
+
+    "tslog": ["tslog@4.11.0", "", {}, "sha512-gBe0FTKkRpOv3DenGipjQWQe073jNd1cOLj3nYfVM0/NP29sQzAIx6kfyfTTsQOiWMC+B+tSr289lNXtu7HCmQ=="],
 
     "type-fest": ["type-fest@4.41.0", "", {}, "sha512-TeTSQ6H5YHvpqVwBRcnLDCBnDOHWYu7IvGbHT6N8AOymcr9PJGjc1GTtiWZTYg0NCgYwvnYWEkVChQAr9bjfwA=="],
 

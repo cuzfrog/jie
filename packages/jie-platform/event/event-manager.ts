@@ -1,6 +1,9 @@
 import type { EventBus } from "./event-bus";
 import { createEventBus } from "./event-bus";
 import type { EventEnvelope, EventType } from "./events";
+import { logger } from "../utils";
+
+const log = logger.getSubLogger({ name: "jie.platform.event" });
 
 export interface EventManager {
   publish<T extends EventType>(event: EventEnvelope<T>): void;
@@ -13,6 +16,7 @@ export interface EventManager {
 export function createEventManager(bus: EventBus = createEventBus()): EventManager {
   return {
     publish<T extends EventType>(event: EventEnvelope<T>): void {
+      log.trace("publish", event);
       bus.publish(event.topic, event);
     },
     subscribe(eventType: string, callback: (event: EventEnvelope<EventType>) => void): () => void {

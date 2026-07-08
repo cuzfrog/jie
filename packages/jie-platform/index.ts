@@ -23,3 +23,5 @@ export type {
 export { Events } from "./event";
 
 export type { GitSnapshot } from "./services";
+
+export { logger } from "./utils";

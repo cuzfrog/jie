@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { WriteStream, ReadStream } from "node:tty";
 import { render } from "ink";
-import type { AnyEventEnvelope, EventEnvelope, EventType, JiePlatform } from "@cuzfrog/jie-platform";
+import { type AnyEventEnvelope, type EventEnvelope, type EventType, type JiePlatform } from "@cuzfrog/jie-platform";
 import { Actions, type TuiState, type StateStore, createStateStore, type Action } from "./state";
 import { createTuiCommandHandler, type CommandHandler } from "./command-handler";
 import { App } from "./components";

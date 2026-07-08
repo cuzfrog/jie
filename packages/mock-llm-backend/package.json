@@ -4,6 +4,9 @@
   "exports": {
     ".": "./index.ts"
   },
+  "dependencies": {
+    "tslog": "catalog:"
+  },
   "devDependencies": {
     "@types/bun": "catalog:",
     "@types/node": "catalog:",

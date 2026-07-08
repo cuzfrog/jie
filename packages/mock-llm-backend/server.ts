@@ -1,3 +1,5 @@
+import { logger as log } from "../jie-platform"; // resume the logger without depending on jie-platform package; this is an exception
+
 import {
   type ChatCompletionRequestBody,
   type Expectation,
@@ -18,8 +20,6 @@ interface ServerState {
   calls: RecordedCall[];
 }
 
-let VERBOSE = (process.env["ENABLE_MOCK_LLM_SERVER_LOGGING"] ?? "").length > 0;
-
 export async function startMockServer(port?: number): Promise<StartedServer> {
   const actualPort = port ?? 12346;
   const state: ServerState = { expectations: [], calls: [] };
@@ -27,7 +27,7 @@ export async function startMockServer(port?: number): Promise<StartedServer> {
     port: actualPort,
     fetch: buildHandler(state),
   });
-  log("started", { port: server.port ?? actualPort, verbose: VERBOSE });
+  log.info("started", { port: server.port ?? actualPort });
   return {
     port: server.port ?? actualPort,
     stop: async () => {
@@ -42,17 +42,6 @@ function buildHandler(state: ServerState): (req: Request) => Promise<Response> {
 
     if (url.pathname === "/health" && req.method === "GET") {
       return sendJson(req, 200, { ok: true });
-    }
-
-    if (url.pathname === "/mock/logging" && req.method === "POST") {
-      let parsed: { enabled?: boolean } = {};
-      try {
-        parsed = (await req.json()) as { enabled?: boolean };
-      } catch (cause) {
-        return sendJson(req, 400, { error: { message: `invalid JSON: ${String(cause)}` } });
-      }
-      VERBOSE = parsed.enabled === true;
-      return sendJson(req, 200, { verbose: VERBOSE });
     }
 
     if (url.pathname === "/mock/calls" && req.method === "GET") {
@@ -73,13 +62,13 @@ function buildHandler(state: ServerState): (req: Request) => Promise<Response> {
         }
         state.expectations = [...list];
         state.calls = [];
-        log("register", { count: list.length, rules: list.map((e) => summarizeMatch(e.match)) });
+        log.debug("register", { count: list.length, rules: list.map((e) => summarizeMatch(e.match)) });
         return sendJson(req, 200, { registered: list.length });
       }
       if (req.method === "DELETE") {
         state.expectations = [];
         state.calls = [];
-        log("clear", {});
+        log.debug("clear", {});
         return sendJson(req, 200, { cleared: true });
       }
       return sendJson(req, 405, { error: { message: "method not allowed" } });
@@ -111,7 +100,7 @@ async function handleChatCompletion(req: Request, state: ServerState): Promise<R
       model: body.model,
       lastUserText: lastUserText(body),
     });
-    log("NO-MATCH", { req: summarizeRequest(body), available: state.expectations.length });
+    log.warn("no-match", { req: summarizeRequest(body), available: state.expectations.length });
     return sendJson(req, 500, {
       error: {
         message: "no expectation matched",
@@ -128,7 +117,7 @@ async function handleChatCompletion(req: Request, state: ServerState): Promise<R
     lastUserText: lastUserText(body),
   });
 
-  log("match", {
+  log.debug("match", {
     idx: picked.index,
     rule: summarizeMatch(picked.expectation.match),
     chunks: picked.expectation.responseChunks.map((c) => c.kind),
@@ -140,12 +129,6 @@ async function handleChatCompletion(req: Request, state: ServerState): Promise<R
   headers.set("content-type", "text/event-stream; charset=utf-8");
   headers.set("cache-control", "no-cache");
   return new Response(bytes, { status: 200, headers });
-}
-
-function log(label: string, payload: unknown): void {
-  if (!VERBOSE) return;
-  const ts = new Date().toISOString();
-  console.log(`[mock ${ts}] ${label} ${JSON.stringify(payload)}`);
 }
 
 function sendJson(res: { readonly headers: Headers }, status: number, body: unknown): Response {
@@ -187,7 +170,7 @@ function summarizeRequest(body: ChatCompletionRequestBody): Record<string, unkno
 
 async function main(): Promise<void> {
   const { port, stop } = await startMockServer();
-  console.log(`mock-llm-backend listening on http://localhost:${port} (LOG=${VERBOSE ? "on" : "off"})`);
+  log.info(`mock-llm-backend listening on http://localhost:${port}`);
   const shutdown = async (): Promise<void> => {
     await stop();
     process.exit(0);

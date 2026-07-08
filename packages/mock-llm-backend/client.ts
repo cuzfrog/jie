@@ -26,15 +26,6 @@ export class MockClient {
     if (!res.ok) throw new MockClientError(res.status, `health ${res.status}`);
   }
 
-  async setLogging(enabled: boolean): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/mock/logging`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ enabled }),
-    });
-    if (!res.ok) throw new MockClientError(res.status, `setLogging ${res.status}`);
-  }
-
   async registerExpectations(rules: ReadonlyArray<Expectation>): Promise<void> {
     const res = await fetch(`${this.baseUrl}/mock/expectations`, {
       method: "POST",

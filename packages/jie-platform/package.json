@@ -10,7 +10,8 @@
     "typebox": "catalog:",
     "yaml": "catalog:",
     "ulid": "catalog:",
-    "node-html-parser": "catalog:"
+    "node-html-parser": "catalog:",
+    "tslog": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "catalog:",
