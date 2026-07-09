@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Text } from "ink";
 import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, WORKING_LABEL, pickColor } from "../themes";
 
-export interface WorkingIndicatorProps {
+interface WorkingIndicatorProps {
   readonly message?: string;
   readonly intervalMs?: number;
   readonly now?: () => number;

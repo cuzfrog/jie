@@ -3,7 +3,7 @@ import { useInput } from "ink";
 import { useTuiContext } from "./context";
 import { Actions, type TuiState } from "../state";
 
-export interface GlobalKeyBindingsProps {
+interface GlobalKeyBindingsProps {
   readonly now?: () => number;
 }
 

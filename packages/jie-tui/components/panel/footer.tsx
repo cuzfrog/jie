@@ -2,7 +2,7 @@ import { Box, Text } from "ink";
 import { useTuiContext, useFocusedAgent } from "../context";
 import { pickColor } from "../themes";
 
-export interface FooterProps {
+interface FooterProps {
   readonly cwd: string;
   readonly gitBranch: string;
   readonly gitDirty: boolean;

@@ -2,7 +2,7 @@ import { Box, Text } from "ink";
 import type { MessageCard } from "../../state";
 import { pickColor } from "../themes";
 
-export interface ToolCardProps {
+interface ToolCardProps {
   readonly card: MessageCard;
   readonly expanded: boolean;
 }

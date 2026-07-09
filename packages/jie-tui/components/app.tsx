@@ -5,7 +5,7 @@ import { Layout } from "./layout";
 import { GlobalKeyBindings } from "./global-keys";
 import { type TuiState, type Action } from "../state";
 
-export interface AppProps {
+interface AppProps {
   readonly state: TuiState;
   readonly dispatch: (action: Action) => void;
 }

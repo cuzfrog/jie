@@ -3,7 +3,7 @@ import type { AgentUiState } from "../../state";
 import { useTuiContext } from "../context";
 import { RAIL_ERROR_GLYPH, RAIL_IDLE_GLYPH, RAIL_LEADER_GLYPH, pickColor } from "../themes";
 
-export interface AgentsRailProps {
+interface AgentsRailProps {
   readonly width: number;
 }
 
