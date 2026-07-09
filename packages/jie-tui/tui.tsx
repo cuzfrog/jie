@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
 import type { WriteStream, ReadStream } from "node:tty";
 import { render } from "ink";
 import { type AnyEventEnvelope, type EventEnvelope, type EventType, type JiePlatform } from "@cuzfrog/jie-platform";
-import { Actions, type TuiState, type StateStore, createStateStore, type Action } from "./state";
+import { Actions, type TuiState, type StateStore, createStateStore } from "./state";
 import { createTuiCommandHandler, type CommandHandler } from "./command-handler";
 import { App } from "./components";
 
@@ -44,9 +43,7 @@ export function createTui(options: CreateTUIOptions, deps: TuiDeps): Tui {
   const stateStore = createStateStore();
   const commandHandler = createTuiCommandHandler({ stateStore, platform: deps.platform });
   stateStore.dispatch(Actions.setEnvironment(options.cwd, deps.gitBranch ?? "", deps.gitDirty ?? false));
-  const tui = new InkTui(options, deps, stateStore, commandHandler);
-  (tui as unknown as { stateStore: StateStore }).stateStore = stateStore;
-  return tui;
+  return new InkTui(options, deps, stateStore, commandHandler);
 }
 
 class InkTui implements Tui {
@@ -57,7 +54,6 @@ class InkTui implements Tui {
   private readonly unsubscribeActions: () => void;
   private inkInstance: ReturnType<typeof render> | null = null;
   private resolveStart: (() => void) | null = null;
-  private started = false;
 
   constructor(
     _options: CreateTUIOptions,
@@ -102,19 +98,14 @@ class InkTui implements Tui {
         stdout.write(ALT_SCREEN_ON);
         const stdin = this.deps.stdin ?? process.stdin;
         const stderr = this.deps.stderr;
-        const AppHost = (): JSX.Element => {
-          const [snapshot, setSnapshot] = useState<TuiState>(this.stateStore.getState());
-          useEffect(
-            () => this.stateStore.subscribe(async () => {
-              setSnapshot(this.stateStore.getState());
-            }),
-            [],
-          );
-          return <App state={snapshot} dispatch={(a: Action) => this.stateStore.dispatch(a)} />;
-        };
-        const instance = render(<AppHost />, { stdout, stdin, stderr, exitOnCtrlC: false, patchConsole: true });
+        const instance = render(<App stateStore={this.stateStore} />, {
+          stdout,
+          stdin,
+          stderr,
+          exitOnCtrlC: false,
+          patchConsole: true,
+        });
         this.inkInstance = instance;
-        this.started = true;
         void instance.waitUntilExit().then(() => this.resolveStart?.());
       } catch (error) {
         this.resolveStart = null;
@@ -124,14 +115,13 @@ class InkTui implements Tui {
   }
 
   stop(): void {
-    if (this.started && this.inkInstance !== null) {
+    if (this.inkInstance !== null) {
       try {
         this.inkInstance.unmount();
       } catch {
         // ignore
       }
       this.inkInstance = null;
-      this.started = false;
     }
     this.unsubscribeBus();
     this.unsubscribeActions();

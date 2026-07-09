@@ -4,10 +4,6 @@ import { Actions } from "./state";
 import { withTTY } from "../../tests/support";
 import type { JiePlatform, EventType, AnyEventEnvelope, EventEnvelope } from "@cuzfrog/jie-platform";
 
-declare const test: (name: string, fn: () => void | Promise<void>) => void;
-declare const describe: (name: string, fn: () => void) => void;
-declare const expect: typeof import("bun:test").expect;
-
 class FakeStdin extends PassThrough {
   isTTY = true;
   ref(): this { return this; }
