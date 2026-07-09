@@ -1,4 +1,4 @@
-import { getProviders } from "@earendil-works/pi-ai";
+import { getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";
 import { type AuthStore } from "../config";
 import { type SettingsStore } from "../config";
 import { JiePlatformError } from "../jie-platform-errors";
@@ -20,7 +20,7 @@ export interface CommandExecutor {
 }
 
 export function createCommandExecutor(deps: CommandExecutorDeps): CommandExecutor {
-  const knownProviders = new Set<string>(getProviders() as ReadonlyArray<string>);
+  const knownProviders = new Set<string>(getBuiltinProviders() as ReadonlyArray<string>);
 
   const handlers: { [N in CommandName]: Handler<N> } = {
     login: (command) => {

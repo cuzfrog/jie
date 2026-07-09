@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, type JSX } from "react";
 import { Box, useApp as useInkApp, useStdout } from "ink";
 import { TuiContext, type TuiContextValue } from "./context";
 import { Layout } from "./layout";

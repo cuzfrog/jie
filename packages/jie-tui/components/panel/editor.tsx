@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type JSX } from "react";
 import { Box, Text, useInput } from "ink";
 import { useTuiContext } from "../context";
 import { Actions } from "../../state";

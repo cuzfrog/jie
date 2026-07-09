@@ -1,4 +1,5 @@
 import { Box } from "ink";
+import type { JSX } from "react";
 import { useTuiContext } from "./context";
 import { ChatPane } from "./chat";
 import { AgentsRail } from "./team-rail";

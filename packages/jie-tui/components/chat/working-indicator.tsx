@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type JSX } from "react";
 import { Text } from "ink";
 import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, WORKING_LABEL, pickColor } from "../themes";
 

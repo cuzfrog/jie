@@ -1,4 +1,5 @@
 import { Box, Text } from "ink";
+import type { JSX } from "react";
 import type { MessageBlock } from "../../state";
 import { ASSISTANT_PREFIX, THINKING_LABEL, pickColor } from "../themes";
 

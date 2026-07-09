@@ -1,4 +1,5 @@
 import { Box, Text } from "ink";
+import type { JSX } from "react";
 import type { MessageTurn } from "../../state";
 import { USER_PROMPT_PREFIX, pickColor } from "../themes";
 import { TextBlock } from "./text-block";

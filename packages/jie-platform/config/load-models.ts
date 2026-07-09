@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { getModels as piGetModels } from "@earendil-works/pi-ai";
+import { getBuiltinModels } from "@earendil-works/pi-ai/providers/all";
 import type { Api, Model, OpenAICompletionsCompat, OpenAIResponsesCompat, AnthropicMessagesCompat } from "@earendil-works/pi-ai";
 import { JiePlatformError } from "../jie-platform-errors";
 
@@ -202,8 +202,8 @@ function resolveApi(providerId: string, declared: string | undefined): Api {
     return declared as Api;
   }
 
-  const builtinProbe = (piGetModels as (p: string) => Array<{ api: Api }> | undefined)(
-    providerId as Parameters<typeof piGetModels>[0],
+  const builtinProbe = (getBuiltinModels as (p: string) => Array<{ api: Api }> | undefined)(
+    providerId as Parameters<typeof getBuiltinModels>[0],
   );
   if (builtinProbe !== undefined && builtinProbe.length > 0 && builtinProbe[0] !== undefined) {
     return builtinProbe[0].api;

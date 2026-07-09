@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, type JSX } from "react";
 import { Box, Text } from "ink";
 import type { AgentUiState, MessageTurn } from "../../state";
 import { useTuiContext } from "../context";
