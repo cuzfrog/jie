@@ -1,5 +1,5 @@
 import { logger } from "@cuzfrog/jie-platform";
-import type { TuiState, AgentUiState } from "./state";
+import type { TuiState } from "./state";
 import { reduce } from "./reducer";
 import type { Action } from "./actions";
 
@@ -16,6 +16,8 @@ const INITIAL_TUI_STATE: TuiState = Object.freeze({
   transientMessage: null,
   errorBanner: null,
   showTeamRailPanel: false,
+  thinkingExpanded: false,
+  toolCardsExpanded: false,
   pendingQuit: false,
   editorText: "",
 } as const);
@@ -28,8 +30,6 @@ export interface StateStore {
   dispatch(action: Action): void;
   /** a subscriber can perform side effect upon action; return unsubscribe stub. */
   subscribe(listener: ActionCallback): () => void;
-  getFocusedAgent(): AgentUiState | null;
-  isBusy(): boolean;
 }
 
 export function createStateStore(): StateStore {
@@ -54,16 +54,6 @@ export function createStateStore(): StateStore {
       return (): void => {
         callbacks.delete(listener);
       };
-    },
-    getFocusedAgent(): AgentUiState | null {
-      if (state.focusedAgentId === null) return null;
-      return state.agents.get(state.focusedAgentId) ?? null;
-    },
-    isBusy(): boolean {
-      for (const agent of state.agents.values()) {
-        if (agent.status === "busy") return true;
-      }
-      return false;
     },
   };
 }

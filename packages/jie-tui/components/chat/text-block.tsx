@@ -2,7 +2,7 @@ import { Box, Text } from "ink";
 import type { MessageBlock } from "../../state";
 import { ASSISTANT_PREFIX, THINKING_LABEL, pickColor } from "../themes";
 
-export interface TextBlockProps {
+interface TextBlockProps {
   readonly block: MessageBlock;
   readonly expanded: boolean;
 }

@@ -4,7 +4,7 @@ import { useTuiContext } from "../context";
 import { Actions } from "../../state";
 import { pickColor } from "../themes";
 
-export interface EditorProps {}
+interface EditorProps {}
 
 const HISTORY_LIMIT = 100;
 const PLACEHOLDER = "type a prompt...";

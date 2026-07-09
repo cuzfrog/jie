@@ -5,7 +5,7 @@ import { AgentsRail } from "./team-rail";
 import { railWidth } from "./themes";
 import { Editor, Footer } from "./panel";
 
-export interface LayoutProps {
+interface LayoutProps {
   readonly columns: number;
   readonly rows: number;
 }

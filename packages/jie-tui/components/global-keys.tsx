@@ -4,19 +4,13 @@ import { useTuiContext } from "./context";
 import { Actions, type TuiState } from "../state";
 
 export interface GlobalKeyBindingsProps {
-  readonly onToggleThinking: () => void;
-  readonly onToggleToolCards: () => void;
   readonly now?: () => number;
 }
 
 const ESC_WINDOW_MS = 300;
 const CTRL_D_WINDOW_MS = 500;
 
-export function GlobalKeyBindings({
-  onToggleThinking,
-  onToggleToolCards,
-  now = Date.now,
-}: GlobalKeyBindingsProps): null {
+export function GlobalKeyBindings({ now = Date.now }: GlobalKeyBindingsProps = {}): null {
   const { state, dispatch } = useTuiContext();
   const lastEscapeAt = useRef<number>(0);
   const lastCtrlDAt = useRef<number>(0);
@@ -49,12 +43,12 @@ export function GlobalKeyBindings({
     }
 
     if (key.ctrl && input === "t") {
-      onToggleThinking();
+      dispatch(Actions.toggleThinking());
       return;
     }
 
     if (key.ctrl && input === "o") {
-      onToggleToolCards();
+      dispatch(Actions.toggleToolCards());
       return;
     }
 

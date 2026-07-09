@@ -47,16 +47,6 @@ function makeDeps(platform: JiePlatform): DepsHandle {
     getState: () => current,
     dispatch: (action) => { dispatch(action); },
     subscribe: vi.fn(() => (): void => undefined),
-    getFocusedAgent: () => {
-      if (current.focusedAgentId === null) return null;
-      return current.agents.get(current.focusedAgentId) ?? null;
-    },
-    isBusy: () => {
-      for (const agent of current.agents.values()) {
-        if (agent.status === "busy") return true;
-      }
-      return false;
-    },
   };
   const deps: CommandHandlerDeps = {
     stateStore,

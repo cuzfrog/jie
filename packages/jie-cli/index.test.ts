@@ -214,6 +214,8 @@ function captureRun(platform: FakePlatform): CapturedRun {
         focusedAgentId: null,
         agents: new Map(),
         showTeamRailPanel: false,
+        thinkingExpanded: false,
+        toolCardsExpanded: false,
         pendingQuit: false,
         transientMessage: null,
         errorBanner: null,

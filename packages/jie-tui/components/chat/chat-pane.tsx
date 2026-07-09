@@ -5,12 +5,12 @@ import { useTuiContext } from "../context";
 import { MessageView } from "./message-view";
 import { WorkingIndicator } from "./working-indicator";
 
-export interface ChatPaneProps {
+interface ChatPaneProps {
   readonly width: number;
 }
 
 export function ChatPane({ width }: ChatPaneProps): JSX.Element {
-  const { state, thinkingExpanded, toolCardsExpanded } = useTuiContext();
+  const { state } = useTuiContext();
   const focusedId = state.focusedAgentId;
   const focused = focusedId === null ? null : state.agents.get(focusedId) ?? null;
   if (focused === null) {
@@ -20,7 +20,7 @@ export function ChatPane({ width }: ChatPaneProps): JSX.Element {
       </Box>
     );
   }
-  return renderTurns(focused, thinkingExpanded, toolCardsExpanded, width);
+  return renderTurns(focused, state.thinkingExpanded, state.toolCardsExpanded, width);
 }
 
 function renderTurns(

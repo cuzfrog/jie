@@ -60,6 +60,8 @@ export interface TuiState {
   readonly transientMessage: string | null;
   readonly errorBanner: string | null;
   readonly showTeamRailPanel: boolean;
+  readonly thinkingExpanded: boolean;
+  readonly toolCardsExpanded: boolean;
   readonly pendingQuit: boolean;
   readonly editorText: string;
 }

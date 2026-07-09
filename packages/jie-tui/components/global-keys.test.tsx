@@ -14,7 +14,7 @@ describe("GlobalKeyBindings", () => {
     const ctx = makeContextValue({ stateStore: store });
     const { lastFrame, unmount } = render(
       <TuiContext.Provider value={ctx}>
-        <GlobalKeyBindings onToggleThinking={() => undefined} onToggleToolCards={() => undefined} />
+        <GlobalKeyBindings />
       </TuiContext.Provider>,
     );
     expect(lastFrame()).toBe("");
@@ -26,11 +26,7 @@ describe("GlobalKeyBindings", () => {
     const ctx = makeContextValue({ stateStore: store });
     const { unmount } = render(
       <TuiContext.Provider value={ctx}>
-        <GlobalKeyBindings
-          onToggleThinking={() => undefined}
-          onToggleToolCards={() => undefined}
-          now={() => 12345}
-        />
+        <GlobalKeyBindings now={() => 12345} />
       </TuiContext.Provider>,
     );
     unmount();

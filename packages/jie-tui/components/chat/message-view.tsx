@@ -4,7 +4,7 @@ import { USER_PROMPT_PREFIX, pickColor } from "../themes";
 import { TextBlock } from "./text-block";
 import { ToolCard } from "./tool-card";
 
-export interface MessageViewProps {
+interface MessageViewProps {
   readonly turn: MessageTurn;
   readonly thinkingExpanded: boolean;
   readonly toolCardsExpanded: boolean;

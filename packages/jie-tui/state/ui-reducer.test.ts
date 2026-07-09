@@ -22,6 +22,32 @@ describe("toggleRail", () => {
   });
 });
 
+describe("toggleThinking", () => {
+  test("toggles thinkingExpanded on each call", () => {
+    const state1 = reduceUiAction(INITIAL_TUI_STATE, Actions.toggleThinking());
+    const state2 = reduceUiAction(state1, Actions.toggleThinking());
+    expect(state1.thinkingExpanded).toBe(true);
+    expect(state2.thinkingExpanded).toBe(false);
+  });
+
+  test("starts as false in initial state", () => {
+    expect(INITIAL_TUI_STATE.thinkingExpanded).toBe(false);
+  });
+});
+
+describe("toggleToolCards", () => {
+  test("toggles toolCardsExpanded on each call", () => {
+    const state1 = reduceUiAction(INITIAL_TUI_STATE, Actions.toggleToolCards());
+    const state2 = reduceUiAction(state1, Actions.toggleToolCards());
+    expect(state1.toolCardsExpanded).toBe(true);
+    expect(state2.toolCardsExpanded).toBe(false);
+  });
+
+  test("starts as false in initial state", () => {
+    expect(INITIAL_TUI_STATE.toolCardsExpanded).toBe(false);
+  });
+});
+
 describe("cycleAgent", () => {
   function multiAgentRail(): TuiState {
     const state = loadedTeam([

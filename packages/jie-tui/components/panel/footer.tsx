@@ -1,5 +1,5 @@
 import { Box, Text } from "ink";
-import { useTuiContext } from "../context";
+import { useTuiContext, useFocusedAgent } from "../context";
 import { pickColor } from "../themes";
 
 export interface FooterProps {
@@ -12,7 +12,8 @@ const HINT_HIDDEN = "ctrl+left for agents";
 const HINT_VISIBLE = "ctrl+↑↓ switch agent  ctrl+left close agents";
 
 export function Footer({ cwd, gitBranch, gitDirty }: FooterProps): JSX.Element {
-  const { state, focusedAgent } = useTuiContext();
+  const { state } = useTuiContext();
+  const focusedAgent = useFocusedAgent();
   const leftIdentity = `${cwd} (${gitBranch.length > 0 ? gitBranch : "main"}${gitDirty ? "*" : ""})`;
   const teamSegment = state.teamId ?? "no-team";
   const focusedSegment = focusedAgent === null ? "—" : focusedAgent.agentKey;
@@ -35,7 +36,7 @@ export function Footer({ cwd, gitBranch, gitDirty }: FooterProps): JSX.Element {
   );
 }
 
-function modelSegmentText(focused: ReturnType<typeof useTuiContext>["focusedAgent"]): string {
+function modelSegmentText(focused: ReturnType<typeof useFocusedAgent>): string {
   if (focused === null || focused.model === null) return "—";
   const m = focused.model;
   return `(${m.provider}) ${m.id} | ${m.effort}`;
