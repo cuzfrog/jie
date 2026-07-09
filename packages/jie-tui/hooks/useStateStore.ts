@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { TuiState, StateStore, Action } from "../state";
 
-export interface StateStoreSnapshot {
+interface StateStoreSnapshot {
   readonly state: TuiState;
   readonly dispatch: (action: Action) => void;
 }

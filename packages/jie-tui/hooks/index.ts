@@ -1,1 +1,1 @@
-export { type StateStoreSnapshot, useStateStore } from "./useStateStore";
+export { useStateStore } from "./useStateStore";
