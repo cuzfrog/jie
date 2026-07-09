@@ -77,7 +77,7 @@ describe("StateStore", () => {
 
   test("state is updated before subscribers are invoked", () => {
     const store = createStateStore();
-    let observed: string | null = null;
+    let observed: string | undefined;
     store.subscribe((action) => {
       if (action.type === Actions.setEditorText("").type) {
         observed = store.getState().editorText;
@@ -85,6 +85,15 @@ describe("StateStore", () => {
       return Promise.resolve();
     });
     store.dispatch(Actions.setEditorText("hello"));
-    expect(observed).toBe("hello");
+    const observedAfter: string | undefined = observed;
+    expect(observedAfter).toBe("hello");
+  });
+
+  test("subscriber rejection is logged but does not propagate from dispatch", async () => {
+    const store = createStateStore();
+    store.subscribe(() => Promise.reject(new Error("boom")));
+    store.dispatch(Actions.setEditorText("hello"));
+    expect(store.getState().editorText).toBe("hello");
+    await new Promise((r) => setTimeout(r, 30));
   });
 });

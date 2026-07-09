@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Box, useStdout } from "ink";
+import { useEffect, useState } from "react";
+import { Box, useApp as useInkApp, useStdout } from "ink";
 import { TuiContext, type TuiContextValue } from "./context";
 import { Layout } from "./layout";
 import { GlobalKeyBindings } from "./global-keys";
@@ -14,8 +14,12 @@ export function App({ state, dispatch }: AppProps): JSX.Element {
   const { stdout } = useStdout();
   const columns = stdout?.columns ?? 80;
   const rows = stdout?.rows ?? 24;
+  const inkApp = useInkApp();
   const [thinkingExpanded, setThinkingExpanded] = useState<boolean>(false);
   const [toolCardsExpanded, setToolCardsExpanded] = useState<boolean>(false);
+  useEffect(() => {
+    if (state.pendingQuit) inkApp.exit();
+  }, [state.pendingQuit, inkApp]);
   const focused: AgentUiState | null = state.focusedAgentId === null
     ? null
     : state.agents.get(state.focusedAgentId) ?? null;

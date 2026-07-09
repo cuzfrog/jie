@@ -1,6 +1,7 @@
 # Context Rules
 
 - IMPORTANT: adhere to Code Conventions and Coding Principles
+- Be positve. All difficulties will be address together with me.
 
 ## Documents
 - @doc/specs/monorepo-structure.md; read `00-overview.md` in the dir you will work with to understand the glossary.

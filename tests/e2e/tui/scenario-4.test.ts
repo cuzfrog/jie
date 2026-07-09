@@ -1,7 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { loadMockExpectations } from "../../../packages/mock-llm-backend/index.ts";
 import { assertLlmReachable, seedTeam, writeModelsJsonTo, writeSettingsJson } from "../_fixture.ts";
-import { startTui, stopTui, submitAndWaitForAgentIdle, waitForErrorBanner, waitForTeam, sendLine } from "./harness";
+import { startTui, stopTui, submitAndWaitForAgentIdle, waitForErrorBanner, waitForNoErrorBanner, waitForTeam, sendLine } from "./harness";
 import expectations from "./scenario-4.llm.ts";
 
 describe("Scenario 4 — first-time setup (TUI flow)", () => {
@@ -39,6 +39,7 @@ describe("Scenario 4 — first-time setup (TUI flow)", () => {
 
       sendLine(harness.stdin, "/team my-team");
       await waitForTeam(harness.tui, "my-team");
+      await waitForNoErrorBanner(harness.tui);
       await submitAndWaitForAgentIdle(harness, "Tell me a joke", "my-team:general-1");
       const agent = harness.tui.state.agents.get("my-team:general-1");
       const allTurns = [

@@ -1,6 +1,9 @@
+import { logger } from "@cuzfrog/jie-platform";
 import type { TuiState, AgentUiState } from "./state";
 import { reduce } from "./reducer";
 import type { Action } from "./actions";
+
+const log = logger.getSubLogger({ name: "jie.tui.state-store" });
 
 const INITIAL_TUI_STATE: TuiState = Object.freeze({
   cwd: null,
@@ -37,10 +40,13 @@ export function createStateStore(): StateStore {
       return state;
     },
     dispatch(action: Action): void {
-      const afterState = reduce(state, action);
+      const beforeState = state;
+      const afterState = reduce(beforeState, action);
       state = afterState;
       for (const callback of callbacks) {
-        callback(action, afterState, afterState);
+        void Promise.resolve(callback(action, afterState, beforeState)).catch((error: unknown) => {
+          log.error({ action, error }, "subscriber callback failed");
+        });
       }
     },
     subscribe(listener: ActionCallback): () => void {

@@ -188,6 +188,9 @@ function captureRun(platform: JiePlatform): CapturedRun {
     tuiCalls.push({ options, deps });
     const tui: Tui = {
       state: {
+        cwd: null,
+        gitBranch: null,
+        gitDirty: false,
         teamId: null,
         leaderAgentId: null,
         focusedAgentId: null,
@@ -198,7 +201,6 @@ function captureRun(platform: JiePlatform): CapturedRun {
         errorBanner: null,
         editorText: "",
       },
-      submit: () => undefined,
       start: () => {
         startCalls.value += 1;
         return Promise.resolve();

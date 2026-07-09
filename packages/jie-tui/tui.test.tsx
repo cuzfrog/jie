@@ -1,10 +1,67 @@
+import { PassThrough } from "node:stream";
 import { createTui, type Tui } from "./tui";
+import { Actions } from "./state";
 import { makePlatform } from "./test-harness";
 import { withTTY } from "../../tests/support";
 
 declare const test: (name: string, fn: () => void | Promise<void>) => void;
 declare const describe: (name: string, fn: () => void) => void;
 declare const expect: typeof import("bun:test").expect;
+
+class FakeStdin extends PassThrough {
+  isTTY = true;
+  ref(): this { return this; }
+  unref(): this { return this; }
+  setRawMode(): this { return this; }
+  setEncoding(): this { return this; }
+  resume(): this { super.resume(); return this; }
+  pause(): this { super.pause(); return this; }
+}
+
+class FakeStdout extends PassThrough {
+  columns = 80;
+  rows = 30;
+}
+
+function bootTui(): Tui {
+  const stdin = new FakeStdin();
+  const stdout = new FakeStdout();
+  return createTui({ cwd: process.cwd() }, {
+    platform: makePlatform(),
+    stdin: stdin as unknown as NodeJS.ReadStream,
+    stdout: stdout as unknown as NodeJS.WriteStream,
+  });
+}
+
+describe("createTui — start resolves on pendingQuit", () => {
+  test("dispatching requestQuit resolves start()", async () => {
+    withTTY(true, async () => {
+      const tui = bootTui();
+      const stateStore = (tui as unknown as { stateStore: { getState: () => { pendingQuit: boolean }; dispatch: (a: unknown) => void } }).stateStore;
+      const started = tui.start();
+      await new Promise((r) => setTimeout(r, 30));
+      stateStore.dispatch(Actions.requestQuit());
+      expect(stateStore.getState().pendingQuit).toBe(true);
+      await Promise.race([
+        started,
+        new Promise<never>((_resolve, reject) => setTimeout(() => reject(new Error("start did not resolve within 2s after requestQuit")), 2000)),
+      ]);
+    });
+  });
+
+  test("stop() resolves start() even without requestQuit", async () => {
+    withTTY(true, async () => {
+      const tui = bootTui();
+      const started = tui.start();
+      await new Promise((r) => setTimeout(r, 30));
+      tui.stop();
+      await Promise.race([
+        started,
+        new Promise<never>((_resolve, reject) => setTimeout(() => reject(new Error("stop did not resolve within 2s")), 2000)),
+      ]);
+    });
+  });
+});
 
 describe("createTui — surface contract", () => {
   test("throws when not on a TTY", () => {

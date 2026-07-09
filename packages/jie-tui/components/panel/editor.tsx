@@ -10,11 +10,11 @@ const HISTORY_LIMIT = 100;
 const PLACEHOLDER = "type a prompt...";
 
 export function Editor(_props: EditorProps): JSX.Element {
-  const { dispatch } = useTuiContext();
-  const [buffer, setBuffer] = useState<string>("");
+  const { state, dispatch } = useTuiContext();
   const [history, setHistory] = useState<ReadonlyArray<string>>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
   const [draft, setDraft] = useState<string>("");
+  const buffer = state.editorText;
 
   useInput((input, key) => {
     if (key.return) {
@@ -24,9 +24,8 @@ export function Editor(_props: EditorProps): JSX.Element {
       setHistory(next);
       setHistoryIndex(-1);
       setDraft("");
-      setBuffer("");
-      dispatch(Actions.submitEditorText(text));
       dispatch(Actions.setEditorText(""));
+      dispatch(Actions.submitEditorText(text));
       return;
     }
     if (input.endsWith("\r") && !key.ctrl && !key.meta) {
@@ -37,9 +36,8 @@ export function Editor(_props: EditorProps): JSX.Element {
       setHistory(hist);
       setHistoryIndex(-1);
       setDraft("");
-      setBuffer("");
-      dispatch(Actions.submitEditorText(next));
       dispatch(Actions.setEditorText(""));
+      dispatch(Actions.submitEditorText(next));
       return;
     }
     if (key.upArrow && history.length > 0) {
@@ -47,25 +45,25 @@ export function Editor(_props: EditorProps): JSX.Element {
       const recalled = history[nextIndex] ?? "";
       if (historyIndex === -1) setDraft(buffer);
       setHistoryIndex(nextIndex);
-      setBuffer(recalled);
+      dispatch(Actions.setEditorText(recalled));
       return;
     }
     if (key.downArrow && historyIndex >= 0) {
       const nextIndex = historyIndex - 1;
       const recalled = nextIndex < 0 ? draft : history[nextIndex] ?? "";
       setHistoryIndex(nextIndex);
-      setBuffer(recalled);
+      dispatch(Actions.setEditorText(recalled));
       return;
     }
     if (key.backspace || key.delete) {
       if (buffer.length === 0) return;
       const next = buffer.slice(0, -1);
-      setBuffer(next);
+      dispatch(Actions.setEditorText(next));
       return;
     }
     if (input.length > 0 && !key.ctrl && !key.meta) {
       const next = buffer + input;
-      setBuffer(next);
+      dispatch(Actions.setEditorText(next));
     }
   });
 

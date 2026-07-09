@@ -107,7 +107,13 @@ async function waitFor(predicate: () => boolean, timeoutMs: number, label: strin
 
 export async function waitForTeam(tui: Tui, teamId: string, timeoutMs = 60000): Promise<void> {
   await waitFor(
-    () => tui.state.teamId === teamId,
+    () => {
+      const s = tui.state;
+      if (s.errorBanner !== null) {
+        throw new Error(`team ${teamId} failed to load: ${s.errorBanner}`);
+      }
+      return s.teamId === teamId;
+    },
     timeoutMs,
     `team ${teamId}`,
   );
