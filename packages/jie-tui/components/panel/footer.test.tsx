@@ -1,8 +1,9 @@
 import { Events } from "@cuzfrog/jie-platform";
+import { render } from "ink-testing-library";
 import { Footer } from "./footer";
 import { TuiContext } from "../context";
 import { Actions, createStateStore } from "../../state";
-import { makeContextValue, renderComponent } from "../../test-harness";
+import { makeContextValue } from "../../test-support";
 
 declare const test: (name: string, fn: () => void | Promise<void>) => void;
 declare const describe: (name: string, fn: () => void) => void;
@@ -16,7 +17,7 @@ describe("Footer", () => {
     ])));
     const state = stateStore.getState();
     const ctx = makeContextValue({ stateStore, state });
-    const { lastFrame, unmount } = renderComponent(
+    const { lastFrame, unmount } = render(
       <TuiContext.Provider value={ctx}>
         <Footer cwd="/tmp/proj" gitBranch="main" gitDirty={false} />
       </TuiContext.Provider>,
@@ -29,7 +30,7 @@ describe("Footer", () => {
 
   test("falls back to '(main)' when no branch is given", () => {
     const ctx = makeContextValue();
-    const { lastFrame, unmount } = renderComponent(
+    const { lastFrame, unmount } = render(
       <TuiContext.Provider value={ctx}>
         <Footer cwd="/p" gitBranch="" gitDirty={false} />
       </TuiContext.Provider>,
@@ -40,7 +41,7 @@ describe("Footer", () => {
 
   test("shows 'no-team:—' when no team is loaded", () => {
     const ctx = makeContextValue();
-    const { lastFrame, unmount } = renderComponent(
+    const { lastFrame, unmount } = render(
       <TuiContext.Provider value={ctx}>
         <Footer cwd="/p" gitBranch="" gitDirty={false} />
       </TuiContext.Provider>,

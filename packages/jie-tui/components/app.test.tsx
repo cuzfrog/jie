@@ -1,7 +1,8 @@
 import { Events } from "@cuzfrog/jie-platform";
+import { render } from "ink-testing-library";
 import { App } from "./app";
 import { TuiContext } from "./context";
-import { makeContextValue, renderComponent } from "../test-harness";
+import { makeContextValue } from "../test-support";
 import { Actions, createStateStore } from "../state";
 
 declare const test: (name: string, fn: () => void | Promise<void>) => void;
@@ -13,7 +14,7 @@ describe("App", () => {
     const stateStore = createStateStore();
     const state = stateStore.getState();
     const ctx = makeContextValue({ stateStore, state });
-    const { lastFrame, unmount } = renderComponent(
+    const { lastFrame, unmount } = render(
       <TuiContext.Provider value={ctx}>
         <App state={state} dispatch={(a) => stateStore.dispatch(a)} />
       </TuiContext.Provider>,
@@ -29,7 +30,7 @@ describe("App", () => {
     ])));
     const state = stateStore.getState();
     const ctx = makeContextValue({ stateStore, state });
-    const { lastFrame, unmount } = renderComponent(
+    const { lastFrame, unmount } = render(
       <TuiContext.Provider value={ctx}>
         <App state={state} dispatch={(a) => stateStore.dispatch(a)} />
       </TuiContext.Provider>,
@@ -47,7 +48,7 @@ describe("App", () => {
     stateStore.dispatch(Actions.setEnvironment("/tmp/proj", "main", false));
     const state = stateStore.getState();
     const ctx = makeContextValue({ stateStore, state });
-    const { lastFrame, unmount } = renderComponent(
+    const { lastFrame, unmount } = render(
       <TuiContext.Provider value={ctx}>
         <App state={state} dispatch={(a) => stateStore.dispatch(a)} />
       </TuiContext.Provider>,
@@ -68,7 +69,7 @@ describe("App", () => {
       expect(captured.state).toBe(state);
       return null;
     };
-    const { unmount } = renderComponent(
+    const { unmount } = render(
       <TuiContext.Provider value={ctx}><Probe /></TuiContext.Provider>,
     );
     unmount();

@@ -1,11 +1,5 @@
-import type { JiePlatform, TeamIdentity } from "@cuzfrog/jie-platform";
+import { type Command, type CommandName, type CommandResult, type Console, type EventEnvelope, type EventType, type JiePlatform, type TeamIdentity } from "@cuzfrog/jie-platform";
 import { runPrint } from "./print";
-
-interface JiePlatformStub {
-  subscribe: ReturnType<typeof vi.fn>;
-  prompt: ReturnType<typeof vi.fn>;
-  execute: ReturnType<typeof vi.fn>;
-}
 
 type AgentEnvelope = {
   sender: { kind: string; teamId?: string; agentKey?: string };
@@ -13,17 +7,32 @@ type AgentEnvelope = {
 };
 type Handler = (env: AgentEnvelope) => void;
 
-function makeHandle(): { handle: JiePlatformStub; subscribes: Map<string, Handler> } {
+function makeHandle(): { handle: JiePlatform; subscribes: Map<string, Handler> } {
   const subscribes = new Map<string, Handler>();
-  const handle: JiePlatformStub = {
-    subscribe: vi.fn((topic: string, cb: Handler) => {
-      subscribes.set(topic, cb);
-      return () => {};
-    }),
+  const dispatch = vi.fn(async <T extends CommandName>(_command: Command<T>): Promise<CommandResult<T>> => {
+    return null as CommandResult<T>;
+  });
+  const subscribeFn = <T extends EventType>(topic: T, callback: (event: EventEnvelope<T>) => void): (() => void) => {
+    subscribes.set(topic as unknown as string, callback as unknown as Handler);
+    return () => {};
+  };
+  const subscribeSpy = vi.fn(subscribeFn);
+  const handle: JiePlatform = {
+    settings: {},
+    subscribe: subscribeSpy,
     prompt: vi.fn(),
-    execute: vi.fn().mockResolvedValue(null),
+    interrupt: vi.fn(),
+    execute: dispatch,
+    loadedTeams: () => [],
   };
   return { handle, subscribes };
+}
+
+function makeConsoleMock(): Console {
+  return {
+    print: vi.fn(),
+    error: vi.fn(),
+  };
 }
 
 function makeTeam(teamId: string, agentKeys: ReadonlyArray<string>, leaderKey: string): TeamIdentity {
@@ -54,7 +63,7 @@ describe("runPrint", () => {
       });
     });
 
-    const code = await runPrint(handle as unknown as JiePlatform, team, baseArgs);
+    const code = await runPrint(handle, team, baseArgs, makeConsoleMock());
     expect(code).toBe(0);
     expect(handle.subscribe).toHaveBeenCalledWith("agent.stream.chunk", expect.any(Function));
     expect(handle.prompt).toHaveBeenCalledWith(teamId, leaderKey, "hi");
@@ -64,13 +73,16 @@ describe("runPrint", () => {
   test("timeout: returns 3 and stops the handle", async () => {
     const { handle } = makeHandle();
     const team = makeTeam("t1", ["general-1"], "general-1");
+    const consoleMock = makeConsoleMock();
     const code = await runPrint(
-      handle as unknown as JiePlatform,
+      handle,
       team,
       { ...baseArgs, timeout: 0.05 },
+      consoleMock,
     );
     expect(code).toBe(3);
     expect(handle.execute).toHaveBeenCalledWith({ name: "stop" });
+    expect(consoleMock.error).toHaveBeenCalledWith("no response from team within 0.05s");
   });
 
   test("worker busy while leader idles: gate does NOT open until worker idles", async () => {
@@ -104,7 +116,7 @@ describe("runPrint", () => {
     });
 
     const start = Date.now();
-    const code = await runPrint(handle as unknown as JiePlatform, team, { ...baseArgs, timeout: 2 });
+    const code = await runPrint(handle, team, { ...baseArgs, timeout: 2 }, makeConsoleMock());
     const elapsed = Date.now() - start;
     expect(code).toBe(0);
     expect(elapsed).toBeGreaterThanOrEqual(25);
@@ -136,7 +148,7 @@ describe("runPrint", () => {
     });
 
     const start = Date.now();
-    const code = await runPrint(handle as unknown as JiePlatform, team, { ...baseArgs, timeout: 2 });
+    const code = await runPrint(handle, team, { ...baseArgs, timeout: 2 }, makeConsoleMock());
     const elapsed = Date.now() - start;
     expect(code).toBe(0);
     expect(elapsed).toBeGreaterThanOrEqual(25);
@@ -178,7 +190,7 @@ describe("runPrint", () => {
       });
     });
 
-    const code = await runPrint(handle as unknown as JiePlatform, team, { ...baseArgs, timeout: 5 });
+    const code = await runPrint(handle, team, { ...baseArgs, timeout: 5 }, makeConsoleMock());
     expect(code).toBe(0);
     const concatenated = writes.join("");
     expect(concatenated).toContain("leader-1");

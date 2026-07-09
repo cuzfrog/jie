@@ -1,8 +1,9 @@
 import { Events } from "@cuzfrog/jie-platform";
+import { render } from "ink-testing-library";
 import { AgentsRail } from "./agents-rail";
 import { TuiContext } from "../context";
 import { Actions, createStateStore } from "../../state";
-import { makeContextValue, renderComponent } from "../../test-harness";
+import { makeContextValue } from "../../test-support";
 
 declare const test: (name: string, fn: () => void | Promise<void>) => void;
 declare const describe: (name: string, fn: () => void) => void;
@@ -17,10 +18,10 @@ describe("AgentsRail", () => {
     ])));
     const state = stateStore.getState();
     const ctx = makeContextValue({ stateStore, state });
-    const { lastFrame, unmount } = renderComponent(
+    const { lastFrame, unmount } = render(
       <TuiContext.Provider value={ctx}><AgentsRail width={20} /></TuiContext.Provider>,
     );
-    const frame = lastFrame();
+    const frame = lastFrame() ?? "";
     expect(frame).toContain("★");
     const leaderIdx = frame.indexOf("general");
     const helperIdx = frame.indexOf("helper");
@@ -36,7 +37,7 @@ describe("AgentsRail", () => {
     ])));
     const state = stateStore.getState();
     const ctx = makeContextValue({ stateStore, state });
-    const { lastFrame, unmount } = renderComponent(
+    const { lastFrame, unmount } = render(
       <TuiContext.Provider value={ctx}><AgentsRail width={20} /></TuiContext.Provider>,
     );
     expect(lastFrame()).toContain("·");

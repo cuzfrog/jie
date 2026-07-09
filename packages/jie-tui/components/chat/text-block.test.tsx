@@ -1,5 +1,5 @@
+import { render } from "ink-testing-library";
 import { TextBlock } from "./text-block";
-import { renderComponent } from "../../test-harness";
 
 declare const test: (name: string, fn: () => void | Promise<void>) => void;
 declare const describe: (name: string, fn: () => void) => void;
@@ -7,7 +7,7 @@ declare const expect: typeof import("bun:test").expect;
 
 describe("TextBlock", () => {
   test("renders assistant text with the ● prefix on the first line", () => {
-    const { lastFrame, unmount } = renderComponent(
+    const { lastFrame, unmount } = render(
       <TextBlock block={{ kind: "text", text: "first\nsecond" }} expanded={true} />,
     );
     const frame = lastFrame();
@@ -17,7 +17,7 @@ describe("TextBlock", () => {
   });
 
   test("collapsed thinking block renders the 'Thinking...' label", () => {
-    const { lastFrame, unmount } = renderComponent(
+    const { lastFrame, unmount } = render(
       <TextBlock block={{ kind: "thinking", text: "raw" }} expanded={false} />,
     );
     expect(lastFrame()).toContain("Thinking...");
@@ -25,7 +25,7 @@ describe("TextBlock", () => {
   });
 
   test("expanded thinking block renders the body text indented", () => {
-    const { lastFrame, unmount } = renderComponent(
+    const { lastFrame, unmount } = render(
       <TextBlock block={{ kind: "thinking", text: "raw" }} expanded={true} />,
     );
     expect(lastFrame()).toContain("raw");

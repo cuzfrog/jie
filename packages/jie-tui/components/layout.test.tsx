@@ -2,7 +2,8 @@ import { Events } from "@cuzfrog/jie-platform";
 import { Layout } from "./layout";
 import { TuiContext } from "./context";
 import { Actions, createStateStore } from "../state";
-import { makeContextValue, renderComponent } from "../test-harness";
+import { render } from "ink-testing-library";
+import { makeContextValue } from "../test-support";
 
 declare const test: (name: string, fn: () => void | Promise<void>) => void;
 declare const describe: (name: string, fn: () => void) => void;
@@ -21,12 +22,12 @@ function mountLayout(opts: { columns: number; rows: number; showRail: boolean })
   if (opts.showRail) stateStore.dispatch(Actions.toggleTeamRail());
   const state = stateStore.getState();
   const ctx = makeContextValue({ stateStore, state });
-  const { lastFrame, unmount } = renderComponent(
+  const { lastFrame, unmount } = render(
     <TuiContext.Provider value={ctx}>
       <Layout columns={opts.columns} rows={opts.rows} />
     </TuiContext.Provider>,
   );
-  return { lastFrame, unmount };
+  return { lastFrame: () => lastFrame() ?? "", unmount };
 }
 
 describe("Layout", () => {

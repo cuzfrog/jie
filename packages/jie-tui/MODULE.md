@@ -8,6 +8,7 @@ sealed:
   - command-handler.ts
   - git-service.test.ts
   - git-service.ts
+  - test-support.ts
 ---
 
 # Design principles

@@ -24,4 +24,4 @@ export { Events } from "./event";
 
 export type { GitSnapshot } from "./services";
 
-export { logger } from "./utils";
+export { logger, type Console, defaultConsole } from "./utils";

@@ -1,9 +1,30 @@
+import { Component, type ReactNode } from "react";
+import { render } from "ink-testing-library";
 import { TuiContext, useTuiContext, useFocusedAgent } from "./context";
-import { makeContextValue, renderComponent } from "../test-harness";
+import { makeContextValue } from "../test-support";
 
 declare const test: (name: string, fn: () => void | Promise<void>) => void;
 declare const describe: (name: string, fn: () => void) => void;
 declare const expect: typeof import("bun:test").expect;
+
+interface BoundaryProps {
+  readonly children: ReactNode;
+  readonly onError: (err: Error) => void;
+}
+
+class Boundary extends Component<BoundaryProps, { readonly error: Error | null }> {
+  override state: { readonly error: Error | null } = { error: null };
+  static getDerivedStateFromError(error: Error): { readonly error: Error } {
+    return { error };
+  }
+  override componentDidCatch(error: Error): void {
+    this.props.onError(error);
+  }
+  override render(): ReactNode {
+    if (this.state.error !== null) return null;
+    return this.props.children;
+  }
+}
 
 describe("TuiContext", () => {
   test("useTuiContext returns the provided value inside a Provider", () => {
@@ -14,7 +35,7 @@ describe("TuiContext", () => {
       return null;
     };
     const ctx = makeContextValue();
-    const { unmount } = renderComponent(
+    const { unmount } = render(
       <TuiContext.Provider value={ctx}>
         <Probe />
       </TuiContext.Provider>,
@@ -31,7 +52,7 @@ describe("TuiContext", () => {
       return null;
     };
     const ctx = makeContextValue();
-    const { unmount } = renderComponent(
+    const { unmount } = render(
       <TuiContext.Provider value={ctx}>
         <Probe />
       </TuiContext.Provider>,
@@ -45,7 +66,23 @@ describe("TuiContext", () => {
       useTuiContext();
       return null;
     };
-    const { unmount } = renderComponent(<Probe />);
-    unmount();
+    const caught: { value: Error | null } = { value: null };
+    const originalConsoleError = console.error;
+    console.error = (): void => undefined;
+    let unmountFn: (() => void) | null = null;
+    try {
+      const result = render(
+        <Boundary onError={(e) => { caught.value = e; }}>
+          <Probe />
+        </Boundary>,
+      );
+      unmountFn = result.unmount;
+    } finally {
+      console.error = originalConsoleError;
+    }
+    expect(caught.value).not.toBeNull();
+    if (caught.value === null) throw new Error("unreachable");
+    expect(caught.value.message).toBe("TuiContext is not provided; wrap your tree in <TuiContext.Provider>");
+    unmountFn?.();
   });
 });

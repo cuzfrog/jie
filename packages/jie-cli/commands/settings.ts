@@ -1,9 +1,10 @@
-import { JiePlatformError, type JiePlatform } from "@cuzfrog/jie-platform";
+import { JiePlatformError, defaultConsole, type Console, type JiePlatform } from "@cuzfrog/jie-platform";
 import type { ParsedArgsMap } from "../cli-flags";
 
 export async function runModel(
   parsed: ParsedArgsMap["model"],
   platform: JiePlatform,
+  console: Console = defaultConsole,
 ): Promise<number> {
   try {
     await platform.execute({ name: "setDefaultModel", provider: parsed.provider, modelId: parsed.modelId });
@@ -14,18 +15,19 @@ export async function runModel(
     }
     throw error;
   }
-  console.log(`default model set to ${parsed.provider}/${parsed.modelId}`);
+  console.print(`default model set to ${parsed.provider}/${parsed.modelId}`);
   return 0;
 }
 
 export async function runTeam(
   parsed: ParsedArgsMap["team"],
   platform: JiePlatform,
+  console: Console = defaultConsole,
 ): Promise<number> {
   if (parsed.teamId === undefined) {
     const info = await platform.execute({ name: "getTeamInfo" });
-    console.log(`defaultTeam: ${info.defaultTeam ?? "unset"}`);
-    console.log(`installed: ${info.installed.join(", ")}`);
+    console.print(`defaultTeam: ${info.defaultTeam ?? "unset"}`);
+    console.print(`installed: ${info.installed.join(", ")}`);
     return 0;
   }
   const teamId = parsed.teamId;
@@ -40,6 +42,6 @@ export async function runTeam(
     }
     throw error;
   }
-  console.log(`default team set to '${teamId}'`);
+  console.print(`default team set to '${teamId}'`);
   return 0;
 }

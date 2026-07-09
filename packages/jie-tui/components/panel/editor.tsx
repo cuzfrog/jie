@@ -17,27 +17,17 @@ export function Editor(_props: EditorProps): JSX.Element {
   const buffer = state.editorText;
 
   useInput((input, key) => {
-    if (key.return) {
-      const text = buffer;
+    if (key.return || (input.endsWith("\r") && !key.ctrl && !key.meta)) {
+      const head = key.return ? input : input.slice(0, -1);
+      const raw = buffer + head;
+      const text = raw.replace(/[\r\n]+$/, "");
       if (text.length === 0) return;
-      const next = [text, ...history].slice(0, HISTORY_LIMIT);
-      setHistory(next);
-      setHistoryIndex(-1);
-      setDraft("");
-      dispatch(Actions.setEditorText(""));
-      dispatch(Actions.submitEditorText(text));
-      return;
-    }
-    if (input.endsWith("\r") && !key.ctrl && !key.meta) {
-      const head = input.slice(0, -1);
-      const next = buffer + head;
-      if (next.length === 0) return;
-      const hist = [next, ...history].slice(0, HISTORY_LIMIT);
+      const hist = [text, ...history].slice(0, HISTORY_LIMIT);
       setHistory(hist);
       setHistoryIndex(-1);
       setDraft("");
       dispatch(Actions.setEditorText(""));
-      dispatch(Actions.submitEditorText(next));
+      dispatch(Actions.submitEditorText(text));
       return;
     }
     if (key.upArrow && history.length > 0) {
@@ -63,6 +53,7 @@ export function Editor(_props: EditorProps): JSX.Element {
     }
     if (input.length > 0 && !key.ctrl && !key.meta) {
       const next = buffer + input;
+      if (buffer.length === 0) dispatch(Actions.clearBanners());
       dispatch(Actions.setEditorText(next));
     }
   });

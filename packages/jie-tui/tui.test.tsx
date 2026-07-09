@@ -1,8 +1,8 @@
 import { PassThrough } from "node:stream";
 import { createTui, type Tui } from "./tui";
 import { Actions } from "./state";
-import { makePlatform } from "./test-harness";
 import { withTTY } from "../../tests/support";
+import type { JiePlatform, EventType, AnyEventEnvelope, EventEnvelope } from "@cuzfrog/jie-platform";
 
 declare const test: (name: string, fn: () => void | Promise<void>) => void;
 declare const describe: (name: string, fn: () => void) => void;
@@ -33,6 +33,24 @@ function bootTui(): Tui {
   });
 }
 
+function makePlatform(): JiePlatform {
+  const handlers = new Map<EventType, (env: AnyEventEnvelope) => void>();
+  return {
+    settings: { defaultTeam: undefined, defaultProvider: undefined, defaultModel: undefined },
+    subscribe: <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void) => {
+      const handler = cb as (env: AnyEventEnvelope) => void;
+      handlers.set(topic, handler);
+      return () => {
+        if (handlers.get(topic) === handler) handlers.delete(topic);
+      };
+    },
+    prompt: () => undefined,
+    interrupt: () => undefined,
+    execute: (async () => null) as JiePlatform["execute"],
+    loadedTeams: () => [],
+  };
+}
+
 describe("createTui — start resolves on pendingQuit", () => {
   test("dispatching requestQuit resolves start()", async () => {
     withTTY(true, async () => {
@@ -46,6 +64,7 @@ describe("createTui — start resolves on pendingQuit", () => {
         started,
         new Promise<never>((_resolve, reject) => setTimeout(() => reject(new Error("start did not resolve within 2s after requestQuit")), 2000)),
       ]);
+      tui.stop();
     });
   });
 

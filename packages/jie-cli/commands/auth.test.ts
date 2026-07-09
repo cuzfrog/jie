@@ -1,62 +1,65 @@
+import { type Command, type CommandName, type CommandResult, type Console, type JiePlatform } from "@cuzfrog/jie-platform";
 import { runApiKey, runLogin, runLogout } from "./auth";
-import type { JiePlatform } from "@cuzfrog/jie-platform";
+
+function makeConsoleMock(): Console {
+  return {
+    print: vi.fn(),
+    error: vi.fn(),
+  };
+}
 
 function makePlatform(): { platform: JiePlatform; execute: ReturnType<typeof vi.fn> } {
-  const execute = vi.fn(async (cmd: { name: string } & Record<string, unknown>) => {
-    switch (cmd.name) {
-      case "getDefaultModel":
-        return null;
-      case "login":
-      case "logout":
-      default:
-        return null;
-    }
+  const dispatch = vi.fn(async <T extends CommandName>(command: Command<T>): Promise<CommandResult<T>> => {
+    if (command.name === "getDefaultModel") return null as CommandResult<T>;
+    return null as CommandResult<T>;
   });
-  const platform = {
-    team: { id: "minimal", agents: [] },
-    stop: vi.fn<() => Promise<void>>(() => Promise.resolve()),
-    subscribe: vi.fn(),
+  const platform: JiePlatform = {
+    settings: {},
+    subscribe: vi.fn(() => () => undefined),
     prompt: vi.fn(),
     interrupt: vi.fn(),
-    execute,
+    execute: dispatch,
+    loadedTeams: () => [],
   };
-  return { platform: platform as unknown as JiePlatform, execute };
+  return { platform, execute: dispatch };
 }
 
 describe("runLogin", () => {
   test("login --provider anthropic --api-key sk-test -> dispatches login and prints success", async () => {
     const { platform, execute } = makePlatform();
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
+    const consoleMock = makeConsoleMock();
     const code = await runLogin(
       { kind: "login", provider: "anthropic", apiKey: "sk-test" },
       platform,
+      consoleMock,
     );
     expect(code).toBe(0);
     expect(execute).toHaveBeenCalledWith({ name: "login", provider: "anthropic", apiKey: "sk-test" });
-    expect(logSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain("logged in to anthropic");
-    logSpy.mockRestore();
+    expect(consoleMock.print).toHaveBeenCalledWith("logged in to anthropic");
   });
 
   test("login without flags -> exit 1, no execute calls", async () => {
     const { platform, execute } = makePlatform();
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => { });
-    const code = await runLogin({ kind: "login" }, platform);
+    const consoleMock = makeConsoleMock();
+    const code = await runLogin({ kind: "login" }, platform, consoleMock);
     expect(code).toBe(1);
     expect(execute).not.toHaveBeenCalled();
-    errSpy.mockRestore();
+    expect(consoleMock.error).toHaveBeenCalledWith("interactive login not implemented in v1; use --provider and --api-key");
   });
 });
 
 describe("runLogout", () => {
   test("logout anthropic -> dispatches logout with provider", async () => {
     const { platform, execute } = makePlatform();
-    await runLogout({ kind: "logout", provider: "anthropic" }, platform);
+    const consoleMock = makeConsoleMock();
+    await runLogout({ kind: "logout", provider: "anthropic" }, platform, consoleMock);
     expect(execute).toHaveBeenCalledWith({ name: "logout", provider: "anthropic" });
   });
 
   test("logout (no provider) -> dispatches logout with undefined provider", async () => {
     const { platform, execute } = makePlatform();
-    await runLogout({ kind: "logout" }, platform);
+    const consoleMock = makeConsoleMock();
+    await runLogout({ kind: "logout" }, platform, consoleMock);
     expect(execute).toHaveBeenCalledWith({ name: "logout", provider: undefined });
   });
 });
@@ -68,21 +71,23 @@ describe("runApiKey (top-level --api-key)", () => {
       if (cmd.name === "getDefaultModel") return { provider: "anthropic", modelId: "claude-sonnet-4" };
       return null;
     });
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
-    const code = await runApiKey({ kind: "apiKey", apiKey: "sk-new" }, platform);
+    const consoleMock = makeConsoleMock();
+    const code = await runApiKey({ kind: "apiKey", apiKey: "sk-new" }, platform, consoleMock);
     expect(code).toBe(0);
     expect(execute).toHaveBeenNthCalledWith(1, { name: "getDefaultModel" });
     expect(execute).toHaveBeenNthCalledWith(2, { name: "login", provider: "anthropic", apiKey: "sk-new" });
-    logSpy.mockRestore();
+    expect(consoleMock.print).toHaveBeenCalledWith("logged in to anthropic");
   });
 
   test("--api-key without defaultProvider -> exit 1", async () => {
     const { platform, execute } = makePlatform();
     execute.mockResolvedValueOnce(null);
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => { });
-    const code = await runApiKey({ kind: "apiKey", apiKey: "sk-new" }, platform);
+    const consoleMock = makeConsoleMock();
+    const code = await runApiKey({ kind: "apiKey", apiKey: "sk-new" }, platform, consoleMock);
     expect(code).toBe(1);
     expect(execute).toHaveBeenCalledTimes(1);
-    errSpy.mockRestore();
+    expect(consoleMock.error).toHaveBeenCalledWith(
+      "no provider resolved; run 'jie model <provider>/<modelId>' first, or use 'jie login --provider <id> --api-key <key>' to set the key for a specific provider",
+    );
   });
 });

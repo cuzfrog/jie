@@ -1,4 +1,4 @@
-import type { JiePlatform, TeamIdentity } from "@cuzfrog/jie-platform";
+import { defaultConsole, type Console, type JiePlatform, type TeamIdentity } from "@cuzfrog/jie-platform";
 import type { ParsedArgsMap } from "../cli-flags";
 
 export type PrintArgs = ParsedArgsMap["print"];
@@ -7,6 +7,7 @@ export async function runPrint(
   handle: JiePlatform,
   team: TeamIdentity,
   args: PrintArgs,
+  console: Console = defaultConsole,
 ): Promise<number> {
   const agentKeys = team.agents.map((a) => a.agentKey);
   handle.subscribe("agent.stream.chunk", (envelope) => {

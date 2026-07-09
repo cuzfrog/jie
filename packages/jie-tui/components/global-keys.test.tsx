@@ -1,7 +1,8 @@
+import { render } from "ink-testing-library";
 import { GlobalKeyBindings } from "./global-keys";
 import { TuiContext } from "./context";
 import { createStateStore } from "../state";
-import { makeContextValue, renderComponent } from "../test-harness";
+import { makeContextValue } from "../test-support";
 
 declare const test: (name: string, fn: () => void | Promise<void>) => void;
 declare const describe: (name: string, fn: () => void) => void;
@@ -11,7 +12,7 @@ describe("GlobalKeyBindings", () => {
   test("renders nothing (returns null)", () => {
     const store = createStateStore();
     const ctx = makeContextValue({ stateStore: store });
-    const { lastFrame, unmount } = renderComponent(
+    const { lastFrame, unmount } = render(
       <TuiContext.Provider value={ctx}>
         <GlobalKeyBindings onToggleThinking={() => undefined} onToggleToolCards={() => undefined} />
       </TuiContext.Provider>,
@@ -23,7 +24,7 @@ describe("GlobalKeyBindings", () => {
   test("accepts a custom now() clock", () => {
     const store = createStateStore();
     const ctx = makeContextValue({ stateStore: store });
-    const { unmount } = renderComponent(
+    const { unmount } = render(
       <TuiContext.Provider value={ctx}>
         <GlobalKeyBindings
           onToggleThinking={() => undefined}
