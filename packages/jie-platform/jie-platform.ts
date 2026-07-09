@@ -44,7 +44,7 @@ export interface JiePlatform {
   subscribe<T extends EventType>(topic: T, callback: (event: EventEnvelope<T>) => void): () => void;
   execute<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>>;
   /** visibleForTesting */
-  loadedTeams(): ReadonlyArray<TeamIdentity>;
+  teams(): ReadonlyArray<TeamIdentity>;
 }
 
 export async function createJiePlatform(options: JiePlatformOptions, deps: JiePlatformDeps = buildJiePlatformDeps(options)): Promise<JiePlatform> {
@@ -72,7 +72,7 @@ export async function createJiePlatform(options: JiePlatformOptions, deps: JiePl
     execute<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>> {
       return deps.commandExecutor.execute(command);
     },
-    loadedTeams(): ReadonlyArray<TeamIdentity> {
+    teams(): ReadonlyArray<TeamIdentity> {
       return [...deps.teamManager.listLoaded().values()];
     },
   };

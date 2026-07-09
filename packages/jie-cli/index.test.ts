@@ -159,7 +159,7 @@ function makeFakePlatform(): FakePlatform {
     execute: vi.fn(async <T extends CommandName>(command: Command<T>): Promise<CommandResult<T>> => {
       return dispatch(command) as CommandResult<T>;
     }),
-    loadedTeams: () => [],
+    teams: () => [],
   };
   return fake;
 }

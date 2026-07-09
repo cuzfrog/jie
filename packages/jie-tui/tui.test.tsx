@@ -43,7 +43,7 @@ function makePlatform(): JiePlatform {
     prompt: () => undefined,
     interrupt: () => undefined,
     execute: (async () => null) as JiePlatform["execute"],
-    loadedTeams: () => [],
+    teams: () => [],
   };
 }
 

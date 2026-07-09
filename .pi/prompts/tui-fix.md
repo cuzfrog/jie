@@ -15,5 +15,5 @@ Fix tui problems, enhance tests.
 - Once a problem is found, update/add tests coverage first, run the test, ensure the test will fail (reproduce the problem) before implementation the fix. Unit tests should be collocated in companion test files.
 - Any logic change should be reflected by unit test accordingly.
 
-## User Instructions
+## Issues mentioned by user:
 $ARGUMENTS
