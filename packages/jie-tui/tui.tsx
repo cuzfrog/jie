@@ -1,12 +1,13 @@
 import type { WriteStream, ReadStream } from "node:tty";
 import { render } from "ink";
-import { type AnyEventEnvelope, type EventEnvelope, type EventType, type JiePlatform } from "@cuzfrog/jie-platform";
+import { logger, type AnyEventEnvelope, type EventEnvelope, type EventType, type JiePlatform } from "@cuzfrog/jie-platform";
 import { Actions, type TuiState, type StateStore, createStateStore } from "./state";
 import { createTuiCommandHandler, type CommandHandler } from "./command-handler";
 import { App } from "./components";
 
 const SUBMIT_EDITOR_TEXT = Actions.submitEditorText("").type;
 const REQUEST_INTERRUPT = Actions.requestInterrupt("", "").type;
+const log = logger.getSubLogger({ name: "jie.tui" });
 
 export interface TuiDeps {
   readonly platform: JiePlatform;
@@ -119,7 +120,7 @@ class InkTui implements Tui {
       try {
         this.inkInstance.unmount();
       } catch {
-        // ignore
+        log.error("failed to unmount ink");
       }
       this.inkInstance = null;
     }

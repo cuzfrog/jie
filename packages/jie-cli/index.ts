@@ -55,8 +55,8 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
   const handle = await bootPlatform({ cwd, homeJieDir, projectJieDir }, deps.createPlatform, deps.console);
   switch (args.kind) {
     case "tui": {
-      await handle.execute({ name: "team", teamId: args.team });
       const tui = deps.createTui({ cwd }, { platform: handle });
+      await handle.execute({ name: "team", teamId: args.team });
       await tui.start();
       await handle.execute({ name: "stop" });
       return 0;

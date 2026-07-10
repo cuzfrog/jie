@@ -248,7 +248,48 @@ describe("createTuiCommandHandler — /team", () => {
     await new Promise((r) => setImmediate(r));
     expect(execute).toHaveBeenCalledWith({ name: "team", teamId: "alpha" });
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("loading team 'alpha'")));
-    expect(dispatch.mock.calls.some(([a]) => a.type === "[bus] receive event from event bus")).toBe(true);
+  });
+
+  test("/team <id> first-time load dispatches switchTeam (UI concern) with the full identity", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => ({
+      id: "alpha",
+      leaderKey: "general-1",
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true }],
+    }));
+    const { deps, dispatch } = makeDeps(platform);
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("/team alpha");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch.mock.calls.some(([a]) => a.type === "[bus] receive event from event bus")).toBe(false);
+    const switchCalls = dispatch.mock.calls.filter(([a]) => a.type === "[ui] switch team");
+    expect(switchCalls).toHaveLength(1);
+    expect(switchCalls[0]![0]).toEqual(Actions.switchTeam({
+      id: "alpha",
+      leaderKey: "general-1",
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true }],
+    }));
+  });
+
+  test("/team <currentId> (cache hit) still dispatches switchTeam so the UI rebuilds", async () => {
+    const { platform, execute } = makePlatform();
+    const identity = {
+      id: "alpha",
+      leaderKey: "general-1",
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true }],
+    } as const;
+    execute.mockImplementation(async () => identity);
+    const { deps, dispatch } = makeDeps(platform);
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("/team alpha");
+    await new Promise((r) => setImmediate(r));
+    handler.handle("/team alpha");
+    await new Promise((r) => setImmediate(r));
+    expect(execute).toHaveBeenCalledTimes(2);
+    const switchCalls = dispatch.mock.calls.filter(([a]) => a.type === "[ui] switch team");
+    expect(switchCalls).toHaveLength(2);
+    expect(switchCalls[0]![0]).toEqual(Actions.switchTeam(identity));
+    expect(switchCalls[1]![0]).toEqual(Actions.switchTeam(identity));
   });
 
   test("/team <id> surfaces the platform error's message verbatim", async () => {

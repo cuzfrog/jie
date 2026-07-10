@@ -11,11 +11,11 @@
       },
       "models": [
         {
-          "id": "minicpm5-1b",
-          "name": "minicpm5-1b",
+          "id": "ornith-1.0-9b-mtp",
+          "name": "ornith-1.0-9b-mtp",
           "reasoning": true,
           "input": ["text"],
-          "contextWindow": 131528,
+          "contextWindow": 100000,
           "maxTokens": 4096,
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
         }

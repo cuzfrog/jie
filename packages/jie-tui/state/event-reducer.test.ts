@@ -2,6 +2,8 @@ import { Events, type AgentSender, type SystemSender, type UserSender } from "@c
 import type { TuiState } from "./state";
 import { createStateStore } from "./state-store";
 import { reduce } from "./event-reducer";
+import { reduce as reduceAction } from "./reducer";
+import { Actions } from "./actions";
 
 const INITIAL_TUI_STATE = createStateStore().getState();
 
@@ -53,6 +55,57 @@ describe("reduceTeamLoaded", () => {
     ]));
     expect(state.leaderAgentId).toBe("my-team:manager-1");
     expect(state.agents.get("my-team:worker-1")?.isLeader).toBe(false);
+  });
+});
+
+describe("Actions.switchTeam", () => {
+  test("first-time switch from empty state seeds agents and focuses the leader", () => {
+    const identity = {
+      id: "my-team",
+      leaderKey: "general-1",
+      agents: [
+        { teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true },
+      ],
+    };
+    const state = reduceAction(INITIAL_TUI_STATE, Actions.switchTeam(identity));
+    expect(state.teamId).toBe("my-team");
+    expect(state.leaderAgentId).toBe("my-team:general-1");
+    expect(state.focusedAgentId).toBe("my-team:general-1");
+    expect(state.agents.size).toBe(1);
+    expect(state.agents.get("my-team:general-1")?.isLeader).toBe(true);
+  });
+
+  test("subsequent switch to a different team resets agents and re-focuses the new leader", () => {
+    const first = reduceAction(INITIAL_TUI_STATE, Actions.switchTeam({
+      id: "team-a",
+      leaderKey: "general-1",
+      agents: [{ teamId: "team-a", role: "general", agentKey: "general-1", isLeader: true }],
+    }));
+    const second = reduceAction(first, Actions.switchTeam({
+      id: "team-b",
+      leaderKey: "worker-1",
+      agents: [
+        { teamId: "team-b", role: "manager", agentKey: "manager-1", isLeader: false },
+        { teamId: "team-b", role: "worker", agentKey: "worker-1", isLeader: true },
+      ],
+    }));
+    expect(second.teamId).toBe("team-b");
+    expect(second.leaderAgentId).toBe("team-b:worker-1");
+    expect(second.focusedAgentId).toBe("team-b:worker-1");
+    expect(second.agents.size).toBe(2);
+    expect(second.agents.has("team-a:general-1")).toBe(false);
+    expect(second.agents.get("team-b:worker-1")?.isLeader).toBe(true);
+    expect(second.agents.get("team-b:manager-1")?.isLeader).toBe(false);
+  });
+
+  test("switchTeam carries the full identity a consumer needs (no platform round-trip in reducer)", () => {
+    const identity = {
+      id: "minimal",
+      leaderKey: "general-1",
+      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true }],
+    };
+    const state = reduceAction(INITIAL_TUI_STATE, Actions.switchTeam(identity));
+    expect(state.agents.get("minimal:general-1")?.role).toBe("general");
   });
 });
 

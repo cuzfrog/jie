@@ -113,13 +113,13 @@ describe("createJiePlatform", () => {
     expect(handle.settings).toBe(customSettings);
   });
 
-  test("auto-loads a team and publishes system.team.loaded before resolving", async () => {
+  test("construction does not eagerly publish system.team.loaded; teams() is empty until execute({name:'team'})", async () => {
     const deps = makeDeps(workspace, homeJieDir);
     const seen: EventEnvelope<"system.team.loaded">[] = [];
     deps.eventManager.subscribe("system.team.loaded", (env) => seen.push(env));
     const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
-    expect(seen.length).toBeGreaterThanOrEqual(1);
-    expect(seen[0]!.payload.teamId).toBe("minimal");
+    expect(seen).toEqual([]);
+    expect(handle.teams()).toEqual([]);
     void handle;
   });
 

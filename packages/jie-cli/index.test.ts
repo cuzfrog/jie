@@ -143,20 +143,29 @@ describe("jie --api-key (top-level, integration)", () => {
 interface FakePlatform extends JiePlatform {
   execute: ReturnType<typeof vi.fn>;
   subscribeCalls: EventType[];
+  trace: TraceEvent[];
 }
+
+type TraceEvent =
+  | { readonly kind: "subscribe"; readonly topic: EventType }
+  | { readonly kind: "execute"; readonly commandName: string };
 
 function makeFakePlatform(): FakePlatform {
   const subscribeCalls: EventType[] = [];
+  const trace: TraceEvent[] = [];
   const fake: FakePlatform = {
     settings: {},
     subscribeCalls,
+    trace,
     subscribe<T extends EventType>(topic: T, _cb: (event: EventEnvelope<T>) => void): () => void {
       subscribeCalls.push(topic);
+      trace.push({ kind: "subscribe", topic });
       return () => undefined;
     },
     prompt: vi.fn(),
     interrupt: vi.fn(),
     execute: vi.fn(async <T extends CommandName>(command: Command<T>): Promise<CommandResult<T>> => {
+      trace.push({ kind: "execute", commandName: command.name });
       return dispatch(command) as CommandResult<T>;
     }),
     teams: () => [],
@@ -204,6 +213,8 @@ function captureRun(platform: FakePlatform): CapturedRun {
   const createPlatform = vi.fn(async (_opts: JiePlatformOptions): Promise<JiePlatform> => platform);
   const createTui = vi.fn((options: CreateTUIOptions, deps: TuiDeps): Tui => {
     tuiCalls.push({ options, deps });
+    deps.platform.subscribe("system.team.loaded", () => undefined);
+    deps.platform.subscribe("system.error", () => undefined);
     const tui: Tui = {
       state: {
         cwd: null,
@@ -261,6 +272,21 @@ describe("_run — tui", () => {
     const captured = captureRun(platform);
     await captured.run({ kind: "tui" });
     expect(platform.subscribeCalls).toContain("system.error");
+  });
+
+  test("tui boot: TUI subscribes BEFORE execute({name:'team'}) so system.team.loaded reaches the TUI", async () => {
+    const platform = makeFakePlatform();
+    const captured = captureRun(platform);
+    await captured.run({ kind: "tui" });
+    const teamExecuteIndex = platform.trace.findIndex(
+      (e) => e.kind === "execute" && e.commandName === "team",
+    );
+    expect(teamExecuteIndex).toBeGreaterThanOrEqual(0);
+    const subscribedBeforeTeam = platform.trace
+      .slice(0, teamExecuteIndex)
+      .filter((e): e is { kind: "subscribe"; topic: EventType } => e.kind === "subscribe")
+      .some((e) => e.topic === "system.team.loaded");
+    expect(subscribedBeforeTeam).toBe(true);
   });
 
   test("tui boot: propagates createPlatform rejection via thrown error", async () => {

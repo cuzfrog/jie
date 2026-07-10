@@ -1,7 +1,8 @@
-import type { AnyEventEnvelope } from "@cuzfrog/jie-platform";
+import type { AnyEventEnvelope, TeamIdentity } from "@cuzfrog/jie-platform";
 
 export const ActionTypes = {
   RECEIVE_EVENT: "[bus] receive event from event bus",
+  SWITCH_TEAM: "[ui] switch team",
   TOGGLE_TEAM_RAIL: "[ui] toggle team rail panel",
   TOGGLE_THINKING: "[ui] toggle thinking expanded",
   TOGGLE_TOOL_CARDS: "[ui] toggle tool cards expanded",
@@ -38,6 +39,7 @@ const clearBanners = createAction(ActionTypes.CLEAR_BANNERS);
 // If parameters are <= 3, do not use object.
 export const Actions = {
   receiveEvent: (event: AnyEventEnvelope) => createAction(ActionTypes.RECEIVE_EVENT, event),
+	switchTeam: (identity: TeamIdentity) => createAction(ActionTypes.SWITCH_TEAM, identity),
 	toggleTeamRail: () => toggleTeamRail,
 	toggleThinking: () => toggleThinking,
 	toggleToolCards: () => toggleToolCards,

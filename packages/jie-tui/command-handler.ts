@@ -1,4 +1,4 @@
-import { Events, JiePlatformError, type JiePlatform } from "@cuzfrog/jie-platform";
+import { JiePlatformError, type JiePlatform } from "@cuzfrog/jie-platform";
 import { Actions, type StateStore } from "./state";
 
 type CommandOutcome =
@@ -157,15 +157,7 @@ function interceptTeam(args: ReadonlyArray<string>, deps: CommandHandlerDeps): I
   const argument = args[0]!;
   void deps.platform.execute({ name: "team", teamId: argument })
     .then((identity) => {
-      deps.stateStore.dispatch(
-        Actions.receiveEvent(
-          Events.teamLoaded(
-            { kind: "system" },
-            identity.id,
-            identity.agents.map((a) => ({ role: a.role, agent_key: a.agentKey, is_leader: a.isLeader })),
-          ),
-        ),
-      );
+      deps.stateStore.dispatch(Actions.switchTeam(identity));
     }, (error: unknown) => {
       if (error instanceof JiePlatformError) {
         deps.stateStore.dispatch(Actions.setErrorMessage(error.message));

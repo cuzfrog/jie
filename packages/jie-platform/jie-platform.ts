@@ -49,13 +49,6 @@ export interface JiePlatform {
 
 export async function createJiePlatform(options: JiePlatformOptions, deps: JiePlatformDeps = buildJiePlatformDeps(options)): Promise<JiePlatform> {
   const settingsSnapshot: Settings = deps.settingsStore.load();
-  try {
-    await deps.teamManager.load();
-  } catch (error) {
-    deps.eventManager.publish(
-      Events.systemError({ kind: "system" }, error instanceof Error ? error.message : String(error)),
-    );
-  }
 
   const handle: JiePlatform = {
     settings: settingsSnapshot,

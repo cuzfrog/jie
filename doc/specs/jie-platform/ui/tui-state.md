@@ -30,9 +30,11 @@ Editor-internal state (`inputBuffer`, `inputHistory`, `historyIndex`) lives on p
 
 ## Actions
 
-The reducer takes `Action = ReceiveEvent | ToggleTeamRail | SwitchCycleAgent | ClearTuiState | SetTransientMessage | ClearTransientMessage | SetErrorMessage | ClearErrorMessage | RequestQuit | RequestRender` (defined in `packages/jie-tui/state/actions.ts`). Bus envelope types are **not** the action type — `tui.ts` wraps every bus envelope in `Actions.receiveEvent(envelope)` before dispatch. UI-local events (rail toggle, cycle, transient, error, clear, quit, render) are dispatched directly.
+The reducer takes `Action = ReceiveEvent | SwitchTeam | ToggleTeamRail | SwitchCycleAgent | ClearTuiState | SetTransientMessage | ClearTransientMessage | SetErrorMessage | ClearErrorMessage | RequestQuit | RequestRender` (defined in `packages/jie-tui/state/actions.ts`). Bus envelope types are **not** the action type — `tui.ts` wraps every bus envelope in `Actions.receiveEvent(envelope)` before dispatch. UI-local events (switch team, rail toggle, cycle, transient, error, clear, quit, render) are dispatched directly.
 
 This split exists because the bus event taxonomy is the platform's contract (other consumers may subscribe to the same topic); UI actions are the TUI's local vocabulary. Keeping them as separate action types prevents accidentally publishing UI actions to the bus and keeps the reducer testable with literal action objects.
+
+**`system.team.loaded` is a platform data signal, not a UI switch signal.** It tells the TUI "this team is now loaded" and is emitted by `TeamManager.load` only on fresh loads (cache hits are silent). Switching — i.e. "this is the team the TUI is now watching" — is a UI concern and lives on the `Actions.switchTeam(identity)` path, fired by the `/team <id>` slash command after the platform's `execute({name:"team"})` resolves. Both paths reduce through the same agent-map seeding logic; the only difference is the source shape (`TeamIdentity` from the action, snake-cased event payload from the bus).
 
 ## Cross-team guard
 
@@ -45,6 +47,12 @@ Rules not covered below fall through and return `state` unchanged — the reduce
 ### `system.team.loaded`
 
 Seed `state.agents` from `payload.agents`, composing `AgentId = \`${teamId}:${agent_key}\``. **Re-applying the same team updates only `role` and `isLeader`** — history and current turn are preserved. On team switch (`state.teamId !== null && state.teamId !== payload.teamId`), reset `agents`, `leaderAgentId`, `focusedAgentId` first. **Drop any agent in `state.agents` that is absent from the incoming payload** (stale slots from the previous team). Record the leader's `AgentId` as `state.leaderAgentId`; if `focusedAgentId === null`, focus the leader.
+
+This event is a platform data signal — it tells the TUI a team has been loaded. It is **not** the switch mechanism; the TUI's slash-command `/team <id>` path uses `Actions.switchTeam(identity)` instead (see UI actions below). Both rules share the same agent-map seeding logic, and `Actions.switchTeam` always fires regardless of whether the underlying `TeamManager.load` was a fresh load or a cache hit, so the UI rebuilds uniformly.
+
+### `Actions.switchTeam(identity)`
+
+UI action carrying a `TeamIdentity` payload (full data a consumer needs: `id`, `leaderKey`, `agents`). Fired by `interceptTeam` in `command-handler.ts` after `platform.execute({name:"team", teamId})` resolves — applies to first-time loads, subsequent switches, and cache-hit re-selections. Reduces identically to `system.team.loaded` (same agent-map seeding rules) but lives on the UI side so the reducer does not depend on the platform's emission timing or cache-hit semantics.
 
 ### `user.prompt`
 
@@ -82,6 +90,7 @@ Set `state.errorBanner = { text: <composed> }` where `<composed>` is either `eve
 
 ### UI actions
 
+- `Actions.switchTeam(identity)` — see rule above; fires on `/team <id>` regardless of cache state.
 - `Actions.toggleTeamRail()` — flip `state.showTeamRailPanel`. Wired to `ctrl+left`.
 - `Actions.switchCycleAgent(direction: 1 | -1)` — cycle `state.focusedAgentId`. **No-op when the rail is hidden**, when the agent map has fewer than two agents, or when the current focus cannot be resolved. When `state.focusedAgentId === null`, direction `1` lands on the first agent in insertion order, direction `-1` on the last. Otherwise wraps in insertion order.
 - `Actions.setTransientMessage(text)` — slash-command acknowledgments (`logged in to nvidia`, etc.). Renderer ages the message out after 5 s render-side (the reducer never sees the clock).
