@@ -54,6 +54,7 @@ class InkTui implements Tui {
   private readonly unsubscribeBus: () => void;
   private readonly unsubscribeActions: () => void;
   private inkInstance: ReturnType<typeof render> | null = null;
+  private altScreenEntered = false;
   private resolveStart: (() => void) | null = null;
 
   constructor(
@@ -97,6 +98,7 @@ class InkTui implements Tui {
       };
       try {
         stdout.write(ALT_SCREEN_ON);
+        this.altScreenEntered = true;
         const stdin = this.deps.stdin ?? process.stdin;
         const stderr = this.deps.stderr;
         const instance = render(<App stateStore={this.stateStore} />, {
@@ -127,6 +129,8 @@ class InkTui implements Tui {
     this.unsubscribeBus();
     this.unsubscribeActions();
     this.resolveStart?.();
+    if (!this.altScreenEntered) return;
+    this.altScreenEntered = false;
     const stdout = this.deps.stdout ?? process.stdout;
     stdout.write(ALT_SCREEN_OFF);
   }

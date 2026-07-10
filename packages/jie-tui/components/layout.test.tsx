@@ -56,4 +56,34 @@ describe("Layout", () => {
     expect(lastFrame()).toContain("★");
     unmount();
   });
+
+  test("pins the footer to the last two rows of the terminal", () => {
+    const rows = 30;
+    const { lastFrame, unmount } = mountLayout({ columns: 100, rows, showRail: false });
+    const lines = lastFrame().split("\n");
+    const footerLeftIndex = lines.findIndex((line) => line.includes("/tmp/proj"));
+    expect(footerLeftIndex).toBe(rows - 2);
+    const footerRightIndex = lines.findIndex((line) => line.includes("demo:general-1"));
+    expect(footerRightIndex).toBe(footerLeftIndex);
+    unmount();
+  });
+
+  test("editor content height equals 1 plus the number of newlines in the buffer", () => {
+    const { lastFrame, unmount } = mountLayout({ columns: 100, rows: 30, showRail: false });
+    const lines = lastFrame().split("\n");
+    const placeholderIndex = lines.findIndex((line) => line.includes("type a prompt..."));
+    expect(placeholderIndex).toBeGreaterThanOrEqual(0);
+    const editorTopBorderIndex = placeholderIndex - 1;
+    const editorBottomBorderIndex = (() => {
+      for (let i = placeholderIndex + 1; i < lines.length; i++) {
+        if (lines[i]?.includes("─") === true) return i;
+      }
+      return -1;
+    })();
+    expect(editorTopBorderIndex).toBeGreaterThanOrEqual(0);
+    expect(editorBottomBorderIndex).toBeGreaterThan(placeholderIndex);
+    const editorContentHeight = editorBottomBorderIndex - editorTopBorderIndex - 1;
+    expect(editorContentHeight).toBe(1);
+    unmount();
+  });
 });

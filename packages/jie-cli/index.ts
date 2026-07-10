@@ -57,7 +57,11 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
     case "tui": {
       const tui = deps.createTui({ cwd }, { platform: handle });
       await handle.execute({ name: "team", teamId: args.team });
-      await tui.start();
+      try {
+        await tui.start();
+      } finally {
+        tui.stop();
+      }
       await handle.execute({ name: "stop" });
       return 0;
     }

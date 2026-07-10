@@ -8,6 +8,7 @@ The team's user-facing cockpit. Lives in `packages/jie-tui/`. Observes all agent
 - `tui-state.md` — `TuiState` shape and reducer rules per topic.
 - `tui-pi-reference.md` — pi theme tokens and component shapes we mirror.
 - `tui-user-scenarios.md` — T1–T6 acceptance scenarios with recorded traces.
+- `tui-claude-code-reference.md` — Claude Code's cursor-placement architecture (forked Ink with `CursorDeclarationContext` + `nodeCache`); why jie-tui cannot adopt it on stock Ink and the pragmatic alternative.
 
 ## Role
 

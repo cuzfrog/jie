@@ -4,7 +4,7 @@
 - Be positve. All difficulties will be address together with me.
 
 ## Documents
-- @doc/specs/monorepo-structure.md; read `00-overview.md` in the dir you will work with to understand the glossary.
+- @doc/specs/monorepo-structure.md; read `00-overview.md` to understand the glossary.
 - @doc/DEVELOPMENT.md
 - @doc/plan/MILESTONES.md
 
@@ -24,8 +24,8 @@ When rules in different documents conflict, context rules win, in below order. R
 
 ## Conversation style
 - Be concise, but must explain the reason and provide context information.
-- When I ask a question, answer it before any actions.
-- When I make a decision, reason it thoroughly, then express your opinion. Only when we both agree, we move on.
+- When the user ask a question, answer it before any actions.
+- When the user make a decision, reason it thoroughly, then express your opinion. Only when we both agree, we move on.
 - Stick to fact. Our purpose is to build good software, don't fluff, challenge my ideas.
 - Do not ask trivial questions where the answer is recoverable.
 

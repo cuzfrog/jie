@@ -5,57 +5,26 @@ The v0.2 prototype's spatial design. Sibling of `tui-shortcuts.md` (keybindings)
 Example:
 ```text
 > Tell me a story
-thinking...                                                               
-Marry had a little lamb.                                                        
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-⠋ Working…                                                                      
+thinking...
+Marry had a little lamb.
+...
+⠋ Working…
 ────────────────────────────────────────────────────────────────────────────────
-<random tip for shortcuts>                                                                
+ hello world
 ────────────────────────────────────────────────────────────────────────────────
-~/workspace/jie (main)                                           my-team:agent-1       
-0%/200k  Shift ← for agents                           (anthropic) opus-4.8 | max
+~/workspace/jie (main)                                           my-team:agent-1
+0%/200k  ctrl+left for agents                          (anthropic) opus-4.8 | max
 ```
 
 ## Bottom strip
 
-The TUI is a single column split into **four horizontal bands**, top to bottom:
+The TUI is a single column split into **three horizontal bands**, top to bottom: body, editor, footer.
 
-```
-┌────────────────────────────────────────────────────────────────────────────┐
-│  chat (and, when visible, left rail)                                       │  ← body
-├────────────────────────────────────────────────────────────────────────────┤  ← border
-│  editor                                                                     │  ← editor
-├────────────────────────────────────────────────────────────────────────────┤  ← border
-│  footer line 1                                                              │
-│  footer line 2                                                              │  ← footer (2 lines)
-└────────────────────────────────────────────────────────────────────────────┘
-```
-
-The `body` is whatever height remains after the editor and footer render themselves; it is computed at render time, not stored. The two borders between the bands are full-width `─` in `borderMuted` (240). All bands share the terminal's full width — the editor spans the full row, including under the rail.
+The body is whatever height remains after the editor and footer render themselves. It is not stored; it is recomputed per render via `flexGrow={1}` on the body box. Bands share the terminal's full width — the editor spans the full row, including under the rail.
 
 - Reference terminal: **80 cols × 30 rows**.
-- Editor height = `max(5, floor(terminalRows * 0.3)) + 2` border lines (9 lines on a 30-row terminal).
-- Body height = `terminalRows - editorLines - 2 borders - 2 footer lines`.
+- Editor height: **1 content row + 2 border rows (top + bottom) by default** — the box is a single thin strip. The content row count grows by one for every `\n` the user types.
+- Footer height is fixed at 2 rows.
 
 The body never hosts a status bar. The leader's status, queue depth, and prompt-queue pickup are surfaced either in the rail (when visible) or in the footer. The earlier status-bar design was superseded by this layout for v0.2.
 
@@ -95,11 +64,17 @@ The chat pane scrolls only when content exceeds its height — the reference 30-
 
 ## Editor
 
-A `pi-tui` `Editor` instance, full width. Single-line by default; multi-line when the prompt contains `\n`. Two borders (top + bottom) in `borderMuted`. Placeholder: `type a prompt...` when empty.
+The editor is a single React component that owns its input loop and prompt history. It is full width, drawn between the body and the footer.
 
-Submit (`Enter`) appends to the editor's prompt history and dispatches a prompt event to the reducer. `↑` / `↓` (with a non-empty history) walks back / forward through previously submitted prompts — the editor owns this behavior; the global input listener does not intercept plain arrow keys.
+- **Single-line by default; grows by one row for every `\n` typed** — the editor never reserves a static fraction of rows.
+- **Borders**: top + bottom only in `borderMuted`; left and right are open (no `│`).
+- **Placeholder**: `type a prompt...` (in `muted`) when the buffer is empty. The caret is placed at the start of the placeholder row so the user can begin typing immediately.
+- **Cursor**: Ink's `useCursor()` hook is called each render to position the OS terminal caret at the end of the trailing line. Coordinates are `x = paddingLeft + trailingLineLength` (0-indexed column; `ansi-escapes` `cursorTo(x)` writes column `x + 1`) and `y = rows - footerLines - borderLines - (lines.length - 1 - trailingLineIndex)` (1-indexed row; `setCursorPosition.y` is **1-indexed** in Ink — see `ink/build/cursor-helpers.js`'s `buildCursorSuffix` where `moveUp = visibleLineCount - y` and the cursor lands on the 1-indexed row `y` after Ink finishes writing the frame). For an editor that is the bottom-most band with the footer pinned, the trailing content row sits at terminal row `rows - 3` (1 line content + 2 borders + 2 footer rows = 5 rows of chrome below the top; the content row is therefore row `rows - 4` when counted 0-indexed, and row `rows - 3` when counted 1-indexed). The pure function `_caretPositionForCursor(buffer, rows)` lives in `panel/editor.tsx` and is re-exported as a test seam; the file is sealed. See ADR 27 for the original design rationale and `tui-claude-code-reference.md` for the architectural alternative (Claude Code's `CursorDeclarationContext` + `nodeCache` pattern) and why jie-tui cannot adopt it on stock Ink.
+- **Padding**: 1 column on the left and right inside the border.
 
-**The editor is connected to the focused agent, not a fixed leader.** On submit, `editor.onSubmit` reads `state.focusedAgentKey` from the current reducer state and includes it in the prompt envelope. Cycling agents with `Ctrl+↑/↓` re-targets the editor without a refocus — the next `Enter` goes to the currently focused agent. When `focusedAgentKey` is null (mid team switch, before leader focus), submit falls back to the leader's key so the prompt is not lost.
+The editor is connected to the focused agent, not a fixed leader. On submit (`Enter`), `editor.onSubmit` reads `state.focusedAgentKey` from the current reducer state and includes it in the prompt envelope. Cycling agents with `Ctrl+↑/↓` re-targets the editor without a refocus — the next `Enter` goes to the currently focused agent. When `focusedAgentKey` is null (mid team switch, before leader focus), submit falls back to the leader's key so the prompt is not lost.
+
+`↑` / `↓` (with a non-empty history) walks back / forward through previously submitted prompts — the editor owns this behavior; the global input listener does not intercept plain arrow keys.
 
 ## Footer (2 lines)
 

@@ -202,6 +202,7 @@ interface CapturedRun {
   fakePlatform: FakePlatform;
   tuiCalls: { options: CreateTUIOptions; deps: TuiDeps }[];
   startCalls: { value: number };
+  stopCalls: { value: number };
   consoleMock: Console;
   run: (parsed: Parameters<typeof _run>[0]) => Promise<number>;
 }
@@ -209,6 +210,7 @@ interface CapturedRun {
 function captureRun(platform: FakePlatform): CapturedRun {
   const tuiCalls: { options: CreateTUIOptions; deps: TuiDeps }[] = [];
   const startCalls = { value: 0 };
+  const stopCalls = { value: 0 };
   const consoleMock = makeConsoleMock();
   const createPlatform = vi.fn(async (_opts: JiePlatformOptions): Promise<JiePlatform> => platform);
   const createTui = vi.fn((options: CreateTUIOptions, deps: TuiDeps): Tui => {
@@ -236,13 +238,15 @@ function captureRun(platform: FakePlatform): CapturedRun {
         startCalls.value += 1;
         return Promise.resolve();
       },
-      stop: () => undefined,
+      stop: () => {
+        stopCalls.value += 1;
+      },
     };
     return tui;
   });
   const run = (parsed: Parameters<typeof _run>[0]): Promise<number> =>
     _run(parsed, process.cwd(), process.env.HOME ?? "/tmp", { createPlatform, createTui, console: consoleMock });
-  return { fakePlatform: platform, tuiCalls, startCalls, consoleMock, run };
+  return { fakePlatform: platform, tuiCalls, startCalls, stopCalls, consoleMock, run };
 }
 
 describe("_run — tui", () => {
@@ -257,6 +261,14 @@ describe("_run — tui", () => {
     expect(captured.tuiCalls[0]?.options.cwd).toBe(process.cwd());
     expect(captured.tuiCalls[0]?.deps.platform).toBe(platform);
     expect(captured.startCalls.value).toBe(1);
+  });
+
+  test("tui boot: calls tui.stop() after start resolves (restores terminal state)", async () => {
+    const platform = makeFakePlatform();
+    const captured = captureRun(platform);
+    const exit = await captured.run({ kind: "tui" });
+    expect(exit).toBe(0);
+    expect(captured.stopCalls.value).toBe(1);
   });
 
   test("tui boot: passes args.team to execute({name:'team'})", async () => {
