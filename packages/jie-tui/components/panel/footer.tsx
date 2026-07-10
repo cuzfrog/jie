@@ -9,8 +9,8 @@ interface FooterProps {
   readonly gitDirty: boolean;
 }
 
-const HINT_HIDDEN = "ctrl+left for agents";
-const HINT_VISIBLE = "ctrl+↑↓ switch agent  ctrl+left close agents";
+const HINT_HIDDEN = "shift&← show agents";
+const HINT_VISIBLE = "shift&↑↓ switch agent  shift&← close agents";
 
 export function Footer({ cwd, gitBranch, gitDirty }: FooterProps): JSX.Element {
   const { state } = useTuiContext();

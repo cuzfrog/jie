@@ -13,7 +13,7 @@ Marry had a little lamb.
  hello world
 ────────────────────────────────────────────────────────────────────────────────
 ~/workspace/jie (main)                                           my-team:agent-1
-0%/200k  ctrl+left for agents                          (anthropic) opus-4.8 | max
+0%/200k  shift&← show agents                           (anthropic) opus-4.8 | max
 ```
 
 ## Bottom strip
