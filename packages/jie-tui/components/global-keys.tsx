@@ -7,26 +7,21 @@ interface GlobalKeyBindingsProps {
   readonly now?: () => number;
 }
 
-const ESC_WINDOW_MS = 300;
 const CTRL_D_WINDOW_MS = 500;
 
 export function GlobalKeyBindings({ now = Date.now }: GlobalKeyBindingsProps = {}): null {
   const { state, dispatch } = useTuiContext();
-  const lastEscapeAt = useRef<number>(0);
   const lastCtrlDAt = useRef<number>(0);
 
   useEffect(() => {
     return (): void => {
-      lastEscapeAt.current = 0;
       lastCtrlDAt.current = 0;
     };
   }, []);
 
   useInput((input, key) => {
     if (key.escape) {
-      const at = now();
-      const consumed = tryDoubleEscInterrupt(state, dispatch, lastEscapeAt.current, at);
-      lastEscapeAt.current = consumed ? 0 : at;
+      interruptFocusedBusyAgent(state, dispatch);
       return;
     }
 
@@ -81,18 +76,14 @@ export function GlobalKeyBindings({ now = Date.now }: GlobalKeyBindingsProps = {
   return null;
 }
 
-function tryDoubleEscInterrupt(
+function interruptFocusedBusyAgent(
   state: TuiState,
   dispatch: (action: ReturnType<typeof Actions.requestInterrupt>) => void,
-  lastEscapeAt: number,
-  at: number,
-): boolean {
-  if (at - lastEscapeAt > ESC_WINDOW_MS) return false;
-  if (state.teamId === null || state.focusedAgentId === null) return false;
+): void {
+  if (state.teamId === null || state.focusedAgentId === null) return;
   const focused = state.agents.get(state.focusedAgentId);
-  if (focused === undefined) return false;
+  if (focused === undefined || focused.status !== "busy") return;
   dispatch(Actions.requestInterrupt(focused.teamId, focused.agentKey));
-  return true;
 }
 
 function tryDoubleCtrlDQuit(dispatch: (action: ReturnType<typeof Actions.requestQuit>) => void, lastCtrlDAt: number, at: number): boolean {

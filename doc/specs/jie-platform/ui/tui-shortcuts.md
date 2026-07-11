@@ -10,7 +10,7 @@ The TUI is keyboard-driven. All keybindings are global (handled by the input lis
 | `Enter`        | Submit the editor buffer as a prompt                          | editor focused (always)                    |
 | `↑`            | Recall the previous prompt into the editor                    | editor focused, history non-empty          |
 | `↓`            | Recall the next prompt into the editor                        | editor focused, currently walking history  |
-| `Esc Esc`      | Interrupt the current agent run (abort the in-flight stream) | focused agent is `busy`                    |
+| `Esc`          | Interrupt the current agent run (abort the in-flight stream) | focused agent is `busy`                    |
 | `Shift+←`      | Toggle the left rail (agents panel) on / off                 | always                                     |
 | `Ctrl+T`       | Expand / collapse all thinking blocks in this agent's history | focused agent has at least one thinking block |
 | `Ctrl+O`       | Expand / collapse all tool cards in this agent's history      | focused agent has at least one tool card   |
@@ -23,12 +23,12 @@ When `state.showTeamRailPanel === true`:
 
 | Key            | What it does                              | Active when                              |
 | -------------- | ----------------------------------------- | ---------------------------------------- |
-| `Shift+↑`      | Focus the previous agent in the rail      | rail visible, more than one agent        |
-| `Shift+↓`      | Focus the next agent in the rail          | rail visible, more than one agent        |
+| `Shift+↑` or `Ctrl+↑` | Focus the previous agent in the rail      | rail visible, more than one agent        |
+| `Shift+↓` or `Ctrl+↓` | Focus the next agent in the rail          | rail visible, more than one agent        |
 
-## Esc×2 vs Ctrl+C
+## Esc vs Ctrl+C
 
-`Esc Esc` is a two-press interrupt (matches pi's convention): the first `Esc` does nothing; the second, arriving within 300 ms, aborts the in-flight stream. `Ctrl+C` clears the editor buffer when non-empty; on an empty buffer it quits the TUI. The split avoids losing a half-typed prompt to a stray `Ctrl+C`.
+`Esc` interrupts the focused agent only while that agent is busy; it does not clear the editor or quit. `Ctrl+C` clears the editor buffer when non-empty; on an empty buffer it quits the TUI. The split avoids losing a half-typed prompt to an interrupt key.
 
 ## Ctrl+D×2 to quit
 
@@ -40,7 +40,7 @@ Both toggles are **component-local** — `MessageView` owns the per-block `expan
 
 ## Prompt history
 
-`↑` / `↓` in the editor walk the prompt history (most-recent first). Owned by pi-tui's `Editor`; we call `editor.addToHistory(text)` in the `onSubmit` handler. `Ctrl+↑` / `Ctrl+↓` are always the rail-cycling keys and bypass the editor; the plain-arrow form is not intercepted by the global input listener, so the editor handles it natively.
+`↑` / `↓` in the editor walk the prompt history (most-recent first). Owned by pi-tui's `Editor`; we call `editor.addToHistory(text)` in the `onSubmit` handler. `Shift+↑` / `Shift+↓` and `Ctrl+↑` / `Ctrl+↓` are rail-cycling keys and bypass the editor; the plain-arrow form is not intercepted by the global input listener, so the editor handles it natively.
 
 ## Slash commands
 

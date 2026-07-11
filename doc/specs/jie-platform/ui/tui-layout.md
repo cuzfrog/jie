@@ -71,7 +71,7 @@ The editor is a single React component that owns its input loop and prompt histo
 - **Cursor**: a block character (`▌`, U+258C) rendered inline as part of the editor's text, with no theme color. When the buffer is empty, the row shows only the block. When the buffer has text, the block is appended to the trailing line (e.g. `ab44ds▌`). Multi-line buffers render the block only on the last line. The block travels with the text by construction, so Ink's `useCursor()` placement is intentionally not used (it inherits a `buildReturnToBottom` off-by-one in fullscreen mode that misaligns the OS cursor when the trailing line contains trailing whitespace — see ADR 27 for the original `useCursor()` design and the rationale for dropping it).
 - **Padding**: 1 column on the left and right inside the border.
 
-The editor is connected to the focused agent, not a fixed leader. On submit (`Enter`), `editor.onSubmit` reads `state.focusedAgentKey` from the current reducer state and includes it in the prompt envelope. Cycling agents with `Ctrl+↑/↓` re-targets the editor without a refocus — the next `Enter` goes to the currently focused agent. When `focusedAgentKey` is null (mid team switch, before leader focus), submit falls back to the leader's key so the prompt is not lost.
+The editor is connected to the focused agent, not a fixed leader. On submit (`Enter`), `editor.onSubmit` reads `state.focusedAgentKey` from the current reducer state and includes it in the prompt envelope. Cycling agents with `Shift+↑/↓` or `Ctrl+↑/↓` re-targets the editor without a refocus — the next `Enter` goes to the currently focused agent. When `focusedAgentKey` is null (mid team switch, before leader focus), submit falls back to the leader's key so the prompt is not lost.
 
 `↑` / `↓` (with a non-empty history) walks back / forward through previously submitted prompts — the editor owns this behavior; the global input listener does not intercept plain arrow keys.
 
@@ -102,11 +102,11 @@ left:   "0%/200k" (stats)     hint     right: "(<provider>) <modelId> | <effort>
 
 - **Stats** (left): usage indicator, in `muted`. v0.2 placeholder is `0%/200k` (static). The real implementation pulls from a session-stats event when it exists.
 - **Hint** (left): a single short string describing the most useful rail-state-dependent shortcut. In `muted`. Two values:
-  - hidden: `ctrl+left for agents`
-  - visible: `ctrl+↑↓ switch agent  ctrl+left close agents`
+  - hidden: `shift&← show agents`
+  - visible: `shift&↑↓ switch agent  shift&← close agents`
 
   See `tui-shortcuts.md` for the full keymap — this hint is a one-line reminder, not the keymap.
-- **Right**: the focused agent's `(provider) modelId | effort`, in `muted` with the model id itself in `accent`. When no focused agent: `—`. Each agent in a team has its own model; cycling focus with `Ctrl+↑/↓` swaps this segment to reflect the new focused agent's `(provider, id, effort)`.
+- **Right**: the focused agent's `(provider) modelId | effort`, in `muted` with the model id itself in `accent`. When no focused agent: `—`. Each agent in a team has its own model; cycling focus with `Shift+↑/↓` or `Ctrl+↑/↓` swaps this segment to reflect the new focused agent's `(provider, id, effort)`.
 
 ### What line 1 is NOT
 
@@ -135,5 +135,5 @@ These mappings live here (not in `tui-pi-reference.md`) because they are jie-spe
 ## What is intentionally out of scope for v0.2
 
 - Status bar (top of screen) — superseded by footer line 2 + rail.
-- Multi-pane chat (split-view when multiple agents are mid-stream) — out; the user can cycle with `Ctrl+↑/↓` to inspect other agents.
+- Multi-pane chat (split-view when multiple agents are mid-stream) — out; the user can cycle with `Shift+↑/↓` or `Ctrl+↑/↓` to inspect other agents.
 - Floating tool overlays / modal prompts — out; the editor is the only input surface.

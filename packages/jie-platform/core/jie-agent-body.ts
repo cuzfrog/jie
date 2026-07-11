@@ -156,6 +156,10 @@ export class JieAgentBody implements AgentBody {
         if (env.payload.teamId !== this.teamId || env.payload.agentKey !== this.agentKey) return;
         this.ingestUserPrompt(env.payload);
       }),
+      this.eventManager.subscribe("agent.interrupt", (env) => {
+        if (env.payload.teamId !== this.teamId || env.payload.agentKey !== this.agentKey) return;
+        this.interruptActiveRun();
+      }),
     );
     for (const topic of this.soul.subscribe) {
       this.unsubscribers.push(
@@ -190,6 +194,11 @@ export class JieAgentBody implements AgentBody {
     } else {
       void this.agent.prompt(message);
     }
+  }
+
+  private interruptActiveRun(): void {
+    if (!this.agent.state.isStreaming) return;
+    this.agent.abort();
   }
 }
 

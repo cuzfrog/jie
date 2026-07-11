@@ -30,7 +30,7 @@ Editor-internal state (`inputBuffer`, `inputHistory`, `historyIndex`) lives on p
 
 ## Actions
 
-The reducer takes `Action = ReceiveEvent | SwitchTeam | ToggleTeamRail | SwitchCycleAgent | ClearTuiState | SetTransientMessage | ClearTransientMessage | SetErrorMessage | ClearErrorMessage | RequestQuit | RequestRender` (defined in `packages/jie-tui/state/actions.ts`). Bus envelope types are **not** the action type — `tui.ts` wraps every bus envelope in `Actions.receiveEvent(envelope)` before dispatch. UI-local events (switch team, rail toggle, cycle, transient, error, clear, quit, render) are dispatched directly.
+The reducer takes `Action = ReceiveEvent | SwitchTeam | ToggleTeamRail | ToggleThinking | ToggleToolCards | SwitchCycleAgent | ClearTuiState | SetTransientMessage | ClearTransientMessage | SetErrorMessage | ClearErrorMessage | ClearBanners | RequestQuit | RequestRender | SetEditorText | SubmitEditorText | RequestInterrupt | SetEnvironment` (defined in `packages/jie-tui/state/actions.ts`). Bus envelope types are **not** the action type — `tui.ts` wraps every bus envelope in `Actions.receiveEvent(envelope)` before dispatch. UI-local events (switch team, rail toggle, cycle, transient, error, clear, quit, render, editor text, submit, interrupt, environment) are dispatched directly.
 
 This split exists because the bus event taxonomy is the platform's contract (other consumers may subscribe to the same topic); UI actions are the TUI's local vocabulary. Keeping them as separate action types prevents accidentally publishing UI actions to the bus and keeps the reducer testable with literal action objects.
 
@@ -91,7 +91,8 @@ Set `state.errorBanner = { text: <composed> }` where `<composed>` is either `eve
 ### UI actions
 
 - `Actions.switchTeam(identity)` — see rule above; fires on `/team <id>` regardless of cache state.
-- `Actions.toggleTeamRail()` — flip `state.showTeamRailPanel`. Wired to `ctrl+left`.
+- `Actions.toggleTeamRail()` — flip `state.showTeamRailPanel`. Wired to `Shift+←`.
+- `Actions.requestInterrupt(teamId, agentKey)` — no reducer state change. The TUI host observes the action and calls `platform.interrupt(teamId, agentKey)`. Wired to `Esc` only when the focused agent is busy.
 - `Actions.switchCycleAgent(direction: 1 | -1)` — cycle `state.focusedAgentId`. **No-op when the rail is hidden**, when the agent map has fewer than two agents, or when the current focus cannot be resolved. When `state.focusedAgentId === null`, direction `1` lands on the first agent in insertion order, direction `-1` on the last. Otherwise wraps in insertion order.
 - `Actions.setTransientMessage(text)` — slash-command acknowledgments (`logged in to nvidia`, etc.). Renderer ages the message out after 5 s render-side (the reducer never sees the clock).
 - `Actions.clearTransientMessage()` — dispatched on the next `Enter` so stale acknowledgments do not linger.
@@ -107,7 +108,7 @@ The reducer is per-agent by construction — `state.agents: ReadonlyMap<AgentId,
 
 ## Editor → focused agent
 
-`state.focusedAgentId` is the editor's target. On submit, `handleSubmit(text)` in `tui.ts` reads `state.focusedAgentId ?? state.leaderAgentId` from the current reducer state and publishes the prompt envelope via `Events.userPrompt(...)`. Cycling focus re-targets the next prompt without a refocus — `handleSubmit` re-reads `focusedAgentId` each time. When `state.focusedAgentId === null` (mid team-switch, before the first leader focus), `leaderAgentId` is the fallback. **The prompt is not lost.**
+`state.focusedAgentId` is the editor's target. On submit, `handleSubmit(text)` in `tui.ts` reads `state.focusedAgentId ?? state.leaderAgentId` from the current reducer state and publishes through `platform.prompt(teamId, agentKey, text)`. Cycling focus re-targets the next prompt without a refocus — `handleSubmit` re-reads `focusedAgentId` each time. When `state.focusedAgentId === null` (mid team-switch, before the first leader focus), `leaderAgentId` is the fallback. **The prompt is not lost.**
 
 ## History rotation
 

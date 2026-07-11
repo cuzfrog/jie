@@ -1,4 +1,5 @@
 # Reserved OS Keyboard Shortcuts & TUI Conflicts
+Do not change this file, this file is about gathered knowledge. You should avoid key shortcut conflicts mentioned by this file.
 
 Reference catalog of keyboard shortcuts that are reserved, expected, or otherwise claimed by macOS, Linux (TTY + readline), and Windows (Console + Win32 hotkeys). Companion to `tui-shortcuts.md`; lists which of those bindings collide with our TUI's chosen keymap and how `jie` avoids or honors each conflict.
 

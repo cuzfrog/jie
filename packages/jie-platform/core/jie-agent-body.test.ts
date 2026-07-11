@@ -26,6 +26,7 @@ function makeFakeAgent(overrides: Partial<{
   prompt: ReturnType<typeof vi.fn>;
   followUp: ReturnType<typeof vi.fn>;
   steer: ReturnType<typeof vi.fn>;
+  abort: ReturnType<typeof vi.fn>;
   continue: ReturnType<typeof vi.fn>;
   subscribe: ReturnType<typeof vi.fn>;
 } {
@@ -37,6 +38,7 @@ function makeFakeAgent(overrides: Partial<{
   const prompt = vi.fn(async (_message: AgentMessage | AgentMessage[]) => {});
   const followUp = vi.fn(() => {});
   const steer = vi.fn(() => {});
+  const abort = vi.fn(() => {});
   const cont = vi.fn(async () => {});
   const subscribe = vi.fn(() => () => {});
   const agent = {
@@ -44,10 +46,11 @@ function makeFakeAgent(overrides: Partial<{
     prompt,
     followUp,
     steer,
+    abort,
     continue: cont,
     subscribe,
   } as unknown as Agent;
-  return { agent, state, prompt, followUp, steer, continue: cont, subscribe };
+  return { agent, state, prompt, followUp, steer, abort, continue: cont, subscribe };
 }
 
 function makeFakeStream(): {
@@ -90,6 +93,7 @@ interface Harness {
   prompt: ReturnType<typeof vi.fn>;
   followUp: ReturnType<typeof vi.fn>;
   steer: ReturnType<typeof vi.fn>;
+  abort: ReturnType<typeof vi.fn>;
   continue: ReturnType<typeof vi.fn>;
   subscribe: ReturnType<typeof vi.fn>;
   stream: StreamPublisher;
@@ -103,7 +107,7 @@ interface Harness {
 function makeHarness(): Harness {
   const events: EventManager = createEventManager();
   const { memory, persisted } = makeFakeMemory();
-  const { agent, state, prompt, followUp, steer, continue: cont, subscribe } = makeFakeAgent();
+  const { agent, state, prompt, followUp, steer, abort, continue: cont, subscribe } = makeFakeAgent();
   const { stream, beginStream, append, endStream } = makeFakeStream();
   const makeBody: Harness["makeBody"] = (overrides = {}) =>
     new JieAgentBody({
@@ -126,6 +130,7 @@ function makeHarness(): Harness {
     prompt,
     followUp,
     steer,
+    abort,
     continue: cont,
     subscribe,
     stream,
@@ -177,6 +182,27 @@ describe("JieAgentBody — start() subscriptions", () => {
     await b2.start();
     expect(h.events.subscriberCount("user.prompt")).toBe(1);
     b2.stop();
+  });
+
+  test("agent.interrupt addressed to this body aborts the active agent run", async () => {
+    await body.start();
+    h.state.isStreaming = true;
+    h.events.publish(Events.agentInterrupt({ kind: "user" }, "t1", "general-1"));
+    expect(h.abort).toHaveBeenCalledTimes(1);
+  });
+
+  test("agent.interrupt for another body is ignored", async () => {
+    await body.start();
+    h.state.isStreaming = true;
+    h.events.publish(Events.agentInterrupt({ kind: "user" }, "t1", "worker-1"));
+    h.events.publish(Events.agentInterrupt({ kind: "user" }, "t2", "general-1"));
+    expect(h.abort).not.toHaveBeenCalled();
+  });
+
+  test("agent.interrupt is ignored when the body is idle", async () => {
+    await body.start();
+    h.events.publish(Events.agentInterrupt({ kind: "user" }, "t1", "general-1"));
+    expect(h.abort).not.toHaveBeenCalled();
   });
 
   test("subscribes to each topic in soul.subscriptions", async () => {
@@ -521,8 +547,10 @@ describe("JieAgentBody — addExternalCleanup + stop()", () => {
     const body = h.makeBody();
     await body.start();
     expect(h.events.subscriberCount("user.prompt")).toBe(1);
+    expect(h.events.subscriberCount("agent.interrupt")).toBe(1);
     body.stop();
     expect(h.events.subscriberCount("user.prompt")).toBe(0);
+    expect(h.events.subscriberCount("agent.interrupt")).toBe(0);
   });
 
   test("start() is idempotent (second call does not re-subscribe)", async () => {
