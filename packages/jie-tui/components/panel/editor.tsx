@@ -71,21 +71,21 @@ export function Editor(_props: EditorProps): JSX.Element {
       width="100%"
     >
       <Box flexDirection="column" paddingX={1}>
-        {buffer.length === 0 ? (
-          <Text>{CURSOR_BLOCK}</Text>
-        ) : (
-          lines.map((line, i) => {
-            const isCursorLine = i === lines.length - 1;
-            const display = line.length === 0 ? " " : line;
-            if (!isCursorLine) return <Text key={`l-${i}`}>{display}</Text>;
-            return (
-              <Text key={`l-${i}`}>
-                {display}
-                <Text>{CURSOR_BLOCK}</Text>
-              </Text>
-            );
-          })
-        )}
+        {lines.map((line, i) => {
+          const isCursorLine = i === lines.length - 1;
+          if (!isCursorLine) {
+            return <Text key={`l-${i}`}>{line.length === 0 ? " " : line}</Text>;
+          }
+          if (line.length === 0) {
+            return <Text key={`l-${i}`}>{CURSOR_BLOCK}</Text>;
+          }
+          return (
+            <Text key={`l-${i}`}>
+              {line}
+              <Text>{CURSOR_BLOCK}</Text>
+            </Text>
+          );
+        })}
       </Box>
     </Box>
   );

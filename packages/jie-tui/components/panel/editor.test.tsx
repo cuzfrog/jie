@@ -199,4 +199,34 @@ describe("Editor", () => {
     expect(beforeCursor.endsWith("ab44ds  ")).toBe(true);
     unmount();
   });
+
+  test("trailing newline puts the cursor block at column 0 of the content area", async () => {
+    const store = createStateStore();
+    store.dispatch(Actions.setEditorText("abc\n"));
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const { lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    const frame = lastFrame();
+    const lines = frame.split("\n");
+    const topBorder = lines.findIndex((line) => line.includes("─"));
+    const bottomBorder = (() => {
+      for (let i = lines.length - 1; i > topBorder; i--) {
+        if (lines[i]?.includes("─") === true) return i;
+      }
+      return -1;
+    })();
+    const contentLines = lines.slice(topBorder + 1, bottomBorder);
+    expect(contentLines).toHaveLength(2);
+    const abcLine = contentLines[0] ?? "";
+    const cursorLine = contentLines.find((line) => line.includes("▌")) ?? "";
+    expect(abcLine).toContain("abc");
+    expect(abcLine.includes("▌")).toBe(false);
+    expect(cursorLine.trimEnd().endsWith("▌")).toBe(true);
+    const cursorIndex = cursorLine.indexOf("▌");
+    expect(cursorIndex).toBe(1);
+    expect(cursorLine.slice(0, cursorIndex)).toBe(" ");
+    unmount();
+  });
 });
