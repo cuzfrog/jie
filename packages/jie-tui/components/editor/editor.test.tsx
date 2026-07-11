@@ -1,5 +1,5 @@
 import { render } from "ink-testing-library";
-import { Editor } from "../footer/editor";
+import { Editor } from "./editor";
 import { TuiContext } from "../context";
 import { Actions, createStateStore } from "../../state";
 import { makeContextValue } from "../../test-support";
@@ -25,7 +25,7 @@ describe("Editor", () => {
     const { lastFrame, unmount } = render(
       <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
     );
-    const lines = lastFrame().split("\n");
+    const lines = (lastFrame() ?? "").split("\n");
     const topBorder = lines.findIndex((line) => line.includes("─"));
     const bottomBorder = (() => {
       for (let i = lines.length - 1; i > topBorder; i--) {
@@ -114,7 +114,7 @@ describe("Editor", () => {
     const { lastFrame, unmount } = render(
       <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
     );
-    const lines = lastFrame().split("\n");
+    const lines = (lastFrame() ?? "").split("\n");
     const offending = lines.filter((line) => line.startsWith("│") || line.endsWith("│"));
     expect(offending).toEqual([]);
     unmount();
@@ -126,7 +126,7 @@ describe("Editor", () => {
     const { lastFrame, unmount } = render(
       <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
     );
-    const lines = lastFrame().split("\n").filter((line) => line.length > 0);
+    const lines = (lastFrame() ?? "").split("\n").filter((line) => line.length > 0);
     const top = lines.findIndex((line) => line.includes("─"));
     const bottom = (() => {
       for (let i = lines.length - 1; i >= 0; i--) {
@@ -148,7 +148,7 @@ describe("Editor", () => {
     const { lastFrame, unmount } = render(
       <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
     );
-    const frame = lastFrame();
+    const frame = lastFrame() ?? "";
     expect(frame).toContain("line1");
     expect(frame).toContain("line2");
     expect(frame).toContain("line3");
@@ -163,7 +163,7 @@ describe("Editor", () => {
       <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
     );
     await new Promise((r) => setTimeout(r, 30));
-    const frame = lastFrame();
+    const frame = lastFrame() ?? "";
     expect(frame).toContain("ab44ds");
     expect(frame).toContain("\u001b[7m \u001b[27m");
     const lines = frame.split("\n");
@@ -182,7 +182,7 @@ describe("Editor", () => {
       <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
     );
     await new Promise((r) => setTimeout(r, 30));
-    const frame = lastFrame();
+    const frame = lastFrame() ?? "";
     expect(frame).toContain("line1");
     expect(frame).toContain("line2");
     expect(frame).toContain("line3");
@@ -209,7 +209,7 @@ describe("Editor", () => {
       <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
     );
     await new Promise((r) => setTimeout(r, 30));
-    const frame = lastFrame();
+    const frame = lastFrame() ?? "";
     const contentLine = frame.split("\n").find((line) => line.includes("ab44ds")) ?? "";
     const cursorIndex = contentLine.indexOf("\u001b[7m");
     expect(cursorIndex).toBeGreaterThan(0);
@@ -226,7 +226,7 @@ describe("Editor", () => {
       <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
     );
     await new Promise((r) => setTimeout(r, 30));
-    const frame = lastFrame();
+    const frame = lastFrame() ?? "";
     const lines = frame.split("\n");
     const topBorder = lines.findIndex((line) => line.includes("─"));
     const bottomBorder = (() => {
@@ -266,7 +266,7 @@ describe("Editor", () => {
     await new Promise((r) => setTimeout(r, 10));
     stdin.write("\x1b[D");
     await new Promise((r) => setTimeout(r, 30));
-    const frame = lastFrame();
+    const frame = lastFrame() ?? "";
     const contentLine = frame.split("\n").find((line) => line.includes("c")) ?? "";
     const highlightIdx = contentLine.indexOf("\x1b[7m");
     const highlightedChar = contentLine.slice(highlightIdx + 4, highlightIdx + 5);
@@ -306,11 +306,10 @@ describe("Editor", () => {
     unmount();
   });
 
-  test("delete in the middle of a single-line buffer behaves like backspace (TextInput limitation)", async () => {
-    // @inkjs/ui's TextInput does not distinguish Delete from Backspace: both
-    // remove the char BEFORE the cursor. This test pins that behavior so the
-    // Editor stays compatible with TextInput; if a custom hook replaces it,
-    // this test should be updated.
+  test("delete in the middle of a single-line buffer removes the character AT the cursor (forward delete)", async () => {
+    // Delete (forward delete) removes the grapheme at the cursor. This differs
+    // from Backspace, which removes the grapheme BEFORE the cursor. The Editor
+    // owns both semantics; see tui-pi-editor-reference.md §8.
     const store = createStateStore();
     store.dispatch(Actions.setEditorText("abcde"));
     const ctx = makeContextValue({ stateStore: store, state: store.getState() });
@@ -318,6 +317,7 @@ describe("Editor", () => {
       <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
     );
     await new Promise((r) => setTimeout(r, 30));
+    // Move cursor from end (col=5) to col=1 (between "a" and "b"). Then Delete.
     stdin.write("\x1b[D");
     await new Promise((r) => setTimeout(r, 10));
     stdin.write("\x1b[D");
@@ -328,15 +328,34 @@ describe("Editor", () => {
     await new Promise((r) => setTimeout(r, 10));
     stdin.write("\x1b[3~");
     await new Promise((r) => setTimeout(r, 30));
+    expect(store.getState().editorText).toBe("acde");
+    unmount();
+  });
+
+  test("delete at the start of the buffer removes the first character", async () => {
+    // Forward delete at col=0 deletes the first grapheme of the line. The
+    // cursor stays put so subsequent insertions place text before the deletion.
+    const store = createStateStore();
+    store.dispatch(Actions.setEditorText("abcde"));
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const { stdin, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    // Move cursor from end (col=5) to col=0. Then Delete.
+    for (let i = 0; i < 5; i++) {
+      stdin.write("\x1b[D");
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    stdin.write("\x1b[3~");
+    await new Promise((r) => setTimeout(r, 30));
     expect(store.getState().editorText).toBe("bcde");
     unmount();
   });
 
-  test("delete at the end of a line removes the trailing character (TextInput does not merge lines via Delete)", async () => {
-    // @inkjs/ui's TextInput's Delete behaves like Backspace: it removes the
-    // character immediately before the cursor. It does NOT merge the current
-    // line with the next line. This test pins that behavior; if a custom hook
-    // replaces TextInput, this should be updated to assert line-merging.
+  test("delete at the end of a non-last line joins it with the next line (forward-delete line merge)", async () => {
+    // At end-of-line, forward delete joins with the next line — the symmetric
+    // operation to backspace-joining with the previous line at col=0.
     const store = createStateStore();
     store.dispatch(Actions.setEditorText("foo\nbar"));
     const ctx = makeContextValue({ stateStore: store, state: store.getState() });
@@ -344,21 +363,19 @@ describe("Editor", () => {
       <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
     );
     await new Promise((r) => setTimeout(r, 30));
+    // Move cursor up one line; the cursor lands at end of "foo" (col=3).
     stdin.write("\x1b[A");
     await new Promise((r) => setTimeout(r, 10));
     stdin.write("\x1b[3~");
     await new Promise((r) => setTimeout(r, 30));
-    expect(store.getState().editorText).toBe("foo\nba");
+    expect(store.getState().editorText).toBe("foobar");
     unmount();
   });
 
-  test("backspace at the start of the buffer deletes the first character (known TextInput bug)", async () => {
-    // @inkjs/ui's useTextInputState has a reducer bug: when cursorOffset is 0
-    // and a delete (backspace) is dispatched, it computes
-    //   slice(0, 0) + slice(0 + 1) = slice(1)
-    // instead of leaving the value unchanged. This test pins the buggy
-    // behavior; if a custom hook replaces TextInput, this should be updated to
-    // assert no-op.
+  test("backspace at the start of the buffer is a no-op (does not delete the first character)", async () => {
+    // Backspace at (line=0, col=0) is a no-op. There is nothing to delete
+    // before the cursor and there is no previous line to join with. The cursor
+    // stays put.
     const store = createStateStore();
     store.dispatch(Actions.setEditorText("abc"));
     const ctx = makeContextValue({ stateStore: store, state: store.getState() });
@@ -374,15 +391,14 @@ describe("Editor", () => {
     await new Promise((r) => setTimeout(r, 10));
     stdin.write("\x7f");
     await new Promise((r) => setTimeout(r, 30));
-    expect(store.getState().editorText).toBe("bc");
+    expect(store.getState().editorText).toBe("abc");
     unmount();
   });
 
-  test("delete at the end of the buffer deletes the trailing character (Delete == Backspace in TextInput)", async () => {
-    // @inkjs/ui's TextInput does not distinguish Delete from Backspace: both
-    // remove the character immediately before the cursor. At end-of-buffer
-    // this deletes the trailing char. Pins the limitation; if a custom hook
-    // replaces TextInput, update this to assert no-op.
+  test("delete at the end of the last line of a single-line buffer is a no-op", async () => {
+    // Forward delete at end-of-last-line of a single-line buffer is a no-op.
+    // There is no character at the cursor to delete, and no next line to
+    // join with.
     const store = createStateStore();
     store.dispatch(Actions.setEditorText("abc"));
     const ctx = makeContextValue({ stateStore: store, state: store.getState() });
@@ -392,7 +408,7 @@ describe("Editor", () => {
     await new Promise((r) => setTimeout(r, 30));
     stdin.write("\x1b[3~");
     await new Promise((r) => setTimeout(r, 30));
-    expect(store.getState().editorText).toBe("ab");
+    expect(store.getState().editorText).toBe("abc");
     unmount();
   });
 
@@ -457,10 +473,8 @@ describe("Editor", () => {
     unmount();
   });
 
-  test("delete at the end of the last line deletes the trailing character (Delete == Backspace in TextInput)", async () => {
-    // @inkjs/ui's TextInput's Delete is backspace semantics; at end-of-last-line
-    // this deletes the trailing char. Pins the limitation; if a custom hook
-    // replaces TextInput, update this to assert no-op.
+  test("delete at the end of the last line of a multi-line buffer is a no-op", async () => {
+    // Forward delete at end-of-last-line of a multi-line buffer is also a no-op.
     const store = createStateStore();
     store.dispatch(Actions.setEditorText("abc\nxyz"));
     const ctx = makeContextValue({ stateStore: store, state: store.getState() });
@@ -470,7 +484,223 @@ describe("Editor", () => {
     await new Promise((r) => setTimeout(r, 30));
     stdin.write("\x1b[3~");
     await new Promise((r) => setTimeout(r, 30));
-    expect(store.getState().editorText).toBe("abc\nxy");
+    expect(store.getState().editorText).toBe("abc\nxyz");
+    unmount();
+  });
+
+  test("down arrow moves the cursor from line 0 to line 1", async () => {
+    // Multi-line cursor positioning: down arrow from end of line 0 places the
+    // cursor at end of line 1. See tui-pi-editor-reference.md §9.
+    const store = createStateStore();
+    store.dispatch(Actions.setEditorText("abc\ndef"));
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const { stdin, lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\x1b[B");
+    await new Promise((r) => setTimeout(r, 30));
+    const frame = lastFrame() ?? "";
+    const lines = frame.split("\n");
+    const defLine = lines.find((line) => line.includes("def")) ?? "";
+    expect(defLine).toContain("\u001b[7m");
+    // After stripping ANSI, "def" must be followed by a single trailing space —
+    // the cursor block sits on the immediately-after position.
+    const stripped = defLine.replace(/\u001b\[[0-9;]*m/g, "");
+    expect(stripped).toMatch(/^.*def $/);
+    unmount();
+  });
+
+  test("up arrow moves the cursor from line 1 to line 0", async () => {
+    const store = createStateStore();
+    store.dispatch(Actions.setEditorText("abc\ndef"));
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const { stdin, lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\x1b[A");
+    await new Promise((r) => setTimeout(r, 30));
+    const frame = lastFrame() ?? "";
+    const lines = frame.split("\n");
+    const abcLine = lines.find((line) => line.includes("abc")) ?? "";
+    expect(abcLine).toContain("\u001b[7m");
+    unmount();
+  });
+
+  test("up arrow on a single-line buffer clamps to the first line", async () => {
+    const store = createStateStore();
+    store.dispatch(Actions.setEditorText("abc"));
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const { stdin, lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\x1b[A");
+    await new Promise((r) => setTimeout(r, 30));
+    const frame = lastFrame() ?? "";
+    const contentLine = frame.split("\n").find((line) => line.includes("abc")) ?? "";
+    expect(contentLine).toContain("\u001b[7m");
+    expect(contentLine.indexOf("\u001b[7m")).toBe(contentLine.lastIndexOf("c") + 1);
+    unmount();
+  });
+
+  test("down arrow on a single-line buffer clamps to the last line", async () => {
+    const store = createStateStore();
+    store.dispatch(Actions.setEditorText("abc"));
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const { stdin, lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\x1b[B");
+    await new Promise((r) => setTimeout(r, 30));
+    const frame = lastFrame() ?? "";
+    const contentLine = frame.split("\n").find((line) => line.includes("abc")) ?? "";
+    expect(contentLine).toContain("\u001b[7m");
+    expect(contentLine.indexOf("\u001b[7m")).toBe(contentLine.lastIndexOf("c") + 1);
+    unmount();
+  });
+
+  test("up arrow clamps cursorCol when the line above is shorter", async () => {
+    const store = createStateStore();
+    store.dispatch(Actions.setEditorText("ab\nabcd"));
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const { stdin, lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\x1b[A");
+    await new Promise((r) => setTimeout(r, 30));
+    const frame = lastFrame() ?? "";
+    const lines = frame.split("\n");
+    const shortLine = lines.find((line) => line.includes("ab") && !line.includes("abcd")) ?? "";
+    expect(shortLine).toContain("\u001b[7m");
+    expect(shortLine.indexOf("\u001b[7m")).toBe("ab".length + 1);
+    unmount();
+  });
+
+  test("left arrow at col=0 of a non-first line jumps to end of previous line", async () => {
+    // Symmetric to right-arrow at end-of-line: see tui-pi-editor-reference.md
+    // §9.
+    const store = createStateStore();
+    store.dispatch(Actions.setEditorText("abc\ndef"));
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const { stdin, lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    for (let i = 0; i < 4; i++) {
+      stdin.write("\x1b[D");
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    const frame = lastFrame() ?? "";
+    const lines = frame.split("\n");
+    const abcLine = lines.find((line) => line.includes("abc")) ?? "";
+    expect(abcLine).toContain("\u001b[7m");
+    expect(abcLine.replace(/\u001b\[[0-9;]*m/g, "")).toContain("abc ");
+    unmount();
+  });
+
+  test("ctrl+j inserts a newline at the cursor (tui.input.newLine keybinding)", async () => {
+    // Per tui-pi-editor-reference.md §17, the default for `tui.input.newLine`
+    // is `ctrl+j` (and `shift+enter`). Ink parses ctrl+j as `\n` and reports
+    // it as a keypress with `input = "j"` and `key.ctrl = true`, NOT as a
+    // `key.return`. The Editor must accept both forms.
+    const store = createStateStore();
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const { stdin, lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    // Ctrl+J sends `\n` (LF, 0x0A). Ink parses it as `key.ctrl = true,
+    // input = "j"`.
+    stdin.write("\x0a");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(store.getState().editorText).toBe("\n");
+    const frame = lastFrame() ?? "";
+    // The cursor block should be on a new line, below the empty line.
+    const lines = frame.split("\n");
+    const topBorder = lines.findIndex((line) => line.includes("─"));
+    const bottomBorder = (() => {
+      for (let i = lines.length - 1; i > topBorder; i--) {
+        if (lines[i]?.includes("─") === true) return i;
+      }
+      return -1;
+    })();
+    const contentLines = lines.slice(topBorder + 1, bottomBorder);
+    expect(contentLines.length).toBe(2);
+    const emptyLine = contentLines[0] ?? "";
+    expect(emptyLine).not.toContain("\u001b[7m");
+    const cursorLine = contentLines[1] ?? "";
+    expect(cursorLine).toContain("\u001b[7m");
+    expect(cursorLine.indexOf("\u001b[7m")).toBe(1);
+    unmount();
+  });
+
+  test("up arrow from (line=1, col=0) moves the cursor to (line=0, col=0)", async () => {
+    // tmp/issue-examples.md Example 2:
+    //   abc
+    //  |abc        <- initial cursor at (1, 0)
+    //   ...        <- after Up, cursor should be on line 0
+    //  |abc        <- expected
+    //   abc
+    const store = createStateStore();
+    store.dispatch(Actions.setEditorText("abc\nabc"));
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const { stdin, lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    // Move cursor from (1, 3) (end of buffer) to (1, 0) with three left arrows.
+    stdin.write("\x1b[D");
+    await new Promise((r) => setTimeout(r, 10));
+    stdin.write("\x1b[D");
+    await new Promise((r) => setTimeout(r, 10));
+    stdin.write("\x1b[D");
+    await new Promise((r) => setTimeout(r, 10));
+    await new Promise((r) => setTimeout(r, 30));
+    // Sanity: cursor is now on line 1 (the second 'abc' row), at col 0.
+    {
+      const frame = lastFrame() ?? "";
+      const lines = frame.split("\n");
+      const topBorder = lines.findIndex((line) => line.includes("─"));
+      const bottomBorder = (() => {
+        for (let i = lines.length - 1; i > topBorder; i--) {
+          if (lines[i]?.includes("─") === true) return i;
+        }
+        return -1;
+      })();
+      const contentLines = lines.slice(topBorder + 1, bottomBorder);
+      expect(contentLines.length).toBe(2);
+      // Line 0: "abc", no cursor block.
+      const topLine = contentLines[0] ?? "";
+      expect(topLine).not.toContain("\u001b[7m");
+      // Line 1: cursor block at col 1 (after the left padding).
+      const cursorLine = contentLines[1] ?? "";
+      expect(cursorLine).toContain("\u001b[7m");
+      expect(cursorLine.indexOf("\u001b[7m")).toBe(1);
+    }
+    // Now press Up. Cursor should move to line 0, col 0.
+    stdin.write("\x1b[A");
+    await new Promise((r) => setTimeout(r, 30));
+    const frame = lastFrame() ?? "";
+    const lines = frame.split("\n");
+    const topBorder = lines.findIndex((line) => line.includes("─"));
+    const bottomBorder = (() => {
+      for (let i = lines.length - 1; i > topBorder; i--) {
+        if (lines[i]?.includes("─") === true) return i;
+      }
+      return -1;
+    })();
+    const contentLines = lines.slice(topBorder + 1, bottomBorder);
+    expect(contentLines.length).toBe(2);
+    const topLine = contentLines[0] ?? "";
+    expect(topLine).toContain("\u001b[7m");
+    // Cursor block sits at col 1 (immediately after the left padding column).
+    expect(topLine.indexOf("\u001b[7m")).toBe(1);
+    const bottomLine = contentLines[1] ?? "";
+    expect(bottomLine).not.toContain("\u001b[7m");
     unmount();
   });
 });

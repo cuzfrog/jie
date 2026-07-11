@@ -826,24 +826,31 @@ These depend on pi's imperative `render(width)` API and need to be reimplemented
 
 ### 19.4 Architectural decision: imperative vs. React
 
-Pi's Editor is ~2300 lines of imperative code. A full React port preserving all features (grapheme cursor, sticky column, kill ring, undo coalescing, history walk, autocomplete async-cancellation, paste markers, IME hook) would be 800-1500 lines of stateful component logic, with the same complexity but spread across hooks. jie-tui currently uses `@inkjs/ui`'s `<TextInput>` (~150 LOC) which handles ~60% of the editor's behavior and explicitly lacks the rest (Delete == Backspace, cursor-in-grapheme-cluster bug, no paste markers, no kill ring, no word navigation, no history, no undo). Closing that gap either means:
+Pi's Editor is ~2300 lines of imperative code. A full React port preserving all features (grapheme cursor, sticky column, kill ring, undo coalescing, history walk, autocomplete async-cancellation, paste markers, IME hook) would be 800-1500 lines of stateful component logic, with the same complexity but spread across hooks. jie-tui shipped v0.3 with `@inkjs/ui`'s `<TextInput>` (~150 LOC) and pinned its limitations in `editor.test.tsx` comments. For v0.4 we replaced `<TextInput>` with a native Ink implementation: a `useEditorState` hook backed by a `useReducer` over `{ lines, cursorLine, cursorCol }`, plus a grapheme-aware cursor implementation that handles multi-line cursor positioning per pi's reference.
 
-1. **Wrap `@inkjs/ui` with our own state model.** Keep `<TextInput>` for the rendering, build hooks for grapheme cursor, kill ring, undo, history on top. ~400-600 LOC of glue + custom cursor logic.
-2. **Replace `<TextInput>` with our own imperative-ish editor.** Lift the pi Editor class' key algorithms (word nav, sticky column, undo coalescing, kill ring, layout) and re-implement them against Ink. ~1200-1800 LOC.
-3. **Don't replace.** Keep `<TextInput>`, document its limitations (already done in `editor.test.tsx` comments), file follow-up issues for the things that matter most. We chose this for v0.3.
+Closing the remaining gaps (word nav, kill ring, undo, sticky column, autocomplete) is a separate scope; see 19.5.
 
-### 19.5 v0.4 considerations
+### 19.5 v0.4 delivery status
 
-If jie-tui moves to a custom editor, the priority order (by user impact) is:
+Delivered in v0.4 (in `packages/jie-tui/components/editor/`):
+
+- **Multi-line cursor positioning** per pi §3, §9 — `cursorLine`, `cursorCol`, vertical/horizontal movement with `cursorCol` clamping when target line is shorter. (`useEditorState.moveCursorUp`/`Down`.)
+- **Grapheme-aware insertion / deletion** per pi §7, §8 — `Intl.Segmenter({ granularity: "grapheme" })` walks `delete`-at-cursor and `backspace`-before-cursor by cluster unit, not by UTF-16 code unit. (`useEditorState.insert` / `backspace` / `forwardDelete`.)
+- **Line-merge on boundary deletion** per pi §8 — backspace at `(line>0, col=0)` joins with previous line; forward delete at end-of-non-last-line joins with next line; backspace at `(0, 0)` and forward delete at end-of-last-line are no-ops (fixes the pinned `@inkjs/ui` reducer bugs).
+- **Native cursor render** — ANSI inverse-block on the cursor line, in front of the next grapheme (or trailing inverse space at end-of-line). The single-line `▌` `U+258C` literal in `tui-layout.md` is now an ANSI inverse-space block.
+- **History walk with `historyDraft` capture/restore** — pi §13 semantics adapted to the React state model: `Up` at the top of the buffer with non-empty history enters walk mode; `Down` walks forward; `draft` is the live buffer at walk entry and restores on `Down`-past-newest.
+
+Not yet delivered (deferred to v0.5+):
 
 1. **Word navigation** (`Alt+Left`, `Alt+Right`, `Ctrl+Left`, `Ctrl+Right`) — biggest UX win.
 2. **Kill ring + yank** (`Ctrl+W`, `Ctrl+U`, `Ctrl+K`, `Ctrl+Y`) — eliminates the "select + delete + paste" dance.
-3. **Undo** (`Ctrl+-`) — currently nothing works.
-4. **Delete at start of buffer = no-op, delete forward != backspace** — basic correctness.
-5. **Multi-line support with explicit newline keybinding** — already partially works via Ink's natural layout, but Enter always submits.
-6. **Sticky column** — only matters when wrap is in play; we don't wrap yet.
+3. **Undo** (`Ctrl+-`).
+4. **Sticky column** — only matters when word-wrap is in play; we don't wrap yet.
+5. **Autocomplete** (provider interface, async cancellation, paste-marker awareness) — pi §15.
+6. **Paste markers** (atomic-segment insertion of large pastes) — pi §16.
+7. **IME hook** via hardware cursor placement — pi §1.1; Ink's `useCursor` API can be revisited if a real IME dependency appears.
 
-The cursor-position bugs in `<TextInput>` (Delete==Backspace, cursor at offset 0 deletes the first char) are bugs we should file upstream against `@inkjs/ui` while continuing to use it.
+The `@inkjs/ui` cursor-position bugs that v0.3 pinned are no longer relevant — the dependency is removed.
 
 ## Where to look in pi
 

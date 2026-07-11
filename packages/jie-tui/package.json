@@ -6,7 +6,6 @@
   },
   "dependencies": {
     "@cuzfrog/jie-platform": "workspace:*",
-    "@inkjs/ui": "catalog:",
     "ink": "catalog:",
     "react": "catalog:"
   },

@@ -16,8 +16,7 @@
     "ink": "7.1.0",
     "react": "19.2.7",
     "ink-testing-library": "4.0.0",
-    "tslog": "4.11.0",
-    "@inkjs/ui": "2.0.0"
+    "tslog": "4.11.0"
   },
   "bin": {
     "jie": "packages/jie-cli/index.ts"
