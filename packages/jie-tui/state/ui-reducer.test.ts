@@ -9,8 +9,20 @@ const INITIAL_TUI_STATE = createStateStore().getState();
 
 const SYSTEM_SENDER: Parameters<typeof Events.teamLoaded>[0] = { kind: "system" };
 
-function loadedTeam(roles: Array<{ role: string; agent_key: string; is_leader: boolean }>): TuiState {
-  return reduceEvent(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, "my-team", roles));
+function loadedTeam(roles: ReadonlyArray<{ role: string; agent_key: string; is_leader: boolean }>): TuiState {
+  const agents = roles.map((r) => ({
+    teamId: "my-team",
+    role: r.role,
+    agentKey: r.agent_key,
+    isLeader: r.is_leader,
+    model: null,
+  }));
+  const leaderKey = agents.find((a) => a.isLeader)?.agentKey ?? agents[0]?.agentKey ?? "general-1";
+  return reduceEvent(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, {
+    id: "my-team",
+    leaderKey,
+    agents,
+  }));
 }
 
 describe("toggleRail", () => {

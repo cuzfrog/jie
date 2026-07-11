@@ -74,12 +74,23 @@ function writeTeam(rootDir: string, id: string, leader: string, extras: Readonly
 function collectEvents(bus: ReturnType<typeof createEventManager>): {
   teamLoaded: EventEnvelope<"system.team.loaded">[];
   systemError: EventEnvelope<"system.error">[];
+  modelAssigned: EventEnvelope<"agent.model.assigned">[];
+  order: string[];
 } {
   const teamLoaded: EventEnvelope<"system.team.loaded">[] = [];
   const systemError: EventEnvelope<"system.error">[] = [];
-  bus.subscribe("system.team.loaded", (env) => teamLoaded.push(env));
+  const modelAssigned: EventEnvelope<"agent.model.assigned">[] = [];
+  const order: string[] = [];
+  bus.subscribe("system.team.loaded", (env) => {
+    teamLoaded.push(env);
+    order.push("team.loaded");
+  });
   bus.subscribe("system.error", (env) => systemError.push(env));
-  return { teamLoaded, systemError };
+  bus.subscribe("agent.model.assigned", (env) => {
+    modelAssigned.push(env);
+    order.push("model.assigned");
+  });
+  return { teamLoaded, systemError, modelAssigned, order };
 }
 
 describe("createTeamManager — full surface", () => {
@@ -106,7 +117,7 @@ describe("createTeamManager — full surface", () => {
       expect(team.leaderKey).toBe("general-1");
       expect(team.agents).toHaveLength(1);
       expect(team.agents[0]?.isLeader).toBe(true);
-      const loadedIds = events.teamLoaded.map((e) => e.payload.teamId);
+      const loadedIds = events.teamLoaded.map((e) => e.payload.id);
       expect(loadedIds).toContain("minimal");
     });
 
@@ -179,8 +190,23 @@ describe("createTeamManager — full surface", () => {
       const events = collectEvents(eventManager);
       await manager.load("minimal");
       await manager.load("minimal");
-      const minimalEvents = events.teamLoaded.filter((e) => e.payload.teamId === "minimal");
+      const minimalEvents = events.teamLoaded.filter((e) => e.payload.id === "minimal");
       expect(minimalEvents).toHaveLength(1);
+    });
+
+    test("publishes system.team.loaded after agent.model.assigned (carries the model in the event payload)", async () => {
+      const { manager, eventManager } = makeManager(workspace, homeJieDir, null);
+      const events = collectEvents(eventManager);
+      await manager.load("minimal");
+      const teamLoadedEvents = events.teamLoaded;
+      expect(teamLoadedEvents).toHaveLength(1);
+      const teamLoaded = teamLoadedEvents[0]!;
+      const agents = teamLoaded.payload.agents;
+      const modelAssignedCount = events.modelAssigned.length;
+      expect(modelAssignedCount).toBeGreaterThan(0);
+      for (const agent of agents) {
+        expect(agent.model).not.toBeNull();
+      }
     });
 
     test("loads a second team without disturbing the first", async () => {
@@ -190,7 +216,7 @@ describe("createTeamManager — full surface", () => {
       const events = collectEvents(eventManager);
       await manager.load("minimal");
       await manager.load("alpha");
-      const loadedIds = events.teamLoaded.map((e) => e.payload.teamId);
+      const loadedIds = events.teamLoaded.map((e) => e.payload.id);
       expect(loadedIds).toContain("minimal");
       expect(loadedIds).toContain("alpha");
     });

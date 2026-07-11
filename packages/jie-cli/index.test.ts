@@ -17,7 +17,7 @@ import type {
   EventType,
   JiePlatform,
   JiePlatformOptions,
-  TeamIdentity,
+  TeamInfo,
 } from "@cuzfrog/jie-platform";
 import type { CreateTUIOptions, Tui, TuiDeps } from "@cuzfrog/jie-tui";
 import { _run, main } from ".";
@@ -178,10 +178,10 @@ function dispatch(command: Command<CommandName>): CommandResult<CommandName> | n
     case "setApiKey":
       throw new Error("setApiKey boom");
     case "getDefaultModel":
-      return { provider: "anthropic", modelId: "claude-sonnet-4-5" };
+      return { provider: "anthropic", id: "claude-sonnet-4-5", effort: "off" };
     case "team": {
       const teamId = command.teamId ?? "minimal";
-      const team: TeamIdentity = {
+      const team: TeamInfo = {
         id: teamId,
         leaderKey: "general-1",
         agents: [{
@@ -189,6 +189,7 @@ function dispatch(command: Command<CommandName>): CommandResult<CommandName> | n
           role: "general",
           agentKey: "general-1",
           isLeader: true,
+          model: null,
         }],
       };
       return team;
@@ -426,7 +427,7 @@ describe("_run — dispatch to command handlers", () => {
     const captured = captureRun(platform);
     const exit = await captured.run({ kind: "model", provider: "anthropic", modelId: "claude-sonnet-4-5" });
     expect(exit).toBe(0);
-    expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "setDefaultModel", provider: "anthropic", modelId: "claude-sonnet-4-5" });
+    expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5", effort: "off" });
     expect(captured.consoleMock.print).toHaveBeenCalledWith("default model set to anthropic/claude-sonnet-4-5");
   });
 

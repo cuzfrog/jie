@@ -13,7 +13,7 @@ import {
   createStorage,
 } from "./storage";
 import { type Command, type CommandExecutor, type CommandName, type CommandResult, createCommandExecutor } from "./command";
-import type { TeamIdentity } from "./types";
+import type { TeamInfo } from "./types";
 import { createGitService } from "./services";
 
 export interface JiePlatformOptions {
@@ -44,7 +44,7 @@ export interface JiePlatform {
   subscribe<T extends EventType>(topic: T, callback: (event: EventEnvelope<T>) => void): () => void;
   execute<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>>;
   /** visibleForTesting */
-  teams(): ReadonlyArray<TeamIdentity>;
+  teams(): ReadonlyArray<TeamInfo>;
 }
 
 export async function createJiePlatform(options: JiePlatformOptions, deps: JiePlatformDeps = buildJiePlatformDeps(options)): Promise<JiePlatform> {
@@ -65,7 +65,7 @@ export async function createJiePlatform(options: JiePlatformOptions, deps: JiePl
     execute<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>> {
       return deps.commandExecutor.execute(command);
     },
-    teams(): ReadonlyArray<TeamIdentity> {
+    teams(): ReadonlyArray<TeamInfo> {
       return [...deps.teamManager.listLoaded().values()];
     },
   };

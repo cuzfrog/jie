@@ -1,11 +1,11 @@
-import { defaultConsole, type Console, type JiePlatform, type TeamIdentity } from "@cuzfrog/jie-platform";
+import { defaultConsole, type Console, type JiePlatform, type TeamInfo } from "@cuzfrog/jie-platform";
 import type { ParsedArgsMap } from "../cli-flags";
 
 export type PrintArgs = ParsedArgsMap["print"];
 
 export async function runPrint(
   handle: JiePlatform,
-  team: TeamIdentity,
+  team: TeamInfo,
   args: PrintArgs,
   console: Console = defaultConsole,
 ): Promise<number> {

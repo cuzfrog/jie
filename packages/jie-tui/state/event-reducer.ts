@@ -1,5 +1,6 @@
 import type { AnyEventEnvelope } from "@cuzfrog/jie-platform";
-import type { AgentId, AgentUiState, MessageCard, ModelReference, TuiState, MessageTurn } from "./state";
+import type { AgentId, AgentUiState, MessageCard, TuiState, MessageTurn } from "./state";
+import { teamLoadReducer } from "./team-load-reducer";
 
 export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
   switch (event.type) {
@@ -19,34 +20,7 @@ export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
 
 function reduceTeamLoaded(state: TuiState, event: AnyEventEnvelope): TuiState {
   if (event.type !== "system.team.loaded") return state;
-  const { teamId, agents } = event.payload;
-  const newAgents = new Map(state.agents);
-  let leaderId: AgentId | null = state.leaderAgentId;
-  let focused: AgentId | null = state.focusedAgentId;
-  if (state.teamId !== null && state.teamId !== teamId) {
-    newAgents.clear();
-    leaderId = null;
-    focused = null;
-  }
-  const incomingIds = new Set<string>();
-  for (const agent of agents) {
-    const agentId = composeAgentId(teamId, agent.agent_key);
-    incomingIds.add(agentId);
-    const existing = newAgents.get(agentId);
-    if (existing !== undefined) {
-      newAgents.set(agentId, { ...existing, role: agent.role, isLeader: agent.is_leader });
-    } else {
-      newAgents.set(agentId, emptyAgent(agentId, teamId, agent.agent_key, agent.role, agent.is_leader));
-    }
-    if (agent.is_leader) leaderId = agentId;
-  }
-  for (const id of newAgents.keys()) {
-    if (!incomingIds.has(id)) newAgents.delete(id);
-  }
-  if (focused !== null && !newAgents.has(focused)) focused = null;
-  if (focused === null && leaderId !== null && newAgents.has(leaderId)) focused = leaderId;
-  if (leaderId !== null && !newAgents.has(leaderId)) leaderId = null;
-  return { ...state, teamId, leaderAgentId: leaderId, focusedAgentId: focused, agents: newAgents };
+  return teamLoadReducer(state, event.payload);
 }
 
 function reduceSystemError(state: TuiState, event: AnyEventEnvelope): TuiState {
@@ -88,8 +62,7 @@ function reduceModelAssigned(state: TuiState, event: AnyEventEnvelope): TuiState
   if (resolved === null) return state;
   if (event.type !== "agent.model.assigned") return state;
   const { agentId, agent } = resolved;
-  const model: ModelReference = { provider: event.payload.provider, id: event.payload.model, effort: event.payload.effort };
-  return withAgent(state, agentId, { ...agent, model });
+  return withAgent(state, agentId, { ...agent, model: { provider: event.payload.provider, id: event.payload.model, effort: event.payload.effort } });
 }
 
 function reduceQueueUpdate(state: TuiState, event: AnyEventEnvelope): TuiState {
@@ -182,10 +155,6 @@ function withAgent(state: TuiState, agentId: AgentId, agent: AgentUiState, extra
   const agents = new Map(state.agents);
   agents.set(agentId, agent);
   return { ...state, ...extra, agents };
-}
-
-function emptyAgent(agentId: AgentId, teamId: string, agentKey: string, role: string, isLeader: boolean): AgentUiState {
-  return { agentId, teamId, agentKey, role, isLeader, status: "idle", lastStopReason: null, model: null, queue: [], history: [], currentTurn: null };
 }
 
 function freshTurn(userPrompt: string): MessageTurn {

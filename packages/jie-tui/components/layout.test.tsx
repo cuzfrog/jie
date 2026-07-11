@@ -14,10 +14,14 @@ function mountLayout(opts: { columns: number; rows: number; showRail: boolean })
   unmount: () => void;
 } {
   const stateStore = createStateStore();
-  stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, "demo", [
-    { role: "general", agent_key: "general-1", is_leader: true },
-    { role: "helper", agent_key: "helper-1", is_leader: false },
-  ])));
+  stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
+    id: "demo",
+    leaderKey: "general-1",
+    agents: [
+      { teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, model: null },
+      { teamId: "demo", role: "helper", agentKey: "helper-1", isLeader: false, model: null },
+    ],
+  })));
   stateStore.dispatch(Actions.setEnvironment("/tmp/proj", "main", false));
   if (opts.showRail) stateStore.dispatch(Actions.toggleTeamRail());
   const state = stateStore.getState();
@@ -31,15 +35,15 @@ function mountLayout(opts: { columns: number; rows: number; showRail: boolean })
 }
 
 describe("Layout", () => {
-  test("mounts with the placeholder before any agent activity", () => {
+  test("mounts with the cursor block before any agent activity", () => {
     const { lastFrame, unmount } = mountLayout({ columns: 100, rows: 30, showRail: false });
-    expect(lastFrame()).toContain("type a prompt...");
+    expect(lastFrame()).toContain("▌");
     unmount();
   });
 
-  test("renders the editor placeholder", () => {
+  test("renders the editor cursor block when the buffer is empty", () => {
     const { lastFrame, unmount } = mountLayout({ columns: 100, rows: 30, showRail: false });
-    expect(lastFrame()).toContain("type a prompt...");
+    expect(lastFrame()).toContain("▌");
     unmount();
   });
 
@@ -71,17 +75,17 @@ describe("Layout", () => {
   test("editor content height equals 1 plus the number of newlines in the buffer", () => {
     const { lastFrame, unmount } = mountLayout({ columns: 100, rows: 30, showRail: false });
     const lines = lastFrame().split("\n");
-    const placeholderIndex = lines.findIndex((line) => line.includes("type a prompt..."));
-    expect(placeholderIndex).toBeGreaterThanOrEqual(0);
-    const editorTopBorderIndex = placeholderIndex - 1;
+    const cursorIndex = lines.findIndex((line) => line.includes("▌"));
+    expect(cursorIndex).toBeGreaterThanOrEqual(0);
+    const editorTopBorderIndex = cursorIndex - 1;
     const editorBottomBorderIndex = (() => {
-      for (let i = placeholderIndex + 1; i < lines.length; i++) {
+      for (let i = cursorIndex + 1; i < lines.length; i++) {
         if (lines[i]?.includes("─") === true) return i;
       }
       return -1;
     })();
     expect(editorTopBorderIndex).toBeGreaterThanOrEqual(0);
-    expect(editorBottomBorderIndex).toBeGreaterThan(placeholderIndex);
+    expect(editorBottomBorderIndex).toBeGreaterThan(cursorIndex);
     const editorContentHeight = editorBottomBorderIndex - editorTopBorderIndex - 1;
     expect(editorContentHeight).toBe(1);
     unmount();

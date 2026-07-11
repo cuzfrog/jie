@@ -8,10 +8,14 @@ declare const expect: typeof import("bun:test").expect;
 function loadDemoTeam(stateStore: ReturnType<typeof createStateStore>): void {
   stateStore.dispatch(
     Actions.receiveEvent(
-      Events.teamLoaded({ kind: "system" }, "demo", [
-        { role: "helper", agent_key: "helper-1", is_leader: false },
-        { role: "general", agent_key: "general-1", is_leader: true },
-      ]),
+      Events.teamLoaded({ kind: "system" }, {
+        id: "demo",
+        leaderKey: "general-1",
+        agents: [
+          { teamId: "demo", role: "helper", agentKey: "helper-1", isLeader: false, model: null },
+          { teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, model: null },
+        ],
+      }),
     ),
   );
 }

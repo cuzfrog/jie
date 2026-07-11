@@ -12,9 +12,11 @@ declare const expect: typeof import("bun:test").expect;
 describe("Footer", () => {
   test("shows cwd on the left and team:agent on the right", () => {
     const stateStore = createStateStore();
-    stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, "demo", [
-      { role: "general", agent_key: "general-1", is_leader: true },
-    ])));
+    stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
+      id: "demo",
+      leaderKey: "general-1",
+      agents: [{ teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    })));
     const state = stateStore.getState();
     const ctx = makeContextValue({ stateStore, state });
     const { lastFrame, unmount } = render(
@@ -47,6 +49,45 @@ describe("Footer", () => {
       </TuiContext.Provider>,
     );
     expect(lastFrame()).toContain("no-team:—");
+    unmount();
+  });
+
+  test("shows '(provider) modelId | effort' for the focused agent from team.loaded (model carried in the event)", () => {
+    const stateStore = createStateStore();
+    stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
+      id: "demo",
+      leaderKey: "general-1",
+      agents: [{
+        teamId: "demo",
+        role: "general",
+        agentKey: "general-1",
+        isLeader: true,
+        model: { provider: "lm-studio", id: "ornith-1.0-9b-mtp", effort: "off" },
+      }],
+    })));
+    const ctx = makeContextValue({ stateStore });
+    const { lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}>
+        <Footer cwd="/tmp/proj" gitBranch="main" gitDirty={false} />
+      </TuiContext.Provider>,
+    );
+    const frame = lastFrame();
+    expect(frame).toContain("(lm-studio)");
+    expect(frame).toContain("ornith-1.0-9b-mtp");
+    expect(frame).toContain("| off");
+    expect(frame).not.toMatch(/no-team:—/);
+    unmount();
+  });
+
+  test("renders the model segment with '—' only when no agent is focused (no model yet)", () => {
+    const stateStore = createStateStore();
+    const ctx = makeContextValue({ stateStore });
+    const { lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}>
+        <Footer cwd="/p" gitBranch="" gitDirty={false} />
+      </TuiContext.Provider>,
+    );
+    expect(lastFrame()).toContain("—");
     unmount();
   });
 });

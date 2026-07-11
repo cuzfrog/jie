@@ -7,7 +7,7 @@ export async function runModel(
   console: Console = defaultConsole,
 ): Promise<number> {
   try {
-    await platform.execute({ name: "setDefaultModel", provider: parsed.provider, modelId: parsed.modelId });
+    await platform.execute({ name: "setDefaultModel", provider: parsed.provider, id: parsed.modelId, effort: "off" });
   } catch (error) {
     if (error instanceof JiePlatformError && error.code === "UNKNOWN_PROVIDER") {
       console.error(`unknown provider: ${parsed.provider}`);

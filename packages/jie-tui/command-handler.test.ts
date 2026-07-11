@@ -171,7 +171,7 @@ describe("createTuiCommandHandler — /model", () => {
     const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/model openai/gpt-4o");
-    expect(execute).toHaveBeenCalledWith({ name: "setDefaultModel", provider: "openai", modelId: "gpt-4o" });
+    expect(execute).toHaveBeenCalledWith({ name: "setDefaultModel", provider: "openai", id: "gpt-4o", effort: "off" });
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("default model set to openai/gpt-4o")));
   });
 
@@ -255,7 +255,7 @@ describe("createTuiCommandHandler — /team", () => {
     execute.mockImplementationOnce(async () => ({
       id: "alpha",
       leaderKey: "general-1",
-      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true }],
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, model: null }],
     }));
     const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
@@ -267,7 +267,7 @@ describe("createTuiCommandHandler — /team", () => {
     expect(switchCalls[0]![0]).toEqual(Actions.switchTeam({
       id: "alpha",
       leaderKey: "general-1",
-      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true }],
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, model: null }],
     }));
   });
 
@@ -276,7 +276,7 @@ describe("createTuiCommandHandler — /team", () => {
     const identity = {
       id: "alpha",
       leaderKey: "general-1",
-      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true }],
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, model: null }],
     } as const;
     execute.mockImplementation(async () => identity);
     const { deps, dispatch } = makeDeps(platform);

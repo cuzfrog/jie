@@ -14,9 +14,11 @@ const STREAM_SENDER: AgentSender = AGENT_SENDER;
 const TOOL_SENDER: AgentSender = AGENT_SENDER;
 
 function loadedState(): TuiState {
-  return reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, "my-team", [
-    { role: "general", agent_key: "general-1", is_leader: true },
-  ]));
+  return reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, {
+    id: "my-team",
+    leaderKey: "general-1",
+    agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+  }));
 }
 
 function promptedState(): TuiState {
@@ -25,9 +27,11 @@ function promptedState(): TuiState {
 
 describe("reduceTeamLoaded", () => {
   test("seeds agents and focuses the leader", () => {
-    const state = reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, "my-team", [
-      { role: "general", agent_key: "general-1", is_leader: true },
-    ]));
+    const state = reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, {
+      id: "my-team",
+      leaderKey: "general-1",
+      agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    }));
     expect(state.teamId).toBe("my-team");
     expect(state.agents.size).toBe(1);
     expect(state.leaderAgentId).toBe("my-team:general-1");
@@ -35,12 +39,16 @@ describe("reduceTeamLoaded", () => {
   });
 
   test("team switch resets the agent map and clears leader focus from prior team", () => {
-    const state1 = reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, "my-team-1", [
-      { role: "general", agent_key: "general-1", is_leader: true },
-    ]));
-    const state2 = reduce(state1, Events.teamLoaded(SYSTEM_SENDER, "my-team-2", [
-      { role: "general", agent_key: "general-1", is_leader: true },
-    ]));
+    const state1 = reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, {
+      id: "my-team-1",
+      leaderKey: "general-1",
+      agents: [{ teamId: "my-team-1", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    }));
+    const state2 = reduce(state1, Events.teamLoaded(SYSTEM_SENDER, {
+      id: "my-team-2",
+      leaderKey: "general-1",
+      agents: [{ teamId: "my-team-2", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    }));
     expect(state2.teamId).toBe("my-team-2");
     expect(state2.agents.size).toBe(1);
     expect(state2.agents.has("my-team-2:general-1")).toBe(true);
@@ -49,10 +57,14 @@ describe("reduceTeamLoaded", () => {
   });
 
   test("non-leader agent is recorded but leader flag stays false", () => {
-    const state = reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, "my-team", [
-      { role: "manager", agent_key: "manager-1", is_leader: true },
-      { role: "worker", agent_key: "worker-1", is_leader: false },
-    ]));
+    const state = reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, {
+      id: "my-team",
+      leaderKey: "manager-1",
+      agents: [
+        { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, model: null },
+        { teamId: "my-team", role: "worker", agentKey: "worker-1", isLeader: false, model: null },
+      ],
+    }));
     expect(state.leaderAgentId).toBe("my-team:manager-1");
     expect(state.agents.get("my-team:worker-1")?.isLeader).toBe(false);
   });
@@ -64,7 +76,7 @@ describe("Actions.switchTeam", () => {
       id: "my-team",
       leaderKey: "general-1",
       agents: [
-        { teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true },
+        { teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, model: null },
       ],
     };
     const state = reduceAction(INITIAL_TUI_STATE, Actions.switchTeam(identity));
@@ -79,14 +91,14 @@ describe("Actions.switchTeam", () => {
     const first = reduceAction(INITIAL_TUI_STATE, Actions.switchTeam({
       id: "team-a",
       leaderKey: "general-1",
-      agents: [{ teamId: "team-a", role: "general", agentKey: "general-1", isLeader: true }],
+      agents: [{ teamId: "team-a", role: "general", agentKey: "general-1", isLeader: true, model: null }],
     }));
     const second = reduceAction(first, Actions.switchTeam({
       id: "team-b",
       leaderKey: "worker-1",
       agents: [
-        { teamId: "team-b", role: "manager", agentKey: "manager-1", isLeader: false },
-        { teamId: "team-b", role: "worker", agentKey: "worker-1", isLeader: true },
+        { teamId: "team-b", role: "manager", agentKey: "manager-1", isLeader: false, model: null },
+        { teamId: "team-b", role: "worker", agentKey: "worker-1", isLeader: true, model: null },
       ],
     }));
     expect(second.teamId).toBe("team-b");
@@ -102,7 +114,7 @@ describe("Actions.switchTeam", () => {
     const identity = {
       id: "minimal",
       leaderKey: "general-1",
-      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true }],
+      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, model: null }],
     };
     const state = reduceAction(INITIAL_TUI_STATE, Actions.switchTeam(identity));
     expect(state.agents.get("minimal:general-1")?.role).toBe("general");

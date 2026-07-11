@@ -12,10 +12,14 @@ declare const expect: typeof import("bun:test").expect;
 describe("AgentsRail", () => {
   test("shows leader pinned first with the leader glyph", () => {
     const stateStore = createStateStore();
-    stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, "demo", [
-      { role: "helper", agent_key: "helper-1", is_leader: false },
-      { role: "general", agent_key: "general-1", is_leader: true },
-    ])));
+    stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
+      id: "demo",
+      leaderKey: "general-1",
+      agents: [
+        { teamId: "demo", role: "helper", agentKey: "helper-1", isLeader: false, model: null },
+        { teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, model: null },
+      ],
+    })));
     const state = stateStore.getState();
     const ctx = makeContextValue({ stateStore, state });
     const { lastFrame, unmount } = render(
@@ -32,9 +36,11 @@ describe("AgentsRail", () => {
 
   test("renders the idle glyph for idle agents", () => {
     const stateStore = createStateStore();
-    stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, "demo", [
-      { role: "general", agent_key: "general-1", is_leader: true },
-    ])));
+    stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
+      id: "demo",
+      leaderKey: "general-1",
+      agents: [{ teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    })));
     const state = stateStore.getState();
     const ctx = makeContextValue({ stateStore, state });
     const { lastFrame, unmount } = render(

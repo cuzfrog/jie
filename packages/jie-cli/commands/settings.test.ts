@@ -1,4 +1,4 @@
-import { JiePlatformError, type Command, type CommandName, type CommandResult, type Console, type JiePlatform, type Settings, type TeamIdentity } from "@cuzfrog/jie-platform";
+import { JiePlatformError, type Command, type CommandName, type CommandResult, type Console, type JiePlatform, type Settings, type TeamInfo } from "@cuzfrog/jie-platform";
 import { runModel, runTeam } from "./settings";
 
 function makeConsoleMock(): Console {
@@ -13,7 +13,7 @@ function makePlatform(): { platform: JiePlatform; execute: ReturnType<typeof vi.
     return null as CommandResult<T>;
   });
   const settings: Settings = {};
-  const teams = new Map<string, TeamIdentity>();
+  const teams = new Map<string, TeamInfo>();
   const platform: JiePlatform = {
     settings,
     subscribe: vi.fn(() => () => undefined),
@@ -38,7 +38,8 @@ describe("runModel", () => {
     expect(execute).toHaveBeenCalledWith({
       name: "setDefaultModel",
       provider: "anthropic",
-      modelId: "claude-opus-4",
+      id: "claude-opus-4",
+      effort: "off",
     });
     expect(consoleMock.print).toHaveBeenCalledWith("default model set to anthropic/claude-opus-4");
   });

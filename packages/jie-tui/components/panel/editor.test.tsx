@@ -1,5 +1,5 @@
 import { render } from "ink-testing-library";
-import { Editor, _caretPositionForCursor } from "./editor";
+import { Editor } from "./editor";
 import { TuiContext } from "../context";
 import { Actions, createStateStore } from "../../state";
 import { makeContextValue } from "../../test-support";
@@ -9,13 +9,35 @@ declare const describe: (name: string, fn: () => void) => void;
 declare const expect: typeof import("bun:test").expect;
 
 describe("Editor", () => {
-  test("renders the placeholder when state.editorText is empty", () => {
+  test("does not render a placeholder when state.editorText is empty", () => {
     const store = createStateStore();
     const ctx = makeContextValue({ stateStore: store });
     const { lastFrame, unmount } = render(
       <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
     );
-    expect(lastFrame()).toContain("type a prompt...");
+    expect(lastFrame()).not.toContain("type a prompt");
+    unmount();
+  });
+
+  test("renders an inline block cursor when the buffer is empty", () => {
+    const store = createStateStore();
+    const ctx = makeContextValue({ stateStore: store });
+    const { lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    const lines = lastFrame().split("\n");
+    const topBorder = lines.findIndex((line) => line.includes("─"));
+    const bottomBorder = (() => {
+      for (let i = lines.length - 1; i > topBorder; i--) {
+        if (lines[i]?.includes("─") === true) return i;
+      }
+      return -1;
+    })();
+    expect(topBorder).toBeGreaterThanOrEqual(0);
+    expect(bottomBorder).toBeGreaterThan(topBorder);
+    const contentLines = lines.slice(topBorder + 1, bottomBorder);
+    expect(contentLines).toHaveLength(1);
+    expect(contentLines[0]?.trim()).toBe("▌");
     unmount();
   });
 
@@ -125,32 +147,56 @@ describe("Editor", () => {
     unmount();
   });
 
-  test("caret y for an empty buffer on a 30-row terminal is on the placeholder row, not row 0", () => {
-    const pos = _caretPositionForCursor("", 30);
-    expect(pos).toEqual({ x: 1, y: 27 });
+  test("renders an inline block cursor at the end of a single-line buffer", async () => {
+    const store = createStateStore();
+    store.dispatch(Actions.setEditorText("ab44ds"));
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const { lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    const frame = lastFrame();
+    expect(frame).toContain("ab44ds▌");
+    const lines = frame.split("\n");
+    const contentLine = lines.find((line) => line.includes("ab44ds"));
+    expect(contentLine).toBeDefined();
+    expect(contentLine!.endsWith("ab44ds▌")).toBe(true);
+    unmount();
   });
 
-  test("caret y for a single-line buffer on a 30-row terminal is on the content row above the bottom border", () => {
-    const pos = _caretPositionForCursor("hello", 30);
-    expect(pos).toEqual({ x: 6, y: 27 });
+  test("renders the cursor block only on the trailing line of a multi-line buffer", async () => {
+    const store = createStateStore();
+    store.dispatch(Actions.setEditorText("line1\nline2\nline3"));
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const { lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    const frame = lastFrame();
+    expect(frame).toContain("line3▌");
+    const lines = frame.split("\n").filter((line) => line.length > 0);
+    const cursorCount = lines.filter((line) => line.includes("▌")).length;
+    expect(cursorCount).toBe(1);
+    expect(frame).toContain("line1");
+    expect(frame).toContain("line2");
+    expect(frame).toContain("line3");
+    unmount();
   });
 
-  test("caret y for a multi-line buffer places the caret on the last line above the bottom border", () => {
-    const pos = _caretPositionForCursor("first\nsecond\nthird", 30);
-    expect(pos).toEqual({ x: 6, y: 27 });
-  });
-
-  test("caret y scales with terminal rows — caret stays just above the bottom border", () => {
-    const pos = _caretPositionForCursor("hi", 12);
-    expect(pos).toEqual({ x: 3, y: 9 });
-  });
-
-  test("caret x for a multi-line buffer counts only the trailing line's length", () => {
-    const pos = _caretPositionForCursor("aaaaa\nbbb", 30);
-    expect(pos).toEqual({ x: 4, y: 27 });
-  });
-
-  test("caret on the trailing line of a multi-line buffer sits at the same row as a single-line buffer of the trailing text", () => {
-    expect(_caretPositionForCursor("first\nsecond", 30)).toEqual(_caretPositionForCursor("second", 30));
+  test("trailing whitespace keeps the cursor block immediately after the last character of the trailing line", async () => {
+    const store = createStateStore();
+    store.dispatch(Actions.setEditorText("ab44ds  "));
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const { lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    const frame = lastFrame();
+    const contentLine = frame.split("\n").find((line) => line.includes("ab44ds")) ?? "";
+    const cursorIndex = contentLine.indexOf("▌");
+    expect(cursorIndex).toBeGreaterThan(0);
+    const beforeCursor = contentLine.slice(0, cursorIndex);
+    expect(beforeCursor.endsWith("ab44ds  ")).toBe(true);
+    unmount();
   });
 });

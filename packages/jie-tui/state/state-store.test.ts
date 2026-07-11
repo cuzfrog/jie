@@ -8,9 +8,11 @@ declare const expect: typeof import("bun:test").expect;
 describe("StateStore", () => {
   test("nested dispatch in subscriber preserves inner update", () => {
     const store = createStateStore();
-    store.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, "my-team", [
-      { role: "general", agent_key: "general-1", is_leader: true },
-    ])));
+    store.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
+      id: "my-team",
+      leaderKey: "general-1",
+      agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    })));
     store.subscribe((action) => {
       if (action.type === Actions.submitEditorText("").type) {
         store.dispatch(

@@ -40,7 +40,7 @@ const EMPTY_GIT_SNAPSHOT: GitSnapshot = { branch: "", dirty: false, ahead: 0, be
 type AuthConfig = ReturnType<typeof authStore.setProvider>;
 type AuthConfigRemoved = ReturnType<typeof authStore.removeProvider>;
 type AuthConfigCleared = ReturnType<typeof authStore.clear>;
-type TeamIdentity = Awaited<ReturnType<typeof teamManager.load>>;
+type TeamInfo = Awaited<ReturnType<typeof teamManager.load>>;
 
 function makeExecutor(): CommandExecutor {
   return createCommandExecutor({ authStore, settingsStore, teamManager, gitService });
@@ -118,7 +118,7 @@ describe("CommandExecutor", () => {
   describe("setDefaultModel", () => {
     test("writes the provider/model pair via settingsStore", async () => {
       const executor = makeExecutor();
-      const result = await executor.execute({ name: "setDefaultModel", provider: "anthropic", modelId: "claude-sonnet-4-5" });
+      const result = await executor.execute({ name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5", effort: "off" });
       expect(result).toBeNull();
       expect(settingsStore.setDefaultProvider).toHaveBeenCalledWith("anthropic", "claude-sonnet-4-5");
     });
@@ -127,7 +127,7 @@ describe("CommandExecutor", () => {
       const executor = makeExecutor();
       const callsBefore = settingsStore.setDefaultProvider.mock.calls.length;
       expect(
-        executor.execute({ name: "setDefaultModel", provider: "no-such-provider", modelId: "x" }),
+        executor.execute({ name: "setDefaultModel", provider: "no-such-provider", id: "x", effort: "off" }),
       ).rejects.toThrow(/Unknown provider/);
       expect(settingsStore.setDefaultProvider.mock.calls.length).toBe(callsBefore);
     });
@@ -138,7 +138,7 @@ describe("CommandExecutor", () => {
       settingsStore.load.mockReturnValueOnce({ defaultProvider: "anthropic", defaultModel: "claude-sonnet-4-5" });
       const executor = makeExecutor();
       const result = await executor.execute({ name: "getDefaultModel" });
-      expect(result).toEqual({ provider: "anthropic", modelId: "claude-sonnet-4-5" });
+      expect(result).toEqual({ provider: "anthropic", id: "claude-sonnet-4-5", effort: "off" });
     });
 
     test("returns null when no defaults are configured", async () => {
@@ -168,10 +168,10 @@ describe("CommandExecutor", () => {
 
   describe("team", () => {
     test("delegates to teamManager.load and returns the team identity", async () => {
-      const identity: TeamIdentity = {
+      const identity: TeamInfo = {
         id: "alpha",
         leaderKey: "general-1",
-        agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true }],
+        agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, model: null }],
       };
       teamManager.load.mockResolvedValue(identity);
       const executor = makeExecutor();
@@ -232,7 +232,7 @@ describe("CommandExecutor", () => {
         { name: "login", provider: "anthropic", apiKey: "sk-test" },
         { name: "logout" },
         { name: "setApiKey", apiKey: "sk-test" },
-        { name: "setDefaultModel", provider: "anthropic", modelId: "claude-sonnet-4-5" },
+        { name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5", effort: "off" },
         { name: "getDefaultModel" },
         { name: "setDefaultTeam", teamId: "alpha" },
         { name: "team", teamId: "alpha" },

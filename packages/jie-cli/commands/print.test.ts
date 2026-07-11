@@ -1,4 +1,4 @@
-import { type Command, type CommandName, type CommandResult, type Console, type EventEnvelope, type EventType, type JiePlatform, type TeamIdentity } from "@cuzfrog/jie-platform";
+import { type Command, type CommandName, type CommandResult, type Console, type EventEnvelope, type EventType, type JiePlatform, type TeamInfo } from "@cuzfrog/jie-platform";
 import { runPrint } from "./print";
 
 type AgentEnvelope = {
@@ -35,11 +35,11 @@ function makeConsoleMock(): Console {
   };
 }
 
-function makeTeam(teamId: string, agentKeys: ReadonlyArray<string>, leaderKey: string): TeamIdentity {
+function makeTeam(teamId: string, agentKeys: ReadonlyArray<string>, leaderKey: string): TeamInfo {
   return {
     id: teamId,
     leaderKey,
-    agents: agentKeys.map((k) => ({ teamId, role: k, agentKey: k, isLeader: k === leaderKey })),
+    agents: agentKeys.map((k) => ({ teamId, role: k, agentKey: k, isLeader: k === leaderKey, model: null })),
   };
 }
 

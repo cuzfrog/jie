@@ -135,7 +135,7 @@ function interceptModel(args: ReadonlyArray<string>, deps: CommandHandlerDeps): 
   if (args.length !== 1) return { kind: "error", text: "/model <provider>/<modelId>" };
   const parsed = parseModelArg(args[0]!);
   if (parsed.kind === "error") return parsed;
-  void deps.platform.execute({ name: "setDefaultModel", provider: parsed.provider, modelId: parsed.modelId })
+  void deps.platform.execute({ name: "setDefaultModel", provider: parsed.provider, id: parsed.modelId, effort: "off" })
     .then(() => undefined, (error: unknown) => {
       const reason = error instanceof Error ? error.message : String(error);
       deps.stateStore.dispatch(Actions.setErrorMessage(`/model failed: ${reason}`));

@@ -116,6 +116,7 @@ function makeHarness(): Harness {
       memory,
       agent,
       streamPublisher: stream,
+      model: null,
     });
   return {
     events,

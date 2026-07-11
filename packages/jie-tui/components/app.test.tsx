@@ -9,18 +9,20 @@ declare const describe: (name: string, fn: () => void) => void;
 declare const expect: typeof import("bun:test").expect;
 
 describe("App", () => {
-  test("mounts and renders the editor placeholder", () => {
+  test("mounts and renders the editor cursor block", () => {
     const stateStore = createStateStore();
     const { lastFrame, unmount } = render(<App stateStore={stateStore} />);
-    expect(lastFrame()).toContain("type a prompt...");
+    expect(lastFrame()).toContain("▌");
     unmount();
   });
 
   test("renders the team id after a system.team.loaded event", async () => {
     const stateStore = createStateStore();
-    stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, "demo", [
-      { role: "general", agent_key: "general-1", is_leader: true },
-    ])));
+    stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
+      id: "demo",
+      leaderKey: "general-1",
+      agents: [{ teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    })));
     const { lastFrame, unmount } = render(<App stateStore={stateStore} />);
     await new Promise((r) => setTimeout(r, 50));
     expect(lastFrame()).toContain("general");
@@ -29,9 +31,11 @@ describe("App", () => {
 
   test("renders the focused agent after typing into the editor", async () => {
     const stateStore = createStateStore();
-    stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, "demo", [
-      { role: "general", agent_key: "general-1", is_leader: true },
-    ])));
+    stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
+      id: "demo",
+      leaderKey: "general-1",
+      agents: [{ teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    })));
     stateStore.dispatch(Actions.setEnvironment("/tmp/proj", "main", false));
     const { lastFrame, unmount } = render(<App stateStore={stateStore} />);
     expect(lastFrame()).toContain("/tmp/proj");
@@ -40,9 +44,11 @@ describe("App", () => {
 
   test("App's TuiContext exposes the current stateStore snapshot", () => {
     const stateStore = createStateStore();
-    stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, "demo", [
-      { role: "general", agent_key: "general-1", is_leader: true },
-    ])));
+    stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
+      id: "demo",
+      leaderKey: "general-1",
+      agents: [{ teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    })));
     const captured = makeContextValue({ stateStore });
     expect(captured.state).toBe(stateStore.getState());
   });

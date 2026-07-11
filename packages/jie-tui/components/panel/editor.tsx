@@ -1,5 +1,5 @@
 import { useState, type JSX } from "react";
-import { Box, Text, useCursor, useInput, useWindowSize } from "ink";
+import { Box, Text, useInput } from "ink";
 import { useTuiContext } from "../context";
 import { Actions } from "../../state";
 import { pickColor } from "../themes";
@@ -7,20 +7,15 @@ import { pickColor } from "../themes";
 interface EditorProps { }
 
 const HISTORY_LIMIT = 100;
-const PLACEHOLDER = "type a prompt...";
+const CURSOR_BLOCK = "▌";
 
 export function Editor(_props: EditorProps): JSX.Element {
   const { state, dispatch } = useTuiContext();
   const [history, setHistory] = useState<ReadonlyArray<string>>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
   const [draft, setDraft] = useState<string>("");
-  const { rows } = useWindowSize();
   const buffer = state.editorText;
   const lines = buffer.split("\n");
-  const placeholder = buffer.length === 0;
-
-  const { setCursorPosition } = useCursor();
-  setCursorPosition(caretPositionForCursor(buffer, rows));
 
   useInput((input, key) => {
     if (key.return || (input.endsWith("\r") && !key.ctrl && !key.meta)) {
@@ -76,37 +71,22 @@ export function Editor(_props: EditorProps): JSX.Element {
       width="100%"
     >
       <Box flexDirection="column" paddingX={1}>
-        {placeholder ? (
-          <Text color={pickColor("muted")}>{PLACEHOLDER}</Text>
+        {buffer.length === 0 ? (
+          <Text>{CURSOR_BLOCK}</Text>
         ) : (
-          lines.map((line, i) => (
-            <Text key={`l-${i}`}>{line.length === 0 ? " " : line}</Text>
-          ))
+          lines.map((line, i) => {
+            const isCursorLine = i === lines.length - 1;
+            const display = line.length === 0 ? " " : line;
+            if (!isCursorLine) return <Text key={`l-${i}`}>{display}</Text>;
+            return (
+              <Text key={`l-${i}`}>
+                {display}
+                <Text>{CURSOR_BLOCK}</Text>
+              </Text>
+            );
+          })
         )}
       </Box>
     </Box>
   );
-}
-
-interface CaretPosition {
-  readonly x: number;
-  readonly y: number;
-}
-
-const EDITOR_PADDING_X = 1;
-const EDITOR_BORDER_LINES = 2;
-const FOOTER_LINES = 2;
-
-function caretPositionForCursor(buffer: string, totalRows: number): CaretPosition {
-  const lines = buffer.split("\n");
-  const lastLineIndex = lines.length - 1;
-  const currentLine = lines[lastLineIndex] ?? "";
-  const x = EDITOR_PADDING_X + currentLine.length;
-  const lastContentRow = Math.max(0, totalRows - FOOTER_LINES - EDITOR_BORDER_LINES);
-  const y = Math.max(1, lastContentRow + 1 - (lines.length - 1 - lastLineIndex));
-  return { x, y };
-}
-
-export {
-  caretPositionForCursor as _caretPositionForCursor
 }

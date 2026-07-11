@@ -1,13 +1,9 @@
 import type { StopReason } from "@earendil-works/pi-ai";
+import type { EffortLevel, ModelInfo } from "@cuzfrog/jie-platform";
 
 export type AgentStatus = "idle" | "busy";
-export type EffortLevel = "low" | "medium" | "high" | "max";
-
-export interface ModelReference {
-  readonly provider: string;
-  readonly id: string;
-  readonly effort: EffortLevel;
-}
+export { type EffortLevel };
+export type ModelReference = ModelInfo;
 
 export interface MessageCard {
   readonly kind: "toolCall" | "toolResult";

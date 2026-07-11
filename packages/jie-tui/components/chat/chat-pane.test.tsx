@@ -21,9 +21,11 @@ describe("ChatPane", () => {
 
   test("renders user prompt with prefix and assistant block text", () => {
     const stateStore = createStateStore();
-    stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, "demo", [
-      { role: "general", agent_key: "general-1", is_leader: true },
-    ])));
+    stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
+      id: "demo",
+      leaderKey: "general-1",
+      agents: [{ teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    })));
     stateStore.dispatch(Actions.receiveEvent(Events.userPrompt({ kind: "user" }, "demo", "hello", "general-1")));
     stateStore.dispatch(Actions.receiveEvent(
       Events.agentStreamChunk({ kind: "agent", teamId: "demo", agentKey: "general-1" }, 1, 0, "text", "world"),

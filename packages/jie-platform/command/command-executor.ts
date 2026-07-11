@@ -55,13 +55,13 @@ export function createCommandExecutor(deps: CommandExecutorDeps): CommandExecuto
       if (!knownProviders.has(command.provider)) {
         throw new JiePlatformError("UNKNOWN_PROVIDER", { detail: command.provider });
       }
-      deps.settingsStore.setDefaultProvider(command.provider, command.modelId);
+      deps.settingsStore.setDefaultProvider(command.provider, command.id);
       return null;
     },
     getDefaultModel: () => {
       const settings = deps.settingsStore.load();
       if (settings.defaultProvider === undefined || settings.defaultModel === undefined) return null;
-      return { provider: settings.defaultProvider, modelId: settings.defaultModel };
+      return { provider: settings.defaultProvider, id: settings.defaultModel, effort: "off" };
     },
     setDefaultTeam: (command) => {
       deps.settingsStore.setDefaultTeam(command.teamId);

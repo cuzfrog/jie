@@ -7,7 +7,7 @@ import { adaptToolToAgent } from "./tool-adapter";
 import { makeStreamPublisher } from "./streaming";
 import { JieAgentBody } from "./jie-agent-body";
 import { Events, type AgentSender, type EventManager } from "../event";
-import type { AgentIdentity } from "../types";
+import type { AgentInfo } from "../types";
 
 export interface CreateAgentBodyOptions {
   readonly agentKey: string;
@@ -25,7 +25,7 @@ export interface CreateAgentBodyOptions {
 }
 
 export interface AgentBody {
-  readonly identity: AgentIdentity;
+  readonly identity: AgentInfo;
   start(): Promise<void>;
   stop(): void;
 }
@@ -82,11 +82,11 @@ export function createAgentBody(options: CreateAgentBodyOptions): AgentBody {
     },
   });
   agent.state.systemPrompt = options.soul.systemPrompt;
+  const bodyModel = resolveBodyModelInfo(options.model, agent.state.thinkingLevel);
   if (options.model !== undefined) {
     agent.state.model = options.model;
-    const effort = agentEffort(agent.state.thinkingLevel);
-    if (effort !== null) {
-      options.eventManager.publish(Events.agentModelAssigned(sender, options.model.provider, options.model.id, effort));
+    if (bodyModel !== null) {
+      options.eventManager.publish(Events.agentModelAssigned(sender, bodyModel.provider, bodyModel.id, bodyModel.effort));
     }
   }
   agent.state.tools = adaptedTools;
@@ -101,6 +101,7 @@ export function createAgentBody(options: CreateAgentBodyOptions): AgentBody {
     memory: options.memory,
     agent,
     streamPublisher,
+    model: bodyModel,
   });
 
   const unsubscribeAgent = agent.subscribe((event, _signal) =>
@@ -143,11 +144,15 @@ function extractToolError(context: {
   return text.length > 0 ? text : "tool error";
 }
 
-function agentEffort(thinkingLevel: ThinkingLevel): "low" | "medium" | "high" | "max" | null {
-  if (thinkingLevel === "low" || thinkingLevel === "medium" || thinkingLevel === "high" || thinkingLevel === "xhigh") {
-    return thinkingLevel === "xhigh" ? "max" : thinkingLevel;
-  }
-  return null;
+function agentEffort(thinkingLevel: ThinkingLevel): "off" | "low" | "medium" | "high" | "max" {
+  if (thinkingLevel === "low" || thinkingLevel === "medium" || thinkingLevel === "high") return thinkingLevel;
+  if (thinkingLevel === "xhigh") return "max";
+  return "off";
+}
+
+function resolveBodyModelInfo(model: Model<Api> | undefined, thinkingLevel: ThinkingLevel): { readonly provider: string; readonly id: string; readonly effort: "off" | "low" | "medium" | "high" | "max" } | null {
+  if (model === undefined) return null;
+  return { provider: model.provider, id: model.id, effort: agentEffort(thinkingLevel) };
 }
 
 interface JieToolResult {

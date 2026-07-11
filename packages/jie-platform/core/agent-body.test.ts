@@ -87,7 +87,7 @@ interface FakeAgentCapture {
   factory: (opts: ConstructorParameters<typeof PiAgent>[0]) => PiAgent;
   fake: {
     subscribe: ReturnType<typeof vi.fn>;
-    state: { systemPrompt: string; model: unknown; tools: unknown[]; messages: AgentMessage[]; isStreaming: boolean };
+    state: { systemPrompt: string; model: unknown; tools: unknown[]; messages: AgentMessage[]; isStreaming: boolean; thinkingLevel: import("@earendil-works/pi-agent-core").ThinkingLevel };
     continue: ReturnType<typeof vi.fn>;
     prompt: ReturnType<typeof vi.fn>;
   };
@@ -107,6 +107,7 @@ function makeFakeAgentFactory(): FakeAgentCapture {
     tools: [] as unknown[],
     messages: [] as AgentMessage[],
     isStreaming: false,
+    thinkingLevel: "off" as import("@earendil-works/pi-agent-core").ThinkingLevel,
   };
   const fake = {
     subscribe,
@@ -179,6 +180,7 @@ describe("createAgentBody — wiring", () => {
       role: "general",
       agentKey: "leader-1",
       isLeader: true,
+      model: { provider: "anthropic", id: "claude-sonnet-4", effort: "off" },
     });
   });
 
@@ -236,5 +238,65 @@ describe("createAgentBody — wiring", () => {
     body2.stop();
     expect(unsubscribed).toBe(true);
     body.stop();
+  });
+});
+
+describe("createAgentBody — agent.model.assigned publication", () => {
+  test("publishes the event with effort 'off' when agent's default thinkingLevel is 'off' (e.g. local LM Studio)", () => {
+    const { opts, subscribeSubject } = makeOpts();
+    const cap = makeFakeAgentFactory();
+    cap.fake.state.thinkingLevel = "off";
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    subscribeSubject("agent.model.assigned", (env) => {
+      received.push(env);
+    });
+    createAgentBody({ ...opts, createAgent: cap.factory });
+    expect(received).toHaveLength(1);
+    expect(received[0]!.payload).toEqual({
+      provider: opts.model!.provider,
+      model: opts.model!.id,
+      effort: "off",
+    });
+  });
+
+  test("publishes the event with mapped effort when thinkingLevel is a recognized level", () => {
+    const { opts, subscribeSubject } = makeOpts();
+    const cap = makeFakeAgentFactory();
+    cap.fake.state.thinkingLevel = "high";
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    subscribeSubject("agent.model.assigned", (env) => {
+      received.push(env);
+    });
+    createAgentBody({ ...opts, createAgent: cap.factory });
+    expect(received).toHaveLength(1);
+    expect(received[0]!.payload).toEqual({
+      provider: opts.model!.provider,
+      model: opts.model!.id,
+      effort: "high",
+    });
+  });
+
+  test("maps 'xhigh' thinkingLevel to 'max' effort in the event payload", () => {
+    const { opts, subscribeSubject } = makeOpts();
+    const cap = makeFakeAgentFactory();
+    cap.fake.state.thinkingLevel = "xhigh";
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    subscribeSubject("agent.model.assigned", (env) => {
+      received.push(env);
+    });
+    createAgentBody({ ...opts, createAgent: cap.factory });
+    expect(received).toHaveLength(1);
+    expect(received[0]!.payload.effort).toBe("max");
+  });
+
+  test("does not publish the event when options.model is undefined", () => {
+    const { opts, subscribeSubject } = makeOpts({ model: undefined });
+    const cap = makeFakeAgentFactory();
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    subscribeSubject("agent.model.assigned", (env) => {
+      received.push(env);
+    });
+    createAgentBody({ ...opts, createAgent: cap.factory });
+    expect(received).toHaveLength(0);
   });
 });

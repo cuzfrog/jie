@@ -9,7 +9,7 @@ import { type ModelRegistry } from "../config";
 import { type ToolRegistry } from "../tools";
 import { type AgentSoul, type TeamBlueprint, type TeamBlueprintLocation, BUILTIN_MINIMAL_TEAM_ID } from "./types";
 import { type TeamRegistry, createTeamRegistry } from "./registry";
-import type { AgentIdentity, TeamIdentity } from "../types";
+import type { AgentInfo, TeamInfo } from "../types";
 
 export interface TeamManagerOptions {
   readonly homeJieDir: string;
@@ -27,11 +27,11 @@ export interface TeamManagerDeps {
 }
 
 export interface TeamManager {
-  load(teamId?: string): Promise<TeamIdentity>;
+  load(teamId?: string): Promise<TeamInfo>;
   listInstalled(): string[];
-  listLoaded(): ReadonlyMap<string, TeamIdentity>;
+  listLoaded(): ReadonlyMap<string, TeamInfo>;
   locate(teamId: string): TeamBlueprintLocation;
-  agents(teamId: string): ReadonlyArray<AgentIdentity>;
+  agents(teamId: string): ReadonlyArray<AgentInfo>;
   stop(): void;
 }
 
@@ -44,11 +44,11 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
   const loadedTeams = new Map<string, AgentBody[]>();
   const sessionIds = new Map<string, string>();
 
-  async function loadImpl(teamId?: string): Promise<TeamIdentity> {
+  async function loadImpl(teamId?: string): Promise<TeamInfo> {
     const requested = resolveTeamId(teamId);
     const existing = loadedTeams.get(requested);
     if (existing !== undefined) {
-      return toTeamIdentity(requested, existing);
+      return toTeamInfo(requested, existing);
     }
     const blueprint: TeamBlueprint = teamRegistry.parseTeamManifest(requested);
     const sessionId = resolveSessionId(requested);
@@ -76,8 +76,8 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
       await body.start();
     }
     loadedTeams.set(requested, bodies);
-    publishTeamLoaded(requested, blueprint);
-    return toTeamIdentity(requested, bodies);
+    publishTeamLoaded(requested, bodies);
+    return toTeamInfo(requested, bodies);
   }
 
   function resolveTeamId(teamId?: string): string {
@@ -121,24 +121,18 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
     }
   }
 
-  function publishTeamLoaded(teamId: string, blueprint: TeamBlueprint): void {
-    const sorted = [...blueprint.roles].sort((a, b) => a.role.localeCompare(b.role));
-    const agents = sorted.map((r) => ({
-      role: r.role,
-      agent_key: `${r.role}-1`,
-      is_leader: r.role === blueprint.leaderRole,
-    }));
-    eventManager.publish(Events.teamLoaded({ kind: "system" }, teamId, agents));
+  function publishTeamLoaded(teamId: string, bodies: AgentBody[]): void {
+    eventManager.publish(Events.teamLoaded({ kind: "system" }, toTeamInfo(teamId, bodies)));
   }
 
-  function agents(teamId: string): ReadonlyArray<AgentIdentity> {
+  function agents(teamId: string): ReadonlyArray<AgentInfo> {
     return (loadedTeams.get(teamId) ?? []).map((b) => b.identity);
   }
 
-  function listLoaded(): ReadonlyMap<string, TeamIdentity> {
-    const result = new Map<string, TeamIdentity>();
+  function listLoaded(): ReadonlyMap<string, TeamInfo> {
+    const result = new Map<string, TeamInfo>();
     for (const [id, bodies] of loadedTeams) {
-      result.set(id, toTeamIdentity(id, bodies));
+      result.set(id, toTeamInfo(id, bodies));
     }
     return result;
   }
@@ -163,7 +157,7 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
   };
 }
 
-function toTeamIdentity(id: string, bodies: AgentBody[]): TeamIdentity {
+function toTeamInfo(id: string, bodies: AgentBody[]): TeamInfo {
   const identities = bodies.map((b) => b.identity);
   const leader = identities.find((a) => a.isLeader);
   if (leader === undefined) {
