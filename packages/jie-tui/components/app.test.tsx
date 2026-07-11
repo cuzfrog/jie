@@ -12,7 +12,7 @@ describe("App", () => {
   test("mounts and renders the editor cursor block", () => {
     const stateStore = createStateStore();
     const { lastFrame, unmount } = render(<App stateStore={stateStore} />);
-    expect(lastFrame()).toContain("▌");
+    expect(lastFrame()).toContain("\u001b[7m \u001b[27m");
     unmount();
   });
 

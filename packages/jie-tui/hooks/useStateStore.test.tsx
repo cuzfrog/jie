@@ -66,4 +66,29 @@ describe("useStateStore", () => {
     expect(unsubscribeSpy).toHaveBeenCalledTimes(1);
     unmount();
   });
+
+  test("dispatch is referentially stable across re-renders", async () => {
+    // Consumers (e.g. <Editor>) rely on dispatch having a stable identity so
+    // that useCallback-wrapped handlers don't churn on every state update.
+    // Re-render the hook by dispatching through it; the returned dispatch
+    // reference must not change.
+    const stateStore = createStateStore();
+    const dispatches: Array<ReturnType<typeof useStateStore>["dispatch"]> = [];
+    const Probe = (): null => {
+      const { dispatch } = useStateStore(stateStore);
+      dispatches.push(dispatch);
+      return null;
+    };
+    const { unmount, rerender } = render(<Probe />);
+    await sleep(FLUSH_EFFECTS_MS);
+    stateStore.dispatch(Actions.toggleThinking());
+    await sleep(FLUSH_EFFECTS_MS);
+    rerender(<Probe />);
+    await sleep(FLUSH_EFFECTS_MS);
+    expect(dispatches.length).toBeGreaterThanOrEqual(2);
+    for (let i = 1; i < dispatches.length; i++) {
+      expect(dispatches[i]).toBe(dispatches[0]);
+    }
+    unmount();
+  });
 });

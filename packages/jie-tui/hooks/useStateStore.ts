@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { TuiState, StateStore, Action } from "../state";
 
 interface StateStoreSnapshot {
@@ -14,5 +14,6 @@ export function useStateStore(stateStore: StateStore): StateStoreSnapshot {
     }),
     [stateStore],
   );
-  return { state, dispatch: (action) => stateStore.dispatch(action) };
+  const dispatch = useCallback((action: Action) => stateStore.dispatch(action), [stateStore]);
+  return { state, dispatch };
 }

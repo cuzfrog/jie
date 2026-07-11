@@ -37,13 +37,13 @@ function mountLayout(opts: { columns: number; rows: number; showRail: boolean })
 describe("Layout", () => {
   test("mounts with the cursor block before any agent activity", () => {
     const { lastFrame, unmount } = mountLayout({ columns: 100, rows: 30, showRail: false });
-    expect(lastFrame()).toContain("▌");
+    expect(lastFrame()).toContain("\u001b[7m \u001b[27m");
     unmount();
   });
 
   test("renders the editor cursor block when the buffer is empty", () => {
     const { lastFrame, unmount } = mountLayout({ columns: 100, rows: 30, showRail: false });
-    expect(lastFrame()).toContain("▌");
+    expect(lastFrame()).toContain("\u001b[7m \u001b[27m");
     unmount();
   });
 
@@ -75,7 +75,7 @@ describe("Layout", () => {
   test("editor content height equals 1 plus the number of newlines in the buffer", () => {
     const { lastFrame, unmount } = mountLayout({ columns: 100, rows: 30, showRail: false });
     const lines = lastFrame().split("\n");
-    const cursorIndex = lines.findIndex((line) => line.includes("▌"));
+    const cursorIndex = lines.findIndex((line) => line.includes("\u001b[7m \u001b[27m"));
     expect(cursorIndex).toBeGreaterThanOrEqual(0);
     const editorTopBorderIndex = cursorIndex - 1;
     const editorBottomBorderIndex = (() => {

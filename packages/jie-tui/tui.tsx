@@ -97,7 +97,7 @@ class InkTui implements Tui {
         resolve();
       };
       try {
-        stdout.write(ALT_SCREEN_ON);
+        // stdout.write(ALT_SCREEN_ON);
         this.altScreenEntered = true;
         const stdin = this.deps.stdin ?? process.stdin;
         const stderr = this.deps.stderr;
