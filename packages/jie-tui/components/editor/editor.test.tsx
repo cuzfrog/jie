@@ -1,5 +1,5 @@
 import { render } from "ink-testing-library";
-import { Editor } from "./editor";
+import { Editor } from "../footer/editor";
 import { TuiContext } from "../context";
 import { Actions, createStateStore } from "../../state";
 import { makeContextValue } from "../../test-support";

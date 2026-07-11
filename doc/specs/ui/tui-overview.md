@@ -7,6 +7,7 @@ The team's user-facing cockpit. Lives in `packages/jie-tui/`. Observes all agent
 - `key-shortcuts-conflicts.md` — OS-reserved shortcuts (macOS, Linux, Windows) and how each TUI binding avoids or honors a conflict.
 - `tui-state.md` — `TuiState` shape and reducer rules per topic.
 - `tui-pi-reference.md` — pi theme tokens and component shapes we mirror.
+- `tui-pi-editor-reference.md` — pi `Editor` internals: state shape, grapheme-aware cursor, word-wrap layout, sticky-column decision table, fish-style undo, kill ring, history walk, paste-marker atomic segments, autocomplete async-cancellation, IME hook.
 - `tui-user-scenarios.md` — T1–T6 acceptance scenarios with recorded traces.
 - `tui-claude-code-reference.md` — Claude Code's cursor-placement architecture (forked Ink with `CursorDeclarationContext` + `nodeCache`); why jie-tui cannot adopt it on stock Ink and the pragmatic alternative.
 

@@ -4,7 +4,7 @@ import { useTuiContext } from "./context";
 import { ChatPane } from "./chat";
 import { AgentsRail } from "./team-rail";
 import { railWidth } from "./themes";
-import { Editor, Footer } from "./panel";
+import { Editor, Footer } from "./footer";
 
 interface LayoutProps {
   readonly columns: number;
