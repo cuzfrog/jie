@@ -52,4 +52,28 @@ describe("App", () => {
     const captured = makeContextValue({ stateStore });
     expect(captured.state).toBe(stateStore.getState());
   });
+
+  test("App re-renders the layout with the new width after a SIGWINCH resize", async () => {
+    const stateStore = createStateStore();
+    const instance = render(<App stateStore={stateStore} />);
+    const before = instance.stdout.frames.length;
+    instance.stdout.resize(60, 30);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(instance.stdout.frames.length).toBeGreaterThan(before);
+    instance.unmount();
+  });
+
+  test("App test-renderer's resize() emits a 'resize' event and updates columns/rows", () => {
+    const stateStore = createStateStore();
+    const instance = render(<App stateStore={stateStore} />);
+    let fired = 0;
+    instance.stdout.on("resize", () => {
+      fired += 1;
+    });
+    instance.stdout.resize(60, 30);
+    expect(instance.stdout.columns).toBe(60);
+    expect(instance.stdout.rows).toBe(30);
+    expect(fired).toBe(1);
+    instance.unmount();
+  });
 });

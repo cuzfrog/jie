@@ -18,9 +18,13 @@ import {hideCursorEscape, showCursorEscape} from './cursor-helpers.js';
 import logUpdate, {type LogUpdate, type CursorPosition} from './log-update.js';
 import {bsu, esu, shouldSynchronize} from './write-synchronized.js';
 import instances from './instances.js';
+import {EventEmitter} from 'node:events';
 import App from './components/App.js';
 import {type TerminalSuspension} from './components/AppContext.js';
 import {accessibilityContext as AccessibilityContext} from './components/AccessibilityContext.js';
+import {materializeRoot} from './selection/materialize.js';
+import {type CellPosition} from './selection/selection-engine.js';
+import {writeClipboard} from './selection/clipboard.js';
 import {
 	type KittyKeyboardOptions,
 	type KittyFlagName,
@@ -342,6 +346,16 @@ export default class Ink {
 	// mode and bracketed paste state.
 	private pauseInput?: () => void;
 	private resumeInput?: () => void;
+	// Latest materializer grid, refreshed on every layout commit. Consumed by
+	// the in-app selection subsystem when extracting the selected text.
+	private selectionMaterializer: () => ReadonlyArray<ReadonlyArray<CellPosition>> = () => [];
+	// Dedicated emitter that App.tsx fans every parsed input chunk into. The
+	// selection engine listens here so it sees mouse events regardless of
+	// which component handled them via useInput.
+	private readonly selectionEmitter: EventEmitter = new EventEmitter();
+	// Clipboard writer that the engine calls on release; writes OSC 52 to
+	// the configured stdout. Exposed so App.tsx can pass it through.
+	private onSelectionClipboard: (text: string) => void = () => {};
 
 	constructor(options: Options) {
 		autoBind(this);
@@ -428,6 +442,24 @@ export default class Ink {
 		this.lastOutputToRender = '';
 		this.lastOutputHeight = 0;
 		this.lastTerminalWidth = getWindowSize(this.options.stdout).columns;
+
+		// Selection materializer: materialized on demand from the rendered DOM
+		// tree. Consumed by the in-app selection engine when extracting text.
+		this.selectionMaterializer = () => {
+			try {
+				return materializeRoot(this.rootNode);
+			} catch {
+				return [];
+			}
+		};
+		this.selectionEmitter.setMaxListeners(Infinity);
+		this.onSelectionClipboard = (text: string) => {
+			try {
+				writeClipboard(this.options.stdout, text);
+			} catch {
+				// Best-effort; clipboard write must never throw into Ink.
+			}
+		};
 
 		// This variable is used only in debug mode to store full static output
 		// so that it's rerendered every time, not just new static parts, like in non-debug mode
@@ -682,6 +714,12 @@ export default class Ink {
 				value={{isScreenReaderEnabled: this.isScreenReaderEnabled}}
 			>
 				<App
+					selectionMaterializer={this.selectionMaterializer}
+					selectionEmitter={this.selectionEmitter}
+					onSelectionClipboard={this.onSelectionClipboard}
+					selectionStdoutWrite={(chunk: string) => {
+						this.writeBestEffort(this.options.stdout, chunk);
+					}}
 					stdin={this.options.stdin}
 					stdout={this.options.stdout}
 					stderr={this.options.stderr}
@@ -855,11 +893,7 @@ export default class Ink {
 				// buffer switch adds fragile lifecycle-specific behavior, so Ink keeps
 				// alternate-screen teardown intentionally simple and best-effort.
 				if (this.alternateScreen) {
-					this.writeBestEffort(
-						this.options.stdout,
-						ansiEscapes.exitAlternativeScreen,
-					);
-					this.writeBestEffort(this.options.stdout, showCursorEscape);
+					this.clearAlternateScreen();
 					this.alternateScreen = false;
 				}
 
@@ -1056,7 +1090,27 @@ export default class Ink {
 				ansiEscapes.enterAlternativeScreen,
 			);
 			this.writeBestEffort(this.options.stdout, hideCursorEscape);
+			// SGR mouse tracking: 1002 streams button events plus motion-with-button
+			// events, which is what gives live drag preview during a left-button
+			// drag; 1006 selects the SGR-encoded coordinate format that survives
+			// wide terminals. We enable both here so jie-tui (and any other Ink
+			// consumer) gets drag selection for free whenever they enter alt-screen.
+			this.writeBestEffort(this.options.stdout, '\x1b[?1002h');
+			this.writeBestEffort(this.options.stdout, '\x1b[?1006h');
 		}
+	}
+
+	private clearAlternateScreen(): void {
+		// Inverse of the enable pair written in setAlternateScreen. Order matters:
+		// disabling 1006 first avoids a brief window where the terminal would emit
+		// legacy-X10 coordinates if 1002 leaked a motion event after 1006 went down.
+		this.writeBestEffort(this.options.stdout, '\x1b[?1006l');
+		this.writeBestEffort(this.options.stdout, '\x1b[?1002l');
+		this.writeBestEffort(
+			this.options.stdout,
+			ansiEscapes.exitAlternativeScreen,
+		);
+		this.writeBestEffort(this.options.stdout, showCursorEscape);
 	}
 
 	private resolveInteractiveOption(interactive: boolean | undefined): boolean {
@@ -1312,6 +1366,11 @@ export default class Ink {
 				}
 
 				if (this.alternateScreen) {
+					// Disable mouse tracking before we leave alt-screen so the child
+					// process inherits a clean mouse state. We re-enable 1002/1006
+					// in endSuspend to keep symmetry with setAlternateScreen.
+					this.writeBestEffort(this.options.stdout, '\x1b[?1006l');
+					this.writeBestEffort(this.options.stdout, '\x1b[?1002l');
 					this.writeBestEffort(
 						this.options.stdout,
 						ansiEscapes.exitAlternativeScreen,
@@ -1359,6 +1418,9 @@ export default class Ink {
 					this.options.stdout,
 					ansiEscapes.enterAlternativeScreen,
 				);
+				// Re-arm mouse tracking after the child process is done.
+				this.writeBestEffort(this.options.stdout, '\x1b[?1002h');
+				this.writeBestEffort(this.options.stdout, '\x1b[?1006h');
 			}
 
 			if (this.kittyProtocolEnabled && this.kittyFlags) {
@@ -1383,5 +1445,13 @@ export default class Ink {
 			this.onRender();
 			await this.waitUntilRenderFlush();
 		} catch {}
+	}
+
+	/**
+	 * Returns the latest materializer grid for the in-app selection engine.
+	 * Each call materializes the current frame from the rendered DOM tree.
+	 */
+	getSelectionMaterializer(): () => ReadonlyArray<ReadonlyArray<CellPosition>> {
+		return this.selectionMaterializer;
 	}
 }

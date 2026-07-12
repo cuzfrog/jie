@@ -1,5 +1,6 @@
 import {useEffect, useEffectEvent} from 'react';
 import parseKeypress, {nonAlphanumericKeys} from '../parse-keypress.js';
+import type {ParsedMouseEvent} from '../parse-keypress.js';
 import reconciler from '../reconciler.js';
 import {useStdinContext} from './use-stdin.js';
 
@@ -134,9 +135,23 @@ export type Key = {
 	Only available with kitty keyboard protocol.
 	*/
 	eventType?: 'press' | 'repeat' | 'release';
+
+	/**
+	Structured mouse event payload for SGR-encoded mouse sequences
+	(`ESC[<button;col;row M|m`). Only populated when the terminal emits
+	mouse events (DECSET 1000/1002/1006). `x` and `y` are 1-based screen
+	coordinates; `button` preserves the full SGR button field including
+	modifier bits so callers can distinguish a left-press (0) from
+	left-button motion (32). `terminator` is `'press'` for `M` sequences
+	(press or motion) and `'release'` for `m` (release). X10 legacy mouse
+	is absorbed by the parser without a structured payload.
+	*/
+	mouse?: ParsedMouseEvent;
 };
 
 type Handler = (input: string, key: Key) => void;
+
+export type {ParsedMouseEvent};
 
 type Options = {
 	/**
@@ -214,6 +229,7 @@ const useInput = (inputHandler: Handler, options: Options = {}) => {
 			capsLock: keypress.capsLock ?? false,
 			numLock: keypress.numLock ?? false,
 			eventType: keypress.eventType,
+			mouse: keypress.mouse,
 		};
 
 		let input: string;

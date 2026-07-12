@@ -165,12 +165,33 @@ type ParsedKey = {
 	eventType?: 'press' | 'repeat' | 'release';
 	isKittyProtocol?: boolean;
 	text?: string;
+	// Structured mouse event payload for SGR-encoded mouse sequences. Only
+	// populated when `name === 'mouse'`. X10 legacy mouse is absorbed but
+	// does not carry a structured payload because its coordinate range is
+	// limited and it is only kept for terminals that ignore DECSET 1006.
+	mouse?: ParsedMouseEvent;
 	// Whether this key represents printable text input.
 	// When false, the key is a control/function/modifier key that should not
 	// produce text input (e.g., arrows, function keys, capslock, media keys).
 	// Only set by the kitty protocol parser.
 	isPrintable?: boolean;
 };
+
+export interface MouseModifiers {
+	readonly shift: boolean;
+	readonly meta: boolean;
+	readonly ctrl: boolean;
+}
+
+export interface ParsedMouseEvent {
+	readonly button: number;
+	readonly x: number;
+	readonly y: number;
+	// SGR mouse sequences use uppercase `M` for press/motion and lowercase
+	// `m` for release. X10 does not encode release separately.
+	readonly terminator: 'press' | 'release';
+	readonly modifiers: MouseModifiers;
+}
 
 // Kitty keyboard protocol: CSI codepoint ; modifiers [: eventType] [; text-as-codepoints] u
 const kittyKeyRe = /^\x1b\[(\d+)(?:;(\d+)(?::(\d+))?(?:;([\d:]+))?)?u$/;
@@ -488,13 +509,25 @@ const parseKeypress = (s: Uint8Array | string = ''): ParsedKey => {
 			masked === 0x40 ? 'wheelup' :
 			masked === 0x41 ? 'wheeldown' :
 			'mouse';
+		const modifiers: MouseModifiers = {
+			shift: (button & 0x04) !== 0,
+			meta: (button & 0x08) !== 0,
+			ctrl: (button & 0x10) !== 0,
+		};
 		return {
 			name,
-			ctrl: false,
-			meta: false,
-			shift: false,
+			ctrl: modifiers.ctrl,
+			meta: modifiers.meta,
+			shift: modifiers.shift,
 			sequence: s,
 			raw: s,
+			mouse: {
+				button,
+				x: parseInt(sgrMouseMatch[2]!, 10),
+				y: parseInt(sgrMouseMatch[3]!, 10),
+				terminator: sgrMouseMatch[4] === 'M' ? 'press' : 'release',
+				modifiers,
+			},
 		};
 	}
 

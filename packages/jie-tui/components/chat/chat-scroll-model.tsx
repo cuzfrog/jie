@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { AgentUiState, MessageCard, MessageTurn } from "../../state";
+import { ASSISTANT_PREFIX, USER_PROMPT_PREFIX } from "../themes";
 
 export interface ChatScrollOptions {
   readonly toolCardsExpanded: boolean;
@@ -26,8 +27,6 @@ export interface ChatScrollSlice {
 const BLANK_ROW_BETWEEN_TURNS = 1;
 const WORKING_INDICATOR_ROWS = 1;
 const MIN_WIDTH_FOR_WRAP = 8;
-const PROMPT_PREFIX = "> ";
-const ASSISTANT_PREFIX = "  ";
 const THINKING_PREFIX = "  ";
 
 /**
@@ -142,7 +141,7 @@ export function turnHeight(turn: MessageTurn, width: number, options: ChatScroll
 }
 
 function promptHeight(text: string, width: number): number {
-  return wrapAccountingForFirstLinePrefix(text, width, PROMPT_PREFIX);
+  return wrapAccountingForFirstLinePrefix(text, width, USER_PROMPT_PREFIX);
 }
 
 function blockHeight(

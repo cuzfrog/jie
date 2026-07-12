@@ -5,6 +5,7 @@ import {
   jumpChatOffset,
   turnHeight,
 } from "./chat-scroll-model";
+import { ASSISTANT_PREFIX, USER_PROMPT_PREFIX } from "../themes";
 
 declare const test: (name: string, fn: () => void | Promise<void>) => void;
 declare const describe: (name: string, fn: () => void) => void;
@@ -53,6 +54,17 @@ describe("turnHeight", () => {
       OPTIONS,
     );
     expect(h).toBeGreaterThan(2);
+  });
+
+  test("user-prompt prefix matches themes.USER_PROMPT_PREFIX glyph (single source of truth)", () => {
+    // Smoke: the model reads its prefix from themes so it can never drift
+    // out of sync with `<MessageView>`. The surrounding width-accounting
+    // is owned by the shared wrap helper (planned for Step 7).
+    expect(USER_PROMPT_PREFIX).toBe("› ");
+  });
+
+  test("assistant block prefix matches themes.ASSISTANT_PREFIX glyph (single source of truth)", () => {
+    expect(ASSISTANT_PREFIX).toBe("● ");
   });
 
   test("long block wraps proportionally", () => {

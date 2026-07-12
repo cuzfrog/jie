@@ -20,6 +20,8 @@ import FocusContext from './FocusContext.js';
 import AnimationContext from './AnimationContext.js';
 import CursorContext from './CursorContext.js';
 import ErrorBoundary from './ErrorBoundary.js';
+import {installSelectionEngine, type Selection} from '../selection/selection-engine.js';
+import {installOverlay} from '../selection/overlay.js';
 
 const tab = '\t';
 const shiftTab = '\u001B[Z';
@@ -50,6 +52,10 @@ type Props = {
 	readonly setCursorPosition: (position: CursorPosition | undefined) => void;
 	readonly interactive: boolean;
 	readonly renderThrottleMs: number;
+	readonly selectionMaterializer: () => ReadonlyArray<ReadonlyArray<{readonly row: number; readonly column: number; readonly text: string}>>;
+	readonly selectionEmitter: EventEmitter;
+	readonly onSelectionClipboard: (text: string) => void;
+	readonly selectionStdoutWrite: (chunk: string) => void;
 };
 
 type Focusable = {
@@ -75,6 +81,10 @@ function App({
 	setCursorPosition,
 	interactive,
 	renderThrottleMs,
+	selectionMaterializer,
+	selectionEmitter,
+	onSelectionClipboard,
+	selectionStdoutWrite,
 }: Props): React.ReactNode {
 	const [isFocusEnabled, setIsFocusEnabled] = useState(true);
 	const [activeFocusId, setActiveFocusId] = useState<string | undefined>(
@@ -266,8 +276,9 @@ function App({
 		(input: string): void => {
 			handleInput(input);
 			internal_eventEmitter.current.emit('input', input);
+			selectionEmitter.emit('input', input);
 		},
-		[handleInput],
+		[handleInput, selectionEmitter],
 	);
 
 	const schedulePendingInputFlush = useCallback((): void => {
@@ -701,6 +712,39 @@ function App({
 			}
 		};
 	}, [stdout, isRawModeSupported, disableRawMode, interactive]);
+
+	// Install the in-app selection engine + overlay once on mount. The engine
+	// listens on `selectionEmitter` for SGR mouse events; the overlay paints
+	// reverse-video spaces on every selection change.
+	const selectionEngineRef = useRef<{getSelection: () => Selection | null; dispose: () => void} | null>(null);
+	useEffect(() => {
+		let currentSelection: Selection | null = null;
+		const overlay = installOverlay(
+			// Direct stdout write: routing through writeToStdout would erase
+			// the frame and then restore it via Ink's lastOutput, immediately
+			// wiping the reverse-video highlight the overlay just painted.
+			selectionStdoutWrite,
+			() => currentSelection,
+			selectionMaterializer,
+		);
+		const engine = installSelectionEngine(selectionEmitter, {
+			materializer: selectionMaterializer,
+			writeClipboard: (text: string) => {
+				onSelectionClipboard(text);
+			},
+			onSelectionChange: (next: Selection | null) => {
+				currentSelection = next;
+				overlay.paint();
+			},
+		});
+		selectionEngineRef.current = engine;
+		return () => {
+			engine.dispose();
+			overlay.dispose();
+			selectionEngineRef.current = null;
+		};
+	}, [selectionEmitter, selectionMaterializer, selectionStdoutWrite, onSelectionClipboard]);
+	void selectionEngineRef;
 
 	// Memoize context values to prevent unnecessary re-renders
 	const appContextValue = useMemo(

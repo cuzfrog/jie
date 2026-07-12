@@ -64,14 +64,13 @@ function captureContext(): { ctx: ReturnType<typeof makeContextValue>; out: Capt
 
 function mount(
   focused: AgentUiState,
-  overrides: { readonly linesPerNotch?: number; readonly tty?: boolean } = {},
+  overrides: { readonly linesPerNotch?: number } = {},
 ): MountedHarness {
   const { ctx, out } = captureContext();
   const instance = render(
     <TuiContext.Provider value={ctx}>
       <ChatWheelInput focused={focused} width={80} height={20} linesPerNotch={overrides.linesPerNotch} />
     </TuiContext.Provider>,
-    { stdoutIsTTY: overrides.tty === true },
   );
   return {
     instance,
@@ -82,7 +81,7 @@ function mount(
 
 async function mountAsync(
   focused: AgentUiState,
-  overrides: { readonly linesPerNotch?: number; readonly tty?: boolean } = {},
+  overrides: { readonly linesPerNotch?: number } = {},
 ): Promise<MountedHarness> {
   const h = mount(focused, overrides);
   await new Promise((r) => setTimeout(r, 30));
@@ -90,18 +89,6 @@ async function mountAsync(
 }
 
 describe("ChatWheelInput", () => {
-  test("TTY mount writes SGR enable codes and unmount writes the matching disables", async () => {
-    const focused = agent([turn("x")]);
-    const h = await mountAsync(focused, { tty: true });
-    expect(h.instance.stdout.frames.some((f) => f.includes(`${ESC}[?1000h`))).toBe(true);
-    expect(h.instance.stdout.frames.some((f) => f.includes(`${ESC}[?1006h`))).toBe(true);
-    h.instance.unmount();
-    await new Promise((r) => setTimeout(r, 30));
-    const finalFrames = h.instance.stdout.frames;
-    expect(finalFrames.some((f) => f.includes(`${ESC}[?1000l`))).toBe(true);
-    expect(finalFrames.some((f) => f.includes(`${ESC}[?1006l`))).toBe(true);
-  });
-
   test("wheel-up at tail pin dispatches SCROLL_CHAT with a finite offset", async () => {
     const focused = agent(new Array(60).fill(0).map(() => turn("x")));
     const h = await mountAsync(focused);

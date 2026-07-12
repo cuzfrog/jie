@@ -4,9 +4,8 @@ import {render as jieInkRender} from '@cuzfrog/jie-ink';
 
 class Stdout extends EventEmitter {
 	isTTY: boolean = false;
-	get columns(): number {
-		return 100;
-	}
+	columns: number = 100;
+	rows: number = 24;
 	frames: string[] = [];
 	_lastFrame: string | undefined;
 	write = (frame: string): void => {
@@ -14,13 +13,17 @@ class Stdout extends EventEmitter {
 		this._lastFrame = frame;
 	};
 	lastFrame = (): string | undefined => this._lastFrame;
+	resize = (columns: number, rows: number): void => {
+		this.columns = columns;
+		this.rows = rows;
+		this.emit('resize');
+	};
 }
 
 class Stderr extends EventEmitter {
 	isTTY: boolean = false;
-	get columns(): number {
-		return 100;
-	}
+	columns: number = 100;
+	rows: number = 24;
 	frames: string[] = [];
 	_lastFrame: string | undefined;
 	write = (frame: string): void => {
@@ -28,6 +31,11 @@ class Stderr extends EventEmitter {
 		this._lastFrame = frame;
 	};
 	lastFrame = (): string | undefined => this._lastFrame;
+	resize = (columns: number, rows: number): void => {
+		this.columns = columns;
+		this.rows = rows;
+		this.emit('resize');
+	};
 }
 
 class Stdin extends EventEmitter {

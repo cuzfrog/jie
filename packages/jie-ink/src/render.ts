@@ -208,6 +208,14 @@ export type Instance = {
 	Clear output.
 	*/
 	clear: () => void;
+
+	/**
+	Returns a function that materializes the current frame as a 2D grid of
+	cells indexed by terminal (row, column). Each call walks the rendered
+	DOM tree at that moment. Used internally by the in-app selection engine;
+	consumers generally do not need to call this directly.
+	*/
+	getSelectionMaterializer: Ink['getSelectionMaterializer'];
 };
 
 /**
@@ -249,6 +257,7 @@ const render = (
 			instance.unmount();
 		},
 		clear: instance.clear,
+		getSelectionMaterializer: instance.getSelectionMaterializer,
 	};
 };
 
