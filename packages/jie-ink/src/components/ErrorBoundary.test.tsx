@@ -1,8 +1,17 @@
 import process from 'node:process';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import React, {useEffect} from 'react';
 import stripAnsi from 'strip-ansi';
 import {render, useStdin, Text} from '../index.js';
 import createStdout from '../../test/helpers/create-stdout.js';
+
+// Resolve this test file's path relative to the monorepo root so the test is
+// portable regardless of where it lives in the monorepo.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const monorepoRoot = path.resolve(__dirname, '../../../..');
+const testRelDir = path.relative(monorepoRoot, __dirname);
+const testPath = `${testRelDir}/ErrorBoundary.test.tsx:20:13`;
 
 test('catch and display error', () => {
 	const stdout = createStdout();
@@ -25,17 +34,17 @@ test('catch and display error', () => {
 		'',
 		'  ERROR  Oh no',
 		'',
-		' src/components/ErrorBoundary.test.tsx:11:13',
+		` ${testPath}`,
 		'',
-		'  8:   const stdout = createStdout();',
-		'  9:',
-		' 10:   const Test = () => {',
-		" 11:     throw new Error('Oh no');",
-		' 12:   };',
-		' 13:',
-		' 14:   render(<Test />, {stdout});',
+		' 17:   const stdout = createStdout();',
+		' 18:',
+		' 19:   const Test = () => {',
+		" 20:     throw new Error('Oh no');",
+		' 21:   };',
+		' 22:',
+		' 23:   render(<Test />, {stdout});',
 		'',
-		' - <anonymous> (src/components/ErrorBoundary.test.tsx:11:13)',
+		` - <anonymous> (${testPath})`,
 	]);
 });
 
