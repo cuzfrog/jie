@@ -374,10 +374,265 @@ const createIncremental = (
 	return render;
 };
 
+const createAppend = (
+	stream: Writable,
+	{showCursor = false} = {},
+): LogUpdate => {
+	let previousLines: string[] = [];
+	let previousOutput = '';
+	let hasHiddenCursor = false;
+	let cursorPosition: CursorPosition | undefined;
+	let cursorDirty = false;
+	let previousCursorPosition: CursorPosition | undefined;
+	let cursorWasShown = false;
+
+	const getActiveCursor = () => (cursorDirty ? cursorPosition : undefined);
+	const hasChanges = (
+		str: string,
+		activeCursor: CursorPosition | undefined,
+	): boolean => {
+		const cursorChanged = cursorPositionChanged(
+			activeCursor,
+			previousCursorPosition,
+		);
+		return str !== previousOutput || cursorChanged;
+	};
+
+	const render = (str: string) => {
+		if (!showCursor && !hasHiddenCursor) {
+			cliCursor.hide(stream);
+			hasHiddenCursor = true;
+		}
+
+		const activeCursor = getActiveCursor();
+		cursorDirty = false;
+		const cursorChanged = cursorPositionChanged(
+			activeCursor,
+			previousCursorPosition,
+		);
+
+		if (!hasChanges(str, activeCursor)) {
+			return false;
+		}
+
+		const nextLines = str.split('\n');
+		const visibleCount = visibleLineCount(nextLines, str);
+		const previousVisible = visibleLineCount(previousLines, previousOutput);
+
+		// Cursor-only path: nothing changed in the output, only cursor moved.
+		if (str === previousOutput && cursorChanged) {
+			stream.write(
+				buildCursorOnlySequence({
+					cursorWasShown,
+					previousLineCount: previousLines.length,
+					previousCursorPosition,
+					visibleLineCount: visibleCount,
+					cursorPosition: activeCursor,
+				}),
+			);
+			previousCursorPosition = activeCursor ? {...activeCursor} : undefined;
+			cursorWasShown = activeCursor !== undefined;
+			return true;
+		}
+
+		// First render: nothing to compare against, write the frame as-is.
+		if (previousOutput.length === 0) {
+			const cursorSuffix = buildCursorSuffix(visibleCount, activeCursor);
+			stream.write(str + cursorSuffix);
+			previousOutput = str;
+			previousLines = nextLines;
+			cursorWasShown = activeCursor !== undefined;
+			previousCursorPosition = activeCursor ? {...activeCursor} : undefined;
+			return true;
+		}
+
+		// Path selection: pure-append, pure-shrink, last-line edit, or full rewrite.
+		const isPureAppend =
+			visibleCount >= previousVisible &&
+			linesMatchUpTo(nextLines, previousLines, previousVisible);
+		const isPureShrink =
+			visibleCount < previousVisible &&
+			linesMatchUpTo(nextLines, previousLines, visibleCount);
+		const isOnlyLastLineChanged =
+			visibleCount === previousVisible &&
+			lastLineOnlyDiffers(nextLines, previousLines, visibleCount);
+
+		if (!isPureAppend && !isPureShrink && !isOnlyLastLineChanged) {
+			// Fall back to the standard erase-and-rewrite. Scrollback is lost
+			// in this rare case; chat streaming never lands here.
+			const returnPrefix = buildReturnToBottomPrefix(
+				cursorWasShown,
+				previousLines.length,
+				previousCursorPosition,
+			);
+			const cursorSuffix = buildCursorSuffix(visibleCount, activeCursor);
+			stream.write(
+				returnPrefix +
+					ansiEscapes.eraseLines(previousLines.length) +
+					str +
+					cursorSuffix,
+			);
+			previousOutput = str;
+			previousLines = nextLines;
+			cursorWasShown = activeCursor !== undefined;
+			previousCursorPosition = activeCursor
+				? {...activeCursor}
+				: undefined;
+			return true;
+		}
+
+		// All non-fallback paths share the same prefix and suffix.
+		// Prefix only if the cursor was previously positioned; otherwise the
+		// cursor is already at the slot below the previous frame's bottom.
+		const returnPrefix = buildReturnToBottomPrefix(
+			cursorWasShown,
+			previousLines.length,
+			previousCursorPosition,
+		);
+		const cursorSuffix = buildCursorSuffix(visibleCount, activeCursor);
+
+		if (isPureAppend) {
+			// Cursor is at row previousVisible (slot). Append visibleCount - previousVisible
+			// new lines directly below. Unchanged lines are NEVER touched.
+			const appendedLines = nextLines
+				.slice(previousVisible, visibleCount)
+				.join('\n');
+			const trailingNewline = str.endsWith('\n') ? '\n' : '';
+			stream.write(returnPrefix + appendedLines + trailingNewline + cursorSuffix);
+		} else if (isPureShrink) {
+			// Cursor at row previousVisible. Clear the dropped trailing rows.
+			// eraseLines(previousVisible - visibleCount + 1) reaches up through the
+			// slot row, ending at the new slot row visibleCount.
+			stream.write(
+				returnPrefix +
+					ansiEscapes.eraseLines(previousVisible - visibleCount + 1) +
+					cursorSuffix,
+			);
+		} else {
+			// Last-line-only change: cursorUp(1) to the last visible row, clear
+			// it, write the new content, return to the slot.
+			stream.write(
+				returnPrefix +
+					ansiEscapes.cursorUp(1) +
+					ansiEscapes.eraseEndLine +
+					nextLines[visibleCount - 1]! +
+					ansiEscapes.cursorDown(1) +
+					ansiEscapes.cursorTo(0) +
+					cursorSuffix,
+			);
+		}
+
+		previousOutput = str;
+		previousLines = nextLines;
+		cursorWasShown = activeCursor !== undefined;
+		previousCursorPosition = activeCursor ? {...activeCursor} : undefined;
+		return true;
+	};
+
+	render.clear = () => {
+		// Append-mode clear must NOT erase the visible frame: history stays in
+		// scrollback for the user to scroll up to. Just reset internal state so
+		// the next render is treated as a first render.
+		previousOutput = '';
+		previousLines = [];
+		previousCursorPosition = undefined;
+		cursorWasShown = false;
+	};
+
+	render.done = () => {
+		previousOutput = '';
+		previousLines = [];
+		previousCursorPosition = undefined;
+		cursorWasShown = false;
+
+		if (!showCursor) {
+			cliCursor.show(stream);
+			hasHiddenCursor = false;
+		}
+	};
+
+	render.reset = () => {
+		previousOutput = '';
+		previousLines = [];
+		previousCursorPosition = undefined;
+		cursorWasShown = false;
+	};
+
+	render.sync = (str: string) => {
+		const activeCursor = cursorDirty ? cursorPosition : undefined;
+		cursorDirty = false;
+
+		const lines = str.split('\n');
+		previousOutput = str;
+		previousLines = lines;
+
+		if (!activeCursor && cursorWasShown) {
+			stream.write(hideCursorEscape);
+		}
+
+		if (activeCursor) {
+			stream.write(
+				buildCursorSuffix(visibleLineCount(lines, str), activeCursor),
+			);
+		}
+
+		previousCursorPosition = activeCursor ? {...activeCursor} : undefined;
+		cursorWasShown = activeCursor !== undefined;
+	};
+
+	render.setCursorPosition = (position: CursorPosition | undefined) => {
+		cursorPosition = position;
+		cursorDirty = true;
+	};
+
+	render.isCursorDirty = () => cursorDirty;
+	render.willRender = (str: string) => hasChanges(str, getActiveCursor());
+
+	return render;
+};
+
+const linesMatchUpTo = (
+	nextLines: string[],
+	previousLines: string[],
+	count: number,
+): boolean => {
+	for (let i = 0; i < count; i++) {
+		if (nextLines[i] !== previousLines[i]) {
+			return false;
+		}
+	}
+
+	return true;
+};
+
+const lastLineOnlyDiffers = (
+	nextLines: string[],
+	previousLines: string[],
+	visibleCount: number,
+): boolean => {
+	for (let i = 0; i < visibleCount - 1; i++) {
+		if (nextLines[i] !== previousLines[i]) {
+			return false;
+		}
+	}
+
+	return nextLines[visibleCount - 1] !== previousLines[visibleCount - 1];
+};
+
 const create = (
 	stream: Writable,
-	{showCursor = false, incremental = false} = {},
+	{showCursor = false, incremental = false, appendToScrollback = false} = {},
 ): LogUpdate => {
+	if (incremental && appendToScrollback) {
+		throw new Error(
+			"logUpdate: 'incremental' and 'appendToScrollback' are mutually exclusive",
+		);
+	}
+
+	if (appendToScrollback) {
+		return createAppend(stream, {showCursor});
+	}
+
 	if (incremental) {
 		return createIncremental(stream, {showCursor});
 	}

@@ -286,6 +286,13 @@ export type Options = {
 	@see {@link RenderOptions.alternateScreen}
 	*/
 	alternateScreen?: boolean;
+
+	/**
+	Render in append-to-scrollback mode. See {@link RenderOptions.appendToScrollback}.
+
+	@default false
+	*/
+	appendToScrollback?: boolean;
 };
 
 export default class Ink {
@@ -383,6 +390,7 @@ export default class Ink {
 		this.rootNode.onStaticChange = this.handleStaticChange;
 		this.log = logUpdate.create(options.stdout, {
 			incremental: options.incrementalRendering,
+			appendToScrollback: options.appendToScrollback,
 		});
 		this.cursorPosition = undefined;
 		this.throttledLog = unthrottled
@@ -1116,6 +1124,7 @@ export default class Ink {
 	): void {
 		const hasStaticOutput = staticOutput !== '';
 		const isTty = this.options.stdout.isTTY;
+		const isAppendMode = Boolean(this.options.appendToScrollback);
 
 		// Detect fullscreen: output fills or exceeds terminal height.
 		// Only apply when writing to a real TTY — piped output always gets trailing newlines.
@@ -1123,13 +1132,15 @@ export default class Ink {
 		const isFullscreen = isTty && outputHeight >= viewportRows;
 		const outputToRender = isFullscreen ? output : output + '\n';
 
-		const shouldClearTerminal = shouldClearTerminalForFrame({
-			isTty,
-			viewportRows,
-			previousOutputHeight: this.lastOutputHeight,
-			nextOutputHeight: outputHeight,
-			isUnmounting: this.isUnmounting,
-		});
+		const shouldClearTerminal =
+			!isAppendMode &&
+			shouldClearTerminalForFrame({
+				isTty,
+				viewportRows,
+				previousOutputHeight: this.lastOutputHeight,
+				nextOutputHeight: outputHeight,
+				isUnmounting: this.isUnmounting,
+			});
 
 		if (shouldClearTerminal) {
 			const sync = this.shouldSync();

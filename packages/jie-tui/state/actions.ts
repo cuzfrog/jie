@@ -1,4 +1,5 @@
 import type { AnyEventEnvelope, TeamInfo } from "@cuzfrog/jie-platform";
+import type { AgentId } from "./state";
 
 export const ActionTypes = {
   RECEIVE_EVENT: "[bus] receive event from event bus",
@@ -7,6 +8,8 @@ export const ActionTypes = {
   TOGGLE_THINKING: "[ui] toggle thinking expanded",
   TOGGLE_TOOL_CARDS: "[ui] toggle tool cards expanded",
   SWITCH_CYCLE_AGENT: "[ui] switch and cycle focused agent",
+  SCROLL_CHAT: "[ui] scroll chat",
+  JUMP_CHAT: "[ui] jump chat",
   CLEAR_TUI_STATE: "[ui] clear tui state",
   SET_TRANSIENT_MESSAGE: "[ui] transient message",
   CLEAR_TRANSIENT_MESSAGE: "[ui] transient clear",
@@ -44,6 +47,10 @@ export const Actions = {
 	toggleThinking: () => toggleThinking,
 	toggleToolCards: () => toggleToolCards,
 	switchCycleAgent: (direction: 1 | -1) => createAction(ActionTypes.SWITCH_CYCLE_AGENT, { direction }),
+	scrollChat: (agentId: AgentId, newOffsetRows: number) =>
+		createAction(ActionTypes.SCROLL_CHAT, { agentId, newOffsetRows }),
+	jumpChat: (agentId: AgentId, target: 'top' | 'tail') =>
+		createAction(ActionTypes.JUMP_CHAT, { agentId, target }),
 	clearTuiState: () => clearTuiState,
 	setTransientMessage: (text: string) => createAction(ActionTypes.SET_TRANSIENT_MESSAGE, { text }),
 	clearTransientMessage: () => clearTransientMessage,

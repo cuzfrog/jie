@@ -600,3 +600,212 @@ test('incremental rendering - render to empty string (full clear vs early exit)'
 	render('\n');
 	expect((stdout.write as any).mock.calls.length).toBe(2); // No additional write
 });
+
+// Append-to-scrollback rendering tests.
+// Goal: never erase the previous frame wholesale. Unchanged lines stay in terminal
+// scrollback so the user can scroll up to see history.
+
+test('append rendering - first render writes content with no erase', () => {
+	const stdout = createStdout();
+	const render = logUpdate.create(stdout, {
+		showCursor: true,
+		appendToScrollback: true,
+	});
+
+	render('Line 1\nLine 2\nLine 3\n');
+
+	expect((stdout.write as any).mock.calls.length).toBe(1);
+	const written = (stdout.write as any).mock.calls[0]?.[0] as string;
+	expect(written).not.toContain(ansiEscapes.eraseLines(1).slice(0, 3));
+	expect(written).toBe('Line 1\nLine 2\nLine 3\n');
+});
+
+test('append rendering - identical output is skipped', () => {
+	const stdout = createStdout();
+	const render = logUpdate.create(stdout, {
+		showCursor: true,
+		appendToScrollback: true,
+	});
+
+	render('Line 1\nLine 2\n');
+	render('Line 1\nLine 2\n');
+
+	expect((stdout.write as any).mock.calls.length).toBe(1);
+});
+
+test('append rendering - appended content writes only the new lines', () => {
+	const stdout = createStdout();
+	const render = logUpdate.create(stdout, {
+		showCursor: true,
+		appendToScrollback: true,
+	});
+
+	render('Line 1\nLine 2\n');
+	render('Line 1\nLine 2\nLine 3\nLine 4\n');
+
+	const secondCall = (stdout.write as any).mock.calls[1]?.[0] as string;
+	// After first render, cursor sits at row 2 (slot below Line 2). Pure append:
+	// emit only the new lines Line 3 and Line 4. Unchanged lines are NEVER touched,
+	// so they remain in terminal scrollback.
+	expect(secondCall).toBe('Line 3\nLine 4\n');
+	expect(secondCall.includes('Line 1')).toBe(false);
+	expect(secondCall.includes('Line 2')).toBe(false);
+	expect(secondCall.includes(ansiEscapes.eraseLines(1).slice(0, 3))).toBe(false);
+});
+
+test('append rendering - only-last-line change rewrites the bottom row', () => {
+	const stdout = createStdout();
+	const render = logUpdate.create(stdout, {
+		showCursor: true,
+		appendToScrollback: true,
+	});
+
+	render('Line 1\nLine 2\nLine 3\n');
+	render('Line 1\nLine 2\nUpdated\n');
+
+	const secondCall = (stdout.write as any).mock.calls[1]?.[0] as string;
+	// Streaming-in-place update of the last line. previousVisible == visibleCount == 3,
+	// only nextLines[2] changed. cursorUp(1) to row 2 (where Line 3 was),
+	// eraseLine + write 'Updated', then cursorDown(1) back to slot.
+	expect(secondCall).toBe(
+		ansiEscapes.cursorUp(1) +
+			ansiEscapes.eraseEndLine +
+			'Updated' +
+			ansiEscapes.cursorDown(1) +
+			ansiEscapes.cursorTo(0),
+	);
+	// Lines 1 and 2 must never appear in the buffer (scrollback preserved).
+	expect(secondCall.includes('Line 1')).toBe(false);
+	expect(secondCall.includes('Line 2')).toBe(false);
+});
+
+test('append rendering - middle change falls back to full rewrite', () => {
+	const stdout = createStdout();
+	const render = logUpdate.create(stdout, {
+		showCursor: true,
+		appendToScrollback: true,
+	});
+
+	render('A\nB\nC\n');
+	render('A\nUpdated\nC\n');
+
+	const secondCall = (stdout.write as any).mock.calls[1]?.[0] as string;
+	// Line B changed but the bottom didn't grow. The line-by-line append path
+	// doesn't cover middle edits, so we fall back to the standard "return to
+	// bottom, erase, rewrite" sequence. (Streaming a chat never lands here.)
+	expect(secondCall).toBe(
+		ansiEscapes.eraseLines(4) + 'A\nUpdated\nC\n',
+	);
+});
+
+test('append rendering - shrinking content clears trailing extra lines', () => {
+	const stdout = createStdout();
+	const render = logUpdate.create(stdout, {
+		showCursor: true,
+		appendToScrollback: true,
+	});
+
+	render('Line 1\nLine 2\nLine 3\n');
+	render('Line 1\n');
+
+	const secondCall = (stdout.write as any).mock.calls[1]?.[0] as string;
+	// previousVisible=3, visibleCount=1. From cursor at row 3, eraseLines(3)
+	// clears rows 3, 2, 1 (Line 2, Line 3, slot). Line 1 at row 0 is preserved.
+	expect(secondCall).toBe(ansiEscapes.eraseLines(3));
+});
+
+test('append rendering - clear() does NOT erase the visible frame (history preserved)', () => {
+	const stdout = createStdout();
+	const render = logUpdate.create(stdout, {
+		showCursor: true,
+		appendToScrollback: true,
+	});
+
+	render('Line 1\nLine 2\n');
+	render.clear();
+
+	// clear() must NOT touch the terminal at all -- the visible rows stay in
+	// scrollback. Only the first render emits a write.
+	expect((stdout.write as any).mock.calls.length).toBe(1);
+});
+
+test('append rendering - done() resets state without emitting erase', () => {
+	const stdout = createStdout();
+	const render = logUpdate.create(stdout, {
+		showCursor: true,
+		appendToScrollback: true,
+	});
+
+	render('Line 1\nLine 2\n');
+	render.done();
+
+	expect((stdout.write as any).mock.calls.length).toBe(1);
+});
+
+test('append rendering - sync() resets state without writing to stream', () => {
+	const stdout = createStdout();
+	const render = logUpdate.create(stdout, {
+		showCursor: true,
+		appendToScrollback: true,
+	});
+
+	render.sync('Line 1\nLine 2\nLine 3\n');
+	expect((stdout.write as any).mock.calls.length).toBe(0);
+
+	render('Line 1\nLine 2\nLine 3\nLine 4\n');
+	expect((stdout.write as any).mock.calls.length).toBe(1);
+	const written = (stdout.write as any).mock.calls[0]?.[0] as string;
+	// previousLines was reset by sync, so this looks like first render + an append.
+	// Cursor sits at row 3 (slot below Line 3). Pure append of Line 4.
+	expect(written).toBe('Line 4\n');
+});
+
+test('append rendering - cursor position is honoured on first render', () => {
+	const stdout = createStdout();
+	const render = logUpdate.create(stdout, {
+		showCursor: true,
+		appendToScrollback: true,
+	});
+
+	render.setCursorPosition({x: 5, y: 1});
+	render('Line 1\nLine 2\nLine 3\n');
+
+	const written = (stdout.write as any).mock.calls[0]?.[0] as string;
+	expect(written).toBe(
+		'Line 1\nLine 2\nLine 3\n' +
+			ansiEscapes.cursorUp(2) +
+			ansiEscapes.cursorTo(5) +
+			showCursorEscape,
+	);
+});
+
+test('append rendering - cursor position is honoured after append', () => {
+	const stdout = createStdout();
+	const render = logUpdate.create(stdout, {
+		showCursor: true,
+		appendToScrollback: true,
+	});
+
+	render('Line 1\nLine 2\n');
+	render.setCursorPosition({x: 2, y: 1});
+	render('Line 1\nLine 2\nLine 3\n');
+
+	const secondCall = (stdout.write as any).mock.calls[1]?.[0] as string;
+	// After append, cursor lands at row 3 (slot below Line 3, visibleCount=3).
+	// To reach y=1: cursorUp(3 - 1) = cursorUp(2).
+	expect(secondCall.endsWith(
+		ansiEscapes.cursorUp(2) + ansiEscapes.cursorTo(2) + showCursorEscape,
+	)).toBe(true);
+	expect(secondCall.includes('Line 3')).toBe(true);
+});
+
+test('appendToScrollback is mutually exclusive with incremental', () => {
+	const stdout = createStdout();
+	expect(() =>
+		logUpdate.create(stdout, {
+			showCursor: true,
+			incremental: true,
+			appendToScrollback: true,
+		}),
+	).toThrow();
+});

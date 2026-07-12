@@ -20,6 +20,7 @@ const INITIAL_TUI_STATE: TuiState = Object.freeze({
   toolCardsExpanded: false,
   pendingQuit: false,
   editorText: "",
+  chatScrollOffsets: new Map(),
 } as const);
 
 /** a subscriber can perform side effect */

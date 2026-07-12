@@ -60,6 +60,7 @@ export interface TuiState {
   readonly toolCardsExpanded: boolean;
   readonly pendingQuit: boolean;
   readonly editorText: string;
+  readonly chatScrollOffsets: ReadonlyMap<AgentId, number>;
 }
 
 function getFocusedAgent(state: TuiState): AgentUiState | null {

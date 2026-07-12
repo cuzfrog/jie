@@ -98,7 +98,24 @@ const keyName: Record<string, string> = {
 	'[Z': 'tab',
 };
 
-export const nonAlphanumericKeys = [...Object.values(keyName), 'backspace'];
+export const nonAlphanumericKeys = [...Object.values(keyName), 'backspace', 'wheelup', 'wheeldown', 'mouse'];
+
+// SGR-encoded mouse (DECSET 1006). Format: `\x1b[<BUTTON;COL;ROW M` for press
+// or `\x1b[<BUTTON;COL;ROW m` for release. Wheel bit is 0x40; the low bit
+// encodes scroll direction (0=up, 1=down). Modifier bits (Shift=0x04,
+// Meta=0x08, Ctrl=0x10) are ignored so Ctrl/Shift+scroll still registers as
+// wheel. Click/drag/release (button & 0x40 === 0) are absorbed and surfaced
+// to useInput as `name: 'mouse'` so the editor never sees the raw SGR bytes
+// as text. (Without this, the empty-name branch below would hand the raw
+// sequence to the editor and leak characters.)
+const SGR_MOUSE_RE = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])$/;
+
+// X10 legacy mouse (DECSET 1000, no 1006). Format: `\x1b[M<Cb><Cx><Cy>`
+// followed by exactly three raw bytes with 32 added to the value (so the
+// terminal keeps the response in printable ASCII). Absorbed for the same
+// reason as SGR non-wheel: we don't act on it, but the editor must not see
+// it as text either.
+const X10_MOUSE_RE = /^\x1b\[M[\x20-\x7f]{3}$/;
 
 const isShiftKey = (code: string) => {
 	return [
@@ -455,6 +472,42 @@ const parseKeypress = (s: Uint8Array | string = ''): ParsedKey => {
 			raw: s,
 			isKittyProtocol: true,
 			isPrintable: false,
+		};
+	}
+
+	// SGR-encoded mouse (DECSET 1006). Must run before `fnKeyRe` because the
+	// legacy function-key regex would match the `[<digits;digits;digits`
+	// prefix as garbage and leak the raw sequence into text input. Both
+	// wheel (button & 0x40) and non-wheel (click/drag/release) are absorbed
+	// here so the editor never sees mouse sequences as text.
+	const sgrMouseMatch = SGR_MOUSE_RE.exec(s);
+	if (sgrMouseMatch) {
+		const button = parseInt(sgrMouseMatch[1]!, 10);
+		const masked = button & 0x43;
+		const name =
+			masked === 0x40 ? 'wheelup' :
+			masked === 0x41 ? 'wheeldown' :
+			'mouse';
+		return {
+			name,
+			ctrl: false,
+			meta: false,
+			shift: false,
+			sequence: s,
+			raw: s,
+		};
+	}
+
+	// X10 legacy mouse (DECSET 1000 without 1006). Must run before the
+	// function-key regex for the same reason as the SGR branch above.
+	if (X10_MOUSE_RE.test(s)) {
+		return {
+			name: 'mouse',
+			ctrl: false,
+			meta: false,
+			shift: false,
+			sequence: s,
+			raw: s,
 		};
 	}
 

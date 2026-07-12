@@ -133,6 +133,23 @@ export type RenderOptions = {
 	@default false
 	*/
 	alternateScreen?: boolean;
+
+	/**
+	Render in append-to-scrollback mode. Each frame is positioned so unchanged
+	lines stay in the terminal scrollback buffer. The renderer only writes new
+	appended lines, an in-place edit of the last visible line, or a pure shrink.
+	Any change in the middle of the frame falls back to a full rewrite.
+
+	This mode is the closest analogue to "let the terminal handle history" — the
+	chat pane grows over time, old turns stay visible via scroll-up, and the
+	editor / footer live at the bottom of the visible region.
+
+	Mutually exclusive with `incrementalRendering`. Only meaningful on an
+	interactive TTY; ignored otherwise.
+
+	@default false
+	*/
+	appendToScrollback?: boolean;
 };
 
 export type Instance = {
@@ -211,6 +228,7 @@ const render = (
 		incrementalRendering: false,
 		concurrent: false,
 		alternateScreen: false,
+		appendToScrollback: false,
 		...getOptions(options),
 	};
 

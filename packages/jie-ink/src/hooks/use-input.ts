@@ -38,6 +38,19 @@ export type Key = {
 	pageUp: boolean;
 
 	/**
+	Mouse wheel scrolled up. Only delivered when the host terminal has
+	mouse tracking enabled (DECSET 1000/1006). Combine with `useInput` to
+	distinguish from `pageUp`, e.g. by checking pageUp first or by
+	routing in a parent that owns both bindings.
+	*/
+	wheelUp: boolean;
+
+	/**
+	Mouse wheel scrolled down. See `wheelUp` for context.
+	*/
+	wheelDown: boolean;
+
+	/**
 	Home key was pressed.
 	*/
 	home: boolean;
@@ -183,6 +196,8 @@ const useInput = (inputHandler: Handler, options: Options = {}) => {
 			rightArrow: keypress.name === 'right',
 			pageDown: keypress.name === 'pagedown',
 			pageUp: keypress.name === 'pageup',
+			wheelDown: keypress.name === 'wheeldown',
+			wheelUp: keypress.name === 'wheelup',
 			home: keypress.name === 'home',
 			end: keypress.name === 'end',
 			return: keypress.name === 'return',

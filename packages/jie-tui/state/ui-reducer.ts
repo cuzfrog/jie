@@ -1,6 +1,7 @@
 import { ActionTypes, type Action } from "./actions";
 import { teamLoadReducer } from "./team-load-reducer";
 import type { TuiState } from "./state";
+import { reduceChatScroll, reduceChatJump } from "./chat-scroll-reducer";
 
 export function reduceUiAction(state: TuiState, action: Action): TuiState {
   switch (action.type) {
@@ -14,6 +15,10 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
       return { ...state, toolCardsExpanded: !state.toolCardsExpanded };
     case ActionTypes.SWITCH_CYCLE_AGENT:
       return reduceAgentCycle(state, action.payload.direction);
+    case ActionTypes.SCROLL_CHAT:
+      return reduceChatScroll(state, action.payload.agentId, action.payload.newOffsetRows);
+    case ActionTypes.JUMP_CHAT:
+      return reduceChatJump(state, action.payload.agentId, action.payload.target);
     case ActionTypes.CLEAR_TUI_STATE:
       return {
         ...state,
@@ -22,6 +27,7 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
         focusedAgentId: null,
         transientMessage: null,
         errorBanner: null,
+        chatScrollOffsets: new Map(),
       };
     case ActionTypes.SET_TRANSIENT_MESSAGE:
       return { ...state, transientMessage: action.payload.text };

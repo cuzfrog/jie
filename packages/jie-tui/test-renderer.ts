@@ -3,6 +3,7 @@ import type {ReactElement} from 'react';
 import {render as jieInkRender} from '@cuzfrog/jie-ink';
 
 class Stdout extends EventEmitter {
+	isTTY: boolean = false;
 	get columns(): number {
 		return 100;
 	}
@@ -16,6 +17,10 @@ class Stdout extends EventEmitter {
 }
 
 class Stderr extends EventEmitter {
+	isTTY: boolean = false;
+	get columns(): number {
+		return 100;
+	}
 	frames: string[] = [];
 	_lastFrame: string | undefined;
 	write = (frame: string): void => {
@@ -64,8 +69,17 @@ export type Instance = {
 
 const instances: Array<{unmount: () => void; cleanup: () => void}> = [];
 
-export const render = (tree: ReactElement): Instance => {
+export interface RenderOptions {
+	readonly appendToScrollback?: boolean;
+	readonly stdoutIsTTY?: boolean;
+}
+
+export const render = (
+	tree: ReactElement,
+	options: RenderOptions = {},
+): Instance => {
 	const stdout = new Stdout();
+	stdout.isTTY = options.stdoutIsTTY ?? false;
 	const stderr = new Stderr();
 	const stdin = new Stdin();
 	const instance = jieInkRender(tree, {
@@ -75,6 +89,7 @@ export const render = (tree: ReactElement): Instance => {
 		debug: true,
 		exitOnCtrlC: false,
 		patchConsole: false,
+		appendToScrollback: options.appendToScrollback,
 	});
 	instances.push(instance);
 	return {
