@@ -17,16 +17,16 @@ const makeGrid = (rows: ReadonlyArray<ReadonlyArray<CellPosition>>): Materialize
 
 const blankGrid: ReadonlyArray<ReadonlyArray<CellPosition>> = [
 	[
-		{row: 1, column: 1, text: 'h'},
-		{row: 1, column: 2, text: 'i'},
-		{row: 1, column: 3, text: '!'},
-		{row: 1, column: 4, text: '!'},
+		{row: 1, column: 1, text: 'h', sgr: ''},
+		{row: 1, column: 2, text: 'i', sgr: ''},
+		{row: 1, column: 3, text: '!', sgr: ''},
+		{row: 1, column: 4, text: '!', sgr: ''},
 	],
 	[
-		{row: 2, column: 1, text: 'b'},
-		{row: 2, column: 2, text: 'y'},
-		{row: 2, column: 3, text: 'e'},
-		{row: 2, column: 4, text: '!'},
+		{row: 2, column: 1, text: 'b', sgr: ''},
+		{row: 2, column: 2, text: 'y', sgr: ''},
+		{row: 2, column: 3, text: 'e', sgr: ''},
+		{row: 2, column: 4, text: '!', sgr: ''},
 	],
 ];
 
