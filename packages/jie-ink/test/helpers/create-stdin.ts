@@ -1,22 +1,36 @@
 import EventEmitter from 'node:events';
 
-export const createStdin = (): NodeJS.WriteStream => {
-	const stdin = new EventEmitter() as unknown as NodeJS.WriteStream;
+type WriteMock = ReturnType<typeof vi.fn>;
+
+interface MockedStdin {
+	setRawMode: WriteMock;
+	read: WriteMock;
+	ref: WriteMock;
+	unref: WriteMock;
+	setEncoding: (encoding?: BufferEncoding) => MockedStdin;
+}
+
+export type StdinMock = NodeJS.ReadStream &
+	NodeJS.WriteStream &
+	MockedStdin;
+
+export const createStdin = (): StdinMock => {
+	const stdin = new EventEmitter() as unknown as StdinMock;
 	stdin.isTTY = true;
 	stdin.setRawMode = vi.fn();
-	stdin.setEncoding = (): void => {};
+	stdin.setEncoding = (_encoding?: BufferEncoding): StdinMock => stdin;
 	stdin.read = vi.fn();
-	stdin.unref = (): void => {};
-	stdin.ref = (): void => {};
+	stdin.unref = vi.fn();
+	stdin.ref = vi.fn();
 
 	return stdin;
 };
 
 export const emitReadable = (
-	stdin: NodeJS.WriteStream,
+	stdin: StdinMock,
 	chunk: string,
 ): void => {
-	const read = stdin.read as ReturnType<typeof vi.fn>;
+	const read = stdin.read;
 	read.mockReturnValueOnce(chunk);
 	read.mockReturnValueOnce(null);
 	stdin.emit('readable');

@@ -1,4 +1,3 @@
-import React from 'react';
 import boxen, {type Options} from 'boxen';
 import sliceAnsi from 'slice-ansi';
 import {Box, Text} from '../index.js';

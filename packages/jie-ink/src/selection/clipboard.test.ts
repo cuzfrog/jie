@@ -7,7 +7,7 @@ declare const expect: typeof import('bun:test').expect;
 
 class FakeStdout extends EventEmitter {
 	readonly writes: string[] = [];
-	override write(chunk: string): boolean {
+	write(chunk: string): boolean {
 		this.writes.push(chunk);
 		return true;
 	}

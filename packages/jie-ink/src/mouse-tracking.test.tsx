@@ -1,4 +1,3 @@
-import React from 'react';
 import {Box, Text, render} from './index.js';
 import createStdout from '../test/helpers/create-stdout.js';
 import {createStdin} from '../test/helpers/create-stdin.js';

@@ -1,4 +1,4 @@
-import React, {useContext, type ReactNode} from 'react';
+import {useContext, type ReactNode} from 'react';
 import {accessibilityContext} from './AccessibilityContext.js';
 
 export type Props = {

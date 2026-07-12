@@ -1356,7 +1356,7 @@ test('reset is a stable function reference', () => {
 	rerender(<ResettableAnimation />);
 
 	expect(resets.length >= 2).toBe(true);
-	expect(resets[0]).toBe(resets.at(-1));
+	expect(resets[0]).toBe(resets[resets.length - 1]);
 
 	unmount();
 });

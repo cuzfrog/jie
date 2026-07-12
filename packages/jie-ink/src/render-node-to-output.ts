@@ -190,7 +190,7 @@ const renderNodeToOutput = (
 
 				yogaNode.calculateLayout(
 					yogaNode.getComputedWidth(),
-					Yoga.UNDEFINED,
+					undefined,
 					Yoga.DIRECTION_LTR,
 				);
 

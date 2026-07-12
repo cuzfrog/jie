@@ -1,10 +1,10 @@
-import React, {useEffect} from 'react';
+import {useEffect} from 'react';
 
 import stripAnsi from 'strip-ansi';
 import {render, useApp, useInput, useStdout, Text} from '../index.js';
 import {type SuspendTerminal} from '../components/AppContext.js';
 import createStdout, {type FakeStdout} from '../../test/helpers/create-stdout.js';
-import {createStdin} from '../../test/helpers/create-stdin.js';
+import {createStdin, type StdinMock} from '../../test/helpers/create-stdin.js';
 import term from '../../test/helpers/term.js';
 
 const showCursor = '[?25h';
@@ -17,9 +17,8 @@ const delay = async (ms: number) =>
 		setTimeout(resolve, ms);
 	});
 
-const lastSetRawModeArg = (stdin: NodeJS.WriteStream): boolean | undefined => {
-	const calls = (stdin.setRawMode as unknown as {mock: {calls: unknown[][]}}).mock.calls;
-	return calls.at(-1)?.[0] as boolean | undefined;
+const lastSetRawModeArg = (stdin: StdinMock): boolean | undefined => {
+	return stdin.setRawMode.mock.calls.at(-1)?.[0] as boolean | undefined;
 };
 
 // Renders an interactive app (raw mode on via useInput) and runs `run` with the
@@ -27,9 +26,9 @@ const lastSetRawModeArg = (stdin: NodeJS.WriteStream): boolean | undefined => {
 const renderWithSuspend = async (
 	run: (
 		suspendTerminal: SuspendTerminal,
-		stdin: NodeJS.WriteStream,
+		stdin: StdinMock,
 	) => Promise<void>,
-): Promise<{stdout: FakeStdout; stdin: NodeJS.WriteStream}> => {
+): Promise<{stdout: FakeStdout; stdin: StdinMock}> => {
 	const stdout = createStdout();
 	const stdin = createStdin();
 
@@ -179,7 +178,7 @@ test('suspendTerminal keeps Ink off the terminal while suspended', async () => {
 	await delay(50);
 	unmount();
 
-	expect(writesDuringSuspend, 0);
+	expect(writesDuringSuspend).toBe(0);
 });
 
 test('suspendTerminal runs the callback but skips the handoff when not interactive', async () => {
@@ -252,7 +251,7 @@ test.skip(
 		const afterChild = output.slice(
 			output.lastIndexOf('CHILD_OUTPUT') + 'CHILD_OUTPUT'.length,
 		);
-		expect(stripAnsi(afterChild).includes('Ink frame').toBe(true));
+		expect(stripAnsi(afterChild).includes('Ink frame')).toBe(true);
 		expect(afterChild.includes(hideCursor)).toBe(true);
 	},
 );

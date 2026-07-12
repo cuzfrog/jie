@@ -26,7 +26,7 @@ type Stream = 'stdout' | 'stderr';
 const patchConsole = (callback: (stream: Stream, data: string) => void): (() => void) => {
 	const originalMethods = new Map<string, (...args: unknown[]) => void>();
 	for (const method of consoleMethods) {
-		originalMethods.set(method, console[method].bind(console));
+		originalMethods.set(method, (console[method] as (...args: unknown[]) => void).bind(console));
 		const stream: Stream =
 			method === 'error' || method === 'warn' || method === 'trace' || method === 'dir'
 				? 'stderr'

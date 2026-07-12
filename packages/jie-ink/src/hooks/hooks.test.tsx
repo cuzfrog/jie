@@ -88,4 +88,4 @@ test.skip('useStdout - write to stdout (PTY)', async () => {
 // `node-pty` doesn't support streaming stderr output, so I need to figure out
 // how to test useStderr() hook. child_process.spawn() can't be used, because
 // Ink fails with "raw mode unsupported" error.
-test.todo('useStderr - write to stderr');
+test.todo('useStderr - write to stderr', () => {});

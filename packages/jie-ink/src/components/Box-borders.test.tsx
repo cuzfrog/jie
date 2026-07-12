@@ -1,4 +1,3 @@
-import React from 'react';
 import boxen from 'boxen';
 import indentString from 'indent-string';
 import cliBoxes from 'cli-boxes';

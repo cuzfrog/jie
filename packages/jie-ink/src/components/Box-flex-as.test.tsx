@@ -1,4 +1,3 @@
-import React from 'react';
 import {Box, Text, Newline} from '../index.js';
 import {renderToString} from '../../test/helpers/render-to-string.js';
 

@@ -1,6 +1,5 @@
 import process from 'node:process';
 import EventEmitter from 'node:events';
-import React from 'react';
 import parseKeypress from './parse-keypress.js';
 import {render, Text} from './index.js';
 
@@ -575,7 +574,7 @@ const createFakeStdin = () => {
 	const stdin = new EventEmitter() as unknown as NodeJS.ReadStream;
 	stdin.isTTY = true;
 	stdin.setRawMode = vi.fn();
-	stdin.setEncoding = () => {};
+	stdin.setEncoding = (_encoding?: BufferEncoding): NodeJS.ReadStream => stdin;
 	stdin.read = vi.fn();
 	return stdin;
 };

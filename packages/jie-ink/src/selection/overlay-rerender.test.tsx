@@ -1,5 +1,5 @@
 import React from "react";
-import { test, expect, afterEach } from "bun:test";
+import { test, expect } from "bun:test";
 import { Writable, Readable } from "node:stream";
 import { render, useInput, Text, Box } from "@cuzfrog/jie-ink";
 import chalk from "chalk";

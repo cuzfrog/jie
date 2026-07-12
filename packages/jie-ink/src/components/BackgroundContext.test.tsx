@@ -1,4 +1,3 @@
-import React from 'react';
 import chalk from 'chalk';
 import {render, Box, Text} from '../index.js';
 import {

@@ -1,7 +1,7 @@
 import React from "react";
 import { test, expect } from "bun:test";
 import { Writable, Readable } from "node:stream";
-import { render, useInput, useStdout } from "@cuzfrog/jie-ink";
+import { render, useInput } from "@cuzfrog/jie-ink";
 
 const ESC = String.fromCharCode(0x1b);
 
@@ -42,9 +42,10 @@ test("selection overlay survives non-append Ink rerender", async () => {
   let triggerRerender: (() => void) | null = null;
   function MouseProbe(): React.ReactNode {
     const [tick, setTick] = React.useState(0);
-    triggerRerender = (): void => {
+    const rerender = (): void => {
       setTick((t) => t + 1);
     };
+    triggerRerender = rerender;
     useInput(() => {});
     return React.createElement("ink-box", {key: tick},
       React.createElement("ink-text", null, "hello world"),
@@ -76,7 +77,7 @@ test("selection overlay survives non-append Ink rerender", async () => {
   // either (a) the overlay's onSelectionChange callback re-paints after
   // the rerender, OR (b) the rerender path itself does not erase cells
   // that the overlay wrote.
-  triggerRerender?.();
+  if (triggerRerender) (triggerRerender as () => void)();
   await new Promise(r => setTimeout(r, 100));
 
   const afterRerender = stdout.chunks.join("");

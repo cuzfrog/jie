@@ -1,7 +1,7 @@
 import process from 'node:process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import React, {useEffect} from 'react';
+import {useEffect} from 'react';
 import stripAnsi from 'strip-ansi';
 import {render, useStdin, Text} from '../index.js';
 import createStdout from '../../test/helpers/create-stdout.js';

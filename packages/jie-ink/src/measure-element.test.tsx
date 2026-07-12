@@ -1,4 +1,4 @@
-import React, {useState, useRef, useEffect, useLayoutEffect} from 'react';
+import {useState, useRef, useEffect, useLayoutEffect} from 'react';
 import delay from 'delay';
 import stripAnsi from 'strip-ansi';
 import {

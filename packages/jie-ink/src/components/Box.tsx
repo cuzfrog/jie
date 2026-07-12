@@ -1,4 +1,4 @@
-import React, {forwardRef, useContext, type PropsWithChildren} from 'react';
+import {forwardRef, useContext, type PropsWithChildren} from 'react';
 import type {Except} from 'type-fest';
 import {type Styles} from '../styles.js';
 import {type DOMElement} from '../dom.js';

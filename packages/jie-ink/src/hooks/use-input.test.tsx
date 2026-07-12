@@ -29,8 +29,6 @@ test.skip(
 		await delay(2000);
 		ps.write('\r');
 		await ps.waitForExit();
-		const finalMatch = /FINAL .+/.exec(ps.output);
-		t.log('Output:', finalMatch?.[0] ?? ps.output.slice(-300));
 		expect(ps.output.includes('FINAL query:"" deferred:""')).toBe(true);
 	},
 );

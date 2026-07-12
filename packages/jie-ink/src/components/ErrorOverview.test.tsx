@@ -1,4 +1,3 @@
-import React from 'react';
 import stripAnsi from 'strip-ansi';
 import {renderToString} from '../index.js';
 import ErrorOverview from '../components/ErrorOverview.js';

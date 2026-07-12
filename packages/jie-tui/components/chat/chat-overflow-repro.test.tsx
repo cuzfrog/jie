@@ -1,5 +1,4 @@
 import { Events } from "@cuzfrog/jie-platform";
-import { Box } from "@cuzfrog/jie-ink";
 import { render } from "../../test-renderer";
 import { ChatPane } from "./chat-pane";
 import { TuiContext } from "../context";

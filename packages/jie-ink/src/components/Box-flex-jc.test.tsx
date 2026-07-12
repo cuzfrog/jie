@@ -1,4 +1,3 @@
-import React from 'react';
 import chalk from 'chalk';
 import {Box, Text} from '../index.js';
 import {renderToString} from '../../test/helpers/render-to-string.js';

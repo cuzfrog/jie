@@ -1,4 +1,4 @@
-import React, {type JSX} from 'react';
+import {type JSX} from 'react';
 import {Box, Text} from './index.js';
 import {renderToString} from '../test/helpers/render-to-string.js';
 import {enableTestColors, disableTestColors} from '../test/helpers/force-colors.js';

@@ -1,4 +1,3 @@
-import React from 'react';
 import {Box, Text, render} from '../index.js';
 import {
 	renderToString,

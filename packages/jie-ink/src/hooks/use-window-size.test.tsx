@@ -1,7 +1,6 @@
 import process from 'node:process';
 import delay from 'delay';
 import stripAnsi from 'strip-ansi';
-import React from 'react';
 import {render, Box, Text, useWindowSize} from '../index.js';
 import createStdout, {type FakeStdout} from '../../test/helpers/create-stdout.js';
 

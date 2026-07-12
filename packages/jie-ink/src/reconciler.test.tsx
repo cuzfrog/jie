@@ -1,4 +1,4 @@
-import React, {Suspense} from 'react';
+import {Suspense} from 'react';
 import chalk from 'chalk';
 import {Box, Text, render} from './index.js';
 import createStdout from '../test/helpers/create-stdout.js';

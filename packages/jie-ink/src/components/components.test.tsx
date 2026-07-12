@@ -1,4 +1,3 @@
-import EventEmitter from 'node:events';
 import process from 'node:process';
 
 import chalk from 'chalk';
@@ -19,7 +18,7 @@ import {
 	useStdin,
 } from '../index.js';
 import createStdout from '../../test/helpers/create-stdout.js';
-import {emitReadable} from '../../test/helpers/create-stdin.js';
+import {createStdin, emitReadable, type StdinMock} from '../../test/helpers/create-stdin.js';
 import {
 	renderToString,
 	renderToStringAsync,
@@ -27,17 +26,7 @@ import {
 import {run} from '../../test/helpers/run.js';
 import {renderAsync} from '../../test/helpers/test-renderer.js';
 
-const createRawModeStdin = (): NodeJS.WriteStream => {
-	const stdin = new EventEmitter() as NodeJS.WriteStream;
-	stdin.setEncoding = () => {};
-	stdin.setRawMode = vi.fn();
-	stdin.isTTY = true;
-	stdin.ref = vi.fn();
-	stdin.unref = vi.fn();
-	stdin.read = vi.fn();
-
-	return stdin;
-};
+const createRawModeStdin = (): StdinMock => createStdin();
 
 test('text', () => {
 	const output = renderToString(<Text>Hello World</Text>);
@@ -463,7 +452,7 @@ test('<Transform> with null children', () => {
 
 test('hooks', () => {
 	function WithHooks() {
-		const [value, setValue] = useState('Hello');
+		const [value] = useState('Hello');
 
 		return <Text>{value}</Text>;
 	}
@@ -548,7 +537,7 @@ test('static output stops accumulating after Static unmounts (#904)', () => {
 	// If staticNode is properly cleared, fullStaticOutput stops growing and
 	// outputs stay the same length. If not, each render appends duplicate
 	// static content, making outputs progressively longer.
-	expect(outputAfterChurn.length, outputAfterUnmount.length);
+	expect(outputAfterChurn.length).toBe(outputAfterUnmount.length);
 	expect(outputAfterChurn.includes('Dynamic')).toBe(true);
 });
 
@@ -959,9 +948,7 @@ test('re-ref stdin when input is used after previous unmount', () => {
 test('setRawMode() should throw if raw mode is not supported', () => {
 	const stdout = createStdout();
 
-	const stdin = new EventEmitter() as NodeJS.ReadStream;
-	stdin.setEncoding = () => {};
-	stdin.setRawMode = vi.fn();
+	const stdin = createStdin();
 	stdin.isTTY = false;
 
 	const didCatchInMount = vi.fn();
@@ -1009,9 +996,7 @@ test('setRawMode() should throw if raw mode is not supported', () => {
 test('render different component based on whether stdin is a TTY or not', () => {
 	const stdout = createStdout();
 
-	const stdin = new EventEmitter() as NodeJS.WriteStream;
-	stdin.setEncoding = () => {};
-	stdin.setRawMode = vi.fn();
+	const stdin = createStdin();
 	stdin.isTTY = false;
 
 	const options = {
@@ -1158,10 +1143,7 @@ test.skip('render only last frame when stdout is not a TTY', async () => {
 	// Verify no intermediate frames were written
 	const contentWrites = allWrites.map(w => stripAnsi(w));
 	for (const intermediate of ['Count: 0', 'Count: 1', 'Count: 2']) {
-		expect(contentWrites.some(w => w.includes(intermediate))).toBe(
-			false,
-			`Intermediate frame "${intermediate}" should not be written in non-interactive mode`,
-		);
+		expect(contentWrites.some(w => w.includes(intermediate)), `Intermediate frame "${intermediate}" should not be written in non-interactive mode`).toBe(false);
 	}
 
 	// Verify no erase/cursor ANSI sequences were emitted
@@ -1256,10 +1238,7 @@ test.skip('interactive option overrides TTY detection', async () => {
 	// Verify no intermediate frames were written
 	const contentWrites = allWrites.map(w => stripAnsi(w));
 	for (const intermediate of ['Count: 0', 'Count: 1', 'Count: 2']) {
-		expect(contentWrites.some(w => w.includes(intermediate))).toBe(
-			false,
-			`Intermediate frame "${intermediate}" should not be written when interactive=false overrides TTY`,
-		);
+		expect(contentWrites.some(w => w.includes(intermediate)), `Intermediate frame "${intermediate}" should not be written when interactive=false overrides TTY`).toBe(false);
 	}
 
 	// Verify no erase/cursor ANSI sequences were emitted
@@ -1296,10 +1275,7 @@ test('alternate screen - enters on mount and exits on unmount', async () => {
 
 	expect(enterIndex).not.toBe(-1);
 	expect(exitIndex).not.toBe(-1);
-	expect(enterIndex < exitIndex).toBe(
-		true,
-		'enterAlternativeScreen must come before exitAlternativeScreen',
-	);
+	expect(enterIndex < exitIndex, 'enterAlternativeScreen must come before exitAlternativeScreen').toBe(true);
 	expect(enterIndex).toBe(0);
 });
 
@@ -1350,10 +1326,7 @@ test.skip(
 			String(call[0]).includes('primary cleanup'),
 		);
 
-		expect(output.includes('primary cleanup')).toBe(
-			false,
-			'Should keep cleanup console output out of Ink-managed stdout writes',
-		);
+		expect(output.includes('primary cleanup'), 'Should keep cleanup console output out of Ink-managed stdout writes').toBe(false);
 		expect(nativeConsoleLog).toBe(true);
 	},
 );
@@ -1430,10 +1403,8 @@ test(
 			replayedOutput.includes('normal ERROR banner') ||
 				replayedOutput.includes('Error: Done') ||
 				replayedOutput.includes('Done\n    at'),
-		).toBe(
-			false,
 			'Should not replay alternate-screen teardown output onto the primary screen',
-		);
+		).toBe(false);
 	},
 );
 
@@ -1532,10 +1503,7 @@ test(
 		const showCursorIndex = output.lastIndexOf(showCursorEscape);
 
 		expect(exitIndex).not.toBe(-1);
-		expect(showCursorIndex > exitIndex).toBe(
-			true,
-			'Should restore the cursor after leaving the alternate screen',
-		);
+		expect(showCursorIndex > exitIndex, 'Should restore the cursor after leaving the alternate screen').toBe(true);
 	},
 );
 
@@ -1599,14 +1567,8 @@ test('alternate screen - ignored when non-interactive', async () => {
 
 	const allWrites = stdout.getWrites();
 
-	expect(allWrites.some(w => w.includes(ansiEscapes.enterAlternativeScreen))).toBe(
-		false,
-		'Should not write enterAlternativeScreen in non-interactive mode',
-	);
-	expect(allWrites.some(w => w.includes(ansiEscapes.exitAlternativeScreen))).toBe(
-		false,
-		'Should not write exitAlternativeScreen in non-interactive mode',
-	);
+	expect(allWrites.some(w => w.includes(ansiEscapes.enterAlternativeScreen)), 'Should not write enterAlternativeScreen in non-interactive mode').toBe(false);
+	expect(allWrites.some(w => w.includes(ansiEscapes.exitAlternativeScreen)), 'Should not write exitAlternativeScreen in non-interactive mode').toBe(false);
 });
 
 test('alternate screen - disabled by default', async () => {
@@ -1622,14 +1584,8 @@ test('alternate screen - disabled by default', async () => {
 
 	const allWrites = stdout.getWrites();
 
-	expect(allWrites.some(w => w.includes(ansiEscapes.enterAlternativeScreen))).toBe(
-		false,
-		'Should not write enterAlternativeScreen by default',
-	);
-	expect(allWrites.some(w => w.includes(ansiEscapes.exitAlternativeScreen))).toBe(
-		false,
-		'Should not write exitAlternativeScreen by default',
-	);
+	expect(allWrites.some(w => w.includes(ansiEscapes.enterAlternativeScreen)), 'Should not write enterAlternativeScreen by default').toBe(false);
+	expect(allWrites.some(w => w.includes(ansiEscapes.exitAlternativeScreen)), 'Should not write exitAlternativeScreen by default').toBe(false);
 });
 
 test('alternate screen - content is rendered between enter and exit', async () => {
@@ -1676,14 +1632,8 @@ test('alternate screen - ignored when isTTY is false', async () => {
 
 	const allWrites = stdout.getWrites();
 
-	expect(allWrites.some(w => w.includes(ansiEscapes.enterAlternativeScreen))).toBe(
-		false,
-		'Should not write enterAlternativeScreen when isTTY is false',
-	);
-	expect(allWrites.some(w => w.includes(ansiEscapes.exitAlternativeScreen))).toBe(
-		false,
-		'Should not write exitAlternativeScreen when isTTY is false',
-	);
+	expect(allWrites.some(w => w.includes(ansiEscapes.enterAlternativeScreen)), 'Should not write enterAlternativeScreen when isTTY is false').toBe(false);
+	expect(allWrites.some(w => w.includes(ansiEscapes.exitAlternativeScreen)), 'Should not write exitAlternativeScreen when isTTY is false').toBe(false);
 });
 
 test('alternate screen - ignored when isTTY is false even if interactive is true', async () => {
@@ -1700,14 +1650,8 @@ test('alternate screen - ignored when isTTY is false even if interactive is true
 
 	const allWrites = stdout.getWrites();
 
-	expect(allWrites.some(w => w.includes(ansiEscapes.enterAlternativeScreen))).toBe(
-		false,
-		'Should not write enterAlternativeScreen when isTTY is false, even with interactive=true',
-	);
-	expect(allWrites.some(w => w.includes(ansiEscapes.exitAlternativeScreen))).toBe(
-		false,
-		'Should not write exitAlternativeScreen when isTTY is false, even with interactive=true',
-	);
+	expect(allWrites.some(w => w.includes(ansiEscapes.enterAlternativeScreen)), 'Should not write enterAlternativeScreen when isTTY is false, even with interactive=true').toBe(false);
+	expect(allWrites.some(w => w.includes(ansiEscapes.exitAlternativeScreen)), 'Should not write exitAlternativeScreen when isTTY is false, even with interactive=true').toBe(false);
 });
 
 test.skip('static output is written immediately in non-interactive mode', async () => {

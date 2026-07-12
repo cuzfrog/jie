@@ -1,6 +1,6 @@
 import {createInputParser, type InputEvent} from './input-parser.js';
 
-const parseChunks = (chunks: string[]): InputEvent[] => {
+const parseChunks = (chunks: ReadonlyArray<string>): InputEvent[] => {
 	const parser = createInputParser();
 	const events: InputEvent[] = [];
 
@@ -291,7 +291,7 @@ const deleteAndBackspaceCases = [
 
 for (const testCase of deleteAndBackspaceCases) {
 	test(testCase.title, () => {
-		expect(parseChunks(testCase.chunks)).toEqual(testCase.events);
+		expect(parseChunks(testCase.chunks)).toEqual([...testCase.events]);
 	});
 }
 

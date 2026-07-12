@@ -1,4 +1,4 @@
-import React, {useEffect} from 'react';
+import {useEffect} from 'react';
 import delay from 'delay';
 import {render, Box, Text, useFocus, useFocusManager} from '../index.js';
 import {createStdin, emitReadable} from '../../test/helpers/create-stdin.js';

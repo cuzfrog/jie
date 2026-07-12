@@ -1,4 +1,3 @@
-import React from 'react';
 import stripAnsi from 'strip-ansi';
 import stringWidth from 'string-width';
 import {Box, Text} from './index.js';

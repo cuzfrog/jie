@@ -4,6 +4,7 @@ import {
   stepChatOffset,
   jumpChatOffset,
   turnHeight,
+  type ChatScrollOptions,
 } from "./chat-scroll-model";
 import { ASSISTANT_PREFIX, USER_PROMPT_PREFIX } from "../themes";
 
@@ -200,7 +201,7 @@ describe("jumpChatOffset", () => {
   });
 });
 
-function sliceTailOffset(_unused: number, viewport: number, focused: AgentUiState, options: ChatScrollOptions_w, width: number): number {
+function sliceTailOffset(_unused: number, viewport: number, focused: AgentUiState, options: ChatScrollOptions, width: number): number {
   void _unused;
   void options;
   void focused;

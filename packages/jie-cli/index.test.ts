@@ -227,6 +227,7 @@ function captureRun(platform: FakePlatform): CapturedRun {
         leaderAgentId: null,
         focusedAgentId: null,
         agents: new Map(),
+        chatScrollOffsets: new Map(),
         showTeamRailPanel: false,
         thinkingExpanded: false,
         toolCardsExpanded: false,

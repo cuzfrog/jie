@@ -1,9 +1,14 @@
 import EventEmitter from 'node:events';
 
-export type FakeStdout = {
+type WriteMock = ReturnType<typeof vi.fn>;
+
+interface MockedStdout {
+	write: WriteMock;
 	get: () => string;
 	getWrites: () => string[];
-} & NodeJS.WriteStream;
+}
+
+export type FakeStdout = NodeJS.WriteStream & MockedStdout;
 
 const createStdout = (columns?: number, isTTY?: boolean): FakeStdout => {
 	const stdout = new EventEmitter() as unknown as FakeStdout;
@@ -13,7 +18,7 @@ const createStdout = (columns?: number, isTTY?: boolean): FakeStdout => {
 	const write = vi.fn();
 	stdout.write = write;
 
-	stdout.get = (): string => write.mock.calls.at(-1)?.[0] as string;
+	stdout.get = (): string => (write.mock.calls.at(-1)?.[0] ?? '') as string;
 
 	stdout.getWrites = (): string[] =>
 		write.mock.calls.map(args => args[0] as string);

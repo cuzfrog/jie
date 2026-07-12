@@ -1,4 +1,4 @@
-import React, {forwardRef, type PropsWithChildren, type ReactNode} from 'react';
+import {forwardRef, type PropsWithChildren, type ReactNode} from 'react';
 import {type DOMElement} from '../dom.js';
 import Box from './Box.js';
 

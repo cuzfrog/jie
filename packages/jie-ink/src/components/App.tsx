@@ -52,7 +52,7 @@ type Props = {
 	readonly setCursorPosition: (position: CursorPosition | undefined) => void;
 	readonly interactive: boolean;
 	readonly renderThrottleMs: number;
-	readonly selectionMaterializer: () => ReadonlyArray<ReadonlyArray<{readonly row: number; readonly column: number; readonly text: string}>>;
+	readonly selectionMaterializer: () => ReadonlyArray<ReadonlyArray<{readonly row: number; readonly column: number; readonly text: string; readonly sgr: string}>>;
 	readonly selectionEmitter: EventEmitter;
 	readonly onSelectionClipboard: (text: string) => void;
 	readonly selectionStdoutWrite: (chunk: string) => void;
@@ -731,6 +731,7 @@ function App({
 			materializer: selectionMaterializer,
 			writeClipboard: (text: string) => {
 				onSelectionClipboard(text);
+				return {written: true, text};
 			},
 			onSelectionChange: (next: Selection | null) => {
 				currentSelection = next;

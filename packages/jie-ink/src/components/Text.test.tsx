@@ -1,4 +1,3 @@
-import React from 'react';
 import chalk from 'chalk';
 import stripAnsi from 'strip-ansi';
 import {render, Box, Text} from '../index.js';
