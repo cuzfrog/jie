@@ -1,5 +1,5 @@
 import { Events } from "@cuzfrog/jie-platform";
-import { render } from "ink-testing-library";
+import { render } from "../../test-renderer";
 import { ChatPane } from "./chat-pane";
 import { TuiContext } from "../context";
 import { Actions, createStateStore } from "../../state";
@@ -13,7 +13,7 @@ describe("ChatPane", () => {
   test("renders 'no focused agent' when no agent is focused", () => {
     const ctx = makeContextValue();
     const { lastFrame, unmount } = render(
-      <TuiContext.Provider value={ctx}><ChatPane width={40} /></TuiContext.Provider>,
+      <TuiContext.Provider value={ctx}><ChatPane width={40} height={20} /></TuiContext.Provider>,
     );
     expect(lastFrame()).toContain("no focused agent");
     unmount();
@@ -33,7 +33,7 @@ describe("ChatPane", () => {
     const state = stateStore.getState();
     const ctx = makeContextValue({ stateStore, state });
     const { lastFrame, unmount } = render(
-      <TuiContext.Provider value={ctx}><ChatPane width={80} /></TuiContext.Provider>,
+      <TuiContext.Provider value={ctx}><ChatPane width={80} height={20} /></TuiContext.Provider>,
     );
     const frame = lastFrame();
     expect(frame).toContain("hello");

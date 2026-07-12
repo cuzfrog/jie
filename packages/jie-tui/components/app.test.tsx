@@ -1,5 +1,5 @@
 import { Events } from "@cuzfrog/jie-platform";
-import { render } from "ink-testing-library";
+import { render } from "../test-renderer";
 import { App } from "./app";
 import { makeContextValue } from "../test-support";
 import { Actions, createStateStore } from "../state";

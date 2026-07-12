@@ -1,5 +1,5 @@
 import { Events } from "@cuzfrog/jie-platform";
-import { render } from "ink-testing-library";
+import { render } from "../../test-renderer";
 import { Footer } from "./footer";
 import { TuiContext } from "../context";
 import { Actions, createStateStore } from "../../state";

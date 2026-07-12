@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { render } from "ink-testing-library";
-import { Text } from "ink";
+import { render } from "../../test-renderer";
+import { Text } from "@cuzfrog/jie-ink";
 import type { JSX } from "react";
 import { useEditorState } from "./useEditorState";
 import { useEditorInput, renderLines } from "./editor-view";

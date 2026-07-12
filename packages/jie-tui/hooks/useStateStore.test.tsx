@@ -1,6 +1,6 @@
 import { useEffect, type JSX } from "react";
-import { Text } from "ink";
-import { render } from "ink-testing-library";
+import { Text } from "@cuzfrog/jie-ink";
+import { render } from "../test-renderer";
 import { Actions, createStateStore } from "../state";
 import { useStateStore } from "./useStateStore";
 

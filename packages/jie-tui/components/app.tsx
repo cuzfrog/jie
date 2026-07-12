@@ -1,5 +1,5 @@
 import { useEffect, type JSX } from "react";
-import { Box, useApp as useInkApp, useStdout } from "ink";
+import { Box, useApp as useInkApp, useStdout } from "@cuzfrog/jie-ink";
 import { TuiContext, type TuiContextValue } from "./context";
 import { Layout } from "./layout";
 import { GlobalKeyBindings } from "./global-keys";

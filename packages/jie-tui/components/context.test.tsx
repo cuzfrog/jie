@@ -1,5 +1,5 @@
 import { Component, type ReactNode } from "react";
-import { render } from "ink-testing-library";
+import { render } from "../test-renderer";
 import { TuiContext, useTuiContext, useFocusedAgent } from "./context";
 import { makeContextValue } from "../test-support";
 

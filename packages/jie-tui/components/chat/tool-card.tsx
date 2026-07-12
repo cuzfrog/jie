@@ -1,4 +1,4 @@
-import { Box, Text } from "ink";
+import { Box, Text } from "@cuzfrog/jie-ink";
 import type { JSX } from "react";
 import type { MessageCard } from "../../state";
 import { pickColor } from "../themes";

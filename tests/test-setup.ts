@@ -34,7 +34,6 @@ Object.assign(globalThis, {
 
 beforeEach(() => {
   _vi.resetAllMocks();
-  _vi.restoreAllMocks();
 });
 
 declare global {

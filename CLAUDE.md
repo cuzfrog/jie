@@ -94,6 +94,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 - do not skip tests, problems must be resolved.
 - do not ignore tech debt you encountered, record them as Github issues so later other agents can analyze and fix.
 - avoid worktrees.
+- avoid direct usage of `console`, use our interface abstraction `Console` instead. So that tests can supply a mock console and don't need to mock global objects.
 
 ## Best practices
 - write down your plan before execution.

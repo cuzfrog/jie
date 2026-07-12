@@ -1,5 +1,5 @@
 import { useEffect, useState, type JSX } from "react";
-import { Text } from "ink";
+import { Text } from "@cuzfrog/jie-ink";
 import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, WORKING_LABEL, pickColor } from "../themes";
 
 interface WorkingIndicatorProps {

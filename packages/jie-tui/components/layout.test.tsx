@@ -2,7 +2,7 @@ import { Events } from "@cuzfrog/jie-platform";
 import { Layout } from "./layout";
 import { TuiContext } from "./context";
 import { Actions, createStateStore } from "../state";
-import { render } from "ink-testing-library";
+import { render } from "../test-renderer";
 import { makeContextValue } from "../test-support";
 
 declare const test: (name: string, fn: () => void | Promise<void>) => void;

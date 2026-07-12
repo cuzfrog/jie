@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, type JSX } from "react";
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useInput } from "@cuzfrog/jie-ink";
 import { useTuiContext } from "../context";
 import { Actions } from "../../state";
 import { pickColor } from "../themes";

@@ -1,4 +1,4 @@
-import { render } from "ink-testing-library";
+import { render } from "../../test-renderer";
 import { useRef } from "react";
 import type { JSX } from "react";
 import { useEditorState } from "./useEditorState";

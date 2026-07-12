@@ -5,15 +5,14 @@
     ".": "./index.ts"
   },
   "dependencies": {
+    "@cuzfrog/jie-ink": "workspace:*",
     "@cuzfrog/jie-platform": "workspace:*",
-    "ink": "catalog:",
     "react": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
-    "ink-testing-library": "catalog:",
     "typescript": "catalog:"
   }
 }

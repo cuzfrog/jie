@@ -1,4 +1,4 @@
-import { Box, Text } from "ink";
+import { Box, Text } from "@cuzfrog/jie-ink";
 import type { JSX } from "react";
 import { useTuiContext, useFocusedAgent } from "../context";
 import { pickColor } from "../themes";

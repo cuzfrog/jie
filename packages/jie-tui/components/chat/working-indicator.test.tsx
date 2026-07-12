@@ -1,4 +1,4 @@
-import { render } from "ink-testing-library";
+import { render } from "../../test-renderer";
 import { WorkingIndicator } from "./working-indicator";
 import { SPINNER_FRAMES } from "../themes";
 

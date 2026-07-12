@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useInput } from "ink";
+import { useInput } from "@cuzfrog/jie-ink";
 import { useTuiContext } from "./context";
 import { Actions, type TuiState } from "../state";
 

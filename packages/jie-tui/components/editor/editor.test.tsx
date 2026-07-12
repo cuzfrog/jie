@@ -1,4 +1,4 @@
-import { render } from "ink-testing-library";
+import { render } from "../../test-renderer";
 import { Editor } from "./editor";
 import { TuiContext } from "../context";
 import { Actions, createStateStore } from "../../state";

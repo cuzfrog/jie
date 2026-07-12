@@ -1,4 +1,4 @@
-import { render } from "ink-testing-library";
+import { render } from "../../test-renderer";
 import { MessageView } from "./message-view";
 import type { MessageTurn } from "../../state";
 

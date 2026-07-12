@@ -1,5 +1,5 @@
 import type { WriteStream, ReadStream } from "node:tty";
-import { render } from "ink";
+import { render } from "@cuzfrog/jie-ink";
 import { logger, type AnyEventEnvelope, type EventEnvelope, type EventType, type JiePlatform } from "@cuzfrog/jie-platform";
 import { Actions, type TuiState, type StateStore, createStateStore } from "./state";
 import { createTuiCommandHandler, type CommandHandler } from "./command-handler";

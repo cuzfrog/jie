@@ -1,4 +1,4 @@
-import { render } from "ink-testing-library";
+import { render } from "../../test-renderer";
 import { TextBlock } from "./text-block";
 
 declare const test: (name: string, fn: () => void | Promise<void>) => void;

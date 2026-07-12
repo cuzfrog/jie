@@ -1,4 +1,4 @@
-import { useInput } from "ink";
+import { useInput } from "@cuzfrog/jie-ink";
 import { useCallback } from "react";
 import type { EditorStateApi } from "./useEditorState";
 
