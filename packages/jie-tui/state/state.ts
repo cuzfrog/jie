@@ -75,7 +75,12 @@ function isBusy(state: TuiState): boolean {
   return false;
 }
 
+function shouldShowErrorBanner(state: TuiState): boolean {
+  return state.errorBanner !== null && state.errorBanner !== "";
+}
+
 export const TuiState = {
   getFocusedAgent,
   isBusy,
+  shouldShowErrorBanner,
 } as const;

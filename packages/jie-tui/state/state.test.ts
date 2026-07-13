@@ -68,3 +68,29 @@ describe("TuiState.isBusy", () => {
     expect(TuiState.isBusy(store.getState())).toBe(true);
   });
 });
+
+describe("TuiState.shouldShowErrorBanner", () => {
+  test("returns false when errorBanner is null", () => {
+    const store = createStateStore();
+    expect(TuiState.shouldShowErrorBanner(store.getState())).toBe(false);
+  });
+
+  test("returns false when errorBanner is the empty string", () => {
+    const store = createStateStore();
+    store.dispatch(Actions.setErrorMessage(""));
+    expect(TuiState.shouldShowErrorBanner(store.getState())).toBe(false);
+  });
+
+  test("returns true once setErrorMessage is dispatched", () => {
+    const store = createStateStore();
+    store.dispatch(Actions.setErrorMessage("boom"));
+    expect(TuiState.shouldShowErrorBanner(store.getState())).toBe(true);
+  });
+
+  test("returns false again after clearBanners is dispatched", () => {
+    const store = createStateStore();
+    store.dispatch(Actions.setErrorMessage("boom"));
+    store.dispatch(Actions.clearBanners());
+    expect(TuiState.shouldShowErrorBanner(store.getState())).toBe(false);
+  });
+});

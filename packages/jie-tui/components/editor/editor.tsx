@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, type JSX } from "react";
 import { Box, Text, useInput } from "@cuzfrog/jie-ink";
 import { useTuiContext } from "../context";
 import { Actions } from "../../state";
-import { pickColor } from "../themes";
+import { pickColor, RAIL_ERROR_GLYPH } from "../themes";
 import { useEditorState } from "./useEditorState";
 import { useEditorInput, renderLines } from "./editor-view";
 
@@ -112,6 +112,9 @@ export function Editor(_props: EditorProps): JSX.Element {
 
   useEditorInput(api);
 
+  const bannerText = state.errorBanner;
+  const showErrorBanner = bannerText !== null && bannerText !== "";
+
   return (
     <Box
       flexDirection="column"
@@ -124,6 +127,9 @@ export function Editor(_props: EditorProps): JSX.Element {
       width="100%"
     >
       <Box flexDirection="column" paddingX={1} key={mountKey}>
+        {showErrorBanner ? (
+          <Text color={pickColor("error")}>{`${RAIL_ERROR_GLYPH} ${bannerText}`}</Text>
+        ) : null}
         {renderLines(api).map((line, i) => (
           <Text key={i}>{line.text}</Text>
         ))}

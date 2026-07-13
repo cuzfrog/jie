@@ -141,6 +141,70 @@ describe("Editor", () => {
     unmount();
   });
 
+  test("renders the error banner as a sibling row when errorBanner is set", async () => {
+    const store = createStateStore();
+    store.dispatch(Actions.setErrorMessage("No model selected"));
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const { lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("✗");
+    expect(frame).toContain("No model selected");
+    // The editor remains interactive: the cursor block is still rendered below
+    // the banner.
+    expect(frame).toContain("[7m [27m");
+    unmount();
+  });
+
+  test("uses the 'error' color token for the error banner text", async () => {
+    const store = createStateStore();
+    store.dispatch(Actions.setErrorMessage("boom"));
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const { lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    // COLORS.error === "red" -> ANSI 31. The banner is prefixed with the rail
+    // glyph, so the message text sits after the glyph and a space.
+    expect(lastFrame() ?? "").toMatch(/\[31m✗ boom/);
+    unmount();
+  });
+
+  test("renders the banner alongside typed content (does not hide it)", async () => {
+    const store = createStateStore();
+    store.dispatch(Actions.setEditorText("already typing"));
+    store.dispatch(Actions.setErrorMessage("async error"));
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const { lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("already typing");
+    expect(frame).toContain("async error");
+    // Banner must sit ABOVE the typed content so the user can see both.
+    const lines = frame.split("\n");
+    const bannerIdx = lines.findIndex((line) => line.includes("async error"));
+    const contentIdx = lines.findIndex((line) => line.includes("already typing"));
+    expect(bannerIdx).toBeGreaterThanOrEqual(0);
+    expect(contentIdx).toBeGreaterThan(bannerIdx);
+    unmount();
+  });
+
+  test("does not render the error banner row when errorBanner is null", async () => {
+    const store = createStateStore();
+    const ctx = makeContextValue({ stateStore: store });
+    const { lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    const frame = lastFrame() ?? "";
+    expect(frame).not.toContain("✗");
+    unmount();
+  });
+
   test("grows the content height when buffer contains newlines", () => {
     const store = createStateStore();
     store.dispatch(Actions.setEditorText("line1\nline2\nline3"));
