@@ -37,6 +37,7 @@ function agent(turns: MessageTurn[], extras: Partial<AgentUiState> = {}): AgentU
     history: turns,
     currentTurn: null,
     lastStopReason: null,
+    contextTokensUsed: 0,
     ...extras,
   };
 }

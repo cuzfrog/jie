@@ -61,7 +61,7 @@ describe("Footer", () => {
 
   test("shows '(provider) modelId | effort' for the focused agent from team.loaded (model carried in the event)", () => {
     const stateStore = createStateStore();
-    loadDemoTeam(stateStore, [{ teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, model: { provider: "lm-studio", id: "ornith-1.0-9b-mtp", effort: "off" } }]);
+    loadDemoTeam(stateStore, [{ teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, model: { provider: "lm-studio", id: "ornith-1.0-9b-mtp", effort: "off", contextWindow: null } }]);
     const ctx = makeContextValue({ stateStore });
     const { lastFrame, unmount } = render(
       <TuiContext.Provider value={ctx}>
@@ -168,6 +168,92 @@ describe("Footer queue indicator", () => {
       </TuiContext.Provider>,
     );
     expect(lastFrame()).not.toContain("queued");
+    unmount();
+  });
+});
+
+describe("Footer context-% display", () => {
+  test("shows '—' when no agent is focused", () => {
+    const ctx = makeContextValue();
+    const { lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}>
+        <Footer cwd="/p" gitBranch="" gitDirty={false} />
+      </TuiContext.Provider>,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("—");
+    expect(frame).not.toMatch(/\d+%/);
+    unmount();
+  });
+
+  test("shows '—' when the focused agent has no model assigned", () => {
+    const stateStore = createStateStore();
+    loadDemoTeam(stateStore);
+    const ctx = makeContextValue({ stateStore });
+    const { lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}>
+        <Footer cwd="/tmp/proj" gitBranch="main" gitDirty={false} />
+      </TuiContext.Provider>,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("—");
+    expect(frame).not.toMatch(/\d+%/);
+    unmount();
+  });
+
+  test("shows '—' when the model has contextWindow null", () => {
+    const stateStore = createStateStore();
+    loadDemoTeam(stateStore, [{ teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, model: { provider: "openai", id: "gpt-4", effort: "off", contextWindow: null } }]);
+    const ctx = makeContextValue({ stateStore });
+    const { lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}>
+        <Footer cwd="/tmp/proj" gitBranch="main" gitDirty={false} />
+      </TuiContext.Provider>,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("—");
+    expect(frame).not.toMatch(/\d+%/);
+    unmount();
+  });
+
+  test("renders '0%/200k' when model has contextWindow 200000 and no usage yet", () => {
+    const stateStore = createStateStore();
+    loadDemoTeam(stateStore, [{ teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, model: { provider: "openai", id: "gpt-4", effort: "off", contextWindow: 200000 } }]);
+    const ctx = makeContextValue({ stateStore });
+    const { lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}>
+        <Footer cwd="/tmp/proj" gitBranch="main" gitDirty={false} />
+      </TuiContext.Provider>,
+    );
+    expect(lastFrame()).toContain("0%/200k");
+    unmount();
+  });
+
+  test("renders the percent derived from focused agent's contextTokensUsed", () => {
+    const stateStore = createStateStore();
+    loadDemoTeam(stateStore, [{ teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, model: { provider: "openai", id: "gpt-4", effort: "off", contextWindow: 1000 } }]);
+    stateStore.dispatch(Actions.receiveEvent(Events.userPrompt({ kind: "user" }, "demo", "x".repeat(3200), "general-1")));
+    const ctx = makeContextValue({ stateStore });
+    const { lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}>
+        <Footer cwd="/tmp/proj" gitBranch="main" gitDirty={false} />
+      </TuiContext.Provider>,
+    );
+    expect(lastFrame()).toContain("80%/1k");
+    unmount();
+  });
+
+  test("clamps percent at 100 when used exceeds window", () => {
+    const stateStore = createStateStore();
+    loadDemoTeam(stateStore, [{ teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, model: { provider: "openai", id: "gpt-4", effort: "off", contextWindow: 1000 } }]);
+    stateStore.dispatch(Actions.receiveEvent(Events.userPrompt({ kind: "user" }, "demo", "x".repeat(8000), "general-1")));
+    const ctx = makeContextValue({ stateStore });
+    const { lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}>
+        <Footer cwd="/tmp/proj" gitBranch="main" gitDirty={false} />
+      </TuiContext.Provider>,
+    );
+    expect(lastFrame()).toContain("100%/1k");
     unmount();
   });
 });

@@ -13,7 +13,7 @@ function team(agents: ReadonlyArray<{
   role: string;
   agentKey: string;
   isLeader: boolean;
-  model: { provider: string; id: string; effort: "off" | "low" | "medium" | "high" | "max" } | null;
+  model: { provider: string; id: string; effort: "off" | "low" | "medium" | "high" | "max"; contextWindow: number | null } | null;
 }>): TeamInfo {
   const leader = agents.find((a) => a.isLeader) ?? agents[0];
   return {
@@ -42,18 +42,26 @@ describe("teamLoadReducer", () => {
 
   test("seeds the model from the TeamInfo for new agents", () => {
     const state = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, model: { provider: "lm-studio", id: "ornith-1.0-9b-mtp", effort: "off" } },
+      { role: "general", agentKey: "general-1", isLeader: true, model: { provider: "lm-studio", id: "ornith-1.0-9b-mtp", effort: "off", contextWindow: null } },
     ]));
     expect(state.agents.get("my-team:general-1")?.model).toEqual({
       provider: "lm-studio",
       id: "ornith-1.0-9b-mtp",
       effort: "off",
+      contextWindow: null,
     });
+  });
+
+  test("seeds the model with contextWindow from TeamInfo (populates from body.identity.model)", () => {
+    const state = teamLoadReducer(INITIAL_TUI_STATE, team([
+      { role: "general", agentKey: "general-1", isLeader: true, model: { provider: "openai", id: "gpt-4", effort: "off", contextWindow: 200000 } },
+    ]));
+    expect(state.agents.get("my-team:general-1")?.model?.contextWindow).toBe(200000);
   });
 
   test("preserves the existing model when the new payload carries model: null (no overwrite)", () => {
     const first = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, model: { provider: "lm-studio", id: "ornith-1.0-9b-mtp", effort: "off" } },
+      { role: "general", agentKey: "general-1", isLeader: true, model: { provider: "lm-studio", id: "ornith-1.0-9b-mtp", effort: "off", contextWindow: null } },
     ]));
     const second = teamLoadReducer(first, team([
       { role: "general", agentKey: "general-1", isLeader: true, model: null },
@@ -62,6 +70,7 @@ describe("teamLoadReducer", () => {
       provider: "lm-studio",
       id: "ornith-1.0-9b-mtp",
       effort: "off",
+      contextWindow: null,
     });
   });
 

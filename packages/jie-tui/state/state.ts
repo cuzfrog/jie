@@ -43,6 +43,7 @@ export interface AgentUiState {
   readonly history: MessageTurn[];
   readonly currentTurn: MessageTurn | null;
   readonly lastStopReason: StopReason | null;
+  readonly contextTokensUsed: number;
 }
 
 export interface TuiState {

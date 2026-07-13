@@ -118,7 +118,7 @@ describe("CommandExecutor", () => {
   describe("setDefaultModel", () => {
     test("writes the provider/model pair via settingsStore", async () => {
       const executor = makeExecutor();
-      const result = await executor.execute({ name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5", effort: "off" });
+      const result = await executor.execute({ name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null });
       expect(result).toBeNull();
       expect(settingsStore.setDefaultProvider).toHaveBeenCalledWith("anthropic", "claude-sonnet-4-5");
     });
@@ -127,7 +127,7 @@ describe("CommandExecutor", () => {
       const executor = makeExecutor();
       const callsBefore = settingsStore.setDefaultProvider.mock.calls.length;
       expect(
-        executor.execute({ name: "setDefaultModel", provider: "no-such-provider", id: "x", effort: "off" }),
+        executor.execute({ name: "setDefaultModel", provider: "no-such-provider", id: "x", effort: "off", contextWindow: null }),
       ).rejects.toThrow(/Unknown provider/);
       expect(settingsStore.setDefaultProvider.mock.calls.length).toBe(callsBefore);
     });
@@ -138,7 +138,7 @@ describe("CommandExecutor", () => {
       settingsStore.load.mockReturnValueOnce({ defaultProvider: "anthropic", defaultModel: "claude-sonnet-4-5" });
       const executor = makeExecutor();
       const result = await executor.execute({ name: "getDefaultModel" });
-      expect(result).toEqual({ provider: "anthropic", id: "claude-sonnet-4-5", effort: "off" });
+      expect(result).toEqual({ provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null });
     });
 
     test("returns null when no defaults are configured", async () => {
@@ -232,7 +232,7 @@ describe("CommandExecutor", () => {
         { name: "login", provider: "anthropic", apiKey: "sk-test" },
         { name: "logout" },
         { name: "setApiKey", apiKey: "sk-test" },
-        { name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5", effort: "off" },
+        { name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null },
         { name: "getDefaultModel" },
         { name: "setDefaultTeam", teamId: "alpha" },
         { name: "team", teamId: "alpha" },

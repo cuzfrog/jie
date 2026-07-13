@@ -52,5 +52,6 @@ function emptyAgent(
     queue: [],
     history: [],
     currentTurn: null,
+    contextTokensUsed: 0,
   };
 }

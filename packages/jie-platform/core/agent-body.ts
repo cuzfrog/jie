@@ -150,9 +150,9 @@ function agentEffort(thinkingLevel: ThinkingLevel): "off" | "low" | "medium" | "
   return "off";
 }
 
-function resolveBodyModelInfo(model: Model<Api> | undefined, thinkingLevel: ThinkingLevel): { readonly provider: string; readonly id: string; readonly effort: "off" | "low" | "medium" | "high" | "max" } | null {
+function resolveBodyModelInfo(model: Model<Api> | undefined, thinkingLevel: ThinkingLevel): { readonly provider: string; readonly id: string; readonly effort: "off" | "low" | "medium" | "high" | "max"; readonly contextWindow: number | null } | null {
   if (model === undefined) return null;
-  return { provider: model.provider, id: model.id, effort: agentEffort(thinkingLevel) };
+  return { provider: model.provider, id: model.id, effort: agentEffort(thinkingLevel), contextWindow: model.contextWindow };
 }
 
 interface JieToolResult {

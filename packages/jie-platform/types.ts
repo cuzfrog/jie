@@ -4,6 +4,7 @@ export interface ModelInfo {
     readonly provider: string;
     readonly id: string;
     readonly effort: EffortLevel;
+    readonly contextWindow: number | null;
 }
 
 export interface AgentInfo {

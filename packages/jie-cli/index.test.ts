@@ -178,7 +178,7 @@ function dispatch(command: Command<CommandName>): CommandResult<CommandName> | n
     case "setApiKey":
       throw new Error("setApiKey boom");
     case "getDefaultModel":
-      return { provider: "anthropic", id: "claude-sonnet-4-5", effort: "off" };
+      return { provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null };
     case "team": {
       const teamId = command.teamId ?? "minimal";
       const team: TeamInfo = {
@@ -428,7 +428,7 @@ describe("_run — dispatch to command handlers", () => {
     const captured = captureRun(platform);
     const exit = await captured.run({ kind: "model", provider: "anthropic", modelId: "claude-sonnet-4-5" });
     expect(exit).toBe(0);
-    expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5", effort: "off" });
+    expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null });
     expect(captured.consoleMock.print).toHaveBeenCalledWith("default model set to anthropic/claude-sonnet-4-5");
   });
 

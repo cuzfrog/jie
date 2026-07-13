@@ -171,7 +171,7 @@ describe("createTuiCommandHandler — /model", () => {
     const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/model openai/gpt-4o");
-    expect(execute).toHaveBeenCalledWith({ name: "setDefaultModel", provider: "openai", id: "gpt-4o", effort: "off" });
+    expect(execute).toHaveBeenCalledWith({ name: "setDefaultModel", provider: "openai", id: "gpt-4o", effort: "off", contextWindow: null });
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("default model set to openai/gpt-4o")));
   });
 

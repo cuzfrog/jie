@@ -135,6 +135,7 @@ describe("reduceModelAssigned", () => {
       provider: "openai",
       id: "gpt-4",
       effort: "high",
+      contextWindow: null,
     });
   });
 

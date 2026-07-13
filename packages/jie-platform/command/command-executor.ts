@@ -61,7 +61,7 @@ export function createCommandExecutor(deps: CommandExecutorDeps): CommandExecuto
     getDefaultModel: () => {
       const settings = deps.settingsStore.load();
       if (settings.defaultProvider === undefined || settings.defaultModel === undefined) return null;
-      return { provider: settings.defaultProvider, id: settings.defaultModel, effort: "off" };
+      return { provider: settings.defaultProvider, id: settings.defaultModel, effort: "off", contextWindow: null };
     },
     setDefaultTeam: (command) => {
       deps.settingsStore.setDefaultTeam(command.teamId);
