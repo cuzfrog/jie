@@ -6,6 +6,7 @@ import { AgentsRail } from "./team-rail";
 import { railWidth } from "./themes";
 import { Editor } from "./editor";
 import { Footer } from "./footer";
+import { TransientBanner } from "./transient-banner/transient-banner";
 
 const EDITOR_ROWS = 8;
 const FOOTER_ROWS = 2;
@@ -34,6 +35,7 @@ export function Layout(props: LayoutProps): JSX.Element {
       <Box width="100%" maxHeight={EDITOR_ROWS} overflow="hidden" flexShrink={0}>
         <Editor />
       </Box>
+      <TransientBanner />
       <Footer cwd={state.cwd ?? ""} gitBranch={state.gitBranch ?? ""} gitDirty={state.gitDirty} />
     </Box>
   );
