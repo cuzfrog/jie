@@ -24,7 +24,7 @@ test(
 			);
 		}
 
-		const {waitUntilRenderFlush} = render(<Test />, {stdout});
+		const {waitUntilRenderFlush} = render(<Test />, {stdout, interactive: true});
 		await waitUntilRenderFlush();
 
 		expect(stripAnsi(getWriteContents(stdout).at(-1)!).includes('100x40')).toBe(true);
@@ -157,7 +157,7 @@ test('clear screen when terminal width decreases', async () => {
 		);
 	}
 
-	render(<Test />, {stdout});
+	render(<Test />, {stdout, interactive: true});
 
 	const initialOutput = stripAnsi(getWriteContents(stdout)[0]!);
 	expect(initialOutput.includes('Hello World')).toBe(true);
@@ -186,7 +186,7 @@ test('no screen clear when terminal width increases', async () => {
 		);
 	}
 
-	render(<Test />, {stdout});
+	render(<Test />, {stdout, interactive: true});
 
 	const initialOutput = getWriteContents(stdout)[0]!;
 
@@ -217,7 +217,7 @@ test(
 			);
 		}
 
-		render(<Test />, {stdout});
+		render(<Test />, {stdout, interactive: true});
 
 		const initialOutput = stripAnsi(getWriteContents(stdout)[0]!);
 
@@ -252,7 +252,7 @@ test('width decrease clears lastOutput to force rerender', async () => {
 		);
 	}
 
-	const {rerender} = render(<Test />, {stdout});
+	const {rerender} = render(<Test />, {stdout, interactive: true});
 
 	const initialOutput = stripAnsi(getWriteContents(stdout)[0]!);
 

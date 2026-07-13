@@ -27,7 +27,7 @@ describe('mouse tracking (DECSET 1002 + 1006)', () => {
 			<Box>
 				<Text>hello</Text>
 			</Box>,
-			{stdout, stdin, alternateScreen: true},
+			{stdout, stdin, alternateScreen: true, interactive: true},
 		);
 		await new Promise(r => setTimeout(r, 30));
 		expect(writes.some(w => w.includes(`${ESC}[?1002h`))).toBe(true);

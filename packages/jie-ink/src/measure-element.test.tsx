@@ -183,7 +183,7 @@ test('calculate layout while rendering is throttled', async () => {
 		);
 	}
 
-	const {rerender} = render(null, {stdout, patchConsole: false});
+	const {rerender} = render(null, {stdout, patchConsole: false, interactive: true});
 	rerender(<Test />);
 	await delay(50);
 

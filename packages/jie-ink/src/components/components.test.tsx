@@ -647,6 +647,7 @@ test('render only new items in static output on final render', () => {
 	const {rerender, unmount} = render(<Dynamic items={[]} />, {
 		stdout,
 		debug: true,
+		interactive: true,
 	});
 
 	expect((stdout.write as any).mock.calls.at(-1)?.[0]).toBe('');
@@ -1493,6 +1494,7 @@ test(
 			alternateScreen: true,
 			concurrent: true,
 			debug: true,
+			interactive: true,
 		});
 
 		unmount();

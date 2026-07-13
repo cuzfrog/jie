@@ -799,7 +799,7 @@ test('rerender on resize', async () => {
 		);
 	}
 
-	const {unmount} = render(<Test />, {stdout});
+	const {unmount} = render(<Test />, {stdout, interactive: true});
 
 	const contentWrites = getContentWrites(stdout.write);
 	expect(stripAnsi(contentWrites[0]!)).toBe(
@@ -841,6 +841,7 @@ test('throttle renders to maxFps', () => {
 		const {unmount, rerender} = render(<ThrottleTestComponent text="Hello" />, {
 			stdout,
 			maxFps: 1, // 1 Hz => ~1000 ms window
+			interactive: true,
 		});
 
 		// Initial render (leading call)
@@ -928,6 +929,7 @@ test('no throttled renders after unmount', () => {
 
 		const {unmount, rerender} = render(<ThrottleTestComponent text="Foo" />, {
 			stdout,
+			interactive: true,
 		});
 
 		expect(getContentWrites(stdout.write).length).toBe(1);
@@ -954,6 +956,7 @@ test('unmount forces pending throttled render', () => {
 		const {unmount, rerender} = render(<ThrottleTestComponent text="Hello" />, {
 			stdout,
 			maxFps: 1, // 1 Hz => ~1000 ms throttle window
+			interactive: true,
 		});
 
 		// Initial render (leading call)
@@ -1862,7 +1865,7 @@ const assertNoBsuEsuForUnchangedTrailingRerender = (
 	withFakeClock(clock => {
 		const stdout = createTtyStdout();
 		const writes = captureWrites(stdout);
-		const {unmount, rerender} = render(element, {stdout, maxFps: 1});
+		const {unmount, rerender} = render(element, {stdout, maxFps: 1, interactive: true});
 		try {
 			expect(writes.includes(bsu)).toBe(true);
 
@@ -1897,6 +1900,7 @@ test('bsu/esu wraps throttledLog trailing call', () => {
 		const {unmount, rerender} = render(<ThrottleTestComponent text="Hello" />, {
 			stdout,
 			maxFps: 1,
+			interactive: true,
 		});
 		try {
 			// Leading call writes: bsu, content, esu

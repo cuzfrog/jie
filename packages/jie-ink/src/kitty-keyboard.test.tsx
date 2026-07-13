@@ -711,6 +711,7 @@ test(
 				stdout,
 				stdin,
 				kittyKeyboard: {mode: 'auto'},
+				interactive: true,
 			});
 
 			// The enable sequence should have been written
@@ -740,6 +741,7 @@ test(
 				stdout,
 				stdin,
 				kittyKeyboard: {mode: 'auto'},
+				interactive: true,
 			});
 
 			// Respond with Uint8Array instead of string
@@ -791,6 +793,7 @@ test(
 				stdout,
 				stdin,
 				kittyKeyboard: {mode: 'auto'},
+				interactive: true,
 			});
 
 			// Emit one UTF-8 emoji split across chunks during detection.
@@ -832,6 +835,7 @@ test(
 				stdout,
 				stdin,
 				kittyKeyboard: {mode: 'auto'},
+				interactive: true,
 			});
 
 			// Simulate partial terminal response that times out before completion.
@@ -872,6 +876,7 @@ test(
 				stdout,
 				stdin,
 				kittyKeyboard: {mode: 'auto'},
+				interactive: true,
 			});
 
 			stdin.emit('data', '[?');
@@ -916,6 +921,7 @@ test(
 				stdout,
 				stdin,
 				kittyKeyboard: {mode: 'auto'},
+				interactive: true,
 			});
 
 			stdin.emit('data', '[?u');
@@ -960,6 +966,7 @@ test(
 				stdout,
 				stdin,
 				kittyKeyboard: {mode: 'auto'},
+				interactive: true,
 			});
 
 			stdin.emit('data', '[?1x');

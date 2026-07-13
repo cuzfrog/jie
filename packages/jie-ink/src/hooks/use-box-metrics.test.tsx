@@ -72,7 +72,7 @@ test('updates when terminal is resized', async () => {
 		);
 	}
 
-	const {waitUntilRenderFlush} = render(<Test />, {stdout, debug: true});
+	const {waitUntilRenderFlush} = render(<Test />, {stdout, debug: true, interactive: true});
 	await waitUntilRenderFlush();
 	await delay(50);
 
@@ -115,7 +115,7 @@ test('uses latest tracked ref when terminal is resized', async () => {
 		);
 	}
 
-	const {waitUntilRenderFlush} = render(<Test />, {stdout, debug: true});
+	const {waitUntilRenderFlush} = render(<Test />, {stdout, debug: true, interactive: true});
 	await waitUntilRenderFlush();
 	await delay(50);
 
@@ -301,7 +301,7 @@ test('removes resize listener on unmount', async () => {
 	const stdout = createStdout(100);
 
 	const initialListenerCount = stdout.listenerCount('resize');
-	const {unmount, waitUntilRenderFlush} = render(<SimpleBox />, {stdout});
+	const {unmount, waitUntilRenderFlush} = render(<SimpleBox />, {stdout, interactive: true});
 	await waitUntilRenderFlush();
 
 	expect(stdout.listenerCount('resize') > initialListenerCount).toBe(true);
@@ -313,7 +313,7 @@ test('removes resize listener on unmount', async () => {
 test('does not crash when resize fires after unmount', async () => {
 	const stdout = createStdout(100);
 
-	const {unmount, waitUntilRenderFlush} = render(<SimpleBox />, {stdout});
+	const {unmount, waitUntilRenderFlush} = render(<SimpleBox />, {stdout, interactive: true});
 	await waitUntilRenderFlush();
 	unmount();
 

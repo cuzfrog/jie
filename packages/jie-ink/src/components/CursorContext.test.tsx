@@ -89,7 +89,7 @@ test('cursor is shown at specified position after render', async () => {
 	const stdout = createStdout();
 	const stdin = createStdin();
 
-	const {unmount} = render(<InputApp />, {stdout, stdin});
+	const {unmount} = render(<InputApp />, {stdout, stdin, interactive: true});
 	await delay(50);
 
 	// With isTTY=true, cli-cursor writes cursor escape sequences as separate
@@ -107,7 +107,7 @@ test('cursor is not hidden by useEffect after first render', async () => {
 	const stdout = createStdout();
 	const stdin = createStdin();
 
-	const {unmount} = render(<InputApp />, {stdout, stdin});
+	const {unmount} = render(<InputApp />, {stdout, stdin, interactive: true});
 	await delay(50);
 
 	// Check all writes after the first render — none should be a bare hideCursorEscape
@@ -127,7 +127,7 @@ test('cursor follows text input', async () => {
 	const stdout = createStdout();
 	const stdin = createStdin();
 
-	const {unmount} = render(<InputApp />, {stdout, stdin});
+	const {unmount} = render(<InputApp />, {stdout, stdin, interactive: true});
 	await delay(50);
 
 	emitReadable(stdin, 'a');
@@ -147,7 +147,7 @@ test('cursor moves on space input even when output is identical', async () => {
 	const stdout = createStdout();
 	const stdin = createStdin();
 
-	const {unmount} = render(<InputApp />, {stdout, stdin});
+	const {unmount} = render(<InputApp />, {stdout, stdin, interactive: true});
 	await delay(50);
 
 	emitReadable(stdin, 'a');
@@ -192,7 +192,7 @@ test('cursor is cleared when component using useCursor unmounts', async () => {
 		return <Box>{showChild ? <CursorChild /> : <Text>no cursor</Text>}</Box>;
 	}
 
-	const {unmount} = render(<Parent />, {stdout, stdin});
+	const {unmount} = render(<Parent />, {stdout, stdin, interactive: true});
 	await delay(50);
 
 	// With isTTY=true, cli-cursor writes cursor escape sequences as separate
@@ -250,7 +250,7 @@ test('cursor position does not leak from suspended concurrent render to fallback
 	}
 
 	await act(async () => {
-		render(<Test />, {stdout, stdin, concurrent: true});
+		render(<Test />, {stdout, stdin, concurrent: true, interactive: true});
 	});
 
 	const fallbackOutput = getWriteCalls(stdout).join('');
@@ -289,7 +289,7 @@ test('screen does not scroll up on subsequent renders', async () => {
 		);
 	}
 
-	const {unmount} = render(<MultiLineApp />, {stdout, stdin});
+	const {unmount} = render(<MultiLineApp />, {stdout, stdin, interactive: true});
 	await delay(50);
 
 	const writesBeforeInput = (stdout.write as any).mock.calls.length;
@@ -375,7 +375,7 @@ for (const testCase of hookWriteCases) {
 
 		const {unmount} = render(
 			<testCase.App />,
-			stderr ? {stdout, stderr, stdin} : {stdout, stdin},
+			stderr ? {stdout, stderr, stdin, interactive: true} : {stdout, stdin, interactive: true},
 		);
 		await delay(50);
 
