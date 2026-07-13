@@ -1,7 +1,7 @@
 import { Box, Text } from "@cuzfrog/jie-ink";
 import type { JSX } from "react";
 import { useTuiContext, useFocusedAgent } from "../context";
-import { pickColor } from "../themes";
+import { formatQueueIndicator, pickColor } from "../themes";
 
 interface FooterProps {
   readonly cwd: string;
@@ -21,6 +21,7 @@ export function Footer({ cwd, gitBranch, gitDirty }: FooterProps): JSX.Element {
   const rightIdentity = `${teamSegment}:${focusedSegment}`;
   const hint = state.showTeamRailPanel ? HINT_VISIBLE : HINT_HIDDEN;
   const modelSegment = modelSegmentText(focusedAgent);
+  const queueSegment = formatQueueIndicator(focusedAgent?.queue);
 
   return (
     <Box flexDirection="column" width="100%">
@@ -31,6 +32,7 @@ export function Footer({ cwd, gitBranch, gitDirty }: FooterProps): JSX.Element {
       <Box flexDirection="row" width="100%">
         <Text color={pickColor("muted")}>0%/200k  {hint.padEnd(40, " ")}</Text>
         <Box flexGrow={1} />
+        {queueSegment !== null ? <Text color={pickColor("warning")}>{queueSegment}  </Text> : null}
         <Text color={pickColor("muted")}>{modelSegment}</Text>
       </Box>
     </Box>

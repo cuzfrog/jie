@@ -49,8 +49,8 @@ export const VERTICAL_SEPARATOR = "│";
 
 export const DEFAULT_MIN_COLS = 60;
 
-export function formatQueueIndicator(queue: ReadonlyArray<string> | null): string | null {
-  if (queue === null || queue.length === 0) return null;
+export function formatQueueIndicator(queue: ReadonlyArray<string> | null | undefined): string | null {
+  if (queue === undefined || queue === null || queue.length === 0) return null;
   const next = queue[0] ?? "";
   const preview = next.length > QUEUE_PREVIEW_MAX_CHARS ? `${next.slice(0, QUEUE_PREVIEW_MAX_CHARS)}…` : next;
   const suffix = queue.length === 1 ? "prompt" : "prompts";
