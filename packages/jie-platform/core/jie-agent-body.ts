@@ -10,8 +10,10 @@ import type { AgentSoul } from "../team";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { StreamPublisher } from "./streaming";
 import type { AgentBody } from "./agent-body";
+import type { AgentInfo, ModelInfo } from "../types";
 
 export class JieAgentBody implements AgentBody {
+  readonly identity: AgentInfo;
   private readonly agentKey: string;
   private readonly teamId: string;
   private readonly soul: AgentSoul;
@@ -30,12 +32,21 @@ export class JieAgentBody implements AgentBody {
     agentKey: string;
     teamId: string;
     soul: AgentSoul;
+    isLeader: boolean;
     sessionId: string;
     eventManager: EventManager;
     memory: MemoryManager;
     agent: Agent;
     streamPublisher: StreamPublisher;
+    model: ModelInfo | null;
   }) {
+    this.identity = {
+      teamId: deps.teamId,
+      role: deps.soul.role,
+      agentKey: deps.agentKey,
+      isLeader: deps.isLeader,
+      model: deps.model,
+    };
     this.agentKey = deps.agentKey;
     this.teamId = deps.teamId;
     this.soul = deps.soul;
@@ -44,10 +55,7 @@ export class JieAgentBody implements AgentBody {
     this.memory = deps.memory;
     this.agent = deps.agent;
     this.stream = deps.streamPublisher;
-    this.sender = {
-      kind: "agent",
-      identity: { teamId: this.teamId, agentRole: this.soul.role, agentKey: this.agentKey },
-    };
+    this.sender = { kind: "agent", teamId: this.teamId, agentKey: this.agentKey };
   }
 
   handlePiAgentEvent(event: PiAgentEvent): void {
@@ -61,6 +69,7 @@ export class JieAgentBody implements AgentBody {
           const next = this.queue.shift()!;
           this.agent.followUp(next);
         }
+        this.eventManager.publish(Events.agentPromptQueueUpdate(agentSender, this.queue.map(userPromptText)));
         return;
       }
       case "agent_end": {
@@ -73,6 +82,7 @@ export class JieAgentBody implements AgentBody {
           const next = this.queue.shift()!;
           this.agent.followUp(next);
         }
+        this.eventManager.publish(Events.agentPromptQueueUpdate(agentSender, this.queue.map(userPromptText)));
         return;
       }
       case "message_start":
@@ -146,8 +156,12 @@ export class JieAgentBody implements AgentBody {
         if (env.payload.teamId !== this.teamId || env.payload.agentKey !== this.agentKey) return;
         this.ingestUserPrompt(env.payload);
       }),
+      this.eventManager.subscribe("agent.interrupt", (env) => {
+        if (env.payload.teamId !== this.teamId || env.payload.agentKey !== this.agentKey) return;
+        this.interruptActiveRun();
+      }),
     );
-    for (const topic of this.soul.subscriptions) {
+    for (const topic of this.soul.subscribe) {
       this.unsubscribers.push(
         this.eventManager.subscribe(`custom.${this.teamId}.${topic}`, (env) => {
           this.ingestCustom(topic, env.sender, env.payload);
@@ -161,8 +175,8 @@ export class JieAgentBody implements AgentBody {
   }
 
   private ingestCustom(topic: string, sender: AgentSender, payload: { message: string; truncated: boolean }): void {
-    if (sender.identity.agentKey === this.agentKey) return;
-    this.dispatchIngress(topic, sender.identity.agentKey, payload.message);
+    if (sender.agentKey === this.agentKey) return;
+    this.dispatchIngress(topic, sender.agentKey, payload.message);
   }
 
   private dispatchIngress(topic: string, source: string | null, prompt: string): void {
@@ -176,10 +190,26 @@ export class JieAgentBody implements AgentBody {
     };
     if (this.agent.state.isStreaming) {
       this.queue.push(message);
+      this.eventManager.publish(Events.agentPromptQueueUpdate(this.sender, this.queue.map(userPromptText)));
     } else {
       void this.agent.prompt(message);
     }
   }
+
+  private interruptActiveRun(): void {
+    if (!this.agent.state.isStreaming) return;
+    this.agent.abort();
+  }
+}
+
+function userPromptText(message: AgentMessage): string {
+  if (message.role !== "user") return "";
+  const content = message.content;
+  if (typeof content === "string") return content;
+  return content
+    .filter((part): part is { type: "text"; text: string } => part.type === "text")
+    .map((part) => part.text)
+    .join("");
 }
 
 function readFinalStopReason(event: Extract<PiAgentEvent, { type: "agent_end" }> | Extract<PiAgentEvent, { type: "turn_end" }>): { stopReason: StopReason; isError: boolean; errorMessage: string | null } {

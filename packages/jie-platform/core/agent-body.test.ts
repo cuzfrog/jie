@@ -3,8 +3,8 @@ import type {
   AgentEvent as PiAgentEvent,
   AgentMessage,
 } from "@earendil-works/pi-agent-core";
+import type { Api, Model } from "@earendil-works/pi-ai";
 import { createAgentBody, type CreateAgentBodyOptions } from "./agent-body";
-import { JieAgentBody } from "./jie-agent-body";
 import { createEventManager, type EventManager, type EventEnvelope, type EventType } from "../event";
 import {
   createArtifactStore,
@@ -15,6 +15,21 @@ import { createToolRegistry, type Tool } from "../tools";
 import type { AgentSoul } from "../team";
 import { Type } from "typebox";
 
+function makeModel(provider: string, id: string): Model<Api> {
+  return {
+    id,
+    name: id,
+    api: "anthropic-messages" as Api,
+    provider,
+    baseUrl: "",
+    reasoning: false,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 200000,
+    maxTokens: 8192,
+  };
+}
+
 function makeSoul(overrides: Partial<AgentSoul> = {}): AgentSoul {
   return {
     role: "general",
@@ -22,7 +37,6 @@ function makeSoul(overrides: Partial<AgentSoul> = {}): AgentSoul {
     systemPrompt: "you are a general assistant",
     tools: ["noop"],
     subscribe: [],
-    subscriptions: [],
     ...overrides,
   };
 }
@@ -60,7 +74,7 @@ function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: Crea
     sessionId: "s1",
     toolRegistry: registry,
     getApiKey: () => undefined,
-    model: { provider: "anthropic", id: "claude-sonnet-4" },
+    model: makeModel("anthropic", "claude-sonnet-4"),
     ...overrides,
   };
   const subscribeSubject = <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void): (() => void) => {
@@ -73,7 +87,7 @@ interface FakeAgentCapture {
   factory: (opts: ConstructorParameters<typeof PiAgent>[0]) => PiAgent;
   fake: {
     subscribe: ReturnType<typeof vi.fn>;
-    state: { systemPrompt: string; model: unknown; tools: unknown[]; messages: AgentMessage[]; isStreaming: boolean };
+    state: { systemPrompt: string; model: unknown; tools: unknown[]; messages: AgentMessage[]; isStreaming: boolean; thinkingLevel: import("@earendil-works/pi-agent-core").ThinkingLevel };
     continue: ReturnType<typeof vi.fn>;
     prompt: ReturnType<typeof vi.fn>;
   };
@@ -93,6 +107,7 @@ function makeFakeAgentFactory(): FakeAgentCapture {
     tools: [] as unknown[],
     messages: [] as AgentMessage[],
     isStreaming: false,
+    thinkingLevel: "off" as import("@earendil-works/pi-agent-core").ThinkingLevel,
   };
   const fake = {
     subscribe,
@@ -159,10 +174,14 @@ describe("createAgentBody — wiring", () => {
   test("returned body's identity matches the options", () => {
     const { opts } = makeOpts({ agentKey: "leader-1", isLeader: true, sessionId: "sess-x" });
     const cap = makeFakeAgentFactory();
-    const body = createAgentBody({ ...opts, createAgent: cap.factory }) as JieAgentBody;
-    const identity = body as unknown as { agentKey: string; teamId: string };
-    expect(identity.agentKey).toBe("leader-1");
-    expect(identity.teamId).toBe("t1");
+    const body = createAgentBody({ ...opts, createAgent: cap.factory });
+    expect(body.identity).toEqual({
+      teamId: "t1",
+      role: "general",
+      agentKey: "leader-1",
+      isLeader: true,
+      model: { provider: "anthropic", id: "claude-sonnet-4", effort: "off" },
+    });
   });
 
   test("beforeToolCall shapes tool args into wire form (short input → input_truncated=false)", async () => {
@@ -219,5 +238,65 @@ describe("createAgentBody — wiring", () => {
     body2.stop();
     expect(unsubscribed).toBe(true);
     body.stop();
+  });
+});
+
+describe("createAgentBody — agent.model.assigned publication", () => {
+  test("publishes the event with effort 'off' when agent's default thinkingLevel is 'off' (e.g. local LM Studio)", () => {
+    const { opts, subscribeSubject } = makeOpts();
+    const cap = makeFakeAgentFactory();
+    cap.fake.state.thinkingLevel = "off";
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    subscribeSubject("agent.model.assigned", (env) => {
+      received.push(env);
+    });
+    createAgentBody({ ...opts, createAgent: cap.factory });
+    expect(received).toHaveLength(1);
+    expect(received[0]!.payload).toEqual({
+      provider: opts.model!.provider,
+      model: opts.model!.id,
+      effort: "off",
+    });
+  });
+
+  test("publishes the event with mapped effort when thinkingLevel is a recognized level", () => {
+    const { opts, subscribeSubject } = makeOpts();
+    const cap = makeFakeAgentFactory();
+    cap.fake.state.thinkingLevel = "high";
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    subscribeSubject("agent.model.assigned", (env) => {
+      received.push(env);
+    });
+    createAgentBody({ ...opts, createAgent: cap.factory });
+    expect(received).toHaveLength(1);
+    expect(received[0]!.payload).toEqual({
+      provider: opts.model!.provider,
+      model: opts.model!.id,
+      effort: "high",
+    });
+  });
+
+  test("maps 'xhigh' thinkingLevel to 'max' effort in the event payload", () => {
+    const { opts, subscribeSubject } = makeOpts();
+    const cap = makeFakeAgentFactory();
+    cap.fake.state.thinkingLevel = "xhigh";
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    subscribeSubject("agent.model.assigned", (env) => {
+      received.push(env);
+    });
+    createAgentBody({ ...opts, createAgent: cap.factory });
+    expect(received).toHaveLength(1);
+    expect(received[0]!.payload.effort).toBe("max");
+  });
+
+  test("does not publish the event when options.model is undefined", () => {
+    const { opts, subscribeSubject } = makeOpts({ model: undefined });
+    const cap = makeFakeAgentFactory();
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    subscribeSubject("agent.model.assigned", (env) => {
+      received.push(env);
+    });
+    createAgentBody({ ...opts, createAgent: cap.factory });
+    expect(received).toHaveLength(0);
   });
 });

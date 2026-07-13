@@ -85,7 +85,7 @@ export interface TeamBlueprint {
 }
 ```
 
-`AgentSoul` is the role's parsed soul per `06-agent-model.md` "AgentSoul" (model, system_prompt, tools, subscribe, subscriptions). The loader does NOT attach the team's resolved `team_id` to the blueprint; `team_id` is a runtime concern supplied by `startJie` (the directory name of `.jie/teams/<id>/` or the built-in minimal sentinel), not a parse-time artifact. The blueprint is the static, team-id-agnostic result of parsing the `.md` files.
+`AgentSoul` is the role's parsed soul per `06-agent-model.md` "AgentSoul" (model, system_prompt, tools, subscribe). The loader does NOT attach the team's resolved `team_id` to the blueprint; `team_id` is a runtime concern supplied by `startJie` (the directory name of `.jie/teams/<id>/` or the built-in minimal sentinel), not a parse-time artifact. The blueprint is the static, team-id-agnostic result of parsing the `.md` files.
 
 The `parseTeamFromManifests` parser is the **only** place that knows about frontmatter syntax and role-file shape. `loadTeamFromDir` and `loadMinimalTeam` differ only in where the bytes come from.
 

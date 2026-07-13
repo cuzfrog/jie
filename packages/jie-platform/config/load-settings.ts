@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Settings, RawSettings } from "./types";
-import { JiePlatformError } from "../types";
+import { JiePlatformError } from "../jie-platform-errors";
 
 const TEAM_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
 const DEFAULT_TEAM_ERROR = (value: unknown): string => `invalid defaultTeam: ${value}`;
@@ -37,7 +37,7 @@ function readSettingsFile(path: string): RawSettings | null {
 }
 
 function validateSettings(raw: RawSettings, source: string): Settings {
-  const result: Settings = {};
+  const result: { -readonly [K in keyof Settings]: Settings[K] } = {};
 
   if ("defaultProvider" in raw && raw.defaultProvider !== undefined) {
     if (typeof raw.defaultProvider !== "string") {

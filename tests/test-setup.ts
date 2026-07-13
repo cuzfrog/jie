@@ -10,6 +10,8 @@ import {
   beforeEach as _beforeEach,
 } from 'bun:test';
 
+process.env.FORCE_COLOR = '1';
+
 // this is hacking for test setup, exempted from context rules.
 const _vi = Object.assign(_bunVi, {
   mocked: <T>(item: T): T extends (...args: any[]) => any
@@ -32,7 +34,6 @@ Object.assign(globalThis, {
 
 beforeEach(() => {
   _vi.resetAllMocks();
-  _vi.restoreAllMocks();
 });
 
 declare global {

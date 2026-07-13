@@ -2,7 +2,7 @@ import { mkdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types";
-import { JiePlatformError, JiePlatformErrorMessages } from "../types";
+import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
 import { mapErrno, resolveWithinWorkspace } from "./path-utils";
 
 const CONTENT_CAP = 5 * 1024 * 1024;
@@ -17,7 +17,7 @@ export interface WriteFileDeps {
   workspaceRoot: string;
 }
 
-const ERRNO_MAP: Record<string, keyof typeof JiePlatformErrorMessages> = {
+const ERRNO_MAP: Record<string, JiePlatformErrorCode> = {
   EACCES: "PERMISSION_DENIED",
   EISDIR: "IS_A_DIRECTORY",
   ENOSPC: "DISK_FULL",

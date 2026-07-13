@@ -5,7 +5,7 @@ import type { AuthJson } from "./types";
 
 export interface AuthStore {
   load(): AuthJson;
-  write(auth: AuthJson): void;
+  saveAuthConfig(auth: AuthJson): void;
   setProvider(auth: AuthJson, provider: string, key: string): AuthJson;
   removeProvider(auth: AuthJson, provider: string): AuthJson;
   clear(): AuthJson;
@@ -20,7 +20,7 @@ export function makeAuthStore(homeJieDir: string): AuthStore {
         return {};
       }
     },
-    write(auth: AuthJson): void {
+    saveAuthConfig(auth: AuthJson): void {
       mkdirSync(homeJieDir, { recursive: true, mode: 0o755 });
       const path = join(homeJieDir, "auth.json");
       writeFileSync(path, `${JSON.stringify(auth, null, 2)}\n`, "utf-8");

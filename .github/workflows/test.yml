@@ -27,10 +27,22 @@ jobs:
       - name: Unit tests
         run: bun test --path-ignore-patterns tests/e2e
 
-      - name: e2e (NVIDIA)
-        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-        env:
-          JIE_E2E_BASE_URL: https://integrate.api.nvidia.com/v1
-          JIE_E2E_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
-          JIE_E2E_MODEL: nvidia/nemotron-3-nano-30b-a3b
-        run: bun test tests/e2e
+      - name: e2e (mock LLM stub)
+        run: |
+          bun run packages/mock-llm-backend/server.ts &
+          MOCK_PID=$!
+          trap "kill $MOCK_PID 2>/dev/null || true" EXIT
+          # Wait for /health to be reachable, then run the suite.
+          for _ in $(seq 1 30); do
+            if curl -sf http://localhost:12346/health >/dev/null; then break; fi
+            sleep 0.5
+          done
+          bun test:e2e:mock
+
+      # - name: e2e (NVIDIA)
+      #   if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+      #   env:
+      #     JIE_E2E_BASE_URL: https://integrate.api.nvidia.com/v1
+      #     JIE_E2E_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+      #     JIE_E2E_MODEL: nvidia/nemotron-3-nano-30b-a3b
+      #   run: bun test:e2e:local

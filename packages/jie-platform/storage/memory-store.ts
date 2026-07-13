@@ -13,7 +13,6 @@ interface TurnRecord {
 }
 
 export interface MemoryManager {
-
   persist(
     message: AgentMessage,
     agentKey: string,
@@ -34,8 +33,6 @@ export interface MemoryManager {
     sessionId: string,
     teamId: string,
   ): Promise<AgentMessage[]>;
-
-  mostRecentSessionId(teamId: string): string | null;
 
   hasSession(teamId: string, sessionId: string): boolean;
 }
@@ -129,17 +126,6 @@ export class SqliteMemoryManager implements MemoryManager {
     return rows.map((row) => JSON.parse(row[5] as string) as AgentMessage);
   }
 
-  mostRecentSessionId(teamId: string): string | null {
-    const rows = this.storage.query(
-      `SELECT session_id FROM memory_turns
-       WHERE team_id = ? GROUP BY session_id
-       ORDER BY MAX(created_at) DESC LIMIT 1`,
-      [teamId],
-    );
-    if (rows.length === 0) return null;
-    return rows[0]![0] as string;
-  }
-
   hasSession(teamId: string, sessionId: string): boolean {
     const rows = this.storage.query(
       `SELECT 1 FROM memory_turns
@@ -221,15 +207,6 @@ export class InMemoryMemoryManager implements MemoryManager {
       )
       .sort((a, b) => a.seq - b.seq)
       .map((r) => JSON.parse(r.content) as AgentMessage);
-  }
-
-  mostRecentSessionId(teamId: string): string | null {
-    let best: TurnRecord | undefined;
-    for (const r of this.rows) {
-      if (r.team_id !== teamId) continue;
-      if (best === undefined || r.created_at > best.created_at) best = r;
-    }
-    return best?.session_id ?? null;
   }
 
   hasSession(teamId: string, sessionId: string): boolean {

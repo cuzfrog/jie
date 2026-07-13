@@ -1,9 +1,10 @@
 # Context Rules
 
 - IMPORTANT: adhere to Code Conventions and Coding Principles
+- Be positve. All difficulties will be address together with me.
 
 ## Documents
-- @doc/specs/monorepo-structure.md; read `00-overview.md` in the dir you will work with to understand the glossary.
+- @doc/specs/monorepo-structure.md; read `00-overview.md` to understand the glossary.
 - @doc/DEVELOPMENT.md
 - @doc/plan/MILESTONES.md
 
@@ -23,23 +24,26 @@ When rules in different documents conflict, context rules win, in below order. R
 
 ## Conversation style
 - Be concise, but must explain the reason and provide context information.
-- When I ask a question, answer it before any actions.
-- When I make a decision, reason it thoroughly, then express your opinion. Only when we both agree, we move on.
+- When the user ask a question, answer it before any actions.
+- When the user make a decision, reason it thoroughly, then express your opinion. Only when we both agree, we move on.
 - Stick to fact. Our purpose is to build good software, don't fluff, challenge my ideas.
 - Do not ask trivial questions where the answer is recoverable.
 
 ## Code Conventions
 - No `any`, `unknown` types, no unsafe `as`, code must be strongly typed. No `enum` keyword.
 - Prefer plain function over arrow functions.
+- Fields default to be `readonly` in public types. On an interface, use methods instead of field arrow functions, methods are natively readonly.
 - Public types, contract, methods, higher-level abstractions should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers. See below section `Single file layout`.
 - Inline oneline trivial functions.
-- Imports from a module without specific file, e.g., `import { foo } from "../module"`. Not `"../module/index.ts"`. For siblings in the immediate directory, directly import from the sibling, e.g. `import { foo } from "./foo"`.
+- Consolidate imports into one statement: do not split `import { a } from 'x'; import { type b } from 'x';` into two.
 - Code identifiers (variables, parameters, class fields, function names) use camelCase. Names must be full words, no abbreviations beyond common ones (id, url, db, ts, cwd, pid, ctx, deps). Only serialized events/messages use snake_case. Module-level compile-time constants (e.g. `DEFAULT_COLS`, `MAX_RETRIES`) use SCREAMING_SNAKE_CASE.
-- Keep code in one line if the line is < 140 chars. Do not break into multiple lines if the line is < 140 chars.
+- Keep code in one line if the line is < 140 chars. Do not break into multiple lines if the line is < 140 chars. Ensure a newline at the end of the file.
 - Use `as const` for tuples and object-literals. Do not use `// @ts-expect-error` or `// @ts-ignore`, fix the type.
 
 ### Test
+- Favor TDD, update/add tests before implementing actual logic.
 - use mocks for unit test. See @doc/HOW_TO_MOCK.md
+- for e2e test, see @doc/DEVELOPMENT.md
 - unit tests should align with the test target file. E.g. a test `function1.test.ts` should test and only test `function1.ts`. If `function1.test.ts` is testing `index.ts`, it is a smell of coding principle violation. Unit tests should not test dependencies.
 - do not import `bun:test`, all test utilities have been added to global namespace and are compatible with `vi`.
 
@@ -66,13 +70,14 @@ When rules in different documents conflict, context rules win, in below order. R
 - A responsibility should belong to an earlier performer. E.g. if type `Config` can parse the configuration into ready-to-use types, it shouldn't pass raw strings to its clients. A producer's return type is the one its consumer can use directly — no further parsing, validation, or normalization.
 - Logic should be put in pure functions as much as possible. A function is pure when it has no I/O, no state, no dependency on external data, and no side effect on its arguments. Any side effect, e.g. IO, should be limited to the edge layers with minimal logic. This makes the code easier to test where a module's dependencies are mockable in tests so that unit tests can be done with mocks without creating actual dependency.
 - A feature cannot ship by deferring an NFR(non-functional requirement); the NFR must be met in the same change. Do not be scared of change scopes, divide and conquer. Maintain good code architecture, follow context rules even if changes are big.
+- No cyclical dependencies.
 
 #### Module visibility
-Minimal visibility or public surface of a type or a module. This ensures loose coupling and separation of concerns. If this is violated, e.g. a type or a module exposes multiple functions, it usually means the design is wrong.
+Minimal visibility or public surface of a type or a module. This ensures loose coupling and separation of concerns. If this is violated, e.g. a type or a module exposes multiple functions, it usually means the design is wrong. Do not add `export` unless it's proven neccessary.
 - A *module* is a directory containing code. The `MODULE.md` lives at the module's root and gates its branching point in the tree.
 - A single file should ideally have only 1 exported function and necessary types, all other things in the file should be file private. For unit testing complex logic, use `export as` at the file bottom with `_` prefix to the function, meaning only "visible for testing" (the underscore signals "internal seam", not part of the public API).
-- All imports must be from a module (without explicit `index.ts`), must NOT import from a specific file. For the same source module, consolidate into one import statement: do not split `import { a } from 'x'; import { b } from 'x';` into two.
-- In each module, search `MODULE.md`. You must follow its specifications. You cannot change the visibility. Any new exposure must be discussed with the user. If you are blocked, ask the user to review and manually add the exports. `sealed` files can still be edited, just no new exports.
+- - External imports must be from a module without specific file, e.g., `import { foo } from "../module"`. Not `"../module/index.ts"`. Refer to `Module gates` glossary. For siblings in the immediate directory, directly import from the sibling, e.g. `import { foo } from "./foo"`. For internal files, imports from specific files within the same module are allowed.
+- In each module, search `MODULE.md`. You must follow its specifications. Any new exposure must be discussed with the user. If you are blocked, ask the user to review and manually add the exports. Check Module Gates glossary for the keyword meanings. `sealed` files can be edited.
 - Cross boundary domain types, config types, global DTOs are exempted from the visibility rule.
 
 #### SOLID principles:
@@ -85,9 +90,11 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 ## Things to avoid
 - do not `find` from the root dir, it's slow and unnecessary. Use `pwd` to figure out where you are.
 - do not write test-only production code, testability should be achieved by adhering to above coding principles.
-- do not add comments unless the code itself cannot tell, decisions should be captured in `doc/specs/` or `doc/addrs/`.
+- no comments in the code, decisions should be captured in `doc/specs/` or `doc/addrs/`.
 - do not skip tests, problems must be resolved.
 - do not ignore tech debt you encountered, record them as Github issues so later other agents can analyze and fix.
+- avoid worktrees.
+- avoid direct usage of `console`, use our interface abstraction `Console` instead. So that tests can supply a mock console and don't need to mock global objects.
 
 ## Best practices
 - write down your plan before execution.
@@ -99,6 +106,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 Pre-action:
 - Before adding utility functions/logic, check existing utils for reuse.
 - Before adding logic to existing files, check if any coding principles are violated, if violated, propose refactoring first.
+- Before any semantic or logic change, update or add tests to ensure coverage.
 
 Post-action:
 - After file edit (semantic or logic change), run tests.

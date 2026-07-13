@@ -1,17 +1,14 @@
 import { SqliteStorage } from "./sqlite-storage";
 
 export interface Storage {
-
   exec(sql: string, params?: unknown[]): void;
-
-  query(sql: string, params?: unknown[]): unknown[][];
-
+  query(sql: string, params?: unknown[]): ReadonlyArray<ReadonlyArray<unknown>>;
   transaction<T>(fn: (storage: Storage) => T): T;
 }
 
 interface CreateStorageParams {
-  type: "sqlite";
-  filePath: string;
+  readonly type: "sqlite";
+  readonly filePath: string;
 }
 
 export function createStorage(options: CreateStorageParams): Storage {

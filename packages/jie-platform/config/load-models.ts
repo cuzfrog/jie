@@ -1,65 +1,63 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { getModels as piGetModels } from "@earendil-works/pi-ai";
+import { getBuiltinModels } from "@earendil-works/pi-ai/providers/all";
 import type { Api, Model, OpenAICompletionsCompat, OpenAIResponsesCompat, AnthropicMessagesCompat } from "@earendil-works/pi-ai";
-import { JiePlatformError } from "../types";
+import { JiePlatformError } from "../jie-platform-errors";
 
 export interface RawModelsConfig {
-  providers?: Record<string, RawProviderConfig>;
+  readonly providers?: Record<string, RawProviderConfig>;
 }
 
 export interface RawProviderConfig {
-  baseUrl?: string;
-  api?: string;
-  apiKey?: string;
-  headers?: Record<string, string>;
-  authHeader?: boolean;
-  compat?: Record<string, unknown>;
-  models?: RawModelConfig[];
-  modelOverrides?: Record<string, RawModelOverride>;
+  readonly baseUrl?: string;
+  readonly api?: string;
+  readonly apiKey?: string;
+  readonly headers?: Record<string, string>;
+  readonly compat?: Record<string, unknown>;
+  readonly models?: ReadonlyArray<RawModelConfig>;
+  readonly modelOverrides?: Record<string, RawModelOverride>;
 }
 
 export interface RawModelConfig {
-  id: string;
-  name?: string;
-  api?: string;
-  reasoning?: boolean;
-  input?: ("text" | "image")[];
-  contextWindow?: number;
-  maxTokens?: number;
-  cost?: {
-    input?: number;
-    output?: number;
-    cacheRead?: number;
-    cacheWrite?: number;
+  readonly id: string;
+  readonly name?: string;
+  readonly api?: string;
+  readonly reasoning?: boolean;
+  readonly input?: ReadonlyArray<"text" | "image">;
+  readonly contextWindow?: number;
+  readonly maxTokens?: number;
+  readonly cost?: {
+    readonly input?: number;
+    readonly output?: number;
+    readonly cacheRead?: number;
+    readonly cacheWrite?: number;
   };
-  compat?: Record<string, unknown>;
+  readonly compat?: Record<string, unknown>;
 }
 
 export interface RawModelOverride {
-  name?: string;
-  reasoning?: boolean;
-  input?: ("text" | "image")[];
-  contextWindow?: number;
-  maxTokens?: number;
-  compat?: Record<string, unknown>;
-  headers?: Record<string, string>;
-  cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
+  readonly name?: string;
+  readonly reasoning?: boolean;
+  readonly input?: ReadonlyArray<"text" | "image">;
+  readonly contextWindow?: number;
+  readonly maxTokens?: number;
+  readonly compat?: Record<string, unknown>;
+  readonly headers?: Record<string, string>;
+  readonly cost?: { readonly input?: number; readonly output?: number; readonly cacheRead?: number; readonly cacheWrite?: number };
 }
 
 export interface ResolvedProviderConfig {
-  provider: string;
-  baseUrl: string;
-  api: Api;
-  apiKey: string;
-  headers: Record<string, string>;
-  authHeader: boolean;
-  compat: OpenAICompletionsCompat | OpenAIResponsesCompat | AnthropicMessagesCompat | Record<string, never>;
+  readonly provider: string;
+  readonly baseUrl: string;
+  readonly api: Api;
+  readonly apiKey: string;
+  readonly headers: Record<string, string>;
+  readonly compat: OpenAICompletionsCompat | OpenAIResponsesCompat | AnthropicMessagesCompat | Record<string, never>;
 }
 
 export interface ResolvedModelsConfig {
-  providers: Map<string, ResolvedProviderConfig>;
-  models: Model<Api>[];
+  readonly providers: ReadonlyMap<string, ResolvedProviderConfig>;
+  readonly models: ReadonlyArray<Model<Api>>;
 }
 
 const KNOWN_APIS: ReadonlySet<Api> = new Set<Api>([
@@ -133,14 +131,13 @@ function mergeProviderConfig(base: RawProviderConfig | undefined, override: RawP
     api: override.api ?? base.api,
     apiKey: override.apiKey ?? base.apiKey,
     headers: { ...(base.headers ?? {}), ...(override.headers ?? {}) },
-    authHeader: override.authHeader ?? base.authHeader,
     compat: { ...(base.compat ?? {}), ...(override.compat ?? {}) },
     models: mergeModelArrays(base.models, override.models),
     modelOverrides: { ...(base.modelOverrides ?? {}), ...(override.modelOverrides ?? {}) },
   };
 }
 
-function mergeModelArrays(base: RawModelConfig[] | undefined, override: RawModelConfig[] | undefined): RawModelConfig[] | undefined {
+function mergeModelArrays(base: ReadonlyArray<RawModelConfig> | undefined, override: ReadonlyArray<RawModelConfig> | undefined): RawModelConfig[] | undefined {
   if (base === undefined && override === undefined) return undefined;
   const result = new Map<string, RawModelConfig>();
   for (const m of base ?? []) result.set(m.id, m);
@@ -166,7 +163,6 @@ function resolveConfig(raw: RawModelsConfig): ResolvedModelsConfig {
     }
     const compat = (rawCfg.compat ?? {}) as ResolvedProviderConfig["compat"];
     const apiKey = resolveValue(rawCfg.apiKey ?? "", `provider '${providerId}' apiKey`);
-    const authHeader = rawCfg.authHeader ?? true;
     const baseUrl = resolveValue(rawCfg.baseUrl, `provider '${providerId}' baseUrl`);
 
     providers.set(providerId, {
@@ -175,7 +171,6 @@ function resolveConfig(raw: RawModelsConfig): ResolvedModelsConfig {
       api,
       apiKey,
       headers,
-      authHeader,
       compat,
     });
 
@@ -189,7 +184,6 @@ function resolveConfig(raw: RawModelsConfig): ResolvedModelsConfig {
           { ...rawM, id: resolvedId, name: rawM.name === undefined ? undefined : resolveValue(rawM.name, `provider '${providerId}' model.name`) },
           compat,
           headers,
-          authHeader,
         );
         models.push(model);
       }
@@ -208,8 +202,8 @@ function resolveApi(providerId: string, declared: string | undefined): Api {
     return declared as Api;
   }
 
-  const builtinProbe = (piGetModels as (p: string) => Array<{ api: Api }> | undefined)(
-    providerId as Parameters<typeof piGetModels>[0],
+  const builtinProbe = (getBuiltinModels as (p: string) => Array<{ api: Api }> | undefined)(
+    providerId as Parameters<typeof getBuiltinModels>[0],
   );
   if (builtinProbe !== undefined && builtinProbe.length > 0 && builtinProbe[0] !== undefined) {
     return builtinProbe[0].api;
@@ -226,7 +220,6 @@ function buildModel(
   raw: RawModelConfig,
   providerCompat: ResolvedProviderConfig["compat"],
   providerHeaders: Record<string, string>,
-  authHeader: boolean,
 ): Model<Api> {
   if (typeof raw.id !== "string" || raw.id === "") {
     throw new JiePlatformError("INVALID_CONFIG", {
@@ -247,14 +240,13 @@ function buildModel(
     provider: providerId,
     baseUrl,
     reasoning: raw.reasoning ?? false,
-    input: raw.input ?? ["text"],
+    input: [...(raw.input ?? ["text"])],
     cost,
     contextWindow: raw.contextWindow ?? 128000,
     maxTokens: raw.maxTokens ?? 16384,
   };
   if (Object.keys(providerHeaders).length > 0) result.headers = providerHeaders;
   if (Object.keys(mergedCompat).length > 0) result.compat = mergedCompat as never;
-  if (authHeader === false) (result as unknown as { __authHeader?: boolean }).__authHeader = false;
   return result;
 }
 

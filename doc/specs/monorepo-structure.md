@@ -31,9 +31,9 @@ packages/
 ## Dependencies
 
 ```
-jie-cli → jie-platform  (types, AgentBody, EventBus, ArtifactStore, MemoryManager)
-jie-cli → jie-tui       (import TUI component, pass EventBus + ArtifactStore refs)
-jie-tui → jie-platform  (types, event envelope shapes)
+jie-cli → jie-platform  (composition root: constructs stores, calls `createJiePlatform`, hands the facade to TUI/CLI commands; the facade hides every store from the CLI's command modules)
+jie-cli → jie-tui       (passes the `JiePlatform` facade to `createTui`)
+jie-tui → jie-platform  (only `JiePlatform` and the wire-format types `EventEnvelope<T>`, `AnyEventEnvelope`, `EventType`; no store types reach the TUI's module surface)
 jie-team → jie-platform (types: AgentSoul, ToolSpec — dev only, erased at runtime)
 code-lens               (standalone — no jie dependencies)
 ```
@@ -71,9 +71,9 @@ code-lens               (standalone — no jie dependencies)
 }
 ```
 
-`jie-platform/index.ts` re-exports all public types: `AgentBody`, `AgentSoul`, `EventBus`, `Tool`, `ToolRegistry`, `ArtifactStore`, `MemoryManager`, `ExecutionContext`.
+`jie-platform/index.ts` re-exports the facade: `JiePlatform`, `createJiePlatform`, the event protocol types (`EventEnvelope<T>`, `AnyEventEnvelope`, `EventType`), and `JiePlatformError` with its codes. `GitSnapshot` is re-exported so consumers do not need to reach into `jie-platform/services`.
 
-`jie-tui/index.ts` exports the TUI component function: `createTui(options: { bus: EventBus, artifacts: ArtifactStore, roles: string[] })`.
+`jie-tui/index.ts` exports the TUI component function: `createTui(deps: { platform: JiePlatform }, options: CreateTUIOptions)`. The TUI's only platform import is the facade and the wire-format types; it does not import `AuthStore`, `SettingsStore`, `TeamRegistry`, `GitService`, or any other store type.
 
 ## `jie-platform` Runtime Dependencies
 
@@ -106,7 +106,7 @@ The platform's runtime dep set is small and fixed. Bun provides most of what the
 
 **No MCP SDK in v1.** Per ADR 15, MCP client integration is Day 2. `@modelcontextprotocol/sdk@1.29.0` (the standard) is **not** a v1 dep. The `mcp.json` schema in `10-configuration.md` is forward-looking; the platform's `startJie` does not load it in v1.
 
-**No CLI / utility libraries.** No `commander` / `yargs` / `lodash` / `picomatch` / `inquirer` / `chalk`. The v1 CLI surface is small (`-p`, `--team`, `--api-key`, `--resume`, `--continue`, `--version`, `--help`, plus `login` / `logout` / `model` / `team` subcommands); a 20-line manual parser over `Bun.argv` is smaller than the dep. Settings deep-merge is three top-level scalar fields; an 8-line function is smaller than `lodash.merge`. If the CLI grows, the swap to `commander` is a single-file change.
+**No CLI / utility libraries.** No `commander` / `yargs` / `lodash` / `picomatch` / `inquirer` / `chalk`. The v1 CLI surface is small (`-p`, `--team`, `--api-key`, `--resume`, `--version`, `--help`, plus `login` / `logout` / `model` / `team` subcommands); a 20-line manual parser over `Bun.argv` is smaller than the dep. Settings deep-merge is three top-level scalar fields; an 8-line function is smaller than `lodash.merge`. If the CLI grows, the swap to `commander` is a single-file change.
 
 ## Umbrella Package
 

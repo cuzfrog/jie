@@ -124,7 +124,7 @@ The event-order contract is what makes option B correct. The contract is recorde
 
 ## Consequences
 
-- ADR 13 — `JiePlatform` interface drops `waitForIdle`. `StartJieOptions` drops `onIdle`. Handle publishes `{team_id}.team.loaded` in `createJiePlatform` (after all `body.start()`) and in the platform's internal `loadTeam` (Day 2+ per ADR 19).
+- ADR 13 — `JiePlatform` interface drops `waitForIdle`; `JiePlatformOptions` drops `onIdle`. The handle publishes `system.team.loaded` in `createJiePlatform` (after all `body.start()`) and for every additional team loaded via the eager-loading loop at startup (per ADR 24).
 - ADR 19 — `team.loaded` is one-shot per `loadTeam`; not republished on swap-back. The previously-active team is not stopped; the new team's `team.loaded` fires for the new team only.
 - `03-event-system.md` — Subject Schema: add `{team_id}.team.loaded`; tighten `agent.idle` row. "Agent Idle" section: rewrite (no startup `agent.idle`; boot signal is `team.loaded`). New section "Event-Order Contract" with both pieces and the Day-2 NATS note.
 - `06-agent-model.md` — `AgentBody.start()` ordering drops the `agent.idle` publish. "Event Bridging" notes the alternation under `turn_start` and `agent_end` rows.

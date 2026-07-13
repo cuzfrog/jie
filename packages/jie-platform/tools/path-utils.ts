@@ -1,6 +1,6 @@
 import { realpathSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
-import { JiePlatformError, JiePlatformErrorMessages } from "../types";
+import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
 
 export function resolveWithinWorkspace(
   path: string,
@@ -34,7 +34,7 @@ export function mapErrno(
     const code = errorMap[errno.code];
     if (code !== undefined) {
       return new JiePlatformError(
-        code as keyof typeof JiePlatformErrorMessages,
+        code as JiePlatformErrorCode,
         { detail: errno.message, cause: errno },
       );
     }

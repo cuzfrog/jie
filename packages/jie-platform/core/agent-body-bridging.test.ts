@@ -1,5 +1,5 @@
 import type { Agent, AgentEvent as PiAgentEvent, AgentMessage, AfterToolCallContext, BeforeToolCallContext } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, AssistantMessageEvent } from "@earendil-works/pi-ai";
+import type { Api, AssistantMessage, AssistantMessageEvent, Model } from "@earendil-works/pi-ai";
 import { createAgentBody, type AgentBody, type CreateAgentBodyOptions } from "./agent-body";
 import { createEventManager, type EventManager, type EventEnvelope, type EventType } from "../event";
 
@@ -50,7 +50,21 @@ function makeSoul(): AgentSoul {
     systemPrompt: "you are a general assistant",
     tools: ["noop"],
     subscribe: [],
-    subscriptions: [],
+  };
+}
+
+function makeModel(provider: string, id: string): Model<Api> {
+  return {
+    id,
+    name: id,
+    api: "anthropic-messages" as Api,
+    provider,
+    baseUrl: "",
+    reasoning: false,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 200000,
+    maxTokens: 8192,
   };
 }
 
@@ -152,7 +166,7 @@ function makeOpts(overrides: Partial<CreateAgentBodyOptions> = {}): { opts: Crea
     sessionId: "s1",
     toolRegistry: registry,
     getApiKey: () => undefined,
-    model: {},
+    model: makeModel("anthropic", "claude-sonnet-4"),
     ...overrides,
   };
   const subscribeSubject = <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void): (() => void) => {

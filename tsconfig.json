@@ -14,8 +14,9 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noPropertyAccessFromIndexSignature": false,
+    "jsx": "react-jsx",
     "types": ["bun", "node"]
   },
-  "include": ["packages/*/index.ts", "packages/*/**/*.ts", "tests/**/*.ts"],
+  "include": ["packages/*/index.ts", "packages/*/**/*.ts", "packages/*/**/*.tsx", "tests/**/*.ts", "tests/**/*.tsx", "scripts/**/*.ts"],
   "exclude": ["node_modules", "**/node_modules"]
 }

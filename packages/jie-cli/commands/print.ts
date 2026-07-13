@@ -1,21 +1,19 @@
-import type { JiePlatform } from "@cuzfrog/jie-platform";
-import { Events, type EventEnvelope, type EventManager } from "@cuzfrog/jie-platform/event";
+import { defaultConsole, type Console, type JiePlatform, type TeamInfo } from "@cuzfrog/jie-platform";
 import type { ParsedArgsMap } from "../cli-flags";
 
 export type PrintArgs = ParsedArgsMap["print"];
 
 export async function runPrint(
   handle: JiePlatform,
-  teamId: string,
-  leaderRole: string,
-  leaderKey: string,
-  agentKeys: string[],
+  team: TeamInfo,
   args: PrintArgs,
+  console: Console = defaultConsole,
 ): Promise<number> {
-  handle.events.subscribe("agent.stream.chunk", (envelope) => {
+  const agentKeys = team.agents.map((a) => a.agentKey);
+  handle.subscribe("agent.stream.chunk", (envelope) => {
     if (envelope.sender.kind !== "agent") return;
-    if (envelope.sender.identity.teamId !== teamId) return;
-    if (envelope.sender.identity.agentRole !== leaderRole) return;
+    if (envelope.sender.teamId !== team.id) return;
+    if (envelope.sender.agentKey !== team.leaderKey) return;
     const text = envelope.payload.text;
     if (args.json) {
       process.stdout.write(JSON.stringify({ chunk: text, seq: envelope.payload.seq }) + "\n");
@@ -24,10 +22,10 @@ export async function runPrint(
     }
   });
 
-  handle.events.publish(Events.userPrompt({ kind: "user" }, teamId, args.instruction, leaderKey));
+  handle.prompt(team.id, team.leaderKey, args.instruction);
 
   try {
-    await setupIdleGate(handle.events, agentKeys, args.timeout);
+    await setupIdleGate(handle, agentKeys, args.timeout);
   } catch (error) {
     if (!args.json) process.stdout.write("\n");
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -36,50 +34,50 @@ export async function runPrint(
     } else {
       console.error(errorMessage);
     }
-    await handle.stop();
+    await handle.execute({ name: "stop" });
     return 3;
   }
   if (!args.json) process.stdout.write("\n");
-  await handle.stop();
+  await handle.execute({ name: "stop" });
   return 0;
 }
 
-function setupIdleGate(events: EventManager, agentKeys: string[], timeoutSec: number): Promise<void> {
+function setupIdleGate(handle: JiePlatform, agentKeys: ReadonlyArray<string>, timeoutSec: number): Promise<void> {
   const state = new Map<string, "busy" | "idle">();
   for (const agentKey of agentKeys) state.set(agentKey, "idle");
 
-  let resolve!: () => void;
-  let reject!: (error: Error) => void;
-  const promise = new Promise<void>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  const timer =
-    timeoutSec > 0
-      ? setTimeout(() => reject(new Error("timeout")), timeoutSec * 1000)
-      : undefined;
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
 
-  const agentKeyOf = (envelope: EventEnvelope<"agent.turn.start"> | EventEnvelope<"agent.idle">): string | null =>
-    envelope.sender.kind === "agent" ? envelope.sender.identity.agentKey : null;
+    const unsubTurnStart = handle.subscribe("agent.turn.start", (envelope) => {
+      if (envelope.sender.kind !== "agent") return;
+      if (!state.has(envelope.sender.agentKey)) return;
+      state.set(envelope.sender.agentKey, "busy");
+    });
+    const unsubIdle = handle.subscribe("agent.idle", (envelope) => {
+      if (envelope.sender.kind !== "agent") return;
+      if (!state.has(envelope.sender.agentKey)) return;
+      state.set(envelope.sender.agentKey, "idle");
+      let allIdle = true;
+      for (const v of state.values()) {
+        if (v !== "idle") { allIdle = false; break; }
+      }
+      if (allIdle) finish(undefined);
+    });
 
-  const evaluate = (): void => {
-    if (timer !== undefined) clearTimeout(timer);
-    unsubTurnStart();
-    unsubIdle();
-    resolve();
-  };
+    const timer =
+      timeoutSec > 0
+        ? setTimeout(() => finish(new Error("timeout")), timeoutSec * 1000)
+        : undefined;
 
-  const unsubTurnStart = events.subscribe("agent.turn.start", (envelope) => {
-    const agentKey = agentKeyOf(envelope);
-    if (agentKey !== null && state.has(agentKey)) state.set(agentKey, "busy");
-  });
-  const unsubIdle = events.subscribe("agent.idle", (envelope) => {
-    const agentKey = agentKeyOf(envelope);
-    if (agentKey !== null && state.has(agentKey)) {
-      state.set(agentKey, "idle");
-      if ([...state.values()].every((v) => v === "idle")) evaluate();
+    function finish(result: Error | undefined): void {
+      if (settled) return;
+      settled = true;
+      if (timer !== undefined) clearTimeout(timer);
+      unsubTurnStart();
+      unsubIdle();
+      if (result === undefined) resolve();
+      else reject(result);
     }
   });
-
-  return promise;
 }

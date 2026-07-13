@@ -1,6 +1,6 @@
 import { SqliteStorage } from "./sqlite-storage";
 import { SqliteArtifactStore, InMemoryArtifactStore } from "./artifact-store";
-import { JiePlatformError } from "../types";
+import { JiePlatformError } from "../jie-platform-errors";
 
 function makeStore(): SqliteArtifactStore {
   return new SqliteArtifactStore(new SqliteStorage(":memory:"));

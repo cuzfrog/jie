@@ -20,7 +20,6 @@ describe("InProcessEventBus", () => {
 
   test("a throwing callback does not stop dispatch; subsequent subscribers still run", () => {
     const bus = createEventBus();
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     let secondRan = false;
     bus.subscribe("s", () => {
       throw new Error("boom");
@@ -31,11 +30,6 @@ describe("InProcessEventBus", () => {
 
     expect(() => bus.publish("s", { x: 1 })).not.toThrow();
     expect(secondRan).toBe(true);
-    expect(errorSpy).toHaveBeenCalled();
-    const args = errorSpy.mock.calls[0]!;
-    expect(args[0]).toContain("s");
-    expect(args[0]).toContain("boom");
-    errorSpy.mockRestore();
   });
 
   test("subscriberCount reflects registers minus unsubscribes", () => {
@@ -68,13 +62,11 @@ describe("InProcessEventBus", () => {
 
   test("a throwing callback does not change subscriberCount", () => {
     const bus = createEventBus();
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     bus.subscribe("s", () => {
       throw new Error("boom");
     });
     bus.publish("s", { x: 1 });
     expect(bus.subscriberCount("s")).toBe(1);
-    errorSpy.mockRestore();
   });
 
   test("subscribers on different subjects are isolated", () => {

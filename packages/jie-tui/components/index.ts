@@ -1,1 +1,2 @@
-export { buildView, type BuildViewOpts } from "./build-view";
+export { App } from "./app";
+export { type TuiContextValue } from "./context";

@@ -1,13 +1,9 @@
 import type { StopReason } from "@earendil-works/pi-ai";
+import type { EffortLevel, ModelInfo } from "@cuzfrog/jie-platform";
 
 export type AgentStatus = "idle" | "busy";
-export type EffortLevel = "low" | "medium" | "high" | "max";
-
-export interface ModelReference {
-  readonly provider: string;
-  readonly id: string;
-  readonly effort: EffortLevel;
-}
+export { type EffortLevel };
+export type ModelReference = ModelInfo;
 
 export interface MessageCard {
   readonly kind: "toolCall" | "toolResult";
@@ -43,12 +39,16 @@ export interface AgentUiState {
   readonly isLeader: boolean;
   readonly status: AgentStatus;
   readonly model: ModelReference | null;
+  readonly queue: ReadonlyArray<string>;
   readonly history: MessageTurn[];
   readonly currentTurn: MessageTurn | null;
   readonly lastStopReason: StopReason | null;
 }
 
 export interface TuiState {
+  readonly cwd: string | null;
+  readonly gitBranch: string | null;
+  readonly gitDirty: boolean;
   readonly teamId: string | null;
   readonly leaderAgentId: AgentId | null;
   readonly agents: ReadonlyMap<AgentId, AgentUiState>;
@@ -56,14 +56,26 @@ export interface TuiState {
   readonly transientMessage: string | null;
   readonly errorBanner: string | null;
   readonly showTeamRailPanel: boolean;
+  readonly thinkingExpanded: boolean;
+  readonly toolCardsExpanded: boolean;
+  readonly pendingQuit: boolean;
+  readonly editorText: string;
+  readonly chatScrollOffsets: ReadonlyMap<AgentId, number>;
 }
 
-export const INITIAL_TUI_STATE: TuiState = Object.freeze({
-  teamId: null,
-  leaderAgentId: null,
-  agents: new Map(),
-  focusedAgentId: null,
-  transientMessage: null,
-  errorBanner: null,
-  showTeamRailPanel: false,
-} as const);
+function getFocusedAgent(state: TuiState): AgentUiState | null {
+  if (state.focusedAgentId === null) return null;
+  return state.agents.get(state.focusedAgentId) ?? null;
+}
+
+function isBusy(state: TuiState): boolean {
+  for (const agent of state.agents.values()) {
+    if (agent.status === "busy") return true;
+  }
+  return false;
+}
+
+export const TuiState = {
+  getFocusedAgent,
+  isBusy,
+} as const;

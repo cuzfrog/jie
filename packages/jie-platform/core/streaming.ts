@@ -1,4 +1,4 @@
-import { Events, type EventManager, type Sender } from "../event";
+import { Events, type AgentSender, type EventManager } from "../event";
 
 const STREAM_CHUNK_SIZE = 64;
 const STREAM_FLUSH_MS = 200;
@@ -8,11 +8,11 @@ export type BlockType = "text" | "thinking";
 export interface StreamPublisher {
   beginStream(): void;
   append(blockType: BlockType, delta: string): void;
-  endStream(): { streamId: number; totalChunks: number };
+  endStream(): { readonly streamId: number; readonly totalChunks: number };
 }
 
-export function makeStreamPublisher(events: EventManager, sender: Sender): StreamPublisher {
-  const agentSender = sender as Parameters<typeof Events.agentStreamChunk>[0];
+export function makeStreamPublisher(events: EventManager, sender: AgentSender): StreamPublisher {
+  const agentSender = sender;
   let streamId = 0;
   let buffer = "";
   let currentBlockType: BlockType | null = null;

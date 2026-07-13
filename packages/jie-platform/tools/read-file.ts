@@ -1,7 +1,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types";
-import { JiePlatformError, JiePlatformErrorMessages } from "../types";
+import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
 import { mapErrno, resolveWithinWorkspace } from "./path-utils";
 
 const DEFAULT_LINE_CAP = 2000;
@@ -17,7 +17,7 @@ export interface ReadFileDeps {
   workspaceRoot: string;
 }
 
-const ERRNO_MAP: Record<string, keyof typeof JiePlatformErrorMessages> = {
+const ERRNO_MAP: Record<string, JiePlatformErrorCode> = {
   ENOENT: "FILE_NOT_FOUND",
   ENOTDIR: "PATH_ESCAPE",
   EACCES: "PERMISSION_DENIED",

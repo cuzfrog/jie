@@ -121,26 +121,6 @@ describe("SqliteMemoryManager", () => {
     ).toThrow("synthetic storage failure");
   });
 
-  test("mostRecentSessionId is null when team_id has no rows", () => {
-    const m = makeManager();
-    expect(m.mostRecentSessionId("t-nope")).toBeNull();
-  });
-
-  test("mostRecentSessionId returns the session_id of the most recent row", () => {
-    const m = makeManager();
-    m.persist(userMessage("a"), "agent-1", "s-old", "t1");
-    m.persist(userMessage("b"), "agent-1", "s-new", "t1");
-    expect(m.mostRecentSessionId("t1")).toBe("s-new");
-  });
-
-  test("mostRecentSessionId is scoped to team_id", () => {
-    const m = makeManager();
-    m.persist(userMessage("a"), "agent-1", "s-x", "t1");
-    m.persist(userMessage("b"), "agent-1", "s-y", "t2");
-    expect(m.mostRecentSessionId("t1")).toBe("s-x");
-    expect(m.mostRecentSessionId("t2")).toBe("s-y");
-  });
-
   test("hasSession is false before any persist, true after", () => {
     const m = makeManager();
     expect(m.hasSession("t1", "sX")).toBe(false);
@@ -178,7 +158,6 @@ describe("InMemoryMemoryManager", () => {
     m.compact([1, 2], summaryMessage("sum"), "agent-1", "s1", "t1");
     const restored = await m.restore("agent-1", "s1", "t1");
     expect(restored).toHaveLength(2);
-    expect(m.mostRecentSessionId("t1")).toBe("s1");
     expect(m.hasSession("t1", "s1")).toBe(true);
   });
 });

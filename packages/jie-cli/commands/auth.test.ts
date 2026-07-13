@@ -1,145 +1,93 @@
-import type { AuthStore, SettingsStore } from "@cuzfrog/jie-platform/config";
+import { type Command, type CommandName, type CommandResult, type Console, type JiePlatform } from "@cuzfrog/jie-platform";
 import { runApiKey, runLogin, runLogout } from "./auth";
 
-type AuthJson = Record<string, { type: "api_key"; key: string }>;
+function makeConsoleMock(): Console {
+  return {
+    print: vi.fn(),
+    error: vi.fn(),
+  };
+}
 
-const auth = vi.mocked<AuthStore>({
-  load: vi.fn(),
-  write: vi.fn(),
-  setProvider: vi.fn(),
-  removeProvider: vi.fn(),
-  clear: vi.fn(),
-});
-
-const settings = vi.mocked<SettingsStore>({
-  load: vi.fn(),
-  write: vi.fn(),
-  unsetDefaultTeam: vi.fn(),
-});
+function makePlatform(): { platform: JiePlatform; execute: ReturnType<typeof vi.fn> } {
+  const dispatch = vi.fn(async <T extends CommandName>(command: Command<T>): Promise<CommandResult<T>> => {
+    if (command.name === "getDefaultModel") return null as CommandResult<T>;
+    return null as CommandResult<T>;
+  });
+  const platform: JiePlatform = {
+    settings: {},
+    subscribe: vi.fn(() => () => undefined),
+    prompt: vi.fn(),
+    interrupt: vi.fn(),
+    execute: dispatch,
+    teams: () => [],
+  };
+  return { platform, execute: dispatch };
+}
 
 describe("runLogin", () => {
-  beforeEach(() => {
-    auth.load.mockReturnValue({});
-    auth.setProvider.mockImplementation(
-      (current: AuthJson, provider: string, key: string): AuthJson => ({
-        ...current,
-        [provider]: { type: "api_key", key },
-      }),
-    );
-  });
-
-  test("login --provider anthropic --api-key sk-test calls load -> setProvider -> write with the right args and prints success", async () => {
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => { });
+  test("login --provider anthropic --api-key sk-test -> dispatches login and prints success", async () => {
+    const { platform, execute } = makePlatform();
+    const consoleMock = makeConsoleMock();
     const code = await runLogin(
       { kind: "login", provider: "anthropic", apiKey: "sk-test" },
-      auth,
+      platform,
+      consoleMock,
     );
     expect(code).toBe(0);
-    expect(auth.setProvider).toHaveBeenCalledWith({}, "anthropic", "sk-test");
-    expect(auth.write).toHaveBeenCalledWith({ anthropic: { type: "api_key", key: "sk-test" } });
-    expect(logSpy.mock.calls.map((c) => String(c[0])).join("|")).toContain("logged in to anthropic");
-    logSpy.mockRestore();
+    expect(execute).toHaveBeenCalledWith({ name: "login", provider: "anthropic", apiKey: "sk-test" });
+    expect(consoleMock.print).toHaveBeenCalledWith("logged in to anthropic");
   });
 
-  test("login without flags -> exit 1, no load/setProvider/write calls", async () => {
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => { });
-    const code = await runLogin({ kind: "login" }, auth);
+  test("login without flags -> exit 1, no execute calls", async () => {
+    const { platform, execute } = makePlatform();
+    const consoleMock = makeConsoleMock();
+    const code = await runLogin({ kind: "login" }, platform, consoleMock);
     expect(code).toBe(1);
-    expect(auth.load).not.toHaveBeenCalled();
-    expect(auth.setProvider).not.toHaveBeenCalled();
-    expect(auth.write).not.toHaveBeenCalled();
-    errSpy.mockRestore();
-  });
-
-  test("login merges with existing entries (passes the loaded auth to setProvider)", async () => {
-    const existing: AuthJson = { openai: { type: "api_key", key: "sk-o" } };
-    auth.load.mockReturnValueOnce(existing);
-    const code = await runLogin(
-      { kind: "login", provider: "anthropic", apiKey: "sk-a" },
-      auth,
-    );
-    expect(code).toBe(0);
-    expect(auth.setProvider).toHaveBeenCalledWith(existing, "anthropic", "sk-a");
-    expect(auth.write).toHaveBeenCalledWith({
-      openai: { type: "api_key", key: "sk-o" },
-      anthropic: { type: "api_key", key: "sk-a" },
-    });
+    expect(execute).not.toHaveBeenCalled();
+    expect(consoleMock.error).toHaveBeenCalledWith("interactive login not implemented in v1; use --provider and --api-key");
   });
 });
 
 describe("runLogout", () => {
-  beforeEach(() => {
-    auth.load.mockReturnValue({});
+  test("logout anthropic -> dispatches logout with provider", async () => {
+    const { platform, execute } = makePlatform();
+    const consoleMock = makeConsoleMock();
+    await runLogout({ kind: "logout", provider: "anthropic" }, platform, consoleMock);
+    expect(execute).toHaveBeenCalledWith({ name: "logout", provider: "anthropic" });
   });
 
-  test("logout anthropic removes only the anthropic entry", async () => {
-    const initial: AuthJson = {
-      anthropic: { type: "api_key", key: "sk-a" },
-      openai: { type: "api_key", key: "sk-o" },
-    };
-    auth.load.mockReturnValueOnce(initial);
-    auth.removeProvider.mockImplementation(
-      (current: AuthJson, provider: string): AuthJson => {
-        const next = { ...current };
-        delete next[provider as keyof typeof next];
-        return next as AuthJson;
-      },
-    );
-    const code = await runLogout({ kind: "logout", provider: "anthropic" }, auth);
-    expect(code).toBe(0);
-    expect(auth.removeProvider).toHaveBeenCalledWith(initial, "anthropic");
-    expect(auth.write).toHaveBeenCalledWith({ openai: { type: "api_key", key: "sk-o" } });
-  });
-
-  test("logout (no provider) clears all entries", async () => {
-    auth.clear.mockReturnValue({});
-    const code = await runLogout({ kind: "logout" }, auth);
-    expect(code).toBe(0);
-    expect(auth.clear).toHaveBeenCalled();
-    expect(auth.write).toHaveBeenCalledWith({});
-  });
-
-  test("logout a missing provider is a no-op on the result but still writes", async () => {
-    const initial: AuthJson = { openai: { type: "api_key", key: "sk-o" } };
-    auth.load.mockReturnValueOnce(initial);
-    auth.removeProvider.mockImplementation(
-      (current: AuthJson, provider: string): AuthJson => {
-        const next = { ...current };
-        delete next[provider as keyof typeof next];
-        return next as AuthJson;
-      },
-    );
-    const code = await runLogout({ kind: "logout", provider: "ghost" }, auth);
-    expect(code).toBe(0);
-    expect(auth.removeProvider).toHaveBeenCalledWith(initial, "ghost");
-    expect(auth.write).toHaveBeenCalledWith({ openai: { type: "api_key", key: "sk-o" } });
+  test("logout (no provider) -> dispatches logout with undefined provider", async () => {
+    const { platform, execute } = makePlatform();
+    const consoleMock = makeConsoleMock();
+    await runLogout({ kind: "logout" }, platform, consoleMock);
+    expect(execute).toHaveBeenCalledWith({ name: "logout", provider: undefined });
   });
 });
 
 describe("runApiKey (top-level --api-key)", () => {
-  beforeEach(() => {
-    auth.load.mockReturnValue({});
-    auth.setProvider.mockImplementation(
-      (current: AuthJson, provider: string, key: string): AuthJson => ({
-        ...current,
-        [provider]: { type: "api_key", key },
-      }),
-    );
-  });
-
-  test("--api-key sk-new writes auth.json for defaultProvider and exits 0", async () => {
-    settings.load.mockReturnValueOnce({ defaultProvider: "anthropic" });
-    const code = await runApiKey({ kind: "apiKey", apiKey: "sk-new" }, settings, auth);
+  test("--api-key sk-new with defaultProvider set -> dispatches getDefaultModel then login", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async (cmd: { name: string } & Record<string, unknown>) => {
+      if (cmd.name === "getDefaultModel") return { provider: "anthropic", modelId: "claude-sonnet-4" };
+      return null;
+    });
+    const consoleMock = makeConsoleMock();
+    const code = await runApiKey({ kind: "apiKey", apiKey: "sk-new" }, platform, consoleMock);
     expect(code).toBe(0);
-    expect(settings.load).toHaveBeenCalled();
-    expect(auth.setProvider).toHaveBeenCalledWith({}, "anthropic", "sk-new");
-    expect(auth.write).toHaveBeenCalledWith({ anthropic: { type: "api_key", key: "sk-new" } });
+    expect(execute).toHaveBeenNthCalledWith(1, { name: "getDefaultModel" });
+    expect(execute).toHaveBeenNthCalledWith(2, { name: "login", provider: "anthropic", apiKey: "sk-new" });
+    expect(consoleMock.print).toHaveBeenCalledWith("logged in to anthropic");
   });
 
-  test("--api-key without defaultProvider -> exit 1, no auth.json written", async () => {
-    settings.load.mockReturnValueOnce({});
-    const code = await runApiKey({ kind: "apiKey", apiKey: "sk-new" }, settings, auth);
+  test("--api-key without defaultProvider -> exit 1", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockResolvedValueOnce(null);
+    const consoleMock = makeConsoleMock();
+    const code = await runApiKey({ kind: "apiKey", apiKey: "sk-new" }, platform, consoleMock);
     expect(code).toBe(1);
-    expect(auth.write).not.toHaveBeenCalled();
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(consoleMock.error).toHaveBeenCalledWith(
+      "no provider resolved; run 'jie model <provider>/<modelId>' first, or use 'jie login --provider <id> --api-key <key>' to set the key for a specific provider",
+    );
   });
 });

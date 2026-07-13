@@ -1,65 +1,250 @@
-import { createEventManager, Events, type EventEnvelope, type EventManager, type Sender, type EventType } from "@cuzfrog/jie-platform/event";
-import { createTui, type Tui, type CreateTUIOptions } from "@cuzfrog/jie-tui";
-import { JiePlatformErrorMessages } from "@cuzfrog/jie-platform";
-import { withTTY } from "../../support";
+// e2e test do not wait for intermediate state, it's not reliable. Check the eventual state.
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { PassThrough } from "node:stream";
+import { createJiePlatform, type JiePlatform } from "@cuzfrog/jie-platform";
+import { type CreateTUIOptions, type Tui, createTui } from "@cuzfrog/jie-tui";
+import { writeModelsJsonTo, writeSettingsJson } from "../_fixture.ts";
 
-export const startTuiOn = (
-  bus: EventManager,
-  preload: ReadonlyArray<EventEnvelope<EventType>>,
-): Tui => {
-  const opts: CreateTUIOptions = {
-    eventManager: bus,
-    rows: 30,
-    cwd: "/tmp",
-    branch: "main",
-  };
-  const tuiHandle: { current: Tui | null } = { current: null };
-  withTTY(true, () => { tuiHandle.current = createTui(opts); });
-  const tui = tuiHandle.current;
-  if (tui === null) throw new Error("TUI handle not initialized");
-  for (const env of preload) bus.publish(env);
-  return tui;
-};
+type AgentId = `${string}:${string}`;
 
-export const replayEnvelopes = (
-  envelopes: ReadonlyArray<EventEnvelope<EventType>>,
-): { tui: Tui; bus: EventManager } => {
-  const bus = createEventManager();
-  const tui = startTuiOn(bus, envelopes);
-  return { tui, bus };
-};
+const LANG_DEFAULT = "en_US.UTF-8";
+const POLL_INTERVAL_MS = 10;
 
-export const NO_MODEL_ERROR = JiePlatformErrorMessages.NO_MODEL_ERROR;
+export interface TuiHarness {
+  readonly dir: string;
+  readonly tui: Tui;
+  readonly platform: JiePlatform;
+  readonly stdin: PassThrough;
+  readonly stdout: PassThrough;
+}
 
-export const attachNoModelBody = (
-  bus: EventManager,
-  teamId: string,
-  agentKey: string,
-  role: string,
-): (() => void) => {
-  const agentSender: Sender = { kind: "agent", identity: { teamId, agentRole: role, agentKey } };
-  const unsubscribe = bus.subscribe("user.prompt", (env) => {
-    if (env.payload === null || typeof env.payload !== "object") return;
-    const payload = env.payload as { teamId?: unknown; agentKey?: unknown };
-    if (payload.teamId !== teamId || payload.agentKey !== agentKey) return;
-    bus.publish(Events.agentIdle(agentSender, "error"));
-    bus.publish(Events.systemError({ kind: "system" }, NO_MODEL_ERROR));
+export interface StartTuiOptions {
+  readonly rows?: number;
+  readonly cwd?: string;
+}
+
+class TestWritable extends PassThrough {
+  columns = 80;
+  rows = 30;
+  isTTY = true;
+}
+
+class TestReadable extends PassThrough {
+  isTTY = true;
+  ref(): this { return this; }
+  unref(): this { return this; }
+  setRawMode(): this { return this; }
+  setEncoding(): this { return this; }
+  resume(): this {
+    super.resume();
+    return this;
+  }
+  pause(): this {
+    super.pause();
+    return this;
+  }
+}
+
+export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> {
+  const dir = mkdtempSync(join(tmpdir(), "jie-tui-e2e-"));
+  writeModelsJsonTo(dir);
+  writeSettingsJson(dir);
+  const prevLang = process.env.LANG;
+  process.env.LANG = LANG_DEFAULT;
+  const prevLangAll = process.env.LC_ALL;
+  process.env.LC_ALL = LANG_DEFAULT;
+  let platform: JiePlatform;
+  try {
+    platform = await createJiePlatform({ cwd: dir, homeJieDir: dir, projectJieDir: dir });
+  } catch (err) {
+    restoreLang(prevLang, prevLangAll);
+    rmSync(dir, { recursive: true, force: true });
+    throw err;
+  }
+  const stdin = new TestReadable();
+  const stdout = new TestWritable();
+  stdout.rows = opts.rows ?? 30;
+  const stderr = new TestWritable();
+  stderr.rows = opts.rows ?? 30;
+  const tuiOptions: CreateTUIOptions = { cwd: opts.cwd ?? dir, rows: opts.rows ?? 30 };
+  const tui = createTui(tuiOptions, {
+    platform,
+    stdin: stdin as unknown as NodeJS.ReadStream,
+    stdout: stdout as unknown as NodeJS.WriteStream,
+    stderr: stderr as unknown as NodeJS.WriteStream,
+    gitBranch: "main",
+    gitDirty: false,
   });
-  return unsubscribe;
-};
+  void tui.start();
+  return { dir, tui, platform, stdin, stdout };
+}
 
-export const loadFixture = async (name: string): Promise<EventEnvelope<EventType>[]> => {
-  const path = `${import.meta.dir}/fixtures/${name}.jsonl`;
-  const file = Bun.file(path);
-  if (!(await file.exists())) {
-    throw new Error(`fixture not found: ${path}`);
+export async function stopTui(harness: TuiHarness): Promise<void> {
+  harness.tui.stop();
+  await harness.platform.execute({ name: "stop" });
+  rmSync(harness.dir, { recursive: true, force: true });
+}
+
+async function typeChunk(stdin: PassThrough, chunk: string): Promise<void> {
+  // Real terminals deliver each keystroke as its own stdin chunk. Ink's
+  // input-parser matches single-codepoint special keys (\r, \t, \x7f)
+  // against the chunk as a whole, so writing the whole command in a single
+  // chunk collapses every char into one non-recognized event and the
+  // trailing \r never matches `key.return`. Yield between writes so the
+  // PassThrough emits a `readable` boundary between keystrokes, matching
+  // raw-mode terminal behavior.
+  for (const ch of chunk) {
+    stdin.write(ch);
+    // Flush the PassThrough's internal buffer so the next `read()` only
+    // sees this codepoint, and the consumer's `handleReadable` callback
+    // runs before the next keystroke is queued.
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
-  const text = await file.text();
-  const out: EventEnvelope<EventType>[] = [];
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed === "") continue;
-    out.push(JSON.parse(trimmed) as EventEnvelope<EventType>);
+}
+
+export async function sendCmd(stdin: PassThrough, text: string): Promise<void> {
+  await typeChunk(stdin, text);
+}
+
+export async function sendEnter(stdin: PassThrough): Promise<void> {
+  await typeChunk(stdin, "\r");
+}
+
+export async function sendLine(stdin: PassThrough, text: string): Promise<void> {
+  await sendCmd(stdin, text);
+  await sendEnter(stdin);
+}
+
+async function waitFor(predicate: () => boolean, timeoutMs: number, label: string): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (predicate()) return;
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
   }
-  return out;
-};
+  throw new Error(`waitFor timed out after ${timeoutMs}ms waiting for: ${label}`);
+}
+
+export async function waitForTeam(tui: Tui, teamId: string, timeoutMs = 60000): Promise<void> {
+  await waitFor(
+    () => tui.state.teamId === teamId,
+    timeoutMs,
+    `team ${teamId}`,
+  );
+}
+
+export async function waitForAgentIdle(tui: Tui, agentId: AgentId, timeoutMs = 60000): Promise<void> {
+  await waitFor(
+    () => tui.state.agents.get(agentId)?.status === "idle",
+    timeoutMs,
+    `agent ${agentId} idle`,
+  );
+}
+
+export async function waitForAgentIdleCount(
+  harness: TuiHarness,
+  agentId: AgentId,
+  count: number,
+  timeoutMs = 60000,
+): Promise<void> {
+  let seen = 0;
+  const off = harness.platform.subscribe("agent.idle", (event) => {
+    if (event.sender.kind !== "agent") return;
+    if (`${event.sender.teamId}:${event.sender.agentKey}` !== agentId) return;
+    seen += 1;
+  });
+  try {
+    await waitFor(() => seen >= count, timeoutMs, `agent ${agentId} idle count >= ${count} (seen ${seen})`);
+  } finally {
+    off();
+  }
+}
+
+export async function submitAndWaitForAgentIdle(
+  harness: TuiHarness,
+  prompt: string,
+  agentId: AgentId,
+  timeoutMs = 60000,
+): Promise<void> {
+  const before = harness.tui.state.agents.get(agentId);
+  const priorHistoryLen = before?.history.length ?? 0;
+  const priorCurrentBlocks = before?.currentTurn?.blocks.length ?? 0;
+  const priorCurrentCards = before?.currentTurn?.cards.length ?? 0;
+  await sendLine(harness.stdin, prompt);
+  await waitForPromptSettled(
+    harness.tui,
+    agentId,
+    priorHistoryLen,
+    priorCurrentBlocks,
+    priorCurrentCards,
+    timeoutMs,
+  );
+}
+
+async function waitForPromptSettled(
+  tui: Tui,
+  agentId: AgentId,
+  priorHistoryLen: number,
+  priorCurrentBlocks: number,
+  priorCurrentCards: number,
+  timeoutMs: number,
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const agent = tui.state.agents.get(agentId);
+    if (agent === undefined) {
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+      continue;
+    }
+    if (agent.status === "idle") {
+      const historyGrew = agent.history.length > priorHistoryLen;
+      const currentHasOutput =
+        (agent.currentTurn?.blocks.length ?? 0) > priorCurrentBlocks ||
+        (agent.currentTurn?.cards.length ?? 0) > priorCurrentCards;
+      const currentReplaced =
+        agent.currentTurn !== null &&
+        (agent.currentTurn.blocks.length > 0 || agent.currentTurn.cards.length > 0);
+      if (historyGrew && currentReplaced) return;
+      if (!historyGrew && currentHasOutput) return;
+    }
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+  }
+  const agent = tui.state.agents.get(agentId);
+  throw new Error(
+    `submitAndWaitForAgentIdle timed out after ${timeoutMs}ms for agent ${agentId} (status=${agent?.status}, history=${agent?.history.length}, curBlocks=${agent?.currentTurn?.blocks.length}, curCards=${agent?.currentTurn?.cards.length})`,
+  );
+}
+
+export async function waitForTurnText(tui: Tui, agentId: AgentId, contains: string, timeoutMs = 60000): Promise<void> {
+  await waitFor(
+    () => {
+      const agent = tui.state.agents.get(agentId);
+      if (agent === undefined) return false;
+      const current = agent.currentTurn;
+      if (current === null) return false;
+      return current.blocks.some((b) => b.text.includes(contains));
+    },
+    timeoutMs,
+    `agent ${agentId} blocks contain '${contains}'`,
+  );
+}
+
+export async function waitForErrorBanner(tui: Tui, contains: string, timeoutMs = 60000): Promise<void> {
+  await waitFor(
+    () => tui.state.errorBanner !== null && tui.state.errorBanner.includes(contains),
+    timeoutMs,
+    `errorBanner contains '${contains}'`,
+  );
+}
+
+export async function waitForNoErrorBanner(tui: Tui, timeoutMs = 60000): Promise<void> {
+  await waitFor(() => tui.state.errorBanner === null, timeoutMs, "errorBanner cleared");
+}
+
+function restoreLang(prevLang: string | undefined, prevLangAll: string | undefined): void {
+  if (prevLang === undefined) delete process.env.LANG;
+  else process.env.LANG = prevLang;
+  if (prevLangAll === undefined) delete process.env.LC_ALL;
+  else process.env.LC_ALL = prevLangAll;
+}

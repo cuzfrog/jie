@@ -12,7 +12,6 @@ function makeSoul(overrides: Partial<AgentSoul> = {}): AgentSoul {
     systemPrompt: "you are a general assistant",
     tools: [],
     subscribe: [],
-    subscriptions: [],
     ...overrides,
   };
 }
@@ -27,6 +26,7 @@ function makeFakeAgent(overrides: Partial<{
   prompt: ReturnType<typeof vi.fn>;
   followUp: ReturnType<typeof vi.fn>;
   steer: ReturnType<typeof vi.fn>;
+  abort: ReturnType<typeof vi.fn>;
   continue: ReturnType<typeof vi.fn>;
   subscribe: ReturnType<typeof vi.fn>;
 } {
@@ -38,6 +38,7 @@ function makeFakeAgent(overrides: Partial<{
   const prompt = vi.fn(async (_message: AgentMessage | AgentMessage[]) => {});
   const followUp = vi.fn(() => {});
   const steer = vi.fn(() => {});
+  const abort = vi.fn(() => {});
   const cont = vi.fn(async () => {});
   const subscribe = vi.fn(() => () => {});
   const agent = {
@@ -45,10 +46,11 @@ function makeFakeAgent(overrides: Partial<{
     prompt,
     followUp,
     steer,
+    abort,
     continue: cont,
     subscribe,
   } as unknown as Agent;
-  return { agent, state, prompt, followUp, steer, continue: cont, subscribe };
+  return { agent, state, prompt, followUp, steer, abort, continue: cont, subscribe };
 }
 
 function makeFakeStream(): {
@@ -91,6 +93,7 @@ interface Harness {
   prompt: ReturnType<typeof vi.fn>;
   followUp: ReturnType<typeof vi.fn>;
   steer: ReturnType<typeof vi.fn>;
+  abort: ReturnType<typeof vi.fn>;
   continue: ReturnType<typeof vi.fn>;
   subscribe: ReturnType<typeof vi.fn>;
   stream: StreamPublisher;
@@ -104,18 +107,20 @@ interface Harness {
 function makeHarness(): Harness {
   const events: EventManager = createEventManager();
   const { memory, persisted } = makeFakeMemory();
-  const { agent, state, prompt, followUp, steer, continue: cont, subscribe } = makeFakeAgent();
+  const { agent, state, prompt, followUp, steer, abort, continue: cont, subscribe } = makeFakeAgent();
   const { stream, beginStream, append, endStream } = makeFakeStream();
   const makeBody: Harness["makeBody"] = (overrides = {}) =>
     new JieAgentBody({
       agentKey: overrides.agentKey ?? "general-1",
       teamId: "t1",
       soul: overrides.soul ?? makeSoul(),
+      isLeader: false,
       sessionId: overrides.sessionId ?? "s1",
       eventManager: events,
       memory,
       agent,
       streamPublisher: stream,
+      model: null,
     });
   return {
     events,
@@ -125,6 +130,7 @@ function makeHarness(): Harness {
     prompt,
     followUp,
     steer,
+    abort,
     continue: cont,
     subscribe,
     stream,
@@ -178,17 +184,38 @@ describe("JieAgentBody — start() subscriptions", () => {
     b2.stop();
   });
 
+  test("agent.interrupt addressed to this body aborts the active agent run", async () => {
+    await body.start();
+    h.state.isStreaming = true;
+    h.events.publish(Events.agentInterrupt({ kind: "user" }, "t1", "general-1"));
+    expect(h.abort).toHaveBeenCalledTimes(1);
+  });
+
+  test("agent.interrupt for another body is ignored", async () => {
+    await body.start();
+    h.state.isStreaming = true;
+    h.events.publish(Events.agentInterrupt({ kind: "user" }, "t1", "worker-1"));
+    h.events.publish(Events.agentInterrupt({ kind: "user" }, "t2", "general-1"));
+    expect(h.abort).not.toHaveBeenCalled();
+  });
+
+  test("agent.interrupt is ignored when the body is idle", async () => {
+    await body.start();
+    h.events.publish(Events.agentInterrupt({ kind: "user" }, "t1", "general-1"));
+    expect(h.abort).not.toHaveBeenCalled();
+  });
+
   test("subscribes to each topic in soul.subscriptions", async () => {
     body.stop();
     const b2 = h.makeBody({
-      soul: makeSoul({ subscriptions: ["task.recorded"] }),
+      soul: makeSoul({ subscribe: ["task.recorded"] }),
     });
     await b2.start();
     let received = false;
     h.events.subscribe("custom.t1.task.recorded", () => {
       received = true;
     });
-    h.events.publish(Events.custom({ kind: "agent", identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" } }, "t1.task.recorded", "task"));
+    h.events.publish(Events.custom({ kind: "agent", teamId: "t1", agentKey: "general-1" }, "t1.task.recorded", "task"));
     expect(received).toBe(true);
     b2.stop();
   });
@@ -196,11 +223,11 @@ describe("JieAgentBody — start() subscriptions", () => {
   test("ingestCustom drops self-published events (avoids feedback loop)", async () => {
     body.stop();
     const b2 = h.makeBody({
-      soul: makeSoul({ subscriptions: ["task.recorded"] }),
+      soul: makeSoul({ subscribe: ["task.recorded"] }),
     });
     await b2.start();
     h.events.publish(Events.custom(
-      { kind: "agent", identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" } },
+      { kind: "agent", teamId: "t1", agentKey: "general-1" },
       "t1.task.recorded",
       "do X",
     ));
@@ -211,11 +238,11 @@ describe("JieAgentBody — start() subscriptions", () => {
   test("ingestCustom still dispatches events from a different agent", async () => {
     body.stop();
     const b2 = h.makeBody({
-      soul: makeSoul({ subscriptions: ["task.recorded"] }),
+      soul: makeSoul({ subscribe: ["task.recorded"] }),
     });
     await b2.start();
     h.events.publish(Events.custom(
-      { kind: "agent", identity: { teamId: "t1", agentRole: "leader", agentKey: "leader-1" } },
+      { kind: "agent", teamId: "t1", agentKey: "leader-1" },
       "t1.task.recorded",
       "do X",
     ));
@@ -305,10 +332,10 @@ describe("JieAgentBody — prompt ingress format", () => {
 
   test("notify-sourced event is formatted as `[<agentKey> on '<topic>']: <prompt>`", async () => {
     const body = h.makeBody({
-      soul: makeSoul({ subscriptions: ["task.researched"] }),
+      soul: makeSoul({ subscribe: ["task.researched"] }),
     });
     await body.start();
-    h.events.publish(Events.custom({ kind: "agent", identity: { teamId: "t1", agentRole: "researcher", agentKey: "researcher-1" } }, "t1.task.researched", "report"));
+    h.events.publish(Events.custom({ kind: "agent", teamId: "t1", agentKey: "researcher-1" }, "t1.task.researched", "report"));
     const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
     const content = (synthetic as { content: unknown }).content;
     expect(content).toBe(
@@ -520,8 +547,10 @@ describe("JieAgentBody — addExternalCleanup + stop()", () => {
     const body = h.makeBody();
     await body.start();
     expect(h.events.subscriberCount("user.prompt")).toBe(1);
+    expect(h.events.subscriberCount("agent.interrupt")).toBe(1);
     body.stop();
     expect(h.events.subscriberCount("user.prompt")).toBe(0);
+    expect(h.events.subscriberCount("agent.interrupt")).toBe(0);
   });
 
   test("start() is idempotent (second call does not re-subscribe)", async () => {

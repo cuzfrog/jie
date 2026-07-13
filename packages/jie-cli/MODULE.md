@@ -5,6 +5,4 @@ sealed:
   - index.test.ts
   - index.ts
   - version.ts
-  - app.ts
-  - app.test.ts
 ---

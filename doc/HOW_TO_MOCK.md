@@ -27,7 +27,6 @@ Define mocks at the top of the test file, above `describe`. The same mock object
 const settingsStore = vi.mocked<SettingsStore>({
   load: vi.fn(),
   write: vi.fn(),
-  unsetDefaultTeam: vi.fn(),
 });
 ```
 

@@ -1,15 +1,23 @@
 
 export interface ParsedArgsMap {
-  print: { kind: "print"; instruction: string; team?: string; timeout: number; json: boolean; apiKey?: string; resume?: string; continueLast: boolean };
-  version: { kind: "version" };
-  help: { kind: "help" };
-  login: { kind: "login"; provider?: string; apiKey?: string };
-  logout: { kind: "logout"; provider?: string };
-  model: { kind: "model"; provider: string; modelId: string };
-  team: { kind: "team"; teamId?: string; unset: boolean };
-  apiKey: { kind: "apiKey"; apiKey: string };
-  tui: { kind: "tui"; team?: string };
-  error: { kind: "error"; message: string };
+  readonly print: {
+    readonly kind: "print";
+    readonly instruction: string;
+    readonly team?: string;
+    readonly timeout: number;
+    readonly json: boolean;
+    readonly apiKey?: string;
+    readonly resume?: string;
+  };
+  readonly version: { readonly kind: "version" };
+  readonly help: { readonly kind: "help" };
+  readonly login: { readonly kind: "login"; readonly provider?: string; readonly apiKey?: string };
+  readonly logout: { readonly kind: "logout"; readonly provider?: string };
+  readonly model: { readonly kind: "model"; readonly provider: string; readonly modelId: string };
+  readonly team: { readonly kind: "team"; readonly teamId?: string };
+  readonly apiKey: { readonly kind: "apiKey"; readonly apiKey: string };
+  readonly tui: { readonly kind: "tui"; readonly team?: string };
+  readonly error: { readonly kind: "error"; readonly message: string };
 }
 export type ParsedArgs = ParsedArgsMap[keyof ParsedArgsMap];
 
@@ -42,7 +50,7 @@ export function parseFlags(argv: string[]): ParsedArgs {
   if (PRINT_FLAGS.has(first)) {
     return parsePrint(rest.slice(1), dupes, seen, first);
   }
-  if (first === "--resume" || first === "--continue") {
+  if (first === "--resume") {
     return parsePrint(rest.slice(1), dupes, seen, first);
   }
   if (first === "--team") {
@@ -116,12 +124,11 @@ function parseModel(args: string[]): ParsedArgs {
 }
 
 function parseTeam(args: string[]): ParsedArgs {
-  if (args.length === 0) return { kind: "team", unset: false };
-  if (args[0] === "--unset") return { kind: "team", unset: true };
+  if (args.length === 0) return { kind: "team" };
   if (args[0]!.startsWith("-")) {
     return { kind: "error", message: `unknown flag: ${args[0]}` };
   }
-  return { kind: "team", teamId: args[0], unset: false };
+  return { kind: "team", teamId: args[0] };
 }
 
 function parsePrint(
@@ -135,7 +142,6 @@ function parsePrint(
   let json = false;
   let apiKey: string | undefined;
   let resume: string | undefined;
-  let continueLast = false;
   let instruction: string | undefined;
   let i = 0;
   if (firstFlag === "-p" || firstFlag === "--print" || firstFlag === "--api-key") {
@@ -156,9 +162,6 @@ function parsePrint(
     resume = args[i]!;
     i += 1;
     seen.set("--resume", resume);
-  } else if (firstFlag === "--continue") {
-    continueLast = true;
-    seen.set("--continue", "");
   } else if (firstFlag === "--team") {
     if (args[i] === undefined) {
       return { kind: "error", message: "missing argument for --team" };
@@ -219,12 +222,6 @@ function parsePrint(
       i += 1;
       continue;
     }
-    if (a === "--continue") {
-      if (seen.has("--continue")) dupes.add("--continue");
-      seen.set("--continue", "");
-      continueLast = true;
-      continue;
-    }
     if (a.startsWith("-")) {
       return { kind: "error", message: `unknown flag: ${a}` };
     }
@@ -233,9 +230,6 @@ function parsePrint(
     } else {
       return { kind: "error", message: `unexpected positional argument: ${a}` };
     }
-  }
-  if (resume !== undefined && continueLast) {
-    return { kind: "error", message: "cannot use --resume and --continue together" };
   }
   if (instruction === undefined) {
     return { kind: "error", message: "missing instruction for -p/--print" };
@@ -250,6 +244,5 @@ function parsePrint(
     json,
     apiKey,
     resume,
-    continueLast,
   };
 }

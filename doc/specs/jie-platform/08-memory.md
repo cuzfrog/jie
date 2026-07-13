@@ -26,12 +26,6 @@ interface MemoryManager {
   // Returns an empty array if no prior history exists.
   restore(agent_key: string, session_id: string, team_id: string): Promise<AgentMessage[]>;
 
-  // Return the most-recent session_id for `team_id` (by MAX(created_at) over its
-  // rows in `memory_turns`), or `null` if no prior session exists. Scoped to
-  // `team_id` alone (per ADR 17). Used by `jie --continue` to resolve the resume
-  // target. Pure read; no state change.
-  mostRecentSessionId(team_id: string): string | null;
-
   // Return `true` if at least one row in `memory_turns` matches
   // (team_id, session_id). Used by `jie --resume <id>` validation. Pure read;
   // no state change.
@@ -39,7 +33,7 @@ interface MemoryManager {
 }
 ```
 
-`MemoryManager` is initialized by `AgentBody` at startup. It does not hold an in-memory copy of the conversation — the pi-agent's `state.messages` is the sole in-memory source of truth. The two query methods (`mostRecentSessionId`, `hasSession`) are called by `startJie` at startup to resolve `--continue` / `--resume`; the CLI does not run them directly (per ADR 20).
+`MemoryManager` is initialized by `AgentBody` at startup. It does not hold an in-memory copy of the conversation — the pi-agent's `state.messages` is the sole in-memory source of truth. The single query method `hasSession` is called by the platform's `createJiePlatform` at startup to validate `--resume <id>`; the CLI does not run it directly (per ADR 20).
 
 ### Persist
 
@@ -66,18 +60,17 @@ On agent start, the body's `session_id` is supplied by `createJiePlatform` (per 
 
 | Source | Resolved by | Behavior |
 |---|---|---|
-| `StartJieOptions.resumeSessionId` (set by `jie --resume <id>`) | `startJie` validates via `memory.hasSession(team_id, session_id)`. If `false` → exit 1 with `unknown session_id: <value>`. If `true` → use it. | Hard fail on validation failure. |
-| `StartJieOptions.continueLastSession: true` (set by `jie --continue`) | `startJie` queries `memory.mostRecentSessionId(team_id)`. If `null` → WARN to stderr `no prior session in this directory; starting a new session` and mint fresh. If non-null → use it. | Non-fatal WARN on no prior session. |
-| Neither flag | `startJie` mints a fresh `session_id` (ULID via `ulid@2.3.0`). | n/a |
+| `JiePlatformOptions.resumeSessionId` (set by `jie --resume <id>`) | `createJiePlatform` validates via `memory.hasSession(team_id, session_id)`. If `false` → exit 1 with `unknown session_id: <value>`. If `true` → use it. | Hard fail on validation failure. |
+| No flag | `createJiePlatform` mints a fresh `session_id` (ULID via `ulid@2.3.0`). | n/a |
 
-The CLI does not run session-id SQL itself; the CLI passes intent via `StartJieOptions` and `startJie` does the work.
+The CLI does not run session-id SQL itself; the CLI passes intent via `JiePlatformOptions` and `createJiePlatform` does the work.
 
 `createJiePlatform` keeps a private in-memory `Map<team_id, session_id>` (closure state, not part of the public `JiePlatform` interface). For each new body:
 
 - If the map has a recorded `session_id` for the body's `team_id` (the team is already loaded in this process — either the startup team on initial `createJiePlatform`, or a team that was previously loaded via the platform's internal `loadTeam` in a Day 2+ multi-team process; per ADR 19, the team keeps running in the loaded-teams map so the session id persists on the map), the platform passes the recorded value to the body. The body uses it; `memory.restore()` returns the prior `memory_turns` rows for `(team_id, agent_key, session_id)`.
-- If the map has no entry for the body's `team_id` (first load of this team in the process), the platform mints a fresh `session_id` (ULID via `ulid@2.3.0`; 26 chars; shorter than UUID v4 and human-scannable in logs and DB rows), records the mapping, and passes it to the body. The `--resume <session_id>` and `--continue` CLI flags override the minted value: the CLI resolves a `session_id` (the named one for `--resume`, or the most-recent for `--continue` — see `ui/cli.md` and ADR 17), the platform records that value under the team's `team_id`, and the body uses it.
+- If the map has no entry for the body's `team_id` (first load of this team in the process), the platform mints a fresh `session_id` (ULID via `ulid@2.3.0`; 26 chars; shorter than UUID v4 and human-scannable in logs and DB rows), records the mapping, and passes it to the body. The `--resume <session_id>` flag overrides the minted value: the CLI passes the named id via `JiePlatformOptions.resumeSessionId`, the platform validates via `memory.hasSession`, records it under the team's `team_id`, and the body uses it.
 
-**Per-team session id.** The session id is per process run × team: all agents in the same team in the same process share one session id. On team swap (Day 2+), the new team's session id is independent of the old team's — conversation is bound to the team, not the process. Two teams that share an `agent_key` (e.g., both have a `general` role) are disambiguated by their different `team_id`s: they get different `session_id`s and live in disjoint row sets in `memory_turns`. Switching back to a previously-active team reuses that team's recorded session id (the map's value); the previously-active team's bodies are **not** stopped (per ADR 19) but its session id is preserved on the map for the lifetime of the process.
+**Per-team session id.** The session id is per process run × team: all agents in the same team in the same process share one session id. The platform loads every installed team at startup (per ADR 24), so in the same process each loaded team has its own `team_id`-keyed session. Two teams that share an `agent_key` (e.g., both have a `general` role) are disambiguated by their different `team_id`s: they get different `session_id`s and live in disjoint row sets in `memory_turns`.
 
 The body then calls `memory.restore(agent_key, session_id, team_id)`. This queries `memory_turns` for all rows matching `(team_id, agent_key, session_id)` where `compacted = false`, ordered by `seq`:
 

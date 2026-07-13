@@ -4,6 +4,8 @@
 
 Accepted. The TUI is a passive observer of the event bus. It does not call `handle.bodiesFor`, does not read `body.model`, does not read `body.soul.tools`. All agent state visible to the TUI is published on the bus. The v0.2 update (2026-06-27) promotes the handle surface from `{ bus, stop }` to `{ bus, teamId, bodies(), loadTeam, stop }` because v0.2 ships multi-team in the TUI; the TUI's read-only relationship with the bus is unchanged.
 
+**v0.2 follow-up.** The handle surface grows to expose the TUI's full surface — the runtime methods plus a flat set of typed publishers (`subscribe`, `userPrompt`, `interrupt`) and slash-command operations (`login`, `logout`, `setDefaultModel`, `getDefaultTeam`, `getDefaultModel`, `listInstalledTeams`, `getGitStatus`). The TUI's `TuiDeps` is now a single object: the `JiePlatform` facade. The TUI no longer imports any store type from `jie-platform/{config,team,services}`. The event-driven principle (this ADR) is unchanged.
+
 ## Context
 
 The natural design for a TUI is to expose the runtime objects (`JieHandle`, `AgentBody[]`, `AgentSoul`, etc.) and let the TUI query them. This is the "active observer" model: the TUI pulls state when it needs to render.
@@ -26,13 +28,14 @@ The push model is the natural fit:
 
 The TUI's permitted surface on `JiePlatform` in v0.2 is:
 
-- `bus: EventBus` — for subscribing to platform events.
-- `teamId: string` — the active team (set by the TUI's `/team <id>` slash command; the platform owns the authoritative value; the TUI reads it for view-routing).
-- `bodies(): Map<team_id, AgentBody[]>` — for the TUI's bootstrap and per-team queries.
+- `events` — `subscribe(topic, cb)` for receiving typed envelopes per topic; `userPrompt(agentKey, text)` for publishing a user prompt; `interrupt()` for publishing an interrupt.
+- `team: { id; agents }` — the active team's metadata.
 - `loadTeam(teamId): Promise<void>` — for the TUI's `/team <id>` slash command (idempotent ensure-loaded per ADR 19).
+- `login` / `logout` / `setDefaultModel` / `getDefaultTeam` / `getDefaultModel` / `listInstalledTeams` — slash-command operations on the auth and settings stores, hidden behind the facade.
+- `getGitStatus()` — for the status bar.
 - `stop(): Promise<void>` — for shutdown.
 
-The TUI does not read `body.model`, `body.soul.system_prompt`, `body.soul.tools`, or any other body field. The TUI derives per-agent state from the bus event stream — primarily the `team.loaded` event (which carries the per-agent roster with `is_leader`) and the per-body busy/idle transitions from `agent.turn.start` / `agent.idle`.
+The TUI does not read `body.model`, `body.soul.system_prompt`, `body.soul.tools`, or any other body field. The TUI derives per-agent state from the bus event stream — primarily the `team.loaded` event (which carries the per-agent roster with `is_leader`) and the per-body busy/idle transitions from `agent.turn.start` / `agent.idle`. The TUI's `TuiDeps` is the `JiePlatform` handle alone; no store handles or `AuthStore`/`SettingsStore`/`TeamRegistry`/`GitService` references reach the TUI's module surface.
 
 The CLI's `createApp` orchestrator captures the team info (`teamId`, `leaderRole`, `leaderKey`) from the `team.loaded` event and passes it to `runPrint`; the TUI does the same (subscribes to the bus, captures from the event, filters platform events by `team_id` from the envelope).
 
@@ -68,7 +71,7 @@ The exact shape of the derived state is the TUI's concern (per `ui/tui-state.md`
 
 ## Consequences
 
-- `JiePlatform` in v0.2 is `{ bus, teamId, bodies(), loadTeam, stop }`. The TUI's permitted v0.2 surface is the bus, the multi-team view methods, and the shutdown method. The CLI's `createApp` orchestrator captures the team info from the `team.loaded` event; the TUI does the same.
+- `JiePlatform` in v0.2 is the full facade: `{ events (subscribe/userPrompt/interrupt), team, loadTeam, stop, login, logout, setDefaultModel, getDefaultTeam, getDefaultModel, listInstalledTeams, getGitStatus }`. The TUI's permitted v0.2 surface is the facade plus the event protocol types (`EventEnvelope<T>`, `AnyEventEnvelope`, `EventType`) re-exported from `jie-platform`. The TUI's `TuiDeps` is `{ platform: JiePlatform }`.
 - The v0.2 TUI's `stop()` semantics: iterates every loaded team's bodies and stops them. In-flight turns are **not** awaited (per `09-deployment.md` step 4 limitation, kept in v0.2; revisit in v0.3). The TUI's `Ctrl+C` path publishes a synthetic interrupt event (per `ui/tui-shortcuts.md` "Esc×2 vs Ctrl+C") and does not call `stop`; the TUI exits only on `Ctrl+D` or `/exit`.
 - The `team.loaded` event payload is `{ team_id, agents: [{ role, agent_key, is_leader }] }` — `is_leader` is included for the TUI's agents panel. The TUI's per-team roster is built from this event for every loaded team (the TUI subscribes to the per-process subject and filters by active `team_id`).
 - The TUI's state shape and rendering are its own concern (see `ui/tui-state.md` "Reducer rules" and `ui/tui-layout.md`). The platform's contract is: "every visible state has a bus event".

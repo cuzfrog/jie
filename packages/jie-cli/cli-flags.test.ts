@@ -69,15 +69,15 @@ describe("parseFlags — model", () => {
 
 describe("parseFlags — team", () => {
   test("team dev", () => {
-    expect(parseFlags(["team", "dev"])).toEqual({ kind: "team", teamId: "dev", unset: false });
+    expect(parseFlags(["team", "dev"])).toEqual({ kind: "team", teamId: "dev" });
   });
 
   test("team (no arg)", () => {
-    expect(parseFlags(["team"])).toEqual({ kind: "team", teamId: undefined, unset: false });
+    expect(parseFlags(["team"])).toEqual({ kind: "team", teamId: undefined });
   });
 
-  test("team --unset", () => {
-    expect(parseFlags(["team", "--unset"])).toEqual({ kind: "team", unset: true });
+  test("team --unset -> unknown flag error", () => {
+    expect(parseFlags(["team", "--unset"])).toEqual({ kind: "error", message: "unknown flag: --unset" });
   });
 });
 
@@ -91,7 +91,6 @@ describe("parseFlags — -p", () => {
       json: false,
       apiKey: undefined,
       resume: undefined,
-      continueLast: false,
     });
   });
 
@@ -104,7 +103,6 @@ describe("parseFlags — -p", () => {
       json: false,
       apiKey: undefined,
       resume: undefined,
-      continueLast: false,
     });
   });
 
@@ -117,7 +115,6 @@ describe("parseFlags — -p", () => {
       json: false,
       apiKey: undefined,
       resume: undefined,
-      continueLast: false,
     });
   });
 
@@ -130,7 +127,6 @@ describe("parseFlags — -p", () => {
       json: false,
       apiKey: undefined,
       resume: undefined,
-      continueLast: false,
     });
   });
 
@@ -161,7 +157,6 @@ describe("parseFlags — -p", () => {
       json: false,
       apiKey: "sk-x",
       resume: undefined,
-      continueLast: false,
     });
   });
 
@@ -169,14 +164,10 @@ describe("parseFlags — -p", () => {
     expect(parseFlags(["-p", "x", "--resume", "abc"])).toMatchObject({ resume: "abc" });
   });
 
-  test("-p with --continue", () => {
-    expect(parseFlags(["-p", "x", "--continue"])).toMatchObject({ continueLast: true });
-  });
-
-  test("-p with both --resume and --continue -> error", () => {
-    expect(parseFlags(["-p", "x", "--resume", "a", "--continue"])).toEqual({
+  test("--continue is rejected as an unknown flag", () => {
+    expect(parseFlags(["-p", "x", "--continue"])).toEqual({
       kind: "error",
-      message: "cannot use --resume and --continue together",
+      message: "unknown flag: --continue",
     });
   });
 

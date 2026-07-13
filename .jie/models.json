@@ -11,11 +11,29 @@
       },
       "models": [
         {
-          "id": "qwen3.5-2b",
+          "id": "ornith-1.0-9b-mtp",
+          "name": "ornith-1.0-9b-mtp",
+          "reasoning": true,
+          "input": ["text"],
+          "contextWindow": 100000,
+          "maxTokens": 4096,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        },
+        {
+          "id": "qwen3.5-4b-claude-4.6-opus-reasoning-distilled-v2",
+          "name": "qwen3.5-4b",
+          "reasoning": true,
+          "input": ["text"],
+          "contextWindow": 100000,
+          "maxTokens": 4096,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        },
+        {
+          "id": "qwen3.5-2b-claude-4.6-opus-reasoning-distilled",
           "name": "qwen3.5-2b",
           "reasoning": true,
           "input": ["text"],
-          "contextWindow": 131528,
+          "contextWindow": 100000,
           "maxTokens": 4096,
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
         }

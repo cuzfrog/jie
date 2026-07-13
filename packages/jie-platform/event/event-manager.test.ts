@@ -15,7 +15,8 @@ function collect<T extends EventType>(bus: EventBus, subject: T): EventEnvelope<
 
 const agentSender: Sender = {
   kind: "agent",
-  identity: { teamId: "t1", agentRole: "general", agentKey: "general-1" },
+  teamId: "t1",
+  agentKey: "general-1",
 };
 
 const systemSender: Sender = { kind: "system" };
@@ -56,7 +57,7 @@ describe("createEventManager — envelope stamping", () => {
     const bus = createEventBus();
     const received = collect(bus, "system.team.loaded");
     const events: EventManager = createEventManager(bus);
-    events.publish(Events.teamLoaded(systemSender, "t1", []));
+    events.publish(Events.teamLoaded(systemSender, { id: "t1", leaderKey: "", agents: [] }));
     const env = received[0]!;
     expect(env.sender.kind).toBe("system");
     expect(env.topic).toBe("system.team.loaded");
@@ -99,20 +100,22 @@ describe("createEventManager — topic shape", () => {
     const bus = createEventBus();
     const received = collect(bus, "system.team.loaded");
     const events: EventManager = createEventManager(bus);
-    events.publish(Events.teamLoaded(systemSender, "t1", [{ role: "leader", agent_key: "leader-1", is_leader: true }]));
+    events.publish(Events.teamLoaded(systemSender, { id: "t1", leaderKey: "leader-1", agents: [{ teamId: "t1", role: "leader", agentKey: "leader-1", isLeader: true, model: null }] }));
     expect(received).toHaveLength(1);
     const env = received[0]!;
     expect(env.topic).toBe("system.team.loaded");
   });
 
-  test("interruptTeam publishes to 'system.team.interrupted'", () => {
+  test("agentInterrupt publishes to 'agent.interrupt' with teamId/agentKey in payload", () => {
     const bus = createEventBus();
-    const received = collect(bus, "system.team.interrupted");
+    const received = collect(bus, "agent.interrupt");
     const events: EventManager = createEventManager(bus);
-    events.publish(Events.interruptTeam(systemSender, "t1"));
+    events.publish(Events.agentInterrupt(userSender, "t1", "general-1"));
     expect(received).toHaveLength(1);
     const env = received[0]!;
-    expect(env.topic).toBe("system.team.interrupted");
+    expect(env.topic).toBe("agent.interrupt");
+    expect(env.sender).toEqual(userSender);
+    expect(env.payload).toEqual({ teamId: "t1", agentKey: "general-1" });
   });
 
   test("custom prefixes the clientTopic with custom.", () => {

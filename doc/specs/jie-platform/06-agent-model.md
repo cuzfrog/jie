@@ -10,8 +10,7 @@ interface AgentSoul {
   model:           string;      // '<provider>/<model_id>', split on first '/', resolved via pi-ai's getModel(provider, modelId)
   system_prompt:   string;      // prose body of the agent's .md file
   tools:           ToolSpec[];  // from frontmatter `tools`, resolved through ToolRegistry
-  subscribe:       string[];    // from frontmatter `subscribe:` if present, else `[]` — domain topics this agent listens to
-  subscriptions:   string[];    // auto-computed by the platform to the team-scoped subject list (e.g. `['{team_id}.task.recorded']`); the body subscribes to these directly without further prefixing
+  subscribe:       string[];    // from frontmatter `subscribe:` if present, else `[]` — un-scoped domain topic names this agent listens to; the body prefixes each with `{team_id}.` at body construction (per ADR 19)
 }
 ```
 
@@ -143,19 +142,23 @@ Unknown frontmatter fields are tolerated (warned, ignored), matching the platfor
 
 The `model:` field is optional. When absent, the platform falls through to the user's global default — see `10-configuration.md` "Model Resolution" for the full chain. The `AgentSoul.model` value is always a resolved `<provider>/<modelId>` string by the time the soul is constructed; the frontmatter field is just the agent's *explicit override* slot.
 
-If a model string is present but malformed (no `/` separator), the platform fails at startup with `invalid model string: <value>` citing the agent's role. The error is part of the startup pre-check (run by `startJie`) (see "Startup Pre-Check" below).
+If a model string is present but malformed (no `/` separator), the team-load for that team publishes a `system.error` event with `invalid model string: <value>` citing the agent's role, and the team is omitted from the loaded map (see "Team Loading" below).
 
-### Startup Pre-Check
+### Team Loading
 
-`startJie` walks every agent in the blueprint before constructing any `AgentSoul`. For each agent it attempts to resolve a concrete `(provider, modelId)`. If any agent fails, startup exits 1 with a single error message:
+`createJiePlatform` returns a handle whose `teams` map is empty until `handle.start()` resolves. `start()` calls `TeamManager.loadAll()`, which iterates every installed team (`registry.listInstalled()` always includes the built-in `"minimal"`), calls `loadImpl(id)` per team, and aggregates the successes into the `teams` map.
 
-```
-No model has been selected, please login and select a default model.
-```
+A team fails to load when:
 
-(Matches the user scenario 6 expected error. The platform's CLI maps from the internal "no `defaultProvider` and no per-agent `model:`" condition to this user-facing message.)
+- No `model:` is set in the soul AND no `defaultProvider` / `defaultModel` is in merged settings (the soul's `resolveSoulModel` throws `JiePlatformError("NO_MODEL_ERROR")`).
+- The model's `(provider, modelId)` cannot be resolved by the model's registry.
+- The manifest fails to parse (missing `.md`, malformed YAML, invalid team id, etc.).
 
-This is a hard fail — no partial startup, no agent constructed. `startJie` does not surface a "missing model" error at LLM-call time; that class of error is caught here.
+Per failure, `loadAll` catches the error, publishes `system.error` with a message of the form `team '<id>' failed to load: <reason>`, and continues with the next team. The CLI's `createApp` subscribes to `system.error` and surfaces it as a warning before reading `teams`. The build-in minimal team is always installed (the registry seeds it in `listInstalled`), so a degraded environment still has at least one usable team to fall back to.
+
+`UNKNOWN_SESSION` (the only error from `--resume <id>` validation per ADR 20) is re-thrown by `loadAll` because the user explicitly asked for that session and silent fallback would hide the typo. `await handle.start()` rejects with `unknown session_id: <value>`; the CLI's catch returns exit 1.
+
+A team that has no `model:` and no settings default still publishes `system.error`; it does NOT block startup. The CLI's `resolveTeam(handle.teams, requestedTeam)` falls back to the minimal team when present, and exits 1 with `team '<id>' has no agents to run; check the team manifest` if even `"minimal"` is missing from the loaded map.
 
 ### Platform Auto-Wiring
 
@@ -246,7 +249,7 @@ Behavior inside the body:
 
 2. **Publish the `EventEnvelope`** to `{team_id}.{topic}` on the event bus via `Events.custom(sender, "${teamId}.${topic}", prompt)`. The envelope's `type` is the full subject (`${team_id}.${topic}`); `payload` is the prompt string (opaque to the platform for runtime subjects); `sender` is `{ kind: "agent", identity: { teamId, agentRole, agentKey } }`; `version` is `1`; `timestamp` is the current ISO 8601 string. The team's view is unscoped (the LLM supplies just `topic`); the body prefixes `{team_id}.` in the subject per `03-event-system.md` "Subject Schema" (ADR 19). The wire-format contract (every-publisher-fills-every-field, no shorthand) is in `03-event-system.md` "Event Envelope"; the per-publisher protocol is in `02-protocol-stack.md` "Prompt Ingress".
 3. The publishing agent's `AgentBody` subscription callback filters self-receipt: when the callback receives an event whose `envelope.sender.identity.agentKey` matches its own `agent_key`, it skips processing (per the `notify` tool step 3 contract). The bus invokes the callback with `(subject, envelope)`; the body reads `envelope.sender.identity.agentKey` for the self-receipt check. The `EventBus` itself is transport-agnostic and does not know about agent identity; putting the filter on the bus would leak Jie agent concepts into the transport, and a future `NatsEventBus` would have no agent-key awareness to filter against. The bus also catches per-subscriber exceptions (see `03-event-system.md` "Error Containment") and continues dispatch — a misbehaving subscriber does not poison the publisher.
-4. The LLM-visible return is a human-readable string summarizing delivery. The LLM-facing `recipients` count is `subscriberCount({team_id}.{topic})` minus self if the publisher is itself subscribed to `{team_id}.{topic}` (i.e., if the topic is in `AgentSoul.subscriptions`). The bus-level `subscriberCount({team_id}.{topic})` is the raw transport count and is unchanged; the LLM-facing number is the count of OTHER agents that would receive the message after self-receipt filtering. `details.recipients` carries the same LLM-facing number — observers see what the LLM was told.
+4. The LLM-visible return is a human-readable string summarizing delivery. The LLM-facing `recipients` count is `subscriberCount({team_id}.{topic})` minus self if the publisher is itself subscribed to `{team_id}.{topic}` (i.e., if the topic is in `AgentSoul.subscribe` after platform prefixing). The bus-level `subscriberCount({team_id}.{topic})` is the raw transport count and is unchanged; the LLM-facing number is the count of OTHER agents that would receive the message after self-receipt filtering. `details.recipients` carries the same LLM-facing number — observers see what the LLM was told.
 
    | LLM-facing `recipients` | LLM-visible `content` |
    |---|---|
@@ -632,7 +635,7 @@ class AgentBody {
 - **`is_leader` is a constructor parameter, not a `AgentSoul` field.** The soul is the role's behavioral profile (model, system prompt, tools, subscriptions); whether the role is the team leader is a team-level fact owned by the team-blueprint loader and passed to each body's constructor. The body uses `is_leader` only to decide whether to auto-subscribe to `{team_id}.leader.prompt` (see "Platform Auto-Wiring" below). The same `AgentSoul` could be the leader in one team and a non-leader in another (e.g., the built-in minimal team's `general` is the leader; a user team might have `general` as a non-leader role).
 - **`start()` is async and returns when the body is fully started.** The platform awaits every body's `start()` (in `createJiePlatform`'s startup sequence and the platform's internal `loadTeam`) before publishing `{team_id}.team.loaded` (per ADR 22 and `addrs/13-platform-entry-function.md`). The order inside `start()` is:
 
-  1. **Register bus subscriptions.** Subscribe to `{team_id}.{agent_key}` (every body), plus `{team_id}.leader.prompt` if `is_leader === true`, plus `{team_id}.<topic>` for every topic in `soul.subscriptions` (per ADR 19's per-team subject prefixing). The subscription callback enqueues incoming events onto the body's `queue` field and publishes `agent.prompt.queue.update` (see "Prompt Ingress & Queuing" below).
+  1. **Register bus subscriptions.** Subscribe to `{team_id}.{agent_key}` (every body), plus `{team_id}.leader.prompt` if `is_leader === true`, plus `{team_id}.<topic>` for every topic in `soul.subscribe` (per ADR 19's per-team subject prefixing). The subscription callback enqueues incoming events onto the body's `queue` field and publishes `agent.prompt.queue.update` (see "Prompt Ingress & Queuing" below).
   2. **Restore history.** Call `memory.restore(agent_key, session_id, team_id)` → `AgentMessage[]`. Push the returned array into `agent.state.messages`.
   3. **Conditionally `continue()`.** If the restored array is non-empty and the last message is `user` or `toolResult`, call `agent.continue()` to resume the in-flight turn. If the array is empty (fresh `session_id`) or ends with `assistant` (a completed prior turn), do **not** call `continue()`; the body waits for the next `agent.prompt()` from the queue.
   4. **Start the queue-processing loop.** If the in-memory `queue` is non-empty (events may have arrived on subscribed subjects between step 1's subscription registration and step 2's restore), dequeue the first message and call `agent.prompt(message)`. Otherwise, wait for new events from the subscription callback. After `agent_end`, the loop dequeues the next message and calls `agent.prompt(nextMessage)`, until the queue is empty.
@@ -778,7 +781,7 @@ Memory has two write paths in the body, both unconditional:
 - **`message_end` → `persist`**: On every `message_end` from pi-agent, the body calls `memory.persist(message, agent_key, session_id, team_id)` — write-through to SQLite. No role check; the listener does not special-case summaries.
 - **`transformContext` wrapper → `compact`**: The body passes a wrapped `transformContext` to pi-agent. The wrapper calls the inner `transformContext`, diffs input vs. output for newly-added `CompactionSummaryMessage` entries, and calls `memory.compact(range, summary, agent_key, session_id, team_id)` for each. The wrapper is invariant across days: in v1 the inner is identity (no compaction → wrapper is a no-op); in Day 2+ the inner is pi-agent's actual compaction logic (or a custom implementation) and the wrapper persists the produced summaries. Compaction is trigger-agnostic — `/compact` slash command, pi-agent's auto-threshold, or Day 2+ team hooks all funnel through `transformContext` and the wrapper persists.
 
-Memory is durable and session-scoped. The `session_id` is supplied by the platform at construction (per ADR 18 and ADR 20). Without `--resume` or `--continue`, a new process run mints a fresh `session_id` (ULID via `ulid@2.3.0`) and the agent starts with a clean conversation. With `--resume <id>`, the named `session_id` is validated and used; `memory.restore()` returns prior rows for that session. With `--continue`, the most-recent `session_id` for the current `team_id` is used; `memory.restore()` returns prior rows for that session.
+Memory is durable and session-scoped. The `session_id` is supplied by the platform at construction (per ADR 18 and ADR 20). Without `--resume`, a new process run mints a fresh `session_id` (ULID via `ulid@2.3.0`) and the agent starts with a clean conversation. With `--resume <id>`, the named `session_id` is validated and used; `memory.restore()` returns prior rows for that session.
 
 `memory.compact()` writes the summary row and the raw range's `compacted=1` flag updates in a single `Storage.transaction()`. The `compactionSummary` role's row is owned exclusively by `compact()`; `persist()` does not write summaries because pi-agent does not emit `message_end` for `CompactionSummaryMessage` injected by `transformContext`. See `08-memory.md` "Compact" and "Integration with pi-agent" for the full contract.
 

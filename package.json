@@ -2,24 +2,39 @@
   "name": "@cuzfrog/jie",
   "version": "0.2.0",
   "workspaces": ["packages/*"],
+  "catalog": {
+    "typescript": "7.0.2",
+    "@types/bun": "1.3.14",
+    "@types/node": "26.1.1",
+    "@types/react": "19.2.17",
+    "@earendil-works/pi-agent-core": "0.80.5",
+    "@earendil-works/pi-ai": "0.80.5",
+    "typebox": "1.3.6",
+    "yaml": "2.9.0",
+    "ulid": "2.4.0",
+    "node-html-parser": "6.1.13",
+    "ink": "7.1.0",
+    "react": "19.2.7",
+    "ink-testing-library": "4.0.0",
+    "tslog": "4.11.0"
+  },
   "bin": {
     "jie": "packages/jie-cli/index.ts"
   },
   "scripts": {
-    "test:e2e": "set -a && . ./setenv && set +a && bun test tests/e2e",
-    "test:e2e:ci": "bun test tests/e2e"
+    "mock:start": "bun run packages/mock-llm-backend/server.ts",
+    "test:e2e:local": "set -a && . ./setenv && set +a && bun test --timeout=60000 tests/e2e",
+    "test:e2e:mock": "JIE_E2E_BASE_URL=http://localhost:12346 JIE_E2E_API_KEY=dummy JIE_E2E_MODEL=dummy bun test --max-concurrency=1 tests/e2e"
   },
   "dependencies": {
     "@cuzfrog/jie-platform": "workspace:*",
-    "@cuzfrog/jie-tui": "workspace:*",
-    "@earendil-works/pi-tui": "0.79.10"
+    "@cuzfrog/jie-tui": "workspace:*"
   },
   "devDependencies": {
-    "@earendil-works/pi-agent-core": "0.79.1",
-    "@earendil-works/pi-ai": "0.79.1",
-    "@types/bun": "1.3.14",
-    "@types/node": "25.9.3",
-    "@xterm/headless": "5.5.0",
-    "typebox": "1.1.38"
+    "@earendil-works/pi-agent-core": "catalog:",
+    "@earendil-works/pi-ai": "catalog:",
+    "@types/bun": "catalog:",
+    "@types/node": "catalog:",
+    "typebox": "catalog:"
   }
 }

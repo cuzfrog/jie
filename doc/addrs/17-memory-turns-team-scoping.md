@@ -6,10 +6,9 @@ Accepted. `team_id` is a first-class column in `memory_turns` and the namespace 
 
 ## Context
 
-The spec needed two issues resolved together:
+The original spec needed one issue resolved:
 
-1. **`--continue` "most recent" was ambiguous** — the spec said "highest `created_at`" but each `memory_turns` row has its own timestamp; "most recent session" is a derived notion.
-2. **`--continue` needed to be team-scoped** — a user who ran `jie --team A` yesterday and `jie --team B` today should resume B's last session, not A's.
+- **`team_id` must namespace memory rows** so two teams sharing an `agent_key` (e.g. both teams have a `general → general-1`) do not collide on the same `memory_turns` rows.
 
 The natural-looking filter for team scoping was `agent_key IN (current team's agent_keys)`. This breaks when two teams both contain a role with the same name (e.g., both have a `general` → both have `agent_key = general-1`). The two `general-1` agents live in different teams but share an `agent_key`; filtering by `agent_key` alone conflates their conversation histories.
 
@@ -56,18 +55,7 @@ interface MemoryManager {
 
 The body knows its `team_id` at construction (the team resolution flow resolves the team id and constructs bodies from it). The body closes over `team_id` and passes it to every memory call. `ExecutionContext` also exposes `team_id` so tools can build team-scoped keys if they need to.
 
-### `--continue` algorithm
-
-```sql
-SELECT session_id
-FROM memory_turns
-WHERE team_id = ?
-GROUP BY session_id
-ORDER BY MAX(created_at) DESC
-LIMIT 1;
-```
-
-The `idx_memory_turns_team_session_created` index makes this an index-only scan. No `agent_key` filter — `team_id` alone is the namespace. A session with one row and a session with thousands are both valid candidates; the most recent by `MAX(created_at)` wins. Empty result: WARN to stderr (`no prior session in this directory; starting a new session`) and proceed as if `--continue` were not given.
+The `idx_memory_turns_team_session_created` index supports `--resume`'s `(team_id, session_id)` lookup as well as future per-team queries; it is retained even after `--continue` was removed, because the index is cheap and useful.
 
 ### `JiePlatform`'s internal session map
 
@@ -75,7 +63,7 @@ The `idx_memory_turns_team_session_created` index makes this an index-only scan.
 
 In v1, the map has at most one entry (the startup team). In Day 2+ multi-team, the same map shape covers the loaded teams; ADR 19 captures the Day 2+ lifecycle.
 
-All agents in the same team in the same process share one session id. On team swap, the new team's session id is independent of the old team's — conversation is bound to the team, not the process. Switch back to a previously-active team reuses the recorded session id; the previously-active team's bodies are **not** stopped (per ADR 19), but its session id remains on the map for the lifetime of the process. Memory is per-team at the session level, per-agent at the row level.
+All agents in the same team in the same process share one session id. Each loaded team's session id is independent of every other team's — conversation is bound to the team, not the process. Memory is per-team at the session level, per-agent at the row level.
 
 **Refinement.** The original design keyed the map on `(team_id, agent_key)`. The per-`agent_key` half of the key was redundant: the session id is shared across all agents in a team, so the per-`agent_key` disambiguation adds no information. The map key collapses to `team_id` only (per ADR 18). Two teams that share an `agent_key` are still disambiguated — they have different `team_id`s, so they get different `session_id`s and live in disjoint row sets in `memory_turns`. The `memory_turns` primary key still includes `agent_key` (memory rows are per-agent) — only the session-map key on the handle is simplified.
 

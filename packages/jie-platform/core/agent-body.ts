@@ -1,37 +1,37 @@
-import { Agent, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
+import { Agent, type AgentMessage, type AgentTool, type AgentToolResult, type ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { Api, Model, TextContent } from "@earendil-works/pi-ai";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { AgentSoul } from "../team";
 import type { ExecutionContext, ToolRegistry } from "../tools";
 import { adaptToolToAgent } from "./tool-adapter";
 import { makeStreamPublisher } from "./streaming";
 import { JieAgentBody } from "./jie-agent-body";
-import { Events, type EventManager, type Sender } from "../event";
+import { Events, type AgentSender, type EventManager } from "../event";
+import type { AgentInfo } from "../types";
 
 export interface CreateAgentBodyOptions {
-  agentKey: string;
-  teamId: string;
-  soul: AgentSoul;
-  isLeader: boolean;
-  eventManager: EventManager;
-  artifactStore: ArtifactStore;
-  memory: MemoryManager;
-  sessionId: string;
-  toolRegistry: ToolRegistry;
-  getApiKey: (provider: string) => Promise<string | undefined> | string | undefined;
-  model: unknown;
-  createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
+  readonly agentKey: string;
+  readonly teamId: string;
+  readonly soul: AgentSoul;
+  readonly isLeader: boolean;
+  readonly eventManager: EventManager;
+  readonly artifactStore: ArtifactStore;
+  readonly memory: MemoryManager;
+  readonly sessionId: string;
+  readonly toolRegistry: ToolRegistry;
+  getApiKey(provider: string): Promise<string | undefined> | string | undefined;
+  readonly model: Model<Api> | undefined;
+  readonly createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
 }
 
 export interface AgentBody {
+  readonly identity: AgentInfo;
   start(): Promise<void>;
   stop(): void;
 }
 
 export function createAgentBody(options: CreateAgentBodyOptions): AgentBody {
-  const sender: Sender = {
-    kind: "agent",
-    identity: { teamId: options.teamId, agentRole: options.soul.role, agentKey: options.agentKey },
-  };
+  const sender: AgentSender = { kind: "agent", teamId: options.teamId, agentKey: options.agentKey };
   const streamPublisher = makeStreamPublisher(options.eventManager, sender);
 
   const executionContext: ExecutionContext = {
@@ -82,8 +82,12 @@ export function createAgentBody(options: CreateAgentBodyOptions): AgentBody {
     },
   });
   agent.state.systemPrompt = options.soul.systemPrompt;
+  const bodyModel = resolveBodyModelInfo(options.model, agent.state.thinkingLevel);
   if (options.model !== undefined) {
-    agent.state.model = options.model as never;
+    agent.state.model = options.model;
+    if (bodyModel !== null) {
+      options.eventManager.publish(Events.agentModelAssigned(sender, bodyModel.provider, bodyModel.id, bodyModel.effort));
+    }
   }
   agent.state.tools = adaptedTools;
 
@@ -91,11 +95,13 @@ export function createAgentBody(options: CreateAgentBodyOptions): AgentBody {
     agentKey: options.agentKey,
     teamId: options.teamId,
     soul: options.soul,
+    isLeader: options.isLeader,
     sessionId: options.sessionId,
     eventManager: options.eventManager,
     memory: options.memory,
     agent,
     streamPublisher,
+    model: bodyModel,
   });
 
   const unsubscribeAgent = agent.subscribe((event, _signal) =>
@@ -127,17 +133,26 @@ function defaultAgentFactory(agentOptions: ConstructorParameters<typeof Agent>[0
 
 function extractToolError(context: {
   isError: boolean;
-  result: unknown;
+  result: AgentToolResult<unknown> | undefined;
 }): string | null {
   if (!context.isError) return null;
   if (context.result === undefined) return "tool error";
-  const content = (context.result as { content?: Array<{ text?: string }> }).content;
-  if (!Array.isArray(content)) return "tool error";
-  const text = content
+  const text = context.result.content
+    .filter((c): c is TextContent => c.type === "text")
     .map((c) => c.text)
-    .filter((t): t is string => typeof t === "string")
     .join("\n");
   return text.length > 0 ? text : "tool error";
+}
+
+function agentEffort(thinkingLevel: ThinkingLevel): "off" | "low" | "medium" | "high" | "max" {
+  if (thinkingLevel === "low" || thinkingLevel === "medium" || thinkingLevel === "high") return thinkingLevel;
+  if (thinkingLevel === "xhigh") return "max";
+  return "off";
+}
+
+function resolveBodyModelInfo(model: Model<Api> | undefined, thinkingLevel: ThinkingLevel): { readonly provider: string; readonly id: string; readonly effort: "off" | "low" | "medium" | "high" | "max" } | null {
+  if (model === undefined) return null;
+  return { provider: model.provider, id: model.id, effort: agentEffort(thinkingLevel) };
 }
 
 interface JieToolResult {
@@ -146,20 +161,15 @@ interface JieToolResult {
   terminate?: boolean;
 }
 
-function jieToolResultOf(piResult: unknown): JieToolResult {
-  const r = piResult as {
-    content?: Array<{ type: string; text?: string }>;
-    details?: unknown;
-    terminate?: boolean;
-  };
-  const block = r.content;
+function jieToolResultOf(piResult: AgentToolResult<unknown>): JieToolResult {
+  const block = piResult.content;
   const content =
-    Array.isArray(block) && block.length === 1 && block[0]?.type === "text"
-      ? (block[0].text ?? "")
-      : (block ?? "");
+    block.length === 1 && block[0]?.type === "text"
+      ? block[0].text
+      : block;
   return {
     content,
-    details: r.details,
-    terminate: r.terminate ?? false,
+    details: piResult.details,
+    terminate: piResult.terminate ?? false,
   };
 }

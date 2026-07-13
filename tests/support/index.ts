@@ -1,1 +1,1 @@
-export { withTTY, createTestTuiWithTerminal, type TestTuiWithTerminal } from "./test-support";
+export { withTTY } from "./test-support";

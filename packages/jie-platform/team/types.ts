@@ -1,15 +1,16 @@
-
 export interface AgentSoul {
-  role: string;
-  model: string;
-  systemPrompt: string;
-  tools: string[];
-  subscribe: string[];
-  subscriptions: string[];
+  readonly role: string;
+  readonly model: string;
+  readonly systemPrompt: string;
+  readonly tools: ReadonlyArray<string>;
+  readonly subscribe: ReadonlyArray<string>;
 }
 
-export interface Team {
-  id: string;
-  roles: AgentSoul[];
-  leaderRole: string | null;
+export interface TeamBlueprint {
+  readonly id: string;
+  readonly roles: ReadonlyArray<AgentSoul>;
+  readonly leaderRole: string | null;
 }
+export type TeamBlueprintLocation = "builtin" | "project" | "user" | null;
+
+export const BUILTIN_MINIMAL_TEAM_ID = "minimal";

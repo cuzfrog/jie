@@ -1,17 +1,24 @@
-import { Events, type AgentSender, type SystemSender, type UserSender } from "@cuzfrog/jie-platform/event";
-import { INITIAL_TUI_STATE, type TuiState } from "./state";
+import { Events, type AgentSender, type SystemSender, type UserSender } from "@cuzfrog/jie-platform";
+import type { TuiState } from "./state";
+import { createStateStore } from "./state-store";
 import { reduce } from "./event-reducer";
+import { reduce as reduceAction } from "./reducer";
+import { Actions } from "./actions";
+
+const INITIAL_TUI_STATE = createStateStore().getState();
 
 const SYSTEM_SENDER: SystemSender = { kind: "system" };
 const USER_SENDER: UserSender = { kind: "user" };
-const AGENT_SENDER: AgentSender = { kind: "agent", identity: { teamId: "my-team", agentRole: "general", agentKey: "general-1" } };
+const AGENT_SENDER: AgentSender = { kind: "agent", teamId: "my-team", agentKey: "general-1" };
 const STREAM_SENDER: AgentSender = AGENT_SENDER;
 const TOOL_SENDER: AgentSender = AGENT_SENDER;
 
 function loadedState(): TuiState {
-  return reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, "my-team", [
-    { role: "general", agent_key: "general-1", is_leader: true },
-  ]));
+  return reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, {
+    id: "my-team",
+    leaderKey: "general-1",
+    agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+  }));
 }
 
 function promptedState(): TuiState {
@@ -20,9 +27,11 @@ function promptedState(): TuiState {
 
 describe("reduceTeamLoaded", () => {
   test("seeds agents and focuses the leader", () => {
-    const state = reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, "my-team", [
-      { role: "general", agent_key: "general-1", is_leader: true },
-    ]));
+    const state = reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, {
+      id: "my-team",
+      leaderKey: "general-1",
+      agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    }));
     expect(state.teamId).toBe("my-team");
     expect(state.agents.size).toBe(1);
     expect(state.leaderAgentId).toBe("my-team:general-1");
@@ -30,12 +39,16 @@ describe("reduceTeamLoaded", () => {
   });
 
   test("team switch resets the agent map and clears leader focus from prior team", () => {
-    const state1 = reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, "my-team-1", [
-      { role: "general", agent_key: "general-1", is_leader: true },
-    ]));
-    const state2 = reduce(state1, Events.teamLoaded(SYSTEM_SENDER, "my-team-2", [
-      { role: "general", agent_key: "general-1", is_leader: true },
-    ]));
+    const state1 = reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, {
+      id: "my-team-1",
+      leaderKey: "general-1",
+      agents: [{ teamId: "my-team-1", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    }));
+    const state2 = reduce(state1, Events.teamLoaded(SYSTEM_SENDER, {
+      id: "my-team-2",
+      leaderKey: "general-1",
+      agents: [{ teamId: "my-team-2", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    }));
     expect(state2.teamId).toBe("my-team-2");
     expect(state2.agents.size).toBe(1);
     expect(state2.agents.has("my-team-2:general-1")).toBe(true);
@@ -44,12 +57,67 @@ describe("reduceTeamLoaded", () => {
   });
 
   test("non-leader agent is recorded but leader flag stays false", () => {
-    const state = reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, "my-team", [
-      { role: "manager", agent_key: "manager-1", is_leader: true },
-      { role: "worker", agent_key: "worker-1", is_leader: false },
-    ]));
+    const state = reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, {
+      id: "my-team",
+      leaderKey: "manager-1",
+      agents: [
+        { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, model: null },
+        { teamId: "my-team", role: "worker", agentKey: "worker-1", isLeader: false, model: null },
+      ],
+    }));
     expect(state.leaderAgentId).toBe("my-team:manager-1");
     expect(state.agents.get("my-team:worker-1")?.isLeader).toBe(false);
+  });
+});
+
+describe("Actions.switchTeam", () => {
+  test("first-time switch from empty state seeds agents and focuses the leader", () => {
+    const identity = {
+      id: "my-team",
+      leaderKey: "general-1",
+      agents: [
+        { teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, model: null },
+      ],
+    };
+    const state = reduceAction(INITIAL_TUI_STATE, Actions.switchTeam(identity));
+    expect(state.teamId).toBe("my-team");
+    expect(state.leaderAgentId).toBe("my-team:general-1");
+    expect(state.focusedAgentId).toBe("my-team:general-1");
+    expect(state.agents.size).toBe(1);
+    expect(state.agents.get("my-team:general-1")?.isLeader).toBe(true);
+  });
+
+  test("subsequent switch to a different team resets agents and re-focuses the new leader", () => {
+    const first = reduceAction(INITIAL_TUI_STATE, Actions.switchTeam({
+      id: "team-a",
+      leaderKey: "general-1",
+      agents: [{ teamId: "team-a", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    }));
+    const second = reduceAction(first, Actions.switchTeam({
+      id: "team-b",
+      leaderKey: "worker-1",
+      agents: [
+        { teamId: "team-b", role: "manager", agentKey: "manager-1", isLeader: false, model: null },
+        { teamId: "team-b", role: "worker", agentKey: "worker-1", isLeader: true, model: null },
+      ],
+    }));
+    expect(second.teamId).toBe("team-b");
+    expect(second.leaderAgentId).toBe("team-b:worker-1");
+    expect(second.focusedAgentId).toBe("team-b:worker-1");
+    expect(second.agents.size).toBe(2);
+    expect(second.agents.has("team-a:general-1")).toBe(false);
+    expect(second.agents.get("team-b:worker-1")?.isLeader).toBe(true);
+    expect(second.agents.get("team-b:manager-1")?.isLeader).toBe(false);
+  });
+
+  test("switchTeam carries the full identity a consumer needs (no platform round-trip in reducer)", () => {
+    const identity = {
+      id: "minimal",
+      leaderKey: "general-1",
+      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    };
+    const state = reduceAction(INITIAL_TUI_STATE, Actions.switchTeam(identity));
+    expect(state.agents.get("minimal:general-1")?.role).toBe("general");
   });
 });
 
@@ -57,6 +125,61 @@ describe("reduceUserPrompt", () => {
   test("starts a fresh turn when none is in flight", () => {
     const state = reduce(loadedState(), Events.userPrompt(USER_SENDER, "my-team", "hello", "general-1"));
     expect(state.agents.get("my-team:general-1")?.currentTurn?.userPrompt).toBe("hello");
+  });
+});
+
+describe("reduceModelAssigned", () => {
+  test("populates focused agent's model", () => {
+    const state = reduce(loadedState(), Events.agentModelAssigned(AGENT_SENDER, "openai", "gpt-4", "high"));
+    expect(state.agents.get("my-team:general-1")?.model).toEqual({
+      provider: "openai",
+      id: "gpt-4",
+      effort: "high",
+    });
+  });
+
+  test("ignores events for a foreign team", () => {
+    const state = loadedState();
+    const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
+    const state2 = reduce(state, Events.agentModelAssigned(foreign, "anthropic", "claude", "low"));
+    expect(state2.agents.get("my-team:general-1")?.model).toBeNull();
+  });
+
+  test("ignores events before any team is loaded", () => {
+    const state = reduce(INITIAL_TUI_STATE, Events.agentModelAssigned(AGENT_SENDER, "openai", "gpt-4", "high"));
+    expect(state).toBe(INITIAL_TUI_STATE);
+  });
+});
+
+describe("reduceQueueUpdate", () => {
+  test("replaces the agent's queue with the snapshot", () => {
+    const state = reduce(loadedState(), Events.agentPromptQueueUpdate(AGENT_SENDER, ["alpha", "beta"]));
+    expect(state.agents.get("my-team:general-1")?.queue).toEqual(["alpha", "beta"]);
+  });
+
+  test("clears the queue when the body publishes an empty array", () => {
+    let state = loadedState();
+    state = reduce(state, Events.agentPromptQueueUpdate(AGENT_SENDER, ["queued"]));
+    state = reduce(state, Events.agentPromptQueueUpdate(AGENT_SENDER, []));
+    expect(state.agents.get("my-team:general-1")?.queue).toEqual([]);
+  });
+
+  test("ignores events for a foreign team", () => {
+    const state = loadedState();
+    const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
+    const state2 = reduce(state, Events.agentPromptQueueUpdate(foreign, ["x"]));
+    expect(state2.agents.get("my-team:general-1")?.queue).toEqual([]);
+  });
+
+  test("ignores events for an unknown agent in the loaded team", () => {
+    const stranger: AgentSender = { kind: "agent", teamId: "my-team", agentKey: "ghost" };
+    const state = reduce(loadedState(), Events.agentPromptQueueUpdate(stranger, ["x"]));
+    expect(state.agents.get("my-team:general-1")?.queue).toEqual([]);
+  });
+
+  test("ignores events before any team is loaded", () => {
+    const state = reduce(INITIAL_TUI_STATE, Events.agentPromptQueueUpdate(AGENT_SENDER, ["x"]));
+    expect(state).toBe(INITIAL_TUI_STATE);
   });
 });
 
@@ -76,7 +199,7 @@ describe("reduceTurnStart", () => {
 
   test("rejects events from a foreign team (cross-team guard)", () => {
     const state = loadedState();
-    const foreign: AgentSender = { kind: "agent", identity: { teamId: "other-team", agentRole: "general", agentKey: "general-1" } };
+    const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
     const state2 = reduce(state, Events.agentTurnStart(foreign));
     expect(state2).toBe(state);
   });
@@ -94,7 +217,7 @@ describe("reduceIdle", () => {
 
   test("rejects idle events from a foreign team", () => {
     const state = loadedState();
-    const foreign: AgentSender = { kind: "agent", identity: { teamId: "other-team", agentRole: "general", agentKey: "general-1" } };
+    const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
     const state2 = reduce(state, Events.agentIdle(foreign, "stop"));
     expect(state2).toBe(state);
   });
@@ -133,7 +256,7 @@ describe("reduceStreamChunk", () => {
 
   test("rejects events from a foreign team", () => {
     const state = promptedState();
-    const foreign: AgentSender = { kind: "agent", identity: { teamId: "other-team", agentRole: "general", agentKey: "general-1" } };
+    const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
     const state2 = reduce(state, Events.agentStreamChunk(foreign, 1, 1, "text", "x"));
     expect(state2).toBe(state);
   });
@@ -178,7 +301,7 @@ describe("reduceToolCall + reduceToolResult", () => {
 
   test("rejects events from a foreign team", () => {
     const state = promptedState();
-    const foreign: AgentSender = { kind: "agent", identity: { teamId: "other-team", agentRole: "general", agentKey: "general-1" } };
+    const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
     const state2 = reduce(state, Events.agentToolCall(foreign, "c1", "bash", "x"));
     expect(state2).toBe(state);
   });

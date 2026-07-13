@@ -1,4 +1,8 @@
+import { logger } from "../utils";
+
 type EventCallback = (subject: string, payload: object) => void;
+
+const log = logger.getSubLogger({ name: "jie.platform.event" });
 
 /** Low level primitive behind `EventManager`. */
 export interface EventBus {
@@ -48,12 +52,9 @@ class InProcessEventBus implements EventBus {
 
   private reportError(subject: string, error: unknown): void {
     if (error instanceof Error) {
-      console.error(
-        `EventBus callback error on subject "${subject}": ${error.message}`,
-        error.stack,
-      );
+      log.error(`EventBus callback error on subject "${subject}": ${error.message}`, { stack: error.stack });
       return;
     }
-    console.error(`EventBus callback error on subject "${subject}":`, error);
+    log.error(`EventBus callback error on subject "${subject}"`, { error });
   }
 }

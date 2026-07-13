@@ -1,4 +1,5 @@
 import type { StopReason } from "@earendil-works/pi-ai";
+import type { TeamInfo } from "../types";
 
 type EventDef<S extends Sender, P = null> = { sender: S; payload: P };
 type EventDefinitions = {
@@ -26,37 +27,32 @@ type EventDefinitions = {
   }>;
   "agent.stream.end": EventDef<AgentSender, { stream_id: number; total_chunks: number }>;
   "agent.prompt.queue.update": EventDef<AgentSender, { prompts: string[] }>;
+  "agent.model.assigned": EventDef<AgentSender, { provider: string; model: string; effort: "off" | "low" | "medium" | "high" | "max" }>;
   "user.prompt": EventDef<UserSender, { teamId: string; agentKey: string; prompt: string }>;
-  "system.team.loaded": EventDef<SystemSender, {
-    teamId: string;
-    agents: Array<{ role: string; agent_key: string; is_leader: boolean }>;
-  }>;
-  "system.team.interrupted": EventDef<SystemSender, { teamId: string }>;
+  "system.team.loaded": EventDef<SystemSender, TeamInfo>;
+  "agent.interrupt": EventDef<Sender, { teamId: string; agentKey: string }>;
   "system.error": EventDef<SystemSender, { error: string }>;
   [topic: `custom.${string}`]: EventDef<AgentSender, { message: string, truncated: boolean }>;
 }
 export type EventType = keyof EventDefinitions;
 
-export interface AgentIdentity {
-  teamId: string;
-  agentRole: string;
-  agentKey: string;
-}
-
-export interface AgentSender { kind: "agent"; identity: AgentIdentity };
-export interface UserSender { kind: "user" };
-export interface SystemSender { kind: "system" };
+export interface AgentSender { readonly kind: "agent"; readonly teamId: string; readonly agentKey: string };
+export interface UserSender { readonly kind: "user" };
+export interface SystemSender { readonly kind: "system" };
 export type Sender = AgentSender | UserSender | SystemSender;
 
 /** Use `Events.*` to create event. */
 export interface EventEnvelope<T extends EventType> {
-  version: 1;
-  type: T;
-  topic: string;
-  sender: EventDefinitions[T]["sender"];
-  timestamp: string;
-  payload: EventDefinitions[T]["payload"];
+  readonly version: 1;
+  readonly type: T;
+  readonly topic: string;
+  readonly sender: EventDefinitions[T]["sender"];
+  readonly timestamp: string;
+  readonly payload: EventDefinitions[T]["payload"];
 }
+export type AnyEventEnvelope = {
+  [K in EventType]: EventEnvelope<K>;
+}[EventType];
 
 export const EVENT_TEXT_TRUNCATION_BYTES: number = 4 * 1024;
 const EVENT_TEXT_TRUNCATION_MARKER = "...[%d chars truncated]...";
@@ -74,12 +70,14 @@ export const Events = {
     createEvent("agent.stream.end", sender, { stream_id, total_chunks }),
   agentPromptQueueUpdate: (sender: AgentSender, prompts: string[]): EventEnvelope<"agent.prompt.queue.update"> =>
     createEvent("agent.prompt.queue.update", sender, { prompts }),
+  agentModelAssigned: (sender: AgentSender, provider: string, model: string, effort: "off" | "low" | "medium" | "high" | "max"): EventEnvelope<"agent.model.assigned"> =>
+    createEvent("agent.model.assigned", sender, { provider, model, effort }),
   userPrompt: (sender: UserSender, teamId: string, prompt: string, agentKey: string): EventEnvelope<"user.prompt"> =>
     createEvent("user.prompt", sender, { teamId, prompt, agentKey }),
-  teamLoaded: (sender: SystemSender, teamId: string, agents: Array<{ role: string; agent_key: string; is_leader: boolean }>): EventEnvelope<"system.team.loaded"> =>
-    createEvent("system.team.loaded", sender, { teamId, agents }),
-  interruptTeam: (sender: SystemSender, teamId: string): EventEnvelope<"system.team.interrupted"> =>
-    createEvent("system.team.interrupted", sender, { teamId }),
+  teamLoaded: (sender: SystemSender, info: TeamInfo): EventEnvelope<"system.team.loaded"> =>
+    createEvent("system.team.loaded", sender, info),
+  agentInterrupt: (sender: Sender, teamId: string, agentKey: string): EventEnvelope<"agent.interrupt"> =>
+    createEvent("agent.interrupt", sender, { teamId, agentKey }),
   systemError: (sender: SystemSender, error: string): EventEnvelope<"system.error"> =>
     createEvent("system.error", sender, { error }),
   custom(sender: AgentSender, clientTopic: string, message: string): EventEnvelope<`custom.${string}`> {

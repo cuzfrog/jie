@@ -1,9 +1,8 @@
 ---
 sealed:
   - index.ts
-  - package.json
-  - start.test.ts
-  - start.ts
+  - jie-platform.test.ts
+  - jie-platform.ts
   - types.ts
   - utils.ts
 ---
