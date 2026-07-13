@@ -33,6 +33,7 @@ export function Editor(_props: EditorProps): JSX.Element {
 
   const apiRef = useRef(api);
   apiRef.current = api;
+  const externalUpdateValue = useRef<string | null>(null);
 
   const handleSubmit = useCallback((value: string): void => {
     const text = value.replace(/[\r\n]+$/, "");
@@ -42,6 +43,7 @@ export function Editor(_props: EditorProps): JSX.Element {
     setHistoryIndex(-1);
     setDraft("");
     externalUpdate.current = true;
+    externalUpdateValue.current = "";
     dispatch(Actions.setEditorText(""));
     dispatch(Actions.submitEditorText(text));
   }, [history, dispatch]);
@@ -49,7 +51,9 @@ export function Editor(_props: EditorProps): JSX.Element {
   useEffect(() => {
     if (externalUpdate.current) {
       externalUpdate.current = false;
-      apiRef.current.applyExternalValue(state.editorText);
+      const target = externalUpdateValue.current ?? state.editorText;
+      externalUpdateValue.current = null;
+      apiRef.current.applyExternalValue(target);
       setMountKey((k) => k + 1);
     }
   }, [state.editorText]);
@@ -63,14 +67,18 @@ export function Editor(_props: EditorProps): JSX.Element {
         setDraft(api.value);
         setHistoryIndex(0);
         externalUpdate.current = true;
-        dispatch(Actions.setEditorText(history[0] ?? ""));
+        const recalled = history[0] ?? "";
+        externalUpdateValue.current = recalled;
+        dispatch(Actions.setEditorText(recalled));
         return;
       }
       if (historyIndex >= 0) {
         const nextIndex = Math.min(historyIndex + 1, history.length - 1);
         setHistoryIndex(nextIndex);
         externalUpdate.current = true;
-        dispatch(Actions.setEditorText(history[nextIndex] ?? ""));
+        const recalled = history[nextIndex] ?? "";
+        externalUpdateValue.current = recalled;
+        dispatch(Actions.setEditorText(recalled));
         return;
       }
       if (onTopLine && atLineStart) {
@@ -85,6 +93,7 @@ export function Editor(_props: EditorProps): JSX.Element {
         setHistoryIndex(nextIndex);
         const recalled = nextIndex < 0 ? draft : history[nextIndex] ?? "";
         externalUpdate.current = true;
+        externalUpdateValue.current = recalled;
         dispatch(Actions.setEditorText(recalled));
         return;
       }
