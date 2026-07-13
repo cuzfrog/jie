@@ -194,4 +194,48 @@ describe("Layout with chat scrolled up", () => {
     }
     unmount();
   });
+
+  test("scrolled-to-top with 12-line editor (taller than EDITOR_ROWS=8): chat content stays above editor", () => {
+    const rows = 30;
+    const { lastFrame, unmount } = mountLayoutWithScroll({
+      columns: 100,
+      rows,
+      showRail: false,
+      turns: 30,
+      scrollOffset: 0,
+      editorLines: 12,
+    });
+    const frame = lastFrame();
+    dumpFrame("100x30 editor=12 scrolled to top", frame);
+    const lines = frame.split("\n");
+    const editorTopBorder = findEditorTopBorder(lines);
+    expect(editorTopBorder).toBeGreaterThan(0);
+    for (let r = editorTopBorder; r < lines.length; r++) {
+      expect(lines[r] ?? "").not.toContain("prompt-");
+      expect(lines[r] ?? "").not.toContain("reply-");
+    }
+    unmount();
+  });
+
+  test("scrolled-up (offset 30) with 12-line editor: chat content stays above editor", () => {
+    const rows = 30;
+    const { lastFrame, unmount } = mountLayoutWithScroll({
+      columns: 100,
+      rows,
+      showRail: false,
+      turns: 30,
+      scrollOffset: 30,
+      editorLines: 12,
+    });
+    const frame = lastFrame();
+    dumpFrame("100x30 editor=12 scrolled mid", frame);
+    const lines = frame.split("\n");
+    const editorTopBorder = findEditorTopBorder(lines);
+    expect(editorTopBorder).toBeGreaterThan(0);
+    for (let r = editorTopBorder; r < lines.length; r++) {
+      expect(lines[r] ?? "").not.toContain("prompt-");
+      expect(lines[r] ?? "").not.toContain("reply-");
+    }
+    unmount();
+  });
 });

@@ -31,7 +31,7 @@ export function Layout(props: LayoutProps): JSX.Element {
         ) : null}
         <ChatPane width={chatWidth} height={chatHeight} />
       </Box>
-      <Box width="100%">
+      <Box width="100%" maxHeight={EDITOR_ROWS} overflow="hidden" flexShrink={0}>
         <Editor />
       </Box>
       <Footer cwd={state.cwd ?? ""} gitBranch={state.gitBranch ?? ""} gitDirty={state.gitDirty} />

@@ -73,6 +73,7 @@ export type Instance = {
 	stdin: Stdin;
 	frames: string[];
 	lastFrame: () => string | undefined;
+	waitUntilRenderFlush: () => Promise<void>;
 };
 
 const instances: Array<{unmount: () => void; cleanup: () => void}> = [];
@@ -80,6 +81,13 @@ const instances: Array<{unmount: () => void; cleanup: () => void}> = [];
 export interface RenderOptions {
 	readonly appendToScrollback?: boolean;
 	readonly stdoutIsTTY?: boolean;
+	/**
+	Mirror the live TUI render path: disable `debug` so `log-update` runs,
+	and turn on `appendToScrollback` + `alternateScreen` + `interactive` to
+	match the production TUI config. Use this to assert against frame
+	increments the way a real terminal would observe them.
+	*/
+	readonly liveMode?: boolean;
 }
 
 export const render = (
@@ -94,10 +102,12 @@ export const render = (
 		stdout: stdout as unknown as NodeJS.WriteStream,
 		stderr: stderr as unknown as NodeJS.WriteStream,
 		stdin: stdin as unknown as NodeJS.ReadStream,
-		debug: true,
+		debug: options.liveMode !== true,
 		exitOnCtrlC: false,
 		patchConsole: false,
 		appendToScrollback: options.appendToScrollback,
+		alternateScreen: options.liveMode === true,
+		interactive: options.liveMode === true,
 	});
 	instances.push(instance);
 	return {
@@ -109,6 +119,7 @@ export const render = (
 		stdin,
 		frames: stdout.frames,
 		lastFrame: stdout.lastFrame,
+		waitUntilRenderFlush: instance.waitUntilRenderFlush,
 	};
 };
 
