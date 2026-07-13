@@ -4,6 +4,7 @@ import { AgentsRail } from "./agents-rail";
 import { TuiContext } from "../context";
 import { Actions, createStateStore } from "../../state";
 import { makeContextValue } from "../../test-support";
+import { SPINNER_FRAMES } from "../themes";
 
 declare const test: (name: string, fn: () => void | Promise<void>) => void;
 declare const describe: (name: string, fn: () => void) => void;
@@ -47,6 +48,26 @@ describe("AgentsRail", () => {
       <TuiContext.Provider value={ctx}><AgentsRail width={20} /></TuiContext.Provider>,
     );
     expect(lastFrame()).toContain("·");
+    unmount();
+  });
+
+  test("renders a spinner frame for busy agents", () => {
+    const stateStore = createStateStore();
+    const sender = { kind: "agent", teamId: "demo", agentKey: "general-1" } as const;
+    stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
+      id: "demo",
+      leaderKey: "general-1",
+      agents: [{ teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    })));
+    stateStore.dispatch(Actions.receiveEvent(Events.agentTurnStart(sender)));
+    const state = stateStore.getState();
+    const ctx = makeContextValue({ stateStore, state });
+    const { lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}><AgentsRail width={20} /></TuiContext.Provider>,
+    );
+    const frame = lastFrame() ?? "";
+    const hasFrame = SPINNER_FRAMES.some((glyph) => frame.includes(glyph));
+    expect(hasFrame).toBe(true);
     unmount();
   });
 });

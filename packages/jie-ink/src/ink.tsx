@@ -24,6 +24,7 @@ import {type TerminalSuspension} from './components/AppContext.js';
 import {accessibilityContext as AccessibilityContext} from './components/AccessibilityContext.js';
 import {materializeRoot} from './selection/materialize.js';
 import {type CellPosition} from './selection/selection-engine.js';
+import {createCachedMaterializer} from './selection/cached-materializer.js';
 import {writeClipboard} from './selection/clipboard.js';
 import {
 	type KittyKeyboardOptions,
@@ -444,14 +445,23 @@ export default class Ink {
 		this.lastTerminalWidth = getWindowSize(this.options.stdout).columns;
 
 		// Selection materializer: materialized on demand from the rendered DOM
-		// tree. Consumed by the in-app selection engine when extracting text.
-		this.selectionMaterializer = () => {
+		// tree. Cached: the grid is recomputed only when the DOM tree changes.
+		// Invalidation rides the existing layout-listener hook in dom.ts: every
+		// React commit calls `emitLayoutListeners(rootNode)` (synchronously,
+		// before paint), so a long drag over a stable frame re-uses one walk
+		// rather than re-walking per mouse motion event. Consumed by the
+		// in-app selection engine when extracting text.
+		const cachedMaterializer = createCachedMaterializer(() => {
 			try {
 				return materializeRoot(this.rootNode);
 			} catch {
 				return [];
 			}
-		};
+		});
+		this.selectionMaterializer = cachedMaterializer;
+		dom.addLayoutListener(this.rootNode, () => {
+			cachedMaterializer.invalidate();
+		});
 		this.selectionEmitter.setMaxListeners(Infinity);
 		this.onSelectionClipboard = (text: string) => {
 			try {
