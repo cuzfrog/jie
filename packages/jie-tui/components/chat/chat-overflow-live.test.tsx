@@ -1,16 +1,12 @@
 import { Events } from "@cuzfrog/jie-platform";
 import type { ReactElement } from "react";
 import { App } from "../app";
-import { Actions, createStateStore, type TuiStateStore } from "../../state";
+import { Actions, createStateStore, type StateStore } from "../../state";
 import { render } from "../../test-renderer";
-
-declare const test: (name: string, fn: () => void | Promise<void>) => void;
-declare const describe: (name: string, fn: () => void) => void;
-declare const expect: typeof import("bun:test").expect;
 
 interface LiveInstance {
   readonly frames: string[];
-  readonly stateStore: TuiStateStore;
+  readonly stateStore: StateStore;
   waitFlush(): Promise<void>;
   unmount(): void;
 }
@@ -29,7 +25,7 @@ function mountLive(opts: { turns: number; initialScrollOffset: number; editorLin
   return mountLiveFillHistory(stateStore, opts);
 }
 
-function mountLiveFillHistory(stateStore: TuiStateStore, opts: { turns: number; initialScrollOffset: number; editorLines: number }): LiveInstance {
+function mountLiveFillHistory(stateStore: StateStore, opts: { turns: number; initialScrollOffset: number; editorLines: number }): LiveInstance {
   const sender = { kind: "agent", teamId: "demo", agentKey: "general-1" } as const;
   for (let i = 0; i < opts.turns; i++) {
     stateStore.dispatch(Actions.receiveEvent(Events.userPrompt({ kind: "user" }, "demo", `prompt-${i}`, "general-1")));
