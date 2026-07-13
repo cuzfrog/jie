@@ -795,14 +795,27 @@ export default class Ink {
 			return;
 		}
 
+		// stderr is optional. When absent (e.g. embedders that pass only stdout),
+		// fall back to the underlying process stream so patches that route
+		// console.error/warn here don't crash. process.stderr is also undefined
+		// in worker contexts, in which case we silently drop rather than throw.
+		const stderr = this.options.stderr;
+		const writeStderr = (chunk: string): void => {
+			if (stderr === undefined) {
+				process.stderr?.write(chunk);
+			} else {
+				stderr.write(chunk);
+			}
+		};
+
 		if (this.options.debug) {
-			this.options.stderr.write(data);
+			writeStderr(data);
 			this.options.stdout.write(this.fullStaticOutput + this.lastOutput);
 			return;
 		}
 
 		if (!this.interactive) {
-			this.options.stderr.write(data);
+			writeStderr(data);
 			return;
 		}
 
@@ -812,7 +825,7 @@ export default class Ink {
 		}
 
 		this.log.clear();
-		this.options.stderr.write(data);
+		writeStderr(data);
 		this.restoreLastOutput();
 
 		if (sync) {

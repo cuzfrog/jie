@@ -17,7 +17,7 @@ describe("Scenario 4 — first-time setup (TUI flow)", () => {
       seedTeam(harness.dir, "my-team", "general", [
         { role: "general", systemPrompt: "You answer briefly.", tools: [] },
       ]);
-      sendLine(harness.stdin, "/team my-team");
+      await sendLine(harness.stdin, "/team my-team");
       await waitForErrorBanner(harness.tui, "No model has been selected");
     } finally {
       await stopTui(harness);
@@ -31,13 +31,13 @@ describe("Scenario 4 — first-time setup (TUI flow)", () => {
       seedTeam(harness.dir, "my-team", "general", [
         { role: "general", systemPrompt: "You answer briefly.", tools: [] },
       ]);
-      sendLine(harness.stdin, "/team my-team");
+      await sendLine(harness.stdin, "/team my-team");
       await waitForErrorBanner(harness.tui, "No model has been selected");
 
       writeModelsJsonTo(harness.dir);
       writeSettingsJson(harness.dir);
 
-      sendLine(harness.stdin, "/team my-team");
+      await sendLine(harness.stdin, "/team my-team");
       await waitForTeam(harness.tui, "my-team");
       await waitForNoErrorBanner(harness.tui);
       await submitAndWaitForAgentIdle(harness, "Tell me a joke", "my-team:general-1");

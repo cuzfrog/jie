@@ -23,7 +23,7 @@ describe("Scenario 1 — simple agent", () => {
   });
 
   test("team loads, prompt streams, idle closes; rail hidden by default", async () => {
-    sendLine(harness.stdin, "/team my-team");
+    await sendLine(harness.stdin, "/team my-team");
     await waitForTeam(harness.tui, "my-team");
     await submitAndWaitForAgentIdle(harness, "Tell me a story", "my-team:general-1");
     const state = harness.tui.state;

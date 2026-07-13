@@ -27,7 +27,7 @@ describe("Scenario 2 — pass work in a team", () => {
   });
 
   test("team loads with manager and worker; both agents keep separate conversations", async () => {
-    sendLine(harness.stdin, "/team my-team");
+    await sendLine(harness.stdin, "/team my-team");
     await waitForTeam(harness.tui, "my-team");
     await submitAndWaitForAgentIdle(harness, "Read file1.txt and write its content to my-answer.txt", "my-team:manager-1");
     const state = harness.tui.state;
@@ -39,7 +39,7 @@ describe("Scenario 2 — pass work in a team", () => {
   });
 
   test("manager drives a bash tool to completion", async () => {
-    sendLine(harness.stdin, "/team my-team");
+    await sendLine(harness.stdin, "/team my-team");
     await waitForTeam(harness.tui, "my-team");
     await submitAndWaitForAgentIdle(harness, "Read file1.txt and write its content to my-answer.txt", "my-team:manager-1");
     const state = harness.tui.state;

@@ -32,7 +32,7 @@ describe("Scenario 6 — queued prompts from agent", () => {
   });
 
   test("manager emits 5 notify tool cards and worker drains 5 queued turns", async () => {
-    sendLine(harness.stdin, "/team my-team");
+    await sendLine(harness.stdin, "/team my-team");
     await waitForTeam(harness.tui, "my-team");
     const state0 = harness.tui.state;
     expect(state0.agents.size).toBe(2);

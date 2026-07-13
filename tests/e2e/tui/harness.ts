@@ -28,6 +28,7 @@ export interface StartTuiOptions {
 class TestWritable extends PassThrough {
   columns = 80;
   rows = 30;
+  isTTY = true;
 }
 
 class TestReadable extends PassThrough {
@@ -65,11 +66,14 @@ export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> 
   const stdin = new TestReadable();
   const stdout = new TestWritable();
   stdout.rows = opts.rows ?? 30;
+  const stderr = new TestWritable();
+  stderr.rows = opts.rows ?? 30;
   const tuiOptions: CreateTUIOptions = { cwd: opts.cwd ?? dir, rows: opts.rows ?? 30 };
   const tui = createTui(tuiOptions, {
     platform,
     stdin: stdin as unknown as NodeJS.ReadStream,
     stdout: stdout as unknown as NodeJS.WriteStream,
+    stderr: stderr as unknown as NodeJS.WriteStream,
     gitBranch: "main",
     gitDirty: false,
   });
@@ -83,17 +87,34 @@ export async function stopTui(harness: TuiHarness): Promise<void> {
   rmSync(harness.dir, { recursive: true, force: true });
 }
 
-export function sendCmd(stdin: PassThrough, text: string): void {
-  stdin.write(text);
+async function typeChunk(stdin: PassThrough, chunk: string): Promise<void> {
+  // Real terminals deliver each keystroke as its own stdin chunk. Ink's
+  // input-parser matches single-codepoint special keys (\r, \t, \x7f)
+  // against the chunk as a whole, so writing the whole command in a single
+  // chunk collapses every char into one non-recognized event and the
+  // trailing \r never matches `key.return`. Yield between writes so the
+  // PassThrough emits a `readable` boundary between keystrokes, matching
+  // raw-mode terminal behavior.
+  for (const ch of chunk) {
+    stdin.write(ch);
+    // Flush the PassThrough's internal buffer so the next `read()` only
+    // sees this codepoint, and the consumer's `handleReadable` callback
+    // runs before the next keystroke is queued.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
 }
 
-export function sendEnter(stdin: PassThrough): void {
-  stdin.write("\r");
+export async function sendCmd(stdin: PassThrough, text: string): Promise<void> {
+  await typeChunk(stdin, text);
 }
 
-export function sendLine(stdin: PassThrough, text: string): void {
-  stdin.write(text);
-  stdin.write("\r");
+export async function sendEnter(stdin: PassThrough): Promise<void> {
+  await typeChunk(stdin, "\r");
+}
+
+export async function sendLine(stdin: PassThrough, text: string): Promise<void> {
+  await sendCmd(stdin, text);
+  await sendEnter(stdin);
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs: number, label: string): Promise<void> {
@@ -150,7 +171,7 @@ export async function submitAndWaitForAgentIdle(
   const priorHistoryLen = before?.history.length ?? 0;
   const priorCurrentBlocks = before?.currentTurn?.blocks.length ?? 0;
   const priorCurrentCards = before?.currentTurn?.cards.length ?? 0;
-  sendLine(harness.stdin, prompt);
+  await sendLine(harness.stdin, prompt);
   await waitForPromptSettled(
     harness.tui,
     agentId,

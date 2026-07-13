@@ -23,7 +23,7 @@ describe("Scenario 5 — second prompt after the first turn", () => {
   });
 
   test("state captures both prompts and the haiku response", async () => {
-    sendLine(harness.stdin, "/team my-team");
+    await sendLine(harness.stdin, "/team my-team");
     await waitForTeam(harness.tui, "my-team");
     await submitAndWaitForAgentIdle(harness, "Research the history of J", "my-team:general-1");
     await submitAndWaitForAgentIdle(harness, "Tell me a haiku", "my-team:general-1");

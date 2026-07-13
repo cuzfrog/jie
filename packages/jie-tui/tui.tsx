@@ -104,6 +104,7 @@ class InkTui implements Tui {
           patchConsole: true,
           appendToScrollback: true,
           alternateScreen: true,
+          interactive: true,
         });
         this.inkInstance = instance;
         void instance.waitUntilExit().then(() => this.resolveStart?.());

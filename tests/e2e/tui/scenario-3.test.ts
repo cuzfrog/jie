@@ -26,12 +26,12 @@ describe("Scenario 3 — switch teams", () => {
   });
 
   test("swap to a second team loads new agents", async () => {
-    sendLine(harness.stdin, "/team my-team-1");
+    await sendLine(harness.stdin, "/team my-team-1");
     await waitForTeam(harness.tui, "my-team-1");
     await submitAndWaitForAgentIdle(harness, "go", "my-team-1:general-1");
     expect(harness.tui.state.agents.get("my-team-1:general-1")?.currentTurn?.blocks.some((b) => b.text.includes("3"))).toBe(true);
 
-    sendLine(harness.stdin, "/team my-team-2");
+    await sendLine(harness.stdin, "/team my-team-2");
     await waitForTeam(harness.tui, "my-team-2");
     await submitAndWaitForAgentIdle(harness, "go", "my-team-2:general-1");
 
@@ -44,11 +44,11 @@ describe("Scenario 3 — switch teams", () => {
   });
 
   test("swap back to first team re-seeds", async () => {
-    sendLine(harness.stdin, "/team my-team-1");
+    await sendLine(harness.stdin, "/team my-team-1");
     await waitForTeam(harness.tui, "my-team-1");
-    sendLine(harness.stdin, "/team my-team-2");
+    await sendLine(harness.stdin, "/team my-team-2");
     await waitForTeam(harness.tui, "my-team-2");
-    sendLine(harness.stdin, "/team my-team-1");
+    await sendLine(harness.stdin, "/team my-team-1");
     await waitForTeam(harness.tui, "my-team-1");
     expect(harness.tui.state.agents.has("my-team-1:general-1")).toBe(true);
   });
