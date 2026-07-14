@@ -8,6 +8,7 @@ import { Editor } from "./editor";
 import { Footer } from "./footer";
 import { MAX_VISIBLE_TODOS, TodoList, todoListRowCount } from "./agent-todo";
 import { TransientBanner } from "./transient-banner/transient-banner";
+import { ErrorBanner } from "./error-banner";
 import { SlashAutocomplete, SLASH_COMMAND_NAMES } from "../slash-autocomplete";
 import { FileMention, scanFiles, type FileEntry } from "../file-mention";
 import { Actions } from "../state";
@@ -53,6 +54,8 @@ export function Layout(props: LayoutProps): JSX.Element {
         <TodoList width={props.columns} />
       </Box>
       <Box width="100%" maxHeight={EDITOR_ROWS} overflow="hidden" flexShrink={0}>
+        <ErrorBanner />
+        <TransientBanner />
         <Editor />
       </Box>
       <Box width="100%" flexShrink={0}>
@@ -81,7 +84,6 @@ export function Layout(props: LayoutProps): JSX.Element {
           }}
         />
       </Box>
-      <TransientBanner />
       <Footer cwd={state.cwd ?? ""} gitBranch={state.gitBranch ?? ""} gitDirty={state.gitDirty} />
     </Box>
   );
