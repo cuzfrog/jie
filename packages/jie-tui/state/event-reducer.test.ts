@@ -327,5 +327,39 @@ describe("reduceToolCall + reduceToolResult", () => {
       expect(card.details).toBeNull();
     }
   });
+
+  test("a todo_write tool result updates the agent's todos from details.kind === 'todos'", () => {
+    let state = promptedState();
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "todo_write", "{}"));
+    const todos = [
+      { content: "alpha", status: "completed" },
+      { content: "beta", status: "in_progress" },
+      { content: "gamma", status: "pending" },
+    ] as const;
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "todo_write", "ok", 5, null, { kind: "todos", todos }));
+    expect(state.agents.get("my-team:general-1")?.todos).toEqual(todos);
+  });
+
+  test("an empty todo list clears the agent's todos", () => {
+    let state = promptedState();
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "todo_write", "{}"));
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "todo_write", "ok", 5, null, { kind: "todos", todos: [] }));
+    expect(state.agents.get("my-team:general-1")?.todos).toEqual([]);
+  });
+
+  test("a tool result with non-todo details does not touch the agent's todos", () => {
+    let state = promptedState();
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", "out", 5, null, { kind: "diff", diff: "@@ -1 +1 @@\n-a\n+A" }));
+    expect(state.agents.get("my-team:general-1")?.todos).toEqual([]);
+  });
+
+  test("a todo_write tool result for a foreign team is ignored", () => {
+    const state = promptedState();
+    const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
+    const state2 = reduce(state, Events.agentToolResult(foreign, "c1", "todo_write", "ok", 5, null, { kind: "todos", todos: [{ content: "x", status: "in_progress" }] }));
+    expect(state2).toBe(state);
+    expect(state2.agents.get("my-team:general-1")?.todos).toEqual([]);
+  });
 });
 

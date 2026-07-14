@@ -6,10 +6,12 @@ import { AgentsRail } from "./team-rail";
 import { railWidth } from "./themes";
 import { Editor } from "./editor";
 import { Footer } from "./footer";
+import { MAX_VISIBLE_TODOS, TodoList, todoListRowCount } from "./agent-todo";
 import { TransientBanner } from "./transient-banner/transient-banner";
 
 const EDITOR_ROWS = 8;
 const FOOTER_ROWS = 2;
+const TODO_BORDER_ROWS = 2;
 
 interface LayoutProps {
   readonly columns: number;
@@ -21,7 +23,8 @@ export function Layout(props: LayoutProps): JSX.Element {
   const railVisible = state.showTeamRailPanel;
   const rail = railVisible ? railWidth(props.columns) : 0;
   const chatWidth = Math.max(1, props.columns - rail - (rail > 0 ? 1 : 0));
-  const chatHeight = Math.max(1, props.rows - EDITOR_ROWS - FOOTER_ROWS);
+  const todoHeight = todoPanelHeight(state);
+  const chatHeight = Math.max(1, props.rows - EDITOR_ROWS - FOOTER_ROWS - todoHeight);
 
   return (
     <Box flexDirection="column" width={props.columns} height={props.rows}>
@@ -32,6 +35,9 @@ export function Layout(props: LayoutProps): JSX.Element {
         ) : null}
         <ChatPane width={chatWidth} height={chatHeight} />
       </Box>
+      <Box width="100%" maxHeight={MAX_VISIBLE_TODOS + TODO_BORDER_ROWS} overflow="hidden" flexShrink={0}>
+        <TodoList width={props.columns} />
+      </Box>
       <Box width="100%" maxHeight={EDITOR_ROWS} overflow="hidden" flexShrink={0}>
         <Editor />
       </Box>
@@ -39,4 +45,14 @@ export function Layout(props: LayoutProps): JSX.Element {
       <Footer cwd={state.cwd ?? ""} gitBranch={state.gitBranch ?? ""} gitDirty={state.gitDirty} />
     </Box>
   );
+}
+
+function todoPanelHeight(state: ReturnType<typeof useTuiContext>["state"]): number {
+  const focusedId = state.focusedAgentId;
+  if (focusedId === null) return 0;
+  const focused = state.agents.get(focusedId);
+  if (focused === undefined) return 0;
+  const visibleRows = todoListRowCount(focused.todos.length);
+  if (visibleRows === 0) return 0;
+  return visibleRows + TODO_BORDER_ROWS;
 }

@@ -36,6 +36,7 @@ function agent(turns: ReadonlyArray<MessageTurn>): AgentUiState {
     currentTurn: null,
     lastStopReason: null,
     contextTokensUsed: 0,
+    todos: [],
   };
 }
 

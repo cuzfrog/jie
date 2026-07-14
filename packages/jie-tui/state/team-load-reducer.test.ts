@@ -106,4 +106,40 @@ describe("teamLoadReducer", () => {
     expect(second.agents.has("my-team:general-1")).toBe(true);
     expect(second.agents.has("my-team:helper-1")).toBe(false);
   });
+
+  test("team switch resets every agent's todos to []", () => {
+    const first = teamLoadReducer(INITIAL_TUI_STATE, team([
+      { role: "general", agentKey: "general-1", isLeader: true, model: null },
+    ]));
+    const withTodos: TuiState = {
+      ...first,
+      agents: new Map(first.agents),
+    };
+    const withTodosAgent = withTodos.agents.get("my-team:general-1");
+    if (withTodosAgent === undefined) throw new Error("seed missing");
+    withTodos.agents.set("my-team:general-1", { ...withTodosAgent, todos: [{ content: "carry-over", status: "in_progress" }] });
+    const switched = teamLoadReducer(withTodos, {
+      id: "my-team-2",
+      leaderKey: "worker-1",
+      agents: [{ teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, model: null }],
+    });
+    expect(switched.agents.get("my-team-2:worker-1")?.todos).toEqual([]);
+  });
+
+  test("same-team reload preserves an agent's existing todos", () => {
+    const first = teamLoadReducer(INITIAL_TUI_STATE, team([
+      { role: "general", agentKey: "general-1", isLeader: true, model: null },
+    ]));
+    const firstAgent = first.agents.get("my-team:general-1");
+    if (firstAgent === undefined) throw new Error("seed missing");
+    const withTodos: TuiState = {
+      ...first,
+      agents: new Map(first.agents),
+    };
+    withTodos.agents.set("my-team:general-1", { ...firstAgent, todos: [{ content: "still here", status: "pending" }] });
+    const second = teamLoadReducer(withTodos, team([
+      { role: "general", agentKey: "general-1", isLeader: true, model: null },
+    ]));
+    expect(second.agents.get("my-team:general-1")?.todos).toEqual([{ content: "still here", status: "pending" }]);
+  });
 });

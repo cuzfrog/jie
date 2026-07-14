@@ -2,6 +2,7 @@ import type { AnyEventEnvelope } from "@cuzfrog/jie-platform";
 import type { AgentId, AgentUiState, MessageCard, TuiState, MessageTurn } from "./state";
 import { teamLoadReducer } from "./team-load-reducer";
 import { estimateContextTokens } from "./context-tokens";
+import { isTodoDetails } from "../todo";
 
 export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
   switch (event.type) {
@@ -149,7 +150,12 @@ function reduceToolResult(state: TuiState, event: AnyEventEnvelope): TuiState {
   const nextTurn = { ...agent.currentTurn, cards };
   const contextTokensUsed = estimateContextTokens(agent.history, nextTurn);
   const next: AgentUiState = { ...agent, currentTurn: nextTurn, contextTokensUsed };
-  return withAgent(state, agentId, next);
+  return withAgent(state, agentId, withTodoDetails(next, details));
+}
+
+function withTodoDetails(agent: AgentUiState, details: unknown): AgentUiState {
+  if (!isTodoDetails(details)) return agent;
+  return { ...agent, todos: details.todos };
 }
 
 function resolveAgent(

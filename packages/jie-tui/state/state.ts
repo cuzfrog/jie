@@ -1,5 +1,6 @@
 import type { StopReason } from "@earendil-works/pi-ai";
 import type { EffortLevel, ModelInfo, SessionSummary } from "@cuzfrog/jie-platform";
+import type { TodoItem } from "../todo";
 
 export type AgentStatus = "idle" | "busy";
 export { type EffortLevel };
@@ -45,6 +46,7 @@ export interface AgentUiState {
   readonly currentTurn: MessageTurn | null;
   readonly lastStopReason: StopReason | null;
   readonly contextTokensUsed: number;
+  readonly todos: ReadonlyArray<TodoItem>;
 }
 
 export interface TuiState {
