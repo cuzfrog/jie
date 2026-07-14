@@ -46,6 +46,7 @@ export interface AgentUiState {
   readonly currentTurn: MessageTurn | null;
   readonly lastStopReason: StopReason | null;
   readonly contextTokensUsed: number;
+  readonly lastReportedTotalTokens: number | null;
   readonly todos: ReadonlyArray<TodoItem>;
 }
 

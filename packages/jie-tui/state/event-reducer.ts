@@ -95,7 +95,7 @@ function reduceIdle(state: TuiState, event: AnyEventEnvelope): TuiState {
   if (resolved === null) return state;
   if (event.type !== "agent.idle") return state;
   const { agentId, agent } = resolved;
-  const contextTokensUsed = estimateContextTokens(agent.history, agent.currentTurn);
+  const contextTokensUsed = agent.lastReportedTotalTokens ?? estimateContextTokens(agent.history, agent.currentTurn);
   const next: AgentUiState = { ...agent, status: "idle", lastStopReason: event.payload, contextTokensUsed };
   return withAgent(state, agentId, next);
 }
@@ -105,7 +105,7 @@ function reduceUsage(state: TuiState, event: AnyEventEnvelope): TuiState {
   if (resolved === null) return state;
   if (event.type !== "agent.usage") return state;
   const { agentId, agent } = resolved;
-  return withAgent(state, agentId, { ...agent, contextTokensUsed: event.payload.totalTokens });
+  return withAgent(state, agentId, { ...agent, contextTokensUsed: event.payload.totalTokens, lastReportedTotalTokens: event.payload.totalTokens });
 }
 
 function reduceStreamChunk(state: TuiState, event: AnyEventEnvelope): TuiState {

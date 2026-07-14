@@ -266,6 +266,44 @@ describe("reduceUsage", () => {
     }));
     expect(state2).toBe(state);
   });
+
+  test("two consecutive agent.usage events last-wins on contextTokensUsed", () => {
+    const state = loadedState();
+    const mid = reduce(state, Events.agentUsage(AGENT_SENDER, {
+      input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 100,
+    }));
+    const final = reduce(mid, Events.agentUsage(AGENT_SENDER, {
+      input: 5, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 250,
+    }));
+    const agent = final.agents.get("my-team:general-1");
+    expect(agent?.contextTokensUsed).toBe(250);
+    expect(agent?.lastReportedTotalTokens).toBe(250);
+  });
+});
+
+describe("reduceIdle after agent.usage", () => {
+  test("agent.idle preserves the precise contextTokensUsed set by a prior agent.usage", () => {
+    let state = loadedState();
+    state = reduce(state, Events.userPrompt(USER_SENDER, "my-team", "hi", "general-1"));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER));
+    state = reduce(state, Events.agentUsage(AGENT_SENDER, {
+      input: 10, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 480,
+    }));
+    const state2 = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
+    const agent = state2.agents.get("my-team:general-1");
+    expect(agent?.contextTokensUsed).toBe(480);
+    expect(agent?.status).toBe("idle");
+  });
+
+  test("agent.idle falls back to the estimator when no agent.usage has fired yet", () => {
+    let state = loadedState();
+    state = reduce(state, Events.userPrompt(USER_SENDER, "my-team", "hi", "general-1"));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER));
+    const state2 = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
+    const agent = state2.agents.get("my-team:general-1");
+    expect(agent?.contextTokensUsed).toBeGreaterThan(0);
+    expect(agent?.status).toBe("idle");
+  });
 });
 
 describe("reduceStreamChunk", () => {

@@ -63,6 +63,7 @@ function emptyAgent(
     history: [],
     currentTurn: null,
     contextTokensUsed: 0,
+    lastReportedTotalTokens: null,
     todos: [],
   };
 }
