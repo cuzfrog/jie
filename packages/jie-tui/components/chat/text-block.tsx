@@ -18,14 +18,15 @@ export function TextBlock({ block, expanded }: TextBlockProps): JSX.Element {
         </Text>
       );
     }
-    const lines = block.text.length === 0 ? [] : block.text.split("\n");
+    if (block.text.length === 0) {
+      return <></>;
+    }
     return (
-      <Box flexDirection="column">
-        {lines.map((line, i) => (
-          <Text key={`t-${i}`} color={pickColor("thinkingText")} italic>
-            {`  ${line}`}
-          </Text>
-        ))}
+      <Box flexDirection="column" paddingX={1} paddingY={0}>
+        <Markdown
+          source={block.text}
+          style={{ textColor: pickColor("thinkingText"), italic: true }}
+        />
       </Box>
     );
   }

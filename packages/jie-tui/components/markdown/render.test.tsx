@@ -40,6 +40,26 @@ describe("Markdown", () => {
     expect(f).toContain("three");
   });
 
+  test("renders inline code inside a list item via InlineRuns", () => {
+    const f = stripAnsi(frameOf("- use `foo()` please"));
+    expect(f).toContain("use");
+    expect(f).toContain("foo()");
+    expect(f).toContain("please");
+    expect(f).toContain("- ");
+  });
+
+  test("renders emphasis inside a list item", () => {
+    const f = stripAnsi(frameOf("- this is *italic*"));
+    expect(f).toContain("this is");
+    expect(f).toContain("italic");
+  });
+
+  test("renders nested list children with indent", () => {
+    const f = stripAnsi(frameOf("- outer\n  - inner"));
+    expect(f).toContain("outer");
+    expect(f).toContain("inner");
+  });
+
   test("renders an ordered list with digit prefixes", () => {
     const f = frameOf("1. alpha\n2. beta");
     expect(f).toContain("alpha");
@@ -69,6 +89,13 @@ describe("Markdown", () => {
     expect(f).toContain("2");
     expect(f).toContain("3");
     expect(f).toContain("4");
+  });
+
+  test("renders inline code inside a table cell", () => {
+    const f = stripAnsi(frameOf("| cmd | desc |\n|-----|------|\n| `ls` | list |"));
+    expect(f).toContain("cmd");
+    expect(f).toContain("ls");
+    expect(f).toContain("list");
   });
 
   test("renders inline code spans distinct from regular text", () => {
@@ -130,5 +157,48 @@ describe("Markdown", () => {
     expect(f).toContain("heading");
     expect(f).toContain("one");
     expect(f).toContain("const x = 1;");
+  });
+});
+
+describe("Markdown style override", () => {
+  function stripAnsi(s: string): string {
+    return s.replace(/\x1b\[[0-9;]*m/g, "");
+  }
+
+  test("textColor override recolors paragraph runs to the override", () => {
+    const out = render(<Markdown source="hello" style={{ textColor: "red" }} />);
+    const frame = out.lastFrame() ?? "";
+    expect(frame).toContain("\x1b[31m");
+  });
+
+  test("italic override wraps paragraph runs in italic", () => {
+    const out = render(<Markdown source="hello" style={{ italic: true }} />);
+    const frame = out.lastFrame() ?? "";
+    expect(frame).toContain("\x1b[3m");
+  });
+
+  test("code spans respect textColor override", () => {
+    const out = render(<Markdown source="call `foo()`" style={{ textColor: "red" }} />);
+    const frame = out.lastFrame() ?? "";
+    expect(frame).toContain("foo()");
+    expect(frame).toMatch(/\x1b\[31m[^\x1b]*foo\(\)/);
+  });
+
+  test("lists render through the override color", () => {
+    const out = render(<Markdown source="- a\n- b" style={{ textColor: "red" }} />);
+    const frame = stripAnsi(out.lastFrame() ?? "");
+    expect(frame).toContain("a");
+    expect(frame).toContain("b");
+  });
+
+  test("tables do not emit accent color under the override", () => {
+    const out = render(
+      <Markdown
+        source={"| a | b |\n|---|---|\n| 1 | 2 |"}
+        style={{ textColor: "red" }}
+      />,
+    );
+    const frame = out.lastFrame() ?? "";
+    expect(frame).not.toContain("\x1b[36m");
   });
 });

@@ -89,4 +89,27 @@ describe("formatOsc8", () => {
     const out = formatOsc8("", "x");
     expect(out).toBe("x ()");
   });
+
+  test("strips control bytes from the label in OSC-8 mode", () => {
+    setEnv("1");
+    const out = formatOsc8("https://x.com", "la\x07bel");
+    expect(out).toContain("label");
+    expect(out).not.toContain("\x07");
+  });
+
+  test("strips ESC byte from the label in OSC-8 mode", () => {
+    setEnv("1");
+    const out = formatOsc8("https://x.com", "right\x1b]0;hijack");
+    expect(out).toContain("right");
+    expect(out).toContain("]0;hijack");
+    expect(out.indexOf("\x1b")).toBe(0);
+    expect(out.indexOf("\x1b", 1)).toBeGreaterThan(0);
+    expect(out.lastIndexOf("\x1b")).toBeGreaterThan(out.indexOf("]0;hijack"));
+  });
+
+  test("strips ST byte (0x9c) from the label in OSC-8 mode", () => {
+    setEnv("1");
+    const out = formatOsc8("https://x.com", "a\x9cb");
+    expect(out).toBe("\x1b]8;;https://x.com\x1b\\ab\x1b]8;;\x1b\\");
+  });
 });

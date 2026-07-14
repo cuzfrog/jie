@@ -32,6 +32,45 @@ describe("TextBlock", () => {
     unmount();
   });
 
+  test("expanded thinking renders markdown list items through Markdown", () => {
+    const { lastFrame, unmount } = render(
+      <TextBlock block={{ kind: "thinking", text: "- step one\n- step two" }} expanded={true} />,
+    );
+    const frame = stripAnsi(lastFrame() ?? "");
+    expect(frame).toContain("step one");
+    expect(frame).toContain("step two");
+    expect(frame).toContain("- ");
+    expect(frame).not.toContain("Thinking...");
+    unmount();
+  });
+
+  test("expanded thinking renders headings through Markdown", () => {
+    const { lastFrame, unmount } = render(
+      <TextBlock block={{ kind: "thinking", text: "# plan\nitems" }} expanded={true} />,
+    );
+    const frame = stripAnsi(lastFrame() ?? "");
+    expect(frame).toContain("# plan");
+    expect(frame).toContain("items");
+    unmount();
+  });
+
+  test("expanded thinking renders fenced code blocks through Markdown", () => {
+    const { lastFrame, unmount } = render(
+      <TextBlock block={{ kind: "thinking", text: "```ts\nconst x = 1;\n```" }} expanded={true} />,
+    );
+    expect(stripAnsi(lastFrame() ?? "")).toContain("const x = 1;");
+    unmount();
+  });
+
+  test("empty expanded thinking renders nothing", () => {
+    const { lastFrame, unmount } = render(
+      <TextBlock block={{ kind: "thinking", text: "" }} expanded={true} />,
+    );
+    const frame = stripAnsi(lastFrame() ?? "");
+    expect(frame).not.toContain("Thinking...");
+    unmount();
+  });
+
   test("renders markdown headings inside an assistant block", () => {
     const { lastFrame, unmount } = render(
       <TextBlock block={{ kind: "text", text: "# heading\nbody" }} expanded={true} />,

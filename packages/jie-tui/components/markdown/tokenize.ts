@@ -369,16 +369,9 @@ export function parseInline(text: string): ReadonlyArray<InlineRun> {
         continue;
       }
     }
-    if (ch === " " && text[i + 1] === " " && text[i + 2] === "\n") {
-      flush();
-      out.push({ text: " ", br: true });
-      i += 3;
-      continue;
-    }
     buf += ch;
     i += 1;
   }
-  // (intentionally keep hard-break branch above; the second occurrence is unreachable after join)
   flush();
   return mergeAdjacentCode(out);
 }

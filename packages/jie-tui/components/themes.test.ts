@@ -47,13 +47,25 @@ describe("formatQueueIndicator", () => {
     expect(out?.endsWith("…")).toBe(true);
   });
 
-  test("preview cap keeps the footer row within ~60 chars on narrow terminals", () => {
+  test("preview slice is exactly QUEUE_PREVIEW_MAX_CHARS wide", () => {
     const long = "x".repeat(200);
     const out = formatQueueIndicator([long]);
     expect(out).not.toBeNull();
     const previewStart = out!.indexOf("> ") + 2;
     const previewEnd = out!.length - 1;
     const preview = out!.slice(previewStart, previewEnd);
-    expect(preview.length).toBeLessThanOrEqual(50);
+    expect(preview.length).toBe(40);
+    expect(out!.endsWith("…")).toBe(true);
+  });
+
+  test("does not split a surrogate pair at the cap boundary", () => {
+    const filler = "x".repeat(39);
+    const text = `${filler}\u{1F434}tail`;
+    const out = formatQueueIndicator([text]);
+    expect(out).not.toBeNull();
+    expect(out).toContain("\u{1F434}");
+    const codeUnits = out!.split("").filter((ch) => ch !== " " && ch !== ">").join("");
+    const lonely = codeUnits.match(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g);
+    expect(lonely).toBeNull();
   });
 });

@@ -52,7 +52,19 @@ export const DEFAULT_MIN_COLS = 60;
 export function formatQueueIndicator(queue: ReadonlyArray<string> | null | undefined): string | null {
   if (queue === undefined || queue === null || queue.length === 0) return null;
   const next = queue[0] ?? "";
-  const preview = next.length > QUEUE_PREVIEW_MAX_CHARS ? `${next.slice(0, QUEUE_PREVIEW_MAX_CHARS)}…` : next;
+  const preview = truncateCodePoints(next, QUEUE_PREVIEW_MAX_CHARS);
+  const truncated = next.length > preview.length;
+  const shown = truncated ? `${preview}…` : preview;
   const suffix = queue.length === 1 ? "prompt" : "prompts";
-  return `${queue.length} ${suffix} queued  > ${preview}`;
+  return `${queue.length} ${suffix} queued  > ${shown}`;
+}
+
+function truncateCodePoints(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  let end = maxChars;
+  const code = text.charCodeAt(end - 1);
+  if (code >= 0xd800 && code <= 0xdbff && end < text.length) {
+    end += 1;
+  }
+  return text.slice(0, end);
 }

@@ -37,10 +37,23 @@ function escapeOscParam(value: string): string {
   return out;
 }
 
+function sanitizeLabelText(value: string): string {
+  let out = "";
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code <= 0x1f || (code >= 0x80 && code <= 0x9f) || code === 0x7f) {
+      continue;
+    }
+    out += value[i]!;
+  }
+  return out;
+}
+
 export function formatOsc8(href: string, label: string): string {
   if (!isEnabled() || !isSafeHref(href)) {
     return `${label} (${href})`;
   }
-  const safe = escapeOscParam(href);
-  return `\x1b]8;;${safe}\x1b\\${label}\x1b]8;;\x1b\\`;
+  const safeHref = escapeOscParam(href);
+  const safeLabel = sanitizeLabelText(label);
+  return `\x1b]8;;${safeHref}\x1b\\${safeLabel}\x1b]8;;\x1b\\`;
 }
