@@ -80,6 +80,7 @@ export function createCommandExecutor(deps: CommandExecutorDeps): CommandExecuto
       deps.teamManager.stop();
       return null;
     },
+    listSessions: (command) => deps.teamManager.listSessions(command.teamId),
   };
 
   async function execute<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>> {

@@ -1,4 +1,5 @@
 import type { GitSnapshot } from "../services";
+import type { SessionSummary } from "../storage";
 import type { ModelInfo, TeamInfo } from "../types";
 
 interface CommandDef<A, R = null> {
@@ -17,6 +18,7 @@ interface CommandTypeMap {
   getTeamInfo: CommandDef<{}, { defaultTeam: string | null; installed: ReadonlyArray<string> }>;
   getGitStatus: CommandDef<{}, GitSnapshot>;
   stop: CommandDef<{}, null>;
+  listSessions: CommandDef<{ teamId: string }, ReadonlyArray<SessionSummary>>;
 }
 
 export type CommandName = keyof CommandTypeMap;

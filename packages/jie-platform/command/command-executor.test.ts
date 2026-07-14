@@ -220,6 +220,27 @@ describe("CommandExecutor", () => {
     });
   });
 
+  describe("listSessions", () => {
+    test("returns the sessions for the requested teamId via teamManager", async () => {
+      const fakeSessions = [
+        { sessionId: "s1", messageCount: 3, lastActivity: "2026-07-13T10:00:00.000Z" },
+        { sessionId: "s2", messageCount: 7, lastActivity: "2026-07-13T11:00:00.000Z" },
+      ];
+      teamManager.listSessions.mockReturnValueOnce(fakeSessions);
+      const executor = makeExecutor();
+      const result = await executor.execute({ name: "listSessions", teamId: "alpha" });
+      expect(result).toBe(fakeSessions);
+      expect(teamManager.listSessions).toHaveBeenCalledWith("alpha");
+    });
+
+    test("returns an empty array for a team with no sessions", async () => {
+      teamManager.listSessions.mockReturnValueOnce([]);
+      const executor = makeExecutor();
+      const result = await executor.execute({ name: "listSessions", teamId: "ghost" });
+      expect(result).toEqual([]);
+    });
+  });
+
   describe("dispatch", () => {
     test("executor.execute is the single entry point for every command name", async () => {
       teamManager.locate.mockReturnValue("user");
@@ -240,6 +261,7 @@ describe("CommandExecutor", () => {
         { name: "getTeamInfo" },
         { name: "getGitStatus" },
         { name: "stop" },
+        { name: "listSessions", teamId: "alpha" },
       ];
       for (const command of commands) {
         await executor.execute(command);
