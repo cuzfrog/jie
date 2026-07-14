@@ -1,6 +1,10 @@
 import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types";
 import { JiePlatformError } from "../jie-platform-errors";
+import type { TodoItem } from "../types/todo";
+
+export type { TodoStatus, TodoItem, TodoDetailsPayload } from "../types/todo";
+export { isTodoDetails } from "../types/todo";
 
 const TODO_WRITE_DESCRIPTION = `Update the live task checklist. \`todos\` is the full list (it replaces, not
 merges with, whatever the agent has now). Each item is \`{ content, status, active_form? }\`.
@@ -10,14 +14,6 @@ Contract:
 - no empty \`content\`.
 The returned \`details\` carries the same list under \`kind: "todos"\` so the TUI can render
 the live checklist from the same payload.`;
-
-export type TodoStatus = "pending" | "in_progress" | "completed";
-
-export interface TodoItem {
-  readonly content: string;
-  readonly status: TodoStatus;
-  readonly active_form?: string;
-}
 
 interface TodoWriteInput {
   todos: ReadonlyArray<TodoItem>;
