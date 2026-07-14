@@ -208,4 +208,21 @@ describe("scanFiles", () => {
       teardown(dir);
     }
   });
+
+  test("multi-segment literal prefix in .gitignore matches files inside that directory", () => {
+    const dir = setup();
+    try {
+      mkdirSync(join(dir, "outdir"));
+      writeFileSync(join(dir, ".gitignore"), "outdir/*.txt\n");
+      writeFileSync(join(dir, "outdir", "main.txt"), "x");
+      writeFileSync(join(dir, "outdir", "deep.txt"), "x");
+      writeFileSync(join(dir, "kept.ts"), "x");
+      const rels = scanFiles(dir).map((f) => f.relPath);
+      expect(rels).not.toContain("outdir/main.txt");
+      expect(rels).not.toContain("outdir/deep.txt");
+      expect(rels).toContain("kept.ts");
+    } finally {
+      teardown(dir);
+    }
+  });
 });

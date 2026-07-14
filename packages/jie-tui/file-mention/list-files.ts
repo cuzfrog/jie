@@ -15,7 +15,7 @@ export interface ScannedFile {
 
 export function scanFiles(rootDir: string): ReadonlyArray<ScannedFile> {
   if (!existsSync(rootDir)) return [];
-  const rootIgnores = readGitignore(rootDir);
+  const rootIgnores = readGitignore(rootDir, ".");
   const out: ScannedFile[] = [];
   const stack: Array<{ readonly dir: string; readonly relDir: string; readonly depth: number; readonly ignores: IgnoreSet }> = [
     { dir: rootDir, relDir: ".", depth: 0, ignores: rootIgnores },
@@ -40,7 +40,7 @@ export function scanFiles(rootDir: string): ReadonlyArray<ScannedFile> {
         if (SKIP_DIRS.has(entry)) continue;
         if (next.depth >= MAX_DEPTH) continue;
         if (isIgnored(relEntry, next.ignores, next.relDir, true)) continue;
-        const childIgnores = composeIgnores(next.ignores, readGitignore(abs));
+        const childIgnores = composeIgnores(next.ignores, readGitignore(abs, relEntry));
         stack.push({ dir: abs, relDir: relEntry, depth: next.depth + 1, ignores: childIgnores });
         continue;
       }
@@ -78,7 +78,7 @@ interface IgnoreSet {
   readonly patterns: ReadonlyArray<IgnorePattern>;
 }
 
-function readGitignore(dir: string): IgnoreSet {
+function readGitignore(dir: string, fromRelDir: string): IgnoreSet {
   const gitignorePath = join(dir, GITIGNORE_FILE);
   let raw: string;
   try {
@@ -87,7 +87,6 @@ function readGitignore(dir: string): IgnoreSet {
     return { patterns: [] };
   }
   const patterns: IgnorePattern[] = [];
-  const fromRelDir = ".";
   for (const line of raw.split(/\r?\n/)) {
     let trimmed = line.trim();
     if (trimmed === "" || trimmed.startsWith("#")) continue;
@@ -209,14 +208,20 @@ function escapeClassBody(body: string): string {
 
 function isIgnored(relPath: string, ignores: IgnoreSet, frameRelDir: string, isDir: boolean): boolean {
   let ignored = false;
-  const sub = frameRelDir === "." ? relPath : relPath.slice(frameRelDir.length + 1);
   for (const p of ignores.patterns) {
-    if (p.fromRelDir !== "." && p.fromRelDir !== frameRelDir) continue;
+    if (!isInScope(p.fromRelDir, frameRelDir)) continue;
     if (p.dirOnly && !isDir) continue;
+    const sub = p.fromRelDir === "." ? relPath : relPath.slice(p.fromRelDir.length + 1);
     const target = p.dirOnly && isDir ? sub + "/" : sub;
     if (p.regex.test(target)) {
       ignored = !p.negate;
     }
   }
   return ignored;
+}
+
+function isInScope(fromRelDir: string, frameRelDir: string): boolean {
+  if (fromRelDir === ".") return true;
+  if (frameRelDir === fromRelDir) return true;
+  return frameRelDir.startsWith(fromRelDir + "/");
 }
