@@ -228,4 +228,12 @@ describe("tokenize", () => {
     const br = p.runs.find((r) => r.br === true);
     expect(br).toBeDefined();
   });
+
+  test("hard break does not leave a stray space run adjacent to br", () => {
+    const p = first(tokenize("line1  \nline2"), "paragraph");
+    const brIndex = p.runs.findIndex((r) => r.br === true);
+    expect(brIndex).toBeGreaterThanOrEqual(0);
+    const next = p.runs[brIndex + 1];
+    expect(next === undefined || next.text !== " ").toBe(true);
+  });
 });

@@ -257,7 +257,6 @@ function parseParagraph(
     if (ln.match(UL_RE) || ln.match(OL_RE)) break;
     if (ln.match(HR_RE)) break;
     if (ln.match(BLOCKQUOTE_RE)) break;
-    if (ln.match(HEADING_RE)) break;
     if (ln.match(/^---$/) && j + 1 < lines.length) break;
     if (ln.match(/^===\s*$/) && buf.length > 0) break;
     buf.push(ln);
@@ -371,9 +370,9 @@ export function parseInline(text: string): ReadonlyArray<InlineRun> {
       }
     }
     if (ch === " " && text[i + 1] === " " && text[i + 2] === "\n") {
-      buf += " ";
-      i += 3;
+      flush();
       out.push({ text: " ", br: true });
+      i += 3;
       continue;
     }
     buf += ch;

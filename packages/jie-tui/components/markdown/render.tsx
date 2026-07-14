@@ -56,7 +56,7 @@ function ParagraphNode({ runs, prefix }: { readonly runs: ReadonlyArray<InlineRu
 }
 
 function HeadingNode({ level, runs, prefix }: { readonly level: 1 | 2 | 3 | 4 | 5 | 6; readonly runs: ReadonlyArray<InlineRun>; readonly prefix?: { readonly text: string; readonly color: string } }): JSX.Element {
-  const headingPrefix = level <= 2 ? "# " : "## ";
+  const headingPrefix = level === 1 ? "# " : "## ";
   return (
     <Text color={pickColor("accent")} bold>
       {prefix !== undefined ? <Text color={prefix.color}>{prefix.text}</Text> : null}

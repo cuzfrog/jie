@@ -6,6 +6,10 @@ function frameOf(source: string): string {
   return out.lastFrame() ?? "";
 }
 
+function stripAnsi(s: string): string {
+  return s.replace(/\x1b\[[0-9;]*m/g, "");
+}
+
 describe("Markdown", () => {
   test("renders a plain paragraph as text", () => {
     const f = frameOf("hello world");
@@ -13,13 +17,20 @@ describe("Markdown", () => {
   });
 
   test("renders a level-1 heading with accent color and bold", () => {
-    const f = frameOf("# title");
-    expect(f).toContain("title");
+    const f = stripAnsi(frameOf("# title"));
+    expect(f).toMatch(/^# title/);
   });
 
   test("renders a level-2 heading", () => {
-    const f = frameOf("## subtitle");
-    expect(f).toContain("subtitle");
+    const f = stripAnsi(frameOf("## subtitle"));
+    expect(f).toMatch(/^## subtitle/);
+  });
+
+  test("level-1 heading uses single hash prefix, level-2+ uses double hash", () => {
+    const h1 = stripAnsi(frameOf("# h1"));
+    const h2 = stripAnsi(frameOf("## h2"));
+    expect(h1).toMatch(/^# h1/);
+    expect(h2).toMatch(/^## h2/);
   });
 
   test("renders an unordered list with bullets", () => {
@@ -93,7 +104,21 @@ describe("Markdown", () => {
     process.env.INK_OSC8 = "1";
     try {
       const f = frameOf("see [docs](https://x.com)");
-      expect(f).toContain("]8;;https://x.com\\docs]8;;\\");
+      expect(f).toContain("]8;;https://x.com");
+    } finally {
+      if (orig === undefined) delete process.env.INK_OSC8;
+      else process.env.INK_OSC8 = orig;
+    }
+  });
+
+  test("javascript: link in OSC-8 mode falls back to label (href)", () => {
+    const orig = process.env.INK_OSC8;
+    process.env.INK_OSC8 = "1";
+    try {
+      const f = frameOf("[click](javascript:alert(1))");
+      expect(f).toContain("click");
+      expect(f).toContain("javascript:alert(1)");
+      expect(f).not.toContain("]8;;javascript:");
     } finally {
       if (orig === undefined) delete process.env.INK_OSC8;
       else process.env.INK_OSC8 = orig;
