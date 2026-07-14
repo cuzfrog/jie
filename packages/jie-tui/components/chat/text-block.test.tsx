@@ -1,16 +1,16 @@
 import { render } from "../../test-renderer";
 import { TextBlock } from "./text-block";
 
-declare const test: (name: string, fn: () => void | Promise<void>) => void;
-declare const describe: (name: string, fn: () => void) => void;
-declare const expect: typeof import("bun:test").expect;
+function stripAnsi(s: string): string {
+  return s.replace(/\[[0-9;]*m/g, "");
+}
 
 describe("TextBlock", () => {
   test("renders assistant text with the ● prefix on the first line", () => {
     const { lastFrame, unmount } = render(
       <TextBlock block={{ kind: "text", text: "first\nsecond" }} expanded={true} />,
     );
-    const frame = lastFrame();
+    const frame = stripAnsi(lastFrame() ?? "");
     expect(frame).toContain("● first");
     expect(frame).toContain("second");
     unmount();
@@ -20,7 +20,7 @@ describe("TextBlock", () => {
     const { lastFrame, unmount } = render(
       <TextBlock block={{ kind: "thinking", text: "raw" }} expanded={false} />,
     );
-    expect(lastFrame()).toContain("Thinking...");
+    expect(stripAnsi(lastFrame() ?? "")).toContain("Thinking...");
     unmount();
   });
 
@@ -28,7 +28,27 @@ describe("TextBlock", () => {
     const { lastFrame, unmount } = render(
       <TextBlock block={{ kind: "thinking", text: "raw" }} expanded={true} />,
     );
-    expect(lastFrame()).toContain("raw");
+    expect(stripAnsi(lastFrame() ?? "")).toContain("raw");
+    unmount();
+  });
+
+  test("renders markdown headings inside an assistant block", () => {
+    const { lastFrame, unmount } = render(
+      <TextBlock block={{ kind: "text", text: "# heading\nbody" }} expanded={true} />,
+    );
+    const frame = stripAnsi(lastFrame() ?? "");
+    expect(frame).toContain("heading");
+    expect(frame).toContain("body");
+    unmount();
+  });
+
+  test("renders markdown list items inside an assistant block", () => {
+    const { lastFrame, unmount } = render(
+      <TextBlock block={{ kind: "text", text: "- one\n- two" }} expanded={true} />,
+    );
+    const frame = stripAnsi(lastFrame() ?? "");
+    expect(frame).toContain("one");
+    expect(frame).toContain("two");
     unmount();
   });
 });

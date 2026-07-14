@@ -2,6 +2,7 @@ import { Box, Text } from "@cuzfrog/jie-ink";
 import type { JSX } from "react";
 import type { MessageBlock } from "../../state";
 import { ASSISTANT_PREFIX, THINKING_LABEL, pickColor } from "../themes";
+import { Markdown } from "../markdown";
 
 interface TextBlockProps {
   readonly block: MessageBlock;
@@ -9,7 +10,6 @@ interface TextBlockProps {
 }
 
 export function TextBlock({ block, expanded }: TextBlockProps): JSX.Element {
-  const lines = block.text.length === 0 ? [] : block.text.split("\n");
   if (block.kind === "thinking") {
     if (!expanded) {
       return (
@@ -18,23 +18,24 @@ export function TextBlock({ block, expanded }: TextBlockProps): JSX.Element {
         </Text>
       );
     }
+    const lines = block.text.length === 0 ? [] : block.text.split("\n");
     return (
       <Box flexDirection="column">
         {lines.map((line, i) => (
           <Text key={`t-${i}`} color={pickColor("thinkingText")} italic>
-            {i === 0 ? `  ${line}` : `  ${line}`}
+            {`  ${line}`}
           </Text>
         ))}
       </Box>
     );
   }
+  if (block.text.length === 0) {
+    return <></>;
+  }
   return (
-    <Box flexDirection="column">
-      {lines.map((line, i) => (
-        <Text key={`b-${i}`} color={pickColor("text")}>
-          {i === 0 ? `${ASSISTANT_PREFIX}${line}` : `  ${line}`}
-        </Text>
-      ))}
-    </Box>
+    <Markdown
+      source={block.text}
+      prefix={{ text: ASSISTANT_PREFIX, color: pickColor("assistantMessageIcon") }}
+    />
   );
 }
