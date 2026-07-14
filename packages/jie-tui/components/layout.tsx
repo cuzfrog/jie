@@ -1,5 +1,5 @@
+import { useEffect, useRef, useState, type JSX } from "react";
 import { Box } from "@cuzfrog/jie-ink";
-import type { JSX } from "react";
 import { useTuiContext } from "./context";
 import { ChatPane } from "./chat";
 import { AgentsRail } from "./team-rail";
@@ -9,6 +9,7 @@ import { Footer } from "./footer";
 import { MAX_VISIBLE_TODOS, TodoList, todoListRowCount } from "./agent-todo";
 import { TransientBanner } from "./transient-banner/transient-banner";
 import { SlashAutocomplete, SLASH_COMMAND_NAMES } from "../slash-autocomplete";
+import { FileMention, scanFiles, type FileEntry } from "../file-mention";
 import { Actions } from "../state";
 
 const EDITOR_ROWS = 8;
@@ -22,11 +23,22 @@ interface LayoutProps {
 
 export function Layout(props: LayoutProps): JSX.Element {
   const { state, dispatch } = useTuiContext();
+  const editorTextRef = useRef<string>(state.editorText);
+  editorTextRef.current = state.editorText;
   const railVisible = state.showTeamRailPanel;
   const rail = railVisible ? railWidth(props.columns) : 0;
   const chatWidth = Math.max(1, props.columns - rail - (rail > 0 ? 1 : 0));
   const todoHeight = todoPanelHeight(state);
   const chatHeight = Math.max(1, props.rows - EDITOR_ROWS - FOOTER_ROWS - todoHeight);
+  const [files, setFiles] = useState<ReadonlyArray<FileEntry>>([]);
+  useEffect(() => {
+    const cwd = state.cwd;
+    if (cwd === null) {
+      setFiles([]);
+      return;
+    }
+    setFiles(scanFiles(cwd).map((f) => ({ path: f.relPath })));
+  }, [state.cwd]);
 
   return (
     <Box flexDirection="column" width={props.columns} height={props.rows}>
@@ -52,6 +64,20 @@ export function Layout(props: LayoutProps): JSX.Element {
             const suffix = argv.length === 0 ? "" : ` ${argv}`;
             dispatch(Actions.setEditorText(""));
             dispatch(Actions.submitEditorText(`/${command}${suffix}`));
+          }}
+        />
+      </Box>
+      <Box width="100%" flexShrink={0}>
+        <FileMention
+          editorText={state.editorText}
+          sessionPickerOpen={state.sessionPickerOpen}
+          files={files}
+          onInsert={(path): void => {
+            const current = editorTextRef.current;
+            const next = current.endsWith("@")
+              ? `${current}${path} `
+              : `${current} ${path} `;
+            dispatch(Actions.setEditorText(next));
           }}
         />
       </Box>

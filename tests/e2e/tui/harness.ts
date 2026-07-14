@@ -18,6 +18,7 @@ export interface TuiHarness {
   readonly platform: JiePlatform;
   readonly stdin: PassThrough;
   readonly stdout: PassThrough;
+  readonly ownedDir: boolean;
 }
 
 export interface StartTuiOptions {
@@ -48,9 +49,11 @@ class TestReadable extends PassThrough {
 }
 
 export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> {
-  const dir = mkdtempSync(join(tmpdir(), "jie-tui-e2e-"));
-  writeModelsJsonTo(dir);
-  writeSettingsJson(dir);
+  const dir = opts.cwd ?? mkdtempSync(join(tmpdir(), "jie-tui-e2e-"));
+  if (opts.cwd === undefined) {
+    writeModelsJsonTo(dir);
+    writeSettingsJson(dir);
+  }
   const prevLang = process.env.LANG;
   process.env.LANG = LANG_DEFAULT;
   const prevLangAll = process.env.LC_ALL;
@@ -60,7 +63,7 @@ export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> 
     platform = await createJiePlatform({ cwd: dir, homeJieDir: dir, projectJieDir: dir });
   } catch (err) {
     restoreLang(prevLang, prevLangAll);
-    rmSync(dir, { recursive: true, force: true });
+    if (opts.cwd === undefined) rmSync(dir, { recursive: true, force: true });
     throw err;
   }
   const stdin = new TestReadable();
@@ -68,7 +71,7 @@ export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> 
   stdout.rows = opts.rows ?? 30;
   const stderr = new TestWritable();
   stderr.rows = opts.rows ?? 30;
-  const tuiOptions: CreateTUIOptions = { cwd: opts.cwd ?? dir, rows: opts.rows ?? 30 };
+  const tuiOptions: CreateTUIOptions = { cwd: dir, rows: opts.rows ?? 30 };
   const tui = createTui(tuiOptions, {
     platform,
     stdin: stdin as unknown as NodeJS.ReadStream,
@@ -78,13 +81,13 @@ export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> 
     gitDirty: false,
   });
   void tui.start();
-  return { dir, tui, platform, stdin, stdout };
+  return { dir, tui, platform, stdin, stdout, ownedDir: opts.cwd === undefined };
 }
 
 export async function stopTui(harness: TuiHarness): Promise<void> {
   harness.tui.stop();
   await harness.platform.execute({ name: "stop" });
-  rmSync(harness.dir, { recursive: true, force: true });
+  if (harness.ownedDir) rmSync(harness.dir, { recursive: true, force: true });
 }
 
 async function typeChunk(stdin: PassThrough, chunk: string): Promise<void> {
