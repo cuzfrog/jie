@@ -8,6 +8,7 @@ export interface ParsedArgsMap {
     readonly json: boolean;
     readonly apiKey?: string;
     readonly resume?: string;
+    readonly inMemory: boolean;
   };
   readonly version: { readonly kind: "version" };
   readonly help: { readonly kind: "help" };
@@ -16,7 +17,7 @@ export interface ParsedArgsMap {
   readonly model: { readonly kind: "model"; readonly provider: string; readonly modelId: string };
   readonly team: { readonly kind: "team"; readonly teamId?: string };
   readonly apiKey: { readonly kind: "apiKey"; readonly apiKey: string };
-  readonly tui: { readonly kind: "tui"; readonly team?: string };
+  readonly tui: { readonly kind: "tui"; readonly team?: string; readonly inMemory: boolean };
   readonly error: { readonly kind: "error"; readonly message: string };
 }
 export type ParsedArgs = ParsedArgsMap[keyof ParsedArgsMap];
@@ -28,11 +29,29 @@ export function parseFlags(argv: string[]): ParsedArgs {
   const seen = new Map<string, string>();
 
   const rest = argv.slice();
-  if (rest.length === 0) return { kind: "tui" };
+  if (rest.length === 0) return { kind: "tui", inMemory: false };
   const first = rest[0]!;
 
   if (first === "--version") return { kind: "version" };
   if (first === "--help" || first === "-h") return { kind: "help" };
+  if (first === "--in-memory") {
+    const tail = rest.slice(1);
+    if (tail.length === 0) return { kind: "tui", inMemory: true };
+    const head = tail[0]!;
+    if (head === "-p" || head === "--print" || head === "--in-memory") {
+      return parsePrint(tail, dupes, seen, head, true);
+    }
+    if (head === "--api-key" || head === "--resume" || head === "--team") {
+      if (tail.length < 2) {
+        return { kind: "error", message: `missing argument for ${head}` };
+      }
+      return parsePrint(tail.slice(1), dupes, seen, head, true);
+    }
+    if (head.startsWith("-")) {
+      return { kind: "error", message: `unknown flag: ${head}` };
+    }
+    return { kind: "tui", team: head, inMemory: true };
+  }
   if (first === "login") return parseLogin(rest.slice(1), dupes, seen);
   if (first === "logout") return parseLogout(rest.slice(1), dupes, seen);
   if (first === "model") return parseModel(rest.slice(1));
@@ -136,6 +155,7 @@ function parsePrint(
   dupes: Set<string>,
   seen: Map<string, string>,
   firstFlag: string,
+  inMemory = false,
 ): ParsedArgs {
   let team: string | undefined;
   let timeout: number | undefined;
@@ -174,6 +194,12 @@ function parsePrint(
     const a = args[i]!;
     if (a === "-p" || a === "--print") {
       seen.set(a, "");
+      continue;
+    }
+    if (a === "--in-memory") {
+      if (seen.has("--in-memory")) dupes.add("--in-memory");
+      seen.set("--in-memory", "");
+      inMemory = true;
       continue;
     }
     if (a === "--team") {
@@ -244,5 +270,6 @@ function parsePrint(
     json,
     apiKey,
     resume,
+    inMemory,
   };
 }

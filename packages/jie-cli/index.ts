@@ -52,7 +52,16 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
       deps.console.error(args.message);
       return 1;
   }
-  const handle = await bootPlatform({ cwd, homeJieDir, projectJieDir }, deps.createPlatform, deps.console);
+  const handle = await bootPlatform(
+    {
+      cwd,
+      homeJieDir,
+      projectJieDir,
+      inMemory: args.kind === "tui" || args.kind === "print" ? args.inMemory : false,
+    },
+    deps.createPlatform,
+    deps.console,
+  );
   switch (args.kind) {
     case "tui": {
       const tui = deps.createTui({ cwd }, { platform: handle });
@@ -115,7 +124,7 @@ function printHelp(console: Console): void {
 
 Usage:
   jie -p "<instruction>" [--team <id>] [--timeout <s>] [--json]
-                 [--api-key <key>] [--resume <id>]
+                 [--api-key <key>] [--resume <id>] [--in-memory]
   jie --print "<instruction>" ...
 
   jie login --provider <id> --api-key <key>
@@ -126,7 +135,7 @@ Usage:
   jie --api-key <key>
   jie --resume <session_id>
 
-  jie [--team <id>]                  # interactive TUI
+  jie [--team <id>] [--in-memory]    # interactive TUI
   jie --version
   jie --help
 `);

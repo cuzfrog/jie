@@ -235,6 +235,10 @@ function captureRun(platform: FakePlatform): CapturedRun {
         transientMessage: null,
         errorBanner: null,
         editorText: "",
+        sessionPickerOpen: false,
+        sessionPickerQuery: "",
+        sessionPickerSessions: [],
+        sessionPickerFocus: 0,
       },
       start: () => {
         startCalls.value += 1;
@@ -255,7 +259,7 @@ describe("_run — tui", () => {
   test("tui boot: loads team, calls createTui({cwd},{platform}), awaits start, stops platform, returns 0", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    const exit = await captured.run({ kind: "tui" });
+    const exit = await captured.run({ kind: "tui", inMemory: false });
     expect(exit).toBe(0);
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: undefined });
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "stop" });
@@ -268,7 +272,7 @@ describe("_run — tui", () => {
   test("tui boot: calls tui.stop() after start resolves (restores terminal state)", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    const exit = await captured.run({ kind: "tui" });
+    const exit = await captured.run({ kind: "tui", inMemory: false });
     expect(exit).toBe(0);
     expect(captured.stopCalls.value).toBe(1);
   });
@@ -276,7 +280,7 @@ describe("_run — tui", () => {
   test("tui boot: passes args.team to execute({name:'team'})", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    const exit = await captured.run({ kind: "tui", team: "alpha" });
+    const exit = await captured.run({ kind: "tui", team: "alpha", inMemory: false });
     expect(exit).toBe(0);
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: "alpha" });
   });
@@ -284,14 +288,14 @@ describe("_run — tui", () => {
   test("tui boot: subscribes to system.error before dispatching", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    await captured.run({ kind: "tui" });
+    await captured.run({ kind: "tui", inMemory: false });
     expect(platform.subscribeCalls).toContain("system.error");
   });
 
   test("tui boot: TUI subscribes BEFORE execute({name:'team'}) so system.team.loaded reaches the TUI", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    await captured.run({ kind: "tui" });
+    await captured.run({ kind: "tui", inMemory: false });
     const teamExecuteIndex = platform.trace.findIndex(
       (e) => e.kind === "execute" && e.commandName === "team",
     );
@@ -312,7 +316,7 @@ describe("_run — tui", () => {
         createTui: vi.fn(),
         console: consoleMock,
       });
-    expect(run({ kind: "tui" })).rejects.toThrow("boot blew up");
+    expect(run({ kind: "tui", inMemory: false })).rejects.toThrow("boot blew up");
     expect(platform.execute).not.toHaveBeenCalledWith({ name: "stop" });
   });
 });
@@ -367,6 +371,7 @@ describe("_run — print + apiKey", () => {
       team: "minimal",
       timeout: 1,
       json: false,
+      inMemory: false,
     });
     expect(exit).toBe(3);
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: "minimal" });
@@ -382,6 +387,7 @@ describe("_run — print + apiKey", () => {
       timeout: 1,
       json: false,
       apiKey: "sk-fail",
+      inMemory: false,
     });
     expect(exit).toBe(1);
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "setApiKey", apiKey: "sk-fail" });
