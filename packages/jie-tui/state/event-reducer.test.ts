@@ -224,6 +224,50 @@ describe("reduceIdle", () => {
   });
 });
 
+describe("reduceUsage", () => {
+  test("agent.usage sets contextTokensUsed to totalTokens", () => {
+    const state = loadedState();
+    const state2 = reduce(state, Events.agentUsage(AGENT_SENDER, {
+      input: 100,
+      output: 50,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 1234,
+    }));
+    const agent = state2.agents.get("my-team:general-1");
+    expect(agent?.contextTokensUsed).toBe(1234);
+  });
+
+  test("agent.usage overrides prior estimate-based contextTokensUsed", () => {
+    let state = loadedState();
+    state = reduce(state, Events.userPrompt(USER_SENDER, "my-team", "hello", "general-1"));
+    const before = state.agents.get("my-team:general-1")?.contextTokensUsed ?? 0;
+    const state2 = reduce(state, Events.agentUsage(AGENT_SENDER, {
+      input: 10,
+      output: 5,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 99999,
+    }));
+    const after = state2.agents.get("my-team:general-1")?.contextTokensUsed ?? 0;
+    expect(after).toBe(99999);
+    expect(after).not.toBe(before);
+  });
+
+  test("rejects usage events from a foreign team", () => {
+    const state = loadedState();
+    const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
+    const state2 = reduce(state, Events.agentUsage(foreign, {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 1,
+    }));
+    expect(state2).toBe(state);
+  });
+});
+
 describe("reduceStreamChunk", () => {
   test("appends to the current block of the same type", () => {
     let state = promptedState();

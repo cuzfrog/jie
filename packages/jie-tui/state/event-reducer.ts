@@ -13,6 +13,7 @@ export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
     case "agent.prompt.queue.update": return reduceQueueUpdate(state, event);
     case "agent.turn.start": return reduceTurnStart(state, event);
     case "agent.idle": return reduceIdle(state, event);
+    case "agent.usage": return reduceUsage(state, event);
     case "agent.stream.chunk": return reduceStreamChunk(state, event);
     case "agent.tool.call": return reduceToolCall(state, event);
     case "agent.tool.result": return reduceToolResult(state, event);
@@ -97,6 +98,14 @@ function reduceIdle(state: TuiState, event: AnyEventEnvelope): TuiState {
   const contextTokensUsed = estimateContextTokens(agent.history, agent.currentTurn);
   const next: AgentUiState = { ...agent, status: "idle", lastStopReason: event.payload, contextTokensUsed };
   return withAgent(state, agentId, next);
+}
+
+function reduceUsage(state: TuiState, event: AnyEventEnvelope): TuiState {
+  const resolved = resolveAgent(state, event);
+  if (resolved === null) return state;
+  if (event.type !== "agent.usage") return state;
+  const { agentId, agent } = resolved;
+  return withAgent(state, agentId, { ...agent, contextTokensUsed: event.payload.totalTokens });
 }
 
 function reduceStreamChunk(state: TuiState, event: AnyEventEnvelope): TuiState {
