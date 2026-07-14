@@ -28,6 +28,7 @@ export interface TeamManagerDeps {
 
 export interface TeamManager {
   load(teamId?: string): Promise<TeamInfo>;
+  resumeSession(teamId: string, sessionId: string): Promise<TeamInfo>;
   listInstalled(): string[];
   listLoaded(): ReadonlyMap<string, TeamInfo>;
   locate(teamId: string): TeamBlueprintLocation;
@@ -45,14 +46,19 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
   const loadedTeams = new Map<string, AgentBody[]>();
   const sessionIds = new Map<string, string>();
 
-  async function loadImpl(teamId?: string): Promise<TeamInfo> {
+  async function loadImpl(teamId?: string, overrideSessionId?: string): Promise<TeamInfo> {
     const requested = resolveTeamId(teamId);
     const existing = loadedTeams.get(requested);
-    if (existing !== undefined) {
+    if (existing !== undefined && overrideSessionId === undefined) {
       return toTeamInfo(requested, existing);
     }
+    if (existing !== undefined && overrideSessionId !== undefined) {
+      for (const body of existing) body.stop();
+      loadedTeams.delete(requested);
+      sessionIds.delete(requested);
+    }
     const blueprint: TeamBlueprint = teamRegistry.parseTeamManifest(requested);
-    const sessionId = resolveSessionId(requested);
+    const sessionId = resolveSessionId(requested, overrideSessionId);
     sessionIds.set(requested, sessionId);
     const bodies: AgentBody[] = [];
     for (const soul of blueprint.roles) {
@@ -90,9 +96,17 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
     return teamRegistry.listInstalled().find((id) => id !== BUILTIN_MINIMAL_TEAM_ID) ?? BUILTIN_MINIMAL_TEAM_ID;
   }
 
-  function resolveSessionId(teamId: string): string {
+  function resolveSessionId(teamId: string, overrideSessionId?: string): string {
     const existing = sessionIds.get(teamId);
-    if (existing !== undefined) return existing;
+    if (existing !== undefined && overrideSessionId === undefined) return existing;
+    if (overrideSessionId !== undefined) {
+      if (!memoryManager.hasSession(teamId, overrideSessionId)) {
+        throw new JiePlatformError("UNKNOWN_SESSION", {
+          detail: `unknown session_id: ${overrideSessionId}`,
+        });
+      }
+      return overrideSessionId;
+    }
     if (options.resumeSessionId !== undefined) {
       if (!memoryManager.hasSession(teamId, options.resumeSessionId)) {
         throw new JiePlatformError("UNKNOWN_SESSION", {
@@ -148,8 +162,13 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
     return memoryManager.listSessions(teamId);
   }
 
+  async function resumeSession(teamId: string, sessionId: string): Promise<TeamInfo> {
+    return loadImpl(teamId, sessionId);
+  }
+
   return {
     load: loadImpl,
+    resumeSession,
     listInstalled() {
       return teamRegistry.listInstalled();
     },

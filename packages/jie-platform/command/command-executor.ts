@@ -68,6 +68,7 @@ export function createCommandExecutor(deps: CommandExecutorDeps): CommandExecuto
       return null;
     },
     team: (command) => deps.teamManager.load(command.teamId),
+    resumeSession: (command) => deps.teamManager.resumeSession(command.teamId, command.sessionId),
     getTeamInfo: () => {
       const settings = deps.settingsStore.load();
       return {

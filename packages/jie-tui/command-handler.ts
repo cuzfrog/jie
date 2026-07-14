@@ -169,9 +169,24 @@ function interceptTeam(args: ReadonlyArray<string>, deps: CommandHandlerDeps): I
   return { kind: "reply", text: `loading team '${argument}'` };
 }
 
+function interceptResume(_args: ReadonlyArray<string>, deps: CommandHandlerDeps): InterceptResult {
+  const teamId = deps.stateStore.getState().teamId;
+  if (teamId === null) return { kind: "error", text: "/resume: no team loaded" };
+  void deps.platform.execute({ name: "listSessions", teamId })
+    .then((sessions) => {
+      deps.stateStore.dispatch(Actions.openSessionPicker(sessions));
+    }, (error: unknown) => {
+      const reason = error instanceof Error ? error.message : String(error);
+      deps.stateStore.dispatch(Actions.setErrorMessage(`/resume failed: ${reason}`));
+    });
+  return { kind: "reply", text: "loading sessions…" };
+}
+
 const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn>([
   ["login", interceptLogin],
   ["logout", interceptLogout],
   ["model", interceptModel],
   ["team", interceptTeam],
+  ["resume", interceptResume],
+  ["continue", interceptResume],
 ]);

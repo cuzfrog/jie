@@ -29,7 +29,17 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
   if (focused !== null && !newAgents.has(focused)) focused = null;
   if (focused === null && leaderId !== null && newAgents.has(leaderId)) focused = leaderId;
   if (leaderId !== null && !newAgents.has(leaderId)) leaderId = null;
-  return { ...state, teamId, leaderAgentId: leaderId, focusedAgentId: focused, agents: newAgents };
+  return {
+    ...state,
+    teamId,
+    leaderAgentId: leaderId,
+    focusedAgentId: focused,
+    agents: newAgents,
+    sessionPickerOpen: false,
+    sessionPickerQuery: "",
+    sessionPickerSessions: [],
+    sessionPickerFocus: 0,
+  };
 }
 
 function emptyAgent(

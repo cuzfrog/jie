@@ -3,6 +3,8 @@ import { Box, useApp as useInkApp, useWindowSize } from "@cuzfrog/jie-ink";
 import { TuiContext, type TuiContextValue } from "./context";
 import { Layout } from "./layout";
 import { GlobalKeyBindings } from "./global-keys";
+import { SessionPicker } from "./session-list/session-picker";
+import { Actions } from "../state";
 import type { StateStore } from "../state";
 import { useStateStore } from "../hooks";
 
@@ -29,6 +31,33 @@ export function App({ stateStore }: AppProps): JSX.Element {
       <GlobalKeyBindings />
       <Box flexDirection="column" width={columns} height={rows}>
         <Layout columns={columns} rows={rows} />
+        {state.sessionPickerOpen ? (
+          <Box position="absolute">
+            <SessionPicker
+              sessions={state.sessionPickerSessions}
+              query={state.sessionPickerQuery}
+              focusedIndex={state.sessionPickerFocus}
+              width={Math.min(columns, 80)}
+              height={Math.min(rows - 2, 20)}
+              onQueryChange={(q): void => {
+                dispatch(Actions.setPickerQuery(q));
+              }}
+              onFocusChange={(delta): void => {
+                dispatch(Actions.focusPickerIndex(delta));
+              }}
+              onSelect={(session): void => {
+                const teamId = state.teamId;
+                if (teamId !== null) {
+                  dispatch(Actions.selectPickedSession(teamId, session.sessionId));
+                }
+                dispatch(Actions.closeSessionPicker());
+              }}
+              onClose={(): void => {
+                dispatch(Actions.closeSessionPicker());
+              }}
+            />
+          </Box>
+        ) : null}
       </Box>
     </TuiContext.Provider>
   );

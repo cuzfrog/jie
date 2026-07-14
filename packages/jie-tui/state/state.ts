@@ -1,5 +1,5 @@
 import type { StopReason } from "@earendil-works/pi-ai";
-import type { EffortLevel, ModelInfo } from "@cuzfrog/jie-platform";
+import type { EffortLevel, ModelInfo, SessionSummary } from "@cuzfrog/jie-platform";
 
 export type AgentStatus = "idle" | "busy";
 export { type EffortLevel };
@@ -62,6 +62,10 @@ export interface TuiState {
   readonly pendingQuit: boolean;
   readonly editorText: string;
   readonly chatScrollOffsets: ReadonlyMap<AgentId, number>;
+  readonly sessionPickerOpen: boolean;
+  readonly sessionPickerQuery: string;
+  readonly sessionPickerSessions: ReadonlyArray<SessionSummary>;
+  readonly sessionPickerFocus: number;
 }
 
 function getFocusedAgent(state: TuiState): AgentUiState | null {

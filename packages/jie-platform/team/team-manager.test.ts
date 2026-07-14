@@ -185,6 +185,17 @@ describe("createTeamManager — full surface", () => {
       expect(resumeManager.load("minimal")).rejects.toThrow(/unknown session_id/);
     });
 
+    test("resumeSession(teamId, sessionId) loads with the named session and rejects unknown ones", async () => {
+      const { manager, memoryManager } = makeManager(workspace, homeJieDir, null);
+      memoryManager.persist({ role: "user", content: "hello", timestamp: 1 } as never, "general-1", "01-real-session", "minimal");
+      await manager.load("minimal");
+      const reloaded = await manager.resumeSession("minimal", "01-real-session");
+      expect(reloaded.id).toBe("minimal");
+
+      const freshManager = makeManager(workspace, homeJieDir, null).manager;
+      expect(freshManager.resumeSession("minimal", "01-not-real")).rejects.toThrow(/unknown session_id/);
+    });
+
     test("second call to load() returns the cached identity without rebuilding", async () => {
       const { manager, eventManager } = makeManager(workspace, homeJieDir, null);
       const events = collectEvents(eventManager);

@@ -21,6 +21,10 @@ const INITIAL_TUI_STATE: TuiState = Object.freeze({
   pendingQuit: false,
   editorText: "",
   chatScrollOffsets: new Map(),
+  sessionPickerOpen: false,
+  sessionPickerQuery: "",
+  sessionPickerSessions: [],
+  sessionPickerFocus: 0,
 } as const);
 
 /** a subscriber can perform side effect */

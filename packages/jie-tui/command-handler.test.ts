@@ -305,3 +305,71 @@ describe("createTuiCommandHandler — /team", () => {
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("ghost")));
   });
 });
+
+describe("createTuiCommandHandler — /resume", () => {
+  function makeDepsWithTeamId(platform: JiePlatform, teamId: string): DepsHandle {
+    const handle = makeDeps(platform);
+    handle.dispatch(Actions.switchTeam({
+      id: teamId,
+      leaderKey: "general-1",
+      agents: [{ teamId, role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    }));
+    return handle;
+  }
+
+  test("/resume with no team loaded sets an error and does not call execute", () => {
+    const { platform, execute } = makePlatform();
+    const { deps, dispatch } = makeDeps(platform);
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("/resume");
+    expect(execute).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("no team loaded")));
+  });
+
+  test("/resume calls listSessions and dispatches openSessionPicker with the result", async () => {
+    const { platform, execute } = makePlatform();
+    const sessions = [
+      { sessionId: "s1", messageCount: 1, lastActivity: "2026-07-14T00:00:00.000Z" },
+      { sessionId: "s2", messageCount: 2, lastActivity: "2026-07-14T01:00:00.000Z" },
+    ];
+    execute.mockImplementationOnce(async () => sessions);
+    const { deps, dispatch } = makeDepsWithTeamId(platform, "minimal");
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("/resume");
+    expect(execute).toHaveBeenCalledWith({ name: "listSessions", teamId: "minimal" });
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.openSessionPicker(sessions));
+  });
+
+  test("/resume replies with a transient 'loading sessions…' message", () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async () => []);
+    const { deps, dispatch } = makeDepsWithTeamId(platform, "minimal");
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("/resume");
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("loading sessions")));
+  });
+
+  test("/resume surfaces platform errors as an error banner", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async () => {
+      throw new Error("sqlite locked");
+    });
+    const { deps, dispatch } = makeDepsWithTeamId(platform, "minimal");
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("/resume");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/resume failed")));
+  });
+
+  test("/continue is an alias for /resume", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => []);
+    const { deps, dispatch } = makeDepsWithTeamId(platform, "minimal");
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("/continue");
+    expect(execute).toHaveBeenCalledWith({ name: "listSessions", teamId: "minimal" });
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.openSessionPicker([]));
+  });
+});

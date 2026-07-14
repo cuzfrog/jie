@@ -7,6 +7,7 @@ import { App } from "./components";
 
 const SUBMIT_EDITOR_TEXT = Actions.submitEditorText("").type;
 const REQUEST_INTERRUPT = Actions.requestInterrupt("", "").type;
+const SELECT_PICKED_SESSION = Actions.selectPickedSession("", "").type;
 const log = logger.getSubLogger({ name: "jie.tui" });
 
 export interface TuiDeps {
@@ -75,6 +76,10 @@ class InkTui implements Tui {
         this.deps.platform.interrupt(action.payload.teamId, action.payload.agentKey);
         return;
       }
+      if (action.type === SELECT_PICKED_SESSION) {
+        await this.handleResumePickedSession(action.payload.teamId, action.payload.sessionId, afterState);
+        return;
+      }
     });
   }
 
@@ -140,6 +145,16 @@ class InkTui implements Tui {
     const target = afterState.agents.get(afterState.focusedAgentId);
     if (target === undefined) return;
     this.deps.platform.prompt(target.teamId, target.agentKey, trimmed);
+  }
+
+  private async handleResumePickedSession(teamId: string, sessionId: string, _afterState: TuiState): Promise<void> {
+    try {
+      const identity = await this.deps.platform.execute({ name: "resumeSession", teamId, sessionId });
+      this.stateStore.dispatch(Actions.switchTeam(identity));
+    } catch (error: unknown) {
+      const reason = error instanceof Error ? error.message : String(error);
+      this.stateStore.dispatch(Actions.setErrorMessage(`/resume failed: ${reason}`));
+    }
   }
 }
 

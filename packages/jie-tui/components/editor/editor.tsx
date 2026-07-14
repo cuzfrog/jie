@@ -59,6 +59,7 @@ export function Editor(_props: EditorProps): JSX.Element {
   }, [state.editorText]);
 
   useInput((_input, key) => {
+    if (state.sessionPickerOpen) return;
     if (key.upArrow) {
       const { buffer } = api;
       const onTopLine = buffer.cursorLine === 0;
@@ -110,7 +111,7 @@ export function Editor(_props: EditorProps): JSX.Element {
     }
   });
 
-  useEditorInput(api);
+  useEditorInput(api, { isDisabled: state.sessionPickerOpen });
 
   const bannerText = state.errorBanner;
   const showErrorBanner = bannerText !== null && bannerText !== "";
