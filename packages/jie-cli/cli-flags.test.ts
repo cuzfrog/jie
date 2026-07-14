@@ -336,4 +336,11 @@ describe("parseFlags — --in-memory", () => {
       message: "unknown flag: --version",
     });
   });
+
+  test("leading --in-memory followed by another --in-memory is detected as duplicate", () => {
+    expect(parseFlags(["--in-memory", "--in-memory", "-p", "x"])).toEqual({
+      kind: "error",
+      message: "duplicate flag: --in-memory",
+    });
+  });
 });

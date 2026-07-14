@@ -39,12 +39,14 @@ export function parseFlags(argv: string[]): ParsedArgs {
     if (tail.length === 0) return { kind: "tui", inMemory: true };
     const head = tail[0]!;
     if (head === "-p" || head === "--print" || head === "--in-memory") {
+      seen.set("--in-memory", "");
       return parsePrint(tail, dupes, seen, head, true);
     }
     if (head === "--api-key" || head === "--resume" || head === "--team") {
       if (tail.length < 2) {
         return { kind: "error", message: `missing argument for ${head}` };
       }
+      seen.set("--in-memory", "");
       return parsePrint(tail.slice(1), dupes, seen, head, true);
     }
     if (head.startsWith("-")) {
