@@ -225,4 +225,77 @@ describe("scanFiles", () => {
       teardown(dir);
     }
   });
+
+  test("empty .gitignore does not change results", () => {
+    const dir = setup();
+    try {
+      writeFileSync(join(dir, ".gitignore"), "");
+      const rels = scanFiles(dir).map((f) => f.relPath).sort();
+      expect(rels).toContain("src/main.ts");
+      expect(rels).toContain("src/utils/helper.ts");
+    } finally {
+      teardown(dir);
+    }
+  });
+
+  test(".gitignore with CRLF line endings is parsed correctly", () => {
+    const dir = setup();
+    try {
+      writeFileSync(join(dir, ".gitignore"), "ignored.ts\r\nbuild/\r\n");
+      writeFileSync(join(dir, "ignored.ts"), "x");
+      mkdirSync(join(dir, "build"));
+      writeFileSync(join(dir, "build", "out.ts"), "x");
+      const rels = scanFiles(dir).map((f) => f.relPath);
+      expect(rels).not.toContain("ignored.ts");
+      expect(rels.some((r) => r.startsWith("build/"))).toBe(false);
+    } finally {
+      teardown(dir);
+    }
+  });
+
+  test(".gitignore with only whitespace and comments is a no-op", () => {
+    const dir = setup();
+    try {
+      writeFileSync(join(dir, ".gitignore"), "\n   \n# a comment\n#another\n\n");
+      const rels = scanFiles(dir).map((f) => f.relPath).sort();
+      expect(rels).toContain("src/main.ts");
+    } finally {
+      teardown(dir);
+    }
+  });
+
+  test("nested .gitignore pattern does not bleed into sibling directories", () => {
+    const dir = setup();
+    try {
+      mkdirSync(join(dir, "a"));
+      mkdirSync(join(dir, "b"));
+      writeFileSync(join(dir, "a", ".gitignore"), "secret.ts\n");
+      writeFileSync(join(dir, "a", "secret.ts"), "x");
+      writeFileSync(join(dir, "b", "secret.ts"), "x");
+      const rels = scanFiles(dir).map((f) => f.relPath);
+      expect(rels).not.toContain("a/secret.ts");
+      expect(rels).toContain("b/secret.ts");
+    } finally {
+      teardown(dir);
+    }
+  });
+
+  test("inner **/foo pattern from nested .gitignore does not leak to siblings", () => {
+    const dir = setup();
+    try {
+      mkdirSync(join(dir, "a"));
+      mkdirSync(join(dir, "a", "deep"));
+      mkdirSync(join(dir, "other"));
+      writeFileSync(join(dir, "a", ".gitignore"), "**/secret.txt\n");
+      writeFileSync(join(dir, "a", "secret.txt"), "x");
+      writeFileSync(join(dir, "a", "deep", "secret.txt"), "x");
+      writeFileSync(join(dir, "other", "secret.txt"), "x");
+      const rels = scanFiles(dir).map((f) => f.relPath);
+      expect(rels).not.toContain("a/secret.txt");
+      expect(rels).not.toContain("a/deep/secret.txt");
+      expect(rels).toContain("other/secret.txt");
+    } finally {
+      teardown(dir);
+    }
+  });
 });
