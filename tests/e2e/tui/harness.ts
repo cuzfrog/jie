@@ -242,6 +242,21 @@ export async function waitForNoErrorBanner(tui: Tui, timeoutMs = 60000): Promise
   await waitFor(() => tui.state.errorBanner === null, timeoutMs, "errorBanner cleared");
 }
 
+export async function waitForEditorText(tui: Tui, expected: string, timeoutMs = 60000): Promise<void> {
+  await waitFor(() => tui.state.editorText === expected, timeoutMs, `editorText === '${expected}'`);
+}
+
+export async function waitForTransient(tui: Tui, contains: string, timeoutMs = 60000): Promise<void> {
+  await waitFor(
+    () => {
+      const transient = tui.state.transientMessage ?? "";
+      return transient.includes(contains);
+    },
+    timeoutMs,
+    `transientMessage contains '${contains}'`,
+  );
+}
+
 function restoreLang(prevLang: string | undefined, prevLangAll: string | undefined): void {
   if (prevLang === undefined) delete process.env.LANG;
   else process.env.LANG = prevLang;

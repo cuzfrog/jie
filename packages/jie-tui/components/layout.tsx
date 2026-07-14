@@ -8,6 +8,8 @@ import { Editor } from "./editor";
 import { Footer } from "./footer";
 import { MAX_VISIBLE_TODOS, TodoList, todoListRowCount } from "./agent-todo";
 import { TransientBanner } from "./transient-banner/transient-banner";
+import { SlashAutocomplete, SLASH_COMMAND_NAMES } from "../slash-autocomplete";
+import { Actions } from "../state";
 
 const EDITOR_ROWS = 8;
 const FOOTER_ROWS = 2;
@@ -19,7 +21,7 @@ interface LayoutProps {
 }
 
 export function Layout(props: LayoutProps): JSX.Element {
-  const { state } = useTuiContext();
+  const { state, dispatch } = useTuiContext();
   const railVisible = state.showTeamRailPanel;
   const rail = railVisible ? railWidth(props.columns) : 0;
   const chatWidth = Math.max(1, props.columns - rail - (rail > 0 ? 1 : 0));
@@ -40,6 +42,18 @@ export function Layout(props: LayoutProps): JSX.Element {
       </Box>
       <Box width="100%" maxHeight={EDITOR_ROWS} overflow="hidden" flexShrink={0}>
         <Editor />
+      </Box>
+      <Box width="100%" flexShrink={0}>
+        <SlashAutocomplete
+          editorText={state.editorText}
+          sessionPickerOpen={state.sessionPickerOpen}
+          commands={SLASH_COMMAND_NAMES}
+          onCommit={(command, argv): void => {
+            const suffix = argv.length === 0 ? "" : ` ${argv}`;
+            dispatch(Actions.setEditorText(""));
+            dispatch(Actions.submitEditorText(`/${command}${suffix}`));
+          }}
+        />
       </Box>
       <TransientBanner />
       <Footer cwd={state.cwd ?? ""} gitBranch={state.gitBranch ?? ""} gitDirty={state.gitDirty} />
