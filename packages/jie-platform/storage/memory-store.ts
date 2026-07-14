@@ -12,6 +12,12 @@ interface TurnRecord {
   created_at: string;
 }
 
+export interface SessionSummary {
+  readonly sessionId: string;
+  readonly messageCount: number;
+  readonly lastActivity: string;
+}
+
 export interface MemoryManager {
   persist(
     message: AgentMessage,
@@ -35,6 +41,8 @@ export interface MemoryManager {
   ): Promise<AgentMessage[]>;
 
   hasSession(teamId: string, sessionId: string): boolean;
+
+  listSessions(teamId: string): ReadonlyArray<SessionSummary>;
 }
 
 export function createMemoryManager(storage: Storage): MemoryManager {
@@ -134,6 +142,22 @@ export class SqliteMemoryManager implements MemoryManager {
     );
     return rows.length > 0;
   }
+
+  listSessions(teamId: string): ReadonlyArray<SessionSummary> {
+    const rows = this.storage.query(
+      `SELECT session_id, COUNT(*) AS cnt, MAX(created_at) AS last_activity
+       FROM memory_turns
+       WHERE team_id = ?
+       GROUP BY session_id
+       ORDER BY last_activity DESC`,
+      [teamId],
+    );
+    return rows.map((row) => ({
+      sessionId: row[0] as string,
+      messageCount: row[1] as number,
+      lastActivity: row[2] as string,
+    }));
+  }
 }
 
 export class InMemoryMemoryManager implements MemoryManager {
@@ -213,6 +237,23 @@ export class InMemoryMemoryManager implements MemoryManager {
     return this.rows.some(
       (r) => r.team_id === teamId && r.session_id === sessionId,
     );
+  }
+
+  listSessions(teamId: string): ReadonlyArray<SessionSummary> {
+    const grouped = new Map<string, { count: number; lastActivity: string }>();
+    for (const row of this.rows) {
+      if (row.team_id !== teamId) continue;
+      const existing = grouped.get(row.session_id);
+      if (existing === undefined) {
+        grouped.set(row.session_id, { count: 1, lastActivity: row.created_at });
+      } else {
+        existing.count += 1;
+        if (row.created_at > existing.lastActivity) existing.lastActivity = row.created_at;
+      }
+    }
+    return [...grouped.entries()]
+      .map(([sessionId, info]) => ({ sessionId, messageCount: info.count, lastActivity: info.lastActivity }))
+      .sort((a, b) => b.lastActivity.localeCompare(a.lastActivity));
   }
 
   private maxSeq(teamId: string, agentKey: string, sessionId: string): number {
