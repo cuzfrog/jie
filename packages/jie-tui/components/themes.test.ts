@@ -46,4 +46,14 @@ describe("formatQueueIndicator", () => {
     expect(out).not.toBeNull();
     expect(out?.endsWith("…")).toBe(true);
   });
+
+  test("preview cap keeps the footer row within ~60 chars on narrow terminals", () => {
+    const long = "x".repeat(200);
+    const out = formatQueueIndicator([long]);
+    expect(out).not.toBeNull();
+    const previewStart = out!.indexOf("> ") + 2;
+    const previewEnd = out!.length - 1;
+    const preview = out!.slice(previewStart, previewEnd);
+    expect(preview.length).toBeLessThanOrEqual(50);
+  });
 });

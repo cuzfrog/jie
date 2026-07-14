@@ -34,7 +34,7 @@ export function railWidth(columns: number): number {
 export const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 export const SPINNER_INTERVAL_MS = 80;
 
-export const QUEUE_PREVIEW_MAX_CHARS = 100;
+export const QUEUE_PREVIEW_MAX_CHARS = 40;
 
 export const RAIL_LEADER_GLYPH = "★";
 export const RAIL_IDLE_GLYPH = "·";
