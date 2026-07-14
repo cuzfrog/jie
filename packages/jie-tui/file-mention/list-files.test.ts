@@ -133,4 +133,79 @@ describe("scanFiles", () => {
       teardown(dir);
     }
   });
+
+  test("does not throw on malformed .gitignore patterns", () => {
+    const dir = setup();
+    try {
+      writeFileSync(join(dir, ".gitignore"), "[abc\n");
+      const rels = scanFiles(dir).map((f) => f.relPath);
+      expect(rels).toContain("src/main.ts");
+    } finally {
+      teardown(dir);
+    }
+  });
+
+  test("**/foo pattern also matches foo with zero intermediate directories", () => {
+    const dir = setup();
+    try {
+      writeFileSync(join(dir, ".gitignore"), "**/foo\n");
+      writeFileSync(join(dir, "foo"), "x");
+      mkdirSync(join(dir, "a"));
+      writeFileSync(join(dir, "a", "foo"), "x");
+      const rels = scanFiles(dir).map((f) => f.relPath);
+      expect(rels).not.toContain("foo");
+      expect(rels).not.toContain("a/foo");
+    } finally {
+      teardown(dir);
+    }
+  });
+
+  test("nested .gitignore patterns apply to files below the directory", () => {
+    const dir = setup();
+    try {
+      mkdirSync(join(dir, "a", "b"), { recursive: true });
+      writeFileSync(join(dir, "a", ".gitignore"), "down.txt\n");
+      writeFileSync(join(dir, "a", "down.txt"), "x");
+      writeFileSync(join(dir, "a", "b", "down.txt"), "x");
+      writeFileSync(join(dir, "a", "b", "kept.ts"), "x");
+      const rels = scanFiles(dir).map((f) => f.relPath);
+      expect(rels).not.toContain("a/down.txt");
+      expect(rels).not.toContain("a/b/down.txt");
+      expect(rels).toContain("a/b/kept.ts");
+    } finally {
+      teardown(dir);
+    }
+  });
+
+  test("respects negated character class [!...]", () => {
+    const dir = setup();
+    try {
+      writeFileSync(join(dir, ".gitignore"), "[!ch].txt\n");
+      writeFileSync(join(dir, "c.txt"), "x");
+      writeFileSync(join(dir, "h.txt"), "x");
+      writeFileSync(join(dir, "b.txt"), "x");
+      writeFileSync(join(dir, "a.txt"), "x");
+      const rels = scanFiles(dir).map((f) => f.relPath);
+      expect(rels).toContain("c.txt");
+      expect(rels).toContain("h.txt");
+      expect(rels).not.toContain("b.txt");
+      expect(rels).not.toContain("a.txt");
+    } finally {
+      teardown(dir);
+    }
+  });
+
+  test("escaped \\* in .gitignore matches a literal asterisk filename", () => {
+    const dir = setup();
+    try {
+      writeFileSync(join(dir, ".gitignore"), "\\*\n");
+      writeFileSync(join(dir, "*"), "x");
+      writeFileSync(join(dir, "star.ts"), "x");
+      const rels = scanFiles(dir).map((f) => f.relPath);
+      expect(rels).not.toContain("*");
+      expect(rels).toContain("star.ts");
+    } finally {
+      teardown(dir);
+    }
+  });
 });

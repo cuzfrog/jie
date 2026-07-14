@@ -6,6 +6,7 @@ const MAX_DEPTH = 6;
 const MAX_FILES = 500;
 const MAX_FILE_BYTES = 1_048_576;
 const GITIGNORE_FILE = ".gitignore";
+const REGEX_META = new Set([".", "(", ")", "+", "|", "^", "$", "{", "}"]);
 
 export interface ScannedFile {
   readonly absPath: string;
@@ -14,15 +15,14 @@ export interface ScannedFile {
 
 export function scanFiles(rootDir: string): ReadonlyArray<ScannedFile> {
   if (!existsSync(rootDir)) return [];
-  const rootIgnores = readGitignore(rootDir, ".");
+  const rootIgnores = readGitignore(rootDir);
   const out: ScannedFile[] = [];
-  const stack: Array<{ readonly dir: string; readonly relDir: string; readonly depth: number }> = [
-    { dir: rootDir, relDir: ".", depth: 0 },
+  const stack: Array<{ readonly dir: string; readonly relDir: string; readonly depth: number; readonly ignores: IgnoreSet }> = [
+    { dir: rootDir, relDir: ".", depth: 0, ignores: rootIgnores },
   ];
   while (stack.length > 0 && out.length < MAX_FILES) {
     const next = stack.pop();
     if (next === undefined) break;
-    const dirIgnores = next.relDir === "." ? rootIgnores : composeIgnores(rootIgnores, readGitignore(next.dir, next.relDir));
     const entries = safeReaddir(next.dir);
     for (const entry of entries) {
       if (out.length >= MAX_FILES) break;
@@ -39,13 +39,14 @@ export function scanFiles(rootDir: string): ReadonlyArray<ScannedFile> {
       if (stat.isDirectory()) {
         if (SKIP_DIRS.has(entry)) continue;
         if (next.depth >= MAX_DEPTH) continue;
-        if (isIgnored(relEntry + "/", dirIgnores, true)) continue;
-        stack.push({ dir: abs, relDir: relEntry, depth: next.depth + 1 });
+        if (isIgnored(relEntry, next.ignores, next.relDir, true)) continue;
+        const childIgnores = composeIgnores(next.ignores, readGitignore(abs));
+        stack.push({ dir: abs, relDir: relEntry, depth: next.depth + 1, ignores: childIgnores });
         continue;
       }
       if (!stat.isFile()) continue;
       if (stat.size > MAX_FILE_BYTES) continue;
-      if (isIgnored(relEntry, dirIgnores, false)) continue;
+      if (isIgnored(relEntry, next.ignores, next.relDir, false)) continue;
       out.push({ absPath: abs, relPath: toRel(rootDir, abs) });
     }
   }
@@ -70,13 +71,14 @@ interface IgnorePattern {
   readonly dirOnly: boolean;
   readonly negate: boolean;
   readonly regex: RegExp;
+  readonly fromRelDir: string;
 }
 
 interface IgnoreSet {
   readonly patterns: ReadonlyArray<IgnorePattern>;
 }
 
-function readGitignore(dir: string, relDir: string): IgnoreSet {
+function readGitignore(dir: string): IgnoreSet {
   const gitignorePath = join(dir, GITIGNORE_FILE);
   let raw: string;
   try {
@@ -85,6 +87,7 @@ function readGitignore(dir: string, relDir: string): IgnoreSet {
     return { patterns: [] };
   }
   const patterns: IgnorePattern[] = [];
+  const fromRelDir = ".";
   for (const line of raw.split(/\r?\n/)) {
     let trimmed = line.trim();
     if (trimmed === "" || trimmed.startsWith("#")) continue;
@@ -103,9 +106,10 @@ function readGitignore(dir: string, relDir: string): IgnoreSet {
       anchored = true;
       trimmed = trimmed.slice(1);
     }
-    const prefix = relDir === "." ? "" : `${relDir}/`;
-    const regex = compilePattern(trimmed, anchored, prefix);
-    patterns.push({ anchored, dirOnly, negate, regex });
+    if (trimmed === "") continue;
+    const regex = compilePattern(trimmed, anchored, dirOnly);
+    if (regex === null) continue;
+    patterns.push({ anchored, dirOnly, negate, regex, fromRelDir });
   }
   return { patterns };
 }
@@ -114,10 +118,15 @@ function composeIgnores(parent: IgnoreSet, child: IgnoreSet): IgnoreSet {
   return { patterns: [...parent.patterns, ...child.patterns] };
 }
 
-function compilePattern(pattern: string, anchored: boolean, prefix: string): RegExp {
-  let body = globToRegex(pattern);
-  const full = anchored ? `^${escapeForRel(prefix)}${body}(?:/.*)?$` : `^(?:[^/]+/)*${escapeForRel(prefix)}${body}(?:/.*)?$`;
-  return new RegExp(full);
+function compilePattern(pattern: string, anchored: boolean, dirOnly: boolean): RegExp | null {
+  const body = globToRegex(pattern);
+  const tail = dirOnly ? "/?$" : "$";
+  const full = anchored ? `^${body}${tail}` : `^(?:[^/]+/)*${body}${tail}`;
+  try {
+    return new RegExp(full);
+  } catch {
+    return null;
+  }
 }
 
 function globToRegex(pattern: string): string {
@@ -127,6 +136,11 @@ function globToRegex(pattern: string): string {
     const ch = pattern[i]!;
     if (ch === "*") {
       if (pattern[i + 1] === "*") {
+        if (pattern[i + 2] === "/") {
+          out += "(?:[^/]+/)*";
+          i += 3;
+          continue;
+        }
         out += ".*";
         i += 2;
         continue;
@@ -140,7 +154,36 @@ function globToRegex(pattern: string): string {
       i += 1;
       continue;
     }
-    if (ch === "." || ch === "(" || ch === ")" || ch === "+" || ch === "|" || ch === "^" || ch === "$" || ch === "{" || ch === "}" || ch === "\\") {
+    if (ch === "\\") {
+      const next = pattern[i + 1];
+      if (next !== undefined) {
+        if (REGEX_META.has(next) || next === "*" || next === "?" || next === "[" || next === "]") {
+          out += `\\${next}`;
+        } else {
+          out += next;
+        }
+        i += 2;
+        continue;
+      }
+      i += 1;
+      continue;
+    }
+    if (ch === "[") {
+      const end = pattern.indexOf("]", i + 1);
+      if (end === -1) {
+        out += "\\[";
+        i += 1;
+        continue;
+      }
+      let classBody = pattern.slice(i + 1, end);
+      if (classBody.startsWith("!") || classBody.startsWith("^")) {
+        classBody = "^" + classBody.slice(1);
+      }
+      out += "[" + escapeClassBody(classBody) + "]";
+      i = end + 1;
+      continue;
+    }
+    if (REGEX_META.has(ch)) {
       out += `\\${ch}`;
       i += 1;
       continue;
@@ -151,15 +194,27 @@ function globToRegex(pattern: string): string {
   return out;
 }
 
-function escapeForRel(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function escapeClassBody(body: string): string {
+  let out = "";
+  for (let i = 0; i < body.length; i += 1) {
+    const ch = body[i]!;
+    if (ch === "\\" || ch === "]" || ch === "[") {
+      out += `\\${ch}`;
+    } else {
+      out += ch;
+    }
+  }
+  return out;
 }
 
-function isIgnored(relPath: string, ignores: IgnoreSet, isDir: boolean): boolean {
+function isIgnored(relPath: string, ignores: IgnoreSet, frameRelDir: string, isDir: boolean): boolean {
   let ignored = false;
+  const sub = frameRelDir === "." ? relPath : relPath.slice(frameRelDir.length + 1);
   for (const p of ignores.patterns) {
+    if (p.fromRelDir !== "." && p.fromRelDir !== frameRelDir) continue;
     if (p.dirOnly && !isDir) continue;
-    if (p.regex.test(relPath)) {
+    const target = p.dirOnly && isDir ? sub + "/" : sub;
+    if (p.regex.test(target)) {
       ignored = !p.negate;
     }
   }
