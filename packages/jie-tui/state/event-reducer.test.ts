@@ -306,4 +306,26 @@ describe("reduceToolCall + reduceToolResult", () => {
     const state2 = reduce(state, Events.agentToolCall(foreign, "c1", "bash", "x"));
     expect(state2).toBe(state);
   });
+
+  test("the result card carries the details payload from the event", () => {
+    let state = promptedState();
+    const details = { kind: "diff", diff: "@@ -1 +1 @@\n-a\n+A" };
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "edit", "{}"));
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "edit", "ok", 5, null, details));
+    const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
+    if (card?.kind === "toolResult") {
+      expect(card.details).toBe(details);
+    }
+  });
+
+  test("a missing details payload lands as null on the result card", () => {
+    let state = promptedState();
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", "out", 5, null));
+    const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
+    if (card?.kind === "toolResult") {
+      expect(card.details).toBeNull();
+    }
+  });
 });
+

@@ -46,4 +46,72 @@ describe("ToolCard", () => {
     expect(frame).toContain("def");
     unmount();
   });
+
+  test("renders a diff section when details.kind === 'diff' and details.diff is a non-empty string", () => {
+    const { lastFrame, unmount } = render(
+      <ToolCard
+        card={{
+          kind: "toolResult",
+          callId: "1",
+          name: "edit",
+          output: "Edited a.txt: 1 replacement",
+          details: { kind: "diff", path: "a.txt", replacementsCount: 1, diff: "@@ -1,1 +1,1 @@\n-a\n+A" },
+        }}
+        expanded={true}
+      />,
+    );
+    const frame = lastFrame();
+    expect(frame).toContain("diff:");
+    expect(frame).toContain("@@");
+    expect(frame).toContain("-a");
+    expect(frame).toContain("+A");
+    unmount();
+  });
+
+  test("does not render a diff section when details.kind is not 'diff'", () => {
+    const { lastFrame, unmount } = render(
+      <ToolCard
+        card={{
+          kind: "toolResult",
+          callId: "1",
+          name: "write_file",
+          output: "ok",
+          details: { path: "a.txt", diff: "@@ -1,1 +1,1 @@\n-a\n+A" },
+        }}
+        expanded={true}
+      />,
+    );
+    expect(lastFrame()).not.toContain("diff:");
+    unmount();
+  });
+
+  test("does not render a diff section when details is missing or empty", () => {
+    const { lastFrame, unmount } = render(
+      <ToolCard
+        card={{ kind: "toolResult", callId: "1", name: "edit", output: "ok" }}
+        expanded={true}
+      />,
+    );
+    expect(lastFrame()).not.toContain("diff:");
+    unmount();
+  });
+
+  test("does not render a diff section when details.diff is null or empty", () => {
+    const { lastFrame: frame1, unmount: unmount1 } = render(
+      <ToolCard
+        card={{
+          kind: "toolResult",
+          callId: "1",
+          name: "edit",
+          output: "ok",
+          details: { kind: "diff", diff: null },
+        }}
+        expanded={true}
+      />,
+    );
+    expect(frame1()).not.toContain("diff:");
+    unmount1();
+  });
 });
+
+

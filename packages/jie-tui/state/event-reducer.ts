@@ -141,11 +141,11 @@ function reduceToolResult(state: TuiState, event: AnyEventEnvelope): TuiState {
   if (event.type !== "agent.tool.result") return state;
   const { agentId, agent } = resolved;
   if (agent.currentTurn === null) return state;
-  const { tool_call_id, name, output, output_truncated, duration_ms, error } = event.payload;
+  const { tool_call_id, name, output, output_truncated, duration_ms, error, details } = event.payload;
   const cards = [...agent.currentTurn.cards];
   const index = cards.findIndex((card) => card.kind === "toolCall" && card.callId === tool_call_id);
   if (index === -1) return state;
-  cards[index] = { kind: "toolResult", callId: tool_call_id, name, output, outputTruncated: output_truncated, durationMs: duration_ms, error };
+  cards[index] = { kind: "toolResult", callId: tool_call_id, name, output, outputTruncated: output_truncated, durationMs: duration_ms, error, details };
   const nextTurn = { ...agent.currentTurn, cards };
   const contextTokensUsed = estimateContextTokens(agent.history, nextTurn);
   const next: AgentUiState = { ...agent, currentTurn: nextTurn, contextTokensUsed };

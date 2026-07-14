@@ -258,4 +258,21 @@ describe("createEventManager — tool payload pass-through", () => {
     expect(env.payload.output_truncated).toBe(true);
     expect(env.payload.output).toContain("chars truncated");
   });
+
+  test("agent.tool.result: details is propagated unchanged to subscribers", () => {
+    const bus = createEventBus();
+    const received = collect(bus, "agent.tool.result");
+    const events: EventManager = createEventManager(bus);
+    const details = { kind: "diff", diff: "@@ -1 +1 @@\n-a\n+A" };
+    events.publish(Events.agentToolResult(agentSender, "c1", "edit", "ok", 12, null, details));
+    expect(received[0]!.payload.details).toBe(details);
+  });
+
+  test("agent.tool.result: details defaults to null when not provided", () => {
+    const bus = createEventBus();
+    const received = collect(bus, "agent.tool.result");
+    const events: EventManager = createEventManager(bus);
+    events.publish(Events.agentToolResult(agentSender, "c1", "bash", "ok", 12, null));
+    expect(received[0]!.payload.details).toBeNull();
+  });
 });

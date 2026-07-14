@@ -77,6 +77,7 @@ export function createAgentBody(options: CreateAgentBodyOptions): AgentBody {
         output === null ? null : JSON.stringify(output),
         Date.now() - startedAt,
         error,
+        output?.details ?? null,
       ));
       return undefined;
     },

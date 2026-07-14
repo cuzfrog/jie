@@ -18,6 +18,7 @@ type EventDefinitions = {
     output_truncated: boolean;
     duration_ms: number;
     error: string | null;
+    details: unknown;
   }>;
   "agent.stream.chunk": EventDef<AgentSender, {
     stream_id: number;
@@ -90,9 +91,9 @@ function agentToolCall(sender: AgentSender, tool_call_id: string, name: string, 
   const { text, truncated } = truncateForTelemetry(input);
   return createEvent("agent.tool.call", sender, { tool_call_id, name, input: text, input_truncated: truncated });
 }
-function agentToolResult(sender: AgentSender, tool_call_id: string, name: string, output: string | null, duration_ms: number, error: string | null): EventEnvelope<"agent.tool.result"> {
+function agentToolResult(sender: AgentSender, tool_call_id: string, name: string, output: string | null, duration_ms: number, error: string | null, details: unknown = null): EventEnvelope<"agent.tool.result"> {
   const { text, truncated } = truncateForTelemetry(output);
-  return createEvent("agent.tool.result", sender, { tool_call_id, name, output: text, output_truncated: truncated, duration_ms, error });
+  return createEvent("agent.tool.result", sender, { tool_call_id, name, output: text, output_truncated: truncated, duration_ms, error, details });
 }
 
 function createEvent<T extends EventType>(type: T, sender: Sender): EventEnvelope<T>;

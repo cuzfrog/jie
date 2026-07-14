@@ -15,6 +15,7 @@ export interface MessageCard {
   readonly outputTruncated?: boolean;
   readonly durationMs?: number;
   readonly error?: string | null;
+  readonly details?: unknown;
 }
 
 export interface MessageBlock {
