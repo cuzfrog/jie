@@ -309,4 +309,29 @@ describe("createTeamManager — full surface", () => {
       expect(() => manager.stop()).not.toThrow();
     });
   });
+
+  describe("listSessions", () => {
+    test("returns empty array for a team that was never loaded", () => {
+      const { manager } = makeManager(workspace, homeJieDir, null);
+      expect(manager.listSessions("ghost-team")).toEqual([]);
+    });
+
+    test("returns the persisted sessions for the loaded minimal team", async () => {
+      const { manager, memoryManager } = makeManager(workspace, homeJieDir, null);
+      await manager.load("minimal");
+      memoryManager.persist({ role: "user", content: "x", timestamp: 1 } as never, "general-1", "session-A", "minimal");
+      memoryManager.persist({ role: "user", content: "y", timestamp: 2 } as never, "general-1", "session-B", "minimal");
+      const sessions = manager.listSessions("minimal");
+      const ids = sessions.map((s) => s.sessionId).sort();
+      expect(ids).toEqual(["session-A", "session-B"]);
+    });
+
+    test("scopes results to the requested team_id", async () => {
+      const { manager, memoryManager } = makeManager(workspace, homeJieDir, null);
+      await manager.load("minimal");
+      memoryManager.persist({ role: "user", content: "x", timestamp: 1 } as never, "general-1", "s-min", "minimal");
+      memoryManager.persist({ role: "user", content: "y", timestamp: 2 } as never, "general-1", "s-other", "other-team");
+      expect(manager.listSessions("minimal").map((s) => s.sessionId)).toEqual(["s-min"]);
+    });
+  });
 });

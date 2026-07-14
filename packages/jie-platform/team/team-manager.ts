@@ -3,7 +3,7 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import { type AgentBody, createAgentBody } from "../core";
 import { type EventManager, Events } from "../event";
 import { JiePlatformError } from "../jie-platform-errors";
-import { type ArtifactStore, type MemoryManager } from "../storage";
+import { type ArtifactStore, type MemoryManager, type SessionSummary } from "../storage";
 import { type SettingsStore } from "../config";
 import { type ModelRegistry } from "../config";
 import { type ToolRegistry } from "../tools";
@@ -32,6 +32,7 @@ export interface TeamManager {
   listLoaded(): ReadonlyMap<string, TeamInfo>;
   locate(teamId: string): TeamBlueprintLocation;
   agents(teamId: string): ReadonlyArray<AgentInfo>;
+  listSessions(teamId: string): ReadonlyArray<SessionSummary>;
   stop(): void;
 }
 
@@ -143,6 +144,10 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
     }
   }
 
+  function listSessions(teamId: string): ReadonlyArray<SessionSummary> {
+    return memoryManager.listSessions(teamId);
+  }
+
   return {
     load: loadImpl,
     listInstalled() {
@@ -153,6 +158,7 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
       return teamRegistry.locate(id);
     },
     agents,
+    listSessions,
     stop,
   };
 }
