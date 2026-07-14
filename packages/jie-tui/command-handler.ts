@@ -1,5 +1,6 @@
 import { JiePlatformError, type JiePlatform } from "@cuzfrog/jie-platform";
 import { Actions, type StateStore } from "./state";
+import { bashDirective, parseBashCommand } from "./bash";
 
 type CommandOutcome =
   | { readonly kind: "reply"; readonly text: string }
@@ -24,9 +25,18 @@ export interface CommandHandler {
 export function createTuiCommandHandler(deps: CommandHandlerDeps): CommandHandler {
   const handle = (text: string): void => {
     deps.stateStore.dispatch(Actions.clearBanners());
-    const parts = text.split(/\s+/);
+    const trimmed = text.trim();
+    if (trimmed.startsWith("!")) {
+      routeBash(trimmed, deps);
+      return;
+    }
+    if (!trimmed.startsWith("/")) {
+      routePrompt(trimmed, deps);
+      return;
+    }
+    const parts = trimmed.split(/\s+/);
     const rawName = parts[0]!;
-    const name = rawName.startsWith("/") ? rawName.slice(1) : rawName;
+    const name = rawName.slice(1);
     const args = parts.slice(1);
 
     const intercepted = runIntercepts(name, args, deps);
@@ -36,7 +46,7 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): CommandHandle
       return;
     }
 
-    const outcome = runCommand(text);
+    const outcome = runCommand(trimmed);
     switch (outcome.kind) {
       case "clearState":
         deps.stateStore.dispatch(Actions.clearTuiState());
@@ -54,6 +64,33 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): CommandHandle
   };
 
   return { handle };
+}
+
+function routeBash(trimmed: string, deps: CommandHandlerDeps): void {
+  const bash = parseBashCommand(trimmed);
+  if (bash === null) {
+    deps.stateStore.dispatch(Actions.setErrorMessage("bash mode requires a command after !"));
+    return;
+  }
+  const target = focusedAgent(deps.stateStore);
+  if (target === null) {
+    deps.stateStore.dispatch(Actions.setErrorMessage("no focused agent — load a team first"));
+    return;
+  }
+  deps.platform.prompt(target.teamId, target.agentKey, bashDirective(bash));
+}
+
+function routePrompt(trimmed: string, deps: CommandHandlerDeps): void {
+  const target = focusedAgent(deps.stateStore);
+  if (target === null) return;
+  deps.platform.prompt(target.teamId, target.agentKey, trimmed);
+}
+
+function focusedAgent(stateStore: StateStore): { readonly teamId: string; readonly agentKey: string } | null {
+  const state = stateStore.getState();
+  if (state.focusedAgentId === null) return null;
+  const agent = state.agents.get(state.focusedAgentId);
+  return agent === undefined ? null : { teamId: agent.teamId, agentKey: agent.agentKey };
 }
 
 function runCommand(input: string): CommandOutcome {

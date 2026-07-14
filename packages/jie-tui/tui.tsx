@@ -134,17 +134,8 @@ class InkTui implements Tui {
     this.resolveStart?.();
   }
 
-  private async handleSubmitEditorText(text: string, afterState: TuiState): Promise<void> {
-    this.stateStore.dispatch(Actions.clearBanners());
-    const trimmed = text.trim();
-    if (trimmed.startsWith("/")) {
-      this.commandHandler.handle(trimmed);
-      return;
-    }
-    if (afterState.focusedAgentId === null) return;
-    const target = afterState.agents.get(afterState.focusedAgentId);
-    if (target === undefined) return;
-    this.deps.platform.prompt(target.teamId, target.agentKey, trimmed);
+  private async handleSubmitEditorText(text: string, _afterState: TuiState): Promise<void> {
+    this.commandHandler.handle(text);
   }
 
   private async handleResumePickedSession(teamId: string, sessionId: string, _afterState: TuiState): Promise<void> {
