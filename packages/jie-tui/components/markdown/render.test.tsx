@@ -201,4 +201,32 @@ describe("Markdown style override", () => {
     const frame = out.lastFrame() ?? "";
     expect(frame).not.toContain("\x1b[36m");
   });
+
+  test("heading prefix renders italic when italic override is set", () => {
+    const out = render(<Markdown source="# plan" style={{ italic: true }} />);
+    const frame = out.lastFrame() ?? "";
+    const hashIdx = frame.indexOf("#");
+    expect(hashIdx).toBeGreaterThan(-1);
+    const italicStart = frame.lastIndexOf("\x1b[3m", hashIdx);
+    expect(italicStart).toBeGreaterThanOrEqual(0);
+    const italicEnd = frame.indexOf("\x1b[23m", hashIdx);
+    expect(italicEnd).toBeGreaterThan(hashIdx);
+  });
+
+  test("blockquote bar and content both render italic when italic override is set", () => {
+    const out = render(
+      <Markdown source="> quoted" style={{ italic: true, textColor: "gray" }} />,
+    );
+    const frame = out.lastFrame() ?? "";
+    const barIdx = frame.indexOf("│");
+    expect(barIdx).toBeGreaterThan(-1);
+    const italicBeforeBar = frame.lastIndexOf("\x1b[3m", barIdx);
+    expect(italicBeforeBar).toBeGreaterThanOrEqual(0);
+  });
+
+  test("blockquote defaults to italic when no style override is provided", () => {
+    const out = render(<Markdown source="> quoted" />);
+    const frame = out.lastFrame() ?? "";
+    expect(frame).toContain("\x1b[3m");
+  });
 });

@@ -88,7 +88,7 @@ function HeadingNode({
   const headingPrefix = level === 1 ? "# " : "## ";
   const color = style?.textColor ?? pickColor("accent");
   return (
-    <Text color={color} bold>
+    <Text color={color} bold italic={style?.italic === true}>
       {prefix !== undefined ? <Text color={prefix.color}>{prefix.text}</Text> : null}
       {headingPrefix}
       <InlineRuns runs={runs} style={style} />
@@ -128,7 +128,7 @@ function BlockquoteNode({
 }): JSX.Element {
   const color = style?.textColor ?? pickColor("muted");
   return (
-    <Text color={color} italic={style?.italic !== true}>
+    <Text color={color} italic>
       {`│ `}
       <InlineRuns runs={runs} style={style} />
     </Text>
