@@ -10,8 +10,9 @@ dependencies. The renderer is a pure React tree built from
 via `pickColor`.
 
 External modules import from `markdown/index.ts`. The public surface is the
-`Markdown` component and the `formatOsc8` / `tokenize` / `parseInline`
-helpers.
+`Markdown` component (with its optional `MarkdownStyle` override for
+recoloring/italicizing the entire render tree, e.g. thinking blocks) and the
+`formatOsc8` / `tokenize` / `parseInline` helpers.
 
 ## OSC-8
 
