@@ -1,4 +1,5 @@
 import { Box, Text } from "@cuzfrog/jie-ink";
+import type { ModelInfo } from "@cuzfrog/jie-platform";
 import type { JSX } from "react";
 import { useTuiContext, useFocusedAgent } from "../context";
 import { formatQueueIndicator, pickColor } from "../themes";
@@ -21,7 +22,7 @@ export function Footer({ cwd, gitBranch, gitDirty }: FooterProps): JSX.Element {
   const focusedSegment = focusedAgent === null ? "—" : focusedAgent.agentKey;
   const rightIdentity = `${teamSegment}:${focusedSegment}`;
   const hint = state.showTeamRailPanel ? HINT_VISIBLE : HINT_HIDDEN;
-  const modelSegment = modelSegmentText(focusedAgent);
+  const modelSegment = modelSegmentText(focusedAgent?.model ?? null);
   const queueSegment = formatQueueIndicator(focusedAgent?.queue);
   const contextSegment = contextSegmentText(focusedAgent);
   const contextColor = contextSegmentColor(focusedAgent);
@@ -44,10 +45,9 @@ export function Footer({ cwd, gitBranch, gitDirty }: FooterProps): JSX.Element {
   );
 }
 
-function modelSegmentText(focused: ReturnType<typeof useFocusedAgent>): string {
-  if (focused === null || focused.model === null) return "—";
-  const m = focused.model;
-  return `(${m.provider}) ${m.id} | ${m.effort}`;
+function modelSegmentText(model: ModelInfo | null): string {
+  if (model === null) return "—";
+  return `(${model.provider}) ${model.id} | ${model.effort}`;
 }
 
 function contextSegmentText(focused: ReturnType<typeof useFocusedAgent>): string {
