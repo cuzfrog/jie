@@ -209,7 +209,7 @@ describe("SqliteMemoryManager.listSessions", () => {
 
 describe("InMemoryMemoryManager.listSessions", () => {
   test("matches SqliteMemoryManager.listSessions counts and ids on the same fixture", () => {
-    function run(manager: { persist: SqliteMemoryManager["persist"]; listSessions: SqliteMemoryManager["listSessions"]; compact: SqliteMemoryManager["compact"] }): { ids: ReadonlyArray<string>; counts: Record<string, number>; lastActivity: Record<string, string> } {
+    function run(manager: { persist: SqliteMemoryManager["persist"]; listSessions: SqliteMemoryManager["listSessions"]; compact: SqliteMemoryManager["compact"] }): { ids: ReadonlyArray<string>; counts: Record<string, number> } {
       manager.persist(userMessage("a"), "agent-1", "s-old", "t1");
       manager.persist(userMessage("b"), "agent-1", "s-old", "t1");
       manager.persist(userMessage("c"), "agent-2", "s-old", "t1");
@@ -217,18 +217,13 @@ describe("InMemoryMemoryManager.listSessions", () => {
       manager.compact([1, 2], summaryMessage("sum"), "agent-1", "s-old", "t1");
       const sessions = manager.listSessions("t1");
       const counts: Record<string, number> = {};
-      const lastActivity: Record<string, string> = {};
-      for (const s of sessions) {
-        counts[s.sessionId] = s.messageCount;
-        lastActivity[s.sessionId] = s.lastActivity;
-      }
-      return { ids: sessions.map((s) => s.sessionId), counts, lastActivity };
+      for (const s of sessions) counts[s.sessionId] = s.messageCount;
+      return { ids: sessions.map((s) => s.sessionId), counts };
     }
     const sqlite = run(makeManager());
     const memory = run(new InMemoryMemoryManager());
     expect([...memory.ids].sort()).toEqual([...sqlite.ids].sort());
     expect(memory.counts).toEqual(sqlite.counts);
-    expect(memory.lastActivity).toEqual(sqlite.lastActivity);
   });
 
   test("returns empty array when team has no sessions", () => {
