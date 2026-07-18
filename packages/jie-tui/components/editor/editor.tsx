@@ -128,6 +128,9 @@ export function Editor(_props: EditorProps): JSX.Element {
       width="100%"
     >
       <Box flexDirection="column" paddingX={1} key={mountKey}>
+        {state.transientMessage !== null && state.transientMessage !== "" ? (
+          <Text color={pickColor("success")}>{`✓ ${state.transientMessage}`}</Text>
+        ) : null}
         {showErrorBanner ? (
           <Text color={pickColor("error")}>{`${RAIL_ERROR_GLYPH} ${bannerText}`}</Text>
         ) : null}

@@ -382,6 +382,19 @@ describe("reduceToolCall + reduceToolResult", () => {
     }
   });
 
+  test("a tool.result preserves the input carried by the prior tool.call card", () => {
+    let state = promptedState();
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "read_file", "/tmp/missing.txt"));
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "read_file", null, 18, "ENOENT", null));
+    const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
+    if (card?.kind === "toolResult") {
+      expect(card.input).toBe("/tmp/missing.txt");
+      expect(card.inputTruncated).toBe(false);
+      expect(card.output).toBeNull();
+      expect(card.error).toBe("ENOENT");
+    }
+  });
+
   test("rejects events from a foreign team", () => {
     const state = promptedState();
     const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };

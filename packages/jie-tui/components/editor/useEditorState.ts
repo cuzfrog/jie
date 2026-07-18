@@ -1,5 +1,5 @@
-import { useReducer, useCallback, useEffect, useMemo, useRef } from "react";
-import { reduceEditor, bufferFromText, textFromBuffer, emptyBuffer } from "./editor-reducer";
+import { useReducer, useCallback, useEffect, useRef } from "react";
+import { reduceEditor, bufferFromText, textFromBuffer } from "./editor-reducer";
 import type { EditorBuffer } from "./editor-state";
 
 interface UseEditorStateOptions {
@@ -25,17 +25,24 @@ export interface EditorStateApi {
 
 export function useEditorState(initialValue: string = "", options: UseEditorStateOptions = {}): EditorStateApi {
   const { onChange } = options;
-  const initial = useMemo<EditorBuffer>(() => {
-    if (initialValue === "") return emptyBuffer();
-    return bufferFromText(initialValue);
-  }, []);
-
-  const [state, dispatch] = useReducer(reduceEditor, initial);
+  const [state, dispatch] = useReducer(reduceEditor, initialValue, bufferFromText);
 
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
   const lastReportedRef = useRef<string>(textFromBuffer(state));
+  const lastSeededRef = useRef<string>(initialValue);
+
+  // When `initialValue` changes from outside (e.g. a reducer
+  // dispatching `setEditorText` from a slash-command completion),
+  // re-seed the buffer so the user sees the new text.
+  useEffect(() => {
+    if (initialValue === lastSeededRef.current) return;
+    lastSeededRef.current = initialValue;
+    const lines = initialValue.split("\n");
+    const target = lines.length === 0 ? [""] : lines;
+    dispatch({ type: "reset-value", lines: target });
+  }, [initialValue]);
 
   useEffect(() => {
     const current = textFromBuffer(state);
@@ -62,14 +69,16 @@ export function useEditorState(initialValue: string = "", options: UseEditorStat
   const setValue = useCallback((text: string) => {
     const lines = text.split("\n");
     const target = lines.length === 0 ? [""] : lines;
+    lastSeededRef.current = text;
     dispatchAction({ type: "reset-value", lines: target });
   }, [dispatchAction]);
 
   const applyExternalValue = useCallback((text: string) => {
     const lines = text.split("\n");
     const target = lines.length === 0 ? [""] : lines;
-    dispatchAction({ type: "reset-value", lines: target });
+    lastSeededRef.current = text;
     lastReportedRef.current = text;
+    dispatchAction({ type: "reset-value", lines: target });
   }, [dispatchAction]);
 
   return {

@@ -22,9 +22,10 @@ export function TextBlock({ block, expanded }: TextBlockProps): JSX.Element {
       return <></>;
     }
     return (
-      <Box flexDirection="column" paddingX={1} paddingY={0}>
+      <Box flexDirection="column" paddingLeft={2} paddingY={0}>
         <Markdown
           source={block.text}
+          prefix={{ text: "◆ ", color: pickColor("thinkingText") }}
           style={{ textColor: pickColor("thinkingText"), italic: true }}
         />
       </Box>
@@ -34,9 +35,11 @@ export function TextBlock({ block, expanded }: TextBlockProps): JSX.Element {
     return <></>;
   }
   return (
-    <Markdown
-      source={block.text}
-      prefix={{ text: ASSISTANT_PREFIX, color: pickColor("assistantMessageIcon") }}
-    />
+    <Box paddingLeft={2}>
+      <Markdown
+        source={block.text}
+        prefix={{ text: ASSISTANT_PREFIX, color: pickColor("assistantMessageIcon") }}
+      />
+    </Box>
   );
 }

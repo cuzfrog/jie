@@ -6,6 +6,7 @@ import { ChatKeyBindings } from "./chat-key-bindings";
 import { ChatScrollHud } from "./chat-scroll-hud";
 import { ChatWheelInput } from "./chat-wheel-input";
 import { useChatScroll } from "./chat-scroll-model";
+import type { AgentUiState } from "../../state";
 
 /**
 Tail-pin sentinel. Stored in the map as the offset when the user has not
@@ -20,10 +21,23 @@ interface ChatPaneProps {
   readonly height: number;
 }
 
+const EMPTY_OPTIONS = { toolCardsExpanded: false, thinkingExpanded: false } as const;
+
 export function ChatPane({ width, height }: ChatPaneProps): JSX.Element {
   const { state } = useTuiContext();
   const focusedId = state.focusedAgentId;
   const focused = focusedId === null ? null : state.agents.get(focusedId) ?? null;
+  // Pass a synthetic empty agent when no focus is set so the slice collapses
+  // to zero rows and the hook count/order stays identical to the focused path.
+  const sliceAgent = focused ?? EMPTY_FOCUSED;
+  const sliceOffset = focused === null
+    ? TAIL_PIN_OFFSET
+    : state.chatScrollOffsets.get(focusedId) ?? TAIL_PIN_OFFSET;
+  const sliceOptions = focused === null
+    ? EMPTY_OPTIONS
+    : { toolCardsExpanded: state.toolCardsExpanded, thinkingExpanded: state.thinkingExpanded };
+  const slice = useChatScroll(sliceAgent, width, height, sliceOffset, sliceOptions);
+
   if (focused === null) {
     return (
       <Box flexDirection="column" width={width} height={height} overflow="hidden" flexShrink={0}>
@@ -31,9 +45,6 @@ export function ChatPane({ width, height }: ChatPaneProps): JSX.Element {
       </Box>
     );
   }
-  const stored = focusedId === null ? TAIL_PIN_OFFSET : (state.chatScrollOffsets.get(focusedId) ?? TAIL_PIN_OFFSET);
-  const options = { toolCardsExpanded: state.toolCardsExpanded, thinkingExpanded: state.thinkingExpanded };
-  const slice = useChatScroll(focused, width, height, stored, options);
   const hudHeight = slice.atTail ? 0 : 1;
   const historyHeight = Math.max(1, height - hudHeight);
   return (
@@ -45,11 +56,28 @@ export function ChatPane({ width, height }: ChatPaneProps): JSX.Element {
           focused={focused}
           width={width}
           viewportHeight={historyHeight}
-          scrollOffset={stored}
-          options={options}
+          scrollOffset={sliceOffset}
+          options={sliceOptions}
         />
       </Box>
       <ChatScrollHud slice={slice} width={width} />
     </Box>
   );
 }
+
+const EMPTY_FOCUSED: AgentUiState = {
+  agentId: "" as AgentUiState["agentId"],
+  teamId: "",
+  agentKey: "",
+  role: "",
+  isLeader: false,
+  status: "idle",
+  model: null,
+  queue: [],
+  history: [],
+  currentTurn: null,
+  lastStopReason: null,
+  contextTokensUsed: 0,
+  lastReportedTotalTokens: null,
+  todos: [],
+};
