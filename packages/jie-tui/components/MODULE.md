@@ -1,5 +1,5 @@
 ---
-sealed:
+no-new-exports:
   - app.tsx
   - app.test.tsx
   - global-keys.tsx

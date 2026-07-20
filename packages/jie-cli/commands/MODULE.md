@@ -1,5 +1,5 @@
 ---
-sealed:
+no-new-exports:
   - auth.test.ts
   - auth.ts
   - index.ts

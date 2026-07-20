@@ -1,5 +1,5 @@
 ---
-sealed:
+no-new-exports:
   - index.test.ts
   - index.ts
   - tui.test.tsx

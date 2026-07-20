@@ -1,5 +1,5 @@
 ---
-sealed:
+no-new-exports:
   - auth-store.test.ts
   - auth-store.ts
   - config.test.ts

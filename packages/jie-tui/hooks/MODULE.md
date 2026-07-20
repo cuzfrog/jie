@@ -1,5 +1,5 @@
 ---
-sealed:
+no-new-exports:
   - useStateStore.ts
   - useStateStore.test.tsx
 ---

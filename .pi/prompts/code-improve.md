@@ -14,7 +14,7 @@ Improve code quality, resolve technical debt, reduce code entropy, so that next 
 - Do not add comments to code.
 - Ensure references and documents are consistent.
 - I may have modified the code, follow my intentions and complete the implementation, do not revert my changes or overhual the shape without raising to me.
-- If you think better to add new exports to sealed files, give me a list of exports to review, if I agree, I will manually add the exports.
+- If you think better to add new exports to no-new-exports files, give me a list of exports to review, if I agree, I will manually add the exports.
 
 ## User Instructions
 $ARGUMENTS

@@ -1,5 +1,5 @@
 ---
-sealed:
+no-new-exports:
   - chat-pane.tsx
   - chat-pane.test.tsx
   - message-view.tsx

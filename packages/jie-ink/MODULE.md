@@ -1,5 +1,5 @@
 ---
-sealed:
+no-new-exports:
   - src/index.ts
 ---
 

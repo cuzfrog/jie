@@ -43,7 +43,7 @@ exports:
 
 ## Behavior When Descriptor is Missing
 
-The interpretation of "directory has no descriptor" — fully sealed, unrestricted, or somewhere in between — is the concern of the **Module Boundary Enforcement** chapter (see `04-sealed-rule.md`).
+The interpretation of "directory has no descriptor" — fully no-new-exports, unrestricted, or somewhere in between — is the concern of the **Module Boundary Enforcement** chapter (see `04-no-new-exports-rule.md`).
 
 ## User vs Architect Edits
 

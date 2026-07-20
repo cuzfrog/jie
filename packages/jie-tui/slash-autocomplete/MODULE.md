@@ -1,5 +1,5 @@
 ---
-sealed:
+no-new-exports:
   - index.ts
   - filter.ts
   - filter.test.ts

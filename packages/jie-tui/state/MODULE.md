@@ -1,5 +1,5 @@
 ---
-sealed:
+no-new-exports:
   - index.ts
   - state.test.ts
   - state.ts
@@ -25,7 +25,7 @@ event-side and UI-side reducers each import and delegate to it.
 - File naming: `<noun>-reducer.ts`, camelCase exported function `<noun>Reducer`.
   Companion test: `<noun>-reducer.test.ts`.
 - Both `event-reducer.ts` and `ui-reducer.ts` may import from the shared
-  file, but neither may re-export it (the export surface of those sealed
+  file, but neither may re-export it (the export surface of those no-new-exports
   files is fixed).
 
 This pattern keeps the two entry points thin and guarantees a single
