@@ -1,6 +1,7 @@
 import { render } from "../../test-renderer";
 import { TuiContext } from "../context";
 import { makeContextValue } from "../../test-support";
+import { makeAgentUiState } from "../../test-agent";
 import type { AgentUiState, TuiState } from "../../state";
 import type { TodoItem } from "../../todo";
 import { TodoList } from "./todo-list";
@@ -11,28 +12,10 @@ declare const expect: typeof import("bun:test").expect;
 
 const FOCUSED_AGENT_ID = "team:agent-1" as AgentUiState["agentId"];
 
-function makeAgent(todos: ReadonlyArray<TodoItem>): AgentUiState {
-  return {
-    agentId: FOCUSED_AGENT_ID,
-    teamId: "team",
-    agentKey: "agent-1",
-    role: "general",
-    isLeader: true,
-    status: "idle",
-    model: null,
-    queue: [],
-    history: [],
-    currentTurn: null,
-    lastStopReason: null,
-    contextTokensUsed: 0,
-    todos,
-  };
-}
-
 function makeStateWithTodos(todos: ReadonlyArray<TodoItem>): TuiState {
   const base = makeContextValue();
   const nextAgents = new Map(base.state.agents);
-  nextAgents.set(FOCUSED_AGENT_ID, makeAgent(todos));
+  nextAgents.set(FOCUSED_AGENT_ID, makeAgentUiState({ agentId: FOCUSED_AGENT_ID, teamId: "team", agentKey: "agent-1", todos }));
   return { ...base.state, focusedAgentId: FOCUSED_AGENT_ID, agents: nextAgents };
 }
 

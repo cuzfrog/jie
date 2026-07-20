@@ -22,7 +22,7 @@ interface PickerHandles {
 }
 
 function mountPicker(
-  props: Omit<Parameters<typeof SessionPicker>[0], never>,
+  props: Pick<Parameters<typeof SessionPicker>[0], "sessions" | "query" | "focusedIndex" | "width" | "height">,
 ): PickerHandles & { captured: { query: string[]; focus: Array<readonly [number, number]>; selected: SessionSummary[]; closed: boolean } } {
   const captured = { query: [] as string[], focus: [] as Array<readonly [number, number]>, selected: [] as SessionSummary[], closed: false };
   const out = render(

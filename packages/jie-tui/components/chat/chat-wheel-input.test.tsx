@@ -3,6 +3,7 @@ import { ChatWheelInput } from "./chat-wheel-input";
 import { TuiContext } from "../context";
 import { Actions, createStateStore, type Action, type AgentUiState, type MessageTurn } from "../../state";
 import { makeContextValue } from "../../test-support";
+import { makeAgentUiState } from "../../test-agent";
 
 type AgentId = ReturnType<typeof Actions.scrollChat>["payload"]["agentId"];
 
@@ -23,21 +24,7 @@ function turn(text: string): MessageTurn {
 }
 
 function agent(turns: ReadonlyArray<MessageTurn>): AgentUiState {
-  return {
-    agentId: AGENT_ID,
-    teamId: "demo",
-    agentKey: "g",
-    role: "general",
-    isLeader: true,
-    status: "idle",
-    model: null,
-    queue: [],
-    history: [...turns],
-    currentTurn: null,
-    lastStopReason: null,
-    contextTokensUsed: 0,
-    todos: [],
-  };
+  return makeAgentUiState({ agentId: AGENT_ID, history: [...turns] });
 }
 
 interface CapturedDispatch {

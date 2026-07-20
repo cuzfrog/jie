@@ -1,4 +1,5 @@
 import type { AgentUiState, MessageTurn } from "../../state";
+import { makeAgentUiState } from "../../test-agent";
 import {
   sliceChat,
   stepChatOffset,
@@ -21,25 +22,6 @@ function turn(overrides: Partial<MessageTurn> = {}): MessageTurn {
     blocks: [{ kind: "text", text: "r" }],
     streamId: null,
     ...overrides,
-  };
-}
-
-function agent(turns: MessageTurn[], extras: Partial<AgentUiState> = {}): AgentUiState {
-  return {
-    agentId: "demo:g" as AgentUiState["agentId"],
-    teamId: "demo",
-    agentKey: "g",
-    role: "general",
-    isLeader: true,
-    status: "idle",
-    model: null,
-    queue: [],
-    history: turns,
-    currentTurn: null,
-    lastStopReason: null,
-    contextTokensUsed: 0,
-    todos: [],
-    ...extras,
   };
 }
 
@@ -119,10 +101,12 @@ describe("turnHeight", () => {
 
 describe("sliceChat", () => {
   test("tail-pin with content fitting viewport yields tailOffset=0", () => {
-    const a = agent([
-      turn({ userPrompt: "p1", blocks: [{ kind: "text", text: "r1" }] }),
-      turn({ userPrompt: "p2", blocks: [{ kind: "text", text: "r2" }] }),
-    ]);
+    const a = makeAgentUiState({
+      history: [
+        turn({ userPrompt: "p1", blocks: [{ kind: "text", text: "r1" }] }),
+        turn({ userPrompt: "p2", blocks: [{ kind: "text", text: "r2" }] }),
+      ],
+    });
     const slice = sliceChat(a, 80, 50, 0, OPTIONS);
     expect(slice.tailOffset).toBe(0);
     expect(slice.atTail).toBe(true);
@@ -134,7 +118,7 @@ describe("sliceChat", () => {
     const turns = Array.from({ length: 20 }, (_, i) =>
       turn({ userPrompt: `prompt-${i}`, blocks: [{ kind: "text", text: `reply ${"x".repeat(40)}` }] }),
     );
-    const a = agent(turns);
+    const a = makeAgentUiState({ history: turns });
     const slice = sliceChat(a, 80, 10, sliceTailOffset(turns.length, 10, a, OPTIONS, 80), OPTIONS);
     expect(slice.visibleMetrics.length).toBeLessThan(turns.length);
     expect(slice.scrollOffset).toBe(slice.tailOffset);
@@ -145,7 +129,7 @@ describe("sliceChat", () => {
     const turns = Array.from({ length: 20 }, (_, i) =>
       turn({ userPrompt: `prompt-${i}`, blocks: [{ kind: "text", text: `reply ${"x".repeat(40)}` }] }),
     );
-    const a = agent(turns);
+    const a = makeAgentUiState({ history: turns });
     const slice = sliceChat(a, 80, 10, 0, OPTIONS);
     expect(slice.atTop).toBe(true);
     expect(slice.atTail).toBe(false);
@@ -156,7 +140,7 @@ describe("sliceChat", () => {
     const turns = Array.from({ length: 20 }, (_, i) =>
       turn({ userPrompt: `prompt-${i}`, blocks: [{ kind: "text", text: `reply ${"x".repeat(40)}` }] }),
     );
-    const a = agent(turns);
+    const a = makeAgentUiState({ history: turns });
     const slice = sliceChat(a, 80, 10, 1, OPTIONS);
     const first = slice.visibleMetrics[0];
     expect(first).toBeDefined();
@@ -164,11 +148,13 @@ describe("sliceChat", () => {
   });
 
   test("the inter-turn separator belongs to the following turn's footprint", () => {
-    const a = agent([
-      turn({ userPrompt: "p1", blocks: [{ kind: "text", text: "r1" }] }),
-      turn({ userPrompt: "p2", blocks: [{ kind: "text", text: "r2" }] }),
-      turn({ userPrompt: "p3", blocks: [{ kind: "text", text: "r3" }] }),
-    ]);
+    const a = makeAgentUiState({
+      history: [
+        turn({ userPrompt: "p1", blocks: [{ kind: "text", text: "r1" }] }),
+        turn({ userPrompt: "p2", blocks: [{ kind: "text", text: "r2" }] }),
+        turn({ userPrompt: "p3", blocks: [{ kind: "text", text: "r3" }] }),
+      ],
+    });
     const onSeparator = sliceChat(a, 80, 3, 2, OPTIONS);
     expect(onSeparator.visibleMetrics.map((m) => m.turnIndex)).toEqual([1]);
     expect(onSeparator.truncatedFirsts.get(1)).toBeUndefined();
@@ -182,17 +168,18 @@ describe("sliceChat", () => {
     const turns = Array.from({ length: 5 }, (_, i) =>
       turn({ userPrompt: `prompt-${i}`, blocks: [{ kind: "text", text: `reply ${"x".repeat(40)}` }] }),
     );
-    const a = agent(turns);
+    const a = makeAgentUiState({ history: turns });
     const slice = sliceChat(a, 80, 10, 9999, OPTIONS);
     expect(slice.scrollOffset).toBe(slice.tailOffset);
     expect(slice.atTail).toBe(true);
   });
 
   test("busy agent adds a working indicator row", () => {
-    const a = agent(
-      [turn({ userPrompt: "p", blocks: [{ kind: "text", text: "r" }] })],
-      { status: "busy", currentTurn: turn({ userPrompt: "", blocks: [] }) },
-    );
+    const a = makeAgentUiState({
+      history: [turn({ userPrompt: "p", blocks: [{ kind: "text", text: "r" }] })],
+      status: "busy",
+      currentTurn: turn({ userPrompt: "", blocks: [] }),
+    });
     const slice = sliceChat(a, 80, 50, 0, OPTIONS);
     expect(slice.totalRows).toBeGreaterThan(slice.metrics[0]!.turnHeight);
   });

@@ -1,4 +1,3 @@
-import { PassThrough } from "node:stream";
 import { createTui, type Tui } from "../tui";
 import { Actions } from "../state";
 import { withTTY } from "../../../tests/support";
@@ -15,21 +14,6 @@ declare const test: (name: string, fn: () => void | Promise<void>) => void;
 declare const describe: (name: string, fn: () => void) => void;
 declare const expect: typeof import("bun:test").expect;
 declare const beforeEach: (fn: () => void) => void;
-
-class FakeStdin extends PassThrough {
-  isTTY = true;
-  ref(): this { return this; }
-  unref(): this { return this; }
-  setRawMode(): this { return this; }
-  setEncoding(): this { return this; }
-  resume(): this { super.resume(); return this; }
-  pause(): this { super.pause(); return this; }
-}
-
-class FakeStdout extends PassThrough {
-  columns = 80;
-  rows = 30;
-}
 
 interface PromptCall {
   readonly teamId: string;

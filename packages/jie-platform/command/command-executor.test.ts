@@ -24,6 +24,7 @@ const teamManager = vi.mocked<TeamManager>({
   locate: vi.fn(),
   agents: vi.fn(),
   listSessions: vi.fn(),
+  resumeSession: vi.fn(),
   stop: vi.fn(),
 });
 

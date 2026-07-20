@@ -111,13 +111,11 @@ describe("teamLoadReducer", () => {
     const first = teamLoadReducer(INITIAL_TUI_STATE, team([
       { role: "general", agentKey: "general-1", isLeader: true, model: null },
     ]));
-    const withTodos: TuiState = {
-      ...first,
-      agents: new Map(first.agents),
-    };
-    const withTodosAgent = withTodos.agents.get("my-team:general-1");
+    const seededAgents = new Map(first.agents);
+    const withTodosAgent = seededAgents.get("my-team:general-1");
     if (withTodosAgent === undefined) throw new Error("seed missing");
-    withTodos.agents.set("my-team:general-1", { ...withTodosAgent, todos: [{ content: "carry-over", status: "in_progress" }] });
+    seededAgents.set("my-team:general-1", { ...withTodosAgent, todos: [{ content: "carry-over", status: "in_progress" }] });
+    const withTodos: TuiState = { ...first, agents: seededAgents };
     const switched = teamLoadReducer(withTodos, {
       id: "my-team-2",
       leaderKey: "worker-1",
@@ -132,11 +130,9 @@ describe("teamLoadReducer", () => {
     ]));
     const firstAgent = first.agents.get("my-team:general-1");
     if (firstAgent === undefined) throw new Error("seed missing");
-    const withTodos: TuiState = {
-      ...first,
-      agents: new Map(first.agents),
-    };
-    withTodos.agents.set("my-team:general-1", { ...firstAgent, todos: [{ content: "still here", status: "pending" }] });
+    const seededAgents = new Map(first.agents);
+    seededAgents.set("my-team:general-1", { ...firstAgent, todos: [{ content: "still here", status: "pending" }] });
+    const withTodos: TuiState = { ...first, agents: seededAgents };
     const second = teamLoadReducer(withTodos, team([
       { role: "general", agentKey: "general-1", isLeader: true, model: null },
     ]));
