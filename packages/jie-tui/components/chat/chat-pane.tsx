@@ -30,7 +30,7 @@ export function ChatPane({ width, height }: ChatPaneProps): JSX.Element {
   // Pass a synthetic empty agent when no focus is set so the slice collapses
   // to zero rows and the hook count/order stays identical to the focused path.
   const sliceAgent = focused ?? EMPTY_FOCUSED;
-  const sliceOffset = focused === null
+  const sliceOffset = focused === null || focusedId === null
     ? TAIL_PIN_OFFSET
     : state.chatScrollOffsets.get(focusedId) ?? TAIL_PIN_OFFSET;
   const sliceOptions = focused === null
@@ -66,7 +66,7 @@ export function ChatPane({ width, height }: ChatPaneProps): JSX.Element {
 }
 
 const EMPTY_FOCUSED: AgentUiState = {
-  agentId: "" as AgentUiState["agentId"],
+  agentId: ":",
   teamId: "",
   agentKey: "",
   role: "",
