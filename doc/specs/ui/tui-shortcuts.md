@@ -14,8 +14,13 @@ The TUI is keyboard-driven. All keybindings are global (handled by the input lis
 | `Shift+←`      | Toggle the left rail (agents panel) on / off                 | always                                     |
 | `Ctrl+T`       | Expand / collapse all thinking blocks in this agent's history | focused agent has at least one thinking block |
 | `Ctrl+O`       | Expand / collapse all tool cards in this agent's history      | focused agent has at least one tool card   |
-| `Ctrl+C`       | Clear the editor if non-empty; otherwise quit the TUI         | editor focused                             |
-| `Ctrl+D` (twice, within 500 ms) | Quit the TUI                                   | always                                     |
+| `Ctrl+C`       | Clear the editor if non-empty; otherwise quit the TUI         | editor focused (closes the session picker while it is open) |
+| `Ctrl+D` (twice, within 500 ms) | Quit the TUI                                   | always (closes the session picker while it is open, arming the quit window) |
+| `PgUp` / `PgDn` | Scroll the chat viewport up / down by one page minus one row | always (chat pane)                        |
+| `Home` / `End` | Jump the chat viewport to the top / re-pin it to the tail     | always (chat pane)                         |
+| mouse wheel    | Scroll the chat viewport (3 rows per notch)                   | terminal reports SGR mouse events          |
+
+Chat scroll position is per-agent memory in `state.chatScrollOffsets` (`tui-state.md`); switching agents restores each agent's own offset. A viewport that reaches the bottom re-pins to the tail so new output pushes it down again.
 
 ## Rail-visible only
 
@@ -34,6 +39,8 @@ When `state.showTeamRailPanel === true`:
 
 A single `Ctrl+D` is a no-op; two presses within 500 ms quit the TUI. Deliberate alternative to `Ctrl+C` for users who prefer `Ctrl+D` as their muscle-memory quit (matches pi's `Ctrl+D` exit).
 
+While the session picker is open, global keys are suppressed except `Ctrl+C` and `Ctrl+D`: `Ctrl+C` closes the picker; `Ctrl+D` closes it **and** arms the quit window, so a quick double-tap closes the picker and quits. `Esc` also closes the picker.
+
 ## Ctrl+T and Ctrl+O
 
 Both toggles are **component-local** — `MessageView` owns the per-block `expanded` flag for thinking blocks, `ToolCard` owns it for tool cards. There is no reducer action for either. The toggles are all-or-nothing across the focused agent's history + current turn; `Ctrl+T` does not affect tool cards and `Ctrl+O` does not affect thinking blocks. Mid-stream toggle works: the most recent block re-renders in its new state on the next render tick.
@@ -46,6 +53,8 @@ Both toggles are **component-local** — `MessageView` owns the per-block `expan
 
 Slash commands are typed at the editor prompt (no key chord). Each starts with `/`; the editor treats the line as a command rather than a prompt and dispatches synchronously without publishing to the bus.
 
+Typing `/` opens the **slash autocomplete** panel above the footer: it filters commands by the token after `/`, `Tab` commits the focused entry (submitting the command line immediately, arguments included), `Shift+Tab` cycles focus, and the panel clamps its entries to the rows the terminal can spare (hiding entirely on very short terminals). Outside slash commands, typing `@` opens the analogous **file mention** panel over gitignore-aware project files; `Tab` there replaces the `@query` token with the picked path.
+
 | Command | Effect | Transient message |
 |---|---|---|
 | `/login` | Open a `SelectList` of providers; on select, prompt for the API key; write to `~/.jie/auth.json` (mode `0600`) | `logged in to <provider>` |
@@ -53,6 +62,8 @@ Slash commands are typed at the editor prompt (no key chord). Each starts with `
 | `/model <provider>/<modelId>` | Validate and write to `~/.jie/settings.json` | `default model set to <provider>/<modelId>` |
 | `/team <id>` | If installed, switch the TUI's active team. If not installed, render the error in the input area; no team switch | `default team set` (only on direct write to settings) |
 | `/team` (no arg) | Open a `SelectList` over installed team IDs; selecting one is equivalent to `/team <id>` | none |
+| `/resume` | List the team's stored sessions (`listSessions`) and open the session picker: `↑`/`↓` move, typing filters, `Enter` resumes the selected session (`resumeSession` + team switch), `Esc`/`Ctrl+C` cancel | none |
+| `/continue` | Alias for `/resume` | none |
 | `/clear` | Clear `state.agents`, `leaderAgentId`, `focusedAgentId`, `transientMessage`, `errorBanner`. Memory rows on disk untouched | none |
 | `/help` | Open an overlay rendering the keymap from this doc | none |
 | `/exit` | Same as `Ctrl+D` (twice within 500 ms). No busy-state branch | none |

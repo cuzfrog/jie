@@ -26,11 +26,11 @@ Per CLAUDE.md, serialized events use snake_case on the wire; TypeScript identifi
 
 The composite runtime key is `AgentId = \`${teamId}:${agentKey}\`` (see `00-overview.md` glossary). The reducer's `state.agents` map is keyed by `AgentId`, not by `agentKey`, to disambiguate agents across coexisting teams.
 
-Editor-internal state (`inputBuffer`, `inputHistory`, `historyIndex`) lives on pi-tui's `Editor` component; the reducer does not mirror it.
+The editor buffer (`state.editorText`) lives in the reducer — the `Editor` component edits it through `Actions.setEditorText` and submits through `Actions.submitEditorText`. This lets the layout measure the editor's height and lets the slash/mention pickers read the buffer. Only the prompt history (`inputHistory`, `historyIndex`) remains component-local on the editor.
 
 ## Actions
 
-The reducer takes `Action = ReceiveEvent | SwitchTeam | ToggleTeamRail | ToggleThinking | ToggleToolCards | SwitchCycleAgent | ClearTuiState | SetTransientMessage | ClearTransientMessage | SetErrorMessage | ClearErrorMessage | ClearBanners | RequestQuit | RequestRender | SetEditorText | SubmitEditorText | RequestInterrupt | SetEnvironment` (defined in `packages/jie-tui/state/actions.ts`). Bus envelope types are **not** the action type — `tui.ts` wraps every bus envelope in `Actions.receiveEvent(envelope)` before dispatch. UI-local events (switch team, rail toggle, cycle, transient, error, clear, quit, render, editor text, submit, interrupt, environment) are dispatched directly.
+The reducer takes `Action = ReceiveEvent | SwitchTeam | ToggleTeamRail | ToggleThinking | ToggleToolCards | SwitchCycleAgent | ScrollChat | JumpChat | ClearTuiState | SetTransientMessage | ClearTransientMessage | SetErrorMessage | ClearErrorMessage | ClearBanners | RequestQuit | RequestRender | SetEditorText | SubmitEditorText | RequestInterrupt | SetEnvironment | OpenSessionPicker | CloseSessionPicker | SetPickerQuery | FocusPickerIndex | SelectPickedSession` (defined in `packages/jie-tui/state/actions.ts`). Bus envelope types are **not** the action type — `tui.ts` wraps every bus envelope in `Actions.receiveEvent(envelope)` before dispatch. UI-local events (switch team, rail toggle, cycle, chat scroll/jump, transient, error, clear, quit, render, editor text, submit, interrupt, environment, session picker) are dispatched directly.
 
 This split exists because the bus event taxonomy is the platform's contract (other consumers may subscribe to the same topic); UI actions are the TUI's local vocabulary. Keeping them as separate action types prevents accidentally publishing UI actions to the bus and keeps the reducer testable with literal action objects.
 
@@ -46,7 +46,7 @@ Rules not covered below fall through and return `state` unchanged — the reduce
 
 ### `system.team.loaded`
 
-Seed `state.agents` from `payload.agents`, composing `AgentId = \`${teamId}:${agent_key}\``. **Re-applying the same team updates only `role` and `isLeader`** — history and current turn are preserved. On team switch (`state.teamId !== null && state.teamId !== payload.teamId`), reset `agents`, `leaderAgentId`, `focusedAgentId` first. **Drop any agent in `state.agents` that is absent from the incoming payload** (stale slots from the previous team). Record the leader's `AgentId` as `state.leaderAgentId`; if `focusedAgentId === null`, focus the leader.
+Seed `state.agents` from `payload.agents`, composing `AgentId = \`${teamId}:${agent_key}\``. **Re-applying the same team updates `role` and `isLeader`, and merges `model`** (an incoming non-null model wins; null keeps the existing one — otherwise a reload would drop the known model) — history and current turn are preserved. Re-applying also resets the session picker to closed. On team switch (`state.teamId !== null && state.teamId !== payload.teamId`), reset `agents`, `leaderAgentId`, `focusedAgentId` first. **Drop any agent in `state.agents` that is absent from the incoming payload** (stale slots from the previous team). Record the leader's `AgentId` as `state.leaderAgentId`; if `focusedAgentId === null`, focus the leader.
 
 This event is a platform data signal — it tells the TUI a team has been loaded. It is **not** the switch mechanism; the TUI's slash-command `/team <id>` path uses `Actions.switchTeam(identity)` instead (see UI actions below). Both rules share the same agent-map seeding logic, and `Actions.switchTeam` always fires regardless of whether the underlying `TeamManager.load` was a fresh load or a cache hit, so the UI rebuilds uniformly.
 
@@ -56,7 +56,7 @@ UI action carrying a `TeamIdentity` payload (full data a consumer needs: `id`, `
 
 ### `user.prompt`
 
-The delegation/follow-up rotation rule: if the agent's `currentTurn` already has blocks or cards, push it to `history` first, then open `freshTurn(prompt)`. The editor's `inputBuffer` is editor-owned and is not cleared here.
+The delegation/follow-up rotation rule: if the agent's `currentTurn` already has blocks or cards, push it to `history` first, then open `freshTurn(prompt)`. The editor buffer (`state.editorText`) is not cleared here — clearing it on submit is the editor component's job.
 
 ### `agent.turn.start`
 
@@ -82,11 +82,11 @@ Replace in place by `tool_call_id`. **Out-of-order delivery is a no-op** — the
 
 ### `agent.prompt.queue.update`
 
-Replace `agent.queue = payload.prompts` (snapshot semantics — the body publishes the full queue, not a delta). Cross-team guard: foreign-team events no-op. The editor-area indicator reads `state.agents[focused].queue` and renders `N prompt(s) queued` + next-prompt preview (truncated to 100 chars) when non-empty. The indicator clears when the body publishes `{ prompts: [] }` immediately before `agent.turn.start`.
+Replace `agent.queue = payload.prompts` (snapshot semantics — the body publishes the full queue, not a delta). Cross-team guard: foreign-team events no-op. The footer line-2 queue segment (see `tui-layout.md`) reads `state.agents[focused].queue` and renders `N prompt(s) queued` + next-prompt preview (truncated to 40 code points) in `warning` color when non-empty. The indicator clears when the body publishes `{ prompts: [] }` immediately before `agent.turn.start`.
 
 ### `system.error`
 
-Set `state.errorBanner = { text: <composed> }` where `<composed>` is either `event.payload.error` or, if any agent has a `lastStopReason`, `[stop: <stopReason>] <error>`. Distinct from transient messages: errors persist until cleared. Used to surface errors the user must explicitly clear (most prominently the no-model-selected error).
+Set `state.errorBanner` to the composed string: either `event.payload.error` or, if any agent has a `lastStopReason`, `[stop: <stopReason>] <error>`. `errorBanner` and `transientMessage` are `string | null` — no wrapper object. Distinct from transient messages: errors persist until cleared. Used to surface errors the user must explicitly clear (most prominently the no-model-selected error).
 
 ### UI actions
 
@@ -94,10 +94,16 @@ Set `state.errorBanner = { text: <composed> }` where `<composed>` is either `eve
 - `Actions.toggleTeamRail()` — flip `state.showTeamRailPanel`. Wired to `Shift+←`.
 - `Actions.requestInterrupt(teamId, agentKey)` — no reducer state change. The TUI host observes the action and calls `platform.interrupt(teamId, agentKey)`. Wired to `Esc` only when the focused agent is busy.
 - `Actions.switchCycleAgent(direction: 1 | -1)` — cycle `state.focusedAgentId`. **No-op when the rail is hidden**, when the agent map has fewer than two agents, or when the current focus cannot be resolved. When `state.focusedAgentId === null`, direction `1` lands on the first agent in insertion order, direction `-1` on the last. Otherwise wraps in insertion order.
-- `Actions.setTransientMessage(text)` — slash-command acknowledgments (`logged in to nvidia`, etc.). Renderer ages the message out after 5 s render-side (the reducer never sees the clock).
-- `Actions.clearTransientMessage()` — dispatched on the next `Enter` so stale acknowledgments do not linger.
+- `Actions.scrollChat(agentId, newOffsetRows)` / `Actions.jumpChat(agentId, "top" | "tail")` — set `state.chatScrollOffsets[agentId]` (a per-agent `ReadonlyMap<AgentId, number>`; absence means tail-pinned, same as `Infinity`). The chat viewport computes the absolute target from the rendered slice before dispatch, so the reducer stores offsets only and never does arithmetic. Wired to `PgUp`/`PgDn`/`Home`/`End` and mouse-wheel notches (`tui-shortcuts.md`).
+- `Actions.openSessionPicker(sessions)` — store the `SessionSummary` list from `listSessions`, open the picker, reset query and focus. Fired by `/resume` and `/continue`.
+- `Actions.setPickerQuery(text)` — filter text; **also resets `sessionPickerFocus` to 0** so focus never dangles past the filtered list.
+- `Actions.focusPickerIndex(delta, listLength)` — move `sessionPickerFocus` by `±1`, wrapping over the **filtered** `listLength` the picker reports (not the full session list).
+- `Actions.closeSessionPicker()` — close and clear query/sessions/focus. Wired to `Esc`, and to `Ctrl+C`/`Ctrl+D` while the picker is open (`Ctrl+D` additionally arms the quit window).
+- `Actions.selectPickedSession(teamId, sessionId)` — **the reducer branch is a deliberate no-op.** The TUI host observes the action and runs `platform.execute({name:"resumeSession"})`, then `Actions.switchTeam` with the resumed team — same observe-and-act pattern as `requestInterrupt` and `requestQuit`.
+- `Actions.setTransientMessage(text)` — slash-command acknowledgments (`logged in to nvidia`, etc.). The `TransientBanner` row above the editor ages the message out after 5 s render-side (the reducer never sees the clock).
+- `Actions.clearTransientMessage()` — dispatched by the transient banner's 5 s TTL; `Actions.clearBanners()` (below) also clears it on the next submit.
 - `Actions.setErrorMessage(text)` — distinct from transient: persists until cleared.
-- `Actions.clearErrorMessage()` — dispatched on the next `Enter` and on `agent.turn.start`.
+- `Actions.clearErrorMessage()` — clears the error banner alone. The live clear paths consolidate on `clearBanners`: the editor clears banners on the first keystroke after an error is shown (buffer becomes non-empty) and on every submit; `agent.turn.start` clears the error banner as well (see above).
 - `Actions.clearTuiState()` — clear `agents`, `leaderAgentId`, `focusedAgentId`, `transientMessage`, `errorBanner`. Memory rows on disk are untouched. Used by the `/clear` slash command.
 - `Actions.requestQuit()` — set `state.pendingQuit = true` (idempotent). The host subscribes to the state store and, when this flag flips, resolves the start promise and tears down the input loop. No busy-vs-idle branch: a turn in flight is interrupted on quit, not confirmed.
 - `Actions.requestRender()` — no state change, but the subscriber fires anyway. Used by `Ctrl+C` and any "force a redraw" path so render stays single-sourced through the state-subscribe line.
@@ -120,5 +126,5 @@ History is not rotated by size or count in v0.2. The renderer slices to its visi
 
 - **Per-block / per-card `expanded` state.** Expansion is a render concern, not a state concern. The `ToolCard` and `MessageView` components own their own expanded/collapsed state. Earlier drafts of this spec tracked `expanded` on `Card` and `Block`; it was removed because it duplicated the component's job.
 - **In-memory event buffer / replay.** Lives outside the reducer; the platform owns replay.
-- **Queue depth on a leader.** Earlier drafts carried a `state.queue` for prompt-queue indicators; the v0.2 footer does **not** show it. The queue is per-agent (`state.agents[id].queue`), and the editor-area indicator (T5 / T6) surfaces it for the focused agent. The footer remains queue-free.
+- **Queue depth on a leader.** Earlier drafts carried a `state.queue` for prompt-queue indicators. The queue is per-agent (`state.agents[id].queue`); the footer line-2 queue segment (T5 / T6) surfaces the focused agent's.
 - **Queue-pickup flicker debounce.** Earlier drafts kept `lastIdleAt` on the agent slot for a 50 ms "still busy" window. The v0.2 implementation lets `agent.idle` then `agent.turn.start` show as separate transitions; if a future revision needs to mask a brief `idle` window, the fix lives in the chat-pane's working-indicator component (a render-side concern), not in the reducer.

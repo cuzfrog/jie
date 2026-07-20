@@ -20,19 +20,19 @@ The e2e suite asserts user-observable behavior — what a human sees, what files
 2. I can open the agents panel; the panel contains one agent with role `general`.
 3. `jie` behaves as a normal agent CLI (prompt input, conversation screen).
 4. Prompt `Tell me a story`. Response streams to the conversation area, the same way as a pi agent.
-5. Press `Ctrl+D`. The process exits 0.
+5. Press `Ctrl+D` twice (within 500 ms). The process exits 0.
 
-**Preconditions.** No `.jie/`, no `~/.jie/teams/`, no `~/.jie/auth.json` other than what the fixture provides. Default model and provider are resolved from the merged settings file (the fixture writes one). The agents panel starts hidden (`state.showRail === false` per `tui-state.md` initial state); step 2 requires the user to press `← ←` to reveal it.
+**Preconditions.** No `.jie/`, no `~/.jie/teams/`, no `~/.jie/auth.json` other than what the fixture provides. Default model and provider are resolved from the merged settings file (the fixture writes one). The agents panel starts hidden (`state.showRail === false` per `tui-state.md` initial state); step 2 requires the user to press `Shift+←` to reveal it.
 
-**Inputs.** Keystrokes (for layer-3 integration test only): `T`, `e`, `l`, `l`, ` `, `m`, `e`, ` `, `a`, ` `, `s`, `t`, `o`, `r`, `y`, `Enter`; then `Ctrl+D`. The layer-1 (reducer) and layer-2 (render) tests feed the prompt text directly into the reducer / renderer without driving keystrokes.
+**Inputs.** Keystrokes (for layer-3 integration test only): `T`, `e`, `l`, `l`, ` `, `m`, `e`, ` `, `a`, ` `, `s`, `t`, `o`, `r`, `y`, `Enter`; then `Ctrl+D` twice. The layer-1 (reducer) and layer-2 (render) tests feed the prompt text directly into the reducer / renderer without driving keystrokes.
 
 **Observable outputs.**
 
-- After the first `system.teams`, `state.agents` contains exactly one entry with `agentKey === "general"` and `isLeader === true` (built-in minimal team — the single agent is implicitly the leader). Footer line 1 right reads `my-team:general` (verifiable from the rendered frame).
+- After the first `system.team.loaded`, `state.agents` contains exactly one entry with `agentKey === "general"` and `isLeader === true` (built-in minimal team — the single agent is implicitly the leader). Footer line 1 right reads `my-team:general` (verifiable from the rendered frame).
 - After `Enter`, response tokens stream into the conversation area; `state.agents[my-team:general].currentTurn.blocks[*].text` accumulates the streamed content.
-- After `Ctrl+D`, the process exits 0.
+- After the second `Ctrl+D`, the process exits 0.
 
-**Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t1.jsonl`. Envelope schema per `02-protocol-stack.md` "Event Envelope". Includes `system.teams` (with `payload.agents[0].model === null` for the built-in minimal team — the team's `general` does not pin a model), the user prompt, the agent's streaming response, and `agent.idle` close.
+**Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t1.jsonl`. Envelope schema per `02-protocol-stack.md` "Event Envelope". Includes `system.team.loaded` (with `payload.agents[0].model === null` for the built-in minimal team — the team's `general` does not pin a model), the user prompt, the agent's streaming response, and `agent.idle` close.
 
 ## Scenario T2: pass work in a team
 
@@ -43,11 +43,11 @@ The e2e suite asserts user-observable behavior — what a human sees, what files
 5. While the task is in flight, prompt the `manager`: `Tell me a joke`. The `manager` responds with a joke **before the worker becomes idle** — the joke's stream chunks land while the worker is still computing.
 6. The `manager` informs the user when the task is done; `my-answer.txt` contains `110`.
 7. After both turns complete, switch to the `worker` (`Ctrl+↓` cycles forward in insertion order `[manager, worker]`) and back to the `manager` (`Ctrl+↑`); each agent's conversation continues independently.
-8. Press `Ctrl+D`. The process exits 0.
+8. Press `Ctrl+D` twice (within 500 ms). The process exits 0.
 
 **Preconditions.** `.jie/teams/my-team/TEAM.md` declares `leader: manager`. `manager.md` and `worker.md` declare roles per the team-A blueprint (system prompts verbatim — see fixture section). `my-question.txt` exists with content `100+10=?`.
 
-**Inputs.** Slash-command / keystroke sequence: delegation prompt + `Enter`; joke prompt + `Enter` (while worker is still busy); `Ctrl+↓` to worker; `Ctrl+↑` to manager; `Ctrl+D`.
+**Inputs.** Slash-command / keystroke sequence: delegation prompt + `Enter`; joke prompt + `Enter` (while worker is still busy); `Ctrl+↓` to worker; `Ctrl+↑` to manager; `Ctrl+D` twice.
 
 **Observable outputs.**
 
@@ -57,7 +57,7 @@ The e2e suite asserts user-observable behavior — what a human sees, what files
 - The chat area for `manager` (after `Ctrl+↑`) shows the same single scrollback — focus cycling does not affect scrollback content.
 - Final exit code: 0.
 
-**Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t2.jsonl` (with the team-A blueprint at `tests/e2e/tui/fixtures/t2-fixture/`). Envelope schema per `02-protocol-stack.md` "Event Envelope" (each line is `{ version, timestamp, sender: { identity: { teamId, agentKey } }, topic, payload }`). Includes one `system.teams`, two user prompts, multiple `agent.turn.start` / `agent.idle` alternations across both agents, `agent.stream.chunk` and `agent.tool.call` / `agent.tool.result` for both, and `custom.{teamId}.task.*` events from `notify`. The ordering constraint: the joke's `agent.stream.chunk` envelopes arrive **before** the worker's `agent.idle`. The `custom.*` events are in the trace for completeness but the reducer does not assert on them (per `tui-state.md` `custom.{teamId}.{topic}` rule).
+**Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t2.jsonl` (with the team-A blueprint at `tests/e2e/tui/fixtures/t2-fixture/`). Envelope schema per `02-protocol-stack.md` "Event Envelope" (each line is `{ version, timestamp, sender: { identity: { teamId, agentKey } }, topic, payload }`). Includes one `system.team.loaded`, two user prompts, multiple `agent.turn.start` / `agent.idle` alternations across both agents, `agent.stream.chunk` and `agent.tool.call` / `agent.tool.result` for both, and `custom.{teamId}.task.*` events from `notify`. The ordering constraint: the joke's `agent.stream.chunk` envelopes arrive **before** the worker's `agent.idle`. The `custom.*` events are in the trace for completeness but the reducer does not assert on them (per `tui-state.md` `custom.{teamId}.{topic}` rule).
 
 ### T2 test fixture — team-A blueprint
 
@@ -106,11 +106,11 @@ The trace's stubbed manager responses for `task done` are substring-asserted, no
 5. Prompt: `Tell me a story`. Response streams to the conversation area.
 6. Use `/team my-team-1` to switch back. The agent panel repopulates from `my-team-1`; the conversation area contains the previous conversation.
 7. Type `/team` to see a list of teams with selection filter. Selecting `my-team-1` is equivalent to step 6.
-8. Press `Ctrl+D`. The process exits 0.
+8. Press `Ctrl+D` twice (within 500 ms). The process exits 0.
 
 **Preconditions.** Two installed teams with distinct agent canned responses. `defaultTeam: my-team-1` in `.jie/settings.json`.
 
-**Inputs.** Slash-command sequence: first prompt + `Enter`; `/team my-team-2` + `Enter`; second prompt + `Enter`; `/team my-team-1` + `Enter`; `/team` + `Enter` + arrow + `Enter` to select `my-team-1`; `Ctrl+D`.
+**Inputs.** Slash-command sequence: first prompt + `Enter`; `/team my-team-2` + `Enter`; second prompt + `Enter`; `/team my-team-1` + `Enter`; `/team` + `Enter` + arrow + `Enter` to select `my-team-1`; `Ctrl+D` twice.
 
 **Observable outputs.**
 
@@ -121,7 +121,7 @@ The trace's stubbed manager responses for `task done` are substring-asserted, no
 - After step 7: same as step 6; the rendered frame does not contain the picker's filter rows (verifiable by diffing the post-Enter frame against the pre-`/team Enter` frame).
 - Final exit code: 0.
 
-**Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t3.jsonl`. Envelope schema per `02-protocol-stack.md` "Event Envelope". Includes two `system.teams` events (the second on step 4, the first on step 6 either replayed from the buffer or re-emitted by the platform — fixture pins which path), two user prompts, and the in-memory event buffer is asserted via the renderer's view of the state, not via a separate bus event. Each `system.teams` payload's `agents[0].model` is recorded verbatim (the fixture carries the `(provider, id, effort)` triple).
+**Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t3.jsonl`. Envelope schema per `02-protocol-stack.md` "Event Envelope". Includes two `system.team.loaded` events (the second on step 4, the first on step 6 either replayed from the buffer or re-emitted by the platform — fixture pins which path), two user prompts, and the in-memory event buffer is asserted via the renderer's view of the state, not via a separate bus event. Each `system.team.loaded` payload's `agents[0].model` is recorded verbatim (the fixture carries the `(provider, id, effort)` triple).
 
 ## Scenario T4: first-time setup (TUI flow)
 
@@ -131,21 +131,21 @@ The trace's stubbed manager responses for `task done` are substring-asserted, no
 4. Run `/login`, pick `nvidia`, paste API key — `~/.jie/auth.json` exists.
 5. Run `/model nvidia/<modelId>` — `~/.jie/settings.json` contains `defaultProvider: nvidia` and `defaultModel: <modelId>`.
 6. Prompt `Tell me a joke`. Response streams to the conversation area.
-7. Press `Ctrl+D`. The process exits 0.
+7. Press `Ctrl+D` twice (within 500 ms). The process exits 0.
 
 **Preconditions.** No `~/.jie/auth.json`, no `~/.jie/settings.json`. `process.env.NVIDIA_API_KEY` is set so the JSONL fixture can carry the stubbed API key in the test setup (the replay itself does not call an LLM; the provider was switched from `anthropic` in the archive to `nvidia` for e2e CI alignment with the v1 harness).
 
-**Inputs.** Slash-command / keystroke sequence: `Tell me a joke` + `Enter`; `/login` + `Enter`; arrow-down to `nvidia` + `Enter`; paste the API key + `Enter`; `/model nvidia/<modelId>` + `Enter`; prompt + `Enter`; `Ctrl+D`.
+**Inputs.** Slash-command / keystroke sequence: `Tell me a joke` + `Enter`; `/login` + `Enter`; arrow-down to `nvidia` + `Enter`; paste the API key + `Enter`; `/model nvidia/<modelId>` + `Enter`; prompt + `Enter`; `Ctrl+D` twice.
 
 **Observable outputs.**
 
-- After step 3: `state.errorBanner?.text` equals `No model has been selected, please login and select a default model.`. The error persists until the user types the next keystroke that submits or clears the editor (publishes `ui.error.clear`).
-- After step 4: `~/.jie/auth.json` contains `{ nvidia: { type: "api_key", key: <key> } }`. On POSIX runners, the file mode is `0600`; on Windows runners, the file exists and contains the entry (the mode check is skipped). `state.transientMessage?.text` equals `logged in to nvidia` immediately after the slash command, cleared on the next `Enter` or after 5 seconds (per `tui-state.md` "Transient messages").
-- After step 5: `~/.jie/settings.json` contains `{ defaultProvider: "nvidia", defaultModel: "<modelId>" }`. `state.transientMessage?.text` equals `default model set to nvidia/<modelId>`, cleared on the next `Enter` or after 5 seconds.
+- After step 3: `state.errorBanner` equals `No model has been selected, please login and select a default model.`. The error persists until the user types the first keystroke after it is shown, submits, or a new turn starts (per `tui-state.md` `clearBanners` / `agent.turn.start`).
+- After step 4: `~/.jie/auth.json` contains `{ nvidia: { type: "api_key", key: <key> } }`. On POSIX runners, the file mode is `0600`; on Windows runners, the file exists and contains the entry (the mode check is skipped). `state.transientMessage` equals `logged in to nvidia` immediately after the slash command, aged out after 5 seconds by the transient banner's TTL or cleared on the next submit (per `tui-state.md` "Transient messages").
+- After step 5: `~/.jie/settings.json` contains `{ defaultProvider: "nvidia", defaultModel: "<modelId>" }`. `state.transientMessage` equals `default model set to nvidia/<modelId>`, aged out after 5 seconds or cleared on the next submit.
 - After step 6: conversation area streams the joke; `state.errorBanner` is `null` (cleared by the `agent.turn.start` rule per `tui-state.md`, which fires when the body picks up the user's second prompt).
 - Final exit code: 0.
 
-**Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t4.jsonl`. Envelope schema per `02-protocol-stack.md` "Event Envelope". Includes a `system.teams`, the no-model error path (synthesized `ui.error` envelope published by `createTui` before forwarding the prompt), a slash-command sequence (synthesized `ui.transient` envelopes, not from the platform bus), and a normal prompt / response. The trace's order: `system.teams` → user prompt → `ui.error { text: "No model..." }` → `ui.error.clear` → `/login` slash command → `ui.transient { text: "logged in to nvidia" }` → `ui.transient.clear` → `/model` slash command → `ui.transient { text: "default model set to nvidia/<modelId>" }` → user prompt → stream.
+**Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t4.jsonl`. Envelope schema per `02-protocol-stack.md` "Event Envelope". Includes a `system.team.loaded`, the no-model error path (synthesized `ui.error` envelope published by `createTui` before forwarding the prompt), a slash-command sequence (synthesized `ui.transient` envelopes, not from the platform bus), and a normal prompt / response. The trace's order: `system.team.loaded` → user prompt → `ui.error { text: "No model..." }` → `ui.error.clear` → `/login` slash command → `ui.transient { text: "logged in to nvidia" }` → `ui.transient.clear` → `/model` slash command → `ui.transient { text: "default model set to nvidia/<modelId>" }` → user prompt → stream.
 
 ## Scenario T5: queued prompts
 
@@ -153,16 +153,16 @@ The trace's stubbed manager responses for `task done` are substring-asserted, no
 2. Prompt: `Research the history of J and write a simple description to notes.md`. Response streams; the agent uses the `bash` and `write_file` tools.
 3. While the agent is busy, type: `Also write me a haiku about it in the same file.` and press `Enter`. The prompt is queued (visible in the TUI).
 4. After the agent becomes idle, `notes.md` contains both the description and the haiku.
-5. Press `Ctrl+D`. The process exits 0.
+5. Press `Ctrl+D` twice (within 500 ms). The process exits 0.
 
 **Preconditions.** `notes.md` exists (empty is fine). The `bash` and `write_file` tools are available.
 
-**Inputs.** Slash-command / keystroke sequence: long prompt + `Enter`; second prompt + `Enter`; `Ctrl+D`.
+**Inputs.** Slash-command / keystroke sequence: long prompt + `Enter`; second prompt + `Enter`; `Ctrl+D` twice.
 
 **Observable outputs.**
 
-- After step 3, the editor area shows `1 prompt queued` with the next-prompt preview text including the substring `Also write me a haiku about it in the same file` (exact punctuation is implementation-defined; full prompt text fits within the 100-char truncation window per `tui-state.md` "agent.prompt.queue.update").
-- The indicator disappears when the queued prompt is picked up — the disappearing frame is taken **after** `state.agents[leader].status === "busy"` and the `agent.prompt.queue.update {prompts: []}` envelope is processed. The 50 ms `lastIdleAt` debounce hides any `agent.idle` → `agent.turn.start` flicker.
+- After step 3, the footer line-2 queue segment shows `1 prompt queued` with the next-prompt preview text including the substring `Also write me a haiku about it in the same file` (exact punctuation is implementation-defined; the preview is truncated to 40 code points per `tui-state.md` "agent.prompt.queue.update").
+- The indicator disappears when the queued prompt is picked up — the disappearing frame is taken **after** `state.agents[leader].status === "busy"` and the `agent.prompt.queue.update {prompts: []}` envelope is processed. v0.2 carries no `lastIdleAt` debounce: an `agent.idle` → `agent.turn.start` flicker may show as separate transitions (per `tui-state.md` "Out of scope for v0.2").
 - `notes.md` ends with the description followed by the haiku (description first because the second prompt says `in the same file` after the description was already written).
 - Final exit code: 0.
 
@@ -183,7 +183,7 @@ The trace's stubbed manager responses for `task done` are substring-asserted, no
 **Observable outputs.**
 
 - After step 3: `state.agents[my-team:manager-1].status === "idle"`. The chat pane for the manager shows the 5 `notify` tool cards (one per `task` message).
-- During step 4: each `notify`-sourced message arrives on `custom.{teamId}.task`. The worker body enqueues the message on its in-memory prompt queue and publishes `agent.prompt.queue.update { prompts: [<task-1>, <task-2>, ...] }`. The TUI subscribes; cycling focus to the worker (`Ctrl+↓`) shows the editor-area indicator `N prompt(s) queued` with the next-task preview.
+- During step 4: each `notify`-sourced message arrives on `custom.{teamId}.task`. The worker body enqueues the message on its in-memory prompt queue and publishes `agent.prompt.queue.update { prompts: [<task-1>, <task-2>, ...] }`. The TUI subscribes; cycling focus to the worker (`Ctrl+↓`) shows the footer line-2 queue segment `N prompt(s) queued` with the next-task preview.
 - After step 5: the worker has produced 5 turns (one per task) and is idle; `state.agents[my-team:worker-1].status === "idle"`; `state.agents[my-team:worker-1].currentTurn === null` after the last task completes.
 
 **Recorded `EventBus` trace.** `tests/e2e/tui/fixtures/t6.jsonl`. Envelope schema per `02-protocol-stack.md` "Event Envelope". Includes one `system.team.loaded` (manager + worker), one user prompt to the manager, 5 `agent.tool.call` / `agent.tool.result` envelopes for the manager's `notify` calls, 5 `custom.{teamId}.task` events, and per-task `agent.turn.start` / `agent.stream.*` / `agent.tool.*` / `agent.idle` envelopes from the worker. The `agent.prompt.queue.update` envelopes from the worker carry the running queue depth: `{ prompts: [<task-1>] }` while the worker is busy with task 1, `{ prompts: [<task-2>, ..., <task-5>] }` while task 1 is in flight, decrementing as the worker drains the queue.

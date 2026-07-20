@@ -85,27 +85,28 @@ The footer is **always two lines**, full width, both in `muted` (244). Line 1 is
 left: CWD (branch)            right: teamId:focusedAgentKey
 ```
 
-- **Left**: `cwd (branch)`, e.g. `~/workspace/jie (main)`. CWD is taken from `process.cwd()` at TUI startup; branch is detected via `git -C <cwd> rev-parse --abbrev-ref HEAD`. Rendered in `accent` (109). Falls back to `(main)` when not in a git repo or git is unavailable. Does not change mid-session.
-- **Right**: `teamId:focusedAgentKey`, e.g. `t1:general-1`. Rendered in `muted` (244). Updates on team switch (`teamLoaded`) and on agent focus change (`ui.agent.cycle`).
+- **Left**: `cwd (branch)`, e.g. `~/workspace/jie (main)`. CWD is taken from `process.cwd()` at TUI startup; branch is detected via `git -C <cwd> rev-parse --abbrev-ref HEAD`, and a `*` is appended when the working tree is dirty (`~/workspace/jie (main*)`). Rendered in `accent` (109). Falls back to `(main)` when not in a git repo or git is unavailable. Does not change mid-session.
+- **Right**: `<teamId or "no-team">:<focusedAgentKey or "—">`, e.g. `t1:general-1`. Rendered in `muted` (244). Updates on team switch (`teamLoaded`) and on agent focus change (`ui.agent.cycle`).
 
-When nothing is loaded: left is unchanged, right becomes `no-team:—`. When no focused agent (e.g. mid team-switch before leader focus): `no-team:—`.
+When no team is loaded: left is unchanged, right reads `no-team:—`. When a team is loaded but no agent is focused (e.g. mid team-switch before leader focus): `<teamId>:—`.
 
 Queue depth is **not** on this line. See line 2 / rail for queue surfacing.
 
 ### Line 2 — state + keymap + model
 
-Three segments, joined by 2-space gaps:
+Three segments plus a conditional queue segment:
 
 ```
-left:   "0%/200k" (stats)     hint     right: "(<provider>) <modelId> | <effort>"
+left:   "0%/200k" (stats)     hint          [queue]     right: "(<provider>) <modelId> | <effort>"
 ```
 
-- **Stats** (left): usage indicator, in `muted`. v0.2 placeholder is `0%/200k` (static). The real implementation pulls from a session-stats event when it exists.
+- **Stats** (left): context usage for the focused agent, e.g. `12%/200k`, colored `muted` → `warning` at 70% → `error` at 90%. Sourced from `agent.usage` events (`contextTokensUsed` / `lastReportedTotalTokens` per `tui-state.md`); when no usage has been reported yet, a token estimate over the rendered conversation stands in. Reads `—` when no agent or model is focused.
 - **Hint** (left): a single short string describing the most useful rail-state-dependent shortcut. In `muted`. Two values:
   - hidden: `shift&← show agents`
   - visible: `shift&↑↓ switch agent  shift&← close agents`
 
   See `tui-shortcuts.md` for the full keymap — this hint is a one-line reminder, not the keymap.
+- **Queue** (right of hint, conditional): `N prompt(s) queued` + next-prompt preview when the focused agent's queue is non-empty, in `warning` color. Absent otherwise. See `tui-state.md` "agent.prompt.queue.update".
 - **Right**: the focused agent's `(provider) modelId | effort`, in `muted` with the model id itself in `accent`. When no focused agent: `—`. Each agent in a team has its own model; cycling focus with `Shift+↑/↓` or `Ctrl+↑/↓` swaps this segment to reflect the new focused agent's `(provider, id, effort)`.
 
 ### What line 1 is NOT
