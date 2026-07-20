@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, type JSX } from "react";
-import { Box, Text, useInput } from "@cuzfrog/jie-ink";
+import { Box, Text, useInput, usePaste } from "@cuzfrog/jie-ink";
 import { useTuiContext } from "../context";
 import { Actions } from "../../state";
 import { pickColor, RAIL_ERROR_GLYPH } from "../themes";
@@ -111,6 +111,10 @@ export function Editor(_props: EditorProps): JSX.Element {
   });
 
   useEditorInput(api, { isDisabled: state.sessionPickerOpen });
+
+  usePaste((text) => {
+    if (text.length > 0) api.insert(text);
+  }, { isActive: !state.sessionPickerOpen });
 
   const bannerText = state.errorBanner;
   const showErrorBanner = bannerText !== null && bannerText !== "";

@@ -114,6 +114,85 @@ describe("Editor", () => {
     unmount();
   });
 
+  test("pasted text (bracketed paste) is inserted at the cursor", async () => {
+    const store = createStateStore();
+    store.dispatch(Actions.setEditorText("ab"));
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const { stdin, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\x1b[200~XY\x1b[201~");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(store.getState().editorText).toBe("abXY");
+    unmount();
+  });
+
+  test("pasted carriage return inserts a newline instead of submitting", async () => {
+    // Without bracketed paste mode a pasted CR is indistinguishable from the
+    // Enter key and would submit the buffer. The Editor enables bracketed
+    // paste via usePaste so pasted control bytes land as text, never as keys.
+    const store = createStateStore();
+    store.dispatch(Actions.setEditorText("hi"));
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const submitted: string[] = [];
+    store.subscribe((action) => {
+      if (action.type === Actions.submitEditorText("").type) {
+        submitted.push(action.payload.text);
+      }
+      return Promise.resolve();
+    });
+    const { stdin, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\x1b[200~\r\x1b[201~");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(submitted).toEqual([]);
+    expect(store.getState().editorText).toBe("hi\n");
+    unmount();
+  });
+
+  test("multi-line paste inserts all lines, normalizing CRLF to LF", async () => {
+    const store = createStateStore();
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const { stdin, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\x1b[200~line1\r\nline2\nline3\x1b[201~");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(store.getState().editorText).toBe("line1\nline2\nline3");
+    unmount();
+  });
+
+  test("pasted escape sequence is inserted verbatim, not treated as a key", async () => {
+    const store = createStateStore();
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const { stdin, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\x1b[200~\x1b[A\x1b[201~");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(store.getState().editorText).toBe("\x1b[A");
+    unmount();
+  });
+
+  test("paste is ignored while the session picker is open", async () => {
+    const store = createStateStore();
+    store.dispatch(Actions.openSessionPicker([]));
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const { stdin, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\x1b[200~pasted\x1b[201~");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(store.getState().editorText).toBe("");
+    unmount();
+  });
+
   test("typing into an empty editor clears stale error banners", async () => {
     const store = createStateStore();
     store.dispatch(Actions.setErrorMessage("stale: previous failure"));
