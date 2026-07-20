@@ -20,7 +20,13 @@ export function GlobalKeyBindings({ now = Date.now }: GlobalKeyBindingsProps = {
   }, []);
 
   useInput((input, key) => {
-    if (state.sessionPickerOpen) return;
+    if (state.sessionPickerOpen) {
+      if (key.ctrl && (input === "c" || input === "d")) {
+        dispatch(Actions.closeSessionPicker());
+        if (input === "d") lastCtrlDAt.current = now();
+      }
+      return;
+    }
     if (key.escape) {
       interruptFocusedBusyAgent(state, dispatch);
       return;

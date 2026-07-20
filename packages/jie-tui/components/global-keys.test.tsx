@@ -1,8 +1,9 @@
+import { useEffect, useState, type JSX } from "react";
 import { Events } from "@cuzfrog/jie-platform";
 import { render } from "../test-renderer";
 import { GlobalKeyBindings } from "./global-keys";
 import { TuiContext } from "./context";
-import { Actions, createStateStore } from "../state";
+import { Actions, createStateStore, type TuiState } from "../state";
 import { makeContextValue } from "../test-support";
 
 declare const test: (name: string, fn: () => void | Promise<void>) => void;
@@ -61,7 +62,89 @@ describe("GlobalKeyBindings", () => {
     expect(interrupts).toEqual([]);
     unmount();
   });
+
+  test("double Ctrl+D within the window quits", async () => {
+    const store = createFocusedAgentStore();
+    const types = collectActionTypes(store);
+    let clock = 1000;
+    const { stdin, unmount } = renderLiveKeys(store, () => clock);
+    stdin.write("\x04");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(types).not.toContain(Actions.requestQuit().type);
+    clock = 1400;
+    stdin.write("\x04");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(types).toContain(Actions.requestQuit().type);
+    unmount();
+  });
+
+  test("Ctrl+C closes the session picker instead of being dead", async () => {
+    const store = createFocusedAgentStore();
+    store.dispatch(Actions.openSessionPicker([]));
+    const types = collectActionTypes(store);
+    const { stdin, unmount } = renderLiveKeys(store, () => 1000);
+    stdin.write("\x03");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(types).toContain(Actions.closeSessionPicker().type);
+    expect(types).not.toContain(Actions.requestQuit().type);
+    unmount();
+  });
+
+  test("Ctrl+D while the picker is open closes it and arms the quit window", async () => {
+    const store = createFocusedAgentStore();
+    store.dispatch(Actions.openSessionPicker([]));
+    const types = collectActionTypes(store);
+    let clock = 1000;
+    const { stdin, unmount } = renderLiveKeys(store, () => clock);
+    stdin.write("\x04");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(types).toContain(Actions.closeSessionPicker().type);
+    expect(types).not.toContain(Actions.requestQuit().type);
+    clock = 1300;
+    stdin.write("\x04");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(types).toContain(Actions.requestQuit().type);
+    unmount();
+  });
 });
+
+function collectActionTypes(store: ReturnType<typeof createStateStore>): string[] {
+  const types: string[] = [];
+  store.subscribe((action) => {
+    types.push(action.type);
+    return Promise.resolve();
+  });
+  return types;
+}
+
+function LiveKeys(props: {
+  readonly store: ReturnType<typeof createStateStore>;
+  readonly now: () => number;
+}): JSX.Element {
+  const [state, setState] = useState<TuiState>(() => props.store.getState());
+  useEffect(
+    () =>
+      props.store.subscribe((_action, afterState) => {
+        setState(afterState);
+        return Promise.resolve();
+      }),
+    [props.store],
+  );
+  const ctx = { state, dispatch: (action: Parameters<ReturnType<typeof makeContextValue>["dispatch"]>[0]) => props.store.dispatch(action) };
+  return (
+    <TuiContext.Provider value={ctx}>
+      <GlobalKeyBindings now={props.now} />
+    </TuiContext.Provider>
+  );
+}
+
+function renderLiveKeys(
+  store: ReturnType<typeof createStateStore>,
+  now: () => number,
+): { readonly stdin: { write: (data: string) => void }; readonly unmount: () => void } {
+  const out = render(<LiveKeys store={store} now={now} />);
+  return { stdin: out.stdin, unmount: out.unmount };
+}
 
 function createBusyFocusedAgentStore(): ReturnType<typeof createStateStore> {
   const store = createFocusedAgentStore();
