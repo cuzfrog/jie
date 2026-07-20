@@ -237,6 +237,28 @@ describe("Layout", () => {
     unmount();
   });
 
+  test("renders the bash mode indicator as its own row above the editor and shrinks chat", () => {
+    const { lastFrame, unmount } = mountLayout({
+      columns: 100,
+      rows: 30,
+      showRail: false,
+      seed: (dispatch) => {
+        seedThirtyChatLines(dispatch);
+        dispatch(Actions.setEditorText("!ls"));
+      },
+    });
+    const lines = lastFrame().split("\n");
+    const indicatorIndex = lines.findIndex((line) => line.includes("bash mode"));
+    expect(indicatorIndex).toBeGreaterThanOrEqual(0);
+    const editorTopBorder = lines.findIndex((line) => line.includes("─"));
+    expect(indicatorIndex).toBe(editorTopBorder - 1);
+    const editorHeight = 1 + 2;
+    const bashModeHeight = 1;
+    expect(lines.findIndex((line) => line.includes("c30"))).toBe(30 - 2 - editorHeight - bashModeHeight - 1);
+    expect(lines.findIndex((line) => line.includes("/tmp/proj"))).toBe(30 - 2);
+    unmount();
+  });
+
   test("mention Tab replaces the typed query token instead of appending after it", async () => {
     const dir = mkdtempSync(join(tmpdir(), "jie-layout-mention-"));
     mkdirSync(join(dir, "src"));

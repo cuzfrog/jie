@@ -7,6 +7,7 @@ import { AgentsRail } from "./team-rail";
 import { railWidth } from "./themes";
 import { Editor } from "./editor";
 import { TransientBanner } from "./transient-banner";
+import { BashModeIndicator, bashModeIndicatorHeight } from "./bash-mode-indicator";
 import { Footer } from "./footer";
 import { MAX_VISIBLE_TODOS, TodoList, todoListRowCount } from "./agent-todo";
 import { SlashAutocomplete, SLASH_COMMAND_NAMES, slashAutocompleteHeight } from "../slash-autocomplete";
@@ -43,11 +44,12 @@ export function Layout(props: LayoutProps): JSX.Element {
   const chatWidth = Math.max(1, props.columns - rail - (rail > 0 ? 1 : 0));
   const todoHeight = todoPanelHeight(state);
   const transientHeight = state.transientMessage !== null && state.transientMessage !== "" ? 1 : 0;
+  const bashModeHeight = bashModeIndicatorHeight(state.editorText);
   const editorHeight = editorPanelHeight(state, props.columns);
-  const pickerBudget = Math.max(0, props.rows - editorHeight - FOOTER_ROWS - todoHeight - transientHeight - MIN_CHAT_ROWS);
+  const pickerBudget = Math.max(0, props.rows - editorHeight - FOOTER_ROWS - todoHeight - transientHeight - bashModeHeight - MIN_CHAT_ROWS);
   const slashHeight = slashAutocompleteHeight(state.editorText, state.sessionPickerOpen, SLASH_COMMAND_NAMES, pickerBudget);
   const mentionHeight = fileMentionHeight(state.editorText, state.sessionPickerOpen, files, pickerBudget - slashHeight);
-  const chatHeight = Math.max(1, props.rows - editorHeight - FOOTER_ROWS - todoHeight - transientHeight - slashHeight - mentionHeight);
+  const chatHeight = Math.max(1, props.rows - editorHeight - FOOTER_ROWS - todoHeight - transientHeight - bashModeHeight - slashHeight - mentionHeight);
 
   return (
     <Box flexDirection="column" width={props.columns} height={props.rows}>
@@ -63,6 +65,9 @@ export function Layout(props: LayoutProps): JSX.Element {
       </Box>
       <Box width="100%" flexShrink={0}>
         <TransientBanner />
+      </Box>
+      <Box width="100%" flexShrink={0}>
+        <BashModeIndicator />
       </Box>
       <Box width="100%" maxHeight={editorHeight} overflow="hidden" flexShrink={0}>
         <Editor width={props.columns} maxContentRows={MAX_EDITOR_CONTENT_ROWS} />
