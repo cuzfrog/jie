@@ -86,12 +86,9 @@ export function Layout(props: LayoutProps): JSX.Element {
           sessionPickerOpen={state.sessionPickerOpen}
           files={files}
           maxRows={pickerBudget - slashHeight}
-          onInsert={(path): void => {
+          onInsert={(path, tokenStart, tokenEnd): void => {
             const current = editorTextRef.current;
-            const next = current.endsWith("@")
-              ? `${current}${path} `
-              : `${current} ${path} `;
-            dispatch(Actions.setEditorText(next));
+            dispatch(Actions.setEditorText(`${current.slice(0, tokenStart)}@${path} ${current.slice(tokenEnd)}`));
           }}
         />
       </Box>

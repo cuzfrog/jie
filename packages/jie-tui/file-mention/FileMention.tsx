@@ -11,7 +11,7 @@ interface FileMentionProps {
   readonly editorText: string;
   readonly sessionPickerOpen: boolean;
   readonly files: ReadonlyArray<FileEntry>;
-  readonly onInsert: (filePath: string) => void;
+  readonly onInsert: (filePath: string, tokenStart: number, tokenEnd: number) => void;
   readonly maxRows?: number;
 }
 
@@ -22,9 +22,9 @@ export function fileMentionHeight(
   maxRows: number,
 ): number {
   if (sessionPickerOpen || editorText.startsWith("/")) return 0;
-  const query = mentionQuery(editorText);
-  if (query === null) return 0;
-  return pickerRowCount(filterFiles(query, files).length, maxRows);
+  const mention = mentionToken(editorText);
+  if (mention === null) return 0;
+  return pickerRowCount(filterFiles(mention.text, files).length, maxRows);
 }
 
 export function FileMention(props: FileMentionProps): JSX.Element {
@@ -34,22 +34,22 @@ export function FileMention(props: FileMentionProps): JSX.Element {
   const onInsertRef = useRef(onInsert);
   onInsertRef.current = onInsert;
 
-  const query = mentionQuery(editorText);
+  const mention = mentionToken(editorText);
 
-  const candidates = useMemo<ReadonlyArray<FileEntry>>(() => filterFiles(query ?? "", files), [query, files]);
+  const candidates = useMemo<ReadonlyArray<FileEntry>>(() => filterFiles(mention?.text ?? "", files), [mention?.text, files]);
 
   useEffect(() => {
     setFocusedIndex(0);
-  }, [query, files]);
+  }, [mention?.text, files]);
 
   const visibleCount = pickerVisibleCount(candidates.length, maxRows);
   const visible = candidates.slice(0, visibleCount);
   const activeIndex = Math.min(focusedIndex, Math.max(0, visibleCount - 1));
-  const isVisible = !sessionPickerOpen && !editorText.startsWith("/") && query !== null && visibleCount > 0;
+  const isVisible = !sessionPickerOpen && !editorText.startsWith("/") && mention !== null && visibleCount > 0;
 
   useInput(
     (_input, key) => {
-      if (!isVisible) return;
+      if (!isVisible || mention === null) return;
       if (key.tab) {
         if (key.shift) {
           if (visibleCount === 0) return;
@@ -57,7 +57,7 @@ export function FileMention(props: FileMentionProps): JSX.Element {
           return;
         }
         const target = candidates[activeIndex];
-        if (target !== undefined) onInsertRef.current(target.path);
+        if (target !== undefined) onInsertRef.current(target.path, mention.start, mention.end);
         return;
       }
     },
@@ -81,10 +81,17 @@ export function FileMention(props: FileMentionProps): JSX.Element {
   );
 }
 
-function mentionQuery(editorText: string): string | null {
-  const atIndex = editorText.lastIndexOf("@");
-  if (atIndex === -1) return null;
-  return editorText.slice(atIndex + 1, mentionEnd(editorText, atIndex));
+interface MentionToken {
+  readonly text: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+function mentionToken(editorText: string): MentionToken | null {
+  const start = editorText.lastIndexOf("@");
+  if (start === -1) return null;
+  const end = mentionEnd(editorText, start);
+  return { text: editorText.slice(start + 1, end), start, end };
 }
 
 function mentionEnd(text: string, atIndex: number): number {

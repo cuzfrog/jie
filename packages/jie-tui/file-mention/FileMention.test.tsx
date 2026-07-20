@@ -20,16 +20,22 @@ interface MountArgs {
   readonly maxRows?: number;
 }
 
+interface Inserted {
+  readonly path: string;
+  readonly tokenStart: number;
+  readonly tokenEnd: number;
+}
+
 interface MountHandle {
   readonly captured: {
-    readonly inserted: string[];
+    readonly inserted: ReadonlyArray<Inserted>;
     readonly lastFrame: () => string | undefined;
     readonly stdin: { write: (data: string) => void };
   };
 }
 
 function mount(args: MountArgs): MountHandle {
-  const inserted: string[] = [];
+  const inserted: Inserted[] = [];
   const files = args.files ?? FILES;
   const out = render(
     <FileMention
@@ -37,8 +43,8 @@ function mount(args: MountArgs): MountHandle {
       sessionPickerOpen={args.sessionPickerOpen ?? false}
       files={files}
       maxRows={args.maxRows}
-      onInsert={(path): void => {
-        inserted.push(path);
+      onInsert={(path, tokenStart, tokenEnd): void => {
+        inserted.push({ path, tokenStart, tokenEnd });
       }}
     />,
   );
@@ -97,7 +103,14 @@ describe("FileMention", () => {
     const probe = mount({ editorText: "@main" });
     probe.captured.stdin.write("\t");
     await flush();
-    expect(probe.captured.inserted).toEqual(["src/main.ts"]);
+    expect(probe.captured.inserted).toEqual([{ path: "src/main.ts", tokenStart: 0, tokenEnd: 5 }]);
+  });
+
+  test("Tab reports the mention token range so the typed query can be replaced", async () => {
+    const probe = mount({ editorText: "fix @main now" });
+    probe.captured.stdin.write("\t");
+    await flush();
+    expect(probe.captured.inserted).toEqual([{ path: "src/main.ts", tokenStart: 4, tokenEnd: 9 }]);
   });
 
   test("Shift+Tab cycles focus backward through the candidate list", async () => {

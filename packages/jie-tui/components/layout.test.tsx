@@ -1,3 +1,6 @@
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { Events } from "@cuzfrog/jie-platform";
 import { Layout } from "./layout";
 import { TuiContext } from "./context";
@@ -17,6 +20,8 @@ function mountLayout(opts: {
 }): {
   lastFrame: () => string;
   unmount: () => void;
+  stdin: { write: (data: string) => void };
+  stateStore: ReturnType<typeof createStateStore>;
 } {
   const stateStore = createStateStore();
   stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
@@ -32,12 +37,12 @@ function mountLayout(opts: {
   if (opts.seed !== undefined) opts.seed((action) => stateStore.dispatch(action));
   const state = stateStore.getState();
   const ctx = makeContextValue({ stateStore, state });
-  const { lastFrame, unmount } = render(
+  const out = render(
     <TuiContext.Provider value={ctx}>
       <Layout columns={opts.columns} rows={opts.rows} />
     </TuiContext.Provider>,
   );
-  return { lastFrame: () => lastFrame() ?? "", unmount };
+  return { lastFrame: () => out.lastFrame() ?? "", unmount: out.unmount, stdin: out.stdin, stateStore };
 }
 
 describe("Layout", () => {
@@ -230,6 +235,30 @@ describe("Layout", () => {
     expect(lines.findIndex((line) => line.includes("c30"))).toBe(0);
     expect(lines.findIndex((line) => line.includes("/tmp/proj"))).toBe(rows - 2);
     unmount();
+  });
+
+  test("mention Tab replaces the typed query token instead of appending after it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "jie-layout-mention-"));
+    mkdirSync(join(dir, "src"));
+    writeFileSync(join(dir, "src", "main.ts"), "");
+    try {
+      const { stdin, unmount, stateStore } = mountLayout({
+        columns: 100,
+        rows: 30,
+        showRail: false,
+        seed: (dispatch) => {
+          dispatch(Actions.setEnvironment(dir, "main", false));
+          dispatch(Actions.setEditorText("fix @main"));
+        },
+      });
+      await new Promise((r) => setTimeout(r, 30));
+      stdin.write("\t");
+      await new Promise((r) => setTimeout(r, 30));
+      expect(stateStore.getState().editorText).toBe("fix @src/main.ts ");
+      unmount();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
