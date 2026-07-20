@@ -65,10 +65,13 @@ export function sliceChat(
   const truncatedFirsts = new Map<number, number>();
   for (const m of perTurn) {
     const endRow = m.startRow + m.turnHeight - 1;
+    const separatorRows = m.turnIndex === 0 ? 0 : BLANK_ROW_BETWEEN_TURNS;
+    const footStart = m.startRow - separatorRows;
     if (endRow < windowTop) continue;
-    if (m.startRow > windowBottom) continue;
+    if (footStart > windowBottom) continue;
     visibleMetrics.push(m);
-    if (m.startRow < windowTop) truncatedFirsts.set(m.turnIndex, windowTop - m.startRow);
+    const hidden = windowTop - footStart;
+    if (hidden > 0) truncatedFirsts.set(m.turnIndex, hidden);
   }
   return {
     totalRows,

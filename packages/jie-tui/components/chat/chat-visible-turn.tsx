@@ -8,10 +8,10 @@ interface ChatVisibleTurnProps {
   readonly turnIndex: number;
   readonly isFirstVisible: boolean;
   /**
-  Number of rows of this turn's content that should be hidden above the
-  viewport top. Zero means render the turn flush at the top of the visible
-  window. Positive values are produced by `useChatScroll` when the user has
-  scrolled up by a non-integer number of turns.
+  Rows of this turn's rendered box (leading separator, then content) hidden
+  above the viewport top. Zero paints the whole box. For the first visible
+  turn, `useChatScroll` reports how far the window top has moved into the
+  box: 1 hides exactly the separator, more also clips content rows.
   */
   readonly hiddenRows: number;
   readonly thinkingExpanded: boolean;
@@ -20,15 +20,18 @@ interface ChatVisibleTurnProps {
 
 export function ChatVisibleTurn({
   turn,
+  turnIndex,
   isFirstVisible,
   hiddenRows,
   thinkingExpanded,
   toolCardsExpanded,
 }: ChatVisibleTurnProps): JSX.Element {
+  const hasSeparator = turnIndex > 0;
   if (isFirstVisible && hiddenRows > 0) {
     return (
       <Box overflow="hidden" flexDirection="column" flexShrink={0}>
         <Box marginTop={-hiddenRows} flexDirection="column">
+          {hasSeparator ? <Text> </Text> : null}
           <MessageView
             turn={turn}
             thinkingExpanded={thinkingExpanded}
@@ -40,7 +43,7 @@ export function ChatVisibleTurn({
   }
   return (
     <Box flexDirection="column" flexShrink={0}>
-      {isFirstVisible ? null : <Text> </Text>}
+      {hasSeparator ? <Text> </Text> : null}
       <MessageView
         turn={turn}
         thinkingExpanded={thinkingExpanded}

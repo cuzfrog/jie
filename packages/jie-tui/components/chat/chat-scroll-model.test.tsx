@@ -154,6 +154,21 @@ describe("sliceChat", () => {
     expect(slice.truncatedFirsts.get(first!.turnIndex)).toBe(1);
   });
 
+  test("the inter-turn separator belongs to the following turn's footprint", () => {
+    const a = agent([
+      turn({ userPrompt: "p1", blocks: [{ kind: "text", text: "r1" }] }),
+      turn({ userPrompt: "p2", blocks: [{ kind: "text", text: "r2" }] }),
+      turn({ userPrompt: "p3", blocks: [{ kind: "text", text: "r3" }] }),
+    ]);
+    const onSeparator = sliceChat(a, 80, 3, 2, OPTIONS);
+    expect(onSeparator.visibleMetrics.map((m) => m.turnIndex)).toEqual([1]);
+    expect(onSeparator.truncatedFirsts.get(1)).toBeUndefined();
+    const pastSeparator = sliceChat(a, 80, 3, 3, OPTIONS);
+    expect(pastSeparator.truncatedFirsts.get(1)).toBe(1);
+    const insideContent = sliceChat(a, 80, 2, 4, OPTIONS);
+    expect(insideContent.truncatedFirsts.get(1)).toBe(2);
+  });
+
   test("clamps requested offset above tailOffset to tailOffset and marks tail", () => {
     const turns = Array.from({ length: 5 }, (_, i) =>
       turn({ userPrompt: `prompt-${i}`, blocks: [{ kind: "text", text: `reply ${"x".repeat(40)}` }] }),
