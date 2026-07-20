@@ -74,7 +74,7 @@ export const Actions = {
 		createAction(ActionTypes.OPEN_SESSION_PICKER, { sessions }),
 	closeSessionPicker: () => createAction(ActionTypes.CLOSE_SESSION_PICKER),
 	setPickerQuery: (text: string) => createAction(ActionTypes.SET_PICKER_QUERY, { text }),
-	focusPickerIndex: (delta: 1 | -1) => createAction(ActionTypes.FOCUS_PICKER_INDEX, { delta }),
+	focusPickerIndex: (delta: 1 | -1, listLength: number) => createAction(ActionTypes.FOCUS_PICKER_INDEX, { delta, listLength }),
 	selectPickedSession: (teamId: string, sessionId: string) =>
 		createAction(ActionTypes.SELECT_PICKED_SESSION, { teamId, sessionId }),
 } as const;

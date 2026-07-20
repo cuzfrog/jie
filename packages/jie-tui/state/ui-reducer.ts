@@ -84,8 +84,8 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
         sessionPickerFocus: 0,
       };
     case ActionTypes.FOCUS_PICKER_INDEX: {
-      const len = state.sessionPickerSessions.length;
-      if (len === 0) return state;
+      const len = action.payload.listLength;
+      if (len <= 0) return state;
       const next = (state.sessionPickerFocus + action.payload.delta + len) % len;
       return { ...state, sessionPickerFocus: next };
     }

@@ -12,7 +12,7 @@ interface SessionPickerProps {
   readonly width: number;
   readonly height: number;
   readonly onQueryChange: (next: string) => void;
-  readonly onFocusChange: (delta: 1 | -1) => void;
+  readonly onFocusChange: (delta: 1 | -1, listLength: number) => void;
   readonly onSelect: (session: SessionSummary) => void;
   readonly onClose: () => void;
 }
@@ -21,15 +21,16 @@ export function SessionPicker(props: SessionPickerProps): JSX.Element {
   const { sessions, query, focusedIndex, width, height } = props;
   const filtered = useMemo(() => filterSessions(query, sessions), [query, sessions]);
   const visibleCount = Math.max(0, height - 4);
-  const visible = filtered.slice(0, visibleCount);
+  const windowStart = Math.max(0, Math.min(focusedIndex - visibleCount + 1, filtered.length - visibleCount));
+  const visible = filtered.slice(windowStart, windowStart + visibleCount);
 
   useInput((input, key) => {
     if (key.upArrow) {
-      props.onFocusChange(-1);
+      props.onFocusChange(-1, filtered.length);
       return;
     }
     if (key.downArrow) {
-      props.onFocusChange(1);
+      props.onFocusChange(1, filtered.length);
       return;
     }
     if (key.return || input === "\n") {
@@ -65,9 +66,9 @@ export function SessionPicker(props: SessionPickerProps): JSX.Element {
         <Text color={pickColor("muted")}>filter: </Text>
         <Text>{query === "" ? " " : query}</Text>
       </Box>
-      <SessionList sessions={visible} width={width - 4} focusedIndex={focusedIndex} />
-      {filtered.length > visibleCount ? (
-        <Text color={pickColor("muted")}>…and {filtered.length - visibleCount} more</Text>
+      <SessionList sessions={visible} width={width - 4} focusedIndex={focusedIndex - windowStart} />
+      {filtered.length - visible.length > 0 ? (
+        <Text color={pickColor("muted")}>…and {filtered.length - visible.length} more</Text>
       ) : null}
     </Box>
   );

@@ -23,8 +23,8 @@ interface PickerHandles {
 
 function mountPicker(
   props: Omit<Parameters<typeof SessionPicker>[0], never>,
-): PickerHandles & { captured: { query: string[]; focus: number[]; selected: SessionSummary[]; closed: boolean } } {
-  const captured = { query: [] as string[], focus: [] as number[], selected: [] as SessionSummary[], closed: false };
+): PickerHandles & { captured: { query: string[]; focus: Array<readonly [number, number]>; selected: SessionSummary[]; closed: boolean } } {
+  const captured = { query: [] as string[], focus: [] as Array<readonly [number, number]>, selected: [] as SessionSummary[], closed: false };
   const out = render(
     <SessionPicker
       sessions={props.sessions}
@@ -35,8 +35,8 @@ function mountPicker(
       onQueryChange={(q): void => {
         captured.query.push(q);
       }}
-      onFocusChange={(d): void => {
-        captured.focus.push(d);
+      onFocusChange={(d, listLength): void => {
+        captured.focus.push([d, listLength]);
       }}
       onSelect={(s): void => {
         captured.selected.push(s);
@@ -115,7 +115,7 @@ describe("SessionPicker", () => {
     });
     probe.stdin.write("\x1b[B");
     await flush();
-    expect(probe.captured.focus).toEqual([1]);
+    expect(probe.captured.focus).toEqual([[1, 2]]);
   });
 
   test("emits onFocusChange(-1) on up arrow", async () => {
@@ -128,7 +128,38 @@ describe("SessionPicker", () => {
     });
     probe.stdin.write("\x1b[A");
     await flush();
-    expect(probe.captured.focus).toEqual([-1]);
+    expect(probe.captured.focus).toEqual([[-1, 2]]);
+  });
+
+  test("reports the filtered length, not the full list, on focus change", async () => {
+    const probe = mountPicker({
+      sessions: [{ sessionId: "01-alpha", messageCount: 1, lastActivity: isoMinus(1) }, { sessionId: "02-bravo", messageCount: 2, lastActivity: isoMinus(2) }],
+      query: "alpha",
+      focusedIndex: 0,
+      width: 60,
+      height: 20,
+    });
+    probe.stdin.write("\x1b[B");
+    await flush();
+    expect(probe.captured.focus).toEqual([[1, 1]]);
+  });
+
+  test("keeps the focused row visible when focus is past the first window", () => {
+    const sessions: SessionSummary[] = [];
+    for (let i = 1; i <= 12; i++) {
+      sessions.push(session(`s${String(i).padStart(2, "0")}`));
+    }
+    const probe = mountPicker({
+      sessions,
+      query: "",
+      focusedIndex: 8,
+      width: 60,
+      height: 10,
+    });
+    const frame = probe.lastFrame() ?? "";
+    const focusedLine = frame.split("\n").find((line) => line.includes("s09"));
+    expect(focusedLine).toBeDefined();
+    expect(focusedLine).toContain(">");
   });
 
   test("emits onSelect with the focused session on Enter", async () => {

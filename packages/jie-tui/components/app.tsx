@@ -42,8 +42,8 @@ export function App({ stateStore }: AppProps): JSX.Element {
               onQueryChange={(q): void => {
                 dispatch(Actions.setPickerQuery(q));
               }}
-              onFocusChange={(delta): void => {
-                dispatch(Actions.focusPickerIndex(delta));
+              onFocusChange={(delta, listLength): void => {
+                dispatch(Actions.focusPickerIndex(delta, listLength));
               }}
               onSelect={(session): void => {
                 const teamId = state.teamId;

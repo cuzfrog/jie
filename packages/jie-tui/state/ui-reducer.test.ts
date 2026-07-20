@@ -175,7 +175,7 @@ describe("clear", () => {
     let state = INITIAL_TUI_STATE;
     state = reduceUiAction(state, Actions.openSessionPicker([{ sessionId: "s1", messageCount: 1, lastActivity: "2026-07-14T00:00:00.000Z" }]));
     state = reduceUiAction(state, Actions.setPickerQuery("alpha"));
-    state = reduceUiAction(state, Actions.focusPickerIndex(2));
+    state = reduceUiAction(state, Actions.focusPickerIndex(1, 1));
     const cleared = reduceUiAction(state, Actions.clearTuiState());
     expect(cleared.sessionPickerOpen).toBe(false);
     expect(cleared.sessionPickerQuery).toBe("");
@@ -199,8 +199,12 @@ describe("sessionPicker", () => {
 
   test("openSessionPicker clears any prior query/focus", () => {
     let state = INITIAL_TUI_STATE;
+    state = reduceUiAction(state, Actions.openSessionPicker([
+      { sessionId: "s1", messageCount: 1, lastActivity: "" },
+      { sessionId: "s2", messageCount: 2, lastActivity: "" },
+    ]));
     state = reduceUiAction(state, Actions.setPickerQuery("leftover"));
-    state = reduceUiAction(state, Actions.focusPickerIndex(3));
+    state = reduceUiAction(state, Actions.focusPickerIndex(1, 2));
     state = reduceUiAction(state, Actions.openSessionPicker([{ sessionId: "s1", messageCount: 1, lastActivity: "" }]));
     expect(state.sessionPickerQuery).toBe("");
     expect(state.sessionPickerFocus).toBe(0);
@@ -208,9 +212,12 @@ describe("sessionPicker", () => {
 
   test("closeSessionPicker resets all four picker fields", () => {
     let state = INITIAL_TUI_STATE;
-    state = reduceUiAction(state, Actions.openSessionPicker([{ sessionId: "s1", messageCount: 1, lastActivity: "" }]));
+    state = reduceUiAction(state, Actions.openSessionPicker([
+      { sessionId: "s1", messageCount: 1, lastActivity: "" },
+      { sessionId: "s2", messageCount: 2, lastActivity: "" },
+    ]));
     state = reduceUiAction(state, Actions.setPickerQuery("alpha"));
-    state = reduceUiAction(state, Actions.focusPickerIndex(1));
+    state = reduceUiAction(state, Actions.focusPickerIndex(1, 2));
     const closed = reduceUiAction(state, Actions.closeSessionPicker());
     expect(closed.sessionPickerOpen).toBe(false);
     expect(closed.sessionPickerQuery).toBe("");
@@ -224,7 +231,7 @@ describe("sessionPicker", () => {
       { sessionId: "s1", messageCount: 1, lastActivity: "" },
       { sessionId: "s2", messageCount: 2, lastActivity: "" },
     ]));
-    state = reduceUiAction(state, Actions.focusPickerIndex(1));
+    state = reduceUiAction(state, Actions.focusPickerIndex(1, 2));
     const updated = reduceUiAction(state, Actions.setPickerQuery("alpha"));
     expect(updated.sessionPickerQuery).toBe("alpha");
     expect(updated.sessionPickerFocus).toBe(0);
@@ -237,10 +244,10 @@ describe("sessionPicker", () => {
       { sessionId: "s2", messageCount: 2, lastActivity: "" },
       { sessionId: "s3", messageCount: 3, lastActivity: "" },
     ]));
-    state = reduceUiAction(state, Actions.focusPickerIndex(1));
-    state = reduceUiAction(state, Actions.focusPickerIndex(1));
+    state = reduceUiAction(state, Actions.focusPickerIndex(1, 3));
+    state = reduceUiAction(state, Actions.focusPickerIndex(1, 3));
     expect(state.sessionPickerFocus).toBe(2);
-    const wrapped = reduceUiAction(state, Actions.focusPickerIndex(1));
+    const wrapped = reduceUiAction(state, Actions.focusPickerIndex(1, 3));
     expect(wrapped.sessionPickerFocus).toBe(0);
   });
 
@@ -251,12 +258,26 @@ describe("sessionPicker", () => {
       { sessionId: "s2", messageCount: 2, lastActivity: "" },
       { sessionId: "s3", messageCount: 3, lastActivity: "" },
     ]));
-    const wrapped = reduceUiAction(state, Actions.focusPickerIndex(-1));
+    const wrapped = reduceUiAction(state, Actions.focusPickerIndex(-1, 3));
     expect(wrapped.sessionPickerFocus).toBe(2);
   });
 
-  test("focusPickerIndex is a no-op when there are no sessions", () => {
-    const state = reduceUiAction(INITIAL_TUI_STATE, Actions.focusPickerIndex(1));
+  test("focusPickerIndex wraps over the reported filtered length, not the full session list", () => {
+    let state = INITIAL_TUI_STATE;
+    state = reduceUiAction(state, Actions.openSessionPicker([
+      { sessionId: "s1", messageCount: 1, lastActivity: "" },
+      { sessionId: "s2", messageCount: 2, lastActivity: "" },
+      { sessionId: "s3", messageCount: 3, lastActivity: "" },
+      { sessionId: "s4", messageCount: 4, lastActivity: "" },
+    ]));
+    state = reduceUiAction(state, Actions.focusPickerIndex(1, 2));
+    expect(state.sessionPickerFocus).toBe(1);
+    const wrapped = reduceUiAction(state, Actions.focusPickerIndex(1, 2));
+    expect(wrapped.sessionPickerFocus).toBe(0);
+  });
+
+  test("focusPickerIndex is a no-op when the reported list is empty", () => {
+    const state = reduceUiAction(INITIAL_TUI_STATE, Actions.focusPickerIndex(1, 0));
     expect(state.sessionPickerFocus).toBe(0);
   });
 
