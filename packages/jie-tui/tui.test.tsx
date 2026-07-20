@@ -176,3 +176,26 @@ describe("createTui — submit pipeline", () => {
     await started;
   });
 });
+
+describe("createTui — event bus wiring", () => {
+  test("agent.usage events update the agent's reported context tokens", async () => {
+    let harness: TuiHarness | null = null;
+    withTTY(true, () => {
+      harness = bootTui();
+    });
+    const started = harness!.tui.start();
+    await waitFrames(30);
+    harness!.platform.emit(TEAM_LOADED);
+    await waitFrames(20);
+    harness!.platform.emit(Events.agentUsage(
+      { kind: "agent", teamId: "my-team", agentKey: "general-1" },
+      { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 4242 },
+    ));
+    await waitFrames(20);
+    const agent = harness!.tui.state.agents.get("my-team:general-1");
+    expect(agent?.contextTokensUsed).toBe(4242);
+    expect(agent?.lastReportedTotalTokens).toBe(4242);
+    harness!.tui.stop();
+    await started;
+  });
+});
