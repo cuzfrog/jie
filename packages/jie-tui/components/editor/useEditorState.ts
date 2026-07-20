@@ -62,6 +62,7 @@ export function useEditorState(initialValue: string = "", options: UseEditorStat
     const current = textFromBuffer(state);
     if (current === lastReportedRef.current) return;
     lastReportedRef.current = current;
+    lastSeededRef.current = current;
     onChangeRef.current?.(current);
   }, [state]);
 

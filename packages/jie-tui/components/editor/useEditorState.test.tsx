@@ -1,5 +1,5 @@
 import { render } from "../../test-renderer";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type { JSX } from "react";
 import { useEditorState } from "./useEditorState";
 import type { EditorStateApi } from "./useEditorState";
@@ -31,6 +31,29 @@ function Probe({ onReady }: { onReady: (handles: ProbeHandles) => void }): JSX.E
 
 function wait(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+interface EchoHandles {
+  insert: (text: string) => void;
+  moveLeft: () => void;
+  moveUp: () => void;
+  lineStart: () => void;
+  readBuffer: () => EditorBuffer;
+}
+
+function EchoProbe({ onReady }: { onReady: (handles: EchoHandles) => void }): JSX.Element {
+  const [text, setText] = useState("");
+  const apiRef = useRef<EditorStateApi | null>(null);
+  const api = useEditorState(text, { onChange: setText });
+  apiRef.current = api;
+  onReady({
+    insert: (t) => apiRef.current!.insert(t),
+    moveLeft: () => apiRef.current!.moveCursorLeft(),
+    moveUp: () => apiRef.current!.moveCursorUp(),
+    lineStart: () => apiRef.current!.moveLineStart(),
+    readBuffer: () => apiRef.current!.buffer,
+  });
+  return <></>;
 }
 
 describe("useEditorState", () => {
@@ -123,6 +146,33 @@ describe("useEditorState", () => {
     handles!.insert("!");
     await wait(10);
     expect(handles!.readBuffer()).toEqual({ lines: ["from outside!"], cursorLine: 0, cursorCol: "from outside!".length });
+    unmount();
+  });
+
+  test("mid-buffer insert keeps the cursor when the new value echoes back through initialValue", async () => {
+    let handles: EchoHandles | null = null;
+    const { unmount } = render(<EchoProbe onReady={(h) => { handles = h; }} />);
+    await wait(20);
+    handles!.insert("ac");
+    await wait(20);
+    handles!.moveLeft();
+    handles!.insert("b");
+    await wait(20);
+    expect(handles!.readBuffer()).toEqual({ lines: ["abc"], cursorLine: 0, cursorCol: 2 });
+    unmount();
+  });
+
+  test("insert on a non-last line keeps the cursor line when the value echoes back", async () => {
+    let handles: EchoHandles | null = null;
+    const { unmount } = render(<EchoProbe onReady={(h) => { handles = h; }} />);
+    await wait(20);
+    handles!.insert("ab\ncd");
+    await wait(20);
+    handles!.moveUp();
+    handles!.lineStart();
+    handles!.insert("X");
+    await wait(20);
+    expect(handles!.readBuffer()).toEqual({ lines: ["Xab", "cd"], cursorLine: 0, cursorCol: 1 });
     unmount();
   });
 });
