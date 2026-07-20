@@ -1,6 +1,6 @@
 import type { WriteStream, ReadStream } from "node:tty";
 import { render } from "@cuzfrog/jie-ink";
-import { logger, type AnyEventEnvelope, type EventEnvelope, type EventType, type JiePlatform } from "@cuzfrog/jie-platform";
+import { logger, type AnyEventEnvelope, type JiePlatform } from "@cuzfrog/jie-platform";
 import { Actions, type TuiState, type StateStore, createStateStore } from "./state";
 import { createTuiCommandHandler, type CommandHandler } from "./command-handler";
 import { App } from "./components";
@@ -65,7 +65,7 @@ class InkTui implements Tui {
     this.stateStore = stateStore;
     this.commandHandler = commandHandler;
     this.unsubscribeBus = subscribeToBus(this.deps.platform, (env) => {
-      this.stateStore.dispatch(Actions.receiveEvent(env as AnyEventEnvelope));
+      this.stateStore.dispatch(Actions.receiveEvent(env));
     });
     this.unsubscribeActions = stateStore.subscribe(async (action, afterState) => {
       if (action.type === SUBMIT_EDITOR_TEXT) {
@@ -151,12 +151,21 @@ class InkTui implements Tui {
 
 function subscribeToBus(
   platform: JiePlatform,
-  onEvent: (env: EventEnvelope<EventType>) => void,
+  onEvent: (event: AnyEventEnvelope) => void,
 ): () => void {
-  const unsubscribes: Array<() => void> = [];
-  for (const topic of SUBSCRIBED_TOPICS) {
-    unsubscribes.push(platform.subscribe(topic, onEvent));
-  }
+  const unsubscribes: Array<() => void> = [
+    platform.subscribe("system.team.loaded", onEvent),
+    platform.subscribe("system.error", onEvent),
+    platform.subscribe("user.prompt", onEvent),
+    platform.subscribe("agent.model.assigned", onEvent),
+    platform.subscribe("agent.prompt.queue.update", onEvent),
+    platform.subscribe("agent.turn.start", onEvent),
+    platform.subscribe("agent.idle", onEvent),
+    platform.subscribe("agent.stream.chunk", onEvent),
+    platform.subscribe("agent.tool.call", onEvent),
+    platform.subscribe("agent.tool.result", onEvent),
+    platform.subscribe("agent.usage", onEvent),
+  ];
   let unsubscribed = false;
   return (): void => {
     if (unsubscribed) return;
@@ -168,17 +177,3 @@ function subscribeToBus(
 function isUtf8(): boolean {
   return /utf-?8/i.test(process.env.LANG ?? process.env.LC_ALL ?? "");
 }
-
-const SUBSCRIBED_TOPICS = [
-  "system.team.loaded",
-  "system.error",
-  "user.prompt",
-  "agent.model.assigned",
-  "agent.prompt.queue.update",
-  "agent.turn.start",
-  "agent.idle",
-  "agent.stream.chunk",
-  "agent.tool.call",
-  "agent.tool.result",
-  "agent.usage",
-] as const;
