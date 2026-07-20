@@ -185,6 +185,52 @@ describe("Layout", () => {
     expect(lines.findIndex((line) => line.includes("c30"))).toBe(30 - 2 - editorHeight - 1);
     unmount();
   });
+
+  test("an open slash picker takes its rows from the chat pane; footer stays pinned", () => {
+    const rows = 30;
+    const { lastFrame, unmount } = mountLayout({
+      columns: 100,
+      rows,
+      showRail: false,
+      seed: (dispatch) => {
+        seedThirtyChatLines(dispatch);
+        dispatch(Actions.setEditorText("/"));
+      },
+    });
+    const lines = lastFrame().split("\n").map(stripAnsi);
+    const editorHeight = 1 + 2;
+    const pickerHeight = 2 + 1 + 8 + 1;
+    const editorTopBorder = rows - 2 - pickerHeight - editorHeight;
+    const pickerTopBorder = rows - 2 - pickerHeight;
+    expect(lines.findIndex((line) => line.includes("─"))).toBe(editorTopBorder);
+    expect(lines[pickerTopBorder]?.includes("─")).toBe(true);
+    expect(lines[pickerTopBorder + 1]?.includes("slash commands")).toBe(true);
+    expect(lines.findIndex((line) => line.includes("c30"))).toBe(editorTopBorder - 1);
+    expect(lines.findIndex((line) => line.includes("/tmp/proj"))).toBe(rows - 2);
+    unmount();
+  });
+
+  test("the slash picker clamps to the rows the terminal can spare on a short terminal", () => {
+    const rows = 16;
+    const { lastFrame, unmount } = mountLayout({
+      columns: 100,
+      rows,
+      showRail: false,
+      seed: (dispatch) => {
+        seedThirtyChatLines(dispatch);
+        dispatch(Actions.setEditorText("/"));
+      },
+    });
+    const lines = lastFrame().split("\n").map(stripAnsi);
+    const pickerHeight = 10;
+    const editorTopBorder = rows - 2 - pickerHeight - 3;
+    expect(lines.findIndex((line) => line.includes("─"))).toBe(editorTopBorder);
+    expect(lines.some((line) => line.includes("…and 3 more"))).toBe(true);
+    expect(lines.some((line) => line.includes("/team"))).toBe(false);
+    expect(lines.findIndex((line) => line.includes("c30"))).toBe(0);
+    expect(lines.findIndex((line) => line.includes("/tmp/proj"))).toBe(rows - 2);
+    unmount();
+  });
 });
 
 function seedThirtyChatLines(dispatch: (action: Action) => void): void {

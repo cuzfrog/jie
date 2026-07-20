@@ -9,8 +9,8 @@ import { Editor } from "./editor";
 import { TransientBanner } from "./transient-banner";
 import { Footer } from "./footer";
 import { MAX_VISIBLE_TODOS, TodoList, todoListRowCount } from "./agent-todo";
-import { SlashAutocomplete, SLASH_COMMAND_NAMES } from "../slash-autocomplete";
-import { FileMention, scanFiles, type FileEntry } from "../file-mention";
+import { SlashAutocomplete, SLASH_COMMAND_NAMES, slashAutocompleteHeight } from "../slash-autocomplete";
+import { FileMention, fileMentionHeight, scanFiles, type FileEntry } from "../file-mention";
 import { Actions } from "../state";
 
 const MAX_EDITOR_CONTENT_ROWS = 8;
@@ -18,6 +18,7 @@ const EDITOR_BORDER_ROWS = 2;
 const EDITOR_PADDING_COLS = 2;
 const FOOTER_ROWS = 2;
 const TODO_BORDER_ROWS = 2;
+const MIN_CHAT_ROWS = 1;
 
 interface LayoutProps {
   readonly columns: number;
@@ -28,13 +29,6 @@ export function Layout(props: LayoutProps): JSX.Element {
   const { state, dispatch } = useTuiContext();
   const editorTextRef = useRef<string>(state.editorText);
   editorTextRef.current = state.editorText;
-  const railVisible = state.showTeamRailPanel;
-  const rail = railVisible ? railWidth(props.columns) : 0;
-  const chatWidth = Math.max(1, props.columns - rail - (rail > 0 ? 1 : 0));
-  const todoHeight = todoPanelHeight(state);
-  const transientHeight = state.transientMessage !== null && state.transientMessage !== "" ? 1 : 0;
-  const editorHeight = editorPanelHeight(state, props.columns);
-  const chatHeight = Math.max(1, props.rows - editorHeight - FOOTER_ROWS - todoHeight - transientHeight);
   const [files, setFiles] = useState<ReadonlyArray<FileEntry>>([]);
   useEffect(() => {
     const cwd = state.cwd;
@@ -44,6 +38,16 @@ export function Layout(props: LayoutProps): JSX.Element {
     }
     setFiles(scanFiles(cwd).map((f) => ({ path: f.relPath })));
   }, [state.cwd]);
+  const railVisible = state.showTeamRailPanel;
+  const rail = railVisible ? railWidth(props.columns) : 0;
+  const chatWidth = Math.max(1, props.columns - rail - (rail > 0 ? 1 : 0));
+  const todoHeight = todoPanelHeight(state);
+  const transientHeight = state.transientMessage !== null && state.transientMessage !== "" ? 1 : 0;
+  const editorHeight = editorPanelHeight(state, props.columns);
+  const pickerBudget = Math.max(0, props.rows - editorHeight - FOOTER_ROWS - todoHeight - transientHeight - MIN_CHAT_ROWS);
+  const slashHeight = slashAutocompleteHeight(state.editorText, state.sessionPickerOpen, SLASH_COMMAND_NAMES, pickerBudget);
+  const mentionHeight = fileMentionHeight(state.editorText, state.sessionPickerOpen, files, pickerBudget - slashHeight);
+  const chatHeight = Math.max(1, props.rows - editorHeight - FOOTER_ROWS - todoHeight - transientHeight - slashHeight - mentionHeight);
 
   return (
     <Box flexDirection="column" width={props.columns} height={props.rows}>
@@ -68,6 +72,7 @@ export function Layout(props: LayoutProps): JSX.Element {
           editorText={state.editorText}
           sessionPickerOpen={state.sessionPickerOpen}
           commands={SLASH_COMMAND_NAMES}
+          maxRows={pickerBudget}
           onCommit={(command, argv): void => {
             const suffix = argv.length === 0 ? "" : ` ${argv}`;
             dispatch(Actions.setEditorText(""));
@@ -80,6 +85,7 @@ export function Layout(props: LayoutProps): JSX.Element {
           editorText={state.editorText}
           sessionPickerOpen={state.sessionPickerOpen}
           files={files}
+          maxRows={pickerBudget - slashHeight}
           onInsert={(path): void => {
             const current = editorTextRef.current;
             const next = current.endsWith("@")

@@ -1,14 +1,23 @@
 import { render } from "../test-renderer";
-import { FileMention } from "./FileMention";
+import { FileMention, fileMentionHeight } from "./FileMention";
 
 function flush(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 20));
 }
 
+const FILES: ReadonlyArray<{ readonly path: string }> = [
+  { path: "src/main.ts" },
+  { path: "src/utils/helper.ts" },
+  { path: "packages/foo.ts" },
+];
+
+const MANY_FILES: ReadonlyArray<{ readonly path: string }> = Array.from({ length: 12 }, (_, i) => ({ path: `f${i}.ts` }));
+
 interface MountArgs {
   readonly editorText: string;
   readonly sessionPickerOpen?: boolean;
   readonly files?: ReadonlyArray<{ readonly path: string }>;
+  readonly maxRows?: number;
 }
 
 interface MountHandle {
@@ -21,16 +30,13 @@ interface MountHandle {
 
 function mount(args: MountArgs): MountHandle {
   const inserted: string[] = [];
-  const files = args.files ?? [
-    { path: "src/main.ts" },
-    { path: "src/utils/helper.ts" },
-    { path: "packages/foo.ts" },
-  ];
+  const files = args.files ?? FILES;
   const out = render(
     <FileMention
       editorText={args.editorText}
       sessionPickerOpen={args.sessionPickerOpen ?? false}
       files={files}
+      maxRows={args.maxRows}
       onInsert={(path): void => {
         inserted.push(path);
       }}
@@ -113,5 +119,47 @@ describe("FileMention", () => {
     const probe = mount({ editorText: "@", sessionPickerOpen: true });
     const frame = probe.captured.lastFrame() ?? "";
     expect(frame).not.toContain("main.ts");
+  });
+
+  test("renders only as many entries as maxRows allows, with a truthful overflow count", () => {
+    const probe = mount({ editorText: "@", files: MANY_FILES, maxRows: 6 });
+    const frame = probe.captured.lastFrame() ?? "";
+    expect(frame).toContain("f0.ts");
+    expect(frame).toContain("f1.ts");
+    expect(frame).not.toContain("f2.ts");
+    expect(frame).toContain("…and 10 more");
+  });
+
+  test("renders nothing when maxRows cannot fit a single entry", () => {
+    const probe = mount({ editorText: "@", maxRows: 4 });
+    const frame = probe.captured.lastFrame() ?? "";
+    expect(frame.trim()).toBe("");
+  });
+});
+
+describe("fileMentionHeight", () => {
+  test("is 0 when the editor text has no mention", () => {
+    expect(fileMentionHeight("hello world", false, FILES, 30)).toBe(0);
+  });
+
+  test("is 0 while the session picker is open", () => {
+    expect(fileMentionHeight("@", true, FILES, 30)).toBe(0);
+  });
+
+  test("is 0 when no file matches the prefix", () => {
+    expect(fileMentionHeight("@zz", false, FILES, 30)).toBe(0);
+  });
+
+  test("counts the border, header, entries, and overflow row", () => {
+    expect(fileMentionHeight("@main", false, FILES, 30)).toBe(2 + 1 + 1);
+    expect(fileMentionHeight("@", false, MANY_FILES, 30)).toBe(2 + 1 + 8 + 1);
+  });
+
+  test("clamps the entries so the panel never exceeds maxRows", () => {
+    expect(fileMentionHeight("@", false, MANY_FILES, 6)).toBe(6);
+  });
+
+  test("hides the panel when maxRows cannot fit one entry plus its overflow row", () => {
+    expect(fileMentionHeight("@", false, MANY_FILES, 4)).toBe(0);
   });
 });
