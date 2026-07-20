@@ -73,4 +73,10 @@ describe("measureMarkdown", () => {
   test("table counts header, separator and body rows", () => {
     expect(measureMarkdown("| a | b |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |", 80)).toBe(4);
   });
+
+  test("table rows wrap as whole lines at the padded column width", () => {
+    const source = "| aa | bb |\n| --- | --- |\n| cc | dd |";
+    expect(measureMarkdown(source, 80)).toBe(3);
+    expect(measureMarkdown(source, 8)).toBe(6);
+  });
 });

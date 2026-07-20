@@ -102,6 +102,20 @@ describe("Markdown", () => {
     expect(f).toContain("list");
   });
 
+  test("table cells pad to the widest cell in the column", () => {
+    const f = stripAnsi(frameOf("| a | bb |\n| --- | --- |\n| cccc | d |"));
+    expect(f).toContain("a     |  bb");
+    expect(f).toContain("cccc  |  d ");
+    expect(f).toContain("────  |  ──");
+  });
+
+  test("table honors right and center column alignment", () => {
+    const f = stripAnsi(frameOf("| num | mid |\n| ---: | :-: |\n| 12 | x |"));
+    expect(f).toContain("num  |  mid");
+    expect(f).toContain(" 12  |   x ");
+    expect(f).toContain("───  |  ───");
+  });
+
   test("renders inline code spans distinct from regular text", () => {
     const f = frameOf("call `foo()` please");
     expect(f).toContain("foo()");

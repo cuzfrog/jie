@@ -32,6 +32,7 @@ const CASES: ReadonlyArray<ParityCase> = [
   { name: "blockquote keeps a row per source line", text: "> x\n> y", kind: "text", expanded: false },
   { name: "horizontal rule wraps at inner width", text: "---", kind: "text", expanded: false },
   { name: "table", text: "| a | b |\n| --- | --- |\n| 1 | 2 |", kind: "text", expanded: false },
+  { name: "aligned table pads cells", text: "| num | mid |\n| ---: | :-: |\n| 12 | x |", kind: "text", expanded: false },
   { name: "expanded thinking merges lines", text: "t1\nt2", kind: "thinking", expanded: true },
 ];
 

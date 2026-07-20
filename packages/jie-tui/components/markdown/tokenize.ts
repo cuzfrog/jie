@@ -7,6 +7,8 @@ export interface InlineRun {
   readonly br?: boolean;
 }
 
+export type TableCellAlign = "left" | "right" | "center" | "none";
+
 export type MarkdownBlock =
   | { readonly kind: "paragraph"; readonly text: string; readonly runs: ReadonlyArray<InlineRun> }
   | {
@@ -32,8 +34,12 @@ export type MarkdownBlock =
       readonly headerRuns: ReadonlyArray<ReadonlyArray<InlineRun>>;
       readonly rows: ReadonlyArray<ReadonlyArray<string>>;
       readonly rowRuns: ReadonlyArray<ReadonlyArray<ReadonlyArray<InlineRun>>>;
-      readonly aligns: ReadonlyArray<"left" | "right" | "center" | "none">;
+      readonly aligns: ReadonlyArray<TableCellAlign>;
     };
+
+export function runsText(runs: ReadonlyArray<InlineRun>): string {
+  return runs.map((run) => (run.br === true ? "\n" : run.text)).join("");
+}
 
 const HEADING_RE = /^(#{1,6})\s+(.+?)\s*#*\s*$/;
 const UL_RE = /^([ \t]{0,3})[-*+]\s+(.*)$/;
@@ -144,7 +150,7 @@ function parseTable(
   const sep = lines[start + 1]!;
   const sepCells = sep.replace(/^\|/, "").replace(/\|$/, "").split("|");
   if (!sepCells.every((c) => /^\s*:?-+:?\s*$/.test(c))) return start + 1;
-  const aligns: ("left" | "right" | "center" | "none")[] = sepCells.map((c) => {
+  const aligns: TableCellAlign[] = sepCells.map((c) => {
     const t = c.trim();
     const left = t.startsWith(":");
     const right = t.endsWith(":");

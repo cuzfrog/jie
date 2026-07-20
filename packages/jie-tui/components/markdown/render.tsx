@@ -2,7 +2,8 @@ import { Box, Text } from "@cuzfrog/jie-ink";
 import type { JSX } from "react";
 import { pickColor } from "../themes";
 import { formatOsc8 } from "./osc8";
-import { tokenize, type InlineRun, type MarkdownBlock } from "./tokenize";
+import { TABLE_CELL_SEPARATOR, tableCellPadding, tableColumnWidths, tableRule } from "./table";
+import { tokenize, runsText, type InlineRun, type MarkdownBlock, type TableCellAlign } from "./tokenize";
 
 export interface MarkdownStyle {
   readonly textColor?: string;
@@ -182,15 +183,16 @@ function TableNode({
 }): JSX.Element {
   const headerColor = style?.textColor ?? pickColor("accent");
   const rowColor = style?.textColor ?? pickColor("text");
+  const widths = tableColumnWidths(block);
   return (
     <Box flexDirection="column">
       <Text color={headerColor}>
-        <TableRow runs={block.headerRuns} style={style} />
+        <TableRow runs={block.headerRuns} widths={widths} aligns={block.aligns} style={style} />
       </Text>
-      <Text color={pickColor("muted")}>{"─".repeat(block.headerRuns.length * 4 + 12)}</Text>
+      <Text color={pickColor("muted")}>{tableRule(widths)}</Text>
       {block.rowRuns.map((rowRuns, i) => (
         <Text key={`r-${i}`} color={rowColor}>
-          <TableRow runs={rowRuns} style={style} />
+          <TableRow runs={rowRuns} widths={widths} aligns={block.aligns} style={style} />
         </Text>
       ))}
     </Box>
@@ -199,19 +201,28 @@ function TableNode({
 
 function TableRow({
   runs,
+  widths,
+  aligns,
   style,
 }: {
   readonly runs: ReadonlyArray<ReadonlyArray<InlineRun>>;
+  readonly widths: ReadonlyArray<number>;
+  readonly aligns: ReadonlyArray<TableCellAlign>;
   readonly style?: MarkdownStyle;
 }): JSX.Element {
   return (
     <>
-      {runs.map((cellRuns, j) => (
-        <Text key={`c-${j}`}>
-          <InlineRuns runs={cellRuns} style={style} />
-          {j < runs.length - 1 ? "  |  " : ""}
-        </Text>
-      ))}
+      {runs.map((cellRuns, j) => {
+        const padding = tableCellPadding(runsText(cellRuns).length, widths[j] ?? 0, aligns[j] ?? "none");
+        return (
+          <Text key={`c-${j}`}>
+            {padding.leading > 0 ? " ".repeat(padding.leading) : null}
+            <InlineRuns runs={cellRuns} style={style} />
+            {padding.trailing > 0 ? " ".repeat(padding.trailing) : null}
+            {j < runs.length - 1 ? TABLE_CELL_SEPARATOR : ""}
+          </Text>
+        );
+      })}
     </>
   );
 }
