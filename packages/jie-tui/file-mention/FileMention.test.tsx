@@ -121,6 +121,12 @@ describe("FileMention", () => {
     expect(frame).not.toContain("main.ts");
   });
 
+  test("renders nothing inside a slash command so the slash picker owns Tab", () => {
+    const probe = mount({ editorText: "/resume @" });
+    const frame = probe.captured.lastFrame() ?? "";
+    expect(frame.trim()).toBe("");
+  });
+
   test("renders only as many entries as maxRows allows, with a truthful overflow count", () => {
     const probe = mount({ editorText: "@", files: MANY_FILES, maxRows: 6 });
     const frame = probe.captured.lastFrame() ?? "";
@@ -144,6 +150,10 @@ describe("fileMentionHeight", () => {
 
   test("is 0 while the session picker is open", () => {
     expect(fileMentionHeight("@", true, FILES, 30)).toBe(0);
+  });
+
+  test("is 0 inside a slash command so the slash picker owns Tab", () => {
+    expect(fileMentionHeight("/resume @", false, FILES, 30)).toBe(0);
   });
 
   test("is 0 when no file matches the prefix", () => {

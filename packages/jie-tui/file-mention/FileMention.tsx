@@ -21,7 +21,7 @@ export function fileMentionHeight(
   files: ReadonlyArray<FileEntry>,
   maxRows: number,
 ): number {
-  if (sessionPickerOpen) return 0;
+  if (sessionPickerOpen || editorText.startsWith("/")) return 0;
   const query = mentionQuery(editorText);
   if (query === null) return 0;
   return pickerRowCount(filterFiles(query, files).length, maxRows);
@@ -45,7 +45,7 @@ export function FileMention(props: FileMentionProps): JSX.Element {
   const visibleCount = pickerVisibleCount(candidates.length, maxRows);
   const visible = candidates.slice(0, visibleCount);
   const activeIndex = Math.min(focusedIndex, Math.max(0, visibleCount - 1));
-  const isVisible = !sessionPickerOpen && query !== null && visibleCount > 0;
+  const isVisible = !sessionPickerOpen && !editorText.startsWith("/") && query !== null && visibleCount > 0;
 
   useInput(
     (_input, key) => {
