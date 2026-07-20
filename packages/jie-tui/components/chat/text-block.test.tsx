@@ -62,6 +62,16 @@ describe("TextBlock", () => {
     unmount();
   });
 
+  test("empty collapsed thinking renders nothing (matches the scroll model's zero rows)", () => {
+    const { lastFrame, unmount } = render(
+      <TextBlock block={{ kind: "thinking", text: "" }} expanded={false} />,
+    );
+    const frame = stripAnsi(lastFrame() ?? "");
+    expect(frame).not.toContain("Thinking...");
+    expect(frame.trim()).toBe("");
+    unmount();
+  });
+
   test("empty expanded thinking renders nothing", () => {
     const { lastFrame, unmount } = render(
       <TextBlock block={{ kind: "thinking", text: "" }} expanded={true} />,

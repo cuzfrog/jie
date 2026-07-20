@@ -81,6 +81,15 @@ describe("turnHeight", () => {
     expect(h).toBe(1);
   });
 
+  test("empty thinking block consumes no rows collapsed or expanded", () => {
+    const base = turn({ blocks: [] });
+    const withEmpty = turn({ blocks: [{ kind: "thinking", text: "" }] });
+    expect(turnHeight(withEmpty, 80, { toolCardsExpanded: false, thinkingExpanded: false }))
+      .toBe(turnHeight(base, 80, OPTIONS));
+    expect(turnHeight(withEmpty, 80, { toolCardsExpanded: false, thinkingExpanded: true }))
+      .toBe(turnHeight(base, 80, OPTIONS));
+  });
+
   test("tool card collapsed consumes 1 row", () => {
     const h = turnHeight({
       userPrompt: "",

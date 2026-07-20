@@ -10,6 +10,9 @@ interface TextBlockProps {
 }
 
 export function TextBlock({ block, expanded }: TextBlockProps): JSX.Element {
+  if (block.text.length === 0) {
+    return <></>;
+  }
   if (block.kind === "thinking") {
     if (!expanded) {
       return (
@@ -17,9 +20,6 @@ export function TextBlock({ block, expanded }: TextBlockProps): JSX.Element {
           <Text italic>{THINKING_LABEL}</Text>
         </Text>
       );
-    }
-    if (block.text.length === 0) {
-      return <></>;
     }
     return (
       <Box flexDirection="column" paddingLeft={2} paddingY={0}>
@@ -30,9 +30,6 @@ export function TextBlock({ block, expanded }: TextBlockProps): JSX.Element {
         />
       </Box>
     );
-  }
-  if (block.text.length === 0) {
-    return <></>;
   }
   return (
     <Box paddingLeft={2}>
