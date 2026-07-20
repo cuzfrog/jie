@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { Events } from "@cuzfrog/jie-platform";
 import { Layout } from "./layout";
 import { TuiContext } from "./context";
+import { railWidth } from "./themes";
 import { Actions, createStateStore, type Action } from "../state";
 import { render } from "../test-renderer";
 import { makeContextValue } from "../test-support";
@@ -70,6 +71,27 @@ describe("Layout", () => {
     const { lastFrame, unmount } = mountLayout({ columns: 100, rows: 30, showRail: true });
     expect(lastFrame()).toContain("★");
     unmount();
+  });
+
+  test("rail meets chat at a single │ column at the rail's right edge, with no rail box borders", () => {
+    const columns = 100;
+    const { lastFrame, unmount } = mountLayout({ columns, rows: 30, showRail: true });
+    try {
+      const lines = lastFrame().split("\n").map(stripAnsi);
+      const rail = railWidth(columns);
+      const starLine = lines.findIndex((line) => line.includes("★"));
+      expect(starLine).toBeGreaterThanOrEqual(0);
+      expect(lines[starLine]?.charAt(rail)).toBe("│");
+      expect(lines[starLine]?.charAt(rail + 1)).not.toBe("│");
+      for (const glyph of ["┌", "┐", "└", "┘"]) {
+        expect(lines[starLine]).not.toContain(glyph);
+      }
+      const footerLine = lines.findIndex((line) => line.includes("demo:general-1"));
+      expect(footerLine).toBeGreaterThanOrEqual(0);
+      expect(lines[footerLine]?.charAt(rail)).not.toBe("│");
+    } finally {
+      unmount();
+    }
   });
 
   test("pins the footer to the last two rows of the terminal", () => {

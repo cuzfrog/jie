@@ -19,14 +19,14 @@ export function AgentsRail({ width }: AgentsRailProps): JSX.Element {
   const agents = Array.from(state.agents.values());
   const rows = buildRows(agents, state.leaderAgentId);
   return (
-    <Box flexDirection="column" width={width} borderStyle="single" borderColor="gray" paddingX={1}>
+    <Box flexDirection="column" width={width} height="100%" justifyContent="center">
       {rows.map((row) => (
         <Box key={row.agent.agentId} flexDirection="row">
           <Text color={row.isLeader ? pickColor("accent") : pickColor("text")}>
             {row.isLeader ? RAIL_LEADER_GLYPH : " "}{" "}
           </Text>
           <StatusCell agent={row.agent} />
-          <Text color={pickColor("text")}>{truncate(row.agent.role, width - 6)}</Text>
+          <Text color={pickColor("text")}>{truncate(row.agent.role, width - 4)}</Text>
         </Box>
       ))}
     </Box>

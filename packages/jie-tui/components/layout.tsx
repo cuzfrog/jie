@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type JSX } from "react";
-import { Box } from "@cuzfrog/jie-ink";
+import { Box, Text } from "@cuzfrog/jie-ink";
 import wrapAnsi from "wrap-ansi";
 import { useTuiContext } from "./context";
 import { ChatPane } from "./chat";
 import { AgentsRail } from "./team-rail";
-import { railWidth } from "./themes";
+import { pickColor, railWidth } from "./themes";
 import { Editor } from "./editor";
 import { TransientBanner } from "./transient-banner";
 import { BashModeIndicator, bashModeIndicatorHeight } from "./bash-mode-indicator";
@@ -20,6 +20,7 @@ const EDITOR_PADDING_COLS = 2;
 const FOOTER_ROWS = 2;
 const TODO_BORDER_ROWS = 2;
 const MIN_CHAT_ROWS = 1;
+const RAIL_SEPARATOR_GLYPH = "│";
 
 interface LayoutProps {
   readonly columns: number;
@@ -55,9 +56,7 @@ export function Layout(props: LayoutProps): JSX.Element {
     <Box flexDirection="column" width={props.columns} height={props.rows}>
       <Box flexDirection="row" flexGrow={1} width="100%">
         {rail > 0 ? <AgentsRail width={rail} /> : null}
-        {rail > 0 ? (
-          <Box width={1} height="100%"><Box flexGrow={1} /></Box>
-        ) : null}
+        {rail > 0 ? <RailSeparator height={chatHeight} /> : null}
         <ChatPane width={chatWidth} height={chatHeight} />
       </Box>
       <Box width="100%" maxHeight={MAX_VISIBLE_TODOS + TODO_BORDER_ROWS} overflow="hidden" flexShrink={0}>
@@ -98,6 +97,15 @@ export function Layout(props: LayoutProps): JSX.Element {
         />
       </Box>
       <Footer cwd={state.cwd ?? ""} gitBranch={state.gitBranch ?? ""} gitDirty={state.gitDirty} />
+    </Box>
+  );
+}
+
+function RailSeparator({ height }: { readonly height: number }): JSX.Element {
+  const column = Array.from({ length: Math.max(0, height) }, () => RAIL_SEPARATOR_GLYPH).join("\n");
+  return (
+    <Box width={1} flexShrink={0}>
+      <Text color={pickColor("borderMuted")}>{column}</Text>
     </Box>
   );
 }

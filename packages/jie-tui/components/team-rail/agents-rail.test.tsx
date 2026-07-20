@@ -1,4 +1,5 @@
 import { Events } from "@cuzfrog/jie-platform";
+import { Box } from "@cuzfrog/jie-ink";
 import { render } from "../../test-renderer";
 import { AgentsRail } from "./agents-rail";
 import { TuiContext } from "../context";
@@ -69,5 +70,52 @@ describe("AgentsRail", () => {
     const hasFrame = SPINNER_FRAMES.some((glyph) => frame.includes(glyph));
     expect(hasFrame).toBe(true);
     unmount();
+  });
+
+  test("renders no box borders around the agent list", () => {
+    const stateStore = createStateStore();
+    stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
+      id: "demo",
+      leaderKey: "general-1",
+      agents: [{ teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    })));
+    const state = stateStore.getState();
+    const ctx = makeContextValue({ stateStore, state });
+    const { lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}><AgentsRail width={20} /></TuiContext.Provider>,
+    );
+    try {
+      const frame = lastFrame() ?? "";
+      for (const glyph of ["┌", "┐", "└", "┘", "─", "│"]) {
+        expect(frame).not.toContain(glyph);
+      }
+    } finally {
+      unmount();
+    }
+  });
+
+  test("vertically centers the agent block within the container height", () => {
+    const stateStore = createStateStore();
+    stateStore.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
+      id: "demo",
+      leaderKey: "general-1",
+      agents: [{ teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    })));
+    const state = stateStore.getState();
+    const ctx = makeContextValue({ stateStore, state });
+    const { lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}>
+        <Box height={7} width={20}>
+          <AgentsRail width={20} />
+        </Box>
+      </TuiContext.Provider>,
+    );
+    try {
+      const lines = (lastFrame() ?? "").split("\n");
+      expect(lines[0] ?? "").not.toContain("general");
+      expect(lines[3] ?? "").toContain("general");
+    } finally {
+      unmount();
+    }
   });
 });
