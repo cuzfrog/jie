@@ -7,7 +7,8 @@
   "dependencies": {
     "@cuzfrog/jie-ink": "workspace:*",
     "@cuzfrog/jie-platform": "workspace:*",
-    "react": "catalog:"
+    "react": "catalog:",
+    "wrap-ansi": "^10.0.0"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

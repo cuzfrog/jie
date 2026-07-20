@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { AgentUiState, MessageCard, MessageTurn } from "../../state";
+import { measureMarkdown } from "../markdown";
 import { ASSISTANT_PREFIX, USER_PROMPT_PREFIX } from "../themes";
 
 export interface ChatScrollOptions {
@@ -152,7 +153,7 @@ function blockHeight(
   if (block.text.length === 0) return 0;
   if (block.kind === "thinking" && !thinkingExpanded) return 1;
   const prefix = block.kind === "thinking" ? THINKING_PREFIX : ASSISTANT_PREFIX;
-  return wrapAccountingForFirstLinePrefix(block.text, width, prefix);
+  return measureMarkdown(block.text, width, prefix);
 }
 
 function cardHeight(card: MessageCard, width: number, expanded: boolean): number {
