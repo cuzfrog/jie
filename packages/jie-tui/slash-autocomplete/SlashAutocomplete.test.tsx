@@ -1,5 +1,6 @@
 import { render } from "../test-renderer";
-import { SlashAutocomplete, SLASH_COMMAND_NAMES, slashAutocompleteHeight } from "./SlashAutocomplete";
+import { SlashAutocomplete, slashAutocompleteHeight } from "./SlashAutocomplete";
+import { SLASH_COMMAND_NAMES } from "../command-handler";
 
 function flush(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 20));
@@ -131,19 +132,6 @@ describe("SlashAutocomplete", () => {
     expect(probe.captured.committed).toEqual([{ command: "cmd1", args: "" }]);
   });
 
-  test("uses the SLASH_COMMAND_NAMES default fixture (no hand-maintained duplication)", () => {
-    expect(SLASH_COMMAND_NAMES).toEqual([
-      "help",
-      "clear",
-      "exit",
-      "login",
-      "logout",
-      "model",
-      "team",
-      "resume",
-      "continue",
-    ]);
-  });
 });
 
 describe("slashAutocompleteHeight", () => {

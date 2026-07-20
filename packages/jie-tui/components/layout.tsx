@@ -10,7 +10,8 @@ import { TransientBanner } from "./transient-banner";
 import { BashModeIndicator, bashModeIndicatorHeight } from "./bash-mode-indicator";
 import { Footer } from "./footer";
 import { MAX_VISIBLE_TODOS, TodoList, todoListRowCount } from "./agent-todo";
-import { SlashAutocomplete, SLASH_COMMAND_NAMES, slashAutocompleteHeight } from "../slash-autocomplete";
+import { SlashAutocomplete, slashAutocompleteHeight } from "../slash-autocomplete";
+import { SLASH_COMMAND_NAMES } from "../command-handler";
 import { FileMention, fileMentionHeight, scanFiles, type FileEntry } from "../file-mention";
 import { Actions } from "../state";
 

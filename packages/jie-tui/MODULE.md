@@ -5,7 +5,7 @@ no-new-exports:
   - tui.test.tsx
   - tui.ts
   - command-handler.test.ts
-  - command-handler.ts
+  # - command-handler.ts  (D14: temporarily ungated to export SLASH_COMMAND_NAMES for #146; re-seal after review)
   - git-service.test.ts
   - git-service.ts
   - test-support.ts

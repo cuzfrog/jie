@@ -7,18 +7,6 @@ const PICKER_CHROME_ROWS = 3;
 const OVERFLOW_ROWS = 1;
 const DEFAULT_MAX_ROWS = PICKER_CHROME_ROWS + MAX_VISIBLE + OVERFLOW_ROWS;
 
-export const SLASH_COMMAND_NAMES: ReadonlyArray<string> = [
-  "help",
-  "clear",
-  "exit",
-  "login",
-  "logout",
-  "model",
-  "team",
-  "resume",
-  "continue",
-];
-
 interface SlashAutocompleteProps {
   readonly editorText: string;
   readonly sessionPickerOpen: boolean;

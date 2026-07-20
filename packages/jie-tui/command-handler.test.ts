@@ -1,6 +1,7 @@
 import { JiePlatformError, type JiePlatform } from "@cuzfrog/jie-platform";
 import {
   createTuiCommandHandler,
+  SLASH_COMMAND_NAMES,
   type CommandHandlerDeps,
   type CommandHandler,
 } from "./command-handler";
@@ -430,5 +431,21 @@ describe("createTuiCommandHandler — /resume", () => {
     expect(execute).toHaveBeenCalledWith({ name: "listSessions", teamId: "minimal" });
     await new Promise((r) => setImmediate(r));
     expect(dispatch).toHaveBeenCalledWith(Actions.openSessionPicker([]));
+  });
+});
+
+describe("SLASH_COMMAND_NAMES", () => {
+  test("is the union of the commands and intercepts registries, in registration order", () => {
+    expect(SLASH_COMMAND_NAMES).toEqual([
+      "help",
+      "clear",
+      "exit",
+      "login",
+      "logout",
+      "model",
+      "team",
+      "resume",
+      "continue",
+    ]);
   });
 });
