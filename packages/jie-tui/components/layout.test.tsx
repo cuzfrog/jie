@@ -1,7 +1,7 @@
 import { Events } from "@cuzfrog/jie-platform";
 import { Layout } from "./layout";
 import { TuiContext } from "./context";
-import { Actions, createStateStore } from "../state";
+import { Actions, createStateStore, type Action } from "../state";
 import { render } from "../test-renderer";
 import { makeContextValue } from "../test-support";
 
@@ -9,7 +9,12 @@ declare const test: (name: string, fn: () => void | Promise<void>) => void;
 declare const describe: (name: string, fn: () => void) => void;
 declare const expect: typeof import("bun:test").expect;
 
-function mountLayout(opts: { columns: number; rows: number; showRail: boolean }): {
+function mountLayout(opts: {
+  columns: number;
+  rows: number;
+  showRail: boolean;
+  seed?: (dispatch: (action: Action) => void) => void;
+}): {
   lastFrame: () => string;
   unmount: () => void;
 } {
@@ -24,6 +29,7 @@ function mountLayout(opts: { columns: number; rows: number; showRail: boolean })
   })));
   stateStore.dispatch(Actions.setEnvironment("/tmp/proj", "main", false));
   if (opts.showRail) stateStore.dispatch(Actions.toggleTeamRail());
+  if (opts.seed !== undefined) opts.seed((action) => stateStore.dispatch(action));
   const state = stateStore.getState();
   const ctx = makeContextValue({ stateStore, state });
   const { lastFrame, unmount } = render(
@@ -90,4 +96,86 @@ describe("Layout", () => {
     expect(editorContentHeight).toBe(1);
     unmount();
   });
+
+  test("renders every row of an 8-line draft without clipping", () => {
+    const draft = "L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8";
+    const { lastFrame, unmount } = mountLayout({
+      columns: 100,
+      rows: 30,
+      showRail: false,
+      seed: (dispatch) => {
+        dispatch(Actions.setEditorText(draft));
+      },
+    });
+    const lines = lastFrame().split("\n");
+    expect(lines.findIndex((line) => line.includes("L8"))).toBeGreaterThanOrEqual(0);
+    const editorHeight = 8 + 2;
+    expect(lines.findIndex((line) => line.includes("─"))).toBe(30 - 2 - editorHeight);
+    expect(lines[30 - 3]?.includes("─")).toBe(true);
+    unmount();
+  });
+
+  test("caps the editor panel at 8 content rows and keeps the cursor line visible", () => {
+    const draft = "L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9\nL10\nL11\nL12";
+    const { lastFrame, unmount } = mountLayout({
+      columns: 100,
+      rows: 30,
+      showRail: false,
+      seed: (dispatch) => {
+        dispatch(Actions.setEditorText(draft));
+      },
+    });
+    const lines = lastFrame().split("\n").map(stripAnsi);
+    expect(lines.findIndex((line) => line.includes(" L12"))).toBeGreaterThanOrEqual(0);
+    expect(lines.findIndex((line) => line.includes(" L1 "))).toBe(-1);
+    const maxEditorHeight = 8 + 2;
+    expect(lines.findIndex((line) => line.includes("─"))).toBe(30 - 2 - maxEditorHeight);
+    expect(lines[30 - 3]?.includes("─")).toBe(true);
+    unmount();
+  });
+
+  test("hands the rows the editor does not use to the chat pane", () => {
+    const { lastFrame, unmount } = mountLayout({
+      columns: 100,
+      rows: 30,
+      showRail: false,
+      seed: (dispatch) => {
+        seedThirtyChatLines(dispatch);
+      },
+    });
+    const lines = lastFrame().split("\n");
+    const editorHeight = 1 + 2;
+    expect(lines.findIndex((line) => line.includes("c30"))).toBe(30 - 2 - editorHeight - 1);
+    unmount();
+  });
+
+  test("a wrapped editor line grows the editor panel and shrinks the chat pane", () => {
+    const { lastFrame, unmount } = mountLayout({
+      columns: 40,
+      rows: 30,
+      showRail: false,
+      seed: (dispatch) => {
+        dispatch(Actions.setEditorText("x".repeat(60)));
+        seedThirtyChatLines(dispatch);
+      },
+    });
+    const lines = lastFrame().split("\n");
+    const editorHeight = 2 + 2;
+    expect(lines.findIndex((line) => line.includes("c30"))).toBe(30 - 2 - editorHeight - 1);
+    unmount();
+  });
 });
+
+function seedThirtyChatLines(dispatch: (action: Action) => void): void {
+  const text = Array.from({ length: 30 }, (_, i) => `c${String(i + 1).padStart(2, "0")}`).join("\n\n");
+  dispatch(Actions.receiveEvent(Events.userPrompt({ kind: "user" }, "demo", "hi", "general-1")));
+  dispatch(Actions.receiveEvent(Events.agentStreamChunk(
+    { kind: "agent", teamId: "demo", agentKey: "general-1" }, 1, 1, "text", text,
+  )));
+}
+
+const ANSI_COLOR = new RegExp(String.fromCharCode(27) + "\\[[0-9;]*m", "g");
+
+function stripAnsi(text: string): string {
+  return text.replace(ANSI_COLOR, "");
+}

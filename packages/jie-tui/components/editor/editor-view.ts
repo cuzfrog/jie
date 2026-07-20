@@ -1,5 +1,6 @@
 import { useInput } from "@cuzfrog/jie-ink";
 import { useCallback } from "react";
+import wrapAnsi from "wrap-ansi";
 import type { EditorStateApi } from "./useEditorState";
 
 const ANSI_INVERSE_OPEN = "\u001b[7m";
@@ -46,6 +47,33 @@ export function renderLines(api: EditorStateApi): ReadonlyArray<RenderedLine> {
       isCursorLine: true,
     };
   });
+}
+
+/**
+The lines to paint when the panel cannot show the whole buffer. If the
+wrapped total fits `maxRows`, every line stays visible. Otherwise the
+window ends at the cursor line (typing never goes off-panel) and grows
+upward as far as the budget allows; wrapped lines count by their painted
+row count, using the same `wrap-ansi` call the renderer uses.
+*/
+export function editorViewport(
+  lines: ReadonlyArray<RenderedLine>,
+  cursorLine: number,
+  maxRows: number,
+  width: number,
+): ReadonlyArray<RenderedLine> {
+  const totalRows = lines.reduce((sum, line) => sum + wrappedTextRows(line.text, width), 0);
+  if (totalRows <= maxRows) return lines;
+  const cursor = Math.max(0, Math.min(cursorLine, lines.length - 1));
+  let rows = 0;
+  let start = cursor;
+  for (let i = cursor; i >= 0; i--) {
+    const lineRows = wrappedTextRows(lines[i]?.text ?? "", width);
+    if (rows > 0 && rows + lineRows > maxRows) break;
+    rows += lineRows;
+    start = i;
+  }
+  return lines.slice(start, cursor + 1);
 }
 
 interface UseEditorInputOptions {
@@ -110,4 +138,9 @@ export function useEditorInput(api: EditorStateApi, options: UseEditorInputOptio
     },
     { isActive: !isDisabled },
   );
+}
+
+function wrappedTextRows(text: string, width: number): number {
+  if (text.length === 0) return 0;
+  return wrapAnsi(text, Math.max(1, width), { trim: false, hard: true }).split("\n").length;
 }

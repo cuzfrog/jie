@@ -4,13 +4,19 @@ import { useTuiContext } from "../context";
 import { Actions } from "../../state";
 import { pickColor, RAIL_ERROR_GLYPH } from "../themes";
 import { useEditorState } from "./useEditorState";
-import { useEditorInput, renderLines } from "./editor-view";
+import { useEditorInput, renderLines, editorViewport } from "./editor-view";
 
-interface EditorProps {}
+interface EditorProps {
+  readonly width?: number;
+  readonly maxContentRows?: number;
+}
 
 const HISTORY_LIMIT = 100;
+const DEFAULT_WIDTH = 100;
+const DEFAULT_MAX_CONTENT_ROWS = 8;
+const PADDING_COLS = 2;
 
-export function Editor(_props: EditorProps): JSX.Element {
+export function Editor({ width = DEFAULT_WIDTH, maxContentRows = DEFAULT_MAX_CONTENT_ROWS }: EditorProps): JSX.Element {
   const { state, dispatch } = useTuiContext();
   const [history, setHistory] = useState<ReadonlyArray<string>>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
@@ -118,6 +124,11 @@ export function Editor(_props: EditorProps): JSX.Element {
 
   const bannerText = state.errorBanner;
   const showErrorBanner = bannerText !== null && bannerText !== "";
+  const showTransient = state.transientMessage !== null && state.transientMessage !== "";
+  const innerWidth = Math.max(1, width - PADDING_COLS);
+  const bannerRows = (showErrorBanner ? 1 : 0) + (showTransient ? 1 : 0);
+  const textMaxRows = Math.max(1, maxContentRows - bannerRows);
+  const visibleLines = editorViewport(renderLines(api), api.buffer.cursorLine, textMaxRows, innerWidth);
 
   return (
     <Box
@@ -129,15 +140,16 @@ export function Editor(_props: EditorProps): JSX.Element {
       borderRight={false}
       borderColor={pickColor("borderMuted")}
       width="100%"
+      flexShrink={0}
     >
       <Box flexDirection="column" paddingX={1} key={mountKey}>
-        {state.transientMessage !== null && state.transientMessage !== "" ? (
+        {showTransient ? (
           <Text color={pickColor("success")}>{`✓ ${state.transientMessage}`}</Text>
         ) : null}
         {showErrorBanner ? (
           <Text color={pickColor("error")}>{`${RAIL_ERROR_GLYPH} ${bannerText}`}</Text>
         ) : null}
-        {renderLines(api).map((line, i) => (
+        {visibleLines.map((line, i) => (
           <Text key={i}>{line.text}</Text>
         ))}
       </Box>

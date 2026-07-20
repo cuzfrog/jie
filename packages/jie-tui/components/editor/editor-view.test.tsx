@@ -1,9 +1,8 @@
-import { describe, expect, test } from "bun:test";
 import { render } from "../../test-renderer";
 import { Text } from "@cuzfrog/jie-ink";
 import type { JSX } from "react";
 import { useEditorState } from "./useEditorState";
-import { useEditorInput, renderLines } from "./editor-view";
+import { useEditorInput, renderLines, editorViewport } from "./editor-view";
 import type { EditorStateApi } from "./useEditorState";
 import { bufferFromText, emptyBuffer, reduceEditor } from "./editor-reducer";
 import type { EditorAction, EditorBuffer } from "./editor-state";
@@ -112,6 +111,43 @@ describe("renderLines", () => {
     const rendered = renderLines(apiFromBuffer(buffer));
     expect(rendered[0]).toEqual({ text: "first", isCursorLine: false });
     expect(rendered[1]).toEqual({ text: `${INVERSE_OPEN}s${INVERSE_CLOSE}econd`, isCursorLine: true });
+  });
+});
+
+describe("editorViewport", () => {
+  function line(text: string): { text: string; isCursorLine: boolean } {
+    return { text, isCursorLine: false };
+  }
+
+  test("shows every line when the wrapped total fits within the row budget", () => {
+    const lines = [line("a"), line("b"), line("c")];
+    expect(editorViewport(lines, 2, 8, 80)).toEqual(lines);
+  });
+
+  test("shows lines after the cursor too when the whole buffer fits", () => {
+    const lines = [line("a"), line("b"), line("c")];
+    expect(editorViewport(lines, 0, 8, 80)).toEqual(lines);
+  });
+
+  test("pins the window bottom to the cursor line when the buffer overflows", () => {
+    const lines = Array.from({ length: 12 }, (_, i) => line(`L${i + 1}`));
+    expect(editorViewport(lines, 11, 8, 80)).toEqual(lines.slice(4));
+  });
+
+  test("hides lines after the cursor when the buffer overflows", () => {
+    const lines = Array.from({ length: 12 }, (_, i) => line(`L${i + 1}`));
+    expect(editorViewport(lines, 5, 4, 80)).toEqual(lines.slice(2, 6));
+  });
+
+  test("a wrapped line consumes its full painted row count", () => {
+    const lines = [line("a".repeat(40)), line("end")];
+    expect(editorViewport(lines, 1, 3, 20)).toEqual(lines);
+    expect(editorViewport(lines, 1, 2, 20)).toEqual(lines.slice(1));
+  });
+
+  test("the cursor line is kept even when it alone exceeds the budget", () => {
+    const lines = [line("a".repeat(40)), line("b".repeat(40))];
+    expect(editorViewport(lines, 1, 1, 20)).toEqual(lines.slice(1));
   });
 });
 
