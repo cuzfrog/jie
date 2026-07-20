@@ -198,6 +198,22 @@ describe("reduceTurnStart", () => {
     expect(state2.agents.get("my-team:general-1")?.status).toBe("busy");
   });
 
+  test("opens an empty turn so stream chunks after a prompt-less turn.start are captured", () => {
+    const state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER));
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.currentTurn).toEqual({ userPrompt: "", cards: [], blocks: [], streamId: null });
+    const state2 = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "hello"));
+    expect(state2.agents.get("my-team:general-1")?.currentTurn?.blocks).toEqual([{ kind: "text", text: "hello" }]);
+  });
+
+  test("records tool calls after a prompt-less turn.start", () => {
+    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER));
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
+    const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
+    expect(card?.kind).toBe("toolCall");
+    expect(card?.name).toBe("bash");
+  });
+
   test("rejects events from a foreign team (cross-team guard)", () => {
     const state = loadedState();
     const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };

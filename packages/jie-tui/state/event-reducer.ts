@@ -86,7 +86,8 @@ function reduceTurnStart(state: TuiState, event: AnyEventEnvelope): TuiState {
   if (resolved === null) return state;
   const { agentId, agent } = resolved;
   const rotated = rotateTurnIfPopulated(agent);
-  const next: AgentUiState = { ...rotated, status: "busy" };
+  const currentTurn = rotated.currentTurn ?? freshTurn("");
+  const next: AgentUiState = { ...rotated, status: "busy", currentTurn };
   return withAgent(state, agentId, next, { errorBanner: null });
 }
 
