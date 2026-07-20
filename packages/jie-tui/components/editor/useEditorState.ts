@@ -21,6 +21,7 @@ export interface EditorStateApi {
   moveLineEnd(): void;
   setValue(text: string): void;
   applyExternalValue(text: string): void;
+  readValue(): string;
 }
 
 export function useEditorState(initialValue: string = "", options: UseEditorStateOptions = {}): EditorStateApi {
@@ -33,6 +34,19 @@ export function useEditorState(initialValue: string = "", options: UseEditorStat
   const lastReportedRef = useRef<string>(textFromBuffer(state));
   const lastSeededRef = useRef<string>(initialValue);
 
+  // A synchronous mirror of the buffer. Input events from one stdin chunk are
+  // handled back-to-back in a single task, before React re-renders, so the
+  // render snapshot (`state`) lags behind dispatched updates. `dispatchAction`
+  // advances the mirror immediately, letting a later event in the same task
+  // (e.g. Enter right after typed text) read the up-to-date buffer.
+  const bufferRef = useRef<EditorBuffer>(state);
+  bufferRef.current = state;
+
+  const dispatchAction = useCallback((action: Parameters<typeof reduceEditor>[1]) => {
+    bufferRef.current = reduceEditor(bufferRef.current, action);
+    dispatch(action);
+  }, []);
+
   // When `initialValue` changes from outside (e.g. a reducer
   // dispatching `setEditorText` from a slash-command completion),
   // re-seed the buffer so the user sees the new text.
@@ -41,8 +55,8 @@ export function useEditorState(initialValue: string = "", options: UseEditorStat
     lastSeededRef.current = initialValue;
     const lines = initialValue.split("\n");
     const target = lines.length === 0 ? [""] : lines;
-    dispatch({ type: "reset-value", lines: target });
-  }, [initialValue]);
+    dispatchAction({ type: "reset-value", lines: target });
+  }, [initialValue, dispatchAction]);
 
   useEffect(() => {
     const current = textFromBuffer(state);
@@ -50,10 +64,6 @@ export function useEditorState(initialValue: string = "", options: UseEditorStat
     lastReportedRef.current = current;
     onChangeRef.current?.(current);
   }, [state]);
-
-  const dispatchAction = useCallback((action: Parameters<typeof reduceEditor>[1]) => {
-    dispatch(action);
-  }, []);
 
   const insert = useCallback((text: string) => dispatchAction({ type: "insert", text }), [dispatchAction]);
   const insertNewline = useCallback(() => dispatchAction({ type: "insert-newline" }), [dispatchAction]);
@@ -81,6 +91,8 @@ export function useEditorState(initialValue: string = "", options: UseEditorStat
     dispatchAction({ type: "reset-value", lines: target });
   }, [dispatchAction]);
 
+  const readValue = useCallback((): string => textFromBuffer(bufferRef.current), []);
+
   return {
     buffer: state,
     value: textFromBuffer(state),
@@ -96,5 +108,6 @@ export function useEditorState(initialValue: string = "", options: UseEditorStat
     moveLineEnd,
     setValue,
     applyExternalValue,
+    readValue,
   };
 }

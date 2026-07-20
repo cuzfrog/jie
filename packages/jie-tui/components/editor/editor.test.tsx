@@ -80,16 +80,36 @@ describe("Editor", () => {
       <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
     );
     await new Promise((r) => setTimeout(r, 30));
-    // Send the chunk and the Enter keystroke as separate events so that
-    // TextInput processes the chunk as typed text before seeing key.return.
-    // (ink-testing-library passes each stdin.write as a single chunk; a
-    // combined "/team my-team\r" would be parsed as one input where key.return
-    // is true, bypassing the text insertion and submitting an empty value.)
     stdin.write("/team my-team");
     await new Promise((r) => setTimeout(r, 30));
     stdin.write("\r");
     await new Promise((r) => setTimeout(r, 30));
     expect(submitted).toContain("/team my-team");
+    expect(store.getState().editorText).toBe("");
+    unmount();
+  });
+
+  test("submits text when text and Enter arrive in a single chunk (coalesced keystrokes)", async () => {
+    // Terminals coalesce fast keystrokes into one stdin chunk (and drivers
+    // write "text\r" in one go). The text insertion and the submit happen in
+    // the same task, before any re-render, so the submit must read the buffer
+    // synchronously rather than from the render snapshot.
+    const store = createStateStore();
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const submitted: string[] = [];
+    store.subscribe((action) => {
+      if (action.type === Actions.submitEditorText("").type) {
+        submitted.push(action.payload.text);
+      }
+      return Promise.resolve();
+    });
+    const { stdin, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("hi\r");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(submitted).toEqual(["hi"]);
     expect(store.getState().editorText).toBe("");
     unmount();
   });

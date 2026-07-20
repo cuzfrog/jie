@@ -13,6 +13,7 @@ interface ProbeHandles {
   set: (text: string) => void;
   insert: (text: string) => void;
   readBuffer: () => EditorBuffer;
+  readValue: () => string;
 }
 
 function Probe({ onReady }: { onReady: (handles: ProbeHandles) => void }): JSX.Element {
@@ -23,6 +24,7 @@ function Probe({ onReady }: { onReady: (handles: ProbeHandles) => void }): JSX.E
     set: (text) => apiRef.current!.setValue(text),
     insert: (text) => apiRef.current!.insert(text),
     readBuffer: () => apiRef.current!.buffer,
+    readValue: () => apiRef.current!.readValue(),
   });
   return <></>;
 }
@@ -62,6 +64,25 @@ describe("useEditorState", () => {
     handles!.insert("!");
     await wait(10);
     expect(handles!.readBuffer()).toEqual({ lines: ["hi!"], cursorLine: 0, cursorCol: 3 });
+    unmount();
+  });
+
+  test("readValue sees updates within the same task, before any re-render", async () => {
+    // Multiple input events in one stdin chunk are handled synchronously in a
+    // single task, before React re-renders. A submit arriving right after an
+    // insert must still see the inserted text, so the api exposes a
+    // synchronous read of the buffer that does not wait for the render
+    // snapshot.
+    let handles: ProbeHandles | null = null;
+    const { unmount } = render(<Probe onReady={(h) => { handles = h; }} />);
+    await wait(20);
+    handles!.insert("hi");
+    expect(handles!.readValue()).toBe("hi");
+    handles!.set("");
+    expect(handles!.readValue()).toBe("");
+    handles!.insert("ab");
+    handles!.insert("cd");
+    expect(handles!.readValue()).toBe("abcd");
     unmount();
   });
 

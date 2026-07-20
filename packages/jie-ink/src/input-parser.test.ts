@@ -278,14 +278,49 @@ const deleteAndBackspaceCases = [
 		events: ['ab', '\u007F', 'cd'],
 	},
 	{
-		title: 'does not split pasted carriage return from text',
+		title: 'splits carriage return from following text',
 		chunks: ['\rtest'],
-		events: ['\rtest'],
+		events: ['\r', 'test'],
 	},
 	{
-		title: 'does not split pasted tab from text',
+		title: 'splits carriage return from preceding text',
+		chunks: ['hi\r'],
+		events: ['hi', '\r'],
+	},
+	{
+		title: 'splits multiple carriage returns between text segments',
+		chunks: ['hi\rmore\r'],
+		events: ['hi', '\r', 'more', '\r'],
+	},
+	{
+		title: 'splits carriage return before an escape sequence',
+		chunks: ['abc\r\u001B[A'],
+		events: ['abc', '\r', '\u001B[A'],
+	},
+	{
+		title: 'single carriage return is preserved as individual event',
+		chunks: ['\r'],
+		events: ['\r'],
+	},
+	{
+		title: 'splits tab from following text',
 		chunks: ['\ttest'],
-		events: ['\ttest'],
+		events: ['\t', 'test'],
+	},
+	{
+		title: 'splits tab from preceding text',
+		chunks: ['text\t'],
+		events: ['text', '\t'],
+	},
+	{
+		title: 'splits tab between text segments',
+		chunks: ['ab\tcd'],
+		events: ['ab', '\t', 'cd'],
+	},
+	{
+		title: 'single tab is preserved as individual event',
+		chunks: ['\t'],
+		events: ['\t'],
 	},
 ] as const;
 

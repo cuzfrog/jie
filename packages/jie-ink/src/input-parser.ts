@@ -173,16 +173,16 @@ const parseEscapeSequence = (
 };
 
 /**
-Split a chunk of non-escape text so that backspace bytes (`0x7F` and `0x08`) become individual events. When a user holds the backspace key, the terminal sends repeated bytes in a single stdin chunk. Without splitting, `parseKeypress` receives the multi-byte string and fails to recognize it as a key event, corrupting the input state.
+Split a chunk of non-escape text so that key bytes (`0x7F` and `0x08` backspaces, `\r` return, `\t` tab) become individual events. Terminals coalesce fast keystrokes into a single stdin chunk (e.g. `hi\r` when return lands right after typed text). Without splitting, `parseKeypress` receives the multi-byte string, fails to recognize the key, and the keystroke is swallowed.
 
-Other control characters like `\r` and `\t` are NOT split because they can legitimately appear inside pasted text.
+Pasted text never reaches this function: bracketed paste content is extracted into `{paste}` events by `parseKeypresses`, so a raw `\r` or `\t` in the text stream is always a key press, never pasted data.
 */
-const splitBackspaceBytes = (text: string, events: InputEvent[]): void => {
+const splitControlBytes = (text: string, events: InputEvent[]): void => {
 	let textSegmentStart = 0;
 
 	for (let index = 0; index < text.length; index++) {
 		const character = text[index]!;
-		if (character === '\u007F' || character === '\u0008') {
+		if (character === '\u007F' || character === '\u0008' || character === '\r' || character === '\t') {
 			if (index > textSegmentStart) {
 				events.push(text.slice(textSegmentStart, index));
 			}
@@ -208,7 +208,7 @@ const parseKeypresses = (input: string): ParsedInput => {
 	while (index < input.length) {
 		const escapeIndex = input.indexOf(escape, index);
 		if (escapeIndex === -1) {
-			splitBackspaceBytes(input.slice(index), events);
+			splitControlBytes(input.slice(index), events);
 			return {
 				events,
 				pending: '',
@@ -216,7 +216,7 @@ const parseKeypresses = (input: string): ParsedInput => {
 		}
 
 		if (escapeIndex > index) {
-			splitBackspaceBytes(input.slice(index, escapeIndex), events);
+			splitControlBytes(input.slice(index, escapeIndex), events);
 		}
 
 		const parsedEscapeSequence = parseEscapeSequence(input, escapeIndex);

@@ -42,11 +42,10 @@ export function Editor(_props: EditorProps): JSX.Element {
     setHistory(next);
     setHistoryIndex(-1);
     setDraft("");
-    externalUpdate.current = true;
-    externalUpdateValue.current = "";
+    api.applyExternalValue("");
     dispatch(Actions.setEditorText(""));
     dispatch(Actions.submitEditorText(text));
-  }, [history, dispatch]);
+  }, [api, history, dispatch]);
 
   useEffect(() => {
     if (externalUpdate.current) {
@@ -107,7 +106,7 @@ export function Editor(_props: EditorProps): JSX.Element {
       return;
     }
     if (key.return) {
-      handleSubmit(api.value);
+      handleSubmit(api.readValue());
     }
   });
 
