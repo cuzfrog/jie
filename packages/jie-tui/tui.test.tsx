@@ -2,7 +2,7 @@ import { PassThrough } from "node:stream";
 import { createTui, type Tui } from "./tui";
 import { Actions } from "./state";
 import { withTTY } from "../../tests/support";
-import type { JiePlatform, EventType, AnyEventEnvelope, EventEnvelope } from "@cuzfrog/jie-platform";
+import { Events, type JiePlatform, type EventType, type AnyEventEnvelope, type EventEnvelope } from "@cuzfrog/jie-platform";
 
 class FakeStdin extends PassThrough {
   isTTY = true;
@@ -19,19 +19,22 @@ class FakeStdout extends PassThrough {
   rows = 30;
 }
 
-function bootTui(): Tui {
-  const stdin = new FakeStdin();
-  const stdout = new FakeStdout();
-  return createTui({ cwd: process.cwd() }, {
-    platform: makePlatform(),
-    stdin: stdin as unknown as NodeJS.ReadStream,
-    stdout: stdout as unknown as NodeJS.WriteStream,
-  });
+interface PromptCall {
+  readonly teamId: string;
+  readonly agentKey: string;
+  readonly text: string;
 }
 
-function makePlatform(): JiePlatform {
+interface PlatformHarness {
+  readonly platform: JiePlatform;
+  readonly promptCalls: ReadonlyArray<PromptCall>;
+  emit(event: AnyEventEnvelope): void;
+}
+
+function makePlatformHarness(): PlatformHarness {
   const handlers = new Map<EventType, (env: AnyEventEnvelope) => void>();
-  return {
+  const recorded: PromptCall[] = [];
+  const platform: JiePlatform = {
     settings: { defaultTeam: undefined, defaultProvider: undefined, defaultModel: undefined },
     subscribe: <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void) => {
       const handler = cb as (env: AnyEventEnvelope) => void;
@@ -40,17 +43,48 @@ function makePlatform(): JiePlatform {
         if (handlers.get(topic) === handler) handlers.delete(topic);
       };
     },
-    prompt: () => undefined,
+    prompt: (teamId, agentKey, text) => {
+      recorded.push({ teamId, agentKey, text });
+    },
     interrupt: () => undefined,
     execute: (async () => null) as JiePlatform["execute"],
     teams: () => [],
   };
+  return {
+    platform,
+    promptCalls: recorded,
+    emit: (event) => {
+      handlers.get(event.type)?.(event);
+    },
+  };
+}
+
+interface TuiHarness {
+  readonly tui: Tui;
+  readonly stdin: FakeStdin;
+  readonly platform: PlatformHarness;
+}
+
+function bootTui(): TuiHarness {
+  const stdin = new FakeStdin();
+  const stdout = new FakeStdout();
+  const platform = makePlatformHarness();
+  const tui = createTui({ cwd: process.cwd() }, {
+    platform: platform.platform,
+    stdin: stdin as unknown as NodeJS.ReadStream,
+    stdout: stdout as unknown as NodeJS.WriteStream,
+  });
+  return { tui, stdin, platform };
+}
+
+function makePlatform(): JiePlatform {
+  return makePlatformHarness().platform;
 }
 
 describe("createTui — start resolves on pendingQuit", () => {
   test("dispatching requestQuit resolves start()", async () => {
     withTTY(true, async () => {
-      const tui = bootTui();
+      const { tui } = bootTui();
       const stateStore = (tui as unknown as { stateStore: { getState: () => { pendingQuit: boolean }; dispatch: (a: unknown) => void } }).stateStore;
       const started = tui.start();
       await new Promise((r) => setTimeout(r, 30));
@@ -66,7 +100,7 @@ describe("createTui — start resolves on pendingQuit", () => {
 
   test("stop() resolves start() even without requestQuit", async () => {
     withTTY(true, async () => {
-      const tui = bootTui();
+      const { tui } = bootTui();
       const started = tui.start();
       await new Promise((r) => setTimeout(r, 30));
       tui.stop();
@@ -94,5 +128,51 @@ describe("createTui — surface contract", () => {
       expect(s0.agents.size).toBe(0);
       tui.stop();
     });
+  });
+});
+
+const TEAM_LOADED = Events.teamLoaded({ kind: "system" }, {
+  id: "my-team",
+  leaderKey: "general-1",
+  agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+});
+
+function waitFrames(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+describe("createTui — submit pipeline", () => {
+  test("routes typed text to platform.prompt when text and return arrive as separate chunks", async () => {
+    let harness: TuiHarness | null = null;
+    withTTY(true, () => {
+      harness = bootTui();
+    });
+    const started = harness!.tui.start();
+    await waitFrames(30);
+    harness!.platform.emit(TEAM_LOADED);
+    await waitFrames(20);
+    harness!.stdin.write("hi");
+    await waitFrames(20);
+    harness!.stdin.write("\r");
+    await waitFrames(30);
+    expect(harness!.platform.promptCalls).toEqual([{ teamId: "my-team", agentKey: "general-1", text: "hi" }]);
+    harness!.tui.stop();
+    await started;
+  });
+
+  test("routes typed text to platform.prompt when text and return arrive coalesced in one chunk", async () => {
+    let harness: TuiHarness | null = null;
+    withTTY(true, () => {
+      harness = bootTui();
+    });
+    const started = harness!.tui.start();
+    await waitFrames(30);
+    harness!.platform.emit(TEAM_LOADED);
+    await waitFrames(20);
+    harness!.stdin.write("hi\r");
+    await waitFrames(30);
+    expect(harness!.platform.promptCalls).toEqual([{ teamId: "my-team", agentKey: "general-1", text: "hi" }]);
+    harness!.tui.stop();
+    await started;
   });
 });
