@@ -105,7 +105,7 @@ export function Editor(_props: EditorProps): JSX.Element {
       api.moveCursorDown();
       return;
     }
-    if (key.return) {
+    if (key.return && !key.shift) {
       handleSubmit(api.readValue());
     }
   });

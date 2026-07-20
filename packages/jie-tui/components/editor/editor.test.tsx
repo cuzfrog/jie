@@ -114,6 +114,29 @@ describe("Editor", () => {
     unmount();
   });
 
+  test("shift+return (kitty CSI u) inserts a newline and does not submit", async () => {
+    const store = createStateStore();
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const submitted: string[] = [];
+    store.subscribe((action) => {
+      if (action.type === Actions.submitEditorText("").type) {
+        submitted.push(action.payload.text);
+      }
+      return Promise.resolve();
+    });
+    const { stdin, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("ab");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\x1b[13;2u");
+    await new Promise((r) => setTimeout(r, 30));
+    expect(submitted).toEqual([]);
+    expect(store.getState().editorText).toBe("ab\n");
+    unmount();
+  });
+
   test("pasted text (bracketed paste) is inserted at the cursor", async () => {
     const store = createStateStore();
     store.dispatch(Actions.setEditorText("ab"));
