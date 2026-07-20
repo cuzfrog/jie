@@ -25,7 +25,7 @@ function measureBlock(block: MarkdownBlock, width: number, prefix: string): numb
     case "paragraph":
       return rowsFor(prefix + runsText(block.runs), width);
     case "heading":
-      return rowsFor(prefix + (block.level === 1 ? "# " : "## ") + runsText(block.runs), width);
+      return rowsFor(prefix + "#".repeat(block.level) + " " + runsText(block.runs), width);
     case "codeBlock":
       return measureCodeBlock(block, width);
     case "blockquote":

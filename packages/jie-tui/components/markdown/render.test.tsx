@@ -26,11 +26,15 @@ describe("Markdown", () => {
     expect(f).toMatch(/^## subtitle/);
   });
 
-  test("level-1 heading uses single hash prefix, level-2+ uses double hash", () => {
+  test("heading prefix repeats the hash per level", () => {
     const h1 = stripAnsi(frameOf("# h1"));
     const h2 = stripAnsi(frameOf("## h2"));
+    const h3 = stripAnsi(frameOf("### h3"));
+    const h6 = stripAnsi(frameOf("###### h6"));
     expect(h1).toMatch(/^# h1/);
     expect(h2).toMatch(/^## h2/);
+    expect(h3).toMatch(/^### h3/);
+    expect(h6).toMatch(/^###### h6/);
   });
 
   test("renders an unordered list with bullets", () => {

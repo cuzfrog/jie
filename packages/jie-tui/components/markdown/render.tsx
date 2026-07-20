@@ -85,7 +85,7 @@ function HeadingNode({
   readonly prefix?: { readonly text: string; readonly color: string };
   readonly style?: MarkdownStyle;
 }): JSX.Element {
-  const headingPrefix = level === 1 ? "# " : "## ";
+  const headingPrefix = "#".repeat(level) + " ";
   const color = style?.textColor ?? pickColor("accent");
   return (
     <Text color={color} bold italic={style?.italic === true}>

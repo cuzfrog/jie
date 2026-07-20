@@ -23,7 +23,7 @@ const CASES: ReadonlyArray<ParityCase> = [
   { name: "blank line splits paragraphs", text: "a\n\nb", kind: "text", expanded: false },
   { name: "hard break forces a new row", text: "a  \nb", kind: "text", expanded: false },
   { name: "h1 heading plus paragraph", text: "# H1\n\nbody", kind: "text", expanded: false },
-  { name: "h3 heading uses the ## prefix", text: "### deep", kind: "text", expanded: false },
+  { name: "h3 heading repeats the hash per level", text: "### deep", kind: "text", expanded: false },
   { name: "code block with lang", text: "```ts\nfoo\nbar\n```", kind: "text", expanded: false },
   { name: "code line wraps inside the padded box", text: "```\n" + "a".repeat(30) + "\n```", kind: "text", expanded: false },
   { name: "bullet list", text: "- a\n- b\n- c", kind: "text", expanded: false },

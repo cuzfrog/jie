@@ -29,8 +29,9 @@ describe("measureMarkdown", () => {
     expect(measureMarkdown("# t\n\np", 10, "xxxxxxxx")).toBe(3);
   });
 
-  test("level 2+ headings render with the ## prefix", () => {
-    expect(measureMarkdown("### deep", 80)).toBe(1);
+  test("heading prefix repeats the hash per level", () => {
+    expect(measureMarkdown("## " + "a".repeat(7), 10)).toBe(1);
+    expect(measureMarkdown("### " + "a".repeat(7), 10)).toBe(2);
   });
 
   test("code block counts content lines", () => {
