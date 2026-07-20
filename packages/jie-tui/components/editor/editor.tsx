@@ -124,9 +124,8 @@ export function Editor({ width = DEFAULT_WIDTH, maxContentRows = DEFAULT_MAX_CON
 
   const bannerText = state.errorBanner;
   const showErrorBanner = bannerText !== null && bannerText !== "";
-  const showTransient = state.transientMessage !== null && state.transientMessage !== "";
   const innerWidth = Math.max(1, width - PADDING_COLS);
-  const bannerRows = (showErrorBanner ? 1 : 0) + (showTransient ? 1 : 0);
+  const bannerRows = showErrorBanner ? 1 : 0;
   const textMaxRows = Math.max(1, maxContentRows - bannerRows);
   const visibleLines = editorViewport(renderLines(api), api.buffer.cursorLine, textMaxRows, innerWidth);
 
@@ -143,9 +142,6 @@ export function Editor({ width = DEFAULT_WIDTH, maxContentRows = DEFAULT_MAX_CON
       flexShrink={0}
     >
       <Box flexDirection="column" paddingX={1} key={mountKey}>
-        {showTransient ? (
-          <Text color={pickColor("success")}>{`✓ ${state.transientMessage}`}</Text>
-        ) : null}
         {showErrorBanner ? (
           <Text color={pickColor("error")}>{`${RAIL_ERROR_GLYPH} ${bannerText}`}</Text>
         ) : null}

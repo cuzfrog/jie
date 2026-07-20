@@ -19,6 +19,18 @@ describe("Editor", () => {
     unmount();
   });
 
+  test("does not render the transient message inline (layout owns the banner row)", () => {
+    const store = createStateStore();
+    store.dispatch(Actions.setTransientMessage("copied"));
+    const ctx = makeContextValue({ stateStore: store, state: store.getState() });
+    const { lastFrame, unmount } = render(
+      <TuiContext.Provider value={ctx}><Editor /></TuiContext.Provider>,
+    );
+    expect(lastFrame()).not.toContain("✓");
+    expect(lastFrame()).not.toContain("copied");
+    unmount();
+  });
+
   test("renders an inline block cursor when the buffer is empty", () => {
     const store = createStateStore();
     const ctx = makeContextValue({ stateStore: store });

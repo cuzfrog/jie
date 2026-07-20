@@ -6,6 +6,7 @@ import { ChatPane } from "./chat";
 import { AgentsRail } from "./team-rail";
 import { railWidth } from "./themes";
 import { Editor } from "./editor";
+import { TransientBanner } from "./transient-banner";
 import { Footer } from "./footer";
 import { MAX_VISIBLE_TODOS, TodoList, todoListRowCount } from "./agent-todo";
 import { SlashAutocomplete, SLASH_COMMAND_NAMES } from "../slash-autocomplete";
@@ -31,8 +32,9 @@ export function Layout(props: LayoutProps): JSX.Element {
   const rail = railVisible ? railWidth(props.columns) : 0;
   const chatWidth = Math.max(1, props.columns - rail - (rail > 0 ? 1 : 0));
   const todoHeight = todoPanelHeight(state);
+  const transientHeight = state.transientMessage !== null && state.transientMessage !== "" ? 1 : 0;
   const editorHeight = editorPanelHeight(state, props.columns);
-  const chatHeight = Math.max(1, props.rows - editorHeight - FOOTER_ROWS - todoHeight);
+  const chatHeight = Math.max(1, props.rows - editorHeight - FOOTER_ROWS - todoHeight - transientHeight);
   const [files, setFiles] = useState<ReadonlyArray<FileEntry>>([]);
   useEffect(() => {
     const cwd = state.cwd;
@@ -54,6 +56,9 @@ export function Layout(props: LayoutProps): JSX.Element {
       </Box>
       <Box width="100%" maxHeight={MAX_VISIBLE_TODOS + TODO_BORDER_ROWS} overflow="hidden" flexShrink={0}>
         <TodoList width={props.columns} />
+      </Box>
+      <Box width="100%" flexShrink={0}>
+        <TransientBanner />
       </Box>
       <Box width="100%" maxHeight={editorHeight} overflow="hidden" flexShrink={0}>
         <Editor width={props.columns} maxContentRows={MAX_EDITOR_CONTENT_ROWS} />
@@ -106,7 +111,6 @@ function editorPanelHeight(state: ReturnType<typeof useTuiContext>["state"], col
     contentRows += Math.max(1, rowsForText(line, inner));
   }
   if (state.errorBanner !== null && state.errorBanner !== "") contentRows += 1;
-  if (state.transientMessage !== null && state.transientMessage !== "") contentRows += 1;
   return Math.min(contentRows, MAX_EDITOR_CONTENT_ROWS) + EDITOR_BORDER_ROWS;
 }
 

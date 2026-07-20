@@ -149,6 +149,27 @@ describe("Layout", () => {
     unmount();
   });
 
+  test("renders the transient banner as its own row above the editor and shrinks chat", () => {
+    const { lastFrame, unmount } = mountLayout({
+      columns: 100,
+      rows: 30,
+      showRail: false,
+      seed: (dispatch) => {
+        seedThirtyChatLines(dispatch);
+        dispatch(Actions.setTransientMessage("copied"));
+      },
+    });
+    const lines = lastFrame().split("\n");
+    const bannerIndex = lines.findIndex((line) => line.includes("✓ copied"));
+    expect(bannerIndex).toBeGreaterThanOrEqual(0);
+    const editorTopBorder = lines.findIndex((line) => line.includes("─"));
+    expect(bannerIndex).toBe(editorTopBorder - 1);
+    const editorHeight = 1 + 2;
+    const transientHeight = 1;
+    expect(lines.findIndex((line) => line.includes("c30"))).toBe(30 - 2 - editorHeight - transientHeight - 1);
+    unmount();
+  });
+
   test("a wrapped editor line grows the editor panel and shrinks the chat pane", () => {
     const { lastFrame, unmount } = mountLayout({
       columns: 40,
