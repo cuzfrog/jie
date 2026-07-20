@@ -201,6 +201,7 @@ function dispatch(command: Command<CommandName>): CommandResult<CommandName> | n
 
 interface CapturedRun {
   fakePlatform: FakePlatform;
+  createPlatform: ReturnType<typeof vi.fn>;
   tuiCalls: { options: CreateTUIOptions; deps: TuiDeps }[];
   startCalls: { value: number };
   stopCalls: { value: number };
@@ -252,7 +253,7 @@ function captureRun(platform: FakePlatform): CapturedRun {
   });
   const run = (parsed: Parameters<typeof _run>[0]): Promise<number> =>
     _run(parsed, process.cwd(), process.env.HOME ?? "/tmp", { createPlatform, createTui, console: consoleMock });
-  return { fakePlatform: platform, tuiCalls, startCalls, stopCalls, consoleMock, run };
+  return { fakePlatform: platform, createPlatform, tuiCalls, startCalls, stopCalls, consoleMock, run };
 }
 
 describe("_run — tui", () => {
@@ -283,6 +284,14 @@ describe("_run — tui", () => {
     const exit = await captured.run({ kind: "tui", team: "alpha", inMemory: false });
     expect(exit).toBe(0);
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: "alpha" });
+  });
+
+  test("tui boot with resume: passes resumeSessionId in createPlatform options", async () => {
+    const platform = makeFakePlatform();
+    const captured = captureRun(platform);
+    const exit = await captured.run({ kind: "tui", resume: "sess-1", inMemory: false });
+    expect(exit).toBe(0);
+    expect(captured.createPlatform.mock.calls[0]?.[0]).toMatchObject({ resumeSessionId: "sess-1" });
   });
 
   test("tui boot: subscribes to system.error before dispatching", async () => {
@@ -376,6 +385,20 @@ describe("_run — print + apiKey", () => {
     expect(exit).toBe(3);
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: "minimal" });
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "stop" });
+  });
+
+  test("print with resume: passes resumeSessionId in createPlatform options", async () => {
+    const platform = makeFakePlatform();
+    const captured = captureRun(platform);
+    await captured.run({
+      kind: "print",
+      instruction: "hello",
+      timeout: 1,
+      json: false,
+      resume: "sess-1",
+      inMemory: false,
+    });
+    expect(captured.createPlatform.mock.calls[0]?.[0]).toMatchObject({ resumeSessionId: "sess-1" });
   });
 
   test("print with failing setApiKey -> stops platform, returns 1", async () => {

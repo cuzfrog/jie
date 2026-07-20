@@ -218,10 +218,11 @@ describe("parseFlags — --in-memory", () => {
     });
   });
 
-  test("--in-memory --team <name> follows parsePrint (needs instruction)", () => {
+  test("--in-memory --team <name> -> tui with team + inMemory true", () => {
     expect(parseFlags(["--in-memory", "--team", "alpha"])).toEqual({
-      kind: "error",
-      message: "missing instruction for -p/--print",
+      kind: "tui",
+      team: "alpha",
+      inMemory: true,
     });
   });
 
@@ -341,6 +342,70 @@ describe("parseFlags — --in-memory", () => {
     expect(parseFlags(["--in-memory", "--in-memory", "-p", "x"])).toEqual({
       kind: "error",
       message: "duplicate flag: --in-memory",
+    });
+  });
+});
+
+describe("parseFlags — standalone --team / --resume route to the TUI", () => {
+  test("--team <id> alone -> tui for that team", () => {
+    expect(parseFlags(["--team", "alpha"])).toEqual({ kind: "tui", team: "alpha", inMemory: false });
+  });
+
+  test("--resume <id> alone -> tui resuming the session", () => {
+    expect(parseFlags(["--resume", "sess-1"])).toEqual({ kind: "tui", resume: "sess-1", inMemory: false });
+  });
+
+  test("--in-memory --resume <id> -> tui in-memory resuming the session", () => {
+    expect(parseFlags(["--in-memory", "--resume", "sess-1"])).toEqual({ kind: "tui", resume: "sess-1", inMemory: true });
+  });
+
+  test("--resume <id> --in-memory (flag after) -> tui in-memory resuming the session", () => {
+    expect(parseFlags(["--resume", "sess-1", "--in-memory"])).toEqual({ kind: "tui", resume: "sess-1", inMemory: true });
+  });
+
+  test("--team <id> --resume <sid> -> tui carrying both", () => {
+    expect(parseFlags(["--team", "alpha", "--resume", "sess-1"])).toEqual({
+      kind: "tui",
+      team: "alpha",
+      resume: "sess-1",
+      inMemory: false,
+    });
+  });
+
+  test("--team <id> <instruction> stays print", () => {
+    expect(parseFlags(["--team", "alpha", "do it"])).toMatchObject({ kind: "print", instruction: "do it", team: "alpha" });
+  });
+
+  test("--resume <id> with -p stays print carrying the session id", () => {
+    expect(parseFlags(["--resume", "sess-1", "-p", "hi"])).toMatchObject({ kind: "print", instruction: "hi", resume: "sess-1" });
+  });
+
+  test("--team without argument still errors", () => {
+    expect(parseFlags(["--team"])).toEqual({ kind: "error", message: "missing argument for --team" });
+  });
+
+  test("--resume without argument still errors", () => {
+    expect(parseFlags(["--resume"])).toEqual({ kind: "error", message: "missing argument for --resume" });
+  });
+
+  test("--team with --json but no instruction errors (print-only flag without instruction)", () => {
+    expect(parseFlags(["--team", "alpha", "--json"])).toEqual({
+      kind: "error",
+      message: "missing instruction for -p/--print",
+    });
+  });
+
+  test("--api-key with --resume but no instruction errors (apiKey has no tui form)", () => {
+    expect(parseFlags(["--api-key", "k", "--resume", "sess-1"])).toEqual({
+      kind: "error",
+      message: "missing instruction for -p/--print",
+    });
+  });
+
+  test("duplicate --resume without instruction reports the duplicate", () => {
+    expect(parseFlags(["--resume", "a", "--resume", "b"])).toEqual({
+      kind: "error",
+      message: "duplicate flag: --resume",
     });
   });
 });

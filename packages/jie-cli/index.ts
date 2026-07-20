@@ -58,6 +58,7 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
       homeJieDir,
       projectJieDir,
       inMemory: args.kind === "tui" || args.kind === "print" ? args.inMemory : false,
+      resumeSessionId: args.kind === "tui" || args.kind === "print" ? args.resume : undefined,
     },
     deps.createPlatform,
     deps.console,
@@ -135,7 +136,7 @@ Usage:
   jie --api-key <key>
   jie --resume <session_id>
 
-  jie [--team <id>] [--in-memory]    # interactive TUI
+  jie [--team <id>] [--resume <id>] [--in-memory]    # interactive TUI
   jie --version
   jie --help
 `);

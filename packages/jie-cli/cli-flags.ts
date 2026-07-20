@@ -17,7 +17,7 @@ export interface ParsedArgsMap {
   readonly model: { readonly kind: "model"; readonly provider: string; readonly modelId: string };
   readonly team: { readonly kind: "team"; readonly teamId?: string };
   readonly apiKey: { readonly kind: "apiKey"; readonly apiKey: string };
-  readonly tui: { readonly kind: "tui"; readonly team?: string; readonly inMemory: boolean };
+  readonly tui: { readonly kind: "tui"; readonly team?: string; readonly resume?: string; readonly inMemory: boolean };
   readonly error: { readonly kind: "error"; readonly message: string };
 }
 export type ParsedArgs = ParsedArgsMap[keyof ParsedArgsMap];
@@ -259,11 +259,16 @@ function parsePrint(
       return { kind: "error", message: `unexpected positional argument: ${a}` };
     }
   }
-  if (instruction === undefined) {
-    return { kind: "error", message: "missing instruction for -p/--print" };
-  }
   const dupErr = errorIfDupes(dupes);
   if (dupErr !== undefined) return dupErr;
+  if (instruction === undefined) {
+    const printRequested = seen.has("-p") || seen.has("--print");
+    const printOnlyFlags = apiKey !== undefined || timeout !== undefined || json;
+    if (!printRequested && !printOnlyFlags && (team !== undefined || resume !== undefined)) {
+      return { kind: "tui", team, resume, inMemory };
+    }
+    return { kind: "error", message: "missing instruction for -p/--print" };
+  }
   return {
     kind: "print",
     instruction,
