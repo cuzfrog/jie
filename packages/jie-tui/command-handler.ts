@@ -1,5 +1,5 @@
 import { JiePlatformError, type JiePlatform } from "@cuzfrog/jie-platform";
-import { Actions, type StateStore } from "./state";
+import { Actions, type StateStore, type TuiState } from "./state";
 import { bashDirective, parseBashCommand } from "./bash";
 
 type CommandOutcome =
@@ -72,24 +72,36 @@ function routeBash(trimmed: string, deps: CommandHandlerDeps): void {
     deps.stateStore.dispatch(Actions.setErrorMessage("bash mode requires a command after !"));
     return;
   }
-  const target = focusedAgent(deps.stateStore);
+  const target = routeTarget(deps.stateStore);
   if (target === null) {
-    deps.stateStore.dispatch(Actions.setErrorMessage("no focused agent — load a team first"));
+    deps.stateStore.dispatch(Actions.setErrorMessage("no team loaded — load a team first"));
     return;
   }
   deps.platform.prompt(target.teamId, target.agentKey, bashDirective(bash));
 }
 
 function routePrompt(trimmed: string, deps: CommandHandlerDeps): void {
-  const target = focusedAgent(deps.stateStore);
-  if (target === null) return;
+  const target = routeTarget(deps.stateStore);
+  if (target === null) {
+    deps.stateStore.dispatch(Actions.setErrorMessage("no team loaded — load a team first"));
+    return;
+  }
   deps.platform.prompt(target.teamId, target.agentKey, trimmed);
 }
 
-function focusedAgent(stateStore: StateStore): { readonly teamId: string; readonly agentKey: string } | null {
+interface AgentRoute {
+  readonly teamId: string;
+  readonly agentKey: string;
+}
+
+function routeTarget(stateStore: StateStore): AgentRoute | null {
   const state = stateStore.getState();
-  if (state.focusedAgentId === null) return null;
-  const agent = state.agents.get(state.focusedAgentId);
+  return agentTarget(state, state.focusedAgentId) ?? agentTarget(state, state.leaderAgentId);
+}
+
+function agentTarget(state: TuiState, agentId: TuiState["focusedAgentId"]): AgentRoute | null {
+  if (agentId === null) return null;
+  const agent = state.agents.get(agentId);
   return agent === undefined ? null : { teamId: agent.teamId, agentKey: agent.agentKey };
 }
 

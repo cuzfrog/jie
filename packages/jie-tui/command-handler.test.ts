@@ -8,7 +8,7 @@ import { Actions, createStateStore, type StateStore, type TuiState } from "./sta
 
 const ANTHROPIC_KEY = "sk-test-anthropic";
 
-function makePlatform(): { platform: JiePlatform; execute: ReturnType<typeof vi.fn> } {
+function makePlatform(): { platform: JiePlatform; execute: ReturnType<typeof vi.fn>; prompt: ReturnType<typeof vi.fn> } {
   const execute = vi.fn(async (cmd: { name: string } & Record<string, unknown>) => {
     switch (cmd.name) {
       case "getDefaultModel":
@@ -19,15 +19,16 @@ function makePlatform(): { platform: JiePlatform; execute: ReturnType<typeof vi.
         return null;
     }
   });
+  const prompt = vi.fn();
   const platform = {
     team: { id: "minimal", agents: [] },
     stop: vi.fn<() => Promise<void>>(() => Promise.resolve()),
     subscribe: vi.fn(),
-    prompt: vi.fn(),
+    prompt,
     interrupt: vi.fn(),
     execute,
   };
-  return { platform: platform as unknown as JiePlatform, execute };
+  return { platform: platform as unknown as JiePlatform, execute, prompt };
 }
 
 interface DepsHandle {
@@ -111,6 +112,64 @@ describe("createTuiCommandHandler", () => {
     const handler = createTuiCommandHandler(deps);
     handler.handle("/help");
     expect(dispatch.mock.calls[0]?.[0]).toEqual(Actions.clearBanners());
+  });
+});
+
+describe("createTuiCommandHandler — prompt routing", () => {
+  function makeDepsWithTeam(platform: JiePlatform): DepsHandle {
+    const handle = makeDeps(platform);
+    handle.dispatch(Actions.switchTeam({
+      id: "alpha",
+      leaderKey: "general-1",
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    }));
+    return handle;
+  }
+
+  function makeDepsWithState(platform: JiePlatform, state: TuiState): DepsHandle {
+    const dispatch = vi.fn();
+    const stateStore: StateStore = {
+      getState: () => state,
+      dispatch: (action) => { dispatch(action); },
+      subscribe: vi.fn(() => (): void => undefined),
+    };
+    return { deps: { stateStore, platform }, getState: () => state, dispatch };
+  }
+
+  test("plain prompt routes to the focused agent", () => {
+    const { platform, prompt } = makePlatform();
+    const { deps } = makeDepsWithTeam(platform);
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("hello world");
+    expect(prompt).toHaveBeenCalledWith("alpha", "general-1", "hello world");
+  });
+
+  test("plain prompt with no team loaded sets an error banner instead of dropping silently", () => {
+    const { platform, prompt } = makePlatform();
+    const { deps, dispatch } = makeDeps(platform);
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("hello");
+    expect(prompt).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("no team loaded")));
+  });
+
+  test("plain prompt falls back to the leader when no agent is focused", () => {
+    const { platform, prompt } = makePlatform();
+    const seeded = makeDepsWithTeam(platform);
+    const unfocused: TuiState = { ...seeded.getState(), focusedAgentId: null };
+    const { deps } = makeDepsWithState(platform, unfocused);
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("hello");
+    expect(prompt).toHaveBeenCalledWith("alpha", "general-1", "hello");
+  });
+
+  test("bash directive with no team loaded sets an error banner", () => {
+    const { platform, prompt } = makePlatform();
+    const { deps, dispatch } = makeDeps(platform);
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("!ls");
+    expect(prompt).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("no team loaded")));
   });
 });
 

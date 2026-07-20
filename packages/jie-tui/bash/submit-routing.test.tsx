@@ -159,14 +159,14 @@ describe("handleSubmitEditorText — ! bash mode routing", () => {
     });
   });
 
-  test("!cmd with no focused agent surfaces an error banner and does not call platform.prompt", () => {
+  test("!cmd with no team loaded surfaces an error banner and does not call platform.prompt", () => {
     withTTY(true, () => {
       const tp = makePlatform();
       const tui: Tui = createTui({ cwd: process.cwd() }, { platform: tp.platform });
       try {
         internals(tui).stateStore.dispatch(Actions.submitEditorText("!ls"));
         expect(tp.prompts.length).toBe(0);
-        expect(internals(tui).stateStore.getState().errorBanner).toMatch(/no focused agent/i);
+        expect(internals(tui).stateStore.getState().errorBanner).toMatch(/no team loaded/i);
       } finally {
         tui.stop();
       }
