@@ -22,7 +22,7 @@ describe("Scenario 1 — simple agent", () => {
     await stopTui(harness);
   });
 
-  test("team loads, prompt streams, idle closes; rail hidden by default", async () => {
+  test("team loads, prompt streams, idle closes", async () => {
     await sendLine(harness.stdin, "/team my-team");
     await waitForTeam(harness.tui, "my-team");
     await submitAndWaitForAgentIdle(harness, "Tell me a story", "my-team:general-1");
@@ -30,7 +30,6 @@ describe("Scenario 1 — simple agent", () => {
     expect(state.teamId).toBe("my-team");
     expect(state.leaderAgentId).toBe("my-team:general-1");
     expect(state.focusedAgentId).toBe("my-team:general-1");
-    expect(state.showTeamRailPanel).toBe(false);
     const agent = state.agents.get("my-team:general-1");
     const allTurns = [
       ...(agent?.history ?? []),

@@ -1,15 +1,11 @@
 import type { AnyEventEnvelope, SessionSummary, TeamInfo } from "@cuzfrog/jie-platform";
-import type { AgentId } from "./state";
 
 export const ActionTypes = {
   RECEIVE_EVENT: "[bus] receive event from event bus",
   SWITCH_TEAM: "[ui] switch team",
-  TOGGLE_TEAM_RAIL: "[ui] toggle team rail panel",
   TOGGLE_THINKING: "[ui] toggle thinking expanded",
   TOGGLE_TOOL_CARDS: "[ui] toggle tool cards expanded",
   SWITCH_CYCLE_AGENT: "[ui] switch and cycle focused agent",
-  SCROLL_CHAT: "[ui] scroll chat",
-  JUMP_CHAT: "[ui] jump chat",
   CLEAR_TUI_STATE: "[ui] clear tui state",
   SET_TRANSIENT_MESSAGE: "[ui] transient message",
   CLEAR_TRANSIENT_MESSAGE: "[ui] transient clear",
@@ -36,7 +32,6 @@ interface ActionDef<T extends ActionType, P> {
   readonly payload: P,
 }
 
-const toggleTeamRail = createAction(ActionTypes.TOGGLE_TEAM_RAIL);
 const toggleThinking = createAction(ActionTypes.TOGGLE_THINKING);
 const toggleToolCards = createAction(ActionTypes.TOGGLE_TOOL_CARDS);
 const clearTuiState = createAction(ActionTypes.CLEAR_TUI_STATE);
@@ -48,14 +43,9 @@ const clearBanners = createAction(ActionTypes.CLEAR_BANNERS);
 export const Actions = {
   receiveEvent: (event: AnyEventEnvelope) => createAction(ActionTypes.RECEIVE_EVENT, event),
 	switchTeam: (identity: TeamInfo) => createAction(ActionTypes.SWITCH_TEAM, identity),
-	toggleTeamRail: () => toggleTeamRail,
 	toggleThinking: () => toggleThinking,
 	toggleToolCards: () => toggleToolCards,
 	switchCycleAgent: (direction: 1 | -1) => createAction(ActionTypes.SWITCH_CYCLE_AGENT, { direction }),
-	scrollChat: (agentId: AgentId, newOffsetRows: number) =>
-		createAction(ActionTypes.SCROLL_CHAT, { agentId, newOffsetRows }),
-	jumpChat: (agentId: AgentId, target: 'top' | 'tail') =>
-		createAction(ActionTypes.JUMP_CHAT, { agentId, target }),
 	clearTuiState: () => clearTuiState,
 	setTransientMessage: (text: string) => createAction(ActionTypes.SET_TRANSIENT_MESSAGE, { text }),
 	clearTransientMessage: () => clearTransientMessage,

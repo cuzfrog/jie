@@ -15,6 +15,7 @@ import type {
   Console,
   EventEnvelope,
   EventType,
+  GitSnapshot,
   JiePlatform,
   JiePlatformOptions,
   TeamInfo,
@@ -215,6 +216,7 @@ function captureRun(platform: FakePlatform): CapturedRun {
   const stopCalls = { value: 0 };
   const consoleMock = makeConsoleMock();
   const createPlatform = vi.fn(async (_opts: JiePlatformOptions): Promise<JiePlatform> => platform);
+  const gitSnapshot = (_cwd: string): GitSnapshot => ({ branch: "test-branch", dirty: true, ahead: 0, behind: 0 });
   const createTui = vi.fn((options: CreateTUIOptions, deps: TuiDeps): Tui => {
     tuiCalls.push({ options, deps });
     deps.platform.subscribe("system.team.loaded", () => undefined);
@@ -228,8 +230,6 @@ function captureRun(platform: FakePlatform): CapturedRun {
         leaderAgentId: null,
         focusedAgentId: null,
         agents: new Map(),
-        chatScrollOffsets: new Map(),
-        showTeamRailPanel: false,
         thinkingExpanded: false,
         toolCardsExpanded: false,
         pendingQuit: false,
@@ -252,7 +252,7 @@ function captureRun(platform: FakePlatform): CapturedRun {
     return tui;
   });
   const run = (parsed: Parameters<typeof _run>[0]): Promise<number> =>
-    _run(parsed, process.cwd(), process.env.HOME ?? "/tmp", { createPlatform, createTui, console: consoleMock });
+    _run(parsed, process.cwd(), process.env.HOME ?? "/tmp", { createPlatform, createTui, gitSnapshot, console: consoleMock });
   return { fakePlatform: platform, createPlatform, tuiCalls, startCalls, stopCalls, consoleMock, run };
 }
 
@@ -316,6 +316,15 @@ describe("_run — tui", () => {
     expect(subscribedBeforeTeam).toBe(true);
   });
 
+  test("tui boot: passes git branch and dirty flag from the git snapshot to createTui", async () => {
+    const platform = makeFakePlatform();
+    const captured = captureRun(platform);
+    const exit = await captured.run({ kind: "tui", inMemory: false });
+    expect(exit).toBe(0);
+    expect(captured.tuiCalls[0]?.deps.gitBranch).toBe("test-branch");
+    expect(captured.tuiCalls[0]?.deps.gitDirty).toBe(true);
+  });
+
   test("tui boot: propagates createPlatform rejection via thrown error", async () => {
     const platform = makeFakePlatform();
     const consoleMock = makeConsoleMock();
@@ -323,6 +332,7 @@ describe("_run — tui", () => {
       _run(parsed, process.cwd(), "/tmp", {
         createPlatform: () => Promise.reject(new Error("boot blew up")),
         createTui: vi.fn(),
+        gitSnapshot: () => ({ branch: "", dirty: false, ahead: 0, behind: 0 }),
         console: consoleMock,
       });
     expect(run({ kind: "tui", inMemory: false })).rejects.toThrow("boot blew up");
@@ -342,6 +352,7 @@ describe("_run — error/help/version bypass boot", () => {
           return Promise.resolve(platform);
         },
         createTui: vi.fn(),
+        gitSnapshot: () => ({ branch: "", dirty: false, ahead: 0, behind: 0 }),
         console: consoleMock,
       });
     const exit = await run({ kind: "error", message: "bad flag" });
@@ -361,6 +372,7 @@ describe("_run — error/help/version bypass boot", () => {
           return Promise.resolve(platform);
         },
         createTui: vi.fn(),
+        gitSnapshot: () => ({ branch: "", dirty: false, ahead: 0, behind: 0 }),
         console: consoleMock,
       });
     const exit = await run({ kind: "version" });

@@ -60,12 +60,10 @@ export interface TuiState {
   readonly focusedAgentId: AgentId | null;
   readonly transientMessage: string | null;
   readonly errorBanner: string | null;
-  readonly showTeamRailPanel: boolean;
   readonly thinkingExpanded: boolean;
   readonly toolCardsExpanded: boolean;
   readonly pendingQuit: boolean;
   readonly editorText: string;
-  readonly chatScrollOffsets: ReadonlyMap<AgentId, number>;
   readonly sessionPickerOpen: boolean;
   readonly sessionPickerQuery: string;
   readonly sessionPickerSessions: ReadonlyArray<SessionSummary>;

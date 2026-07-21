@@ -1,7 +1,17 @@
+import { inspect } from "node:util";
 import { DefaultLogLevels, Logger, type TLogLevel } from "tslog";
 
 const { level, enabled } = resolveLoggingLevel();
-export const logger = new Logger({ minLevel: level, type: enabled ? "pretty" : "hidden" });
+export const logger = new Logger({
+  minLevel: level,
+  type: enabled ? "pretty" : "hidden",
+  overwrite: {
+    transportFormatted: (logMetaMarkup, logArgs, logErrors) => {
+      const parts = [logMetaMarkup, ...logArgs, ...logErrors].map((part) => typeof part === "string" ? part : inspect(part));
+      defaultConsole.error(parts.join(" "));
+    },
+  },
+});
 
 function resolveLoggingLevel(): { level: TLogLevel | undefined; enabled: boolean } {
   switch (process.env.JIE_LOG_LEVEL?.toLocaleUpperCase()) {

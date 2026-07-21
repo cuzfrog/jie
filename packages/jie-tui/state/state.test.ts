@@ -38,7 +38,6 @@ describe("TuiState.getFocusedAgent", () => {
   test("reflects focus changes from Actions.switchCycleAgent", () => {
     const store = createStateStore();
     loadDemoTeam(store);
-    store.dispatch(Actions.toggleTeamRail());
     store.dispatch(Actions.switchCycleAgent(1));
     const focused = TuiState.getFocusedAgent(store.getState());
     expect(focused?.agentKey).toBe("helper-1");

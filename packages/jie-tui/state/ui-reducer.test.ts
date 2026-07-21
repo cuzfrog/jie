@@ -25,15 +25,6 @@ function loadedTeam(roles: ReadonlyArray<{ role: string; agent_key: string; is_l
   }));
 }
 
-describe("toggleRail", () => {
-  test("toggles showTeamRailPanel on each call", () => {
-    const state1 = reduceUiAction(INITIAL_TUI_STATE, Actions.toggleTeamRail());
-    const state2 = reduceUiAction(state1, Actions.toggleTeamRail());
-    expect(state1.showTeamRailPanel).toBe(true);
-    expect(state2.showTeamRailPanel).toBe(false);
-  });
-});
-
 describe("toggleThinking", () => {
   test("toggles thinkingExpanded on each call", () => {
     const state1 = reduceUiAction(INITIAL_TUI_STATE, Actions.toggleThinking());
@@ -61,61 +52,40 @@ describe("toggleToolCards", () => {
 });
 
 describe("cycleAgent", () => {
-  function multiAgentRail(): TuiState {
-    const state = loadedTeam([
+  function multiAgent(): TuiState {
+    return loadedTeam([
       { role: "manager", agent_key: "manager-1", is_leader: true },
       { role: "worker", agent_key: "worker-1", is_leader: false },
     ]);
-    return reduceUiAction(state, Actions.toggleTeamRail());
   }
 
   test("direction=1 cycles forward", () => {
-    const state1 = multiAgentRail();
+    const state1 = multiAgent();
     expect(state1.focusedAgentId).toBe("my-team:manager-1");
     const state2 = reduceUiAction(state1, Actions.switchCycleAgent(1));
     expect(state2.focusedAgentId).toBe("my-team:worker-1");
   });
 
   test("direction=-1 cycles backward and wraps to the last agent", () => {
-    const state1 = multiAgentRail();
+    const state1 = multiAgent();
     const state2 = reduceUiAction(state1, Actions.switchCycleAgent(-1));
     expect(state2.focusedAgentId).toBe("my-team:worker-1");
   });
 
-  test("is a no-op when the rail is hidden", () => {
-    const state = loadedTeam([
-      { role: "manager", agent_key: "manager-1", is_leader: true },
-      { role: "worker", agent_key: "worker-1", is_leader: false },
-    ]);
-    expect(state.showTeamRailPanel).toBe(false);
-    const state2 = reduceUiAction(state, Actions.switchCycleAgent(1));
-    expect(state2.focusedAgentId).toBe("my-team:manager-1");
-  });
-
   test("is a no-op when only one agent is present", () => {
     const state = loadedTeam([{ role: "general", agent_key: "general-1", is_leader: true }]);
-    const state2 = reduceUiAction(reduceUiAction(state, Actions.toggleTeamRail()), Actions.switchCycleAgent(1));
+    const state2 = reduceUiAction(state, Actions.switchCycleAgent(1));
     expect(state2.focusedAgentId).toBe("my-team:general-1");
   });
 
   test("direction=1 from no focused agent lands on the first agent", () => {
-    let state = loadedTeam([
-      { role: "manager", agent_key: "manager-1", is_leader: true },
-      { role: "worker", agent_key: "worker-1", is_leader: false },
-    ]);
-    state = reduceUiAction(state, Actions.toggleTeamRail());
-    state = { ...state, focusedAgentId: null };
+    const state = { ...multiAgent(), focusedAgentId: null };
     const state2 = reduceUiAction(state, Actions.switchCycleAgent(1));
     expect(state2.focusedAgentId).toBe("my-team:manager-1");
   });
 
   test("direction=-1 from no focused agent lands on the last agent", () => {
-    let state = loadedTeam([
-      { role: "manager", agent_key: "manager-1", is_leader: true },
-      { role: "worker", agent_key: "worker-1", is_leader: false },
-    ]);
-    state = reduceUiAction(state, Actions.toggleTeamRail());
-    state = { ...state, focusedAgentId: null };
+    const state = { ...multiAgent(), focusedAgentId: null };
     const state2 = reduceUiAction(state, Actions.switchCycleAgent(-1));
     expect(state2.focusedAgentId).toBe("my-team:worker-1");
   });
@@ -208,6 +178,12 @@ describe("sessionPicker", () => {
     state = reduceUiAction(state, Actions.openSessionPicker([{ sessionId: "s1", messageCount: 1, lastActivity: "" }]));
     expect(state.sessionPickerQuery).toBe("");
     expect(state.sessionPickerFocus).toBe(0);
+  });
+
+  test("openSessionPicker clears a pending transient message", () => {
+    let state = reduceUiAction(INITIAL_TUI_STATE, Actions.setTransientMessage("loading sessions…"));
+    state = reduceUiAction(state, Actions.openSessionPicker([{ sessionId: "s1", messageCount: 1, lastActivity: "" }]));
+    expect(state.transientMessage).toBeNull();
   });
 
   test("closeSessionPicker resets all four picker fields", () => {

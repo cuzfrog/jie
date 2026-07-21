@@ -41,7 +41,7 @@ describe("Scenario 9 — @-mention autocomplete", () => {
     await sendCmd(harness.stdin, "@main");
     await waitForEditorText(harness.tui, "@main");
     await sendCmd(harness.stdin, "\t");
-    await waitForEditorText(harness.tui, "@main src/main.ts ");
+    await waitForEditorText(harness.tui, "@src/main.ts ");
     await waitForNoErrorBanner(harness.tui);
   });
 });

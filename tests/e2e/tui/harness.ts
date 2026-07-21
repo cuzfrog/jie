@@ -74,9 +74,9 @@ export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> 
   const tuiOptions: CreateTUIOptions = { cwd: dir, rows: opts.rows ?? 30 };
   const tui = createTui(tuiOptions, {
     platform,
-    stdin: stdin as unknown as NodeJS.ReadStream,
-    stdout: stdout as unknown as NodeJS.WriteStream,
-    stderr: stderr as unknown as NodeJS.WriteStream,
+    stdin,
+    stdout,
+    stderr,
     gitBranch: "main",
     gitDirty: false,
   });

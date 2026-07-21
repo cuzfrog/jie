@@ -166,7 +166,7 @@ function reduceToolResult(state: TuiState, event: AnyEventEnvelope): TuiState {
     name,
     input: prior?.input,
     inputTruncated: prior?.inputTruncated,
-    output,
+    output: displayOutput(output),
     outputTruncated: output_truncated,
     durationMs: duration_ms,
     error,
@@ -220,4 +220,17 @@ function turnIsPopulated(turn: MessageTurn | null): boolean {
 
 function composeAgentId(teamId: string, agentKey: string): AgentId {
   return `${teamId}:${agentKey}` as AgentId;
+}
+
+function displayOutput(output: string | null): string | null {
+  if (output === null) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(output);
+  } catch {
+    return output;
+  }
+  if (typeof parsed !== "object" || parsed === null || !("content" in parsed)) return output;
+  const content = parsed.content;
+  return typeof content === "string" ? content : output;
 }

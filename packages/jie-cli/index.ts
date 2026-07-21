@@ -3,9 +3,11 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  createGitService,
   createJiePlatform,
   defaultConsole,
   type Console,
+  type GitSnapshot,
   type JiePlatform,
   type JiePlatformOptions,
 } from "@cuzfrog/jie-platform";
@@ -25,7 +27,7 @@ export async function main(argv: string[], cwd: string = process.cwd(), console:
   const parsed = parseFlags(argv);
   const homeDir = resolveHomeDir();
   try {
-    return await run(parsed, cwd, homeDir, { createPlatform: createJiePlatform, createTui, console });
+    return await run(parsed, cwd, homeDir, { createPlatform: createJiePlatform, createTui, gitSnapshot: readGitSnapshot, console });
   } catch (err) {
     console.error(err instanceof Error ? err.message : String(err));
     return 1;
@@ -35,6 +37,7 @@ export async function main(argv: string[], cwd: string = process.cwd(), console:
 interface RunDeps {
   readonly createPlatform: (options: JiePlatformOptions) => Promise<JiePlatform>;
   readonly createTui: (options: CreateTUIOptions, deps: TuiDeps) => Tui;
+  readonly gitSnapshot: (cwd: string) => GitSnapshot;
   readonly console: Console;
 }
 
@@ -65,7 +68,8 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
   );
   switch (args.kind) {
     case "tui": {
-      const tui = deps.createTui({ cwd }, { platform: handle });
+      const git = deps.gitSnapshot(cwd);
+      const tui = deps.createTui({ cwd }, { platform: handle, gitBranch: git.branch, gitDirty: git.dirty });
       await handle.execute({ name: "team", teamId: args.team });
       try {
         await tui.start();
@@ -156,6 +160,10 @@ function findProjectJieDir(cwd: string): string | null {
     if (parent === current) return null;
     current = parent;
   }
+}
+
+function readGitSnapshot(cwd: string): GitSnapshot {
+  return createGitService({ cwd }).getSnapshot();
 }
 
 if (import.meta.main) {

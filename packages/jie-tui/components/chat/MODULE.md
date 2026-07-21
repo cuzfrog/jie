@@ -1,13 +1,3 @@
 ---
-no-new-exports:
-  - chat-pane.tsx
-  - chat-pane.test.tsx
-  - message-view.tsx
-  - message-view.test.tsx
-  - text-block.tsx
-  - text-block.test.tsx
-  - tool-card.tsx
-  - tool-card.test.tsx
-  - working-indicator.tsx
-  - working-indicator.test.tsx
+no-new-exports: []
 ---

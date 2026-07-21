@@ -232,6 +232,17 @@ describe("reduceIdle", () => {
     expect(agent?.lastStopReason).toBe("stop");
   });
 
+  test("keeps a populated currentTurn for the next turn to rotate (tui-state.md)", () => {
+    let state = loadedState();
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "answer"));
+    state = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.status).toBe("idle");
+    expect(agent?.history.length).toBe(0);
+    expect(agent?.currentTurn?.blocks).toEqual([{ kind: "text", text: "answer" }]);
+  });
+
   test("rejects idle events from a foreign team", () => {
     const state = loadedState();
     const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
@@ -376,6 +387,27 @@ describe("reduceToolCall + reduceToolResult", () => {
       expect(card.output).toBe("out");
       expect(card.durationMs).toBe(12);
       expect(card.error).toBeNull();
+    }
+  });
+
+  test("unwraps the platform result envelope so the card shows the tool content text", () => {
+    let state = promptedState();
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
+    const envelope = JSON.stringify({ content: "exit_code: 0", details: { exitCode: 0 }, terminate: false });
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", envelope, 9, null));
+    const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
+    if (card?.kind === "toolResult") {
+      expect(card.output).toBe("exit_code: 0");
+    }
+  });
+
+  test("keeps output that is not a content envelope verbatim", () => {
+    let state = promptedState();
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", "not json at all", 9, null));
+    const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
+    if (card?.kind === "toolResult") {
+      expect(card.output).toBe("not json at all");
     }
   });
 
