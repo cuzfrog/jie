@@ -1,5 +1,5 @@
 ---
-sealed:
+no-new-exports:
   - index.ts
   - parser.test.ts
   - parser.ts

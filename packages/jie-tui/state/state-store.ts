@@ -15,12 +15,14 @@ const INITIAL_TUI_STATE: TuiState = Object.freeze({
   focusedAgentId: null,
   transientMessage: null,
   errorBanner: null,
-  showTeamRailPanel: false,
   thinkingExpanded: false,
   toolCardsExpanded: false,
   pendingQuit: false,
   editorText: "",
-  chatScrollOffsets: new Map(),
+  sessionPickerOpen: false,
+  sessionPickerQuery: "",
+  sessionPickerSessions: [],
+  sessionPickerFocus: 0,
 } as const);
 
 /** a subscriber can perform side effect */

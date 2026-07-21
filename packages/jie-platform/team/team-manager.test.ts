@@ -185,6 +185,17 @@ describe("createTeamManager — full surface", () => {
       expect(resumeManager.load("minimal")).rejects.toThrow(/unknown session_id/);
     });
 
+    test("resumeSession(teamId, sessionId) loads with the named session and rejects unknown ones", async () => {
+      const { manager, memoryManager } = makeManager(workspace, homeJieDir, null);
+      memoryManager.persist({ role: "user", content: "hello", timestamp: 1 } as never, "general-1", "01-real-session", "minimal");
+      await manager.load("minimal");
+      const reloaded = await manager.resumeSession("minimal", "01-real-session");
+      expect(reloaded.id).toBe("minimal");
+
+      const freshManager = makeManager(workspace, homeJieDir, null).manager;
+      expect(freshManager.resumeSession("minimal", "01-not-real")).rejects.toThrow(/unknown session_id/);
+    });
+
     test("second call to load() returns the cached identity without rebuilding", async () => {
       const { manager, eventManager } = makeManager(workspace, homeJieDir, null);
       const events = collectEvents(eventManager);
@@ -307,6 +318,31 @@ describe("createTeamManager — full surface", () => {
       const { manager } = makeManager(workspace, homeJieDir, null);
       await manager.load("minimal");
       expect(() => manager.stop()).not.toThrow();
+    });
+  });
+
+  describe("listSessions", () => {
+    test("returns empty array for a team that was never loaded", () => {
+      const { manager } = makeManager(workspace, homeJieDir, null);
+      expect(manager.listSessions("ghost-team")).toEqual([]);
+    });
+
+    test("returns the persisted sessions for the loaded minimal team", async () => {
+      const { manager, memoryManager } = makeManager(workspace, homeJieDir, null);
+      await manager.load("minimal");
+      memoryManager.persist({ role: "user", content: "x", timestamp: 1 } as never, "general-1", "session-A", "minimal");
+      memoryManager.persist({ role: "user", content: "y", timestamp: 2 } as never, "general-1", "session-B", "minimal");
+      const sessions = manager.listSessions("minimal");
+      const ids = sessions.map((s) => s.sessionId).sort();
+      expect(ids).toEqual(["session-A", "session-B"]);
+    });
+
+    test("scopes results to the requested team_id", async () => {
+      const { manager, memoryManager } = makeManager(workspace, homeJieDir, null);
+      await manager.load("minimal");
+      memoryManager.persist({ role: "user", content: "x", timestamp: 1 } as never, "general-1", "s-min", "minimal");
+      memoryManager.persist({ role: "user", content: "y", timestamp: 2 } as never, "general-1", "s-other", "other-team");
+      expect(manager.listSessions("minimal").map((s) => s.sessionId)).toEqual(["s-min"]);
     });
   });
 });

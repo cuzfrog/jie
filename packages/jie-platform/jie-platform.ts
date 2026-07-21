@@ -21,6 +21,7 @@ export interface JiePlatformOptions {
   readonly homeJieDir: string;
   readonly projectJieDir: string | null;
   readonly resumeSessionId?: string;
+  readonly inMemory?: boolean;
 }
 
 export interface JiePlatformDeps {
@@ -79,10 +80,11 @@ function buildJiePlatformDeps(options: JiePlatformOptions): JiePlatformDeps {
   const projectJieDir = options.projectJieDir;
   mkdirSync(homeJieDir, { recursive: true, mode: 0o755 });
   const eventManager = createEventManager();
-  const storage = createStorage({
-    type: "sqlite",
-    filePath: join(homeJieDir, "storage.db"),
-  });
+  const storage = createStorage(
+    options.inMemory === true
+      ? { type: "memory" }
+      : { type: "sqlite", filePath: join(homeJieDir, "storage.db") },
+  );
   const authStore = makeAuthStore(homeJieDir);
   const modelRegistry = createModelRegistry(homeJieDir, projectJieDir, authStore);
   const memoryManager = createMemoryManager(storage);

@@ -1,6 +1,7 @@
 import { JiePlatformError, type JiePlatform } from "@cuzfrog/jie-platform";
 import {
   createTuiCommandHandler,
+  SLASH_COMMAND_NAMES,
   type CommandHandlerDeps,
   type CommandHandler,
 } from "./command-handler";
@@ -8,7 +9,7 @@ import { Actions, createStateStore, type StateStore, type TuiState } from "./sta
 
 const ANTHROPIC_KEY = "sk-test-anthropic";
 
-function makePlatform(): { platform: JiePlatform; execute: ReturnType<typeof vi.fn> } {
+function makePlatform(): { platform: JiePlatform; execute: ReturnType<typeof vi.fn>; prompt: ReturnType<typeof vi.fn> } {
   const execute = vi.fn(async (cmd: { name: string } & Record<string, unknown>) => {
     switch (cmd.name) {
       case "getDefaultModel":
@@ -19,15 +20,16 @@ function makePlatform(): { platform: JiePlatform; execute: ReturnType<typeof vi.
         return null;
     }
   });
+  const prompt = vi.fn();
   const platform = {
     team: { id: "minimal", agents: [] },
     stop: vi.fn<() => Promise<void>>(() => Promise.resolve()),
     subscribe: vi.fn(),
-    prompt: vi.fn(),
+    prompt,
     interrupt: vi.fn(),
     execute,
   };
-  return { platform: platform as unknown as JiePlatform, execute };
+  return { platform: platform as unknown as JiePlatform, execute, prompt };
 }
 
 interface DepsHandle {
@@ -114,6 +116,64 @@ describe("createTuiCommandHandler", () => {
   });
 });
 
+describe("createTuiCommandHandler — prompt routing", () => {
+  function makeDepsWithTeam(platform: JiePlatform): DepsHandle {
+    const handle = makeDeps(platform);
+    handle.dispatch(Actions.switchTeam({
+      id: "alpha",
+      leaderKey: "general-1",
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    }));
+    return handle;
+  }
+
+  function makeDepsWithState(platform: JiePlatform, state: TuiState): DepsHandle {
+    const dispatch = vi.fn();
+    const stateStore: StateStore = {
+      getState: () => state,
+      dispatch: (action) => { dispatch(action); },
+      subscribe: vi.fn(() => (): void => undefined),
+    };
+    return { deps: { stateStore, platform }, getState: () => state, dispatch };
+  }
+
+  test("plain prompt routes to the focused agent", () => {
+    const { platform, prompt } = makePlatform();
+    const { deps } = makeDepsWithTeam(platform);
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("hello world");
+    expect(prompt).toHaveBeenCalledWith("alpha", "general-1", "hello world");
+  });
+
+  test("plain prompt with no team loaded sets an error banner instead of dropping silently", () => {
+    const { platform, prompt } = makePlatform();
+    const { deps, dispatch } = makeDeps(platform);
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("hello");
+    expect(prompt).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("no team loaded")));
+  });
+
+  test("plain prompt falls back to the leader when no agent is focused", () => {
+    const { platform, prompt } = makePlatform();
+    const seeded = makeDepsWithTeam(platform);
+    const unfocused: TuiState = { ...seeded.getState(), focusedAgentId: null };
+    const { deps } = makeDepsWithState(platform, unfocused);
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("hello");
+    expect(prompt).toHaveBeenCalledWith("alpha", "general-1", "hello");
+  });
+
+  test("bash directive with no team loaded sets an error banner", () => {
+    const { platform, prompt } = makePlatform();
+    const { deps, dispatch } = makeDeps(platform);
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("!ls");
+    expect(prompt).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("no team loaded")));
+  });
+});
+
 describe("createTuiCommandHandler — /login", () => {
   test("/login <provider> <apiKey> dispatches login command and replies", () => {
     const { platform, execute } = makePlatform();
@@ -171,7 +231,7 @@ describe("createTuiCommandHandler — /model", () => {
     const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/model openai/gpt-4o");
-    expect(execute).toHaveBeenCalledWith({ name: "setDefaultModel", provider: "openai", id: "gpt-4o", effort: "off" });
+    expect(execute).toHaveBeenCalledWith({ name: "setDefaultModel", provider: "openai", id: "gpt-4o", effort: "off", contextWindow: null });
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("default model set to openai/gpt-4o")));
   });
 
@@ -303,5 +363,89 @@ describe("createTuiCommandHandler — /team", () => {
     await new Promise((r) => setImmediate(r));
     expect(execute).toHaveBeenCalledWith({ name: "team", teamId: "ghost" });
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("ghost")));
+  });
+});
+
+describe("createTuiCommandHandler — /resume", () => {
+  function makeDepsWithTeamId(platform: JiePlatform, teamId: string): DepsHandle {
+    const handle = makeDeps(platform);
+    handle.dispatch(Actions.switchTeam({
+      id: teamId,
+      leaderKey: "general-1",
+      agents: [{ teamId, role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    }));
+    return handle;
+  }
+
+  test("/resume with no team loaded sets an error and does not call execute", () => {
+    const { platform, execute } = makePlatform();
+    const { deps, dispatch } = makeDeps(platform);
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("/resume");
+    expect(execute).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("no team loaded")));
+  });
+
+  test("/resume calls listSessions and dispatches openSessionPicker with the result", async () => {
+    const { platform, execute } = makePlatform();
+    const sessions = [
+      { sessionId: "s1", messageCount: 1, lastActivity: "2026-07-14T00:00:00.000Z" },
+      { sessionId: "s2", messageCount: 2, lastActivity: "2026-07-14T01:00:00.000Z" },
+    ];
+    execute.mockImplementationOnce(async () => sessions);
+    const { deps, dispatch } = makeDepsWithTeamId(platform, "minimal");
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("/resume");
+    expect(execute).toHaveBeenCalledWith({ name: "listSessions", teamId: "minimal" });
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.openSessionPicker(sessions));
+  });
+
+  test("/resume replies with a transient 'loading sessions…' message", () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async () => []);
+    const { deps, dispatch } = makeDepsWithTeamId(platform, "minimal");
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("/resume");
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("loading sessions")));
+  });
+
+  test("/resume surfaces platform errors as an error banner", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async () => {
+      throw new Error("sqlite locked");
+    });
+    const { deps, dispatch } = makeDepsWithTeamId(platform, "minimal");
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("/resume");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/resume failed")));
+  });
+
+  test("/continue is an alias for /resume", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => []);
+    const { deps, dispatch } = makeDepsWithTeamId(platform, "minimal");
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("/continue");
+    expect(execute).toHaveBeenCalledWith({ name: "listSessions", teamId: "minimal" });
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.openSessionPicker([]));
+  });
+});
+
+describe("SLASH_COMMAND_NAMES", () => {
+  test("is the union of the commands and intercepts registries, in registration order", () => {
+    expect(SLASH_COMMAND_NAMES).toEqual([
+      "help",
+      "clear",
+      "exit",
+      "login",
+      "logout",
+      "model",
+      "team",
+      "resume",
+      "continue",
+    ]);
   });
 });

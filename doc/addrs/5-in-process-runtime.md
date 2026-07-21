@@ -2,11 +2,11 @@
 
 ## Status
 
-Accepted.
+Accepted. Subsumes ADR 2 (No JetStream).
 
 ## Context
 
-Previous design (ADR 2) used NATS core pub/sub as the EventBus transport, with each agent as an independent OS process spawned by a supervisor. This required:
+The previous design used NATS core pub/sub as the EventBus transport, with each agent as an independent OS process spawned by a supervisor. This required:
 
 - `nats-server` as a runtime dependency, started manually by the user
 - `Bun.spawn()` per-agent process management

@@ -18,6 +18,7 @@ type EventDefinitions = {
     output_truncated: boolean;
     duration_ms: number;
     error: string | null;
+    details: unknown;
   }>;
   "agent.stream.chunk": EventDef<AgentSender, {
     stream_id: number;
@@ -26,6 +27,7 @@ type EventDefinitions = {
     text: string;
   }>;
   "agent.stream.end": EventDef<AgentSender, { stream_id: number; total_chunks: number }>;
+  "agent.usage": EventDef<AgentSender, { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number }>;
   "agent.prompt.queue.update": EventDef<AgentSender, { prompts: string[] }>;
   "agent.model.assigned": EventDef<AgentSender, { provider: string; model: string; effort: "off" | "low" | "medium" | "high" | "max" }>;
   "user.prompt": EventDef<UserSender, { teamId: string; agentKey: string; prompt: string }>;
@@ -68,6 +70,8 @@ export const Events = {
     createEvent("agent.stream.chunk", sender, { stream_id, seq, block_type, text }),
   agentStreamEnd: (sender: AgentSender, stream_id: number, total_chunks: number): EventEnvelope<"agent.stream.end"> =>
     createEvent("agent.stream.end", sender, { stream_id, total_chunks }),
+  agentUsage: (sender: AgentSender, usage: { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number }): EventEnvelope<"agent.usage"> =>
+    createEvent("agent.usage", sender, usage),
   agentPromptQueueUpdate: (sender: AgentSender, prompts: string[]): EventEnvelope<"agent.prompt.queue.update"> =>
     createEvent("agent.prompt.queue.update", sender, { prompts }),
   agentModelAssigned: (sender: AgentSender, provider: string, model: string, effort: "off" | "low" | "medium" | "high" | "max"): EventEnvelope<"agent.model.assigned"> =>
@@ -90,9 +94,9 @@ function agentToolCall(sender: AgentSender, tool_call_id: string, name: string, 
   const { text, truncated } = truncateForTelemetry(input);
   return createEvent("agent.tool.call", sender, { tool_call_id, name, input: text, input_truncated: truncated });
 }
-function agentToolResult(sender: AgentSender, tool_call_id: string, name: string, output: string | null, duration_ms: number, error: string | null): EventEnvelope<"agent.tool.result"> {
+function agentToolResult(sender: AgentSender, tool_call_id: string, name: string, output: string | null, duration_ms: number, error: string | null, details: unknown = null): EventEnvelope<"agent.tool.result"> {
   const { text, truncated } = truncateForTelemetry(output);
-  return createEvent("agent.tool.result", sender, { tool_call_id, name, output: text, output_truncated: truncated, duration_ms, error });
+  return createEvent("agent.tool.result", sender, { tool_call_id, name, output: text, output_truncated: truncated, duration_ms, error, details });
 }
 
 function createEvent<T extends EventType>(type: T, sender: Sender): EventEnvelope<T>;

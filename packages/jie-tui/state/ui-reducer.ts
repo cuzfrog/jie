@@ -1,24 +1,17 @@
 import { ActionTypes, type Action } from "./actions";
 import { teamLoadReducer } from "./team-load-reducer";
 import type { TuiState } from "./state";
-import { reduceChatScroll, reduceChatJump } from "./chat-scroll-reducer";
 
 export function reduceUiAction(state: TuiState, action: Action): TuiState {
   switch (action.type) {
     case ActionTypes.SWITCH_TEAM:
       return teamLoadReducer(state, action.payload);
-    case ActionTypes.TOGGLE_TEAM_RAIL:
-      return { ...state, showTeamRailPanel: !state.showTeamRailPanel };
     case ActionTypes.TOGGLE_THINKING:
       return { ...state, thinkingExpanded: !state.thinkingExpanded };
     case ActionTypes.TOGGLE_TOOL_CARDS:
       return { ...state, toolCardsExpanded: !state.toolCardsExpanded };
     case ActionTypes.SWITCH_CYCLE_AGENT:
       return reduceAgentCycle(state, action.payload.direction);
-    case ActionTypes.SCROLL_CHAT:
-      return reduceChatScroll(state, action.payload.agentId, action.payload.newOffsetRows);
-    case ActionTypes.JUMP_CHAT:
-      return reduceChatJump(state, action.payload.agentId, action.payload.target);
     case ActionTypes.CLEAR_TUI_STATE:
       return {
         ...state,
@@ -27,7 +20,10 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
         focusedAgentId: null,
         transientMessage: null,
         errorBanner: null,
-        chatScrollOffsets: new Map(),
+        sessionPickerOpen: false,
+        sessionPickerQuery: "",
+        sessionPickerSessions: [],
+        sessionPickerFocus: 0,
       };
     case ActionTypes.SET_TRANSIENT_MESSAGE:
       return { ...state, transientMessage: action.payload.text };
@@ -57,13 +53,43 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
         gitBranch: action.payload.gitBranch,
         gitDirty: action.payload.gitDirty,
       };
+    case ActionTypes.OPEN_SESSION_PICKER:
+      return {
+        ...state,
+        transientMessage: null,
+        sessionPickerOpen: true,
+        sessionPickerSessions: action.payload.sessions,
+        sessionPickerQuery: "",
+        sessionPickerFocus: 0,
+      };
+    case ActionTypes.CLOSE_SESSION_PICKER:
+      return {
+        ...state,
+        sessionPickerOpen: false,
+        sessionPickerQuery: "",
+        sessionPickerSessions: [],
+        sessionPickerFocus: 0,
+      };
+    case ActionTypes.SET_PICKER_QUERY:
+      return {
+        ...state,
+        sessionPickerQuery: action.payload.text,
+        sessionPickerFocus: 0,
+      };
+    case ActionTypes.FOCUS_PICKER_INDEX: {
+      const len = action.payload.listLength;
+      if (len <= 0) return state;
+      const next = (state.sessionPickerFocus + action.payload.delta + len) % len;
+      return { ...state, sessionPickerFocus: next };
+    }
+    case ActionTypes.SELECT_PICKED_SESSION:
+      return state;
     default:
       return state;
   }
 }
 
 function reduceAgentCycle(state: TuiState, direction: 1 | -1): TuiState {
-  if (!state.showTeamRailPanel) return state;
   const ids = Array.from(state.agents.keys());
   if (ids.length < 2) return state;
   const length = ids.length;

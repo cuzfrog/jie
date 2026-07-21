@@ -61,13 +61,14 @@ export function createCommandExecutor(deps: CommandExecutorDeps): CommandExecuto
     getDefaultModel: () => {
       const settings = deps.settingsStore.load();
       if (settings.defaultProvider === undefined || settings.defaultModel === undefined) return null;
-      return { provider: settings.defaultProvider, id: settings.defaultModel, effort: "off" };
+      return { provider: settings.defaultProvider, id: settings.defaultModel, effort: "off", contextWindow: null };
     },
     setDefaultTeam: (command) => {
       deps.settingsStore.setDefaultTeam(command.teamId);
       return null;
     },
     team: (command) => deps.teamManager.load(command.teamId),
+    resumeSession: (command) => deps.teamManager.resumeSession(command.teamId, command.sessionId),
     getTeamInfo: () => {
       const settings = deps.settingsStore.load();
       return {
@@ -80,6 +81,7 @@ export function createCommandExecutor(deps: CommandExecutorDeps): CommandExecuto
       deps.teamManager.stop();
       return null;
     },
+    listSessions: (command) => deps.teamManager.listSessions(command.teamId),
   };
 
   async function execute<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>> {

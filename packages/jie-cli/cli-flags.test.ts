@@ -2,7 +2,7 @@ import { parseFlags } from "./cli-flags";
 
 describe("parseFlags — help / version", () => {
   test("no args -> tui (TUI not implemented in v1)", () => {
-    expect(parseFlags([])).toEqual({ kind: "tui" });
+    expect(parseFlags([])).toEqual({ kind: "tui", inMemory: false });
   });
 
   test("--help -> help", () => {
@@ -91,6 +91,7 @@ describe("parseFlags — -p", () => {
       json: false,
       apiKey: undefined,
       resume: undefined,
+      inMemory: false,
     });
   });
 
@@ -103,6 +104,7 @@ describe("parseFlags — -p", () => {
       json: false,
       apiKey: undefined,
       resume: undefined,
+      inMemory: false,
     });
   });
 
@@ -115,6 +117,7 @@ describe("parseFlags — -p", () => {
       json: false,
       apiKey: undefined,
       resume: undefined,
+      inMemory: false,
     });
   });
 
@@ -127,6 +130,7 @@ describe("parseFlags — -p", () => {
       json: false,
       apiKey: undefined,
       resume: undefined,
+      inMemory: false,
     });
   });
 
@@ -157,6 +161,7 @@ describe("parseFlags — -p", () => {
       json: false,
       apiKey: "sk-x",
       resume: undefined,
+      inMemory: false,
     });
   });
 
@@ -196,6 +201,211 @@ describe("parseFlags — -p", () => {
     expect(parseFlags(["-p", "x", "--team"])).toEqual({
       kind: "error",
       message: "missing argument for --team",
+    });
+  });
+});
+
+describe("parseFlags — --in-memory", () => {
+  test("--in-memory alone -> tui with inMemory true", () => {
+    expect(parseFlags(["--in-memory"])).toEqual({ kind: "tui", inMemory: true });
+  });
+
+  test("--in-memory followed by positional -> tui with team + inMemory true", () => {
+    expect(parseFlags(["--in-memory", "alpha"])).toEqual({
+      kind: "tui",
+      team: "alpha",
+      inMemory: true,
+    });
+  });
+
+  test("--in-memory --team <name> -> tui with team + inMemory true", () => {
+    expect(parseFlags(["--in-memory", "--team", "alpha"])).toEqual({
+      kind: "tui",
+      team: "alpha",
+      inMemory: true,
+    });
+  });
+
+  test("--in-memory --team <name> <instruction> -> print", () => {
+    expect(parseFlags(["--in-memory", "--team", "alpha", "do it"])).toEqual({
+      kind: "print",
+      instruction: "do it",
+      team: "alpha",
+      timeout: 300,
+      json: false,
+      apiKey: undefined,
+      resume: undefined,
+      inMemory: true,
+    });
+  });
+
+  test("--in-memory -p <instruction> -> print with inMemory true", () => {
+    expect(parseFlags(["--in-memory", "-p", "do it"])).toEqual({
+      kind: "print",
+      instruction: "do it",
+      team: undefined,
+      timeout: 300,
+      json: false,
+      apiKey: undefined,
+      resume: undefined,
+      inMemory: true,
+    });
+  });
+
+  test("--in-memory --print <instruction> -> print with inMemory true", () => {
+    expect(parseFlags(["--in-memory", "--print", "do it"])).toEqual({
+      kind: "print",
+      instruction: "do it",
+      team: undefined,
+      timeout: 300,
+      json: false,
+      apiKey: undefined,
+      resume: undefined,
+      inMemory: true,
+    });
+  });
+
+  test("--in-memory -p combined with --team and --json", () => {
+    expect(parseFlags(["--in-memory", "-p", "x", "--team", "alpha", "--json"])).toEqual({
+      kind: "print",
+      instruction: "x",
+      team: "alpha",
+      timeout: 300,
+      json: true,
+      apiKey: undefined,
+      resume: undefined,
+      inMemory: true,
+    });
+  });
+
+  test("--in-memory -p with --api-key", () => {
+    expect(parseFlags(["--in-memory", "--api-key", "k", "-p", "go"])).toEqual({
+      kind: "print",
+      instruction: "go",
+      team: undefined,
+      timeout: 300,
+      json: false,
+      apiKey: "k",
+      resume: undefined,
+      inMemory: true,
+    });
+  });
+
+  test("--in-memory -p with --resume", () => {
+    expect(parseFlags(["--in-memory", "-p", "x", "--resume", "abc"])).toEqual({
+      kind: "print",
+      instruction: "x",
+      team: undefined,
+      timeout: 300,
+      json: false,
+      apiKey: undefined,
+      resume: "abc",
+      inMemory: true,
+    });
+  });
+
+  test("--in-memory as a positional subcommand after -p", () => {
+    expect(parseFlags(["-p", "x", "--in-memory"])).toEqual({
+      kind: "print",
+      instruction: "x",
+      team: undefined,
+      timeout: 300,
+      json: false,
+      apiKey: undefined,
+      resume: undefined,
+      inMemory: true,
+    });
+  });
+
+  test("duplicate --in-memory is rejected", () => {
+    expect(parseFlags(["-p", "x", "--in-memory", "--in-memory"])).toEqual({
+      kind: "error",
+      message: "duplicate flag: --in-memory",
+    });
+  });
+
+  test("--in-memory followed by another unknown flag -> error", () => {
+    expect(parseFlags(["--in-memory", "--bogus"])).toEqual({
+      kind: "error",
+      message: "unknown flag: --bogus",
+    });
+  });
+
+  test("--in-memory before --version is not supported (--version must be first)", () => {
+    expect(parseFlags(["--in-memory", "--version"])).toEqual({
+      kind: "error",
+      message: "unknown flag: --version",
+    });
+  });
+
+  test("leading --in-memory followed by another --in-memory is detected as duplicate", () => {
+    expect(parseFlags(["--in-memory", "--in-memory", "-p", "x"])).toEqual({
+      kind: "error",
+      message: "duplicate flag: --in-memory",
+    });
+  });
+});
+
+describe("parseFlags — standalone --team / --resume route to the TUI", () => {
+  test("--team <id> alone -> tui for that team", () => {
+    expect(parseFlags(["--team", "alpha"])).toEqual({ kind: "tui", team: "alpha", inMemory: false });
+  });
+
+  test("--resume <id> alone -> tui resuming the session", () => {
+    expect(parseFlags(["--resume", "sess-1"])).toEqual({ kind: "tui", resume: "sess-1", inMemory: false });
+  });
+
+  test("--in-memory --resume <id> -> tui in-memory resuming the session", () => {
+    expect(parseFlags(["--in-memory", "--resume", "sess-1"])).toEqual({ kind: "tui", resume: "sess-1", inMemory: true });
+  });
+
+  test("--resume <id> --in-memory (flag after) -> tui in-memory resuming the session", () => {
+    expect(parseFlags(["--resume", "sess-1", "--in-memory"])).toEqual({ kind: "tui", resume: "sess-1", inMemory: true });
+  });
+
+  test("--team <id> --resume <sid> -> tui carrying both", () => {
+    expect(parseFlags(["--team", "alpha", "--resume", "sess-1"])).toEqual({
+      kind: "tui",
+      team: "alpha",
+      resume: "sess-1",
+      inMemory: false,
+    });
+  });
+
+  test("--team <id> <instruction> stays print", () => {
+    expect(parseFlags(["--team", "alpha", "do it"])).toMatchObject({ kind: "print", instruction: "do it", team: "alpha" });
+  });
+
+  test("--resume <id> with -p stays print carrying the session id", () => {
+    expect(parseFlags(["--resume", "sess-1", "-p", "hi"])).toMatchObject({ kind: "print", instruction: "hi", resume: "sess-1" });
+  });
+
+  test("--team without argument still errors", () => {
+    expect(parseFlags(["--team"])).toEqual({ kind: "error", message: "missing argument for --team" });
+  });
+
+  test("--resume without argument still errors", () => {
+    expect(parseFlags(["--resume"])).toEqual({ kind: "error", message: "missing argument for --resume" });
+  });
+
+  test("--team with --json but no instruction errors (print-only flag without instruction)", () => {
+    expect(parseFlags(["--team", "alpha", "--json"])).toEqual({
+      kind: "error",
+      message: "missing instruction for -p/--print",
+    });
+  });
+
+  test("--api-key with --resume but no instruction errors (apiKey has no tui form)", () => {
+    expect(parseFlags(["--api-key", "k", "--resume", "sess-1"])).toEqual({
+      kind: "error",
+      message: "missing instruction for -p/--print",
+    });
+  });
+
+  test("duplicate --resume without instruction reports the duplicate", () => {
+    expect(parseFlags(["--resume", "a", "--resume", "b"])).toEqual({
+      kind: "error",
+      message: "duplicate flag: --resume",
     });
   });
 });

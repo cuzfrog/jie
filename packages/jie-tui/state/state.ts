@@ -1,5 +1,6 @@
 import type { StopReason } from "@earendil-works/pi-ai";
-import type { EffortLevel, ModelInfo } from "@cuzfrog/jie-platform";
+import type { EffortLevel, ModelInfo, SessionSummary } from "@cuzfrog/jie-platform";
+import type { TodoItem } from "../todo";
 
 export type AgentStatus = "idle" | "busy";
 export { type EffortLevel };
@@ -15,6 +16,7 @@ export interface MessageCard {
   readonly outputTruncated?: boolean;
   readonly durationMs?: number;
   readonly error?: string | null;
+  readonly details?: unknown;
 }
 
 export interface MessageBlock {
@@ -43,6 +45,9 @@ export interface AgentUiState {
   readonly history: MessageTurn[];
   readonly currentTurn: MessageTurn | null;
   readonly lastStopReason: StopReason | null;
+  readonly contextTokensUsed: number;
+  readonly lastReportedTotalTokens: number | null;
+  readonly todos: ReadonlyArray<TodoItem>;
 }
 
 export interface TuiState {
@@ -55,12 +60,14 @@ export interface TuiState {
   readonly focusedAgentId: AgentId | null;
   readonly transientMessage: string | null;
   readonly errorBanner: string | null;
-  readonly showTeamRailPanel: boolean;
   readonly thinkingExpanded: boolean;
   readonly toolCardsExpanded: boolean;
   readonly pendingQuit: boolean;
   readonly editorText: string;
-  readonly chatScrollOffsets: ReadonlyMap<AgentId, number>;
+  readonly sessionPickerOpen: boolean;
+  readonly sessionPickerQuery: string;
+  readonly sessionPickerSessions: ReadonlyArray<SessionSummary>;
+  readonly sessionPickerFocus: number;
 }
 
 function getFocusedAgent(state: TuiState): AgentUiState | null {
@@ -75,7 +82,12 @@ function isBusy(state: TuiState): boolean {
   return false;
 }
 
+function shouldShowErrorBanner(state: TuiState): boolean {
+  return state.errorBanner !== null && state.errorBanner !== "";
+}
+
 export const TuiState = {
   getFocusedAgent,
   isBusy,
+  shouldShowErrorBanner,
 } as const;

@@ -135,6 +135,7 @@ describe("reduceModelAssigned", () => {
       provider: "openai",
       id: "gpt-4",
       effort: "high",
+      contextWindow: null,
     });
   });
 
@@ -197,6 +198,22 @@ describe("reduceTurnStart", () => {
     expect(state2.agents.get("my-team:general-1")?.status).toBe("busy");
   });
 
+  test("opens an empty turn so stream chunks after a prompt-less turn.start are captured", () => {
+    const state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER));
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.currentTurn).toEqual({ userPrompt: "", cards: [], blocks: [], streamId: null });
+    const state2 = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "hello"));
+    expect(state2.agents.get("my-team:general-1")?.currentTurn?.blocks).toEqual([{ kind: "text", text: "hello" }]);
+  });
+
+  test("records tool calls after a prompt-less turn.start", () => {
+    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER));
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
+    const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
+    expect(card?.kind).toBe("toolCall");
+    expect(card?.name).toBe("bash");
+  });
+
   test("rejects events from a foreign team (cross-team guard)", () => {
     const state = loadedState();
     const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
@@ -215,11 +232,104 @@ describe("reduceIdle", () => {
     expect(agent?.lastStopReason).toBe("stop");
   });
 
+  test("keeps a populated currentTurn for the next turn to rotate (tui-state.md)", () => {
+    let state = loadedState();
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "answer"));
+    state = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.status).toBe("idle");
+    expect(agent?.history.length).toBe(0);
+    expect(agent?.currentTurn?.blocks).toEqual([{ kind: "text", text: "answer" }]);
+  });
+
   test("rejects idle events from a foreign team", () => {
     const state = loadedState();
     const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
     const state2 = reduce(state, Events.agentIdle(foreign, "stop"));
     expect(state2).toBe(state);
+  });
+});
+
+describe("reduceUsage", () => {
+  test("agent.usage sets contextTokensUsed to totalTokens", () => {
+    const state = loadedState();
+    const state2 = reduce(state, Events.agentUsage(AGENT_SENDER, {
+      input: 100,
+      output: 50,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 1234,
+    }));
+    const agent = state2.agents.get("my-team:general-1");
+    expect(agent?.contextTokensUsed).toBe(1234);
+  });
+
+  test("agent.usage overrides prior estimate-based contextTokensUsed", () => {
+    let state = loadedState();
+    state = reduce(state, Events.userPrompt(USER_SENDER, "my-team", "hello", "general-1"));
+    const before = state.agents.get("my-team:general-1")?.contextTokensUsed ?? 0;
+    const state2 = reduce(state, Events.agentUsage(AGENT_SENDER, {
+      input: 10,
+      output: 5,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 99999,
+    }));
+    const after = state2.agents.get("my-team:general-1")?.contextTokensUsed ?? 0;
+    expect(after).toBe(99999);
+    expect(after).not.toBe(before);
+  });
+
+  test("rejects usage events from a foreign team", () => {
+    const state = loadedState();
+    const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
+    const state2 = reduce(state, Events.agentUsage(foreign, {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 1,
+    }));
+    expect(state2).toBe(state);
+  });
+
+  test("two consecutive agent.usage events last-wins on contextTokensUsed", () => {
+    const state = loadedState();
+    const mid = reduce(state, Events.agentUsage(AGENT_SENDER, {
+      input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 100,
+    }));
+    const final = reduce(mid, Events.agentUsage(AGENT_SENDER, {
+      input: 5, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 250,
+    }));
+    const agent = final.agents.get("my-team:general-1");
+    expect(agent?.contextTokensUsed).toBe(250);
+    expect(agent?.lastReportedTotalTokens).toBe(250);
+  });
+});
+
+describe("reduceIdle after agent.usage", () => {
+  test("agent.idle preserves the precise contextTokensUsed set by a prior agent.usage", () => {
+    let state = loadedState();
+    state = reduce(state, Events.userPrompt(USER_SENDER, "my-team", "hi", "general-1"));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER));
+    state = reduce(state, Events.agentUsage(AGENT_SENDER, {
+      input: 10, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 480,
+    }));
+    const state2 = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
+    const agent = state2.agents.get("my-team:general-1");
+    expect(agent?.contextTokensUsed).toBe(480);
+    expect(agent?.status).toBe("idle");
+  });
+
+  test("agent.idle falls back to the estimator when no agent.usage has fired yet", () => {
+    let state = loadedState();
+    state = reduce(state, Events.userPrompt(USER_SENDER, "my-team", "hi", "general-1"));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER));
+    const state2 = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
+    const agent = state2.agents.get("my-team:general-1");
+    expect(agent?.contextTokensUsed).toBeGreaterThan(0);
+    expect(agent?.status).toBe("idle");
   });
 });
 
@@ -280,6 +390,27 @@ describe("reduceToolCall + reduceToolResult", () => {
     }
   });
 
+  test("unwraps the platform result envelope so the card shows the tool content text", () => {
+    let state = promptedState();
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
+    const envelope = JSON.stringify({ content: "exit_code: 0", details: { exitCode: 0 }, terminate: false });
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", envelope, 9, null));
+    const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
+    if (card?.kind === "toolResult") {
+      expect(card.output).toBe("exit_code: 0");
+    }
+  });
+
+  test("keeps output that is not a content envelope verbatim", () => {
+    let state = promptedState();
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", "not json at all", 9, null));
+    const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
+    if (card?.kind === "toolResult") {
+      expect(card.output).toBe("not json at all");
+    }
+  });
+
   test("a tool.result with no matching tool.call is rejected (no phantom card)", () => {
     let state = promptedState();
     const before = state.agents.get("my-team:general-1")?.currentTurn?.cards.length ?? 0;
@@ -299,10 +430,79 @@ describe("reduceToolCall + reduceToolResult", () => {
     }
   });
 
+  test("a tool.result preserves the input carried by the prior tool.call card", () => {
+    let state = promptedState();
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "read_file", "/tmp/missing.txt"));
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "read_file", null, 18, "ENOENT", null));
+    const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
+    if (card?.kind === "toolResult") {
+      expect(card.input).toBe("/tmp/missing.txt");
+      expect(card.inputTruncated).toBe(false);
+      expect(card.output).toBeNull();
+      expect(card.error).toBe("ENOENT");
+    }
+  });
+
   test("rejects events from a foreign team", () => {
     const state = promptedState();
     const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
     const state2 = reduce(state, Events.agentToolCall(foreign, "c1", "bash", "x"));
     expect(state2).toBe(state);
   });
+
+  test("the result card carries the details payload from the event", () => {
+    let state = promptedState();
+    const details = { kind: "diff", diff: "@@ -1 +1 @@\n-a\n+A" };
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "edit", "{}"));
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "edit", "ok", 5, null, details));
+    const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
+    if (card?.kind === "toolResult") {
+      expect(card.details).toBe(details);
+    }
+  });
+
+  test("a missing details payload lands as null on the result card", () => {
+    let state = promptedState();
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", "out", 5, null));
+    const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
+    if (card?.kind === "toolResult") {
+      expect(card.details).toBeNull();
+    }
+  });
+
+  test("a todo_write tool result updates the agent's todos from details.kind === 'todos'", () => {
+    let state = promptedState();
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "todo_write", "{}"));
+    const todos = [
+      { content: "alpha", status: "completed" },
+      { content: "beta", status: "in_progress" },
+      { content: "gamma", status: "pending" },
+    ] as const;
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "todo_write", "ok", 5, null, { kind: "todos", todos }));
+    expect(state.agents.get("my-team:general-1")?.todos).toEqual(todos);
+  });
+
+  test("an empty todo list clears the agent's todos", () => {
+    let state = promptedState();
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "todo_write", "{}"));
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "todo_write", "ok", 5, null, { kind: "todos", todos: [] }));
+    expect(state.agents.get("my-team:general-1")?.todos).toEqual([]);
+  });
+
+  test("a tool result with non-todo details does not touch the agent's todos", () => {
+    let state = promptedState();
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", "out", 5, null, { kind: "diff", diff: "@@ -1 +1 @@\n-a\n+A" }));
+    expect(state.agents.get("my-team:general-1")?.todos).toEqual([]);
+  });
+
+  test("a todo_write tool result for a foreign team is ignored", () => {
+    const state = promptedState();
+    const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
+    const state2 = reduce(state, Events.agentToolResult(foreign, "c1", "todo_write", "ok", 5, null, { kind: "todos", todos: [{ content: "x", status: "in_progress" }] }));
+    expect(state2).toBe(state);
+    expect(state2.agents.get("my-team:general-1")?.todos).toEqual([]);
+  });
 });
+

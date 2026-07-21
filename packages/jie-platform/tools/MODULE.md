@@ -1,5 +1,5 @@
 ---
-sealed:
+no-new-exports:
   - artifact.test.ts
   - bash.test.ts
   - bash.ts

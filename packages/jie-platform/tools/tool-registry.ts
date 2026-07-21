@@ -1,8 +1,10 @@
 import type { Tool } from "./types";
 import { createBashTool } from "./bash";
+import { createEditTool } from "./edit";
 import { createNotifyTool } from "./notify";
 import { createReadArtifactTool } from "./read-artifact";
 import { createReadFileTool } from "./read-file";
+import { createTodoWriteTool } from "./todo-write";
 import { createWebFetchTool } from "./web-fetch";
 import { createWebSearchProvider, createWebSearchTool } from "./web-search";
 import { createWriteArtifactTool } from "./write-artifact";
@@ -40,8 +42,10 @@ function builtins(params: CreateToolRegistryParams): BuiltinTool[] {
     { name: "bash", tool: createBashTool({ workspaceRoot: params.workspaceRoot }) as Tool },
     { name: "read_file", tool: createReadFileTool({ workspaceRoot: params.workspaceRoot }) as Tool },
     { name: "write_file", tool: createWriteFileTool({ workspaceRoot: params.workspaceRoot }) as Tool },
+    { name: "edit", tool: createEditTool({ workspaceRoot: params.workspaceRoot }) as Tool },
     { name: "read_artifact", tool: createReadArtifactTool({ artifactStore: params.artifactStore }) as Tool },
     { name: "write_artifact", tool: createWriteArtifactTool({ artifactStore: params.artifactStore }) as Tool },
+    { name: "todo_write", tool: createTodoWriteTool() as Tool },
     { name: "notify", tool: createNotifyTool({ eventManager: params.eventManager }) as Tool },
     { name: "web_fetch", tool: createWebFetchTool() as Tool },
     { name: "web_search", tool: createWebSearchTool({ provider: createWebSearchProvider() }) as Tool },

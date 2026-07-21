@@ -1,5 +1,5 @@
 ---
-sealed:
+no-new-exports:
   - client.test.ts
   - client.ts
   - expectations.test.ts

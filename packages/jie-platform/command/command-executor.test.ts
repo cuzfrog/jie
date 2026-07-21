@@ -23,6 +23,8 @@ const teamManager = vi.mocked<TeamManager>({
   listLoaded: vi.fn(),
   locate: vi.fn(),
   agents: vi.fn(),
+  listSessions: vi.fn(),
+  resumeSession: vi.fn(),
   stop: vi.fn(),
 });
 
@@ -118,7 +120,7 @@ describe("CommandExecutor", () => {
   describe("setDefaultModel", () => {
     test("writes the provider/model pair via settingsStore", async () => {
       const executor = makeExecutor();
-      const result = await executor.execute({ name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5", effort: "off" });
+      const result = await executor.execute({ name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null });
       expect(result).toBeNull();
       expect(settingsStore.setDefaultProvider).toHaveBeenCalledWith("anthropic", "claude-sonnet-4-5");
     });
@@ -127,7 +129,7 @@ describe("CommandExecutor", () => {
       const executor = makeExecutor();
       const callsBefore = settingsStore.setDefaultProvider.mock.calls.length;
       expect(
-        executor.execute({ name: "setDefaultModel", provider: "no-such-provider", id: "x", effort: "off" }),
+        executor.execute({ name: "setDefaultModel", provider: "no-such-provider", id: "x", effort: "off", contextWindow: null }),
       ).rejects.toThrow(/Unknown provider/);
       expect(settingsStore.setDefaultProvider.mock.calls.length).toBe(callsBefore);
     });
@@ -138,7 +140,7 @@ describe("CommandExecutor", () => {
       settingsStore.load.mockReturnValueOnce({ defaultProvider: "anthropic", defaultModel: "claude-sonnet-4-5" });
       const executor = makeExecutor();
       const result = await executor.execute({ name: "getDefaultModel" });
-      expect(result).toEqual({ provider: "anthropic", id: "claude-sonnet-4-5", effort: "off" });
+      expect(result).toEqual({ provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null });
     });
 
     test("returns null when no defaults are configured", async () => {
@@ -219,6 +221,27 @@ describe("CommandExecutor", () => {
     });
   });
 
+  describe("listSessions", () => {
+    test("returns the sessions for the requested teamId via teamManager", async () => {
+      const fakeSessions = [
+        { sessionId: "s1", messageCount: 3, lastActivity: "2026-07-13T10:00:00.000Z" },
+        { sessionId: "s2", messageCount: 7, lastActivity: "2026-07-13T11:00:00.000Z" },
+      ];
+      teamManager.listSessions.mockReturnValueOnce(fakeSessions);
+      const executor = makeExecutor();
+      const result = await executor.execute({ name: "listSessions", teamId: "alpha" });
+      expect(result).toBe(fakeSessions);
+      expect(teamManager.listSessions).toHaveBeenCalledWith("alpha");
+    });
+
+    test("returns an empty array for a team with no sessions", async () => {
+      teamManager.listSessions.mockReturnValueOnce([]);
+      const executor = makeExecutor();
+      const result = await executor.execute({ name: "listSessions", teamId: "ghost" });
+      expect(result).toEqual([]);
+    });
+  });
+
   describe("dispatch", () => {
     test("executor.execute is the single entry point for every command name", async () => {
       teamManager.locate.mockReturnValue("user");
@@ -232,13 +255,14 @@ describe("CommandExecutor", () => {
         { name: "login", provider: "anthropic", apiKey: "sk-test" },
         { name: "logout" },
         { name: "setApiKey", apiKey: "sk-test" },
-        { name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5", effort: "off" },
+        { name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null },
         { name: "getDefaultModel" },
         { name: "setDefaultTeam", teamId: "alpha" },
         { name: "team", teamId: "alpha" },
         { name: "getTeamInfo" },
         { name: "getGitStatus" },
         { name: "stop" },
+        { name: "listSessions", teamId: "alpha" },
       ];
       for (const command of commands) {
         await executor.execute(command);

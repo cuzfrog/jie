@@ -1,1 +1,1 @@
-export { Editor } from "./editor";
+export { createJieEditor } from "./jie-editor";

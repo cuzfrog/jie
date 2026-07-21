@@ -43,7 +43,7 @@ function makeTeam(teamId: string, agentKeys: ReadonlyArray<string>, leaderKey: s
   };
 }
 
-const baseArgs = { kind: "print", instruction: "hi", team: undefined, timeout: 30, json: false, apiKey: undefined, resume: undefined } as const;
+const baseArgs = { kind: "print", instruction: "hi", team: undefined, timeout: 30, json: false, apiKey: undefined, resume: undefined, inMemory: false } as const;
 
 describe("runPrint", () => {
   test("happy path: subscribes to agent.stream.chunk, publishes leader.prompt, waits for agent.idle, then stop()s", async () => {

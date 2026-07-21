@@ -1,15 +1,11 @@
-import type { AnyEventEnvelope, TeamInfo } from "@cuzfrog/jie-platform";
-import type { AgentId } from "./state";
+import type { AnyEventEnvelope, SessionSummary, TeamInfo } from "@cuzfrog/jie-platform";
 
 export const ActionTypes = {
   RECEIVE_EVENT: "[bus] receive event from event bus",
   SWITCH_TEAM: "[ui] switch team",
-  TOGGLE_TEAM_RAIL: "[ui] toggle team rail panel",
   TOGGLE_THINKING: "[ui] toggle thinking expanded",
   TOGGLE_TOOL_CARDS: "[ui] toggle tool cards expanded",
   SWITCH_CYCLE_AGENT: "[ui] switch and cycle focused agent",
-  SCROLL_CHAT: "[ui] scroll chat",
-  JUMP_CHAT: "[ui] jump chat",
   CLEAR_TUI_STATE: "[ui] clear tui state",
   SET_TRANSIENT_MESSAGE: "[ui] transient message",
   CLEAR_TRANSIENT_MESSAGE: "[ui] transient clear",
@@ -22,6 +18,11 @@ export const ActionTypes = {
   SUBMIT_EDITOR_TEXT: "[ui] submit editor text",
   REQUEST_INTERRUPT: "[ui] request interrupt focused agent",
   SET_ENVIRONMENT: "[ui] set environment",
+  OPEN_SESSION_PICKER: "[ui] open session picker",
+  CLOSE_SESSION_PICKER: "[ui] close session picker",
+  SET_PICKER_QUERY: "[ui] set session picker query",
+  FOCUS_PICKER_INDEX: "[ui] focus session picker index",
+  SELECT_PICKED_SESSION: "[ui] select picked session",
 } as const;
 
 type ActionType = (typeof ActionTypes)[keyof typeof ActionTypes];
@@ -31,7 +32,6 @@ interface ActionDef<T extends ActionType, P> {
   readonly payload: P,
 }
 
-const toggleTeamRail = createAction(ActionTypes.TOGGLE_TEAM_RAIL);
 const toggleThinking = createAction(ActionTypes.TOGGLE_THINKING);
 const toggleToolCards = createAction(ActionTypes.TOGGLE_TOOL_CARDS);
 const clearTuiState = createAction(ActionTypes.CLEAR_TUI_STATE);
@@ -43,14 +43,9 @@ const clearBanners = createAction(ActionTypes.CLEAR_BANNERS);
 export const Actions = {
   receiveEvent: (event: AnyEventEnvelope) => createAction(ActionTypes.RECEIVE_EVENT, event),
 	switchTeam: (identity: TeamInfo) => createAction(ActionTypes.SWITCH_TEAM, identity),
-	toggleTeamRail: () => toggleTeamRail,
 	toggleThinking: () => toggleThinking,
 	toggleToolCards: () => toggleToolCards,
 	switchCycleAgent: (direction: 1 | -1) => createAction(ActionTypes.SWITCH_CYCLE_AGENT, { direction }),
-	scrollChat: (agentId: AgentId, newOffsetRows: number) =>
-		createAction(ActionTypes.SCROLL_CHAT, { agentId, newOffsetRows }),
-	jumpChat: (agentId: AgentId, target: 'top' | 'tail') =>
-		createAction(ActionTypes.JUMP_CHAT, { agentId, target }),
 	clearTuiState: () => clearTuiState,
 	setTransientMessage: (text: string) => createAction(ActionTypes.SET_TRANSIENT_MESSAGE, { text }),
 	clearTransientMessage: () => clearTransientMessage,
@@ -65,6 +60,13 @@ export const Actions = {
 		createAction(ActionTypes.REQUEST_INTERRUPT, { teamId, agentKey }),
 	setEnvironment: (cwd: string, gitBranch: string, gitDirty: boolean) =>
 		createAction(ActionTypes.SET_ENVIRONMENT, { cwd, gitBranch, gitDirty }),
+	openSessionPicker: (sessions: ReadonlyArray<SessionSummary>) =>
+		createAction(ActionTypes.OPEN_SESSION_PICKER, { sessions }),
+	closeSessionPicker: () => createAction(ActionTypes.CLOSE_SESSION_PICKER),
+	setPickerQuery: (text: string) => createAction(ActionTypes.SET_PICKER_QUERY, { text }),
+	focusPickerIndex: (delta: 1 | -1, listLength: number) => createAction(ActionTypes.FOCUS_PICKER_INDEX, { delta, listLength }),
+	selectPickedSession: (teamId: string, sessionId: string) =>
+		createAction(ActionTypes.SELECT_PICKED_SESSION, { teamId, sessionId }),
 } as const;
 
 export type Action = ReturnType<typeof Actions[keyof typeof Actions]>;

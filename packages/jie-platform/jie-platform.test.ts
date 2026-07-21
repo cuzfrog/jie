@@ -131,7 +131,7 @@ describe("createJiePlatform", () => {
         { name: "login", provider: "anthropic", apiKey: "sk-test" },
         { name: "logout" },
         { name: "setApiKey", apiKey: "sk-test" },
-        { name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5", effort: "off" },
+        { name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null },
         { name: "getDefaultModel" },
         { name: "setDefaultTeam", teamId: "alpha" },
         { name: "team", teamId: "alpha" },
@@ -151,9 +151,9 @@ describe("createJiePlatform", () => {
     test("propagates the executor's return value to the caller", async () => {
       const deps = makeDeps(workspace, homeJieDir);
       const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
-      commandExecutor.execute.mockResolvedValueOnce({ provider: "anthropic", id: "claude-sonnet-4-5", effort: "off" });
+      commandExecutor.execute.mockResolvedValueOnce({ provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null });
       const result = await handle.execute({ name: "getDefaultModel" });
-      expect(result).toEqual({ provider: "anthropic", id: "claude-sonnet-4-5", effort: "off" });
+      expect(result).toEqual({ provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null });
     });
 
     test("propagates the executor's rejection to the caller", async () => {

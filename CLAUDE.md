@@ -6,14 +6,8 @@
 ## Documents
 - @doc/specs/monorepo-structure.md; read `00-overview.md` to understand the glossary.
 - @doc/DEVELOPMENT.md
-- @doc/plan/MILESTONES.md
-
-### Document Authority
-When rules in different documents conflict, context rules win, in below order. Raise to user for correction. Rules should not be in `doc/`.
-1. `CLAUDE.md` (this file) — project-wide defaults.
-2. `MODULE.md` (per module) — module-local API, visibility, and file layout.
-3. `doc/addrs/NN-*.md` (ADRs) — source of truth for consequential decisions.
-4. `doc/specs/<pkg>/*.md` (specs) — package-level blueprints.
+- `doc/addrs/` (ADRs) — consequential decisions.
+- `doc/specs/` (specs) — package-level blueprints.
 
 ## Document rules
 - Keep your writing short and concise but accurate enough to avoid guessing room.
@@ -77,7 +71,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 - A *module* is a directory containing code. The `MODULE.md` lives at the module's root and gates its branching point in the tree.
 - A single file should ideally have only 1 exported function and necessary types, all other things in the file should be file private. For unit testing complex logic, use `export as` at the file bottom with `_` prefix to the function, meaning only "visible for testing" (the underscore signals "internal seam", not part of the public API).
 - - External imports must be from a module without specific file, e.g., `import { foo } from "../module"`. Not `"../module/index.ts"`. Refer to `Module gates` glossary. For siblings in the immediate directory, directly import from the sibling, e.g. `import { foo } from "./foo"`. For internal files, imports from specific files within the same module are allowed.
-- In each module, search `MODULE.md`. You must follow its specifications. Any new exposure must be discussed with the user. If you are blocked, ask the user to review and manually add the exports. Check Module Gates glossary for the keyword meanings. `sealed` files can be edited.
+- In each module, search `MODULE.md`. You must follow its specifications. Any new exposure must be discussed with the user. If you are blocked, ask the user to review and manually add the exports. Check Module Gates glossary for the keyword meanings. `no-new-exports` files can be edited.
 - Cross boundary domain types, config types, global DTOs are exempted from the visibility rule.
 
 #### SOLID principles:
@@ -100,12 +94,12 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 - write down your plan before execution.
 - when you have multiple steps in your execution, use a todo-list, divide and conquer.
 
-(you can write tmp files to `./tmp/`, which is ephemeral)
+(Write temporary files to `./tmp/` only if you want me to reivew, otherwise write to `/tmp/`)
 
 ## File Edit Checklist
 Pre-action:
 - Before adding utility functions/logic, check existing utils for reuse.
-- Before adding logic to existing files, check if any coding principles are violated, if violated, propose refactoring first.
+- Before adding logic to existing files, check opportunity for refactoring.
 - Before any semantic or logic change, update or add tests to ensure coverage.
 
 Post-action:

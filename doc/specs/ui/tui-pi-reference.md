@@ -2,6 +2,8 @@
 
 Precise spec, extracted from pi's published theme tokens. Use this to imitate pi's TUI look. Where pi uses a token, the table below records the resolved value as it ships in `dark.json` and `light.json` — not the schema name. Hex and 256-color indices are both given so we can target truecolor terminals and the 256-color fallback. 256-color indices were computed by pi's own `rgbTo256()` (in `theme.ts`) on the dark.json hex values.
 
+**Adoption note.** jie adopts pi's token NAMES (`accent`, `muted`, `borderMuted`, `thinkingText`, `warning`, `error`, and the rest of the Core UI / backgrounds set) but NOT its hex/256 values: `packages/jie-tui/components/themes.ts` maps each token to a plain Ink color name (`cyan`, `gray`, `red`, `yellow`, `white`, `blue`, `green`). The hex/256 columns below document pi only.
+
 ## 1. Theme tokens
 
 ### Core UI

@@ -1,5 +1,5 @@
 ---
-sealed:
+no-new-exports:
   - artifact-store.test.ts
   - artifact-store.ts
   - index.ts

@@ -5,14 +5,13 @@
     ".": "./index.ts"
   },
   "dependencies": {
-    "@cuzfrog/jie-ink": "workspace:*",
     "@cuzfrog/jie-platform": "workspace:*",
-    "react": "catalog:"
+    "@earendil-works/pi-tui": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "catalog:",
     "@types/node": "catalog:",
-    "@types/react": "catalog:",
+    "@xterm/headless": "catalog:",
     "typescript": "catalog:"
   }
 }

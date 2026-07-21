@@ -161,3 +161,80 @@ describe("InMemoryMemoryManager", () => {
     expect(m.hasSession("t1", "s1")).toBe(true);
   });
 });
+
+describe("SqliteMemoryManager.listSessions", () => {
+  test("returns empty array when the team has no sessions", () => {
+    const m = makeManager();
+    expect(m.listSessions("ghost-team")).toEqual([]);
+  });
+
+  test("lists one row per (team_id, session_id) with aggregate counts", () => {
+    const m = makeManager();
+    m.persist(userMessage("a"), "agent-1", "s1", "t1");
+    m.persist(userMessage("b"), "agent-1", "s1", "t1");
+    m.persist(userMessage("c"), "agent-1", "s2", "t1");
+    const sessions = m.listSessions("t1");
+    expect(sessions).toHaveLength(2);
+    const s1 = sessions.find((s) => s.sessionId === "s1");
+    const s2 = sessions.find((s) => s.sessionId === "s2");
+    expect(s1?.messageCount).toBe(2);
+    expect(s2?.messageCount).toBe(1);
+  });
+
+  test("is scoped to team_id", () => {
+    const m = makeManager();
+    m.persist(userMessage("a"), "agent-1", "s1", "t1");
+    m.persist(userMessage("b"), "agent-1", "s2", "t2");
+    expect(m.listSessions("t1").map((s) => s.sessionId)).toEqual(["s1"]);
+    expect(m.listSessions("t2").map((s) => s.sessionId)).toEqual(["s2"]);
+  });
+
+  test("orders by last activity DESC", async () => {
+    const m = makeManager();
+    m.persist(userMessage("a"), "agent-1", "s-old", "t1");
+    await new Promise((r) => setTimeout(r, 5));
+    m.persist(userMessage("b"), "agent-1", "s-new", "t1");
+    const ids = m.listSessions("t1").map((s) => s.sessionId);
+    expect(ids).toEqual(["s-new", "s-old"]);
+  });
+
+  test("includes compaction summary rows in messageCount", () => {
+    const m = makeManager();
+    m.persist(userMessage("a"), "agent-1", "s1", "t1");
+    m.persist(userMessage("b"), "agent-1", "s1", "t1");
+    m.compact([1, 2], summaryMessage("sum"), "agent-1", "s1", "t1");
+    expect(m.listSessions("t1")[0]?.messageCount).toBe(3);
+  });
+});
+
+describe("InMemoryMemoryManager.listSessions", () => {
+  test("matches SqliteMemoryManager.listSessions counts and ids on the same fixture", () => {
+    function run(manager: { persist: SqliteMemoryManager["persist"]; listSessions: SqliteMemoryManager["listSessions"]; compact: SqliteMemoryManager["compact"] }): { ids: ReadonlyArray<string>; counts: Record<string, number> } {
+      manager.persist(userMessage("a"), "agent-1", "s-old", "t1");
+      manager.persist(userMessage("b"), "agent-1", "s-old", "t1");
+      manager.persist(userMessage("c"), "agent-2", "s-old", "t1");
+      manager.persist(userMessage("d"), "agent-1", "s-new", "t1");
+      manager.compact([1, 2], summaryMessage("sum"), "agent-1", "s-old", "t1");
+      const sessions = manager.listSessions("t1");
+      const counts: Record<string, number> = {};
+      for (const s of sessions) counts[s.sessionId] = s.messageCount;
+      return { ids: sessions.map((s) => s.sessionId), counts };
+    }
+    const sqlite = run(makeManager());
+    const memory = run(new InMemoryMemoryManager());
+    expect([...memory.ids].sort()).toEqual([...sqlite.ids].sort());
+    expect(memory.counts).toEqual(sqlite.counts);
+  });
+
+  test("returns empty array when team has no sessions", () => {
+    const m = new InMemoryMemoryManager();
+    expect(m.listSessions("ghost")).toEqual([]);
+  });
+
+  test("is scoped to team_id", () => {
+    const m = new InMemoryMemoryManager();
+    m.persist(userMessage("a"), "agent-1", "s1", "t1");
+    m.persist(userMessage("b"), "agent-1", "s2", "t2");
+    expect(m.listSessions("t1").map((s) => s.sessionId)).toEqual(["s1"]);
+  });
+});

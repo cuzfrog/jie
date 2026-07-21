@@ -25,15 +25,6 @@ function loadedTeam(roles: ReadonlyArray<{ role: string; agent_key: string; is_l
   }));
 }
 
-describe("toggleRail", () => {
-  test("toggles showTeamRailPanel on each call", () => {
-    const state1 = reduceUiAction(INITIAL_TUI_STATE, Actions.toggleTeamRail());
-    const state2 = reduceUiAction(state1, Actions.toggleTeamRail());
-    expect(state1.showTeamRailPanel).toBe(true);
-    expect(state2.showTeamRailPanel).toBe(false);
-  });
-});
-
 describe("toggleThinking", () => {
   test("toggles thinkingExpanded on each call", () => {
     const state1 = reduceUiAction(INITIAL_TUI_STATE, Actions.toggleThinking());
@@ -61,61 +52,40 @@ describe("toggleToolCards", () => {
 });
 
 describe("cycleAgent", () => {
-  function multiAgentRail(): TuiState {
-    const state = loadedTeam([
+  function multiAgent(): TuiState {
+    return loadedTeam([
       { role: "manager", agent_key: "manager-1", is_leader: true },
       { role: "worker", agent_key: "worker-1", is_leader: false },
     ]);
-    return reduceUiAction(state, Actions.toggleTeamRail());
   }
 
   test("direction=1 cycles forward", () => {
-    const state1 = multiAgentRail();
+    const state1 = multiAgent();
     expect(state1.focusedAgentId).toBe("my-team:manager-1");
     const state2 = reduceUiAction(state1, Actions.switchCycleAgent(1));
     expect(state2.focusedAgentId).toBe("my-team:worker-1");
   });
 
   test("direction=-1 cycles backward and wraps to the last agent", () => {
-    const state1 = multiAgentRail();
+    const state1 = multiAgent();
     const state2 = reduceUiAction(state1, Actions.switchCycleAgent(-1));
     expect(state2.focusedAgentId).toBe("my-team:worker-1");
   });
 
-  test("is a no-op when the rail is hidden", () => {
-    const state = loadedTeam([
-      { role: "manager", agent_key: "manager-1", is_leader: true },
-      { role: "worker", agent_key: "worker-1", is_leader: false },
-    ]);
-    expect(state.showTeamRailPanel).toBe(false);
-    const state2 = reduceUiAction(state, Actions.switchCycleAgent(1));
-    expect(state2.focusedAgentId).toBe("my-team:manager-1");
-  });
-
   test("is a no-op when only one agent is present", () => {
     const state = loadedTeam([{ role: "general", agent_key: "general-1", is_leader: true }]);
-    const state2 = reduceUiAction(reduceUiAction(state, Actions.toggleTeamRail()), Actions.switchCycleAgent(1));
+    const state2 = reduceUiAction(state, Actions.switchCycleAgent(1));
     expect(state2.focusedAgentId).toBe("my-team:general-1");
   });
 
   test("direction=1 from no focused agent lands on the first agent", () => {
-    let state = loadedTeam([
-      { role: "manager", agent_key: "manager-1", is_leader: true },
-      { role: "worker", agent_key: "worker-1", is_leader: false },
-    ]);
-    state = reduceUiAction(state, Actions.toggleTeamRail());
-    state = { ...state, focusedAgentId: null };
+    const state = { ...multiAgent(), focusedAgentId: null };
     const state2 = reduceUiAction(state, Actions.switchCycleAgent(1));
     expect(state2.focusedAgentId).toBe("my-team:manager-1");
   });
 
   test("direction=-1 from no focused agent lands on the last agent", () => {
-    let state = loadedTeam([
-      { role: "manager", agent_key: "manager-1", is_leader: true },
-      { role: "worker", agent_key: "worker-1", is_leader: false },
-    ]);
-    state = reduceUiAction(state, Actions.toggleTeamRail());
-    state = { ...state, focusedAgentId: null };
+    const state = { ...multiAgent(), focusedAgentId: null };
     const state2 = reduceUiAction(state, Actions.switchCycleAgent(-1));
     expect(state2.focusedAgentId).toBe("my-team:worker-1");
   });
@@ -169,5 +139,128 @@ describe("clear", () => {
     expect(cleared.focusedAgentId).toBeNull();
     expect(cleared.transientMessage).toBeNull();
     expect(cleared.errorBanner).toBeNull();
+  });
+
+  test("resets session picker state too", () => {
+    let state = INITIAL_TUI_STATE;
+    state = reduceUiAction(state, Actions.openSessionPicker([{ sessionId: "s1", messageCount: 1, lastActivity: "2026-07-14T00:00:00.000Z" }]));
+    state = reduceUiAction(state, Actions.setPickerQuery("alpha"));
+    state = reduceUiAction(state, Actions.focusPickerIndex(1, 1));
+    const cleared = reduceUiAction(state, Actions.clearTuiState());
+    expect(cleared.sessionPickerOpen).toBe(false);
+    expect(cleared.sessionPickerQuery).toBe("");
+    expect(cleared.sessionPickerSessions).toEqual([]);
+    expect(cleared.sessionPickerFocus).toBe(0);
+  });
+});
+
+describe("sessionPicker", () => {
+  test("openSessionPicker sets open=true, stores sessions, resets query and focus", () => {
+    const sessions = [
+      { sessionId: "s1", messageCount: 1, lastActivity: "2026-07-14T00:00:00.000Z" },
+      { sessionId: "s2", messageCount: 2, lastActivity: "2026-07-14T01:00:00.000Z" },
+    ];
+    const state = reduceUiAction(INITIAL_TUI_STATE, Actions.openSessionPicker(sessions));
+    expect(state.sessionPickerOpen).toBe(true);
+    expect(state.sessionPickerSessions).toEqual(sessions);
+    expect(state.sessionPickerQuery).toBe("");
+    expect(state.sessionPickerFocus).toBe(0);
+  });
+
+  test("openSessionPicker clears any prior query/focus", () => {
+    let state = INITIAL_TUI_STATE;
+    state = reduceUiAction(state, Actions.openSessionPicker([
+      { sessionId: "s1", messageCount: 1, lastActivity: "" },
+      { sessionId: "s2", messageCount: 2, lastActivity: "" },
+    ]));
+    state = reduceUiAction(state, Actions.setPickerQuery("leftover"));
+    state = reduceUiAction(state, Actions.focusPickerIndex(1, 2));
+    state = reduceUiAction(state, Actions.openSessionPicker([{ sessionId: "s1", messageCount: 1, lastActivity: "" }]));
+    expect(state.sessionPickerQuery).toBe("");
+    expect(state.sessionPickerFocus).toBe(0);
+  });
+
+  test("openSessionPicker clears a pending transient message", () => {
+    let state = reduceUiAction(INITIAL_TUI_STATE, Actions.setTransientMessage("loading sessions…"));
+    state = reduceUiAction(state, Actions.openSessionPicker([{ sessionId: "s1", messageCount: 1, lastActivity: "" }]));
+    expect(state.transientMessage).toBeNull();
+  });
+
+  test("closeSessionPicker resets all four picker fields", () => {
+    let state = INITIAL_TUI_STATE;
+    state = reduceUiAction(state, Actions.openSessionPicker([
+      { sessionId: "s1", messageCount: 1, lastActivity: "" },
+      { sessionId: "s2", messageCount: 2, lastActivity: "" },
+    ]));
+    state = reduceUiAction(state, Actions.setPickerQuery("alpha"));
+    state = reduceUiAction(state, Actions.focusPickerIndex(1, 2));
+    const closed = reduceUiAction(state, Actions.closeSessionPicker());
+    expect(closed.sessionPickerOpen).toBe(false);
+    expect(closed.sessionPickerQuery).toBe("");
+    expect(closed.sessionPickerSessions).toEqual([]);
+    expect(closed.sessionPickerFocus).toBe(0);
+  });
+
+  test("setPickerQuery stores the text and resets focus to 0", () => {
+    let state = INITIAL_TUI_STATE;
+    state = reduceUiAction(state, Actions.openSessionPicker([
+      { sessionId: "s1", messageCount: 1, lastActivity: "" },
+      { sessionId: "s2", messageCount: 2, lastActivity: "" },
+    ]));
+    state = reduceUiAction(state, Actions.focusPickerIndex(1, 2));
+    const updated = reduceUiAction(state, Actions.setPickerQuery("alpha"));
+    expect(updated.sessionPickerQuery).toBe("alpha");
+    expect(updated.sessionPickerFocus).toBe(0);
+  });
+
+  test("focusPickerIndex(+1) advances with wrap", () => {
+    let state = INITIAL_TUI_STATE;
+    state = reduceUiAction(state, Actions.openSessionPicker([
+      { sessionId: "s1", messageCount: 1, lastActivity: "" },
+      { sessionId: "s2", messageCount: 2, lastActivity: "" },
+      { sessionId: "s3", messageCount: 3, lastActivity: "" },
+    ]));
+    state = reduceUiAction(state, Actions.focusPickerIndex(1, 3));
+    state = reduceUiAction(state, Actions.focusPickerIndex(1, 3));
+    expect(state.sessionPickerFocus).toBe(2);
+    const wrapped = reduceUiAction(state, Actions.focusPickerIndex(1, 3));
+    expect(wrapped.sessionPickerFocus).toBe(0);
+  });
+
+  test("focusPickerIndex(-1) wraps from 0 to last", () => {
+    let state = INITIAL_TUI_STATE;
+    state = reduceUiAction(state, Actions.openSessionPicker([
+      { sessionId: "s1", messageCount: 1, lastActivity: "" },
+      { sessionId: "s2", messageCount: 2, lastActivity: "" },
+      { sessionId: "s3", messageCount: 3, lastActivity: "" },
+    ]));
+    const wrapped = reduceUiAction(state, Actions.focusPickerIndex(-1, 3));
+    expect(wrapped.sessionPickerFocus).toBe(2);
+  });
+
+  test("focusPickerIndex wraps over the reported filtered length, not the full session list", () => {
+    let state = INITIAL_TUI_STATE;
+    state = reduceUiAction(state, Actions.openSessionPicker([
+      { sessionId: "s1", messageCount: 1, lastActivity: "" },
+      { sessionId: "s2", messageCount: 2, lastActivity: "" },
+      { sessionId: "s3", messageCount: 3, lastActivity: "" },
+      { sessionId: "s4", messageCount: 4, lastActivity: "" },
+    ]));
+    state = reduceUiAction(state, Actions.focusPickerIndex(1, 2));
+    expect(state.sessionPickerFocus).toBe(1);
+    const wrapped = reduceUiAction(state, Actions.focusPickerIndex(1, 2));
+    expect(wrapped.sessionPickerFocus).toBe(0);
+  });
+
+  test("focusPickerIndex is a no-op when the reported list is empty", () => {
+    const state = reduceUiAction(INITIAL_TUI_STATE, Actions.focusPickerIndex(1, 0));
+    expect(state.sessionPickerFocus).toBe(0);
+  });
+
+  test("selectPickedSession is a no-op (the side effect is via the store subscriber)", () => {
+    let state = INITIAL_TUI_STATE;
+    state = reduceUiAction(state, Actions.openSessionPicker([{ sessionId: "s1", messageCount: 1, lastActivity: "" }]));
+    const after = reduceUiAction(state, Actions.selectPickedSession("my-team", "s1"));
+    expect(after).toEqual(state);
   });
 });

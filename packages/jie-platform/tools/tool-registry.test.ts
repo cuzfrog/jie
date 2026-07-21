@@ -152,6 +152,7 @@ describe("createToolRegistry", () => {
     expect(names).toContain("bash");
     expect(names).toContain("read_file");
     expect(names).toContain("write_file");
+    expect(names).toContain("edit");
     expect(names).toContain("read_artifact");
     expect(names).toContain("write_artifact");
     expect(names).toContain("notify");
@@ -171,14 +172,16 @@ describe("createToolRegistry", () => {
 });
 
 describe("createToolRegistry — built-in installation", () => {
-  test("populated registry: list() contains all 8 built-ins", () => {
+  test("populated registry: list() contains all 10 built-ins", () => {
     const reg = makeReg();
     const names = reg.list().map((t) => t.name).sort();
     expect(names).toEqual([
       "bash",
+      "edit",
       "notify",
       "read_artifact",
       "read_file",
+      "todo_write",
       "web_fetch",
       "web_search",
       "write_artifact",
@@ -188,7 +191,7 @@ describe("createToolRegistry — built-in installation", () => {
 
   test("populated registry: resolve() returns the matching installed tool for each built-in", () => {
     const reg = makeReg();
-    for (const name of ["bash", "read_file", "write_file", "notify", "web_search", "web_fetch", "read_artifact", "write_artifact"]) {
+    for (const name of ["bash", "read_file", "write_file", "edit", "notify", "web_search", "web_fetch", "read_artifact", "write_artifact", "todo_write"]) {
       const matches = reg.resolve(name);
       expect(matches).toHaveLength(1);
       expect(matches[0]!.name).toBe(name);

@@ -1,6 +1,4 @@
 ---
-sealed:
-  - editor.tsx
-  - editor.test.tsx
+no-new-exports:
   - index.ts
 ---

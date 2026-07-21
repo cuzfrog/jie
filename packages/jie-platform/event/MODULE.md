@@ -1,5 +1,5 @@
 ---
-sealed:
+no-new-exports:
   - event-bus.test.ts
   - event-bus.ts
   - event-manager.ts

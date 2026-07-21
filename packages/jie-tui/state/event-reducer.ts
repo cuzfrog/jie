@@ -1,6 +1,8 @@
 import type { AnyEventEnvelope } from "@cuzfrog/jie-platform";
 import type { AgentId, AgentUiState, MessageCard, TuiState, MessageTurn } from "./state";
 import { teamLoadReducer } from "./team-load-reducer";
+import { estimateContextTokens } from "./context-tokens";
+import { isTodoDetails } from "../todo";
 
 export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
   switch (event.type) {
@@ -11,6 +13,7 @@ export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
     case "agent.prompt.queue.update": return reduceQueueUpdate(state, event);
     case "agent.turn.start": return reduceTurnStart(state, event);
     case "agent.idle": return reduceIdle(state, event);
+    case "agent.usage": return reduceUsage(state, event);
     case "agent.stream.chunk": return reduceStreamChunk(state, event);
     case "agent.tool.call": return reduceToolCall(state, event);
     case "agent.tool.result": return reduceToolResult(state, event);
@@ -50,10 +53,14 @@ function reduceUserPrompt(state: TuiState, event: AnyEventEnvelope): TuiState {
   const newAgents = new Map(state.agents);
   const turn = existing.currentTurn;
   if (turnIsPopulated(turn)) {
-    newAgents.set(agentId, { ...existing, history: [...existing.history, turn!], currentTurn: freshTurn(event.payload.prompt) });
+    const nextTurn = freshTurn(event.payload.prompt);
+    const contextTokensUsed = estimateContextTokens([...existing.history, turn!], nextTurn);
+    newAgents.set(agentId, { ...existing, history: [...existing.history, turn!], currentTurn: nextTurn, contextTokensUsed });
     return { ...state, agents: newAgents };
   }
-  newAgents.set(agentId, { ...existing, currentTurn: freshTurn(event.payload.prompt) });
+  const nextTurn = freshTurn(event.payload.prompt);
+  const contextTokensUsed = estimateContextTokens(existing.history, nextTurn);
+  newAgents.set(agentId, { ...existing, currentTurn: nextTurn, contextTokensUsed });
   return { ...state, agents: newAgents };
 }
 
@@ -62,7 +69,8 @@ function reduceModelAssigned(state: TuiState, event: AnyEventEnvelope): TuiState
   if (resolved === null) return state;
   if (event.type !== "agent.model.assigned") return state;
   const { agentId, agent } = resolved;
-  return withAgent(state, agentId, { ...agent, model: { provider: event.payload.provider, id: event.payload.model, effort: event.payload.effort } });
+  const priorContextWindow = agent.model === null ? null : agent.model.contextWindow;
+  return withAgent(state, agentId, { ...agent, model: { provider: event.payload.provider, id: event.payload.model, effort: event.payload.effort, contextWindow: priorContextWindow } });
 }
 
 function reduceQueueUpdate(state: TuiState, event: AnyEventEnvelope): TuiState {
@@ -78,7 +86,8 @@ function reduceTurnStart(state: TuiState, event: AnyEventEnvelope): TuiState {
   if (resolved === null) return state;
   const { agentId, agent } = resolved;
   const rotated = rotateTurnIfPopulated(agent);
-  const next: AgentUiState = { ...rotated, status: "busy" };
+  const currentTurn = rotated.currentTurn ?? freshTurn("");
+  const next: AgentUiState = { ...rotated, status: "busy", currentTurn };
   return withAgent(state, agentId, next, { errorBanner: null });
 }
 
@@ -87,8 +96,17 @@ function reduceIdle(state: TuiState, event: AnyEventEnvelope): TuiState {
   if (resolved === null) return state;
   if (event.type !== "agent.idle") return state;
   const { agentId, agent } = resolved;
-  const next: AgentUiState = { ...agent, status: "idle", lastStopReason: event.payload };
+  const contextTokensUsed = agent.lastReportedTotalTokens ?? estimateContextTokens(agent.history, agent.currentTurn);
+  const next: AgentUiState = { ...agent, status: "idle", lastStopReason: event.payload, contextTokensUsed };
   return withAgent(state, agentId, next);
+}
+
+function reduceUsage(state: TuiState, event: AnyEventEnvelope): TuiState {
+  const resolved = resolveAgent(state, event);
+  if (resolved === null) return state;
+  if (event.type !== "agent.usage") return state;
+  const { agentId, agent } = resolved;
+  return withAgent(state, agentId, { ...agent, contextTokensUsed: event.payload.totalTokens, lastReportedTotalTokens: event.payload.totalTokens });
 }
 
 function reduceStreamChunk(state: TuiState, event: AnyEventEnvelope): TuiState {
@@ -107,7 +125,9 @@ function reduceStreamChunk(state: TuiState, event: AnyEventEnvelope): TuiState {
   } else {
     blocks.push({ kind: block_type, text });
   }
-  const next: AgentUiState = { ...agent, currentTurn: { ...agent.currentTurn, blocks, streamId: stream_id } };
+  const nextTurn = { ...agent.currentTurn, blocks, streamId: stream_id };
+  const contextTokensUsed = estimateContextTokens(agent.history, nextTurn);
+  const next: AgentUiState = { ...agent, currentTurn: nextTurn, contextTokensUsed };
   return withAgent(state, agentId, next);
 }
 
@@ -120,7 +140,9 @@ function reduceToolCall(state: TuiState, event: AnyEventEnvelope): TuiState {
   const { tool_call_id, name, input, input_truncated } = event.payload;
   if (agent.currentTurn.cards.some((card) => card.kind === "toolCall" && card.callId === tool_call_id)) return state;
   const toolCallCard: MessageCard = { kind: "toolCall", callId: tool_call_id, name, input, inputTruncated: input_truncated };
-  const next: AgentUiState = { ...agent, currentTurn: { ...agent.currentTurn, cards: [...agent.currentTurn.cards, toolCallCard] } };
+  const nextTurn = { ...agent.currentTurn, cards: [...agent.currentTurn.cards, toolCallCard] };
+  const contextTokensUsed = estimateContextTokens(agent.history, nextTurn);
+  const next: AgentUiState = { ...agent, currentTurn: nextTurn, contextTokensUsed };
   return withAgent(state, agentId, next);
 }
 
@@ -129,14 +151,36 @@ function reduceToolResult(state: TuiState, event: AnyEventEnvelope): TuiState {
   if (resolved === null) return state;
   if (event.type !== "agent.tool.result") return state;
   const { agentId, agent } = resolved;
+  const { tool_call_id, name, output, output_truncated, duration_ms, error, details } = event.payload;
+  if (isTodoDetails(details)) {
+    return withAgent(state, agentId, withTodoDetails(agent, details));
+  }
   if (agent.currentTurn === null) return state;
-  const { tool_call_id, name, output, output_truncated, duration_ms, error } = event.payload;
   const cards = [...agent.currentTurn.cards];
   const index = cards.findIndex((card) => card.kind === "toolCall" && card.callId === tool_call_id);
   if (index === -1) return state;
-  cards[index] = { kind: "toolResult", callId: tool_call_id, name, output, outputTruncated: output_truncated, durationMs: duration_ms, error };
-  const next: AgentUiState = { ...agent, currentTurn: { ...agent.currentTurn, cards } };
+  const prior = cards[index];
+  cards[index] = {
+    kind: "toolResult",
+    callId: tool_call_id,
+    name,
+    input: prior?.input,
+    inputTruncated: prior?.inputTruncated,
+    output: displayOutput(output),
+    outputTruncated: output_truncated,
+    durationMs: duration_ms,
+    error,
+    details,
+  };
+  const nextTurn = { ...agent.currentTurn, cards };
+  const contextTokensUsed = estimateContextTokens(agent.history, nextTurn);
+  const next: AgentUiState = { ...agent, currentTurn: nextTurn, contextTokensUsed };
   return withAgent(state, agentId, next);
+}
+
+function withTodoDetails(agent: AgentUiState, details: unknown): AgentUiState {
+  if (!isTodoDetails(details)) return agent;
+  return { ...agent, todos: details.todos };
 }
 
 function resolveAgent(
@@ -176,4 +220,17 @@ function turnIsPopulated(turn: MessageTurn | null): boolean {
 
 function composeAgentId(teamId: string, agentKey: string): AgentId {
   return `${teamId}:${agentKey}` as AgentId;
+}
+
+function displayOutput(output: string | null): string | null {
+  if (output === null) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(output);
+  } catch {
+    return output;
+  }
+  if (typeof parsed !== "object" || parsed === null || !("content" in parsed)) return output;
+  const content = parsed.content;
+  return typeof content === "string" ? content : output;
 }

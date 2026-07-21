@@ -1,55 +1,24 @@
-# 29 — jie-ink `overflow="scrollBottom"` for ChatPane tail-anchoring
+# ADR 29: jie-ink Chat Render Modes (`scrollBottom`, `appendToScrollback`)
 
 ## Status
 
-Accepted. Implemented and covered by `packages/jie-ink/src/render-node-to-output.test.tsx` and `packages/jie-tui/components/chat/chat-overflow-repro.test.tsx`.
+Superseded by ADR 30 (2026-07). Both render modes were deleted with jie-ink. The open question this ADR raised is answered: the pi-tui migration dropped the alternate screen entirely, so the terminal's own scrollback *is* the chat history — `appendToScrollback` is no longer needed, and `scrollBottom` was already unused. (Note: the original ADR 30 this subsumed was folded into this one during the ADR consolidation; the number 30 was reused for the migration ADR.)
 
 ## Context
 
-A standard `Box height={N} overflow="hidden"` in ink renders the children at Yoga-computed coordinates inside an `N`-row clip rect. For a chat history whose natural height exceeds `N`, the visible region is the *top* of the history (since Yoga always anchors at row 0). The user asked for tail-anchoring: when new turns arrive, the visible region should slide to the bottom of the conversation, not stay pinned to the top.
+Chat needs tail-anchoring (new turns slide the visible region to the bottom) and history preservation (old turns stay readable). Two jie-ink features were built for this:
 
-The first pivot ("use terminal scrollback, like pi does") was deferred because, per `doc/specs/ui/tui-claude-code-reference.md`, the TUI uses `alternateScreen: true` which disables scrollback — the terminal itself does not retain history between paints. Anchoring has to be done inside jie-ink.
-
-## Root cause of the naive attempt failing
-
-A child of a `height={N} overflow="hidden"` Box appears at its `getComputedTop()`. The naive offset trick:
-
-```ts
-const childYOffset = -(naturalContentHeight - N);
-children.forEach(c => render(c, {offsetY: y + childYOffset}));
-```
-
-looked correct until we measured: `contentBottom` was always `N`. Children are `Row`s of two `Text` lines — natural height ~60 for 30 turns. Yet `getComputedTop()` on the second Row was 12, not 28.
-
-The reason is Yoga's default `flexShrink: 1`. When a flex column has a constrained height and its children's natural sum exceeds that height, Yoga shrinks each child proportionally to fit. The Box's children are no longer at their natural positions; they are compressed into `[0, N)`. So `cb = cy + ch` cannot exceed `N`, and the offset collapses to 0.
+- `overflow="scrollBottom"` (ADR 29 original): a Box overflow value that anchors content to the bottom of the clip rect. The naive offset trick fails because Yoga's default `flexShrink: 1` compresses children to fit a constrained column, so `contentBottom` never exceeds the box height. The implementation sets `flexShrink: 0` on direct children, re-runs `calculateLayout` on the box subtree with an `UNDEFINED` outer height to get natural tops, computes `contentBottom`, and offsets children by `-(contentBottom − boxInnerHeight)`.
+- `appendToScrollback`: a third `log-update` strategy, `createAppend`, alongside `createStandard` / `createIncremental`. Standard and incremental modes erase the previous frame before redrawing — and `eraseLines(N)` reaches upward from the cursor into rows that already scrolled into the terminal scrollback, destroying history. `createAppend` never touches unchanged lines: pure appends emit only new lines, pure shrinks erase only dropped rows, streaming last-line edits rewrite only the last row, and middle changes fall back to erase-and-rewrite (chat streaming never lands there).
 
 ## Decision
 
-Add a new overflow value `'scrollBottom'` (alongside the existing `'visible'` / `'hidden'`) on the `Box`'s `overflow` / `overflowY` style. When the renderer visits a Box with `overflowY === 'scrollBottom'`:
+Both modes exist in jie-ink. Current usage in jie-tui:
 
-1. Read the box's `boxInnerHeight = height − borders` (a known constraint — the Box is the user-decided viewport).
-2. Set `flexShrink: 0` on each direct child Yoga node (only direct children — grandchildren inherit through normal Yoga flow).
-3. Call `yogaNode.calculateLayout(boxWidth, Yoga.UNDEFINED, Yoga.DIRECTION_LTR)` on the box itself. Yoga handles subtree layout. With `flexShrink=0` and an `UNDEFINED` outer height, children lay out at their natural tops.
-4. Walk the children to compute `contentBottom = max(cy + ch)`.
-5. If `contentBottom > boxInnerHeight`, set `childYOffset = -(contentBottom − boxInnerHeight)`. Otherwise `0`.
-6. Recurse into children with `offsetY: y + childYOffset`. The clip rect is still `[y+border, y+height−border]` so anything that falls outside is naturally not drawn.
-
-The re-layout pass is *not* restored. Subsequent renders will re-enter this branch and redo the calculation (a different set of children may now be present), which is the desired steady-state behaviour.
-
-Why `yogaNode.calculateLayout(...)` instead of `findRootYogaNode(yogaNode).calculateLayout(...)`: the former only re-flows the affected subtree, which is cheap. Touching the whole root was both unnecessary and noisy when more than one scrollBottom box exists.
-
-### Why not a separate "measure" pass?
-
-Yoga has no "measure-only" mode — `calculateLayout` is the only way to get `getComputedTop` / `getComputedHeight`. Running it twice (once normally, once with `flexShrink=0`+`UNDEFINED`) is the simplest API and avoids touching the layout-cache invariants. The cost is a single Yoga pass per scrollBottom box per render — negligible at terminal sizes.
+- **`scrollBottom` is unused.** The chat pane virtualizes at the app level: `chat-pane.tsx` renders a window of visible turns in a plain `overflow="hidden"` box (`chat-visible-turn.tsx`), so tail-anchoring and history are app concerns, not renderer concerns. The mode remains on the jie-ink surface; nothing consumes it.
+- **`appendToScrollback: true` is enabled in `tui.tsx`, alongside `alternateScreen: true`.** Open question: the alternate screen has no scrollback buffer for the terminal to retain, so append mode's preservation property may be moot under it. Verify in a real pty (exit/unmount behaviour) in phase 2; if moot, drop `createAppend` too.
 
 ## Consequences
 
-- ChatPane wraps its turns in `<Box overflow="scrollBottom" height={chatHeight}>`. The `flexShrink={0}` on that wrapper is belt-and-braces — the renderer also sets it on direct children internally — and is left explicit to read at the call site.
-- `overflow="scrollBottom"` is additive on the existing styles enum (`'visible' | 'hidden' | 'scroll'` becomes `'visible' | 'hidden' | 'scroll' | 'scrollBottom'`). No existing call sites change behaviour.
-- The existing `patchConsole: false` path uses the same renderer, so the behaviour is identical in production.
-- Debug-mode visibility (`JIE_INK_DEBUG_SCROLL=1`) writes `[scrollBottom]` measurements to stderr via `process.stderr.write`. This goes through Node's stream API (not `console.*`) so it is testable without crossing the jie-platform `Console` boundary — jie-ink must not import from `@cuzfrog/jie-platform`.
-
-## Open questions / follow-ups
-
-- Scrolling *backwards* (page-up reveals older turns) is out of scope. `scrollBottom` is a tail-anchor; it does not introduce a scroll offset bound to state. If that becomes an NFR, it is a separate ADR.
-- The clip rect strictly excludes anything above row 0. If a user-facing scrollbar indicator is wanted, it is a UI addition on top of this primitive.
+- The two modes are the non-selection part of jie-ink's diff against upstream ink (see `packages/jie-ink/MODULE.md`). Phase 2 attempts complete jie-ink removal (candidate replacement: `@earendil-works/pi-tui`); unused `scrollBottom` goes away with the fork, and `appendToScrollback` goes if the alternate-screen check confirms it is moot.
+- If jie-tui ever needs terminal-scrollback chat again (the pi model: unbounded growth, scroll up to read history), that requires dropping `alternateScreen` — a layout decision, not a renderer one.

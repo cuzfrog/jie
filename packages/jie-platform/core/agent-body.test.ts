@@ -180,7 +180,7 @@ describe("createAgentBody — wiring", () => {
       role: "general",
       agentKey: "leader-1",
       isLeader: true,
-      model: { provider: "anthropic", id: "claude-sonnet-4", effort: "off" },
+      model: { provider: "anthropic", id: "claude-sonnet-4", effort: "off", contextWindow: 200000 },
     });
   });
 

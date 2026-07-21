@@ -56,10 +56,15 @@ describe("Scenario 6 — queued prompts from agent", () => {
 
     await waitForWorker;
 
-    const worker = state.agents.get("my-team:worker-1");
+    // agent.idle does not rotate currentTurn into history (tui-state.md); the
+    // completed fifth turn stays currentTurn until the next turn arrives.
+    const stateAfter = harness.tui.state;
+    const worker = stateAfter.agents.get("my-team:worker-1");
     expect(worker).toBeDefined();
     expect(worker!.status).toBe("idle");
-    expect(worker!.currentTurn).toBeNull();
     expect(worker!.queue.length).toBe(0);
+    const workerTurns = [...worker!.history, ...(worker!.currentTurn !== null ? [worker!.currentTurn] : [])];
+    expect(workerTurns.length).toBe(5);
+    expect(worker!.currentTurn?.blocks.some((b) => b.text.includes("task 5"))).toBe(true);
   });
 });

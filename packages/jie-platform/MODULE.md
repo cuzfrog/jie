@@ -1,5 +1,5 @@
 ---
-sealed:
+no-new-exports:
   - index.ts
   - jie-platform.test.ts
   - jie-platform.ts

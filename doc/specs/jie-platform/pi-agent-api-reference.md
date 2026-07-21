@@ -92,7 +92,7 @@ interface AgentOptions {
 }
 ```
 
-**Jie's usage:** Jie sets `steeringMode: "all"`, `toolExecution: "sequential"`, and wires `beforeToolCall`, `afterToolCall`, `transformContext`, `convertToLlm` to bridge events and manage memory. `prepareNextTurn` is **not wired** in v1 — prompt injection uses `agent.prompt()` from the body's in-memory queue after `agent_end` (see `06-agent-model.md` "Prompt Ingress & Queuing").
+**Jie's usage:** Jie sets `steeringMode: "all"`, `toolExecution: "sequential"`, and wires `beforeToolCall`, `afterToolCall`, `transformContext`, `convertToLlm` to bridge events and manage memory. `prepareNextTurn` is **not wired** in v1 — prompt injection uses `agent.prompt()` from the body's in-memory queue after `agent_end` (see `06-agent-model.md` "Subscription Model").
 
 ---
 
@@ -132,44 +132,7 @@ The union of all message types in the agent's conversation transcript.
 type AgentMessage = Message | CustomAgentMessages[keyof CustomAgentMessages];
 ```
 
-The `CustomAgentMessages` interface is extensible via TypeScript declaration merging. Built-in extensions:
-
-```typescript
-interface CompactionSummaryMessage {
-  role: "compactionSummary";
-  summary: string;
-  tokensBefore: number;
-  timestamp: number;
-}
-
-interface BashExecutionMessage {
-  role: "bashExecution";
-  command: string;
-  output: string;
-  exitCode: number | undefined;
-  cancelled: boolean;
-  truncated: boolean;
-  fullOutputPath?: string;
-  timestamp: number;
-  excludeFromContext?: boolean;
-}
-
-interface BranchSummaryMessage {
-  role: "branchSummary";
-  summary: string;
-  fromId: string;
-  timestamp: number;
-}
-
-interface CustomMessage<T = unknown> {
-  role: "custom";
-  customType: string;
-  content: string | (TextContent | ImageContent)[];
-  display: boolean;
-  details?: T;
-  timestamp: number;
-}
-```
+The `CustomAgentMessages` interface is extensible via TypeScript declaration merging. pi-agent-core ships it empty — there are no built-in extensions; apps add their own message roles by extending it.
 
 The base `Message` type (from `@earendil-works/pi-ai`):
 
@@ -194,7 +157,7 @@ interface AssistantMessage {
   role: "assistant";
   content: (TextContent | ThinkingContent | ToolCall)[];  // ordered arbitrarily
   api: Api;
-  provider: Provider;
+  provider: ProviderId;
   model: string;
   responseModel?: string;
   responseId?: string;
@@ -331,7 +294,7 @@ type AgentEvent =
 
 Hook functions wired at agent construction. Jie uses these for tool telemetry events.
 
-> **Note on pi-agent-core@0.79.1.** The hook context shape changed in pi-agent-core 0.79. The current shape (used by jie) is `{ assistantMessage, toolCall, args, context }`; the tool id and tool name are read from `ctx.toolCall.id` and `ctx.toolCall.name`. An older API exposed a flat `{ toolCallId, toolName, args }` context — that shape is no longer in pi-agent-core. The `BeforeToolCallResult` block shape is also `{ block?, reason? }`, not the older `{ result?, abortRemaining? }`.
+> **Note on the hook context (pi-agent-core 0.80.5).** The hook context shape is `{ assistantMessage, toolCall, args, context }`; the tool id and tool name are read from `ctx.toolCall.id` and `ctx.toolCall.name`. The `BeforeToolCallResult` shape is `{ block?, reason? }`.
 
 ```typescript
 interface BeforeToolCallContext {
@@ -390,21 +353,6 @@ interface AgentLoopTurnUpdate {
   thinkingLevel?: ThinkingLevel;
 }
 ```
-
----
-
-## CompactionSettings
-
-```typescript
-interface CompactionSettings {
-  enabled: boolean;
-  reserveTokens: number;        // tokens reserved for summary prompt + output
-  keepRecentTokens: number;     // approximate recent-context tokens to keep
-}
-```
-
-pi-agent defaults: `{ enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 }`.
-**Jie v1:** `enabled: false` (compaction deferred to Day 2).
 
 ---
 

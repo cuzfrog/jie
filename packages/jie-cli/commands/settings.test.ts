@@ -40,6 +40,7 @@ describe("runModel", () => {
       provider: "anthropic",
       id: "claude-opus-4",
       effort: "off",
+      contextWindow: null,
     });
     expect(consoleMock.print).toHaveBeenCalledWith("default model set to anthropic/claude-opus-4");
   });

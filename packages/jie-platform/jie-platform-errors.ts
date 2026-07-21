@@ -10,6 +10,10 @@ export const JiePlatformErrorMessages = {
   PERMISSION_DENIED: "Permission denied",
   DISK_FULL: "Disk is full",
   IO_ERROR: "I/O error",
+  NO_MATCH: "old_string was not found in the file",
+  AMBIGUOUS_MATCH: "old_string matched more than one location in the file",
+
+  TODO_WRITE_INVALID: "Todo list violates the todo_write contract",
 
   INVALID_ARTIFACT_KEY: "Invalid artifact key",
   ARTIFACT_TOO_LARGE: "Artifact content exceeds the maximum allowed size",

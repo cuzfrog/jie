@@ -49,7 +49,7 @@ The `Editor` class implements `Component` and `Focusable` (`editor.ts:252`). `re
 
 `handleInput(data)` receives the raw ANSI escape sequence for the keypress (e.g. `"\x1b[A"` for Up, `"\x17"` for Ctrl+W, `"\x1b[3~"` for Delete). It dispatches to the right mutator by matching against a `KeybindingsManager` (`packages/tui/src/keybindings.ts:97`), which holds the keybinding registry (`TUI_KEYBINDINGS` at `keybindings.ts:64`). The manager resolves each `tui.editor.*` id to one or more default `KeyId`s, and a user may override individual keys via `settings.json`.
 
-**Why this matters for jie-tui:** pi's `Editor` is one ~2300-line class with all cursor/undo/kill/history/autocomplete logic inside it. The Ink-based equivalents (`@inkjs/ui`'s `TextInput`) are intentionally smaller (~150 LOC) and delegate the hard problems to the renderer or punt on them. The pragmatic lesson: cursor logic is *the* place where a fully-functional editor differs from a workable one, and it is too big to retrofit on top of `<TextInput>` once the rest of the app is built.
+**Why this matters for jie-tui:** pi's `Editor` is one ~2300-line class with all cursor/undo/kill/history/autocomplete logic inside it. jie-tui's native Ink editor (`components/editor/`, see §19) deliberately implements the cursor/multi-line/grapheme core itself and punts the rest (§19.5). The pragmatic lesson: cursor logic is *the* place where a fully-functional editor differs from a workable one, and it is too big to retrofit once the rest of the app is built.
 
 ### 1.1 The `Focusable` interface and the IME hook
 
@@ -826,31 +826,27 @@ These depend on pi's imperative `render(width)` API and need to be reimplemented
 
 ### 19.4 Architectural decision: imperative vs. React
 
-Pi's Editor is ~2300 lines of imperative code. A full React port preserving all features (grapheme cursor, sticky column, kill ring, undo coalescing, history walk, autocomplete async-cancellation, paste markers, IME hook) would be 800-1500 lines of stateful component logic, with the same complexity but spread across hooks. jie-tui shipped v0.3 with `@inkjs/ui`'s `<TextInput>` (~150 LOC) and pinned its limitations in `editor.test.tsx` comments. For v0.4 we replaced `<TextInput>` with a native Ink implementation: a `useEditorState` hook backed by a `useReducer` over `{ lines, cursorLine, cursorCol }`, plus a grapheme-aware cursor implementation that handles multi-line cursor positioning per pi's reference.
+Pi's Editor is ~2300 lines of imperative code. A full React port preserving all features (grapheme cursor, sticky column, kill ring, undo coalescing, history walk, autocomplete async-cancellation, paste markers, IME hook) would be 800-1500 lines of stateful component logic, with the same complexity but spread across hooks. jie-tui instead implements a native Ink editor with a deliberately reduced feature set: a `useEditorState` hook backed by a `useReducer` over `EditorBuffer` (`{ lines, cursorLine, cursorCol }`, `editor-state.ts`), grapheme-aware multi-line cursor movement, and an ANSI inverse-block cursor rendered inline (`editor-view.ts`). Closing the remaining gaps is a separate scope; see 19.5.
 
-Closing the remaining gaps (word nav, kill ring, undo, sticky column, autocomplete) is a separate scope; see 19.5.
+### 19.5 Delivery status
 
-### 19.5 v0.4 delivery status
+Delivered (in `packages/jie-tui/components/editor/`):
 
-Delivered in v0.4 (in `packages/jie-tui/components/editor/`):
-
-- **Multi-line cursor positioning** per pi §3, §9 — `cursorLine`, `cursorCol`, vertical/horizontal movement with `cursorCol` clamping when target line is shorter. (`useEditorState.moveCursorUp`/`Down`.)
+- **Multi-line cursor positioning** per pi §3, §9 — `cursorLine`, `cursorCol`, vertical/horizontal movement with `cursorCol` clamping when the target line is shorter. (`useEditorState.moveCursorUp`/`moveCursorDown`.)
 - **Grapheme-aware insertion / deletion** per pi §7, §8 — `Intl.Segmenter({ granularity: "grapheme" })` walks `delete`-at-cursor and `backspace`-before-cursor by cluster unit, not by UTF-16 code unit. (`useEditorState.insert` / `backspace` / `forwardDelete`.)
-- **Line-merge on boundary deletion** per pi §8 — backspace at `(line>0, col=0)` joins with previous line; forward delete at end-of-non-last-line joins with next line; backspace at `(0, 0)` and forward delete at end-of-last-line are no-ops (fixes the pinned `@inkjs/ui` reducer bugs).
-- **Native cursor render** — ANSI inverse-block on the cursor line, in front of the next grapheme (or trailing inverse space at end-of-line). The single-line `▌` `U+258C` literal in `tui-layout.md` is now an ANSI inverse-space block.
-- **History walk with `historyDraft` capture/restore** — pi §13 semantics adapted to the React state model: `Up` at the top of the buffer with non-empty history enters walk mode; `Down` walks forward; `draft` is the live buffer at walk entry and restores on `Down`-past-newest.
+- **Line-merge on boundary deletion** per pi §8 — backspace at `(line>0, col=0)` joins with the previous line; forward delete at end-of-non-last-line joins with the next line; backspace at `(0, 0)` and forward delete at end-of-last-line are no-ops.
+- **Native cursor render** — ANSI inverse-video block rendered inline by `editor-view.ts` on the cursor line: an inverse space in front of the next grapheme, or a trailing inverse space at end-of-line. No hardware cursor placement at all.
+- **History walk with draft capture/restore** — pi §13 semantics adapted to React state: `Up` at the top of the buffer with non-empty history enters walk mode (capturing the live buffer into `draft`); `Down` walks forward; `Down`-past-newest restores `draft` (`editor.tsx` `history`/`historyIndex`/`draft`).
 
-Not yet delivered (deferred to v0.5+):
+Deferred:
 
 1. **Word navigation** (`Alt+Left`, `Alt+Right`, `Ctrl+Left`, `Ctrl+Right`) — biggest UX win.
-2. **Kill ring + yank** (`Ctrl+W`, `Ctrl+U`, `Ctrl+K`, `Ctrl+Y`) — eliminates the "select + delete + paste" dance.
-3. **Undo** (`Ctrl+-`).
+2. **Kill ring + yank** (`Ctrl+W`, `Ctrl+U`, `Ctrl+K`, `Ctrl+Y`).
+3. **Undo**.
 4. **Sticky column** — only matters when word-wrap is in play; we don't wrap yet.
-5. **Autocomplete** (provider interface, async cancellation, paste-marker awareness) — pi §15.
+5. **Autocomplete provider** (provider interface, async cancellation, paste-marker awareness) — pi §15. (jie-tui's slash-command and file-mention panels live outside the editor.)
 6. **Paste markers** (atomic-segment insertion of large pastes) — pi §16.
-7. **IME hook** via hardware cursor placement — pi §1.1; Ink's `useCursor` API can be revisited if a real IME dependency appears.
-
-The `@inkjs/ui` cursor-position bugs that v0.3 pinned are no longer relevant — the dependency is removed.
+7. **IME hook** via hardware cursor placement — pi §1.1.
 
 ## Where to look in pi
 
