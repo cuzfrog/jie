@@ -1,24 +1,18 @@
-# ADR 17: Memory Turns Are Team-Scoped
+# ADR 17: Memory and Session Model
 
 ## Status
 
-Accepted. `team_id` is a first-class column in `memory_turns` and the namespace for the table.
+Accepted. Subsumes ADR 18 (session id per team) and ADR 20 (MemoryManager session queries, `--resume` resolution).
 
 ## Context
 
-The original spec needed one issue resolved:
+Two teams can both contain a role with the same name (both have a `general` → both get `agent_key = general-1`). Namespacing memory rows by `agent_key` alone conflates their histories. An early spec accepted this collision and told users to "avoid collisions by naming roles uniquely across teams" with a startup WARN — the wrong shape: the platform should namespace, not the user.
 
-- **`team_id` must namespace memory rows** so two teams sharing an `agent_key` (e.g. both teams have a `general → general-1`) do not collide on the same `memory_turns` rows.
-
-The natural-looking filter for team scoping was `agent_key IN (current team's agent_keys)`. This breaks when two teams both contain a role with the same name (e.g., both have a `general` → both have `agent_key = general-1`). The two `general-1` agents live in different teams but share an `agent_key`; filtering by `agent_key` alone conflates their conversation histories.
-
-A prior v1 spec explicitly accepted this collision risk: it told users to "avoid collisions by naming roles uniquely across teams" and added a startup WARN. That was the wrong shape — the platform should namespace, not the user. The user can reuse role names freely across teams; `team_id` does the disambiguation.
+Separately, the session-id lifecycle was inconsistent: the spec disagreed on who mints the session id (body vs handle) and on its scope (per-process, per-team, per-agent), and a `--continue` "most-recent session" lookup existed alongside `--resume <id>`.
 
 ## Decision
 
-`team_id` becomes a first-class column in `memory_turns` and the namespace for the table.
-
-### Schema
+### 1. `team_id` is a first-class column in `memory_turns`
 
 ```sql
 CREATE TABLE IF NOT EXISTS memory_turns (
@@ -37,61 +31,38 @@ CREATE INDEX IF NOT EXISTS idx_memory_turns_team_session_created
   ON memory_turns (team_id, session_id, created_at);
 ```
 
-- Primary key includes `team_id` and `agent_key` because **memory belongs to an individual agent**: each agent has its own `seq` counter within a session. The leader's seq 1 and the worker's seq 1 are independent rows. `seq` is per-(team, agent, session), not per-session.
-- The new index `(team_id, session_id, created_at)` supports the `--continue` aggregate lookup as an index-only scan. It is added in v1, not deferred — the lookup pattern is the platform's primary cross-process-run entry point, and v1 DBs may grow.
-- The old `idx_memory_turns_session` on `(agent_key, session_id, seq)` is dropped — its column list is a prefix of the new primary key, so the primary key covers the same access path.
+`agent_key` and `seq` stay in the primary key because memory belongs to an individual agent: each agent has its own `seq` counter within a session; the leader's seq 1 and the worker's seq 1 are independent rows. Two teams sharing an `agent_key` live in disjoint row sets — no collision to warn about, and users may reuse role names freely across teams.
 
-### API
+### 2. `session_id` is per process × team; the platform mints, the body accepts
 
-`MemoryManager` methods all take a `team_id: string` parameter:
+`createJiePlatform` mints a fresh session id (ULID) per loaded team and records it in a private `Map<team_id, session_id>` closure field (not part of the `JiePlatform` interface; lost on process exit). The body receives `session_id` as a required constructor parameter and uses it on every memory call. All agents in the same team in the same process share one session id — conversation is bound to the team, not the process or the agent.
+
+### 3. `MemoryManager` is team-scoped on every method
 
 ```typescript
 interface MemoryManager {
   persist(message: AgentMessage, agent_key: string, session_id: string, team_id: string): void;
   compact(range: [number, number], summary: AgentMessage, agent_key: string, session_id: string, team_id: string): void;
   restore(agent_key: string, session_id: string, team_id: string): Promise<AgentMessage[]>;
+  hasSession(team_id: string, session_id: string): boolean;
 }
 ```
 
-The body knows its `team_id` at construction (the team resolution flow resolves the team id and constructs bodies from it). The body closes over `team_id` and passes it to every memory call. `ExecutionContext` also exposes `team_id` so tools can build team-scoped keys if they need to.
+`hasSession` is a pure read (an index seek on the primary key); it exists solely for `--resume` validation. There is no most-recent-session query.
 
-The `idx_memory_turns_team_session_created` index supports `--resume`'s `(team_id, session_id)` lookup as well as future per-team queries; it is retained even after `--continue` was removed, because the index is cheap and useful.
+### 4. `--resume` is the only cross-process-run entry point
 
-### `JiePlatform`'s internal session map
-
-`createJiePlatform` holds a private `Map<team_id, session_id>` as a closure field (it is not part of the `JiePlatform` interface). The handle's v1 public surface is `{ bus, stop }` (per ADR 13); the map is an implementation detail of the platform's startup sequence.
-
-In v1, the map has at most one entry (the startup team). In Day 2+ multi-team, the same map shape covers the loaded teams; ADR 19 captures the Day 2+ lifecycle.
-
-All agents in the same team in the same process share one session id. Each loaded team's session id is independent of every other team's — conversation is bound to the team, not the process. Memory is per-team at the session level, per-agent at the row level.
-
-**Refinement.** The original design keyed the map on `(team_id, agent_key)`. The per-`agent_key` half of the key was redundant: the session id is shared across all agents in a team, so the per-`agent_key` disambiguation adds no information. The map key collapses to `team_id` only (per ADR 18). Two teams that share an `agent_key` are still disambiguated — they have different `team_id`s, so they get different `session_id`s and live in disjoint row sets in `memory_turns`. The `memory_turns` primary key still includes `agent_key` (memory rows are per-agent) — only the session-map key on the handle is simplified.
-
-### Removed
-
-- The "Cross-team agent_key collisions" section in `08-memory.md` is removed. With `team_id` as a first-class column, two teams with the same `agent_key` live in disjoint row sets. There's no collision to warn about.
-- The startup WARN that fired "if a freshly-loaded team would create `agent_key` rows that already exist for the current `session_id`" is removed (no longer possible).
-- The "users avoid collisions by naming roles uniquely across teams" guidance is removed. Users can name roles freely, including reusing names across teams.
+The CLI passes intent via `JiePlatformOptions.resumeSessionId`; `createJiePlatform` validates via `memory.hasSession(team_id, id)` and throws `UNKNOWN_SESSION` on mismatch (CLI exits 1 with `unknown session_id: <id>`). Without the flag, a fresh ULID is minted. The CLI does not import `MemoryManager` or run session-id SQL itself. `--continue` does not exist: "the most-recent session" is a derived notion over an opaque token that serves no workflow `--resume <id>` doesn't.
 
 ## Rationale
 
-- **The platform namespaces, not the user.** A user who installs a `general` role in two teams should not be told to rename one. `team_id` is the platform's natural disambiguation point — it already exists in the team resolution flow and identifies the user's intent.
-- **Memory is per-agent.** The leader's conversation and the worker's conversation are independent. The leader doesn't see the worker's history; the worker doesn't see the leader's. This is a fundamental property of agent design. Putting `agent_key` in the primary key makes the per-agent memory stream the row's identity, not a column among many.
-- **Indexes are v1, not deferred.** The `--continue` lookup is the platform's primary cross-process-run entry point. A user resuming a session should not see a slow startup because we deferred a one-line index. Per the design principle "we always need to consider performance" — adding the index at v1 is one CREATE INDEX line; deferring it means the spec looks cleaner but a future implementer has to add it anyway, and the implementation may not do it correctly.
-- **The collision WARN was a workaround.** It told the user "you have a problem; resolve it." That's the wrong direction — the platform should have a namespace that makes the problem impossible. Removing the WARN and the workarounds around it is a simplification, not a regression.
+- **The platform namespaces, not the user.** `team_id` already exists in the team resolution flow and identifies the user's intent; a user who installs a `general` role in two teams should not be told to rename one.
+- **The platform is the lifecycle owner.** One `Map<team_id, session_id>` on the platform is the single source of truth for session ids; bodies consume the value, they don't own it.
+- **Schema knowledge stays inside the platform.** Session queries live on `MemoryManager`; validation lives in `createJiePlatform`; the CLI is a thin caller.
+- **The index is cheap and primary.** `idx_memory_turns_team_session_created` supports `--resume` validation and per-team queries as index-only scans; adding it now avoids a future implementer re-deriving it.
 
 ## Consequences
 
-- Schema change: `memory_turns` gains a `team_id` column; primary key changes; one new index added; one redundant index dropped.
-- API change: `persist`, `compact`, `restore` all take `team_id`.
-- Semantic shift: `session_id` is no longer the only namespace. Two teams with the same `agent_key` no longer share rows. The platform's internal `Map<team_id, session_id>` (a closure field of `createJiePlatform`, not a public field of `JiePlatform` per ADR 13) is keyed by `team_id`.
-- The cross-team collision section and startup WARN are removed.
-- `ExecutionContext` exposes `team_id`. Tools that need it (e.g., for team-scoped artifact keys) can use it; most tools don't.
-- `--resume <session_id>` is team-scoped implicitly: it looks up rows matching the resolved `team_id` plus the named `session_id`. Cross-team resume silently returns no rows and proceeds with a fresh session.
-- The v1 DB hasn't shipped, so the schema change is free — no migration needed. The CREATE TABLE IF NOT EXISTS picks up the new shape on first run.
-
-## Out of scope (deferred)
-
-- **Cross-team `--resume`**: explicit resume of a session owned by a different team. Cross-team resume silently returns no rows and proceeds with a fresh session. A future revision may add an error message; not blocking v1.
-- **Multi-level compaction hierarchy**: the schema change to `memory_turns` doesn't preclude adding a `parent_summary_id` column to a future `memory_summaries` table. Out of scope for v1.
-- **Per-team retention policy**: all rows in `memory_turns` are kept indefinitely in v1 (per `04-storage.md` "Retention"). Per-team retention is a Day 2+ concern.
+- `ExecutionContext` exposes `team_id`; tools that need team-scoped keys can use it.
+- `--resume` is team-scoped by the `hasSession` query; cross-team resume returns no rows and exits 1 (explicit cross-team resume is out of scope).
+- The cross-team collision section and startup WARN are gone from `08-memory.md`; the 4-step restore sequence there is canonical and written against this model.

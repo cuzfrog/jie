@@ -26,7 +26,7 @@ The body is whatever height remains after the editor and footer render themselve
 - Editor height: **1 content row + 2 border rows (top + bottom) by default** — the box is a single thin strip. The content row count grows by one for every `\n` the user types.
 - Footer height is fixed at 2 rows.
 
-The body never hosts a status bar. The leader's status, queue depth, and prompt-queue pickup are surfaced either in the rail (when visible) or in the footer. The earlier status-bar design was superseded by this layout for v0.2.
+The body never hosts a status bar. The leader's status, queue depth, and prompt-queue pickup are surfaced either in the rail (when visible) or in the footer.
 
 ## Chat and rail
 
@@ -35,10 +35,10 @@ The body is split **horizontally, optionally**:
 - Rail hidden (default): body is a single full-width chat pane.
 - Rail visible: body is `rail | chat` with a `│` separator in `borderMuted`.
 
-**Rail width** is `railWidth(cols)`:
+**Rail width** is `railWidth(cols)` (`components/themes.ts`) — always `floor(cols * 0.25)`, responsively:
 
-- `cols < 80` → `floor(cols * 0.25)`, clamped to a minimum of 12.
-- `cols >= 80` → 15..24 columns, fixed (responsive only on the small-terminal side; wide terminals get a fixed rail).
+- `cols < 80` → clamped to a minimum of 12.
+- `cols >= 80` → clamped to `[15, 24]`.
 
 **Rail contents** are vertically centered, one row per agent, leader pinned to top with `★`:
 
@@ -72,13 +72,13 @@ The editor is a single React component that owns its input loop and prompt histo
 - **Padding**: 1 column on the left and right inside the border.
 - **Bash mode strip**: when the buffer parses as a bash command (`!cmd`, or `!!cmd` for the context-excluding variant), one `warning`-colored row sits directly above the editor's top border announcing the mode and whether the command and its output stay in context. The row is absent otherwise; its row goes back to the chat pane (the picker row budget accounts for it like the transient banner's).
 
-The editor is connected to the focused agent, not a fixed leader. On submit (`Enter`), `editor.onSubmit` reads `state.focusedAgentKey` from the current reducer state and includes it in the prompt envelope. Cycling agents with `Shift+↑/↓` or `Ctrl+↑/↓` re-targets the editor without a refocus — the next `Enter` goes to the currently focused agent. When `focusedAgentKey` is null (mid team switch, before leader focus), submit falls back to the leader's key so the prompt is not lost.
+The editor is connected to the focused agent, not a fixed leader. On submit (`Enter`), the command handler reads `state.focusedAgentId` from the current reducer state and addresses the prompt envelope to that agent's key. Cycling agents with `Shift+↑/↓` or `Ctrl+↑/↓` re-targets the editor without a refocus — the next `Enter` goes to the currently focused agent. When `focusedAgentId` is null (mid team switch, before leader focus), submit falls back to the leader's key so the prompt is not lost.
 
 `↑` / `↓` (with a non-empty history) walks back / forward through previously submitted prompts — the editor owns this behavior; the global input listener does not intercept plain arrow keys.
 
 ## Footer (2 lines)
 
-The footer is **always two lines**, full width, both in `muted` (244). Line 1 is the identity strip; line 2 is the state + keymap + model strip. They are not user-editable and never host shortcuts.
+The footer is **always two lines**, full width, both in `muted`. Line 1 is the identity strip; line 2 is the state + keymap + model strip. They are not user-editable and never host shortcuts.
 
 ### Line 1 — identity strip
 
@@ -86,8 +86,8 @@ The footer is **always two lines**, full width, both in `muted` (244). Line 1 is
 left: CWD (branch)            right: teamId:focusedAgentKey
 ```
 
-- **Left**: `cwd (branch)`, e.g. `~/workspace/jie (main)`. CWD is taken from `process.cwd()` at TUI startup; branch is detected via `git -C <cwd> rev-parse --abbrev-ref HEAD`, and a `*` is appended when the working tree is dirty (`~/workspace/jie (main*)`). Rendered in `accent` (109). Falls back to `(main)` when not in a git repo or git is unavailable. Does not change mid-session.
-- **Right**: `<teamId or "no-team">:<focusedAgentKey or "—">`, e.g. `t1:general-1`. Rendered in `muted` (244). Updates on team switch (`teamLoaded`) and on agent focus change (`ui.agent.cycle`).
+- **Left**: `cwd (branch)`, e.g. `~/workspace/jie (main)`. CWD is taken from `process.cwd()` at TUI startup; branch is detected via `git -C <cwd> rev-parse --abbrev-ref HEAD`, and a `*` is appended when the working tree is dirty (`~/workspace/jie (main*)`). Rendered in `accent`. Falls back to `(main)` when not in a git repo or git is unavailable. Does not change mid-session.
+- **Right**: `<teamId or "no-team">:<focusedAgentKey or "—">`, e.g. `t1:general-1`. Rendered in `muted`. Updates on team switch (`teamLoaded`) and on agent focus change (`ui.agent.cycle`).
 
 When no team is loaded: left is unchanged, right reads `no-team:—`. When a team is loaded but no agent is focused (e.g. mid team-switch before leader focus): `<teamId>:—`.
 
@@ -114,10 +114,6 @@ left:   "0%/200k" (stats)     hint          [queue]     right: "(<provider>) <mo
 
 Line 1 does not host shortcuts. The footer hint lives on line 2. This is a deliberate split: line 1 is **identity** (who am I, who am I talking to); line 2 is **state + how to act** (token budget, current shortcut, model). Mixing them crowds both. See ADR 25 for the rationale (footer is a mirror of pi's, with the CWD/team split to make "where am I running" + "what's loaded" scannable at a glance).
 
-## Per-agent streaming isolation
-
-See `tui-state.md` "Per-agent streaming isolation". The renderer reads only the focused agent's history + current turn; cycling focus is a view change that does not cancel another agent's stream.
-
 ## Rail styling
 
 The rail's three tokens are jie-specific decisions layered on pi's color palette (per `tui-pi-reference.md`):
@@ -130,12 +126,6 @@ These mappings live here (not in `tui-pi-reference.md`) because they are jie-spe
 
 ## Borders and separators
 
-- Editor top + bottom borders: `─` × `cols`, color `borderMuted` (240).
+- Editor top + bottom borders: `─` × `cols`, color `borderMuted`.
 - Rail / chat separator (when rail visible): `│` at column `railWidth`, color `borderMuted`.
 - All borders share the same token so the eye reads them as one "container".
-
-## What is intentionally out of scope for v0.2
-
-- Status bar (top of screen) — superseded by footer line 2 + rail.
-- Multi-pane chat (split-view when multiple agents are mid-stream) — out; the user can cycle with `Shift+↑/↓` or `Ctrl+↑/↓` to inspect other agents.
-- Floating tool overlays / modal prompts — out; the editor is the only input surface.

@@ -1,8 +1,8 @@
 # Deployment and Process Model
 
-## Runtime Model
+## Process Topology
 
-Jie runs as a **single OS process** — the `jie` binary. All agents, the EventBus, the ArtifactStore, and the TUI share this process. MCP servers (configured in `mcp.json` with `transport: stdio`) run as child subprocesses.
+Jie runs as a **single OS process** — the `jie` binary (per ADR 5, in-process runtime). The platform handle, all agent bodies, the EventBus, the ArtifactStore, and the TUI share this process. There is no supervisor, no message broker, no process-per-agent, and no network port.
 
 ```
 ┌────────────── jie process ──────────────┐
@@ -19,105 +19,64 @@ Jie runs as a **single OS process** — the `jie` binary. All agents, the EventB
 │  └──────────┘  └──────────────────┘     │
 │                                          │
 └──────────────────────────────────────────┘
-         │
+         │  (Day 2)
     ┌────┴────┐
-    │   MCP   │  (subprocess, stdio transport)
+    │   MCP   │  stdio child subprocess
     │ servers │
     └─────────┘
 ```
 
 | Component | Count | Nature |
 |---|---|---|
-| `jie` process | 1 | Binary entry. Runs the platform's `createJiePlatform` (which spins up the bus, bodies, and the `JiePlatform` handle), agents, and the TUI in-process. |
-| AgentBody | N (per blueprint) | In-process instance. Each has its own EventBus subscriptions, MemoryManager, and async event loop. |
-| TUI | 1 | In-process component (imported from `jie-tui`). Passes `EventBus` and `ArtifactStore` refs at construction. |
-| ArtifactStore | 1 | SQLite file. Single-writer by design (one process). |
-| MCP servers (stdio) | N (per `mcp.json`) | Child subprocess managed by `jie`. |
-
-No process-per-agent. No NATS server. No PID file for individual agents. No network ports.
+| `jie` process | 1 | Runs `createJiePlatform`, the agent bodies, and the TUI in-process. |
+| AgentBody | N (per team blueprint) | In-process. Owns its EventBus subscriptions, memory, and async loop. |
+| TUI | 1 | In-process component (imported from `jie-tui`). |
+| ArtifactStore | 1 | SQLite file at `~/.jie/storage.db`. Single-writer by design. |
+| MCP servers (Day 2) | N (per `mcp.json`) | Child subprocess managed by `jie`. Not implemented yet. |
 
 ## Startup Sequence
 
-The startup sequence is the same for both `jie` (TUI) and `jie -p` (print mode), except for the final UI step.
+The flow is the same for `jie` (TUI) and `jie -p` (print mode), except for the final UI step.
 
-1. **Discover settings.** Walk up from CWD to find `.jie/`. Load `.jie/settings.json` if present; deep-merge with `~/.jie/settings.json`. If neither exists, run with empty settings. See `10-configuration.md`.
-2. **Validate settings.** Validate `settings.json` strictly. Any error (JSON parse, invalid value) → exit 1. See `10-configuration.md` Config Validation.
-3. **Resolve team.** Apply the team resolution rules from `10-configuration.md`:
-   - If `--team <id>` flag is given → use `<id>`; hard fail if not installed.
-   - Else read `defaultTeam` from merged settings → use it; if stale (not installed), WARN and reset to first-available user team (or clear and use built-in minimal if no user teams exist).
-   - Else pick first-available user team alphabetically across `.jie/teams/*` and `~/.jie/teams/*`.
-   - Else use the platform's built-in minimal team (`packages/jie-platform/team/built-in/minimal-team.ts`, see `minimal-team.md`). The platform always has a runnable team.
-4. **Open `ArtifactStore`** (SQLite at the `.jie/storage.db` discovered by walking up from CWD to find `.jie/` — same walk as settings and team lookup per `10-configuration.md` "Discovery"). If no `.jie/` exists at any parent level, the platform creates one at the **process CWD** (i.e. where the user invoked `jie`) so a fresh `cd /project && jie -p …` works without manual `mkdir .jie`. The created `.jie/` directory has mode `0755`; the created `storage.db` file has mode `0600` (it holds conversation history in `memory_turns` and is sensitive). Failure to open (e.g. permission denied, file corrupted, lock contention exhausted after `busy_timeout=5000`) → exit 1 with a clear error message. Multiple `jie` processes targeting the same `storage.db` are not supported in v1 (single-writer by design per `04-storage.md`); the second process will hit `busy_timeout` and exit 1.
-5. **Construct platform services, return handle.** `createJiePlatform` builds the deps bundle (settings store, storage, model / tool registries, memory manager, team manager, command executor), registers the caller-built event manager, and returns the handle. `teams` is empty; `settings` carries the merged snapshot. The CLI / TUI subscribes to events here, before any team-loading events fire.
-6. **(Day 2) Connect MCP servers** configured in `.jie/mcp.json` (project + global merge). Per-server connect failures log a `WARN` and skip that server; the team continues with the rest. See `10-configuration.md` MCP Server Configuration. **In v1 (per ADR 15) this step is skipped** — the platform does not load `mcp.json`, and the `ToolRegistry` only has built-in tools. Agent `.md` files listing `mcp:*` tools fail the cascade check at step 7.
-7. **Construct `AgentSoul`s** from the resolved team's `.md` files. For each `AgentSoul`, resolve its `tools:` list against the `ToolRegistry`. If any tool fails to resolve (e.g. the MCP server for that tool failed to connect), the team's startup fails with a clear error citing the missing tool.
-8. **`handle.start()` loads all installed teams.** The CLI calls `await handle.start()` after subscribing. The platform's `TeamManager.loadAll()` iterates `registry.listInstalled()` (which always includes the built-in `"minimal"`), calls `loadImpl(id)` per team, and aggregates successes into the handle's `teams` map. Per-team failures publish `system.error` with a `team '<id>' failed to load: <reason>` message and continue; `UNKNOWN_SESSION` (from `--resume <id>` validation) re-throws and rejects the start. The session map lives on `TeamManager` (per ADR 18); each loaded team mints or reuses its `session_id` (per ADR 20 — `--resume <id>` is validated via `memory.hasSession`, else a fresh ULID is minted).
-9. **Instantiate `AgentBody`** for each role:
-   - Pass `AgentSoul`, `EventBus`, `ArtifactStore`, the **shared** `MemoryManager` (constructed once in step 8, per ADR 12), `team_id`, `session_id` (resolved by the handle per `08-memory.md` "Restore"), and `is_leader: boolean` (set by the team-blueprint loader per the rules in `06-agent-model.md` "Platform Auto-Wiring" — multi-agent teams with `TEAM.md`: `true` for the `leader:` role's body, `false` for others; single-agent teams without `TEAM.md`: `true` for the single body by implicit-leader rule; etc.). The constructor signature is the one in `06-agent-model.md` "AgentBody".
-   - The body's `start()` (step 10) registers the body's auto-subscriptions (`{team_id}.{agent_key}` for every body, plus `{team_id}.leader.prompt` for the leader's body) and domain topics from the soul's `subscribe:` frontmatter (the platform prefixes `{team_id}.` at body construction per `03-event-system.md` and ADR 19).
-   - Each body fills `team_id` into the `AgentEvent` envelope on every event it publishes. The full wire-format contract is in `03-event-system.md` "Event Envelope" and `02-protocol-stack.md` "Prompt Ingress".
-10. **Call `body.start()`** on each `AgentBody` and `await` every body's `start()` before proceeding to step 11. The body's `start()` runs the four-step restore-and-start sequence documented in `06-agent-model.md` "AgentBody" `start()`: (1) register bus subscriptions, (2) `memory.restore()` and push to `agent.state.messages`, (3) if last message is `user`/`toolResult`, `agent.continue()`, (4) start the queue-processing loop (drain the queue if non-empty, otherwise wait for new events). The body does **not** publish `agent.idle` at startup. The "this team is loaded" signal is the next step.
-11. **Publish `{team_id}.team.loaded`** for the startup team (per ADR 22). The platform publishes this event once, after all bodies' `start()` resolves, with payload `{ team_id, agents: [{ role, agent_key, is_leader }, ...] }` (sorted alphabetically by role). This is the TUI's agents-panel-at-boot anchor and replaces the per-body startup `agent.idle` as the canonical "team is loaded" signal. Subsequent team loads (Day 2+) follow the same pattern (per ADR 19).
-12. **Branch by mode:**
-    - **`jie` (TUI):** Import and start the `jie-tui` component, passing the `EventBus` reference. The TUI subscribes to the un-scoped platform subjects and filters by the active `team_id` from the envelope. TUI renders, user interacts. (Stub in v1 per ADR 15.) In Day 2+, the TUI's `/team <id>` slash command calls the platform's `loadTeam` (idempotent ensure-loaded) and then switches its view; previously-active teams keep running per ADR 19. The view switch is the TUI's concern, not a handle method. The TUI's "agent is alive" check is satisfied by `{team_id}.team.loaded` (per ADR 22), not by per-body `agent.idle`.
-    - **`jie -p <instruction>`:** Subscribe to `agent.stream.chunk` (filter `sender.identity.teamId === <startup_team_id> && sender.identity.agentRole === <leader_role>`) → print to stdout. Publish `Events.userPrompt({ kind: "cli" }, <startup_team_id>, "<instruction>")` to `{startup_team_id}.leader.prompt`. The envelope's `topic` is the full subject, `payload` is `{ teamId: <startup_team_id>, prompt }`, `sender` is `{ kind: "cli" }` (the CLI is the publisher, not the target), `version: 1`, `timestamp` = current ISO 8601 (per `02-protocol-stack.md` "Prompt Ingress" and `ui/cli.md` `jie -p` step 6). The CLI then runs its local idle gate (subscribes to `agent.turn.start` and `agent.idle`, maintains per-body state, opens when all bodies are idle — see `ui/cli.md` `jie -p` step 7 for the full implementation). Print final newline, exit.
+1. **Discover and validate settings.** Walk up from CWD to find `.jie/`; deep-merge `.jie/settings.json` over `~/.jie/settings.json`. Any parse/validation error exits 1. See `10-configuration.md`.
+2. **Create the platform.** `createJiePlatform(options)` builds the deps bundle (settings store, storage, model/tool registries, memory manager, team manager, command executor) and returns the handle `{ settings, prompt, interrupt, subscribe, execute, teams() }`. The `settings` field carries the merged snapshot.
+3. **Subscribe to events.** The CLI subscribes before any team event fires; e.g. it forwards `system.error` envelopes to stderr.
+4. **Load the selected team.** `execute({ name: "team", teamId? })` runs `TeamManager.load`, which resolves `teamId ?? settings.defaultTeam ?? <first installed user team> ?? <built-in minimal>` (per ADR 24, the platform owns team discovery), parses the manifests, builds and starts one `AgentBody` per role (`agent_key = <role>-1`), then publishes `system.team.loaded` with the team roster (`TeamInfo`). Failure modes:
+   - A soul whose model cannot be resolved is skipped silently; if a soul has no model and settings define none, load throws `NO_MODEL_ERROR` ("No model has been selected, please login and select a default model.") and the CLI exits 1.
+   - An unknown `--resume <id>` throws `UNKNOWN_SESSION` (`unknown session_id: <id>`) and the CLI exits 1.
+   - Manifest parse failures throw `JiePlatformError`; the CLI prints the message and exits 1.
+5. **Branch by mode:**
+   - **`jie` (TUI):** construct the TUI with the platform handle, then `tui.start()`; on exit, `tui.stop()` (in a `finally`) followed by `execute({ name: "stop" })`.
+   - **`jie -p <instruction>`:** publish `user.prompt` (payload `{ teamId, agentKey, prompt }`) to the leader, subscribe to `agent.stream.chunk` filtered by `teamId` and the leader's `agentKey`, print chunks to stdout, wait for the team to go idle (`agent.idle`), print a final newline, and exit.
 
-### Graceful Shutdown
+## Graceful Shutdown
 
-On SIGINT/SIGTERM:
-
-1. **Send abort** to all in-flight operations across **all loaded teams**: agent loops, tool calls, and MCP requests. The combined `AbortSignal` propagates the abort; tools see it and throw `AbortError`.
-2. **Bounded wait**: wait up to **10 seconds** for agents (across all loaded teams) to finish their abort handling and exit their loops. The handle maintains internal "bodies settled" bookkeeping for this wait (consuming the same `agent.turn.start` / `agent.idle` events that the CLI's `-p` idle gate consumes per `ui/cli.md` step 7), but does not expose it. `stop()` is the only lifecycle primitive that needs this check; the CLI does not consume it.
-3. **On timeout**: force-exit the process. No further cleanup. Agents may have left a partial state in the artifact store; the next run starts with a clean session.
-4. **On graceful exit (within 10s)**: close `ArtifactStore` (SQLite), terminate MCP subprocesses, unsubscribe event listeners, exit 0.
-
-The 10s window balances responsiveness against letting a slow tool complete cleanly. Configurable later if needed.
-
-**Steps 1-3 are Day 2 — v1 only runs step 4 partial.** In v1, `JieHandle.stop()` only does the subscription-detach half of step 4: it iterates the loaded teams' `AgentBody[]`, calls each body's `stop()`, and returns. It does **not** abort in-flight operations, does **not** wait for them to settle, and does **not** force-exit on a timeout. The CLI's `jie -p` does not rely on `stop()` for ordering — it has its own per-body idle gate (per `ui/cli.md` step 7) — so the gap is silent in v1. The TUI (stage 2) will rely on `stop()` for clean shutdown; until steps 1-3 land, the TUI inherits the same v1 limitation.
+Shutdown is a command, not a handle method: `execute({ name: "stop" })` calls `TeamManager.stop()`, which calls `stop()` on every loaded body. The CLI's TUI flow invokes it in a `finally` after `tui.stop()`. `jie -p` relies on its own idle gate rather than on shutdown ordering.
 
 ## Workspace Layout
 
-```
-./
-  .jie/                  # Project-local platform state (discovered by walking up from CWD)
-    settings.json        # Optional project overrides for defaultProvider/defaultModel/defaultTeam (deep-merged over global)
-    mcp.json             # MCP server definitions
-    storage.db           # SQLite artifact store
-    teams/               # User-installed team directories (project-local)
-      <team_id>/         # One directory per team; looked up by `defaultTeam` from settings
-        TEAM.md          # Team wiring (leader)
-        <role>.md        # Agent definitions (one per role)
-  src/                   # User's codebase (workspace = process.cwd(), not configurable)
-```
+See `10-configuration.md` for the full schema and resolution rules.
 
-User teams can also live globally at `~/.jie/teams/<team_id>/` for sharing across projects. The platform's selected team is `defaultTeam` from merged settings (or `--team <id>` for one-shot override); `defaultTeam` is reset to first-available if stale.
+```
+~/.jie/                    # User-global state (homeJieDir)
+  settings.json            # Global settings
+  auth.json                # Credentials
+  storage.db               # SQLite memory / artifact store (mode 0600)
+  teams/<id>/              # User-global teams
+<project>/.jie/            # Project-local state (discovered walking up from CWD)
+  settings.json            # Project overrides, deep-merged over global
+  mcp.json                 # MCP server definitions (Day 2)
+  teams/<id>/              # Project-local teams
+```
 
 ## Health and Restarts
 
-Agents do not crash — they handle tool failures gracefully and transition to `idle`. See `06-agent-model.md` Failure Handling.
-
-If the `jie` process itself crashes (SIGSEGV, OOM), all agents die with it. No automatic restart in v1 — the user re-runs `jie`. Process-level resilience is a Day 2 concern.
+Agents handle tool failures gracefully and return to `idle` (see `06-agent-model.md` Failure Handling). If the `jie` process crashes (SIGSEGV, OOM), all agents die with it; the user re-runs `jie`. There is no supervisor and no automatic restart.
 
 ## Logging
 
-v1 uses `console.log` / `console.error` to stdout/stderr. No external logging library.
+The platform uses a `tslog` logger (`packages/jie-platform/utils.ts`) gated by the `JIE_LOG_LEVEL` environment variable. Accepted values (case-insensitive): `SILLY`, `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`. When unset, the logger is silent. Tool-result errors surface through the LLM conversation, not the log; agent-to-agent diagnostics travel on the EventBus. Logging is for operator visibility only.
 
-**Format**: `[ISO8601] [LEVEL] [agent_key] message`
+## MCP Server Management (Day 2)
 
-| Level | Usage |
-|---|---|
-| `INFO` | Lifecycle events: agent started. |
-| `WARN` | Non-fatal anomalies: tool execution approaching timeout. |
-| `ERROR` | Fatal conditions before exit: config parse failure, SQLite open failure. |
-
-Tool-result errors are surfaced through the LLM conversation, not via the log. Agent-to-agent diagnostics are on the EventBus — logging is for operator visibility only.
-
-Agents log to the shared stdout of the `jie` process. The `agent_key` prefix disambiguates output.
-
-## MCP Server Management
-
-MCP servers with `transport: stdio` are spawned as child subprocesses at startup. The parent `jie` process monitors them:
-- **Startup connect failure** (server not reachable, catalog fetch failed): log a `WARN`, do not register that server's tools. Startup continues with the rest of the team. If the team's blueprint depends on tools from the failed server, the team fails to start (see `10-configuration.md` Cascade: Agent Load Failure).
-- **Mid-session server exit**: the in-flight tool call (if any) times out or returns `mcp_server_unreachable`. All subsequent invocations to that server also return errors until the server is reconnected. Agents handle these as tool-result errors and may retry or fail gracefully. The platform does **not** auto-reconnect mid-session; restart the process to recover.
-
-**MCP servers are generic.** The platform has no per-server code. Any MCP server is configured in `mcp.json` like any other, and follows the cascade policy above. A team's MCP-server dependency is declared in that team's `.md` manifest. If a server is unreachable at startup, the dependent team fails to start (cascade); a team with no dependency is unaffected. This is consistent with ADR 4 (MCP-agnostic platform).
+MCP is not implemented yet. When it lands, servers declared in `mcp.json` (`transport: stdio`) run as child subprocesses, and the platform stays MCP-agnostic (per ADR 4): a server that fails to connect at startup logs a warning and is skipped, and a team whose blueprint depends on that server's tools fails to start (see `10-configuration.md` cascade rules).

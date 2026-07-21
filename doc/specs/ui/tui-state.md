@@ -6,7 +6,7 @@ The state shape, action union, and reducer implementations live in `packages/jie
 
 ## Reducer purity model
 
-The reducer is a pure function `(state, action) → state`. The caller (`createTui` in `packages/jie-tui/tui.ts`) wraps the reducer in a `dispatch` function and explicitly calls `tui.requestRender()` after each run. **The clock is not read inside the reducer** — spinner frames and transient-message aging live entirely on the render side. UI actions like `Actions.setTransientMessage(text)` carry no timestamp; the renderer records `Date.now()` when it dispatches.
+The reducer is a pure function `(state, action) → state`. The caller (`createTui` in `packages/jie-tui/tui.tsx`) wraps the reducer in a `dispatch` function on the `StateStore`; re-render is driven through the store's subscriber line. **The clock is not read inside the reducer** — spinner frames and transient-message aging live entirely on the render side. UI actions like `Actions.setTransientMessage(text)` carry no timestamp; the renderer records `Date.now()` when it dispatches.
 
 ## Identifier mapping (wire → state)
 
@@ -26,15 +26,17 @@ Per CLAUDE.md, serialized events use snake_case on the wire; TypeScript identifi
 
 The composite runtime key is `AgentId = \`${teamId}:${agentKey}\`` (see `00-overview.md` glossary). The reducer's `state.agents` map is keyed by `AgentId`, not by `agentKey`, to disambiguate agents across coexisting teams.
 
-The editor buffer (`state.editorText`) lives in the reducer — the `Editor` component edits it through `Actions.setEditorText` and submits through `Actions.submitEditorText`. This lets the layout measure the editor's height and lets the slash/mention pickers read the buffer. Only the prompt history (`inputHistory`, `historyIndex`) remains component-local on the editor.
+The editor buffer (`state.editorText`) lives in the reducer — the `Editor` component edits it through `Actions.setEditorText` and submits through `Actions.submitEditorText`. This lets the layout measure the editor's height and lets the slash/mention pickers read the buffer. Only the prompt history (`history`, `historyIndex`, `draft`) remains component-local on the editor.
+
+The per-agent slot (`AgentUiState` in `state.ts`) also carries `todos: ReadonlyArray<TodoItem>` (`TodoItem` comes from jie-platform `types/todo`, re-exported via `packages/jie-tui/todo`). When an `agent.tool.result` payload's `details` is a `TodoDetailsPayload` (the todo tool's result), the reducer replaces `agent.todos` with `details.todos` instead of appending a tool card.
 
 ## Actions
 
-The reducer takes `Action = ReceiveEvent | SwitchTeam | ToggleTeamRail | ToggleThinking | ToggleToolCards | SwitchCycleAgent | ScrollChat | JumpChat | ClearTuiState | SetTransientMessage | ClearTransientMessage | SetErrorMessage | ClearErrorMessage | ClearBanners | RequestQuit | RequestRender | SetEditorText | SubmitEditorText | RequestInterrupt | SetEnvironment | OpenSessionPicker | CloseSessionPicker | SetPickerQuery | FocusPickerIndex | SelectPickedSession` (defined in `packages/jie-tui/state/actions.ts`). Bus envelope types are **not** the action type — `tui.ts` wraps every bus envelope in `Actions.receiveEvent(envelope)` before dispatch. UI-local events (switch team, rail toggle, cycle, chat scroll/jump, transient, error, clear, quit, render, editor text, submit, interrupt, environment, session picker) are dispatched directly.
+The reducer takes `Action = ReceiveEvent | SwitchTeam | ToggleTeamRail | ToggleThinking | ToggleToolCards | SwitchCycleAgent | ScrollChat | JumpChat | ClearTuiState | SetTransientMessage | ClearTransientMessage | SetErrorMessage | ClearErrorMessage | ClearBanners | RequestQuit | RequestRender | SetEditorText | SubmitEditorText | RequestInterrupt | SetEnvironment | OpenSessionPicker | CloseSessionPicker | SetPickerQuery | FocusPickerIndex | SelectPickedSession` (defined in `packages/jie-tui/state/actions.ts`). Bus envelope types are **not** the action type — `tui.tsx` wraps every bus envelope in `Actions.receiveEvent(envelope)` before dispatch. UI-local events (switch team, rail toggle, cycle, chat scroll/jump, transient, error, clear, quit, render, editor text, submit, interrupt, environment, session picker) are dispatched directly.
 
 This split exists because the bus event taxonomy is the platform's contract (other consumers may subscribe to the same topic); UI actions are the TUI's local vocabulary. Keeping them as separate action types prevents accidentally publishing UI actions to the bus and keeps the reducer testable with literal action objects.
 
-**`system.team.loaded` is a platform data signal, not a UI switch signal.** It tells the TUI "this team is now loaded" and is emitted by `TeamManager.load` only on fresh loads (cache hits are silent). Switching — i.e. "this is the team the TUI is now watching" — is a UI concern and lives on the `Actions.switchTeam(identity)` path, fired by the `/team <id>` slash command after the platform's `execute({name:"team"})` resolves. Both paths reduce through the same agent-map seeding logic; the only difference is the source shape (`TeamIdentity` from the action, snake-cased event payload from the bus).
+**`system.team.loaded` is a platform data signal, not a UI switch signal.** It tells the TUI "this team is now loaded" and is emitted by `TeamManager.load` only on fresh loads (cache hits are silent). Switching — i.e. "this is the team the TUI is now watching" — is a UI concern and lives on the `Actions.switchTeam(identity)` path, fired by the `/team <id>` slash command after the platform's `execute({name:"team"})` resolves. Both paths reduce through the same agent-map seeding logic; the only difference is the source shape (`TeamInfo` from the action, snake-cased event payload from the bus).
 
 ## Cross-team guard
 
@@ -52,7 +54,7 @@ This event is a platform data signal — it tells the TUI a team has been loaded
 
 ### `Actions.switchTeam(identity)`
 
-UI action carrying a `TeamIdentity` payload (full data a consumer needs: `id`, `leaderKey`, `agents`). Fired by `interceptTeam` in `command-handler.ts` after `platform.execute({name:"team", teamId})` resolves — applies to first-time loads, subsequent switches, and cache-hit re-selections. Reduces identically to `system.team.loaded` (same agent-map seeding rules) but lives on the UI side so the reducer does not depend on the platform's emission timing or cache-hit semantics.
+UI action carrying a `TeamInfo` payload (full data a consumer needs: `id`, `leaderKey`, `agents`). Fired by `interceptTeam` in `command-handler.ts` after `platform.execute({name:"team", teamId})` resolves — applies to first-time loads, subsequent switches, and cache-hit re-selections. Reduces identically to `system.team.loaded` (same agent-map seeding rules) but lives on the UI side so the reducer does not depend on the platform's emission timing or cache-hit semantics.
 
 ### `user.prompt`
 
@@ -114,7 +116,7 @@ The reducer is per-agent by construction — `state.agents: ReadonlyMap<AgentId,
 
 ## Editor → focused agent
 
-`state.focusedAgentId` is the editor's target. On submit, `handleSubmit(text)` in `tui.ts` reads `state.focusedAgentId ?? state.leaderAgentId` from the current reducer state and publishes through `platform.prompt(teamId, agentKey, text)`. Cycling focus re-targets the next prompt without a refocus — `handleSubmit` re-reads `focusedAgentId` each time. When `state.focusedAgentId === null` (mid team-switch, before the first leader focus), `leaderAgentId` is the fallback. **The prompt is not lost.**
+`state.focusedAgentId` is the editor's target. On submit, `tui.tsx` observes `Actions.submitEditorText` and passes the text to `command-handler.ts`, whose `routeTarget` reads `state.focusedAgentId` (falling back to `state.leaderAgentId`) from the current reducer state and publishes through `platform.prompt(teamId, agentKey, text)`. Cycling focus re-targets the next prompt without a refocus — `routeTarget` re-reads the focus each time. When `state.focusedAgentId === null` (mid team-switch, before the first leader focus), `leaderAgentId` is the fallback. **The prompt is not lost.**
 
 ## History rotation
 
@@ -124,7 +126,6 @@ History is not rotated by size or count in v0.2. The renderer slices to its visi
 
 ## Out of scope for v0.2
 
-- **Per-block / per-card `expanded` state.** Expansion is a render concern, not a state concern. The `ToolCard` and `MessageView` components own their own expanded/collapsed state. Earlier drafts of this spec tracked `expanded` on `Card` and `Block`; it was removed because it duplicated the component's job.
-- **In-memory event buffer / replay.** Lives outside the reducer; the platform owns replay.
-- **Queue depth on a leader.** Earlier drafts carried a `state.queue` for prompt-queue indicators. The queue is per-agent (`state.agents[id].queue`); the footer line-2 queue segment (T5 / T6) surfaces the focused agent's.
-- **Queue-pickup flicker debounce.** Earlier drafts kept `lastIdleAt` on the agent slot for a 50 ms "still busy" window. The v0.2 implementation lets `agent.idle` then `agent.turn.start` show as separate transitions; if a future revision needs to mask a brief `idle` window, the fix lives in the chat-pane's working-indicator component (a render-side concern), not in the reducer.
+- **Per-block / per-card `expanded` state.** Expansion is a render concern, not a state concern. The reducer only carries the all-or-nothing `thinkingExpanded` / `toolCardsExpanded` toggles (`Ctrl+T` / `Ctrl+O`); the components read them.
+- **Queue depth on a leader.** The queue is per-agent (`state.agents[id].queue`); the footer line-2 queue segment surfaces the focused agent's.
+- **Queue-pickup flicker debounce.** `agent.idle` then `agent.turn.start` shows as separate transitions; if a future revision needs to mask a brief `idle` window, the fix lives in the chat-pane's working-indicator component (a render-side concern), not in the reducer.

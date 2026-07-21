@@ -1,7 +1,6 @@
 # TUI Keybinding Matrix
 
-The TUI is keyboard-driven. All keybindings are global (handled by the input listener, not the focused widget) unless noted. Some keys are conditional on the rail being visible or an agent being busy.
-- Must check conflicts in @key-shortcuts-conflicts.md
+The TUI is keyboard-driven. All keybindings are global (handled by the input listener, not the focused widget) unless noted. Some keys are conditional on the rail being visible or an agent being busy. All bindings are implemented in `components/global-keys.tsx` (global) and the editor component (editor-local keys).
 
 ## Global
 
@@ -43,11 +42,11 @@ While the session picker is open, global keys are suppressed except `Ctrl+C` and
 
 ## Ctrl+T and Ctrl+O
 
-Both toggles are **component-local** — `MessageView` owns the per-block `expanded` flag for thinking blocks, `ToolCard` owns it for tool cards. There is no reducer action for either. The toggles are all-or-nothing across the focused agent's history + current turn; `Ctrl+T` does not affect tool cards and `Ctrl+O` does not affect thinking blocks. Mid-stream toggle works: the most recent block re-renders in its new state on the next render tick.
+Both toggles are all-or-nothing across the focused agent's history + current turn: `Actions.toggleThinking()` flips `state.thinkingExpanded` and `Actions.toggleToolCards()` flips `state.toolCardsExpanded`; `MessageView` and `ToolCard` read those flags. `Ctrl+T` does not affect tool cards and `Ctrl+O` does not affect thinking blocks. Mid-stream toggle works: the most recent block re-renders in its new state on the next render tick.
 
 ## Prompt history
 
-`↑` / `↓` in the editor walk the prompt history (most-recent first). Owned by pi-tui's `Editor`; we call `editor.addToHistory(text)` in the `onSubmit` handler. `Shift+↑` / `Shift+↓` and `Ctrl+↑` / `Ctrl+↓` are rail-cycling keys and bypass the editor; the plain-arrow form is not intercepted by the global input listener, so the editor handles it natively.
+`↑` / `↓` in the editor walk the prompt history (most-recent first). Owned by the editor component (`components/editor/editor.tsx`), which keeps `history`/`historyIndex`/`draft` component-local and prepends each submitted prompt. `Shift+↑` / `Shift+↓` and `Ctrl+↑` / `Ctrl+↓` are rail-cycling keys and bypass the editor; the plain-arrow form is not intercepted by the global input listener, so the editor handles it natively.
 
 ## Slash commands
 
@@ -57,15 +56,32 @@ Typing `/` opens the **slash autocomplete** panel above the footer: it filters c
 
 | Command | Effect | Transient message |
 |---|---|---|
-| `/login` | Open a `SelectList` of providers; on select, prompt for the API key; write to `~/.jie/auth.json` (mode `0600`) | `logged in to <provider>` |
+| `/login <provider> <apiKey>` | Write a single API key entry to `~/.jie/auth.json` (mode `0600`); no interactive provider selection | `logged in to <provider>` |
 | `/logout [<provider>]` | Clear one or all entries from `~/.jie/auth.json` | `logged out of <provider>` (or `logged out of all providers`) |
 | `/model <provider>/<modelId>` | Validate and write to `~/.jie/settings.json` | `default model set to <provider>/<modelId>` |
-| `/team <id>` | If installed, switch the TUI's active team. If not installed, render the error in the input area; no team switch | `default team set` (only on direct write to settings) |
-| `/team` (no arg) | Open a `SelectList` over installed team IDs; selecting one is equivalent to `/team <id>` | none |
+| `/team <id>` | If installed, switch the TUI's active team (`execute({name:"team"})` then `Actions.switchTeam`). If not installed, error banner; no team switch | `loading team '<id>'` |
+| `/team` (no arg) | Show `defaultTeam` and installed team IDs | `defaultTeam: <id or unset> \| installed: <ids>` |
 | `/resume` | List the team's stored sessions (`listSessions`) and open the session picker: `↑`/`↓` move, typing filters, `Enter` resumes the selected session (`resumeSession` + team switch), `Esc`/`Ctrl+C` cancel | none |
 | `/continue` | Alias for `/resume` | none |
 | `/clear` | Clear `state.agents`, `leaderAgentId`, `focusedAgentId`, `transientMessage`, `errorBanner`. Memory rows on disk untouched | none |
 | `/help` | Open an overlay rendering the keymap from this doc | none |
 | `/exit` | Same as `Ctrl+D` (twice within 500 ms). No busy-state branch | none |
 
-`/clear` and `/help` are listed here for the first time; they are new in v0.2.
+## Conflict-resolution rationale
+
+Three layers compete for keys: the OS shell / desktop, the TTY driver (or conhost), and the TUI. The TUI runs with stdin in raw mode (owned by `@cuzfrog/jie-ink`), so TTY specials (`Ctrl+C` intr, `Ctrl+D` eof, `Ctrl+O` discard, `Ctrl+T` transpose) arrive as plain bytes and are safe to bind — but only under that contract. Any non-raw input path (e.g. a `jie -p`-style line editor) must keep standard TTY semantics: there `Ctrl+C` is SIGINT, not a free binding.
+
+Bindings the TUI deliberately avoids:
+
+- Window / app lifecycle: `Cmd+Q`, `Cmd+W`, `Alt+F4`, `Win+*`, `Ctrl+Esc`, `F12` (debugger-reserved). Quit is `/exit`, `Ctrl+D`×2, or `Ctrl+C` on an empty editor.
+- Clipboard / edit menu: `Cmd+C/V/X/A` and Linux `Ctrl+Shift+C/V` — owned by the terminal emulator. The TUI attempts no uniform text-operations palette.
+- OS system shortcuts: `Cmd+Space`, `Cmd+Tab`, `Opt+Cmd+Esc`, `Alt+Tab`, `Win+L/R/E/D/Tab`.
+
+Bindings the TUI intentionally mirrors:
+
+- Plain `↑` / `↓` prompt-history walking (readline, cmd/PowerShell convention).
+- `Enter` to submit, `Backspace` to erase, `Tab` to complete — universal terminal conventions.
+- `Ctrl+D` as quit muscle memory (matches pi). It is honored only as a double-tap within 500 ms to avoid the cooked-mode EOF implication.
+- A single `Esc` interrupts the focused busy agent.
+
+`Shift+←` was chosen for the rail toggle because `Ctrl+←` / `Ctrl+→` are word-jump in the Windows console host and in many terminal / readline setups; shift-arrow chords are unclaimed. `Ctrl+T` and `Ctrl+O` are honored despite their cooked-mode claims (transpose / discard) because those are inactive under the raw-mode contract.

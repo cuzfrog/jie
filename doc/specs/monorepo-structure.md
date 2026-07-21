@@ -4,132 +4,73 @@
 
 ```
 packages/
-  code-lens/      # Standalone MCP server: AST-only code structure queries (out of scope for v1 MVP — see ADR 15)
-  jie-platform/   # Platform runtime lib — barrel entry: index.ts
-    start.ts         # Entry function: createJiePlatform(opts, deps): JiePlatform (ADR 13)
-    core/            # EventBus, AgentBody, AgentSoul, Tool interface & registry, tool-error
-    storage/         # Storage abstraction (04-storage.md):
-                       storage.ts        # Storage interface (exec/query/transaction/close)
-                       sqlite-storage.ts # SqliteStorage — default backend
-                       init-db.ts        # initializeSchema(storage) — single-version schema bootstrap
-                       artifact-store.ts # ArtifactStore interface + SqliteArtifactStore impl
-                       memory-store.ts   # MemoryManager interface + SqliteMemoryManager impl
-                       index.ts          # barrel
-    tools/           # Built-in tools: notify, bash, read_file, write_file, web_search, web_fetch, write_artifact, read_artifact
-                       (each tool has its own .ts; index.ts is the barrel)
-    team/            # Team-blueprint loader (ADR 14):
-                       loader.ts         # parseTeamFromManifests, loadTeamFromDir, loadMinimalTeam
-                       minimal/          # Built-in last-resort fallback — same .md format as user teams
-                         TEAM.md
-                         general.md
-    index.ts         # Barrel: re-exports all public APIs
-  jie-tui/        # Terminal UI: stub in v1 (throws "TUI not implemented"). See ADR 15.
-  jie-cli/        # CLI entry point (jie binary) — v1 ships `jie -p` plus `login`/`logout`/`model`/`team` setup commands. ADR 15.
-  jie-team/       # Manifest package: out of scope for v1 MVP. Placeholder package.json only. See ADR 11 / ADR 15.
+  jie-platform/   # Platform runtime lib — entry: jie-platform.ts (createJiePlatform, ADR 13)
+    command/         # Platform commands (team, resumeSession, setDefaultModel, login, …) + executor
+    config/          # Settings, auth, models.json loading, model registry (10-configuration.md)
+    core/            # AgentBody: event loop (jie-agent-body.ts), pi-agent wiring, streaming, tool adapter
+    event/           # EventBus (InProcessEventBus), EventManager, Events factory (03-event-system.md)
+    services/        # GitService (branch / dirty status for the TUI footer)
+    storage/         # Storage + SqliteStorage, schema bootstrap, ArtifactStore, MemoryManager (04-storage.md, 08-memory.md)
+    team/            # Blueprint parser, team registry (discovery, ADR 24), TeamManager, built-in minimal/ team
+    tools/           # Built-in tools: notify, bash, read_file, write_file, edit, todo_write,
+                       web_search, web_fetch, write_artifact, read_artifact + ToolRegistry
+    jie-platform.ts  # Entry function: createJiePlatform(options, deps?): JiePlatform
+    jie-platform-errors.ts
+  jie-cli/        # CLI entry (jie binary): -p print mode, interactive TUI mode, login/logout/model/team commands
+  jie-tui/        # Terminal UI (Ink/React): chat panes, editor, footer, slash commands; createTui(deps, options)
+  jie-ink/        # Vendored fork of ink 7.1.0 — the TUI's React terminal renderer (see its MODULE.md)
+  mock-llm-backend/  # OpenAI-compatible mock LLM server for e2e tests (bun mock:start)
+  jie-team/       # Aspirational dev-team blueprint — package has no code yet (doc/specs/jie-team/)
+  code-lens/      # Aspirational AST code-structure MCP server — package has no code yet (doc/specs/code-lens/)
 ```
 
 ## Dependencies
 
 ```
-jie-cli → jie-platform  (composition root: constructs stores, calls `createJiePlatform`, hands the facade to TUI/CLI commands; the facade hides every store from the CLI's command modules)
-jie-cli → jie-tui       (passes the `JiePlatform` facade to `createTui`)
-jie-tui → jie-platform  (only `JiePlatform` and the wire-format types `EventEnvelope<T>`, `AnyEventEnvelope`, `EventType`; no store types reach the TUI's module surface)
-jie-team → jie-platform (types: AgentSoul, ToolSpec — dev only, erased at runtime)
-code-lens               (standalone — no jie dependencies)
+jie-cli  → jie-platform, jie-tui   (composition root: calls createJiePlatform, hands the handle to the TUI / -p mode)
+jie-tui  → jie-platform, jie-ink   (platform surface: JiePlatform handle + wire-format types only)
+jie-ink                             (vendored ink fork; standalone)
+mock-llm-backend                    (standalone test fixture)
+jie-team, code-lens                 (no code, no dependencies)
 ```
 
-`jie-team` is a sibling of the platform, not a dependency. The CLI does not depend on it; the platform does not import it. `jie-team` is a manifest package — a folder of `.md` files that users place at the standard paths by hand.
-
-**Agnosticism rule (ADR 11).** `jie-platform` has zero runtime dependency on `jie-team` — no `import` in any form, including types. The platform reads team manifests from filesystem paths (`.jie/teams/<id>/`, `~/.jie/teams/<id>/`). The `jie-team` package is a passive source of manifests, not an install hook; the user copies its files into the standard paths.
+**Agnosticism rule (ADR 11).** `jie-platform` has zero dependency on `jie-team` — no `import` in any form, including types. The platform reads team blueprints from filesystem paths (`.jie/teams/<id>/`, `~/.jie/teams/<id>/`) plus its built-in `minimal` fallback; a team is data, not code.
 
 ## Build System
 
-**Zero build step.** The runtime is `bun` (>= 1.3.14), which executes TypeScript natively. No compilation, no bundling, no transpilation. Source `.ts` files are the distributable.
+**Zero build step.** The runtime is `bun` (>= 1.3.14), which executes TypeScript natively — no compilation, bundling, or transpilation. Source `.ts` files are the distributable.
 
-- **Monorepo tool**: bun workspaces. Root `package.json` declares `workspaces: ["packages/*"]`.
-- **No build script**: Distributing TypeScript source executed by bun.
+- **Monorepo tool**: bun workspaces; root `package.json` declares `workspaces: ["packages/*"]`.
+- **Version management**: a root `catalog:` block pins every shared dependency version; packages depend via `"catalog:"`. One place to bump; `bun install` never silently changes behavior. Upgrades are explicit decisions (the platform's spec is precise about API shapes — e.g. a pi-agent minor bump has changed `BeforeToolCallContext` in the past).
 
 ## Package Entry Points
 
-```jsonc
-// packages/jie-platform/package.json
-{
-  "name": "@cuzfrog/jie-platform",
-  "exports": { ".": "./index.ts" }
-}
+Every package exports `.` → `./index.ts`; the root `package.json` declares `"bin": { "jie": "packages/jie-cli/index.ts" }`.
 
-// packages/jie-tui/package.json
-{
-  "name": "@cuzfrog/jie-tui",
-  "exports": { ".": "./index.ts" }
-}
+`jie-platform/index.ts` re-exports the public surface: `JiePlatform`, `createJiePlatform`, `JiePlatformOptions`, the event protocol types (`EventEnvelope<T>`, `Sender`, `EventType`, topic constants), the command types, and `JiePlatformError` with its codes.
 
-// packages/jie-team/package.json
-{
-  "name": "@cuzfrog/jie-team",
-  "files": ["teams/"]
-}
-```
-
-`jie-platform/index.ts` re-exports the facade: `JiePlatform`, `createJiePlatform`, the event protocol types (`EventEnvelope<T>`, `AnyEventEnvelope`, `EventType`), and `JiePlatformError` with its codes. `GitSnapshot` is re-exported so consumers do not need to reach into `jie-platform/services`.
-
-`jie-tui/index.ts` exports the TUI component function: `createTui(deps: { platform: JiePlatform }, options: CreateTUIOptions)`. The TUI's only platform import is the facade and the wire-format types; it does not import `AuthStore`, `SettingsStore`, `TeamRegistry`, `GitService`, or any other store type.
+`jie-tui/index.ts` exports `createTui(deps, options)`. The TUI's only platform imports are the `JiePlatform` handle and the wire-format event types — no store types (`AuthStore`, `SettingsStore`, `TeamRegistry`, …) reach the TUI's module surface.
 
 ## `jie-platform` Runtime Dependencies
 
-The platform's runtime dep set is small and fixed. Bun provides most of what the platform needs as built-ins; the five runtime deps cover the rest.
+Small and fixed (via the root catalog):
 
-```jsonc
-// packages/jie-platform/package.json
-{
-  "name": "@cuzfrog/jie-platform",
-  "type": "module",
-  "exports": { ".": "./index.ts" },
-  "dependencies": {
-    "@earendil-works/pi-agent-core": "0.79.1",
-    "@earendil-works/pi-ai":          "0.79.1",
-    "typebox":                        "1.1.38",
-    "yaml":                           "2.9.0",
-    "ulid":                           "2.3.0",
-    "node-html-parser":               "6.1.13"
-  },
-  "devDependencies": {
-    "@types/bun": "latest",
-    "typescript":  "^5.9.3"
-  }
-}
-```
+| Dependency | Role |
+|---|---|
+| `@earendil-works/pi-agent-core` | Agent loop: streaming, tool execution, turn management |
+| `@earendil-works/pi-ai` | Provider/model definitions, `Model` objects, auth storage backend |
+| `typebox` | Tool JSON schemas |
+| `yaml` | Team-blueprint frontmatter parsing |
+| `ulid` | `session_id` (26 chars — shorter than UUID v4, human-scannable in logs and DB rows) |
+| `node-html-parser` | HTML → text for the `web_fetch` tool (bun has no built-in HTML parser) |
+| `tslog` | Structured logger, gated by `JIE_LOG_LEVEL` (silent when unset) |
 
-**Bun built-ins** (no dep): `bun:sqlite` (default `Storage` backend), `Bun.Glob` (for `mcp:server:*` resolution in `ToolRegistry`), `fetch` (for `web_search` / `web_fetch` tools), `Bun.spawn()` (for `bash` tool and (Day 2) MCP stdio servers), `Bun.argv` (hand-rolled CLI parser), `fs` / `fs/promises` / `path`, `import ... with { type: 'text' }` (for the built-in minimal team per ADR 14). The platform uses `ulid@2.3.0` for `session_id` (26 chars, shorter than UUID v4 and human-scannable in logs and DB rows) rather than `crypto.randomUUID()`; `node-html-parser@6.1.13` parses HTML responses for the `web_fetch` tool (Bun has no built-in HTML parser); see "Fixed pins" below for why a dep was chosen over a built-in.
+**Bun built-ins** (no dep): `bun:sqlite` (`SqliteStorage`), `Bun.Glob` (`ToolRegistry` spec resolution), `fetch` (`web_search` / `web_fetch`), `Bun.spawn()` (`bash` tool; MCP stdio servers when the MCP client lands), `Bun.argv` (hand-rolled CLI parser), `import ... with { type: "text" }` (built-in minimal team).
 
-**Fixed pins, no `^`.** The platform's spec is precise about API shapes. A pi-agent minor version bump can change `BeforeToolCallContext` (it has, between pre-0.75 and 0.79.1). A `yaml` major version bump can change the parse output. Fixed pins mean a `bun install` does not silently change behavior; upgrades are explicit ADR-grade decisions. The pinned `typebox@1.1.38` and `yaml@2.9.0` are the transitive versions of `@earendil-works/pi-agent-core@0.79.1`, so jie and pi-agent share known-good combinations. The pinned `ulid@2.3.0` is the canonical Node/bun ULID implementation; its API is one function (`ulid()`) and is stable, so a fixed pin is the right call.
-
-**No MCP SDK in v1.** Per ADR 15, MCP client integration is Day 2. `@modelcontextprotocol/sdk@1.29.0` (the standard) is **not** a v1 dep. The `mcp.json` schema in `10-configuration.md` is forward-looking; the platform's `startJie` does not load it in v1.
-
-**No CLI / utility libraries.** No `commander` / `yargs` / `lodash` / `picomatch` / `inquirer` / `chalk`. The v1 CLI surface is small (`-p`, `--team`, `--api-key`, `--resume`, `--version`, `--help`, plus `login` / `logout` / `model` / `team` subcommands); a 20-line manual parser over `Bun.argv` is smaller than the dep. Settings deep-merge is three top-level scalar fields; an 8-line function is smaller than `lodash.merge`. If the CLI grows, the swap to `commander` is a single-file change.
-
-## Umbrella Package
-
-```jsonc
-// package.json (root)
-{
-  "name": "@cuzfrog/jie",
-  "workspaces": ["packages/*"],
-  "dependencies": {
-    "@cuzfrog/jie-platform": "workspace:*",
-    "@cuzfrog/jie-tui": "workspace:*"
-  },
-  "bin": {
-    "jie": "packages/jie-cli/index.ts"
-  }
-}
-```
-
-`bun install -g @cuzfrog/jie` installs the workspace set. The binary is `jie` → `packages/jie-cli/index.ts`. `jie-team` and `code-lens` are workspace packages, not runtime dependencies — `jie-team` ships manifests, `code-lens` is out of scope for the platform MVP (ADR 15).
+**No MCP SDK today.** MCP client integration is not implemented (ADR 4); `@modelcontextprotocol/sdk` is not a dependency. **No CLI / utility libraries** (`commander`, `lodash`, `chalk`, …): the CLI surface is small enough that hand-rolled parsing and merging stay smaller than the deps.
 
 ## Testing
 
-- **Framework**: `bun test`. Zero extra dependencies, Jest/vitest-compatible API.
-- **Unit/Integration**: co-located `*.test.ts` files alongside source.
-- **E2E**: `tests/e2e/` at repo root. Spin up a full team (EventBus + AgentBodies + ArtifactStore), inject prompts via EventBus, verify pipeline events and artifact store outcomes.
-- **Command**: `bun test` runs all tests across the workspace.
+- **Framework**: `bun test` — zero extra dependencies, vitest-compatible API (test utilities are on the global namespace; see `doc/HOW_TO_MOCK.md`).
+- **Unit**: co-located `*.test.ts` next to source, aligned one-test-file-per-source-file.
+- **E2E**: `tests/e2e/` at repo root, run against the mock LLM backend (`bun mock:start` + `bun test:e2e:mock`) or a real local endpoint (`bun test:e2e:local`). See `doc/DEVELOPMENT.md`.

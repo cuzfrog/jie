@@ -1,31 +1,29 @@
-# ADR 6: No Hard Turn Budgets — LLM Self-Termination
+# ADR 6: No Turn Budgets, No Grace Turn — Trust the LLM
 
 ## Status
 
-Accepted.
+Accepted. Subsumes ADR 8 (No Grace Turn).
 
 ## Context
 
-`05-agent-model.md` defined two hard turn budgets per agent body:
-
-- `error_turn_budget` (default 30): Decremented on turns with tool-result errors. Exhaustion → terminal event with `error = "error_budget_exhausted"`.
-- `total_turn_budget` (default 200): Decremented on every LLM turn unconditionally. Exhaustion → terminal event with `error = "turn_budget_exhausted"`.
-
-These budgets were safety nets against runaway LLM loops. However, they introduce platform-level logic that second-guesses the LLM's own reasoning about when it is stuck or done.
+The early design guarded against runaway LLM loops with platform-level machinery: `error_turn_budget` / `total_turn_budget` counters, and (after the budgets were dropped) a grace turn — a system reminder when the LLM ended a response without calling `notify`, escalating to a force-emitted `notify(error = "missing_emission")`. Both are defensive scaffolding that second-guess the LLM's own judgment about when it is stuck or done.
 
 ## Decision
 
-Remove both `error_turn_budget` and `total_turn_budget`. The LLM is responsible for self-termination via the `notify` tool. The platform provides a single enforcement mechanism: the grace turn.
+The agent loop is entirely pi-agent-core's responsibility. The platform has no turn counters and no grace turn:
+
+- When the LLM returns `stopReason` (`"stop"`, `"length"`, `"error"`, `"aborted"`), the loop exits and the body publishes `agent.idle`.
+- `notify` is a regular inter-agent notification tool. The LLM calls it when its system prompt instructs it to; it is not a loop-control signal.
+- `ToolResult.terminate`, when a Jie tool returns it, is handled natively by pi-agent (stop the batch, exit the inner loop). The platform does not interpret it.
 
 ## Rationale
 
-- **The LLM knows best when it's stuck.** If a tool repeatedly fails, the LLM is better equipped than a counter to decide whether to try a different approach, ask for help, or signal failure via `notify`.
-- **`notify` is the natural termination mechanism.** Every agent loop already terminates on a successful `notify` call. Adding hard budgets creates a second termination path that can cut off productive work.
-- **Grace turn is sufficient.** If the LLM forgets to call `notify`, it gets one reminder. If it still cannot emit, the body force-publishes `"missing_emission"`. This covers the "LLM lost track" case without imposing arbitrary turn limits.
-- **Simplifies the agent body.** Two fewer fields, two fewer termination branches, no budget-related error types.
+- **The LLM knows best when it is stuck.** If a tool repeatedly fails, the LLM is better equipped than a counter to try a different approach, ask for help, or signal failure via `notify`.
+- **`stopReason` is the standard termination signal.** pi-agent already handles the four termination conditions correctly; a Jie-layer termination path on top is redundant.
+- **Scaffolding for a rare case.** The grace turn bought state tracking, two-step escalation, and synthetic message injection to cover "the LLM forgot its system prompt" — which rarely happens with capable models.
+- **A genuinely broken LLM could consume API credits indefinitely.** Acceptable trade-off; if it becomes a problem, the fix is an external watchdog or optional per-deployment limits, not a default hard budget.
 
 ## Consequences
 
-- Agent loops run until the LLM calls `notify` or the grace turn fires. No bounded maximum turn count.
-- A genuinely broken LLM (hallucinating, looping) could consume API credits indefinitely. In practice, the grace turn catches "forgot to notify" cases, and genuinely pathological loops are rare with capable models.
-- If turn limits are needed for specific deployments (cost control, safety), they can be reintroduced as optional configuration without changing the default model.
+- `AgentBody` has no budget fields, no grace counter, no steering-message injection, no force-emit path; its turn-end handling is bookkeeping only (memory persistence, telemetry).
+- If turn limits are ever needed (cost control, safety), they land as optional configuration or an external watchdog without changing the default model.

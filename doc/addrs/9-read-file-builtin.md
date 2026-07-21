@@ -1,44 +1,33 @@
-# ADR 9: `read_file` as a Built-in Tool
+# ADR 9: File Tools (`read_file`, `write_file`) Are Built-in Platform Tools
 
 ## Status
 
-Accepted.
+Accepted. Subsumes ADR 10 (write_file and the enforcement boundary).
 
 ## Context
 
-The original `jie-platform` spec did not have a `read_file` built-in — file reading was implicitly expected to come from an MCP server (e.g. `mcp:code-lens:read_file`). The glossary (`00-overview.md`) used `read_file` as the bare-name example for the Tool Registry, which was misleading: a bare name implies a built-in, but the only provider at the time was MCP.
-
-The architectural question: should file reading be a platform-level primitive, or should it remain team-/MCP-provided?
+The original spec had no file built-ins — reading was expected from an MCP server, and `write_file` was deferred on the claim that writing is "entangled" with module-boundary enforcement (the writer would have to parse files and check the module descriptor). The deferral forced agents onto a `cat > file <<'EOF'` bash stand-in, which lost path-safety, the LLM-facing schema, and tool telemetry — and contradicted the cascade policy (`10-configuration.md`), which makes an unresolved tool in `tools:` a startup failure.
 
 ## Decision
 
-`read_file` is a built-in platform tool in `jie-platform/tools/`, mirroring pi's `read` tool (`@earendil-works/pi-coding-agent/src/core/tools/read.ts`):
+`read_file` and `write_file` are built-in platform tools in `packages/jie-platform/tools/`, mirroring pi's `read`/`write` tools. They enforce **workspace-root containment only** — resolved absolute path must stay inside the resolved workspace root, `path_escape` / `workdir_escape` tool errors on violation, consistently across `read_file`, `write_file`, and `bash` `workdir`. They do **not** enforce module boundaries, no-new-exports rules, or any team-defined constraint; that is the team's concern (see `06-agent-model.md` "Boundary Enforcement (Platform vs Team)").
 
 ```typescript
-read_file(input: { path: string; offset?: number; limit?: number }): {
-  content: string;
-  truncated: { content: boolean };
-}
+read_file(input: { path: string; offset?: number; limit?: number }): { content: string; truncated: { content: boolean } }
+write_file(input: { path: string; content: string }): { path: string; bytes_written: number; created_at: string }
 ```
 
-v1 scope:
+Shared scope: UTF-8 text only; 120s default timeout. `read_file` truncates at 2000 lines or 50 KiB, whichever first; image MIME types are a tool error (`unsupported_media_type`). `write_file` overwrites (idempotent, no append mode) and auto-creates parent directories.
 
-- **Text only.** Image MIME types (`image/jpeg`, `image/png`, `image/gif`, `image/webp`) return a tool error (`unsupported_media_type`). Image attachment support is a Day 2 extension.
-- **Default truncation:** 2000 lines OR 50 KiB, whichever is hit first.
-- **Path resolution:** workspace-root constraint (resolved absolute path must start with resolved workspace root). Escapes return a tool error (`path_escape`).
-- **Encoding:** UTF-8. No charset detection in v1.
-- **Timeout:** inherits the platform's 120s default (effectively never fires; reads are synchronous and bounded).
-
-`write_file` is a separate decision — see ADR 10.
+The minimal team ships `[bash, read_file, write_file, notify]` and no artifact tools — the artifact store is for inter-agent coordination, and a single-agent team has no peers.
 
 ## Rationale
 
-- **File reading is platform-level.** It is a universal primitive — any agent that inspects source code, configuration, or any artifact needs it. Making teams wire up an MCP server for basic file I/O is friction without value.
-- **Mirror pi's `read`.** Pi is the agent runtime underneath Jie. The pi agent already invokes `read` to feed file contents back to the LLM. Jie's `read_file` is a typed, workspace-bounded wrapper with the same shape — agents can reason about it the same way they would about pi's tool.
-- **Text-only is sufficient for v1.** Source code, plan artifacts (Markdown), and module contracts are all text. Adding image support would mean threading attachment handling through pi-agent's message format — useful but deferrable.
+- **File I/O is a platform-level primitive.** Any agent that inspects source, config, or artifacts needs it; making teams wire up an MCP server for basic reads is friction without value.
+- **Mirror pi.** Pi is the runtime underneath Jie and already feeds file contents to the LLM; same shape means the LLM reasons about the tools the same way.
+- **The two enforcement layers were never entangled.** Workspace-root containment ("can the agent write outside the user's project?") is a security question the platform answers. Module-boundary containment is a workflow question the team answers. Conflating them blocked a useful writer on an unrelated Day-2 contract.
+- **The bash stand-in was strictly worse.** No `path_escape`, no schema, no telemetry.
 
 ## Consequences
 
-- `packages/jie-platform/tools/` gains a `read_file.ts` module.
-- Built-in tool list in `monorepo-structure.md` and `00-overview.md` updated.
-- The platform's path-resolution policy (workspace-root containment) applies to `read_file` and `bash` `workdir`; both surface `path_escape` / `workdir_escape` tool errors on violation. `write_file` (ADR 10) extends the same policy to writes. The error taxonomy is consistent.
+- **Explicit Day-1 commitment:** an agent with `write_file` can write any file inside the workspace root, including files inside a no-new-exports module. The team layer is responsible for preventing that, not the platform. The gap is documented in `06-agent-model.md` so it is not silent.
