@@ -5,21 +5,19 @@ The TUI's acceptance surface. Each scenario corresponds to one e2e test file —
 ## Scenario 1: simple agent
 
 1. Run `jie` under a fresh directory without any team definitions. A TUI opens on the built-in minimal team.
-2. Open the agents panel (`Shift+←`); it contains one agent with role `general` (the implicit leader). The rail starts hidden.
-3. Prompt `Tell me a story`. The response streams to the conversation area.
-4. Press `Ctrl+D` twice (within 500 ms). The process exits 0.
+2. Prompt `Tell me a story`. The response streams into the conversation area.
+3. Press `Ctrl+D` (editor empty). The process exits 0.
 
 **Observable outputs.** After `system.team.loaded`, `state.agents` contains exactly one entry (`general`, leader). Response tokens accumulate in `state.agents[my-team:general-1].currentTurn.blocks[*].text`; `agent.idle` closes the turn.
 
 ## Scenario 2: pass work in a team
 
 1. Under a directory with a team at `.jie/teams/my-team/` — `manager` (leader) and `worker`, both with the `bash` tool. A TUI opens.
-2. The agents panel shows both agents; each keeps a separate conversation in the chat area.
-3. Prompt the `manager`: `Read file1.txt and write its content to my-answer.txt`. The manager drives the `bash` tool to completion — at least one `bash` tool-result card with no error.
-4. Cycle to the `worker` (`Ctrl+↓`, forward in insertion order `[manager, worker]`) and back (`Ctrl+↑`); each agent's conversation continues independently.
-5. Press `Ctrl+D` twice (within 500 ms). The process exits 0.
+2. Prompt the `manager`: `Read file1.txt and write its content to my-answer.txt`. The manager drives the `bash` tool to completion — at least one `bash` tool-result card with no error.
+3. Cycle to the `worker` (`Ctrl+↓`, forward in insertion order `[manager, worker]`) and back (`Ctrl+↑`); each agent's conversation continues independently. The footer line-1 right segment tracks the focused agent.
+4. Press `Ctrl+D` (editor empty). The process exits 0.
 
-**Observable outputs.** `state.leaderAgentId === "my-team:manager-1"`; the manager's turns carry the `bash` tool cards and streamed text; focus cycling does not mutate any agent's scrollback or turn state.
+**Observable outputs.** `state.leaderAgentId === "my-team:manager-1"`; the manager's turns carry the `bash` tool cards and streamed text; focus cycling does not mutate any agent's turn state.
 
 ## Scenario 3: switch teams
 
@@ -28,7 +26,7 @@ The TUI's acceptance surface. Each scenario corresponds to one e2e test file —
 3. `/team my-team-2` — the agent map repopulates from `my-team-2` (`my-team-1`'s agents leave `state.agents`); the chat area shows the new team.
 4. Prompt; the response streams.
 5. `/team my-team-1` — the agent map re-seeds from `my-team-1`. `/team` (no arg) lists `defaultTeam` and installed IDs; picking one is equivalent to step 3.
-6. Press `Ctrl+D` twice (within 500 ms). The process exits 0.
+6. Press `Ctrl+D` (editor empty). The process exits 0.
 
 **Observable outputs.** After each switch, `state.teamId` matches and `state.agents` contains exactly the switched-to team's agents. Switching resets and re-seeds the agent map per the `system.team.loaded` / `Actions.switchTeam` rules in `tui-state.md` — there is no TUI-side conversation buffer.
 
@@ -38,7 +36,7 @@ The TUI's acceptance surface. Each scenario corresponds to one e2e test file —
 2. `/login nvidia <apiKey>` — `~/.jie/auth.json` gains the `nvidia` entry (mode `0600` on POSIX); transient `logged in to nvidia`.
 3. `/model nvidia/<modelId>` — `~/.jie/settings.json` gains `defaultProvider`/`defaultModel`; transient `default model set to nvidia/<modelId>`.
 4. Prompt again; the response streams and the banner is gone (cleared by `agent.turn.start`).
-5. Press `Ctrl+D` twice (within 500 ms). The process exits 0.
+5. Press `Ctrl+D` (editor empty). The process exits 0.
 
 **Observable outputs.** `state.errorBanner` holds the no-model message until the first keystroke after it is shown, a submit, or a new turn starts (per `tui-state.md` `clearBanners` / `agent.turn.start`). Transient messages age out after 5 s render-side.
 
@@ -47,7 +45,7 @@ The TUI's acceptance surface. Each scenario corresponds to one e2e test file —
 1. Run `jie` with a single-agent team.
 2. Prompt `Research the history of J`; wait for the agent to become idle.
 3. Prompt `Tell me a haiku`; wait for idle again.
-4. Press `Ctrl+D` twice (within 500 ms). The process exits 0.
+4. Press `Ctrl+D` (editor empty). The process exits 0.
 
 **Observable outputs.** Both prompts and both responses are captured across `state.agents[my-team:general-1].history` + `currentTurn` (the first turn rotates into history when the second prompt arrives); the agent ends `idle`.
 
@@ -55,10 +53,47 @@ The TUI's acceptance surface. Each scenario corresponds to one e2e test file —
 
 1. Run `jie` with a two-agent team (manager + worker; the worker subscribes to the manager's `task` topic).
 2. Prompt the manager: `send 5 math tasks to the worker 1 per message`. The manager calls `notify` 5 times — five tool cards — then becomes idle.
-3. The worker receives the messages via subscription; while it is busy with one, the rest queue up (`agent.prompt.queue.update` carries the full queue snapshot). Cycling focus to the worker (`Ctrl+↓`) shows the footer line-2 queue segment `N prompts queued` with the next-task preview (truncated to 40 code points).
+3. The worker receives the messages via subscription; while it is busy with one, the rest queue up (`agent.prompt.queue.update` carries the full queue snapshot). Cycling focus to the worker (`Ctrl+↓`) shows the footer line-2 queue segment `N prompts queued` with the next-task preview.
 4. The worker drains the queue one message per turn, then becomes idle.
 
 **Observable outputs.** `state.agents[my-team:manager-1]` shows the 5 `notify` cards; the worker's `queue` grows then drains to `[]` (the indicator clears when the body publishes the empty snapshot before `agent.turn.start`); the worker ends `idle`.
+
+## Scenario 7: ! bash mode
+
+1. Run `jie` with a single-agent team carrying the `bash` tool.
+2. Submit `!ls -la`. The editor's borders flip to `warning` color while the buffer parses as a bash command; on submit the line routes straight through the `bash` tool — the LLM is not involved — and the output lands as a `bash` tool-result card with no error.
+3. Submit a bare `!`. The error banner shows `bash mode requires a command…`; nothing is sent and the agent's history is unchanged.
+
+**Observable outputs.** A `toolResult` card named `bash` with `error === null`; on the bare `!`, `state.errorBanner` matches `/bash mode requires a command/` and history length is unchanged.
+
+## Scenario 8: slash-command autocomplete
+
+1. Type `/he` — the autocomplete popup lists matching slash commands.
+2. Press `Tab`: the buffer becomes `/help ` — completion inserts the token and does **not** submit (pi semantics).
+3. Press `Enter`: the command submits; the transient reply `type a prompt...` appears; no error banner.
+
+**Observable outputs.** `state.editorText` transitions `"/he"` → `"/help "` → `""` (submit clears); `state.transientMessage` matches `type a prompt`.
+
+## Scenario 9: @-mention autocomplete
+
+1. Under a project with `src/main.ts` and `src/helper.ts`, type `@main` — the popup lists the matching file.
+2. Press `Tab`: the buffer becomes `@src/main.ts ` (relative path, trailing space) — the token is inserted, not submitted.
+
+**Observable outputs.** `state.editorText` transitions `"@main"` → `"@src/main.ts "`; no error banner.
+
+## Scenario 10: error banner renderer
+
+1. Submit `/nonexistent-command` — the error banner shows `unknown slash command: /nonexistent-command`.
+2. Submit `/help` — the banner clears (the editor clears banners on submit and on the first keystroke after an error is shown).
+
+**Observable outputs.** `state.errorBanner` matches `unknown slash command`, then returns to `null`.
+
+## Scenario 11: session picker overlay
+
+1. Submit `/resume` — the session picker overlay opens as a full-width band over the column (`state.sessionPickerOpen === true`).
+2. Press `Esc` — the picker dismisses (`sessionPickerOpen === false`); no error banner. Selecting a session instead (`Enter` on a focused row) resumes it via `resumeSession` and switches to the resumed team.
+
+**Observable outputs.** `state.sessionPickerOpen` flips true then false; `state.errorBanner` stays `null`.
 
 ## Out of scope
 

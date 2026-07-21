@@ -9,7 +9,7 @@ packages/
     config/          # Settings, auth, models.json loading, model registry (10-configuration.md)
     core/            # AgentBody: event loop (jie-agent-body.ts), pi-agent wiring, streaming, tool adapter
     event/           # EventBus (InProcessEventBus), EventManager, Events factory (03-event-system.md)
-    services/        # GitService (branch / dirty status for the TUI footer)
+    services/        # GitService (branch / dirty status; consumed by the command surface and by jie-cli for the TUI footer)
     storage/         # Storage + SqliteStorage, schema bootstrap, ArtifactStore, MemoryManager (04-storage.md, 08-memory.md)
     team/            # Blueprint parser, team registry (discovery, ADR 24), TeamManager, built-in minimal/ team
     tools/           # Built-in tools: notify, bash, read_file, write_file, edit, todo_write,
@@ -17,8 +17,7 @@ packages/
     jie-platform.ts  # Entry function: createJiePlatform(options, deps?): JiePlatform
     jie-platform-errors.ts
   jie-cli/        # CLI entry (jie binary): -p print mode, interactive TUI mode, login/logout/model/team commands
-  jie-tui/        # Terminal UI (Ink/React): chat panes, editor, footer, slash commands; createTui(deps, options)
-  jie-ink/        # Vendored fork of ink 7.1.0 — the TUI's React terminal renderer (see its MODULE.md)
+  jie-tui/        # Terminal UI (pi-tui-based inline renderer): chat column, editor, footer, slash commands; createTui(deps, options)
   mock-llm-backend/  # OpenAI-compatible mock LLM server for e2e tests (bun mock:start)
   jie-team/       # Aspirational dev-team blueprint — package has no code yet (doc/specs/jie-team/)
   code-lens/      # Aspirational AST code-structure MCP server — package has no code yet (doc/specs/code-lens/)
@@ -28,8 +27,7 @@ packages/
 
 ```
 jie-cli  → jie-platform, jie-tui   (composition root: calls createJiePlatform, hands the handle to the TUI / -p mode)
-jie-tui  → jie-platform, jie-ink   (platform surface: JiePlatform handle + wire-format types only)
-jie-ink                             (vendored ink fork; standalone)
+jie-tui  → jie-platform, @earendil-works/pi-tui   (platform surface: JiePlatform handle + wire-format types only)
 mock-llm-backend                    (standalone test fixture)
 jie-team, code-lens                 (no code, no dependencies)
 ```

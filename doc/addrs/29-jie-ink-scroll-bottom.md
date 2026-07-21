@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Subsumes ADR 30 (appendToScrollback). Records the current state of jie-ink's two chat-rendering additions over upstream ink; both are candidates for removal in the phase-2 jie-ink removal effort.
+Superseded by ADR 30 (2026-07). Both render modes were deleted with jie-ink. The open question this ADR raised is answered: the pi-tui migration dropped the alternate screen entirely, so the terminal's own scrollback *is* the chat history — `appendToScrollback` is no longer needed, and `scrollBottom` was already unused. (Note: the original ADR 30 this subsumed was folded into this one during the ADR consolidation; the number 30 was reused for the migration ADR.)
 
 ## Context
 

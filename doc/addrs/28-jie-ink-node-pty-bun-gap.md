@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Documented as a known limitation, not a defect to fix.
+Superseded by ADR 30 (2026-07). jie-ink was deleted wholesale in the pi-tui migration, so the gap is moot: the 144 skipped node-pty tests and the node-pty dev dependency went away with the package. pi-tui's render tests (and jie-tui's screen tests) use `@xterm/headless`, which runs under bun without a real PTY.
 
 ## Context
 

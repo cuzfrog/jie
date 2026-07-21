@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (amended: the caret is ANSI inverse video in-frame, not OS-caret placement). Replaces the 2026-07 prototype layout, which reserved a static editor height of ~30% of the terminal, boxed it on all four sides, and floated the footer above trailing spacer rows.
+Superseded by ADR 30 (2026-07). The ink-era implementation it describes (`layout.tsx` bands, `editor-view.ts` inverse-video caret, panel scroll viewport) was deleted in the pi-tui migration. The layout decisions themselves survive — thin editor that grows per newline, two-line pinned footer — now realized with pi-tui components; see `doc/specs/ui/tui-layout.md`.
 
 ## Decision
 
