@@ -42,13 +42,11 @@
 - do not import `bun:test`, all test utilities have been added to global namespace and are compatible with `vi`.
 
 ### Single file layout (ordered from top to bottom)
-1. imports (all imports must be at the top)
+1. imports (all imports must be at the top, no inline imports)
 2. optional public domain/DTO types
-3. one public interface (one primary public type)
-4. one public factory function (createXXX)
-5. private concrete implementation (class or OOP function)
-6. private functions (at bottom, caller should be above callee)
-7. optional `export as` visibleForTesting entries
+3. one exported interface (one abstraction type)
+4. one exported class/function (implementation type should only be seen in its unit test and the `module.ts` registration)
+5. private functions (at bottom, caller should be above callee)
 
 ### Git
 - When involving git operations, refer to @doc/AGENTS_GIT.md.
@@ -72,6 +70,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 - A single file should ideally have only 1 exported function and necessary types, all other things in the file should be file private. For unit testing complex logic, use `export as` at the file bottom with `_` prefix to the function, meaning only "visible for testing" (the underscore signals "internal seam", not part of the public API).
 - - External imports must be from a module without specific file, e.g., `import { foo } from "../module"`. Not `"../module/index.ts"`. Refer to `Module gates` glossary. For siblings in the immediate directory, directly import from the sibling, e.g. `import { foo } from "./foo"`. For internal files, imports from specific files within the same module are allowed.
 - In each module, search `MODULE.md`. You should follow its specifications. Any new exposure should be carefully reasoned and justified. If you are blocked, you can ask the user for approval and temporiarily disable the gate on a file by commenting out the file in `MODULE.md`. Check Module Gates glossary for the keyword meanings.
+- DI is used in this project, `module.ts` is where dependencies are registered for a particular module. Implementation types should not been seen outside of the module, it should only be known by its unit tests and `module.ts` registration.
 - Cross boundary domain types, config types, global DTOs are exempted from the visibility rule.
 
 #### SOLID principles:
