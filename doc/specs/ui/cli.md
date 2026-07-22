@@ -256,7 +256,7 @@ The CLI does not run session-id SQL itself. It passes intent via `JiePlatformOpt
 - **`--resume <session_id>`**: CLI sets `JiePlatformOptions.resumeSessionId = <id>`. The platform validates via `memory.hasSession(team_id, session_id)`. If `false` → exit 1: `unknown session_id: <value>`. If `true` → the platform records the value in its `Map<team_id, session_id>` and threads it to every body.
 - **No flag**: `createJiePlatform` mints a fresh `session_id` and records it in the platform's `Map<team_id, session_id>`.
 
-The TUI has an in-session equivalent: `/resume` (alias `/continue`) lists the loaded team's sessions, opens the session picker, and the picked session goes through the `resumeSession` platform command (same `hasSession` validation; a failure surfaces as the error banner, not an exit). Opening `jie` without `--resume` starts a new session. The platform keeps each team's bodies running once started, so team-to-team conversation history persists mid-process across the team's lifetime.
+The TUI has an in-session equivalent: `/resume` lists the loaded team's sessions, opens the session picker, and the picked session goes through the `resumeSession` platform command (same `hasSession` validation; a failure surfaces as the error banner, not an exit). Opening `jie` without `--resume` starts a new session. The platform keeps each team's bodies running once started, so team-to-team conversation history persists mid-process across the team's lifetime.
 
 **Exit codes:** 0 (success); 1 (unknown session_id for `--resume`, `memory_turns` read error).
 

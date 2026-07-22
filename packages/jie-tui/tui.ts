@@ -1,24 +1,14 @@
-import { Container, Loader, ProcessTerminal, TUI, detectCapabilities, setCapabilities, type OverlayHandle, type Terminal } from "@earendil-works/pi-tui";
-import { logger, type AnyEventEnvelope, type JiePlatform, type SessionSummary } from "@cuzfrog/jie-platform";
-import { Actions, TuiState, type StateStore, createStateStore } from "./state";
+import { ProcessTerminal, TUI, detectCapabilities, setCapabilities, type Terminal } from "@earendil-works/pi-tui";
+import { logger, type AnyEventEnvelope, type JiePlatform } from "@cuzfrog/jie-platform";
+import { Actions, type TuiState, type StateStore, createStateStore } from "./state";
 import { createTuiCommandHandler, type CommandHandler } from "./command-handler";
 import { createStreamTerminal } from "./stream-terminal";
-import { createChatSync } from "./sync";
-import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, SessionPicker, StatusLine, TodoList, WORKING_LABEL, style } from "./components";
-import { Footer } from "./components/footer";
-import { createJieEditor } from "./components/editor";
+import { createTuiView, type TuiView } from "./components";
 
 const SUBMIT_EDITOR_TEXT = Actions.submitEditorText("").type;
 const REQUEST_INTERRUPT = Actions.requestInterrupt("", "").type;
 const REQUEST_QUIT = Actions.requestQuit().type;
 const SELECT_PICKED_SESSION = Actions.selectPickedSession("", "").type;
-const OPEN_SESSION_PICKER = Actions.openSessionPicker([]).type;
-const CLOSE_SESSION_PICKER = Actions.closeSessionPicker().type;
-const CTRL_T = "\x14";
-const CTRL_O = "\x0f";
-const CYCLE_PREV_KEYS = new Set<string>(["\x1b[1;2A", "\x1b[1;5A"]);
-const CYCLE_NEXT_KEYS = new Set<string>(["\x1b[1;2B", "\x1b[1;5B"]);
-const CONSUMED = { consume: true } as const;
 const log = logger.getSubLogger({ name: "jie.tui" });
 
 export interface TuiDeps {
@@ -66,11 +56,7 @@ class PiTui implements Tui {
   private readonly unsubscribeActions: () => void;
   private terminal: Terminal | null = null;
   private ui: TUI | null = null;
-  private unsubscribeChatSync: () => void = noop;
-  private unsubscribeKeys: () => void = noop;
-  private sessionPickerHandle: OverlayHandle | null = null;
-  private workingSlot: Container | null = null;
-  private workingIndicator: Loader | null = null;
+  private view: TuiView | null = null;
   private resolveStart: (() => void) | null = null;
 
   constructor(options: CreateTUIOptions, deps: TuiDeps, stateStore: StateStore, commandHandler: CommandHandler) {
@@ -82,7 +68,6 @@ class PiTui implements Tui {
       this.stateStore.dispatch(Actions.receiveEvent(env));
     });
     this.unsubscribeActions = stateStore.subscribe(async (action) => {
-      this.syncWorkingIndicator();
       if (action.type === SUBMIT_EDITOR_TEXT) {
         this.commandHandler.handle(action.payload.text);
         return;
@@ -96,17 +81,7 @@ class PiTui implements Tui {
         return;
       }
       if (action.type === SELECT_PICKED_SESSION) {
-        this.hideSessionPicker();
-        this.stateStore.dispatch(Actions.closeSessionPicker());
         await this.handleResumePickedSession(action.payload.teamId, action.payload.sessionId);
-        return;
-      }
-      if (action.type === OPEN_SESSION_PICKER) {
-        this.showSessionPicker(action.payload.sessions);
-        return;
-      }
-      if (action.type === CLOSE_SESSION_PICKER) {
-        this.hideSessionPicker();
         return;
       }
     });
@@ -132,23 +107,7 @@ class PiTui implements Tui {
         const stdin = this.deps.stdin ?? process.stdin;
         const terminal: Terminal = this.deps.stdin === undefined ? new ProcessTerminal() : createStreamTerminal(stdin, stdout);
         const ui = new TUI(terminal);
-        const chatContainer = new Container();
-        const editor = createJieEditor(ui, this.stateStore, this.cwd);
-        const workingSlot = new Container();
-        const workingIndicator = new Loader(ui, style("accent"), style("muted"), WORKING_LABEL, { frames: [...SPINNER_FRAMES], intervalMs: SPINNER_INTERVAL_MS });
-        ui.addChild(chatContainer);
-        ui.addChild(new TodoList(this.stateStore));
-        ui.addChild(workingSlot);
-        ui.addChild(new StatusLine(this.stateStore));
-        ui.addChild(editor);
-        ui.addChild(new Footer(this.stateStore));
-        ui.setFocus(editor);
-        this.workingSlot = workingSlot;
-        this.workingIndicator = workingIndicator;
-        this.unsubscribeKeys = ui.addInputListener((data) => this.handleGlobalKey(data));
-        this.unsubscribeChatSync = createChatSync(this.stateStore, chatContainer, () => {
-          ui.requestRender();
-        });
+        this.view = createTuiView({ tui: ui, stateStore: this.stateStore, cwd: this.cwd });
         this.terminal = terminal;
         this.ui = ui;
         ui.start();
@@ -169,14 +128,10 @@ class PiTui implements Tui {
       this.ui = null;
       this.terminal = null;
     }
-    this.sessionPickerHandle = null;
-    if (this.workingIndicator !== null) {
-      this.workingIndicator.stop();
-      this.workingIndicator = null;
+    if (this.view !== null) {
+      this.view.stop();
+      this.view = null;
     }
-    this.workingSlot = null;
-    this.unsubscribeChatSync();
-    this.unsubscribeKeys();
     this.unsubscribeBus();
     this.unsubscribeActions();
     this.resolveStart?.();
@@ -187,61 +142,6 @@ class PiTui implements Tui {
       await this.terminal.drainInput();
     }
     this.stop();
-  }
-
-  private handleGlobalKey(data: string): typeof CONSUMED | undefined {
-    if (data === CTRL_T) {
-      this.stateStore.dispatch(Actions.toggleThinking());
-      return CONSUMED;
-    }
-    if (data === CTRL_O) {
-      this.stateStore.dispatch(Actions.toggleToolCards());
-      return CONSUMED;
-    }
-    if (CYCLE_PREV_KEYS.has(data)) {
-      this.stateStore.dispatch(Actions.switchCycleAgent(-1));
-      return CONSUMED;
-    }
-    if (CYCLE_NEXT_KEYS.has(data)) {
-      this.stateStore.dispatch(Actions.switchCycleAgent(1));
-      return CONSUMED;
-    }
-    return undefined;
-  }
-
-  private syncWorkingIndicator(): void {
-    if (this.workingSlot === null || this.workingIndicator === null) return;
-    const busy = TuiState.isBusy(this.stateStore.getState());
-    const mounted = this.workingSlot.children.length > 0;
-    if (busy && !mounted) {
-      this.workingSlot.addChild(this.workingIndicator);
-      this.workingIndicator.start();
-    } else if (!busy && mounted) {
-      this.workingIndicator.stop();
-      this.workingSlot.removeChild(this.workingIndicator);
-    }
-  }
-
-  private showSessionPicker(sessions: ReadonlyArray<SessionSummary>): void {
-    if (this.ui === null) return;
-    const teamId = this.stateStore.getState().teamId;
-    if (teamId === null) return;
-    const picker = new SessionPicker(sessions, this.stateStore, {
-      onSelect: (sessionId) => {
-        this.stateStore.dispatch(Actions.selectPickedSession(teamId, sessionId));
-      },
-      onCancel: () => {
-        this.stateStore.dispatch(Actions.closeSessionPicker());
-      },
-    });
-    this.sessionPickerHandle = this.ui.showOverlay(picker, { width: "100%", maxHeight: "60%" });
-  }
-
-  private hideSessionPicker(): void {
-    if (this.sessionPickerHandle !== null) {
-      this.sessionPickerHandle.hide();
-      this.sessionPickerHandle = null;
-    }
   }
 
   private async handleResumePickedSession(teamId: string, sessionId: string): Promise<void> {
@@ -280,5 +180,3 @@ function subscribeToBus(platform: JiePlatform, onEvent: (event: AnyEventEnvelope
 function isUtf8(): boolean {
   return /utf-?8/i.test(process.env.LANG ?? process.env.LC_ALL ?? "");
 }
-
-function noop(): void {}

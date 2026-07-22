@@ -101,7 +101,7 @@ Set `state.errorBanner` to the composed string: either `event.payload.error` or,
 - `Actions.switchTeam(identity)` — see rule above; fires on `/team <id>` regardless of cache state.
 - `Actions.requestInterrupt(teamId, agentKey)` — no reducer state change. The TUI host observes the action and calls `platform.interrupt(teamId, agentKey)`. Wired to `Esc` only when the focused agent is busy and no autocomplete popup is showing.
 - `Actions.switchCycleAgent(direction: 1 | -1)` — cycle `state.focusedAgentId`. No-op when the agent map has fewer than two agents or when the current focus cannot be resolved. When `state.focusedAgentId === null`, direction `1` lands on the first agent in insertion order, direction `-1` on the last. Otherwise wraps in insertion order.
-- `Actions.openSessionPicker(sessions)` — store the `SessionSummary` list from `listSessions`, open the picker, reset query and focus, **and clear `transientMessage`** (the `loading sessions…` ack must not linger under the overlay). Fired by `/resume` and `/continue`.
+- `Actions.openSessionPicker(sessions)` — store the `SessionSummary` list from `listSessions`, open the picker, reset query and focus, **and clear `transientMessage`** (the `loading sessions…` ack must not linger under the overlay). Fired by `/resume`.
 - `Actions.setPickerQuery(text)` — filter text; **also resets `sessionPickerFocus` to 0** so focus never dangles past the filtered list.
 - `Actions.focusPickerIndex(delta, listLength)` — move `sessionPickerFocus` by `±1`, wrapping over the **filtered** `listLength` the picker reports (not the full session list).
 - `Actions.closeSessionPicker()` — close and clear query/sessions/focus. Wired to the picker's `Esc` (onCancel) and to the resume completion path.
@@ -132,4 +132,4 @@ History is not rotated by size or count. Rendering is append-only into the inlin
 
 - **Per-block / per-card `expanded` state.** Expansion is a render concern, not a state concern. The reducer only carries the all-or-nothing `thinkingExpanded` / `toolCardsExpanded` toggles (`Ctrl+T` / `Ctrl+O`); the components read them.
 - **Queue depth on a leader.** The queue is per-agent (`state.agents[id].queue`); the footer line-2 queue segment surfaces the focused agent's.
-- **Queue-pickup flicker debounce.** `agent.idle` then `agent.turn.start` shows as separate transitions; if a future revision needs to mask a brief `idle` window, the fix lives in the working-indicator mount logic in `tui.ts` (a render-side concern), not in the reducer.
+- **Queue-pickup flicker debounce.** `agent.idle` then `agent.turn.start` shows as separate transitions; if a future revision needs to mask a brief `idle` window, the fix lives in the working-indicator mount logic in `components/view.ts` (a render-side concern), not in the reducer.

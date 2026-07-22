@@ -422,16 +422,6 @@ describe("createTuiCommandHandler — /resume", () => {
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/resume failed")));
   });
 
-  test("/continue is an alias for /resume", async () => {
-    const { platform, execute } = makePlatform();
-    execute.mockImplementationOnce(async () => []);
-    const { deps, dispatch } = makeDepsWithTeamId(platform, "minimal");
-    const handler = createTuiCommandHandler(deps);
-    handler.handle("/continue");
-    expect(execute).toHaveBeenCalledWith({ name: "listSessions", teamId: "minimal" });
-    await new Promise((r) => setImmediate(r));
-    expect(dispatch).toHaveBeenCalledWith(Actions.openSessionPicker([]));
-  });
 });
 
 describe("SLASH_COMMAND_NAMES", () => {
@@ -445,7 +435,6 @@ describe("SLASH_COMMAND_NAMES", () => {
       "model",
       "team",
       "resume",
-      "continue",
     ]);
   });
 });

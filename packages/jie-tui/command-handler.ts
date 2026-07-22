@@ -237,7 +237,6 @@ const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn
   ["model", interceptModel],
   ["team", interceptTeam],
   ["resume", interceptResume],
-  ["continue", interceptResume],
 ]);
 
 export const SLASH_COMMAND_NAMES: ReadonlyArray<string> = Array.from(COMMANDS.keys()).concat(Array.from(INTERCEPTS.keys()));

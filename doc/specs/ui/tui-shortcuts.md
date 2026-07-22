@@ -1,6 +1,6 @@
 # TUI Keybinding Matrix
 
-The TUI is keyboard-driven. Editor keys are pi-tui `Editor` semantics verbatim plus three jie keys; global keys are handled by the TUI's input listener before they reach the editor. All bindings are implemented in `components/editor/jie-editor.ts` (editor keys) and `tui.ts` (global keys); the session picker carries its own keys while open.
+The TUI is keyboard-driven. Editor keys are pi-tui `Editor` semantics verbatim plus three jie keys; global keys are handled by the TUI's input listener before they reach the editor. All bindings are implemented in `components/editor/jie-editor.ts` (editor keys) and `components/view.ts` (global keys); the session picker carries its own keys while open. On an empty conversation the core keys are also shown as on-screen hints above the editor (`tui-layout.md`, "keybinding hints"); they disappear once a turn starts.
 
 ## Editor
 
@@ -55,7 +55,6 @@ Typed into the editor like a prompt; the command handler (`command-handler.ts`) 
 | `/team <id>` | Switch the active team (`execute({name:"team"})` then `Actions.switchTeam`); unknown id is an error banner | `loading team '<id>'` |
 | `/team` (no arg) | List `defaultTeam` and installed team IDs | `defaultTeam: <id or unset> \| installed: <ids>` |
 | `/resume` | List the team's sessions (`listSessions`) and open the session picker | `loading sessions…` |
-| `/continue` | Alias for `/resume` | `loading sessions…` |
 
 ## Autocomplete
 

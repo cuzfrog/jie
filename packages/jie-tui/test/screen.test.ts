@@ -171,6 +171,26 @@ describe("screen rendering", () => {
       harness.tui.stop();
     }
   });
+
+  test("the empty screen shows keybinding hints above the editor and clears them once a turn streams", async () => {
+    const harness = await bootScreen();
+    try {
+      const initial = harness.vt.getViewport().map(stripAnsi).join("\n");
+      expect(initial).toContain("mention a file");
+      expect(initial).toContain("ctrl+d");
+      harness.emit(TEAM_LOADED);
+      await harness.vt.waitForRender();
+      expect(harness.vt.getViewport().map(stripAnsi).join("\n")).toContain("mention a file");
+      harness.emit(Events.agentTurnStart(AGENT_SENDER));
+      harness.emit(Events.agentStreamChunk(AGENT_SENDER, 1, 1, "text", "hello hints"));
+      await settle(harness);
+      const after = harness.vt.getViewport().map(stripAnsi).join("\n");
+      expect(after).toContain("hello hints");
+      expect(after).not.toContain("mention a file");
+    } finally {
+      harness.tui.stop();
+    }
+  });
 });
 
 function assignOrDeleteLang(value: string | undefined): void {

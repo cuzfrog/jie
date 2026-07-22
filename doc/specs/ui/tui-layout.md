@@ -16,7 +16,7 @@ Example:
 
 ## Single inline column
 
-The TUI renders a single full-width column of stacked sections, top to bottom: chat, todos, working indicator, status line, editor, footer (composition in `tui.ts`). Rendering is **inline into the normal terminal buffer** (pi-tui; no alternate screen): finished conversation output scrolls away as ordinary terminal scrollback, and selection/copy is the terminal's own. There is no rail, no app-level scrollback buffer, no mouse/wheel handling. Agent visibility that the rail used to provide lives in the footer (focused agent, per-agent model) plus the agent-cycle keys (`tui-shortcuts.md`).
+The TUI renders a single full-width column of stacked sections, top to bottom: chat, todos, working indicator, status line, keybinding hints (empty state), editor, footer (composed by `components/layout.ts`, wired by `components/view.ts`). Rendering is **inline into the normal terminal buffer** (pi-tui; no alternate screen): finished conversation output scrolls away as ordinary terminal scrollback, and selection/copy is the terminal's own. There is no rail, no app-level scrollback buffer, no mouse/wheel handling. Agent visibility that the rail used to provide lives in the footer (focused agent, per-agent model) plus the agent-cycle keys (`tui-shortcuts.md`).
 
 Reference terminal: **80 cols**. Every section spans the full width; every custom component truncates each rendered line to the given width (pi-tui's `doRender` throws on over-wide lines — this is pinned by per-component fuzz tests).
 
@@ -33,11 +33,13 @@ The **todo list** renders as its own section below the chat (the focused agent's
 
 The **status line** section sits between the working slot and the editor: the transient message row (`muted`, aged out after 5 s render-side) and the error banner row (`error`), each only when present.
 
+The **keybinding hints** section sits between the status line and the editor and renders only while the conversation is empty — no agent has history or an in-progress turn (`currentTurn === null`). It prints the core bindings (`enter`/`tab`/`@`/`/`/`ctrl+t`/`ctrl+o`/`shift+↑↓`/`esc`/`ctrl+d`) as `key description` pairs (accent key, muted description, ` · ` separators) greedily wrapped to the width. The moment a turn starts the component renders nothing and the inline renderer reclaims the lines. There is no bottom-anchoring: the editor stays inline (pi-tui's model), so on an empty screen the hints + editor sit at the top and the rest is ordinary scrollback.
+
 ## Overlays
 
 Two overlays:
 
-- **Session picker** (`/resume`, `/continue`): a full-width band (`width: "100%"`, `maxHeight: "60%"`) drawn over the column via pi-tui's overlay layer. It captures input while open: `↑`/`↓` move focus, `Enter` selects, `Esc` dismisses, printable chars extend the query filter, backspace shortens it. Driven by the `sessionPicker*` state slice (`tui-state.md`); selecting resumes the session through `platform.execute({name:"resumeSession"})` and switches to the resumed team.
+- **Session picker** (`/resume`): a full-width band (`width: "100%"`, `maxHeight: "60%"`) drawn over the column via pi-tui's overlay layer. It captures input while open: `↑`/`↓` move focus, `Enter` selects, `Esc` dismisses, printable chars extend the query filter, backspace shortens it. Driven by the `sessionPicker*` state slice (`tui-state.md`); selecting resumes the session through `platform.execute({name:"resumeSession"})` and switches to the resumed team.
 - **Editor autocomplete popup** (slash commands, `@`-mentions): drawn by the pi-tui editor itself, anchored to the cursor; see `tui-shortcuts.md`.
 
 ## Editor
