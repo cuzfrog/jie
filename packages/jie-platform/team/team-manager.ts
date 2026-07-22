@@ -1,5 +1,6 @@
 import { ulid } from "ulid";
 import type { Api, Model } from "@earendil-works/pi-ai";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { type AgentBody, createAgentBody } from "../core";
 import { type EventManager, Events } from "../event";
 import { JiePlatformError } from "../jie-platform-errors";
@@ -9,7 +10,7 @@ import { type ModelRegistry } from "../config";
 import { type ToolRegistry } from "../tools";
 import { type AgentSoul, type TeamBlueprint, type TeamBlueprintLocation, BUILTIN_MINIMAL_TEAM_ID } from "./types";
 import { type TeamRegistry, createTeamRegistry } from "./registry";
-import type { AgentInfo, TeamInfo } from "../types";
+import type { AgentHistory, AgentInfo, TeamInfo } from "../types";
 
 export interface TeamManagerOptions {
   readonly homeJieDir: string;
@@ -79,11 +80,15 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
       });
       bodies.push(body);
     }
+    const restored = new Map<string, ReadonlyArray<AgentMessage>>();
+    for (const body of bodies) {
+      restored.set(body.identity.agentKey, await body.restore());
+    }
+    loadedTeams.set(requested, bodies);
+    publishTeamLoaded(requested, bodies, restored);
     for (const body of bodies) {
       await body.start();
     }
-    loadedTeams.set(requested, bodies);
-    publishTeamLoaded(requested, bodies);
     return toTeamInfo(requested, bodies);
   }
 
@@ -136,8 +141,8 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
     }
   }
 
-  function publishTeamLoaded(teamId: string, bodies: AgentBody[]): void {
-    eventManager.publish(Events.teamLoaded({ kind: "system" }, toTeamInfo(teamId, bodies)));
+  function publishTeamLoaded(teamId: string, bodies: AgentBody[], restored: ReadonlyMap<string, ReadonlyArray<AgentMessage>>): void {
+    eventManager.publish(Events.teamLoaded({ kind: "system" }, toTeamInfo(teamId, bodies, restored)));
   }
 
   function agents(teamId: string): ReadonlyArray<AgentInfo> {
@@ -182,7 +187,7 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
   };
 }
 
-function toTeamInfo(id: string, bodies: AgentBody[]): TeamInfo {
+function toTeamInfo(id: string, bodies: AgentBody[], restored?: ReadonlyMap<string, ReadonlyArray<AgentMessage>>): TeamInfo {
   const identities = bodies.map((b) => b.identity);
   const leader = identities.find((a) => a.isLeader);
   if (leader === undefined) {
@@ -190,5 +195,6 @@ function toTeamInfo(id: string, bodies: AgentBody[]): TeamInfo {
       detail: `team '${id}' has no agent marked as leader`,
     });
   }
-  return { id, leaderKey: leader.agentKey, agents: identities };
+  const history: AgentHistory[] = bodies.map((b) => ({ agentKey: b.identity.agentKey, messages: restored?.get(b.identity.agentKey) ?? [] }));
+  return { id, leaderKey: leader.agentKey, agents: identities, history };
 }

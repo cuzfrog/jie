@@ -11,6 +11,7 @@ const AGENT_SENDER = { kind: "agent", teamId: "my-team", agentKey: "general-1" }
 const TEAM_LOADED = Events.teamLoaded({ kind: "system" }, {
   id: "my-team",
   leaderKey: "general-1",
+  history: [],
   agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, model: null }],
 });
 const SESSIONS: ReadonlyArray<SessionSummary> = [
@@ -118,22 +119,23 @@ describe("screen rendering", () => {
     }
   });
 
-  test("the session picker opens as a full-width band and esc dismisses it", async () => {
+  test("the resume autocomplete lists sessions in-flow and the editor stays visible", async () => {
     const harness = await bootScreen();
     try {
       harness.emit(TEAM_LOADED);
       await harness.vt.waitForRender();
-      await typeText(harness, "/resume");
-      await press(harness, "\r");
+      await typeText(harness, "/resume ");
       await settle(harness);
-      const opened = harness.vt.getViewport().map(stripAnsi);
-      expect(opened.join("\n")).toContain("alpha-1");
-      const header = opened.find((line) => line.includes("Resume session"));
-      expect(header).toBeDefined();
-      expect(header!.startsWith("Resume session")).toBe(true);
+      const opened = harness.vt.getViewport().map(stripAnsi).join("\n");
+      expect(opened).toContain("alpha-1");
+      expect(opened).toContain("─");
       await press(harness, "\x1b");
       await settle(harness);
-      expect(harness.vt.getViewport().map(stripAnsi).join("\n")).not.toContain("Resume session");
+      const closed = harness.vt.getViewport().map(stripAnsi).join("\n");
+      expect(closed).not.toContain("alpha-1");
+      expect(closed).toContain("─");
+      await typeText(harness, "x");
+      expect(harness.tui.state.editorText).toBe("/resume x");
     } finally {
       harness.tui.stop();
     }
@@ -167,6 +169,31 @@ describe("screen rendering", () => {
       for (const line of lines) {
         expect(visibleWidth(line)).toBeLessThanOrEqual(COLS);
       }
+    } finally {
+      harness.tui.stop();
+    }
+  });
+
+  test("the empty screen shows the welcome banner and keybinding hints above the editor and clears them once a turn streams", async () => {
+    const harness = await bootScreen();
+    try {
+      const initial = harness.vt.getViewport().map(stripAnsi).join("\n");
+      expect(initial).toContain("multi-agent coding");
+      expect(initial).toContain("mention a file");
+      expect(initial).toContain("ctrl+d");
+      harness.emit(TEAM_LOADED);
+      await harness.vt.waitForRender();
+      const withTeam = harness.vt.getViewport().map(stripAnsi).join("\n");
+      expect(withTeam).toContain("team my-team");
+      expect(withTeam).toContain("general-1 (leader)");
+      expect(withTeam).toContain("mention a file");
+      harness.emit(Events.agentTurnStart(AGENT_SENDER));
+      harness.emit(Events.agentStreamChunk(AGENT_SENDER, 1, 1, "text", "hello hints"));
+      await settle(harness);
+      const after = harness.vt.getViewport().map(stripAnsi).join("\n");
+      expect(after).toContain("hello hints");
+      expect(after).not.toContain("mention a file");
+      expect(after).not.toContain("multi-agent coding");
     } finally {
       harness.tui.stop();
     }

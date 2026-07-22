@@ -40,6 +40,7 @@ function makeTeam(teamId: string, agentKeys: ReadonlyArray<string>, leaderKey: s
     id: teamId,
     leaderKey,
     agents: agentKeys.map((k) => ({ teamId, role: k, agentKey: k, isLeader: k === leaderKey, model: null })),
+    history: [],
   };
 }
 

@@ -2,7 +2,7 @@
 
 The team's user-facing cockpit. Lives in `packages/jie-tui/`. Observes all agent activity; sends user prompts to agents. This parent doc captures the TUI's role, its boundaries, and its invariants. Children capture the rest:
 
-- `tui-layout.md` — spatial design (single inline column, overlays, footer).
+- `tui-layout.md` — spatial design (single inline column, footer).
 - `tui-shortcuts.md` — keybinding matrix, slash commands, and OS-shortcut conflict resolution.
 - `tui-state.md` — `TuiState` shape and reducer rules per topic.
 - `tui-user-scenarios.md` — acceptance scenarios.
@@ -23,7 +23,7 @@ The TUI's sole write path is `platform.prompt(teamId, agentKey, text)`, which pu
 - **No state of its own beyond UI state.** Authoritative state lives on the EventBus and in the Artifact Store. `TuiState` is a derived view, not a cache.
 - **Out-of-band oblivious.** Internal agent operations (compaction, memory loads) are not published on the EventBus and so the TUI does not display them.
 - **Pure reducer.** `(state, action) → state` is referentially transparent; the reducer does not read the clock. Spinner frames and transient-message aging live entirely on the render side. See `tui-state.md` "Reducer purity model".
-- **pi-tui inline rendering.** The renderer is `@earendil-works/pi-tui`: `tui.ts` builds a `TUI` over a component tree (`Container`/`Loader`/custom `Component`s), and pi-tui owns the differential terminal output — it renders **inline into the normal terminal buffer**, no alternate screen. Finished conversation output is the terminal's own scrollback, and selection/copy is the terminal's native; the TUI has no app-level scrolling, mouse, or wheel handling. UI state lives in a `StateStore` (`state/state-store.ts`); bus envelopes are wrapped in `Actions.receiveEvent` before dispatch; a `store.subscribe` line runs the structural chat-sync and `requestRender()` (16 ms-coalesced). Two runtime hazards are guarded: every custom component truncates each rendered line to the given width (pi-tui's `doRender` throws on over-wide lines), and the logger's sink is redirected to `stderr` at startup (stray `stdout` writes would shred the inline renderer).
+- **pi-tui inline rendering.** The renderer is `@earendil-works/pi-tui`: `tui.ts` builds a `TUI` and `components/view.ts` composes the component tree onto it (`Container`/`Loader`/custom `Component`s, arranged by `components/layout.ts`), and pi-tui owns the differential terminal output — it renders **inline into the normal terminal buffer**, no alternate screen. Finished conversation output is the terminal's own scrollback, and selection/copy is the terminal's native; the TUI has no app-level scrolling, mouse, or wheel handling. UI state lives in a `StateStore` (`state/state-store.ts`); bus envelopes are wrapped in `Actions.receiveEvent` before dispatch; a `store.subscribe` line runs the structural chat-sync and `requestRender()` (16 ms-coalesced). Two runtime hazards are guarded: every custom component truncates each rendered line to the given width (pi-tui's `doRender` throws on over-wide lines), and the logger's sink is redirected to `stderr` at startup (stray `stdout` writes would shred the inline renderer).
 
 ## Boundary with the platform
 

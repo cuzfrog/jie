@@ -71,7 +71,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 - A *module* is a directory containing code. The `MODULE.md` lives at the module's root and gates its branching point in the tree.
 - A single file should ideally have only 1 exported function and necessary types, all other things in the file should be file private. For unit testing complex logic, use `export as` at the file bottom with `_` prefix to the function, meaning only "visible for testing" (the underscore signals "internal seam", not part of the public API).
 - - External imports must be from a module without specific file, e.g., `import { foo } from "../module"`. Not `"../module/index.ts"`. Refer to `Module gates` glossary. For siblings in the immediate directory, directly import from the sibling, e.g. `import { foo } from "./foo"`. For internal files, imports from specific files within the same module are allowed.
-- In each module, search `MODULE.md`. You must follow its specifications. Any new exposure must be discussed with the user. If you are blocked, ask the user to review and manually add the exports. Check Module Gates glossary for the keyword meanings. `no-new-exports` files can be edited.
+- In each module, search `MODULE.md`. You should follow its specifications. Any new exposure should be carefully reasoned and justified. If you are blocked, you can ask the user for approval and temporiarily disable the gate on a file by commenting out the file in `MODULE.md`. Check Module Gates glossary for the keyword meanings.
 - Cross boundary domain types, config types, global DTOs are exempted from the visibility rule.
 
 #### SOLID principles:
@@ -87,11 +87,11 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 - no comments in the code, decisions should be captured in `doc/specs/` or `doc/addrs/`.
 - do not skip tests, problems must be resolved.
 - do not ignore tech debt you encountered, record them as Github issues so later other agents can analyze and fix.
-- avoid worktrees.
+- avoid worktrees, for parallel development on different branches, use `git` to clone the repo to `/tmp/<id>/beep/` and work there, then raise PR.
 - avoid direct usage of `console`, use our interface abstraction `Console` instead. So that tests can supply a mock console and don't need to mock global objects.
 
 ## Best practices
-- write down your plan before execution.
+- write down your plan before execution (but do not enter plan mode, it will block your further execution).
 - when you have multiple steps in your execution, use a todo-list, divide and conquer.
 
 (Write temporary files to `./tmp/` only if you want me to reivew, otherwise write to `/tmp/`)

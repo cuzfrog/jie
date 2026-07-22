@@ -185,6 +185,7 @@ function dispatch(command: Command<CommandName>): CommandResult<CommandName> | n
       const team: TeamInfo = {
         id: teamId,
         leaderKey: "general-1",
+        history: [],
         agents: [{
           teamId,
           role: "general",
@@ -236,10 +237,6 @@ function captureRun(platform: FakePlatform): CapturedRun {
         transientMessage: null,
         errorBanner: null,
         editorText: "",
-        sessionPickerOpen: false,
-        sessionPickerQuery: "",
-        sessionPickerSessions: [],
-        sessionPickerFocus: 0,
       },
       start: () => {
         startCalls.value += 1;

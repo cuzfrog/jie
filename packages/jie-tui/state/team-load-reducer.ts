@@ -1,5 +1,7 @@
 import type { TeamInfo } from "@cuzfrog/jie-platform";
 import type { AgentId, AgentUiState, TuiState } from "./state";
+import { hydrateHistory } from "./hydrate-history";
+import { estimateContextTokens } from "./context-tokens";
 
 export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
   const { id: teamId, agents } = teamInfo;
@@ -26,6 +28,20 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
   for (const id of newAgents.keys()) {
     if (!incomingIds.has(id)) newAgents.delete(id);
   }
+  for (const entry of teamInfo.history) {
+    if (entry.messages.length === 0) continue;
+    const agentId = `${teamId}:${entry.agentKey}` as AgentId;
+    const existing = newAgents.get(agentId);
+    if (existing === undefined) continue;
+    const hydrated = hydrateHistory(entry.messages);
+    newAgents.set(agentId, {
+      ...existing,
+      history: hydrated.history,
+      currentTurn: hydrated.currentTurn,
+      todos: hydrated.todos,
+      contextTokensUsed: estimateContextTokens(hydrated.history, hydrated.currentTurn),
+    });
+  }
   if (focused !== null && !newAgents.has(focused)) focused = null;
   if (focused === null && leaderId !== null && newAgents.has(leaderId)) focused = leaderId;
   if (leaderId !== null && !newAgents.has(leaderId)) leaderId = null;
@@ -35,10 +51,6 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
     leaderAgentId: leaderId,
     focusedAgentId: focused,
     agents: newAgents,
-    sessionPickerOpen: false,
-    sessionPickerQuery: "",
-    sessionPickerSessions: [],
-    sessionPickerFocus: 0,
   };
 }
 

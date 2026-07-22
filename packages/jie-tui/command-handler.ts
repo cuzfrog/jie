@@ -154,10 +154,6 @@ function parseModelArg(arg: string): { kind: "ok"; provider: string; modelId: st
   return { kind: "ok", provider, modelId };
 }
 
-function formatTeamListReply(defaultTeam: string | null, installed: ReadonlyArray<string>): string {
-  return `defaultTeam: ${defaultTeam ?? "unset"} | installed: ${installed.join(", ")}`;
-}
-
 function interceptLogin(args: ReadonlyArray<string>, deps: CommandHandlerDeps): InterceptResult {
   if (args.length !== 2) return { kind: "error", text: "/login <provider> <apiKey>" };
   const [provider, apiKey] = args;
@@ -193,17 +189,8 @@ function interceptModel(args: ReadonlyArray<string>, deps: CommandHandlerDeps): 
 }
 
 function interceptTeam(args: ReadonlyArray<string>, deps: CommandHandlerDeps): InterceptResult {
-  if (args.length === 0) {
-    void deps.platform.execute({ name: "getTeamInfo" })
-      .then((info) => {
-        deps.stateStore.dispatch(Actions.setTransientMessage(formatTeamListReply(info.defaultTeam, info.installed)));
-      }, (error: unknown) => {
-        const reason = error instanceof Error ? error.message : String(error);
-        deps.stateStore.dispatch(Actions.setErrorMessage(`/team failed: ${reason}`));
-      });
-    return { kind: "reply", text: "loading team list…" };
-  }
-  const argument = args[0]!;
+  const argument = args[0];
+  if (argument === undefined) return { kind: "error", text: "/team <teamId>" };
   void deps.platform.execute({ name: "team", teamId: argument })
     .then((identity) => {
       deps.stateStore.dispatch(Actions.switchTeam(identity));
@@ -218,17 +205,19 @@ function interceptTeam(args: ReadonlyArray<string>, deps: CommandHandlerDeps): I
   return { kind: "reply", text: `loading team '${argument}'` };
 }
 
-function interceptResume(_args: ReadonlyArray<string>, deps: CommandHandlerDeps): InterceptResult {
+function interceptResume(args: ReadonlyArray<string>, deps: CommandHandlerDeps): InterceptResult {
+  const sessionId = args[0];
+  if (sessionId === undefined) return { kind: "error", text: "/resume <sessionId>" };
   const teamId = deps.stateStore.getState().teamId;
   if (teamId === null) return { kind: "error", text: "/resume: no team loaded" };
-  void deps.platform.execute({ name: "listSessions", teamId })
-    .then((sessions) => {
-      deps.stateStore.dispatch(Actions.openSessionPicker(sessions));
+  void deps.platform.execute({ name: "resumeSession", teamId, sessionId })
+    .then((identity) => {
+      deps.stateStore.dispatch(Actions.switchTeam(identity));
     }, (error: unknown) => {
       const reason = error instanceof Error ? error.message : String(error);
       deps.stateStore.dispatch(Actions.setErrorMessage(`/resume failed: ${reason}`));
     });
-  return { kind: "reply", text: "loading sessions…" };
+  return { kind: "reply", text: `resuming session '${sessionId}'` };
 }
 
 const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn>([
@@ -237,7 +226,6 @@ const INTERCEPTS: ReadonlyMap<string, InterceptFn> = new Map<string, InterceptFn
   ["model", interceptModel],
   ["team", interceptTeam],
   ["resume", interceptResume],
-  ["continue", interceptResume],
 ]);
 
 export const SLASH_COMMAND_NAMES: ReadonlyArray<string> = Array.from(COMMANDS.keys()).concat(Array.from(INTERCEPTS.keys()));

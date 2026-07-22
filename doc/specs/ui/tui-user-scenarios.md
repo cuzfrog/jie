@@ -25,7 +25,7 @@ The TUI's acceptance surface. Each scenario corresponds to one e2e test file —
 2. Prompt on `my-team-1`; the response mentions `3`.
 3. `/team my-team-2` — the agent map repopulates from `my-team-2` (`my-team-1`'s agents leave `state.agents`); the chat area shows the new team.
 4. Prompt; the response streams.
-5. `/team my-team-1` — the agent map re-seeds from `my-team-1`. `/team` (no arg) lists `defaultTeam` and installed IDs; picking one is equivalent to step 3.
+5. `/team my-team-1` — the agent map re-seeds from `my-team-1`. Typing `/team ` autocompletes the installed IDs in-flow (the default marked); `Tab` commits one and `Enter` loads it — equivalent to step 3. Bare `/team` is a usage error (`/team <teamId>`).
 6. Press `Ctrl+D` (editor empty). The process exits 0.
 
 **Observable outputs.** After each switch, `state.teamId` matches and `state.agents` contains exactly the switched-to team's agents. Switching resets and re-seeds the agent map per the `system.team.loaded` / `Actions.switchTeam` rules in `tui-state.md` — there is no TUI-side conversation buffer.
@@ -88,12 +88,15 @@ The TUI's acceptance surface. Each scenario corresponds to one e2e test file —
 
 **Observable outputs.** `state.errorBanner` matches `unknown slash command`, then returns to `null`.
 
-## Scenario 11: session picker overlay
+## Scenario 11: slash command autocomplete
 
-1. Submit `/resume` — the session picker overlay opens as a full-width band over the column (`state.sessionPickerOpen === true`).
-2. Press `Esc` — the picker dismisses (`sessionPickerOpen === false`); no error banner. Selecting a session instead (`Enter` on a focused row) resumes it via `resumeSession` and switches to the resumed team.
+Team and session selection ride the editor's autocomplete popup — drawn inside the editor's frame, so the editor never leaves the layout and the chat stays visible above (`tui-layout.md`, "Selection via editor autocomplete").
 
-**Observable outputs.** `state.sessionPickerOpen` flips true then false; `state.errorBanner` stays `null`.
+1. Type `/team my` — the popup lists matching installed team ids. `Tab` commits the id (`state.editorText === "/team my-team"`), and one `Enter` then submits and loads the team.
+2. Type `/team ` and press `Esc` while the popup is open — the popup closes, the editor keeps its text, and further typing appends to the buffer; no error banner.
+3. With a seeded session on disk, type `/resume ` — the popup lists the loaded team's sessions with `<n> msg · <age>`. `Tab` commits the session id, and one `Enter` resumes it via `resumeSession` — the seeded history hydrates into the chat. The startup `--resume <sessionId>` entry hydrates the same way on the team load.
+
+**Observable outputs.** `state.editorText` transitions `"/team my"` → `"/team my-team"` → `""` (submit clears); the picked team reaches `state.teamId`; the resumed session's prompt appears in the agent's turns; `state.errorBanner` stays `null`.
 
 ## Out of scope
 

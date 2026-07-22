@@ -11,6 +11,7 @@ function loadDemoTeam(stateStore: ReturnType<typeof createStateStore>): void {
       Events.teamLoaded({ kind: "system" }, {
         id: "demo",
         leaderKey: "general-1",
+        history: [],
         agents: [
           { teamId: "demo", role: "helper", agentKey: "helper-1", isLeader: false, model: null },
           { teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, model: null },

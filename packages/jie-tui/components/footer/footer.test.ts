@@ -9,8 +9,20 @@ function seededStore(dirty: boolean): StateStore {
   store.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
     id: "my-team",
     leaderKey: "general-1",
+    history: [],
     agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, model: null }],
   })));
+  return store;
+}
+
+function seededStoreWithModel(): StateStore {
+  const store = seededStore(false);
+  store.dispatch(Actions.receiveEvent(Events.agentModelAssigned(
+    { kind: "agent", teamId: "my-team", agentKey: "general-1" },
+    "anthropic",
+    "claude-opus-4",
+    "high",
+  )));
   return store;
 }
 
@@ -40,6 +52,15 @@ describe("Footer", () => {
     expect(lines[1]).toContain("—");
   });
 
+  test("line two keeps context on the left and right-aligns the model segment at the right edge", () => {
+    const lines = new Footer(seededStoreWithModel()).render(80);
+    const plain = stripAnsi(lines[1]);
+    expect(visibleWidth(lines[1])).toBe(80);
+    expect(plain.endsWith("(anthropic) claude-opus-4 | high")).toBe(true);
+    expect(plain).toMatch(/\S {2,}\(anthropic\) claude-opus-4 \| high$/);
+    expect(plain.trimStart().startsWith("(anthropic)")).toBe(false);
+  });
+
   test("every line fits the given width", () => {
     const lines = new Footer(seededStore(true)).render(60);
     for (const line of lines) {
@@ -54,6 +75,7 @@ describe("Footer", () => {
     store.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
       id: longTeam,
       leaderKey: "general-1",
+      history: [],
       agents: [{ teamId: longTeam, role: "general", agentKey: "general-1", isLeader: true, model: null }],
     })));
     store.dispatch(Actions.receiveEvent(Events.agentModelAssigned(
@@ -70,3 +92,7 @@ describe("Footer", () => {
     }
   });
 });
+
+function stripAnsi(text: string): string {
+  return text.replace(/\x1b\[[0-9;]*m/g, "");
+}

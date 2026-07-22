@@ -1,5 +1,5 @@
 import { TUI, type Terminal } from "@earendil-works/pi-tui";
-import { Events } from "@cuzfrog/jie-platform";
+import { Events, type EventEnvelope, type EventType, type JiePlatform } from "@cuzfrog/jie-platform";
 import { Actions, createStateStore, type StateStore } from "../../state";
 import { createJieEditor } from "./jie-editor";
 
@@ -31,7 +31,7 @@ function bootEditor(): EditorHarness {
   const store = createStateStore();
   const submitted: string[] = [];
   const ui = new TUI(new StubTerminal());
-  const editor = createJieEditor(ui, store, "/nonexistent-jie-test");
+  const editor = createJieEditor(ui, store, "/nonexistent-jie-test", nullPlatform());
   const submit = editor.onSubmit;
   editor.onSubmit = (text: string): void => {
     submitted.push(text);
@@ -40,10 +40,22 @@ function bootEditor(): EditorHarness {
   return { store, editor, submitted };
 }
 
+function nullPlatform(): JiePlatform {
+  return {
+    settings: { defaultTeam: undefined, defaultProvider: undefined, defaultModel: undefined },
+    subscribe: <T extends EventType>(_topic: T, _callback: (event: EventEnvelope<T>) => void): (() => void) => () => undefined,
+    prompt: () => undefined,
+    interrupt: () => undefined,
+    teams: () => [],
+    execute: (async () => null) as JiePlatform["execute"],
+  };
+}
+
 function seedBusyTeam(store: StateStore): void {
   store.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
     id: "my-team",
     leaderKey: "general-1",
+    history: [],
     agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, model: null }],
   })));
   store.dispatch(Actions.receiveEvent(Events.agentTurnStart({ kind: "agent", teamId: "my-team", agentKey: "general-1" })));
@@ -105,6 +117,7 @@ describe("createJieEditor — control keys", () => {
     store.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
       id: "my-team",
       leaderKey: "general-1",
+      history: [],
       agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, model: null }],
     })));
     const types: string[] = [];
