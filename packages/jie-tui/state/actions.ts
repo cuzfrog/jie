@@ -1,4 +1,4 @@
-import type { AnyEventEnvelope, SessionSummary, TeamInfo } from "@cuzfrog/jie-platform";
+import type { AnyEventEnvelope, TeamInfo } from "@cuzfrog/jie-platform";
 
 export const ActionTypes = {
   RECEIVE_EVENT: "[bus] receive event from event bus",
@@ -18,11 +18,6 @@ export const ActionTypes = {
   SUBMIT_EDITOR_TEXT: "[ui] submit editor text",
   REQUEST_INTERRUPT: "[ui] request interrupt focused agent",
   SET_ENVIRONMENT: "[ui] set environment",
-  OPEN_SESSION_PICKER: "[ui] open session picker",
-  CLOSE_SESSION_PICKER: "[ui] close session picker",
-  SET_PICKER_QUERY: "[ui] set session picker query",
-  FOCUS_PICKER_INDEX: "[ui] focus session picker index",
-  SELECT_PICKED_SESSION: "[ui] select picked session",
 } as const;
 
 type ActionType = (typeof ActionTypes)[keyof typeof ActionTypes];
@@ -60,13 +55,6 @@ export const Actions = {
 		createAction(ActionTypes.REQUEST_INTERRUPT, { teamId, agentKey }),
 	setEnvironment: (cwd: string, gitBranch: string, gitDirty: boolean) =>
 		createAction(ActionTypes.SET_ENVIRONMENT, { cwd, gitBranch, gitDirty }),
-	openSessionPicker: (sessions: ReadonlyArray<SessionSummary>) =>
-		createAction(ActionTypes.OPEN_SESSION_PICKER, { sessions }),
-	closeSessionPicker: () => createAction(ActionTypes.CLOSE_SESSION_PICKER),
-	setPickerQuery: (text: string) => createAction(ActionTypes.SET_PICKER_QUERY, { text }),
-	focusPickerIndex: (delta: 1 | -1, listLength: number) => createAction(ActionTypes.FOCUS_PICKER_INDEX, { delta, listLength }),
-	selectPickedSession: (teamId: string, sessionId: string) =>
-		createAction(ActionTypes.SELECT_PICKED_SESSION, { teamId, sessionId }),
 } as const;
 
 export type Action = ReturnType<typeof Actions[keyof typeof Actions]>;

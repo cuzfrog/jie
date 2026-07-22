@@ -8,7 +8,6 @@ import { createTuiView, type TuiView } from "./components";
 const SUBMIT_EDITOR_TEXT = Actions.submitEditorText("").type;
 const REQUEST_INTERRUPT = Actions.requestInterrupt("", "").type;
 const REQUEST_QUIT = Actions.requestQuit().type;
-const SELECT_PICKED_SESSION = Actions.selectPickedSession("", "").type;
 const log = logger.getSubLogger({ name: "jie.tui" });
 
 export interface TuiDeps {
@@ -80,10 +79,6 @@ class PiTui implements Tui {
         await this.quit();
         return;
       }
-      if (action.type === SELECT_PICKED_SESSION) {
-        await this.handleResumePickedSession(action.payload.teamId, action.payload.sessionId);
-        return;
-      }
     });
   }
 
@@ -107,7 +102,7 @@ class PiTui implements Tui {
         const stdin = this.deps.stdin ?? process.stdin;
         const terminal: Terminal = this.deps.stdin === undefined ? new ProcessTerminal() : createStreamTerminal(stdin, stdout);
         const ui = new TUI(terminal);
-        this.view = createTuiView({ tui: ui, stateStore: this.stateStore, cwd: this.cwd });
+        this.view = createTuiView({ tui: ui, stateStore: this.stateStore, platform: this.deps.platform, cwd: this.cwd });
         this.terminal = terminal;
         this.ui = ui;
         ui.start();
@@ -142,16 +137,6 @@ class PiTui implements Tui {
       await this.terminal.drainInput();
     }
     this.stop();
-  }
-
-  private async handleResumePickedSession(teamId: string, sessionId: string): Promise<void> {
-    try {
-      const identity = await this.deps.platform.execute({ name: "resumeSession", teamId, sessionId });
-      this.stateStore.dispatch(Actions.switchTeam(identity));
-    } catch (error: unknown) {
-      const reason = error instanceof Error ? error.message : String(error);
-      this.stateStore.dispatch(Actions.setErrorMessage(`/resume failed: ${reason}`));
-    }
   }
 }
 

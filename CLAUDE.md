@@ -91,7 +91,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 - avoid direct usage of `console`, use our interface abstraction `Console` instead. So that tests can supply a mock console and don't need to mock global objects.
 
 ## Best practices
-- write down your plan before execution.
+- write down your plan before execution (but do not enter plan mode, it will block your further execution).
 - when you have multiple steps in your execution, use a todo-list, divide and conquer.
 
 (Write temporary files to `./tmp/` only if you want me to reivew, otherwise write to `/tmp/`)

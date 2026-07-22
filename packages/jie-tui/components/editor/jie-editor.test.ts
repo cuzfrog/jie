@@ -1,5 +1,5 @@
 import { TUI, type Terminal } from "@earendil-works/pi-tui";
-import { Events } from "@cuzfrog/jie-platform";
+import { Events, type EventEnvelope, type EventType, type JiePlatform } from "@cuzfrog/jie-platform";
 import { Actions, createStateStore, type StateStore } from "../../state";
 import { createJieEditor } from "./jie-editor";
 
@@ -31,13 +31,24 @@ function bootEditor(): EditorHarness {
   const store = createStateStore();
   const submitted: string[] = [];
   const ui = new TUI(new StubTerminal());
-  const editor = createJieEditor(ui, store, "/nonexistent-jie-test");
+  const editor = createJieEditor(ui, store, "/nonexistent-jie-test", nullPlatform());
   const submit = editor.onSubmit;
   editor.onSubmit = (text: string): void => {
     submitted.push(text);
     submit?.(text);
   };
   return { store, editor, submitted };
+}
+
+function nullPlatform(): JiePlatform {
+  return {
+    settings: { defaultTeam: undefined, defaultProvider: undefined, defaultModel: undefined },
+    subscribe: <T extends EventType>(_topic: T, _callback: (event: EventEnvelope<T>) => void): (() => void) => () => undefined,
+    prompt: () => undefined,
+    interrupt: () => undefined,
+    teams: () => [],
+    execute: (async () => null) as JiePlatform["execute"],
+  };
 }
 
 function seedBusyTeam(store: StateStore): void {

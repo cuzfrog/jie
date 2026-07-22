@@ -51,10 +51,6 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
     leaderAgentId: leaderId,
     focusedAgentId: focused,
     agents: newAgents,
-    sessionPickerOpen: false,
-    sessionPickerQuery: "",
-    sessionPickerSessions: [],
-    sessionPickerFocus: 0,
   };
 }
 

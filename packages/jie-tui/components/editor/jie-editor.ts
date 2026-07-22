@@ -1,4 +1,5 @@
 import { Editor, type EditorTheme, type TUI } from "@earendil-works/pi-tui";
+import type { JiePlatform } from "@cuzfrog/jie-platform";
 import { Actions, type StateStore } from "../../state";
 import { createJieAutocompleteProvider } from "../../autocomplete";
 import { style } from "../themes";
@@ -18,9 +19,9 @@ const editorTheme: EditorTheme = {
   },
 };
 
-export function createJieEditor(tui: TUI, stateStore: StateStore, cwd: string): Editor {
+export function createJieEditor(tui: TUI, stateStore: StateStore, cwd: string, platform: JiePlatform): Editor {
   const editor = new JieEditor(tui, stateStore, editorTheme);
-  editor.setAutocompleteProvider(createJieAutocompleteProvider(cwd));
+  editor.setAutocompleteProvider(createJieAutocompleteProvider(cwd, platform, stateStore));
   editor.onChange = (text: string): void => {
     editor.borderColor = text.startsWith("!") ? style("warning") : style("border");
     stateStore.dispatch(Actions.setEditorText(text));
@@ -45,7 +46,11 @@ class JieEditor extends Editor {
 
   handleInput(data: string): void {
     if (data === ESCAPE) {
-      if (!this.isShowingAutocomplete()) this.interruptFocusedAgent();
+      if (this.isShowingAutocomplete()) {
+        super.handleInput(data);
+        return;
+      }
+      this.interruptFocusedAgent();
       return;
     }
     if (data === CTRL_C) {

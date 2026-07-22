@@ -19,10 +19,6 @@ const INITIAL_TUI_STATE: TuiState = Object.freeze({
   toolCardsExpanded: false,
   pendingQuit: false,
   editorText: "",
-  sessionPickerOpen: false,
-  sessionPickerQuery: "",
-  sessionPickerSessions: [],
-  sessionPickerFocus: 0,
 } as const);
 
 /** a subscriber can perform side effect */

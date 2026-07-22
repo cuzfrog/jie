@@ -20,10 +20,6 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
         focusedAgentId: null,
         transientMessage: null,
         errorBanner: null,
-        sessionPickerOpen: false,
-        sessionPickerQuery: "",
-        sessionPickerSessions: [],
-        sessionPickerFocus: 0,
       };
     case ActionTypes.SET_TRANSIENT_MESSAGE:
       return { ...state, transientMessage: action.payload.text };
@@ -53,37 +49,6 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
         gitBranch: action.payload.gitBranch,
         gitDirty: action.payload.gitDirty,
       };
-    case ActionTypes.OPEN_SESSION_PICKER:
-      return {
-        ...state,
-        transientMessage: null,
-        sessionPickerOpen: true,
-        sessionPickerSessions: action.payload.sessions,
-        sessionPickerQuery: "",
-        sessionPickerFocus: 0,
-      };
-    case ActionTypes.CLOSE_SESSION_PICKER:
-      return {
-        ...state,
-        sessionPickerOpen: false,
-        sessionPickerQuery: "",
-        sessionPickerSessions: [],
-        sessionPickerFocus: 0,
-      };
-    case ActionTypes.SET_PICKER_QUERY:
-      return {
-        ...state,
-        sessionPickerQuery: action.payload.text,
-        sessionPickerFocus: 0,
-      };
-    case ActionTypes.FOCUS_PICKER_INDEX: {
-      const len = action.payload.listLength;
-      if (len <= 0) return state;
-      const next = (state.sessionPickerFocus + action.payload.delta + len) % len;
-      return { ...state, sessionPickerFocus: next };
-    }
-    case ActionTypes.SELECT_PICKED_SESSION:
-      return state;
     default:
       return state;
   }

@@ -8,9 +8,11 @@ import {
   stopTui,
   submitAndWaitForAgentIdle,
   waitForConversationText,
+  waitForEditorText,
   waitForNoErrorBanner,
   waitForTeam,
   sendCmd,
+  sendEnter,
   sendLine,
   type TuiHarness,
 } from "./harness";
@@ -19,17 +21,13 @@ import expectations from "./scenario-11.llm.ts";
 const AGENT_ID = "my-team:general-1";
 const SEED_PROMPT = "Remember the word: pineapple";
 const SEED_REPLY = "Pineapple noted.";
+const AUTOCOMPLETE_SETTLE_MS = 200;
 
-async function waitForPicker(tui: TuiHarness["tui"], open: boolean): Promise<void> {
-  const started = Date.now();
-  while (Date.now() - started < 10000) {
-    if (tui.state.sessionPickerOpen === open) return;
-    await new Promise((r) => setTimeout(r, 10));
-  }
-  throw new Error(`session picker did not reach open=${open}`);
+async function settleAutocomplete(): Promise<void> {
+  await new Promise((r) => setTimeout(r, AUTOCOMPLETE_SETTLE_MS));
 }
 
-describe("Scenario 11 — session picker overlay", () => {
+describe("Scenario 11 — slash command autocomplete", () => {
   let harness: TuiHarness;
 
   beforeEach(async () => {
@@ -43,13 +41,23 @@ describe("Scenario 11 — session picker overlay", () => {
     await stopTui(harness);
   });
 
-  test("`/resume` opens the session picker overlay and Esc closes it", async () => {
-    await sendLine(harness.stdin, "/team my-team");
+  test("`/team <prefix>` tab-completes the team id and Enter loads it", async () => {
+    await sendCmd(harness.stdin, "/team my");
+    await settleAutocomplete();
+    await sendCmd(harness.stdin, "\t");
+    await waitForEditorText(harness.tui, "/team my-team");
+    await sendEnter(harness.stdin);
     await waitForTeam(harness.tui, "my-team");
-    await sendLine(harness.stdin, "/resume");
-    await waitForPicker(harness.tui, true);
+    await waitForNoErrorBanner(harness.tui);
+  });
+
+  test("Esc closes the autocomplete popup and the editor keeps its text", async () => {
+    await sendCmd(harness.stdin, "/team ");
+    await settleAutocomplete();
     await sendCmd(harness.stdin, "\x1b");
-    await waitForPicker(harness.tui, false);
+    await settleAutocomplete();
+    await sendCmd(harness.stdin, "x");
+    await waitForEditorText(harness.tui, "/team x");
     await waitForNoErrorBanner(harness.tui);
   });
 });
@@ -107,16 +115,17 @@ describe("Scenario 11 — resume hydrates the conversation", () => {
     }
   });
 
-  test("/resume picker entry hydrates history on resumeSession", async () => {
-    await runSeededSession();
+  test("/resume tab-completion hydrates history on resumeSession", async () => {
+    const sessionId = await runSeededSession();
     const harness = await startTui({ cwd: dir });
     try {
       await sendLine(harness.stdin, "/team my-team");
       await waitForTeam(harness.tui, "my-team");
-      await sendLine(harness.stdin, "/resume");
-      await waitForPicker(harness.tui, true);
-      await sendCmd(harness.stdin, "\r");
-      await waitForPicker(harness.tui, false);
+      await sendCmd(harness.stdin, "/resume ");
+      await settleAutocomplete();
+      await sendCmd(harness.stdin, "\t");
+      await waitForEditorText(harness.tui, `/resume ${sessionId}`);
+      await sendEnter(harness.stdin);
       await waitForConversationText(harness.tui, AGENT_ID, SEED_REPLY);
       const agent = harness.tui.state.agents.get(AGENT_ID);
       const turns = agent?.currentTurn === null || agent?.currentTurn === undefined

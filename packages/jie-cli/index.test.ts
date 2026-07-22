@@ -237,10 +237,6 @@ function captureRun(platform: FakePlatform): CapturedRun {
         transientMessage: null,
         errorBanner: null,
         editorText: "",
-        sessionPickerOpen: false,
-        sessionPickerQuery: "",
-        sessionPickerSessions: [],
-        sessionPickerFocus: 0,
       },
       start: () => {
         startCalls.value += 1;

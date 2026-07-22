@@ -2,7 +2,7 @@
 
 The team's user-facing cockpit. Lives in `packages/jie-tui/`. Observes all agent activity; sends user prompts to agents. This parent doc captures the TUI's role, its boundaries, and its invariants. Children capture the rest:
 
-- `tui-layout.md` — spatial design (single inline column, overlays, footer).
+- `tui-layout.md` — spatial design (single inline column, footer).
 - `tui-shortcuts.md` — keybinding matrix, slash commands, and OS-shortcut conflict resolution.
 - `tui-state.md` — `TuiState` shape and reducer rules per topic.
 - `tui-user-scenarios.md` — acceptance scenarios.

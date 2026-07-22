@@ -84,21 +84,6 @@ describe("createTuiCommandHandler", () => {
     expect(dispatch).toHaveBeenCalledWith(Actions.requestQuit());
   });
 
-  test("handle('/team') reports the current default and installed list", async () => {
-    const { platform, execute } = makePlatform();
-    execute.mockImplementationOnce(async () => ({
-      defaultTeam: "alpha",
-      installed: ["minimal", "alpha", "beta"],
-    }));
-    const { deps, dispatch } = makeDeps(platform);
-    const handler = createTuiCommandHandler(deps);
-    handler.handle("/team");
-    await new Promise((r) => setImmediate(r));
-    expect(execute).toHaveBeenCalledWith({ name: "getTeamInfo" });
-    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringMatching(/alpha/)));
-    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringMatching(/minimal.*alpha.*beta/)));
-  });
-
   test("handle('/nope') sets an error message", () => {
     const { platform } = makePlatform();
     const { deps, dispatch } = makeDeps(platform);
@@ -268,32 +253,13 @@ describe("createTuiCommandHandler — /model", () => {
 });
 
 describe("createTuiCommandHandler — /team", () => {
-  test("/team (no args) replies with defaultTeam and installed list", async () => {
+  test("/team (no args) sets a usage error and does not call execute", () => {
     const { platform, execute } = makePlatform();
-    execute.mockImplementationOnce(async () => ({
-      defaultTeam: "alpha",
-      installed: ["minimal", "alpha", "beta"],
-    }));
     const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
     handler.handle("/team");
-    await new Promise((r) => setImmediate(r));
-    expect(execute).toHaveBeenCalledWith({ name: "getTeamInfo" });
-    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringMatching(/alpha/)));
-    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringMatching(/minimal.*alpha.*beta/)));
-  });
-
-  test("/team (no args) reports 'unset' when no defaultTeam is configured", async () => {
-    const { platform, execute } = makePlatform();
-    execute.mockImplementationOnce(async () => ({
-      defaultTeam: null,
-      installed: ["minimal"],
-    }));
-    const { deps, dispatch } = makeDeps(platform);
-    const handler = createTuiCommandHandler(deps);
-    handler.handle("/team");
-    await new Promise((r) => setImmediate(r));
-    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("unset")));
+    expect(execute).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/team <teamId>")));
   });
 
   test("/team <id> dispatches team load and replies 'loading team'", async () => {
@@ -383,37 +349,54 @@ describe("createTuiCommandHandler — /resume", () => {
     return handle;
   }
 
-  test("/resume with no team loaded sets an error and does not call execute", () => {
+  test("/resume (no args) sets a usage error and does not call execute", () => {
+    const { platform, execute } = makePlatform();
+    const { deps, dispatch } = makeDepsWithTeamId(platform, "minimal");
+    const handler = createTuiCommandHandler(deps);
+    handler.handle("/resume");
+    expect(execute).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/resume <sessionId>")));
+  });
+
+  test("/resume <sessionId> with no team loaded sets an error and does not call execute", () => {
     const { platform, execute } = makePlatform();
     const { deps, dispatch } = makeDeps(platform);
     const handler = createTuiCommandHandler(deps);
-    handler.handle("/resume");
+    handler.handle("/resume s1");
     expect(execute).not.toHaveBeenCalled();
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("no team loaded")));
   });
 
-  test("/resume calls listSessions and dispatches openSessionPicker with the result", async () => {
+  test("/resume <sessionId> dispatches resumeSession for the loaded team and replies", () => {
     const { platform, execute } = makePlatform();
-    const sessions = [
-      { sessionId: "s1", messageCount: 1, lastActivity: "2026-07-14T00:00:00.000Z" },
-      { sessionId: "s2", messageCount: 2, lastActivity: "2026-07-14T01:00:00.000Z" },
-    ];
-    execute.mockImplementationOnce(async () => sessions);
+    const identity = {
+      id: "minimal",
+      leaderKey: "general-1",
+      history: [],
+      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    };
+    execute.mockImplementationOnce(async () => identity);
     const { deps, dispatch } = makeDepsWithTeamId(platform, "minimal");
     const handler = createTuiCommandHandler(deps);
-    handler.handle("/resume");
-    expect(execute).toHaveBeenCalledWith({ name: "listSessions", teamId: "minimal" });
-    await new Promise((r) => setImmediate(r));
-    expect(dispatch).toHaveBeenCalledWith(Actions.openSessionPicker(sessions));
+    handler.handle("/resume s1");
+    expect(execute).toHaveBeenCalledWith({ name: "resumeSession", teamId: "minimal", sessionId: "s1" });
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("resuming session 's1'")));
   });
 
-  test("/resume replies with a transient 'loading sessions…' message", () => {
+  test("/resume <sessionId> dispatches switchTeam with the resumed identity", async () => {
     const { platform, execute } = makePlatform();
-    execute.mockImplementation(async () => []);
+    const identity = {
+      id: "minimal",
+      leaderKey: "general-1",
+      history: [],
+      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+    };
+    execute.mockImplementationOnce(async () => identity);
     const { deps, dispatch } = makeDepsWithTeamId(platform, "minimal");
     const handler = createTuiCommandHandler(deps);
-    handler.handle("/resume");
-    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("loading sessions")));
+    handler.handle("/resume s1");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.switchTeam(identity));
   });
 
   test("/resume surfaces platform errors as an error banner", async () => {
@@ -423,11 +406,10 @@ describe("createTuiCommandHandler — /resume", () => {
     });
     const { deps, dispatch } = makeDepsWithTeamId(platform, "minimal");
     const handler = createTuiCommandHandler(deps);
-    handler.handle("/resume");
+    handler.handle("/resume s1");
     await new Promise((r) => setImmediate(r));
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/resume failed")));
   });
-
 });
 
 describe("SLASH_COMMAND_NAMES", () => {

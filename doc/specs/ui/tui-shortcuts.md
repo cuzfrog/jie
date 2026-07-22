@@ -1,6 +1,6 @@
 # TUI Keybinding Matrix
 
-The TUI is keyboard-driven. Editor keys are pi-tui `Editor` semantics verbatim plus three jie keys; global keys are handled by the TUI's input listener before they reach the editor. All bindings are implemented in `components/editor/jie-editor.ts` (editor keys) and `components/view.ts` (global keys); the session picker carries its own keys while open. On an empty conversation the core keys are also shown as on-screen hints above the editor (`tui-layout.md`, "keybinding hints"); they disappear once a turn starts.
+The TUI is keyboard-driven. Editor keys are pi-tui `Editor` semantics verbatim plus three jie keys; global keys are handled by the TUI's input listener before they reach the editor. All bindings are implemented in `components/editor/jie-editor.ts` (editor keys) and `components/view.ts` (global keys). On an empty conversation the core keys are also shown as on-screen hints above the editor (`tui-layout.md`, "keybinding hints"); they disappear once a turn starts.
 
 ## Editor
 
@@ -26,16 +26,6 @@ Everything else is pi-tui `Editor` behavior: cursor/word movement, undo, kill ri
 
 Both Shift and Ctrl arrow variants are accepted because terminals differ in which they report. The toggles are all-or-nothing across the focused agent's history + current turn (`state.thinkingExpanded` / `state.toolCardsExpanded`); mid-stream toggle re-renders on the next tick. There are **no** `PgUp`/`PgDn`/`Home`/`End`/wheel bindings: finished output is terminal scrollback; scroll and copy are the terminal's native behavior.
 
-## Session picker (while open)
-
-| Key | What it does |
-| --- | --- |
-| `↑` / `↓` | Move focus (wraps over the filtered list) |
-| `Enter` | Resume the focused session |
-| `Esc` | Dismiss the picker |
-| printable chars | Extend the query filter (focus resets to 0) |
-| `Backspace` | Shorten the query |
-
 ## Esc vs Ctrl+C vs Ctrl+D
 
 `Esc` interrupts a busy focused agent only; it never clears the editor or quits. `Ctrl+C` clears the editor when non-empty (protecting a half-typed prompt) and quits on an empty buffer. `Ctrl+D` quits on an empty buffer, a single press (pi's exit key).
@@ -47,23 +37,24 @@ Typed into the editor like a prompt; the command handler (`command-handler.ts`) 
 | Command | Effect | Reply |
 | --- | --- | --- |
 | `/help` | Reply with the command cheat-sheet | `type a prompt...  /clear /help /exit /team /model /login /logout` |
-| `/clear` | Clear `agents`, `leaderAgentId`, `focusedAgentId`, banners, and the session picker; memory rows on disk untouched | none |
+| `/clear` | Clear `agents`, `leaderAgentId`, `focusedAgentId`, and banners; memory rows on disk untouched | none |
 | `/exit` | Quit the TUI (same as `Ctrl+D` on an empty editor); no busy-state branch | none |
 | `/login <provider> <apiKey>` | Write one API key entry to `~/.jie/auth.json` (mode `0600` on POSIX) | `logged in to <provider>` |
 | `/logout [<provider>]` | Clear one or all entries from `~/.jie/auth.json` | `logged out of <provider>` (or `... of all providers`) |
 | `/model <provider>/<modelId>` | Validate and write the default model to settings | `default model set to <provider>/<modelId>` |
-| `/team <id>` | Switch the active team (`execute({name:"team"})` then `Actions.switchTeam`); unknown id is an error banner | `loading team '<id>'` |
-| `/team` (no arg) | List `defaultTeam` and installed team IDs | `defaultTeam: <id or unset> \| installed: <ids>` |
-| `/resume` | List the team's sessions (`listSessions`) and open the session picker | `loading sessions…` |
+| `/team <id>` | Switch the active team (`execute({name:"team"})` then `Actions.switchTeam`); unknown id is an error banner. The id is completed in-flow by autocomplete | `loading team '<id>'` |
+| `/team` (no arg) | Usage error | `/team <teamId>` |
+| `/resume <sessionId>` | Resume one session of the loaded team (`execute({name:"resumeSession"})` then `Actions.switchTeam` with the resumed identity); unknown id or no team loaded is an error banner. The id is completed in-flow by autocomplete | `resuming session '<id>'` |
+| `/resume` (no arg) | Usage error | `/resume <sessionId>` |
 
 ## Autocomplete
 
-The pi editor's autocomplete popup triggers on two prefixes:
+The editor's autocomplete popup (`autocomplete/jie-autocomplete.ts`) triggers on two prefixes:
 
-- **`/`** — slash commands (`SLASH_COMMAND_NAMES` from the command handler).
+- **`/`** — slash commands (`SLASH_COMMAND_NAMES` from the command handler). Two commands also complete their argument: `/team ` lists installed team ids (`(default)` marked) and `/resume ` lists the loaded team's sessions (`<n> msg · <age>`).
 - **`@`** — file mentions: a gitignore-aware scan of `cwd` (`file-mention/`), filtered as you type; the completed token is the relative path, e.g. `@main` + `Tab` → `@src/main.ts `.
 
-`Tab` commits the highlighted suggestion into the buffer; `Enter` submits whatever the buffer holds.
+The popup renders inside the editor's frame; the editor never leaves the layout (`tui-layout.md`, "Selection via editor autocomplete"). `Tab` commits the highlighted suggestion into the buffer without submitting. `Enter` commits the highlighted suggestion when the popup is open (a second `Enter` then submits); once the typed text already matches an entry exactly the popup closes on its own and `Enter` submits directly. `Esc` closes the popup and keeps the buffer text; it interrupts the focused agent only when no popup is showing.
 
 ## Conflict-resolution rationale
 
