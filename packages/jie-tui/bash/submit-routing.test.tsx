@@ -53,6 +53,7 @@ function makeTeamInfo(): TeamInfo {
   return {
     id: "team-1",
     leaderKey: "agent-1",
+    history: [],
     agents: [
       { teamId: "team-1", role: "general", agentKey: "agent-1", isLeader: true, model: null },
     ],

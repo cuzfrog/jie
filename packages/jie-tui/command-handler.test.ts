@@ -122,6 +122,7 @@ describe("createTuiCommandHandler — prompt routing", () => {
     handle.dispatch(Actions.switchTeam({
       id: "alpha",
       leaderKey: "general-1",
+      history: [],
       agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, model: null }],
     }));
     return handle;
@@ -300,6 +301,7 @@ describe("createTuiCommandHandler — /team", () => {
     execute.mockImplementationOnce(async () => ({
       id: "alpha",
       leaderKey: "general-1",
+      history: [],
       agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true }],
     }));
     const { deps, dispatch } = makeDeps(platform);
@@ -315,6 +317,7 @@ describe("createTuiCommandHandler — /team", () => {
     execute.mockImplementationOnce(async () => ({
       id: "alpha",
       leaderKey: "general-1",
+      history: [],
       agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, model: null }],
     }));
     const { deps, dispatch } = makeDeps(platform);
@@ -327,6 +330,7 @@ describe("createTuiCommandHandler — /team", () => {
     expect(switchCalls[0]![0]).toEqual(Actions.switchTeam({
       id: "alpha",
       leaderKey: "general-1",
+      history: [],
       agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, model: null }],
     }));
   });
@@ -336,6 +340,7 @@ describe("createTuiCommandHandler — /team", () => {
     const identity = {
       id: "alpha",
       leaderKey: "general-1",
+      history: [],
       agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, model: null }],
     } as const;
     execute.mockImplementation(async () => identity);
@@ -372,6 +377,7 @@ describe("createTuiCommandHandler — /resume", () => {
     handle.dispatch(Actions.switchTeam({
       id: teamId,
       leaderKey: "general-1",
+      history: [],
       agents: [{ teamId, role: "general", agentKey: "general-1", isLeader: true, model: null }],
     }));
     return handle;

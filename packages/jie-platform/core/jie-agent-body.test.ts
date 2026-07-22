@@ -101,12 +101,13 @@ interface Harness {
   append: ReturnType<typeof vi.fn>;
   endStream: ReturnType<typeof vi.fn>;
   persisted: AgentMessage[];
+  restore: ReturnType<typeof vi.fn>;
   makeBody: (overrides?: Partial<{ soul: AgentSoul; sessionId: string; agentKey: string }>) => JieAgentBody;
 }
 
 function makeHarness(): Harness {
   const events: EventManager = createEventManager();
-  const { memory, persisted } = makeFakeMemory();
+  const { memory, persisted, restore } = makeFakeMemory();
   const { agent, state, prompt, followUp, steer, abort, continue: cont, subscribe } = makeFakeAgent();
   const { stream, beginStream, append, endStream } = makeFakeStream();
   const makeBody: Harness["makeBody"] = (overrides = {}) =>
@@ -138,6 +139,7 @@ function makeHarness(): Harness {
     append,
     endStream,
     persisted,
+    restore,
     makeBody,
   };
 }
@@ -307,6 +309,71 @@ describe("JieAgentBody — start() restore + continue", () => {
     const body = h.makeBody();
     await body.start();
     expect(h.state.messages).toHaveLength(2);
+    body.stop();
+  });
+});
+
+describe("JieAgentBody — restore() snapshot phase", () => {
+  let h: Harness;
+
+  beforeEach(() => {
+    h = makeHarness();
+  });
+
+  test("returns the persisted snapshot and loads it into agent.state.messages", async () => {
+    h.persisted.push(
+      { role: "user", content: "m1" } as unknown as AgentMessage,
+      { role: "assistant", content: "m2" } as unknown as AgentMessage,
+    );
+    const body = h.makeBody();
+    const snapshot = await body.restore();
+    expect(snapshot).toHaveLength(2);
+    expect(h.state.messages).toHaveLength(2);
+    body.stop();
+  });
+
+  test("fresh session returns an empty snapshot and leaves state.messages untouched", async () => {
+    const body = h.makeBody();
+    const snapshot = await body.restore();
+    expect(snapshot).toEqual([]);
+    expect(h.state.messages).toEqual([]);
+    body.stop();
+  });
+
+  test("does not call continue — that is start()'s job", async () => {
+    h.persisted.push({ role: "user", content: "pending" } as unknown as AgentMessage);
+    const body = h.makeBody();
+    await body.restore();
+    expect(h.continue).not.toHaveBeenCalled();
+    body.stop();
+  });
+
+  test("is idempotent — a second call returns the cached snapshot without re-querying memory", async () => {
+    h.persisted.push({ role: "user", content: "m1" } as unknown as AgentMessage);
+    const body = h.makeBody();
+    const first = await body.restore();
+    const second = await body.restore();
+    expect(second).toBe(first);
+    expect(h.restore).toHaveBeenCalledTimes(1);
+    body.stop();
+  });
+
+  test("snapshot is a defensive copy — mutating agent.state.messages does not alter it", async () => {
+    h.persisted.push({ role: "user", content: "m1" } as unknown as AgentMessage);
+    const body = h.makeBody();
+    const snapshot = await body.restore();
+    h.state.messages.push({ role: "assistant", content: "leaked" } as unknown as AgentMessage);
+    expect(snapshot).toHaveLength(1);
+    body.stop();
+  });
+
+  test("start() after restore() reuses the snapshot and still continues an interrupted turn", async () => {
+    h.persisted.push({ role: "user", content: "pending" } as unknown as AgentMessage);
+    const body = h.makeBody();
+    await body.restore();
+    await body.start();
+    expect(h.restore).toHaveBeenCalledTimes(1);
+    expect(h.continue).toHaveBeenCalled();
     body.stop();
   });
 });

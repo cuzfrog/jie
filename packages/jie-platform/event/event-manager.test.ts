@@ -57,7 +57,7 @@ describe("createEventManager — envelope stamping", () => {
     const bus = createEventBus();
     const received = collect(bus, "system.team.loaded");
     const events: EventManager = createEventManager(bus);
-    events.publish(Events.teamLoaded(systemSender, { id: "t1", leaderKey: "", agents: [] }));
+    events.publish(Events.teamLoaded(systemSender, { id: "t1", leaderKey: "", agents: [], history: [] }));
     const env = received[0]!;
     expect(env.sender.kind).toBe("system");
     expect(env.topic).toBe("system.team.loaded");
@@ -100,7 +100,7 @@ describe("createEventManager — topic shape", () => {
     const bus = createEventBus();
     const received = collect(bus, "system.team.loaded");
     const events: EventManager = createEventManager(bus);
-    events.publish(Events.teamLoaded(systemSender, { id: "t1", leaderKey: "leader-1", agents: [{ teamId: "t1", role: "leader", agentKey: "leader-1", isLeader: true, model: null }] }));
+    events.publish(Events.teamLoaded(systemSender, { id: "t1", leaderKey: "leader-1", agents: [{ teamId: "t1", role: "leader", agentKey: "leader-1", isLeader: true, model: null }], history: [] }));
     expect(received).toHaveLength(1);
     const env = received[0]!;
     expect(env.topic).toBe("system.team.loaded");

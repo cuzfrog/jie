@@ -173,6 +173,7 @@ describe("CommandExecutor", () => {
       const identity: TeamInfo = {
         id: "alpha",
         leaderKey: "general-1",
+        history: [],
         agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, model: null }],
       };
       teamManager.load.mockResolvedValue(identity);
@@ -245,7 +246,7 @@ describe("CommandExecutor", () => {
   describe("dispatch", () => {
     test("executor.execute is the single entry point for every command name", async () => {
       teamManager.locate.mockReturnValue("user");
-      teamManager.load.mockResolvedValue({ id: "alpha", leaderKey: "general-1", agents: [] });
+      teamManager.load.mockResolvedValue({ id: "alpha", leaderKey: "general-1", agents: [], history: [] });
       teamManager.listInstalled.mockReturnValue([]);
       authStore.load.mockReturnValue({});
       authStore.setProvider.mockReturnValue({});

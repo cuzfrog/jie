@@ -24,6 +24,7 @@ export interface TuiHarness {
 export interface StartTuiOptions {
   readonly rows?: number;
   readonly cwd?: string;
+  readonly resumeSessionId?: string;
 }
 
 class TestWritable extends PassThrough {
@@ -60,7 +61,7 @@ export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> 
   process.env.LC_ALL = LANG_DEFAULT;
   let platform: JiePlatform;
   try {
-    platform = await createJiePlatform({ cwd: dir, homeJieDir: dir, projectJieDir: dir });
+    platform = await createJiePlatform({ cwd: dir, homeJieDir: dir, projectJieDir: dir, resumeSessionId: opts.resumeSessionId });
   } catch (err) {
     restoreLang(prevLang, prevLangAll);
     if (opts.cwd === undefined) rmSync(dir, { recursive: true, force: true });
@@ -230,6 +231,19 @@ export async function waitForTurnText(tui: Tui, agentId: AgentId, contains: stri
     },
     timeoutMs,
     `agent ${agentId} blocks contain '${contains}'`,
+  );
+}
+
+export async function waitForConversationText(tui: Tui, agentId: AgentId, contains: string, timeoutMs = 60000): Promise<void> {
+  await waitFor(
+    () => {
+      const agent = tui.state.agents.get(agentId);
+      if (agent === undefined) return false;
+      const turns = agent.currentTurn === null ? agent.history : [...agent.history, agent.currentTurn];
+      return turns.some((t) => t.blocks.some((b) => b.text.includes(contains)));
+    },
+    timeoutMs,
+    `agent ${agentId} conversation contains '${contains}'`,
   );
 }
 

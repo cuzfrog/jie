@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { createTeamManager } from "./team-manager";
 import { createEventManager, type EventEnvelope } from "../event";
 import {
@@ -91,6 +92,16 @@ function collectEvents(bus: ReturnType<typeof createEventManager>): {
     order.push("model.assigned");
   });
   return { teamLoaded, systemError, modelAssigned, order };
+}
+
+function assistantMessage(text: string, timestamp: number): AgentMessage {
+  return {
+    role: "assistant",
+    content: [{ type: "text", text }],
+    api: "openai", provider: "openai", model: "m",
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+    stopReason: "stop", timestamp,
+  };
 }
 
 describe("createTeamManager — full surface", () => {
@@ -194,6 +205,30 @@ describe("createTeamManager — full surface", () => {
 
       const freshManager = makeManager(workspace, homeJieDir, null).manager;
       expect(freshManager.resumeSession("minimal", "01-not-real")).rejects.toThrow(/unknown session_id/);
+    });
+
+    test("system.team.loaded carries restored history; the returned identity carries empty history", async () => {
+      const { manager, eventManager, memoryManager } = makeManager(workspace, homeJieDir, null);
+      memoryManager.persist({ role: "user", content: "[user]: hello", timestamp: 1 }, "general-1", "01-seeded", "minimal");
+      memoryManager.persist(assistantMessage("hi there", 2), "general-1", "01-seeded", "minimal");
+      const events = collectEvents(eventManager);
+      const identity = await manager.resumeSession("minimal", "01-seeded");
+      const payload = events.teamLoaded.find((e) => e.payload.id === "minimal")?.payload;
+      expect(payload?.history).toHaveLength(1);
+      expect(payload?.history[0]?.agentKey).toBe("general-1");
+      expect(payload?.history[0]?.messages).toHaveLength(2);
+      expect(identity.history[0]?.messages).toEqual([]);
+    });
+
+    test("resumeSession reloads an already-loaded team and re-publishes history (picker flow, not a cache hit)", async () => {
+      const { manager, eventManager, memoryManager } = makeManager(workspace, homeJieDir, null);
+      memoryManager.persist({ role: "user", content: "[user]: hello", timestamp: 1 }, "general-1", "01-seeded", "minimal");
+      memoryManager.persist(assistantMessage("hi there", 2), "general-1", "01-seeded", "minimal");
+      await manager.load("minimal");
+      const events = collectEvents(eventManager);
+      await manager.resumeSession("minimal", "01-seeded");
+      expect(events.teamLoaded).toHaveLength(1);
+      expect(events.teamLoaded[0]?.payload.history[0]?.messages).toHaveLength(2);
     });
 
     test("second call to load() returns the cached identity without rebuilding", async () => {

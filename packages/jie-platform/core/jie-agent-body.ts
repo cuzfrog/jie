@@ -26,6 +26,7 @@ export class JieAgentBody implements AgentBody {
   private readonly queue: AgentMessage[] = [];
   private readonly unsubscribers: Array<() => void> = [];
   private readonly externalCleanups: Array<() => void> = [];
+  private restored: ReadonlyArray<AgentMessage> | null = null;
   private started = false;
 
   constructor(deps: {
@@ -126,21 +127,29 @@ export class JieAgentBody implements AgentBody {
     this.externalCleanups.push(fn);
   }
 
+  async restore(): Promise<ReadonlyArray<AgentMessage>> {
+    if (this.restored !== null) return this.restored;
+    const messages = await this.memory.restore(
+      this.agentKey,
+      this.sessionId,
+      this.teamId,
+    );
+    if (messages.length > 0) {
+      this.agent.state.messages = [...messages];
+    }
+    this.restored = messages;
+    return messages;
+  }
+
   async start(): Promise<void> {
     if (this.started) return;
     this.started = true;
 
     this.registerSubscriptions();
 
-    const restored = await this.memory.restore(
-      this.agentKey,
-      this.sessionId,
-      this.teamId,
-    );
+    const restored = this.restored ?? await this.restore();
     if (restored.length > 0) {
-      this.agent.state.messages = restored;
-      const last = restored[restored.length - 1]!;
-      const lastRole = last.role;
+      const lastRole = restored[restored.length - 1]!.role;
       if (lastRole === "user" || lastRole === "toolResult") {
         await this.agent.continue();
       }

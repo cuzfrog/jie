@@ -185,6 +185,7 @@ function dispatch(command: Command<CommandName>): CommandResult<CommandName> | n
       const team: TeamInfo = {
         id: teamId,
         leaderKey: "general-1",
+        history: [],
         agents: [{
           teamId,
           role: "general",

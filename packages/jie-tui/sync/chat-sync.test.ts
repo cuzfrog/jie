@@ -10,6 +10,7 @@ function singleAgentTeam(store: StateStore): void {
   store.dispatch(Actions.receiveEvent(Events.teamLoaded(SYSTEM_SENDER, {
     id: "my-team",
     leaderKey: "general-1",
+    history: [],
     agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, model: null }],
   })));
 }
@@ -18,6 +19,7 @@ function twoAgentTeam(store: StateStore): void {
   store.dispatch(Actions.receiveEvent(Events.teamLoaded(SYSTEM_SENDER, {
     id: "my-team",
     leaderKey: "manager-1",
+    history: [],
     agents: [
       { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, model: null },
       { teamId: "my-team", role: "worker", agentKey: "worker-1", isLeader: false, model: null },

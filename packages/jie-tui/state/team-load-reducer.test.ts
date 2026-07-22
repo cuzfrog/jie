@@ -1,4 +1,5 @@
-import { type TeamInfo } from "@cuzfrog/jie-platform";
+import { type AgentMessage, type TeamInfo } from "@cuzfrog/jie-platform";
+import type { Usage } from "@earendil-works/pi-ai";
 import { teamLoadReducer } from "./team-load-reducer";
 import { createStateStore } from "./state-store";
 import type { TuiState } from "./state";
@@ -19,6 +20,7 @@ function team(agents: ReadonlyArray<{
   return {
     id: "my-team",
     leaderKey: leader?.agentKey ?? "general-1",
+    history: [],
     agents: agents.map((a) => ({
       teamId: "my-team",
       role: a.role,
@@ -81,6 +83,7 @@ describe("teamLoadReducer", () => {
     const second = teamLoadReducer(first, {
       id: "my-team-2",
       leaderKey: "worker-1",
+      history: [],
       agents: [
         { teamId: "my-team-2", role: "manager", agentKey: "manager-1", isLeader: false, model: null },
         { teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, model: null },
@@ -119,6 +122,7 @@ describe("teamLoadReducer", () => {
     const switched = teamLoadReducer(withTodos, {
       id: "my-team-2",
       leaderKey: "worker-1",
+      history: [],
       agents: [{ teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, model: null }],
     });
     expect(switched.agents.get("my-team-2:worker-1")?.todos).toEqual([]);
@@ -137,5 +141,104 @@ describe("teamLoadReducer", () => {
       { role: "general", agentKey: "general-1", isLeader: true, model: null },
     ]));
     expect(second.agents.get("my-team:general-1")?.todos).toEqual([{ content: "still here", status: "pending" }]);
+  });
+});
+
+function user(prompt: string): AgentMessage {
+  return { role: "user", content: `[user]: ${prompt}`, timestamp: 0 };
+}
+function assistantText(text: string): AgentMessage {
+  return {
+    role: "assistant",
+    content: [{ type: "text", text }],
+    api: "openai", provider: "openai", model: "m", usage: usage(), stopReason: "stop", timestamp: 0,
+  };
+}
+function assistantToolCall(id: string, name: string, args: Record<string, unknown>): AgentMessage {
+  return {
+    role: "assistant",
+    content: [{ type: "toolCall", id, name, arguments: args }],
+    api: "openai", provider: "openai", model: "m", usage: usage(), stopReason: "toolUse", timestamp: 0,
+  };
+}
+function toolResult(toolCallId: string, toolName: string, text: string, details?: unknown): AgentMessage {
+  return { role: "toolResult", toolCallId, toolName, content: [{ type: "text", text }], isError: false, details, timestamp: 0 };
+}
+function usage(): Usage {
+  return {
+    input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+  };
+}
+
+describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
+  test("non-empty messages hydrate the matching agent's currentTurn", () => {
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, model: null }]);
+    const state = teamLoadReducer(INITIAL_TUI_STATE, {
+      ...info,
+      history: [{ agentKey: "general-1", messages: [user("hello"), assistantText("world")] }],
+    });
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.history).toEqual([]);
+    expect(agent?.currentTurn).toEqual({
+      userPrompt: "hello",
+      cards: [],
+      blocks: [{ kind: "text", text: "world" }],
+      streamId: null,
+    });
+  });
+
+  test("earlier turns rotate into history and todos restore from the last todo result", () => {
+    const todos = [{ content: "a", status: "completed" as const }];
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, model: null }]);
+    const state = teamLoadReducer(INITIAL_TUI_STATE, {
+      ...info,
+      history: [{
+        agentKey: "general-1",
+        messages: [
+          user("first"), assistantText("a1"),
+          user("second"), assistantToolCall("c1", "todo", {}), toolResult("c1", "todo", "ok", { kind: "todos", todos }),
+        ],
+      }],
+    });
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.history).toHaveLength(1);
+    expect(agent?.history[0]?.userPrompt).toBe("first");
+    expect(agent?.currentTurn?.userPrompt).toBe("second");
+    expect(agent?.todos).toEqual(todos);
+  });
+
+  test("empty messages preserve an existing slot (switchTeam identity must not clobber live state)", () => {
+    const seeded = teamLoadReducer(INITIAL_TUI_STATE, team([
+      { role: "general", agentKey: "general-1", isLeader: true, model: null },
+    ]));
+    const existing = seeded.agents.get("my-team:general-1");
+    if (existing === undefined) throw new Error("seed missing");
+    const streamingTurn = { userPrompt: "live", cards: [], blocks: [{ kind: "text" as const, text: "streaming…" }], streamId: 1 };
+    const liveAgents = new Map(seeded.agents);
+    liveAgents.set("my-team:general-1", { ...existing, currentTurn: streamingTurn });
+    const withLive: TuiState = { ...seeded, agents: liveAgents };
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, model: null }]);
+    const after = teamLoadReducer(withLive, { ...info, history: [{ agentKey: "general-1", messages: [] }] });
+    expect(after.agents.get("my-team:general-1")?.currentTurn).toBe(streamingTurn);
+  });
+
+  test("history for an agentKey absent from the payload is skipped without creating a slot", () => {
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, model: null }]);
+    const state = teamLoadReducer(INITIAL_TUI_STATE, {
+      ...info,
+      history: [{ agentKey: "ghost-1", messages: [user("boo"), assistantText("gone")] }],
+    });
+    expect(state.agents.size).toBe(1);
+    expect(state.agents.has("my-team:ghost-1")).toBe(false);
+  });
+
+  test("contextTokensUsed is estimated from the hydrated content", () => {
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, model: null }]);
+    const state = teamLoadReducer(INITIAL_TUI_STATE, {
+      ...info,
+      history: [{ agentKey: "general-1", messages: [user("count me"), assistantText("twelve chars")] }],
+    });
+    expect(state.agents.get("my-team:general-1")?.contextTokensUsed).toBeGreaterThan(0);
   });
 });

@@ -21,6 +21,7 @@ function loadedTeam(roles: ReadonlyArray<{ role: string; agent_key: string; is_l
   return reduceEvent(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, {
     id: "my-team",
     leaderKey,
+    history: [],
     agents,
   }));
 }

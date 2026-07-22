@@ -5,7 +5,8 @@ export {
     type JiePlatformErrorOptions,
 } from "./jie-platform-errors";
 
-export type { TeamInfo, ModelInfo, AgentInfo, EffortLevel } from "./types";
+export type { TeamInfo, ModelInfo, AgentInfo, AgentHistory, EffortLevel } from "./types";
+export type { AgentMessage } from "@earendil-works/pi-agent-core";
 
 export type { Settings, McpServerConfig } from "./config";
 

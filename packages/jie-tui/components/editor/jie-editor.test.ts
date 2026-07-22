@@ -44,6 +44,7 @@ function seedBusyTeam(store: StateStore): void {
   store.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
     id: "my-team",
     leaderKey: "general-1",
+    history: [],
     agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, model: null }],
   })));
   store.dispatch(Actions.receiveEvent(Events.agentTurnStart({ kind: "agent", teamId: "my-team", agentKey: "general-1" })));
@@ -105,6 +106,7 @@ describe("createJieEditor — control keys", () => {
     store.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
       id: "my-team",
       leaderKey: "general-1",
+      history: [],
       agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, model: null }],
     })));
     const types: string[] = [];
