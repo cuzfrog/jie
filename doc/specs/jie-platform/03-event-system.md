@@ -51,11 +51,10 @@ Identity travels in the envelope, not in the subject. `topic` equals `type` for 
 interface EventManager {
   publish<T extends EventType>(event: EventEnvelope<T>): void;              // routes on event.topic
   subscribe<T extends EventType>(topic: T, cb: (e: EventEnvelope<T>) => void): () => void;
-  subscriberCount(subject: string): number;                                  // used by notify
 }
 ```
 
-`createEventManager(bus?)` owns an in-process bus by default; tests may pass an explicit bus. `JiePlatform` wraps the manager: `handle.subscribe(topic, cb)` is the consumer surface (ADR 13) — the bus never reaches consumer code.
+`EventManagerImpl` takes the `eventBus` cradle entry (an in-process bus by default, registered alongside it by `registerEventModule`); tests register a mock bus instead. `JiePlatform` wraps the manager: `handle.subscribe(topic, cb)` is the consumer surface (ADR 13) — the bus never reaches consumer code.
 
 Each known type has a flat-args factory method (`Events.agentTurnStart(sender)`, `Events.agentIdle(sender, stopReason)`, `Events.userPrompt(sender, teamId, prompt, agentKey)`, `Events.teamLoaded(sender, teamInfo)`, …). `Events.custom(sender, clientTopic, message)` is the client-topic factory: the bus subject becomes `custom.${clientTopic}`.
 
@@ -105,4 +104,4 @@ The alternation contract is what makes the busy/idle rows reliable. Queue-pickup
 
 ## In-Process Implementation
 
-`InProcessEventBus` is a `Map<string, Set<callback>>`: publish invokes callbacks synchronously in subscription order; unsubscribe removes the callback; `subscriberCount` returns the set size. Error containment is per callback: a throwing subscriber is caught and logged via the platform logger (subject + error), dispatch continues to the remaining subscribers, and the publisher never sees the exception.
+`InProcessEventBus` is a `Map<string, Set<callback>>`: publish invokes callbacks synchronously in subscription order; unsubscribe removes the callback. Error containment is per callback: a throwing subscriber is caught and logged via the platform logger (subject + error), dispatch continues to the remaining subscribers, and the publisher never sees the exception.

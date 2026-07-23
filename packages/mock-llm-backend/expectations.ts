@@ -1,4 +1,3 @@
-const MOCK_TOOL_CALL_ID_PREFIX = "mock_tool_";
 const MOCK_COMPLETION_ID_PREFIX = "mockcmpl_";
 
 export interface ChatCompletionRequestBody {
@@ -217,8 +216,4 @@ export function renderSseStream(expectation: Expectation, req: ChatCompletionReq
 
   const body = `${lines.join("\n\n")}\n\n`;
   return new TextEncoder().encode(body);
-}
-
-export function defaultToolCallId(): string {
-  return `${MOCK_TOOL_CALL_ID_PREFIX}${Math.random().toString(36).slice(2, 10)}`;
 }

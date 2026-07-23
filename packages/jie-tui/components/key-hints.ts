@@ -1,5 +1,5 @@
 import { truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
-import type { StateStore, TuiState } from "../state";
+import { TuiState, type StateStore } from "../state";
 import { style } from "./themes";
 
 export class KeyHints implements Component {
@@ -10,7 +10,7 @@ export class KeyHints implements Component {
   }
 
   render(width: number): string[] {
-    if (hasConversation(this.stateStore.getState())) return [];
+    if (TuiState.hasConversation(this.stateStore.getState())) return [];
     return layoutHintLines(Math.max(1, width));
   }
 
@@ -54,11 +54,4 @@ function layoutHintLines(width: number): string[] {
   }
   if (line !== "") lines.push(truncateToWidth(line, width));
   return lines;
-}
-
-function hasConversation(state: TuiState): boolean {
-  for (const agent of state.agents.values()) {
-    if (agent.history.length > 0 || agent.currentTurn !== null) return true;
-  }
-  return false;
 }

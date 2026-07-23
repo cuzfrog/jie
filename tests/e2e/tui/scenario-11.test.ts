@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { assertLlmReachable, seedTeam, writeModelsJsonTo, writeSettingsJson } from "../_fixture.ts";
-import { loadMockExpectations } from "../../../packages/mock-llm-backend/index.ts";
+import { loadMockExpectations } from "../../../packages/mock-llm-backend";
 import {
   startTui,
   stopTui,
@@ -45,10 +45,10 @@ describe("Scenario 11 — slash command autocomplete", () => {
     await sendCmd(harness.stdin, "/team my");
     await settleAutocomplete();
     await sendCmd(harness.stdin, "\t");
-    await waitForEditorText(harness.tui, "/team my-team");
+    await waitForEditorText(harness, "/team my-team");
     await sendEnter(harness.stdin);
-    await waitForTeam(harness.tui, "my-team");
-    await waitForNoErrorBanner(harness.tui);
+    await waitForTeam(harness, "my-team");
+    await waitForNoErrorBanner(harness);
   });
 
   test("Esc closes the autocomplete popup and the editor keeps its text", async () => {
@@ -57,8 +57,8 @@ describe("Scenario 11 — slash command autocomplete", () => {
     await sendCmd(harness.stdin, "\x1b");
     await settleAutocomplete();
     await sendCmd(harness.stdin, "x");
-    await waitForEditorText(harness.tui, "/team x");
-    await waitForNoErrorBanner(harness.tui);
+    await waitForEditorText(harness, "/team x");
+    await waitForNoErrorBanner(harness);
   });
 });
 
@@ -87,7 +87,7 @@ describe("Scenario 11 — resume hydrates the conversation", () => {
     const harness = await startTui({ cwd: dir });
     try {
       await sendLine(harness.stdin, "/team my-team");
-      await waitForTeam(harness.tui, "my-team");
+      await waitForTeam(harness, "my-team");
       await submitAndWaitForAgentIdle(harness, SEED_PROMPT, AGENT_ID);
       const sessions = await harness.platform.execute({ name: "listSessions", teamId: "my-team" });
       if (sessions.length === 0) throw new Error("expected at least one persisted session");
@@ -102,14 +102,14 @@ describe("Scenario 11 — resume hydrates the conversation", () => {
     const harness = await startTui({ cwd: dir, resumeSessionId: sessionId });
     try {
       await sendLine(harness.stdin, "/team my-team");
-      await waitForTeam(harness.tui, "my-team");
-      await waitForConversationText(harness.tui, AGENT_ID, SEED_REPLY);
-      const agent = harness.tui.state.agents.get(AGENT_ID);
+      await waitForTeam(harness, "my-team");
+      await waitForConversationText(harness, AGENT_ID, SEED_REPLY);
+      const agent = harness.stateStore.getState().agents.get(AGENT_ID);
       const turns = agent?.currentTurn === null || agent?.currentTurn === undefined
         ? agent?.history ?? []
         : [...(agent?.history ?? []), agent.currentTurn];
       expect(turns.map((t) => t.userPrompt)).toContain(SEED_PROMPT);
-      await waitForNoErrorBanner(harness.tui);
+      await waitForNoErrorBanner(harness);
     } finally {
       await stopTui(harness);
     }
@@ -120,19 +120,19 @@ describe("Scenario 11 — resume hydrates the conversation", () => {
     const harness = await startTui({ cwd: dir });
     try {
       await sendLine(harness.stdin, "/team my-team");
-      await waitForTeam(harness.tui, "my-team");
+      await waitForTeam(harness, "my-team");
       await sendCmd(harness.stdin, "/resume ");
       await settleAutocomplete();
       await sendCmd(harness.stdin, "\t");
-      await waitForEditorText(harness.tui, `/resume ${sessionId}`);
+      await waitForEditorText(harness, `/resume ${sessionId}`);
       await sendEnter(harness.stdin);
-      await waitForConversationText(harness.tui, AGENT_ID, SEED_REPLY);
-      const agent = harness.tui.state.agents.get(AGENT_ID);
+      await waitForConversationText(harness, AGENT_ID, SEED_REPLY);
+      const agent = harness.stateStore.getState().agents.get(AGENT_ID);
       const turns = agent?.currentTurn === null || agent?.currentTurn === undefined
         ? agent?.history ?? []
         : [...(agent?.history ?? []), agent.currentTurn];
       expect(turns.map((t) => t.userPrompt)).toContain(SEED_PROMPT);
-      await waitForNoErrorBanner(harness.tui);
+      await waitForNoErrorBanner(harness);
     } finally {
       await stopTui(harness);
     }

@@ -4,11 +4,11 @@ import { getBuiltinModels } from "@earendil-works/pi-ai/providers/all";
 import type { Api, Model, OpenAICompletionsCompat, OpenAIResponsesCompat, AnthropicMessagesCompat } from "@earendil-works/pi-ai";
 import { JiePlatformError } from "../jie-platform-errors";
 
-export interface RawModelsConfig {
+interface RawModelsConfig {
   readonly providers?: Record<string, RawProviderConfig>;
 }
 
-export interface RawProviderConfig {
+interface RawProviderConfig {
   readonly baseUrl?: string;
   readonly api?: string;
   readonly apiKey?: string;
@@ -18,7 +18,7 @@ export interface RawProviderConfig {
   readonly modelOverrides?: Record<string, RawModelOverride>;
 }
 
-export interface RawModelConfig {
+interface RawModelConfig {
   readonly id: string;
   readonly name?: string;
   readonly api?: string;
@@ -35,7 +35,7 @@ export interface RawModelConfig {
   readonly compat?: Record<string, unknown>;
 }
 
-export interface RawModelOverride {
+interface RawModelOverride {
   readonly name?: string;
   readonly reasoning?: boolean;
   readonly input?: ReadonlyArray<"text" | "image">;
@@ -246,14 +246,16 @@ function buildModel(
     maxTokens: raw.maxTokens ?? 16384,
   };
   if (Object.keys(providerHeaders).length > 0) result.headers = providerHeaders;
-  if (Object.keys(mergedCompat).length > 0) result.compat = mergedCompat as never;
+  if (Object.keys(mergedCompat).length > 0) result.compat = mergedCompat as Model<Api>["compat"];
   return result;
 }
 
-export function resolveValue(value: string, _path: string): string {
+function resolveValue(value: string, _path: string): string {
   return value.replace(/\$\{([A-Z_][A-Z0-9_]*)\}|\$([A-Z_][A-Z0-9_]*)/g, (_, braced: string | undefined, plain: string | undefined) => {
     const name = braced ?? plain ?? "";
     const env = process.env[name];
     return env ?? "";
   });
 }
+
+export { resolveValue as _resolveValue };

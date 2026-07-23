@@ -1,4 +1,4 @@
-import { loadMockExpectations } from "../../../packages/mock-llm-backend/index.ts";
+import { loadMockExpectations } from "../../../packages/mock-llm-backend";
 import { assertLlmReachable, seedTeam } from "../_fixture.ts";
 import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, sendLine, type TuiHarness } from "./harness";
 import expectations from "./scenario-5.llm.ts";
@@ -24,11 +24,11 @@ describe("Scenario 5 — second prompt after the first turn", () => {
 
   test("state captures both prompts and the haiku response", async () => {
     await sendLine(harness.stdin, "/team my-team");
-    await waitForTeam(harness.tui, "my-team");
+    await waitForTeam(harness, "my-team");
     await submitAndWaitForAgentIdle(harness, "Research the history of J", "my-team:general-1");
     await submitAndWaitForAgentIdle(harness, "Tell me a haiku", "my-team:general-1");
 
-    const agent = harness.tui.state.agents.get("my-team:general-1");
+    const agent = harness.stateStore.getState().agents.get("my-team:general-1");
     expect(agent).toBeDefined();
     const allTurns = [
       ...(agent?.history ?? []),

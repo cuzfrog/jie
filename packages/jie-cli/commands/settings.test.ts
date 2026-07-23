@@ -1,10 +1,12 @@
-import { JiePlatformError, type Command, type CommandName, type CommandResult, type Console, type JiePlatform, type Settings, type TeamInfo } from "@cuzfrog/jie-platform";
+import { JiePlatformError, type Command, type CommandName, type CommandResult, type JiePlatform, type Settings, type TeamInfo } from "@cuzfrog/jie-platform";
+import { type Console } from "@cuzfrog/jie-utils";
 import { runModel, runTeam } from "./settings";
 
 function makeConsoleMock(): Console {
   return {
     print: vi.fn(),
     error: vi.fn(),
+    write: vi.fn(),
   };
 }
 
@@ -39,8 +41,6 @@ describe("runModel", () => {
       name: "setDefaultModel",
       provider: "anthropic",
       id: "claude-opus-4",
-      effort: "off",
-      contextWindow: null,
     });
     expect(consoleMock.print).toHaveBeenCalledWith("default model set to anthropic/claude-opus-4");
   });

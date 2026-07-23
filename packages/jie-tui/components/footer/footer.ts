@@ -1,8 +1,9 @@
 import { truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
 import type { ModelInfo } from "@cuzfrog/jie-platform";
 import { TuiState, type AgentUiState, type StateStore } from "../../state";
-import { formatQueueIndicator, style } from "../themes";
+import { style } from "../themes";
 import { contextPercentColor, formatContextPercent } from "./context-percent";
+import { formatQueueIndicator } from "./queue-indicator";
 
 export class Footer implements Component {
   private readonly stateStore: StateStore;

@@ -1,10 +1,12 @@
-import { type Command, type CommandName, type CommandResult, type Console, type JiePlatform } from "@cuzfrog/jie-platform";
+import { type Command, type CommandName, type CommandResult, type JiePlatform } from "@cuzfrog/jie-platform";
+import { type Console } from "@cuzfrog/jie-utils";
 import { runApiKey, runLogin, runLogout } from "./auth";
 
 function makeConsoleMock(): Console {
   return {
     print: vi.fn(),
     error: vi.fn(),
+    write: vi.fn(),
   };
 }
 

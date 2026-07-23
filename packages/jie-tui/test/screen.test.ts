@@ -1,7 +1,8 @@
 import { PassThrough } from "node:stream";
 import { Events, type AnyEventEnvelope, type EventEnvelope, type EventType, type JiePlatform, type SessionSummary } from "@cuzfrog/jie-platform";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { createTui, type Tui } from "../tui";
+import { bootTui, type TuiCradle } from "../container";
+import type { Tui } from "../tui";
 import { VirtualTerminal } from "./virtual-terminal";
 
 const COLS = 80;
@@ -35,6 +36,7 @@ class ScreenStdout extends PassThrough {
 
 interface ScreenHarness {
   readonly tui: Tui;
+  readonly stateStore: TuiCradle["stateStore"];
   readonly stdin: ScreenStdin;
   readonly vt: VirtualTerminal;
   emit(event: AnyEventEnvelope): void;
@@ -49,11 +51,12 @@ async function bootScreen(): Promise<ScreenHarness> {
   const previousLang = process.env.LANG;
   process.env.LANG = UTF8_LOCALE;
   try {
-    const tui = createTui({ cwd: "/repo" }, { platform: makePlatform(handlers), stdin, stdout });
-    void tui.start();
+    const cradle = bootTui({ cwd: "/repo" }, { platform: makePlatform(handlers), stdin, stdout }).cradle;
+    void cradle.tui.start();
     await vt.waitForRender();
     return {
-      tui,
+      tui: cradle.tui,
+      stateStore: cradle.stateStore,
       stdin,
       vt,
       emit: (event) => { handlers.get(event.type)?.(event); },
@@ -135,7 +138,7 @@ describe("screen rendering", () => {
       expect(closed).not.toContain("alpha-1");
       expect(closed).toContain("─");
       await typeText(harness, "x");
-      expect(harness.tui.state.editorText).toBe("/resume x");
+      expect(harness.stateStore.getState().editorText).toBe("/resume x");
     } finally {
       harness.tui.stop();
     }

@@ -5,7 +5,8 @@
     ".": "./index.ts"
   },
   "dependencies": {
-    "tslog": "catalog:"
+    "@cuzfrog/jie-utils": "workspace:*",
+    "awilix": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

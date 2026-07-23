@@ -7,28 +7,47 @@ import {
 } from "@earendil-works/pi-tui";
 import type { JiePlatform } from "@cuzfrog/jie-platform";
 import { SLASH_COMMAND_NAMES } from "../command-handler";
-import { filterFiles, scanFiles } from "../file-mention";
+import { filterFiles, type ScannedFile } from "../file-mention";
 import type { StateStore } from "../state";
 
 const MAX_SUGGESTIONS = 20;
 const AT_PREFIX_PATTERN = /(?:^|[\s"])@([\w./-]*)$/;
 
-export function createJieAutocompleteProvider(basePath: string, platform: JiePlatform, stateStore: StateStore): AutocompleteProvider {
-  const combined = new CombinedAutocompleteProvider(slashCommands(platform, stateStore), basePath, null);
-  return {
-    triggerCharacters: ["@", "/"],
-    async getSuggestions(lines, cursorLine, cursorCol, options): Promise<AutocompleteSuggestions | null> {
-      const textBeforeCursor = (lines[cursorLine] ?? "").slice(0, cursorCol);
-      const query = atQuery(textBeforeCursor);
-      if (query === null) return combined.getSuggestions(lines, cursorLine, cursorCol, options);
-      const items = fileItems(query, basePath);
-      if (items.length === 0) return null;
-      return { items, prefix: `@${query}` };
-    },
-    applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
-      return combined.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
-    },
-  };
+export class JieAutocompleteProviderImpl implements AutocompleteProvider {
+  readonly triggerCharacters = ["@", "/"];
+  private readonly cwd: string;
+  private readonly scan: (rootDir: string) => ReadonlyArray<ScannedFile>;
+  private readonly combined: CombinedAutocompleteProvider;
+
+  constructor(cwd: string, scan: (rootDir: string) => ReadonlyArray<ScannedFile>, platform: JiePlatform, stateStore: StateStore) {
+    this.cwd = cwd;
+    this.scan = scan;
+    this.combined = new CombinedAutocompleteProvider(slashCommands(platform, stateStore), cwd, null);
+  }
+
+  async getSuggestions(
+    lines: string[],
+    cursorLine: number,
+    cursorCol: number,
+    options: { signal: AbortSignal; force?: boolean },
+  ): Promise<AutocompleteSuggestions | null> {
+    const textBeforeCursor = (lines[cursorLine] ?? "").slice(0, cursorCol);
+    const query = atQuery(textBeforeCursor);
+    if (query === null) return this.combined.getSuggestions(lines, cursorLine, cursorCol, options);
+    const items = fileItems(query, this.scan, this.cwd);
+    if (items.length === 0) return null;
+    return { items, prefix: `@${query}` };
+  }
+
+  applyCompletion(
+    lines: string[],
+    cursorLine: number,
+    cursorCol: number,
+    item: AutocompleteItem,
+    prefix: string,
+  ): { lines: string[]; cursorLine: number; cursorCol: number } {
+    return this.combined.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
+  }
 }
 
 function slashCommands(platform: JiePlatform, stateStore: StateStore): SlashCommand[] {
@@ -72,8 +91,8 @@ function atQuery(textBeforeCursor: string): string | null {
   return match === null ? null : (match[1] ?? "");
 }
 
-function fileItems(query: string, basePath: string): AutocompleteItem[] {
-  const entries = filterFiles(query, scanFiles(basePath).map((file) => ({ path: file.relPath })));
+function fileItems(query: string, scan: (rootDir: string) => ReadonlyArray<ScannedFile>, basePath: string): AutocompleteItem[] {
+  const entries = filterFiles(query, scan(basePath).map((file) => ({ path: file.relPath })));
   return entries.slice(0, MAX_SUGGESTIONS).map((entry): AutocompleteItem => ({ value: `@${entry.path}`, label: entry.path }));
 }
 

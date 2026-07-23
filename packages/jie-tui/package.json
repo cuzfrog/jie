@@ -6,7 +6,9 @@
   },
   "dependencies": {
     "@cuzfrog/jie-platform": "workspace:*",
-    "@earendil-works/pi-tui": "catalog:"
+    "@cuzfrog/jie-utils": "workspace:*",
+    "@earendil-works/pi-tui": "catalog:",
+    "awilix": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

@@ -18,43 +18,15 @@ export interface ToolRegistry {
   list(): Tool[];
 }
 
-interface CreateToolRegistryParams {
-  workspaceRoot: string;
-  eventManager: EventManager;
-  artifactStore: ArtifactStore;
-}
-
-export function createToolRegistry(params: CreateToolRegistryParams): ToolRegistry {
-  const registry = new InMemoryToolRegistry();
-  for (const builtin of builtins(params)) {
-    registry.register(builtin.name, builtin.tool);
-  }
-  return registry;
-}
-
-interface BuiltinTool {
-  name: string;
-  tool: Tool;
-}
-
-function builtins(params: CreateToolRegistryParams): BuiltinTool[] {
-  return [
-    { name: "bash", tool: createBashTool({ workspaceRoot: params.workspaceRoot }) as Tool },
-    { name: "read_file", tool: createReadFileTool({ workspaceRoot: params.workspaceRoot }) as Tool },
-    { name: "write_file", tool: createWriteFileTool({ workspaceRoot: params.workspaceRoot }) as Tool },
-    { name: "edit", tool: createEditTool({ workspaceRoot: params.workspaceRoot }) as Tool },
-    { name: "read_artifact", tool: createReadArtifactTool({ artifactStore: params.artifactStore }) as Tool },
-    { name: "write_artifact", tool: createWriteArtifactTool({ artifactStore: params.artifactStore }) as Tool },
-    { name: "todo_write", tool: createTodoWriteTool() as Tool },
-    { name: "notify", tool: createNotifyTool({ eventManager: params.eventManager }) as Tool },
-    { name: "web_fetch", tool: createWebFetchTool() as Tool },
-    { name: "web_search", tool: createWebSearchTool({ provider: createWebSearchProvider() }) as Tool },
-  ];
-}
-
-class InMemoryToolRegistry implements ToolRegistry {
+export class InMemoryToolRegistry implements ToolRegistry {
   private readonly tools = new Map<string, Tool>();
   private readonly globs = new Map<string, Bun.Glob>();
+
+  constructor(cwd: string, eventManager: EventManager, artifactStore: ArtifactStore) {
+    for (const builtin of builtins(cwd, eventManager, artifactStore)) {
+      this.register(builtin.name, builtin.tool);
+    }
+  }
 
   register(name: string, tool: Tool): void {
     this.tools.set(name, tool);
@@ -77,6 +49,26 @@ class InMemoryToolRegistry implements ToolRegistry {
   list(): Tool[] {
     return [...this.tools.values()];
   }
+}
+
+interface BuiltinTool {
+  name: string;
+  tool: Tool;
+}
+
+function builtins(workspaceRoot: string, eventManager: EventManager, artifactStore: ArtifactStore): BuiltinTool[] {
+  return [
+    { name: "bash", tool: createBashTool({ workspaceRoot }) as Tool },
+    { name: "read_file", tool: createReadFileTool({ workspaceRoot }) as Tool },
+    { name: "write_file", tool: createWriteFileTool({ workspaceRoot }) as Tool },
+    { name: "edit", tool: createEditTool({ workspaceRoot }) as Tool },
+    { name: "read_artifact", tool: createReadArtifactTool({ artifactStore }) as Tool },
+    { name: "write_artifact", tool: createWriteArtifactTool({ artifactStore }) as Tool },
+    { name: "todo_write", tool: createTodoWriteTool() as Tool },
+    { name: "notify", tool: createNotifyTool({ eventManager }) as Tool },
+    { name: "web_fetch", tool: createWebFetchTool() as Tool },
+    { name: "web_search", tool: createWebSearchTool({ provider: createWebSearchProvider() }) as Tool },
+  ];
 }
 
 function parseToolPattern(toolSpec: string): string {

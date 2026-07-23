@@ -1,4 +1,4 @@
-export const JiePlatformErrorMessages = {
+const JiePlatformErrorMessages = {
   NO_MODEL_ERROR: "No model has been selected, please login and select a default model.",
 
   FILE_NOT_FOUND: "File not found",

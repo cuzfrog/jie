@@ -11,21 +11,11 @@ export interface ModelRegistry {
   getApiKey(provider: string): string | undefined;
 }
 
-export function createModelRegistry(
-  homeJieDir: string,
-  projectJieDir: string | null,
-  authStore: AuthStore,
-): ModelRegistry {
-  return new PiModelRegistry(loadModelsConfig(homeJieDir, projectJieDir), authStore);
-}
-
-class PiModelRegistry implements ModelRegistry {
+export class PiModelRegistry implements ModelRegistry {
   private readonly custom: ResolvedModelsConfig;
-  private readonly authStore: AuthStore;
 
-  constructor(custom: ResolvedModelsConfig, authStore: AuthStore) {
-    this.custom = custom;
-    this.authStore = authStore;
+  constructor(homeJieDir: string, projectJieDir: string | null, private readonly authStore: AuthStore) {
+    this.custom = loadModelsConfig(homeJieDir, projectJieDir);
   }
 
   providers(): string[] {
@@ -86,7 +76,8 @@ function applyProviderConfig(model: Model<Api>, cfg: ResolvedProviderConfig | un
     merged.headers = { ...(model.headers ?? {}), ...cfg.headers };
   }
   if (Object.keys(cfg.compat).length > 0) {
-    merged.compat = { ...((model.compat ?? {}) as Record<string, unknown>), ...cfg.compat } as never;
+    const mergedCompat = { ...(model.compat ?? {}), ...cfg.compat } as Model<Api>["compat"];
+    merged.compat = mergedCompat;
   }
   return merged;
 }

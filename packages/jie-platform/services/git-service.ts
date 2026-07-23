@@ -9,31 +9,27 @@ export interface GitService {
   getSnapshot(): GitSnapshot;
 }
 
-export interface CreateGitServiceOptions {
-  readonly cwd: string;
-  readonly readGitStatus?: (cwd: string) => GitSnapshot;
-  readonly minIntervalMs?: number;
-  readonly now?: () => number;
-}
-
 const DEFAULT_MIN_INTERVAL_MS = 5000;
 
-export function createGitService(options: CreateGitServiceOptions): GitService {
-  const read = options.readGitStatus ?? readGitStatusViaSpawn;
-  const minIntervalMs = options.minIntervalMs ?? DEFAULT_MIN_INTERVAL_MS;
-  const now = options.now ?? Date.now;
-  let lastRefreshedAt = -Infinity;
-  let cached: GitSnapshot = { branch: "", dirty: false, ahead: 0, behind: 0 };
-  return {
-    getSnapshot(): GitSnapshot {
-      const t = now();
-      if (t - lastRefreshedAt >= minIntervalMs) {
-        lastRefreshedAt = t;
-        cached = read(options.cwd);
-      }
-      return cached;
-    },
-  };
+export class GitServiceImpl implements GitService {
+  private lastRefreshedAt = -Infinity;
+  private cached: GitSnapshot = { branch: "", dirty: false, ahead: 0, behind: 0 };
+
+  constructor(
+    private readonly cwd: string,
+    private readonly readGitStatus: (cwd: string) => GitSnapshot = readGitStatusViaSpawn,
+    private readonly minIntervalMs: number = DEFAULT_MIN_INTERVAL_MS,
+    private readonly now: () => number = Date.now,
+  ) {}
+
+  getSnapshot(): GitSnapshot {
+    const t = this.now();
+    if (t - this.lastRefreshedAt >= this.minIntervalMs) {
+      this.lastRefreshedAt = t;
+      this.cached = this.readGitStatus(this.cwd);
+    }
+    return this.cached;
+  }
 }
 
 function readGitStatusViaSpawn(cwd: string): GitSnapshot {

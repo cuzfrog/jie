@@ -1,11 +1,19 @@
 import { Type } from "typebox";
-import { createEventManager } from "../event";
-import {
-  createArtifactStore,
-  createStorage,
-} from "../storage";
-import { createToolRegistry, type ToolRegistry } from "./tool-registry";
+import type { EventManager } from "../event";
+import type { ArtifactStore } from "../storage";
+import { InMemoryToolRegistry, type ToolRegistry } from "./tool-registry";
 import type { Tool, ToolResult } from "./types";
+
+const eventManager = vi.mocked<EventManager>({
+  publish: vi.fn(),
+  subscribe: vi.fn(),
+});
+
+const artifactStore = vi.mocked<ArtifactStore>({
+  write: vi.fn(),
+  read: vi.fn(),
+  list: vi.fn(),
+});
 
 function makeTool(name: string): Tool {
   return {
@@ -20,15 +28,10 @@ function makeTool(name: string): Tool {
 }
 
 function makeReg(): ToolRegistry {
-  const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
-  return createToolRegistry({
-    workspaceRoot: "/tmp",
-    eventManager: createEventManager(),
-    artifactStore: createArtifactStore(storage),
-  });
+  return new InMemoryToolRegistry("/tmp", eventManager, artifactStore);
 }
 
-describe("createToolRegistry", () => {
+describe("InMemoryToolRegistry", () => {
   test("register + resolve an exact name returns the single tool", () => {
     const reg = makeReg();
     const a = makeTool("a");
@@ -171,7 +174,7 @@ describe("createToolRegistry", () => {
   });
 });
 
-describe("createToolRegistry — built-in installation", () => {
+describe("InMemoryToolRegistry — built-in installation", () => {
   test("populated registry: list() contains all 10 built-ins", () => {
     const reg = makeReg();
     const names = reg.list().map((t) => t.name).sort();

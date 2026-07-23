@@ -109,7 +109,7 @@ Day 2: bridging `onUpdate` (live partial results), parallel tool execution.
 
 ## Built-in Tools
 
-Registered at platform startup by `createToolRegistry`:
+Registered at platform startup by the `InMemoryToolRegistry` constructor (a cradle singleton from `tools/module.ts`):
 
 | Tool | Purpose |
 |---|---|
@@ -259,7 +259,7 @@ interface AgentBody {
 }
 ```
 
-`createAgentBody(options)` builds the single concrete implementation from `agentKey`, `teamId`, `soul`, `isLeader`, `eventManager`, `artifactStore`, `memory`, `sessionId`, `toolRegistry`, `getApiKey`, and the resolved pi-ai `Model`. No inheritance — the body wraps pi-agent-core's `Agent`, which owns the LLM loop, tool execution, streaming, and context transformation. The soul is immutable; the body is the only publisher on the bus.
+The `agentBodyFactory` cradle entry (registered in `core/module.ts`, invoked by `TeamManager.load`) builds the single concrete implementation: per-body `AgentBodyParams` (`agentKey`, `teamId`, `soul`, `isLeader`, `sessionId`, and the resolved pi-ai `Model`) plus cradle-scoped deps (`eventManager`, `artifactStore`, `memoryManager`, `toolRegistry`, `getApiKey` derived from the model registry). No inheritance — the body wraps pi-agent-core's `Agent`, which owns the LLM loop, tool execution, streaming, and context transformation. The soul is immutable; the body is the only publisher on the bus.
 
 **`start()` ordering.** (1) Register the subscriptions above. (2) `memory.restore(agentKey, sessionId, teamId)` and push the rows into `agent.state.messages`. (3) If the restored history ends with a `user` or `toolResult` message, `agent.continue()` to resume the in-flight turn. (4) Drain anything that arrived on subscribed topics during startup via `agent.prompt()`. The body does not publish `agent.idle` at startup — a body that has never run a turn is idle by default. `stop()` unsubscribes everything.
 
@@ -291,7 +291,7 @@ A prompt drives one pi-agent run: think → optionally call tools → think → 
 Two facts belong here; the full contract is canonical in `08-memory.md`.
 
 - **Write-through persist.** Every pi-agent `message_end` → `memory.persist(...)` to SQLite, unconditionally (no role check, no buffering).
-- **Session identity.** The `sessionId` is minted per process run × team by `createJiePlatform` and passed to the body (ADR 17); all agents of one team in one process share it. `jie --resume <id>` validates via `memory.hasSession` and fails hard with `unknown_session` on a miss. `restore()` on `start()` returns the prior rows for `(teamId, agentKey, sessionId)`; a fresh session restores empty.
+- **Session identity.** The `sessionId` is minted per process run × team by the platform (`TeamManager`) and passed to the body (ADR 17); all agents of one team in one process share it. `jie --resume <id>` validates via `memory.hasSession` and fails hard with `unknown_session` on a miss. `restore()` on `start()` returns the prior rows for `(teamId, agentKey, sessionId)`; a fresh session restores empty.
 
 The `transformContext` passed to pi-agent is identity in v1 — compaction, and the `memory.compact()` storage seam it drives, is not wired. See `08-memory.md` "Integration with pi-agent" for the Day-2 wrapper contract.
 

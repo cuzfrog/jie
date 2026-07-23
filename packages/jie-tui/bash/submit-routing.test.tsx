@@ -1,4 +1,4 @@
-import { createTui, type Tui } from "../tui";
+import { bootTui, type Tui } from "../";
 import { Actions } from "../state";
 import { withTTY } from "../../../tests/support";
 import {
@@ -9,11 +9,6 @@ import {
   type EventEnvelope,
   type TeamInfo,
 } from "@cuzfrog/jie-platform";
-
-declare const test: (name: string, fn: () => void | Promise<void>) => void;
-declare const describe: (name: string, fn: () => void) => void;
-declare const expect: typeof import("bun:test").expect;
-declare const beforeEach: (fn: () => void) => void;
 
 interface PromptCall {
   readonly teamId: string;
@@ -81,7 +76,7 @@ describe("handleSubmitEditorText — ! bash mode routing", () => {
   test("!cmd dispatches a bash directive to the focused agent via platform.prompt", () => {
     withTTY(true, () => {
       const tp = makePlatform();
-      const tui: Tui = createTui({ cwd: process.cwd() }, { platform: tp.platform });
+      const tui: Tui = bootTui({ cwd: process.cwd() }, { platform: tp.platform }).cradle.tui;
       try {
         emitTeamLoaded(tp, makeTeamInfo());
         internals(tui).stateStore.dispatch(Actions.submitEditorText("!ls -la"));
@@ -100,7 +95,7 @@ describe("handleSubmitEditorText — ! bash mode routing", () => {
   test("!!cmd dispatches a directive that asks the agent to exclude the output from context", () => {
     withTTY(true, () => {
       const tp = makePlatform();
-      const tui: Tui = createTui({ cwd: process.cwd() }, { platform: tp.platform });
+      const tui: Tui = bootTui({ cwd: process.cwd() }, { platform: tp.platform }).cradle.tui;
       try {
         emitTeamLoaded(tp, makeTeamInfo());
         internals(tui).stateStore.dispatch(Actions.submitEditorText("!!cat secret"));
@@ -117,7 +112,7 @@ describe("handleSubmitEditorText — ! bash mode routing", () => {
   test("plain text (without !) is forwarded verbatim, not wrapped in a bash directive", () => {
     withTTY(true, () => {
       const tp = makePlatform();
-      const tui: Tui = createTui({ cwd: process.cwd() }, { platform: tp.platform });
+      const tui: Tui = bootTui({ cwd: process.cwd() }, { platform: tp.platform }).cradle.tui;
       try {
         emitTeamLoaded(tp, makeTeamInfo());
         internals(tui).stateStore.dispatch(Actions.submitEditorText("hello world"));
@@ -132,7 +127,7 @@ describe("handleSubmitEditorText — ! bash mode routing", () => {
   test("bare ! does not call platform.prompt and surfaces a missing-command error banner", () => {
     withTTY(true, () => {
       const tp = makePlatform();
-      const tui: Tui = createTui({ cwd: process.cwd() }, { platform: tp.platform });
+      const tui: Tui = bootTui({ cwd: process.cwd() }, { platform: tp.platform }).cradle.tui;
       try {
         emitTeamLoaded(tp, makeTeamInfo());
         internals(tui).stateStore.dispatch(Actions.submitEditorText("!"));
@@ -147,7 +142,7 @@ describe("handleSubmitEditorText — ! bash mode routing", () => {
   test("!cmd with no team loaded surfaces an error banner and does not call platform.prompt", () => {
     withTTY(true, () => {
       const tp = makePlatform();
-      const tui: Tui = createTui({ cwd: process.cwd() }, { platform: tp.platform });
+      const tui: Tui = bootTui({ cwd: process.cwd() }, { platform: tp.platform }).cradle.tui;
       try {
         internals(tui).stateStore.dispatch(Actions.submitEditorText("!ls"));
         expect(tp.prompts.length).toBe(0);
@@ -161,7 +156,7 @@ describe("handleSubmitEditorText — ! bash mode routing", () => {
   test("/help still routes to the slash command handler instead of bash mode", () => {
     withTTY(true, () => {
       const tp = makePlatform();
-      const tui: Tui = createTui({ cwd: process.cwd() }, { platform: tp.platform });
+      const tui: Tui = bootTui({ cwd: process.cwd() }, { platform: tp.platform }).cradle.tui;
       try {
         emitTeamLoaded(tp, makeTeamInfo());
         internals(tui).stateStore.dispatch(Actions.submitEditorText("/help"));

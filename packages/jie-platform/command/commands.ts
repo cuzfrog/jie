@@ -11,7 +11,7 @@ interface CommandTypeMap {
   login: CommandDef<{ provider: string; apiKey: string }, null>;
   logout: CommandDef<{ provider?: string }, null>;
   setApiKey: CommandDef<{ apiKey: string }, null>;
-  setDefaultModel: CommandDef<ModelInfo, null>;
+  setDefaultModel: CommandDef<{ provider: string; id: string }, null>;
   getDefaultModel: CommandDef<{}, ModelInfo | null>;
   setDefaultTeam: CommandDef<{ teamId: string }, null>;
   team: CommandDef<{ teamId?: string }, TeamInfo>;

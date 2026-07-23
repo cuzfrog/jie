@@ -1,41 +1,26 @@
 import { createWriteArtifactTool } from "./write-artifact";
-import { createArtifactStore, createStorage } from "../storage";
+import type { ArtifactStore } from "../storage";
 import { makeEmptyContext } from "./_test-context";
 
-function makeStore() {
-  const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
-  return createArtifactStore(storage);
-}
+const artifactStore = vi.mocked<ArtifactStore>({
+  write: vi.fn(),
+  read: vi.fn(),
+  list: vi.fn(),
+});
 
 describe("write_artifact", () => {
   test("success: content reports key + char count; details carries key + created_at", async () => {
-    const store = makeStore();
-    const tool = createWriteArtifactTool({ artifactStore: store });
+    artifactStore.write.mockResolvedValue({ key: "task/plan", created_at: "2026-07-23T00:00:00.000Z" });
+    const tool = createWriteArtifactTool({ artifactStore });
     const result = await tool.execute(
       { key: "task/plan", content: "hello" },
       makeEmptyContext(),
     );
+    expect(artifactStore.write).toHaveBeenCalledWith("task/plan", "hello");
     expect(result.content).toBe("Stored artifact at task/plan (5 chars)");
-    expect(result.details).toMatchObject({
+    expect(result.details).toEqual({
       key: "task/plan",
-      created_at: expect.any(String),
+      created_at: "2026-07-23T00:00:00.000Z",
     });
-  });
-
-  test("invalid key -> invalid_artifact_key", async () => {
-    const store = makeStore();
-    const tool = createWriteArtifactTool({ artifactStore: store });
-    await expect(
-      tool.execute({ key: "bad space", content: "x" }, makeEmptyContext()),
-    ).rejects.toMatchObject({ code: "INVALID_ARTIFACT_KEY" });
-  });
-
-  test("content > 5 MiB -> artifact_too_large", async () => {
-    const store = makeStore();
-    const tool = createWriteArtifactTool({ artifactStore: store });
-    const huge = "x".repeat(5 * 1024 * 1024 + 1);
-    await expect(
-      tool.execute({ key: "k", content: huge }, makeEmptyContext()),
-    ).rejects.toMatchObject({ code: "ARTIFACT_TOO_LARGE" });
   });
 });

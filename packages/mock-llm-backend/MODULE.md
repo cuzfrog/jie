@@ -2,9 +2,14 @@
 no-new-exports:
   - client.test.ts
   - client.ts
+  - expectation-store.test.ts
+  - expectation-store.ts
   - expectations.test.ts
   - expectations.ts
   - index.ts
-  - server.test.ts
+  - mock-llm-server.test.ts
+  - mock-llm-server.ts
+  - module.test.ts
+  - module.ts
   - server.ts
 ---

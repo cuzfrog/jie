@@ -2,16 +2,9 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import {
-  createGitService,
-  createJiePlatform,
-  defaultConsole,
-  type Console,
-  type GitSnapshot,
-  type JiePlatform,
-  type JiePlatformOptions,
-} from "@cuzfrog/jie-platform";
-import { type CreateTUIOptions, type Tui, type TuiDeps, createTui } from "@cuzfrog/jie-tui";
+import { bootPlatform, type JiePlatform, type JiePlatformOptions } from "@cuzfrog/jie-platform";
+import { bootTui, type CreateTUIOptions, type Tui, type TuiDeps } from "@cuzfrog/jie-tui";
+import { defaultConsole, type Console } from "@cuzfrog/jie-utils";
 import { parseFlags, type ParsedArgs } from "./cli-flags";
 import {
   runApiKey,
@@ -27,7 +20,11 @@ export async function main(argv: string[], cwd: string = process.cwd(), console:
   const parsed = parseFlags(argv);
   const homeDir = resolveHomeDir();
   try {
-    return await run(parsed, cwd, homeDir, { createPlatform: createJiePlatform, createTui, gitSnapshot: readGitSnapshot, console });
+    return await run(parsed, cwd, homeDir, {
+      bootPlatform: (options) => bootPlatform(options).cradle.platform,
+      bootTui: (options, deps) => bootTui(options, deps).cradle.tui,
+      console,
+    });
   } catch (err) {
     console.error(err instanceof Error ? err.message : String(err));
     return 1;
@@ -35,9 +32,8 @@ export async function main(argv: string[], cwd: string = process.cwd(), console:
 }
 
 interface RunDeps {
-  readonly createPlatform: (options: JiePlatformOptions) => Promise<JiePlatform>;
-  readonly createTui: (options: CreateTUIOptions, deps: TuiDeps) => Tui;
-  readonly gitSnapshot: (cwd: string) => GitSnapshot;
+  readonly bootPlatform: (options: JiePlatformOptions) => JiePlatform;
+  readonly bootTui: (options: CreateTUIOptions, deps: TuiDeps) => Tui;
   readonly console: Console;
 }
 
@@ -55,7 +51,7 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
       deps.console.error(args.message);
       return 1;
   }
-  const handle = await bootPlatform(
+  const handle = connectPlatform(
     {
       cwd,
       homeJieDir,
@@ -63,13 +59,13 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
       inMemory: args.kind === "tui" || args.kind === "print" ? args.inMemory : false,
       resumeSessionId: args.kind === "tui" || args.kind === "print" ? args.resume : undefined,
     },
-    deps.createPlatform,
+    deps.bootPlatform,
     deps.console,
   );
   switch (args.kind) {
     case "tui": {
-      const git = deps.gitSnapshot(cwd);
-      const tui = deps.createTui({ cwd }, { platform: handle, gitBranch: git.branch, gitDirty: git.dirty });
+      const git = await handle.execute({ name: "getGitStatus" });
+      const tui = deps.bootTui({ cwd }, { platform: handle, gitBranch: git.branch, gitDirty: git.dirty });
       await handle.execute({ name: "team", teamId: args.team });
       try {
         await tui.start();
@@ -105,21 +101,21 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
   }
 }
 
-async function bootPlatform(
+function connectPlatform(
   options: JiePlatformOptions,
-  createPlatform: (options: JiePlatformOptions) => Promise<JiePlatform>,
+  bootPlatform: (options: JiePlatformOptions) => JiePlatform,
   console: Console,
-): Promise<JiePlatform> {
-  let handle: JiePlatform;
+): JiePlatform {
+  let platform: JiePlatform;
   try {
-    handle = await createPlatform(options);
+    platform = bootPlatform(options);
   } catch (error) {
     throw new CliBootError(error instanceof Error ? error.message : String(error));
   }
-  handle.subscribe("system.error", (envelope) => {
+  platform.subscribe("system.error", (envelope) => {
     console.error(`jie: ${envelope.payload.error}`);
   });
-  return handle;
+  return platform;
 }
 
 class CliBootError extends Error {}
@@ -160,10 +156,6 @@ function findProjectJieDir(cwd: string): string | null {
     if (parent === current) return null;
     current = parent;
   }
-}
-
-function readGitSnapshot(cwd: string): GitSnapshot {
-  return createGitService({ cwd }).getSnapshot();
 }
 
 if (import.meta.main) {

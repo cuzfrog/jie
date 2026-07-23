@@ -16,10 +16,6 @@ export interface ArtifactStore {
   list(prefix: string): Promise<ReadonlyArray<{ readonly key: string; readonly created_at: string }>>;
 }
 
-export function createArtifactStore(storage: Storage): ArtifactStore {
-  return new SqliteArtifactStore(storage);
-}
-
 const ARTIFACT_KEY_PATTERN = /^[A-Za-z0-9_./-]{1,256}$/;
 const ARTIFACT_CONTENT_MAX = 5 * 1024 * 1024;
 
@@ -90,39 +86,5 @@ export class SqliteArtifactStore implements ArtifactStore {
       key: row[0] as string,
       created_at: row[1] as string,
     }));
-  }
-}
-
-export class InMemoryArtifactStore implements ArtifactStore {
-  private readonly rows = new Map<string, { content: string; created_at: string }>();
-
-  async write(
-    key: string,
-    content: string,
-  ): Promise<{ key: string; created_at: string }> {
-    validateArtifactKey(key);
-    validateArtifactContent(content);
-    const created_at = new Date().toISOString();
-    this.rows.set(key, { content, created_at });
-    return { key, created_at };
-  }
-
-  async read(key: string): Promise<{
-    key: string;
-    content: string;
-    created_at: string;
-  } | null> {
-    const row = this.rows.get(key);
-    if (row === undefined) return null;
-    return { key, ...row };
-  }
-
-  async list(prefix: string): Promise<{ key: string; created_at: string }[]> {
-    const results: { key: string; created_at: string }[] = [];
-    for (const [key, value] of this.rows) {
-      if (key.startsWith(prefix)) results.push({ key, ...value });
-    }
-    results.sort((a, b) => b.created_at.localeCompare(a.created_at));
-    return results;
   }
 }

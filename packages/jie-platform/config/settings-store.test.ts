@@ -1,36 +1,31 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { makeSettingsStore } from "./settings-store";
+import { SettingsStoreImpl } from "./settings-store";
 
-describe("SettingsStore", () => {
+describe("SettingsStoreImpl", () => {
+  let homeDir: string;
   let homeJieDir: string;
   let cwd: string;
 
   beforeEach(() => {
-    const homeDir = mkdtempSync(join(tmpdir(), "jie-cli-settings-"));
+    homeDir = mkdtempSync(join(tmpdir(), "jie-cli-settings-"));
     homeJieDir = join(homeDir, ".jie");
     cwd = mkdtempSync(join(tmpdir(), "jie-cli-settings-cwd-"));
   });
 
   afterEach(() => {
-    rmSync(homeJieDir, { recursive: true, force: true });
+    rmSync(homeDir, { recursive: true, force: true });
     rmSync(cwd, { recursive: true, force: true });
   });
 
   test("load() returns {} when no settings files exist", () => {
-    const store = makeSettingsStore(cwd, homeJieDir, null, () => null);
+    const store = new SettingsStoreImpl(cwd, homeJieDir, null);
     expect(store.load()).toEqual({});
   });
 
   test("setDefaultProvider writes to ~/.jie/settings.json", () => {
-    const store = makeSettingsStore(cwd, homeJieDir, null, () => null);
+    const store = new SettingsStoreImpl(cwd, homeJieDir, null);
     store.setDefaultProvider("anthropic", "claude-sonnet-4");
     const path = join(homeJieDir, "settings.json");
     expect(existsSync(path)).toBe(true);
@@ -42,8 +37,7 @@ describe("SettingsStore", () => {
 
   test("setDefaultProvider always writes to global, even when projectJieDir is set", () => {
     const projectJieDir = join(cwd, ".jie");
-    mkdirSync(projectJieDir, { recursive: true });
-    const store = makeSettingsStore(cwd, homeJieDir, projectJieDir, () => null);
+    const store = new SettingsStoreImpl(cwd, homeJieDir, projectJieDir);
     store.setDefaultProvider("anthropic", "claude-sonnet-4");
     expect(existsSync(join(projectJieDir, "settings.json"))).toBe(false);
     expect(JSON.parse(readFileSync(join(homeJieDir, "settings.json"), "utf-8"))).toEqual({
@@ -52,56 +46,35 @@ describe("SettingsStore", () => {
     });
   });
 
-  test("setDefaultProvider does not invoke the team resolver", () => {
-    const resolve = vi.fn(() => "user" as const);
-    const store = makeSettingsStore(cwd, homeJieDir, null, resolve);
-    store.setDefaultProvider("anthropic", "claude-sonnet-4");
-    expect(resolve).not.toHaveBeenCalled();
-  });
-
-  test("setDefaultTeam writes to project file when resolver returns 'project'", () => {
+  test("setDefaultTeam with scope 'project' writes to the project settings path", () => {
     const projectJieDir = join(cwd, ".jie");
-    mkdirSync(projectJieDir, { recursive: true });
-    const store = makeSettingsStore(cwd, homeJieDir, projectJieDir, () => "project");
-    store.setDefaultTeam("dev");
-    expect(JSON.parse(readFileSync(join(projectJieDir, "settings.json"), "utf-8"))).toEqual({
-      defaultTeam: "dev",
-    });
+    const store = new SettingsStoreImpl(cwd, homeJieDir, projectJieDir);
+    store.setDefaultTeam("dev", "project");
+    expect(JSON.parse(readFileSync(join(projectJieDir, "settings.json"), "utf-8"))).toEqual({ defaultTeam: "dev" });
   });
 
-  test("setDefaultTeam writes to global file when resolver returns 'user'", () => {
-    const store = makeSettingsStore(cwd, homeJieDir, null, () => "user");
-    store.setDefaultTeam("dev");
-    expect(JSON.parse(readFileSync(join(homeJieDir, "settings.json"), "utf-8"))).toEqual({
-      defaultTeam: "dev",
-    });
+  test("setDefaultTeam with scope 'project' falls back to cwd/.jie when projectJieDir is null", () => {
+    const store = new SettingsStoreImpl(cwd, homeJieDir, null);
+    store.setDefaultTeam("dev", "project");
+    expect(JSON.parse(readFileSync(join(cwd, ".jie", "settings.json"), "utf-8"))).toEqual({ defaultTeam: "dev" });
   });
 
-  test("setDefaultTeam writes to global file when resolver returns 'builtin'", () => {
-    const store = makeSettingsStore(cwd, homeJieDir, null, () => "builtin");
-    store.setDefaultTeam("minimal");
-    expect(JSON.parse(readFileSync(join(homeJieDir, "settings.json"), "utf-8"))).toEqual({
-      defaultTeam: "minimal",
-    });
+  test("setDefaultTeam with scope 'global' writes to the home settings path", () => {
+    const store = new SettingsStoreImpl(cwd, homeJieDir, null);
+    store.setDefaultTeam("dev", "global");
+    expect(JSON.parse(readFileSync(join(homeJieDir, "settings.json"), "utf-8"))).toEqual({ defaultTeam: "dev" });
   });
 
-  test("setDefaultTeam throws TEAM_NOT_FOUND when resolver returns null", () => {
-    const store = makeSettingsStore(cwd, homeJieDir, null, () => null);
-    expect(() => store.setDefaultTeam("ghost")).toThrow(/TEAM_NOT_FOUND|not found/);
-    expect(existsSync(join(homeJieDir, "settings.json"))).toBe(false);
-  });
-
-  test("setDefaultTeam writes to the projectJieDir, not cwd", () => {
+  test("setDefaultTeam with scope 'project' writes to the projectJieDir, not cwd", () => {
     const projectRoot = mkdtempSync(join(tmpdir(), "jie-cli-proj-"));
     const projectJieDir = join(projectRoot, ".jie");
     const nested = join(projectRoot, "a", "b");
     try {
-      mkdirSync(projectJieDir, { recursive: true });
       mkdirSync(nested, { recursive: true });
-      const store = makeSettingsStore(nested, homeJieDir, projectJieDir, () => "project");
-      store.setDefaultTeam("dev");
+      const store = new SettingsStoreImpl(nested, homeJieDir, projectJieDir);
+      store.setDefaultTeam("dev", "project");
       expect(existsSync(join(projectJieDir, "settings.json"))).toBe(true);
-      expect(nested === projectRoot).toBe(false);
+      expect(existsSync(join(nested, ".jie", "settings.json"))).toBe(false);
     } finally {
       rmSync(projectRoot, { recursive: true, force: true });
     }

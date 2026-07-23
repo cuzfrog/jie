@@ -152,22 +152,13 @@ A stale `defaultTeam` (set but not installed) is **not** a failure — it falls 
 
 ## MCP Server Configuration
 
-**Not implemented today** (ADR 4). `createJiePlatform` does not read `mcp.json`, no MCP client connects at startup, and the `ToolRegistry`'s `mcp:<server>:<tool>` / `mcp:<server>:*` spec syntax resolves to zero tools — an agent `.md` listing MCP tools fails tool resolution at team load. The schema below is the forward-looking design that ships when the MCP client lands; the type already exists:
-
-```typescript
-// packages/jie-platform/config/types.ts
-export interface McpServerConfig {
-  readonly transport: "stdio" | "http";
-  readonly command?: string;          // stdio only
-  readonly args?: ReadonlyArray<string>;
-  readonly url?: string;              // http only
-  readonly auth?: { readonly tokenEnv?: string };  // env var holding the server's bearer token
-}
-```
+**Not implemented today** (ADR 4). The platform boot (`bootPlatform`) does not read `mcp.json`, no MCP client connects at startup, and the `ToolRegistry`'s `mcp:<server>:<tool>` / `mcp:<server>:*` spec syntax resolves to zero tools — an agent `.md` listing MCP tools fails tool resolution at team load. The schema below is the forward-looking design that ships when the MCP client lands; no corresponding type exists in the codebase yet:
 
 ```json
 { "servers": { "<name>": { "transport": "stdio", "command": "...", "args": ["..."], "auth": { "tokenEnv": "..." } } } }
 ```
+
+`transport` is `stdio` (`command` + `args`) or `http` (`url`); `auth.tokenEnv` names the env var holding the server's bearer token.
 
 When it lands: `.jie/mcp.json` (project, walk-up) overrides `~/.jie/mcp.json` per server name; each server connects at startup and its catalog registers into `ToolRegistry`; a connect failure is WARN+skip (startup continues without that server's tools); tool-resolution failure inside an agent's `tools:` list fails the team load with an error citing the missing tool. `auth.tokenEnv` is the MCP server's token, not an LLM credential — the no-env-var rule below applies to LLM providers only.
 

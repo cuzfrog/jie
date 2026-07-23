@@ -2,10 +2,11 @@
 no-new-exports:
   - auth-store.test.ts
   - auth-store.ts
-  - config.test.ts
   - index.ts
   - load-models.test.ts
-  - load-models.ts
+  # ungated for DI review: the public `export function resolveValue` is replaced by the
+  # `_resolveValue` test seam (house convention, net -1 public export).
+  # - load-models.ts
   - load-settings.ts
   - model-registry.test.ts
   - model-registry.ts

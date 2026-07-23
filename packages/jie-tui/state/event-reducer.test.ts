@@ -1,11 +1,11 @@
 import { Events, type AgentSender, type SystemSender, type UserSender } from "@cuzfrog/jie-platform";
 import type { TuiState } from "./state";
-import { createStateStore } from "./state-store";
+import { StateStoreImpl } from "./state-store";
 import { reduce } from "./event-reducer";
 import { reduce as reduceAction } from "./reducer";
 import { Actions } from "./actions";
 
-const INITIAL_TUI_STATE = createStateStore().getState();
+const INITIAL_TUI_STATE = new StateStoreImpl().getState();
 
 const SYSTEM_SENDER: SystemSender = { kind: "system" };
 const USER_SENDER: UserSender = { kind: "user" };

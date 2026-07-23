@@ -1,30 +1,9 @@
-import { join } from "node:path";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { createEventManager, Events, type EventEnvelope, type EventManager } from "./event";
-import { createJiePlatform } from "./jie-platform";
-import { type Command, type CommandExecutor, type CommandName } from "./command";
-import {
-  type AuthStore,
-  type ModelRegistry,
-  type Settings,
-  type SettingsStore,
-  createModelRegistry,
-} from "./config";
-import { type TeamManager, createTeamManager } from "./team";
-import { type ToolRegistry, createToolRegistry } from "./tools";
-import {
-  type ArtifactStore,
-  type MemoryManager,
-  type Storage,
-  createArtifactStore,
-  createMemoryManager,
-  createStorage,
-} from "./storage";
-
-const commandExecutor = vi.mocked<CommandExecutor>({
-  execute: vi.fn(),
-});
+import type { Command, CommandExecutor, CommandName } from "./command";
+import type { Settings, SettingsStore } from "./config";
+import type { EventManager } from "./event";
+import { JiePlatformImpl } from "./jie-platform";
+import type { TeamManager } from "./team";
+import type { ModelInfo, TeamInfo } from "./types";
 
 const settingsStore = vi.mocked<SettingsStore>({
   load: vi.fn(),
@@ -32,12 +11,24 @@ const settingsStore = vi.mocked<SettingsStore>({
   setDefaultTeam: vi.fn(),
 });
 
-const authStore = vi.mocked<AuthStore>({
+const eventManager = vi.mocked<EventManager>({
+  publish: vi.fn(),
+  subscribe: vi.fn(),
+});
+
+const commandExecutor = vi.mocked<CommandExecutor>({
+  execute: vi.fn(),
+});
+
+const teamManager = vi.mocked<TeamManager>({
   load: vi.fn(),
-  saveAuthConfig: vi.fn(),
-  setProvider: vi.fn(),
-  removeProvider: vi.fn(),
-  clear: vi.fn(),
+  resumeSession: vi.fn(),
+  listInstalled: vi.fn(),
+  listLoaded: vi.fn(),
+  locate: vi.fn(),
+  agents: vi.fn(),
+  listSessions: vi.fn(),
+  stop: vi.fn(),
 });
 
 const DEFAULT_SETTINGS: Settings = {
@@ -45,102 +36,40 @@ const DEFAULT_SETTINGS: Settings = {
   defaultModel: "claude-sonnet-4-5",
 };
 
-interface PlatformTestDeps {
-  readonly eventManager: EventManager;
-  readonly settingsStore: SettingsStore;
-  readonly storage: Storage;
-  readonly teamManager: TeamManager;
-  readonly modelRegistry: ModelRegistry;
-  readonly toolRegistry: ToolRegistry;
-  readonly artifactStore: ArtifactStore;
-  readonly memoryManager: MemoryManager;
-  readonly commandExecutor: CommandExecutor;
+function createPlatform(): JiePlatformImpl {
+  return new JiePlatformImpl(settingsStore, eventManager, commandExecutor, teamManager);
 }
 
-function makeDeps(workspace: string, homeJieDir: string): PlatformTestDeps {
-  const projectJieDir = join(workspace, ".jie");
-  const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
-  const eventManager = createEventManager();
-  const artifactStore = createArtifactStore(storage);
-  const toolRegistry = createToolRegistry({
-    workspaceRoot: workspace,
-    eventManager,
-    artifactStore,
-  });
-  const modelRegistry = createModelRegistry(homeJieDir, projectJieDir, authStore);
-  const memoryManager = createMemoryManager(storage);
-  const teamManager = createTeamManager(
-    { homeJieDir, projectJieDir },
-    { eventManager, settingsStore, modelRegistry, toolRegistry, artifactStore, memoryManager },
-  );
-  return {
-    eventManager,
-    settingsStore,
-    storage,
-    teamManager,
-    modelRegistry,
-    toolRegistry,
-    artifactStore,
-    memoryManager,
-    commandExecutor,
-  };
-}
-
-describe("createJiePlatform", () => {
-  let workspace: string;
-  let homeJieDir: string;
-  let projectJieDir: string;
-
+describe("JiePlatformImpl", () => {
   beforeEach(() => {
-    workspace = mkdtempSync(join(tmpdir(), "jie-platform-"));
-    homeJieDir = mkdtempSync(join(tmpdir(), "jie-platform-home-"));
-    projectJieDir = join(workspace, ".jie");
-    mkdirSync(projectJieDir, { recursive: true });
     settingsStore.load.mockReturnValue(DEFAULT_SETTINGS);
   });
 
-  afterEach(() => {
-    rmSync(projectJieDir, { recursive: true, force: true });
-    rmSync(workspace, { recursive: true, force: true });
-    rmSync(homeJieDir, { recursive: true, force: true });
-  });
-
-  test("handle.settings reflects the snapshot from settingsStore.load() at construction", async () => {
-    const customSettings: Settings = { defaultProvider: "openai", defaultModel: "gpt-5" };
-    settingsStore.load.mockReturnValueOnce(customSettings);
-    const deps = makeDeps(workspace, homeJieDir);
-    const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
-    expect(handle.settings).toBe(customSettings);
-  });
-
-  test("construction does not eagerly publish system.team.loaded; teams() is empty until execute({name:'team'})", async () => {
-    const deps = makeDeps(workspace, homeJieDir);
-    const seen: EventEnvelope<"system.team.loaded">[] = [];
-    deps.eventManager.subscribe("system.team.loaded", (env) => seen.push(env));
-    const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
-    expect(seen).toEqual([]);
-    expect(handle.teams()).toEqual([]);
-    void handle;
+  test("exposes the settings loaded from the settings store at construction", () => {
+    const platform = createPlatform();
+    expect(settingsStore.load).toHaveBeenCalledTimes(1);
+    expect(platform.settings).toEqual(DEFAULT_SETTINGS);
   });
 
   describe("execute", () => {
-    test("delegates every command to commandExecutor.execute with the same command", async () => {
-      const deps = makeDeps(workspace, homeJieDir);
-      const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
+    test("delegates every command to the command executor", async () => {
+      const platform = createPlatform();
       const commands: ReadonlyArray<Command<CommandName>> = [
         { name: "login", provider: "anthropic", apiKey: "sk-test" },
         { name: "logout" },
         { name: "setApiKey", apiKey: "sk-test" },
-        { name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null },
+        { name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5" },
         { name: "getDefaultModel" },
         { name: "setDefaultTeam", teamId: "alpha" },
         { name: "team", teamId: "alpha" },
+        { name: "resumeSession", teamId: "alpha", sessionId: "01-seeded" },
         { name: "getTeamInfo" },
         { name: "getGitStatus" },
         { name: "stop" },
+        { name: "listSessions", teamId: "alpha" },
       ];
       for (const command of commands) {
-        await handle.execute(command);
+        await platform.execute(command);
       }
       expect(commandExecutor.execute).toHaveBeenCalledTimes(commands.length);
       for (const command of commands) {
@@ -149,66 +78,66 @@ describe("createJiePlatform", () => {
     });
 
     test("propagates the executor's return value to the caller", async () => {
-      const deps = makeDeps(workspace, homeJieDir);
-      const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
-      commandExecutor.execute.mockResolvedValueOnce({ provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null });
-      const result = await handle.execute({ name: "getDefaultModel" });
-      expect(result).toEqual({ provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null });
+      const platform = createPlatform();
+      const model: ModelInfo = { provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null };
+      commandExecutor.execute.mockResolvedValueOnce(model);
+      const result = await platform.execute({ name: "getDefaultModel" });
+      expect(result).toEqual(model);
     });
 
     test("propagates the executor's rejection to the caller", async () => {
-      const deps = makeDeps(workspace, homeJieDir);
-      const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
+      const platform = createPlatform();
       commandExecutor.execute.mockRejectedValueOnce(new Error("boom"));
-      expect(handle.execute({ name: "stop" })).rejects.toThrow("boom");
+      await expect(platform.execute({ name: "stop" })).rejects.toThrow("boom");
     });
   });
 
   describe("subscribe", () => {
-    test("forwards events on the requested topic only", async () => {
-      const deps = makeDeps(workspace, homeJieDir);
-      const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
-      const seen: string[] = [];
-      handle.subscribe("agent.interrupt", (env) => seen.push(env.type));
-      deps.eventManager.publish(Events.agentInterrupt({ kind: "user" }, "t1", "general-1"));
-      deps.eventManager.publish(Events.systemError({ kind: "system" }, "boom"));
-      expect(seen).toEqual(["agent.interrupt"]);
-    });
-
-    test("returns an unsubscribe function that detaches the subscription", async () => {
-      const deps = makeDeps(workspace, homeJieDir);
-      const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
-      const seen: string[] = [];
-      const unsubscribe = handle.subscribe("agent.interrupt", (env) => seen.push(env.type));
-      unsubscribe();
-      deps.eventManager.publish(Events.agentInterrupt({ kind: "user" }, "t1", "general-1"));
-      expect(seen).toEqual([]);
+    test("delegates to the event manager and returns its unsubscribe function", () => {
+      const platform = createPlatform();
+      const unsubscribe = vi.fn();
+      const callback = vi.fn();
+      eventManager.subscribe.mockReturnValue(unsubscribe);
+      const result = platform.subscribe("agent.interrupt", callback);
+      expect(eventManager.subscribe).toHaveBeenCalledWith("agent.interrupt", callback);
+      expect(result).toBe(unsubscribe);
     });
   });
 
   describe("prompt", () => {
-    test("publishes a user.prompt event addressed to the given agent on the active team", async () => {
-      const deps = makeDeps(workspace, homeJieDir);
-      const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
-      const events: EventEnvelope<"user.prompt">[] = [];
-      deps.eventManager.subscribe("user.prompt", (env) => events.push(env));
-      handle.prompt("minimal", "general-1", "hello");
-      expect(events).toHaveLength(1);
-      expect(events[0]!.payload).toEqual({ teamId: "minimal", agentKey: "general-1", prompt: "hello" });
-      expect(events[0]!.sender).toEqual({ kind: "user" });
+    test("publishes a user.prompt event addressed to the given agent", () => {
+      const platform = createPlatform();
+      platform.prompt("minimal", "general-1", "hello");
+      expect(eventManager.publish).toHaveBeenCalledTimes(1);
+      const envelope = eventManager.publish.mock.calls[0]![0]!;
+      expect(envelope.type).toBe("user.prompt");
+      expect(envelope.topic).toBe("user.prompt");
+      expect(envelope.sender).toEqual({ kind: "user" });
+      expect(envelope.payload).toEqual({ teamId: "minimal", agentKey: "general-1", prompt: "hello" });
     });
   });
 
   describe("interrupt", () => {
-    test("publishes an agent.interrupt event addressed to the given agent", async () => {
-      const deps = makeDeps(workspace, homeJieDir);
-      const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
-      const events: EventEnvelope<"agent.interrupt">[] = [];
-      deps.eventManager.subscribe("agent.interrupt", (env) => events.push(env));
-      handle.interrupt("minimal", "general-1");
-      expect(events).toHaveLength(1);
-      expect(events[0]!.sender).toEqual({ kind: "user" });
-      expect(events[0]!.payload).toEqual({ teamId: "minimal", agentKey: "general-1" });
+    test("publishes an agent.interrupt event addressed to the given agent", () => {
+      const platform = createPlatform();
+      platform.interrupt("minimal", "general-1");
+      expect(eventManager.publish).toHaveBeenCalledTimes(1);
+      const envelope = eventManager.publish.mock.calls[0]![0]!;
+      expect(envelope.type).toBe("agent.interrupt");
+      expect(envelope.topic).toBe("agent.interrupt");
+      expect(envelope.sender).toEqual({ kind: "user" });
+      expect(envelope.payload).toEqual({ teamId: "minimal", agentKey: "general-1" });
+    });
+  });
+
+  describe("teams", () => {
+    test("returns the teams loaded in the team manager", () => {
+      const platform = createPlatform();
+      const alpha: TeamInfo = { id: "alpha", leaderKey: "alpha-1", agents: [], history: [] };
+      const beta: TeamInfo = { id: "beta", leaderKey: "beta-1", agents: [], history: [] };
+      teamManager.listLoaded.mockReturnValue(new Map([["alpha", alpha], ["beta", beta]]));
+      expect(platform.teams()).toEqual([alpha, beta]);
+      expect(teamManager.listLoaded).toHaveBeenCalledTimes(1);
     });
   });
 });

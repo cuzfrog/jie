@@ -1,143 +1,169 @@
 import { MockClient, MockClientError, loadMockExpectations } from "./client.ts";
-import { startMockServer } from "./server.ts";
+import { type Expectation, type RecordedCall } from "./expectations.ts";
+import { DEFAULT_MOCK_PORT } from "./mock-llm-server.ts";
+
+const TEST_BASE_URL = "http://localhost:4321";
+
+let fetchMock = vi.spyOn(globalThis, "fetch");
+fetchMock.mockRestore();
+
+beforeEach(() => {
+  fetchMock = vi.spyOn(globalThis, "fetch");
+});
+
+afterEach(() => {
+  fetchMock.mockRestore();
+});
 
 describe("MockClient", () => {
-  let stopped: Array<() => Promise<void>> = [];
+  const rules: ReadonlyArray<Expectation> = [
+    { match: { lastUserContains: "hi" }, responseChunks: [{ kind: "text", delta: "x" }, { kind: "finish", reason: "stop" }] },
+  ];
 
-  afterEach(async () => {
-    while (stopped.length > 0) {
-      const stop = stopped.pop();
-      if (stop !== undefined) await stop();
-    }
+  beforeEach(() => {
+    fetchMock.mockResolvedValue(jsonResponse(200, { ok: true }));
   });
 
-  async function freshClient(): Promise<MockClient> {
-    const server = await startMockServer(0);
-    stopped.push(() => server.stop());
-    const client = new MockClient(`http://localhost:${server.port}`);
-    await client.health();
-    return client;
-  }
-
-  test("health() returns when the server is up", async () => {
-    const c = await freshClient();
-    expect(c.health()).resolves.toBeUndefined();
+  test("health() GETs {baseUrl}/health", async () => {
+    const c = new MockClient(TEST_BASE_URL);
+    await expect(c.health()).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledWith(`${TEST_BASE_URL}/health`);
   });
 
-  test("registerExpectations then getCalls reflects the registered log on the server", async () => {
-    const c = await freshClient();
-    await c.registerExpectations([
-      { match: { lastUserContains: "hi" }, responseChunks: [{ kind: "text", delta: "x" }, { kind: "finish", reason: "stop" }] },
-    ]);
-    // Drive one call directly so the call log is populated.
-    const res = await fetch(`http://localhost:${extractPort(c)}/v1/chat/completions`, {
+  test("health() defaults the baseUrl to the stub port", async () => {
+    const c = new MockClient();
+    await c.health();
+    expect(fetchMock).toHaveBeenCalledWith(`http://localhost:${DEFAULT_MOCK_PORT}/health`);
+  });
+
+  test("health() maps a non-2xx response to MockClientError", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(503, {}));
+    const c = new MockClient(TEST_BASE_URL);
+    await expect(c.health()).rejects.toBeInstanceOf(MockClientError);
+    await expect(c.health()).rejects.toMatchObject({ status: 503, message: "health 503" });
+  });
+
+  test("health() maps a network failure to MockClientError with status 0", async () => {
+    fetchMock.mockRejectedValue(new Error("connection refused"));
+    const c = new MockClient(TEST_BASE_URL);
+    await expect(c.health()).rejects.toMatchObject({ status: 0, message: "health: connection refused" });
+  });
+
+  test("registerExpectations() POSTs the rules as a JSON body", async () => {
+    const c = new MockClient(TEST_BASE_URL);
+    await c.registerExpectations(rules);
+    expect(fetchMock).toHaveBeenCalledWith(`${TEST_BASE_URL}/mock/expectations`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ model: "m", stream: true, messages: [{ role: "user", content: "hi all" }] }),
+      body: JSON.stringify({ expectations: [...rules] }),
     });
-    expect(res.status).toBe(200);
-    await res.body?.cancel();
-
-    const calls = await c.getCalls();
-    expect(calls.length).toBe(1);
-    expect(calls[0]!.expectationIndex).toBe(0);
   });
 
-  test("clearExpectations wipes rules and the call log", async () => {
-    const c = await freshClient();
-    await c.registerExpectations([
-      { match: {}, responseChunks: [{ kind: "text", delta: "x" }, { kind: "finish", reason: "stop" }] },
-    ]);
-    await fetch(`http://localhost:${extractPort(c)}/v1/chat/completions`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ model: "m", stream: true, messages: [{ role: "user", content: "any" }] }),
-    });
-    expect((await c.getCalls()).length).toBe(1);
+  test("registerExpectations() maps a non-2xx response to MockClientError", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(400, {}));
+    const c = new MockClient(TEST_BASE_URL);
+    await expect(c.registerExpectations(rules)).rejects.toMatchObject({ status: 400, message: "register 400" });
+  });
+
+  test("clearExpectations() sends DELETE to /mock/expectations", async () => {
+    const c = new MockClient(TEST_BASE_URL);
     await c.clearExpectations();
-    expect((await c.getCalls()).length).toBe(0);
+    expect(fetchMock).toHaveBeenCalledWith(`${TEST_BASE_URL}/mock/expectations`, { method: "DELETE" });
   });
 
-  test("assertConsumedAll passes when every rule matched", async () => {
-    const c = await freshClient();
-    const rules = [
-      { match: { lastUserContains: "A" }, responseChunks: [{ kind: "text", delta: "x" }, { kind: "finish", reason: "stop" }] as const },
-      { match: { lastUserContains: "B" }, responseChunks: [{ kind: "text", delta: "x" }, { kind: "finish", reason: "stop" }] as const },
+  test("clearExpectations() maps errors to MockClientError", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(500, {}));
+    const c = new MockClient(TEST_BASE_URL);
+    await expect(c.clearExpectations()).rejects.toMatchObject({ status: 500, message: "clear 500" });
+    fetchMock.mockRejectedValue(new Error("boom"));
+    await expect(c.clearExpectations()).rejects.toMatchObject({ status: 0, message: "clear: boom" });
+  });
+
+  test("getCalls() GETs /mock/calls and returns the parsed call log", async () => {
+    const calls: RecordedCall[] = [{ expectationIndex: 0, model: "m", lastUserText: "hi" }];
+    fetchMock.mockResolvedValue(jsonResponse(200, { calls }));
+    const c = new MockClient(TEST_BASE_URL);
+    await expect(c.getCalls()).resolves.toEqual(calls);
+    expect(fetchMock).toHaveBeenCalledWith(`${TEST_BASE_URL}/mock/calls`);
+  });
+
+  test("getCalls() maps errors to MockClientError", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(502, {}));
+    const c = new MockClient(TEST_BASE_URL);
+    await expect(c.getCalls()).rejects.toMatchObject({ status: 502, message: "getCalls 502" });
+    fetchMock.mockRejectedValue(new Error("boom"));
+    await expect(c.getCalls()).rejects.toMatchObject({ status: 0, message: "getCalls: boom" });
+  });
+
+  test("assertConsumedAll() resolves when every rule index was hit", async () => {
+    const calls: RecordedCall[] = [
+      { expectationIndex: 0, model: "m", lastUserText: "A" },
+      { expectationIndex: 1, model: "m", lastUserText: "B" },
     ];
-    await c.registerExpectations(rules);
-    const port = extractPort(c);
-    for (const u of ["A", "B"]) {
-      const res = await fetch(`http://localhost:${port}/v1/chat/completions`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ model: "m", stream: true, messages: [{ role: "user", content: u }] }),
-      });
-      await res.body?.cancel();
-    }
-    expect(c.assertConsumedAll(rules)).resolves.toBeUndefined();
+    fetchMock.mockResolvedValue(jsonResponse(200, { calls }));
+    const c = new MockClient(TEST_BASE_URL);
+    const two = [rules[0]!, rules[0]!];
+    await expect(c.assertConsumedAll(two)).resolves.toBeUndefined();
   });
 
-  test("assertConsumedAll throws when an expectation was never hit", async () => {
-    const c = await freshClient();
-    const rules = [
-      { match: { lastUserContains: "A" }, responseChunks: [{ kind: "text", delta: "x" }, { kind: "finish", reason: "stop" }] as const },
-      { match: { lastUserContains: "NEVER" }, responseChunks: [{ kind: "text", delta: "x" }, { kind: "finish", reason: "stop" }] as const },
-    ];
-    await c.registerExpectations(rules);
-    const port = extractPort(c);
-    const res = await fetch(`http://localhost:${port}/v1/chat/completions`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ model: "m", stream: true, messages: [{ role: "user", content: "A" }] }),
-    });
-    await res.body?.cancel();
-    expect(c.assertConsumedAll(rules)).rejects.toBeInstanceOf(MockClientError);
-  });
-
-  test("health() throws when pointed at an unreachable server", async () => {
-    const c = new MockClient("http://127.0.0.1:1");
-    expect(c.health()).rejects.toBeInstanceOf(MockClientError);
+  test("assertConsumedAll() rejects listing the never-hit indices", async () => {
+    const calls: RecordedCall[] = [{ expectationIndex: 0, model: "m", lastUserText: "A" }];
+    fetchMock.mockResolvedValue(jsonResponse(200, { calls }));
+    const c = new MockClient(TEST_BASE_URL);
+    const two = [rules[0]!, rules[0]!];
+    await expect(c.assertConsumedAll(two)).rejects.toThrow("expectations not consumed: indices 1");
   });
 });
 
-function extractPort(c: MockClient): number {
-  const url = new URL((c as unknown as { baseUrl: string }).baseUrl);
-  return Number(url.port);
-}
-
 describe("loadMockExpectations", () => {
-  let prevBaseUrl: string | undefined;
+  const rules: ReadonlyArray<Expectation> = [{ match: {}, responseChunks: [] }];
+  let savedBaseUrl: string | undefined;
 
   beforeEach(() => {
-    prevBaseUrl = process.env["JIE_E2E_BASE_URL"];
+    savedBaseUrl = process.env["JIE_E2E_BASE_URL"];
+    fetchMock.mockResolvedValue(jsonResponse(200, { ok: true }));
   });
 
   afterEach(() => {
-    if (prevBaseUrl === undefined) delete process.env["JIE_E2E_BASE_URL"];
-    else process.env["JIE_E2E_BASE_URL"] = prevBaseUrl;
+    if (savedBaseUrl === undefined) delete process.env["JIE_E2E_BASE_URL"];
+    else process.env["JIE_E2E_BASE_URL"] = savedBaseUrl;
   });
 
-  test("no-op when JIE_E2E_BASE_URL is unset", async () => {
+  test("is a no-op when JIE_E2E_BASE_URL is unset", async () => {
     delete process.env["JIE_E2E_BASE_URL"];
-    await loadMockExpectations([{ match: {}, responseChunks: [] }]);
+    await loadMockExpectations(rules);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  test("no-op when JIE_E2E_BASE_URL is not the stub port", async () => {
+  test("is a no-op when JIE_E2E_BASE_URL is not the stub port", async () => {
     process.env["JIE_E2E_BASE_URL"] = "http://localhost:9999";
-    await loadMockExpectations([{ match: {}, responseChunks: [] }]);
+    await loadMockExpectations(rules);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  test("registers expectations when the stub is reachable on the stub port", async () => {
-    process.env["JIE_E2E_BASE_URL"] = "http://127.0.0.1:12346";
-    const reachable = await fetch("http://127.0.0.1:12346/health").then(
-      () => true,
-      () => false,
-    );
-    if (!reachable) {
-      // Stub not running; the failure path is covered by
-      // "health() throws when pointed at an unreachable server" above.
-      return;
-    }
-    await loadMockExpectations([{ match: {}, responseChunks: [] }]);
+  test("checks health then registers expectations on the stub port", async () => {
+    const stubUrl = `http://localhost:${DEFAULT_MOCK_PORT}`;
+    process.env["JIE_E2E_BASE_URL"] = stubUrl;
+    await loadMockExpectations(rules);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]).toEqual([`${stubUrl}/health`]);
+    expect(fetchMock.mock.calls[1]).toEqual([
+      `${stubUrl}/mock/expectations`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ expectations: [...rules] }),
+      },
+    ]);
+  });
+
+  test("throws a startup hint when the stub is unreachable", async () => {
+    process.env["JIE_E2E_BASE_URL"] = `http://localhost:${DEFAULT_MOCK_PORT}`;
+    fetchMock.mockRejectedValue(new Error("ECONNREFUSED"));
+    await expect(loadMockExpectations(rules)).rejects.toThrow("is not reachable");
   });
 });
+
+function jsonResponse(status: number, body: object): Response {
+  return new Response(JSON.stringify(body), { status });
+}

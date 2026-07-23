@@ -1,22 +1,13 @@
-import { type Container, type Loader, type TUI } from "@earendil-works/pi-tui";
-import type { JiePlatform } from "@cuzfrog/jie-platform";
+import { Container, Loader, type Component, type Editor, type TUI } from "@earendil-works/pi-tui";
 import { Actions, TuiState, type Action, type StateStore } from "../state";
-import { createChatSync } from "../sync";
-import { composeLayout } from "./layout";
+import type { ChatSync } from "../sync";
+import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, WORKING_LABEL, style } from "./themes";
+import { StatusLine } from "./status-line";
+import { WelcomeBanner } from "./welcome-banner";
+import { KeyHints } from "./key-hints";
 
 export interface TuiView {
   stop(): void;
-}
-
-export interface TuiViewDeps {
-  readonly tui: TUI;
-  readonly stateStore: StateStore;
-  readonly platform: JiePlatform;
-  readonly cwd: string;
-}
-
-export function createTuiView(deps: TuiViewDeps): TuiView {
-  return new TuiViewImpl(deps);
 }
 
 const CTRL_T = "\x14";
@@ -25,36 +16,53 @@ const CYCLE_PREV_KEYS = new Set<string>(["\x1b[1;2A", "\x1b[1;5A"]);
 const CYCLE_NEXT_KEYS = new Set<string>(["\x1b[1;2B", "\x1b[1;5B"]);
 const CONSUMED = { consume: true } as const;
 
-class TuiViewImpl implements TuiView {
+export class TuiViewImpl implements TuiView {
   private readonly stateStore: StateStore;
   private readonly workingSlot: Container;
   private readonly workingIndicator: Loader;
+  private readonly chatSync: ChatSync;
   private readonly unsubscribeActions: () => void;
-  private readonly unsubscribeChatSync: () => void;
   private readonly unsubscribeKeys: () => void;
 
-  constructor(deps: TuiViewDeps) {
-    this.stateStore = deps.stateStore;
-    const layout = composeLayout(deps.tui, deps.stateStore, deps.cwd, deps.platform);
-    this.workingSlot = layout.workingSlot;
-    this.workingIndicator = layout.workingIndicator;
-    this.unsubscribeKeys = deps.tui.addInputListener((data) => {
+  constructor(
+    tui: TUI,
+    stateStore: StateStore,
+    chatSyncFactory: (chatContainer: Container, requestRender: () => void) => ChatSync,
+    todoList: Component,
+    footer: Component,
+    jieEditorFactory: (tui: TUI) => Editor,
+  ) {
+    this.stateStore = stateStore;
+    const chatContainer = new Container();
+    const editor = jieEditorFactory(tui);
+    this.workingSlot = new Container();
+    this.workingIndicator = new Loader(tui, style("accent"), style("muted"), WORKING_LABEL, {
+      frames: [...SPINNER_FRAMES], intervalMs: SPINNER_INTERVAL_MS,
+    });
+    tui.addChild(chatContainer);
+    tui.addChild(todoList);
+    tui.addChild(this.workingSlot);
+    tui.addChild(new StatusLine(stateStore));
+    tui.addChild(new WelcomeBanner(stateStore));
+    tui.addChild(new KeyHints(stateStore));
+    tui.addChild(editor);
+    tui.addChild(footer);
+    tui.setFocus(editor);
+    this.unsubscribeKeys = tui.addInputListener((data) => {
       const action = resolveGlobalKey(data);
       if (action === null) return undefined;
       this.stateStore.dispatch(action);
       return CONSUMED;
     });
-    this.unsubscribeChatSync = createChatSync(deps.stateStore, layout.chatContainer, () => {
-      deps.tui.requestRender();
-    });
-    this.unsubscribeActions = deps.stateStore.subscribe(async (): Promise<void> => {
+    this.chatSync = chatSyncFactory(chatContainer, () => tui.requestRender());
+    this.unsubscribeActions = stateStore.subscribe(async (): Promise<void> => {
       this.syncWorkingIndicator();
     });
   }
 
   stop(): void {
     this.workingIndicator.stop();
-    this.unsubscribeChatSync();
+    this.chatSync.stop();
     this.unsubscribeKeys();
     this.unsubscribeActions();
   }

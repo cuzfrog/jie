@@ -1,17 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Storage } from "./storage";
 
-interface TurnRecord {
-  team_id: string;
-  session_id: string;
-  agent_key: string;
-  seq: number;
-  role: string;
-  content: string;
-  compacted: boolean;
-  created_at: string;
-}
-
 export interface SessionSummary {
   readonly sessionId: string;
   readonly messageCount: number;
@@ -43,10 +32,6 @@ export interface MemoryManager {
   hasSession(teamId: string, sessionId: string): boolean;
 
   listSessions(teamId: string): ReadonlyArray<SessionSummary>;
-}
-
-export function createMemoryManager(storage: Storage): MemoryManager {
-  return new SqliteMemoryManager(storage);
 }
 
 export class SqliteMemoryManager implements MemoryManager {
@@ -157,117 +142,5 @@ export class SqliteMemoryManager implements MemoryManager {
       messageCount: row[1] as number,
       lastActivity: row[2] as string,
     }));
-  }
-}
-
-export class InMemoryMemoryManager implements MemoryManager {
-  private readonly rows: TurnRecord[] = [];
-
-  persist(
-    message: AgentMessage,
-    agentKey: string,
-    sessionId: string,
-    teamId: string,
-  ): void {
-    const role = (message as { role: string }).role;
-    const content = JSON.stringify(message);
-    const createdAt = new Date().toISOString();
-    const seq = this.maxSeq(teamId, agentKey, sessionId) + 1;
-    this.rows.push({
-      team_id: teamId,
-      session_id: sessionId,
-      agent_key: agentKey,
-      seq,
-      role,
-      content,
-      compacted: false,
-      created_at: createdAt,
-    });
-  }
-
-  compact(
-    compactedSeqRange: [number, number],
-    summary: AgentMessage,
-    agentKey: string,
-    sessionId: string,
-    teamId: string,
-  ): void {
-    const summarySeq = this.maxSeq(teamId, agentKey, sessionId) + 1;
-    this.rows.push({
-      team_id: teamId,
-      session_id: sessionId,
-      agent_key: agentKey,
-      seq: summarySeq,
-      role: (summary as { role: string }).role,
-      content: JSON.stringify(summary),
-      compacted: false,
-      created_at: new Date().toISOString(),
-    });
-    for (const row of this.rows) {
-      if (
-        row.team_id === teamId &&
-        row.agent_key === agentKey &&
-        row.session_id === sessionId &&
-        row.seq >= compactedSeqRange[0] &&
-        row.seq <= compactedSeqRange[1]
-      ) {
-        row.compacted = true;
-      }
-    }
-  }
-
-  async restore(
-    agentKey: string,
-    sessionId: string,
-    teamId: string,
-  ): Promise<AgentMessage[]> {
-    return this.rows
-      .filter(
-        (r) =>
-          r.team_id === teamId &&
-          r.agent_key === agentKey &&
-          r.session_id === sessionId &&
-          !r.compacted,
-      )
-      .sort((a, b) => a.seq - b.seq)
-      .map((r) => JSON.parse(r.content) as AgentMessage);
-  }
-
-  hasSession(teamId: string, sessionId: string): boolean {
-    return this.rows.some(
-      (r) => r.team_id === teamId && r.session_id === sessionId,
-    );
-  }
-
-  listSessions(teamId: string): ReadonlyArray<SessionSummary> {
-    const grouped = new Map<string, { count: number; lastActivity: string }>();
-    for (const row of this.rows) {
-      if (row.team_id !== teamId) continue;
-      const existing = grouped.get(row.session_id);
-      if (existing === undefined) {
-        grouped.set(row.session_id, { count: 1, lastActivity: row.created_at });
-      } else {
-        existing.count += 1;
-        if (row.created_at > existing.lastActivity) existing.lastActivity = row.created_at;
-      }
-    }
-    return [...grouped.entries()]
-      .map(([sessionId, info]) => ({ sessionId, messageCount: info.count, lastActivity: info.lastActivity }))
-      .sort((a, b) => b.lastActivity.localeCompare(a.lastActivity));
-  }
-
-  private maxSeq(teamId: string, agentKey: string, sessionId: string): number {
-    let max = 0;
-    for (const r of this.rows) {
-      if (
-        r.team_id === teamId &&
-        r.agent_key === agentKey &&
-        r.session_id === sessionId &&
-        r.seq > max
-      ) {
-        max = r.seq;
-      }
-    }
-    return max;
   }
 }

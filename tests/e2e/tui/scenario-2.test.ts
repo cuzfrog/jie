@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadMockExpectations } from "../../../packages/mock-llm-backend/index.ts";
+import { loadMockExpectations } from "../../../packages/mock-llm-backend";
 import { assertLlmReachable, seedTeam } from "../_fixture.ts";
 import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, sendLine, type TuiHarness } from "./harness";
 import expectations from "./scenario-2.llm.ts";
@@ -28,9 +28,9 @@ describe("Scenario 2 — pass work in a team", () => {
 
   test("team loads with manager and worker; both agents keep separate conversations", async () => {
     await sendLine(harness.stdin, "/team my-team");
-    await waitForTeam(harness.tui, "my-team");
+    await waitForTeam(harness, "my-team");
     await submitAndWaitForAgentIdle(harness, "Read file1.txt and write its content to my-answer.txt", "my-team:manager-1");
-    const state = harness.tui.state;
+    const state = harness.stateStore.getState();
     expect(state.teamId).toBe("my-team");
     expect(state.leaderAgentId).toBe("my-team:manager-1");
     expect(state.agents.size).toBe(2);
@@ -40,9 +40,9 @@ describe("Scenario 2 — pass work in a team", () => {
 
   test("manager drives a bash tool to completion", async () => {
     await sendLine(harness.stdin, "/team my-team");
-    await waitForTeam(harness.tui, "my-team");
+    await waitForTeam(harness, "my-team");
     await submitAndWaitForAgentIdle(harness, "Read file1.txt and write its content to my-answer.txt", "my-team:manager-1");
-    const state = harness.tui.state;
+    const state = harness.stateStore.getState();
     const manager = state.agents.get("my-team:manager-1");
     const allTurns = [...(manager?.history ?? []), ...(manager?.currentTurn !== null && manager?.currentTurn !== undefined ? [manager.currentTurn] : [])];
     const allCards = allTurns.flatMap((t) => t.cards);

@@ -1,5 +1,6 @@
 import { inspect } from "node:util";
 import { DefaultLogLevels, Logger, type TLogLevel } from "tslog";
+import { defaultConsole } from "./console";
 
 const { level, enabled } = resolveLoggingLevel();
 export const logger = new Logger({
@@ -33,13 +34,3 @@ function resolveLoggingLevel(): { level: TLogLevel | undefined; enabled: boolean
       return { level: undefined, enabled: false };
   }
 }
-
-export interface Console {
-  print: (...args: ReadonlyArray<string>) => void;
-  error: (...args: ReadonlyArray<string>) => void;
-}
-
-export const defaultConsole: Console = {
-  print: (...args: ReadonlyArray<string>) => console.log(...(args as ReadonlyArray<unknown>)),
-  error: (...args: ReadonlyArray<string>) => console.error(...(args as ReadonlyArray<unknown>)),
-};

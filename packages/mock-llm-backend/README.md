@@ -99,10 +99,13 @@ await loadMockExpectations(expectations);
 
 ## File map
 
-| File              | Purpose                                                  |
-|-------------------|----------------------------------------------------------|
-| `server.ts`       | `Bun.serve` entry; routes, module-level state.           |
-| `expectations.ts` | Pure matcher + SSE renderer (no I/O).                    |
-| `client.ts`       | `MockClient` SDK + `loadMockExpectations` helper.        |
-| `index.ts`        | Barrel re-exports.                                       |
-| `*.test.ts`       | Unit + in-process HTTP smoke tests.                      |
+| File                    | Purpose                                                          |
+|-------------------------|------------------------------------------------------------------|
+| `index.ts`              | Public surface: `Expectation` type, `loadMockExpectations`.      |
+| `module.ts`             | DI registration: `registerMockServerModule`, `MockServerCradle`. |
+| `mock-llm-server.ts`    | `MockLlmServer` interface + impl: HTTP routes, default port.     |
+| `expectation-store.ts`  | `ExpectationStore` interface + impl: rules + call log.           |
+| `expectations.ts`       | Pure matcher + SSE renderer (no I/O).                            |
+| `client.ts`             | `MockClient` SDK + `loadMockExpectations` helper.                |
+| `server.ts`             | Bootstrap entry: DI container, shutdown on SIGINT/SIGTERM.       |
+| `*.test.ts`             | Unit tests aligned to their target files.                        |

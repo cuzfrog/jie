@@ -1,4 +1,4 @@
-import { logger } from "../utils";
+import { logger } from "@cuzfrog/jie-utils";
 
 type EventCallback = (subject: string, payload: object) => void;
 
@@ -11,15 +11,9 @@ export interface EventBus {
 
   /** returns an unsubscribe function */
   subscribe(subject: string, callback: EventCallback): () => void;
-
-  subscriberCount(subject: string): number;
 }
 
-export function createEventBus(): EventBus {
-  return new InProcessEventBus();
-}
-
-class InProcessEventBus implements EventBus {
+export class InProcessEventBus implements EventBus {
   private readonly subscribers = new Map<string, Set<EventCallback>>();
 
   publish(subject: string, payload: object): void {
@@ -44,10 +38,6 @@ class InProcessEventBus implements EventBus {
     return () => {
       this.subscribers.get(subject)?.delete(callback);
     };
-  }
-
-  subscriberCount(subject: string): number {
-    return this.subscribers.get(subject)?.size ?? 0;
   }
 
   private reportError(subject: string, error: unknown): void {

@@ -1,13 +1,14 @@
-import { JiePlatformError, defaultConsole, type Console, type JiePlatform } from "@cuzfrog/jie-platform";
+import { JiePlatformError, type JiePlatform } from "@cuzfrog/jie-platform";
+import { type Console } from "@cuzfrog/jie-utils";
 import type { ParsedArgsMap } from "../cli-flags";
 
 export async function runModel(
   parsed: ParsedArgsMap["model"],
   platform: JiePlatform,
-  console: Console = defaultConsole,
+  console: Console,
 ): Promise<number> {
   try {
-    await platform.execute({ name: "setDefaultModel", provider: parsed.provider, id: parsed.modelId, effort: "off", contextWindow: null });
+    await platform.execute({ name: "setDefaultModel", provider: parsed.provider, id: parsed.modelId });
   } catch (error) {
     if (error instanceof JiePlatformError && error.code === "UNKNOWN_PROVIDER") {
       console.error(`unknown provider: ${parsed.provider}`);
@@ -22,7 +23,7 @@ export async function runModel(
 export async function runTeam(
   parsed: ParsedArgsMap["team"],
   platform: JiePlatform,
-  console: Console = defaultConsole,
+  console: Console,
 ): Promise<number> {
   if (parsed.teamId === undefined) {
     const info = await platform.execute({ name: "getTeamInfo" });

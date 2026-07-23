@@ -1,1 +1,1 @@
-export { Footer } from "./footer";
+export { registerFooterModule } from "./module";

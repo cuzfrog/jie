@@ -1,10 +1,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { SqliteStorage } from "./sqlite-storage";
 import type { Storage } from "./storage";
-import {
-  SqliteMemoryManager,
-  InMemoryMemoryManager,
-} from "./memory-store";
+import { SqliteMemoryManager } from "./memory-store";
 
 function makeManager(): SqliteMemoryManager {
   return new SqliteMemoryManager(new SqliteStorage(":memory:"));
@@ -149,19 +146,6 @@ describe("SqliteMemoryManager", () => {
   });
 });
 
-describe("InMemoryMemoryManager", () => {
-  test("implements the same interface; persist/compact/restore round-trip", async () => {
-    const m = new InMemoryMemoryManager();
-    m.persist(userMessage("a"), "agent-1", "s1", "t1");
-    m.persist(userMessage("b"), "agent-1", "s1", "t1");
-    m.persist(userMessage("c"), "agent-1", "s1", "t1");
-    m.compact([1, 2], summaryMessage("sum"), "agent-1", "s1", "t1");
-    const restored = await m.restore("agent-1", "s1", "t1");
-    expect(restored).toHaveLength(2);
-    expect(m.hasSession("t1", "s1")).toBe(true);
-  });
-});
-
 describe("SqliteMemoryManager.listSessions", () => {
   test("returns empty array when the team has no sessions", () => {
     const m = makeManager();
@@ -204,37 +188,5 @@ describe("SqliteMemoryManager.listSessions", () => {
     m.persist(userMessage("b"), "agent-1", "s1", "t1");
     m.compact([1, 2], summaryMessage("sum"), "agent-1", "s1", "t1");
     expect(m.listSessions("t1")[0]?.messageCount).toBe(3);
-  });
-});
-
-describe("InMemoryMemoryManager.listSessions", () => {
-  test("matches SqliteMemoryManager.listSessions counts and ids on the same fixture", () => {
-    function run(manager: { persist: SqliteMemoryManager["persist"]; listSessions: SqliteMemoryManager["listSessions"]; compact: SqliteMemoryManager["compact"] }): { ids: ReadonlyArray<string>; counts: Record<string, number> } {
-      manager.persist(userMessage("a"), "agent-1", "s-old", "t1");
-      manager.persist(userMessage("b"), "agent-1", "s-old", "t1");
-      manager.persist(userMessage("c"), "agent-2", "s-old", "t1");
-      manager.persist(userMessage("d"), "agent-1", "s-new", "t1");
-      manager.compact([1, 2], summaryMessage("sum"), "agent-1", "s-old", "t1");
-      const sessions = manager.listSessions("t1");
-      const counts: Record<string, number> = {};
-      for (const s of sessions) counts[s.sessionId] = s.messageCount;
-      return { ids: sessions.map((s) => s.sessionId), counts };
-    }
-    const sqlite = run(makeManager());
-    const memory = run(new InMemoryMemoryManager());
-    expect([...memory.ids].sort()).toEqual([...sqlite.ids].sort());
-    expect(memory.counts).toEqual(sqlite.counts);
-  });
-
-  test("returns empty array when team has no sessions", () => {
-    const m = new InMemoryMemoryManager();
-    expect(m.listSessions("ghost")).toEqual([]);
-  });
-
-  test("is scoped to team_id", () => {
-    const m = new InMemoryMemoryManager();
-    m.persist(userMessage("a"), "agent-1", "s1", "t1");
-    m.persist(userMessage("b"), "agent-1", "s2", "t2");
-    expect(m.listSessions("t1").map((s) => s.sessionId)).toEqual(["s1"]);
   });
 });

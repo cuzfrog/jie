@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SqliteStorage } from "./sqlite-storage";
 import { initializeSchema } from "./init-db";
-import { createStorage } from "./storage";
 
 describe("SqliteStorage", () => {
   test("constructor creates artifacts and memory_turns tables (idempotent)", () => {
@@ -109,60 +108,5 @@ describe("SqliteStorage", () => {
       return s.query("SELECT key FROM artifacts");
     });
     expect(result).toEqual([["k3"]]);
-  });
-});
-
-describe("createStorage — memory variant", () => {
-  test("{ type: 'memory' } returns a fresh, isolated sqlite storage", () => {
-    const storage = createStorage({ type: "memory" });
-    const tables = storage.query(
-      "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
-    );
-    expect(tables).toEqual([["artifacts"], ["memory_turns"]]);
-  });
-
-  test("{ type: 'memory' } is not persisted between calls (each call is fresh)", () => {
-    const a = createStorage({ type: "memory" });
-    a.exec(
-      "INSERT INTO artifacts (key, content, created_at) VALUES (?, ?, ?)",
-      ["ephemeral", "x", "2025-01-01"],
-    );
-    const b = createStorage({ type: "memory" });
-    const rows = b.query("SELECT key FROM artifacts");
-    expect(rows).toEqual([]);
-  });
-
-  test("{ type: 'memory' } accepts writes + reads", () => {
-    const storage = createStorage({ type: "memory" });
-    storage.exec(
-      "INSERT INTO artifacts (key, content, created_at) VALUES (?, ?, ?)",
-      ["k", "c", "2025-01-01"],
-    );
-    const rows = storage.query("SELECT key, content FROM artifacts");
-    expect(rows).toEqual([["k", "c"]]);
-  });
-});
-
-describe("createStorage — sqlite variant", () => {
-  test("{ type: 'sqlite', filePath } opens a file-backed database", () => {
-    const dir = mkdtempSync(join(tmpdir(), "jie-storage-create-"));
-    const path = join(dir, "create.db");
-    try {
-      const storage = createStorage({ type: "sqlite", filePath: path });
-      storage.exec(
-        "INSERT INTO artifacts (key, content, created_at) VALUES (?, ?, ?)",
-        ["k", "c", "2025-01-01"],
-      );
-      const rows = storage.query("SELECT key FROM artifacts");
-      expect(rows).toEqual([["k"]]);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  test("{ type: 'sqlite' } without filePath throws", () => {
-    expect(() => createStorage({ type: "sqlite" })).toThrow(
-      "createStorage: filePath is required for sqlite storage",
-    );
   });
 });

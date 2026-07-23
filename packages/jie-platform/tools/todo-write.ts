@@ -1,10 +1,7 @@
 import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types";
 import { JiePlatformError } from "../jie-platform-errors";
-import type { TodoItem } from "../types/todo";
-
-export type { TodoStatus, TodoItem, TodoDetailsPayload } from "../types/todo";
-export { isTodoDetails } from "../types/todo";
+import type { TodoItem } from "../types";
 
 const TODO_WRITE_DESCRIPTION = `Update the live task checklist. \`todos\` is the full list (it replaces, not
 merges with, whatever the agent has now). Each item is \`{ content, status, active_form? }\`.
@@ -17,11 +14,6 @@ the live checklist from the same payload.`;
 
 interface TodoWriteInput {
   todos: ReadonlyArray<TodoItem>;
-}
-
-export interface TodoWriteResultDetails {
-  readonly kind: "todos";
-  readonly todos: ReadonlyArray<TodoItem>;
 }
 
 export function createTodoWriteTool(): Tool<TodoWriteInput> {

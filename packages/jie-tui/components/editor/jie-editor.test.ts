@@ -1,7 +1,7 @@
-import { TUI, type Terminal } from "@earendil-works/pi-tui";
-import { Events, type EventEnvelope, type EventType, type JiePlatform } from "@cuzfrog/jie-platform";
-import { Actions, createStateStore, type StateStore } from "../../state";
-import { createJieEditor } from "./jie-editor";
+import { TUI, type AutocompleteProvider, type Editor, type Terminal } from "@earendil-works/pi-tui";
+import { Actions, type AgentId, type StateStore, type TuiState } from "../../state";
+import { makeAgentUiState, makeTuiState } from "../../test";
+import { JieEditor } from "./jie-editor";
 
 class StubTerminal implements Terminal {
   columns = 80;
@@ -21,142 +21,117 @@ class StubTerminal implements Terminal {
   setProgress(): void {}
 }
 
+const LEADER_ID: AgentId = "my-team:general-1";
+
+const stateStore = vi.mocked<StateStore>({ getState: vi.fn(), dispatch: vi.fn(), subscribe: vi.fn(() => () => undefined) });
+
+const autocompleteProvider = vi.mocked<AutocompleteProvider>({
+  getSuggestions: vi.fn(() => Promise.resolve(null)),
+  applyCompletion: vi.fn(() => ({ lines: [], cursorLine: 0, cursorCol: 0 })),
+});
+
+beforeEach(() => {
+  stateStore.getState.mockReturnValue(makeTuiState());
+});
+
 interface EditorHarness {
-  readonly store: StateStore;
-  readonly editor: ReturnType<typeof createJieEditor>;
+  readonly editor: Editor;
   readonly submitted: string[];
 }
 
 function bootEditor(): EditorHarness {
-  const store = createStateStore();
-  const submitted: string[] = [];
   const ui = new TUI(new StubTerminal());
-  const editor = createJieEditor(ui, store, "/nonexistent-jie-test", nullPlatform());
+  const editor = new JieEditor(ui, stateStore, autocompleteProvider);
+  const submitted: string[] = [];
   const submit = editor.onSubmit;
   editor.onSubmit = (text: string): void => {
     submitted.push(text);
     submit?.(text);
   };
-  return { store, editor, submitted };
+  return { editor, submitted };
 }
 
-function nullPlatform(): JiePlatform {
-  return {
-    settings: { defaultTeam: undefined, defaultProvider: undefined, defaultModel: undefined },
-    subscribe: <T extends EventType>(_topic: T, _callback: (event: EventEnvelope<T>) => void): (() => void) => () => undefined,
-    prompt: () => undefined,
-    interrupt: () => undefined,
-    teams: () => [],
-    execute: (async () => null) as JiePlatform["execute"],
-  };
-}
-
-function seedBusyTeam(store: StateStore): void {
-  store.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
-    id: "my-team",
-    leaderKey: "general-1",
-    history: [],
-    agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, model: null }],
-  })));
-  store.dispatch(Actions.receiveEvent(Events.agentTurnStart({ kind: "agent", teamId: "my-team", agentKey: "general-1" })));
-}
-
-describe("createJieEditor — onChange wiring", () => {
+describe("JieEditor — onChange wiring", () => {
   test("typing keeps the editorText store slice in sync", () => {
-    const { store, editor } = bootEditor();
+    const { editor } = bootEditor();
     editor.handleInput("h");
     editor.handleInput("i");
-    expect(store.getState().editorText).toBe("hi");
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.setEditorText("hi"));
   });
 
   test("typing while an error banner shows clears the banners", () => {
-    const { store, editor } = bootEditor();
-    store.dispatch(Actions.setErrorMessage("bad"));
+    stateStore.getState.mockReturnValue(makeTuiState({ errorBanner: "bad" }));
+    const { editor } = bootEditor();
     editor.handleInput("x");
-    expect(store.getState().errorBanner).toBeNull();
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.clearBanners());
   });
 
   test("the post-submit clear does not clear a freshly set error banner", () => {
-    const { store, editor } = bootEditor();
+    const { editor } = bootEditor();
     editor.handleInput("x");
     editor.handleInput("\r");
-    store.dispatch(Actions.setErrorMessage("unknown slash command: x"));
+    stateStore.getState.mockReturnValue(makeTuiState({ errorBanner: "unknown slash command: x" }));
     editor.onChange?.("");
-    expect(store.getState().errorBanner).toBe("unknown slash command: x");
+    expect(stateStore.dispatch).not.toHaveBeenCalledWith(Actions.clearBanners());
   });
 });
 
-describe("createJieEditor — onSubmit wiring", () => {
+describe("JieEditor — onSubmit wiring", () => {
   test("enter submits the text and the editor self-clears", () => {
-    const { store, editor, submitted } = bootEditor();
+    const { editor, submitted } = bootEditor();
     editor.handleInput("h");
     editor.handleInput("i");
     editor.handleInput("\r");
     expect(submitted).toEqual(["hi"]);
-    expect(store.getState().editorText).toBe("");
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.submitEditorText("hi"));
     expect(editor.getText()).toBe("");
   });
 });
 
-describe("createJieEditor — control keys", () => {
+describe("JieEditor — control keys", () => {
   test("esc interrupts the focused busy agent", () => {
-    const { store, editor } = bootEditor();
-    seedBusyTeam(store);
-    const interrupts: Array<{ teamId: string; agentKey: string }> = [];
-    const interruptType = Actions.requestInterrupt("", "").type;
-    const unsubscribe = store.subscribe(async (action): Promise<void> => {
-      if (action.type === interruptType) interrupts.push(action.payload);
-    });
+    stateStore.getState.mockReturnValue(stateWithTeam("busy"));
+    const { editor } = bootEditor();
     editor.handleInput("\x1b");
-    unsubscribe();
-    expect(interrupts).toEqual([{ teamId: "my-team", agentKey: "general-1" }]);
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.requestInterrupt("my-team", "general-1"));
   });
 
   test("esc does nothing when the focused agent is idle", () => {
-    const { store, editor } = bootEditor();
-    store.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
-      id: "my-team",
-      leaderKey: "general-1",
-      history: [],
-      agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, model: null }],
-    })));
-    const types: string[] = [];
-    const unsubscribe = store.subscribe(async (action): Promise<void> => { types.push(action.type); });
+    stateStore.getState.mockReturnValue(stateWithTeam("idle"));
+    const { editor } = bootEditor();
     editor.handleInput("\x1b");
-    unsubscribe();
-    expect(types).toEqual([]);
+    expect(stateStore.dispatch).not.toHaveBeenCalled();
   });
 
   test("ctrl+c clears a non-empty editor without quitting", () => {
-    const { store, editor } = bootEditor();
+    const { editor } = bootEditor();
     editor.handleInput("a");
     editor.handleInput("\x03");
     expect(editor.getText()).toBe("");
-    expect(store.getState().editorText).toBe("");
-    expect(store.getState().pendingQuit).toBe(false);
+    expect(stateStore.dispatch).not.toHaveBeenCalledWith(Actions.requestQuit());
   });
 
   test("ctrl+c on an empty editor requests quit", () => {
-    const { store, editor } = bootEditor();
+    const { editor } = bootEditor();
     editor.handleInput("\x03");
-    expect(store.getState().pendingQuit).toBe(true);
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.requestQuit());
   });
 
   test("ctrl+d on an empty editor requests quit", () => {
-    const { store, editor } = bootEditor();
+    const { editor } = bootEditor();
     editor.handleInput("\x04");
-    expect(store.getState().pendingQuit).toBe(true);
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.requestQuit());
   });
 
   test("ctrl+d with text does not quit", () => {
-    const { store, editor } = bootEditor();
+    const { editor } = bootEditor();
     editor.handleInput("a");
     editor.handleInput("\x04");
-    expect(store.getState().pendingQuit).toBe(false);
+    expect(stateStore.dispatch).not.toHaveBeenCalledWith(Actions.requestQuit());
   });
 });
 
-describe("createJieEditor — bash mode border", () => {
+describe("JieEditor — bash mode border", () => {
   test("a leading ! flips the border to the warning color", () => {
     const { editor } = bootEditor();
     editor.handleInput("!");
@@ -171,16 +146,16 @@ describe("createJieEditor — bash mode border", () => {
   });
 });
 
-describe("createJieEditor — prompt history", () => {
+describe("JieEditor — prompt history", () => {
   test("up and down arrows walk submitted prompts and keep the store in sync", () => {
-    const { store, editor } = bootEditor();
+    const { editor } = bootEditor();
     editor.handleInput("a");
     editor.handleInput("\r");
     editor.handleInput("b");
     editor.handleInput("\r");
     editor.handleInput("\x1b[A");
     expect(editor.getText()).toBe("b");
-    expect(store.getState().editorText).toBe("b");
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.setEditorText("b"));
     editor.handleInput("\x1b[A");
     expect(editor.getText()).toBe("a");
     editor.handleInput("\x1b[B");
@@ -199,3 +174,12 @@ describe("createJieEditor — prompt history", () => {
     expect(editor.getText()).toBe("draft");
   });
 });
+
+function stateWithTeam(status: "idle" | "busy"): TuiState {
+  return makeTuiState({
+    teamId: "my-team",
+    leaderAgentId: LEADER_ID,
+    focusedAgentId: LEADER_ID,
+    agents: new Map([[LEADER_ID, makeAgentUiState(LEADER_ID, { isLeader: true, status })]]),
+  });
+}

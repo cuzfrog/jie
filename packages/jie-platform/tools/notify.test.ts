@@ -1,7 +1,7 @@
 import {
-  createEventManager,
   type EventEnvelope,
   type EventManager,
+  type EventType,
 } from "../event";
 import type { ArtifactStore } from "../storage";
 import type { ExecutionContext } from "./types";
@@ -31,13 +31,30 @@ function stubArtifactStore(): ArtifactStore {
   };
 }
 
+function makeFakeEventManager(): EventManager {
+  const subscribers = new Map<string, Array<(env: EventEnvelope<EventType>) => void>>();
+  return {
+    publish: (env: EventEnvelope<EventType>) => {
+      for (const callback of subscribers.get(env.topic) ?? []) callback(env);
+    },
+    subscribe: (topic: string, callback: (env: EventEnvelope<EventType>) => void) => {
+      const list = subscribers.get(topic) ?? [];
+      list.push(callback);
+      subscribers.set(topic, list);
+      return () => {
+        subscribers.set(topic, list.filter((cb) => cb !== callback));
+      };
+    },
+  };
+}
+
 interface Harness {
   events: EventManager;
   received: Array<{ subject: string; env: NotifyEnvelope }>;
 }
 
 function makeHarness(): Harness {
-  const events = createEventManager();
+  const events = makeFakeEventManager();
   const received: Array<{ subject: string; env: NotifyEnvelope }> = [];
   events.subscribe("custom.t1.task", (env) => {
     received.push({ subject: env.topic, env });
@@ -138,7 +155,7 @@ describe("notify — valid publish path", () => {
   });
 
   test("LLM-facing content is identical whether peers are listening or not; never terminates", async () => {
-    const result = await createNotifyTool({ eventManager: createEventManager() }).execute(
+    const result = await createNotifyTool({ eventManager: makeFakeEventManager() }).execute(
       { topic: "ghost", prompt: "x" },
       makeCtx(),
     );
@@ -147,7 +164,7 @@ describe("notify — valid publish path", () => {
   });
 
   test("`details = { topic }` is returned for afterToolCall hooks", async () => {
-    const events = createEventManager();
+    const events = makeFakeEventManager();
     events.subscribe("custom.t1.task", () => {});
     const tool = createNotifyTool({ eventManager: events });
 
@@ -169,7 +186,7 @@ describe("notify — valid publish path", () => {
   });
 
   test("tool metadata: name, description, label, parameters", () => {
-    const events = createEventManager();
+    const events = makeFakeEventManager();
     const tool = createNotifyTool({ eventManager: events });
     expect(tool.name).toBe("notify");
     expect(tool.label).toBe("Notify");

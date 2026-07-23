@@ -1,4 +1,5 @@
-import { createTodoWriteTool, type TodoItem } from "./todo-write";
+import type { TodoItem } from "../types";
+import { createTodoWriteTool } from "./todo-write";
 import { makeEmptyContext } from "./_test-context";
 
 describe("todo_write", () => {

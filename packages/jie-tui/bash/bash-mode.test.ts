@@ -1,9 +1,5 @@
 import { parseBashCommand, bashDirective } from "./bash-mode";
 
-declare const test: (name: string, fn: () => void | Promise<void>) => void;
-declare const describe: (name: string, fn: () => void) => void;
-declare const expect: typeof import("bun:test").expect;
-
 describe("parseBashCommand", () => {
   test("returns null for empty input", () => {
     expect(parseBashCommand("")).toBeNull();

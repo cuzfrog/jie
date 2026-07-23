@@ -34,7 +34,7 @@ When implemented (Day 2), this script installs `@cuzfrog/jie` globally. The vers
 | Component | Version | Rationale |
 |---|---|---|
 | bun | ≥ 1.3.14 | Minimum runtime for native TypeScript execution and package management. |
-| @cuzfrog/jie | workspace (dev) | CLI, `createJiePlatform` entry, agent bodies, TUI — all in one package. The published install path (Day 2) pins a concrete semver. |
+| @cuzfrog/jie | workspace (dev) | CLI, `bootPlatform` entry, agent bodies, TUI — all in one package. The published install path (Day 2) pins a concrete semver. |
 
 ## Manual Install
 

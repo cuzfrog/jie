@@ -1,4 +1,4 @@
-import { loadMockExpectations } from "../../../packages/mock-llm-backend/index.ts";
+import { loadMockExpectations } from "../../../packages/mock-llm-backend";
 import { assertLlmReachable, seedTeam } from "../_fixture.ts";
 import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, sendLine, type TuiHarness } from "./harness";
 import expectations from "./scenario-3.llm.ts";
@@ -27,15 +27,15 @@ describe("Scenario 3 — switch teams", () => {
 
   test("swap to a second team loads new agents", async () => {
     await sendLine(harness.stdin, "/team my-team-1");
-    await waitForTeam(harness.tui, "my-team-1");
+    await waitForTeam(harness, "my-team-1");
     await submitAndWaitForAgentIdle(harness, "go", "my-team-1:general-1");
-    expect(harness.tui.state.agents.get("my-team-1:general-1")?.currentTurn?.blocks.some((b) => b.text.includes("3"))).toBe(true);
+    expect(harness.stateStore.getState().agents.get("my-team-1:general-1")?.currentTurn?.blocks.some((b) => b.text.includes("3"))).toBe(true);
 
     await sendLine(harness.stdin, "/team my-team-2");
-    await waitForTeam(harness.tui, "my-team-2");
+    await waitForTeam(harness, "my-team-2");
     await submitAndWaitForAgentIdle(harness, "go", "my-team-2:general-1");
 
-    const state = harness.tui.state;
+    const state = harness.stateStore.getState();
     expect(state.teamId).toBe("my-team-2");
     expect(state.agents.size).toBe(1);
     expect(state.agents.has("my-team-1:general-1")).toBe(false);
@@ -45,11 +45,11 @@ describe("Scenario 3 — switch teams", () => {
 
   test("swap back to first team re-seeds", async () => {
     await sendLine(harness.stdin, "/team my-team-1");
-    await waitForTeam(harness.tui, "my-team-1");
+    await waitForTeam(harness, "my-team-1");
     await sendLine(harness.stdin, "/team my-team-2");
-    await waitForTeam(harness.tui, "my-team-2");
+    await waitForTeam(harness, "my-team-2");
     await sendLine(harness.stdin, "/team my-team-1");
-    await waitForTeam(harness.tui, "my-team-1");
-    expect(harness.tui.state.agents.has("my-team-1:general-1")).toBe(true);
+    await waitForTeam(harness, "my-team-1");
+    expect(harness.stateStore.getState().agents.has("my-team-1:general-1")).toBe(true);
   });
 });
