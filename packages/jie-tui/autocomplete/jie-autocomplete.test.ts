@@ -1,10 +1,23 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { type JiePlatform } from "@cuzfrog/jie-platform";
+import { type ScannedFile } from "../file-mention";
 import { type StateStore, type TuiState } from "../state";
 import { makeTuiState } from "../test";
 import { JieAutocompleteProviderImpl } from "./jie-autocomplete";
+
+const CWD = "/proj";
+
+const SCANNED_FILES: ReadonlyArray<ScannedFile> = [
+  { absPath: "/proj/src/main.ts", relPath: "src/main.ts" },
+  { absPath: "/proj/src/helper.ts", relPath: "src/helper.ts" },
+];
+
+function scanFixture(): ReadonlyArray<ScannedFile> {
+  return SCANNED_FILES;
+}
+
+function noScan(): ReadonlyArray<ScannedFile> {
+  return [];
+}
 
 function signal(): AbortSignal {
   return new AbortController().signal;
@@ -38,21 +51,8 @@ function storeWithTeam(): StateStore {
 }
 
 describe("createJieAutocompleteProvider — @-mentions", () => {
-  let dir: string;
-
-  beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "jie-ac-"));
-    mkdirSync(join(dir, "src"), { recursive: true });
-    writeFileSync(join(dir, "src", "main.ts"), "export const x = 1;\n");
-    writeFileSync(join(dir, "src", "helper.ts"), "export const y = 2;\n");
-  });
-
-  afterEach(() => {
-    rmSync(dir, { recursive: true, force: true });
-  });
-
   test("@query resolves matching project files with @-prefixed values", async () => {
-    const suggestions = await new JieAutocompleteProviderImpl(dir, nullPlatform(), makeStateStore())
+    const suggestions = await new JieAutocompleteProviderImpl(CWD, scanFixture, nullPlatform(), makeStateStore())
       .getSuggestions(["@mai"], 0, 4, { signal: signal() });
     expect(suggestions).not.toBeNull();
     expect(suggestions!.prefix).toBe("@mai");
@@ -60,19 +60,19 @@ describe("createJieAutocompleteProvider — @-mentions", () => {
   });
 
   test("@ with no match returns null", async () => {
-    const suggestions = await new JieAutocompleteProviderImpl(dir, nullPlatform(), makeStateStore())
+    const suggestions = await new JieAutocompleteProviderImpl(CWD, scanFixture, nullPlatform(), makeStateStore())
       .getSuggestions(["@zzz"], 0, 4, { signal: signal() });
     expect(suggestions).toBeNull();
   });
 
   test("@ mid-line after a space still triggers", async () => {
-    const suggestions = await new JieAutocompleteProviderImpl(dir, nullPlatform(), makeStateStore())
+    const suggestions = await new JieAutocompleteProviderImpl(CWD, scanFixture, nullPlatform(), makeStateStore())
       .getSuggestions(["look at @hel"], 0, 12, { signal: signal() });
     expect(suggestions!.items[0]!.value).toBe("@src/helper.ts");
   });
 
   test("applyCompletion replaces the @ token with the resolved path and a trailing space", () => {
-    const result = new JieAutocompleteProviderImpl(dir, nullPlatform(), makeStateStore())
+    const result = new JieAutocompleteProviderImpl(CWD, scanFixture, nullPlatform(), makeStateStore())
       .applyCompletion(["@mai"], 0, 4, { value: "@src/main.ts", label: "src/main.ts" }, "@mai");
     expect(result.lines).toEqual(["@src/main.ts "]);
     expect(result.cursorCol).toBe(13);
@@ -81,21 +81,21 @@ describe("createJieAutocompleteProvider — @-mentions", () => {
 
 describe("createJieAutocompleteProvider — slash commands", () => {
   test("/query filters jie slash commands", async () => {
-    const suggestions = await new JieAutocompleteProviderImpl("/tmp", nullPlatform(), makeStateStore())
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), makeStateStore())
       .getSuggestions(["/he"], 0, 3, { signal: signal() });
     expect(suggestions!.prefix).toBe("/he");
     expect(suggestions!.items.map((item) => item.value)).toContain("help");
   });
 
   test("slash completion appends the command name and a trailing space", () => {
-    const result = new JieAutocompleteProviderImpl("/tmp", nullPlatform(), makeStateStore())
+    const result = new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), makeStateStore())
       .applyCompletion(["/he"], 0, 3, { value: "help", label: "help" }, "/he");
     expect(result.lines).toEqual(["/help "]);
     expect(result.cursorCol).toBe(6);
   });
 
   test("plain text yields no suggestions", async () => {
-    const suggestions = await new JieAutocompleteProviderImpl("/tmp", nullPlatform(), makeStateStore())
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), makeStateStore())
       .getSuggestions(["hello"], 0, 5, { signal: signal() });
     expect(suggestions).toBeNull();
   });
@@ -110,7 +110,7 @@ describe("createJieAutocompleteProvider — /team arguments", () => {
   }
 
   test("suggests installed teams after '/team ' with the default marked", async () => {
-    const suggestions = await new JieAutocompleteProviderImpl("/tmp", teamPlatform(), makeStateStore())
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, teamPlatform(), makeStateStore())
       .getSuggestions(["/team "], 0, 6, { signal: signal() });
     expect(suggestions!.items).toEqual([
       { value: "minimal", label: "minimal" },
@@ -120,19 +120,19 @@ describe("createJieAutocompleteProvider — /team arguments", () => {
   });
 
   test("filters teams by the typed argument prefix", async () => {
-    const suggestions = await new JieAutocompleteProviderImpl("/tmp", teamPlatform(), makeStateStore())
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, teamPlatform(), makeStateStore())
       .getSuggestions(["/team al"], 0, 8, { signal: signal() });
     expect(suggestions!.items.map((item) => item.value)).toEqual(["alpha"]);
   });
 
   test("a fully typed team id yields no suggestions so Enter submits directly", async () => {
-    const suggestions = await new JieAutocompleteProviderImpl("/tmp", teamPlatform(), makeStateStore())
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, teamPlatform(), makeStateStore())
       .getSuggestions(["/team alpha"], 0, 11, { signal: signal() });
     expect(suggestions).toBeNull();
   });
 
   test("argument completion replaces only the argument token", () => {
-    const result = new JieAutocompleteProviderImpl("/tmp", teamPlatform(), makeStateStore())
+    const result = new JieAutocompleteProviderImpl("/tmp", noScan, teamPlatform(), makeStateStore())
       .applyCompletion(["/team "], 0, 6, { value: "alpha", label: "alpha" }, "");
     expect(result.lines).toEqual(["/team alpha"]);
     expect(result.cursorCol).toBe(11);
@@ -153,7 +153,7 @@ describe("createJieAutocompleteProvider — /resume arguments", () => {
   }
 
   test("suggests sessions after '/resume ' with message count and age", async () => {
-    const suggestions = await new JieAutocompleteProviderImpl("/tmp", sessionPlatform(), storeWithTeam())
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, sessionPlatform(), storeWithTeam())
       .getSuggestions(["/resume "], 0, 8, { signal: signal() });
     expect(suggestions!.items.map((item) => item.value)).toEqual(["alpha-1", "beta-2"]);
     expect(suggestions!.items[0]!.description).toMatch(/^3 msg · /);
@@ -161,20 +161,20 @@ describe("createJieAutocompleteProvider — /resume arguments", () => {
   });
 
   test("filters sessions by the typed argument prefix", async () => {
-    const suggestions = await new JieAutocompleteProviderImpl("/tmp", sessionPlatform(), storeWithTeam())
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, sessionPlatform(), storeWithTeam())
       .getSuggestions(["/resume be"], 0, 10, { signal: signal() });
     expect(suggestions!.items.map((item) => item.value)).toEqual(["beta-2"]);
   });
 
   test("a fully typed session id yields no suggestions so Enter submits directly", async () => {
-    const suggestions = await new JieAutocompleteProviderImpl("/tmp", sessionPlatform(), storeWithTeam())
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, sessionPlatform(), storeWithTeam())
       .getSuggestions(["/resume alpha-1"], 0, 15, { signal: signal() });
     expect(suggestions).toBeNull();
   });
 
   test("yields no suggestions when no team is loaded", async () => {
     const execute = vi.fn(async () => null);
-    const suggestions = await new JieAutocompleteProviderImpl("/tmp", makePlatform(execute), makeStateStore())
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, makePlatform(execute), makeStateStore())
       .getSuggestions(["/resume "], 0, 8, { signal: signal() });
     expect(suggestions).toBeNull();
     expect(execute).not.toHaveBeenCalled();

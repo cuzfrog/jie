@@ -3,6 +3,7 @@ import type { AutocompleteProvider, Component, Container, Editor, Terminal, TUI 
 import type { JiePlatform } from "@cuzfrog/jie-platform";
 import { Actions, registerStateModule, type StateStore } from "./state";
 import { registerAutocompleteModule } from "./autocomplete";
+import type { ScannedFile } from "./file-mention";
 import { registerChatModule, type ChatMessages } from "./components/chat";
 import { registerFooterModule } from "./components/footer";
 import { registerEditorModule } from "./components/editor";
@@ -15,6 +16,7 @@ import type { CreateTUIOptions, Tui, TuiDeps, TuiStdout } from "./tui";
 export interface TuiCradle {
   readonly cwd: string;
   readonly platform: JiePlatform;
+  readonly scan: (rootDir: string) => ReadonlyArray<ScannedFile>;
   readonly stdin: NodeJS.ReadableStream | undefined;
   readonly stdout: TuiStdout | undefined;
   readonly stateStore: StateStore;
