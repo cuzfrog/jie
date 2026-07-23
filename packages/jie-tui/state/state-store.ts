@@ -1,4 +1,4 @@
-import { logger } from "@cuzfrog/jie-platform";
+import { logger } from "@cuzfrog/jie-utils";
 import type { TuiState } from "./state";
 import { reduce } from "./reducer";
 import type { Action } from "./actions";

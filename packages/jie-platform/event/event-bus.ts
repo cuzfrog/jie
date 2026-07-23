@@ -1,4 +1,4 @@
-import { logger } from "../utils";
+import { logger } from "@cuzfrog/jie-utils";
 
 type EventCallback = (subject: string, payload: object) => void;
 

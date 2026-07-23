@@ -10,8 +10,6 @@ no-new-exports:
   - jie-platform.test.ts
   - jie-platform.ts
   # - types.ts
-  - utils.test.ts
-  - utils.ts
 ---
 
 ## jie-platform

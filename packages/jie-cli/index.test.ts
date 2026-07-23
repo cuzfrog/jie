@@ -2,7 +2,6 @@ import type {
   Command,
   CommandName,
   CommandResult,
-  Console,
   EventEnvelope,
   EventType,
   JiePlatform,
@@ -10,6 +9,7 @@ import type {
   TeamInfo,
 } from "@cuzfrog/jie-platform";
 import type { CreateTUIOptions, Tui, TuiDeps } from "@cuzfrog/jie-tui";
+import type { Console } from "@cuzfrog/jie-utils";
 import { _run } from ".";
 
 function makeConsoleMock(): Console & {

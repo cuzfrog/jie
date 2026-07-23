@@ -22,6 +22,7 @@
       "dependencies": {
         "@cuzfrog/jie-platform": "workspace:*",
         "@cuzfrog/jie-tui": "workspace:*",
+        "@cuzfrog/jie-utils": "workspace:*",
         "@earendil-works/pi-agent-core": "catalog:",
         "@earendil-works/pi-ai": "catalog:",
         "awilix": "catalog:",
@@ -35,11 +36,11 @@
     "packages/jie-platform": {
       "name": "@cuzfrog/jie-platform",
       "dependencies": {
+        "@cuzfrog/jie-utils": "workspace:*",
         "@earendil-works/pi-agent-core": "catalog:",
         "@earendil-works/pi-ai": "catalog:",
         "awilix": "catalog:",
         "node-html-parser": "catalog:",
-        "tslog": "catalog:",
         "typebox": "catalog:",
         "ulid": "catalog:",
         "yaml": "catalog:",
@@ -54,6 +55,7 @@
       "name": "@cuzfrog/jie-tui",
       "dependencies": {
         "@cuzfrog/jie-platform": "workspace:*",
+        "@cuzfrog/jie-utils": "workspace:*",
         "@earendil-works/pi-tui": "catalog:",
         "awilix": "catalog:",
       },
@@ -64,11 +66,22 @@
         "typescript": "catalog:",
       },
     },
+    "packages/jie-utils": {
+      "name": "@cuzfrog/jie-utils",
+      "dependencies": {
+        "tslog": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/mock-llm-backend": {
       "name": "@cuzfrog/mock-llm-backend",
       "dependencies": {
+        "@cuzfrog/jie-utils": "workspace:*",
         "awilix": "catalog:",
-        "tslog": "catalog:",
       },
       "devDependencies": {
         "@types/bun": "catalog:",
@@ -150,6 +163,8 @@
     "@cuzfrog/jie-platform": ["@cuzfrog/jie-platform@workspace:packages/jie-platform"],
 
     "@cuzfrog/jie-tui": ["@cuzfrog/jie-tui@workspace:packages/jie-tui"],
+
+    "@cuzfrog/jie-utils": ["@cuzfrog/jie-utils@workspace:packages/jie-utils"],
 
     "@cuzfrog/mock-llm-backend": ["@cuzfrog/mock-llm-backend@workspace:packages/mock-llm-backend"],
 

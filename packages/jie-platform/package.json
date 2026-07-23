@@ -5,13 +5,13 @@
     ".": "./index.ts"
   },
   "dependencies": {
+    "@cuzfrog/jie-utils": "workspace:*",
     "@earendil-works/pi-agent-core": "catalog:",
     "@earendil-works/pi-ai": "catalog:",
     "typebox": "catalog:",
     "yaml": "catalog:",
     "ulid": "catalog:",
     "node-html-parser": "catalog:",
-    "tslog": "catalog:",
     "awilix": "catalog:"
   },
   "devDependencies": {

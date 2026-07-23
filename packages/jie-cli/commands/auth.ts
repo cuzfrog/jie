@@ -1,4 +1,5 @@
-import { type Console, type JiePlatform } from "@cuzfrog/jie-platform";
+import { type JiePlatform } from "@cuzfrog/jie-platform";
+import { type Console } from "@cuzfrog/jie-utils";
 import type { ParsedArgsMap } from "../cli-flags";
 
 export async function runLogin(

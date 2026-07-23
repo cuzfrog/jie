@@ -1,5 +1,5 @@
 import { createContainer, InjectionMode } from "awilix";
-import { logger as log } from "../jie-platform"; // resume the logger without depending on jie-platform package; this is an exception
+import { logger as log } from "@cuzfrog/jie-utils";
 import { registerMockServerModule, type MockServerCradle } from "./module.ts";
 
 async function main(): Promise<void> {

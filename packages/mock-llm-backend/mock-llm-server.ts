@@ -1,5 +1,5 @@
 import { type Server } from "bun";
-import { logger as log } from "../jie-platform"; // resume the logger without depending on jie-platform package; this is an exception
+import { logger as log } from "@cuzfrog/jie-utils";
 import { type ExpectationStore } from "./expectation-store.ts";
 import {
   type ChatCompletionRequestBody,

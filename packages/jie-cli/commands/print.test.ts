@@ -1,4 +1,5 @@
-import { type Command, type CommandName, type CommandResult, type Console, type EventEnvelope, type EventType, type JiePlatform, type TeamInfo } from "@cuzfrog/jie-platform";
+import { type Command, type CommandName, type CommandResult, type EventEnvelope, type EventType, type JiePlatform, type TeamInfo } from "@cuzfrog/jie-platform";
+import { type Console } from "@cuzfrog/jie-utils";
 import { runPrint } from "./print";
 
 type AgentEnvelope = {

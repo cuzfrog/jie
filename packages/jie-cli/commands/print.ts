@@ -1,4 +1,5 @@
-import { type Console, type JiePlatform, type TeamInfo } from "@cuzfrog/jie-platform";
+import { type JiePlatform, type TeamInfo } from "@cuzfrog/jie-platform";
+import { type Console } from "@cuzfrog/jie-utils";
 import type { ParsedArgsMap } from "../cli-flags";
 
 export type PrintArgs = ParsedArgsMap["print"];

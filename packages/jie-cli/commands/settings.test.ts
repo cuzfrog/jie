@@ -1,4 +1,5 @@
-import { JiePlatformError, type Command, type CommandName, type CommandResult, type Console, type JiePlatform, type Settings, type TeamInfo } from "@cuzfrog/jie-platform";
+import { JiePlatformError, type Command, type CommandName, type CommandResult, type JiePlatform, type Settings, type TeamInfo } from "@cuzfrog/jie-platform";
+import { type Console } from "@cuzfrog/jie-utils";
 import { runModel, runTeam } from "./settings";
 
 function makeConsoleMock(): Console {

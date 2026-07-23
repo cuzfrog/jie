@@ -1,6 +1,6 @@
 import type { EventBus } from "./event-bus";
 import type { EventEnvelope, EventType } from "./events";
-import { logger } from "../utils";
+import { logger } from "@cuzfrog/jie-utils";
 
 const log = logger.getSubLogger({ name: "jie.platform.event" });
 

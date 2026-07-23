@@ -7,6 +7,7 @@
   "dependencies": {
     "@cuzfrog/jie-platform": "workspace:*",
     "@cuzfrog/jie-tui": "workspace:*",
+    "@cuzfrog/jie-utils": "workspace:*",
     "@earendil-works/pi-agent-core": "catalog:",
     "@earendil-works/pi-ai": "catalog:",
     "awilix": "catalog:"

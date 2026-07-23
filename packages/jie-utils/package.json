@@ -1,12 +1,11 @@
 {
-  "name": "@cuzfrog/mock-llm-backend",
+  "name": "@cuzfrog/jie-utils",
   "type": "module",
   "exports": {
     ".": "./index.ts"
   },
   "dependencies": {
-    "@cuzfrog/jie-utils": "workspace:*",
-    "awilix": "catalog:"
+    "tslog": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

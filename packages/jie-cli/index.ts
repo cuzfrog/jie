@@ -2,8 +2,9 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { bootPlatform, defaultConsole, type Console, type JiePlatform, type JiePlatformOptions } from "@cuzfrog/jie-platform";
+import { bootPlatform, type JiePlatform, type JiePlatformOptions } from "@cuzfrog/jie-platform";
 import { bootTui, type CreateTUIOptions, type Tui, type TuiDeps } from "@cuzfrog/jie-tui";
+import { defaultConsole, type Console } from "@cuzfrog/jie-utils";
 import { parseFlags, type ParsedArgs } from "./cli-flags";
 import {
   runApiKey,
