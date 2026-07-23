@@ -4,9 +4,6 @@ import { teamLoadReducer } from "./team-load-reducer";
 import { StateStoreImpl } from "./state-store";
 import type { TuiState } from "./state";
 
-declare const test: (name: string, fn: () => void | Promise<void>) => void;
-declare const describe: (name: string, fn: () => void) => void;
-declare const expect: typeof import("bun:test").expect;
 
 const INITIAL_TUI_STATE: TuiState = new StateStoreImpl().getState();
 

@@ -153,7 +153,13 @@ function makeFakeMemory(): {
     persisted.push(message);
   });
   const restore = vi.fn(async () => persisted.slice());
-  const memory = { persist, restore } as unknown as MemoryManager;
+  const memory = vi.mocked<MemoryManager>({
+    persist,
+    compact: vi.fn(),
+    restore,
+    hasSession: vi.fn(() => false),
+    listSessions: vi.fn(() => []),
+  });
   return { memory, persisted, restore };
 }
 
@@ -184,20 +190,19 @@ interface Harness {
 
 function makeFakeEventManager(): EventManager {
   const subscribers = new Map<string, Array<(env: EventEnvelope<EventType>) => void>>();
-  return {
-    publish: (env: EventEnvelope<EventType>) => {
+  return vi.mocked<EventManager>({
+    publish: vi.fn((env: EventEnvelope<EventType>) => {
       for (const callback of subscribers.get(env.topic) ?? []) callback(env);
-    },
-    subscribe: (topic: string, callback: (env: EventEnvelope<EventType>) => void) => {
+    }),
+    subscribe: vi.fn((topic: string, callback: (env: EventEnvelope<EventType>) => void) => {
       const list = subscribers.get(topic) ?? [];
       list.push(callback);
       subscribers.set(topic, list);
       return () => {
         subscribers.set(topic, list.filter((cb) => cb !== callback));
       };
-    },
-    subscriberCount: (subject: string) => subscribers.get(subject)?.length ?? 0,
-  };
+    }),
+  });
 }
 
 function makeHarness(): Harness {
@@ -556,9 +561,16 @@ describe("JieAgentBody — start() subscriptions", () => {
   });
 
   test("each body subscribes to the shared user.prompt subject and filters by agentKey", async () => {
-    const b2 = h.makeBody({ agentKey: "worker-1" });
+    const cap2 = makeFakeAgentFactory();
+    const b2 = h.makeBody({ agentKey: "worker-1", factory: cap2.factory });
+    await body.start();
     await b2.start();
-    expect(h.events.subscriberCount("user.prompt")).toBe(1);
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "for worker", "worker-1"));
+    expect(cap2.fake.prompt.mock.calls.length).toBe(1);
+    expect(h.prompt.mock.calls.length).toBe(0);
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "for general", "general-1"));
+    expect(h.prompt.mock.calls.length).toBe(1);
+    expect(cap2.fake.prompt.mock.calls.length).toBe(1);
     b2.stop();
   });
 
@@ -1066,21 +1078,25 @@ describe("JieAgentBody — stop()", () => {
     const h = makeHarness();
     const body = h.makeBody();
     await body.start();
-    expect(h.events.subscriberCount("user.prompt")).toBe(1);
-    expect(h.events.subscriberCount("agent.interrupt")).toBe(1);
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "before stop", "general-1"));
+    h.state.isStreaming = true;
+    h.events.publish(Events.agentInterrupt({ kind: "user" }, "t1", "general-1"));
+    expect(h.prompt.mock.calls.length).toBe(1);
+    expect(h.abort.mock.calls.length).toBe(1);
     body.stop();
-    expect(h.events.subscriberCount("user.prompt")).toBe(0);
-    expect(h.events.subscriberCount("agent.interrupt")).toBe(0);
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "after stop", "general-1"));
+    h.events.publish(Events.agentInterrupt({ kind: "user" }, "t1", "general-1"));
+    expect(h.prompt.mock.calls.length).toBe(1);
+    expect(h.abort.mock.calls.length).toBe(1);
   });
 
   test("start() is idempotent (second call does not re-subscribe)", async () => {
     const h = makeHarness();
     const body = h.makeBody();
     await body.start();
-    const countAfterFirst = h.events.subscriberCount("user.prompt");
     await body.start();
-    const countAfterSecond = h.events.subscriberCount("user.prompt");
-    expect(countAfterFirst).toBe(countAfterSecond);
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "once", "general-1"));
+    expect(h.prompt.mock.calls.length).toBe(1);
     body.stop();
   });
 });

@@ -1,11 +1,10 @@
 import { Agent, type AgentMessage, type AgentEvent as PiAgentEvent, type AgentTool, type AgentToolResult, type ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Api, AssistantMessage, Model, StopReason, TextContent, UserMessage } from "@earendil-works/pi-ai";
 import type { ArtifactStore, MemoryManager } from "../storage";
-import type { AgentSoul } from "../team";
 import type { ExecutionContext, ToolRegistry } from "../tools";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { AgentBody, AgentBodyParams } from "./agent-body";
-import { makeStreamPublisher, type StreamPublisher } from "./streaming";
+import { StreamPublisherImpl, type StreamPublisher } from "./streaming";
 import { adaptToolToAgent } from "./tool-adapter";
 import type { AgentInfo, EffortLevel, ModelInfo } from "../types";
 
@@ -22,7 +21,7 @@ export class JieAgentBody implements AgentBody {
   readonly identity: AgentInfo;
   private readonly agentKey: string;
   private readonly teamId: string;
-  private readonly soul: AgentSoul;
+  private readonly soul: AgentBodyParams["soul"];
   private readonly sessionId: string;
   private readonly eventManager: EventManager;
   private readonly memory: MemoryManager;
@@ -43,7 +42,7 @@ export class JieAgentBody implements AgentBody {
     this.eventManager = deps.eventManager;
     this.memory = deps.memory;
     this.sender = { kind: "agent", teamId: this.teamId, agentKey: this.agentKey };
-    this.stream = makeStreamPublisher(deps.eventManager, this.sender);
+    this.stream = new StreamPublisherImpl(deps.eventManager, this.sender);
     const executionContext: ExecutionContext = {
       sessionId: this.sessionId,
       teamId: this.teamId,
@@ -268,7 +267,7 @@ export class JieAgentBody implements AgentBody {
 }
 
 function adaptAllTools(
-  soul: AgentSoul,
+  soul: AgentBodyParams["soul"],
   toolRegistry: ToolRegistry,
   executionContext: ExecutionContext,
 ): AgentTool[] {

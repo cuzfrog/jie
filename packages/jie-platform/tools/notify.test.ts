@@ -45,7 +45,6 @@ function makeFakeEventManager(): EventManager {
         subscribers.set(topic, list.filter((cb) => cb !== callback));
       };
     },
-    subscriberCount: (subject: string) => subscribers.get(subject)?.length ?? 0,
   };
 }
 

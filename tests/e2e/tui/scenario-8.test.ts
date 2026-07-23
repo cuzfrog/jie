@@ -27,14 +27,14 @@ describe("Scenario 8 — slash-command autocomplete", () => {
 
   test("typing `/he` then Tab completes to `/help ` and Enter submits it", async () => {
     await sendLine(harness.stdin, "/team my-team");
-    await waitForTeam(harness.tui, "my-team");
+    await waitForTeam(harness, "my-team");
     await sendCmd(harness.stdin, "/he");
-    await waitForEditorText(harness.tui, "/he");
+    await waitForEditorText(harness, "/he");
     await sendCmd(harness.stdin, "\t");
-    await waitForEditorText(harness.tui, "/help ");
+    await waitForEditorText(harness, "/help ");
     await sendCmd(harness.stdin, "\r");
-    await waitForEditorText(harness.tui, "");
-    await waitForNoErrorBanner(harness.tui);
-    await waitForTransient(harness.tui, "type a prompt");
+    await waitForEditorText(harness, "");
+    await waitForNoErrorBanner(harness);
+    await waitForTransient(harness, "type a prompt");
   });
 });

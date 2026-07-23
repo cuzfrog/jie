@@ -88,37 +88,3 @@ export class SqliteArtifactStore implements ArtifactStore {
     }));
   }
 }
-
-export class InMemoryArtifactStore implements ArtifactStore {
-  private readonly rows = new Map<string, { content: string; created_at: string }>();
-
-  async write(
-    key: string,
-    content: string,
-  ): Promise<{ key: string; created_at: string }> {
-    validateArtifactKey(key);
-    validateArtifactContent(content);
-    const created_at = new Date().toISOString();
-    this.rows.set(key, { content, created_at });
-    return { key, created_at };
-  }
-
-  async read(key: string): Promise<{
-    key: string;
-    content: string;
-    created_at: string;
-  } | null> {
-    const row = this.rows.get(key);
-    if (row === undefined) return null;
-    return { key, ...row };
-  }
-
-  async list(prefix: string): Promise<{ key: string; created_at: string }[]> {
-    const results: { key: string; created_at: string }[] = [];
-    for (const [key, value] of this.rows) {
-      if (key.startsWith(prefix)) results.push({ key, ...value });
-    }
-    results.sort((a, b) => b.created_at.localeCompare(a.created_at));
-    return results;
-  }
-}

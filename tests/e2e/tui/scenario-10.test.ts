@@ -25,10 +25,10 @@ describe("Scenario 10 — error banner renderer", () => {
 
   test("triggering an unknown slash command shows the error banner and clears it on next input", async () => {
     await sendLine(harness.stdin, "/team my-team");
-    await waitForTeam(harness.tui, "my-team");
+    await waitForTeam(harness, "my-team");
     await sendLine(harness.stdin, "/nonexistent-command");
-    await waitForErrorBanner(harness.tui, "unknown slash command");
+    await waitForErrorBanner(harness, "unknown slash command");
     await sendLine(harness.stdin, "/help");
-    await waitForNoErrorBanner(harness.tui);
+    await waitForNoErrorBanner(harness);
   });
 });

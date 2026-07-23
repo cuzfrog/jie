@@ -12,7 +12,7 @@ interface PkgJson {
   version?: string;
 }
 
-export function resolveVersion(startDir: string): string {
+function resolveVersion(startDir: string): string {
   let dir = startDir;
   for (let depth = 0; depth < MAX_WALK_DEPTH; depth++) {
     try {

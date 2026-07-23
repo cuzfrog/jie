@@ -7,7 +7,6 @@ import type { Tool, ToolResult } from "./types";
 const eventManager = vi.mocked<EventManager>({
   publish: vi.fn(),
   subscribe: vi.fn(),
-  subscriberCount: vi.fn(),
 });
 
 const artifactStore = vi.mocked<ArtifactStore>({

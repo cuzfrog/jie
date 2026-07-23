@@ -1,9 +1,16 @@
 ---
 no-new-exports:
-  - index.ts
+  # ungated for DI review: todo tool-result DTOs (TodoItem/TodoStatus/TodoDetailsPayload/
+  # isTodoDetails) are cross-boundary DTOs consumed by jie-tui; they must leave through
+  # the package surface instead of the current cross-package deep import of types/todo.ts.
+  - container.test.ts
+  - container.ts
+  # - index.ts
+  - jie-platform-errors.ts
   - jie-platform.test.ts
   - jie-platform.ts
-  - types.ts
+  # - types.ts
+  - utils.test.ts
   - utils.ts
 ---
 

@@ -1,9 +1,5 @@
 import { isTodoDetails } from "./todo";
 
-declare const test: (name: string, fn: () => void | Promise<void>) => void;
-declare const describe: (name: string, fn: () => void) => void;
-declare const expect: typeof import("bun:test").expect;
-
 describe("isTodoDetails", () => {
   test("accepts a well-formed todos payload", () => {
     expect(isTodoDetails({ kind: "todos", todos: [{ content: "x", status: "in_progress" }] })).toBe(true);

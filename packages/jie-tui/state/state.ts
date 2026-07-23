@@ -82,8 +82,16 @@ function shouldShowErrorBanner(state: TuiState): boolean {
   return state.errorBanner !== null && state.errorBanner !== "";
 }
 
+function hasConversation(state: TuiState): boolean {
+  for (const agent of state.agents.values()) {
+    if (agent.history.length > 0 || agent.currentTurn !== null) return true;
+  }
+  return false;
+}
+
 export const TuiState = {
   getFocusedAgent,
   isBusy,
   shouldShowErrorBanner,
+  hasConversation,
 } as const;

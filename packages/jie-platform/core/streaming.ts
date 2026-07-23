@@ -11,72 +11,65 @@ export interface StreamPublisher {
   endStream(): { readonly streamId: number; readonly totalChunks: number };
 }
 
-export function makeStreamPublisher(events: EventManager, sender: AgentSender): StreamPublisher {
-  const agentSender = sender;
-  let streamId = 0;
-  let buffer = "";
-  let currentBlockType: BlockType | null = null;
-  let seq = 0;
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let totalChunks = 0;
+export class StreamPublisherImpl implements StreamPublisher {
+  private streamId = 0;
+  private buffer = "";
+  private currentBlockType: BlockType | null = null;
+  private seq = 0;
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private totalChunks = 0;
 
-  function flush(): void {
-    if (buffer.length === 0 || currentBlockType === null) {
-      if (timer !== null) {
-        clearTimeout(timer);
-        timer = null;
-      }
+  constructor(
+    private readonly events: EventManager,
+    private readonly sender: AgentSender,
+  ) {}
+
+  beginStream(): void {
+    this.streamId += 1;
+    this.seq = 0;
+    this.totalChunks = 0;
+    this.buffer = "";
+    this.currentBlockType = null;
+    this.clearTimer();
+  }
+
+  append(blockType: BlockType, delta: string): void {
+    if (this.currentBlockType !== null && this.currentBlockType !== blockType) {
+      this.flush();
+    }
+    this.currentBlockType = blockType;
+    this.buffer += delta;
+    if (this.buffer.length >= STREAM_CHUNK_SIZE) {
+      this.flush();
       return;
     }
-    events.publish(Events.agentStreamChunk(
-      agentSender,
-      streamId,
-      seq,
-      currentBlockType,
-      buffer,
-    ));
-    seq += 1;
-    totalChunks += 1;
-    buffer = "";
-    if (timer !== null) {
-      clearTimeout(timer);
-      timer = null;
+    if (this.timer === null) {
+      this.timer = setTimeout(() => this.flush(), STREAM_FLUSH_MS);
     }
   }
 
-  return {
+  endStream(): { streamId: number; totalChunks: number } {
+    this.flush();
+    this.events.publish(Events.agentStreamEnd(this.sender, this.streamId, this.totalChunks));
+    return { streamId: this.streamId, totalChunks: this.totalChunks };
+  }
 
-    beginStream(): void {
-      streamId += 1;
-      seq = 0;
-      totalChunks = 0;
-      buffer = "";
-      currentBlockType = null;
-      if (timer !== null) {
-        clearTimeout(timer);
-        timer = null;
-      }
-    },
+  private flush(): void {
+    if (this.buffer.length === 0 || this.currentBlockType === null) {
+      this.clearTimer();
+      return;
+    }
+    this.events.publish(Events.agentStreamChunk(this.sender, this.streamId, this.seq, this.currentBlockType, this.buffer));
+    this.seq += 1;
+    this.totalChunks += 1;
+    this.buffer = "";
+    this.clearTimer();
+  }
 
-    append(blockType: BlockType, delta: string): void {
-      if (currentBlockType !== null && currentBlockType !== blockType) {
-        flush();
-      }
-      currentBlockType = blockType;
-      buffer += delta;
-      if (buffer.length >= STREAM_CHUNK_SIZE) {
-        flush();
-        return;
-      }
-      if (timer === null) {
-        timer = setTimeout(() => flush(), STREAM_FLUSH_MS);
-      }
-    },
-
-    endStream(): { streamId: number; totalChunks: number } {
-      flush();
-      events.publish(Events.agentStreamEnd(agentSender, streamId, totalChunks));
-      return { streamId, totalChunks };
-    },
-  };
+  private clearTimer(): void {
+    if (this.timer !== null) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+  }
 }

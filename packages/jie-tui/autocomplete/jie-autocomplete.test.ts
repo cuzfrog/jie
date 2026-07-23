@@ -1,46 +1,40 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { EventEnvelope, EventType, JiePlatform } from "@cuzfrog/jie-platform";
-import { createContainer, InjectionMode } from "awilix";
-import { Actions, registerStateModule, type StateStore } from "../state";
-import { type TuiCradle } from "../";
+import { type JiePlatform } from "@cuzfrog/jie-platform";
+import { type StateStore, type TuiState } from "../state";
+import { makeTuiState } from "../test";
 import { JieAutocompleteProviderImpl } from "./jie-autocomplete";
-
-function makeStateStore(): StateStore {
-  const container = createContainer<TuiCradle>({ injectionMode: InjectionMode.CLASSIC });
-  registerStateModule(container);
-  return container.cradle.stateStore;
-}
 
 function signal(): AbortSignal {
   return new AbortController().signal;
 }
 
 function makePlatform(execute: ReturnType<typeof vi.fn>): JiePlatform {
-  return {
+  return vi.mocked<JiePlatform>({
     settings: { defaultTeam: undefined, defaultProvider: undefined, defaultModel: undefined },
-    subscribe: <T extends EventType>(_topic: T, _callback: (event: EventEnvelope<T>) => void): (() => void) => () => undefined,
-    prompt: () => undefined,
-    interrupt: () => undefined,
-    teams: () => [],
-    execute: execute as JiePlatform["execute"],
-  };
+    subscribe: vi.fn(() => () => undefined),
+    prompt: vi.fn(),
+    interrupt: vi.fn(),
+    teams: vi.fn(() => []),
+    execute,
+  });
 }
 
 function nullPlatform(): JiePlatform {
   return makePlatform(vi.fn(async () => null));
 }
 
+function makeStateStore(state: TuiState = makeTuiState()): StateStore {
+  return vi.mocked<StateStore>({
+    getState: vi.fn(() => state),
+    dispatch: vi.fn(),
+    subscribe: vi.fn(() => () => undefined),
+  });
+}
+
 function storeWithTeam(): StateStore {
-  const store = makeStateStore();
-  store.dispatch(Actions.switchTeam({
-    id: "my-team",
-    leaderKey: "general-1",
-    history: [],
-    agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, model: null }],
-  }));
-  return store;
+  return makeStateStore(makeTuiState({ teamId: "my-team" }));
 }
 
 describe("createJieAutocompleteProvider — @-mentions", () => {

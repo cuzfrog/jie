@@ -37,11 +37,11 @@ describe("Scenario 9 — @-mention autocomplete", () => {
 
   test("typing `@main` then Tab inserts the resolved file path into the editor text", async () => {
     await sendLine(harness.stdin, "/team my-team");
-    await waitForTeam(harness.tui, "my-team");
+    await waitForTeam(harness, "my-team");
     await sendCmd(harness.stdin, "@main");
-    await waitForEditorText(harness.tui, "@main");
+    await waitForEditorText(harness, "@main");
     await sendCmd(harness.stdin, "\t");
-    await waitForEditorText(harness.tui, "@src/main.ts ");
-    await waitForNoErrorBanner(harness.tui);
+    await waitForEditorText(harness, "@src/main.ts ");
+    await waitForNoErrorBanner(harness);
   });
 });

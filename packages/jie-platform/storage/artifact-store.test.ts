@@ -1,6 +1,5 @@
 import { SqliteStorage } from "./sqlite-storage";
-import { SqliteArtifactStore, InMemoryArtifactStore } from "./artifact-store";
-import { JiePlatformError } from "../jie-platform-errors";
+import { SqliteArtifactStore } from "./artifact-store";
 
 function makeStore(): SqliteArtifactStore {
   return new SqliteArtifactStore(new SqliteStorage(":memory:"));
@@ -81,25 +80,5 @@ describe("SqliteArtifactStore", () => {
     const max = "x".repeat(5 * 1024 * 1024);
     const w = await store.write("k", max);
     expect(w.key).toBe("k");
-  });
-});
-
-describe("InMemoryArtifactStore", () => {
-  test("implements the same interface; write/read/list round-trip", async () => {
-    const store = new InMemoryArtifactStore();
-    await store.write("a/b", "hello");
-    expect((await store.read("a/b"))?.content).toBe("hello");
-    expect(await store.read("missing")).toBeNull();
-    expect((await store.list("a/")).map((r) => r.key)).toEqual(["a/b"]);
-  });
-
-  test("enforces the same key / content validations", async () => {
-    const store = new InMemoryArtifactStore();
-    await expect(store.write("bad space", "x")).rejects.toBeInstanceOf(
-      JiePlatformError,
-    );
-    await expect(store.write("k", "x".repeat(5 * 1024 * 1024 + 1))).rejects.toBeInstanceOf(
-      JiePlatformError,
-    );
   });
 });

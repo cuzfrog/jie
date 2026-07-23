@@ -1,12 +1,16 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
-import type { AgentSoul } from "../team";
 import type { AgentInfo } from "../types";
 
 export interface AgentBodyParams {
   readonly agentKey: string;
   readonly teamId: string;
-  readonly soul: AgentSoul;
+  readonly soul: {
+    readonly role: string;
+    readonly systemPrompt: string;
+    readonly tools: ReadonlyArray<string>;
+    readonly subscribe: ReadonlyArray<string>;
+  };
   readonly isLeader: boolean;
   readonly sessionId: string;
   readonly model: Model<Api> | undefined;

@@ -1,112 +1,152 @@
-import { Container } from "@earendil-works/pi-tui";
-import { Events } from "@cuzfrog/jie-platform";
-import { createContainer, InjectionMode } from "awilix";
-import { Actions, registerStateModule, type StateStore } from "../state";
-import { registerChatModule } from "../components/chat";
-import { type TuiCradle } from "../";
-import { registerSyncModule } from "./module";
+import { type Container } from "@earendil-works/pi-tui";
+import { Actions, type AgentId, type AgentUiState, type MessageTurn, type StateStore, type TuiState } from "../state";
+import { type AssistantMessageComponent, type ChatMessages, type UserMessageComponent } from "../components/chat";
+import { makeAgentUiState, makeTuiState } from "../test";
+import { ChatSyncImpl } from "./chat-sync";
 
-const SYSTEM_SENDER = { kind: "system" } as const;
-const AGENT_SENDER = { kind: "agent", teamId: "my-team", agentKey: "general-1" } as const;
+const AGENT_ID: AgentId = "my-team:general-1";
+const INERT_ACTION = Actions.setEnvironment("/tmp", "main", false);
 
-function singleAgentTeam(store: StateStore): void {
-  store.dispatch(Actions.receiveEvent(Events.teamLoaded(SYSTEM_SENDER, {
-    id: "my-team",
-    leaderKey: "general-1",
-    history: [],
-    agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, model: null }],
-  })));
+function makeTurn(userPrompt: string, text: string | null = null): MessageTurn {
+  return { userPrompt, cards: [], blocks: text === null ? [] : [{ kind: "text", text }], streamId: null };
 }
 
-function twoAgentTeam(store: StateStore): void {
-  store.dispatch(Actions.receiveEvent(Events.teamLoaded(SYSTEM_SENDER, {
-    id: "my-team",
-    leaderKey: "manager-1",
-    history: [],
-    agents: [
-      { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, model: null },
-      { teamId: "my-team", role: "worker", agentKey: "worker-1", isLeader: false, model: null },
-    ],
-  })));
+function teamState(agents: ReadonlyArray<AgentUiState>, focusedAgentId: AgentId | null): TuiState {
+  const leader = agents.find((agent) => agent.isLeader) ?? null;
+  return makeTuiState({
+    teamId: "my-team",
+    leaderAgentId: leader === null ? null : leader.agentId,
+    focusedAgentId,
+    agents: new Map(agents.map((agent) => [agent.agentId, agent] as const)),
+  });
 }
 
 interface SyncHarness {
-  readonly store: StateStore;
-  readonly container: Container;
-  readonly renders: number;
+  readonly notify: (afterState: TuiState) => Promise<void>;
+  readonly addChild: ReturnType<typeof vi.fn>;
+  readonly removeChild: ReturnType<typeof vi.fn>;
+  readonly clear: ReturnType<typeof vi.fn>;
+  readonly requestRender: ReturnType<typeof vi.fn>;
+  readonly createUserMessage: ReturnType<typeof vi.fn>;
+  readonly createAssistantMessage: ReturnType<typeof vi.fn>;
+  readonly userMessages: ReadonlyArray<UserMessageComponent>;
+  readonly assistantMessages: ReadonlyArray<AssistantMessageComponent>;
 }
 
 function bootSync(): SyncHarness {
-  const container = createContainer<TuiCradle>({ injectionMode: InjectionMode.CLASSIC });
-  registerStateModule(container);
-  registerChatModule(container);
-  registerSyncModule(container);
-  const store = container.cradle.stateStore;
-  const chatContainer = new Container();
-  const counter = { value: 0 };
-  container.cradle.chatSyncFactory(chatContainer, () => { counter.value += 1; });
-  return { store, container: chatContainer, get renders(): number { return counter.value; } };
+  const stateStore = vi.mocked<StateStore>({
+    getState: vi.fn(),
+    dispatch: vi.fn(),
+    subscribe: vi.fn(() => () => undefined),
+  });
+  const userMessages: UserMessageComponent[] = [];
+  const assistantMessages: AssistantMessageComponent[] = [];
+  const chatMessages = vi.mocked<ChatMessages>({
+    createUserMessage: vi.fn(() => {
+      const component: UserMessageComponent = { render: vi.fn(() => []), invalidate: vi.fn(), update: vi.fn() };
+      userMessages.push(component);
+      return component;
+    }),
+    createAssistantMessage: vi.fn(() => {
+      const component: AssistantMessageComponent = { render: vi.fn(() => []), invalidate: vi.fn(), update: vi.fn() };
+      assistantMessages.push(component);
+      return component;
+    }),
+  });
+  const chatContainer = vi.mocked<Container>({
+    children: [],
+    addChild: vi.fn(),
+    removeChild: vi.fn(),
+    clear: vi.fn(),
+    invalidate: vi.fn(),
+    render: vi.fn(() => []),
+  });
+  const requestRender = vi.fn();
+  new ChatSyncImpl(stateStore, chatMessages, chatContainer, requestRender);
+  const listener = stateStore.subscribe.mock.calls[0]![0];
+  return {
+    notify: (afterState: TuiState) => listener(INERT_ACTION, afterState, afterState),
+    addChild: chatContainer.addChild,
+    removeChild: chatContainer.removeChild,
+    clear: chatContainer.clear,
+    requestRender,
+    createUserMessage: chatMessages.createUserMessage,
+    createAssistantMessage: chatMessages.createAssistantMessage,
+    userMessages,
+    assistantMessages,
+  };
 }
 
 describe("ChatSyncImpl", () => {
-  test("starts empty and requests a render on every action", () => {
-    const { store, container } = bootSync();
-    singleAgentTeam(store);
-    expect(container.children.length).toBe(0);
+  test("starts empty and requests a render on every action", async () => {
+    const { notify, addChild, requestRender } = bootSync();
+    const agent = makeAgentUiState(AGENT_ID, { isLeader: true });
+    await notify(teamState([agent], AGENT_ID));
+    expect(addChild).not.toHaveBeenCalled();
+    expect(requestRender).toHaveBeenCalledTimes(1);
   });
 
-  test("appends a user+assistant pair when a prompt arrives", () => {
-    const { store, container } = bootSync();
-    singleAgentTeam(store);
-    store.dispatch(Actions.receiveEvent(Events.userPrompt({ kind: "user" }, "my-team", "tell me a story", "general-1")));
-    expect(container.children.length).toBe(2);
-    expect(container.children[0]!.render(80)[0]).toContain("tell me a story");
+  test("appends a user+assistant pair when a prompt arrives", async () => {
+    const { notify, addChild, createUserMessage, createAssistantMessage } = bootSync();
+    const turn = makeTurn("tell me a story");
+    const agent = makeAgentUiState(AGENT_ID, { isLeader: true, currentTurn: turn });
+    await notify(teamState([agent], AGENT_ID));
+    expect(addChild).toHaveBeenCalledTimes(2);
+    expect(createUserMessage).toHaveBeenCalledWith("tell me a story");
+    expect(createAssistantMessage).toHaveBeenCalledWith(turn);
   });
 
-  test("streaming chunks update the existing pair in place", () => {
-    const { store, container } = bootSync();
-    singleAgentTeam(store);
-    store.dispatch(Actions.receiveEvent(Events.userPrompt({ kind: "user" }, "my-team", "q", "general-1")));
-    store.dispatch(Actions.receiveEvent(Events.agentTurnStart(AGENT_SENDER)));
-    store.dispatch(Actions.receiveEvent(Events.agentStreamChunk(AGENT_SENDER, 1, 1, "text", "once upon a time")));
-    expect(container.children.length).toBe(2);
-    const assistantLines = container.children[1]!.render(80).join(" ");
-    expect(assistantLines).toContain("once upon a time");
+  test("streaming chunks update the existing pair in place", async () => {
+    const { notify, addChild, userMessages, assistantMessages } = bootSync();
+    const streamed = makeTurn("q", "once upon a time");
+    await notify(teamState([makeAgentUiState(AGENT_ID, { isLeader: true, currentTurn: makeTurn("q") })], AGENT_ID));
+    await notify(teamState([makeAgentUiState(AGENT_ID, { isLeader: true, currentTurn: streamed })], AGENT_ID));
+    expect(addChild).toHaveBeenCalledTimes(2);
+    expect(userMessages[0]!.update).toHaveBeenCalledWith(streamed);
+    expect(assistantMessages[0]!.update).toHaveBeenCalledWith(streamed);
   });
 
-  test("turn rotation appends a new pair and keeps the completed turn", () => {
-    const { store, container } = bootSync();
-    singleAgentTeam(store);
-    store.dispatch(Actions.receiveEvent(Events.userPrompt({ kind: "user" }, "my-team", "q1", "general-1")));
-    store.dispatch(Actions.receiveEvent(Events.agentTurnStart(AGENT_SENDER)));
-    store.dispatch(Actions.receiveEvent(Events.agentStreamChunk(AGENT_SENDER, 1, 1, "text", "a1")));
-    store.dispatch(Actions.receiveEvent(Events.userPrompt({ kind: "user" }, "my-team", "q2", "general-1")));
-    expect(container.children.length).toBe(4);
-    expect(container.children[0]!.render(80)[0]).toContain("q1");
-    expect(container.children[2]!.render(80)[0]).toContain("q2");
+  test("turn rotation appends a new pair and keeps the completed turn", async () => {
+    const { notify, addChild, removeChild, createUserMessage, userMessages, assistantMessages } = bootSync();
+    const first = makeTurn("q1");
+    const second = makeTurn("q2");
+    await notify(teamState([makeAgentUiState(AGENT_ID, { isLeader: true, currentTurn: first })], AGENT_ID));
+    await notify(teamState([makeAgentUiState(AGENT_ID, { isLeader: true, history: [first], currentTurn: second })], AGENT_ID));
+    expect(addChild).toHaveBeenCalledTimes(4);
+    expect(removeChild).not.toHaveBeenCalled();
+    expect(userMessages[0]!.update).toHaveBeenCalledWith(first);
+    expect(assistantMessages[0]!.update).toHaveBeenCalledWith(first);
+    expect(createUserMessage.mock.calls).toEqual([["q1"], ["q2"]]);
   });
 
-  test("switching the focused agent rebuilds the container from that agent's turns", () => {
-    const { store, container } = bootSync();
-    twoAgentTeam(store);
-    store.dispatch(Actions.receiveEvent(Events.userPrompt({ kind: "user" }, "my-team", "manager task", "manager-1")));
-    expect(container.children.length).toBe(2);
-    store.dispatch(Actions.switchCycleAgent(1));
-    expect(container.children.length).toBe(0);
-    store.dispatch(Actions.receiveEvent(Events.userPrompt({ kind: "user" }, "my-team", "worker task", "worker-1")));
-    expect(container.children.length).toBe(2);
-    expect(container.children[0]!.render(80)[0]).toContain("worker task");
-    store.dispatch(Actions.switchCycleAgent(1));
-    expect(container.children.length).toBe(2);
-    expect(container.children[0]!.render(80)[0]).toContain("manager task");
+  test("switching the focused agent rebuilds the container from that agent's turns", async () => {
+    const { notify, addChild, removeChild, clear, createUserMessage } = bootSync();
+    const managerId: AgentId = "my-team:manager-1";
+    const workerId: AgentId = "my-team:worker-1";
+    const manager = makeAgentUiState(managerId, { isLeader: true, role: "manager", currentTurn: makeTurn("manager task") });
+    const worker = makeAgentUiState(workerId, { role: "worker" });
+    await notify(teamState([manager, worker], managerId));
+    expect(addChild).toHaveBeenCalledTimes(2);
+    await notify(teamState([manager, worker], workerId));
+    expect(clear).toHaveBeenCalledTimes(2);
+    expect(addChild).toHaveBeenCalledTimes(2);
+    const busyWorker = makeAgentUiState(workerId, { role: "worker", currentTurn: makeTurn("worker task") });
+    await notify(teamState([manager, busyWorker], workerId));
+    expect(addChild).toHaveBeenCalledTimes(4);
+    await notify(teamState([manager, busyWorker], managerId));
+    expect(clear).toHaveBeenCalledTimes(3);
+    expect(addChild).toHaveBeenCalledTimes(6);
+    expect(removeChild).not.toHaveBeenCalled();
+    expect(createUserMessage.mock.calls).toEqual([["manager task"], ["worker task"], ["manager task"]]);
   });
 
-  test("clearing the tui state empties the container", () => {
-    const { store, container } = bootSync();
-    singleAgentTeam(store);
-    store.dispatch(Actions.receiveEvent(Events.userPrompt({ kind: "user" }, "my-team", "q", "general-1")));
-    expect(container.children.length).toBe(2);
-    store.dispatch(Actions.clearTuiState());
-    expect(container.children.length).toBe(0);
+  test("clearing the tui state empties the container", async () => {
+    const { notify, addChild, clear } = bootSync();
+    const agent = makeAgentUiState(AGENT_ID, { isLeader: true, currentTurn: makeTurn("q") });
+    await notify(teamState([agent], AGENT_ID));
+    expect(addChild).toHaveBeenCalledTimes(2);
+    await notify(makeTuiState());
+    expect(clear).toHaveBeenCalledTimes(2);
+    expect(addChild).toHaveBeenCalledTimes(2);
   });
 });

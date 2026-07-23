@@ -1,7 +1,10 @@
-import { type Component, type Container, type Editor, type Loader, type TUI } from "@earendil-works/pi-tui";
+import { Container, Loader, type Component, type Editor, type TUI } from "@earendil-works/pi-tui";
 import { Actions, TuiState, type Action, type StateStore } from "../state";
 import type { ChatSync } from "../sync";
-import { composeLayout } from "./layout";
+import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, WORKING_LABEL, style } from "./themes";
+import { StatusLine } from "./status-line";
+import { WelcomeBanner } from "./welcome-banner";
+import { KeyHints } from "./key-hints";
 
 export interface TuiView {
   stop(): void;
@@ -30,16 +33,28 @@ export class TuiViewImpl implements TuiView {
     jieEditorFactory: (tui: TUI) => Editor,
   ) {
     this.stateStore = stateStore;
-    const layout = composeLayout(tui, stateStore, todoList, footer, jieEditorFactory);
-    this.workingSlot = layout.workingSlot;
-    this.workingIndicator = layout.workingIndicator;
+    const chatContainer = new Container();
+    const editor = jieEditorFactory(tui);
+    this.workingSlot = new Container();
+    this.workingIndicator = new Loader(tui, style("accent"), style("muted"), WORKING_LABEL, {
+      frames: [...SPINNER_FRAMES], intervalMs: SPINNER_INTERVAL_MS,
+    });
+    tui.addChild(chatContainer);
+    tui.addChild(todoList);
+    tui.addChild(this.workingSlot);
+    tui.addChild(new StatusLine(stateStore));
+    tui.addChild(new WelcomeBanner(stateStore));
+    tui.addChild(new KeyHints(stateStore));
+    tui.addChild(editor);
+    tui.addChild(footer);
+    tui.setFocus(editor);
     this.unsubscribeKeys = tui.addInputListener((data) => {
       const action = resolveGlobalKey(data);
       if (action === null) return undefined;
       this.stateStore.dispatch(action);
       return CONSUMED;
     });
-    this.chatSync = chatSyncFactory(layout.chatContainer, () => tui.requestRender());
+    this.chatSync = chatSyncFactory(chatContainer, () => tui.requestRender());
     this.unsubscribeActions = stateStore.subscribe(async (): Promise<void> => {
       this.syncWorkingIndicator();
     });

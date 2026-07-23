@@ -1,4 +1,4 @@
-import { defaultConsole, type Console, type JiePlatform, type TeamInfo } from "@cuzfrog/jie-platform";
+import { type Console, type JiePlatform, type TeamInfo } from "@cuzfrog/jie-platform";
 import type { ParsedArgsMap } from "../cli-flags";
 
 export type PrintArgs = ParsedArgsMap["print"];
@@ -7,7 +7,7 @@ export async function runPrint(
   handle: JiePlatform,
   team: TeamInfo,
   args: PrintArgs,
-  console: Console = defaultConsole,
+  console: Console,
 ): Promise<number> {
   const agentKeys = team.agents.map((a) => a.agentKey);
   handle.subscribe("agent.stream.chunk", (envelope) => {
@@ -16,9 +16,9 @@ export async function runPrint(
     if (envelope.sender.agentKey !== team.leaderKey) return;
     const text = envelope.payload.text;
     if (args.json) {
-      process.stdout.write(JSON.stringify({ chunk: text, seq: envelope.payload.seq }) + "\n");
+      console.write(JSON.stringify({ chunk: text, seq: envelope.payload.seq }) + "\n");
     } else {
-      process.stdout.write(text);
+      console.write(text);
     }
   });
 
@@ -27,7 +27,7 @@ export async function runPrint(
   try {
     await setupIdleGate(handle, agentKeys, args.timeout);
   } catch (error) {
-    if (!args.json) process.stdout.write("\n");
+    if (!args.json) console.write("\n");
     const errorMessage = error instanceof Error ? error.message : String(error);
     if (errorMessage === "timeout") {
       console.error(`no response from team within ${args.timeout}s`);
@@ -37,7 +37,7 @@ export async function runPrint(
     await handle.execute({ name: "stop" });
     return 3;
   }
-  if (!args.json) process.stdout.write("\n");
+  if (!args.json) console.write("\n");
   await handle.execute({ name: "stop" });
   return 0;
 }

@@ -5,6 +5,7 @@ function makeConsoleMock(): Console {
   return {
     print: vi.fn(),
     error: vi.fn(),
+    write: vi.fn(),
   };
 }
 
@@ -39,8 +40,6 @@ describe("runModel", () => {
       name: "setDefaultModel",
       provider: "anthropic",
       id: "claude-opus-4",
-      effort: "off",
-      contextWindow: null,
     });
     expect(consoleMock.print).toHaveBeenCalledWith("default model set to anthropic/claude-opus-4");
   });

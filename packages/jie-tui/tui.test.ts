@@ -124,11 +124,11 @@ describe("bootTui — surface contract", () => {
   test("returns a Tui handle with initial empty state", () => {
     withTTY(true, () => {
       const platform = makePlatform();
-      const tui: Tui = bootTui({ cwd: process.cwd() }, { platform }).cradle.tui;
-      const s0 = tui.state;
+      const cradle = bootTui({ cwd: process.cwd() }, { platform }).cradle;
+      const s0 = cradle.stateStore.getState();
       expect(s0.teamId).toBeNull();
       expect(s0.agents.size).toBe(0);
-      tui.stop();
+      cradle.tui.stop();
     });
   });
 });
@@ -205,7 +205,7 @@ describe("bootTui — event bus wiring", () => {
       { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 4242 },
     ));
     await waitFrames(20);
-    const agent = harness!.tui.state.agents.get("my-team:general-1");
+    const agent = harness!.stateStore.getState().agents.get("my-team:general-1");
     expect(agent?.contextTokensUsed).toBe(4242);
     expect(agent?.lastReportedTotalTokens).toBe(4242);
     harness!.tui.stop();
@@ -244,13 +244,13 @@ describe("bootTui — global keys", () => {
     await waitFrames(30);
     harness!.stdin.write("\x14");
     await waitFrames(20);
-    expect(harness!.tui.state.thinkingExpanded).toBe(true);
+    expect(harness!.stateStore.getState().thinkingExpanded).toBe(true);
     harness!.stdin.write("\x0f");
     await waitFrames(20);
-    expect(harness!.tui.state.toolCardsExpanded).toBe(true);
+    expect(harness!.stateStore.getState().toolCardsExpanded).toBe(true);
     harness!.stdin.write("\x14");
     await waitFrames(20);
-    expect(harness!.tui.state.thinkingExpanded).toBe(false);
+    expect(harness!.stateStore.getState().thinkingExpanded).toBe(false);
     harness!.tui.stop();
     await started;
   });
@@ -264,10 +264,10 @@ describe("bootTui — global keys", () => {
     await waitFrames(30);
     harness!.platform.emit(TWO_AGENT_TEAM);
     await waitFrames(20);
-    expect(harness!.tui.state.focusedAgentId).toBe("my-team:manager-1");
+    expect(harness!.stateStore.getState().focusedAgentId).toBe("my-team:manager-1");
     harness!.stdin.write("\x1b[1;2B");
     await waitFrames(20);
-    expect(harness!.tui.state.focusedAgentId).toBe("my-team:worker-1");
+    expect(harness!.stateStore.getState().focusedAgentId).toBe("my-team:worker-1");
     harness!.tui.stop();
     await started;
   });

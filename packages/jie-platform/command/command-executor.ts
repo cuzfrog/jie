@@ -1,5 +1,4 @@
-import { getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";
-import type { AuthStore, SettingsStore } from "../config";
+import type { AuthStore, ModelRegistry, SettingsStore } from "../config";
 import { JiePlatformError } from "../jie-platform-errors";
 import type { GitService } from "../services";
 import type { TeamManager } from "../team";
@@ -12,12 +11,12 @@ export interface CommandExecutor {
 type Handler<N extends CommandName> = (command: Command<N>) => CommandResult<N> | Promise<CommandResult<N>>;
 
 export class CommandExecutorImpl implements CommandExecutor {
-  private readonly knownProviders = new Set<string>(getBuiltinProviders() as ReadonlyArray<string>);
   private readonly handlers: { [N in CommandName]: Handler<N> };
 
   constructor(
     private readonly authStore: AuthStore,
     private readonly settingsStore: SettingsStore,
+    private readonly modelRegistry: ModelRegistry,
     private readonly teamManager: TeamManager,
     private readonly gitService: GitService,
   ) {
@@ -43,16 +42,16 @@ export class CommandExecutorImpl implements CommandExecutor {
   }
 
   private login(command: Command<"login">): CommandResult<"login"> {
-    this.authStore.saveAuthConfig(this.authStore.setProvider(this.authStore.load(), command.provider, command.apiKey));
+    this.authStore.setProvider(command.provider, command.apiKey);
     return null;
   }
 
   private logout(command: Command<"logout">): CommandResult<"logout"> {
     if (command.provider === undefined) {
-      this.authStore.saveAuthConfig(this.authStore.clear());
+      this.authStore.clear();
       return null;
     }
-    this.authStore.saveAuthConfig(this.authStore.removeProvider(this.authStore.load(), command.provider));
+    this.authStore.removeProvider(command.provider);
     return null;
   }
 
@@ -63,12 +62,12 @@ export class CommandExecutorImpl implements CommandExecutor {
         detail: "run 'jie model <provider>/<modelId>' first, or use 'jie login --provider <id> --api-key <key>'",
       });
     }
-    this.authStore.saveAuthConfig(this.authStore.setProvider(this.authStore.load(), settings.defaultProvider, command.apiKey));
+    this.authStore.setProvider(settings.defaultProvider, command.apiKey);
     return null;
   }
 
   private setDefaultModel(command: Command<"setDefaultModel">): CommandResult<"setDefaultModel"> {
-    if (!this.knownProviders.has(command.provider)) {
+    if (!this.modelRegistry.providers().includes(command.provider)) {
       throw new JiePlatformError("UNKNOWN_PROVIDER", { detail: command.provider });
     }
     this.settingsStore.setDefaultProvider(command.provider, command.id);
@@ -82,7 +81,11 @@ export class CommandExecutorImpl implements CommandExecutor {
   }
 
   private setDefaultTeam(command: Command<"setDefaultTeam">): CommandResult<"setDefaultTeam"> {
-    this.settingsStore.setDefaultTeam(command.teamId);
+    const location = this.teamManager.locate(command.teamId);
+    if (location === null) {
+      throw new JiePlatformError("TEAM_NOT_FOUND", { detail: `team '${command.teamId}' not found` });
+    }
+    this.settingsStore.setDefaultTeam(command.teamId, location === "project" ? "project" : "global");
     return null;
   }
 

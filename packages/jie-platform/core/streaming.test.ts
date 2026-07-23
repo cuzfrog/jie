@@ -1,96 +1,97 @@
-import { type EventManager, type AgentSender, type Sender, type EventEnvelope, type EventType } from "../event";
-import { makeStreamPublisher } from "./streaming";
+import { type AgentSender, type EventEnvelope, type EventManager } from "../event";
+import { StreamPublisherImpl } from "./streaming";
 
-type ChunkPayload = EventEnvelope<"agent.stream.chunk">["payload"];
-type StreamEndPayload = EventEnvelope<"agent.stream.end">["payload"];
+const events = vi.mocked<EventManager>({
+  publish: vi.fn(),
+  subscribe: vi.fn(),
+});
 
-function makeFakeEventManager(): EventManager {
-  const subscribers = new Map<string, Array<(env: EventEnvelope<EventType>) => void>>();
-  return {
-    publish: (env: EventEnvelope<EventType>) => {
-      for (const callback of subscribers.get(env.topic) ?? []) callback(env);
-    },
-    subscribe: (topic: string, callback: (env: EventEnvelope<EventType>) => void) => {
-      const list = subscribers.get(topic) ?? [];
-      list.push(callback);
-      subscribers.set(topic, list);
-      return () => {
-        subscribers.set(topic, list.filter((cb) => cb !== callback));
-      };
-    },
-    subscriberCount: (subject: string) => subscribers.get(subject)?.length ?? 0,
-  };
+const sender: AgentSender = { kind: "agent", teamId: "t1", agentKey: "general-1" };
+
+function chunkEnvelopes(): Array<EventEnvelope<"agent.stream.chunk">> {
+  return events.publish.mock.calls
+    .map((call) => call[0])
+    .filter((e): e is EventEnvelope<"agent.stream.chunk"> => e.topic === "agent.stream.chunk");
 }
 
-describe("makeStreamPublisher", () => {
-  let events: EventManager;
-  const agentKey = "general-1";
-  const teamId = "t1";
-  const sender: AgentSender = { kind: "agent", teamId, agentKey };
+function endEnvelopes(): Array<EventEnvelope<"agent.stream.end">> {
+  return events.publish.mock.calls
+    .map((call) => call[0])
+    .filter((e): e is EventEnvelope<"agent.stream.end"> => e.topic === "agent.stream.end");
+}
 
+describe("StreamPublisherImpl", () => {
   beforeEach(() => {
-    events = makeFakeEventManager();
+    vi.useFakeTimers();
   });
 
-  function makeStream() {
-    return makeStreamPublisher(events, sender);
-  }
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
-  test("emits agent.stream.chunk when text delta reaches 64 chars", () => {
-    const stream = makeStream();
-    const chunks: ChunkPayload[] = [];
-    events.subscribe("agent.stream.chunk", (env) => {
-      chunks.push(env.payload);
-    });
-    stream.beginStream();
-    stream.append("text", "x".repeat(64));
+  test("emits agent.stream.chunk when the buffer reaches 64 chars", () => {
+    const publisher = new StreamPublisherImpl(events, sender);
+    publisher.beginStream();
+    publisher.append("text", "x".repeat(64));
+    const chunks = chunkEnvelopes();
     expect(chunks).toHaveLength(1);
-    expect(chunks[0]).toMatchObject({
-      stream_id: 1,
-      seq: 0,
-      block_type: "text",
-      text: "x".repeat(64),
-    });
+    expect(chunks[0]!.payload).toEqual({ stream_id: 1, seq: 0, block_type: "text", text: "x".repeat(64) });
   });
 
   test("block_type change flushes the prior block before appending the new one", () => {
-    const stream = makeStream();
-    const chunks: ChunkPayload[] = [];
-    events.subscribe("agent.stream.chunk", (env) => {
-      chunks.push(env.payload);
-    });
-    stream.beginStream();
-    stream.append("text", "hello");
-    stream.append("thinking", "world");
-    expect(chunks.length).toBeGreaterThanOrEqual(1);
-    expect(chunks[0]?.block_type).toBe("text");
+    const publisher = new StreamPublisherImpl(events, sender);
+    publisher.beginStream();
+    publisher.append("text", "hello");
+    publisher.append("thinking", "world");
+    const chunks = chunkEnvelopes();
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]!.payload).toMatchObject({ stream_id: 1, seq: 0, block_type: "text", text: "hello" });
   });
 
-  test("endStream publishes agent.stream.end with stream_id and total_chunks", () => {
-    const stream = makeStream();
-    const ends: StreamEndPayload[] = [];
-    events.subscribe("agent.stream.end", (env) => {
-      ends.push(env.payload);
-    });
-    stream.beginStream();
-    stream.append("text", "x".repeat(64));
-    stream.append("text", "y".repeat(64));
-    const out = stream.endStream();
-    expect(out.totalChunks).toBe(2);
+  test("flushes buffered text after 200ms", () => {
+    const publisher = new StreamPublisherImpl(events, sender);
+    publisher.beginStream();
+    publisher.append("text", "short");
+    expect(chunkEnvelopes()).toHaveLength(0);
+    vi.advanceTimersByTime(200);
+    const chunks = chunkEnvelopes();
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]!.payload).toMatchObject({ stream_id: 1, seq: 0, block_type: "text", text: "short" });
+  });
+
+  test("beginStream resets streamId, seq and totals", () => {
+    const publisher = new StreamPublisherImpl(events, sender);
+    publisher.beginStream();
+    publisher.append("text", "x".repeat(64));
+    publisher.endStream();
+    publisher.beginStream();
+    publisher.append("text", "y".repeat(64));
+    const result = publisher.endStream();
+    expect(result).toEqual({ streamId: 2, totalChunks: 1 });
+    expect(chunkEnvelopes()[1]!.payload).toMatchObject({ stream_id: 2, seq: 0, text: "y".repeat(64) });
+  });
+
+  test("endStream flushes the buffer and publishes agent.stream.end with totals", () => {
+    const publisher = new StreamPublisherImpl(events, sender);
+    publisher.beginStream();
+    publisher.append("text", "x".repeat(64));
+    publisher.append("text", "y".repeat(64));
+    const result = publisher.endStream();
+    expect(result).toEqual({ streamId: 1, totalChunks: 2 });
+    const ends = endEnvelopes();
     expect(ends).toHaveLength(1);
-    expect(ends[0]).toEqual({ stream_id: 1, total_chunks: 2 });
+    expect(ends[0]!.payload).toEqual({ stream_id: 1, total_chunks: 2 });
   });
 
-  test("envelope is stamped with sender from constructor", () => {
-    const stream = makeStream();
-    const received: Array<{ sender: Sender; topic: string }> = [];
-    events.subscribe("agent.stream.end", (env) => {
-      received.push({ sender: env.sender, topic: env.topic });
-    });
-    stream.beginStream();
-    stream.endStream();
-    expect(received).toHaveLength(1);
-    expect(received[0]?.sender).toEqual(sender);
-    expect(received[0]?.topic).toBe("agent.stream.end");
+  test("envelopes are stamped with the sender from the constructor", () => {
+    const publisher = new StreamPublisherImpl(events, sender);
+    publisher.beginStream();
+    publisher.append("text", "x".repeat(64));
+    publisher.endStream();
+    const envelopes = events.publish.mock.calls.map((call) => call[0]);
+    expect(envelopes.length).toBeGreaterThan(0);
+    for (const envelope of envelopes) {
+      expect(envelope.sender).toEqual(sender);
+    }
   });
 });

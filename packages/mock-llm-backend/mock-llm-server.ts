@@ -9,9 +9,14 @@ import {
   renderSseStream,
 } from "./expectations.ts";
 
-const DEFAULT_MOCK_PORT = 12346;
+export const DEFAULT_MOCK_PORT = 12346;
 
-export class MockLlmServer {
+export interface MockLlmServer {
+  readonly port: number;
+  stop(): Promise<void>;
+}
+
+export class MockLlmServerImpl implements MockLlmServer {
   readonly port: number;
   private readonly expectationStore: ExpectationStore;
   private readonly server: Server<undefined>;

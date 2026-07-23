@@ -13,15 +13,17 @@ export interface AssistantMessageComponent extends Component {
 
 export interface ChatMessages {
   createUserMessage(userPrompt: string): UserMessageComponent;
-  createAssistantMessage(turn: MessageTurn | null, stateStore: StateStore): AssistantMessageComponent;
+  createAssistantMessage(turn: MessageTurn | null): AssistantMessageComponent;
 }
 
 export class ChatMessagesImpl implements ChatMessages {
+  constructor(private readonly stateStore: StateStore) {}
+
   createUserMessage(userPrompt: string): UserMessageComponent {
     return new UserMessage(userPrompt);
   }
 
-  createAssistantMessage(turn: MessageTurn | null, stateStore: StateStore): AssistantMessageComponent {
-    return new AssistantMessage(turn, stateStore);
+  createAssistantMessage(turn: MessageTurn | null): AssistantMessageComponent {
+    return new AssistantMessage(turn, this.stateStore);
   }
 }

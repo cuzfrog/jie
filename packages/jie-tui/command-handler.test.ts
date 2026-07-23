@@ -1,59 +1,50 @@
 import { JiePlatformError, type JiePlatform } from "@cuzfrog/jie-platform";
 import { CommandHandlerImpl, SLASH_COMMAND_NAMES, type CommandHandler } from "./command-handler";
-import { createContainer, InjectionMode } from "awilix";
-import { Actions, registerStateModule, type StateStore, type TuiState } from "./state";
-import { type TuiCradle } from "./container";
-
-function makeStateStore(): StateStore {
-  const container = createContainer<TuiCradle>({ injectionMode: InjectionMode.CLASSIC });
-  registerStateModule(container);
-  return container.cradle.stateStore;
-}
+import { Actions, type StateStore, type TuiState } from "./state";
+import { makeAgentUiState, makeTuiState } from "./test";
 
 const ANTHROPIC_KEY = "sk-test-anthropic";
 
-function makePlatform(): { platform: JiePlatform; execute: ReturnType<typeof vi.fn>; prompt: ReturnType<typeof vi.fn> } {
-  const execute = vi.fn(async (cmd: { name: string } & Record<string, unknown>) => {
-    switch (cmd.name) {
-      case "getDefaultModel":
-        return null;
-      case "team":
-        return { kind: "info" as const, defaultTeam: "alpha", installed: ["minimal", "alpha", "beta"] };
-      default:
-        return null;
-    }
-  });
-  const prompt = vi.fn();
-  const platform = {
-    team: { id: "minimal", agents: [] },
-    stop: vi.fn<() => Promise<void>>(() => Promise.resolve()),
-    subscribe: vi.fn(),
-    prompt,
+interface PlatformHandle {
+  readonly platform: JiePlatform;
+  readonly execute: ReturnType<typeof vi.fn>;
+  readonly prompt: ReturnType<typeof vi.fn>;
+}
+
+function makePlatform(): PlatformHandle {
+  const platform = vi.mocked<JiePlatform>({
+    settings: {},
+    subscribe: vi.fn(() => () => undefined),
+    prompt: vi.fn(),
     interrupt: vi.fn(),
-    execute,
-  };
-  return { platform: platform as unknown as JiePlatform, execute, prompt };
+    teams: vi.fn(() => []),
+    execute: vi.fn(async () => null),
+  });
+  return { platform, execute: platform.execute, prompt: platform.prompt };
+}
+
+function stateWithTeam(teamId: string, agentFocused: boolean): TuiState {
+  const agent = makeAgentUiState(`${teamId}:general-1`, { isLeader: true });
+  return makeTuiState({
+    teamId,
+    leaderAgentId: agent.agentId,
+    focusedAgentId: agentFocused ? agent.agentId : null,
+    agents: new Map([[agent.agentId, agent]]),
+  });
 }
 
 interface HandlerHandle {
-  handler: CommandHandler;
-  getState: () => TuiState;
-  dispatch: ReturnType<typeof vi.fn>;
+  readonly handler: CommandHandler;
+  readonly dispatch: ReturnType<typeof vi.fn>;
 }
 
-function makeHandler(platform: JiePlatform): HandlerHandle {
-  const baseStore = makeStateStore();
-  let current: TuiState = baseStore.getState();
-  const dispatch = vi.fn((action: Parameters<StateStore["dispatch"]>[0]) => {
-    baseStore.dispatch(action);
-    current = baseStore.getState();
+function makeHandler(platform: JiePlatform, state: TuiState = makeTuiState()): HandlerHandle {
+  const stateStore = vi.mocked<StateStore>({
+    getState: vi.fn(() => state),
+    dispatch: vi.fn(),
+    subscribe: vi.fn(() => () => undefined),
   });
-  const stateStore: StateStore = {
-    getState: () => current,
-    dispatch: (action) => { dispatch(action); },
-    subscribe: vi.fn(() => (): void => undefined),
-  };
-  return { handler: new CommandHandlerImpl(stateStore, platform), getState: () => current, dispatch };
+  return { handler: new CommandHandlerImpl(stateStore, platform), dispatch: stateStore.dispatch };
 }
 
 describe("CommandHandlerImpl", () => {
@@ -96,30 +87,9 @@ describe("CommandHandlerImpl", () => {
 });
 
 describe("CommandHandlerImpl — prompt routing", () => {
-  function makeHandlerWithTeam(platform: JiePlatform): HandlerHandle {
-    const handle = makeHandler(platform);
-    handle.dispatch(Actions.switchTeam({
-      id: "alpha",
-      leaderKey: "general-1",
-      history: [],
-      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, model: null }],
-    }));
-    return handle;
-  }
-
-  function makeHandlerWithState(platform: JiePlatform, state: TuiState): HandlerHandle {
-    const dispatch = vi.fn();
-    const stateStore: StateStore = {
-      getState: () => state,
-      dispatch: (action) => { dispatch(action); },
-      subscribe: vi.fn(() => (): void => undefined),
-    };
-    return { handler: new CommandHandlerImpl(stateStore, platform), getState: () => state, dispatch };
-  }
-
   test("plain prompt routes to the focused agent", () => {
     const { platform, prompt } = makePlatform();
-    const { handler } = makeHandlerWithTeam(platform);
+    const { handler } = makeHandler(platform, stateWithTeam("alpha", true));
     handler.handle("hello world");
     expect(prompt).toHaveBeenCalledWith("alpha", "general-1", "hello world");
   });
@@ -134,9 +104,7 @@ describe("CommandHandlerImpl — prompt routing", () => {
 
   test("plain prompt falls back to the leader when no agent is focused", () => {
     const { platform, prompt } = makePlatform();
-    const seeded = makeHandlerWithTeam(platform);
-    const unfocused: TuiState = { ...seeded.getState(), focusedAgentId: null };
-    const { handler } = makeHandlerWithState(platform, unfocused);
+    const { handler } = makeHandler(platform, stateWithTeam("alpha", false));
     handler.handle("hello");
     expect(prompt).toHaveBeenCalledWith("alpha", "general-1", "hello");
   });
@@ -201,7 +169,7 @@ describe("CommandHandlerImpl — /model", () => {
     const { platform, execute } = makePlatform();
     const { handler, dispatch } = makeHandler(platform);
     handler.handle("/model openai/gpt-4o");
-    expect(execute).toHaveBeenCalledWith({ name: "setDefaultModel", provider: "openai", id: "gpt-4o", effort: "off", contextWindow: null });
+    expect(execute).toHaveBeenCalledWith({ name: "setDefaultModel", provider: "openai", id: "gpt-4o" });
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("default model set to openai/gpt-4o")));
   });
 
@@ -314,20 +282,9 @@ describe("CommandHandlerImpl — /team", () => {
 });
 
 describe("CommandHandlerImpl — /resume", () => {
-  function makeHandlerWithTeamId(platform: JiePlatform, teamId: string): HandlerHandle {
-    const handle = makeHandler(platform);
-    handle.dispatch(Actions.switchTeam({
-      id: teamId,
-      leaderKey: "general-1",
-      history: [],
-      agents: [{ teamId, role: "general", agentKey: "general-1", isLeader: true, model: null }],
-    }));
-    return handle;
-  }
-
   test("/resume (no args) sets a usage error and does not call execute", () => {
     const { platform, execute } = makePlatform();
-    const { handler, dispatch } = makeHandlerWithTeamId(platform, "minimal");
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
     handler.handle("/resume");
     expect(execute).not.toHaveBeenCalled();
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/resume <sessionId>")));
@@ -350,7 +307,7 @@ describe("CommandHandlerImpl — /resume", () => {
       agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, model: null }],
     };
     execute.mockImplementationOnce(async () => identity);
-    const { handler, dispatch } = makeHandlerWithTeamId(platform, "minimal");
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
     handler.handle("/resume s1");
     expect(execute).toHaveBeenCalledWith({ name: "resumeSession", teamId: "minimal", sessionId: "s1" });
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("resuming session 's1'")));
@@ -365,7 +322,7 @@ describe("CommandHandlerImpl — /resume", () => {
       agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, model: null }],
     };
     execute.mockImplementationOnce(async () => identity);
-    const { handler, dispatch } = makeHandlerWithTeamId(platform, "minimal");
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
     handler.handle("/resume s1");
     await new Promise((r) => setImmediate(r));
     expect(dispatch).toHaveBeenCalledWith(Actions.switchTeam(identity));
@@ -376,7 +333,7 @@ describe("CommandHandlerImpl — /resume", () => {
     execute.mockImplementation(async () => {
       throw new Error("sqlite locked");
     });
-    const { handler, dispatch } = makeHandlerWithTeamId(platform, "minimal");
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
     handler.handle("/resume s1");
     await new Promise((r) => setImmediate(r));
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/resume failed")));

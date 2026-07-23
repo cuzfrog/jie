@@ -2,10 +2,6 @@ import { Events } from "@cuzfrog/jie-platform";
 import { Actions, TuiState, type StateStore } from ".";
 import { StateStoreImpl } from "./state-store";
 
-declare const test: (name: string, fn: () => void | Promise<void>) => void;
-declare const describe: (name: string, fn: () => void) => void;
-declare const expect: typeof import("bun:test").expect;
-
 function loadDemoTeam(stateStore: StateStore): void {
   stateStore.dispatch(
     Actions.receiveEvent(

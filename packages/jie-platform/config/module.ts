@@ -1,4 +1,4 @@
-import { asClass, asValue, type AwilixContainer } from "awilix";
+import { asClass, type AwilixContainer } from "awilix";
 import type { PlatformCradle } from "../container";
 import { AuthStoreImpl } from "./auth-store";
 import { PiModelRegistry } from "./model-registry";
@@ -8,7 +8,6 @@ export function registerConfigModule(container: AwilixContainer<PlatformCradle>)
   container.register({
     authStore: asClass(AuthStoreImpl).singleton(),
     modelRegistry: asClass(PiModelRegistry).singleton(),
-    teamLocator: asValue((teamId: string) => container.cradle.teamManager.locate(teamId)),
     settingsStore: asClass(SettingsStoreImpl).singleton(),
   });
 }

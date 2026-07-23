@@ -12,7 +12,6 @@ import { TeamManagerImpl } from "./team-manager";
 const eventManager = vi.mocked<EventManager>({
   publish: vi.fn(),
   subscribe: vi.fn(),
-  subscriberCount: vi.fn(),
 });
 
 const settingsStore = vi.mocked<SettingsStore>({

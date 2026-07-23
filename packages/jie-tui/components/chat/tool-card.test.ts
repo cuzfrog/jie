@@ -1,34 +1,32 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { createContainer, InjectionMode } from "awilix";
-import { Actions, registerStateModule, type MessageCard, type StateStore } from "../../state";
-import { type TuiCradle } from "../../";
+import { type MessageCard, type StateStore } from "../../state";
+import { makeTuiState } from "../../test";
 import { ToolCard } from "./tool-card";
 
-function makeStateStore(): StateStore {
-  const container = createContainer<TuiCradle>({ injectionMode: InjectionMode.CLASSIC });
-  registerStateModule(container);
-  return container.cradle.stateStore;
-}
+const stateStore = vi.mocked<StateStore>({ getState: vi.fn(), dispatch: vi.fn(), subscribe: vi.fn(() => () => undefined) });
 
 function card(partial: Partial<MessageCard> = {}): MessageCard {
   return { kind: "toolResult", callId: "c1", name: "bash", ...partial };
 }
 
 describe("ToolCard", () => {
+  beforeEach(() => {
+    stateStore.getState.mockReturnValue(makeTuiState());
+  });
+
   test("collapsed by default: a single header line", () => {
-    const view = new ToolCard(card({ output: "ok", durationMs: 12 }), makeStateStore());
+    const view = new ToolCard(card({ output: "ok", durationMs: 12 }), stateStore);
     expect(view.render(80)).toEqual(["\x1b[37m✓ bash  12ms\x1b[39m"]);
   });
 
   test("error cards use the error glyph and color", () => {
-    const view = new ToolCard(card({ error: "boom" }), makeStateStore());
+    const view = new ToolCard(card({ error: "boom" }), stateStore);
     expect(view.render(80)).toEqual(["\x1b[31m✗ bash\x1b[39m"]);
   });
 
   test("expanded: input, output and error sections appear", () => {
-    const store = makeStateStore();
-    store.dispatch(Actions.toggleToolCards());
-    const view = new ToolCard(card({ input: "ls", output: "ok", error: "boom" }), store);
+    stateStore.getState.mockReturnValue(makeTuiState({ toolCardsExpanded: true }));
+    const view = new ToolCard(card({ input: "ls", output: "ok", error: "boom" }), stateStore);
     const lines = view.render(80);
     expect(lines[0]).toBe("\x1b[31m✗ bash\x1b[39m");
     expect(lines[1]).toBe("\x1b[90minput:\x1b[39m");
@@ -39,9 +37,8 @@ describe("ToolCard", () => {
   });
 
   test("expanded: a diff detail renders a colored diff section", () => {
-    const store = makeStateStore();
-    store.dispatch(Actions.toggleToolCards());
-    const view = new ToolCard(card({ details: { kind: "diff", diff: "-a\n+b" } }), store);
+    stateStore.getState.mockReturnValue(makeTuiState({ toolCardsExpanded: true }));
+    const view = new ToolCard(card({ details: { kind: "diff", diff: "-a\n+b" } }), stateStore);
     const lines = view.render(80);
     expect(lines[1]).toBe("\x1b[90mdiff:\x1b[39m");
     expect(lines[2]).toBe("\x1b[31m-a\x1b[39m");
@@ -49,31 +46,28 @@ describe("ToolCard", () => {
   });
 
   test("non-diff details render no diff section", () => {
-    const store = makeStateStore();
-    store.dispatch(Actions.toggleToolCards());
-    const view = new ToolCard(card({ output: "ok", details: { kind: "other" } }), store);
+    stateStore.getState.mockReturnValue(makeTuiState({ toolCardsExpanded: true }));
+    const view = new ToolCard(card({ output: "ok", details: { kind: "other" } }), stateStore);
     expect(view.render(80).some((line) => line.includes("diff:"))).toBe(false);
   });
 
   test("truncated input and output get an ellipsis", () => {
-    const store = makeStateStore();
-    store.dispatch(Actions.toggleToolCards());
-    const view = new ToolCard(card({ input: "in", inputTruncated: true, output: "out", outputTruncated: true }), store);
+    stateStore.getState.mockReturnValue(makeTuiState({ toolCardsExpanded: true }));
+    const view = new ToolCard(card({ input: "in", inputTruncated: true, output: "out", outputTruncated: true }), stateStore);
     const lines = view.render(80);
     expect(lines[2]).toBe("\x1b[90min…\x1b[39m");
     expect(lines[4]).toBe("\x1b[90mout…\x1b[39m");
   });
 
   test("never renders a line wider than the given width (doRender guard)", () => {
-    const store = makeStateStore();
-    store.dispatch(Actions.toggleToolCards());
+    stateStore.getState.mockReturnValue(makeTuiState({ toolCardsExpanded: true }));
     const view = new ToolCard(card({
       name: "x".repeat(300),
       input: "x".repeat(300),
       output: "中文🎉".repeat(40),
       error: "x".repeat(300),
       details: { kind: "diff", diff: `+${"x".repeat(300)}\n-${"中文🎉".repeat(40)}` },
-    }), store);
+    }), stateStore);
     for (const width of [13, 40, 61, 80, 139]) {
       for (const line of view.render(width)) {
         expect(visibleWidth(line)).toBeLessThanOrEqual(width);

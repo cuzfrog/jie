@@ -13,13 +13,3 @@ export type AuthEntry =
   | ({ type: "oauth" } & OAuthCredentials);
 
 export type AuthJson = Record<string, AuthEntry>;
-
-export interface McpServerConfig {
-  readonly transport: "stdio" | "http";
-  readonly command?: string;
-  readonly args?: ReadonlyArray<string>;
-  readonly url?: string;
-  readonly auth?: {
-    readonly tokenEnv?: string;
-  };
-}

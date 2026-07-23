@@ -13,7 +13,6 @@ import { registerTeamModule } from "./module";
 const eventManager = vi.mocked<EventManager>({
   publish: vi.fn(),
   subscribe: vi.fn(),
-  subscriberCount: vi.fn(),
 });
 
 const settingsStore = vi.mocked<SettingsStore>({

@@ -1,67 +1,47 @@
-import { Events } from "@cuzfrog/jie-platform";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { createContainer, InjectionMode } from "awilix";
-import { Actions, registerStateModule, type StateStore } from "../../state";
-import { type TuiCradle } from "../../";
+import { type AgentId, type StateStore, type TuiState } from "../../state";
+import { makeAgentUiState, makeTuiState } from "../../test";
 import { Footer } from "./footer";
 
-function makeStateStore(): StateStore {
-  const container = createContainer<TuiCradle>({ injectionMode: InjectionMode.CLASSIC });
-  registerStateModule(container);
-  return container.cradle.stateStore;
-}
+const LEADER_ID: AgentId = "my-team:general-1";
 
-function seededStore(dirty: boolean): StateStore {
-  const store = makeStateStore();
-  store.dispatch(Actions.setEnvironment("/repo", "dev", dirty));
-  store.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
-    id: "my-team",
-    leaderKey: "general-1",
-    history: [],
-    agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, model: null }],
-  })));
-  return store;
-}
-
-function seededStoreWithModel(): StateStore {
-  const store = seededStore(false);
-  store.dispatch(Actions.receiveEvent(Events.agentModelAssigned(
-    { kind: "agent", teamId: "my-team", agentKey: "general-1" },
-    "anthropic",
-    "claude-opus-4",
-    "high",
-  )));
-  return store;
-}
+const stateStore = vi.mocked<StateStore>({ getState: vi.fn(), dispatch: vi.fn(), subscribe: vi.fn(() => () => undefined) });
 
 describe("Footer", () => {
+  beforeEach(() => {
+    stateStore.getState.mockReturnValue(makeTuiState());
+  });
+
   test("renders two lines: identity with cwd/branch left and team:agent right", () => {
-    const lines = new Footer(seededStore(false)).render(80);
+    stateStore.getState.mockReturnValue(seededState(false));
+    const lines = new Footer(stateStore).render(80);
     expect(lines.length).toBe(2);
     expect(lines[0]).toContain("/repo (dev)");
     expect(lines[0]).toContain("my-team:general-1");
   });
 
   test("marks a dirty worktree with a star after the branch", () => {
-    const lines = new Footer(seededStore(true)).render(80);
+    stateStore.getState.mockReturnValue(seededState(true));
+    const lines = new Footer(stateStore).render(80);
     expect(lines[0]).toContain("(dev*)");
   });
 
   test("falls back to main when no branch is known and to no-team without a team", () => {
-    const store = makeStateStore();
-    store.dispatch(Actions.setEnvironment("/repo", "", false));
-    const lines = new Footer(store).render(80);
+    stateStore.getState.mockReturnValue(makeTuiState({ cwd: "/repo", gitBranch: "" }));
+    const lines = new Footer(stateStore).render(80);
     expect(lines[0]).toContain("/repo (main)");
     expect(lines[0]).toContain("no-team:—");
   });
 
   test("line two reports placeholders when no model is assigned", () => {
-    const lines = new Footer(seededStore(false)).render(80);
+    stateStore.getState.mockReturnValue(seededState(false));
+    const lines = new Footer(stateStore).render(80);
     expect(lines[1]).toContain("—");
   });
 
   test("line two keeps context on the left and right-aligns the model segment at the right edge", () => {
-    const lines = new Footer(seededStoreWithModel()).render(80);
+    stateStore.getState.mockReturnValue(seededStateWithModel());
+    const lines = new Footer(stateStore).render(80);
     const plain = stripAnsi(lines[1]);
     expect(visibleWidth(lines[1])).toBe(80);
     expect(plain.endsWith("(anthropic) claude-opus-4 | high")).toBe(true);
@@ -70,29 +50,16 @@ describe("Footer", () => {
   });
 
   test("every line fits the given width", () => {
-    const lines = new Footer(seededStore(true)).render(60);
+    stateStore.getState.mockReturnValue(seededState(true));
+    const lines = new Footer(stateStore).render(60);
     for (const line of lines) {
       expect(visibleWidth(line)).toBeLessThanOrEqual(60);
     }
   });
 
   test("never renders a line wider than the given width with over-long identity (doRender guard)", () => {
-    const longTeam = "x".repeat(300);
-    const store = makeStateStore();
-    store.dispatch(Actions.setEnvironment(`/${longTeam}`, "中文🎉".repeat(40), true));
-    store.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
-      id: longTeam,
-      leaderKey: "general-1",
-      history: [],
-      agents: [{ teamId: longTeam, role: "general", agentKey: "general-1", isLeader: true, model: null }],
-    })));
-    store.dispatch(Actions.receiveEvent(Events.agentModelAssigned(
-      { kind: "agent", teamId: longTeam, agentKey: "general-1" },
-      "provider",
-      "y".repeat(300),
-      "high",
-    )));
-    const footer = new Footer(store);
+    stateStore.getState.mockReturnValue(seededStateWithLongIdentity());
+    const footer = new Footer(stateStore);
     for (const width of [13, 40, 61, 80, 139]) {
       for (const line of footer.render(width)) {
         expect(visibleWidth(line)).toBeLessThanOrEqual(width);
@@ -100,6 +67,46 @@ describe("Footer", () => {
     }
   });
 });
+
+function seededState(dirty: boolean): TuiState {
+  return makeTuiState({
+    cwd: "/repo",
+    gitBranch: "dev",
+    gitDirty: dirty,
+    teamId: "my-team",
+    leaderAgentId: LEADER_ID,
+    focusedAgentId: LEADER_ID,
+    agents: new Map([[LEADER_ID, makeAgentUiState(LEADER_ID, { isLeader: true })]]),
+  });
+}
+
+function seededStateWithModel(): TuiState {
+  const model = { provider: "anthropic", id: "claude-opus-4", effort: "high", contextWindow: null } as const;
+  return makeTuiState({
+    cwd: "/repo",
+    gitBranch: "dev",
+    gitDirty: false,
+    teamId: "my-team",
+    leaderAgentId: LEADER_ID,
+    focusedAgentId: LEADER_ID,
+    agents: new Map([[LEADER_ID, makeAgentUiState(LEADER_ID, { isLeader: true, model })]]),
+  });
+}
+
+function seededStateWithLongIdentity(): TuiState {
+  const longText = "x".repeat(300);
+  const model = { provider: "provider", id: "y".repeat(300), effort: "high", contextWindow: null } as const;
+  const agents = new Map([[LEADER_ID, makeAgentUiState(LEADER_ID, { isLeader: true, model })]]);
+  return makeTuiState({
+    cwd: `/${longText}`,
+    gitBranch: "中文🎉".repeat(40),
+    gitDirty: true,
+    teamId: longText,
+    leaderAgentId: LEADER_ID,
+    focusedAgentId: LEADER_ID,
+    agents,
+  });
+}
 
 function stripAnsi(text: string): string {
   return text.replace(/\x1b\[[0-9;]*m/g, "");

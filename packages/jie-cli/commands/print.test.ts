@@ -28,10 +28,15 @@ function makeHandle(): { handle: JiePlatform; subscribes: Map<string, Handler> }
   return { handle, subscribes };
 }
 
-function makeConsoleMock(): Console {
+function makeConsoleMock(): Console & {
+  print: ReturnType<typeof vi.fn>;
+  error: ReturnType<typeof vi.fn>;
+  write: ReturnType<typeof vi.fn>;
+} {
   return {
     print: vi.fn(),
     error: vi.fn(),
+    write: vi.fn(),
   };
 }
 
@@ -163,9 +168,9 @@ describe("runPrint", () => {
     const team = makeTeam(teamId, [leaderKey], leaderKey);
 
     const writes: string[] = [];
-    const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
-      writes.push(typeof chunk === "string" ? chunk : chunk.toString());
-      return true;
+    const consoleMock = makeConsoleMock();
+    consoleMock.write.mockImplementation((text: string) => {
+      writes.push(text);
     });
 
     setImmediate(() => {
@@ -191,13 +196,12 @@ describe("runPrint", () => {
       });
     });
 
-    const code = await runPrint(handle, team, { ...baseArgs, timeout: 5 }, makeConsoleMock());
+    const code = await runPrint(handle, team, { ...baseArgs, timeout: 5 }, consoleMock);
     expect(code).toBe(0);
     const concatenated = writes.join("");
     expect(concatenated).toContain("leader-1");
     expect(concatenated).not.toContain("worker-1");
     expect(concatenated).not.toContain("other-team");
     expect(concatenated).not.toContain("user-text");
-    stdoutSpy.mockRestore();
   });
 });

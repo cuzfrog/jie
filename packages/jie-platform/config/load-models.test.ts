@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadModelsConfig, resolveValue } from "./load-models";
+import { loadModelsConfig, _resolveValue } from "./load-models";
 
 describe("loadModelsConfig", () => {
   let cwd: string;
@@ -280,13 +280,13 @@ describe("loadModelsConfig", () => {
 
 describe("resolveValue", () => {
   test("literal passes through", () => {
-    expect(resolveValue("sk-1234", "test")).toBe("sk-1234");
+    expect(_resolveValue("sk-1234", "test")).toBe("sk-1234");
   });
 
   test("$VAR interpolation", () => {
     process.env.MY_VAR = "value";
     try {
-      expect(resolveValue("$MY_VAR", "test")).toBe("value");
+      expect(_resolveValue("$MY_VAR", "test")).toBe("value");
     } finally {
       delete process.env.MY_VAR;
     }
@@ -295,7 +295,7 @@ describe("resolveValue", () => {
   test("${VAR} interpolation with literal text around it", () => {
     process.env.MY_VAR = "value";
     try {
-      expect(resolveValue("prefix-${MY_VAR}-suffix", "test")).toBe("prefix-value-suffix");
+      expect(_resolveValue("prefix-${MY_VAR}-suffix", "test")).toBe("prefix-value-suffix");
     } finally {
       delete process.env.MY_VAR;
     }
@@ -303,13 +303,13 @@ describe("resolveValue", () => {
 
   test("missing env var resolves to empty string", () => {
     delete process.env.NOT_SET_XYZ;
-    expect(resolveValue("$NOT_SET_XYZ", "test")).toBe("");
+    expect(_resolveValue("$NOT_SET_XYZ", "test")).toBe("");
   });
 
   test("lowercase env var name is treated as literal (not interpolated)", () => {
     process.env.lowercase = "should-not-be-used";
     try {
-      expect(resolveValue("$lowercase", "test")).toBe("$lowercase");
+      expect(_resolveValue("$lowercase", "test")).toBe("$lowercase");
     } finally {
       delete process.env.lowercase;
     }

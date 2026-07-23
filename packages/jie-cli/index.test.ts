@@ -1,14 +1,3 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import type {
   Command,
   CommandName,
@@ -16,132 +5,24 @@ import type {
   Console,
   EventEnvelope,
   EventType,
-  GitSnapshot,
   JiePlatform,
   JiePlatformOptions,
-  PlatformCradle,
   TeamInfo,
 } from "@cuzfrog/jie-platform";
-import type { CreateTUIOptions, Tui, TuiCradle, TuiDeps } from "@cuzfrog/jie-tui";
-import { _run, main } from ".";
-
-interface Capture {
-  exit: number;
-  stdout: string;
-  stderr: string;
-}
-
-interface RunOptions {
-  pre?: (homeDir: string) => void;
-}
-
-interface RunResult {
-  capture: Capture;
-  readHomeFile: (relative: string) => string | null;
-  cleanup: () => void;
-}
+import type { CreateTUIOptions, Tui, TuiDeps } from "@cuzfrog/jie-tui";
+import { _run } from ".";
 
 function makeConsoleMock(): Console & {
   print: ReturnType<typeof vi.fn>;
   error: ReturnType<typeof vi.fn>;
+  write: ReturnType<typeof vi.fn>;
 } {
   return {
     print: vi.fn(),
     error: vi.fn(),
+    write: vi.fn(),
   };
 }
-
-async function runInIsolatedHome(argv: string[], options: RunOptions = {}): Promise<RunResult> {
-  const homeDir = mkdtempSync(join(tmpdir(), "jie-cli-main-"));
-  mkdirSync(join(homeDir, ".jie"), { recursive: true });
-  options.pre?.(homeDir);
-  const prevCwd = process.cwd();
-  const prevHome = process.env.HOME;
-  const consoleMock = makeConsoleMock();
-  const stdoutLines: string[] = [];
-  const stderrLines: string[] = [];
-  consoleMock.print.mockImplementation((...args: ReadonlyArray<string>) => {
-    stdoutLines.push(args.join(" "));
-  });
-  consoleMock.error.mockImplementation((...args: ReadonlyArray<string>) => {
-    stderrLines.push(args.join(" "));
-  });
-  process.chdir(homeDir);
-  process.env.HOME = homeDir;
-  const readHomeFile = (relative: string): string | null => {
-    const path = join(homeDir, relative);
-    if (!existsSync(path)) return null;
-    return readFileSync(path, "utf-8");
-  };
-  const cleanup = (): void => {
-    process.chdir(prevCwd);
-    if (prevHome === undefined) delete process.env.HOME;
-    else process.env.HOME = prevHome;
-    rmSync(homeDir, { recursive: true, force: true });
-  };
-  let exit = 0;
-  try {
-    exit = await Promise.race([
-      main(argv, homeDir, consoleMock),
-      new Promise<number>((resolve) => setTimeout(() => resolve(-1), 2000)),
-    ]);
-    if (exit === -1) stderrLines.push("[timeout] main did not return within 2s");
-  } catch (error) {
-    exit = 1;
-    stderrLines.push(error instanceof Error ? error.message : String(error));
-  }
-  const capture: Capture = { exit, stdout: stdoutLines.join("\n"), stderr: stderrLines.join("\n") };
-  return { capture, readHomeFile, cleanup };
-}
-
-describe("jie --version", () => {
-  test("--version -> exit 0, stdout starts with 'jie '", async () => {
-    const r = await runInIsolatedHome(["--version"]);
-    try {
-      expect(r.capture.exit).toBe(0);
-      expect(r.capture.stdout).toMatch(/^jie /);
-    } finally {
-      r.cleanup();
-    }
-  });
-});
-
-describe("jie --help", () => {
-  test("--help -> exit 0, stdout lists -p, --print, login, model, team", async () => {
-    const r = await runInIsolatedHome(["--help"]);
-    try {
-      expect(r.capture.exit).toBe(0);
-      expect(r.capture.stdout).toContain("-p");
-      expect(r.capture.stdout).toContain("--print");
-      expect(r.capture.stdout).toContain("login");
-      expect(r.capture.stdout).toContain("model");
-      expect(r.capture.stdout).toContain("team");
-    } finally {
-      r.cleanup();
-    }
-  });
-});
-
-describe("jie --api-key (top-level, integration)", () => {
-  test("with defaultProvider -> writes auth.json and exits 0", async () => {
-    const r = await runInIsolatedHome(["--api-key", "sk-new"], {
-      pre: (homeDir) => {
-        writeFileSync(
-          join(homeDir, ".jie", "settings.json"),
-          JSON.stringify({ defaultProvider: "anthropic", defaultModel: "claude-sonnet-4" }),
-        );
-      },
-    });
-    try {
-      expect(r.capture.exit).toBe(0);
-      const authText = r.readHomeFile(".jie/auth.json");
-      if (authText === null) throw new Error("auth.json was not written");
-      expect(JSON.parse(authText)).toEqual({ anthropic: { type: "api_key", key: "sk-new" } });
-    } finally {
-      r.cleanup();
-    }
-  });
-});
 
 interface FakePlatform extends JiePlatform {
   execute: ReturnType<typeof vi.fn>;
@@ -180,6 +61,8 @@ function dispatch(command: Command<CommandName>): CommandResult<CommandName> | n
   switch (command.name) {
     case "setApiKey":
       throw new Error("setApiKey boom");
+    case "getGitStatus":
+      return { branch: "test-branch", dirty: true, ahead: 0, behind: 0 };
     case "getDefaultModel":
       return { provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null };
     case "team": {
@@ -218,28 +101,12 @@ function captureRun(platform: FakePlatform): CapturedRun {
   const startCalls = { value: 0 };
   const stopCalls = { value: 0 };
   const consoleMock = makeConsoleMock();
-  const snapshot: GitSnapshot = { branch: "test-branch", dirty: true, ahead: 0, behind: 0 };
-  const bootPlatform = vi.fn((_options: JiePlatformOptions): AwilixContainer<PlatformCradle> => makePlatformContainer(platform, snapshot));
-  const bootTui = vi.fn((options: CreateTUIOptions, deps: TuiDeps): AwilixContainer<TuiCradle> => {
+  const bootPlatform = vi.fn((_options: JiePlatformOptions): JiePlatform => platform);
+  const bootTui = vi.fn((options: CreateTUIOptions, deps: TuiDeps): Tui => {
     tuiCalls.push({ options, deps });
     deps.platform.subscribe("system.team.loaded", () => undefined);
     deps.platform.subscribe("system.error", () => undefined);
-    const tui: Tui = {
-      state: {
-        cwd: null,
-        gitBranch: null,
-        gitDirty: false,
-        teamId: null,
-        leaderAgentId: null,
-        focusedAgentId: null,
-        agents: new Map(),
-        thinkingExpanded: false,
-        toolCardsExpanded: false,
-        pendingQuit: false,
-        transientMessage: null,
-        errorBanner: null,
-        editorText: "",
-      },
+    return {
       start: () => {
         startCalls.value += 1;
         return Promise.resolve();
@@ -248,22 +115,10 @@ function captureRun(platform: FakePlatform): CapturedRun {
         stopCalls.value += 1;
       },
     };
-    const container = createContainer<TuiCradle>({ injectionMode: InjectionMode.CLASSIC });
-    container.register({ tui: asValue(tui) });
-    return container;
   });
   const run = (parsed: Parameters<typeof _run>[0]): Promise<number> =>
     _run(parsed, process.cwd(), process.env.HOME ?? "/tmp", { bootPlatform, bootTui, console: consoleMock });
   return { fakePlatform: platform, bootPlatform, tuiCalls, startCalls, stopCalls, consoleMock, run };
-}
-
-function makePlatformContainer(platform: JiePlatform, snapshot: GitSnapshot): AwilixContainer<PlatformCradle> {
-  const container = createContainer<PlatformCradle>({ injectionMode: InjectionMode.CLASSIC });
-  container.register({
-    platform: asValue(platform),
-    gitService: asValue({ getSnapshot: () => snapshot }),
-  });
-  return container;
 }
 
 describe("_run — tui", () => {
@@ -353,41 +208,37 @@ describe("_run — tui", () => {
 
 describe("_run — error/help/version bypass boot", () => {
   test("error kind -> prints message, exit 1, no platform boot", async () => {
-    let platformBoots = 0;
-    const platform = makeFakePlatform();
+    const bootPlatform = vi.fn();
     const consoleMock = makeConsoleMock();
-    const run = (parsed: Parameters<typeof _run>[0]): Promise<number> =>
-      _run(parsed, process.cwd(), "/tmp", {
-        bootPlatform: () => {
-          platformBoots += 1;
-          return makePlatformContainer(platform, { branch: "", dirty: false, ahead: 0, behind: 0 });
-        },
-        bootTui: vi.fn(),
-        console: consoleMock,
-      });
-    const exit = await run({ kind: "error", message: "bad flag" });
+    const exit = await _run(
+      { kind: "error", message: "bad flag" }, process.cwd(), "/tmp", { bootPlatform, bootTui: vi.fn(), console: consoleMock },
+    );
     expect(exit).toBe(1);
-    expect(platformBoots).toBe(0);
+    expect(bootPlatform).not.toHaveBeenCalled();
     expect(consoleMock.error).toHaveBeenCalledWith("bad flag");
   });
 
   test("version kind -> prints version, exit 0, no platform boot", async () => {
-    let platformBoots = 0;
-    const platform = makeFakePlatform();
+    const bootPlatform = vi.fn();
     const consoleMock = makeConsoleMock();
-    const run = (parsed: Parameters<typeof _run>[0]): Promise<number> =>
-      _run(parsed, process.cwd(), "/tmp", {
-        bootPlatform: () => {
-          platformBoots += 1;
-          return makePlatformContainer(platform, { branch: "", dirty: false, ahead: 0, behind: 0 });
-        },
-        bootTui: vi.fn(),
-        console: consoleMock,
-      });
-    const exit = await run({ kind: "version" });
+    const exit = await _run({ kind: "version" }, process.cwd(), "/tmp", { bootPlatform, bootTui: vi.fn(), console: consoleMock });
     expect(exit).toBe(0);
-    expect(platformBoots).toBe(0);
+    expect(bootPlatform).not.toHaveBeenCalled();
     expect(consoleMock.print.mock.calls[0]?.[0]).toMatch(/^jie /);
+  });
+
+  test("help kind -> prints usage listing the main commands, exit 0, no platform boot", async () => {
+    const bootPlatform = vi.fn();
+    const consoleMock = makeConsoleMock();
+    const exit = await _run({ kind: "help" }, process.cwd(), "/tmp", { bootPlatform, bootTui: vi.fn(), console: consoleMock });
+    expect(exit).toBe(0);
+    expect(bootPlatform).not.toHaveBeenCalled();
+    const text = consoleMock.print.mock.calls[0]?.[0] ?? "";
+    expect(text).toContain("-p");
+    expect(text).toContain("--print");
+    expect(text).toContain("login");
+    expect(text).toContain("model");
+    expect(text).toContain("team");
   });
 });
 
@@ -478,7 +329,7 @@ describe("_run — dispatch to command handlers", () => {
     const captured = captureRun(platform);
     const exit = await captured.run({ kind: "model", provider: "anthropic", modelId: "claude-sonnet-4-5" });
     expect(exit).toBe(0);
-    expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null });
+    expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5" });
     expect(captured.consoleMock.print).toHaveBeenCalledWith("default model set to anthropic/claude-sonnet-4-5");
   });
 

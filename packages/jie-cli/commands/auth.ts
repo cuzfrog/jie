@@ -1,10 +1,10 @@
-import { defaultConsole, type Console, type JiePlatform } from "@cuzfrog/jie-platform";
+import { type Console, type JiePlatform } from "@cuzfrog/jie-platform";
 import type { ParsedArgsMap } from "../cli-flags";
 
 export async function runLogin(
   parsed: ParsedArgsMap["login"],
   platform: JiePlatform,
-  console: Console = defaultConsole,
+  console: Console,
 ): Promise<number> {
   if (parsed.provider === undefined || parsed.apiKey === undefined) {
     console.error("interactive login not implemented in v1; use --provider and --api-key");
@@ -18,7 +18,7 @@ export async function runLogin(
 export async function runLogout(
   parsed: ParsedArgsMap["logout"],
   platform: JiePlatform,
-  console: Console = defaultConsole,
+  console: Console,
 ): Promise<number> {
   await platform.execute({ name: "logout", provider: parsed.provider });
   console.print(parsed.provider === undefined ? "logged out of all providers" : `logged out of ${parsed.provider}`);
@@ -28,7 +28,7 @@ export async function runLogout(
 export async function runApiKey(
   parsed: ParsedArgsMap["apiKey"],
   platform: JiePlatform,
-  console: Console = defaultConsole,
+  console: Console,
 ): Promise<number> {
   const current = await platform.execute<"getDefaultModel">({ name: "getDefaultModel" });
   if (current === null) {

@@ -21,13 +21,13 @@ describe("StateStore", () => {
       return Promise.resolve();
     });
     const before = store.getState();
-    const agentBefore = before.agents.get("my-team:general-1" as never);
+    const agentBefore = before.agents.get("my-team:general-1");
     expect(agentBefore?.currentTurn).toBeNull();
 
     store.dispatch(Actions.submitEditorText("hello"));
 
     const after = store.getState();
-    const agentAfter = after.agents.get("my-team:general-1" as never);
+    const agentAfter = after.agents.get("my-team:general-1");
     expect(agentAfter?.currentTurn).not.toBeNull();
     expect(agentAfter?.currentTurn?.userPrompt).toBe("hello");
   });

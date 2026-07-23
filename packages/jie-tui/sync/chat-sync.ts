@@ -12,7 +12,6 @@ interface TurnPair {
 }
 
 export class ChatSyncImpl implements ChatSync {
-  private readonly stateStore: StateStore;
   private readonly chatMessages: ChatMessages;
   private readonly chatContainer: Container;
   private readonly requestRender: () => void;
@@ -21,7 +20,6 @@ export class ChatSyncImpl implements ChatSync {
   private readonly unsubscribe: () => void;
 
   constructor(stateStore: StateStore, chatMessages: ChatMessages, chatContainer: Container, requestRender: () => void) {
-    this.stateStore = stateStore;
     this.chatMessages = chatMessages;
     this.chatContainer = chatContainer;
     this.requestRender = requestRender;
@@ -56,7 +54,7 @@ export class ChatSyncImpl implements ChatSync {
       } else {
         const pair: TurnPair = {
           user: this.chatMessages.createUserMessage(turn.userPrompt),
-          assistant: this.chatMessages.createAssistantMessage(turn, this.stateStore),
+          assistant: this.chatMessages.createAssistantMessage(turn),
         };
         this.pairs.push(pair);
         this.chatContainer.addChild(pair.user);

@@ -2,15 +2,8 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { type AwilixContainer } from "awilix";
-import {
-  bootPlatform,
-  defaultConsole,
-  type Console,
-  type JiePlatformOptions,
-  type PlatformCradle,
-} from "@cuzfrog/jie-platform";
-import { bootTui, type CreateTUIOptions, type TuiCradle, type TuiDeps } from "@cuzfrog/jie-tui";
+import { bootPlatform, defaultConsole, type Console, type JiePlatform, type JiePlatformOptions } from "@cuzfrog/jie-platform";
+import { bootTui, type CreateTUIOptions, type Tui, type TuiDeps } from "@cuzfrog/jie-tui";
 import { parseFlags, type ParsedArgs } from "./cli-flags";
 import {
   runApiKey,
@@ -26,7 +19,11 @@ export async function main(argv: string[], cwd: string = process.cwd(), console:
   const parsed = parseFlags(argv);
   const homeDir = resolveHomeDir();
   try {
-    return await run(parsed, cwd, homeDir, { bootPlatform, bootTui, console });
+    return await run(parsed, cwd, homeDir, {
+      bootPlatform: (options) => bootPlatform(options).cradle.platform,
+      bootTui: (options, deps) => bootTui(options, deps).cradle.tui,
+      console,
+    });
   } catch (err) {
     console.error(err instanceof Error ? err.message : String(err));
     return 1;
@@ -34,8 +31,8 @@ export async function main(argv: string[], cwd: string = process.cwd(), console:
 }
 
 interface RunDeps {
-  readonly bootPlatform: (options: JiePlatformOptions) => AwilixContainer<PlatformCradle>;
-  readonly bootTui: (options: CreateTUIOptions, deps: TuiDeps) => AwilixContainer<TuiCradle>;
+  readonly bootPlatform: (options: JiePlatformOptions) => JiePlatform;
+  readonly bootTui: (options: CreateTUIOptions, deps: TuiDeps) => Tui;
   readonly console: Console;
 }
 
@@ -53,7 +50,7 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
       deps.console.error(args.message);
       return 1;
   }
-  const platformContainer = connectPlatform(
+  const handle = connectPlatform(
     {
       cwd,
       homeJieDir,
@@ -64,11 +61,10 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
     deps.bootPlatform,
     deps.console,
   );
-  const handle = platformContainer.cradle.platform;
   switch (args.kind) {
     case "tui": {
-      const git = platformContainer.cradle.gitService.getSnapshot();
-      const tui = deps.bootTui({ cwd }, { platform: handle, gitBranch: git.branch, gitDirty: git.dirty }).cradle.tui;
+      const git = await handle.execute({ name: "getGitStatus" });
+      const tui = deps.bootTui({ cwd }, { platform: handle, gitBranch: git.branch, gitDirty: git.dirty });
       await handle.execute({ name: "team", teamId: args.team });
       try {
         await tui.start();
@@ -106,19 +102,19 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
 
 function connectPlatform(
   options: JiePlatformOptions,
-  bootPlatform: (options: JiePlatformOptions) => AwilixContainer<PlatformCradle>,
+  bootPlatform: (options: JiePlatformOptions) => JiePlatform,
   console: Console,
-): AwilixContainer<PlatformCradle> {
-  let container: AwilixContainer<PlatformCradle>;
+): JiePlatform {
+  let platform: JiePlatform;
   try {
-    container = bootPlatform(options);
+    platform = bootPlatform(options);
   } catch (error) {
     throw new CliBootError(error instanceof Error ? error.message : String(error));
   }
-  container.cradle.platform.subscribe("system.error", (envelope) => {
+  platform.subscribe("system.error", (envelope) => {
     console.error(`jie: ${envelope.payload.error}`);
   });
-  return container;
+  return platform;
 }
 
 class CliBootError extends Error {}

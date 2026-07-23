@@ -8,7 +8,7 @@ import type { JiePlatform, JiePlatformOptions } from "./jie-platform";
 import { registerPlatformModule } from "./module";
 import { registerServicesModule, type GitService } from "./services";
 import { registerStorageModule, type ArtifactStore, type MemoryManager, type Storage } from "./storage";
-import { registerTeamModule, type TeamBlueprintLocation, type TeamManager } from "./team";
+import { registerTeamModule, type TeamManager } from "./team";
 import { registerToolsModule, type ToolRegistry } from "./tools";
 
 export interface PlatformCradle {
@@ -29,7 +29,6 @@ export interface PlatformCradle {
   readonly gitService: GitService;
   readonly toolRegistry: ToolRegistry;
   readonly agentBodyFactory: (params: AgentBodyParams) => AgentBody;
-  readonly teamLocator: (teamId: string) => TeamBlueprintLocation;
   readonly teamManager: TeamManager;
   readonly commandExecutor: CommandExecutor;
   readonly platform: JiePlatform;

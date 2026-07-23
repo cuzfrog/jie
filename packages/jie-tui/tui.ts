@@ -1,6 +1,6 @@
 import { ProcessTerminal, TUI, detectCapabilities, setCapabilities, type Terminal } from "@earendil-works/pi-tui";
 import { logger, type AnyEventEnvelope, type JiePlatform } from "@cuzfrog/jie-platform";
-import { Actions, type StateStore, type TuiState } from "./state";
+import { Actions, type StateStore } from "./state";
 import type { CommandHandler } from "./command-handler";
 import type { TuiView } from "./components";
 
@@ -26,8 +26,6 @@ export interface CreateTUIOptions {
 }
 
 export interface Tui {
-  /** visibleForTesting */
-  readonly state: TuiState;
   start(): Promise<void>;
   stop(): void;
 }
@@ -82,10 +80,6 @@ export class TuiImpl implements Tui {
         return;
       }
     });
-  }
-
-  get state(): TuiState {
-    return this.stateStore.getState();
   }
 
   start(): Promise<void> {

@@ -1,5 +1,5 @@
 import { assertLlmReachable, seedTeam } from "../_fixture.ts";
-import { loadMockExpectations } from "../../../packages/mock-llm-backend/index.ts";
+import { loadMockExpectations } from "../../../packages/mock-llm-backend";
 import { startTui, stopTui, waitForTeam, sendLine, submitAndWaitForAgentIdle, type TuiHarness } from "./harness";
 import expectations from "./scenario-7.llm.ts";
 
@@ -24,9 +24,9 @@ describe("Scenario 7 — ! bash mode", () => {
 
   test("!ls -la routes through the bash tool and the output lands as a tool card", async () => {
     await sendLine(harness.stdin, "/team my-team");
-    await waitForTeam(harness.tui, "my-team");
+    await waitForTeam(harness, "my-team");
     await submitAndWaitForAgentIdle(harness, "!ls -la", "my-team:general-1");
-    const state = harness.tui.state;
+    const state = harness.stateStore.getState();
     const agent = state.agents.get("my-team:general-1");
     expect(agent).toBeDefined();
     const turns = [...(agent?.history ?? []), ...(agent?.currentTurn !== null && agent?.currentTurn !== undefined ? [agent.currentTurn] : [])];
@@ -36,11 +36,11 @@ describe("Scenario 7 — ! bash mode", () => {
 
   test("bare ! surfaces a no-command error and does not call the LLM", async () => {
     await sendLine(harness.stdin, "/team my-team");
-    await waitForTeam(harness.tui, "my-team");
-    const priorHistoryLen = harness.tui.state.agents.get("my-team:general-1")?.history.length ?? 0;
+    await waitForTeam(harness, "my-team");
+    const priorHistoryLen = harness.stateStore.getState().agents.get("my-team:general-1")?.history.length ?? 0;
     await sendLine(harness.stdin, "!");
     await new Promise((r) => setTimeout(r, 200));
-    const state = harness.tui.state;
+    const state = harness.stateStore.getState();
     expect(state.errorBanner).toMatch(/bash mode requires a command/);
     const historyLenAfter = state.agents.get("my-team:general-1")?.history.length ?? 0;
     expect(historyLenAfter).toBe(priorHistoryLen);

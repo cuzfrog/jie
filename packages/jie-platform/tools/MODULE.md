@@ -1,8 +1,9 @@
 ---
 no-new-exports:
-  - artifact.test.ts
   - bash.test.ts
   - bash.ts
+  - edit.test.ts
+  - edit.ts
   - index.ts
   - notify.test.ts
   - notify.ts
@@ -11,6 +12,8 @@ no-new-exports:
   - read-artifact.ts
   - read-file.test.ts
   - read-file.ts
+  - todo-write.test.ts
+  - todo-write.ts
   - tool-registry.test.ts
   - tool-registry.ts
   - types.ts

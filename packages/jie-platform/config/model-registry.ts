@@ -76,7 +76,8 @@ function applyProviderConfig(model: Model<Api>, cfg: ResolvedProviderConfig | un
     merged.headers = { ...(model.headers ?? {}), ...cfg.headers };
   }
   if (Object.keys(cfg.compat).length > 0) {
-    merged.compat = { ...((model.compat ?? {}) as Record<string, unknown>), ...cfg.compat } as never;
+    const mergedCompat = { ...(model.compat ?? {}), ...cfg.compat } as Model<Api>["compat"];
+    merged.compat = mergedCompat;
   }
   return merged;
 }

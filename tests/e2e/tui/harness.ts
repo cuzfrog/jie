@@ -3,8 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
-import { type AwilixContainer } from "awilix";
-import { bootPlatform, type JiePlatform, type PlatformCradle } from "@cuzfrog/jie-platform";
+import { bootPlatform, type JiePlatform } from "@cuzfrog/jie-platform";
 import { bootTui, type CreateTUIOptions, type Tui, type TuiCradle } from "@cuzfrog/jie-tui";
 import { writeModelsJsonTo, writeSettingsJson } from "../_fixture.ts";
 
@@ -15,9 +14,8 @@ const POLL_INTERVAL_MS = 10;
 
 export interface TuiHarness {
   readonly dir: string;
-  readonly platformContainer: AwilixContainer<PlatformCradle>;
-  readonly tuiContainer: AwilixContainer<TuiCradle>;
   readonly tui: Tui;
+  readonly stateStore: TuiCradle["stateStore"];
   readonly platform: JiePlatform;
   readonly stdin: PassThrough;
   readonly stdout: PassThrough;
@@ -62,7 +60,7 @@ export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> 
   process.env.LANG = LANG_DEFAULT;
   const prevLangAll = process.env.LC_ALL;
   process.env.LC_ALL = LANG_DEFAULT;
-  let platformContainer: AwilixContainer<PlatformCradle>;
+  let platformContainer: ReturnType<typeof bootPlatform>;
   try {
     platformContainer = bootPlatform({ cwd: dir, homeJieDir: dir, projectJieDir: dir, resumeSessionId: opts.resumeSessionId });
   } catch (err) {
@@ -86,8 +84,9 @@ export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> 
     gitDirty: false,
   });
   const tui = tuiContainer.cradle.tui;
+  const stateStore = tuiContainer.cradle.stateStore;
   void tui.start();
-  return { dir, platformContainer, tuiContainer, tui, platform, stdin, stdout, ownedDir: opts.cwd === undefined };
+  return { dir, tui, stateStore, platform, stdin, stdout, ownedDir: opts.cwd === undefined };
 }
 
 export async function stopTui(harness: TuiHarness): Promise<void> {
@@ -135,17 +134,17 @@ async function waitFor(predicate: () => boolean, timeoutMs: number, label: strin
   throw new Error(`waitFor timed out after ${timeoutMs}ms waiting for: ${label}`);
 }
 
-export async function waitForTeam(tui: Tui, teamId: string, timeoutMs = 60000): Promise<void> {
+export async function waitForTeam(harness: TuiHarness, teamId: string, timeoutMs = 60000): Promise<void> {
   await waitFor(
-    () => tui.state.teamId === teamId,
+    () => harness.stateStore.getState().teamId === teamId,
     timeoutMs,
     `team ${teamId}`,
   );
 }
 
-export async function waitForAgentIdle(tui: Tui, agentId: AgentId, timeoutMs = 60000): Promise<void> {
+export async function waitForAgentIdle(harness: TuiHarness, agentId: AgentId, timeoutMs = 60000): Promise<void> {
   await waitFor(
-    () => tui.state.agents.get(agentId)?.status === "idle",
+    () => harness.stateStore.getState().agents.get(agentId)?.status === "idle",
     timeoutMs,
     `agent ${agentId} idle`,
   );
@@ -176,13 +175,13 @@ export async function submitAndWaitForAgentIdle(
   agentId: AgentId,
   timeoutMs = 60000,
 ): Promise<void> {
-  const before = harness.tui.state.agents.get(agentId);
+  const before = harness.stateStore.getState().agents.get(agentId);
   const priorHistoryLen = before?.history.length ?? 0;
   const priorCurrentBlocks = before?.currentTurn?.blocks.length ?? 0;
   const priorCurrentCards = before?.currentTurn?.cards.length ?? 0;
   await sendLine(harness.stdin, prompt);
   await waitForPromptSettled(
-    harness.tui,
+    harness,
     agentId,
     priorHistoryLen,
     priorCurrentBlocks,
@@ -192,7 +191,7 @@ export async function submitAndWaitForAgentIdle(
 }
 
 async function waitForPromptSettled(
-  tui: Tui,
+  harness: TuiHarness,
   agentId: AgentId,
   priorHistoryLen: number,
   priorCurrentBlocks: number,
@@ -201,7 +200,7 @@ async function waitForPromptSettled(
 ): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    const agent = tui.state.agents.get(agentId);
+    const agent = harness.stateStore.getState().agents.get(agentId);
     if (agent === undefined) {
       await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
       continue;
@@ -219,16 +218,16 @@ async function waitForPromptSettled(
     }
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
   }
-  const agent = tui.state.agents.get(agentId);
+  const agent = harness.stateStore.getState().agents.get(agentId);
   throw new Error(
     `submitAndWaitForAgentIdle timed out after ${timeoutMs}ms for agent ${agentId} (status=${agent?.status}, history=${agent?.history.length}, curBlocks=${agent?.currentTurn?.blocks.length}, curCards=${agent?.currentTurn?.cards.length})`,
   );
 }
 
-export async function waitForTurnText(tui: Tui, agentId: AgentId, contains: string, timeoutMs = 60000): Promise<void> {
+export async function waitForTurnText(harness: TuiHarness, agentId: AgentId, contains: string, timeoutMs = 60000): Promise<void> {
   await waitFor(
     () => {
-      const agent = tui.state.agents.get(agentId);
+      const agent = harness.stateStore.getState().agents.get(agentId);
       if (agent === undefined) return false;
       const current = agent.currentTurn;
       if (current === null) return false;
@@ -239,10 +238,10 @@ export async function waitForTurnText(tui: Tui, agentId: AgentId, contains: stri
   );
 }
 
-export async function waitForConversationText(tui: Tui, agentId: AgentId, contains: string, timeoutMs = 60000): Promise<void> {
+export async function waitForConversationText(harness: TuiHarness, agentId: AgentId, contains: string, timeoutMs = 60000): Promise<void> {
   await waitFor(
     () => {
-      const agent = tui.state.agents.get(agentId);
+      const agent = harness.stateStore.getState().agents.get(agentId);
       if (agent === undefined) return false;
       const turns = agent.currentTurn === null ? agent.history : [...agent.history, agent.currentTurn];
       return turns.some((t) => t.blocks.some((b) => b.text.includes(contains)));
@@ -252,26 +251,29 @@ export async function waitForConversationText(tui: Tui, agentId: AgentId, contai
   );
 }
 
-export async function waitForErrorBanner(tui: Tui, contains: string, timeoutMs = 60000): Promise<void> {
+export async function waitForErrorBanner(harness: TuiHarness, contains: string, timeoutMs = 60000): Promise<void> {
   await waitFor(
-    () => tui.state.errorBanner !== null && tui.state.errorBanner.includes(contains),
+    () => {
+      const errorBanner = harness.stateStore.getState().errorBanner;
+      return errorBanner !== null && errorBanner.includes(contains);
+    },
     timeoutMs,
     `errorBanner contains '${contains}'`,
   );
 }
 
-export async function waitForNoErrorBanner(tui: Tui, timeoutMs = 60000): Promise<void> {
-  await waitFor(() => tui.state.errorBanner === null, timeoutMs, "errorBanner cleared");
+export async function waitForNoErrorBanner(harness: TuiHarness, timeoutMs = 60000): Promise<void> {
+  await waitFor(() => harness.stateStore.getState().errorBanner === null, timeoutMs, "errorBanner cleared");
 }
 
-export async function waitForEditorText(tui: Tui, expected: string, timeoutMs = 60000): Promise<void> {
-  await waitFor(() => tui.state.editorText === expected, timeoutMs, `editorText === '${expected}'`);
+export async function waitForEditorText(harness: TuiHarness, expected: string, timeoutMs = 60000): Promise<void> {
+  await waitFor(() => harness.stateStore.getState().editorText === expected, timeoutMs, `editorText === '${expected}'`);
 }
 
-export async function waitForTransient(tui: Tui, contains: string, timeoutMs = 60000): Promise<void> {
+export async function waitForTransient(harness: TuiHarness, contains: string, timeoutMs = 60000): Promise<void> {
   await waitFor(
     () => {
-      const transient = tui.state.transientMessage ?? "";
+      const transient = harness.stateStore.getState().transientMessage ?? "";
       return transient.includes(contains);
     },
     timeoutMs,

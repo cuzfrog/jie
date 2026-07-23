@@ -32,22 +32,6 @@ describe("InProcessEventBus", () => {
     expect(secondRan).toBe(true);
   });
 
-  test("subscriberCount reflects registers minus unsubscribes", () => {
-    const bus = new InProcessEventBus();
-    expect(bus.subscriberCount("s")).toBe(0);
-    const off1 = bus.subscribe("s", () => {});
-    const off2 = bus.subscribe("s", () => {});
-    expect(bus.subscriberCount("s")).toBe(2);
-    off1();
-    expect(bus.subscriberCount("s")).toBe(1);
-    off2();
-    expect(bus.subscriberCount("s")).toBe(0);
-    const off3 = bus.subscribe("s", () => {});
-    expect(bus.subscriberCount("s")).toBe(1);
-    off3();
-    expect(bus.subscriberCount("s")).toBe(0);
-  });
-
   test("unsubscribe prevents the callback from firing on later publish", () => {
     const bus = new InProcessEventBus();
     let ran = false;
@@ -57,16 +41,6 @@ describe("InProcessEventBus", () => {
     off();
     bus.publish("s", { x: 1 });
     expect(ran).toBe(false);
-    expect(bus.subscriberCount("s")).toBe(0);
-  });
-
-  test("a throwing callback does not change subscriberCount", () => {
-    const bus = new InProcessEventBus();
-    bus.subscribe("s", () => {
-      throw new Error("boom");
-    });
-    bus.publish("s", { x: 1 });
-    expect(bus.subscriberCount("s")).toBe(1);
   });
 
   test("subscribers on different subjects are isolated", () => {

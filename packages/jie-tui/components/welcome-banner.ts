@@ -1,5 +1,5 @@
 import { truncateToWidth, type Component } from "@earendil-works/pi-tui";
-import type { AgentUiState, StateStore, TuiState } from "../state";
+import { TuiState, type AgentUiState, type StateStore } from "../state";
 import { style } from "./themes";
 
 export class WelcomeBanner implements Component {
@@ -10,7 +10,7 @@ export class WelcomeBanner implements Component {
   }
 
   render(width: number): string[] {
-    if (hasConversation(this.stateStore.getState())) return [];
+    if (TuiState.hasConversation(this.stateStore.getState())) return [];
     const w = Math.max(1, width);
     const lines: string[] = [`${style("accent")(WORDMARK)}${style("muted")(`  ${TAGLINE}`)}`];
     const team = teamLine(this.stateStore.getState());
@@ -36,11 +36,4 @@ function describeAgent(agent: AgentUiState): string {
   const leader = agent.isLeader ? " (leader)" : "";
   const model = agent.model === null ? "" : ` · ${agent.model.provider}/${agent.model.id}`;
   return `${agent.agentKey}${leader}${model}`;
-}
-
-function hasConversation(state: TuiState): boolean {
-  for (const agent of state.agents.values()) {
-    if (agent.history.length > 0 || agent.currentTurn !== null) return true;
-  }
-  return false;
 }

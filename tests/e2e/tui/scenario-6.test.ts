@@ -1,4 +1,4 @@
-import { loadMockExpectations } from "../../../packages/mock-llm-backend/index.ts";
+import { loadMockExpectations } from "../../../packages/mock-llm-backend";
 import { assertLlmReachable, seedTeam } from "../_fixture.ts";
 import {
   startTui,
@@ -33,8 +33,8 @@ describe("Scenario 6 — queued prompts from agent", () => {
 
   test("manager emits 5 notify tool cards and worker drains 5 queued turns", async () => {
     await sendLine(harness.stdin, "/team my-team");
-    await waitForTeam(harness.tui, "my-team");
-    const state0 = harness.tui.state;
+    await waitForTeam(harness, "my-team");
+    const state0 = harness.stateStore.getState();
     expect(state0.agents.size).toBe(2);
     expect(state0.leaderAgentId).toBe("my-team:manager-1");
     expect(state0.agents.get("my-team:worker-1")?.role).toBe("worker");
@@ -42,7 +42,7 @@ describe("Scenario 6 — queued prompts from agent", () => {
     const waitForWorker = waitForAgentIdleCount(harness, "my-team:worker-1", 5, 3000);
     await submitAndWaitForAgentIdle(harness, "send 5 math tasks to the worker 1 per message", "my-team:manager-1");
 
-    const state = harness.tui.state;
+    const state = harness.stateStore.getState();
     const manager = state.agents.get("my-team:manager-1");
     expect(manager).toBeDefined();
     const allManagerTurns = [
@@ -58,7 +58,7 @@ describe("Scenario 6 — queued prompts from agent", () => {
 
     // agent.idle does not rotate currentTurn into history (tui-state.md); the
     // completed fifth turn stays currentTurn until the next turn arrives.
-    const stateAfter = harness.tui.state;
+    const stateAfter = harness.stateStore.getState();
     const worker = stateAfter.agents.get("my-team:worker-1");
     expect(worker).toBeDefined();
     expect(worker!.status).toBe("idle");

@@ -11,8 +11,6 @@ export interface EventBus {
 
   /** returns an unsubscribe function */
   subscribe(subject: string, callback: EventCallback): () => void;
-
-  subscriberCount(subject: string): number;
 }
 
 export class InProcessEventBus implements EventBus {
@@ -40,10 +38,6 @@ export class InProcessEventBus implements EventBus {
     return () => {
       this.subscribers.get(subject)?.delete(callback);
     };
-  }
-
-  subscriberCount(subject: string): number {
-    return this.subscribers.get(subject)?.size ?? 0;
   }
 
   private reportError(subject: string, error: unknown): void {

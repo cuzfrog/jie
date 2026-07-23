@@ -6,8 +6,8 @@ no-new-exports:
   - init-db.ts
   - memory-store.test.ts
   - memory-store.ts
+  - sqlite-storage.test.ts
   - sqlite-storage.ts
-  - storage.test.ts
   - storage.ts
 ---
 

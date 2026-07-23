@@ -7,7 +7,6 @@ import { registerToolsModule } from "./module";
 const eventManager = vi.mocked<EventManager>({
   publish: vi.fn(),
   subscribe: vi.fn(),
-  subscriberCount: vi.fn(),
 });
 
 const artifactStore = vi.mocked<ArtifactStore>({

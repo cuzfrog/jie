@@ -1,14 +1,12 @@
-
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AuthJson } from "./types";
+import type { AuthEntry, AuthJson } from "./types";
 
 export interface AuthStore {
   load(): AuthJson;
-  saveAuthConfig(auth: AuthJson): void;
-  setProvider(auth: AuthJson, provider: string, key: string): AuthJson;
-  removeProvider(auth: AuthJson, provider: string): AuthJson;
-  clear(): AuthJson;
+  setProvider(provider: string, key: string): void;
+  removeProvider(provider: string): void;
+  clear(): void;
 }
 
 export class AuthStoreImpl implements AuthStore {
@@ -22,25 +20,19 @@ export class AuthStoreImpl implements AuthStore {
     }
   }
 
-  saveAuthConfig(auth: AuthJson): void {
-    mkdirSync(this.homeJieDir, { recursive: true, mode: 0o755 });
-    const path = join(this.homeJieDir, "auth.json");
-    writeFileSync(path, `${JSON.stringify(auth, null, 2)}\n`, "utf-8");
-    chmodSync(path, 0o600);
+  setProvider(provider: string, key: string): void {
+    const entry: AuthEntry = { type: "api_key", key };
+    saveAuthJson(this.homeJieDir, { ...this.load(), [provider]: entry });
   }
 
-  setProvider(auth: AuthJson, provider: string, key: string): AuthJson {
-    return { ...auth, [provider]: { type: "api_key", key } };
-  }
-
-  removeProvider(auth: AuthJson, provider: string): AuthJson {
-    const next: AuthJson = { ...auth };
+  removeProvider(provider: string): void {
+    const next: AuthJson = { ...this.load() };
     delete next[provider];
-    return next;
+    saveAuthJson(this.homeJieDir, next);
   }
 
-  clear(): AuthJson {
-    return {};
+  clear(): void {
+    saveAuthJson(this.homeJieDir, {});
   }
 }
 
@@ -53,5 +45,13 @@ function loadAuthJson(homeJieDir: string): AuthJson {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
     throw error;
   }
-  return JSON.parse(text) as AuthJson;
+  const parsed: AuthJson = JSON.parse(text);
+  return parsed;
+}
+
+function saveAuthJson(homeJieDir: string, auth: AuthJson): void {
+  mkdirSync(homeJieDir, { recursive: true, mode: 0o755 });
+  const path = join(homeJieDir, "auth.json");
+  writeFileSync(path, `${JSON.stringify(auth, null, 2)}\n`, "utf-8");
+  chmodSync(path, 0o600);
 }

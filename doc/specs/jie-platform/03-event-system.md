@@ -51,7 +51,6 @@ Identity travels in the envelope, not in the subject. `topic` equals `type` for 
 interface EventManager {
   publish<T extends EventType>(event: EventEnvelope<T>): void;              // routes on event.topic
   subscribe<T extends EventType>(topic: T, cb: (e: EventEnvelope<T>) => void): () => void;
-  subscriberCount(subject: string): number;                                  // used by notify
 }
 ```
 
@@ -105,4 +104,4 @@ The alternation contract is what makes the busy/idle rows reliable. Queue-pickup
 
 ## In-Process Implementation
 
-`InProcessEventBus` is a `Map<string, Set<callback>>`: publish invokes callbacks synchronously in subscription order; unsubscribe removes the callback; `subscriberCount` returns the set size. Error containment is per callback: a throwing subscriber is caught and logged via the platform logger (subject + error), dispatch continues to the remaining subscribers, and the publisher never sees the exception.
+`InProcessEventBus` is a `Map<string, Set<callback>>`: publish invokes callbacks synchronously in subscription order; unsubscribe removes the callback. Error containment is per callback: a throwing subscriber is caught and logged via the platform logger (subject + error), dispatch continues to the remaining subscribers, and the publisher never sees the exception.

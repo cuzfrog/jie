@@ -5,6 +5,7 @@ function makeConsoleMock(): Console {
   return {
     print: vi.fn(),
     error: vi.fn(),
+    write: vi.fn(),
   };
 }
 
