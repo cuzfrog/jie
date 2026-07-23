@@ -1,6 +1,14 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { Actions, createStateStore, type MessageCard, type MessageTurn, type StateStore } from "../../state";
+import { createContainer, InjectionMode } from "awilix";
+import { Actions, registerStateModule, type MessageCard, type MessageTurn, type StateStore } from "../../state";
+import { type TuiCradle } from "../../";
 import { AssistantMessage } from "./assistant-message";
+
+function makeStateStore(): StateStore {
+  const container = createContainer<TuiCradle>({ injectionMode: InjectionMode.CLASSIC });
+  registerStateModule(container);
+  return container.cradle.stateStore;
+}
 
 function turn(partial: Partial<MessageTurn> = {}): MessageTurn {
   return { userPrompt: "q", cards: [], blocks: [], streamId: null, ...partial };
@@ -11,7 +19,7 @@ function card(partial: Partial<MessageCard> = {}): MessageCard {
 }
 
 function boot(partial: Partial<MessageTurn> = {}): { store: StateStore; message: AssistantMessage } {
-  const store = createStateStore();
+  const store = makeStateStore();
   return { store, message: new AssistantMessage(turn(partial), store) };
 }
 

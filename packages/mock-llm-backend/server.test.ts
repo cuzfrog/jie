@@ -1,5 +1,6 @@
-import { startMockServer } from "./server.ts";
+import { ExpectationStoreImpl } from "./expectation-store.ts";
 import { type Expectation, type RecordedCall } from "./expectations.ts";
+import { MockLlmServer } from "./mock-llm-server.ts";
 
 interface SseRecord {
   data: string;
@@ -40,8 +41,8 @@ interface Harness {
   stop(): Promise<void>;
 }
 
-async function startHarness(): Promise<Harness> {
-  const server = await startMockServer(0);
+function startHarness(): Harness {
+  const server = new MockLlmServer(new ExpectationStoreImpl(), 0);
   const baseUrl = `http://localhost:${server.port}`;
   return {
     baseUrl,
@@ -65,8 +66,8 @@ async function startHarness(): Promise<Harness> {
 describe("mock-llm-backend server", () => {
   let h: Harness;
 
-  beforeEach(async () => {
-    h = await startHarness();
+  beforeEach(() => {
+    h = startHarness();
   });
 
   afterEach(async () => {

@@ -1,11 +1,19 @@
 import { Events } from "@cuzfrog/jie-platform";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { Actions, createStateStore, type StateStore } from "../../state";
+import { createContainer, InjectionMode } from "awilix";
+import { Actions, registerStateModule, type StateStore } from "../../state";
+import { type TuiCradle } from "../../";
 import type { TodoItem } from "../../todo";
 import { TodoList } from "./todo-list";
 
+function makeStateStore(): StateStore {
+  const container = createContainer<TuiCradle>({ injectionMode: InjectionMode.CLASSIC });
+  registerStateModule(container);
+  return container.cradle.stateStore;
+}
+
 function storeWithTodos(todos: ReadonlyArray<TodoItem>): StateStore {
-  const store = createStateStore();
+  const store = makeStateStore();
   store.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
     id: "my-team",
     leaderKey: "general-1",
@@ -26,7 +34,7 @@ function storeWithTodos(todos: ReadonlyArray<TodoItem>): StateStore {
 
 describe("TodoList", () => {
   test("renders nothing without a focused agent", () => {
-    expect(new TodoList(createStateStore()).render(80)).toEqual([]);
+    expect(new TodoList(makeStateStore()).render(80)).toEqual([]);
   });
 
   test("renders nothing when the focused agent has no todos", () => {

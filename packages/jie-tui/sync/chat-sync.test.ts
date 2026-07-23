@@ -1,7 +1,10 @@
 import { Container } from "@earendil-works/pi-tui";
 import { Events } from "@cuzfrog/jie-platform";
-import { Actions, createStateStore, type StateStore } from "../state";
-import { createChatSync } from "./chat-sync";
+import { createContainer, InjectionMode } from "awilix";
+import { Actions, registerStateModule, type StateStore } from "../state";
+import { registerChatModule } from "../components/chat";
+import { type TuiCradle } from "../";
+import { registerSyncModule } from "./module";
 
 const SYSTEM_SENDER = { kind: "system" } as const;
 const AGENT_SENDER = { kind: "agent", teamId: "my-team", agentKey: "general-1" } as const;
@@ -34,14 +37,18 @@ interface SyncHarness {
 }
 
 function bootSync(): SyncHarness {
-  const store = createStateStore();
-  const container = new Container();
+  const container = createContainer<TuiCradle>({ injectionMode: InjectionMode.CLASSIC });
+  registerStateModule(container);
+  registerChatModule(container);
+  registerSyncModule(container);
+  const store = container.cradle.stateStore;
+  const chatContainer = new Container();
   const counter = { value: 0 };
-  createChatSync(store, container, () => { counter.value += 1; });
-  return { store, container, get renders(): number { return counter.value; } };
+  container.cradle.chatSyncFactory(chatContainer, () => { counter.value += 1; });
+  return { store, container: chatContainer, get renders(): number { return counter.value; } };
 }
 
-describe("createChatSync", () => {
+describe("ChatSyncImpl", () => {
   test("starts empty and requests a render on every action", () => {
     const { store, container } = bootSync();
     singleAgentTeam(store);

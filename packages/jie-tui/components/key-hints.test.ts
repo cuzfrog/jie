@@ -1,12 +1,20 @@
 import { Events } from "@cuzfrog/jie-platform";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { Actions, createStateStore, type StateStore } from "../state";
+import { createContainer, InjectionMode } from "awilix";
+import { Actions, registerStateModule, type StateStore } from "../state";
+import { type TuiCradle } from "../";
 import { KeyHints } from "./key-hints";
+
+function makeStateStore(): StateStore {
+  const container = createContainer<TuiCradle>({ injectionMode: InjectionMode.CLASSIC });
+  registerStateModule(container);
+  return container.cradle.stateStore;
+}
 
 const AGENT_SENDER = { kind: "agent", teamId: "my-team", agentKey: "general-1" } as const;
 
 function emptyStore(): StateStore {
-  const store = createStateStore();
+  const store = makeStateStore();
   store.dispatch(Actions.setEnvironment("/repo", "dev", false));
   return store;
 }

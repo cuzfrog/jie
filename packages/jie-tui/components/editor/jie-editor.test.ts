@@ -1,7 +1,10 @@
-import { TUI, type Terminal } from "@earendil-works/pi-tui";
+import { TUI, type Editor, type Terminal } from "@earendil-works/pi-tui";
 import { Events, type EventEnvelope, type EventType, type JiePlatform } from "@cuzfrog/jie-platform";
-import { Actions, createStateStore, type StateStore } from "../../state";
-import { createJieEditor } from "./jie-editor";
+import { asValue, createContainer, InjectionMode } from "awilix";
+import { Actions, registerStateModule, type StateStore } from "../../state";
+import { registerAutocompleteModule } from "../../autocomplete";
+import { type TuiCradle } from "../../";
+import { registerEditorModule } from "./module";
 
 class StubTerminal implements Terminal {
   columns = 80;
@@ -23,21 +26,28 @@ class StubTerminal implements Terminal {
 
 interface EditorHarness {
   readonly store: StateStore;
-  readonly editor: ReturnType<typeof createJieEditor>;
+  readonly editor: Editor;
   readonly submitted: string[];
 }
 
 function bootEditor(): EditorHarness {
-  const store = createStateStore();
+  const container = createContainer<TuiCradle>({ injectionMode: InjectionMode.CLASSIC });
+  container.register({
+    cwd: asValue("/nonexistent-jie-test"),
+    platform: asValue(nullPlatform()),
+  });
+  registerStateModule(container);
+  registerAutocompleteModule(container);
+  registerEditorModule(container);
   const submitted: string[] = [];
   const ui = new TUI(new StubTerminal());
-  const editor = createJieEditor(ui, store, "/nonexistent-jie-test", nullPlatform());
+  const editor = container.cradle.jieEditorFactory(ui);
   const submit = editor.onSubmit;
   editor.onSubmit = (text: string): void => {
     submitted.push(text);
     submit?.(text);
   };
-  return { store, editor, submitted };
+  return { store: container.cradle.stateStore, editor, submitted };
 }
 
 function nullPlatform(): JiePlatform {
@@ -61,7 +71,7 @@ function seedBusyTeam(store: StateStore): void {
   store.dispatch(Actions.receiveEvent(Events.agentTurnStart({ kind: "agent", teamId: "my-team", agentKey: "general-1" })));
 }
 
-describe("createJieEditor — onChange wiring", () => {
+describe("JieEditor — onChange wiring", () => {
   test("typing keeps the editorText store slice in sync", () => {
     const { store, editor } = bootEditor();
     editor.handleInput("h");
@@ -86,7 +96,7 @@ describe("createJieEditor — onChange wiring", () => {
   });
 });
 
-describe("createJieEditor — onSubmit wiring", () => {
+describe("JieEditor — onSubmit wiring", () => {
   test("enter submits the text and the editor self-clears", () => {
     const { store, editor, submitted } = bootEditor();
     editor.handleInput("h");
@@ -98,7 +108,7 @@ describe("createJieEditor — onSubmit wiring", () => {
   });
 });
 
-describe("createJieEditor — control keys", () => {
+describe("JieEditor — control keys", () => {
   test("esc interrupts the focused busy agent", () => {
     const { store, editor } = bootEditor();
     seedBusyTeam(store);
@@ -156,7 +166,7 @@ describe("createJieEditor — control keys", () => {
   });
 });
 
-describe("createJieEditor — bash mode border", () => {
+describe("JieEditor — bash mode border", () => {
   test("a leading ! flips the border to the warning color", () => {
     const { editor } = bootEditor();
     editor.handleInput("!");
@@ -171,7 +181,7 @@ describe("createJieEditor — bash mode border", () => {
   });
 });
 
-describe("createJieEditor — prompt history", () => {
+describe("JieEditor — prompt history", () => {
   test("up and down arrows walk submitted prompts and keep the store in sync", () => {
     const { store, editor } = bootEditor();
     editor.handleInput("a");

@@ -1,5 +1,6 @@
 import { MockClient, MockClientError, loadMockExpectations } from "./client.ts";
-import { startMockServer } from "./server.ts";
+import { ExpectationStoreImpl } from "./expectation-store.ts";
+import { MockLlmServer } from "./mock-llm-server.ts";
 
 describe("MockClient", () => {
   let stopped: Array<() => Promise<void>> = [];
@@ -12,7 +13,7 @@ describe("MockClient", () => {
   });
 
   async function freshClient(): Promise<MockClient> {
-    const server = await startMockServer(0);
+    const server = new MockLlmServer(new ExpectationStoreImpl(), 0);
     stopped.push(() => server.stop());
     const client = new MockClient(`http://localhost:${server.port}`);
     await client.health();

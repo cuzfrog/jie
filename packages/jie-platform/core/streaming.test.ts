@@ -1,8 +1,26 @@
-import { createEventManager, type EventManager, type AgentSender, type Sender, type EventEnvelope } from "../event";
+import { type EventManager, type AgentSender, type Sender, type EventEnvelope, type EventType } from "../event";
 import { makeStreamPublisher } from "./streaming";
 
 type ChunkPayload = EventEnvelope<"agent.stream.chunk">["payload"];
 type StreamEndPayload = EventEnvelope<"agent.stream.end">["payload"];
+
+function makeFakeEventManager(): EventManager {
+  const subscribers = new Map<string, Array<(env: EventEnvelope<EventType>) => void>>();
+  return {
+    publish: (env: EventEnvelope<EventType>) => {
+      for (const callback of subscribers.get(env.topic) ?? []) callback(env);
+    },
+    subscribe: (topic: string, callback: (env: EventEnvelope<EventType>) => void) => {
+      const list = subscribers.get(topic) ?? [];
+      list.push(callback);
+      subscribers.set(topic, list);
+      return () => {
+        subscribers.set(topic, list.filter((cb) => cb !== callback));
+      };
+    },
+    subscriberCount: (subject: string) => subscribers.get(subject)?.length ?? 0,
+  };
+}
 
 describe("makeStreamPublisher", () => {
   let events: EventManager;
@@ -11,7 +29,7 @@ describe("makeStreamPublisher", () => {
   const sender: AgentSender = { kind: "agent", teamId, agentKey };
 
   beforeEach(() => {
-    events = createEventManager();
+    events = makeFakeEventManager();
   });
 
   function makeStream() {

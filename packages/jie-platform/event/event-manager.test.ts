@@ -1,6 +1,6 @@
-import { createEventBus, type EventBus } from "./event-bus";
+import { InProcessEventBus, type EventBus } from "./event-bus";
 import {
-  createEventManager,
+  EventManagerImpl,
   type EventManager,
 } from "./event-manager";
 import { Events, type EventEnvelope, type EventType, type Sender } from "./events";
@@ -22,11 +22,11 @@ const agentSender: Sender = {
 const systemSender: Sender = { kind: "system" };
 const userSender: Sender = { kind: "user" };
 
-describe("createEventManager — envelope stamping", () => {
+describe("EventManagerImpl — envelope stamping", () => {
   test("stamps version, type, sender, timestamp", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     const received = collect(bus, "agent.turn.start");
-    const events: EventManager = createEventManager(bus);
+    const events: EventManager = new EventManagerImpl(bus);
     events.publish(Events.agentTurnStart(agentSender));
     expect(received).toHaveLength(1);
     const env = received[0]!;
@@ -36,27 +36,27 @@ describe("createEventManager — envelope stamping", () => {
   });
 
   test("payload is passed through for non-tool topics", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     const received = collect(bus, "user.prompt");
-    const events: EventManager = createEventManager(bus);
+    const events: EventManager = new EventManagerImpl(bus);
     events.publish(Events.userPrompt(userSender, "t1", "hello", "general-1"));
     const env = received[0]!;
     expect(env.payload).toEqual({ teamId: "t1", agentKey: "general-1", prompt: "hello" });
   });
 
   test("agent.idle has null payload", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     const received = collect(bus, "agent.idle");
-    const events: EventManager = createEventManager(bus);
+    const events: EventManager = new EventManagerImpl(bus);
     events.publish(Events.agentIdle(agentSender, "stop"));
     const env = received[0]!;
     expect(env.payload).toBe("stop");
   });
 
   test("system sender on system.team.loaded envelope has kind 'system'", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     const received = collect(bus, "system.team.loaded");
-    const events: EventManager = createEventManager(bus);
+    const events: EventManager = new EventManagerImpl(bus);
     events.publish(Events.teamLoaded(systemSender, { id: "t1", leaderKey: "", agents: [], history: [] }));
     const env = received[0]!;
     expect(env.sender.kind).toBe("system");
@@ -64,19 +64,19 @@ describe("createEventManager — envelope stamping", () => {
   });
 });
 
-describe("createEventManager — topic shape", () => {
+describe("EventManagerImpl — topic shape", () => {
   test("agent.tool.call publishes on its static subject", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     const received = collect(bus, "agent.tool.call");
-    const events: EventManager = createEventManager(bus);
+    const events: EventManager = new EventManagerImpl(bus);
     events.publish(Events.agentToolCall(agentSender, "c1", "bash", "{}"));
     expect(received).toHaveLength(1);
   });
 
   test("userPrompt publishes to the static 'user.prompt' topic with teamId/agentKey in payload", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     const received = collect(bus, "user.prompt");
-    const events: EventManager = createEventManager(bus);
+    const events: EventManager = new EventManagerImpl(bus);
     events.publish(Events.userPrompt(userSender, "t1", "hi", "general-1"));
     expect(received).toHaveLength(1);
     const env = received[0]!;
@@ -86,9 +86,9 @@ describe("createEventManager — topic shape", () => {
   });
 
   test("userPrompt targeted to a non-leader agentKey still resolves", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     const received = collect(bus, "user.prompt");
-    const events: EventManager = createEventManager(bus);
+    const events: EventManager = new EventManagerImpl(bus);
     events.publish(Events.userPrompt(userSender, "t1", "go", "worker-2"));
     expect(received).toHaveLength(1);
     const env = received[0]!;
@@ -97,9 +97,9 @@ describe("createEventManager — topic shape", () => {
   });
 
   test("teamLoaded publishes to the static 'system.team.loaded' topic", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     const received = collect(bus, "system.team.loaded");
-    const events: EventManager = createEventManager(bus);
+    const events: EventManager = new EventManagerImpl(bus);
     events.publish(Events.teamLoaded(systemSender, { id: "t1", leaderKey: "leader-1", agents: [{ teamId: "t1", role: "leader", agentKey: "leader-1", isLeader: true, model: null }], history: [] }));
     expect(received).toHaveLength(1);
     const env = received[0]!;
@@ -107,9 +107,9 @@ describe("createEventManager — topic shape", () => {
   });
 
   test("agentInterrupt publishes to 'agent.interrupt' with teamId/agentKey in payload", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     const received = collect(bus, "agent.interrupt");
-    const events: EventManager = createEventManager(bus);
+    const events: EventManager = new EventManagerImpl(bus);
     events.publish(Events.agentInterrupt(userSender, "t1", "general-1"));
     expect(received).toHaveLength(1);
     const env = received[0]!;
@@ -119,9 +119,9 @@ describe("createEventManager — topic shape", () => {
   });
 
   test("custom prefixes the clientTopic with custom.", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     const received = collect(bus, "custom.t1.task");
-    const events: EventManager = createEventManager(bus);
+    const events: EventManager = new EventManagerImpl(bus);
     events.publish(Events.custom(agentSender, "t1.task", "x"));
     expect(received).toHaveLength(1);
     const env = received[0]!;
@@ -130,10 +130,10 @@ describe("createEventManager — topic shape", () => {
   });
 });
 
-describe("createEventManager — subscribe", () => {
+describe("EventManagerImpl — subscribe", () => {
   test("subscribe callback receives typed envelope on static topic", () => {
-    const bus = createEventBus();
-    const events: EventManager = createEventManager(bus);
+    const bus = new InProcessEventBus();
+    const events: EventManager = new EventManagerImpl(bus);
     const received: EventEnvelope<"user.prompt">[] = [];
     const off = events.subscribe("user.prompt", (e) => {
       received.push(e);
@@ -148,8 +148,8 @@ describe("createEventManager — subscribe", () => {
   });
 
   test("subscribe receives bare subject events as agent.*", () => {
-    const bus = createEventBus();
-    const events: EventManager = createEventManager(bus);
+    const bus = new InProcessEventBus();
+    const events: EventManager = new EventManagerImpl(bus);
     const received: EventEnvelope<"agent.stream.chunk">[] = [];
     events.subscribe("agent.stream.chunk", (e) => {
       received.push(e);
@@ -160,8 +160,8 @@ describe("createEventManager — subscribe", () => {
   });
 
   test("subscribe to a custom-prefixed topic receives the wrapped envelope", () => {
-    const bus = createEventBus();
-    const events: EventManager = createEventManager(bus);
+    const bus = new InProcessEventBus();
+    const events: EventManager = new EventManagerImpl(bus);
     const received: EventEnvelope<`custom.${string}`>[] = [];
     events.subscribe("custom.t1.task.recorded", (e) => {
       received.push(e);
@@ -173,8 +173,8 @@ describe("createEventManager — subscribe", () => {
   });
 
   test("subscriberCount counts subscribers for the given subject", () => {
-    const bus = createEventBus();
-    const events: EventManager = createEventManager(bus);
+    const bus = new InProcessEventBus();
+    const events: EventManager = new EventManagerImpl(bus);
     expect(events.subscriberCount("user.prompt")).toBe(0);
     events.subscribe("user.prompt", () => {});
     expect(events.subscriberCount("user.prompt")).toBe(1);
@@ -184,7 +184,7 @@ describe("createEventManager — subscribe", () => {
   });
 });
 
-describe("createEventManager — stream events pass through", () => {
+describe("EventManagerImpl — stream events pass through", () => {
   test.each([
     {
       name: "agent.stream.chunk",
@@ -204,19 +204,19 @@ describe("createEventManager — stream events pass through", () => {
       expected: { stream_id: 7, total_chunks: 5 },
     },
   ])("$name payload is preserved", ({ topic, publish, expected }) => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     const received = collect(bus, topic as "agent.stream.chunk" | "agent.stream.end");
-    const events: EventManager = createEventManager(bus);
+    const events: EventManager = new EventManagerImpl(bus);
     events.publish(publish());
     expect(received[0]!.payload).toEqual(expected);
   });
 });
 
-describe("createEventManager — tool payload pass-through", () => {
+describe("EventManagerImpl — tool payload pass-through", () => {
   test("agent.tool.call: short input passes through", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     const received = collect(bus, "agent.tool.call");
-    const events: EventManager = createEventManager(bus);
+    const events: EventManager = new EventManagerImpl(bus);
     events.publish(Events.agentToolCall(agentSender, "c1", "bash", '{"command":"ls"}'));
     const env = received[0]!;
     expect(env.payload).toEqual({
@@ -228,9 +228,9 @@ describe("createEventManager — tool payload pass-through", () => {
   });
 
   test("agent.tool.call: long input gets truncated and input_truncated=true", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     const received = collect(bus, "agent.tool.call");
-    const events: EventManager = createEventManager(bus);
+    const events: EventManager = new EventManagerImpl(bus);
     events.publish(Events.agentToolCall(agentSender, "c1", "bash", "x".repeat(8000)));
     const env = received[0]!;
     expect(env.payload.input_truncated).toBe(true);
@@ -239,9 +239,9 @@ describe("createEventManager — tool payload pass-through", () => {
   });
 
   test("agent.tool.result: error path leaves output null", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     const received = collect(bus, "agent.tool.result");
-    const events: EventManager = createEventManager(bus);
+    const events: EventManager = new EventManagerImpl(bus);
     events.publish(Events.agentToolResult(agentSender, "c1", "bash", null, 100, "boom"));
     const env = received[0]!;
     expect(env.payload.output).toBeNull();
@@ -250,9 +250,9 @@ describe("createEventManager — tool payload pass-through", () => {
   });
 
   test("agent.tool.result: long output gets truncated", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     const received = collect(bus, "agent.tool.result");
-    const events: EventManager = createEventManager(bus);
+    const events: EventManager = new EventManagerImpl(bus);
     events.publish(Events.agentToolResult(agentSender, "c1", "bash", "y".repeat(8000), 100, null));
     const env = received[0]!;
     expect(env.payload.output_truncated).toBe(true);
@@ -260,18 +260,18 @@ describe("createEventManager — tool payload pass-through", () => {
   });
 
   test("agent.tool.result: details is propagated unchanged to subscribers", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     const received = collect(bus, "agent.tool.result");
-    const events: EventManager = createEventManager(bus);
+    const events: EventManager = new EventManagerImpl(bus);
     const details = { kind: "diff", diff: "@@ -1 +1 @@\n-a\n+A" };
     events.publish(Events.agentToolResult(agentSender, "c1", "edit", "ok", 12, null, details));
     expect(received[0]!.payload.details).toBe(details);
   });
 
   test("agent.tool.result: details defaults to null when not provided", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     const received = collect(bus, "agent.tool.result");
-    const events: EventManager = createEventManager(bus);
+    const events: EventManager = new EventManagerImpl(bus);
     events.publish(Events.agentToolResult(agentSender, "c1", "bash", "ok", 12, null));
     expect(received[0]!.payload.details).toBeNull();
   });

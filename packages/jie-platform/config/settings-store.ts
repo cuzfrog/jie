@@ -11,42 +11,46 @@ export interface SettingsStore {
   setDefaultTeam(teamId: string): void;
 }
 
-export function makeSettingsStore(
-  cwd: string,
-  homeJieDir: string,
-  projectJieDir: string | null,
-  locateTeam: (teamId: string) => TeamBlueprintLocation,
-): SettingsStore {
-  const globalPath = join(homeJieDir, "settings.json");
-  const projectPath =
-    projectJieDir === null ? join(cwd, ".jie", "settings.json") : join(projectJieDir, "settings.json");
+export class SettingsStoreImpl implements SettingsStore {
+  private readonly globalPath: string;
+  private readonly projectPath: string;
 
-  return {
-    load(): Settings {
-      try {
-        return loadMergedSettings(homeJieDir, projectJieDir);
-      } catch {
-        return {} as Settings;
-      }
-    },
-    setDefaultProvider(provider, modelId): void {
-      const next: Settings = {
-        ...readSettingsFile(globalPath),
-        defaultProvider: provider,
-        defaultModel: modelId,
-      };
-      writeSettingsFile(globalPath, next);
-    },
-    setDefaultTeam(teamId): void {
-      const location = locateTeam(teamId);
-      if (location === null) {
-        throw new JiePlatformError("TEAM_NOT_FOUND", { detail: `team '${teamId}' not found` });
-      }
-      const path = location === "project" ? projectPath : globalPath;
-      const next: Settings = { ...readSettingsFile(path), defaultTeam: teamId };
-      writeSettingsFile(path, next);
-    },
-  };
+  constructor(
+    cwd: string,
+    private readonly homeJieDir: string,
+    private readonly projectJieDir: string | null,
+    private readonly teamLocator: (teamId: string) => TeamBlueprintLocation,
+  ) {
+    this.globalPath = join(homeJieDir, "settings.json");
+    this.projectPath = projectJieDir === null ? join(cwd, ".jie", "settings.json") : join(projectJieDir, "settings.json");
+  }
+
+  load(): Settings {
+    try {
+      return loadMergedSettings(this.homeJieDir, this.projectJieDir);
+    } catch {
+      return {} as Settings;
+    }
+  }
+
+  setDefaultProvider(provider: string, modelId: string): void {
+    const next: Settings = {
+      ...readSettingsFile(this.globalPath),
+      defaultProvider: provider,
+      defaultModel: modelId,
+    };
+    writeSettingsFile(this.globalPath, next);
+  }
+
+  setDefaultTeam(teamId: string): void {
+    const location = this.teamLocator(teamId);
+    if (location === null) {
+      throw new JiePlatformError("TEAM_NOT_FOUND", { detail: `team '${teamId}' not found` });
+    }
+    const path = location === "project" ? this.projectPath : this.globalPath;
+    const next: Settings = { ...readSettingsFile(path), defaultTeam: teamId };
+    writeSettingsFile(path, next);
+  }
 }
 
 function readSettingsFile(path: string): Settings {

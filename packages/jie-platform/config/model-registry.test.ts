@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createModelRegistry } from "./model-registry";
+import { PiModelRegistry } from "./model-registry";
 import type { AuthStore } from "./auth-store";
 import { JiePlatformError } from "../jie-platform-errors";
 
@@ -13,7 +13,7 @@ const authStore = vi.mocked<AuthStore>({
   clear: vi.fn(),
 });
 
-describe("ModelRegistry", () => {
+describe("PiModelRegistry", () => {
   let cwd: string;
   let homeDir: string;
   let homeJieDir: string;
@@ -32,7 +32,7 @@ describe("ModelRegistry", () => {
   });
 
   test("empty registry: providers() returns only built-ins", () => {
-    const reg = createModelRegistry(homeJieDir, projectJieDir, authStore);
+    const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
     const providers = reg.providers();
     expect(providers.length).toBeGreaterThan(0);
     expect(providers).toContain("anthropic");
@@ -41,13 +41,13 @@ describe("ModelRegistry", () => {
 
   test("empty registry: getApiKey returns undefined for built-in when auth.json has no entry", () => {
     authStore.load.mockReturnValueOnce({});
-    const reg = createModelRegistry(homeJieDir, projectJieDir, authStore);
+    const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
     expect(reg.getApiKey("anthropic")).toBeUndefined();
   });
 
   test("built-in + auth.json api_key: getApiKey returns the auth.json key", () => {
     authStore.load.mockReturnValueOnce({ anthropic: { type: "api_key", key: "sk-from-auth" } });
-    const reg = createModelRegistry(homeJieDir, projectJieDir, authStore);
+    const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
     expect(reg.getApiKey("anthropic")).toBe("sk-from-auth");
   });
 
@@ -60,7 +60,7 @@ describe("ModelRegistry", () => {
         expires: 0,
       },
     });
-    const reg = createModelRegistry(homeJieDir, projectJieDir, authStore);
+    const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
     let caught: unknown;
     try {
       reg.getApiKey("anthropic");
@@ -88,7 +88,7 @@ describe("ModelRegistry", () => {
       }),
     );
     authStore.load.mockReturnValueOnce({ anthropic: { type: "api_key", key: "sk-from-auth" } });
-    const reg = createModelRegistry(homeJieDir, projectJieDir, authStore);
+    const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
     expect(reg.getApiKey("anthropic")).toBe("sk-from-auth");
   });
 
@@ -107,7 +107,7 @@ describe("ModelRegistry", () => {
         },
       }),
     );
-    const reg = createModelRegistry(homeJieDir, projectJieDir, authStore);
+    const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
     const model = reg.resolve("lm-studio", "qwen3.5-2b");
     expect(model).toBeDefined();
     expect(model?.id).toBe("qwen3.5-2b");
@@ -131,7 +131,7 @@ describe("ModelRegistry", () => {
       }),
     );
     authStore.load.mockReturnValueOnce({});
-    const reg = createModelRegistry(homeJieDir, projectJieDir, authStore);
+    const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
     expect(reg.getApiKey("lm-studio")).toBe("my-key");
   });
 
@@ -151,12 +151,12 @@ describe("ModelRegistry", () => {
       }),
     );
     authStore.load.mockReturnValueOnce({});
-    const reg = createModelRegistry(homeJieDir, projectJieDir, authStore);
+    const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
     expect(reg.getApiKey("lm-studio")).toBeUndefined();
   });
 
   test("built-in provider: resolve() returns pi-ai's model", () => {
-    const reg = createModelRegistry(homeJieDir, projectJieDir, authStore);
+    const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
     const providers = reg.providers();
     const anthropicProvider = providers.find((p) => p === "anthropic");
     expect(anthropicProvider).toBeDefined();
@@ -180,14 +180,14 @@ describe("ModelRegistry", () => {
         },
       }),
     );
-    const reg = createModelRegistry(homeJieDir, projJie, authStore);
+    const reg = new PiModelRegistry(homeJieDir, projJie, authStore);
     const models = reg.listModels("anthropic");
     expect(models.length).toBeGreaterThan(0);
     expect(models[0]?.baseUrl).toBe("https://my-proxy.example.com");
   });
 
   test("unknown provider: resolve() returns undefined", () => {
-    const reg = createModelRegistry(homeJieDir, projectJieDir, authStore);
+    const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
     expect(reg.resolve("not-a-real-provider", "any-model")).toBeUndefined();
   });
 
@@ -201,7 +201,7 @@ describe("ModelRegistry", () => {
         },
       }),
     );
-    const reg = createModelRegistry(homeJieDir, projectJieDir, authStore);
+    const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
     const providers = reg.providers();
     expect(providers[0]).toBe("lm-studio");
   });
@@ -220,7 +220,7 @@ describe("ModelRegistry", () => {
         },
       }),
     );
-    const reg = createModelRegistry(homeJieDir, projectJieDir, authStore);
+    const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
     const models = reg.listModels("custom");
     expect(models).toHaveLength(2);
     expect(models.map((m) => m.id).sort()).toEqual(["m1", "m2"]);

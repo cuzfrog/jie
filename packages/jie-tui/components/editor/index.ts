@@ -1,1 +1,1 @@
-export { createJieEditor } from "./jie-editor";
+export { registerEditorModule } from "./module";

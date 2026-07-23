@@ -1,6 +1,14 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { Actions, createStateStore, type MessageCard } from "../../state";
+import { createContainer, InjectionMode } from "awilix";
+import { Actions, registerStateModule, type MessageCard, type StateStore } from "../../state";
+import { type TuiCradle } from "../../";
 import { ToolCard } from "./tool-card";
+
+function makeStateStore(): StateStore {
+  const container = createContainer<TuiCradle>({ injectionMode: InjectionMode.CLASSIC });
+  registerStateModule(container);
+  return container.cradle.stateStore;
+}
 
 function card(partial: Partial<MessageCard> = {}): MessageCard {
   return { kind: "toolResult", callId: "c1", name: "bash", ...partial };
@@ -8,17 +16,17 @@ function card(partial: Partial<MessageCard> = {}): MessageCard {
 
 describe("ToolCard", () => {
   test("collapsed by default: a single header line", () => {
-    const view = new ToolCard(card({ output: "ok", durationMs: 12 }), createStateStore());
+    const view = new ToolCard(card({ output: "ok", durationMs: 12 }), makeStateStore());
     expect(view.render(80)).toEqual(["\x1b[37m✓ bash  12ms\x1b[39m"]);
   });
 
   test("error cards use the error glyph and color", () => {
-    const view = new ToolCard(card({ error: "boom" }), createStateStore());
+    const view = new ToolCard(card({ error: "boom" }), makeStateStore());
     expect(view.render(80)).toEqual(["\x1b[31m✗ bash\x1b[39m"]);
   });
 
   test("expanded: input, output and error sections appear", () => {
-    const store = createStateStore();
+    const store = makeStateStore();
     store.dispatch(Actions.toggleToolCards());
     const view = new ToolCard(card({ input: "ls", output: "ok", error: "boom" }), store);
     const lines = view.render(80);
@@ -31,7 +39,7 @@ describe("ToolCard", () => {
   });
 
   test("expanded: a diff detail renders a colored diff section", () => {
-    const store = createStateStore();
+    const store = makeStateStore();
     store.dispatch(Actions.toggleToolCards());
     const view = new ToolCard(card({ details: { kind: "diff", diff: "-a\n+b" } }), store);
     const lines = view.render(80);
@@ -41,14 +49,14 @@ describe("ToolCard", () => {
   });
 
   test("non-diff details render no diff section", () => {
-    const store = createStateStore();
+    const store = makeStateStore();
     store.dispatch(Actions.toggleToolCards());
     const view = new ToolCard(card({ output: "ok", details: { kind: "other" } }), store);
     expect(view.render(80).some((line) => line.includes("diff:"))).toBe(false);
   });
 
   test("truncated input and output get an ellipsis", () => {
-    const store = createStateStore();
+    const store = makeStateStore();
     store.dispatch(Actions.toggleToolCards());
     const view = new ToolCard(card({ input: "in", inputTruncated: true, output: "out", outputTruncated: true }), store);
     const lines = view.render(80);
@@ -57,7 +65,7 @@ describe("ToolCard", () => {
   });
 
   test("never renders a line wider than the given width (doRender guard)", () => {
-    const store = createStateStore();
+    const store = makeStateStore();
     store.dispatch(Actions.toggleToolCards());
     const view = new ToolCard(card({
       name: "x".repeat(300),

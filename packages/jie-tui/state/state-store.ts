@@ -31,28 +31,29 @@ export interface StateStore {
   subscribe(listener: ActionCallback): () => void;
 }
 
-export function createStateStore(): StateStore {
-  let state: TuiState = INITIAL_TUI_STATE;
-  const callbacks = new Set<ActionCallback>();
-  return {
-    getState(): TuiState {
-      return state;
-    },
-    dispatch(action: Action): void {
-      const beforeState = state;
-      const afterState = reduce(beforeState, action);
-      state = afterState;
-      for (const callback of callbacks) {
-        void Promise.resolve(callback(action, afterState, beforeState)).catch((error: unknown) => {
-          log.error({ action, error }, "subscriber callback failed");
-        });
-      }
-    },
-    subscribe(listener: ActionCallback): () => void {
-      callbacks.add(listener);
-      return (): void => {
-        callbacks.delete(listener);
-      };
-    },
-  };
+export class StateStoreImpl implements StateStore {
+  private state: TuiState = INITIAL_TUI_STATE;
+  private readonly callbacks = new Set<ActionCallback>();
+
+  getState(): TuiState {
+    return this.state;
+  }
+
+  dispatch(action: Action): void {
+    const beforeState = this.state;
+    const afterState = reduce(beforeState, action);
+    this.state = afterState;
+    for (const callback of this.callbacks) {
+      void Promise.resolve(callback(action, afterState, beforeState)).catch((error: unknown) => {
+        log.error({ action, error }, "subscriber callback failed");
+      });
+    }
+  }
+
+  subscribe(listener: ActionCallback): () => void {
+    this.callbacks.add(listener);
+    return (): void => {
+      this.callbacks.delete(listener);
+    };
+  }
 }

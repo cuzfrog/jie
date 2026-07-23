@@ -1,10 +1,18 @@
 import { Events } from "@cuzfrog/jie-platform";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { Actions, createStateStore, type StateStore } from "../../state";
+import { createContainer, InjectionMode } from "awilix";
+import { Actions, registerStateModule, type StateStore } from "../../state";
+import { type TuiCradle } from "../../";
 import { Footer } from "./footer";
 
+function makeStateStore(): StateStore {
+  const container = createContainer<TuiCradle>({ injectionMode: InjectionMode.CLASSIC });
+  registerStateModule(container);
+  return container.cradle.stateStore;
+}
+
 function seededStore(dirty: boolean): StateStore {
-  const store = createStateStore();
+  const store = makeStateStore();
   store.dispatch(Actions.setEnvironment("/repo", "dev", dirty));
   store.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
     id: "my-team",
@@ -40,7 +48,7 @@ describe("Footer", () => {
   });
 
   test("falls back to main when no branch is known and to no-team without a team", () => {
-    const store = createStateStore();
+    const store = makeStateStore();
     store.dispatch(Actions.setEnvironment("/repo", "", false));
     const lines = new Footer(store).render(80);
     expect(lines[0]).toContain("/repo (main)");
@@ -70,7 +78,7 @@ describe("Footer", () => {
 
   test("never renders a line wider than the given width with over-long identity (doRender guard)", () => {
     const longTeam = "x".repeat(300);
-    const store = createStateStore();
+    const store = makeStateStore();
     store.dispatch(Actions.setEnvironment(`/${longTeam}`, "中文🎉".repeat(40), true));
     store.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
       id: longTeam,

@@ -1,1 +1,1 @@
-export { createJieAutocompleteProvider } from "./jie-autocomplete";
+export { registerAutocompleteModule } from "./module";

@@ -1,9 +1,34 @@
-import { type Agent, type AgentMessage } from "@earendil-works/pi-agent-core";
+import type {
+  Agent as PiAgent,
+  AgentEvent as PiAgentEvent,
+  AgentMessage,
+  AfterToolCallContext,
+  BeforeToolCallContext,
+  ThinkingLevel,
+} from "@earendil-works/pi-agent-core";
+import type { Api, AssistantMessage, AssistantMessageEvent, Model } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { JieAgentBody } from "./jie-agent-body";
-import { createEventManager, Events, type EventManager } from "../event";
-import type { MemoryManager } from "../storage";
+import type { AgentBodyParams } from "./agent-body";
+import { Events, type EventEnvelope, type EventManager, type EventType } from "../event";
+import type { ArtifactStore, MemoryManager } from "../storage";
+import type { Tool, ToolRegistry, ToolResult } from "../tools";
 import type { AgentSoul } from "../team";
-import type { StreamPublisher } from "./streaming";
+
+function makeModel(provider: string, id: string): Model<Api> {
+  return {
+    id,
+    name: id,
+    api: "anthropic-messages" as Api,
+    provider,
+    baseUrl: "",
+    reasoning: false,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 200000,
+    maxTokens: 8192,
+  };
+}
 
 function makeSoul(overrides: Partial<AgentSoul> = {}): AgentSoul {
   return {
@@ -16,143 +41,494 @@ function makeSoul(overrides: Partial<AgentSoul> = {}): AgentSoul {
   };
 }
 
-function makeFakeAgent(overrides: Partial<{
-  messages: AgentMessage[];
-  isStreaming: boolean;
-  model: unknown;
-}> = {}): {
-  agent: Agent;
-  state: { messages: AgentMessage[]; isStreaming: boolean; model: unknown };
-  prompt: ReturnType<typeof vi.fn>;
-  followUp: ReturnType<typeof vi.fn>;
-  steer: ReturnType<typeof vi.fn>;
-  abort: ReturnType<typeof vi.fn>;
-  continue: ReturnType<typeof vi.fn>;
-  subscribe: ReturnType<typeof vi.fn>;
-} {
-  const state = {
-    messages: overrides.messages ?? [],
-    isStreaming: overrides.isStreaming ?? false,
-    model: overrides.model ?? {},
+function makeNoopTool(): Tool {
+  return {
+    name: "noop",
+    description: "no-op",
+    label: "Noop",
+    parameters: Type.Object({}),
+    async execute(): Promise<ToolResult> {
+      return { content: "noop" };
+    },
   };
-  const prompt = vi.fn(async (_message: AgentMessage | AgentMessage[]) => {});
-  const followUp = vi.fn(() => {});
-  const steer = vi.fn(() => {});
-  const abort = vi.fn(() => {});
-  const cont = vi.fn(async () => {});
-  const subscribe = vi.fn(() => () => {});
-  const agent = {
-    state,
-    prompt,
-    followUp,
-    steer,
-    abort,
-    continue: cont,
-    subscribe,
-  } as unknown as Agent;
-  return { agent, state, prompt, followUp, steer, abort, continue: cont, subscribe };
 }
 
-function makeFakeStream(): {
-  stream: StreamPublisher;
-  beginStream: ReturnType<typeof vi.fn>;
-  append: ReturnType<typeof vi.fn>;
-  endStream: ReturnType<typeof vi.fn>;
-} {
-  const beginStream = vi.fn(() => {});
-  const append = vi.fn(() => {});
-  const endStream = vi.fn(() => ({ stream_id: 0, total_chunks: 0 }));
-  const stream = {
-    beginStream,
-    append,
-    endStream,
-  } as unknown as StreamPublisher;
-  return { stream, beginStream, append, endStream };
+function makeAssistantMessage(overrides: Partial<AssistantMessage> = {}): AssistantMessage {
+  return {
+    role: "assistant",
+    content: [],
+    api: "anthropic-messages",
+    provider: "anthropic",
+    model: "claude-sonnet-4",
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason: "stop",
+    timestamp: 0,
+    ...overrides,
+  };
+}
+
+function makeAgentContext(overrides: Partial<{ systemPrompt: string; messages: AgentMessage[] }> = {}): { systemPrompt: string; messages: AgentMessage[] } {
+  return {
+    systemPrompt: "",
+    messages: [],
+    ...overrides,
+  };
+}
+
+interface FakeAgentState {
+  systemPrompt: string;
+  model: unknown;
+  tools: unknown[];
+  messages: AgentMessage[];
+  isStreaming: boolean;
+  thinkingLevel: ThinkingLevel;
+}
+
+interface FakeAgentCapture {
+  factory: (opts: ConstructorParameters<typeof PiAgent>[0]) => PiAgent;
+  fake: {
+    state: FakeAgentState;
+    subscribe: ReturnType<typeof vi.fn>;
+    prompt: ReturnType<typeof vi.fn>;
+    followUp: ReturnType<typeof vi.fn>;
+    steer: ReturnType<typeof vi.fn>;
+    abort: ReturnType<typeof vi.fn>;
+    continue: ReturnType<typeof vi.fn>;
+  };
+  lastOpts: () => ConstructorParameters<typeof PiAgent>[0] | undefined;
+  readonly agentListener: ((event: PiAgentEvent) => void) | undefined;
+}
+
+function makeFakeAgentFactory(): FakeAgentCapture {
+  let listener: ((event: PiAgentEvent) => void) | undefined;
+  const state: FakeAgentState = {
+    systemPrompt: "",
+    model: null,
+    tools: [],
+    messages: [],
+    isStreaming: false,
+    thinkingLevel: "off",
+  };
+  const fake = {
+    state,
+    subscribe: vi.fn((l: (event: PiAgentEvent) => void) => {
+      listener = l;
+      return () => {};
+    }),
+    prompt: vi.fn(async (_message: AgentMessage | AgentMessage[]) => {}),
+    followUp: vi.fn(() => {}),
+    steer: vi.fn(() => {}),
+    abort: vi.fn(() => {}),
+    continue: vi.fn(async () => {}),
+  };
+  const stub = fake as unknown as PiAgent;
+  let captured: ConstructorParameters<typeof PiAgent>[0] | undefined;
+  return {
+    factory: (opts) => {
+      captured = opts;
+      return stub;
+    },
+    fake,
+    lastOpts: () => captured,
+    get agentListener() {
+      return listener;
+    },
+  };
 }
 
 function makeFakeMemory(): {
   memory: MemoryManager;
   persisted: AgentMessage[];
   restore: ReturnType<typeof vi.fn>;
-  persist: ReturnType<typeof vi.fn>;
 } {
   const persisted: AgentMessage[] = [];
-  const persist = vi.fn(async (msg: AgentMessage) => {
-    persisted.push(msg);
+  const persist = vi.fn(async (message: AgentMessage) => {
+    persisted.push(message);
   });
   const restore = vi.fn(async () => persisted.slice());
   const memory = { persist, restore } as unknown as MemoryManager;
-  return { memory, persisted, restore, persist };
+  return { memory, persisted, restore };
+}
+
+interface MakeBodyOverrides {
+  agentKey?: string;
+  teamId?: string;
+  soul?: AgentSoul;
+  isLeader?: boolean;
+  sessionId?: string;
+  model?: Model<Api>;
+  factory?: (opts: ConstructorParameters<typeof PiAgent>[0]) => PiAgent;
 }
 
 interface Harness {
   events: EventManager;
-  memory: MemoryManager;
-  agent: Agent;
-  state: { messages: AgentMessage[]; isStreaming: boolean };
-  prompt: ReturnType<typeof vi.fn>;
-  followUp: ReturnType<typeof vi.fn>;
-  steer: ReturnType<typeof vi.fn>;
-  abort: ReturnType<typeof vi.fn>;
-  continue: ReturnType<typeof vi.fn>;
-  subscribe: ReturnType<typeof vi.fn>;
-  stream: StreamPublisher;
-  beginStream: ReturnType<typeof vi.fn>;
-  append: ReturnType<typeof vi.fn>;
-  endStream: ReturnType<typeof vi.fn>;
   persisted: AgentMessage[];
   restore: ReturnType<typeof vi.fn>;
-  makeBody: (overrides?: Partial<{ soul: AgentSoul; sessionId: string; agentKey: string }>) => JieAgentBody;
+  cap: FakeAgentCapture;
+  state: FakeAgentState;
+  prompt: ReturnType<typeof vi.fn>;
+  followUp: ReturnType<typeof vi.fn>;
+  abort: ReturnType<typeof vi.fn>;
+  continue: ReturnType<typeof vi.fn>;
+  subscribeSubject: <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void) => () => void;
+  fireEvent: (event: PiAgentEvent) => void;
+  makeBody: (overrides?: MakeBodyOverrides) => JieAgentBody;
+}
+
+function makeFakeEventManager(): EventManager {
+  const subscribers = new Map<string, Array<(env: EventEnvelope<EventType>) => void>>();
+  return {
+    publish: (env: EventEnvelope<EventType>) => {
+      for (const callback of subscribers.get(env.topic) ?? []) callback(env);
+    },
+    subscribe: (topic: string, callback: (env: EventEnvelope<EventType>) => void) => {
+      const list = subscribers.get(topic) ?? [];
+      list.push(callback);
+      subscribers.set(topic, list);
+      return () => {
+        subscribers.set(topic, list.filter((cb) => cb !== callback));
+      };
+    },
+    subscriberCount: (subject: string) => subscribers.get(subject)?.length ?? 0,
+  };
 }
 
 function makeHarness(): Harness {
-  const events: EventManager = createEventManager();
+  const events: EventManager = makeFakeEventManager();
   const { memory, persisted, restore } = makeFakeMemory();
-  const { agent, state, prompt, followUp, steer, abort, continue: cont, subscribe } = makeFakeAgent();
-  const { stream, beginStream, append, endStream } = makeFakeStream();
-  const makeBody: Harness["makeBody"] = (overrides = {}) =>
-    new JieAgentBody({
+  const cap = makeFakeAgentFactory();
+  const toolRegistry = vi.mocked<ToolRegistry>({
+    register: vi.fn(),
+    resolve: vi.fn(() => [makeNoopTool()]),
+    list: vi.fn(() => []),
+  });
+  const artifactStore = vi.mocked<ArtifactStore>({
+    write: vi.fn(),
+    read: vi.fn(),
+    list: vi.fn(),
+  });
+  const subscribeSubject = <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void): (() => void) =>
+    events.subscribe(topic, (env) => cb(env));
+  const makeBody: Harness["makeBody"] = (overrides = {}) => {
+    const params: AgentBodyParams = {
       agentKey: overrides.agentKey ?? "general-1",
-      teamId: "t1",
+      teamId: overrides.teamId ?? "t1",
       soul: overrides.soul ?? makeSoul(),
-      isLeader: false,
+      isLeader: overrides.isLeader ?? false,
       sessionId: overrides.sessionId ?? "s1",
+      model: overrides.model,
+    };
+    return new JieAgentBody(params, {
       eventManager: events,
+      artifactStore,
       memory,
-      agent,
-      streamPublisher: stream,
-      model: null,
+      toolRegistry,
+      getApiKey: () => undefined,
+      createAgent: overrides.factory ?? cap.factory,
     });
+  };
+  const fireEvent = (event: PiAgentEvent): void => {
+    const listener = cap.agentListener;
+    if (listener === undefined) throw new Error("agent listener not captured");
+    listener(event);
+  };
   return {
     events,
-    memory,
-    agent,
-    state,
-    prompt,
-    followUp,
-    steer,
-    abort,
-    continue: cont,
-    subscribe,
-    stream,
-    beginStream,
-    append,
-    endStream,
     persisted,
     restore,
+    cap,
+    state: cap.fake.state,
+    prompt: cap.fake.prompt,
+    followUp: cap.fake.followUp,
+    abort: cap.fake.abort,
+    continue: cap.fake.continue,
+    subscribeSubject,
+    fireEvent,
     makeBody,
   };
 }
 
 describe("JieAgentBody — identity", () => {
-  test("constructor stores the identity fields from deps", () => {
+  test("identity reflects the params and the resolved model info", () => {
     const h = makeHarness();
-    const body = h.makeBody({ agentKey: "leader-1" }) as unknown as {
-      agentKey: string;
-      teamId: string;
+    const body = h.makeBody({
+      agentKey: "leader-1",
+      isLeader: true,
+      model: makeModel("anthropic", "claude-sonnet-4"),
+    });
+    expect(body.identity).toEqual({
+      teamId: "t1",
+      role: "general",
+      agentKey: "leader-1",
+      isLeader: true,
+      model: { provider: "anthropic", id: "claude-sonnet-4", effort: "off", contextWindow: 200000 },
+    });
+  });
+
+  test("identity.model is null when no model is given", () => {
+    const h = makeHarness();
+    const body = h.makeBody();
+    expect(body.identity.model).toBeNull();
+  });
+});
+
+describe("JieAgentBody — agent construction wiring", () => {
+  test("invokes the createAgent seam exactly once with the right shape", () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    const tracked = vi.fn(cap.factory);
+    h.makeBody({ factory: tracked });
+    expect(tracked).toHaveBeenCalledTimes(1);
+    const passed = tracked.mock.calls[0]![0]!;
+    expect(passed.sessionId).toBe("s1");
+    expect(passed.steeringMode).toBe("all");
+    expect(passed.followUpMode).toBe("all");
+    expect(passed.toolExecution).toBe("sequential");
+    expect(passed.convertToLlm).toBeUndefined();
+  });
+
+  test("assigns soul.systemPrompt, model and adapted tools onto agent.state", () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    const model = makeModel("anthropic", "claude-sonnet-4");
+    h.makeBody({ soul: makeSoul({ tools: ["noop"] }), model, factory: cap.factory });
+    expect(cap.fake.state.systemPrompt).toBe("you are a general assistant");
+    expect(cap.fake.state.model).toBe(model);
+    expect(cap.fake.state.tools).toHaveLength(1);
+    expect((cap.fake.state.tools as Array<{ name: string }>)[0]!.name).toBe("noop");
+  });
+
+  test("subscribes to agent events via agent.subscribe", () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    h.makeBody({ factory: cap.factory });
+    expect(cap.fake.subscribe).toHaveBeenCalledTimes(1);
+  });
+
+  test("subscribe listener accepts (event, signal) per pi-agent contract", () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    let argCount: number | undefined;
+    cap.fake.subscribe.mockImplementation((l: (event: PiAgentEvent) => void) => {
+      argCount = l.length;
+      return () => {};
+    });
+    h.makeBody({ factory: cap.factory });
+    expect(argCount).toBe(2);
+  });
+
+  test("stop() unsubscribes the agent event subscription", () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    let unsubscribed = false;
+    cap.fake.subscribe.mockImplementation(() => () => {
+      unsubscribed = true;
+    });
+    const body = h.makeBody({ factory: cap.factory });
+    body.stop();
+    expect(unsubscribed).toBe(true);
+  });
+
+  test("beforeToolCall publishes agent.tool.call with wire-shaped input (short input not truncated)", async () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    h.makeBody({ factory: cap.factory });
+    const hook = cap.lastOpts()?.beforeToolCall;
+    if (hook === undefined) throw new Error("beforeToolCall hook not provided");
+    const received: EventEnvelope<"agent.tool.call">[] = [];
+    h.subscribeSubject("agent.tool.call", (env) => {
+      received.push(env);
+    });
+    const ctx: BeforeToolCallContext = {
+      assistantMessage: makeAssistantMessage(),
+      toolCall: { type: "toolCall", id: "c1", name: "bash", arguments: { command: "ls" } },
+      args: { command: "ls" },
+      context: makeAgentContext(),
     };
-    expect(body.agentKey).toBe("leader-1");
-    expect(body.teamId).toBe("t1");
+    await hook(ctx);
+    expect(received).toHaveLength(1);
+    const payload = received[0]!.payload;
+    expect(payload.tool_call_id).toBe("c1");
+    expect(payload.name).toBe("bash");
+    expect(typeof payload.input).toBe("string");
+    expect(payload.input_truncated).toBe(false);
+  });
+
+  test("beforeToolCall truncates long input with a marker", async () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    h.makeBody({ factory: cap.factory });
+    const hook = cap.lastOpts()?.beforeToolCall;
+    if (hook === undefined) throw new Error("beforeToolCall hook not provided");
+    const received: EventEnvelope<"agent.tool.call">[] = [];
+    h.subscribeSubject("agent.tool.call", (env) => {
+      received.push(env);
+    });
+    const ctx: BeforeToolCallContext = {
+      assistantMessage: makeAssistantMessage(),
+      toolCall: { type: "toolCall", id: "c1", name: "bash", arguments: { command: "x".repeat(8000) } },
+      args: { command: "x".repeat(8000) },
+      context: makeAgentContext(),
+    };
+    await hook(ctx);
+    const payload = received[0]!.payload;
+    expect(payload.input_truncated).toBe(true);
+    expect(payload.input).toContain("chars truncated");
+    expect(payload.input.length).toBeLessThan(8000);
+  });
+
+  test("afterToolCall publishes agent.tool.result with the Jie ToolResult shape", async () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    h.makeBody({ factory: cap.factory });
+    const hook = cap.lastOpts()?.afterToolCall;
+    if (hook === undefined) throw new Error("afterToolCall hook not provided");
+    const results: EventEnvelope<"agent.tool.result">[] = [];
+    h.subscribeSubject("agent.tool.result", (env) => {
+      results.push(env);
+    });
+    const ctx: AfterToolCallContext = {
+      assistantMessage: makeAssistantMessage(),
+      toolCall: { type: "toolCall", id: "call_r", name: "noop", arguments: {} },
+      args: {},
+      context: makeAgentContext(),
+      result: {
+        content: [{ type: "text", text: "hello" }],
+        details: { foo: 1 },
+        terminate: false,
+      },
+      isError: false,
+    };
+    await hook(ctx);
+    expect(results).toHaveLength(1);
+    expect(JSON.parse(results[0]!.payload.output!)).toEqual({
+      content: "hello",
+      details: { foo: 1 },
+      terminate: false,
+    });
+  });
+
+  test("afterToolCall: multi-block content serializes as a JSON array", async () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    h.makeBody({ factory: cap.factory });
+    const hook = cap.lastOpts()?.afterToolCall;
+    if (hook === undefined) throw new Error("afterToolCall hook not provided");
+    const results: EventEnvelope<"agent.tool.result">[] = [];
+    h.subscribeSubject("agent.tool.result", (env) => {
+      results.push(env);
+    });
+    const ctx: AfterToolCallContext = {
+      assistantMessage: makeAssistantMessage(),
+      toolCall: { type: "toolCall", id: "call_m", name: "noop", arguments: {} },
+      args: {},
+      context: makeAgentContext(),
+      result: {
+        content: [
+          { type: "text", text: "a" },
+          { type: "image", data: "x", mimeType: "image/png" },
+        ],
+        details: { ok: true },
+        terminate: true,
+      },
+      isError: false,
+    };
+    await hook(ctx);
+    expect(JSON.parse(results[0]!.payload.output!)).toEqual({
+      content: [
+        { type: "text", text: "a" },
+        { type: "image", data: "x", mimeType: "image/png" },
+      ],
+      details: { ok: true },
+      terminate: true,
+    });
+  });
+
+  test("afterToolCall on error: output null, error carries the message", async () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    h.makeBody({ factory: cap.factory });
+    const hook = cap.lastOpts()?.afterToolCall;
+    if (hook === undefined) throw new Error("afterToolCall hook not provided");
+    const results: EventEnvelope<"agent.tool.result">[] = [];
+    h.subscribeSubject("agent.tool.result", (env) => {
+      results.push(env);
+    });
+    const ctx: AfterToolCallContext = {
+      assistantMessage: makeAssistantMessage(),
+      toolCall: { type: "toolCall", id: "call_e", name: "noop", arguments: {} },
+      args: {},
+      context: makeAgentContext(),
+      result: {
+        content: [{ type: "text", text: "boom" }],
+        details: {},
+        terminate: false,
+      },
+      isError: true,
+    };
+    await hook(ctx);
+    expect(results).toHaveLength(1);
+    const env = results[0]!;
+    expect(env.payload.output).toBeNull();
+    expect(env.payload.error).toBe("boom");
+  });
+});
+
+describe("JieAgentBody — agent.model.assigned publication", () => {
+  test("publishes with effort 'off' for the agent's default thinkingLevel", () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    cap.fake.state.thinkingLevel = "off";
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    h.subscribeSubject("agent.model.assigned", (env) => {
+      received.push(env);
+    });
+    h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), factory: cap.factory });
+    expect(received).toHaveLength(1);
+    expect(received[0]!.payload).toEqual({ provider: "anthropic", model: "claude-sonnet-4", effort: "off" });
+  });
+
+  test("publishes with the mapped effort for a recognized thinkingLevel", () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    cap.fake.state.thinkingLevel = "high";
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    h.subscribeSubject("agent.model.assigned", (env) => {
+      received.push(env);
+    });
+    h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), factory: cap.factory });
+    expect(received).toHaveLength(1);
+    expect(received[0]!.payload).toEqual({ provider: "anthropic", model: "claude-sonnet-4", effort: "high" });
+  });
+
+  test("maps 'xhigh' thinkingLevel to 'max' effort", () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    cap.fake.state.thinkingLevel = "xhigh";
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    h.subscribeSubject("agent.model.assigned", (env) => {
+      received.push(env);
+    });
+    h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), factory: cap.factory });
+    expect(received).toHaveLength(1);
+    expect(received[0]!.payload.effort).toBe("max");
+  });
+
+  test("does not publish when no model is given", () => {
+    const h = makeHarness();
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    h.subscribeSubject("agent.model.assigned", (env) => {
+      received.push(env);
+    });
+    h.makeBody();
+    expect(received).toHaveLength(0);
   });
 });
 
@@ -412,117 +788,207 @@ describe("JieAgentBody — prompt ingress format", () => {
   });
 });
 
-describe("JieAgentBody — handlePiAgentEvent (stream bridge)", () => {
+describe("JieAgentBody — pi-agent event bridging", () => {
   let h: Harness;
 
   beforeEach(() => {
     h = makeHarness();
   });
 
-  test("message_start: stream.beginStream is called", () => {
-    const body = h.makeBody();
-    body.handlePiAgentEvent({
-      type: "message_start",
-      message: { role: "assistant", content: [] } as unknown as AgentMessage,
+  test("turn_start publishes agent.turn.start with a null payload", () => {
+    const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    h.subscribeSubject("agent.turn.start", (env) => {
+      turnStart.push(env);
     });
-    expect(h.beginStream).toHaveBeenCalled();
+    h.makeBody();
+    h.fireEvent({ type: "turn_start" });
+    expect(turnStart).toHaveLength(1);
+    expect(turnStart[0]!.topic).toBe("agent.turn.start");
+    expect(turnStart[0]!.payload).toBeNull();
   });
 
-  test("message_update text_delta: stream.append('text', delta)", () => {
+  test("agent_end publishes agent.idle with the final stopReason", () => {
+    const idle: EventEnvelope<"agent.idle">[] = [];
+    h.subscribeSubject("agent.idle", (env) => {
+      idle.push(env);
+    });
+    h.makeBody();
+    h.fireEvent({ type: "agent_end", messages: [] });
+    expect(idle).toHaveLength(1);
+    expect(idle[0]!.payload).toBe("stop");
+  });
+
+  test("3 turns alternate strictly: turn_start, idle, turn_start, idle, ...", () => {
+    const sequence: string[] = [];
+    h.subscribeSubject("agent.turn.start", () => sequence.push("turn_start"));
+    h.subscribeSubject("agent.idle", () => sequence.push("idle"));
+    h.makeBody();
+    for (let i = 0; i < 3; i++) {
+      h.fireEvent({ type: "turn_start" });
+      h.fireEvent({ type: "agent_end", messages: [] });
+    }
+    expect(sequence).toEqual([
+      "turn_start",
+      "idle",
+      "turn_start",
+      "idle",
+      "turn_start",
+      "idle",
+    ]);
+  });
+
+  test("start() does not emit agent.turn.start or agent.idle", async () => {
+    const idleEvents: unknown[] = [];
+    const turnStartEvents: unknown[] = [];
+    h.subscribeSubject("agent.idle", (env) => idleEvents.push(env));
+    h.subscribeSubject("agent.turn.start", (env) => turnStartEvents.push(env));
     const body = h.makeBody();
-    body.handlePiAgentEvent({
+    await body.start();
+    expect(idleEvents).toHaveLength(0);
+    expect(turnStartEvents).toHaveLength(0);
+    body.stop();
+  });
+
+  test("message_start resets stream state: stream ids increment across streams", () => {
+    const ends: EventEnvelope<"agent.stream.end">[] = [];
+    h.subscribeSubject("agent.stream.end", (env) => {
+      ends.push(env);
+    });
+    h.makeBody();
+    for (let i = 0; i < 2; i++) {
+      h.fireEvent({ type: "message_start", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
+      h.fireEvent({ type: "message_end", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
+    }
+    expect(ends.map((env) => env.payload.stream_id)).toEqual([1, 2]);
+  });
+
+  test("message_update text_delta buffers text and flushes it on message_end", () => {
+    const chunks: EventEnvelope<"agent.stream.chunk">[] = [];
+    h.subscribeSubject("agent.stream.chunk", (env) => {
+      chunks.push(env);
+    });
+    h.makeBody();
+    h.fireEvent({ type: "message_start", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
+    h.fireEvent({
       type: "message_update",
-      message: { role: "assistant", content: [] } as never,
+      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
       assistantMessageEvent: {
         type: "text_delta",
         contentIndex: 0,
         delta: "hello",
-        partial: { role: "assistant", content: [] } as never,
+        partial: { role: "assistant", content: [] } as unknown as AssistantMessage,
       },
     });
-    expect(h.append).toHaveBeenCalledWith("text", "hello");
+    expect(chunks).toHaveLength(0);
+    h.fireEvent({ type: "message_end", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]!.payload).toMatchObject({ stream_id: 1, seq: 0, block_type: "text", text: "hello" });
   });
 
-  test("message_update thinking_delta: stream.append('thinking', delta)", () => {
-    const body = h.makeBody();
-    body.handlePiAgentEvent({
+  test("message_update thinking_delta publishes a chunk with block_type 'thinking'", () => {
+    const chunks: EventEnvelope<"agent.stream.chunk">[] = [];
+    h.subscribeSubject("agent.stream.chunk", (env) => {
+      chunks.push(env);
+    });
+    h.makeBody();
+    h.fireEvent({ type: "message_start", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
+    h.fireEvent({
       type: "message_update",
-      message: { role: "assistant", content: [] } as never,
+      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
       assistantMessageEvent: {
         type: "thinking_delta",
         contentIndex: 0,
         delta: "hmm",
-        partial: { role: "assistant", content: [] } as never,
+        partial: { role: "assistant", content: [] } as unknown as AssistantMessage,
       },
     });
-    expect(h.append).toHaveBeenCalledWith("thinking", "hmm");
+    h.fireEvent({ type: "message_end", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]!.payload.block_type).toBe("thinking");
   });
 
-  test("message_end: stream.endStream is called", () => {
-    const body = h.makeBody();
-    body.handlePiAgentEvent({
+  test("message_update text_delta flushes synchronously once the buffer reaches 64 chars", () => {
+    const chunks: EventEnvelope<"agent.stream.chunk">[] = [];
+    h.subscribeSubject("agent.stream.chunk", (env) => {
+      chunks.push(env);
+    });
+    h.makeBody();
+    h.fireEvent({ type: "message_start", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
+    const deltaEvent: AssistantMessageEvent = {
+      type: "text_delta",
+      contentIndex: 0,
+      delta: "x".repeat(64),
+      partial: { role: "assistant", content: [] } as unknown as AssistantMessage,
+    };
+    h.fireEvent({
+      type: "message_update",
+      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
+      assistantMessageEvent: deltaEvent,
+    });
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]!.payload).toMatchObject({
+      stream_id: 1,
+      seq: 0,
+      block_type: "text",
+      text: "x".repeat(64),
+    });
+  });
+
+  test("message_end (assistant) publishes agent.stream.end", () => {
+    const ends: EventEnvelope<"agent.stream.end">[] = [];
+    h.subscribeSubject("agent.stream.end", (env) => {
+      ends.push(env);
+    });
+    h.makeBody();
+    h.fireEvent({ type: "message_start", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
+    h.fireEvent({ type: "message_end", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
+    expect(ends).toHaveLength(1);
+    expect(ends[0]!.payload).toMatchObject({ stream_id: 1, total_chunks: 0 });
+  });
+
+  test("message_end with non-assistant role publishes no agent.stream.end", () => {
+    const ends: EventEnvelope<"agent.stream.end">[] = [];
+    h.subscribeSubject("agent.stream.end", (env) => {
+      ends.push(env);
+    });
+    h.makeBody();
+    h.fireEvent({
       type: "message_end",
-      message: { role: "assistant", content: [] } as unknown as AgentMessage,
+      message: { role: "user", content: "hi" } as unknown as AgentMessage,
     });
-    expect(h.endStream).toHaveBeenCalled();
+    expect(ends).toHaveLength(0);
   });
 
-  test("message_end: memory.persist is called for every message role (no role check)", async () => {
-    const cases: Array<{ name: string; message: Record<string, unknown> }> = [
-      {
-        name: "assistant",
-        message: { role: "assistant", content: [{ type: "text", text: "x" }] },
-      },
-      {
-        name: "user",
-        message: { role: "user", content: "hi" },
-      },
-      {
-        name: "toolResult",
-        message: {
-          role: "toolResult",
-          toolCallId: "call_x",
-          content: "ok",
-          isError: false,
-          timestamp: Date.now(),
-        },
-      },
-      {
-        name: "custom",
-        message: {
-          role: "custom",
-          customType: "test",
-          content: "x",
-          display: false,
-          timestamp: Date.now(),
-        },
-      },
+  test("message_end persists every message role via memory.persist", async () => {
+    const cases: Array<Record<string, unknown>> = [
+      { role: "assistant", content: [{ type: "text", text: "x" }] },
+      { role: "user", content: "hi" },
+      { role: "toolResult", toolCallId: "call_x", content: "ok", isError: false, timestamp: 0 },
+      { role: "custom", customType: "test", content: "x", display: false, timestamp: 0 },
     ];
-    for (const { message } of cases) {
-      const body = h.makeBody();
-      body.handlePiAgentEvent({
-        type: "message_end",
-        message: message as unknown as AgentMessage,
-      });
+    h.makeBody();
+    for (const message of cases) {
+      h.fireEvent({ type: "message_end", message: message as unknown as AgentMessage });
       await Promise.resolve();
       expect(h.persisted.length).toBe(1);
       h.persisted.length = 0;
     }
   });
 
-  test("message_end with non-assistant role: stream.endStream is NOT called", () => {
-    const body = h.makeBody();
-    body.handlePiAgentEvent({
-      type: "message_end",
-      message: {
-        role: "user",
-        content: "hi",
-      } as unknown as AgentMessage,
-    });
-    expect(h.endStream).not.toHaveBeenCalled();
+  test("message_end persists the assistant message end-to-end (start + end)", async () => {
+    h.makeBody();
+    const msg = {
+      role: "assistant",
+      content: [{ type: "text", text: "hello" }],
+      timestamp: 0,
+    } as unknown as AssistantMessage;
+    h.fireEvent({ type: "message_start", message: msg });
+    h.fireEvent({ type: "message_end", message: msg });
+    await Promise.resolve();
+    expect(h.persisted).toHaveLength(1);
   });
 
-  test("agent_end drains the queue: dequeued message is passed to agent.followUp (not prompt, to avoid activeRun throw)", async () => {
+  test("agent_end drains the queue: the dequeued message goes to followUp (not prompt)", async () => {
     const body = h.makeBody();
     await body.start();
     h.state.isStreaming = true;
@@ -530,85 +996,72 @@ describe("JieAgentBody — handlePiAgentEvent (stream bridge)", () => {
     expect(h.followUp.mock.calls.length).toBe(0);
     expect(h.prompt.mock.calls.length).toBe(0);
     h.state.isStreaming = false;
-    body.handlePiAgentEvent({ type: "agent_end", messages: [] });
+    h.fireEvent({ type: "agent_end", messages: [] });
     expect(h.followUp.mock.calls.length).toBe(1);
     expect(h.prompt.mock.calls.length).toBe(0);
+    body.stop();
   });
 
-  test("agent_end with no queued message: agent.followUp not called", async () => {
-    const body = h.makeBody();
-    body.handlePiAgentEvent({ type: "agent_end", messages: [] });
+  test("agent_end with no queued message: followUp not called", () => {
+    h.makeBody();
+    h.fireEvent({ type: "agent_end", messages: [] });
     expect(h.followUp.mock.calls.length).toBe(0);
     expect(h.prompt.mock.calls.length).toBe(0);
   });
 
-  test("turn_end does NOT publish agent.idle (fix #89: avoid spurious idle on sub-turns)", () => {
-    const h = makeHarness();
-    const body = h.makeBody();
+  test("turn_end does NOT publish agent.idle (fix #89: no spurious idle on sub-turns)", () => {
     let idleCount = 0;
-    h.events.subscribe("agent.idle", () => {
+    h.subscribeSubject("agent.idle", () => {
       idleCount += 1;
     });
-    body.handlePiAgentEvent({
+    h.makeBody();
+    h.fireEvent({
       type: "turn_end",
-      message: { role: "assistant", content: [] } as unknown as AgentMessage,
+      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
       toolResults: [],
     });
     expect(idleCount).toBe(0);
   });
 
   test("turn_end drains the queue via followUp (no idle publish) (#89)", async () => {
-    const h = makeHarness();
     const body = h.makeBody();
     await body.start();
     h.state.isStreaming = true;
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "queued msg", "general-1"));
     h.state.isStreaming = false;
-    body.handlePiAgentEvent({
+    h.fireEvent({
       type: "turn_end",
-      message: { role: "assistant", content: [] } as unknown as AgentMessage,
+      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
       toolResults: [],
     });
     expect(h.followUp.mock.calls.length).toBe(1);
     expect(h.prompt.mock.calls.length).toBe(0);
+    body.stop();
   });
 
   test("agent_end publishes agent.idle exactly once per run (#89)", () => {
-    const h = makeHarness();
-    const body = h.makeBody();
     let idleCount = 0;
-    h.events.subscribe("agent.idle", () => {
+    h.subscribeSubject("agent.idle", () => {
       idleCount += 1;
     });
-    body.handlePiAgentEvent({
+    h.makeBody();
+    h.fireEvent({
       type: "turn_end",
-      message: { role: "assistant", content: [] } as unknown as AgentMessage,
+      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
       toolResults: [],
     });
-    body.handlePiAgentEvent({
+    h.fireEvent({
       type: "turn_end",
-      message: { role: "assistant", content: [] } as unknown as AgentMessage,
+      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
       toolResults: [],
     });
     expect(idleCount).toBe(0);
-    body.handlePiAgentEvent({ type: "agent_end", messages: [] });
+    h.fireEvent({ type: "agent_end", messages: [] });
     expect(idleCount).toBe(1);
   });
 });
 
-describe("JieAgentBody — addExternalCleanup + stop()", () => {
-  test("stop() invokes each external cleanup", () => {
-    const h = makeHarness();
-    const body = h.makeBody();
-    const cleanup1 = vi.fn(() => {});
-    const cleanup2 = vi.fn(() => {});
-    body.addExternalCleanup(cleanup1);
-    body.addExternalCleanup(cleanup2);
-    body.stop();
-    expect(cleanup1).toHaveBeenCalled();
-    expect(cleanup2).toHaveBeenCalled();
-  });
-
+describe("JieAgentBody — stop()", () => {
   test("stop() unsubscribes bus subscriptions registered via start()", async () => {
     const h = makeHarness();
     const body = h.makeBody();

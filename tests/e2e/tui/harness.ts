@@ -3,8 +3,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
-import { createJiePlatform, type JiePlatform } from "@cuzfrog/jie-platform";
-import { type CreateTUIOptions, type Tui, createTui } from "@cuzfrog/jie-tui";
+import { type AwilixContainer } from "awilix";
+import { bootPlatform, type JiePlatform, type PlatformCradle } from "@cuzfrog/jie-platform";
+import { bootTui, type CreateTUIOptions, type Tui, type TuiCradle } from "@cuzfrog/jie-tui";
 import { writeModelsJsonTo, writeSettingsJson } from "../_fixture.ts";
 
 type AgentId = `${string}:${string}`;
@@ -14,6 +15,8 @@ const POLL_INTERVAL_MS = 10;
 
 export interface TuiHarness {
   readonly dir: string;
+  readonly platformContainer: AwilixContainer<PlatformCradle>;
+  readonly tuiContainer: AwilixContainer<TuiCradle>;
   readonly tui: Tui;
   readonly platform: JiePlatform;
   readonly stdin: PassThrough;
@@ -59,21 +62,22 @@ export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> 
   process.env.LANG = LANG_DEFAULT;
   const prevLangAll = process.env.LC_ALL;
   process.env.LC_ALL = LANG_DEFAULT;
-  let platform: JiePlatform;
+  let platformContainer: AwilixContainer<PlatformCradle>;
   try {
-    platform = await createJiePlatform({ cwd: dir, homeJieDir: dir, projectJieDir: dir, resumeSessionId: opts.resumeSessionId });
+    platformContainer = bootPlatform({ cwd: dir, homeJieDir: dir, projectJieDir: dir, resumeSessionId: opts.resumeSessionId });
   } catch (err) {
     restoreLang(prevLang, prevLangAll);
     if (opts.cwd === undefined) rmSync(dir, { recursive: true, force: true });
     throw err;
   }
+  const platform = platformContainer.cradle.platform;
   const stdin = new TestReadable();
   const stdout = new TestWritable();
   stdout.rows = opts.rows ?? 30;
   const stderr = new TestWritable();
   stderr.rows = opts.rows ?? 30;
   const tuiOptions: CreateTUIOptions = { cwd: dir, rows: opts.rows ?? 30 };
-  const tui = createTui(tuiOptions, {
+  const tuiContainer = bootTui(tuiOptions, {
     platform,
     stdin,
     stdout,
@@ -81,8 +85,9 @@ export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> 
     gitBranch: "main",
     gitDirty: false,
   });
+  const tui = tuiContainer.cradle.tui;
   void tui.start();
-  return { dir, tui, platform, stdin, stdout, ownedDir: opts.cwd === undefined };
+  return { dir, platformContainer, tuiContainer, tui, platform, stdin, stdout, ownedDir: opts.cwd === undefined };
 }
 
 export async function stopTui(harness: TuiHarness): Promise<void> {

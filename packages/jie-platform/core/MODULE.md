@@ -1,7 +1,5 @@
 ---
 no-new-exports:
-  - agent-body-bridging.test.ts
-  - agent-body.test.ts
   - agent-body.ts
   - jie-agent-body.test.ts
   - jie-agent-body.ts

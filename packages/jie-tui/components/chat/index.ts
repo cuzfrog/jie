@@ -1,3 +1,2 @@
-export { UserMessage } from "./user-message";
-export { AssistantMessage } from "./assistant-message";
-export { TodoList } from "./todo-list";
+export { type AssistantMessageComponent, type ChatMessages, type UserMessageComponent } from "./chat-messages";
+export { registerChatModule } from "./module";

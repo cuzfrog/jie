@@ -11,7 +11,8 @@
     "yaml": "catalog:",
     "ulid": "catalog:",
     "node-html-parser": "catalog:",
-    "tslog": "catalog:"
+    "tslog": "catalog:",
+    "awilix": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

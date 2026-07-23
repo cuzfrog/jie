@@ -45,10 +45,6 @@ export interface MemoryManager {
   listSessions(teamId: string): ReadonlyArray<SessionSummary>;
 }
 
-export function createMemoryManager(storage: Storage): MemoryManager {
-  return new SqliteMemoryManager(storage);
-}
-
 export class SqliteMemoryManager implements MemoryManager {
   private readonly storage: Storage;
 

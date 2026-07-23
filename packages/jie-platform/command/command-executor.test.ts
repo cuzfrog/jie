@@ -1,7 +1,7 @@
 import { type AuthStore, type Settings, type SettingsStore } from "../config";
 import { type TeamManager } from "../team";
 import { type GitService, type GitSnapshot } from "../services";
-import { type CommandExecutor, createCommandExecutor } from "./command-executor";
+import { CommandExecutorImpl } from "./command-executor";
 
 const authStore = vi.mocked<AuthStore>({
   load: vi.fn(),
@@ -44,8 +44,8 @@ type AuthConfigRemoved = ReturnType<typeof authStore.removeProvider>;
 type AuthConfigCleared = ReturnType<typeof authStore.clear>;
 type TeamInfo = Awaited<ReturnType<typeof teamManager.load>>;
 
-function makeExecutor(): CommandExecutor {
-  return createCommandExecutor({ authStore, settingsStore, teamManager, gitService });
+function makeExecutor(): CommandExecutorImpl {
+  return new CommandExecutorImpl(authStore, settingsStore, teamManager, gitService);
 }
 
 beforeEach(() => {
@@ -54,7 +54,7 @@ beforeEach(() => {
   gitService.getSnapshot.mockReturnValue(EMPTY_GIT_SNAPSHOT);
 });
 
-describe("CommandExecutor", () => {
+describe("CommandExecutorImpl", () => {
   describe("login", () => {
     test("calls authStore.setProvider and persists the new auth config", async () => {
       const next: AuthConfig = { anthropic: { type: "api_key", key: "sk-test" } };

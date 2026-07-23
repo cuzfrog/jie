@@ -11,21 +11,11 @@ export interface ModelRegistry {
   getApiKey(provider: string): string | undefined;
 }
 
-export function createModelRegistry(
-  homeJieDir: string,
-  projectJieDir: string | null,
-  authStore: AuthStore,
-): ModelRegistry {
-  return new PiModelRegistry(loadModelsConfig(homeJieDir, projectJieDir), authStore);
-}
-
-class PiModelRegistry implements ModelRegistry {
+export class PiModelRegistry implements ModelRegistry {
   private readonly custom: ResolvedModelsConfig;
-  private readonly authStore: AuthStore;
 
-  constructor(custom: ResolvedModelsConfig, authStore: AuthStore) {
-    this.custom = custom;
-    this.authStore = authStore;
+  constructor(homeJieDir: string, projectJieDir: string | null, private readonly authStore: AuthStore) {
+    this.custom = loadModelsConfig(homeJieDir, projectJieDir);
   }
 
   providers(): string[] {

@@ -1,7 +1,7 @@
 import { PassThrough } from "node:stream";
 import { Events, type AnyEventEnvelope, type EventEnvelope, type EventType, type JiePlatform, type SessionSummary } from "@cuzfrog/jie-platform";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { createTui, type Tui } from "../tui";
+import { bootTui, type Tui } from "../";
 import { VirtualTerminal } from "./virtual-terminal";
 
 const COLS = 80;
@@ -49,7 +49,7 @@ async function bootScreen(): Promise<ScreenHarness> {
   const previousLang = process.env.LANG;
   process.env.LANG = UTF8_LOCALE;
   try {
-    const tui = createTui({ cwd: "/repo" }, { platform: makePlatform(handlers), stdin, stdout });
+    const tui = bootTui({ cwd: "/repo" }, { platform: makePlatform(handlers), stdin, stdout }).cradle.tui;
     void tui.start();
     await vt.waitForRender();
     return {

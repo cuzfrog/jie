@@ -1,6 +1,6 @@
 import { PassThrough } from "node:stream";
-import { createJiePlatform, type JiePlatform } from "@cuzfrog/jie-platform";
-import { createTui, type Tui } from "../tui";
+import { bootPlatform, type JiePlatform } from "@cuzfrog/jie-platform";
+import { bootTui, type Tui } from "../";
 import { VirtualTerminal } from "./virtual-terminal";
 
 export interface HeadlessTui {
@@ -64,8 +64,8 @@ export async function startHeadlessTui(options: StartHeadlessOptions): Promise<H
   process.env.LANG = UTF8_LOCALE;
   process.env.LC_ALL = UTF8_LOCALE;
   try {
-    const platform = await createJiePlatform({ cwd: options.dir, homeJieDir: options.dir, projectJieDir: options.dir });
-    const tui = createTui({ cwd: options.dir, rows }, { platform, stdin, stdout, stderr, gitBranch: options.gitBranch ?? "main" });
+    const platform = bootPlatform({ cwd: options.dir, homeJieDir: options.dir, projectJieDir: options.dir }).cradle.platform;
+    const tui = bootTui({ cwd: options.dir, rows }, { platform, stdin, stdout, stderr, gitBranch: options.gitBranch ?? "main" }).cradle.tui;
     const started = tui.start();
     return {
       tui,

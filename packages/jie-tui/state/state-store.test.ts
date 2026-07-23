@@ -1,13 +1,10 @@
 import { Events } from "@cuzfrog/jie-platform";
-import { Actions, createStateStore } from "./";
-
-declare const test: (name: string, fn: () => void | Promise<void>) => void;
-declare const describe: (name: string, fn: () => void) => void;
-declare const expect: typeof import("bun:test").expect;
+import { Actions } from "./";
+import { StateStoreImpl } from "./state-store";
 
 describe("StateStore", () => {
   test("nested dispatch in subscriber preserves inner update", () => {
-    const store = createStateStore();
+    const store = new StateStoreImpl();
     store.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
       id: "my-team",
       leaderKey: "general-1",
@@ -36,7 +33,7 @@ describe("StateStore", () => {
   });
 
   test("nested dispatch in subscriber does not overwrite outer state", () => {
-    const store = createStateStore();
+    const store = new StateStoreImpl();
     store.subscribe((action) => {
       if (action.type === Actions.submitEditorText("").type) {
         store.dispatch(Actions.setEditorText("inner"));
@@ -49,7 +46,7 @@ describe("StateStore", () => {
   });
 
   test("multiple subscribers all receive the action", () => {
-    const store = createStateStore();
+    const store = new StateStoreImpl();
     const calls: string[] = [];
     store.subscribe((action) => {
       calls.push(`a:${action.type}`);
@@ -65,7 +62,7 @@ describe("StateStore", () => {
   });
 
   test("unsubscribe stops further notifications", () => {
-    const store = createStateStore();
+    const store = new StateStoreImpl();
     let count = 0;
     const off = store.subscribe(() => {
       count += 1;
@@ -79,7 +76,7 @@ describe("StateStore", () => {
   });
 
   test("state is updated before subscribers are invoked", () => {
-    const store = createStateStore();
+    const store = new StateStoreImpl();
     let observed: string | undefined;
     store.subscribe((action) => {
       if (action.type === Actions.setEditorText("").type) {
@@ -93,7 +90,7 @@ describe("StateStore", () => {
   });
 
   test("subscriber rejection is logged but does not propagate from dispatch", async () => {
-    const store = createStateStore();
+    const store = new StateStoreImpl();
     store.subscribe(() => Promise.reject(new Error("boom")));
     store.dispatch(Actions.setEditorText("hello"));
     expect(store.getState().editorText).toBe("hello");

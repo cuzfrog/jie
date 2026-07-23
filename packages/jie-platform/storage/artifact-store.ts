@@ -16,10 +16,6 @@ export interface ArtifactStore {
   list(prefix: string): Promise<ReadonlyArray<{ readonly key: string; readonly created_at: string }>>;
 }
 
-export function createArtifactStore(storage: Storage): ArtifactStore {
-  return new SqliteArtifactStore(storage);
-}
-
 const ARTIFACT_KEY_PATTERN = /^[A-Za-z0-9_./-]{1,256}$/;
 const ARTIFACT_CONTENT_MAX = 5 * 1024 * 1024;
 

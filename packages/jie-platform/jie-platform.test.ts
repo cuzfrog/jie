@@ -1,43 +1,15 @@
-import { join } from "node:path";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { createEventManager, Events, type EventEnvelope, type EventManager } from "./event";
-import { createJiePlatform } from "./jie-platform";
-import { type Command, type CommandExecutor, type CommandName } from "./command";
-import {
-  type AuthStore,
-  type ModelRegistry,
-  type Settings,
-  type SettingsStore,
-  createModelRegistry,
-} from "./config";
-import { type TeamManager, createTeamManager } from "./team";
-import { type ToolRegistry, createToolRegistry } from "./tools";
-import {
-  type ArtifactStore,
-  type MemoryManager,
-  type Storage,
-  createArtifactStore,
-  createMemoryManager,
-  createStorage,
-} from "./storage";
+import { join } from "node:path";
+import { asValue, type AwilixContainer } from "awilix";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { Command, CommandExecutor, CommandName } from "./command";
+import type { Settings } from "./config";
+import { bootPlatform, type PlatformCradle } from "./container";
+import { Events, type EventEnvelope } from "./event";
 
 const commandExecutor = vi.mocked<CommandExecutor>({
   execute: vi.fn(),
-});
-
-const settingsStore = vi.mocked<SettingsStore>({
-  load: vi.fn(),
-  setDefaultProvider: vi.fn(),
-  setDefaultTeam: vi.fn(),
-});
-
-const authStore = vi.mocked<AuthStore>({
-  load: vi.fn(),
-  saveAuthConfig: vi.fn(),
-  setProvider: vi.fn(),
-  removeProvider: vi.fn(),
-  clear: vi.fn(),
 });
 
 const DEFAULT_SETTINGS: Settings = {
@@ -45,88 +17,60 @@ const DEFAULT_SETTINGS: Settings = {
   defaultModel: "claude-sonnet-4-5",
 };
 
-interface PlatformTestDeps {
-  readonly eventManager: EventManager;
-  readonly settingsStore: SettingsStore;
-  readonly storage: Storage;
-  readonly teamManager: TeamManager;
-  readonly modelRegistry: ModelRegistry;
-  readonly toolRegistry: ToolRegistry;
-  readonly artifactStore: ArtifactStore;
-  readonly memoryManager: MemoryManager;
-  readonly commandExecutor: CommandExecutor;
+function bootContainer(workspace: string, homeJieDir: string, overrides: { commandExecutor?: CommandExecutor } = {}): AwilixContainer<PlatformCradle> {
+  writeFileSync(join(homeJieDir, "settings.json"), JSON.stringify(DEFAULT_SETTINGS));
+  const container = bootPlatform({ cwd: workspace, homeJieDir, projectJieDir: null, inMemory: true });
+  if (overrides.commandExecutor !== undefined) {
+    container.register({ commandExecutor: asValue(overrides.commandExecutor) });
+  }
+  return container;
 }
 
-function makeDeps(workspace: string, homeJieDir: string): PlatformTestDeps {
-  const projectJieDir = join(workspace, ".jie");
-  const storage = createStorage({ type: "sqlite", filePath: ":memory:" });
-  const eventManager = createEventManager();
-  const artifactStore = createArtifactStore(storage);
-  const toolRegistry = createToolRegistry({
-    workspaceRoot: workspace,
-    eventManager,
-    artifactStore,
-  });
-  const modelRegistry = createModelRegistry(homeJieDir, projectJieDir, authStore);
-  const memoryManager = createMemoryManager(storage);
-  const teamManager = createTeamManager(
-    { homeJieDir, projectJieDir },
-    { eventManager, settingsStore, modelRegistry, toolRegistry, artifactStore, memoryManager },
-  );
+function assistantMessage(text: string, timestamp: number): AgentMessage {
   return {
-    eventManager,
-    settingsStore,
-    storage,
-    teamManager,
-    modelRegistry,
-    toolRegistry,
-    artifactStore,
-    memoryManager,
-    commandExecutor,
+    role: "assistant",
+    content: [{ type: "text", text }],
+    api: "openai", provider: "openai", model: "m",
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+    stopReason: "stop", timestamp,
   };
 }
 
-describe("createJiePlatform", () => {
+describe("bootPlatform", () => {
   let workspace: string;
   let homeJieDir: string;
-  let projectJieDir: string;
 
   beforeEach(() => {
     workspace = mkdtempSync(join(tmpdir(), "jie-platform-"));
     homeJieDir = mkdtempSync(join(tmpdir(), "jie-platform-home-"));
-    projectJieDir = join(workspace, ".jie");
-    mkdirSync(projectJieDir, { recursive: true });
-    settingsStore.load.mockReturnValue(DEFAULT_SETTINGS);
   });
 
   afterEach(() => {
-    rmSync(projectJieDir, { recursive: true, force: true });
     rmSync(workspace, { recursive: true, force: true });
     rmSync(homeJieDir, { recursive: true, force: true });
   });
 
-  test("handle.settings reflects the snapshot from settingsStore.load() at construction", async () => {
-    const customSettings: Settings = { defaultProvider: "openai", defaultModel: "gpt-5" };
-    settingsStore.load.mockReturnValueOnce(customSettings);
-    const deps = makeDeps(workspace, homeJieDir);
-    const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
-    expect(handle.settings).toBe(customSettings);
+  test("resolves platform as a singleton", () => {
+    const container = bootContainer(workspace, homeJieDir);
+    expect(container.resolve("platform")).toBe(container.cradle.platform);
   });
 
-  test("construction does not eagerly publish system.team.loaded; teams() is empty until execute({name:'team'})", async () => {
-    const deps = makeDeps(workspace, homeJieDir);
+  test("handle.settings reflects the settings file at boot", () => {
+    const platform = bootContainer(workspace, homeJieDir).cradle.platform;
+    expect(platform.settings).toEqual(DEFAULT_SETTINGS);
+  });
+
+  test("construction does not eagerly load teams; teams() is empty", () => {
+    const container = bootContainer(workspace, homeJieDir);
     const seen: EventEnvelope<"system.team.loaded">[] = [];
-    deps.eventManager.subscribe("system.team.loaded", (env) => seen.push(env));
-    const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
+    container.cradle.eventManager.subscribe("system.team.loaded", (env) => seen.push(env));
+    expect(container.cradle.platform.teams()).toEqual([]);
     expect(seen).toEqual([]);
-    expect(handle.teams()).toEqual([]);
-    void handle;
   });
 
   describe("execute", () => {
-    test("delegates every command to commandExecutor.execute with the same command", async () => {
-      const deps = makeDeps(workspace, homeJieDir);
-      const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
+    test("delegates every command to the cradle commandExecutor", async () => {
+      const platform = bootContainer(workspace, homeJieDir, { commandExecutor }).cradle.platform;
       const commands: ReadonlyArray<Command<CommandName>> = [
         { name: "login", provider: "anthropic", apiKey: "sk-test" },
         { name: "logout" },
@@ -140,7 +84,7 @@ describe("createJiePlatform", () => {
         { name: "stop" },
       ];
       for (const command of commands) {
-        await handle.execute(command);
+        await platform.execute(command);
       }
       expect(commandExecutor.execute).toHaveBeenCalledTimes(commands.length);
       for (const command of commands) {
@@ -149,50 +93,45 @@ describe("createJiePlatform", () => {
     });
 
     test("propagates the executor's return value to the caller", async () => {
-      const deps = makeDeps(workspace, homeJieDir);
-      const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
+      const platform = bootContainer(workspace, homeJieDir, { commandExecutor }).cradle.platform;
       commandExecutor.execute.mockResolvedValueOnce({ provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null });
-      const result = await handle.execute({ name: "getDefaultModel" });
+      const result = await platform.execute({ name: "getDefaultModel" });
       expect(result).toEqual({ provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null });
     });
 
     test("propagates the executor's rejection to the caller", async () => {
-      const deps = makeDeps(workspace, homeJieDir);
-      const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
+      const platform = bootContainer(workspace, homeJieDir, { commandExecutor }).cradle.platform;
       commandExecutor.execute.mockRejectedValueOnce(new Error("boom"));
-      expect(handle.execute({ name: "stop" })).rejects.toThrow("boom");
+      expect(platform.execute({ name: "stop" })).rejects.toThrow("boom");
     });
   });
 
   describe("subscribe", () => {
-    test("forwards events on the requested topic only", async () => {
-      const deps = makeDeps(workspace, homeJieDir);
-      const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
+    test("forwards events on the requested topic only", () => {
+      const container = bootContainer(workspace, homeJieDir);
       const seen: string[] = [];
-      handle.subscribe("agent.interrupt", (env) => seen.push(env.type));
-      deps.eventManager.publish(Events.agentInterrupt({ kind: "user" }, "t1", "general-1"));
-      deps.eventManager.publish(Events.systemError({ kind: "system" }, "boom"));
+      container.cradle.platform.subscribe("agent.interrupt", (env) => seen.push(env.type));
+      container.cradle.eventManager.publish(Events.agentInterrupt({ kind: "user" }, "t1", "general-1"));
+      container.cradle.eventManager.publish(Events.systemError({ kind: "system" }, "boom"));
       expect(seen).toEqual(["agent.interrupt"]);
     });
 
-    test("returns an unsubscribe function that detaches the subscription", async () => {
-      const deps = makeDeps(workspace, homeJieDir);
-      const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
+    test("returns an unsubscribe function that detaches the subscription", () => {
+      const container = bootContainer(workspace, homeJieDir);
       const seen: string[] = [];
-      const unsubscribe = handle.subscribe("agent.interrupt", (env) => seen.push(env.type));
+      const unsubscribe = container.cradle.platform.subscribe("agent.interrupt", (env) => seen.push(env.type));
       unsubscribe();
-      deps.eventManager.publish(Events.agentInterrupt({ kind: "user" }, "t1", "general-1"));
+      container.cradle.eventManager.publish(Events.agentInterrupt({ kind: "user" }, "t1", "general-1"));
       expect(seen).toEqual([]);
     });
   });
 
   describe("prompt", () => {
-    test("publishes a user.prompt event addressed to the given agent on the active team", async () => {
-      const deps = makeDeps(workspace, homeJieDir);
-      const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
+    test("publishes a user.prompt event addressed to the given agent", () => {
+      const container = bootContainer(workspace, homeJieDir);
       const events: EventEnvelope<"user.prompt">[] = [];
-      deps.eventManager.subscribe("user.prompt", (env) => events.push(env));
-      handle.prompt("minimal", "general-1", "hello");
+      container.cradle.eventManager.subscribe("user.prompt", (env) => events.push(env));
+      container.cradle.platform.prompt("minimal", "general-1", "hello");
       expect(events).toHaveLength(1);
       expect(events[0]!.payload).toEqual({ teamId: "minimal", agentKey: "general-1", prompt: "hello" });
       expect(events[0]!.sender).toEqual({ kind: "user" });
@@ -200,15 +139,49 @@ describe("createJiePlatform", () => {
   });
 
   describe("interrupt", () => {
-    test("publishes an agent.interrupt event addressed to the given agent", async () => {
-      const deps = makeDeps(workspace, homeJieDir);
-      const handle = await createJiePlatform({ cwd: workspace, homeJieDir, projectJieDir }, deps);
+    test("publishes an agent.interrupt event addressed to the given agent", () => {
+      const container = bootContainer(workspace, homeJieDir);
       const events: EventEnvelope<"agent.interrupt">[] = [];
-      deps.eventManager.subscribe("agent.interrupt", (env) => events.push(env));
-      handle.interrupt("minimal", "general-1");
+      container.cradle.eventManager.subscribe("agent.interrupt", (env) => events.push(env));
+      container.cradle.platform.interrupt("minimal", "general-1");
       expect(events).toHaveLength(1);
       expect(events[0]!.sender).toEqual({ kind: "user" });
       expect(events[0]!.payload).toEqual({ teamId: "minimal", agentKey: "general-1" });
+    });
+  });
+
+  describe("team integration through the real container", () => {
+    test("execute team loads the builtin minimal team; agent.model.assigned precedes system.team.loaded", async () => {
+      const container = bootContainer(workspace, homeJieDir);
+      const platform = container.cradle.platform;
+      const order: string[] = [];
+      let loaded: EventEnvelope<"system.team.loaded"> | undefined;
+      container.cradle.eventManager.subscribe("agent.model.assigned", () => order.push("model.assigned"));
+      container.cradle.eventManager.subscribe("system.team.loaded", (env) => {
+        order.push("team.loaded");
+        loaded = env;
+      });
+      const team = await platform.execute({ name: "team" });
+      expect(team.id).toBe("minimal");
+      expect(order).toEqual(["model.assigned", "team.loaded"]);
+      for (const agent of loaded!.payload.agents) {
+        expect(agent.model).not.toBeNull();
+      }
+      expect(platform.teams().map((t) => t.id)).toEqual(["minimal"]);
+      container.cradle.teamManager.stop();
+    });
+
+    test("resumeSession carries restored history on the event; the returned identity carries empty history", async () => {
+      const container = bootContainer(workspace, homeJieDir);
+      const platform = container.cradle.platform;
+      container.cradle.memoryManager.persist({ role: "user", content: "[user]: hello", timestamp: 1 }, "general-1", "01-seeded", "minimal");
+      container.cradle.memoryManager.persist(assistantMessage("hi there", 2), "general-1", "01-seeded", "minimal");
+      const loaded: EventEnvelope<"system.team.loaded">[] = [];
+      container.cradle.eventManager.subscribe("system.team.loaded", (env) => loaded.push(env));
+      const team = await platform.execute({ name: "resumeSession", teamId: "minimal", sessionId: "01-seeded" });
+      expect(team.history[0]?.messages).toEqual([]);
+      expect(loaded[0]?.payload.history[0]?.messages).toHaveLength(2);
+      container.cradle.teamManager.stop();
     });
   });
 });

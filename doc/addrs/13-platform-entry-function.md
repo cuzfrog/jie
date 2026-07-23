@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. The platform's entry point is `createJiePlatform` in `packages/jie-platform/jie-platform.ts`; there is no `Supervisor` class — "supervisor" was a spec placeholder for "the thing that owns lifecycle", now an explicit function plus a small handle object.
+Accepted. The platform's entry point is `createJiePlatform` in `packages/jie-platform/jie-platform.ts`; there is no `Supervisor` class — "supervisor" was a spec placeholder for "the thing that owns lifecycle", now an explicit function plus a small handle object. The "no class, no DI" rationale below is superseded by ADR 31 (dependency injection via awilix): the entry function survives as `bootPlatform(options): AwilixContainer<PlatformCradle>`, same role, container-shaped result.
 
 ## Decision
 

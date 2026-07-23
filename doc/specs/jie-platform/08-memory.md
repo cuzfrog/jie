@@ -17,7 +17,7 @@ interface MemoryManager {
 }
 ```
 
-The manager holds no in-memory copy of the conversation — pi-agent's `state.messages` is the sole in-memory source of truth. `hasSession` is called by `createJiePlatform` when validating `--resume <id>`; the CLI never runs session-id SQL itself.
+The manager holds no in-memory copy of the conversation — pi-agent's `state.messages` is the sole in-memory source of truth. `hasSession` is called by the platform's `TeamManager` (via the `resumeSessionId` cradle value) when validating `--resume <id>` at team load; the CLI never runs session-id SQL itself.
 
 ### Persist
 
@@ -31,7 +31,7 @@ Called on every pi-agent `message_end`: the message is serialized (`JSON.stringi
 
 ### Restore
 
-The body's `session_id` is supplied by the platform (ADR 17): `createJiePlatform` validates `JiePlatformOptions.resumeSessionId` via `hasSession` (mismatch → `unknown session_id: <id>`, exit 1) or mints a fresh ULID, and records it in a private `Map<team_id, session_id>` closure field (in-memory only; lost on process exit). All agents in the same team in the same process share one session id — conversation is bound to the team, not the process or the agent.
+The body's `session_id` is supplied by the platform (ADR 17): the platform's `TeamManager` validates `JiePlatformOptions.resumeSessionId` (a cradle value registered by `bootPlatform`) via `hasSession` (mismatch → `unknown session_id: <id>`, exit 1) or mints a fresh ULID, and records it in a private `Map<team_id, session_id>` field (in-memory only; lost on process exit). All agents in the same team in the same process share one session id — conversation is bound to the team, not the process or the agent.
 
 `restore(agent_key, session_id, team_id)` returns all rows matching `(team_id, agent_key, session_id)` with `compacted = false`, ordered by `seq`:
 

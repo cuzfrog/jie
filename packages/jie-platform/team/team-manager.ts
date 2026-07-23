@@ -1,31 +1,14 @@
 import { ulid } from "ulid";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { type AgentBody, createAgentBody } from "../core";
+import type { AgentBody, AgentBodyParams } from "../core";
 import { type EventManager, Events } from "../event";
 import { JiePlatformError } from "../jie-platform-errors";
-import { type ArtifactStore, type MemoryManager, type SessionSummary } from "../storage";
-import { type SettingsStore } from "../config";
-import { type ModelRegistry } from "../config";
-import { type ToolRegistry } from "../tools";
+import type { MemoryManager, SessionSummary } from "../storage";
+import { type ModelRegistry, type SettingsStore } from "../config";
 import { type AgentSoul, type TeamBlueprint, type TeamBlueprintLocation, BUILTIN_MINIMAL_TEAM_ID } from "./types";
 import { type TeamRegistry, createTeamRegistry } from "./registry";
 import type { AgentHistory, AgentInfo, TeamInfo } from "../types";
-
-export interface TeamManagerOptions {
-  readonly homeJieDir: string;
-  readonly projectJieDir: string | null;
-  readonly resumeSessionId?: string;
-}
-
-export interface TeamManagerDeps {
-  readonly eventManager: EventManager;
-  readonly settingsStore: SettingsStore;
-  readonly modelRegistry: ModelRegistry;
-  readonly toolRegistry: ToolRegistry;
-  readonly artifactStore: ArtifactStore;
-  readonly memoryManager: MemoryManager;
-}
 
 export interface TeamManager {
   load(teamId?: string): Promise<TeamInfo>;
@@ -38,44 +21,86 @@ export interface TeamManager {
   stop(): void;
 }
 
-export function createTeamManager(options: TeamManagerOptions, deps: TeamManagerDeps): TeamManager {
-  const teamRegistry: TeamRegistry = createTeamRegistry({
-    homeJieDir: options.homeJieDir,
-    projectJieDir: options.projectJieDir,
-  });
-  const { eventManager, settingsStore, modelRegistry, toolRegistry, artifactStore, memoryManager } = deps;
-  const loadedTeams = new Map<string, AgentBody[]>();
-  const sessionIds = new Map<string, string>();
+export class TeamManagerImpl implements TeamManager {
+  private readonly teamRegistry: TeamRegistry;
+  private readonly loadedTeams = new Map<string, AgentBody[]>();
+  private readonly sessionIds = new Map<string, string>();
 
-  async function loadImpl(teamId?: string, overrideSessionId?: string): Promise<TeamInfo> {
-    const requested = resolveTeamId(teamId);
-    const existing = loadedTeams.get(requested);
+  constructor(
+    homeJieDir: string,
+    projectJieDir: string | null,
+    private readonly eventManager: EventManager,
+    private readonly settingsStore: SettingsStore,
+    private readonly modelRegistry: ModelRegistry,
+    private readonly memoryManager: MemoryManager,
+    private readonly agentBodyFactory: (params: AgentBodyParams) => AgentBody,
+    private readonly resumeSessionId: string | undefined = undefined,
+  ) {
+    this.teamRegistry = createTeamRegistry({ homeJieDir, projectJieDir });
+  }
+
+  async load(teamId?: string): Promise<TeamInfo> {
+    return this.loadImpl(teamId);
+  }
+
+  async resumeSession(teamId: string, sessionId: string): Promise<TeamInfo> {
+    return this.loadImpl(teamId, sessionId);
+  }
+
+  listInstalled(): string[] {
+    return this.teamRegistry.listInstalled();
+  }
+
+  listLoaded(): ReadonlyMap<string, TeamInfo> {
+    const result = new Map<string, TeamInfo>();
+    for (const [id, bodies] of this.loadedTeams) {
+      result.set(id, toTeamInfo(id, bodies));
+    }
+    return result;
+  }
+
+  locate(teamId: string): TeamBlueprintLocation {
+    return this.teamRegistry.locate(teamId);
+  }
+
+  agents(teamId: string): ReadonlyArray<AgentInfo> {
+    return (this.loadedTeams.get(teamId) ?? []).map((b) => b.identity);
+  }
+
+  listSessions(teamId: string): ReadonlyArray<SessionSummary> {
+    return this.memoryManager.listSessions(teamId);
+  }
+
+  stop(): void {
+    for (const bodies of this.loadedTeams.values()) {
+      for (const b of bodies) b.stop();
+    }
+  }
+
+  private async loadImpl(teamId?: string, overrideSessionId?: string): Promise<TeamInfo> {
+    const requested = this.resolveTeamId(teamId);
+    const existing = this.loadedTeams.get(requested);
     if (existing !== undefined && overrideSessionId === undefined) {
       return toTeamInfo(requested, existing);
     }
     if (existing !== undefined && overrideSessionId !== undefined) {
       for (const body of existing) body.stop();
-      loadedTeams.delete(requested);
-      sessionIds.delete(requested);
+      this.loadedTeams.delete(requested);
+      this.sessionIds.delete(requested);
     }
-    const blueprint: TeamBlueprint = teamRegistry.parseTeamManifest(requested);
-    const sessionId = resolveSessionId(requested, overrideSessionId);
-    sessionIds.set(requested, sessionId);
+    const blueprint: TeamBlueprint = this.teamRegistry.parseTeamManifest(requested);
+    const sessionId = this.resolveSessionId(requested, overrideSessionId);
+    this.sessionIds.set(requested, sessionId);
     const bodies: AgentBody[] = [];
     for (const soul of blueprint.roles) {
-      const resolvedModel = resolveSoulModel(soul);
+      const resolvedModel = this.resolveSoulModel(soul);
       if (resolvedModel === undefined) continue;
-      const body = createAgentBody({
-        agentKey: `${soul.role}-1`, // TODO: multiple agents per role
+      const body = this.agentBodyFactory({
+        agentKey: `${soul.role}-1`,
         teamId: requested,
         soul,
         isLeader: soul.role === blueprint.leaderRole,
-        eventManager,
-        artifactStore,
-        memory: memoryManager,
         sessionId,
-        toolRegistry,
-        getApiKey: async (provider: string) => modelRegistry.getApiKey(provider),
         model: resolvedModel,
       });
       bodies.push(body);
@@ -84,47 +109,47 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
     for (const body of bodies) {
       restored.set(body.identity.agentKey, await body.restore());
     }
-    loadedTeams.set(requested, bodies);
-    publishTeamLoaded(requested, bodies, restored);
+    this.loadedTeams.set(requested, bodies);
+    this.publishTeamLoaded(requested, bodies, restored);
     for (const body of bodies) {
       await body.start();
     }
     return toTeamInfo(requested, bodies);
   }
 
-  function resolveTeamId(teamId?: string): string {
+  private resolveTeamId(teamId?: string): string {
     if (teamId !== undefined) return teamId;
-    const settings = settingsStore.load();
-    if (settings.defaultTeam !== undefined && teamRegistry.locate(settings.defaultTeam) !== null) {
+    const settings = this.settingsStore.load();
+    if (settings.defaultTeam !== undefined && this.teamRegistry.locate(settings.defaultTeam) !== null) {
       return settings.defaultTeam;
     }
-    return teamRegistry.listInstalled().find((id) => id !== BUILTIN_MINIMAL_TEAM_ID) ?? BUILTIN_MINIMAL_TEAM_ID;
+    return this.teamRegistry.listInstalled().find((id) => id !== BUILTIN_MINIMAL_TEAM_ID) ?? BUILTIN_MINIMAL_TEAM_ID;
   }
 
-  function resolveSessionId(teamId: string, overrideSessionId?: string): string {
-    const existing = sessionIds.get(teamId);
+  private resolveSessionId(teamId: string, overrideSessionId?: string): string {
+    const existing = this.sessionIds.get(teamId);
     if (existing !== undefined && overrideSessionId === undefined) return existing;
     if (overrideSessionId !== undefined) {
-      if (!memoryManager.hasSession(teamId, overrideSessionId)) {
+      if (!this.memoryManager.hasSession(teamId, overrideSessionId)) {
         throw new JiePlatformError("UNKNOWN_SESSION", {
           detail: `unknown session_id: ${overrideSessionId}`,
         });
       }
       return overrideSessionId;
     }
-    if (options.resumeSessionId !== undefined) {
-      if (!memoryManager.hasSession(teamId, options.resumeSessionId)) {
+    if (this.resumeSessionId !== undefined) {
+      if (!this.memoryManager.hasSession(teamId, this.resumeSessionId)) {
         throw new JiePlatformError("UNKNOWN_SESSION", {
-          detail: `unknown session_id: ${options.resumeSessionId}`,
+          detail: `unknown session_id: ${this.resumeSessionId}`,
         });
       }
-      return options.resumeSessionId;
+      return this.resumeSessionId;
     }
     return ulid();
   }
 
-  function resolveSoulModel(soul: AgentSoul): Model<Api> | undefined {
-    const settings = settingsStore.load();
+  private resolveSoulModel(soul: AgentSoul): Model<Api> | undefined {
+    const settings = this.settingsStore.load();
     const hasSettingsModel = settings.defaultProvider !== undefined && settings.defaultModel !== undefined;
     if (soul.model === "" && !hasSettingsModel) {
       throw new JiePlatformError("NO_MODEL_ERROR");
@@ -135,56 +160,15 @@ export function createTeamManager(options: TeamManagerOptions, deps: TeamManager
     const provider = modelStr.slice(0, slash);
     const modelId = modelStr.slice(slash + 1);
     try {
-      return modelRegistry.resolve(provider, modelId);
+      return this.modelRegistry.resolve(provider, modelId);
     } catch {
       return undefined;
     }
   }
 
-  function publishTeamLoaded(teamId: string, bodies: AgentBody[], restored: ReadonlyMap<string, ReadonlyArray<AgentMessage>>): void {
-    eventManager.publish(Events.teamLoaded({ kind: "system" }, toTeamInfo(teamId, bodies, restored)));
+  private publishTeamLoaded(teamId: string, bodies: AgentBody[], restored: ReadonlyMap<string, ReadonlyArray<AgentMessage>>): void {
+    this.eventManager.publish(Events.teamLoaded({ kind: "system" }, toTeamInfo(teamId, bodies, restored)));
   }
-
-  function agents(teamId: string): ReadonlyArray<AgentInfo> {
-    return (loadedTeams.get(teamId) ?? []).map((b) => b.identity);
-  }
-
-  function listLoaded(): ReadonlyMap<string, TeamInfo> {
-    const result = new Map<string, TeamInfo>();
-    for (const [id, bodies] of loadedTeams) {
-      result.set(id, toTeamInfo(id, bodies));
-    }
-    return result;
-  }
-
-  function stop(): void {
-    for (const bodies of loadedTeams.values()) {
-      for (const b of bodies) b.stop();
-    }
-  }
-
-  function listSessions(teamId: string): ReadonlyArray<SessionSummary> {
-    return memoryManager.listSessions(teamId);
-  }
-
-  async function resumeSession(teamId: string, sessionId: string): Promise<TeamInfo> {
-    return loadImpl(teamId, sessionId);
-  }
-
-  return {
-    load: loadImpl,
-    resumeSession,
-    listInstalled() {
-      return teamRegistry.listInstalled();
-    },
-    listLoaded,
-    locate(id) {
-      return teamRegistry.locate(id);
-    },
-    agents,
-    listSessions,
-    stop,
-  };
 }
 
 function toTeamInfo(id: string, bodies: AgentBody[], restored?: ReadonlyMap<string, ReadonlyArray<AgentMessage>>): TeamInfo {

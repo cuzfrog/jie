@@ -13,22 +13,39 @@ import type { StateStore } from "../state";
 const MAX_SUGGESTIONS = 20;
 const AT_PREFIX_PATTERN = /(?:^|[\s"])@([\w./-]*)$/;
 
-export function createJieAutocompleteProvider(basePath: string, platform: JiePlatform, stateStore: StateStore): AutocompleteProvider {
-  const combined = new CombinedAutocompleteProvider(slashCommands(platform, stateStore), basePath, null);
-  return {
-    triggerCharacters: ["@", "/"],
-    async getSuggestions(lines, cursorLine, cursorCol, options): Promise<AutocompleteSuggestions | null> {
-      const textBeforeCursor = (lines[cursorLine] ?? "").slice(0, cursorCol);
-      const query = atQuery(textBeforeCursor);
-      if (query === null) return combined.getSuggestions(lines, cursorLine, cursorCol, options);
-      const items = fileItems(query, basePath);
-      if (items.length === 0) return null;
-      return { items, prefix: `@${query}` };
-    },
-    applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
-      return combined.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
-    },
-  };
+export class JieAutocompleteProviderImpl implements AutocompleteProvider {
+  readonly triggerCharacters = ["@", "/"];
+  private readonly cwd: string;
+  private readonly combined: CombinedAutocompleteProvider;
+
+  constructor(cwd: string, platform: JiePlatform, stateStore: StateStore) {
+    this.cwd = cwd;
+    this.combined = new CombinedAutocompleteProvider(slashCommands(platform, stateStore), cwd, null);
+  }
+
+  async getSuggestions(
+    lines: string[],
+    cursorLine: number,
+    cursorCol: number,
+    options: { signal: AbortSignal; force?: boolean },
+  ): Promise<AutocompleteSuggestions | null> {
+    const textBeforeCursor = (lines[cursorLine] ?? "").slice(0, cursorCol);
+    const query = atQuery(textBeforeCursor);
+    if (query === null) return this.combined.getSuggestions(lines, cursorLine, cursorCol, options);
+    const items = fileItems(query, this.cwd);
+    if (items.length === 0) return null;
+    return { items, prefix: `@${query}` };
+  }
+
+  applyCompletion(
+    lines: string[],
+    cursorLine: number,
+    cursorCol: number,
+    item: AutocompleteItem,
+    prefix: string,
+  ): { lines: string[]; cursorLine: number; cursorCol: number } {
+    return this.combined.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
+  }
 }
 
 function slashCommands(platform: JiePlatform, stateStore: StateStore): SlashCommand[] {

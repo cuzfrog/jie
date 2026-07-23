@@ -1,6 +1,7 @@
 import { PassThrough } from "node:stream";
-import { createTui, type Tui } from "./tui";
-import { Actions } from "./state";
+import { type Tui } from "./tui";
+import { bootTui } from "./container";
+import { Actions, type StateStore } from "./state";
 import { withTTY } from "../../tests/support";
 import { Events, type JiePlatform, type EventType, type AnyEventEnvelope, type EventEnvelope } from "@cuzfrog/jie-platform";
 
@@ -61,32 +62,32 @@ function makePlatformHarness(): PlatformHarness {
 
 interface TuiHarness {
   readonly tui: Tui;
+  readonly stateStore: StateStore;
   readonly stdin: FakeStdin;
   readonly stdout: FakeStdout;
   readonly platform: PlatformHarness;
 }
 
-function bootTui(): TuiHarness {
+function bootHarness(): TuiHarness {
   const stdin = new FakeStdin();
   const stdout = new FakeStdout();
   const platform = makePlatformHarness();
-  const tui = createTui({ cwd: process.cwd() }, {
+  const container = bootTui({ cwd: process.cwd() }, {
     platform: platform.platform,
     stdin,
     stdout,
   });
-  return { tui, stdin, stdout, platform };
+  return { tui: container.cradle.tui, stateStore: container.cradle.stateStore, stdin, stdout, platform };
 }
 
 function makePlatform(): JiePlatform {
   return makePlatformHarness().platform;
 }
 
-describe("createTui — start resolves on pendingQuit", () => {
+describe("bootTui — start resolves on pendingQuit", () => {
   test("dispatching requestQuit resolves start()", async () => {
     withTTY(true, async () => {
-      const { tui } = bootTui();
-      const stateStore = (tui as unknown as { stateStore: { getState: () => { pendingQuit: boolean }; dispatch: (a: unknown) => void } }).stateStore;
+      const { tui, stateStore } = bootHarness();
       const started = tui.start();
       await new Promise((r) => setTimeout(r, 30));
       stateStore.dispatch(Actions.requestQuit());
@@ -101,7 +102,7 @@ describe("createTui — start resolves on pendingQuit", () => {
 
   test("stop() resolves start() even without requestQuit", async () => {
     withTTY(true, async () => {
-      const { tui } = bootTui();
+      const { tui } = bootHarness();
       const started = tui.start();
       await new Promise((r) => setTimeout(r, 30));
       tui.stop();
@@ -113,17 +114,17 @@ describe("createTui — start resolves on pendingQuit", () => {
   });
 });
 
-describe("createTui — surface contract", () => {
+describe("bootTui — surface contract", () => {
   test("throws when not on a TTY", () => {
     withTTY(false, () => {
-      expect(() => createTui({ cwd: process.cwd() }, { platform: makePlatform() })).toThrow(/interactive terminal/);
+      expect(() => bootTui({ cwd: process.cwd() }, { platform: makePlatform() })).toThrow(/interactive terminal/);
     });
   });
 
   test("returns a Tui handle with initial empty state", () => {
     withTTY(true, () => {
       const platform = makePlatform();
-      const tui: Tui = createTui({ cwd: process.cwd() }, { platform });
+      const tui: Tui = bootTui({ cwd: process.cwd() }, { platform }).cradle.tui;
       const s0 = tui.state;
       expect(s0.teamId).toBeNull();
       expect(s0.agents.size).toBe(0);
@@ -153,11 +154,11 @@ function waitFrames(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-describe("createTui — submit pipeline", () => {
+describe("bootTui — submit pipeline", () => {
   test("routes typed text to platform.prompt when text and return arrive as separate chunks", async () => {
     let harness: TuiHarness | null = null;
     withTTY(true, () => {
-      harness = bootTui();
+      harness = bootHarness();
     });
     const started = harness!.tui.start();
     await waitFrames(30);
@@ -175,7 +176,7 @@ describe("createTui — submit pipeline", () => {
   test("routes typed text to platform.prompt when text and return arrive coalesced in one chunk", async () => {
     let harness: TuiHarness | null = null;
     withTTY(true, () => {
-      harness = bootTui();
+      harness = bootHarness();
     });
     const started = harness!.tui.start();
     await waitFrames(30);
@@ -189,11 +190,11 @@ describe("createTui — submit pipeline", () => {
   });
 });
 
-describe("createTui — event bus wiring", () => {
+describe("bootTui — event bus wiring", () => {
   test("agent.usage events update the agent's reported context tokens", async () => {
     let harness: TuiHarness | null = null;
     withTTY(true, () => {
-      harness = bootTui();
+      harness = bootHarness();
     });
     const started = harness!.tui.start();
     await waitFrames(30);
@@ -212,11 +213,11 @@ describe("createTui — event bus wiring", () => {
   });
 });
 
-describe("createTui — working indicator", () => {
+describe("bootTui — working indicator", () => {
   test("renders the working indicator while an agent is busy", async () => {
     let harness: TuiHarness | null = null;
     withTTY(true, () => {
-      harness = bootTui();
+      harness = bootHarness();
     });
     const frames: string[] = [];
     harness!.stdout.on("data", (chunk: Buffer) => {
@@ -233,11 +234,11 @@ describe("createTui — working indicator", () => {
   });
 });
 
-describe("createTui — global keys", () => {
+describe("bootTui — global keys", () => {
   test("ctrl+t and ctrl+o toggle thinking and tool-card expansion", async () => {
     let harness: TuiHarness | null = null;
     withTTY(true, () => {
-      harness = bootTui();
+      harness = bootHarness();
     });
     const started = harness!.tui.start();
     await waitFrames(30);
@@ -257,7 +258,7 @@ describe("createTui — global keys", () => {
   test("shift+down cycles the focused agent to the next team member", async () => {
     let harness: TuiHarness | null = null;
     withTTY(true, () => {
-      harness = bootTui();
+      harness = bootHarness();
     });
     const started = harness!.tui.start();
     await waitFrames(30);

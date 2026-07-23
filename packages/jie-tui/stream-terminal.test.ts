@@ -1,5 +1,5 @@
 import { PassThrough } from "node:stream";
-import { createStreamTerminal } from "./stream-terminal";
+import { StreamTerminalImpl } from "./stream-terminal";
 
 function makeStreams(): { stdin: PassThrough; written: () => string; stdout: NodeJS.WritableStream & { columns?: number; rows?: number }; emitter: PassThrough } {
   const stdin = new PassThrough();
@@ -14,10 +14,10 @@ function makeStreams(): { stdin: PassThrough; written: () => string; stdout: Nod
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-describe("createStreamTerminal — input", () => {
+describe("StreamTerminalImpl — input", () => {
   test("forwards each keystroke as its own onInput call", async () => {
     const { stdin, stdout } = makeStreams();
-    const terminal = createStreamTerminal(stdin, stdout);
+    const terminal = new StreamTerminalImpl(stdin, stdout);
     const inputs: string[] = [];
     terminal.start((d) => inputs.push(d), () => undefined);
     stdin.write("h");
@@ -29,7 +29,7 @@ describe("createStreamTerminal — input", () => {
 
   test("splits a batched chunk into individual sequences", async () => {
     const { stdin, stdout } = makeStreams();
-    const terminal = createStreamTerminal(stdin, stdout);
+    const terminal = new StreamTerminalImpl(stdin, stdout);
     const inputs: string[] = [];
     terminal.start((d) => inputs.push(d), () => undefined);
     stdin.write("hi\r");
@@ -40,7 +40,7 @@ describe("createStreamTerminal — input", () => {
 
   test("coalesces an escape sequence split across chunks", async () => {
     const { stdin, stdout } = makeStreams();
-    const terminal = createStreamTerminal(stdin, stdout);
+    const terminal = new StreamTerminalImpl(stdin, stdout);
     const inputs: string[] = [];
     terminal.start((d) => inputs.push(d), () => undefined);
     stdin.write("\x1b");
@@ -52,7 +52,7 @@ describe("createStreamTerminal — input", () => {
 
   test("re-wraps bracketed paste content with markers for the editor", async () => {
     const { stdin, stdout } = makeStreams();
-    const terminal = createStreamTerminal(stdin, stdout);
+    const terminal = new StreamTerminalImpl(stdin, stdout);
     const inputs: string[] = [];
     terminal.start((d) => inputs.push(d), () => undefined);
     stdin.write("\x1b[200~hello\x1b[201~");
@@ -63,7 +63,7 @@ describe("createStreamTerminal — input", () => {
 
   test("stop detaches stdin: later writes produce no input", async () => {
     const { stdin, stdout } = makeStreams();
-    const terminal = createStreamTerminal(stdin, stdout);
+    const terminal = new StreamTerminalImpl(stdin, stdout);
     const inputs: string[] = [];
     terminal.start((d) => inputs.push(d), () => undefined);
     stdin.write("a");
@@ -76,7 +76,7 @@ describe("createStreamTerminal — input", () => {
 
   test("drainInput flushes a pending incomplete sequence as input", async () => {
     const { stdin, stdout } = makeStreams();
-    const terminal = createStreamTerminal(stdin, stdout);
+    const terminal = new StreamTerminalImpl(stdin, stdout);
     const inputs: string[] = [];
     terminal.start((d) => inputs.push(d), () => undefined);
     stdin.write("\x1b");
@@ -87,17 +87,17 @@ describe("createStreamTerminal — input", () => {
   });
 });
 
-describe("createStreamTerminal — output", () => {
+describe("StreamTerminalImpl — output", () => {
   test("write passes bytes through to stdout", () => {
     const { stdout, written } = makeStreams();
-    const terminal = createStreamTerminal(new PassThrough(), stdout);
+    const terminal = new StreamTerminalImpl(new PassThrough(), stdout);
     terminal.write("hello");
     expect(written()).toBe("hello");
   });
 
   test("cursor, clear, move, title, and progress operations emit the same ANSI sequences as ProcessTerminal", () => {
     const { stdout, written } = makeStreams();
-    const terminal = createStreamTerminal(new PassThrough(), stdout);
+    const terminal = new StreamTerminalImpl(new PassThrough(), stdout);
     terminal.hideCursor();
     terminal.showCursor();
     terminal.clearLine();
@@ -116,14 +116,14 @@ describe("createStreamTerminal — output", () => {
 
   test("moveBy(0) writes nothing", () => {
     const { stdout, written } = makeStreams();
-    const terminal = createStreamTerminal(new PassThrough(), stdout);
+    const terminal = new StreamTerminalImpl(new PassThrough(), stdout);
     terminal.moveBy(0);
     expect(written()).toBe("");
   });
 
   test("exposes the underlying stream dimensions and no kitty protocol", () => {
     const { stdout } = makeStreams();
-    const terminal = createStreamTerminal(new PassThrough(), stdout);
+    const terminal = new StreamTerminalImpl(new PassThrough(), stdout);
     expect(terminal.columns).toBe(100);
     expect(terminal.rows).toBe(40);
     expect(terminal.kittyProtocolActive).toBe(false);
@@ -131,16 +131,16 @@ describe("createStreamTerminal — output", () => {
 
   test("falls back to 80x24 when the stream has no dimensions", () => {
     const bare = new PassThrough() as NodeJS.WritableStream & { columns?: number; rows?: number };
-    const terminal = createStreamTerminal(new PassThrough(), bare);
+    const terminal = new StreamTerminalImpl(new PassThrough(), bare);
     expect(terminal.columns).toBe(80);
     expect(terminal.rows).toBe(24);
   });
 });
 
-describe("createStreamTerminal — resize", () => {
+describe("StreamTerminalImpl — resize", () => {
   test("forwards the stdout resize event to the onResize handler", () => {
     const { stdout, emitter } = makeStreams();
-    const terminal = createStreamTerminal(new PassThrough(), stdout);
+    const terminal = new StreamTerminalImpl(new PassThrough(), stdout);
     let resizes = 0;
     terminal.start(() => undefined, () => { resizes++; });
     emitter.emit("resize");
@@ -150,7 +150,7 @@ describe("createStreamTerminal — resize", () => {
 
   test("stop detaches the resize listener", () => {
     const { stdout, emitter } = makeStreams();
-    const terminal = createStreamTerminal(new PassThrough(), stdout);
+    const terminal = new StreamTerminalImpl(new PassThrough(), stdout);
     let resizes = 0;
     terminal.start(() => undefined, () => { resizes++; });
     terminal.stop();

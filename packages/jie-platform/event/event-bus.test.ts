@@ -1,8 +1,8 @@
-import { createEventBus } from "./event-bus";
+import { InProcessEventBus } from "./event-bus";
 
 describe("InProcessEventBus", () => {
   test("publishes to subscribers in subscription order with the same arguments", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     const received: Array<[string, object]> = [];
     bus.subscribe("s", (subject, payload) => {
       received.push([subject, payload]);
@@ -19,7 +19,7 @@ describe("InProcessEventBus", () => {
   });
 
   test("a throwing callback does not stop dispatch; subsequent subscribers still run", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     let secondRan = false;
     bus.subscribe("s", () => {
       throw new Error("boom");
@@ -33,7 +33,7 @@ describe("InProcessEventBus", () => {
   });
 
   test("subscriberCount reflects registers minus unsubscribes", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     expect(bus.subscriberCount("s")).toBe(0);
     const off1 = bus.subscribe("s", () => {});
     const off2 = bus.subscribe("s", () => {});
@@ -49,7 +49,7 @@ describe("InProcessEventBus", () => {
   });
 
   test("unsubscribe prevents the callback from firing on later publish", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     let ran = false;
     const off = bus.subscribe("s", () => {
       ran = true;
@@ -61,7 +61,7 @@ describe("InProcessEventBus", () => {
   });
 
   test("a throwing callback does not change subscriberCount", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     bus.subscribe("s", () => {
       throw new Error("boom");
     });
@@ -70,7 +70,7 @@ describe("InProcessEventBus", () => {
   });
 
   test("subscribers on different subjects are isolated", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     let aRan = false;
     let bRan = false;
     bus.subscribe("a", () => {
@@ -85,7 +85,7 @@ describe("InProcessEventBus", () => {
   });
 
   test("callback receives the published payload object by reference", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     let seen: object | undefined;
     const payload = { inner: "value" };
     bus.subscribe("s", (_subject, p) => {
@@ -96,7 +96,7 @@ describe("InProcessEventBus", () => {
   });
 
   test("publish is depth-first synchronous: nested subscribers complete before outer publish returns", () => {
-    const bus = createEventBus();
+    const bus = new InProcessEventBus();
     const events: string[] = [];
 
     bus.subscribe("wake", () => {

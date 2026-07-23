@@ -1,9 +1,9 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { makeAuthStore } from "./auth-store";
+import { AuthStoreImpl } from "./auth-store";
 
-describe("AuthStore", () => {
+describe("AuthStoreImpl", () => {
   let homeDir: string;
   let homeJieDir: string;
 
@@ -17,12 +17,12 @@ describe("AuthStore", () => {
   });
 
   test("load() on missing auth.json returns {}", () => {
-    const store = makeAuthStore(homeJieDir);
+    const store = new AuthStoreImpl(homeJieDir);
     expect(store.load()).toEqual({});
   });
 
   test("write() creates ~/.jie/auth.json with mode 0o600 and valid JSON", () => {
-    const store = makeAuthStore(homeJieDir);
+    const store = new AuthStoreImpl(homeJieDir);
     const auth = { anthropic: { type: "api_key" as const, key: "sk-test" } };
     store.saveAuthConfig(auth);
 
@@ -34,19 +34,19 @@ describe("AuthStore", () => {
   });
 
   test("write() then load() round-trips", () => {
-    const store = makeAuthStore(homeJieDir);
+    const store = new AuthStoreImpl(homeJieDir);
     store.saveAuthConfig({ anthropic: { type: "api_key", key: "sk-a" } });
     expect(store.load()).toEqual({ anthropic: { type: "api_key", key: "sk-a" } });
   });
 
   test("setProvider() returns a new auth with the provider entry added", () => {
-    const store = makeAuthStore(homeJieDir);
+    const store = new AuthStoreImpl(homeJieDir);
     const next = store.setProvider({}, "anthropic", "sk-1");
     expect(next).toEqual({ anthropic: { type: "api_key", key: "sk-1" } });
   });
 
   test("setProvider() is immutable — does not mutate input", () => {
-    const store = makeAuthStore(homeJieDir);
+    const store = new AuthStoreImpl(homeJieDir);
     const before: ReturnType<typeof store.load> = {};
     const next = store.setProvider(before, "anthropic", "sk-1");
     expect(before).toEqual({});
@@ -54,7 +54,7 @@ describe("AuthStore", () => {
   });
 
   test("removeProvider() returns a new auth without the provider entry", () => {
-    const store = makeAuthStore(homeJieDir);
+    const store = new AuthStoreImpl(homeJieDir);
     const next = store.removeProvider(
       { anthropic: { type: "api_key", key: "sk-a" }, openai: { type: "api_key", key: "sk-o" } },
       "anthropic",
@@ -63,14 +63,14 @@ describe("AuthStore", () => {
   });
 
   test("removeProvider() is immutable — does not mutate input", () => {
-    const store = makeAuthStore(homeJieDir);
+    const store = new AuthStoreImpl(homeJieDir);
     const before = { anthropic: { type: "api_key" as const, key: "sk-a" } };
     store.removeProvider(before, "anthropic");
     expect(before).toEqual({ anthropic: { type: "api_key", key: "sk-a" } });
   });
 
   test("clear() returns an empty auth", () => {
-    const store = makeAuthStore(homeJieDir);
+    const store = new AuthStoreImpl(homeJieDir);
     expect(store.clear()).toEqual({});
   });
 });

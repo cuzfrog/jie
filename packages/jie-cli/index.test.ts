@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import type {
   Command,
   CommandName,
@@ -18,9 +19,10 @@ import type {
   GitSnapshot,
   JiePlatform,
   JiePlatformOptions,
+  PlatformCradle,
   TeamInfo,
 } from "@cuzfrog/jie-platform";
-import type { CreateTUIOptions, Tui, TuiDeps } from "@cuzfrog/jie-tui";
+import type { CreateTUIOptions, Tui, TuiCradle, TuiDeps } from "@cuzfrog/jie-tui";
 import { _run, main } from ".";
 
 interface Capture {
@@ -203,7 +205,7 @@ function dispatch(command: Command<CommandName>): CommandResult<CommandName> | n
 
 interface CapturedRun {
   fakePlatform: FakePlatform;
-  createPlatform: ReturnType<typeof vi.fn>;
+  bootPlatform: ReturnType<typeof vi.fn>;
   tuiCalls: { options: CreateTUIOptions; deps: TuiDeps }[];
   startCalls: { value: number };
   stopCalls: { value: number };
@@ -216,9 +218,9 @@ function captureRun(platform: FakePlatform): CapturedRun {
   const startCalls = { value: 0 };
   const stopCalls = { value: 0 };
   const consoleMock = makeConsoleMock();
-  const createPlatform = vi.fn(async (_opts: JiePlatformOptions): Promise<JiePlatform> => platform);
-  const gitSnapshot = (_cwd: string): GitSnapshot => ({ branch: "test-branch", dirty: true, ahead: 0, behind: 0 });
-  const createTui = vi.fn((options: CreateTUIOptions, deps: TuiDeps): Tui => {
+  const snapshot: GitSnapshot = { branch: "test-branch", dirty: true, ahead: 0, behind: 0 };
+  const bootPlatform = vi.fn((_options: JiePlatformOptions): AwilixContainer<PlatformCradle> => makePlatformContainer(platform, snapshot));
+  const bootTui = vi.fn((options: CreateTUIOptions, deps: TuiDeps): AwilixContainer<TuiCradle> => {
     tuiCalls.push({ options, deps });
     deps.platform.subscribe("system.team.loaded", () => undefined);
     deps.platform.subscribe("system.error", () => undefined);
@@ -246,15 +248,26 @@ function captureRun(platform: FakePlatform): CapturedRun {
         stopCalls.value += 1;
       },
     };
-    return tui;
+    const container = createContainer<TuiCradle>({ injectionMode: InjectionMode.CLASSIC });
+    container.register({ tui: asValue(tui) });
+    return container;
   });
   const run = (parsed: Parameters<typeof _run>[0]): Promise<number> =>
-    _run(parsed, process.cwd(), process.env.HOME ?? "/tmp", { createPlatform, createTui, gitSnapshot, console: consoleMock });
-  return { fakePlatform: platform, createPlatform, tuiCalls, startCalls, stopCalls, consoleMock, run };
+    _run(parsed, process.cwd(), process.env.HOME ?? "/tmp", { bootPlatform, bootTui, console: consoleMock });
+  return { fakePlatform: platform, bootPlatform, tuiCalls, startCalls, stopCalls, consoleMock, run };
+}
+
+function makePlatformContainer(platform: JiePlatform, snapshot: GitSnapshot): AwilixContainer<PlatformCradle> {
+  const container = createContainer<PlatformCradle>({ injectionMode: InjectionMode.CLASSIC });
+  container.register({
+    platform: asValue(platform),
+    gitService: asValue({ getSnapshot: () => snapshot }),
+  });
+  return container;
 }
 
 describe("_run — tui", () => {
-  test("tui boot: loads team, calls createTui({cwd},{platform}), awaits start, stops platform, returns 0", async () => {
+  test("tui boot: loads team, calls bootTui({cwd},{platform}), awaits start, stops platform, returns 0", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
     const exit = await captured.run({ kind: "tui", inMemory: false });
@@ -283,12 +296,12 @@ describe("_run — tui", () => {
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: "alpha" });
   });
 
-  test("tui boot with resume: passes resumeSessionId in createPlatform options", async () => {
+  test("tui boot with resume: passes resumeSessionId in bootPlatform options", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
     const exit = await captured.run({ kind: "tui", resume: "sess-1", inMemory: false });
     expect(exit).toBe(0);
-    expect(captured.createPlatform.mock.calls[0]?.[0]).toMatchObject({ resumeSessionId: "sess-1" });
+    expect(captured.bootPlatform.mock.calls[0]?.[0]).toMatchObject({ resumeSessionId: "sess-1" });
   });
 
   test("tui boot: subscribes to system.error before dispatching", async () => {
@@ -313,7 +326,7 @@ describe("_run — tui", () => {
     expect(subscribedBeforeTeam).toBe(true);
   });
 
-  test("tui boot: passes git branch and dirty flag from the git snapshot to createTui", async () => {
+  test("tui boot: passes git branch and dirty flag from the git snapshot to bootTui", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
     const exit = await captured.run({ kind: "tui", inMemory: false });
@@ -322,14 +335,15 @@ describe("_run — tui", () => {
     expect(captured.tuiCalls[0]?.deps.gitDirty).toBe(true);
   });
 
-  test("tui boot: propagates createPlatform rejection via thrown error", async () => {
+  test("tui boot: propagates bootPlatform failure via thrown error", async () => {
     const platform = makeFakePlatform();
     const consoleMock = makeConsoleMock();
     const run = (parsed: Parameters<typeof _run>[0]): Promise<number> =>
       _run(parsed, process.cwd(), "/tmp", {
-        createPlatform: () => Promise.reject(new Error("boot blew up")),
-        createTui: vi.fn(),
-        gitSnapshot: () => ({ branch: "", dirty: false, ahead: 0, behind: 0 }),
+        bootPlatform: () => {
+          throw new Error("boot blew up");
+        },
+        bootTui: vi.fn(),
         console: consoleMock,
       });
     expect(run({ kind: "tui", inMemory: false })).rejects.toThrow("boot blew up");
@@ -344,12 +358,11 @@ describe("_run — error/help/version bypass boot", () => {
     const consoleMock = makeConsoleMock();
     const run = (parsed: Parameters<typeof _run>[0]): Promise<number> =>
       _run(parsed, process.cwd(), "/tmp", {
-        createPlatform: () => {
+        bootPlatform: () => {
           platformBoots += 1;
-          return Promise.resolve(platform);
+          return makePlatformContainer(platform, { branch: "", dirty: false, ahead: 0, behind: 0 });
         },
-        createTui: vi.fn(),
-        gitSnapshot: () => ({ branch: "", dirty: false, ahead: 0, behind: 0 }),
+        bootTui: vi.fn(),
         console: consoleMock,
       });
     const exit = await run({ kind: "error", message: "bad flag" });
@@ -364,12 +377,11 @@ describe("_run — error/help/version bypass boot", () => {
     const consoleMock = makeConsoleMock();
     const run = (parsed: Parameters<typeof _run>[0]): Promise<number> =>
       _run(parsed, process.cwd(), "/tmp", {
-        createPlatform: () => {
+        bootPlatform: () => {
           platformBoots += 1;
-          return Promise.resolve(platform);
+          return makePlatformContainer(platform, { branch: "", dirty: false, ahead: 0, behind: 0 });
         },
-        createTui: vi.fn(),
-        gitSnapshot: () => ({ branch: "", dirty: false, ahead: 0, behind: 0 }),
+        bootTui: vi.fn(),
         console: consoleMock,
       });
     const exit = await run({ kind: "version" });
@@ -396,7 +408,7 @@ describe("_run — print + apiKey", () => {
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "stop" });
   });
 
-  test("print with resume: passes resumeSessionId in createPlatform options", async () => {
+  test("print with resume: passes resumeSessionId in bootPlatform options", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
     await captured.run({
@@ -407,7 +419,7 @@ describe("_run — print + apiKey", () => {
       resume: "sess-1",
       inMemory: false,
     });
-    expect(captured.createPlatform.mock.calls[0]?.[0]).toMatchObject({ resumeSessionId: "sess-1" });
+    expect(captured.bootPlatform.mock.calls[0]?.[0]).toMatchObject({ resumeSessionId: "sess-1" });
   });
 
   test("print with failing setApiKey -> stops platform, returns 1", async () => {

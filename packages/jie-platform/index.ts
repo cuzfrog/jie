@@ -1,4 +1,5 @@
-export { type JiePlatform, type JiePlatformOptions, type JiePlatformDeps, createJiePlatform } from "./jie-platform";
+export { type JiePlatform, type JiePlatformOptions } from "./jie-platform";
+export { bootPlatform, type PlatformCradle } from "./container";
 export {
     JiePlatformError,
     type JiePlatformErrorCode,
@@ -25,6 +26,6 @@ export { Events } from "./event";
 
 export type { SessionSummary } from "./storage";
 
-export { createGitService, type GitSnapshot } from "./services";
+export type { GitSnapshot } from "./services";
 
 export { logger, type Console, defaultConsole } from "./utils";

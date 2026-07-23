@@ -15,11 +15,7 @@ export interface EventBus {
   subscriberCount(subject: string): number;
 }
 
-export function createEventBus(): EventBus {
-  return new InProcessEventBus();
-}
-
-class InProcessEventBus implements EventBus {
+export class InProcessEventBus implements EventBus {
   private readonly subscribers = new Map<string, Set<EventCallback>>();
 
   publish(subject: string, payload: object): void {

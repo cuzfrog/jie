@@ -1,6 +1,6 @@
 {
   "name": "@cuzfrog/jie",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "workspaces": ["packages/*"],
   "catalog": {
     "typescript": "7.0.2",
@@ -14,7 +14,8 @@
     "yaml": "2.9.0",
     "ulid": "2.4.0",
     "node-html-parser": "6.1.13",
-    "tslog": "4.11.0"
+    "tslog": "4.11.0",
+    "awilix": "13.0.5"
   },
   "bin": {
     "jie": "packages/jie-cli/index.ts"
@@ -33,6 +34,7 @@
     "@earendil-works/pi-ai": "catalog:",
     "@types/bun": "catalog:",
     "@types/node": "catalog:",
+    "awilix": "catalog:",
     "typebox": "catalog:"
   }
 }

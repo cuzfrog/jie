@@ -1,14 +1,14 @@
 import { type AgentMessage, type TeamInfo } from "@cuzfrog/jie-platform";
 import type { Usage } from "@earendil-works/pi-ai";
 import { teamLoadReducer } from "./team-load-reducer";
-import { createStateStore } from "./state-store";
+import { StateStoreImpl } from "./state-store";
 import type { TuiState } from "./state";
 
 declare const test: (name: string, fn: () => void | Promise<void>) => void;
 declare const describe: (name: string, fn: () => void) => void;
 declare const expect: typeof import("bun:test").expect;
 
-const INITIAL_TUI_STATE: TuiState = createStateStore().getState();
+const INITIAL_TUI_STATE: TuiState = new StateStoreImpl().getState();
 
 function team(agents: ReadonlyArray<{
   role: string;

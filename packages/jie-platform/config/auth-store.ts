@@ -11,33 +11,37 @@ export interface AuthStore {
   clear(): AuthJson;
 }
 
-export function makeAuthStore(homeJieDir: string): AuthStore {
-  return {
-    load(): AuthJson {
-      try {
-        return loadAuthJson(homeJieDir);
-      } catch {
-        return {};
-      }
-    },
-    saveAuthConfig(auth: AuthJson): void {
-      mkdirSync(homeJieDir, { recursive: true, mode: 0o755 });
-      const path = join(homeJieDir, "auth.json");
-      writeFileSync(path, `${JSON.stringify(auth, null, 2)}\n`, "utf-8");
-      chmodSync(path, 0o600);
-    },
-    setProvider(auth, provider, key) {
-      return { ...auth, [provider]: { type: "api_key", key } };
-    },
-    removeProvider(auth, provider) {
-      const next: AuthJson = { ...auth };
-      delete next[provider];
-      return next;
-    },
-    clear(): AuthJson {
+export class AuthStoreImpl implements AuthStore {
+  constructor(private readonly homeJieDir: string) {}
+
+  load(): AuthJson {
+    try {
+      return loadAuthJson(this.homeJieDir);
+    } catch {
       return {};
-    },
-  };
+    }
+  }
+
+  saveAuthConfig(auth: AuthJson): void {
+    mkdirSync(this.homeJieDir, { recursive: true, mode: 0o755 });
+    const path = join(this.homeJieDir, "auth.json");
+    writeFileSync(path, `${JSON.stringify(auth, null, 2)}\n`, "utf-8");
+    chmodSync(path, 0o600);
+  }
+
+  setProvider(auth: AuthJson, provider: string, key: string): AuthJson {
+    return { ...auth, [provider]: { type: "api_key", key } };
+  }
+
+  removeProvider(auth: AuthJson, provider: string): AuthJson {
+    const next: AuthJson = { ...auth };
+    delete next[provider];
+    return next;
+  }
+
+  clear(): AuthJson {
+    return {};
+  }
 }
 
 function loadAuthJson(homeJieDir: string): AuthJson {

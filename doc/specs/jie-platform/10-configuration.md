@@ -152,7 +152,7 @@ A stale `defaultTeam` (set but not installed) is **not** a failure — it falls 
 
 ## MCP Server Configuration
 
-**Not implemented today** (ADR 4). `createJiePlatform` does not read `mcp.json`, no MCP client connects at startup, and the `ToolRegistry`'s `mcp:<server>:<tool>` / `mcp:<server>:*` spec syntax resolves to zero tools — an agent `.md` listing MCP tools fails tool resolution at team load. The schema below is the forward-looking design that ships when the MCP client lands; the type already exists:
+**Not implemented today** (ADR 4). The platform boot (`bootPlatform`) does not read `mcp.json`, no MCP client connects at startup, and the `ToolRegistry`'s `mcp:<server>:<tool>` / `mcp:<server>:*` spec syntax resolves to zero tools — an agent `.md` listing MCP tools fails tool resolution at team load. The schema below is the forward-looking design that ships when the MCP client lands; the type already exists:
 
 ```typescript
 // packages/jie-platform/config/types.ts

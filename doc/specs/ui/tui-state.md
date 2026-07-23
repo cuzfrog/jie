@@ -6,7 +6,7 @@ The state shape, action union, and reducer implementations live in `packages/jie
 
 ## Reducer purity model
 
-The reducer is a pure function `(state, action) → state`. The caller (`createTui` in `packages/jie-tui/tui.ts`) wraps the reducer in a `dispatch` function on the `StateStore`; re-render is driven through the store's subscriber line. **The clock is not read inside the reducer** — spinner frames and transient-message aging live entirely on the render side. UI actions like `Actions.setTransientMessage(text)` carry no timestamp; the renderer records `Date.now()` when it dispatches.
+The reducer is a pure function `(state, action) → state`. `StateStoreImpl` (`packages/jie-tui/state/state-store.ts`, constructed by the `bootTui` container) wraps the pure reducer in a `dispatch` function on the `StateStore`; re-render is driven through the store's subscriber line. **The clock is not read inside the reducer** — spinner frames and transient-message aging live entirely on the render side. UI actions like `Actions.setTransientMessage(text)` carry no timestamp; the renderer records `Date.now()` when it dispatches.
 
 ## Identifier mapping (wire → state)
 
@@ -30,7 +30,7 @@ The editor buffer (`state.editorText`) lives in the reducer — the editor compo
 
 The per-agent slot (`AgentUiState` in `state.ts`) also carries `todos: ReadonlyArray<TodoItem>` (`TodoItem` comes from jie-platform `types/todo`, re-exported via `packages/jie-tui/todo`). When an `agent.tool.result` payload's `details` is a `TodoDetailsPayload` (the todo tool's result), the reducer replaces `agent.todos` with `details.todos` instead of appending a tool card.
 
-Environment fields (`cwd`, `gitBranch`, `gitDirty`) are seeded once at `createTui` time via `Actions.setEnvironment` from the CLI's git snapshot; they never change mid-session.
+Environment fields (`cwd`, `gitBranch`, `gitDirty`) are seeded once at `bootTui` time via `Actions.setEnvironment` from the CLI's git snapshot; they never change mid-session.
 
 ## Actions
 

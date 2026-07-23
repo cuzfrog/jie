@@ -1,14 +1,12 @@
-import { Editor, type EditorTheme, type TUI } from "@earendil-works/pi-tui";
-import type { JiePlatform } from "@cuzfrog/jie-platform";
+import { Editor, type AutocompleteProvider, type EditorTheme, type TUI } from "@earendil-works/pi-tui";
 import { Actions, type StateStore } from "../../state";
-import { createJieAutocompleteProvider } from "../../autocomplete";
 import { style } from "../themes";
 
 const ESCAPE = "\x1b";
 const CTRL_C = "\x03";
 const CTRL_D = "\x04";
 
-const editorTheme: EditorTheme = {
+const EDITOR_THEME: EditorTheme = {
   borderColor: style("border"),
   selectList: {
     selectedPrefix: style("accent"),
@@ -19,29 +17,24 @@ const editorTheme: EditorTheme = {
   },
 };
 
-export function createJieEditor(tui: TUI, stateStore: StateStore, cwd: string, platform: JiePlatform): Editor {
-  const editor = new JieEditor(tui, stateStore, editorTheme);
-  editor.setAutocompleteProvider(createJieAutocompleteProvider(cwd, platform, stateStore));
-  editor.onChange = (text: string): void => {
-    editor.borderColor = text.startsWith("!") ? style("warning") : style("border");
-    stateStore.dispatch(Actions.setEditorText(text));
-    if (stateStore.getState().errorBanner !== null && text.length > 0) {
-      stateStore.dispatch(Actions.clearBanners());
-    }
-  };
-  editor.onSubmit = (text: string): void => {
-    if (text !== "") editor.addToHistory(text);
-    stateStore.dispatch(Actions.submitEditorText(text));
-  };
-  return editor;
-}
-
-class JieEditor extends Editor {
+export class JieEditor extends Editor {
   private readonly stateStore: StateStore;
 
-  constructor(tui: TUI, stateStore: StateStore, theme: EditorTheme) {
+  constructor(tui: TUI, stateStore: StateStore, autocompleteProvider: AutocompleteProvider, theme: EditorTheme = EDITOR_THEME) {
     super(tui, theme);
     this.stateStore = stateStore;
+    this.setAutocompleteProvider(autocompleteProvider);
+    this.onChange = (text: string): void => {
+      this.borderColor = text.startsWith("!") ? style("warning") : style("border");
+      this.stateStore.dispatch(Actions.setEditorText(text));
+      if (this.stateStore.getState().errorBanner !== null && text.length > 0) {
+        this.stateStore.dispatch(Actions.clearBanners());
+      }
+    };
+    this.onSubmit = (text: string): void => {
+      if (text !== "") this.addToHistory(text);
+      this.stateStore.dispatch(Actions.submitEditorText(text));
+    };
   }
 
   handleInput(data: string): void {

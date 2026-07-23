@@ -8,7 +8,8 @@
     "@cuzfrog/jie-platform": "workspace:*",
     "@cuzfrog/jie-tui": "workspace:*",
     "@earendil-works/pi-agent-core": "catalog:",
-    "@earendil-works/pi-ai": "catalog:"
+    "@earendil-works/pi-ai": "catalog:",
+    "awilix": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

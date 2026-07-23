@@ -28,7 +28,7 @@ Jie runs as a **single OS process** — the `jie` binary (per ADR 5, in-process 
 
 | Component | Count | Nature |
 |---|---|---|
-| `jie` process | 1 | Runs `createJiePlatform`, the agent bodies, and the TUI in-process. |
+| `jie` process | 1 | Runs the `bootPlatform` container, the agent bodies, and the TUI in-process. |
 | AgentBody | N (per team blueprint) | In-process. Owns its EventBus subscriptions, memory, and async loop. |
 | TUI | 1 | In-process component (imported from `jie-tui`). |
 | ArtifactStore | 1 | SQLite file at `~/.jie/storage.db`. Single-writer by design. |
@@ -39,7 +39,7 @@ Jie runs as a **single OS process** — the `jie` binary (per ADR 5, in-process 
 The flow is the same for `jie` (TUI) and `jie -p` (print mode), except for the final UI step.
 
 1. **Discover and validate settings.** Walk up from CWD to find `.jie/`; deep-merge `.jie/settings.json` over `~/.jie/settings.json`. Any parse/validation error exits 1. See `10-configuration.md`.
-2. **Create the platform.** `createJiePlatform(options)` builds the deps bundle (settings store, storage, model/tool registries, memory manager, team manager, command executor) and returns the handle `{ settings, prompt, interrupt, subscribe, execute, teams() }`. The `settings` field carries the merged snapshot.
+2. **Create the platform.** `bootPlatform(options)` composes an awilix container over the singletons (settings store, storage, model/tool registries, memory manager, team manager, command executor); resolving `cradle.platform` yields the handle `{ settings, prompt, interrupt, subscribe, execute, teams() }`. The `settings` field carries the merged snapshot.
 3. **Subscribe to events.** The CLI subscribes before any team event fires; e.g. it forwards `system.error` envelopes to stderr.
 4. **Load the selected team.** `execute({ name: "team", teamId? })` runs `TeamManager.load`, which resolves `teamId ?? settings.defaultTeam ?? <first installed user team> ?? <built-in minimal>` (per ADR 24, the platform owns team discovery), parses the manifests, builds and starts one `AgentBody` per role (`agent_key = <role>-1`), then publishes `system.team.loaded` with the team roster (`TeamInfo`). Failure modes:
    - A soul whose model cannot be resolved is skipped silently; if a soul has no model and settings define none, load throws `NO_MODEL_ERROR` ("No model has been selected, please login and select a default model.") and the CLI exits 1.
