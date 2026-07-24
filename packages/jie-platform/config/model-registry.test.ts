@@ -224,4 +224,39 @@ describe("PiModelRegistry", () => {
     expect(models).toHaveLength(2);
     expect(models.map((m) => m.id).sort()).toEqual(["m1", "m2"]);
   });
+
+  test("listProviders: built-in providers report configured false", () => {
+    const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
+    const anthropic = reg.listProviders().find((provider) => provider.id === "anthropic");
+    expect(anthropic).toBeDefined();
+    expect(anthropic!.configured).toBe(false);
+  });
+
+  test("listProviders: a models.json provider reports configured true and lists first", () => {
+    mkdirSync(homeJieDir, { recursive: true });
+    writeFileSync(
+      join(homeJieDir, "models.json"),
+      JSON.stringify({
+        providers: {
+          "lm-studio": { baseUrl: "http://x", api: "openai-completions", models: [] },
+        },
+      }),
+    );
+    const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
+    const providers = reg.listProviders();
+    expect(providers[0]).toEqual({ id: "lm-studio", configured: true, envKeys: [] });
+  });
+
+  test("listProviders: reports the env var names set for a built-in provider", () => {
+    const original = process.env.ANTHROPIC_API_KEY;
+    process.env.ANTHROPIC_API_KEY = "sk-test";
+    try {
+      const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
+      const anthropic = reg.listProviders().find((provider) => provider.id === "anthropic");
+      expect(anthropic!.envKeys).toContain("ANTHROPIC_API_KEY");
+    } finally {
+      if (original === undefined) delete process.env.ANTHROPIC_API_KEY;
+      else process.env.ANTHROPIC_API_KEY = original;
+    }
+  });
 });
