@@ -196,7 +196,7 @@ export class JieAgentBody implements AgentBody {
       case "message_end":
         if (event.message.role === "assistant") {
           this.stream.endStream();
-          if (event.message.usage !== undefined) {
+          if (event.message.usage !== undefined && event.message.usage.totalTokens > 0) {
             this.eventManager.publish(Events.agentUsage(agentSender, {
               input: event.message.usage.input,
               output: event.message.usage.output,

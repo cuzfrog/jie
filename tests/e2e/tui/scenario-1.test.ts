@@ -1,6 +1,6 @@
-import { assertLlmReachable, seedTeam } from "../_fixture.ts";
+import { assertLlmReachable, seedTeam, FIXTURE } from "../_fixture.ts";
 import { loadMockExpectations } from "../../../packages/mock-llm-backend";
-import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, sendLine, type TuiHarness } from "./harness";
+import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, sendCmd, sendLine, type TuiHarness } from "./harness";
 import expectations from "./scenario-1.llm.ts";
 
 describe("Scenario 1 — simple agent", () => {
@@ -40,5 +40,13 @@ describe("Scenario 1 — simple agent", () => {
     const allPrompts = allTurns.map((t) => t.userPrompt).join("\n");
     expect(allPrompts).toContain("Tell me a story");
     expect(agent?.status).toBe("idle");
+    expect(agent?.model?.provider).toBe(FIXTURE.provider);
+    expect(agent?.model?.id).toBe(FIXTURE.modelId);
+    expect(agent?.contextTokensUsed).toBeGreaterThan(0);
+  });
+
+  test("ctrl+d on an empty editor quits cleanly", async () => {
+    await sendCmd(harness.stdin, "\x04");
+    await harness.exited;
   });
 });

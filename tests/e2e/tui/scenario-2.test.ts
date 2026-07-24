@@ -1,8 +1,17 @@
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadMockExpectations } from "../../../packages/mock-llm-backend";
 import { assertLlmReachable, seedTeam } from "../_fixture.ts";
-import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, sendLine, type TuiHarness } from "./harness";
+import {
+  startTui,
+  stopTui,
+  submitAndWaitForAgentIdle,
+  waitForTeam,
+  waitForFocusedAgent,
+  sendCmd,
+  sendLine,
+  type TuiHarness,
+} from "./harness";
 import expectations from "./scenario-2.llm.ts";
 
 describe("Scenario 2 — pass work in a team", () => {
@@ -49,5 +58,34 @@ describe("Scenario 2 — pass work in a team", () => {
     expect(allCards.some((c) => c.kind === "toolResult" && c.name === "bash" && c.error === null)).toBe(true);
     const allBlocks = allTurns.flatMap((t) => t.blocks).map((b) => b.text).join("\n");
     expect(allBlocks.length).toBeGreaterThan(0);
+    expect(readFileSync(join(harness.dir, "my-answer.txt"), "utf8")).toBe("Hello world");
+  });
+
+  test("ctrl+down/ctrl+up cycle focus without touching conversations", async () => {
+    await sendLine(harness.stdin, "/team my-team");
+    await waitForTeam(harness, "my-team");
+    await waitForFocusedAgent(harness, "my-team:manager-1");
+    const before = snapshotConversations(harness);
+    await sendCmd(harness.stdin, "\x1b[1;5B");
+    await waitForFocusedAgent(harness, "my-team:worker-1");
+    await sendCmd(harness.stdin, "\x1b[1;5A");
+    await waitForFocusedAgent(harness, "my-team:manager-1");
+    expect(snapshotConversations(harness)).toEqual(before);
+  });
+
+  test("ctrl+d on an empty editor quits cleanly", async () => {
+    await sendCmd(harness.stdin, "\x04");
+    await harness.exited;
   });
 });
+
+function snapshotConversations(harness: TuiHarness): ReadonlyArray<Readonly<{ agentId: string; prompts: string[]; blocks: string[] }>> {
+  return [...harness.stateStore.getState().agents.values()].map((agent) => {
+    const turns = [...agent.history, ...(agent.currentTurn !== null ? [agent.currentTurn] : [])];
+    return {
+      agentId: agent.agentId,
+      prompts: turns.map((turn) => turn.userPrompt),
+      blocks: turns.flatMap((turn) => turn.blocks).map((block) => block.text),
+    };
+  });
+}

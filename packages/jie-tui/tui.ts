@@ -4,6 +4,7 @@ import { logger } from "@cuzfrog/jie-utils";
 import { Actions, type StateStore } from "./state";
 import type { CommandHandler } from "./command-handler";
 import type { TuiView } from "./components";
+import { createTransientAger } from "./transient-ager";
 
 const SUBMIT_EDITOR_TEXT = Actions.submitEditorText("").type;
 const REQUEST_INTERRUPT = Actions.requestInterrupt("", "").type;
@@ -44,6 +45,7 @@ export class TuiImpl implements Tui {
   private readonly stdout: TuiStdout | undefined;
   private readonly unsubscribeBus: () => void;
   private readonly unsubscribeActions: () => void;
+  private readonly unsubscribeTransientAger: () => void;
   private terminal: Terminal | null = null;
   private ui: TUI | null = null;
   private view: TuiView | null = null;
@@ -68,6 +70,7 @@ export class TuiImpl implements Tui {
     this.unsubscribeBus = subscribeToBus(platform, (env) => {
       this.stateStore.dispatch(Actions.receiveEvent(env));
     });
+    this.unsubscribeTransientAger = createTransientAger(stateStore);
     this.unsubscribeActions = stateStore.subscribe(async (action) => {
       if (action.type === SUBMIT_EDITOR_TEXT) {
         this.commandHandler.handle(action.payload.text);
@@ -127,6 +130,7 @@ export class TuiImpl implements Tui {
     }
     this.unsubscribeBus();
     this.unsubscribeActions();
+    this.unsubscribeTransientAger();
     this.resolveStart?.();
   }
 

@@ -19,6 +19,7 @@ export interface TuiHarness {
   readonly platform: JiePlatform;
   readonly stdin: PassThrough;
   readonly stdout: PassThrough;
+  readonly exited: Promise<void>;
   readonly ownedDir: boolean;
 }
 
@@ -86,8 +87,8 @@ export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> 
   });
   const tui = tuiContainer.cradle.tui;
   const stateStore = tuiContainer.cradle.stateStore;
-  void tui.start();
-  return { dir, tui, stateStore, platform, stdin, stdout, ownedDir: opts.cwd === undefined };
+  const exited = tui.start();
+  return { dir, tui, stateStore, platform, stdin, stdout, exited, ownedDir: opts.cwd === undefined };
 }
 
 export async function stopTui(harness: TuiHarness): Promise<void> {
@@ -151,23 +152,28 @@ export async function waitForAgentIdle(harness: TuiHarness, agentId: AgentId, ti
   );
 }
 
-export async function waitForAgentIdleCount(
-  harness: TuiHarness,
-  agentId: AgentId,
-  count: number,
-  timeoutMs = 60000,
-): Promise<void> {
-  let seen = 0;
-  const off = harness.platform.subscribe("agent.idle", (event) => {
-    if (event.sender.kind !== "agent") return;
-    if (`${event.sender.teamId}:${event.sender.agentKey}` !== agentId) return;
-    seen += 1;
-  });
-  try {
-    await waitFor(() => seen >= count, timeoutMs, `agent ${agentId} idle count >= ${count} (seen ${seen})`);
-  } finally {
-    off();
-  }
+export async function waitForAgentBusy(harness: TuiHarness, agentId: AgentId, timeoutMs = 60000): Promise<void> {
+  await waitFor(
+    () => harness.stateStore.getState().agents.get(agentId)?.status === "busy",
+    timeoutMs,
+    `agent ${agentId} busy`,
+  );
+}
+
+export async function waitForAgentQueueNonEmpty(harness: TuiHarness, agentId: AgentId, timeoutMs = 60000): Promise<void> {
+  await waitFor(
+    () => (harness.stateStore.getState().agents.get(agentId)?.queue.length ?? 0) > 0,
+    timeoutMs,
+    `agent ${agentId} queue non-empty`,
+  );
+}
+
+export async function waitForFocusedAgent(harness: TuiHarness, agentId: AgentId, timeoutMs = 60000): Promise<void> {
+  await waitFor(
+    () => harness.stateStore.getState().focusedAgentId === agentId,
+    timeoutMs,
+    `focused agent ${agentId}`,
+  );
 }
 
 export async function submitAndWaitForAgentIdle(

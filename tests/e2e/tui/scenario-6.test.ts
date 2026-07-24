@@ -4,7 +4,8 @@ import {
   startTui,
   stopTui,
   submitAndWaitForAgentIdle,
-  waitForAgentIdleCount,
+  waitForAgentIdle,
+  waitForAgentQueueNonEmpty,
   waitForTeam,
   sendLine,
   type TuiHarness,
@@ -39,8 +40,9 @@ describe("Scenario 6 — queued prompts from agent", () => {
     expect(state0.leaderAgentId).toBe("my-team:manager-1");
     expect(state0.agents.get("my-team:worker-1")?.role).toBe("worker");
 
-    const waitForWorker = waitForAgentIdleCount(harness, "my-team:worker-1", 5, 3000);
+    const waitForWorkerQueue = waitForAgentQueueNonEmpty(harness, "my-team:worker-1", 3000);
     await submitAndWaitForAgentIdle(harness, "send 5 math tasks to the worker 1 per message", "my-team:manager-1");
+    await waitForWorkerQueue;
 
     const state = harness.stateStore.getState();
     const manager = state.agents.get("my-team:manager-1");
@@ -54,7 +56,10 @@ describe("Scenario 6 — queued prompts from agent", () => {
     expect(notifyCards.length).toBe(5);
     expect(notifyCards.every((c) => c.kind === "toolResult" && c.error === null)).toBe(true);
 
-    await waitForWorker;
+    // Overlapping queued prompts chain into one agent run via followUp, which
+    // ends in a single agent.idle; queue-non-empty above proves the worker is
+    // mid-batch, so idle here means the whole batch drained.
+    await waitForAgentIdle(harness, "my-team:worker-1", 3000);
 
     // agent.idle does not rotate currentTurn into history (tui-state.md); the
     // completed fifth turn stays currentTurn until the next turn arrives.
