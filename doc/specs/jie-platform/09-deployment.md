@@ -75,7 +75,7 @@ Agents handle tool failures gracefully and return to `idle` (see `06-agent-model
 
 ## Logging
 
-The platform uses a `tslog` logger (`packages/jie-platform/utils.ts`) gated by the `JIE_LOG_LEVEL` environment variable. Accepted values (case-insensitive): `SILLY`, `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`. When unset, the logger is silent. Tool-result errors surface through the LLM conversation, not the log; agent-to-agent diagnostics travel on the EventBus. Logging is for operator visibility only.
+The platform uses a `tslog` logger (`packages/jie-utils/logger.ts`, shared by all packages via `@cuzfrog/jie-utils`) gated by the `JIE_LOG_LEVEL` environment variable. Accepted values (case-insensitive): `SILLY`, `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`. When unset, the logger is silent. Tool-result errors surface through the LLM conversation, not the log; agent-to-agent diagnostics travel on the EventBus. Logging is for operator visibility only.
 
 ## MCP Server Management (Day 2)
 

@@ -19,6 +19,7 @@ packages/
     jie-platform-errors.ts
   jie-cli/        # CLI entry (jie binary): -p print mode, interactive TUI mode, login/logout/model/team commands
   jie-tui/        # Terminal UI (pi-tui-based inline renderer): chat column, editor, footer, slash commands; bootTui(options, deps)
+  jie-utils/      # Process-level infra shared by all packages: diagnostic logger (tslog), Console output abstraction
   mock-llm-backend/  # OpenAI-compatible mock LLM server for e2e tests (bun mock:start)
   jie-team/       # Aspirational dev-team blueprint — package has no code yet (doc/specs/jie-team/)
   code-lens/      # Aspirational AST code-structure MCP server — package has no code yet (doc/specs/code-lens/)
@@ -27,9 +28,10 @@ packages/
 ## Dependencies
 
 ```
-jie-cli  → jie-platform, jie-tui   (composition root: calls bootPlatform/bootTui, hands the handle to the TUI / -p mode)
-jie-tui  → jie-platform, @earendil-works/pi-tui   (platform surface: JiePlatform handle + wire-format types only)
-mock-llm-backend                    (standalone test fixture)
+jie-cli  → jie-platform, jie-tui, jie-utils   (composition root: calls bootPlatform/bootTui, hands the handle to the TUI / -p mode)
+jie-tui  → jie-platform, jie-utils, @earendil-works/pi-tui   (platform surface: JiePlatform handle + wire-format types only)
+jie-platform → jie-utils
+mock-llm-backend → jie-utils        (standalone test fixture)
 jie-team, code-lens                 (no code, no dependencies)
 ```
 
@@ -50,6 +52,8 @@ Every package exports `.` → `./index.ts`; the root `package.json` declares `"b
 
 `jie-tui/index.ts` exports `bootTui(options, deps)` — it returns an `AwilixContainer<TuiCradle>`; the `Tui` handle is `cradle.tui`. The TUI's only platform imports are the `JiePlatform` handle and the wire-format event types — no store types (`AuthStore`, `SettingsStore`, `TeamRegistry`, …) reach the TUI's module surface.
 
+`jie-utils/index.ts` exports `logger` (a tslog instance gated by `JIE_LOG_LEVEL`) and `Console` / `defaultConsole` — the output abstraction CLI commands write through and the logger's transport routes to stderr. It depends on no other jie package; diagnostic logging is orthogonal to app logic and is imported as a module-scope instance, not injected.
+
 ## `jie-platform` Runtime Dependencies
 
 Small and fixed (via the root catalog):
@@ -62,8 +66,9 @@ Small and fixed (via the root catalog):
 | `yaml` | Team-blueprint frontmatter parsing |
 | `ulid` | `session_id` (26 chars — shorter than UUID v4, human-scannable in logs and DB rows) |
 | `node-html-parser` | HTML → text for the `web_fetch` tool (bun has no built-in HTML parser) |
-| `tslog` | Structured logger, gated by `JIE_LOG_LEVEL` (silent when unset) |
 | `awilix` | DI container — per-boot composition (ADR 31): one container per `bootPlatform`/`bootTui` call, CLASSIC constructor injection; also used by jie-cli, jie-tui, and mock-llm-backend |
+
+`jie-utils`' only runtime dependency is `tslog` (structured logger, gated by `JIE_LOG_LEVEL`; silent when unset).
 
 **Bun built-ins** (no dep): `bun:sqlite` (`SqliteStorage`), `Bun.Glob` (`ToolRegistry` spec resolution), `fetch` (`web_search` / `web_fetch`), `Bun.spawn()` (`bash` tool; MCP stdio servers when the MCP client lands), `Bun.argv` (hand-rolled CLI parser), `import ... with { type: "text" }` (built-in minimal team).
 
