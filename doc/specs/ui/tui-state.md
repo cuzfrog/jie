@@ -66,11 +66,13 @@ The delegation/follow-up rotation rule: if the agent's `currentTurn` already has
 
 ### `agent.turn.start`
 
-Clear `state.errorBanner` on every `turn.start`. Any prior `errorBanner` (most prominently the no-model-selected error) is cleared because the user is now actively prompting. If `currentTurn` already has blocks or cards, push it to `history` and open a fresh empty turn — the symmetric rotation path to `user.prompt`, so history stays consistent regardless of which side opens the new turn first.
+Clear `state.errorBanner` on every `turn.start`. Any prior `errorBanner` (most prominently the no-model-selected error) is cleared because the user is now actively prompting. If `currentTurn` already has blocks or cards, push it to `history` and open a fresh empty turn — the symmetric rotation path to `user.prompt`, so history stays consistent regardless of which side opens the new turn first. Also clear `state.interruptedAgentId` when this agent is the interrupted one — its own next turn supersedes the interrupted turn; another agent's `turn.start` leaves the marker.
 
 ### `agent.idle`
 
 `agent.status = "idle"`; `agent.lastStopReason = payload.stopReason`. `contextTokensUsed` refreshes from the last reported usage total when one exists, else from the token estimate over history + current turn. **The reducer does not move `currentTurn` into `history` here** — the prompt arrival in the next turn moves it. This avoids a premature "currentTurn frozen" state when a body restarts after a transient error mid-stream.
+
+**Interrupt marker.** When the idling agent is the focused one and `stopReason === "aborted"` (the `Esc` interrupt), set `state.interruptedAgentId` to its `AgentId` — the turn-level marker that drives the working slot's static `Interrupted` line (`tui-layout.md`). It is cleared by the interrupted agent's own `agent.turn.start`, by `Actions.submitEditorText`, by a team load / `Actions.switchTeam`, and by `Actions.clearTuiState`. A non-aborted idle of the focused agent leaves the marker untouched — it cannot outlive one: a new turn always starts before the next idle, and that start clears it.
 
 ### `agent.usage`
 

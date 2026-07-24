@@ -139,6 +139,17 @@ describe("teamLoadReducer", () => {
     ]));
     expect(second.agents.get("my-team:general-1")?.todos).toEqual([{ content: "still here", status: "pending" }]);
   });
+
+  test("team load clears the interrupted marker", () => {
+    const first = teamLoadReducer(INITIAL_TUI_STATE, team([
+      { role: "general", agentKey: "general-1", isLeader: true, model: null },
+    ]));
+    const marked: TuiState = { ...first, interruptedAgentId: "my-team:general-1" };
+    const second = teamLoadReducer(marked, team([
+      { role: "general", agentKey: "general-1", isLeader: true, model: null },
+    ]));
+    expect(second.interruptedAgentId).toBeNull();
+  });
 });
 
 function user(prompt: string): AgentMessage {

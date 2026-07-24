@@ -100,11 +100,11 @@ Team and session selection ride the editor's autocomplete popup — drawn inside
 
 ## Scenario 12: core keybindings
 
-1. While the focused agent is busy streaming, press `Esc` — the focused agent is interrupted and settles idle with `lastStopReason === "aborted"`. When no agent is busy, `Esc` is a no-op (with the autocomplete popup open, it closes the popup instead — scenario 11).
+1. While the focused agent is busy streaming, press `Esc` — the focused agent is interrupted and settles idle with `lastStopReason === "aborted"`. The working slot then shows a static muted `Interrupted` in place of the spinner; it clears when the next prompt is submitted or the agent's next turn starts. When no agent is busy, `Esc` is a no-op (with the autocomplete popup open, it closes the popup instead — scenario 11).
 2. With text in the editor, press `Ctrl+C` — the editor clears, nothing quits. Press `Ctrl+C` on an empty editor — the TUI quits.
 3. Press `Ctrl+D` on an empty editor — the TUI quits in one press. With text in the editor, `Ctrl+D` is a no-op.
 
-**Observable outputs.** After the interrupt, `state.agents.get(state.focusedAgentId).lastStopReason === "aborted"`; on quit, `tui.start()` resolves and the process exits 0.
+**Observable outputs.** After the interrupt, `state.agents.get(state.focusedAgentId).lastStopReason === "aborted"`; `state.interruptedAgentId` is the interrupted agent's id and returns to `null` once the next prompt is submitted; on quit, `tui.start()` resolves and the process exits 0.
 
 ## Out of scope
 

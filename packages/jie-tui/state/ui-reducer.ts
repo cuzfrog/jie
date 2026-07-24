@@ -18,6 +18,7 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
         agents: new Map(),
         leaderAgentId: null,
         focusedAgentId: null,
+        interruptedAgentId: null,
         transientMessage: null,
         errorBanner: null,
       };
@@ -39,7 +40,8 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
     case ActionTypes.SET_EDITOR_TEXT:
       return { ...state, editorText: action.payload.text };
     case ActionTypes.SUBMIT_EDITOR_TEXT:
-      return state;
+      if (state.interruptedAgentId === null) return state;
+      return { ...state, interruptedAgentId: null };
     case ActionTypes.REQUEST_INTERRUPT:
       return state;
     case ActionTypes.SET_ENVIRONMENT:

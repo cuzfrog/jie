@@ -88,7 +88,8 @@ function reduceTurnStart(state: TuiState, event: AnyEventEnvelope): TuiState {
   const rotated = rotateTurnIfPopulated(agent);
   const currentTurn = rotated.currentTurn ?? freshTurn("");
   const next: AgentUiState = { ...rotated, status: "busy", currentTurn };
-  return withAgent(state, agentId, next, { errorBanner: null });
+  const interruptedAgentId = state.interruptedAgentId === agentId ? null : state.interruptedAgentId;
+  return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId });
 }
 
 function reduceIdle(state: TuiState, event: AnyEventEnvelope): TuiState {
@@ -98,7 +99,8 @@ function reduceIdle(state: TuiState, event: AnyEventEnvelope): TuiState {
   const { agentId, agent } = resolved;
   const contextTokensUsed = agent.lastReportedTotalTokens ?? estimateContextTokens(agent.history, agent.currentTurn);
   const next: AgentUiState = { ...agent, status: "idle", lastStopReason: event.payload, contextTokensUsed };
-  return withAgent(state, agentId, next);
+  const interruptedAgentId = agentId === state.focusedAgentId && event.payload === "aborted" ? agentId : state.interruptedAgentId;
+  return withAgent(state, agentId, next, { interruptedAgentId });
 }
 
 function reduceUsage(state: TuiState, event: AnyEventEnvelope): TuiState {

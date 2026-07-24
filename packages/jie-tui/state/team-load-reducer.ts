@@ -50,6 +50,7 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
     teamId,
     leaderAgentId: leaderId,
     focusedAgentId: focused,
+    interruptedAgentId: null,
     agents: newAgents,
   };
 }

@@ -179,6 +179,37 @@ describe("screen rendering", () => {
     }
   });
 
+  test("the working slot shows the spinner while busy, a static Interrupted after an abort, and clears on the next turn", async () => {
+    const harness = await bootScreen();
+    try {
+      harness.emit(TEAM_LOADED);
+      await harness.vt.waitForRender();
+      harness.emit(Events.agentTurnStart(AGENT_SENDER));
+      await settle(harness);
+      const busy = harness.vt.getViewport().map(stripAnsi).join("\n");
+      expect(busy).toContain("Working…");
+      expect(harness.stateStore.getState().interruptedAgentId).toBeNull();
+      harness.emit(Events.agentIdle(AGENT_SENDER, "aborted"));
+      await settle(harness);
+      const interrupted = harness.vt.getViewport().map(stripAnsi).join("\n");
+      expect(interrupted).toContain("Interrupted");
+      expect(interrupted).not.toContain("Working…");
+      expect(harness.stateStore.getState().interruptedAgentId).toBe("my-team:general-1");
+      harness.emit(Events.agentTurnStart(AGENT_SENDER));
+      await settle(harness);
+      const resumed = harness.vt.getViewport().map(stripAnsi).join("\n");
+      expect(resumed).toContain("Working…");
+      expect(resumed).not.toContain("Interrupted");
+      harness.emit(Events.agentIdle(AGENT_SENDER, "stop"));
+      await settle(harness);
+      const cleared = harness.vt.getViewport().map(stripAnsi).join("\n");
+      expect(cleared).not.toContain("Working…");
+      expect(cleared).not.toContain("Interrupted");
+    } finally {
+      harness.tui.stop();
+    }
+  });
+
   test("the empty screen shows the welcome banner and keybinding hints above the editor and clears them once a turn streams", async () => {
     const harness = await bootScreen();
     try {

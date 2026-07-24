@@ -58,6 +58,7 @@ export interface TuiState {
   readonly leaderAgentId: AgentId | null;
   readonly agents: ReadonlyMap<AgentId, AgentUiState>;
   readonly focusedAgentId: AgentId | null;
+  readonly interruptedAgentId: AgentId | null;
   readonly transientMessage: string | null;
   readonly errorBanner: string | null;
   readonly thinkingExpanded: boolean;
@@ -78,6 +79,10 @@ function isBusy(state: TuiState): boolean {
   return false;
 }
 
+function isInterrupted(state: TuiState): boolean {
+  return state.interruptedAgentId !== null;
+}
+
 function shouldShowErrorBanner(state: TuiState): boolean {
   return state.errorBanner !== null && state.errorBanner !== "";
 }
@@ -92,6 +97,7 @@ function hasConversation(state: TuiState): boolean {
 export const TuiState = {
   getFocusedAgent,
   isBusy,
+  isInterrupted,
   shouldShowErrorBanner,
   hasConversation,
 } as const;
