@@ -102,6 +102,13 @@ describe("loadMergedSettings", () => {
     expect(result.defaultTeam).toBe("my-team-1");
   });
 
+  test("accepts a valid defaultEffort", () => {
+    const home = track(freshDir("jie-home-"));
+    writeJson(join(home, "settings.json"), { defaultEffort: "high" });
+    const result = loadMergedSettings(home, null);
+    expect(result.defaultEffort).toBe("high");
+  });
+
   test.each([
     {
       name: "defaultTeam with invalid characters",
@@ -132,6 +139,18 @@ describe("loadMergedSettings", () => {
       field: "defaultTeam",
       value: 42,
       match: /defaultTeam must be a string/,
+    },
+    {
+      name: "defaultEffort not in the effort vocabulary",
+      field: "defaultEffort",
+      value: "extreme",
+      match: /invalid defaultEffort/,
+    },
+    {
+      name: "non-string defaultEffort",
+      field: "defaultEffort",
+      value: 42,
+      match: /invalid defaultEffort/,
     },
   ])("rejects $name with code INVALID_CONFIG", ({ field, value, match }) => {
     const home = track(freshDir("jie-home-"));

@@ -18,6 +18,7 @@ const eventManager = vi.mocked<EventManager>({
 const settingsStore = vi.mocked<SettingsStore>({
   load: vi.fn(),
   setDefaultProvider: vi.fn(),
+  setDefaultEffort: vi.fn(),
   setDefaultTeam: vi.fn(),
 });
 

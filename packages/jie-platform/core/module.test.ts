@@ -88,6 +88,7 @@ function makeParams(overrides: Partial<AgentBodyParams> = {}): AgentBodyParams {
     isLeader: false,
     sessionId: "s1",
     model: undefined,
+    effort: "off",
     ...overrides,
   };
 }

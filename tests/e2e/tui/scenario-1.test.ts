@@ -1,6 +1,6 @@
 import { assertLlmReachable, seedTeam, FIXTURE } from "../_fixture.ts";
 import { loadMockExpectations } from "../../../packages/mock-llm-backend";
-import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, sendCmd, sendLine, type TuiHarness } from "./harness";
+import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, waitForTransient, sendCmd, sendLine, type TuiHarness } from "./harness";
 import expectations from "./scenario-1.llm.ts";
 
 describe("Scenario 1 — simple agent", () => {
@@ -43,6 +43,16 @@ describe("Scenario 1 — simple agent", () => {
     expect(agent?.model?.provider).toBe(FIXTURE.provider);
     expect(agent?.model?.id).toBe(FIXTURE.modelId);
     expect(agent?.contextTokensUsed).toBeGreaterThan(0);
+  });
+
+  test("/effort high becomes the default effort for teams loaded thereafter", async () => {
+    await sendLine(harness.stdin, "/effort high");
+    await waitForTransient(harness, "default effort set to high");
+    await sendLine(harness.stdin, "/team my-team");
+    await waitForTeam(harness, "my-team");
+    const agent = harness.stateStore.getState().agents.get("my-team:general-1");
+    expect(agent?.model?.provider).toBe(FIXTURE.provider);
+    expect(agent?.model?.effort).toBe("high");
   });
 
   test("ctrl+d on an empty editor quits cleanly", async () => {

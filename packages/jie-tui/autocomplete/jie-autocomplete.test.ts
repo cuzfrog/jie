@@ -181,6 +181,26 @@ describe("createJieAutocompleteProvider — /resume arguments", () => {
   });
 });
 
+describe("createJieAutocompleteProvider — /effort arguments", () => {
+  test("suggests the five effort levels after '/effort '", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), makeStateStore())
+      .getSuggestions(["/effort "], 0, 8, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["off", "low", "medium", "high", "max"]);
+  });
+
+  test("filters effort levels by the typed prefix", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), makeStateStore())
+      .getSuggestions(["/effort h"], 0, 9, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["high"]);
+  });
+
+  test("a fully typed effort level yields no suggestions so Enter submits directly", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), makeStateStore())
+      .getSuggestions(["/effort high"], 0, 12, { signal: signal() });
+    expect(suggestions).toBeNull();
+  });
+});
+
 describe("createJieAutocompleteProvider — /model arguments", () => {
   const MODELS = [
     { provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5" },

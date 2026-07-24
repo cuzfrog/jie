@@ -90,6 +90,7 @@ export class JieAgentBody implements AgentBody {
       },
     });
     this.agent.state.systemPrompt = params.soul.systemPrompt;
+    this.agent.state.thinkingLevel = effortToThinkingLevel(params.effort);
     const bodyModel = resolveBodyModelInfo(params.model, this.agent.state.thinkingLevel);
     if (params.model !== undefined) {
       this.agent.state.model = params.model;
@@ -306,6 +307,10 @@ function agentEffort(thinkingLevel: ThinkingLevel): EffortLevel {
   if (thinkingLevel === "low" || thinkingLevel === "medium" || thinkingLevel === "high") return thinkingLevel;
   if (thinkingLevel === "xhigh") return "max";
   return "off";
+}
+
+function effortToThinkingLevel(effort: EffortLevel): ThinkingLevel {
+  return effort === "max" ? "xhigh" : effort;
 }
 
 function resolveBodyModelInfo(model: Model<Api> | undefined, thinkingLevel: ThinkingLevel): ModelInfo | null {

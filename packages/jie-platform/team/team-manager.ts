@@ -90,6 +90,7 @@ export class TeamManagerImpl implements TeamManager {
     const blueprint: TeamBlueprint = this.teamRegistry.parseTeamManifest(requested);
     const sessionId = this.resolveSessionId(requested, overrideSessionId);
     this.sessionIds.set(requested, sessionId);
+    const effort = this.settingsStore.load().defaultEffort ?? "off";
     const bodies: AgentBody[] = [];
     for (const soul of blueprint.roles) {
       const resolvedModel = this.resolveSoulModel(soul);
@@ -101,6 +102,7 @@ export class TeamManagerImpl implements TeamManager {
         isLeader: soul.role === blueprint.leaderRole,
         sessionId,
         model: resolvedModel,
+        effort,
       });
       bodies.push(body);
     }

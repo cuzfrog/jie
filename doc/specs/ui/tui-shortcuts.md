@@ -42,6 +42,8 @@ Typed into the editor like a prompt; the command handler (`command-handler.ts`) 
 | `/login <provider> <apiKey>` | Write one API key entry to `~/.jie/auth.json` (mode `0600` on POSIX) | `logged in to <provider>` |
 | `/logout [<provider>]` | Clear one or all entries from `~/.jie/auth.json` | `logged out of <provider>` (or `... of all providers`) |
 | `/model <provider>/<modelId>` | Validate and write the default model to settings; applies to teams loaded thereafter (no hot-swap of running agents). The argument is completed in-flow by autocomplete | `default model set to <provider>/<modelId>` |
+| `/effort <level>` | Write the default effort (`off` \| `low` \| `medium` \| `high` \| `max`) to global settings; applies to teams loaded thereafter (no hot-swap). The level is completed in-flow by autocomplete; an unknown level is an error banner | `default effort set to <level>` |
+| `/effort` (no arg) | Query and show the current default effort (`off` when unset) | `default effort: <level>` |
 | `/team <id>` | Switch the active team (`execute({name:"team"})` then `Actions.switchTeam`); unknown id is an error banner. The id is completed in-flow by autocomplete | `loading team '<id>'` |
 | `/team` (no arg) | Usage error | `/team <teamId>` |
 | `/resume <sessionId>` | Resume one session of the loaded team (`execute({name:"resumeSession"})` then `Actions.switchTeam` with the resumed identity); unknown id or no team loaded is an error banner. The id is completed in-flow by autocomplete | `resuming session '<id>'` |
@@ -51,7 +53,7 @@ Typed into the editor like a prompt; the command handler (`command-handler.ts`) 
 
 The editor's autocomplete popup (`autocomplete/jie-autocomplete.ts`) triggers on two prefixes:
 
-- **`/`** — slash commands (`SLASH_COMMAND_NAMES` from the command handler). Three commands also complete their argument: `/team ` lists installed team ids (`(default)` marked), `/resume ` lists the loaded team's sessions (`<n> msg · <age>`), and `/model ` lists the registry's models as `<provider>/<modelId>` (human-readable model name).
+- **`/`** — slash commands (`SLASH_COMMAND_NAMES` from the command handler). Four commands also complete their argument: `/team ` lists installed team ids (`(default)` marked), `/resume ` lists the loaded team's sessions (`<n> msg · <age>`), `/model ` lists the registry's models as `<provider>/<modelId>` (human-readable model name), and `/effort ` lists the five effort levels.
 - **`@`** — file mentions: a gitignore-aware scan of `cwd` (`file-mention/`), filtered as you type; the completed token is the relative path, e.g. `@main` + `Tab` → `@src/main.ts `.
 
 The popup renders inside the editor's frame; the editor never leaves the layout (`tui-layout.md`, "Selection via editor autocomplete"). `Tab` commits the highlighted suggestion into the buffer without submitting. `Enter` commits the highlighted suggestion when the popup is open (a second `Enter` then submits); once the typed text already matches an entry exactly the popup closes on its own and `Enter` submits directly. `Esc` closes the popup and keeps the buffer text; it interrupts the focused agent only when no popup is showing.

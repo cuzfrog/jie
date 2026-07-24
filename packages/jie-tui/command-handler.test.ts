@@ -201,6 +201,43 @@ describe("CommandHandlerImpl — /model", () => {
   });
 });
 
+describe("CommandHandlerImpl — /effort", () => {
+  test("/effort <level> dispatches setDefaultEffort and replies", () => {
+    const { platform, execute } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/effort high");
+    expect(execute).toHaveBeenCalledWith({ name: "setDefaultEffort", effort: "high" });
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("default effort set to high")));
+  });
+
+  test("/effort with an unknown level sets an error and does not dispatch", () => {
+    const { platform, execute } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/effort extreme");
+    expect(execute).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/effort: invalid 'extreme'")));
+  });
+
+  test("/effort (no args) queries the current default and shows it as a transient message", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => "max");
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/effort");
+    await new Promise((r) => setImmediate(r));
+    expect(execute).toHaveBeenCalledWith({ name: "getDefaultEffort" });
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("default effort: max")));
+  });
+
+  test("/effort surfaces platform errors as error messages", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async () => { throw new Error("disk full"); });
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/effort high");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/effort failed")));
+  });
+});
+
 describe("CommandHandlerImpl — /team", () => {
   test("/team (no args) sets a usage error and does not call execute", () => {
     const { platform, execute } = makePlatform();
@@ -349,6 +386,7 @@ describe("SLASH_COMMAND_NAMES", () => {
       "login",
       "logout",
       "model",
+      "effort",
       "team",
       "resume",
     ]);

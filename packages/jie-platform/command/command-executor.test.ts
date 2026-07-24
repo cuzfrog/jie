@@ -16,6 +16,7 @@ const authStore = vi.mocked<AuthStore>({
 const settingsStore = vi.mocked<SettingsStore>({
   load: vi.fn(),
   setDefaultProvider: vi.fn(),
+  setDefaultEffort: vi.fn(),
   setDefaultTeam: vi.fn(),
 });
 
@@ -143,6 +144,12 @@ describe("CommandExecutorImpl", () => {
       expect(result).toEqual({ provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null });
     });
 
+    test("carries the configured defaultEffort instead of 'off'", async () => {
+      settingsStore.load.mockReturnValueOnce({ defaultProvider: "anthropic", defaultModel: "claude-sonnet-4-5", defaultEffort: "high" });
+      const result = await executor.execute({ name: "getDefaultModel" });
+      expect(result).toEqual({ provider: "anthropic", id: "claude-sonnet-4-5", effort: "high", contextWindow: null });
+    });
+
     test("returns null when no defaults are configured", async () => {
       settingsStore.load.mockReturnValueOnce({});
       const result = await executor.execute({ name: "getDefaultModel" });
@@ -153,6 +160,28 @@ describe("CommandExecutorImpl", () => {
       settingsStore.load.mockReturnValueOnce({ defaultProvider: "anthropic" });
       const result = await executor.execute({ name: "getDefaultModel" });
       expect(result).toBeNull();
+    });
+  });
+
+  describe("setDefaultEffort", () => {
+    test("persists the effort via settingsStore.setDefaultEffort", async () => {
+      const result = await executor.execute({ name: "setDefaultEffort", effort: "high" });
+      expect(result).toBeNull();
+      expect(settingsStore.setDefaultEffort).toHaveBeenCalledWith("high");
+    });
+  });
+
+  describe("getDefaultEffort", () => {
+    test("returns the configured defaultEffort", async () => {
+      settingsStore.load.mockReturnValueOnce({ defaultEffort: "max" });
+      const result = await executor.execute({ name: "getDefaultEffort" });
+      expect(result).toBe("max");
+    });
+
+    test("returns 'off' when no defaultEffort is configured", async () => {
+      settingsStore.load.mockReturnValueOnce({});
+      const result = await executor.execute({ name: "getDefaultEffort" });
+      expect(result).toBe("off");
     });
   });
 
@@ -296,6 +325,8 @@ describe("CommandExecutorImpl", () => {
         { name: "setApiKey", apiKey: "sk-test" },
         { name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5" },
         { name: "getDefaultModel" },
+        { name: "setDefaultEffort", effort: "high" },
+        { name: "getDefaultEffort" },
         { name: "listModels" },
         { name: "setDefaultTeam", teamId: "alpha" },
         { name: "team", teamId: "alpha" },

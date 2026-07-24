@@ -15,6 +15,7 @@ const authStore = vi.mocked<AuthStore>({
 const settingsStore = vi.mocked<SettingsStore>({
   load: vi.fn(),
   setDefaultProvider: vi.fn(),
+  setDefaultEffort: vi.fn(),
   setDefaultTeam: vi.fn(),
 });
 

@@ -1,4 +1,4 @@
-import { JiePlatformError, type CommandName, type JiePlatform } from "@cuzfrog/jie-platform";
+import { isEffortLevel, JiePlatformError, type CommandName, type JiePlatform } from "@cuzfrog/jie-platform";
 import { Actions, type StateStore, type TuiState } from "./state";
 import { bashDirective, parseBashCommand } from "./bash";
 
@@ -13,14 +13,14 @@ interface SlashCommand {
   readonly run: (args: ReadonlyArray<string>) => CommandOutcome;
 }
 
-type InterceptResult = { kind: "reply"; text: string } | { kind: "error"; text: string } | null;
+type InterceptResult = { kind: "reply"; text: string } | { kind: "error"; text: string } | { kind: "silent" } | null;
 
 interface AgentRoute {
   readonly teamId: string;
   readonly agentKey: string;
 }
 
-type InterceptName = "model" | "resume" | Extract<CommandName, "login" | "logout" | "team">;
+type InterceptName = "model" | "effort" | "resume" | Extract<CommandName, "login" | "logout" | "team">;
 
 type TuiCommandName = "help" | "clear" | "exit" | InterceptName;
 
@@ -56,7 +56,7 @@ export class CommandHandlerImpl implements CommandHandler {
     const intercepted = this.runIntercepts(name, args);
     if (intercepted !== null) {
       if (intercepted.kind === "reply") this.stateStore.dispatch(Actions.setTransientMessage(intercepted.text));
-      else this.stateStore.dispatch(Actions.setErrorMessage(intercepted.text));
+      else if (intercepted.kind === "error") this.stateStore.dispatch(Actions.setErrorMessage(intercepted.text));
       return;
     }
 
@@ -105,6 +105,7 @@ export class CommandHandlerImpl implements CommandHandler {
       case "login": return this.interceptLogin(args);
       case "logout": return this.interceptLogout(args);
       case "model": return this.interceptModel(args);
+      case "effort": return this.interceptEffort(args);
       case "team": return this.interceptTeam(args);
       case "resume": return this.interceptResume(args);
       default: return null;
@@ -143,6 +144,29 @@ export class CommandHandlerImpl implements CommandHandler {
         this.stateStore.dispatch(Actions.setErrorMessage(`/model failed: ${reason}`));
       });
     return { kind: "reply", text: `default model set to ${parsed.provider}/${parsed.modelId}` };
+  }
+
+  private interceptEffort(args: ReadonlyArray<string>): InterceptResult {
+    const argument = args[0];
+    if (argument === undefined) {
+      void this.platform.execute({ name: "getDefaultEffort" })
+        .then((effort) => {
+          this.stateStore.dispatch(Actions.setTransientMessage(`default effort: ${effort}`));
+        }, (error: unknown) => {
+          const reason = error instanceof Error ? error.message : String(error);
+          this.stateStore.dispatch(Actions.setErrorMessage(`/effort failed: ${reason}`));
+        });
+      return { kind: "silent" };
+    }
+    if (!isEffortLevel(argument)) {
+      return { kind: "error", text: `/effort: invalid '${argument}' (expected off | low | medium | high | max)` };
+    }
+    void this.platform.execute({ name: "setDefaultEffort", effort: argument })
+      .then(() => undefined, (error: unknown) => {
+        const reason = error instanceof Error ? error.message : String(error);
+        this.stateStore.dispatch(Actions.setErrorMessage(`/effort failed: ${reason}`));
+      });
+    return { kind: "reply", text: `default effort set to ${argument}` };
   }
 
   private interceptTeam(args: ReadonlyArray<string>): InterceptResult {
@@ -212,7 +236,7 @@ const COMMANDS: ReadonlyMap<string, SlashCommand> = new Map<string, SlashCommand
 
 const LOCAL_COMMAND_NAMES = ["help", "clear", "exit"] as const satisfies ReadonlyArray<TuiCommandName>;
 
-const INTERCEPT_NAMES = ["login", "logout", "model", "team", "resume"] as const satisfies ReadonlyArray<InterceptName>;
+const INTERCEPT_NAMES = ["login", "logout", "model", "effort", "team", "resume"] as const satisfies ReadonlyArray<InterceptName>;
 
 export const SLASH_COMMAND_NAMES: ReadonlyArray<TuiCommandName> = [...LOCAL_COMMAND_NAMES, ...INTERCEPT_NAMES];
 
