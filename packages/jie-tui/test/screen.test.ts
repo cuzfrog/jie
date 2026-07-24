@@ -124,6 +124,21 @@ describe("screen rendering", () => {
     }
   });
 
+  test("fenced code blocks render with language syntax highlighting", async () => {
+    const harness = await bootScreen();
+    try {
+      harness.emit(TEAM_LOADED);
+      await harness.vt.waitForRender();
+      harness.emit(Events.agentTurnStart(AGENT_SENDER));
+      harness.emit(Events.agentStreamChunk(AGENT_SENDER, 1, 1, "text", "```ts\nconst x = 1;\n```"));
+      await settle(harness);
+      const styled = harness.vt.getStyledViewport().join("\n");
+      expect(styled).toContain("\x1b[36mconst\x1b[39m");
+    } finally {
+      harness.tui.stop();
+    }
+  });
+
   test("the resume autocomplete lists sessions in-flow and the editor stays visible", async () => {
     const harness = await bootScreen();
     try {

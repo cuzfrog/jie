@@ -40,3 +40,28 @@ describe("jieMarkdownTheme", () => {
     expect(theme.strikethrough("x")).toBe("\x1b[9mx\x1b[29m");
   });
 });
+
+describe("jieMarkdownTheme highlightCode", () => {
+  test("a typescript block yields ANSI-colored token lines", () => {
+    const lines = jieMarkdownTheme().highlightCode!("const n: number = 1; // note", "typescript");
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("\x1b[36mconst\x1b[39m");
+    expect(lines[0]).toContain("\x1b[90m// note\x1b[39m");
+  });
+
+  test("multi-line code keeps its line count", () => {
+    const lines = jieMarkdownTheme().highlightCode!("const a = 1;\nconst b = 2;", "typescript");
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toContain("\x1b[36mconst\x1b[39m");
+  });
+
+  test("an unknown language falls back to the plain code style", () => {
+    const lines = jieMarkdownTheme().highlightCode!("just words", "nosuchlang");
+    expect(lines).toEqual([style("text")("just words")]);
+  });
+
+  test("an absent language falls back to the plain code style", () => {
+    const lines = jieMarkdownTheme().highlightCode!("just words");
+    expect(lines).toEqual([style("text")("just words")]);
+  });
+});
