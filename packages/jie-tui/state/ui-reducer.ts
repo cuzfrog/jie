@@ -10,6 +10,8 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
       return { ...state, thinkingExpanded: !state.thinkingExpanded };
     case ActionTypes.TOGGLE_TOOL_CARDS:
       return { ...state, toolCardsExpanded: !state.toolCardsExpanded };
+    case ActionTypes.TOGGLE_TEAM_PANEL:
+      return { ...state, teamPanelVisible: !state.teamPanelVisible };
     case ActionTypes.SWITCH_CYCLE_AGENT:
       return reduceAgentCycle(state, action.payload.direction);
     case ActionTypes.CLEAR_TUI_STATE:

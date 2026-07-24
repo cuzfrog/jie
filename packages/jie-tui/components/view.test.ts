@@ -20,6 +20,11 @@ describe("resolveGlobalKey", () => {
     expect(_resolveGlobalKey("\x1b[1;5B")).toEqual(Actions.switchCycleAgent(1));
   });
 
+  test("shift+left and ctrl+left toggle the team panel", () => {
+    expect(_resolveGlobalKey("\x1b[1;2D")).toEqual(Actions.toggleTeamPanel());
+    expect(_resolveGlobalKey("\x1b[1;5D")).toEqual(Actions.toggleTeamPanel());
+  });
+
   test("any other key is left to the editor", () => {
     expect(_resolveGlobalKey("a")).toBeNull();
     expect(_resolveGlobalKey("\r")).toBeNull();

@@ -139,6 +139,22 @@ describe("screen rendering", () => {
     }
   });
 
+  test("shift+left toggles the team panel beside the chat", async () => {
+    const harness = await bootScreen();
+    try {
+      harness.emit(TEAM_LOADED);
+      await harness.vt.waitForRender();
+      await press(harness, "\x1b[1;2D");
+      const shown = harness.vt.getViewport().map(stripAnsi).join("\n");
+      expect(shown).toContain("★");
+      expect(shown.split("\n").some((line) => line.includes("│") && line.includes("general-1"))).toBe(true);
+      await press(harness, "\x1b[1;2D");
+      expect(harness.vt.getViewport().map(stripAnsi).join("\n")).not.toContain("│");
+    } finally {
+      harness.tui.stop();
+    }
+  });
+
   test("the resume autocomplete lists sessions in-flow and the editor stays visible", async () => {
     const harness = await bootScreen();
     try {
