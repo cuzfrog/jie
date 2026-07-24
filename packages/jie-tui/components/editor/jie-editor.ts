@@ -1,6 +1,7 @@
 import { Editor, type AutocompleteProvider, type EditorTheme, type TUI } from "@earendil-works/pi-tui";
 import { Actions, type StateStore } from "../../state";
 import { style } from "../themes";
+import type { PromptHistoryStore } from "./prompt-history";
 
 const ESCAPE = "\x1b";
 const CTRL_C = "\x03";
@@ -19,11 +20,21 @@ const EDITOR_THEME: EditorTheme = {
 
 export class JieEditor extends Editor {
   private readonly stateStore: StateStore;
+  private readonly promptHistoryStore: PromptHistoryStore;
+  private lastPersistedPrompt: string | null = null;
 
-  constructor(tui: TUI, stateStore: StateStore, autocompleteProvider: AutocompleteProvider, theme: EditorTheme = EDITOR_THEME) {
+  constructor(
+    tui: TUI,
+    stateStore: StateStore,
+    autocompleteProvider: AutocompleteProvider,
+    promptHistoryStore: PromptHistoryStore,
+    theme: EditorTheme = EDITOR_THEME,
+  ) {
     super(tui, theme);
     this.stateStore = stateStore;
+    this.promptHistoryStore = promptHistoryStore;
     this.setAutocompleteProvider(autocompleteProvider);
+    this.seedHistory();
     this.onChange = (text: string): void => {
       this.borderColor = text.startsWith("!") ? style("warning") : style("border");
       this.stateStore.dispatch(Actions.setEditorText(text));
@@ -33,6 +44,7 @@ export class JieEditor extends Editor {
     };
     this.onSubmit = (text: string): void => {
       if (text !== "") this.addToHistory(text);
+      this.persistPrompt(text);
       this.stateStore.dispatch(Actions.submitEditorText(text));
     };
   }
@@ -55,6 +67,19 @@ export class JieEditor extends Editor {
       return;
     }
     super.handleInput(data);
+  }
+
+  private seedHistory(): void {
+    const entries = this.promptHistoryStore.load();
+    for (const entry of entries) this.addToHistory(entry);
+    this.lastPersistedPrompt = entries[entries.length - 1] ?? null;
+  }
+
+  private persistPrompt(text: string): void {
+    const trimmed = text.trim();
+    if (trimmed === "" || trimmed === this.lastPersistedPrompt) return;
+    this.lastPersistedPrompt = trimmed;
+    this.promptHistoryStore.append(trimmed);
   }
 
   private interruptFocusedAgent(): void {

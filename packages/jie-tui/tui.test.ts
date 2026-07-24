@@ -1,3 +1,5 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { type Tui } from "./tui";
 import { bootTui } from "./container";
@@ -74,6 +76,7 @@ function bootHarness(): TuiHarness {
   const platform = makePlatformHarness();
   const container = bootTui({ cwd: process.cwd() }, {
     platform: platform.platform,
+    homeJieDir: join(tmpdir(), "jie-tui-unit-home"),
     stdin,
     stdout,
   });
@@ -117,14 +120,14 @@ describe("bootTui — start resolves on pendingQuit", () => {
 describe("bootTui — surface contract", () => {
   test("throws when not on a TTY", () => {
     withTTY(false, () => {
-      expect(() => bootTui({ cwd: process.cwd() }, { platform: makePlatform() })).toThrow(/interactive terminal/);
+      expect(() => bootTui({ cwd: process.cwd() }, { platform: makePlatform(), homeJieDir: join(tmpdir(), "jie-tui-unit-home") })).toThrow(/interactive terminal/);
     });
   });
 
   test("returns a Tui handle with initial empty state", () => {
     withTTY(true, () => {
       const platform = makePlatform();
-      const cradle = bootTui({ cwd: process.cwd() }, { platform }).cradle;
+      const cradle = bootTui({ cwd: process.cwd() }, { platform, homeJieDir: join(tmpdir(), "jie-tui-unit-home") }).cradle;
       const s0 = cradle.stateStore.getState();
       expect(s0.teamId).toBeNull();
       expect(s0.agents.size).toBe(0);

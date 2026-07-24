@@ -14,6 +14,7 @@ export type TuiStdout = NodeJS.WritableStream & { readonly columns?: number; rea
 
 export interface TuiDeps {
   readonly platform: JiePlatform;
+  readonly homeJieDir: string;
   readonly stdin?: NodeJS.ReadableStream;
   readonly stdout?: TuiStdout;
   readonly stderr?: NodeJS.WritableStream;

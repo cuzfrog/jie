@@ -2,6 +2,7 @@ import { TUI, type AutocompleteProvider, type Editor, type Terminal } from "@ear
 import { Actions, type AgentId, type StateStore, type TuiState } from "../../state";
 import { makeAgentUiState, makeTuiState } from "../../test";
 import { JieEditor } from "./jie-editor";
+import type { PromptHistoryStore } from "./prompt-history";
 
 class StubTerminal implements Terminal {
   columns = 80;
@@ -30,6 +31,11 @@ const autocompleteProvider = vi.mocked<AutocompleteProvider>({
   applyCompletion: vi.fn(() => ({ lines: [], cursorLine: 0, cursorCol: 0 })),
 });
 
+const promptHistoryStore = vi.mocked<PromptHistoryStore>({
+  load: vi.fn(() => []),
+  append: vi.fn(),
+});
+
 beforeEach(() => {
   stateStore.getState.mockReturnValue(makeTuiState());
 });
@@ -41,7 +47,7 @@ interface EditorHarness {
 
 function bootEditor(): EditorHarness {
   const ui = new TUI(new StubTerminal());
-  const editor = new JieEditor(ui, stateStore, autocompleteProvider);
+  const editor = new JieEditor(ui, stateStore, autocompleteProvider, promptHistoryStore);
   const submitted: string[] = [];
   const submit = editor.onSubmit;
   editor.onSubmit = (text: string): void => {
@@ -172,6 +178,46 @@ describe("JieEditor — prompt history", () => {
     expect(editor.getText()).toBe("a");
     editor.handleInput("\x1b[B");
     expect(editor.getText()).toBe("draft");
+  });
+
+  test("construction seeds the walk from the persisted store, most recent first", () => {
+    promptHistoryStore.load.mockReturnValue(["first", "second"]);
+    const { editor } = bootEditor();
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("second");
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("first");
+  });
+
+  test("submitting a prompt appends the trimmed text to the store", () => {
+    const { editor } = bootEditor();
+    for (const ch of " hi ") editor.handleInput(ch);
+    editor.handleInput("\r");
+    expect(promptHistoryStore.append).toHaveBeenCalledWith("hi");
+  });
+
+  test("consecutive duplicate submits append only once", () => {
+    const { editor } = bootEditor();
+    editor.handleInput("dup");
+    editor.handleInput("\r");
+    editor.handleInput("dup");
+    editor.handleInput("\r");
+    expect(promptHistoryStore.append).toHaveBeenCalledTimes(1);
+  });
+
+  test("submitting the last seeded prompt does not re-append it", () => {
+    promptHistoryStore.load.mockReturnValue(["again"]);
+    const { editor } = bootEditor();
+    editor.handleInput("again");
+    editor.handleInput("\r");
+    expect(promptHistoryStore.append).not.toHaveBeenCalled();
+  });
+
+  test("a whitespace-only submit does not append", () => {
+    const { editor } = bootEditor();
+    editor.handleInput(" ");
+    editor.handleInput("\r");
+    expect(promptHistoryStore.append).not.toHaveBeenCalled();
   });
 });
 

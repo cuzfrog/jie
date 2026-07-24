@@ -15,6 +15,7 @@ import type { CreateTUIOptions, Tui, TuiDeps, TuiStdout } from "./tui";
 
 export interface TuiCradle {
   readonly cwd: string;
+  readonly homeJieDir: string;
   readonly platform: JiePlatform;
   readonly scan: (rootDir: string) => ReadonlyArray<ScannedFile>;
   readonly stdin: NodeJS.ReadableStream | undefined;
@@ -42,6 +43,7 @@ export function bootTui(options: CreateTUIOptions, deps: TuiDeps): AwilixContain
   const container = createContainer<TuiCradle>({ injectionMode: InjectionMode.CLASSIC });
   container.register({
     cwd: asValue(options.cwd),
+    homeJieDir: asValue(deps.homeJieDir),
     platform: asValue(deps.platform),
   });
   if (deps.stdin !== undefined) container.register("stdin", asValue(deps.stdin));
