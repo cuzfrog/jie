@@ -1,4 +1,4 @@
-import xterm, { type Terminal as XtermTerminalType } from "@xterm/headless";
+import xterm, { type IBufferCell, type IBufferLine, type Terminal as XtermTerminalType } from "@xterm/headless";
 import type { Terminal } from "@earendil-works/pi-tui";
 
 const XtermTerminal = xterm.Terminal;
@@ -114,6 +114,16 @@ export class VirtualTerminal implements Terminal {
     return lines;
   }
 
+  getStyledViewport(): string[] {
+    const lines: string[] = [];
+    const buffer = this.xterm.buffer.active;
+    for (let i = 0; i < this.xterm.rows; i++) {
+      const line = buffer.getLine(buffer.viewportY + i);
+      lines.push(line === undefined ? "" : styledLine(line));
+    }
+    return lines;
+  }
+
   getScrollBuffer(): string[] {
     const lines: string[] = [];
     const buffer = this.xterm.buffer.active;
@@ -142,4 +152,39 @@ export class VirtualTerminal implements Terminal {
     await new Promise<void>((resolve) => setTimeout(resolve, 20));
     await this.flush();
   }
+}
+
+function styledLine(line: IBufferLine): string {
+  const cell = line.getCell(0);
+  if (cell === undefined) return "";
+  let out = "";
+  let previousSgr: string | null = null;
+  for (let x = 0; x < line.length; x++) {
+    if (line.getCell(x, cell) === undefined) break;
+    if (cell.getWidth() === 0) continue;
+    const sgr = foregroundSgr(cell);
+    if (sgr !== previousSgr) {
+      if (previousSgr !== null) out += "\x1b[39m";
+      if (sgr !== null) out += sgr;
+      previousSgr = sgr;
+    }
+    out += cell.getChars();
+  }
+  if (previousSgr !== null) out += "\x1b[39m";
+  return out;
+}
+
+function foregroundSgr(cell: IBufferCell): string | null {
+  if (cell.isFgDefault()) return null;
+  if (cell.isFgPalette()) {
+    const color = cell.getFgColor();
+    if (color < 8) return `\x1b[${30 + color}m`;
+    if (color < 16) return `\x1b[${90 + color - 8}m`;
+    return `\x1b[38;5;${color}m`;
+  }
+  if (cell.isFgRGB()) {
+    const color = cell.getFgColor();
+    return `\x1b[38;2;${(color >> 16) & 255};${(color >> 8) & 255};${color & 255}m`;
+  }
+  return null;
 }

@@ -1,3 +1,4 @@
+import { highlight, supportsLanguage, type Theme } from "cli-highlight";
 import type { MarkdownTheme } from "@earendil-works/pi-tui";
 
 export const COLORS = {
@@ -49,6 +50,7 @@ export function jieMarkdownTheme(): MarkdownTheme {
     code: (text) => style("warning")(text),
     codeBlock: (text) => style("text")(text),
     codeBlockBorder: (text) => style("borderMuted")(text),
+    highlightCode: highlightCode,
     quote: (text) => style("muted")(text),
     quoteBorder: (text) => style("borderMuted")(text),
     hr: (text) => style("borderMuted")(text),
@@ -68,6 +70,58 @@ export const USER_PROMPT_PREFIX = "› ";
 export const ASSISTANT_PREFIX = "● ";
 export const THINKING_LABEL = "Thinking...";
 export const WORKING_LABEL = "Working…";
+
+function highlightCode(code: string, lang?: string): string[] {
+  if (lang === undefined || lang === "" || !supportsLanguage(lang)) {
+    return code.split("\n").map((line) => style("text")(line));
+  }
+  return highlight(code, { language: lang, ignoreIllegals: true, theme: CODE_TOKEN_STYLES }).split("\n");
+}
+
+const CODE_TOKEN_STYLES: Theme = {
+  keyword: style("accent"),
+  built_in: style("accent"),
+  "builtin-name": style("accent"),
+  type: style("accent"),
+  class: style("accent"),
+  literal: style("warning"),
+  number: style("warning"),
+  symbol: style("warning"),
+  regexp: style("warning"),
+  string: style("success"),
+  "meta-string": style("success"),
+  addition: style("success"),
+  deletion: style("error"),
+  comment: style("muted"),
+  doctag: style("muted"),
+  meta: style("muted"),
+  "meta-keyword": style("muted"),
+  quote: style("muted"),
+  function: (text) => style("text")(boldAttr(text)),
+  title: (text) => style("text")(boldAttr(text)),
+  section: style("accent"),
+  tag: style("accent"),
+  name: style("accent"),
+  attr: style("warning"),
+  attribute: style("warning"),
+  "selector-tag": style("accent"),
+  "selector-id": style("accent"),
+  "selector-class": style("accent"),
+  "selector-attr": style("warning"),
+  "selector-pseudo": style("accent"),
+  "template-tag": style("accent"),
+  "template-variable": style("warning"),
+  bullet: style("accent"),
+  link: style("accent"),
+  variable: style("text"),
+  params: style("text"),
+  subst: style("text"),
+  formula: style("text"),
+  code: style("text"),
+  emphasis: italicAttr,
+  strong: boldAttr,
+  default: (text) => text,
+};
 
 function boldAttr(text: string): string {
   return `\x1b[1m${text}\x1b[22m`;
