@@ -1,4 +1,5 @@
 import { truncateToWidth, type Component } from "@earendil-works/pi-tui";
+import { COMMAND_METADATA } from "../../command-metadata";
 import { type InfoEntry, type StateStore, type TuiState } from "../../state";
 import { style } from "../themes";
 import { welcomeLines } from "../welcome-banner";
@@ -25,21 +26,9 @@ export class InfoMessage implements Component {
 
 function helpLines(state: TuiState, width: number): string[] {
   const lines: string[] = [...welcomeLines(state), ...hintLines(width)];
-  for (const [name, description] of COMMAND_SUMMARY) {
-    lines.push(`${style("accent")(name)}${style("muted")(`  ${description}`)}`);
+  for (const command of COMMAND_METADATA) {
+    const name = command.argumentHint === undefined ? `/${command.name}` : `/${command.name} ${command.argumentHint}`;
+    lines.push(`${style("accent")(name)}${style("muted")(`  ${command.description}`)}`);
   }
   return lines.map((line) => truncateToWidth(line, width));
 }
-
-const COMMAND_SUMMARY: ReadonlyArray<readonly [string, string]> = [
-  ["/help", "show this help"],
-  ["/clear", "clear the conversation"],
-  ["/exit", "quit jie"],
-  ["/team <teamId>", "switch the active team"],
-  ["/resume <sessionId>", "resume a session of the loaded team"],
-  ["/rename <name>", "name the active session"],
-  ["/model <provider>/<modelId>", "set the default model"],
-  ["/effort <level>", "set the default thinking effort"],
-  ["/login <provider> <apiKey>", "store a provider API key"],
-  ["/logout [<provider>]", "remove one or all API keys"],
-];

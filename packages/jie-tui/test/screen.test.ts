@@ -146,6 +146,21 @@ describe("screen rendering", () => {
     }
   });
 
+  test("bare '/' lists commands with the hint-and-description column", async () => {
+    const harness = await bootScreen();
+    try {
+      harness.emit(TEAM_LOADED);
+      await harness.vt.waitForRender();
+      await typeText(harness, "/");
+      await settle(harness);
+      const screen = harness.vt.getViewport().map(stripAnsi).join("\n");
+      expect(screen).toContain("<provider> <apiKey> — store a provider API key");
+      expect(screen).toContain("show this help");
+    } finally {
+      harness.tui.stop();
+    }
+  });
+
   test("/help reprints the welcome info into the chat area", async () => {
     const harness = await bootScreen();
     try {
