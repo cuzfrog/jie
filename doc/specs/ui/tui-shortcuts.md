@@ -23,6 +23,7 @@ Everything else is pi-tui `Editor` behavior: cursor/word movement, undo, kill ri
 | `Ctrl+O` | Expand / collapse all tool cards | always |
 | `Shift+↑` or `Ctrl+↑` | Focus the previous agent (insertion order) | always; no-op with fewer than two agents |
 | `Shift+↓` or `Ctrl+↓` | Focus the next agent (insertion order) | always; no-op with fewer than two agents |
+| `Shift+←` or `Ctrl+←` | Toggle the left team panel (`tui-team-panel.md`) | always |
 
 Both Shift and Ctrl arrow variants are accepted because terminals differ in which they report. The toggles are all-or-nothing across the focused agent's history + current turn (`state.thinkingExpanded` / `state.toolCardsExpanded`); mid-stream toggle re-renders on the next tick. There are **no** `PgUp`/`PgDn`/`Home`/`End`/wheel bindings: finished output is terminal scrollback; scroll and copy are the terminal's native behavior.
 

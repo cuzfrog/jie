@@ -52,6 +52,25 @@ describe("toggleToolCards", () => {
   });
 });
 
+describe("toggleTeamPanel", () => {
+  test("toggles teamPanelVisible on each call", () => {
+    const state1 = reduceUiAction(INITIAL_TUI_STATE, Actions.toggleTeamPanel());
+    const state2 = reduceUiAction(state1, Actions.toggleTeamPanel());
+    expect(state1.teamPanelVisible).toBe(true);
+    expect(state2.teamPanelVisible).toBe(false);
+  });
+
+  test("starts as false in initial state", () => {
+    expect(INITIAL_TUI_STATE.teamPanelVisible).toBe(false);
+  });
+
+  test("survives clearTuiState", () => {
+    const shown = reduceUiAction(INITIAL_TUI_STATE, Actions.toggleTeamPanel());
+    const cleared = reduceUiAction(shown, Actions.clearTuiState());
+    expect(cleared.teamPanelVisible).toBe(true);
+  });
+});
+
 describe("cycleAgent", () => {
   function multiAgent(): TuiState {
     return loadedTeam([

@@ -20,6 +20,7 @@ const INITIAL_TUI_STATE: TuiState = Object.freeze({
   errorBanner: null,
   thinkingExpanded: false,
   toolCardsExpanded: false,
+  teamPanelVisible: false,
   pendingQuit: false,
   editorText: "",
 } as const);

@@ -16,6 +16,7 @@ export function makeTuiState(overrides: Partial<TuiState> = {}): TuiState {
     errorBanner: null,
     thinkingExpanded: false,
     toolCardsExpanded: false,
+    teamPanelVisible: false,
     pendingQuit: false,
     editorText: "",
     ...overrides,

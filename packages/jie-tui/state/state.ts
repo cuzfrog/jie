@@ -71,6 +71,7 @@ export interface TuiState {
   readonly errorBanner: string | null;
   readonly thinkingExpanded: boolean;
   readonly toolCardsExpanded: boolean;
+  readonly teamPanelVisible: boolean;
   readonly pendingQuit: boolean;
   readonly editorText: string;
 }

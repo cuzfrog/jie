@@ -25,6 +25,7 @@ const HINTS: ReadonlyArray<readonly [string, string]> = [
   ["ctrl+t", "thinking"],
   ["ctrl+o", "tool output"],
   ["shift+↑/↓", "switch agent"],
+  ["shift+←", "team panel"],
   ["esc", "interrupt"],
   ["ctrl+d", "quit"],
 ];

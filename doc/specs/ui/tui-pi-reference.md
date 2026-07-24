@@ -106,11 +106,11 @@ Bash-mode border is also driven by theme: `bashMode` → dark `#b5bd68`, light `
   - `DynamicBorder`: renders `"─".repeat(Math.max(1, width))` (`dynamic-border.ts:23`). Default color is `border` (`#5f87ff` dark / `#547da7` light). Used inside `bash-execution.ts` (top + bottom, color = `bashMode` or `dim` for `!!`), `BorderedLoader` (`border`), and around sections that need a thin rule.
   - Markdown `---` hr: `─` repeated up to `min(width, 80)` (`markdown.ts:464`), color = `mdHr`.
   - Inside a markdown table: `┌─…─┬─…─┐`, `├─…─┼─…─┤`, `└─…─┴─…─┘` borders drawn with `─` (`markdown.ts:803-851`); not theme-colored, raw glyphs.
-- No vertical rail-and-chat separator is used in the built-in TUI. There is no `│` column between the chat and any side panel because there is no side panel — pi's TUI is a single column.
+- No vertical rail-and-chat separator is used in the built-in TUI — pi's TUI is a single column. Jie's toggleable team panel adds a `│` separator of its own (`tui-team-panel.md`).
 
-## 4. Rail styling
+## 4. Team panel styling
 
-Jie's rail is a net-new surface — pi has no rail in the built-in TUI. The jie-specific color choices for the rail live in `tui-layout.md` "Rail styling". This doc only lists pi's tokens; the application of those tokens to the rail is a jie-side decision.
+Jie's team panel is a net-new surface — pi has no side panel in the built-in TUI (single column, §3). The jie-specific color choices live in `tui-team-panel.md`. This doc only lists pi's tokens; the application of those tokens to the panel is a jie-side decision.
 
 ## 5. Footer styling
 
