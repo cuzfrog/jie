@@ -12,6 +12,8 @@ const USER_SENDER: UserSender = { kind: "user" };
 const AGENT_SENDER: AgentSender = { kind: "agent", teamId: "my-team", agentKey: "general-1" };
 const STREAM_SENDER: AgentSender = AGENT_SENDER;
 const TOOL_SENDER: AgentSender = AGENT_SENDER;
+const MANAGER_SENDER: AgentSender = { kind: "agent", teamId: "my-team", agentKey: "manager-1" };
+const WORKER_SENDER: AgentSender = { kind: "agent", teamId: "my-team", agentKey: "worker-1" };
 
 function loadedState(): TuiState {
   return reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, {
@@ -22,8 +24,26 @@ function loadedState(): TuiState {
   }));
 }
 
+function twoAgentState(): TuiState {
+  return reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, {
+    id: "my-team",
+    leaderKey: "manager-1",
+    history: [],
+    agents: [
+      { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, model: null },
+      { teamId: "my-team", role: "worker", agentKey: "worker-1", isLeader: false, model: null },
+    ],
+  }));
+}
+
 function promptedState(): TuiState {
   return reduce(loadedState(), Events.userPrompt(USER_SENDER, "my-team", "hi", "general-1"));
+}
+
+function interruptedState(): TuiState {
+  let state = loadedState();
+  state = reduce(state, Events.agentTurnStart(AGENT_SENDER));
+  return reduce(state, Events.agentIdle(AGENT_SENDER, "aborted"));
 }
 
 describe("reduceTeamLoaded", () => {
@@ -229,6 +249,20 @@ describe("reduceTurnStart", () => {
     const state2 = reduce(state, Events.agentTurnStart(foreign));
     expect(state2).toBe(state);
   });
+
+  test("clears interruptedAgentId when the interrupted agent starts its next turn", () => {
+    const state = reduce(interruptedState(), Events.agentTurnStart(AGENT_SENDER));
+    expect(state.interruptedAgentId).toBeNull();
+  });
+
+  test("keeps interruptedAgentId when a different agent starts a turn", () => {
+    let state = twoAgentState();
+    state = reduce(state, Events.agentTurnStart(MANAGER_SENDER));
+    state = reduce(state, Events.agentIdle(MANAGER_SENDER, "aborted"));
+    expect(state.interruptedAgentId).toBe("my-team:manager-1");
+    state = reduce(state, Events.agentTurnStart(WORKER_SENDER));
+    expect(state.interruptedAgentId).toBe("my-team:manager-1");
+  });
 });
 
 describe("reduceIdle", () => {
@@ -257,6 +291,25 @@ describe("reduceIdle", () => {
     const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
     const state2 = reduce(state, Events.agentIdle(foreign, "stop"));
     expect(state2).toBe(state);
+  });
+
+  test("marks interruptedAgentId when the focused agent idles aborted", () => {
+    const state = interruptedState();
+    expect(state.interruptedAgentId).toBe("my-team:general-1");
+  });
+
+  test("leaves interruptedAgentId null when the focused agent idles with a normal stop", () => {
+    let state = loadedState();
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER));
+    state = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
+    expect(state.interruptedAgentId).toBeNull();
+  });
+
+  test("leaves interruptedAgentId null when a non-focused agent idles aborted", () => {
+    let state = twoAgentState();
+    state = reduce(state, Events.agentTurnStart(WORKER_SENDER));
+    state = reduce(state, Events.agentIdle(WORKER_SENDER, "aborted"));
+    expect(state.interruptedAgentId).toBeNull();
   });
 });
 

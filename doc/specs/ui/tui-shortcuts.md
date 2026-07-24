@@ -9,7 +9,7 @@ The TUI is keyboard-driven. Editor keys are pi-tui `Editor` semantics verbatim p
 | `Enter` | Submit the editor buffer | pi semantics; `Shift+Enter` inserts a newline where the terminal reports modifyOtherKeys/Kitty (production path) |
 | `Tab` | Complete the highlighted autocomplete suggestion | Inserts the completed token into the buffer; does **not** submit — submit is always `Enter` |
 | `↑` / `↓` | Walk prompt history (with draft capture) | pi editor owns this; the global listener does not intercept plain arrows |
-| `Esc` | Interrupt the focused agent's in-flight run | only when that agent is busy and no autocomplete popup is showing; otherwise pi closes the popup |
+| `Esc` | Interrupt the focused agent's in-flight run | only when that agent is busy and no autocomplete popup is showing; otherwise pi closes the popup. The working slot then shows a static `Interrupted` until the agent's next turn starts or the user submits |
 | `Ctrl+C` | Clear the editor if non-empty; otherwise quit | |
 | `Ctrl+D` | Quit when the editor is empty | single press — pi semantics |
 
@@ -28,7 +28,7 @@ Both Shift and Ctrl arrow variants are accepted because terminals differ in whic
 
 ## Esc vs Ctrl+C vs Ctrl+D
 
-`Esc` interrupts a busy focused agent only; it never clears the editor or quits. `Ctrl+C` clears the editor when non-empty (protecting a half-typed prompt) and quits on an empty buffer. `Ctrl+D` quits on an empty buffer, a single press (pi's exit key).
+`Esc` interrupts a busy focused agent only; it never clears the editor or quits. The interrupted run is marked: the working slot shows a static muted `Interrupted` (the `Loader` with empty spinner frames) until the interrupted agent's next turn starts, the user submits, or the team switches (`tui-state.md`, `agent.idle`). `Ctrl+C` clears the editor when non-empty (protecting a half-typed prompt) and quits on an empty buffer. `Ctrl+D` quits on an empty buffer, a single press (pi's exit key).
 
 ## Slash commands
 

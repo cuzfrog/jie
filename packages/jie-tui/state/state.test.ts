@@ -66,6 +66,32 @@ describe("TuiState.isBusy", () => {
   });
 });
 
+describe("TuiState.isInterrupted", () => {
+  test("returns false on the initial state", () => {
+    const store = new StateStoreImpl();
+    expect(TuiState.isInterrupted(store.getState())).toBe(false);
+  });
+
+  test("returns true once the focused agent idles aborted", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    const sender = { kind: "agent", teamId: "demo", agentKey: "general-1" } as const;
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart(sender)));
+    store.dispatch(Actions.receiveEvent(Events.agentIdle(sender, "aborted")));
+    expect(TuiState.isInterrupted(store.getState())).toBe(true);
+  });
+
+  test("returns false after the next submit", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    const sender = { kind: "agent", teamId: "demo", agentKey: "general-1" } as const;
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart(sender)));
+    store.dispatch(Actions.receiveEvent(Events.agentIdle(sender, "aborted")));
+    store.dispatch(Actions.submitEditorText("again"));
+    expect(TuiState.isInterrupted(store.getState())).toBe(false);
+  });
+});
+
 describe("TuiState.shouldShowErrorBanner", () => {
   test("returns false when errorBanner is null", () => {
     const store = new StateStoreImpl();

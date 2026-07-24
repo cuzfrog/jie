@@ -42,6 +42,11 @@ describe("Scenario 12 — core keybindings", () => {
     const agent = harness.stateStore.getState().agents.get("my-team:general-1");
     expect(agent?.status).toBe("idle");
     expect(agent?.lastStopReason).toBe("aborted");
+    expect(harness.stateStore.getState().interruptedAgentId).toBe("my-team:general-1");
+    await sendLine(harness.stdin, "Count to three again.");
+    await waitForAgentBusy(harness, "my-team:general-1");
+    expect(harness.stateStore.getState().interruptedAgentId).toBeNull();
+    await waitForAgentIdle(harness, "my-team:general-1");
   });
 
   test("ctrl+c clears a non-empty editor, then quits on empty", async () => {

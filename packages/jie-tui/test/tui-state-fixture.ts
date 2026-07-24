@@ -9,6 +9,7 @@ export function makeTuiState(overrides: Partial<TuiState> = {}): TuiState {
     leaderAgentId: null,
     agents: new Map(),
     focusedAgentId: null,
+    interruptedAgentId: null,
     transientMessage: null,
     errorBanner: null,
     thinkingExpanded: false,

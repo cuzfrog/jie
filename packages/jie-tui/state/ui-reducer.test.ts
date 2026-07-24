@@ -143,3 +143,25 @@ describe("clear", () => {
   });
 });
 
+describe("interrupted marker", () => {
+  function markedTeam(): TuiState {
+    const state = loadedTeam([{ role: "general", agent_key: "general-1", is_leader: true }]);
+    return { ...state, interruptedAgentId: "my-team:general-1" };
+  }
+
+  test("submitEditorText clears interruptedAgentId", () => {
+    const state = reduceUiAction(markedTeam(), Actions.submitEditorText("next prompt"));
+    expect(state.interruptedAgentId).toBeNull();
+  });
+
+  test("submitEditorText is a no-op when no marker is set", () => {
+    const state = loadedTeam([{ role: "general", agent_key: "general-1", is_leader: true }]);
+    expect(reduceUiAction(state, Actions.submitEditorText("x"))).toBe(state);
+  });
+
+  test("clearTuiState clears interruptedAgentId", () => {
+    const state = reduceUiAction(markedTeam(), Actions.clearTuiState());
+    expect(state.interruptedAgentId).toBeNull();
+  });
+});
+
