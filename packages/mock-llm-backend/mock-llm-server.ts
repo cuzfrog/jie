@@ -104,11 +104,11 @@ export class MockLlmServerImpl implements MockLlmServer {
       req: summarizeRequest(body),
     });
 
-    const bytes = renderSseStream(picked.expectation, body);
+    const rendered = renderSseStream(picked.expectation, body);
     const headers = new Headers();
     headers.set("content-type", "text/event-stream; charset=utf-8");
     headers.set("cache-control", "no-cache");
-    return new Response(bytes, { status: 200, headers });
+    return new Response(rendered, { status: 200, headers });
   }
 }
 

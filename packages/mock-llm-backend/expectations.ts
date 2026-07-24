@@ -24,14 +24,15 @@ export interface MatchRule {
 }
 
 export type ResponseChunk =
-  | { readonly kind: "text"; readonly delta: string }
+  | { readonly kind: "text"; readonly delta: string; readonly delayMs?: number }
   | {
       readonly kind: "tool_call";
       readonly id: string;
       readonly name: string;
       readonly argumentsChunks: ReadonlyArray<string>;
+      readonly delayMs?: number;
     }
-  | { readonly kind: "finish"; readonly reason: "stop" | "length" | "tool_calls" };
+  | { readonly kind: "finish"; readonly reason: "stop" | "length" | "tool_calls"; readonly delayMs?: number };
 
 export interface Expectation {
   readonly match: MatchRule;
@@ -193,27 +194,46 @@ function renderChunk(chunk: ResponseChunk, completionId: string, model: string, 
   return `data: ${JSON.stringify(finishBase)}`;
 }
 
-export function renderSseStream(expectation: Expectation, req: ChatCompletionRequestBody): Uint8Array {
+export function renderSseStream(
+  expectation: Expectation,
+  req: ChatCompletionRequestBody,
+): Uint8Array | ReadableStream<Uint8Array> {
   const completionId = `${MOCK_COMPLETION_ID_PREFIX}${Math.random().toString(36).slice(2, 10)}`;
   const created = Math.floor(Date.now() / 1000);
-  const lines: string[] = [];
+  const header = `data: ${JSON.stringify({
+    id: completionId,
+    object: "chat.completion.chunk",
+    created,
+    model: req.model,
+    choices: [{ index: 0, delta: { role: "assistant" }, finish_reason: null }],
+  })}`;
+  const chunks = expectation.responseChunks;
 
-  lines.push(
-    `data: ${JSON.stringify({
-      id: completionId,
-      object: "chat.completion.chunk",
-      created,
-      model: req.model,
-      choices: [{ index: 0, delta: { role: "assistant" }, finish_reason: null }],
-    })}`,
-  );
-
-  for (const chunk of expectation.responseChunks) {
-    lines.push(renderChunk(chunk, completionId, req.model, created));
+  if (!chunks.some((chunk) => (chunk.delayMs ?? 0) > 0)) {
+    const lines: string[] = [header];
+    for (const chunk of chunks) lines.push(renderChunk(chunk, completionId, req.model, created));
+    lines.push("data: [DONE]");
+    return new TextEncoder().encode(`${lines.join("\n\n")}\n\n`);
   }
 
-  lines.push("data: [DONE]");
+  const encoder = new TextEncoder();
+  const blocks: ReadonlyArray<string> = [
+    header,
+    ...chunks.map((chunk) => renderChunk(chunk, completionId, req.model, created)),
+    "data: [DONE]",
+  ];
+  let stage = 0;
+  return new ReadableStream<Uint8Array>({
+    async pull(controller): Promise<void> {
+      await sleep(chunks[stage - 1]?.delayMs ?? 0);
+      controller.enqueue(encoder.encode(`${blocks[stage]}\n\n`));
+      stage += 1;
+      if (stage === blocks.length) controller.close();
+    },
+  });
+}
 
-  const body = `${lines.join("\n\n")}\n\n`;
-  return new TextEncoder().encode(body);
+function sleep(ms: number): Promise<void> {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

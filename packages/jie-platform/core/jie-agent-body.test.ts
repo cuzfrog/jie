@@ -996,6 +996,30 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     expect(ends[0]!.payload).toMatchObject({ stream_id: 1, total_chunks: 0 });
   });
 
+  test("message_end with a reported usage publishes agent.usage", () => {
+    const usages: EventEnvelope<"agent.usage">[] = [];
+    h.subscribeSubject("agent.usage", (env) => {
+      usages.push(env);
+    });
+    h.makeBody();
+    const usage = { input: 10, output: 5, cacheRead: 2, cacheWrite: 1, totalTokens: 18, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
+    h.fireEvent({ type: "message_start", message: makeAssistantMessage() });
+    h.fireEvent({ type: "message_end", message: makeAssistantMessage({ usage }) });
+    expect(usages).toHaveLength(1);
+    expect(usages[0]!.payload).toMatchObject({ input: 10, output: 5, cacheRead: 2, cacheWrite: 1, totalTokens: 18 });
+  });
+
+  test("message_end with an all-zero usage publishes no agent.usage", () => {
+    const usages: EventEnvelope<"agent.usage">[] = [];
+    h.subscribeSubject("agent.usage", (env) => {
+      usages.push(env);
+    });
+    h.makeBody();
+    h.fireEvent({ type: "message_start", message: makeAssistantMessage() });
+    h.fireEvent({ type: "message_end", message: makeAssistantMessage() });
+    expect(usages).toHaveLength(0);
+  });
+
   test("message_end with non-assistant role publishes no agent.stream.end", () => {
     const ends: EventEnvelope<"agent.stream.end">[] = [];
     h.subscribeSubject("agent.stream.end", (env) => {

@@ -38,7 +38,7 @@ The TUI's acceptance surface. Each scenario corresponds to one e2e test file —
 4. Prompt again; the response streams and the banner is gone (cleared by `agent.turn.start`).
 5. Press `Ctrl+D` (editor empty). The process exits 0.
 
-**Observable outputs.** `state.errorBanner` holds the no-model message until the first keystroke after it is shown, a submit, or a new turn starts (per `tui-state.md` `clearBanners` / `agent.turn.start`). Transient messages age out after 5 s render-side.
+**Observable outputs.** `state.errorBanner` holds the no-model message until the first keystroke after it is shown, a submit, or a new turn starts (per `tui-state.md` `clearBanners` / `agent.turn.start`). Transient messages age out after 5 s; a newer transient resets the timer.
 
 ## Scenario 5: second prompt after the first turn
 
@@ -97,6 +97,14 @@ Team and session selection ride the editor's autocomplete popup — drawn inside
 3. With a seeded session on disk, type `/resume ` — the popup lists the loaded team's sessions with `<n> msg · <age>`. `Tab` commits the session id, and one `Enter` resumes it via `resumeSession` — the seeded history hydrates into the chat. The startup `--resume <sessionId>` entry hydrates the same way on the team load.
 
 **Observable outputs.** `state.editorText` transitions `"/team my"` → `"/team my-team"` → `""` (submit clears); the picked team reaches `state.teamId`; the resumed session's prompt appears in the agent's turns; `state.errorBanner` stays `null`.
+
+## Scenario 12: core keybindings
+
+1. While the focused agent is busy streaming, press `Esc` — the focused agent is interrupted and settles idle with `lastStopReason === "aborted"`. When no agent is busy, `Esc` is a no-op (with the autocomplete popup open, it closes the popup instead — scenario 11).
+2. With text in the editor, press `Ctrl+C` — the editor clears, nothing quits. Press `Ctrl+C` on an empty editor — the TUI quits.
+3. Press `Ctrl+D` on an empty editor — the TUI quits in one press. With text in the editor, `Ctrl+D` is a no-op.
+
+**Observable outputs.** After the interrupt, `state.agents.get(state.focusedAgentId).lastStopReason === "aborted"`; on quit, `tui.start()` resolves and the process exits 0.
 
 ## Out of scope
 

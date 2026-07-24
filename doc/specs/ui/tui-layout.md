@@ -42,7 +42,7 @@ The chat section is append-only: `sync/chat-sync.ts` subscribes to the state sto
 
 The **todo list** renders as its own section below the chat (the focused agent's `agent.todos`, replaced wholesale when a todo-tool result arrives). The **working indicator** (a pi-tui `Loader`, accent spinner + `Working…` label) is mounted in its slot while **any** agent is `busy` and removed the moment all agents are idle.
 
-The **status line** section sits between the working slot and the editor: the transient message row (`muted`, aged out after 5 s render-side) and the error banner row (`error`), each only when present.
+The **status line** section sits between the working slot and the editor: the transient message row (`muted`, aged out after 5 s; a newer transient resets the timer) and the error banner row (`error`), each only when present.
 
 The **welcome banner** section sits between the status line and the keybinding hints and renders only while the conversation is empty (the same `hasConversation` gate as the hints). It prints the `jie` wordmark + tagline (accent wordmark, muted tagline) and, once a team is loaded, a team line: `team <id>` (accent) followed by the agent roster (agent key, `(leader)` mark, `provider/modelId` when a model is assigned, ` · ` separators). It disappears the moment a turn starts so it never permanently occupies rows above the chat.
 

@@ -49,6 +49,23 @@ const expectChunks = (() => {
   };
 })();
 
+async function readAll(stream: ReadableStream<Uint8Array>): Promise<string> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let out = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return out;
+    out += decoder.decode(value, { stream: true });
+  }
+}
+
+function renderStatic(expectation: Expectation, request: ChatCompletionRequestBody): Uint8Array {
+  const rendered = renderSseStream(expectation, request);
+  if (!(rendered instanceof Uint8Array)) throw new Error("expected static bytes when no chunk carries delayMs");
+  return rendered;
+}
+
 describe("lastUserText", () => {
   test("returns the last user message string", () => {
     expect(
@@ -175,7 +192,7 @@ describe("selectExpectation", () => {
 
 describe("renderSseStream", () => {
   test("always starts with a role-only chunk and ends with [DONE]", () => {
-    const bytes = renderSseStream(
+    const bytes = renderStatic(
       { match: {}, responseChunks: [text("hi"), finish("stop")] },
       req(),
     );
@@ -186,7 +203,7 @@ describe("renderSseStream", () => {
 
   test("text chunks carry their delta on the choice", () => {
     const chunks = expectChunks(
-      renderSseStream({ match: {}, responseChunks: [text("abc"), finish("stop")] }, req()),
+      renderStatic({ match: {}, responseChunks: [text("abc"), finish("stop")] }, req()),
     );
     // skip the leading role-only chunk, then find the text chunk
     const textChunks = chunks.filter((c) => c.includes('"content"'));
@@ -196,7 +213,7 @@ describe("renderSseStream", () => {
 
   test("finish chunk sets finish_reason in the last chunk", () => {
     const chunks = expectChunks(
-      renderSseStream({ match: {}, responseChunks: [text("ok"), finish("tool_calls")] }, req()),
+      renderStatic({ match: {}, responseChunks: [text("ok"), finish("tool_calls")] }, req()),
     );
     const last = chunks[chunks.length - 1];
     expect(last).toBeDefined();
@@ -205,7 +222,7 @@ describe("renderSseStream", () => {
 
   test("tool_call chunks stream name first, then per-token arguments", () => {
     const chunks = expectChunks(
-      renderSseStream(
+      renderStatic(
         {
           match: {},
           responseChunks: [
@@ -230,11 +247,29 @@ describe("renderSseStream", () => {
   });
 
   test("renders the model id from the request body", () => {
-    const bytes = renderSseStream(
+    const bytes = renderStatic(
       { match: {}, responseChunks: [text("ok"), finish("stop")] },
       req({ model: "the-mock-model-9" }),
     );
     const decoded = new TextDecoder().decode(bytes);
     expect(decoded).toContain('"model":"the-mock-model-9"');
+  });
+
+  test("no chunk delay keeps the static byte-sequence path", () => {
+    const rendered = renderSseStream({ match: {}, responseChunks: [text("x"), finish("stop")] }, req());
+    expect(rendered instanceof Uint8Array).toBe(true);
+  });
+
+  test("a chunk carrying delayMs switches rendering to a timed ReadableStream", async () => {
+    const started = performance.now();
+    const rendered = renderSseStream(
+      { match: {}, responseChunks: [text("slow"), { kind: "finish", reason: "stop", delayMs: 150 }] },
+      req(),
+    );
+    if (!(rendered instanceof ReadableStream)) throw new Error("expected a timed stream when a chunk carries delayMs");
+    const decoded = await readAll(rendered);
+    expect(performance.now() - started).toBeGreaterThanOrEqual(140);
+    expect(decoded).toContain('"content":"slow"');
+    expect(decoded.endsWith("data: [DONE]\n\n")).toBe(true);
   });
 });
