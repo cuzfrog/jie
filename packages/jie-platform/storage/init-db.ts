@@ -27,4 +27,12 @@ export function initializeSchema(storage: Storage): void {
     CREATE INDEX IF NOT EXISTS idx_memory_turns_team_session_created
     ON memory_turns (team_id, session_id, created_at)
   `);
+
+  storage.exec(`
+    CREATE TABLE IF NOT EXISTS session_metadata (
+      session_id TEXT PRIMARY KEY,
+      name       TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
 }

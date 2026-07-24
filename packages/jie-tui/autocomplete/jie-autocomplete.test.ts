@@ -160,10 +160,37 @@ describe("createJieAutocompleteProvider — /resume arguments", () => {
     expect(suggestions!.items[1]!.description).toMatch(/^12 msg · /);
   });
 
+  function namedSessionPlatform(): JiePlatform {
+    return makePlatform(vi.fn(async (cmd: { name: string }) => {
+      if (cmd.name === "listSessions") {
+        return [
+          { sessionId: "01HZX-ULID", name: "refactor pass", messageCount: 3, lastActivity: "2026-07-22T00:00:00.000Z" },
+          { sessionId: "beta-2", messageCount: 12, lastActivity: "2026-07-21T00:00:00.000Z" },
+        ];
+      }
+      return null;
+    }));
+  }
+
   test("filters sessions by the typed argument prefix", async () => {
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, sessionPlatform(), storeWithTeam())
       .getSuggestions(["/resume be"], 0, 10, { signal: signal() });
     expect(suggestions!.items.map((item) => item.value)).toEqual(["beta-2"]);
+  });
+
+  test("shows a renamed session's name as the label, keeping the sessionId as the committed value", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, namedSessionPlatform(), storeWithTeam())
+      .getSuggestions(["/resume "], 0, 8, { signal: signal() });
+    expect(suggestions!.items[0]!.label).toBe("refactor pass");
+    expect(suggestions!.items[0]!.value).toBe("01HZX-ULID");
+    expect(suggestions!.items[0]!.description).toMatch(/^3 msg · /);
+    expect(suggestions!.items[1]!.label).toBe("beta-2");
+  });
+
+  test("filters sessions by name prefix in addition to session id", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, namedSessionPlatform(), storeWithTeam())
+      .getSuggestions(["/resume ref"], 0, 11, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["01HZX-ULID"]);
   });
 
   test("a fully typed session id yields no suggestions so Enter submits directly", async () => {

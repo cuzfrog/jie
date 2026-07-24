@@ -94,7 +94,7 @@ Team and session selection ride the editor's autocomplete popup — drawn inside
 
 1. Type `/team my` — the popup lists matching installed team ids. `Tab` commits the id (`state.editorText === "/team my-team"`), and one `Enter` then submits and loads the team.
 2. Type `/team ` and press `Esc` while the popup is open — the popup closes, the editor keeps its text, and further typing appends to the buffer; no error banner.
-3. With a seeded session on disk, type `/resume ` — the popup lists the loaded team's sessions with `<n> msg · <age>`. `Tab` commits the session id, and one `Enter` resumes it via `resumeSession` — the seeded history hydrates into the chat. The startup `--resume <sessionId>` entry hydrates the same way on the team load.
+3. With a seeded session on disk, type `/resume ` — the popup lists the loaded team's sessions with `<n> msg · <age>` (a session named via `/rename` shows that name as its label). `Tab` commits the session id, and one `Enter` resumes it via `resumeSession` — the seeded history hydrates into the chat. The startup `--resume <sessionId>` entry hydrates the same way on the team load.
 
 **Observable outputs.** `state.editorText` transitions `"/team my"` → `"/team my-team"` → `""` (submit clears); the picked team reaches `state.teamId`; the resumed session's prompt appears in the agent's turns; `state.errorBanner` stays `null`.
 

@@ -55,6 +55,16 @@ describe("Scenario 1 — simple agent", () => {
     expect(agent?.model?.effort).toBe("high");
   });
 
+  test("/rename names the active session and the name appears in listSessions", async () => {
+    await sendLine(harness.stdin, "/team my-team");
+    await waitForTeam(harness, "my-team");
+    await submitAndWaitForAgentIdle(harness, "Say hi briefly", "my-team:general-1");
+    await sendLine(harness.stdin, "/rename my named session");
+    await waitForTransient(harness, "session renamed to my named session");
+    const sessions = await harness.platform.execute({ name: "listSessions", teamId: "my-team" });
+    expect(sessions[0]?.name).toBe("my named session");
+  });
+
   test("ctrl+d on an empty editor quits cleanly", async () => {
     await sendCmd(harness.stdin, "\x04");
     await harness.exited;

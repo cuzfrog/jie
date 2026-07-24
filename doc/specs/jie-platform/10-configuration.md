@@ -252,4 +252,4 @@ Commands that mutate persistent files:
 
 Runtime flags (no persistence): `--team <id>` (one-shot load override for `jie` and `jie -p`), `--resume <sessionId>` (load a team on a prior session), `--in-memory` (SQLite `:memory:`; nothing persists), `-p "..."` (one-shot print mode).
 
-TUI slash commands run the same platform commands in-session — no restart: `/login`, `/logout`, `/model <provider>/<modelId>`, `/team [<id>]` (hot-load; "Team Swap" above), `/resume` (session picker). The `<provider>/<modelId>` slash convention is pi's; two separate flags are not accepted.
+TUI slash commands run the same platform commands in-session — no restart: `/login`, `/logout`, `/model <provider>/<modelId>`, `/team [<id>]` (hot-load; "Team Swap" above), `/resume` (session picker), `/rename <name>` (names the active session; `08-memory.md` "List and rename"). The `<provider>/<modelId>` slash convention is pi's; two separate flags are not accepted.

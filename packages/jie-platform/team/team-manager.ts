@@ -17,6 +17,7 @@ export interface TeamManager {
   locate(teamId: string): TeamBlueprintLocation;
   agents(teamId: string): ReadonlyArray<AgentInfo>;
   listSessions(teamId: string): ReadonlyArray<SessionSummary>;
+  renameSession(teamId: string, name: string): void;
   stop(): void;
 }
 
@@ -68,6 +69,18 @@ export class TeamManagerImpl implements TeamManager {
 
   listSessions(teamId: string): ReadonlyArray<SessionSummary> {
     return this.memoryManager.listSessions(teamId);
+  }
+
+  renameSession(teamId: string, name: string): void {
+    const trimmed = name.trim();
+    if (trimmed === "") {
+      throw new JiePlatformError("INVALID_SESSION_NAME", { detail: "name must not be empty" });
+    }
+    const sessionId = this.sessionIds.get(teamId);
+    if (sessionId === undefined) {
+      throw new JiePlatformError("NO_TEAM", { detail: `no session loaded for team '${teamId}'` });
+    }
+    this.memoryManager.renameSession(sessionId, trimmed);
   }
 
   stop(): void {

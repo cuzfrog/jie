@@ -24,6 +24,7 @@ const commandExecutor = vi.mocked<CommandExecutor>({
 const teamManager = vi.mocked<TeamManager>({
   load: vi.fn(),
   resumeSession: vi.fn(),
+  renameSession: vi.fn(),
   listInstalled: vi.fn(),
   listLoaded: vi.fn(),
   locate: vi.fn(),

@@ -53,7 +53,7 @@ The **keybinding hints** section sits between the welcome banner and the editor 
 Team switch and session resume are selected through the editor's own autocomplete popup — there is no separate menu surface, and the editor never leaves the layout. The jie autocomplete provider (`autocomplete/jie-autocomplete.ts`) attaches argument completions to three slash commands:
 
 - **`/team `** — installed team ids from `getTeamInfo`, the default marked `(default)`.
-- **`/resume `** — the loaded team's sessions from `listSessions`, each described as `<n> msg · <age>` (a relative age: now/m/h/d/mo/y).
+- **`/resume `** — the loaded team's sessions from `listSessions`, each described as `<n> msg · <age>` (a relative age: now/m/h/d/mo/y); a session named via `/rename` shows that name as its label instead of the session id.
 - **`/model `** — the registry's models from `listModels` as `<provider>/<modelId>`, each described by the model's human-readable name.
 - **`/effort `** — the five effort levels (`off`/`low`/`medium`/`high`/`max`).
 

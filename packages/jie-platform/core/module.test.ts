@@ -26,6 +26,7 @@ const memoryManager = vi.mocked<MemoryManager>({
   restore: vi.fn(),
   hasSession: vi.fn(),
   listSessions: vi.fn(),
+  renameSession: vi.fn(),
 });
 
 const toolRegistry = vi.mocked<ToolRegistry>({

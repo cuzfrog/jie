@@ -46,6 +46,7 @@ const JiePlatformErrorMessages = {
   OAUTH_NOT_SUPPORTED: "OAuth credentials are not supported in v1",
 
   UNKNOWN_SESSION: "Unknown session_id",
+  INVALID_SESSION_NAME: "Invalid session name",
 
   INVALID_CONFIG: "Invalid configuration",
 

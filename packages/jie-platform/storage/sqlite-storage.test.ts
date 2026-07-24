@@ -5,12 +5,12 @@ import { SqliteStorage } from "./sqlite-storage";
 import { initializeSchema } from "./init-db";
 
 describe("SqliteStorage", () => {
-  test("constructor creates artifacts and memory_turns tables (idempotent)", () => {
+  test("constructor creates all schema tables (idempotent)", () => {
     const storage = new SqliteStorage(":memory:");
     const tables = storage.query(
       "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
     );
-    expect(tables).toEqual([["artifacts"], ["memory_turns"]]);
+    expect(tables).toEqual([["artifacts"], ["memory_turns"], ["session_metadata"]]);
   });
 
   test("initializeSchema is callable separately and idempotent", () => {

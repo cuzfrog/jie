@@ -19,7 +19,7 @@ describe("registerStorageModule", () => {
   test("inMemory resolves a fresh isolated storage with the schema", () => {
     const a = bootedContainer("/unused", true);
     const tables = a.cradle.storage.query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name");
-    expect(tables).toEqual([["artifacts"], ["memory_turns"]]);
+    expect(tables).toEqual([["artifacts"], ["memory_turns"], ["session_metadata"]]);
     a.cradle.storage.exec("INSERT INTO artifacts (key, content, created_at) VALUES (?, ?, ?)", ["ephemeral", "x", "2025-01-01"]);
     const b = bootedContainer("/unused", true);
     expect(b.cradle.storage.query("SELECT key FROM artifacts")).toEqual([]);

@@ -14,6 +14,8 @@ interface MemoryManager {
   compact(compactedSeqRange: [number, number], summary: AgentMessage, agent_key: string, session_id: string, team_id: string): void;
   restore(agent_key: string, session_id: string, team_id: string): Promise<AgentMessage[]>;
   hasSession(team_id: string, session_id: string): boolean;   // --resume validation; pure read
+  listSessions(team_id: string): SessionSummary[];            // /resume picker; one aggregate row per session, newest first
+  renameSession(session_id: string, name: string): void;      // upsert session_metadata
 }
 ```
 
@@ -39,6 +41,10 @@ The body's `session_id` is supplied by the platform (ADR 17): the platform's `Te
 - Resumed session (`--resume`) → prior history; the body resumes. `seq` is per-agent: the leader's seq 1 and the worker's seq 1 are independent rows.
 
 **`seq` caching.** The body caches the next `seq` as a private field, initialized once from the restored array (`max(restored.seq) + 1`, or `1` when empty) — no per-`persist` `MAX(seq)` query. The cache is per-body and discarded on process exit; the next run re-initializes from `restore`. When the compaction wrapper lands, it must refresh the cache if a summary displaces the high-water mark.
+
+### List and rename
+
+`listSessions(team_id)` aggregates `memory_turns` into one `SessionSummary { sessionId, messageCount, lastActivity, name? }` per session, newest activity first; `name` comes from a LEFT JOIN on `session_metadata` and is absent for unnamed sessions. `renameSession(session_id, name)` upserts that table. The `renameSession` **command** (TUI `/rename <name>`) resolves the active `session_id` from `TeamManager`'s private `Map<team_id, session_id>` — no session loaded for that team fails `NO_TEAM` — trims the name (blank fails `INVALID_SESSION_NAME`), and calls the manager. Naming is a presentation concern over the durable id: `/resume` still commits the `session_id`, and the name follows the session across process restarts (the table persists; the in-memory map does not).
 
 ## Persistence
 

@@ -20,7 +20,7 @@ interface AgentRoute {
   readonly agentKey: string;
 }
 
-type InterceptName = "model" | "effort" | "resume" | Extract<CommandName, "login" | "logout" | "team">;
+type InterceptName = "model" | "effort" | "resume" | "rename" | Extract<CommandName, "login" | "logout" | "team">;
 
 type TuiCommandName = "help" | "clear" | "exit" | InterceptName;
 
@@ -108,6 +108,7 @@ export class CommandHandlerImpl implements CommandHandler {
       case "effort": return this.interceptEffort(args);
       case "team": return this.interceptTeam(args);
       case "resume": return this.interceptResume(args);
+      case "rename": return this.interceptRename(args);
       default: return null;
     }
   }
@@ -186,6 +187,19 @@ export class CommandHandlerImpl implements CommandHandler {
     return { kind: "reply", text: `loading team '${argument}'` };
   }
 
+  private interceptRename(args: ReadonlyArray<string>): InterceptResult {
+    const name = args.join(" ");
+    if (name === "") return { kind: "error", text: "/rename <name>" };
+    const teamId = this.stateStore.getState().teamId;
+    if (teamId === null) return { kind: "error", text: "/rename: no team loaded" };
+    void this.platform.execute({ name: "renameSession", teamId, sessionName: name })
+      .then(() => undefined, (error: unknown) => {
+        const reason = error instanceof Error ? error.message : String(error);
+        this.stateStore.dispatch(Actions.setErrorMessage(`/rename failed: ${reason}`));
+      });
+    return { kind: "reply", text: `session renamed to ${name}` };
+  }
+
   private interceptResume(args: ReadonlyArray<string>): InterceptResult {
     const sessionId = args[0];
     if (sessionId === undefined) return { kind: "error", text: "/resume <sessionId>" };
@@ -236,7 +250,7 @@ const COMMANDS: ReadonlyMap<string, SlashCommand> = new Map<string, SlashCommand
 
 const LOCAL_COMMAND_NAMES = ["help", "clear", "exit"] as const satisfies ReadonlyArray<TuiCommandName>;
 
-const INTERCEPT_NAMES = ["login", "logout", "model", "effort", "team", "resume"] as const satisfies ReadonlyArray<InterceptName>;
+const INTERCEPT_NAMES = ["login", "logout", "model", "effort", "team", "resume", "rename"] as const satisfies ReadonlyArray<InterceptName>;
 
 export const SLASH_COMMAND_NAMES: ReadonlyArray<TuiCommandName> = [...LOCAL_COMMAND_NAMES, ...INTERCEPT_NAMES];
 
