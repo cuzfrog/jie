@@ -1,3 +1,5 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { Events, type AnyEventEnvelope, type EventEnvelope, type EventType, type JiePlatform, type SessionSummary } from "@cuzfrog/jie-platform";
 import { visibleWidth } from "@earendil-works/pi-tui";
@@ -51,7 +53,7 @@ async function bootScreen(): Promise<ScreenHarness> {
   const previousLang = process.env.LANG;
   process.env.LANG = UTF8_LOCALE;
   try {
-    const cradle = bootTui({ cwd: "/repo" }, { platform: makePlatform(handlers), stdin, stdout }).cradle;
+    const cradle = bootTui({ cwd: "/repo" }, { platform: makePlatform(handlers), homeJieDir: join(tmpdir(), "jie-tui-screen-home"), stdin, stdout }).cradle;
     void cradle.tui.start();
     await vt.waitForRender();
     return {

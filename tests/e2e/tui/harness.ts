@@ -77,6 +77,7 @@ export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> 
   const tuiOptions: CreateTUIOptions = { cwd: dir, rows: opts.rows ?? 30 };
   const tuiContainer = bootTui(tuiOptions, {
     platform,
+    homeJieDir: dir,
     stdin,
     stdout,
     stderr,

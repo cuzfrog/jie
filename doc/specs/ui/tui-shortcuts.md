@@ -41,7 +41,7 @@ Typed into the editor like a prompt; the command handler (`command-handler.ts`) 
 | `/exit` | Quit the TUI (same as `Ctrl+D` on an empty editor); no busy-state branch | none |
 | `/login <provider> <apiKey>` | Write one API key entry to `~/.jie/auth.json` (mode `0600` on POSIX) | `logged in to <provider>` |
 | `/logout [<provider>]` | Clear one or all entries from `~/.jie/auth.json` | `logged out of <provider>` (or `... of all providers`) |
-| `/model <provider>/<modelId>` | Validate and write the default model to settings. The argument is completed in-flow by autocomplete | `default model set to <provider>/<modelId>` |
+| `/model <provider>/<modelId>` | Validate and write the default model to settings; applies to teams loaded thereafter (no hot-swap of running agents). The argument is completed in-flow by autocomplete | `default model set to <provider>/<modelId>` |
 | `/team <id>` | Switch the active team (`execute({name:"team"})` then `Actions.switchTeam`); unknown id is an error banner. The id is completed in-flow by autocomplete | `loading team '<id>'` |
 | `/team` (no arg) | Usage error | `/team <teamId>` |
 | `/resume <sessionId>` | Resume one session of the loaded team (`execute({name:"resumeSession"})` then `Actions.switchTeam` with the resumed identity); unknown id or no team loaded is an error banner. The id is completed in-flow by autocomplete | `resuming session '<id>'` |

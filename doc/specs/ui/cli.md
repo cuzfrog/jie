@@ -162,7 +162,7 @@ jie logout anthropic      # clear only the anthropic entry
 
 ## `jie model <provider>/<modelId>`
 
-Set the global default model. Writes to `~/.jie/settings.json` (not the project file — project overrides go in `.jie/settings.json` by hand).
+Set the global default model. Writes to `~/.jie/settings.json` (not the project file — project overrides go in `.jie/settings.json` by hand). Applies to teams and sessions loaded thereafter — a running agent's model is not hot-swapped.
 
 ```
 jie model anthropic/claude-sonnet-4-20250514

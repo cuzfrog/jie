@@ -65,7 +65,7 @@ export async function startHeadlessTui(options: StartHeadlessOptions): Promise<H
   process.env.LC_ALL = UTF8_LOCALE;
   try {
     const platform = bootPlatform({ cwd: options.dir, homeJieDir: options.dir, projectJieDir: options.dir }).cradle.platform;
-    const tui = bootTui({ cwd: options.dir, rows }, { platform, stdin, stdout, stderr, gitBranch: options.gitBranch ?? "main" }).cradle.tui;
+    const tui = bootTui({ cwd: options.dir, rows }, { platform, homeJieDir: options.dir, stdin, stdout, stderr, gitBranch: options.gitBranch ?? "main" }).cradle.tui;
     const started = tui.start();
     return {
       tui,

@@ -60,7 +60,7 @@ The popup is drawn by the pi-tui editor inside its own frame, anchored below the
 
 ## Editor
 
-The editor is pi-tui's `Editor` subclass (`components/editor/jie-editor.ts`), full width, focused at startup. Its autocomplete provider is jie's (`autocomplete/jie-autocomplete.ts`): slash commands, `/team`, `/resume`, and `/model` argument completion ("Selection via editor autocomplete" above), and `@`-file mentions. Top + bottom borders in `borderMuted`; when the buffer parses as a bash command (`!cmd` / `!!cmd`), both borders flip to `warning` color for the duration. Grows by one row per typed `\n`; never reserves a static row budget. Key handling is pi's verbatim plus three jie keys (`tui-shortcuts.md`). The editor's target is `state.focusedAgentId` (fallback: `state.leaderAgentId`); `onChange` syncs `state.editorText` and clears banners on the first keystroke after an error; `onSubmit` appends to prompt history and dispatches `submitEditorText`.
+The editor is pi-tui's `Editor` subclass (`components/editor/jie-editor.ts`), full width, focused at startup. Its autocomplete provider is jie's (`autocomplete/jie-autocomplete.ts`): slash commands, `/team`, `/resume`, and `/model` argument completion ("Selection via editor autocomplete" above), and `@`-file mentions. Top + bottom borders in `borderMuted`; when the buffer parses as a bash command (`!cmd` / `!!cmd`), both borders flip to `warning` color for the duration. Grows by one row per typed `\n`; never reserves a static row budget. Key handling is pi's verbatim plus three jie keys (`tui-shortcuts.md`). The editor's target is `state.focusedAgentId` (fallback: `state.leaderAgentId`); `onChange` syncs `state.editorText` and clears banners on the first keystroke after an error; `onSubmit` appends to prompt history (persisted as one JSON line per entry in `<jie home>/prompt-history.jsonl`, seeded back into the `Up`/`Down` walk at the next startup) and dispatches `submitEditorText`.
 
 ## Footer (2 lines)
 
@@ -83,7 +83,7 @@ left: "0%/200k"  [queue]     right: "(<provider>) <modelId> | <effort>"
 
 - **Stats** (left): context usage for the focused agent, e.g. `12%/200k`, colored `muted` → `warning` at 70% → `error` at 90%. Sourced from `agent.usage` events (`contextTokensUsed` per `tui-state.md`); `—` when no agent or model is focused.
 - **Queue** (conditional): `N prompt(s) queued` + next-prompt preview when the focused agent's queue is non-empty, in `warning`. Absent otherwise. See `tui-state.md` "agent.prompt.queue.update".
-- **Right**: the focused agent's `(provider) modelId | effort`, `muted` with the model id in `accent`; `—` when no agent is focused. Cycling focus swaps this segment.
+- **Right**: the focused agent's `(provider) modelId | effort`, `muted` with the model id in `accent`; `—` when no agent is focused. Cycling focus swaps this segment. It reflects the focused agent's *running* model: `/model` sets the default for teams loaded thereafter and does not hot-swap a running agent, so this segment updates at the next team load.
 
 ## Borders
 
