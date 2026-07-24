@@ -5,12 +5,12 @@ import { JiePlatformError } from "../jie-platform-errors";
 
 const NOTIFY_DESCRIPTION = `notify({ topic, prompt }): Publish a message to the team-scoped event bus on
 \`{team_id}.{topic}\`. The receiving agent (any agent whose \`subscribe:\` field
-lists this topic, or the agent addressed by \`topic\` if it is an agent_key)
-will see the message as a synthetic user-style entry: \`[{source_agent_key}
-on '{topic}']: {prompt}\`. Topic names must not start with \`agent.\`
-(platform events; observer-only) or with \`{team_id}.\` (the platform manages
-the prefix); empty topics and control characters are rejected. \`notify\` is
-the SOLE means of inter-agent communication. Does NOT end the turn.`;
+lists this topic) will see the message as a synthetic user-style entry:
+\`[{source_agent_key} on '{topic}']: {prompt}\`. Topic names must not start
+with \`agent.\` (platform events; observer-only) or with \`{team_id}.\` (the
+platform manages the prefix); empty topics and control characters are
+rejected. \`notify\` is the SOLE means of inter-agent communication. Does NOT
+end the turn.`;
 
 export interface NotifyDeps {
   eventManager: EventManager;
