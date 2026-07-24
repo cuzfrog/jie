@@ -78,11 +78,11 @@ async function sessionItems(platform: JiePlatform, stateStore: StateStore, prefi
   const sessions = await platform.execute({ name: "listSessions", teamId });
   if (isAlreadyComplete(sessions.map((session) => session.sessionId), prefix)) return null;
   const items = sessions
-    .filter((session) => hasPrefix(session.sessionId, prefix))
+    .filter((session) => hasPrefix(session.sessionId, prefix) || (session.name !== undefined && hasPrefix(session.name, prefix)))
     .slice(0, MAX_SUGGESTIONS)
     .map((session): AutocompleteItem => ({
       value: session.sessionId,
-      label: session.sessionId,
+      label: session.name ?? session.sessionId,
       description: `${session.messageCount} msg · ${relativeAge(session.lastActivity)}`,
     }));
   return items.length === 0 ? null : items;

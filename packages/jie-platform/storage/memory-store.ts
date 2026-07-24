@@ -5,6 +5,7 @@ export interface SessionSummary {
   readonly sessionId: string;
   readonly messageCount: number;
   readonly lastActivity: string;
+  readonly name?: string;
 }
 
 export interface MemoryManager {
@@ -32,6 +33,8 @@ export interface MemoryManager {
   hasSession(teamId: string, sessionId: string): boolean;
 
   listSessions(teamId: string): ReadonlyArray<SessionSummary>;
+
+  renameSession(sessionId: string, name: string): void;
 }
 
 export class SqliteMemoryManager implements MemoryManager {
@@ -130,10 +133,11 @@ export class SqliteMemoryManager implements MemoryManager {
 
   listSessions(teamId: string): ReadonlyArray<SessionSummary> {
     const rows = this.storage.query(
-      `SELECT session_id, COUNT(*) AS cnt, MAX(created_at) AS last_activity
-       FROM memory_turns
-       WHERE team_id = ?
-       GROUP BY session_id
+      `SELECT t.session_id, COUNT(*) AS cnt, MAX(t.created_at) AS last_activity, m.name
+       FROM memory_turns t
+       LEFT JOIN session_metadata m ON m.session_id = t.session_id
+       WHERE t.team_id = ?
+       GROUP BY t.session_id
        ORDER BY last_activity DESC`,
       [teamId],
     );
@@ -141,6 +145,16 @@ export class SqliteMemoryManager implements MemoryManager {
       sessionId: row[0] as string,
       messageCount: row[1] as number,
       lastActivity: row[2] as string,
+      name: (row[3] as string | null) ?? undefined,
     }));
+  }
+
+  renameSession(sessionId: string, name: string): void {
+    const updatedAt = new Date().toISOString();
+    this.storage.exec(
+      `INSERT INTO session_metadata (session_id, name, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(session_id) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at`,
+      [sessionId, name, updatedAt],
+    );
   }
 }

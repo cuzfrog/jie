@@ -1,6 +1,6 @@
 # Storage & Artifacts
 
-`Storage` is the platform's persistence abstraction; `SqliteStorage` (bun:sqlite) is the only implementation. Two domain stores sit on top and share one `Storage` instance per process — one SQLite file (`~/.jie/storage.db`, or `:memory:` with the `inMemory` option), two tables: `artifacts` and `memory_turns`. "Storage" is the umbrella (the layer); "artifact" is a work product an agent writes to the store.
+`Storage` is the platform's persistence abstraction; `SqliteStorage` (bun:sqlite) is the only implementation. Two domain stores sit on top and share one `Storage` instance per process — one SQLite file (`~/.jie/storage.db`, or `:memory:` with the `inMemory` option), three tables: `artifacts`, `memory_turns`, and `session_metadata`. "Storage" is the umbrella (the layer); "artifact" is a work product an agent writes to the store.
 
 ## Storage Interface
 
@@ -43,9 +43,15 @@ CREATE TABLE IF NOT EXISTS memory_turns (
 
 CREATE INDEX IF NOT EXISTS idx_memory_turns_team_session_created
   ON memory_turns (team_id, session_id, created_at);
+
+CREATE TABLE IF NOT EXISTS session_metadata (
+  session_id TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 ```
 
-`memory_turns` shape and session model: ADR 17 and `08-memory.md`. Future schema changes append versioned migrations advancing `PRAGMA user_version`; today there is one version.
+`memory_turns` shape and session model: ADR 17 and `08-memory.md`. `session_metadata` holds the optional human name a session was given (`/rename` → the `renameSession` command); it is keyed by `session_id` alone (ULIDs are globally unique) and LEFT-JOINed into `listSessions` (`08-memory.md`, "List and rename"). Future schema changes append versioned migrations advancing `PRAGMA user_version`; today there is one version.
 
 ## Artifact Store
 

@@ -34,6 +34,7 @@ const memoryManager = vi.mocked<MemoryManager>({
   restore: vi.fn(async () => []),
   hasSession: vi.fn(() => false),
   listSessions: vi.fn(() => []),
+  renameSession: vi.fn(),
 });
 
 const DEFAULT_SETTINGS: Settings = {
@@ -360,6 +361,36 @@ describe("TeamManagerImpl — full surface", () => {
       const { manager } = makeManager(homeJieDir, null);
       await manager.load("minimal");
       expect(() => manager.stop()).not.toThrow();
+    });
+  });
+
+  describe("renameSession", () => {
+    test("renames the loaded team's active session via the memory manager", async () => {
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("minimal");
+      const sessionId = agentBodyFactory.mock.calls[0]![0]!.sessionId;
+      manager.renameSession("minimal", "my session");
+      expect(memoryManager.renameSession).toHaveBeenCalledWith(sessionId, "my session");
+    });
+
+    test("trims the name before persisting", async () => {
+      const { manager } = makeManager(homeJieDir, null);
+      await manager.load("minimal");
+      manager.renameSession("minimal", "  padded  ");
+      expect(memoryManager.renameSession).toHaveBeenCalledWith(expect.anything(), "padded");
+    });
+
+    test("rejects an empty name without touching the memory manager", async () => {
+      const { manager } = makeManager(homeJieDir, null);
+      await manager.load("minimal");
+      expect(() => manager.renameSession("minimal", "   ")).toThrow(/name must not be empty/);
+      expect(memoryManager.renameSession).not.toHaveBeenCalled();
+    });
+
+    test("throws when the team has no loaded session", () => {
+      const { manager } = makeManager(homeJieDir, null);
+      expect(() => manager.renameSession("ghost", "x")).toThrow(/no session loaded for team 'ghost'/);
+      expect(memoryManager.renameSession).not.toHaveBeenCalled();
     });
   });
 

@@ -377,6 +377,43 @@ describe("CommandHandlerImpl — /resume", () => {
   });
 });
 
+describe("CommandHandlerImpl — /rename", () => {
+  test("/rename (no args) sets a usage error and does not call execute", () => {
+    const { platform, execute } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    handler.handle("/rename");
+    expect(execute).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/rename <name>")));
+  });
+
+  test("/rename <name> with no team loaded sets an error and does not call execute", () => {
+    const { platform, execute } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/rename my session");
+    expect(execute).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("no team loaded")));
+  });
+
+  test("/rename joins multi-word args and dispatches renameSession for the loaded team", () => {
+    const { platform, execute } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    handler.handle("/rename my cool session");
+    expect(execute).toHaveBeenCalledWith({ name: "renameSession", teamId: "minimal", sessionName: "my cool session" });
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("session renamed to my cool session")));
+  });
+
+  test("/rename surfaces platform errors as an error banner", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async () => {
+      throw new Error("sqlite locked");
+    });
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    handler.handle("/rename x");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/rename failed")));
+  });
+});
+
 describe("SLASH_COMMAND_NAMES", () => {
   test("is the union of the commands and intercepts registries, in registration order", () => {
     expect(SLASH_COMMAND_NAMES).toEqual([
@@ -389,6 +426,7 @@ describe("SLASH_COMMAND_NAMES", () => {
       "effort",
       "team",
       "resume",
+      "rename",
     ]);
   });
 });

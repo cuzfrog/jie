@@ -30,6 +30,7 @@ const modelRegistry = vi.mocked<ModelRegistry>({
 const teamManager = vi.mocked<TeamManager>({
   load: vi.fn(),
   resumeSession: vi.fn(),
+  renameSession: vi.fn(),
   listInstalled: vi.fn(),
   listLoaded: vi.fn(),
   locate: vi.fn(),
@@ -311,6 +312,22 @@ describe("CommandExecutorImpl", () => {
     });
   });
 
+  describe("renameSession", () => {
+    test("delegates teamId and session name to the team manager", async () => {
+      const result = await executor.execute({ name: "renameSession", teamId: "alpha", sessionName: "my session" });
+      expect(result).toBeNull();
+      expect(teamManager.renameSession).toHaveBeenCalledWith("alpha", "my session");
+    });
+
+    test("propagates team manager errors", async () => {
+      teamManager.renameSession.mockImplementationOnce(() => {
+        throw new JiePlatformError("NO_TEAM", { detail: "no session loaded for team 'ghost'" });
+      });
+      const pending = executor.execute({ name: "renameSession", teamId: "ghost", sessionName: "x" });
+      await expect(pending).rejects.toMatchObject({ code: "NO_TEAM" });
+    });
+  });
+
   describe("dispatch", () => {
     test("executor.execute is the single entry point for every command name", async () => {
       teamManager.locate.mockReturnValue("user");
@@ -331,6 +348,7 @@ describe("CommandExecutorImpl", () => {
         { name: "setDefaultTeam", teamId: "alpha" },
         { name: "team", teamId: "alpha" },
         { name: "resumeSession", teamId: "alpha", sessionId: "s1" },
+        { name: "renameSession", teamId: "alpha", sessionName: "my session" },
         { name: "getTeamInfo" },
         { name: "getGitStatus" },
         { name: "stop" },

@@ -35,6 +35,7 @@ const memoryManager = vi.mocked<MemoryManager>({
   restore: vi.fn(),
   hasSession: vi.fn(() => false),
   listSessions: vi.fn(() => []),
+  renameSession: vi.fn(),
 });
 
 const agentBodyFactory = vi.fn<(params: AgentBodyParams) => AgentBody>();

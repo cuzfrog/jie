@@ -189,4 +189,37 @@ describe("SqliteMemoryManager.listSessions", () => {
     m.compact([1, 2], summaryMessage("sum"), "agent-1", "s1", "t1");
     expect(m.listSessions("t1")[0]?.messageCount).toBe(3);
   });
+
+  test("surfaces a renamed session's name", () => {
+    const m = makeManager();
+    m.persist(userMessage("a"), "agent-1", "s1", "t1");
+    m.renameSession("s1", "my session");
+    expect(m.listSessions("t1")[0]?.name).toBe("my session");
+  });
+
+  test("leaves name undefined for sessions without metadata", () => {
+    const m = makeManager();
+    m.persist(userMessage("a"), "agent-1", "s1", "t1");
+    m.persist(userMessage("b"), "agent-1", "s2", "t1");
+    m.renameSession("s1", "named");
+    const sessions = m.listSessions("t1");
+    expect(sessions.find((s) => s.sessionId === "s1")?.name).toBe("named");
+    expect(sessions.find((s) => s.sessionId === "s2")?.name).toBeUndefined();
+  });
+});
+
+describe("SqliteMemoryManager.renameSession", () => {
+  test("upserts: the second rename replaces the first, keeping a single metadata row", () => {
+    const m = makeManager();
+    m.persist(userMessage("a"), "agent-1", "s1", "t1");
+    m.renameSession("s1", "first name");
+    m.renameSession("s1", "second name");
+    expect(m.listSessions("t1")[0]?.name).toBe("second name");
+    const rows = (m as unknown as { storage: Storage }).storage.query("SELECT session_id, name, updated_at FROM session_metadata");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]![0]).toBe("s1");
+    expect(rows[0]![1]).toBe("second name");
+    expect(typeof rows[0]![2]).toBe("string");
+    expect((rows[0]![2] as string).length).toBeGreaterThan(0);
+  });
 });

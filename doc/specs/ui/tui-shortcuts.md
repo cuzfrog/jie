@@ -46,14 +46,16 @@ Typed into the editor like a prompt; the command handler (`command-handler.ts`) 
 | `/effort` (no arg) | Query and show the current default effort (`off` when unset) | `default effort: <level>` |
 | `/team <id>` | Switch the active team (`execute({name:"team"})` then `Actions.switchTeam`); unknown id is an error banner. The id is completed in-flow by autocomplete | `loading team '<id>'` |
 | `/team` (no arg) | Usage error | `/team <teamId>` |
-| `/resume <sessionId>` | Resume one session of the loaded team (`execute({name:"resumeSession"})` then `Actions.switchTeam` with the resumed identity); unknown id or no team loaded is an error banner. The id is completed in-flow by autocomplete | `resuming session '<id>'` |
+| `/resume <sessionId>` | Resume one session of the loaded team (`execute({name:"resumeSession"})` then `Actions.switchTeam` with the resumed identity); unknown id or no team loaded is an error banner. The id is completed in-flow by autocomplete; a session named via `/rename` shows its name in the popup | `resuming session '<id>'` |
 | `/resume` (no arg) | Usage error | `/resume <sessionId>` |
+| `/rename <name>` | Name the loaded team's active session (`execute({name:"renameSession"})`; persisted in `session_metadata`, survives restarts). Multi-word names are joined; no team loaded is an error banner. The name becomes the `/resume` candidate's label | `session renamed to <name>` |
+| `/rename` (no arg) | Usage error | `/rename <name>` |
 
 ## Autocomplete
 
 The editor's autocomplete popup (`autocomplete/jie-autocomplete.ts`) triggers on two prefixes:
 
-- **`/`** — slash commands (`SLASH_COMMAND_NAMES` from the command handler). Four commands also complete their argument: `/team ` lists installed team ids (`(default)` marked), `/resume ` lists the loaded team's sessions (`<n> msg · <age>`), `/model ` lists the registry's models as `<provider>/<modelId>` (human-readable model name), and `/effort ` lists the five effort levels.
+- **`/`** — slash commands (`SLASH_COMMAND_NAMES` from the command handler). Four commands also complete their argument: `/team ` lists installed team ids (`(default)` marked), `/resume ` lists the loaded team's sessions (label = the `/rename` name when present, else the session id; described as `<n> msg · <age>`; filtering matches name or id), `/model ` lists the registry's models as `<provider>/<modelId>` (human-readable model name), and `/effort ` lists the five effort levels.
 - **`@`** — file mentions: a gitignore-aware scan of `cwd` (`file-mention/`), filtered as you type; the completed token is the relative path, e.g. `@main` + `Tab` → `@src/main.ts `.
 
 The popup renders inside the editor's frame; the editor never leaves the layout (`tui-layout.md`, "Selection via editor autocomplete"). `Tab` commits the highlighted suggestion into the buffer without submitting. `Enter` commits the highlighted suggestion when the popup is open (a second `Enter` then submits); once the typed text already matches an entry exactly the popup closes on its own and `Enter` submits directly. `Esc` closes the popup and keeps the buffer text; it interrupts the focused agent only when no popup is showing.

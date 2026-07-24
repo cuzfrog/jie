@@ -8,6 +8,13 @@ const expectations: Expectation[] = [
       { kind: "finish", reason: "stop" },
     ],
   },
+  {
+    match: { lastUserContains: "Say hi briefly" },
+    responseChunks: [
+      { kind: "text", delta: "Hi." },
+      { kind: "finish", reason: "stop" },
+    ],
+  },
 ];
 
 export default expectations;
