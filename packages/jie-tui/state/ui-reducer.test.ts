@@ -143,6 +143,28 @@ describe("clear", () => {
   });
 });
 
+describe("showHelp", () => {
+  test("appends a help info entry at the next seq and advances the counter", () => {
+    const state = reduceUiAction(INITIAL_TUI_STATE, Actions.showHelp());
+    expect(state.infoEntries).toEqual([{ seq: 0, kind: "help" }]);
+    expect(state.nextEntrySeq).toBe(1);
+  });
+
+  test("a second help entry takes the following seq", () => {
+    let state = reduceUiAction(INITIAL_TUI_STATE, Actions.showHelp());
+    state = reduceUiAction(state, Actions.showHelp());
+    expect(state.infoEntries).toEqual([{ seq: 0, kind: "help" }, { seq: 1, kind: "help" }]);
+    expect(state.nextEntrySeq).toBe(2);
+  });
+
+  test("clearTuiState removes info entries and resets the counter", () => {
+    let state = reduceUiAction(INITIAL_TUI_STATE, Actions.showHelp());
+    state = reduceUiAction(state, Actions.clearTuiState());
+    expect(state.infoEntries).toEqual([]);
+    expect(state.nextEntrySeq).toBe(0);
+  });
+});
+
 describe("interrupted marker", () => {
   function markedTeam(): TuiState {
     const state = loadedTeam([{ role: "general", agent_key: "general-1", is_leader: true }]);

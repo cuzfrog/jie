@@ -5,10 +5,11 @@ import { estimateContextTokens } from "./context-tokens";
 
 export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
   const { id: teamId, agents } = teamInfo;
+  const switching = state.teamId !== null && state.teamId !== teamId;
   const newAgents = new Map(state.agents);
   let leaderId: AgentId | null = state.leaderAgentId;
   let focused: AgentId | null = state.focusedAgentId;
-  if (state.teamId !== null && state.teamId !== teamId) {
+  if (switching) {
     newAgents.clear();
     leaderId = null;
     focused = null;
@@ -28,12 +29,14 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
   for (const id of newAgents.keys()) {
     if (!incomingIds.has(id)) newAgents.delete(id);
   }
+  let nextEntrySeq = switching ? 0 : state.nextEntrySeq;
   for (const entry of teamInfo.history) {
     if (entry.messages.length === 0) continue;
     const agentId = `${teamId}:${entry.agentKey}` as AgentId;
     const existing = newAgents.get(agentId);
     if (existing === undefined) continue;
-    const hydrated = hydrateHistory(entry.messages);
+    const hydrated = hydrateHistory(entry.messages, nextEntrySeq);
+    nextEntrySeq = hydrated.nextSeq;
     newAgents.set(agentId, {
       ...existing,
       history: hydrated.history,
@@ -51,6 +54,8 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
     leaderAgentId: leaderId,
     focusedAgentId: focused,
     interruptedAgentId: null,
+    infoEntries: switching ? [] : state.infoEntries,
+    nextEntrySeq,
     agents: newAgents,
   };
 }

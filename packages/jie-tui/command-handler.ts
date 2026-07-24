@@ -6,6 +6,7 @@ type CommandOutcome =
   | { readonly kind: "reply"; readonly text: string }
   | { readonly kind: "error"; readonly text: string }
   | { readonly kind: "clearState" }
+  | { readonly kind: "showHelp" }
   | { readonly kind: "stop" };
 
 interface SlashCommand {
@@ -64,6 +65,9 @@ export class CommandHandlerImpl implements CommandHandler {
     switch (outcome.kind) {
       case "clearState":
         this.stateStore.dispatch(Actions.clearTuiState());
+        return;
+      case "showHelp":
+        this.stateStore.dispatch(Actions.showHelp());
         return;
       case "stop":
         this.stateStore.dispatch(Actions.requestQuit());
@@ -225,11 +229,9 @@ function runCommand(input: string): CommandOutcome {
   return slashCommand.run(parts.slice(1));
 }
 
-const HELP_TEXT = "type a prompt...  /clear /help /exit /team /model /login /logout";
-
 const helpCommand: SlashCommand = {
   name: "help",
-  run: () => ({ kind: "reply", text: HELP_TEXT }),
+  run: () => ({ kind: "showHelp" }),
 };
 
 const clearCommand: SlashCommand = {

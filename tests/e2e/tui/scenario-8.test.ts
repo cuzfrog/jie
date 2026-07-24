@@ -3,9 +3,9 @@ import {
   startTui,
   stopTui,
   waitForEditorText,
+  waitForInfoEntry,
   waitForNoErrorBanner,
   waitForTeam,
-  waitForTransient,
   sendCmd,
   sendLine,
   type TuiHarness,
@@ -35,6 +35,6 @@ describe("Scenario 8 — slash-command autocomplete", () => {
     await sendCmd(harness.stdin, "\r");
     await waitForEditorText(harness, "");
     await waitForNoErrorBanner(harness);
-    await waitForTransient(harness, "type a prompt");
+    await waitForInfoEntry(harness);
   });
 });

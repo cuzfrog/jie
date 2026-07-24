@@ -10,7 +10,7 @@ beforeEach(() => {
 });
 
 function turn(partial: Partial<MessageTurn> = {}): MessageTurn {
-  return { userPrompt: "q", cards: [], blocks: [], streamId: null, ...partial };
+  return { userPrompt: "q", cards: [], blocks: [], streamId: null, seq: 0, ...partial };
 }
 
 function card(partial: Partial<MessageCard> = {}): MessageCard {

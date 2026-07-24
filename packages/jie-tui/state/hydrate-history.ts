@@ -9,26 +9,35 @@ export interface HydratedHistory {
   readonly history: MessageTurn[];
   readonly currentTurn: MessageTurn | null;
   readonly todos: ReadonlyArray<TodoItem>;
+  readonly nextSeq: number;
 }
 
-export function hydrateHistory(messages: ReadonlyArray<AgentMessage>): HydratedHistory {
+export function hydrateHistory(messages: ReadonlyArray<AgentMessage>, startSeq: number): HydratedHistory {
   const turns: MessageTurn[] = [];
   let current: MessageTurn | null = null;
+  let nextSeq = startSeq;
   for (const message of messages) {
     if (message.role === "user") {
       if (current !== null) turns.push(current);
-      current = { userPrompt: userPromptText(message), cards: [], blocks: [], streamId: null };
+      current = { userPrompt: userPromptText(message), cards: [], blocks: [], streamId: null, seq: nextSeq };
+      nextSeq += 1;
     } else if (message.role === "assistant") {
-      if (current === null) current = { userPrompt: "", cards: [], blocks: [], streamId: null };
+      if (current === null) {
+        current = { userPrompt: "", cards: [], blocks: [], streamId: null, seq: nextSeq };
+        nextSeq += 1;
+      }
       appendAssistant(current, message);
     } else if (message.role === "toolResult") {
-      if (current === null) current = { userPrompt: "", cards: [], blocks: [], streamId: null };
+      if (current === null) {
+        current = { userPrompt: "", cards: [], blocks: [], streamId: null, seq: nextSeq };
+        nextSeq += 1;
+      }
       appendToolResult(current, message);
     }
   }
   if (current !== null) turns.push(current);
-  if (turns.length === 0) return { history: [], currentTurn: null, todos: [] };
-  return { history: turns.slice(0, turns.length - 1), currentTurn: turns[turns.length - 1]!, todos: deriveTodos(turns) };
+  if (turns.length === 0) return { history: [], currentTurn: null, todos: [], nextSeq };
+  return { history: turns.slice(0, turns.length - 1), currentTurn: turns[turns.length - 1]!, todos: deriveTodos(turns), nextSeq };
 }
 
 function deriveTodos(turns: ReadonlyArray<MessageTurn>): ReadonlyArray<TodoItem> {

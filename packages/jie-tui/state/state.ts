@@ -29,6 +29,12 @@ export interface MessageTurn {
   readonly cards: MessageCard[];
   readonly blocks: MessageBlock[];
   readonly streamId: number | null;
+  readonly seq: number;
+}
+
+export interface InfoEntry {
+  readonly seq: number;
+  readonly kind: "help";
 }
 
 export type AgentId = `${string}:${string}`;
@@ -59,6 +65,8 @@ export interface TuiState {
   readonly agents: ReadonlyMap<AgentId, AgentUiState>;
   readonly focusedAgentId: AgentId | null;
   readonly interruptedAgentId: AgentId | null;
+  readonly infoEntries: ReadonlyArray<InfoEntry>;
+  readonly nextEntrySeq: number;
   readonly transientMessage: string | null;
   readonly errorBanner: string | null;
   readonly thinkingExpanded: boolean;
@@ -87,7 +95,8 @@ function shouldShowErrorBanner(state: TuiState): boolean {
   return state.errorBanner !== null && state.errorBanner !== "";
 }
 
-function hasConversation(state: TuiState): boolean {
+function hasChatContent(state: TuiState): boolean {
+  if (state.infoEntries.length > 0) return true;
   for (const agent of state.agents.values()) {
     if (agent.history.length > 0 || agent.currentTurn !== null) return true;
   }
@@ -99,5 +108,5 @@ export const TuiState = {
   isBusy,
   isInterrupted,
   shouldShowErrorBanner,
-  hasConversation,
+  hasChatContent,
 } as const;

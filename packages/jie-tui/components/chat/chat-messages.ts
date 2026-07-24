@@ -1,6 +1,7 @@
 import { type Component } from "@earendil-works/pi-tui";
-import type { MessageTurn, StateStore } from "../../state";
+import type { InfoEntry, MessageTurn, StateStore } from "../../state";
 import { AssistantMessage } from "./assistant-message";
+import { InfoMessage } from "./info-message";
 import { UserMessage } from "./user-message";
 
 export interface UserMessageComponent extends Component {
@@ -14,6 +15,7 @@ export interface AssistantMessageComponent extends Component {
 export interface ChatMessages {
   createUserMessage(userPrompt: string): UserMessageComponent;
   createAssistantMessage(turn: MessageTurn | null): AssistantMessageComponent;
+  createInfoMessage(entry: InfoEntry): Component;
 }
 
 export class ChatMessagesImpl implements ChatMessages {
@@ -25,5 +27,9 @@ export class ChatMessagesImpl implements ChatMessages {
 
   createAssistantMessage(turn: MessageTurn | null): AssistantMessageComponent {
     return new AssistantMessage(turn, this.stateStore);
+  }
+
+  createInfoMessage(entry: InfoEntry): Component {
+    return new InfoMessage(this.stateStore, entry);
   }
 }

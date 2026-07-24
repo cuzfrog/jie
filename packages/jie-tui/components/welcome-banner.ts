@@ -10,15 +10,19 @@ export class WelcomeBanner implements Component {
   }
 
   render(width: number): string[] {
-    if (TuiState.hasConversation(this.stateStore.getState())) return [];
+    if (TuiState.hasChatContent(this.stateStore.getState())) return [];
     const w = Math.max(1, width);
-    const lines: string[] = [`${style("accent")(WORDMARK)}${style("muted")(`  ${TAGLINE}`)}`];
-    const team = teamLine(this.stateStore.getState());
-    if (team !== null) lines.push(team);
-    return lines.map((line) => truncateToWidth(line, w));
+    return welcomeLines(this.stateStore.getState()).map((line) => truncateToWidth(line, w));
   }
 
   invalidate(): void {}
+}
+
+export function welcomeLines(state: TuiState): string[] {
+  const lines: string[] = [`${style("accent")(WORDMARK)}${style("muted")(`  ${TAGLINE}`)}`];
+  const team = teamLine(state);
+  if (team !== null) lines.push(team);
+  return lines;
 }
 
 const WORDMARK = "jie";

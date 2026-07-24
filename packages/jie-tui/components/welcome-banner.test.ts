@@ -39,6 +39,11 @@ describe("WelcomeBanner", () => {
     expect(new WelcomeBanner(stateStore).render(200)).toEqual([]);
   });
 
+  test("hides the banner once the help info was reprinted into the chat", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ infoEntries: [{ seq: 0, kind: "help" }], nextEntrySeq: 1 }));
+    expect(new WelcomeBanner(stateStore).render(200)).toEqual([]);
+  });
+
   test("every banner line fits the given width", () => {
     stateStore.getState.mockReturnValue(stateWithTeamAndModel());
     const banner = new WelcomeBanner(stateStore);
@@ -79,7 +84,7 @@ function stateWithTurn(): TuiState {
 }
 
 function makeTurn(): MessageTurn {
-  return { userPrompt: "q", cards: [], blocks: [], streamId: 1 };
+  return { userPrompt: "q", cards: [], blocks: [], streamId: 1, seq: 0 };
 }
 
 function stripAnsi(text: string): string {

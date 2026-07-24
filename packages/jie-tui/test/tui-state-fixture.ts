@@ -10,6 +10,8 @@ export function makeTuiState(overrides: Partial<TuiState> = {}): TuiState {
     agents: new Map(),
     focusedAgentId: null,
     interruptedAgentId: null,
+    infoEntries: [],
+    nextEntrySeq: 0,
     transientMessage: null,
     errorBanner: null,
     thinkingExpanded: false,

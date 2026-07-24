@@ -146,6 +146,24 @@ describe("screen rendering", () => {
     }
   });
 
+  test("/help reprints the welcome info into the chat area", async () => {
+    const harness = await bootScreen();
+    try {
+      harness.emit(TEAM_LOADED);
+      await harness.vt.waitForRender();
+      await typeText(harness, "/help");
+      await press(harness, "\r");
+      await settle(harness);
+      expect(harness.stateStore.getState().infoEntries.length).toBe(1);
+      const screen = harness.vt.getViewport().map(stripAnsi).join("\n");
+      expect(screen).toContain("/resume");
+      expect(screen).toContain("multi-agent coding");
+      expect(screen).toContain("mention a file");
+    } finally {
+      harness.tui.stop();
+    }
+  });
+
   test("long content with expanded tool cards renders without crashing the frame", async () => {
     const harness = await bootScreen();
     try {

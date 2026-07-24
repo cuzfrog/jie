@@ -10,7 +10,7 @@ function block(text: string): MessageBlock {
 }
 
 function turn(userPrompt: string, blocks: ReadonlyArray<MessageBlock> = [], cards: ReadonlyArray<MessageCard> = []): MessageTurn {
-  return { userPrompt, blocks: [...blocks], cards: [...cards], streamId: null };
+  return { userPrompt, blocks: [...blocks], cards: [...cards], streamId: null, seq: 0 };
 }
 
 describe("estimateContextTokens", () => {
