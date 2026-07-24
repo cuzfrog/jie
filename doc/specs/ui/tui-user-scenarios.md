@@ -70,9 +70,9 @@ The TUI's acceptance surface. Each scenario corresponds to one e2e test file —
 
 1. Type `/he` — the autocomplete popup lists matching slash commands.
 2. Press `Tab`: the buffer becomes `/help ` — completion inserts the token and does **not** submit (pi semantics).
-3. Press `Enter`: the command submits; the transient reply `type a prompt...` appears; no error banner.
+3. Press `Enter`: the command submits; the welcome info reprints into the chat area (wordmark, keybinding hints, command list) and the banner / hints sections disappear; no error banner.
 
-**Observable outputs.** `state.editorText` transitions `"/he"` → `"/help "` → `""` (submit clears); `state.transientMessage` matches `type a prompt`.
+**Observable outputs.** `state.editorText` transitions `"/he"` → `"/help "` → `""` (submit clears); `state.infoEntries` gains one `help` entry; `state.transientMessage` stays `null`.
 
 ## Scenario 9: @-mention autocomplete
 
@@ -105,6 +105,14 @@ Team and session selection ride the editor's autocomplete popup — drawn inside
 3. Press `Ctrl+D` on an empty editor — the TUI quits in one press. With text in the editor, `Ctrl+D` is a no-op.
 
 **Observable outputs.** After the interrupt, `state.agents.get(state.focusedAgentId).lastStopReason === "aborted"`; `state.interruptedAgentId` is the interrupted agent's id and returns to `null` once the next prompt is submitted; on quit, `tui.start()` resolves and the process exits 0.
+
+## Scenario 13: /help reprint
+
+1. Load a team — the welcome banner shows the wordmark + team line above the editor.
+2. Submit `/help` — the welcome content reprints into the chat area as an info entry: wordmark + tagline, team line, keybinding hints, and the command cheat-sheet (accent name + muted description), in the same stream as conversation turns; the welcome banner and keybinding hints sections hide so nothing is duplicated.
+3. Continue the conversation — turns render after the reprint in submission order; the reprint stays in place until a team switch or `/clear`.
+
+**Observable outputs.** `state.infoEntries` holds one entry with `kind === "help"` and a `seq` ordered among the turns (entry sequence, `tui-state.md`); the chat viewport contains the command list (e.g. `/resume`), the tagline, and the keybinding hints; `state.transientMessage` stays `null`.
 
 ## Out of scope
 

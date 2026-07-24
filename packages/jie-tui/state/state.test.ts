@@ -92,6 +92,26 @@ describe("TuiState.isInterrupted", () => {
   });
 });
 
+describe("TuiState.hasChatContent", () => {
+  test("returns false on the initial state", () => {
+    const store = new StateStoreImpl();
+    expect(TuiState.hasChatContent(store.getState())).toBe(false);
+  });
+
+  test("returns true once an agent has a current turn", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart({ kind: "agent", teamId: "demo", agentKey: "general-1" })));
+    expect(TuiState.hasChatContent(store.getState())).toBe(true);
+  });
+
+  test("returns true with only an info entry and no conversation", () => {
+    const store = new StateStoreImpl();
+    store.dispatch(Actions.showHelp());
+    expect(TuiState.hasChatContent(store.getState())).toBe(true);
+  });
+});
+
 describe("TuiState.shouldShowErrorBanner", () => {
   test("returns false when errorBanner is null", () => {
     const store = new StateStoreImpl();

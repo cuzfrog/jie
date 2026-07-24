@@ -273,6 +273,10 @@ export async function waitForNoErrorBanner(harness: TuiHarness, timeoutMs = 6000
   await waitFor(() => harness.stateStore.getState().errorBanner === null, timeoutMs, "errorBanner cleared");
 }
 
+export async function waitForInfoEntry(harness: TuiHarness, timeoutMs = 60000): Promise<void> {
+  await waitFor(() => harness.stateStore.getState().infoEntries.length > 0, timeoutMs, "an info entry in the chat area");
+}
+
 export async function waitForEditorText(harness: TuiHarness, expected: string, timeoutMs = 60000): Promise<void> {
   await waitFor(() => harness.stateStore.getState().editorText === expected, timeoutMs, `editorText === '${expected}'`);
 }

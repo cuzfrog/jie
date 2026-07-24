@@ -3,7 +3,7 @@ import type { MessageTurn } from "../../state";
 import { UserMessage } from "./user-message";
 
 function turn(userPrompt: string): MessageTurn {
-  return { userPrompt, cards: [], blocks: [], streamId: null };
+  return { userPrompt, cards: [], blocks: [], streamId: null, seq: 0 };
 }
 
 describe("UserMessage", () => {

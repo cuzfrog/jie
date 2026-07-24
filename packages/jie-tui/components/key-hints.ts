@@ -10,8 +10,8 @@ export class KeyHints implements Component {
   }
 
   render(width: number): string[] {
-    if (TuiState.hasConversation(this.stateStore.getState())) return [];
-    return layoutHintLines(Math.max(1, width));
+    if (TuiState.hasChatContent(this.stateStore.getState())) return [];
+    return hintLines(Math.max(1, width));
   }
 
   invalidate(): void {}
@@ -31,7 +31,7 @@ const HINTS: ReadonlyArray<readonly [string, string]> = [
 
 const SEPARATOR = " · ";
 
-function layoutHintLines(width: number): string[] {
+export function hintLines(width: number): string[] {
   const separator = style("muted")(SEPARATOR);
   const separatorWidth = visibleWidth(separator);
   const lines: string[] = [];

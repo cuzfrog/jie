@@ -19,6 +19,8 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
         leaderAgentId: null,
         focusedAgentId: null,
         interruptedAgentId: null,
+        infoEntries: [],
+        nextEntrySeq: 0,
         transientMessage: null,
         errorBanner: null,
       };
@@ -50,6 +52,12 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
         cwd: action.payload.cwd,
         gitBranch: action.payload.gitBranch,
         gitDirty: action.payload.gitDirty,
+      };
+    case ActionTypes.SHOW_HELP:
+      return {
+        ...state,
+        infoEntries: [...state.infoEntries, { seq: state.nextEntrySeq, kind: "help" }],
+        nextEntrySeq: state.nextEntrySeq + 1,
       };
     default:
       return state;

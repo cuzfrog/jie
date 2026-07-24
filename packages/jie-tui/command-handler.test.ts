@@ -48,12 +48,13 @@ function makeHandler(platform: JiePlatform, state: TuiState = makeTuiState()): H
 }
 
 describe("CommandHandlerImpl", () => {
-  test("handle('/help') clears banners then sets a reply message", () => {
+  test("handle('/help') clears banners then dispatches showHelp", () => {
     const { platform } = makePlatform();
     const { handler, dispatch } = makeHandler(platform);
     handler.handle("/help");
     expect(dispatch).toHaveBeenCalledWith(Actions.clearBanners());
-    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("/clear")));
+    expect(dispatch).toHaveBeenCalledWith(Actions.showHelp());
+    expect(dispatch).not.toHaveBeenCalledWith(Actions.setTransientMessage(expect.anything()));
   });
 
   test("handle('/clear') dispatches clearTuiState", () => {

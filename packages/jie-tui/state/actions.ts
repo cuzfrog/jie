@@ -18,6 +18,7 @@ export const ActionTypes = {
   SUBMIT_EDITOR_TEXT: "[ui] submit editor text",
   REQUEST_INTERRUPT: "[ui] request interrupt focused agent",
   SET_ENVIRONMENT: "[ui] set environment",
+  SHOW_HELP: "[ui] show help in the chat area",
 } as const;
 
 type ActionType = (typeof ActionTypes)[keyof typeof ActionTypes];
@@ -33,6 +34,7 @@ const clearTuiState = createAction(ActionTypes.CLEAR_TUI_STATE);
 const clearTransientMessage = createAction(ActionTypes.CLEAR_TRANSIENT_MESSAGE);
 const clearErrorMessage = createAction(ActionTypes.CLEAR_ERROR_MESSAGE);
 const clearBanners = createAction(ActionTypes.CLEAR_BANNERS);
+const showHelp = createAction(ActionTypes.SHOW_HELP);
 
 // If parameters are <= 3, do not use object.
 export const Actions = {
@@ -55,6 +57,7 @@ export const Actions = {
 		createAction(ActionTypes.REQUEST_INTERRUPT, { teamId, agentKey }),
 	setEnvironment: (cwd: string, gitBranch: string, gitDirty: boolean) =>
 		createAction(ActionTypes.SET_ENVIRONMENT, { cwd, gitBranch, gitDirty }),
+	showHelp: () => showHelp,
 } as const;
 
 export type Action = ReturnType<typeof Actions[keyof typeof Actions]>;

@@ -193,6 +193,7 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
       cards: [],
       blocks: [{ kind: "text", text: "world" }],
       streamId: null,
+      seq: 0,
     });
   });
 
@@ -222,7 +223,7 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
     ]));
     const existing = seeded.agents.get("my-team:general-1");
     if (existing === undefined) throw new Error("seed missing");
-    const streamingTurn = { userPrompt: "live", cards: [], blocks: [{ kind: "text" as const, text: "streaming…" }], streamId: 1 };
+    const streamingTurn = { userPrompt: "live", cards: [], blocks: [{ kind: "text" as const, text: "streaming…" }], streamId: 1, seq: 0 };
     const liveAgents = new Map(seeded.agents);
     liveAgents.set("my-team:general-1", { ...existing, currentTurn: streamingTurn });
     const withLive: TuiState = { ...seeded, agents: liveAgents };
@@ -248,5 +249,51 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
       history: [{ agentKey: "general-1", messages: [user("count me"), assistantText("twelve chars")] }],
     });
     expect(state.agents.get("my-team:general-1")?.contextTokensUsed).toBeGreaterThan(0);
+  });
+
+  test("hydrated turns are numbered sequentially and nextEntrySeq advances past them", () => {
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, model: null }]);
+    const state = teamLoadReducer(INITIAL_TUI_STATE, {
+      ...info,
+      history: [{
+        agentKey: "general-1",
+        messages: [user("first"), assistantText("a1"), user("second"), assistantText("a2")],
+      }],
+    });
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.history[0]?.seq).toBe(0);
+    expect(agent?.currentTurn?.seq).toBe(1);
+    expect(state.nextEntrySeq).toBe(2);
+  });
+});
+
+describe("teamLoadReducer — info entries", () => {
+  function withInfoEntry(state: TuiState): TuiState {
+    return { ...state, infoEntries: [{ seq: 0, kind: "help" }], nextEntrySeq: 3 };
+  }
+
+  test("team switch resets info entries and the seq counter", () => {
+    const first = withInfoEntry(teamLoadReducer(INITIAL_TUI_STATE, team([
+      { role: "general", agentKey: "general-1", isLeader: true, model: null },
+    ])));
+    const switched = teamLoadReducer(first, {
+      id: "my-team-2",
+      leaderKey: "worker-1",
+      history: [],
+      agents: [{ teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, model: null }],
+    });
+    expect(switched.infoEntries).toEqual([]);
+    expect(switched.nextEntrySeq).toBe(0);
+  });
+
+  test("same-team reload preserves info entries", () => {
+    const first = withInfoEntry(teamLoadReducer(INITIAL_TUI_STATE, team([
+      { role: "general", agentKey: "general-1", isLeader: true, model: null },
+    ])));
+    const second = teamLoadReducer(first, team([
+      { role: "general", agentKey: "general-1", isLeader: true, model: null },
+    ]));
+    expect(second.infoEntries).toEqual([{ seq: 0, kind: "help" }]);
+    expect(second.nextEntrySeq).toBe(3);
   });
 });

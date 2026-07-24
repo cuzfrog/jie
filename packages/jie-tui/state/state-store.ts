@@ -14,6 +14,8 @@ const INITIAL_TUI_STATE: TuiState = Object.freeze({
   agents: new Map(),
   focusedAgentId: null,
   interruptedAgentId: null,
+  infoEntries: [],
+  nextEntrySeq: 0,
   transientMessage: null,
   errorBanner: null,
   thinkingExpanded: false,

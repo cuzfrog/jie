@@ -9,6 +9,7 @@ import {
   submitAndWaitForAgentIdle,
   waitForConversationText,
   waitForEditorText,
+  waitForInfoEntry,
   waitForNoErrorBanner,
   waitForTeam,
   sendCmd,
@@ -58,6 +59,14 @@ describe("Scenario 11 — slash command autocomplete", () => {
     await settleAutocomplete();
     await sendCmd(harness.stdin, "x");
     await waitForEditorText(harness, "/team x");
+    await waitForNoErrorBanner(harness);
+  });
+
+  test("`/help` reprints the welcome info into the chat area", async () => {
+    await sendLine(harness.stdin, "/team my-team");
+    await waitForTeam(harness, "my-team");
+    await sendLine(harness.stdin, "/help");
+    await waitForInfoEntry(harness);
     await waitForNoErrorBanner(harness);
   });
 });

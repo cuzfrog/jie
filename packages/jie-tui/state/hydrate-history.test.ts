@@ -38,39 +38,44 @@ function usage(): Usage {
 
 describe("hydrateHistory", () => {
   test("empty messages yields empty history and null current turn", () => {
-    expect(hydrateHistory([])).toEqual({ history: [], currentTurn: null, todos: [] });
+    expect(hydrateHistory([], 0)).toEqual({ history: [], currentTurn: null, todos: [], nextSeq: 0 });
   });
 
   test("single completed turn becomes currentTurn with empty history", () => {
-    const result = hydrateHistory([user("hello"), assistantText("world")]);
+    const result = hydrateHistory([user("hello"), assistantText("world")], 0);
     expect(result.history).toEqual([]);
     expect(result.currentTurn).toEqual({
       userPrompt: "hello",
       cards: [],
       blocks: [{ kind: "text", text: "world" }],
       streamId: null,
+      seq: 0,
     });
+    expect(result.nextSeq).toBe(1);
   });
 
   test("strips the [user]: ingress prefix from the user prompt", () => {
-    const result = hydrateHistory([user("tell me a joke"), assistantText("ok")]);
+    const result = hydrateHistory([user("tell me a joke"), assistantText("ok")], 0);
     expect(result.currentTurn?.userPrompt).toBe("tell me a joke");
   });
 
-  test("multiple turns rotate earlier ones into history", () => {
+  test("multiple turns rotate earlier ones into history, numbered from startSeq", () => {
     const result = hydrateHistory([
       user("first"), assistantText("a1"),
       user("second"), assistantText("a2"),
-    ]);
+    ], 5);
     expect(result.history).toHaveLength(1);
     expect(result.history[0]?.userPrompt).toBe("first");
     expect(result.history[0]?.blocks).toEqual([{ kind: "text", text: "a1" }]);
+    expect(result.history[0]?.seq).toBe(5);
     expect(result.currentTurn?.userPrompt).toBe("second");
     expect(result.currentTurn?.blocks).toEqual([{ kind: "text", text: "a2" }]);
+    expect(result.currentTurn?.seq).toBe(6);
+    expect(result.nextSeq).toBe(7);
   });
 
   test("thinking and text become ordered blocks", () => {
-    const result = hydrateHistory([user("q"), assistantThinkingThenText("hm", "ans")]);
+    const result = hydrateHistory([user("q"), assistantThinkingThenText("hm", "ans")], 0);
     expect(result.currentTurn?.blocks).toEqual([
       { kind: "thinking", text: "hm" },
       { kind: "text", text: "ans" },
@@ -80,7 +85,7 @@ describe("hydrateHistory", () => {
   test("tool call and result become a single toolResult card", () => {
     const result = hydrateHistory([
       user("run"), assistantToolCall("c1", "bash", { cmd: "ls" }), toolResult("c1", "bash", "file.txt"),
-    ]);
+    ], 0);
     expect(result.currentTurn?.cards).toEqual([{
       kind: "toolResult",
       callId: "c1",
@@ -98,16 +103,16 @@ describe("hydrateHistory", () => {
   test("tool error sets error and nulls output", () => {
     const result = hydrateHistory([
       user("run"), assistantToolCall("c1", "bash", {}), toolResult("c1", "bash", "boom", true),
-    ]);
+    ], 0);
     const card = result.currentTurn?.cards[0];
     expect(card?.error).toBe("boom");
     expect(card?.output).toBeNull();
   });
 
   test("trailing user message leaves an open currentTurn for continue()", () => {
-    const result = hydrateHistory([user("pending")]);
+    const result = hydrateHistory([user("pending")], 0);
     expect(result.history).toEqual([]);
-    expect(result.currentTurn).toEqual({ userPrompt: "pending", cards: [], blocks: [], streamId: null });
+    expect(result.currentTurn).toEqual({ userPrompt: "pending", cards: [], blocks: [], streamId: null, seq: 0 });
     expect(result.todos).toEqual([]);
   });
 
@@ -121,7 +126,7 @@ describe("hydrateHistory", () => {
       assistantToolCall("c1", "todo", {}),
       toolResult("c1", "todo", "ok", false, { kind: "todos", todos }),
       assistantText("done"),
-    ]);
+    ], 0);
     expect(result.todos).toEqual(todos);
   });
 });

@@ -32,6 +32,11 @@ describe("KeyHints", () => {
     expect(new KeyHints(stateStore).render(200)).toEqual([]);
   });
 
+  test("hides the hints once the help info was reprinted into the chat", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ infoEntries: [{ seq: 0, kind: "help" }], nextEntrySeq: 1 }));
+    expect(new KeyHints(stateStore).render(200)).toEqual([]);
+  });
+
   test("lays the hints out on a single line when the width is ample", () => {
     expect(new KeyHints(stateStore).render(300).length).toBe(1);
   });
@@ -61,7 +66,7 @@ function stateWithTeam(): TuiState {
 }
 
 function stateWithTurn(): TuiState {
-  const currentTurn: MessageTurn = { userPrompt: "q", cards: [], blocks: [], streamId: 1 };
+  const currentTurn: MessageTurn = { userPrompt: "q", cards: [], blocks: [], streamId: 1, seq: 0 };
   return makeTuiState({
     teamId: "my-team",
     leaderAgentId: LEADER_ID,

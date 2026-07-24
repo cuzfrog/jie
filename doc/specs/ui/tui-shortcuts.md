@@ -36,8 +36,8 @@ Typed into the editor like a prompt; the command handler (`command-handler.ts`) 
 
 | Command | Effect | Reply |
 | --- | --- | --- |
-| `/help` | Reply with the command cheat-sheet | `type a prompt...  /clear /help /exit /team /model /login /logout` |
-| `/clear` | Clear `agents`, `leaderAgentId`, `focusedAgentId`, and banners; memory rows on disk untouched | none |
+| `/help` | Reprint the welcome info into the chat area as an info entry (wordmark + team line, keybinding hints, command cheat-sheet); the banner / hints sections hide while the reprint is present (`tui-state.md`, entry sequence) | none |
+| `/clear` | Clear `agents`, `leaderAgentId`, `focusedAgentId`, info entries, and banners; reset the entry counter; memory rows on disk untouched | none |
 | `/exit` | Quit the TUI (same as `Ctrl+D` on an empty editor); no busy-state branch | none |
 | `/login <provider> <apiKey>` | Write one API key entry to `~/.jie/auth.json` (mode `0600` on POSIX) | `logged in to <provider>` |
 | `/logout [<provider>]` | Clear one or all entries from `~/.jie/auth.json` | `logged out of <provider>` (or `... of all providers`) |

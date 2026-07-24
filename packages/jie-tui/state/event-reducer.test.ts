@@ -155,6 +155,22 @@ describe("reduceUserPrompt", () => {
     const state = reduce(loadedState(), Events.userPrompt(USER_SENDER, "my-team", "hello", "general-1"));
     expect(state.agents.get("my-team:general-1")?.currentTurn?.userPrompt).toBe("hello");
   });
+
+  test("assigns the next seq to the new turn and advances nextEntrySeq", () => {
+    const state = reduce(loadedState(), Events.userPrompt(USER_SENDER, "my-team", "hello", "general-1"));
+    expect(state.agents.get("my-team:general-1")?.currentTurn?.seq).toBe(0);
+    expect(state.nextEntrySeq).toBe(1);
+  });
+
+  test("rotating a populated turn numbers the new turn after it", () => {
+    let state = reduce(loadedState(), Events.userPrompt(USER_SENDER, "my-team", "first", "general-1"));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "answer"));
+    state = reduce(state, Events.userPrompt(USER_SENDER, "my-team", "second", "general-1"));
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.history[0]?.seq).toBe(0);
+    expect(agent?.currentTurn?.seq).toBe(1);
+    expect(state.nextEntrySeq).toBe(2);
+  });
 });
 
 describe("reduceModelAssigned", () => {
@@ -230,9 +246,26 @@ describe("reduceTurnStart", () => {
   test("opens an empty turn so stream chunks after a prompt-less turn.start are captured", () => {
     const state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER));
     const agent = state.agents.get("my-team:general-1");
-    expect(agent?.currentTurn).toEqual({ userPrompt: "", cards: [], blocks: [], streamId: null });
+    expect(agent?.currentTurn).toEqual({ userPrompt: "", cards: [], blocks: [], streamId: null, seq: 0 });
     const state2 = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "hello"));
     expect(state2.agents.get("my-team:general-1")?.currentTurn?.blocks).toEqual([{ kind: "text", text: "hello" }]);
+  });
+
+  test("reuses the prompt's turn when turn.start follows user.prompt (no seq consumed)", () => {
+    let state = reduce(loadedState(), Events.userPrompt(USER_SENDER, "my-team", "hello", "general-1"));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER));
+    expect(state.agents.get("my-team:general-1")?.currentTurn?.seq).toBe(0);
+    expect(state.nextEntrySeq).toBe(1);
+  });
+
+  test("rotating a populated turn on the next turn.start assigns the following seq", () => {
+    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "answer"));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER));
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.history[0]?.seq).toBe(0);
+    expect(agent?.currentTurn?.seq).toBe(1);
+    expect(state.nextEntrySeq).toBe(2);
   });
 
   test("records tool calls after a prompt-less turn.start", () => {
