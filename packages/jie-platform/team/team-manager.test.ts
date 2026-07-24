@@ -65,6 +65,7 @@ function makeFakeBody(params: AgentBodyParams, restored: ReadonlyArray<AgentMess
       model: null,
     },
     restore: async () => restored,
+    messages: () => [...restored],
     start: async () => {},
     stop: () => {},
   };
@@ -197,7 +198,7 @@ describe("TeamManagerImpl — full surface", () => {
       expect(freshManager.resumeSession("minimal", "01-not-real")).rejects.toThrow(/unknown session_id/);
     });
 
-    test("system.team.loaded carries restored history; the returned identity carries empty history", async () => {
+    test("system.team.loaded and the returned identity both carry restored history", async () => {
       memoryManager.hasSession.mockReturnValue(true);
       const seeded: ReadonlyArray<AgentMessage> = [{ role: "user", content: "[user]: hello", timestamp: 1 }, assistantMessage("hi there", 2)];
       const { manager } = makeManager(homeJieDir, null, undefined, seeded);
@@ -206,7 +207,8 @@ describe("TeamManagerImpl — full surface", () => {
       expect(payload?.history).toHaveLength(1);
       expect(payload?.history[0]?.agentKey).toBe("general-1");
       expect(payload?.history[0]?.messages).toHaveLength(2);
-      expect(identity.history[0]?.messages).toEqual([]);
+      expect(identity.history[0]?.messages).toHaveLength(2);
+      expect(identity.history[0]?.messages).toEqual(payload?.history[0]?.messages ?? []);
     });
 
     test("resumeSession reloads an already-loaded team and re-publishes history (picker flow, not a cache hit)", async () => {
@@ -225,6 +227,26 @@ describe("TeamManagerImpl — full surface", () => {
       await manager.load("minimal");
       await manager.load("minimal");
       expect(teamLoadedEvents().filter((e) => e.payload.id === "minimal")).toHaveLength(1);
+    });
+
+    test("cache hit carries the agents' live history and stays silent", async () => {
+      const live: AgentMessage[] = [];
+      const factory = (params: AgentBodyParams): AgentBody => ({
+        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, model: null },
+        restore: async () => [...live],
+        messages: () => [...live],
+        start: async () => {},
+        stop: () => {},
+      });
+      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, memoryManager, factory);
+      const first = await manager.load("minimal");
+      expect(first.history[0]?.messages).toEqual([]);
+      live.push({ role: "user", content: "[user]: hello", timestamp: 1 }, assistantMessage("hi there", 2));
+      const cached = await manager.load("minimal");
+      expect(teamLoadedEvents().filter((e) => e.payload.id === "minimal")).toHaveLength(1);
+      expect(cached.history[0]?.messages).toHaveLength(2);
+      expect(cached.history[0]?.messages[0]).toMatchObject({ role: "user" });
+      expect(cached.history[0]?.messages[1]).toMatchObject({ role: "assistant" });
     });
 
     test("loads a second team without disturbing the first", async () => {

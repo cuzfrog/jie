@@ -1,6 +1,5 @@
 import { ulid } from "ulid";
 import type { Api, Model } from "@earendil-works/pi-ai";
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AgentBody, AgentBodyParams } from "../core";
 import { type EventManager, Events } from "../event";
 import { JiePlatformError } from "../jie-platform-errors";
@@ -105,12 +104,11 @@ export class TeamManagerImpl implements TeamManager {
       });
       bodies.push(body);
     }
-    const restored = new Map<string, ReadonlyArray<AgentMessage>>();
     for (const body of bodies) {
-      restored.set(body.identity.agentKey, await body.restore());
+      await body.restore();
     }
     this.loadedTeams.set(requested, bodies);
-    this.publishTeamLoaded(requested, bodies, restored);
+    this.publishTeamLoaded(requested, bodies);
     for (const body of bodies) {
       await body.start();
     }
@@ -166,12 +164,12 @@ export class TeamManagerImpl implements TeamManager {
     }
   }
 
-  private publishTeamLoaded(teamId: string, bodies: AgentBody[], restored: ReadonlyMap<string, ReadonlyArray<AgentMessage>>): void {
-    this.eventManager.publish(Events.teamLoaded({ kind: "system" }, toTeamInfo(teamId, bodies, restored)));
+  private publishTeamLoaded(teamId: string, bodies: AgentBody[]): void {
+    this.eventManager.publish(Events.teamLoaded({ kind: "system" }, toTeamInfo(teamId, bodies)));
   }
 }
 
-function toTeamInfo(id: string, bodies: AgentBody[], restored?: ReadonlyMap<string, ReadonlyArray<AgentMessage>>): TeamInfo {
+function toTeamInfo(id: string, bodies: AgentBody[]): TeamInfo {
   const identities = bodies.map((b) => b.identity);
   const leader = identities.find((a) => a.isLeader);
   if (leader === undefined) {
@@ -179,6 +177,6 @@ function toTeamInfo(id: string, bodies: AgentBody[], restored?: ReadonlyMap<stri
       detail: `team '${id}' has no agent marked as leader`,
     });
   }
-  const history: AgentHistory[] = bodies.map((b) => ({ agentKey: b.identity.agentKey, messages: restored?.get(b.identity.agentKey) ?? [] }));
+  const history: AgentHistory[] = bodies.map((b) => ({ agentKey: b.identity.agentKey, messages: b.messages() }));
   return { id, leaderKey: leader.agentKey, agents: identities, history };
 }

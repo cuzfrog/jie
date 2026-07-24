@@ -43,13 +43,20 @@ describe("Scenario 3 — switch teams", () => {
     expect(state.agents.get("my-team-2:general-1")?.currentTurn?.blocks.some((b) => b.text.includes("story"))).toBe(true);
   });
 
-  test("swap back to first team re-seeds", async () => {
+  test("swap back to first team re-hydrates its conversation from the live agents", async () => {
     await sendLine(harness.stdin, "/team my-team-1");
     await waitForTeam(harness, "my-team-1");
+    await submitAndWaitForAgentIdle(harness, "go", "my-team-1:general-1");
+    expect(harness.stateStore.getState().agents.get("my-team-1:general-1")?.currentTurn?.blocks.some((b) => b.text.includes("3"))).toBe(true);
+
     await sendLine(harness.stdin, "/team my-team-2");
     await waitForTeam(harness, "my-team-2");
+    expect(harness.stateStore.getState().agents.has("my-team-1:general-1")).toBe(false);
+
     await sendLine(harness.stdin, "/team my-team-1");
     await waitForTeam(harness, "my-team-1");
-    expect(harness.stateStore.getState().agents.has("my-team-1:general-1")).toBe(true);
+    const agent = harness.stateStore.getState().agents.get("my-team-1:general-1");
+    expect(agent).toBeDefined();
+    expect(agent?.currentTurn?.blocks.some((b) => b.text.includes("3"))).toBe(true);
   });
 });

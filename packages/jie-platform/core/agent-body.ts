@@ -19,6 +19,7 @@ export interface AgentBodyParams {
 export interface AgentBody {
   readonly identity: AgentInfo;
   restore(): Promise<ReadonlyArray<AgentMessage>>;
+  messages(): ReadonlyArray<AgentMessage>;
   start(): Promise<void>;
   stop(): void;
 }

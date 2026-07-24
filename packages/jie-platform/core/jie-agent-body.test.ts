@@ -766,6 +766,44 @@ describe("JieAgentBody — restore() snapshot phase", () => {
   });
 });
 
+describe("JieAgentBody — messages()", () => {
+  let h: Harness;
+
+  beforeEach(() => {
+    h = makeHarness();
+  });
+
+  test("returns the agent's current messages — empty before restore, live afterwards", async () => {
+    const body = h.makeBody();
+    expect(body.messages()).toEqual([]);
+    h.persisted.push(
+      { role: "user", content: "m1" } as unknown as AgentMessage,
+      makeAssistantMessage({ content: [{ type: "text", text: "reply" }] }),
+    );
+    await body.restore();
+    expect(body.messages()).toHaveLength(2);
+    body.stop();
+  });
+
+  test("reflects conversation progress made after restore", async () => {
+    const body = h.makeBody();
+    await body.restore();
+    h.state.messages.push(makeAssistantMessage({ content: [{ type: "text", text: "streamed" }] }));
+    expect(body.messages()).toHaveLength(1);
+    body.stop();
+  });
+
+  test("returns a snapshot — later agent progress does not alter a previously returned value", async () => {
+    const body = h.makeBody();
+    await body.restore();
+    const before = body.messages();
+    h.state.messages.push(makeAssistantMessage());
+    expect(before).toHaveLength(0);
+    expect(body.messages()).toHaveLength(1);
+    body.stop();
+  });
+});
+
 describe("JieAgentBody — prompt ingress format", () => {
   let h: Harness;
 
