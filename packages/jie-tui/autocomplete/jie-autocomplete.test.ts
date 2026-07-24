@@ -289,3 +289,52 @@ describe("createJieAutocompleteProvider — /model arguments", () => {
     expect(suggestions!.items).toHaveLength(20);
   });
 });
+
+describe("createJieAutocompleteProvider — /login arguments", () => {
+  const PROVIDERS: ReadonlyArray<{ id: string; description?: string }> = [
+    { id: "my-local", description: "configured" },
+    { id: "anthropic", description: "ANTHROPIC_API_KEY" },
+    { id: "openai" },
+  ];
+
+  function providerPlatform(providers: ReadonlyArray<{ id: string; description?: string }>): JiePlatform {
+    return makePlatform(vi.fn(async (cmd: { name: string }) => {
+      if (cmd.name === "listProviders") return providers;
+      return null;
+    }));
+  }
+
+  test("suggests providers with their descriptions after '/login '", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, providerPlatform(PROVIDERS), makeStateStore())
+      .getSuggestions(["/login "], 0, 7, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["my-local", "anthropic", "openai"]);
+    expect(suggestions!.items[0]!.description).toBe("configured");
+    expect(suggestions!.items[1]!.description).toBe("ANTHROPIC_API_KEY");
+    expect(suggestions!.items[2]!.description).toBeUndefined();
+  });
+
+  test("filters providers by the typed prefix", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, providerPlatform(PROVIDERS), makeStateStore())
+      .getSuggestions(["/login an"], 0, 9, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["anthropic"]);
+  });
+
+  test("a fully typed provider yields no suggestions so Enter submits directly", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, providerPlatform(PROVIDERS), makeStateStore())
+      .getSuggestions(["/login anthropic"], 0, 16, { signal: signal() });
+    expect(suggestions).toBeNull();
+  });
+
+  test("yields no suggestions when the registry lists no providers", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, providerPlatform([]), makeStateStore())
+      .getSuggestions(["/login "], 0, 7, { signal: signal() });
+    expect(suggestions).toBeNull();
+  });
+
+  test("commits the bare provider id with no trailing space", () => {
+    const result = new JieAutocompleteProviderImpl("/tmp", noScan, providerPlatform(PROVIDERS), makeStateStore())
+      .applyCompletion(["/login "], 0, 7, { value: "anthropic", label: "anthropic" }, "");
+    expect(result.lines).toEqual(["/login anthropic"]);
+    expect(result.cursorCol).toBe(16);
+  });
+});

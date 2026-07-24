@@ -55,6 +55,7 @@ function slashCommands(platform: JiePlatform, stateStore: StateStore): SlashComm
     if (name === "team") return { name, getArgumentCompletions: (prefix) => teamItems(platform, prefix) };
     if (name === "resume") return { name, getArgumentCompletions: (prefix) => sessionItems(platform, stateStore, prefix) };
     if (name === "model") return { name, getArgumentCompletions: (prefix) => modelItems(platform, prefix) };
+    if (name === "login") return { name, getArgumentCompletions: (prefix) => providerItems(platform, prefix) };
     if (name === "effort") return { name, getArgumentCompletions: async (prefix) => effortItems(prefix) };
     return { name };
   });
@@ -94,6 +95,15 @@ async function modelItems(platform: JiePlatform, prefix: string): Promise<Autoco
     const value = `${model.provider}/${model.id}`;
     return { value, label: value, description: model.name };
   });
+  if (isAlreadyComplete(items.map((item) => item.value), prefix)) return null;
+  const matches = items.filter((item) => hasPrefix(item.label, prefix)).slice(0, MAX_SUGGESTIONS);
+  return matches.length === 0 ? null : matches;
+}
+
+async function providerItems(platform: JiePlatform, prefix: string): Promise<AutocompleteItem[] | null> {
+  const providers = await platform.execute({ name: "listProviders" });
+  const items = providers.map((provider): AutocompleteItem =>
+    ({ value: provider.id, label: provider.id, description: provider.description }));
   if (isAlreadyComplete(items.map((item) => item.value), prefix)) return null;
   const matches = items.filter((item) => hasPrefix(item.label, prefix)).slice(0, MAX_SUGGESTIONS);
   return matches.length === 0 ? null : matches;

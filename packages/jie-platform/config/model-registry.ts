@@ -1,11 +1,19 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { getBuiltinModel, getBuiltinModels, getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";
+import { findEnvKeys } from "@earendil-works/pi-ai/compat";
 import { loadModelsConfig, type ResolvedModelsConfig, type ResolvedProviderConfig } from "./load-models";
 import type { AuthStore } from "./auth-store";
 import { JiePlatformError } from "../jie-platform-errors";
 
+export interface ProviderInfo {
+  readonly id: string;
+  readonly configured: boolean;
+  readonly envKeys: ReadonlyArray<string>;
+}
+
 export interface ModelRegistry {
   providers(): ReadonlyArray<string>;
+  listProviders(): ReadonlyArray<ProviderInfo>;
   resolve(provider: string, modelId: string): Model<Api> | undefined;
   listModels(provider: string): ReadonlyArray<Model<Api>>;
   getApiKey(provider: string): string | undefined;
@@ -22,6 +30,10 @@ export class PiModelRegistry implements ModelRegistry {
     const customIds = Array.from(this.custom.providers.keys());
     const builtinIds = getBuiltinProviders().filter((id) => !this.custom.providers.has(id));
     return [...customIds, ...builtinIds];
+  }
+
+  listProviders(): ProviderInfo[] {
+    return this.providers().map((id) => ({ id, configured: this.custom.providers.has(id), envKeys: findEnvKeys(id) ?? [] }));
   }
 
   resolve(provider: string, modelId: string): Model<Api> | undefined {

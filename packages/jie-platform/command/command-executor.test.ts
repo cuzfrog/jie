@@ -22,6 +22,7 @@ const settingsStore = vi.mocked<SettingsStore>({
 
 const modelRegistry = vi.mocked<ModelRegistry>({
   providers: vi.fn(),
+  listProviders: vi.fn(),
   resolve: vi.fn(),
   listModels: vi.fn(),
   getApiKey: vi.fn(),
@@ -206,6 +207,26 @@ describe("CommandExecutorImpl", () => {
       modelRegistry.listModels.mockReturnValue([]);
       const result = await executor.execute({ name: "listModels" });
       expect(result).toEqual([]);
+    });
+  });
+
+  describe("listProviders", () => {
+    test("describes a provider by its set env var name", async () => {
+      modelRegistry.listProviders.mockReturnValue([{ id: "anthropic", configured: false, envKeys: ["ANTHROPIC_API_KEY"] }]);
+      const result = await executor.execute({ name: "listProviders" });
+      expect(result).toEqual([{ id: "anthropic", description: "ANTHROPIC_API_KEY" }]);
+    });
+
+    test("describes a configured provider without env keys as configured", async () => {
+      modelRegistry.listProviders.mockReturnValue([{ id: "my-local", configured: true, envKeys: [] }]);
+      const result = await executor.execute({ name: "listProviders" });
+      expect(result).toEqual([{ id: "my-local", description: "configured" }]);
+    });
+
+    test("omits the description for a built-in without env keys", async () => {
+      modelRegistry.listProviders.mockReturnValue([{ id: "openai", configured: false, envKeys: [] }]);
+      const result = await executor.execute({ name: "listProviders" });
+      expect(result).toEqual([{ id: "openai" }]);
     });
   });
 

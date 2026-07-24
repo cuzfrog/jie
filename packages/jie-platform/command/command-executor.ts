@@ -29,6 +29,7 @@ export class CommandExecutorImpl implements CommandExecutor {
       setDefaultEffort: this.setDefaultEffort.bind(this),
       getDefaultEffort: this.getDefaultEffort.bind(this),
       listModels: this.listModels.bind(this),
+      listProviders: this.listProviders.bind(this),
       setDefaultTeam: this.setDefaultTeam.bind(this),
       team: this.team.bind(this),
       resumeSession: this.resumeSession.bind(this),
@@ -102,6 +103,13 @@ export class CommandExecutorImpl implements CommandExecutor {
     return this.modelRegistry.providers().flatMap((provider) =>
       this.modelRegistry.listModels(provider).map((model) => ({ provider, id: model.id, name: model.name })),
     );
+  }
+
+  private listProviders(): CommandResult<"listProviders"> {
+    return this.modelRegistry.listProviders().map((provider) => {
+      const description = provider.envKeys[0] ?? (provider.configured ? "configured" : undefined);
+      return description === undefined ? { id: provider.id } : { id: provider.id, description };
+    });
   }
 
   private setDefaultTeam(command: Command<"setDefaultTeam">): CommandResult<"setDefaultTeam"> {

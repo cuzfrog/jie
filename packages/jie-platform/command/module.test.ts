@@ -21,6 +21,7 @@ const settingsStore = vi.mocked<SettingsStore>({
 
 const modelRegistry = vi.mocked<ModelRegistry>({
   providers: vi.fn(),
+  listProviders: vi.fn(),
   resolve: vi.fn(),
   listModels: vi.fn(),
   getApiKey: vi.fn(),

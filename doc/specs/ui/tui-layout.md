@@ -52,11 +52,12 @@ The **keybinding hints** section sits between the welcome banner and the editor 
 
 ## Selection via editor autocomplete
 
-Team switch and session resume are selected through the editor's own autocomplete popup — there is no separate menu surface, and the editor never leaves the layout. The jie autocomplete provider (`autocomplete/jie-autocomplete.ts`) attaches argument completions to three slash commands:
+Team switch and session resume are selected through the editor's own autocomplete popup — there is no separate menu surface, and the editor never leaves the layout. The jie autocomplete provider (`autocomplete/jie-autocomplete.ts`) attaches argument completions to five slash commands:
 
 - **`/team `** — installed team ids from `getTeamInfo`, the default marked `(default)`.
 - **`/resume `** — the loaded team's sessions from `listSessions`, each described as `<n> msg · <age>` (a relative age: now/m/h/d/mo/y); a session named via `/rename` shows that name as its label instead of the session id.
 - **`/model `** — the registry's models from `listModels` as `<provider>/<modelId>`, each described by the model's human-readable name.
+- **`/login `** — provider ids from `listProviders` (models.json providers first, then built-ins, deduped), each described by the env var name providing its key, or `configured` for a models.json provider.
 - **`/effort `** — the five effort levels (`off`/`low`/`medium`/`high`/`max`).
 
 The popup is drawn by the pi-tui editor inside its own frame, anchored below the input line; the chat stays fully visible above and the editor's `─` borders stay on screen. `Tab` or `Enter` commits the highlighted argument into the buffer; once the typed argument exactly matches an entry the popup closes on its own and a single `Enter` submits. Submitting runs the command handler: `/team <id>` loads the team, `/resume <sessionId>` resumes the session, `/model <provider>/<modelId>` sets the default model (`tui-shortcuts.md`, "Slash commands"). `Esc` dismisses the popup and keeps the buffer text.

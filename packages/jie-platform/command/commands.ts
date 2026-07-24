@@ -16,6 +16,7 @@ interface CommandTypeMap {
   setDefaultEffort: CommandDef<{ effort: EffortLevel }, null>;
   getDefaultEffort: CommandDef<{}, EffortLevel>;
   listModels: CommandDef<{}, ReadonlyArray<{ readonly provider: string; readonly id: string; readonly name: string }>>;
+  listProviders: CommandDef<{}, ReadonlyArray<{ readonly id: string; readonly description?: string }>>;
   setDefaultTeam: CommandDef<{ teamId: string }, null>;
   team: CommandDef<{ teamId?: string }, TeamInfo>;
   resumeSession: CommandDef<{ teamId: string; sessionId: string }, TeamInfo>;
