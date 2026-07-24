@@ -50,16 +50,17 @@ The **keybinding hints** section sits between the welcome banner and the editor 
 
 ## Selection via editor autocomplete
 
-Team switch and session resume are selected through the editor's own autocomplete popup — there is no separate menu surface, and the editor never leaves the layout. The jie autocomplete provider (`autocomplete/jie-autocomplete.ts`) attaches argument completions to two slash commands:
+Team switch and session resume are selected through the editor's own autocomplete popup — there is no separate menu surface, and the editor never leaves the layout. The jie autocomplete provider (`autocomplete/jie-autocomplete.ts`) attaches argument completions to three slash commands:
 
 - **`/team `** — installed team ids from `getTeamInfo`, the default marked `(default)`.
 - **`/resume `** — the loaded team's sessions from `listSessions`, each described as `<n> msg · <age>` (a relative age: now/m/h/d/mo/y).
+- **`/model `** — the registry's models from `listModels` as `<provider>/<modelId>`, each described by the model's human-readable name.
 
-The popup is drawn by the pi-tui editor inside its own frame, anchored below the input line; the chat stays fully visible above and the editor's `─` borders stay on screen. `Tab` or `Enter` commits the highlighted argument into the buffer; once the typed argument exactly matches an entry the popup closes on its own and a single `Enter` submits. Submitting runs the command handler: `/team <id>` loads the team, `/resume <sessionId>` resumes the session (`tui-shortcuts.md`, "Slash commands"). `Esc` dismisses the popup and keeps the buffer text.
+The popup is drawn by the pi-tui editor inside its own frame, anchored below the input line; the chat stays fully visible above and the editor's `─` borders stay on screen. `Tab` or `Enter` commits the highlighted argument into the buffer; once the typed argument exactly matches an entry the popup closes on its own and a single `Enter` submits. Submitting runs the command handler: `/team <id>` loads the team, `/resume <sessionId>` resumes the session, `/model <provider>/<modelId>` sets the default model (`tui-shortcuts.md`, "Slash commands"). `Esc` dismisses the popup and keeps the buffer text.
 
 ## Editor
 
-The editor is pi-tui's `Editor` subclass (`components/editor/jie-editor.ts`), full width, focused at startup. Its autocomplete provider is jie's (`autocomplete/jie-autocomplete.ts`): slash commands, `/team` and `/resume` argument completion ("Selection via editor autocomplete" above), and `@`-file mentions. Top + bottom borders in `borderMuted`; when the buffer parses as a bash command (`!cmd` / `!!cmd`), both borders flip to `warning` color for the duration. Grows by one row per typed `\n`; never reserves a static row budget. Key handling is pi's verbatim plus three jie keys (`tui-shortcuts.md`). The editor's target is `state.focusedAgentId` (fallback: `state.leaderAgentId`); `onChange` syncs `state.editorText` and clears banners on the first keystroke after an error; `onSubmit` appends to prompt history and dispatches `submitEditorText`.
+The editor is pi-tui's `Editor` subclass (`components/editor/jie-editor.ts`), full width, focused at startup. Its autocomplete provider is jie's (`autocomplete/jie-autocomplete.ts`): slash commands, `/team`, `/resume`, and `/model` argument completion ("Selection via editor autocomplete" above), and `@`-file mentions. Top + bottom borders in `borderMuted`; when the buffer parses as a bash command (`!cmd` / `!!cmd`), both borders flip to `warning` color for the duration. Grows by one row per typed `\n`; never reserves a static row budget. Key handling is pi's verbatim plus three jie keys (`tui-shortcuts.md`). The editor's target is `state.focusedAgentId` (fallback: `state.leaderAgentId`); `onChange` syncs `state.editorText` and clears banners on the first keystroke after an error; `onSubmit` appends to prompt history and dispatches `submitEditorText`.
 
 ## Footer (2 lines)
 

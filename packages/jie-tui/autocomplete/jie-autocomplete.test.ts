@@ -180,3 +180,65 @@ describe("createJieAutocompleteProvider — /resume arguments", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 });
+
+describe("createJieAutocompleteProvider — /model arguments", () => {
+  const MODELS = [
+    { provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5" },
+    { provider: "anthropic", id: "claude-opus-4-5", name: "Claude Opus 4.5" },
+    { provider: "openai", id: "gpt-5", name: "GPT-5" },
+  ];
+
+  function modelPlatform(models: ReadonlyArray<{ provider: string; id: string; name: string }>): JiePlatform {
+    return makePlatform(vi.fn(async (cmd: { name: string }) => {
+      if (cmd.name === "listModels") return models;
+      return null;
+    }));
+  }
+
+  test("suggests registry models as provider/modelId with the model name as description", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, modelPlatform(MODELS), makeStateStore())
+      .getSuggestions(["/model "], 0, 7, { signal: signal() });
+    expect(suggestions!.items).toEqual([
+      { value: "anthropic/claude-sonnet-4-5", label: "anthropic/claude-sonnet-4-5", description: "Claude Sonnet 4.5" },
+      { value: "anthropic/claude-opus-4-5", label: "anthropic/claude-opus-4-5", description: "Claude Opus 4.5" },
+      { value: "openai/gpt-5", label: "openai/gpt-5", description: "GPT-5" },
+    ]);
+  });
+
+  test("filters models by the provider segment", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, modelPlatform(MODELS), makeStateStore())
+      .getSuggestions(["/model anth"], 0, 11, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["anthropic/claude-sonnet-4-5", "anthropic/claude-opus-4-5"]);
+  });
+
+  test("filters models across the provider/modelId boundary", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, modelPlatform(MODELS), makeStateStore())
+      .getSuggestions(["/model anthropic/claude-o"], 0, 25, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["anthropic/claude-opus-4-5"]);
+  });
+
+  test("a fully typed provider/modelId yields no suggestions so Enter submits directly", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, modelPlatform(MODELS), makeStateStore())
+      .getSuggestions(["/model openai/gpt-5"], 0, 19, { signal: signal() });
+    expect(suggestions).toBeNull();
+  });
+
+  test("yields no suggestions when no model matches", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, modelPlatform(MODELS), makeStateStore())
+      .getSuggestions(["/model google/"], 0, 14, { signal: signal() });
+    expect(suggestions).toBeNull();
+  });
+
+  test("yields no suggestions when the registry lists no models", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, modelPlatform([]), makeStateStore())
+      .getSuggestions(["/model "], 0, 7, { signal: signal() });
+    expect(suggestions).toBeNull();
+  });
+
+  test("caps the suggestion list at twenty entries", async () => {
+    const many = Array.from({ length: 25 }, (_, index) => ({ provider: "anthropic", id: `model-${index}`, name: `Model ${index}` }));
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, modelPlatform(many), makeStateStore())
+      .getSuggestions(["/model "], 0, 7, { signal: signal() });
+    expect(suggestions!.items).toHaveLength(20);
+  });
+});
