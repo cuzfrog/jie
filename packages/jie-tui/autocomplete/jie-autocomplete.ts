@@ -5,7 +5,7 @@ import {
   type AutocompleteSuggestions,
   type SlashCommand,
 } from "@earendil-works/pi-tui";
-import type { JiePlatform } from "@cuzfrog/jie-platform";
+import { EFFORT_LEVELS, type JiePlatform } from "@cuzfrog/jie-platform";
 import { SLASH_COMMAND_NAMES } from "../command-handler";
 import { filterFiles, type ScannedFile } from "../file-mention";
 import type { StateStore } from "../state";
@@ -55,6 +55,7 @@ function slashCommands(platform: JiePlatform, stateStore: StateStore): SlashComm
     if (name === "team") return { name, getArgumentCompletions: (prefix) => teamItems(platform, prefix) };
     if (name === "resume") return { name, getArgumentCompletions: (prefix) => sessionItems(platform, stateStore, prefix) };
     if (name === "model") return { name, getArgumentCompletions: (prefix) => modelItems(platform, prefix) };
+    if (name === "effort") return { name, getArgumentCompletions: async (prefix) => effortItems(prefix) };
     return { name };
   });
 }
@@ -96,6 +97,14 @@ async function modelItems(platform: JiePlatform, prefix: string): Promise<Autoco
   if (isAlreadyComplete(items.map((item) => item.value), prefix)) return null;
   const matches = items.filter((item) => hasPrefix(item.label, prefix)).slice(0, MAX_SUGGESTIONS);
   return matches.length === 0 ? null : matches;
+}
+
+function effortItems(prefix: string): AutocompleteItem[] | null {
+  if (isAlreadyComplete(EFFORT_LEVELS, prefix)) return null;
+  const items = EFFORT_LEVELS
+    .filter((level) => hasPrefix(level, prefix))
+    .map((level): AutocompleteItem => ({ value: level, label: level }));
+  return items.length === 0 ? null : items;
 }
 
 function atQuery(textBeforeCursor: string): string | null {

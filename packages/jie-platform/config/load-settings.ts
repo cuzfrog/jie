@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Settings, RawSettings } from "./types";
+import { isEffortLevel } from "../types";
 import { JiePlatformError } from "../jie-platform-errors";
 
 const TEAM_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
@@ -63,6 +64,15 @@ function validateSettings(raw: RawSettings, source: string): Settings {
       });
     }
     result.defaultTeam = raw.defaultTeam;
+  }
+
+  if ("defaultEffort" in raw && raw.defaultEffort !== undefined) {
+    if (!isEffortLevel(raw.defaultEffort)) {
+      throw new JiePlatformError("INVALID_CONFIG", {
+        detail: `${source}: invalid defaultEffort: ${JSON.stringify(raw.defaultEffort)}`,
+      });
+    }
+    result.defaultEffort = raw.defaultEffort;
   }
 
   return result;

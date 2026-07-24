@@ -26,6 +26,8 @@ export class CommandExecutorImpl implements CommandExecutor {
       setApiKey: this.setApiKey.bind(this),
       setDefaultModel: this.setDefaultModel.bind(this),
       getDefaultModel: this.getDefaultModel.bind(this),
+      setDefaultEffort: this.setDefaultEffort.bind(this),
+      getDefaultEffort: this.getDefaultEffort.bind(this),
       listModels: this.listModels.bind(this),
       setDefaultTeam: this.setDefaultTeam.bind(this),
       team: this.team.bind(this),
@@ -78,7 +80,21 @@ export class CommandExecutorImpl implements CommandExecutor {
   private getDefaultModel(): CommandResult<"getDefaultModel"> {
     const settings = this.settingsStore.load();
     if (settings.defaultProvider === undefined || settings.defaultModel === undefined) return null;
-    return { provider: settings.defaultProvider, id: settings.defaultModel, effort: "off", contextWindow: null };
+    return {
+      provider: settings.defaultProvider,
+      id: settings.defaultModel,
+      effort: settings.defaultEffort ?? "off",
+      contextWindow: null,
+    };
+  }
+
+  private setDefaultEffort(command: Command<"setDefaultEffort">): CommandResult<"setDefaultEffort"> {
+    this.settingsStore.setDefaultEffort(command.effort);
+    return null;
+  }
+
+  private getDefaultEffort(): CommandResult<"getDefaultEffort"> {
+    return this.settingsStore.load().defaultEffort ?? "off";
   }
 
   private listModels(): CommandResult<"listModels"> {

@@ -14,6 +14,7 @@ import { Events, type EventEnvelope, type EventManager, type EventType } from ".
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { Tool, ToolRegistry, ToolResult } from "../tools";
 import type { AgentSoul } from "../team";
+import type { EffortLevel } from "../types";
 
 function makeModel(provider: string, id: string): Model<Api> {
   return {
@@ -170,6 +171,7 @@ interface MakeBodyOverrides {
   isLeader?: boolean;
   sessionId?: string;
   model?: Model<Api>;
+  effort?: EffortLevel;
   factory?: (opts: ConstructorParameters<typeof PiAgent>[0]) => PiAgent;
 }
 
@@ -229,6 +231,7 @@ function makeHarness(): Harness {
       isLeader: overrides.isLeader ?? false,
       sessionId: overrides.sessionId ?? "s1",
       model: overrides.model,
+      effort: overrides.effort ?? "off",
     };
     return new JieAgentBody(params, {
       eventManager: events,
@@ -487,10 +490,9 @@ describe("JieAgentBody — agent construction wiring", () => {
 });
 
 describe("JieAgentBody — agent.model.assigned publication", () => {
-  test("publishes with effort 'off' for the agent's default thinkingLevel", () => {
+  test("publishes with effort 'off' when the effort param is 'off'", () => {
     const h = makeHarness();
     const cap = makeFakeAgentFactory();
-    cap.fake.state.thinkingLevel = "off";
     const received: EventEnvelope<"agent.model.assigned">[] = [];
     h.subscribeSubject("agent.model.assigned", (env) => {
       received.push(env);
@@ -498,30 +500,31 @@ describe("JieAgentBody — agent.model.assigned publication", () => {
     h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), factory: cap.factory });
     expect(received).toHaveLength(1);
     expect(received[0]!.payload).toEqual({ provider: "anthropic", model: "claude-sonnet-4", effort: "off" });
+    expect(cap.fake.state.thinkingLevel).toBe("off");
   });
 
-  test("publishes with the mapped effort for a recognized thinkingLevel", () => {
+  test("sets the agent thinkingLevel from the effort param and publishes the same effort", () => {
     const h = makeHarness();
     const cap = makeFakeAgentFactory();
-    cap.fake.state.thinkingLevel = "high";
     const received: EventEnvelope<"agent.model.assigned">[] = [];
     h.subscribeSubject("agent.model.assigned", (env) => {
       received.push(env);
     });
-    h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), factory: cap.factory });
+    h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), effort: "high", factory: cap.factory });
+    expect(cap.fake.state.thinkingLevel).toBe("high");
     expect(received).toHaveLength(1);
     expect(received[0]!.payload).toEqual({ provider: "anthropic", model: "claude-sonnet-4", effort: "high" });
   });
 
-  test("maps 'xhigh' thinkingLevel to 'max' effort", () => {
+  test("maps effort 'max' to the 'xhigh' thinkingLevel while reporting 'max' effort", () => {
     const h = makeHarness();
     const cap = makeFakeAgentFactory();
-    cap.fake.state.thinkingLevel = "xhigh";
     const received: EventEnvelope<"agent.model.assigned">[] = [];
     h.subscribeSubject("agent.model.assigned", (env) => {
       received.push(env);
     });
-    h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), factory: cap.factory });
+    h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), effort: "max", factory: cap.factory });
+    expect(cap.fake.state.thinkingLevel).toBe("xhigh");
     expect(received).toHaveLength(1);
     expect(received[0]!.payload.effort).toBe("max");
   });

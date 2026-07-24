@@ -1,6 +1,6 @@
 import type { GitSnapshot } from "../services";
 import type { SessionSummary } from "../storage";
-import type { ModelInfo, TeamInfo } from "../types";
+import type { EffortLevel, ModelInfo, TeamInfo } from "../types";
 
 interface CommandDef<A, R = null> {
   args: A;
@@ -13,6 +13,8 @@ interface CommandTypeMap {
   setApiKey: CommandDef<{ apiKey: string }, null>;
   setDefaultModel: CommandDef<{ provider: string; id: string }, null>;
   getDefaultModel: CommandDef<{}, ModelInfo | null>;
+  setDefaultEffort: CommandDef<{ effort: EffortLevel }, null>;
+  getDefaultEffort: CommandDef<{}, EffortLevel>;
   listModels: CommandDef<{}, ReadonlyArray<{ readonly provider: string; readonly id: string; readonly name: string }>>;
   setDefaultTeam: CommandDef<{ teamId: string }, null>;
   team: CommandDef<{ teamId?: string }, TeamInfo>;

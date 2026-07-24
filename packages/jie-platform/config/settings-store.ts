@@ -2,10 +2,12 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { loadMergedSettings } from "./load-settings";
 import type { Settings } from "./types";
+import type { EffortLevel } from "../types";
 
 export interface SettingsStore {
   load(): Settings;
   setDefaultProvider(provider: string, modelId: string): void;
+  setDefaultEffort(effort: EffortLevel): void;
   setDefaultTeam(teamId: string, scope: "project" | "global"): void;
 }
 
@@ -36,6 +38,11 @@ export class SettingsStoreImpl implements SettingsStore {
       defaultProvider: provider,
       defaultModel: modelId,
     };
+    writeSettingsFile(this.globalPath, next);
+  }
+
+  setDefaultEffort(effort: EffortLevel): void {
+    const next: Settings = { ...readSettingsFile(this.globalPath), defaultEffort: effort };
     writeSettingsFile(this.globalPath, next);
   }
 

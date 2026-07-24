@@ -46,6 +46,23 @@ describe("SettingsStoreImpl", () => {
     });
   });
 
+  test("setDefaultEffort writes defaultEffort to ~/.jie/settings.json", () => {
+    const store = new SettingsStoreImpl(cwd, homeJieDir, null);
+    store.setDefaultEffort("high");
+    expect(JSON.parse(readFileSync(join(homeJieDir, "settings.json"), "utf-8"))).toEqual({ defaultEffort: "high" });
+  });
+
+  test("setDefaultEffort preserves existing settings fields", () => {
+    const store = new SettingsStoreImpl(cwd, homeJieDir, null);
+    store.setDefaultProvider("anthropic", "claude-sonnet-4");
+    store.setDefaultEffort("max");
+    expect(JSON.parse(readFileSync(join(homeJieDir, "settings.json"), "utf-8"))).toEqual({
+      defaultProvider: "anthropic",
+      defaultModel: "claude-sonnet-4",
+      defaultEffort: "max",
+    });
+  });
+
   test("setDefaultTeam with scope 'project' writes to the project settings path", () => {
     const projectJieDir = join(cwd, ".jie");
     const store = new SettingsStoreImpl(cwd, homeJieDir, projectJieDir);

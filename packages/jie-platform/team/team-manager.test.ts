@@ -17,6 +17,7 @@ const eventManager = vi.mocked<EventManager>({
 const settingsStore = vi.mocked<SettingsStore>({
   load: vi.fn(),
   setDefaultProvider: vi.fn(),
+  setDefaultEffort: vi.fn(),
   setDefaultTeam: vi.fn(),
 });
 
@@ -247,6 +248,19 @@ describe("TeamManagerImpl — full surface", () => {
       expect(cached.history[0]?.messages).toHaveLength(2);
       expect(cached.history[0]?.messages[0]).toMatchObject({ role: "user" });
       expect(cached.history[0]?.messages[1]).toMatchObject({ role: "assistant" });
+    });
+
+    test("passes the configured defaultEffort to the agent body factory", async () => {
+      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, defaultEffort: "high" });
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("minimal");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("high");
+    });
+
+    test("passes effort 'off' to the agent body factory when no defaultEffort is configured", async () => {
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("minimal");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("off");
     });
 
     test("loads a second team without disturbing the first", async () => {

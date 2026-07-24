@@ -1,6 +1,12 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 
-export type EffortLevel = "off" | "low" | "medium" | "high" | "max";
+export const EFFORT_LEVELS = ["off", "low", "medium", "high", "max"] as const;
+
+export type EffortLevel = (typeof EFFORT_LEVELS)[number];
+
+export function isEffortLevel(value: unknown): value is EffortLevel {
+    return typeof value === "string" && (EFFORT_LEVELS as readonly string[]).includes(value);
+}
 
 export interface ModelInfo {
     readonly provider: string;

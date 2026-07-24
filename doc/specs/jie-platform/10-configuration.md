@@ -6,7 +6,7 @@ Platform-level configuration surface: how Jie discovers and loads settings, cred
 
 | File | Scope | Sensitivity | Holds |
 |---|---|---|---|
-| `~/.jie/settings.json` | Global user settings | Plain JSON | `defaultProvider`, `defaultModel`, `defaultTeam` |
+| `~/.jie/settings.json` | Global user settings | Plain JSON | `defaultProvider`, `defaultModel`, `defaultTeam`, `defaultEffort` |
 | `.jie/settings.json` | Project override | Plain JSON | Same fields, deep-merge over global |
 | `~/.jie/auth.json` | Global credentials | mode `0600` | API keys, OAuth tokens (schema owned by pi-ai) |
 | `~/.jie/models.json` | Global provider definitions | Plain JSON | Custom providers: base URLs, APIs, keys, model catalogs |
@@ -34,6 +34,7 @@ Two locations, **project overrides global with deep-merge** (nested objects merg
 | `defaultProvider` | string | Provider id (e.g. `anthropic`, `openai`). |
 | `defaultModel` | string | Model id within the provider. |
 | `defaultTeam` | string | Last user-selected team. Charset `[A-Za-z0-9_-]{1,32}`. |
+| `defaultEffort` | string | Default reasoning effort for team loads: one of `off` \| `low` \| `medium` \| `high` \| `max`. Absent means `off`. |
 
 **Unknown field policy.** Unrecognized top-level fields are tolerated (warned, ignored) so future versions can land new settings without breaking old files. Unrecognized *values* for recognized fields follow the same policy — e.g. an unknown `defaultProvider` is WARN+ignore (treated as absent; model resolution falls through and may surface `NO_MODEL_ERROR` at team load). Shape errors (e.g. `defaultProvider: 42`) are a hard fail — malformed input, not an unfamiliar value.
 
@@ -45,10 +46,11 @@ export interface Settings {
   readonly defaultProvider?: string;
   readonly defaultModel?: string;
   readonly defaultTeam?: string;
+  readonly defaultEffort?: EffortLevel;
 }
 ```
 
-Each field may be absent (the user has not run `jie model` yet); the resolution chains below treat absent as "fall through to the next source". The platform never persists its own fields — the only writers are the `setDefaultProvider` / `setDefaultTeam` commands (CLI `jie model` / `jie team`, TUI `/model`).
+Each field may be absent (the user has not run `jie model` yet); the resolution chains below treat absent as "fall through to the next source". The platform never persists its own fields — the only writers are the `setDefaultProvider` / `setDefaultTeam` / `setDefaultEffort` commands (CLI `jie model` / `jie team`, TUI `/model` / `/effort`).
 
 ## Team Selection
 
@@ -81,6 +83,10 @@ CLI `jie team <id>` executes `setDefaultTeam`: the write scope follows the team'
 TUI `/team <id>` does **not** persist; it hot-loads the team in the running session — see "Team Swap" below.
 
 `jie team` / `/team` with no argument executes `getTeamInfo`: prints the current `defaultTeam` (or none) plus the installed team list. There is no explicit unset; a stale `defaultTeam` simply falls through at step 2, and the auto-selection is never persisted.
+
+### Setting `defaultEffort`
+
+TUI `/effort <level>` executes `setDefaultEffort`, writing `defaultEffort` to the **global** `settings.json` (like `setDefaultProvider`). `/effort` with no argument executes `getDefaultEffort` and shows the current default (`off` when absent). The value applies at team load — same semantics as `defaultModel`, no hot-swap of running agents: `TeamManager.load` reads the merged setting and threads it into `AgentBodyParams.effort`; `JieAgentBody` maps it onto the pi-agent `thinkingLevel` (`max` → `xhigh`, other levels pass through; pi's own `off` level means no extended thinking) and reports it through `agent.model.assigned` and `ModelInfo.effort`. Out-of-vocabulary values in the file hard-fail `INVALID_CONFIG` (closed vocabulary, like the `defaultTeam` charset).
 
 ### Team Swap (TUI)
 
