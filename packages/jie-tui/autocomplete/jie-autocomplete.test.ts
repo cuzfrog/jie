@@ -99,6 +99,85 @@ describe("createJieAutocompleteProvider — slash commands", () => {
       .getSuggestions(["hello"], 0, 5, { signal: signal() });
     expect(suggestions).toBeNull();
   });
+
+  test("bare '/' lists every command with its argument hint and description", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), makeStateStore())
+      .getSuggestions(["/"], 0, 1, { signal: signal() });
+    expect(suggestions!.items).toHaveLength(10);
+    const team = suggestions!.items.find((item) => item.value === "team");
+    expect(team!.description).toBe("<teamId> — switch the active team");
+    const help = suggestions!.items.find((item) => item.value === "help");
+    expect(help!.description).toBe("show this help");
+  });
+});
+
+describe("createJieAutocompleteProvider — unambiguous-command drill-down", () => {
+  function drillPlatform(): JiePlatform {
+    return makePlatform(vi.fn(async (cmd: { name: string }) => {
+      if (cmd.name === "getTeamInfo") return { defaultTeam: "alpha", installed: ["alpha", "beta"] };
+      if (cmd.name === "listSessions") {
+        return [
+          { sessionId: "alpha-1", messageCount: 3, lastActivity: "2026-07-22T00:00:00.000Z" },
+          { sessionId: "beta-2", messageCount: 12, lastActivity: "2026-07-21T00:00:00.000Z" },
+        ];
+      }
+      if (cmd.name === "listModels") return [{ provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5" }];
+      return null;
+    }));
+  }
+
+  test("'/resum' drills down to resume's session rows labeled 'resume <id>'", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, drillPlatform(), storeWithTeam())
+      .getSuggestions(["/resum"], 0, 6, { signal: signal() });
+    expect(suggestions!.prefix).toBe("/resum");
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["resume alpha-1", "resume beta-2"]);
+    expect(suggestions!.items[0]!.description).toMatch(/^3 msg · /);
+  });
+
+  test("'/tea' drills down to team rows with the default badge", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, drillPlatform(), makeStateStore())
+      .getSuggestions(["/tea"], 0, 4, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["team alpha", "team beta"]);
+    expect(suggestions!.items[0]!.description).toBe("(default)");
+  });
+
+  test("'/mod' drills down keeping provider/model values", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, drillPlatform(), makeStateStore())
+      .getSuggestions(["/mod"], 0, 4, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["model anthropic/claude-sonnet-4-5"]);
+  });
+
+  test("'/eff' drills down to the effort-level rows", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, drillPlatform(), makeStateStore())
+      .getSuggestions(["/eff"], 0, 4, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value))
+      .toEqual(["effort off", "effort low", "effort medium", "effort high", "effort max"]);
+  });
+
+  test("a multi-match prefix keeps the plain command candidates", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, drillPlatform(), storeWithTeam())
+      .getSuggestions(["/re"], 0, 3, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value).sort()).toEqual(["rename", "resume"]);
+  });
+
+  test("falls back to the command candidate when argument completion is empty", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, drillPlatform(), makeStateStore())
+      .getSuggestions(["/resum"], 0, 6, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["resume"]);
+  });
+
+  test("a no-argument command keeps the plain command candidate", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, drillPlatform(), makeStateStore())
+      .getSuggestions(["/hel"], 0, 4, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["help"]);
+  });
+
+  test("drill-down completion commits '/command arg' with a trailing space", () => {
+    const result = new JieAutocompleteProviderImpl("/tmp", noScan, drillPlatform(), storeWithTeam())
+      .applyCompletion(["/resum"], 0, 6, { value: "resume alpha-1", label: "resume alpha-1" }, "/resum");
+    expect(result.lines).toEqual(["/resume alpha-1 "]);
+    expect(result.cursorCol).toBe(16);
+  });
 });
 
 describe("createJieAutocompleteProvider — /team arguments", () => {

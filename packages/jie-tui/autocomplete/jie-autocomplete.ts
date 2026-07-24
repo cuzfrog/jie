@@ -1,12 +1,13 @@
 import {
   CombinedAutocompleteProvider,
+  fuzzyFilter,
   type AutocompleteItem,
   type AutocompleteProvider,
   type AutocompleteSuggestions,
   type SlashCommand,
 } from "@earendil-works/pi-tui";
 import { EFFORT_LEVELS, type JiePlatform } from "@cuzfrog/jie-platform";
-import { SLASH_COMMAND_NAMES } from "../command-handler";
+import { COMMAND_METADATA } from "../command-metadata";
 import { filterFiles, type ScannedFile } from "../file-mention";
 import type { StateStore } from "../state";
 
@@ -17,12 +18,14 @@ export class JieAutocompleteProviderImpl implements AutocompleteProvider {
   readonly triggerCharacters = ["@", "/"];
   private readonly cwd: string;
   private readonly scan: (rootDir: string) => ReadonlyArray<ScannedFile>;
+  private readonly commands: SlashCommand[];
   private readonly combined: CombinedAutocompleteProvider;
 
   constructor(cwd: string, scan: (rootDir: string) => ReadonlyArray<ScannedFile>, platform: JiePlatform, stateStore: StateStore) {
     this.cwd = cwd;
     this.scan = scan;
-    this.combined = new CombinedAutocompleteProvider(slashCommands(platform, stateStore), cwd, null);
+    this.commands = slashCommands(platform, stateStore);
+    this.combined = new CombinedAutocompleteProvider(this.commands, cwd, null);
   }
 
   async getSuggestions(
@@ -33,7 +36,10 @@ export class JieAutocompleteProviderImpl implements AutocompleteProvider {
   ): Promise<AutocompleteSuggestions | null> {
     const textBeforeCursor = (lines[cursorLine] ?? "").slice(0, cursorCol);
     const query = atQuery(textBeforeCursor);
-    if (query === null) return this.combined.getSuggestions(lines, cursorLine, cursorCol, options);
+    if (query === null) {
+      const drillDown = await drillDownSuggestions(this.commands, textBeforeCursor);
+      return drillDown ?? this.combined.getSuggestions(lines, cursorLine, cursorCol, options);
+    }
     const items = fileItems(query, this.scan, this.cwd);
     if (items.length === 0) return null;
     return { items, prefix: `@${query}` };
@@ -51,14 +57,34 @@ export class JieAutocompleteProviderImpl implements AutocompleteProvider {
 }
 
 function slashCommands(platform: JiePlatform, stateStore: StateStore): SlashCommand[] {
-  return SLASH_COMMAND_NAMES.map((name): SlashCommand => {
-    if (name === "team") return { name, getArgumentCompletions: (prefix) => teamItems(platform, prefix) };
-    if (name === "resume") return { name, getArgumentCompletions: (prefix) => sessionItems(platform, stateStore, prefix) };
-    if (name === "model") return { name, getArgumentCompletions: (prefix) => modelItems(platform, prefix) };
-    if (name === "login") return { name, getArgumentCompletions: (prefix) => providerItems(platform, prefix) };
-    if (name === "effort") return { name, getArgumentCompletions: async (prefix) => effortItems(prefix) };
-    return { name };
+  return COMMAND_METADATA.map((meta): SlashCommand => {
+    if (meta.name === "team") return { ...meta, getArgumentCompletions: (prefix) => teamItems(platform, prefix) };
+    if (meta.name === "resume") return { ...meta, getArgumentCompletions: (prefix) => sessionItems(platform, stateStore, prefix) };
+    if (meta.name === "model") return { ...meta, getArgumentCompletions: (prefix) => modelItems(platform, prefix) };
+    if (meta.name === "login") return { ...meta, getArgumentCompletions: (prefix) => providerItems(platform, prefix) };
+    if (meta.name === "effort") return { ...meta, getArgumentCompletions: async (prefix) => effortItems(prefix) };
+    return { ...meta };
   });
+}
+
+async function drillDownSuggestions(commands: SlashCommand[], textBeforeCursor: string): Promise<AutocompleteSuggestions | null> {
+  if (!textBeforeCursor.startsWith("/") || textBeforeCursor.includes(" ")) return null;
+  const query = textBeforeCursor.slice(1);
+  if (query === "") return null;
+  const matches = fuzzyFilter(commands, query, (command) => command.name);
+  if (matches.length !== 1) return null;
+  const command = matches[0];
+  if (command.getArgumentCompletions === undefined) return null;
+  const argumentItems = await command.getArgumentCompletions("");
+  if (argumentItems === null || argumentItems.length === 0) return null;
+  return {
+    items: argumentItems.map((item): AutocompleteItem => ({
+      value: `${command.name} ${item.value}`,
+      label: `${command.name} ${item.label}`,
+      description: item.description,
+    })),
+    prefix: textBeforeCursor,
+  };
 }
 
 async function teamItems(platform: JiePlatform, prefix: string): Promise<AutocompleteItem[] | null> {
