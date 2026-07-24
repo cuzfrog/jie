@@ -54,6 +54,7 @@ function slashCommands(platform: JiePlatform, stateStore: StateStore): SlashComm
   return SLASH_COMMAND_NAMES.map((name): SlashCommand => {
     if (name === "team") return { name, getArgumentCompletions: (prefix) => teamItems(platform, prefix) };
     if (name === "resume") return { name, getArgumentCompletions: (prefix) => sessionItems(platform, stateStore, prefix) };
+    if (name === "model") return { name, getArgumentCompletions: (prefix) => modelItems(platform, prefix) };
     return { name };
   });
 }
@@ -84,6 +85,17 @@ async function sessionItems(platform: JiePlatform, stateStore: StateStore, prefi
       description: `${session.messageCount} msg · ${relativeAge(session.lastActivity)}`,
     }));
   return items.length === 0 ? null : items;
+}
+
+async function modelItems(platform: JiePlatform, prefix: string): Promise<AutocompleteItem[] | null> {
+  const models = await platform.execute({ name: "listModels" });
+  const items = models.map((model): AutocompleteItem => {
+    const value = `${model.provider}/${model.id}`;
+    return { value, label: value, description: model.name };
+  });
+  if (isAlreadyComplete(items.map((item) => item.value), prefix)) return null;
+  const matches = items.filter((item) => hasPrefix(item.label, prefix)).slice(0, MAX_SUGGESTIONS);
+  return matches.length === 0 ? null : matches;
 }
 
 function atQuery(textBeforeCursor: string): string | null {

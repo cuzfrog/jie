@@ -1,3 +1,4 @@
+import { type Api, type Model } from "@earendil-works/pi-ai";
 import { type AuthStore, type ModelRegistry, type Settings, type SettingsStore } from "../config";
 import { JiePlatformError } from "../jie-platform-errors";
 import { type GitService, type GitSnapshot } from "../services";
@@ -46,6 +47,21 @@ const DEFAULT_SETTINGS: Settings = {
 };
 
 const EMPTY_GIT_SNAPSHOT: GitSnapshot = { branch: "", dirty: false, ahead: 0, behind: 0 };
+
+function fakeModel(provider: "anthropic" | "openai", id: string, name: string): Model<Api> {
+  return {
+    id,
+    name,
+    api: provider === "anthropic" ? "anthropic-messages" : "openai-completions",
+    provider,
+    baseUrl: "https://example.com",
+    reasoning: false,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 1000,
+    maxTokens: 100,
+  };
+}
 
 let executor: CommandExecutorImpl;
 
@@ -137,6 +153,29 @@ describe("CommandExecutorImpl", () => {
       settingsStore.load.mockReturnValueOnce({ defaultProvider: "anthropic" });
       const result = await executor.execute({ name: "getDefaultModel" });
       expect(result).toBeNull();
+    });
+  });
+
+  describe("listModels", () => {
+    test("flattens each provider's models into provider/id/name entries", async () => {
+      modelRegistry.providers.mockReturnValueOnce(["anthropic", "openai"]);
+      modelRegistry.listModels.mockImplementation((provider) => provider === "anthropic"
+        ? [fakeModel("anthropic", "claude-sonnet-4-5", "Claude Sonnet 4.5"), fakeModel("anthropic", "claude-opus-4-5", "Claude Opus 4.5")]
+        : [fakeModel("openai", "gpt-5", "GPT-5")]);
+      const result = await executor.execute({ name: "listModels" });
+      expect(result).toEqual([
+        { provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5" },
+        { provider: "anthropic", id: "claude-opus-4-5", name: "Claude Opus 4.5" },
+        { provider: "openai", id: "gpt-5", name: "GPT-5" },
+      ]);
+      expect(modelRegistry.listModels).toHaveBeenCalledWith("anthropic");
+      expect(modelRegistry.listModels).toHaveBeenCalledWith("openai");
+    });
+
+    test("returns an empty array when no provider lists models", async () => {
+      modelRegistry.listModels.mockReturnValue([]);
+      const result = await executor.execute({ name: "listModels" });
+      expect(result).toEqual([]);
     });
   });
 
@@ -250,12 +289,14 @@ describe("CommandExecutorImpl", () => {
       teamManager.resumeSession.mockResolvedValue({ id: "alpha", leaderKey: "general-1", agents: [], history: [] });
       teamManager.listInstalled.mockReturnValue([]);
       teamManager.listSessions.mockReturnValue([]);
+      modelRegistry.listModels.mockReturnValue([]);
       const commands: Array<Parameters<typeof executor.execute>[0]> = [
         { name: "login", provider: "anthropic", apiKey: "sk-test" },
         { name: "logout" },
         { name: "setApiKey", apiKey: "sk-test" },
         { name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5" },
         { name: "getDefaultModel" },
+        { name: "listModels" },
         { name: "setDefaultTeam", teamId: "alpha" },
         { name: "team", teamId: "alpha" },
         { name: "resumeSession", teamId: "alpha", sessionId: "s1" },
