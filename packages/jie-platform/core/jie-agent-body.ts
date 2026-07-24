@@ -123,6 +123,10 @@ export class JieAgentBody implements AgentBody {
     return messages;
   }
 
+  messages(): ReadonlyArray<AgentMessage> {
+    return [...this.agent.state.messages];
+  }
+
   async start(): Promise<void> {
     if (this.started) return;
     this.started = true;

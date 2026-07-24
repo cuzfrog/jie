@@ -28,7 +28,7 @@ The TUI's acceptance surface. Each scenario corresponds to one e2e test file —
 5. `/team my-team-1` — the agent map re-seeds from `my-team-1`. Typing `/team ` autocompletes the installed IDs in-flow (the default marked); `Tab` commits one and `Enter` loads it — equivalent to step 3. Bare `/team` is a usage error (`/team <teamId>`).
 6. Press `Ctrl+D` (editor empty). The process exits 0.
 
-**Observable outputs.** After each switch, `state.teamId` matches and `state.agents` contains exactly the switched-to team's agents. Switching resets and re-seeds the agent map per the `system.team.loaded` / `Actions.switchTeam` rules in `tui-state.md` — there is no TUI-side conversation buffer.
+**Observable outputs.** After each switch, `state.teamId` matches and `state.agents` contains exactly the switched-to team's agents. Switching resets and re-seeds the agent map per the `system.team.loaded` / `Actions.switchTeam` rules in `tui-state.md` — re-selecting a still-loaded team re-hydrates its conversation from the live agents (the cache-hit identity carries live `history`; no event is re-emitted).
 
 ## Scenario 4: first-time setup (TUI flow)
 
