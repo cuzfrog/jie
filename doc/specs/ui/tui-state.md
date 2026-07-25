@@ -34,7 +34,7 @@ Environment fields (`cwd`, `gitBranch`, `gitDirty`) are seeded once at `bootTui`
 
 ## Actions
 
-The reducer takes `Action = ReceiveEvent | SwitchTeam | ToggleThinking | ToggleToolCards | ToggleTeamPanel | SwitchCycleAgent | ClearTuiState | SetTransientMessage | ClearTransientMessage | SetErrorMessage | ClearErrorMessage | ClearBanners | RequestQuit | RequestRender | SetEditorText | SubmitEditorText | RequestInterrupt | SetEnvironment | ShowHelp` (defined in `packages/jie-tui/state/actions.ts`). Bus envelope types are **not** the action type — `tui.ts` wraps every bus envelope in `Actions.receiveEvent(envelope)` before dispatch. UI-local events (switch team, cycle, team panel, transient, error, clear, quit, render, editor text, submit, interrupt, environment, show help) are dispatched directly.
+The reducer takes `Action = ReceiveEvent | SwitchTeam | ToggleThinking | ToggleToolCards | SwitchCycleAgent | ClearTuiState | SetTransientMessage | ClearTransientMessage | SetErrorMessage | ClearErrorMessage | ClearBanners | RequestQuit | RequestRender | SetEditorText | SubmitEditorText | RequestInterrupt | SetEnvironment | ShowHelp` (defined in `packages/jie-tui/state/actions.ts`). Bus envelope types are **not** the action type — `tui.ts` wraps every bus envelope in `Actions.receiveEvent(envelope)` before dispatch. UI-local events (switch team, cycle, team panel, transient, error, clear, quit, render, editor text, submit, interrupt, environment, show help) are dispatched directly.
 
 This split exists because the bus event taxonomy is the platform's contract (other consumers may subscribe to the same topic); UI actions are the TUI's local vocabulary. Keeping them as separate action types prevents accidentally publishing UI actions to the bus and keeps the reducer testable with literal action objects.
 
@@ -104,7 +104,7 @@ Set `state.errorBanner` to the composed string: either `event.payload.error` or,
 
 - `Actions.switchTeam(identity)` — see rule above; fires on `/team <id>` regardless of cache state.
 - `Actions.requestInterrupt(teamId, agentKey)` — no reducer state change. The TUI host observes the action and calls `platform.interrupt(teamId, agentKey)`. Wired to `Esc` only when the focused agent is busy and no autocomplete popup is showing.
-- `Actions.switchCycleAgent(direction: 1 | -1)` — cycle `state.focusedAgentId`. No-op when the agent map has fewer than two agents or when the current focus cannot be resolved. When `state.focusedAgentId === null`, direction `1` lands on the first agent in insertion order, direction `-1` on the last. Otherwise wraps in insertion order.
+- `Actions.switchCycleAgent(direction: 1 | -1)` — the team-strip cursor rule (`tui-team-panel.md`). Hidden (`!state.teamPanelVisible`): show the strip with the cursor on `state.focusedAgentId`, no move; when the focus is null, direction `1` lands on the first agent, `-1` on the last. Shown: direction `1` moves the cursor down with the focus following live, wrapping last → first; direction `-1` moves the cursor up, except at the first agent, where it hides the strip and keeps the focus. Navigation order is `TuiState.rosterOrder` (leader first, then map insertion order) — the same order the strip displays. No-op when the agent map is empty; a stale focus recovers to the first agent on the next press.
 - `Actions.setTransientMessage(text)` — slash-command acknowledgments (`logged in to nvidia`, etc.). The status line above the editor ages the message out after 5 s render-side (the reducer never sees the clock).
 - `Actions.clearTransientMessage()` — dispatched by the status line's 5 s TTL; `Actions.clearBanners()` (below) also clears it on the next submit.
 - `Actions.setErrorMessage(text)` — distinct from transient: persists until cleared.
@@ -134,6 +134,6 @@ The chat column is a single chronological stream of two entry kinds — conversa
 
 ## Out of scope for v0.2
 
-- **Per-block / per-card `expanded` state.** Expansion is a render concern, not a state concern. The reducer only carries the all-or-nothing view toggles `thinkingExpanded` / `toolCardsExpanded` / `teamPanelVisible` (`Ctrl+T` / `Ctrl+O` / `Shift+←`); the components read them. `teamPanelVisible` is preserved across `clearTuiState` like the other two (see `tui-team-panel.md`).
+- **Per-block / per-card `expanded` state.** Expansion is a render concern, not a state concern. The reducer only carries the all-or-nothing view toggles `thinkingExpanded` / `toolCardsExpanded` / `teamPanelVisible` (`Ctrl+T` / `Ctrl+O` / the `Shift+↑·↓` cursor rule); the components read them. `teamPanelVisible` is preserved across `clearTuiState` like the other two (see `tui-team-panel.md`).
 - **Queue depth on a leader.** The queue is per-agent (`state.agents[id].queue`); the footer line-2 queue segment surfaces the focused agent's.
 - **Queue-pickup flicker debounce.** `agent.idle` then `agent.turn.start` shows as separate transitions; if a future revision needs to mask a brief `idle` window, the fix lives in the working-indicator mount logic in `components/view.ts` (a render-side concern), not in the reducer.

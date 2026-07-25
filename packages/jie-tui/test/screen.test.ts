@@ -139,18 +139,20 @@ describe("screen rendering", () => {
     }
   });
 
-  test("shift+left toggles the team panel beside the chat", async () => {
+  test("shift+down calls out the team strip below the footer and shift+up at the first agent closes it", async () => {
     const harness = await bootScreen();
     try {
       harness.emit(TEAM_LOADED);
       await harness.vt.waitForRender();
-      await press(harness, "\x1b[1;2D");
+      await press(harness, "\x1b[1;2B");
       await settle(harness);
-      const shown = harness.vt.getScrollBuffer().map(stripAnsi).join("\n");
+      const shown = harness.vt.getViewport().map(stripAnsi).join("\n");
+      expect(shown).toContain("▸");
       expect(shown).toContain("★");
-      expect(shown.split("\n").some((line) => line.includes("│") && line.includes("general-1"))).toBe(true);
-      await press(harness, "\x1b[1;2D");
-      expect(harness.vt.getViewport().map(stripAnsi).join("\n")).not.toContain("│");
+      expect(shown).toContain("general-1");
+      await press(harness, "\x1b[1;2A");
+      await settle(harness);
+      expect(harness.vt.getViewport().map(stripAnsi).join("\n")).not.toContain("▸");
     } finally {
       harness.tui.stop();
     }

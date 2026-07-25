@@ -1,6 +1,6 @@
 import { ActionTypes, type Action } from "./actions";
 import { teamLoadReducer } from "./team-load-reducer";
-import type { TuiState } from "./state";
+import { TuiState } from "./state";
 
 export function reduceUiAction(state: TuiState, action: Action): TuiState {
   switch (action.type) {
@@ -10,10 +10,8 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
       return { ...state, thinkingExpanded: !state.thinkingExpanded };
     case ActionTypes.TOGGLE_TOOL_CARDS:
       return { ...state, toolCardsExpanded: !state.toolCardsExpanded };
-    case ActionTypes.TOGGLE_TEAM_PANEL:
-      return { ...state, teamPanelVisible: !state.teamPanelVisible };
     case ActionTypes.SWITCH_CYCLE_AGENT:
-      return reduceAgentCycle(state, action.payload.direction);
+      return reduceAgentCursor(state, action.payload.direction);
     case ActionTypes.CLEAR_TUI_STATE:
       return {
         ...state,
@@ -66,16 +64,16 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
   }
 }
 
-function reduceAgentCycle(state: TuiState, direction: 1 | -1): TuiState {
-  const ids = Array.from(state.agents.keys());
-  if (ids.length < 2) return state;
-  const length = ids.length;
-  if (state.focusedAgentId === null) {
-    const fallback = direction === 1 ? 0 : length - 1;
-    return { ...state, focusedAgentId: ids[fallback]! };
+function reduceAgentCursor(state: TuiState, direction: 1 | -1): TuiState {
+  const roster = TuiState.rosterOrder(state);
+  if (roster.length === 0) return state;
+  if (!state.teamPanelVisible) {
+    const focused = state.focusedAgentId ?? roster[direction === 1 ? 0 : roster.length - 1]!.agentId;
+    return { ...state, teamPanelVisible: true, focusedAgentId: focused };
   }
-  const currentIndex = ids.indexOf(state.focusedAgentId);
-  if (currentIndex === -1) return state;
-  const next = (currentIndex + direction + length) % length;
-  return { ...state, focusedAgentId: ids[next]! };
+  const index = roster.findIndex((agent) => agent.agentId === state.focusedAgentId);
+  if (index === -1) return { ...state, focusedAgentId: roster[0]!.agentId };
+  if (direction === -1 && index === 0) return { ...state, teamPanelVisible: false };
+  const next = direction === 1 && index === roster.length - 1 ? 0 : index + direction;
+  return { ...state, focusedAgentId: roster[next]!.agentId };
 }
