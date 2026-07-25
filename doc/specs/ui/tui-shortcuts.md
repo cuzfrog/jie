@@ -1,6 +1,6 @@
 # TUI Keybinding Matrix
 
-The TUI is keyboard-driven. Editor keys are pi-tui `Editor` semantics verbatim plus three jie keys; global keys are handled by the TUI's input listener before they reach the editor. All bindings are implemented in `components/editor/jie-editor.ts` (editor keys) and `components/view.ts` (global keys). The core keys are also listed under the KEYS heading of the `/help` reprint (`tui-layout.md`, "keybinding hints").
+The TUI is keyboard-driven. Editor keys are pi-tui `Editor` semantics verbatim plus three jie keys; global keys are handled by the TUI's input listener before they reach the editor. All bindings are implemented in `components/editor/jie-editor.ts` (editor keys) and `components/view.ts` (global keys). The core keys are also listed under the Shortcuts heading of the welcome splash and the `/help` reprint (`tui-layout.md`, "keybinding hints").
 
 ## Editor
 
@@ -36,7 +36,7 @@ Typed into the editor like a prompt; the command handler (`command-handler.ts`) 
 
 | Command | Effect | Reply |
 | --- | --- | --- |
-| `/help` | Reprint the welcome info into the chat area as an info entry (the splash — mark, wordmark + tagline, team line, COMMANDS section — plus the KEYS section with the keybinding hints); the splash hides while the reprint is present (`tui-state.md`, entry sequence) | none |
+| `/help` | Reprint the welcome info into the chat area as an info entry (the splash — mark, wordmark + tagline, team line, Commands and Shortcuts sections, the latter carrying the keybinding hints); the splash hides while the reprint is present (`tui-state.md`, entry sequence) | none |
 | `/clear` | Clear `agents`, `leaderAgentId`, `focusedAgentId`, info entries, and banners; reset the entry counter; memory rows on disk untouched | none |
 | `/exit` | Quit the TUI (same as `Ctrl+D` on an empty editor); no busy-state branch | none |
 | `/login <provider> <apiKey>` | Write one API key entry to `~/.jie/auth.json` (mode `0600` on POSIX). The provider is completed in-flow by autocomplete | `logged in to <provider>` |

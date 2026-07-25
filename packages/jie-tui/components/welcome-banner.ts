@@ -13,8 +13,7 @@ export class WelcomeBanner implements Component {
 
   render(width: number): string[] {
     if (TuiState.hasChatContent(this.stateStore.getState())) return [];
-    const w = Math.max(1, width);
-    return splashRows(this.stateStore.getState(), w).map((line) => truncateToWidth(line, w));
+    return welcomeLines(this.stateStore.getState(), width);
   }
 
   invalidate(): void {}
@@ -22,11 +21,7 @@ export class WelcomeBanner implements Component {
 
 export function welcomeLines(state: TuiState, width: number): string[] {
   const w = Math.max(1, width);
-  return [...splashRows(state, w), "", ...keysSection(w)].map((line) => truncateToWidth(line, w));
-}
-
-function splashRows(state: TuiState, width: number): string[] {
-  return [...headerLines(state, width), "", ...commandSection(width)];
+  return [...headerLines(state, w), "", ...commandSection(w), "", ...shortcutsSection(w)].map((line) => truncateToWidth(line, w));
 }
 
 function headerLines(state: TuiState, width: number): string[] {
@@ -65,8 +60,8 @@ function describeAgent(agent: AgentUiState): string {
   return `${agent.agentKey}${leader}${model}`;
 }
 
-function keysSection(width: number): string[] {
-  return [sectionHeading(KEYS_HEADING, width), ...hintLines(width)];
+function shortcutsSection(width: number): string[] {
+  return [style("text")(SHORTCUTS_HEADING), ...hintLines(width)];
 }
 
 function commandSection(width: number): string[] {
@@ -87,7 +82,7 @@ function commandSection(width: number): string[] {
   } else {
     for (const cell of cells) rows.push(`  ${cell.text}`);
   }
-  return [sectionHeading(COMMANDS_HEADING, width), ...rows];
+  return [style("text")(COMMANDS_HEADING), ...rows];
 }
 
 function commandCell(command: CommandMeta): CommandCell {
@@ -103,11 +98,6 @@ interface CommandCell {
 
 function maxWidth(cells: ReadonlyArray<CommandCell>): number {
   return cells.reduce((max, cell) => Math.max(max, cell.width), 0);
-}
-
-function sectionHeading(title: string, width: number): string {
-  const ruleLength = Math.max(0, width - title.length - 1);
-  return `${style("text")(title)} ${style("borderMuted")("─".repeat(ruleLength))}`;
 }
 
 const WORDMARK = "jie";
@@ -127,6 +117,6 @@ const MARK_WIDTH = 15;
 const MARK_GAP = 4;
 const MARK_MIN_WIDTH = MARK_WIDTH + MARK_GAP + WORDMARK.length + 2 + TAGLINE.length;
 const COLUMN_GAP = 4;
-const COMMANDS_HEADING = "COMMANDS";
-const KEYS_HEADING = "KEYS";
+const COMMANDS_HEADING = "Commands";
+const SHORTCUTS_HEADING = "Shortcuts";
 const ROSTER_SEPARATOR = " · ";
