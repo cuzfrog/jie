@@ -4,7 +4,6 @@ import type { ChatSync } from "../sync";
 import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, WORKING_LABEL, style } from "./themes";
 import { StatusLine } from "./status-line";
 import { WelcomeBanner } from "./welcome-banner";
-import { KeyHints } from "./key-hints";
 import { SplitPane, panelWidth } from "./split-pane";
 import { TeamPanel } from "./team-panel";
 
@@ -54,7 +53,6 @@ export class TuiViewImpl implements TuiView {
     tui.addChild(this.workingSlot);
     tui.addChild(new StatusLine(stateStore));
     tui.addChild(new WelcomeBanner(stateStore));
-    tui.addChild(new KeyHints(stateStore));
     tui.addChild(editor);
     tui.addChild(footer);
     tui.setFocus(editor);

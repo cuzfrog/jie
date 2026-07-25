@@ -1,36 +1,5 @@
-import { truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
-import { TuiState, type StateStore } from "../state";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { style } from "./themes";
-
-export class KeyHints implements Component {
-  private readonly stateStore: StateStore;
-
-  constructor(stateStore: StateStore) {
-    this.stateStore = stateStore;
-  }
-
-  render(width: number): string[] {
-    if (TuiState.hasChatContent(this.stateStore.getState())) return [];
-    return hintLines(Math.max(1, width));
-  }
-
-  invalidate(): void {}
-}
-
-const HINTS: ReadonlyArray<readonly [string, string]> = [
-  ["enter", "send"],
-  ["tab", "complete"],
-  ["@", "mention a file"],
-  ["/", "commands"],
-  ["ctrl+t", "thinking"],
-  ["ctrl+o", "tool output"],
-  ["shift+↑/↓", "switch agent"],
-  ["shift+←", "team panel"],
-  ["esc", "interrupt"],
-  ["ctrl+d", "quit"],
-];
-
-const SEPARATOR = " · ";
 
 export function hintLines(width: number): string[] {
   const separator = style("muted")(SEPARATOR);
@@ -56,3 +25,18 @@ export function hintLines(width: number): string[] {
   if (line !== "") lines.push(truncateToWidth(line, width));
   return lines;
 }
+
+const HINTS: ReadonlyArray<readonly [string, string]> = [
+  ["enter", "send"],
+  ["tab", "complete"],
+  ["@", "mention a file"],
+  ["/", "commands"],
+  ["ctrl+t", "thinking"],
+  ["ctrl+o", "tool output"],
+  ["shift+↑/↓", "switch agent"],
+  ["shift+←", "team panel"],
+  ["esc", "interrupt"],
+  ["ctrl+d", "quit"],
+];
+
+const SEPARATOR = " · ";
