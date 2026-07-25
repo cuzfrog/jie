@@ -43,6 +43,19 @@ describe("InfoMessage", () => {
     }
   });
 
+  test("a help entry shows argument hints and descriptions under a COMMANDS heading", () => {
+    const text = new InfoMessage(stateStore, HELP).render(200).map(stripAnsi).join("\n");
+    expect(text).toContain("COMMANDS");
+    expect(text).toContain("<provider> <apiKey>");
+    expect(text).toContain("resume a session of the loaded team");
+  });
+
+  test("a help entry shows the key hints under a KEYS heading", () => {
+    const text = new InfoMessage(stateStore, HELP).render(200).map(stripAnsi).join("\n");
+    expect(text).toContain("KEYS");
+    expect(text).toContain("enter send");
+  });
+
   test("every help line fits the given width", () => {
     stateStore.getState.mockReturnValue(makeTuiState({
       teamId: "my-team",

@@ -145,7 +145,8 @@ describe("screen rendering", () => {
       harness.emit(TEAM_LOADED);
       await harness.vt.waitForRender();
       await press(harness, "\x1b[1;2D");
-      const shown = harness.vt.getViewport().map(stripAnsi).join("\n");
+      await settle(harness);
+      const shown = harness.vt.getScrollBuffer().map(stripAnsi).join("\n");
       expect(shown).toContain("★");
       expect(shown.split("\n").some((line) => line.includes("│") && line.includes("general-1"))).toBe(true);
       await press(harness, "\x1b[1;2D");
@@ -203,7 +204,7 @@ describe("screen rendering", () => {
       expect(harness.stateStore.getState().infoEntries.length).toBe(1);
       const screen = harness.vt.getViewport().map(stripAnsi).join("\n");
       expect(screen).toContain("/resume");
-      expect(screen).toContain("multi-agent coding");
+      expect(screen).toContain("COMMANDS");
       expect(screen).toContain("mention a file");
     } finally {
       harness.tui.stop();
@@ -274,25 +275,26 @@ describe("screen rendering", () => {
     }
   });
 
-  test("the empty screen shows the welcome banner and keybinding hints above the editor and clears them once a turn streams", async () => {
+  test("the empty screen shows the welcome splash above the editor and clears it once a turn streams", async () => {
     const harness = await bootScreen();
     try {
       const initial = harness.vt.getViewport().map(stripAnsi).join("\n");
       expect(initial).toContain("multi-agent coding");
-      expect(initial).toContain("mention a file");
-      expect(initial).toContain("ctrl+d");
+      expect(initial).toContain("█▀▀▀▀█▀▀▀▀█");
+      expect(initial).toContain("COMMANDS");
+      expect(initial).toContain("/resume");
       harness.emit(TEAM_LOADED);
       await harness.vt.waitForRender();
       const withTeam = harness.vt.getViewport().map(stripAnsi).join("\n");
       expect(withTeam).toContain("team my-team");
       expect(withTeam).toContain("general-1 (leader)");
-      expect(withTeam).toContain("mention a file");
+      expect(withTeam).toContain("COMMANDS");
       harness.emit(Events.agentTurnStart(AGENT_SENDER));
-      harness.emit(Events.agentStreamChunk(AGENT_SENDER, 1, 1, "text", "hello hints"));
+      harness.emit(Events.agentStreamChunk(AGENT_SENDER, 1, 1, "text", "hello splash"));
       await settle(harness);
       const after = harness.vt.getViewport().map(stripAnsi).join("\n");
-      expect(after).toContain("hello hints");
-      expect(after).not.toContain("mention a file");
+      expect(after).toContain("hello splash");
+      expect(after).not.toContain("COMMANDS");
       expect(after).not.toContain("multi-agent coding");
     } finally {
       harness.tui.stop();

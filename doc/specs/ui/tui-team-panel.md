@@ -4,7 +4,7 @@ A toggleable left panel giving the team-at-a-glance view — roster, per-agent s
 
 ## Layout
 
-When `state.teamPanelVisible`, the chat section renders as `panel │ chat`. Every other section — todos, working slot, status line, welcome banner, keybinding hints, editor, footer — keeps the full terminal width: the editor sits below the panel and spans the whole row, so focus handling is unchanged. pi-tui containers stack vertically only, so the split is composed by the jie-owned `SplitPane` component (`components/split-pane.ts`): it renders both sides at their own width and joins them line by line, space-padding the shorter column. The separator is `│` in `borderMuted`.
+When `state.teamPanelVisible`, the chat section renders as `panel │ chat`. Every other section — todos, working slot, status line, welcome splash, editor, footer — keeps the full terminal width: the editor sits below the panel and spans the whole row, so focus handling is unchanged. pi-tui containers stack vertically only, so the split is composed by the jie-owned `SplitPane` component (`components/split-pane.ts`): it renders both sides at their own width and joins them line by line, space-padding the shorter column. The separator is `│` in `borderMuted`.
 
 **Panel width** `panelWidth(cols)`:
 
