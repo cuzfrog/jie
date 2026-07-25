@@ -11,6 +11,7 @@ describe("getBoundaryReferences", () => {
     expect(dogReference?.toFile).toBe("src/animal.ts");
     expect(dogReference?.targetKind).toBe("type");
     expect(dogReference?.targetIsLocal).toBe(false);
+    expect(dogReference?.isImport).toBe(false);
   });
 
   test("never reports a reference whose target lives in the same file", () => {

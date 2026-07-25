@@ -1,6 +1,9 @@
 {
   "name": "@cuzfrog/code-lens",
   "type": "module",
+  "bin": {
+    "code-lens": "main.ts"
+  },
   "exports": {
     ".": "./index.ts"
   },

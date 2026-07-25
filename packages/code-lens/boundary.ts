@@ -15,7 +15,7 @@ export function getBoundaryReferences(index: CodeIndex): ReadonlyArray<BoundaryR
   const seen = new Set<string>();
   for (const file of index.files) {
     for (const reference of file.references) {
-      if (reference.isDefinition) continue;
+      if (reference.isDefinition && !reference.isImport) continue;
       const target = index.symbols.get(reference.symbolId);
       const toFile = target?.documentPath ?? null;
       if (toFile === file.path) continue;
