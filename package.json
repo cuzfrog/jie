@@ -15,7 +15,8 @@
     "ulid": "2.4.0",
     "node-html-parser": "6.1.13",
     "tslog": "4.11.0",
-    "awilix": "13.0.5"
+    "awilix": "13.0.5",
+    "protobufjs": "8.7.1"
   },
   "bin": {
     "jie": "packages/jie-cli/index.ts"
