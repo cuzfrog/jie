@@ -1,6 +1,6 @@
 import { Events } from "@cuzfrog/jie-platform";
 import { Actions } from "./actions";
-import type { TuiState } from "./state";
+import type { AgentId, TuiState } from "./state";
 import { StateStoreImpl } from "./state-store";
 import { reduce as reduceEvent } from "./event-reducer";
 import { reduceUiAction } from "./ui-reducer";
@@ -52,62 +52,104 @@ describe("toggleToolCards", () => {
   });
 });
 
-describe("toggleTeamPanel", () => {
-  test("toggles teamPanelVisible on each call", () => {
-    const state1 = reduceUiAction(INITIAL_TUI_STATE, Actions.toggleTeamPanel());
-    const state2 = reduceUiAction(state1, Actions.toggleTeamPanel());
-    expect(state1.teamPanelVisible).toBe(true);
-    expect(state2.teamPanelVisible).toBe(false);
-  });
-
-  test("starts as false in initial state", () => {
-    expect(INITIAL_TUI_STATE.teamPanelVisible).toBe(false);
-  });
-
-  test("survives clearTuiState", () => {
-    const shown = reduceUiAction(INITIAL_TUI_STATE, Actions.toggleTeamPanel());
-    const cleared = reduceUiAction(shown, Actions.clearTuiState());
-    expect(cleared.teamPanelVisible).toBe(true);
-  });
-});
-
-describe("cycleAgent", () => {
-  function multiAgent(): TuiState {
+describe("team strip cursor", () => {
+  function twoAgent(): TuiState {
     return loadedTeam([
       { role: "manager", agent_key: "manager-1", is_leader: true },
       { role: "worker", agent_key: "worker-1", is_leader: false },
     ]);
   }
 
-  test("direction=1 cycles forward", () => {
-    const state1 = multiAgent();
+  function threeAgent(): TuiState {
+    return loadedTeam([
+      { role: "manager", agent_key: "manager-1", is_leader: true },
+      { role: "worker", agent_key: "worker-1", is_leader: false },
+      { role: "worker", agent_key: "worker-2", is_leader: false },
+    ]);
+  }
+
+  test("first press opens the strip without moving the cursor", () => {
+    const state1 = twoAgent();
     expect(state1.focusedAgentId).toBe("my-team:manager-1");
     const state2 = reduceUiAction(state1, Actions.switchCycleAgent(1));
-    expect(state2.focusedAgentId).toBe("my-team:worker-1");
+    expect(state2.teamPanelVisible).toBe(true);
+    expect(state2.focusedAgentId).toBe("my-team:manager-1");
   });
 
-  test("direction=-1 cycles backward and wraps to the last agent", () => {
-    const state1 = multiAgent();
-    const state2 = reduceUiAction(state1, Actions.switchCycleAgent(-1));
-    expect(state2.focusedAgentId).toBe("my-team:worker-1");
-  });
-
-  test("is a no-op when only one agent is present", () => {
+  test("first press opens the strip even with a single agent", () => {
     const state = loadedTeam([{ role: "general", agent_key: "general-1", is_leader: true }]);
     const state2 = reduceUiAction(state, Actions.switchCycleAgent(1));
+    expect(state2.teamPanelVisible).toBe(true);
     expect(state2.focusedAgentId).toBe("my-team:general-1");
   });
 
-  test("direction=1 from no focused agent lands on the first agent", () => {
-    const state = { ...multiAgent(), focusedAgentId: null };
+  test("is a no-op when no agents are loaded", () => {
+    expect(reduceUiAction(INITIAL_TUI_STATE, Actions.switchCycleAgent(1))).toBe(INITIAL_TUI_STATE);
+    expect(reduceUiAction(INITIAL_TUI_STATE, Actions.switchCycleAgent(-1))).toBe(INITIAL_TUI_STATE);
+  });
+
+  test("opening with no focus lands on the first agent on down and the last on up", () => {
+    const base = { ...twoAgent(), focusedAgentId: null };
+    expect(reduceUiAction(base, Actions.switchCycleAgent(1)).focusedAgentId).toBe("my-team:manager-1");
+    expect(reduceUiAction(base, Actions.switchCycleAgent(-1)).focusedAgentId).toBe("my-team:worker-1");
+  });
+
+  test("down moves the cursor to the next agent and focus follows", () => {
+    const opened = reduceUiAction(twoAgent(), Actions.switchCycleAgent(1));
+    const state2 = reduceUiAction(opened, Actions.switchCycleAgent(1));
+    expect(state2.focusedAgentId).toBe("my-team:worker-1");
+  });
+
+  test("down at the last agent wraps to the first", () => {
+    const opened = reduceUiAction(twoAgent(), Actions.switchCycleAgent(1));
+    const atWorker = reduceUiAction(opened, Actions.switchCycleAgent(1));
+    const wrapped = reduceUiAction(atWorker, Actions.switchCycleAgent(1));
+    expect(wrapped.focusedAgentId).toBe("my-team:manager-1");
+    expect(wrapped.teamPanelVisible).toBe(true);
+  });
+
+  test("up from a middle agent moves the cursor without closing", () => {
+    let state = reduceUiAction(threeAgent(), Actions.switchCycleAgent(1));
+    state = reduceUiAction(state, Actions.switchCycleAgent(1));
+    state = reduceUiAction(state, Actions.switchCycleAgent(1));
+    expect(state.focusedAgentId).toBe("my-team:worker-2");
+    state = reduceUiAction(state, Actions.switchCycleAgent(-1));
+    expect(state.focusedAgentId).toBe("my-team:worker-1");
+    expect(state.teamPanelVisible).toBe(true);
+  });
+
+  test("up at the first agent closes the strip and keeps the focus", () => {
+    const opened = reduceUiAction(twoAgent(), Actions.switchCycleAgent(1));
+    const closed = reduceUiAction(opened, Actions.switchCycleAgent(-1));
+    expect(closed.teamPanelVisible).toBe(false);
+    expect(closed.focusedAgentId).toBe("my-team:manager-1");
+  });
+
+  test("navigates in leader-first order even when the leader is not first in the payload", () => {
+    let state = loadedTeam([
+      { role: "worker", agent_key: "worker-1", is_leader: false },
+      { role: "manager", agent_key: "manager-1", is_leader: true },
+    ]);
+    state = reduceUiAction(state, Actions.switchCycleAgent(1));
+    state = reduceUiAction(state, Actions.switchCycleAgent(1));
+    expect(state.focusedAgentId).toBe("my-team:worker-1");
+    state = reduceUiAction(state, Actions.switchCycleAgent(-1));
+    expect(state.focusedAgentId).toBe("my-team:manager-1");
+    state = reduceUiAction(state, Actions.switchCycleAgent(-1));
+    expect(state.teamPanelVisible).toBe(false);
+  });
+
+  test("recovers a stale focus to the first agent", () => {
+    const ghost: AgentId = "my-team:ghost";
+    const state = { ...twoAgent(), teamPanelVisible: true, focusedAgentId: ghost };
     const state2 = reduceUiAction(state, Actions.switchCycleAgent(1));
     expect(state2.focusedAgentId).toBe("my-team:manager-1");
   });
 
-  test("direction=-1 from no focused agent lands on the last agent", () => {
-    const state = { ...multiAgent(), focusedAgentId: null };
-    const state2 = reduceUiAction(state, Actions.switchCycleAgent(-1));
-    expect(state2.focusedAgentId).toBe("my-team:worker-1");
+  test("teamPanelVisible survives clearTuiState", () => {
+    const opened = reduceUiAction(twoAgent(), Actions.switchCycleAgent(1));
+    const cleared = reduceUiAction(opened, Actions.clearTuiState());
+    expect(cleared.teamPanelVisible).toBe(true);
   });
 });
 

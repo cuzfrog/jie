@@ -37,8 +37,23 @@ describe("TuiState.getFocusedAgent", () => {
     const store = new StateStoreImpl();
     loadDemoTeam(store);
     store.dispatch(Actions.switchCycleAgent(1));
+    store.dispatch(Actions.switchCycleAgent(1));
     const focused = TuiState.getFocusedAgent(store.getState());
     expect(focused?.agentKey).toBe("helper-1");
+  });
+});
+
+describe("TuiState.rosterOrder", () => {
+  test("is empty when no team is loaded", () => {
+    const store = new StateStoreImpl();
+    expect(TuiState.rosterOrder(store.getState())).toEqual([]);
+  });
+
+  test("puts the leader first even when it is not first in the payload", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    const keys = TuiState.rosterOrder(store.getState()).map((agent) => agent.agentKey);
+    expect(keys).toEqual(["general-1", "helper-1"]);
   });
 });
 

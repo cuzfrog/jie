@@ -61,15 +61,18 @@ describe("Scenario 2 — pass work in a team", () => {
     expect(readFileSync(join(harness.dir, "my-answer.txt"), "utf8")).toBe("Hello world");
   });
 
-  test("ctrl+down/ctrl+up cycle focus without touching conversations", async () => {
+  test("shift+down/shift+up move the team strip cursor without touching conversations", async () => {
     await sendLine(harness.stdin, "/team my-team");
     await waitForTeam(harness, "my-team");
     await waitForFocusedAgent(harness, "my-team:manager-1");
     const before = snapshotConversations(harness);
-    await sendCmd(harness.stdin, "\x1b[1;5B");
+    await sendCmd(harness.stdin, "\x1b[1;2B");
+    await sendCmd(harness.stdin, "\x1b[1;2B");
     await waitForFocusedAgent(harness, "my-team:worker-1");
-    await sendCmd(harness.stdin, "\x1b[1;5A");
+    await sendCmd(harness.stdin, "\x1b[1;2A");
     await waitForFocusedAgent(harness, "my-team:manager-1");
+    await sendCmd(harness.stdin, "\x1b[1;2A");
+    expect(harness.stateStore.getState().teamPanelVisible).toBe(false);
     expect(snapshotConversations(harness)).toEqual(before);
   });
 

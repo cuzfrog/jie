@@ -1,5 +1,5 @@
 import { truncateToWidth, type Component } from "@earendil-works/pi-tui";
-import { type AgentId, type AgentUiState, type StateStore } from "../state";
+import { TuiState, type AgentUiState, type StateStore } from "../state";
 import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, style } from "./themes";
 
 export class TeamPanel implements Component {
@@ -11,28 +11,22 @@ export class TeamPanel implements Component {
 
   render(width: number): string[] {
     const state = this.stateStore.getState();
-    if (state.teamId === null) return [];
-    const agents = rosterOrder(state.agents, state.leaderAgentId);
+    if (state.teamId === null || !state.teamPanelVisible) return [];
+    const agents = TuiState.rosterOrder(state);
     if (agents.length === 0) return [];
     const w = Math.max(1, width);
     const lines: string[] = [];
     for (const agent of agents) {
-      const mark = agent.isLeader ? style("accent")("★") : " ";
-      const key = agent.agentId === state.focusedAgentId ? style("accent")(agent.agentKey) : agent.agentKey;
-      lines.push(truncateToWidth(`${mark} ${key}`, w));
-      lines.push(truncateToWidth(`  ${statusGlyph(agent)} ${style("muted")(statusDetail(agent))}`, w));
+      const focused = agent.agentId === state.focusedAgentId;
+      const pointer = focused ? style("accent")("▸") : " ";
+      const mark = agent.isLeader ? `${style("accent")("★")} ` : "";
+      const key = focused ? style("accent")(agent.agentKey) : agent.agentKey;
+      lines.push(truncateToWidth(`${pointer} ${mark}${key} ${statusGlyph(agent)} ${style("muted")(statusDetail(agent))}`, w));
     }
     return lines;
   }
 
   invalidate(): void {}
-}
-
-function rosterOrder(agents: ReadonlyMap<AgentId, AgentUiState>, leaderAgentId: AgentId | null): AgentUiState[] {
-  const all = [...agents.values()];
-  const leader = all.filter((agent) => agent.agentId === leaderAgentId);
-  const rest = all.filter((agent) => agent.agentId !== leaderAgentId);
-  return [...leader, ...rest];
 }
 
 function statusGlyph(agent: AgentUiState): string {

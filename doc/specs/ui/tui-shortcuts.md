@@ -21,11 +21,10 @@ Everything else is pi-tui `Editor` behavior: cursor/word movement, undo, kill ri
 | --- | --- | --- |
 | `Ctrl+T` | Expand / collapse all thinking blocks | always |
 | `Ctrl+O` | Expand / collapse all tool cards | always |
-| `Shift+↑` or `Ctrl+↑` | Focus the previous agent (insertion order) | always; no-op with fewer than two agents |
-| `Shift+↓` or `Ctrl+↓` | Focus the next agent (insertion order) | always; no-op with fewer than two agents |
-| `Shift+←` or `Ctrl+←` | Toggle the left team panel (`tui-team-panel.md`) | always |
+| `Shift+↓` | Call out the team strip, then move the cursor down (focus follows); wraps last → first (`tui-team-panel.md`) | always; no-op before a team is loaded |
+| `Shift+↑` | Move the cursor up; at the first agent, hide the strip | always; no-op before a team is loaded |
 
-Both Shift and Ctrl arrow variants are accepted because terminals differ in which they report. The toggles are all-or-nothing across the focused agent's history + current turn (`state.thinkingExpanded` / `state.toolCardsExpanded`); mid-stream toggle re-renders on the next tick. There are **no** `PgUp`/`PgDn`/`Home`/`End`/wheel bindings: finished output is terminal scrollback; scroll and copy are the terminal's native behavior.
+Only `Shift` arrows are bound — `Ctrl` arrows conflict with OS shortcuts and stay with the terminal. The first press while the strip is hidden shows it with the cursor on the focused agent and does not move; the asymmetry is deliberate: down wraps, up at the top closes (`tui-team-panel.md`, Interaction). The thinking/tool toggles are all-or-nothing across the focused agent's history + current turn (`state.thinkingExpanded` / `state.toolCardsExpanded`); mid-stream toggle re-renders on the next tick. There are **no** `PgUp`/`PgDn`/`Home`/`End`/wheel bindings: finished output is terminal scrollback; scroll and copy are the terminal's native behavior.
 
 ## Esc vs Ctrl+C vs Ctrl+D
 

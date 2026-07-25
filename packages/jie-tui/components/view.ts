@@ -4,7 +4,6 @@ import type { ChatSync } from "../sync";
 import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, WORKING_LABEL, style } from "./themes";
 import { StatusLine } from "./status-line";
 import { WelcomeBanner } from "./welcome-banner";
-import { SplitPane, panelWidth } from "./split-pane";
 import { TeamPanel } from "./team-panel";
 
 export interface TuiView {
@@ -13,9 +12,8 @@ export interface TuiView {
 
 const CTRL_T = "\x14";
 const CTRL_O = "\x0f";
-const CYCLE_PREV_KEYS = new Set<string>(["\x1b[1;2A", "\x1b[1;5A"]);
-const CYCLE_NEXT_KEYS = new Set<string>(["\x1b[1;2B", "\x1b[1;5B"]);
-const TOGGLE_PANEL_KEYS = new Set<string>(["\x1b[1;2D", "\x1b[1;5D"]);
+const SHIFT_UP = "\x1b[1;2A";
+const SHIFT_DOWN = "\x1b[1;2B";
 const CONSUMED = { consume: true } as const;
 const INTERRUPTED_LABEL = "Interrupted";
 const NO_SPINNER_FRAMES: string[] = [];
@@ -47,14 +45,14 @@ export class TuiViewImpl implements TuiView {
     this.interruptedIndicator = new Loader(tui, style("muted"), style("muted"), INTERRUPTED_LABEL, {
       frames: NO_SPINNER_FRAMES,
     });
-    const panelWidthWhenVisible = (columns: number) => (stateStore.getState().teamPanelVisible ? panelWidth(columns) : null);
-    tui.addChild(new SplitPane(new TeamPanel(stateStore), chatContainer, panelWidthWhenVisible));
+    tui.addChild(chatContainer);
     tui.addChild(todoList);
     tui.addChild(this.workingSlot);
     tui.addChild(new StatusLine(stateStore));
     tui.addChild(new WelcomeBanner(stateStore));
     tui.addChild(editor);
     tui.addChild(footer);
+    tui.addChild(new TeamPanel(stateStore));
     tui.setFocus(editor);
     this.unsubscribeKeys = tui.addInputListener((data) => {
       const action = resolveGlobalKey(data);
@@ -86,9 +84,8 @@ export class TuiViewImpl implements TuiView {
 function resolveGlobalKey(data: string): Action | null {
   if (data === CTRL_T) return Actions.toggleThinking();
   if (data === CTRL_O) return Actions.toggleToolCards();
-  if (CYCLE_PREV_KEYS.has(data)) return Actions.switchCycleAgent(-1);
-  if (CYCLE_NEXT_KEYS.has(data)) return Actions.switchCycleAgent(1);
-  if (TOGGLE_PANEL_KEYS.has(data)) return Actions.toggleTeamPanel();
+  if (data === SHIFT_UP) return Actions.switchCycleAgent(-1);
+  if (data === SHIFT_DOWN) return Actions.switchCycleAgent(1);
   return null;
 }
 

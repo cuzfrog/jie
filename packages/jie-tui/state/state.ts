@@ -81,6 +81,13 @@ function getFocusedAgent(state: TuiState): AgentUiState | null {
   return state.agents.get(state.focusedAgentId) ?? null;
 }
 
+function rosterOrder(state: TuiState): AgentUiState[] {
+  const agents = [...state.agents.values()];
+  const leader = agents.find((agent) => agent.agentId === state.leaderAgentId);
+  if (leader === undefined) return agents;
+  return [leader, ...agents.filter((agent) => agent !== leader)];
+}
+
 function isBusy(state: TuiState): boolean {
   for (const agent of state.agents.values()) {
     if (agent.status === "busy") return true;
@@ -106,6 +113,7 @@ function hasChatContent(state: TuiState): boolean {
 
 export const TuiState = {
   getFocusedAgent,
+  rosterOrder,
   isBusy,
   isInterrupted,
   shouldShowErrorBanner,

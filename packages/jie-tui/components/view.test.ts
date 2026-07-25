@@ -10,19 +10,19 @@ describe("resolveGlobalKey", () => {
     expect(_resolveGlobalKey("\x0f")).toEqual(Actions.toggleToolCards());
   });
 
-  test("shift+up and ctrl+up map to cycling to the previous agent", () => {
+  test("shift+up maps to cycling to the previous agent", () => {
     expect(_resolveGlobalKey("\x1b[1;2A")).toEqual(Actions.switchCycleAgent(-1));
-    expect(_resolveGlobalKey("\x1b[1;5A")).toEqual(Actions.switchCycleAgent(-1));
   });
 
-  test("shift+down and ctrl+down map to cycling to the next agent", () => {
+  test("shift+down maps to cycling to the next agent", () => {
     expect(_resolveGlobalKey("\x1b[1;2B")).toEqual(Actions.switchCycleAgent(1));
-    expect(_resolveGlobalKey("\x1b[1;5B")).toEqual(Actions.switchCycleAgent(1));
   });
 
-  test("shift+left and ctrl+left toggle the team panel", () => {
-    expect(_resolveGlobalKey("\x1b[1;2D")).toEqual(Actions.toggleTeamPanel());
-    expect(_resolveGlobalKey("\x1b[1;5D")).toEqual(Actions.toggleTeamPanel());
+  test("ctrl arrows and shift+left are left to the editor", () => {
+    expect(_resolveGlobalKey("\x1b[1;5A")).toBeNull();
+    expect(_resolveGlobalKey("\x1b[1;5B")).toBeNull();
+    expect(_resolveGlobalKey("\x1b[1;2D")).toBeNull();
+    expect(_resolveGlobalKey("\x1b[1;5D")).toBeNull();
   });
 
   test("any other key is left to the editor", () => {
