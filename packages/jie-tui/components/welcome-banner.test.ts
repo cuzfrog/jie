@@ -36,9 +36,9 @@ describe("WelcomeBanner", () => {
     expect(text).toContain("openai/gpt-4o");
   });
 
-  test("shows a COMMANDS section with every command, argument hint and description", () => {
+  test("shows a Commands section with every command, argument hint and description", () => {
     const text = new WelcomeBanner(stateStore).render(80).map(stripAnsi).join("\n");
-    expect(text).toContain("COMMANDS");
+    expect(text).toContain("Commands");
     for (const command of ["/help", "/clear", "/exit", "/team", "/resume", "/rename", "/model", "/effort", "/login", "/logout"]) {
       expect(text).toContain(command);
     }
@@ -68,10 +68,16 @@ describe("WelcomeBanner", () => {
     expect(ample).toContain("█▀▀▀▀█▀▀▀▀█");
   });
 
-  test("leaves the key hints to the /help reprint", () => {
+  test("shows a Shortcuts section with the core keybindings", () => {
     const text = new WelcomeBanner(stateStore).render(80).map(stripAnsi).join("\n");
-    expect(text).not.toContain("ctrl+d");
-    expect(text).not.toContain("mention a file");
+    expect(text).toContain("Shortcuts");
+    expect(text).toContain("mention a file");
+    expect(text).toContain("ctrl+d quit");
+  });
+
+  test("headings carry no rule line", () => {
+    const text = new WelcomeBanner(stateStore).render(80).map(stripAnsi).join("\n");
+    expect(text).not.toContain("─");
   });
 
   test("colors the mark in accent and the argument hints in warning", () => {
@@ -80,13 +86,9 @@ describe("WelcomeBanner", () => {
     expect(lines.some((line) => line.includes("\x1b[33m<provider> <apiKey>\x1b[39m"))).toBe(true);
   });
 
-  test("the splash is a prefix of the full /help content", () => {
+  test("the splash renders exactly the full /help content", () => {
     stateStore.getState.mockReturnValue(stateWithTeamAndModel());
-    const state = stateStore.getState();
-    const splash = new WelcomeBanner(stateStore).render(80);
-    const full = welcomeLines(state, 80);
-    expect(full.slice(0, splash.length)).toEqual(splash);
-    expect(full.join("\n")).toContain("KEYS");
+    expect(new WelcomeBanner(stateStore).render(80)).toEqual(welcomeLines(stateStore.getState(), 80));
   });
 
   test("hides the banner once a turn is in progress", () => {

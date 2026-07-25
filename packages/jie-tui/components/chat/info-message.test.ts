@@ -43,16 +43,16 @@ describe("InfoMessage", () => {
     }
   });
 
-  test("a help entry shows argument hints and descriptions under a COMMANDS heading", () => {
+  test("a help entry shows argument hints and descriptions under a Commands heading", () => {
     const text = new InfoMessage(stateStore, HELP).render(200).map(stripAnsi).join("\n");
-    expect(text).toContain("COMMANDS");
+    expect(text).toContain("Commands");
     expect(text).toContain("<provider> <apiKey>");
     expect(text).toContain("resume a session of the loaded team");
   });
 
-  test("a help entry shows the key hints under a KEYS heading", () => {
+  test("a help entry shows the key hints under a Shortcuts heading", () => {
     const text = new InfoMessage(stateStore, HELP).render(200).map(stripAnsi).join("\n");
-    expect(text).toContain("KEYS");
+    expect(text).toContain("Shortcuts");
     expect(text).toContain("enter send");
   });
 

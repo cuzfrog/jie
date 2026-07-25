@@ -24,12 +24,16 @@ Example (empty screen, team loaded):
     ▄▀▄▀ █ ▀▄
   ▄▀ ▄▀  █   ▀▄
 
-COMMANDS ───────────────────────────────────────────────────────────────────────
+Commands
   /help  show this help
   /clear  clear the conversation
   …
   /resume <sessionId>  resume a session of the loaded team
   /rename <name>  name the active session
+
+Shortcuts
+enter send · tab complete · @ mention a file · / commands · ctrl+t thinking
+ctrl+o tool output · shift+↑/↓ team panel · esc interrupt · ctrl+d quit
 ────────────────────────────────────────────────────────────────────────────────
 
 ────────────────────────────────────────────────────────────────────────────────
@@ -51,15 +55,15 @@ The chat section is append-only: `sync/chat-sync.ts` subscribes to the state sto
 3. **Thinking block** (one or many) — collapsed renders a single italic `Thinking...` line in `thinkingText`; expanded renders the markdown body recolored to `thinkingText` + italic. `Ctrl+T` expands / collapses all (`state.thinkingExpanded`).
 4. **Tool cards** (`tool-call` + matching `tool-result`) — one header line when collapsed (`✓`/`✗` glyph, name, duration); expanded shows input, output (the reducer unwraps `{content, details, terminate}` envelopes to the string content), and a diff view when the result carries one. `Ctrl+O` expands / collapses all (`state.toolCardsExpanded`).
 
-**Info entries** interleave with turns in `seq` order (`tui-state.md`, entry sequence). The single kind today — the `/help` reprint — renders the full welcome content (`welcomeLines` in `components/welcome-banner.ts`): the splash (mark + identity lines + COMMANDS section, exactly as the empty-state splash renders it) followed by a KEYS heading and the keybinding hint lines. Every line truncates to the column width. The reprint is created once per `/help` and never mutates afterward.
+**Info entries** interleave with turns in `seq` order (`tui-state.md`, entry sequence). The single kind today — the `/help` reprint — renders `welcomeLines` (`components/welcome-banner.ts`) — exactly the empty-state splash content: mark + identity lines, the Commands section, and the Shortcuts section with the keybinding hint lines. Every line truncates to the column width. The reprint is created once per `/help` and never mutates afterward.
 
 The **todo list** renders as its own section below the chat (the focused agent's `agent.todos`, replaced wholesale when a todo-tool result arrives). The **working indicator** slot shows exactly one of three states: while **any** agent is `busy`, a pi-tui `Loader` (accent spinner + `Working…` label); else while `state.interruptedAgentId` is set — the focused agent's last idle was `aborted` (`tui-state.md`, `agent.idle`) — a static muted `Interrupted` line (the same `Loader` with empty spinner frames, no animation); else empty. The slot empties when the interrupted agent starts its next turn, when the user submits, on team switch, or on `/clear`.
 
 The **status line** section sits between the working slot and the editor: the transient message row (`muted`, aged out after 5 s; a newer transient resets the timer) and the error banner row (`error`), each only when present.
 
-The **welcome splash** section sits between the status line and the editor and renders only while the chat has no content — no agent has history or an in-progress turn and `state.infoEntries` is empty (the `hasChatContent` gate). At widths of at least 66 columns it draws the half-block `界` mark (accent) beside the identity block; narrower widths render the identity block alone. The identity block is the `jie` wordmark + tagline (accent wordmark, muted tagline), the `界 (jiè) · boundary; world` gloss (warning glyph, muted gloss), and, once a team is loaded, a team line: `team <id>` (accent) followed by the agent roster (agent key, `(leader)` mark, `provider/modelId` when a model is assigned, ` · ` separators). Below sits the **COMMANDS** section: a heading (text title + borderMuted `─` rule) then every command from the shared `COMMAND_METADATA` registry (the same one that feeds the autocomplete hints) — accent `/name`, warning argument hint, muted one-line description, in slash-command order — in two columns when the width fits both, otherwise one. It disappears the moment a turn starts or `/help` reprints this content into the chat, so the reprint is never duplicated above the chat.
+The **welcome splash** section sits between the status line and the editor and renders only while the chat has no content — no agent has history or an in-progress turn and `state.infoEntries` is empty (the `hasChatContent` gate). At widths of at least 66 columns it draws the half-block `界` mark (accent) beside the identity block; narrower widths render the identity block alone. The identity block is the `jie` wordmark + tagline (accent wordmark, muted tagline), the `界 (jiè) · boundary; world` gloss (warning glyph, muted gloss), and, once a team is loaded, a team line: `team <id>` (accent) followed by the agent roster (agent key, `(leader)` mark, `provider/modelId` when a model is assigned, ` · ` separators). Below sit the **Commands** section — a plain text heading then every command from the shared `COMMAND_METADATA` registry (the same one that feeds the autocomplete hints): accent `/name`, warning argument hint, muted one-line description, in slash-command order, in two columns when the width fits both, otherwise one — and the **Shortcuts** section (a plain text heading + the keybinding hint lines, below). Headings carry no rule line. It disappears the moment a turn starts or `/help` reprints this content into the chat, so the reprint is never duplicated above the chat. On terminals shorter than splash + editor + footer (28 rows at 80 cols) the splash top becomes ordinary scrollback — inline rendering reserves no screen height.
 
-The **keybinding hints** are not a standalone section: `hintLines(width)` (`components/key-hints.ts`) renders the core bindings (the `tui-shortcuts.md` matrix) as `key description` pairs (accent key, muted description, ` · ` separators) greedily wrapped to the width, and appears only under the **KEYS** heading of the `/help` reprint — the splash itself stays light (mark + identity + commands) and the full help with hints lives in the chat area, where scrollback makes height free. There is no bottom-anchoring: the editor stays inline (pi-tui's model), so on an empty screen the splash + editor sit at the top and the rest is ordinary scrollback.
+The **keybinding hints** render under the **Shortcuts** heading of both the welcome splash and the `/help` reprint (identical content): `hintLines(width)` (`components/key-hints.ts`) lays out the core bindings (the `tui-shortcuts.md` matrix) as `key description` pairs (accent key, muted description, ` · ` separators), greedily wrapped to the width. There is no bottom-anchoring: the editor stays inline (pi-tui's model), so on an empty screen the splash + editor sit at the top and the rest is ordinary scrollback.
 
 ## Selection via editor autocomplete
 
