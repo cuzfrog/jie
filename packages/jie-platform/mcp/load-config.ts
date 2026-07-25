@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { JiePlatformError } from "../jie-platform-errors";
+import type { JsonObject, JsonValue } from "./json";
 import type { McpConfig, McpServerAuth, McpServerConfig } from "./types";
 
 const MCP_CONFIG_FILE = "mcp.json";
@@ -17,7 +18,7 @@ export function loadMergedMcpConfig(homeJieDir: string, projectJieDir: string | 
 function readServerEntries(path: string): Map<string, McpServerConfig> {
   const text = readOptionalFile(path);
   if (text === null) return new Map();
-  let parsed: unknown;
+  let parsed: JsonValue;
   try {
     parsed = JSON.parse(text);
   } catch (error) {
@@ -41,7 +42,7 @@ function readOptionalFile(path: string): string | null {
   }
 }
 
-function parseServerEntry(name: string, raw: unknown, source: string): McpServerConfig {
+function parseServerEntry(name: string, raw: JsonValue, source: string): McpServerConfig {
   if (!SERVER_NAME_PATTERN.test(name)) {
     throw configError(source, `invalid server name '${name}' (allowed characters: A-Za-z0-9._-, max 64)`);
   }
@@ -61,7 +62,7 @@ function parseServerEntry(name: string, raw: unknown, source: string): McpServer
   return { transport, url, auth };
 }
 
-function parseArgs(raw: unknown, name: string, source: string): ReadonlyArray<string> {
+function parseArgs(raw: JsonValue, name: string, source: string): ReadonlyArray<string> {
   if (raw === undefined) return [];
   if (!Array.isArray(raw)) throw configError(source, `server '${name}' args must be an array of strings`);
   const args: string[] = [];
@@ -72,7 +73,7 @@ function parseArgs(raw: unknown, name: string, source: string): ReadonlyArray<st
   return args;
 }
 
-function parseAuth(raw: unknown, name: string, source: string): McpServerAuth | null {
+function parseAuth(raw: JsonValue, name: string, source: string): McpServerAuth | null {
   if (raw === undefined) return null;
   if (!isJsonObject(raw)) throw configError(source, `server '${name}' auth must be an object`);
   const tokenEnv = raw["tokenEnv"];
@@ -80,7 +81,7 @@ function parseAuth(raw: unknown, name: string, source: string): McpServerAuth | 
   return { tokenEnv };
 }
 
-function isJsonObject(value: unknown): value is Record<string, unknown> {
+function isJsonObject(value: JsonValue): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
