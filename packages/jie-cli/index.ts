@@ -21,7 +21,7 @@ export async function main(argv: string[], cwd: string = process.cwd(), console:
   const homeDir = resolveHomeDir();
   try {
     return await run(parsed, cwd, homeDir, {
-      bootPlatform: (options) => bootPlatform(options).cradle.platform,
+      bootPlatform: async (options) => (await bootPlatform(options)).cradle.platform,
       bootTui: (options, deps) => bootTui(options, deps).cradle.tui,
       console,
     });
@@ -32,7 +32,7 @@ export async function main(argv: string[], cwd: string = process.cwd(), console:
 }
 
 interface RunDeps {
-  readonly bootPlatform: (options: JiePlatformOptions) => JiePlatform;
+  readonly bootPlatform: (options: JiePlatformOptions) => Promise<JiePlatform>;
   readonly bootTui: (options: CreateTUIOptions, deps: TuiDeps) => Tui;
   readonly console: Console;
 }
@@ -51,7 +51,7 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
       deps.console.error(args.message);
       return 1;
   }
-  const handle = connectPlatform(
+  const handle = await connectPlatform(
     {
       cwd,
       homeJieDir,
@@ -62,53 +62,57 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
     deps.bootPlatform,
     deps.console,
   );
-  switch (args.kind) {
-    case "tui": {
-      const git = await handle.execute({ name: "getGitStatus" });
-      const tui = deps.bootTui({ cwd }, { platform: handle, homeJieDir, gitBranch: git.branch, gitDirty: git.dirty });
-      await handle.execute({ name: "team", teamId: args.team });
-      try {
-        await tui.start();
-      } finally {
-        tui.stop();
-      }
-      await handle.execute({ name: "stop" });
-      return 0;
-    }
-    case "login":
-      return runLogin(args, handle, deps.console);
-    case "logout":
-      return runLogout(args, handle, deps.console);
-    case "apiKey":
-      return runApiKey(args, handle, deps.console);
-    case "model":
-      return runModel(args, handle, deps.console);
-    case "team":
-      return runTeam(args, handle, deps.console);
-    case "print": {
-      const team = await handle.execute({ name: "team", teamId: args.team });
-      if (args.apiKey !== undefined) {
+  try {
+    switch (args.kind) {
+      case "tui": {
+        const git = await handle.execute({ name: "getGitStatus" });
+        const tui = deps.bootTui({ cwd }, { platform: handle, homeJieDir, gitBranch: git.branch, gitDirty: git.dirty });
+        await handle.execute({ name: "team", teamId: args.team });
         try {
-          await handle.execute({ name: "setApiKey", apiKey: args.apiKey });
-        } catch (error) {
-          deps.console.error(error instanceof Error ? error.message : String(error));
-          await handle.execute({ name: "stop" });
-          return 1;
+          await tui.start();
+        } finally {
+          tui.stop();
         }
+        await handle.execute({ name: "stop" });
+        return 0;
       }
-      return runPrint(handle, team, args, deps.console);
+      case "login":
+        return await runLogin(args, handle, deps.console);
+      case "logout":
+        return await runLogout(args, handle, deps.console);
+      case "apiKey":
+        return await runApiKey(args, handle, deps.console);
+      case "model":
+        return await runModel(args, handle, deps.console);
+      case "team":
+        return await runTeam(args, handle, deps.console);
+      case "print": {
+        const team = await handle.execute({ name: "team", teamId: args.team });
+        if (args.apiKey !== undefined) {
+          try {
+            await handle.execute({ name: "setApiKey", apiKey: args.apiKey });
+          } catch (error) {
+            deps.console.error(error instanceof Error ? error.message : String(error));
+            await handle.execute({ name: "stop" });
+            return 1;
+          }
+        }
+        return await runPrint(handle, team, args, deps.console);
+      }
     }
+  } finally {
+    await handle.shutdown();
   }
 }
 
-function connectPlatform(
+async function connectPlatform(
   options: JiePlatformOptions,
-  bootPlatform: (options: JiePlatformOptions) => JiePlatform,
+  bootPlatform: (options: JiePlatformOptions) => Promise<JiePlatform>,
   console: Console,
-): JiePlatform {
+): Promise<JiePlatform> {
   let platform: JiePlatform;
   try {
-    platform = bootPlatform(options);
+    platform = await bootPlatform(options);
   } catch (error) {
     throw new CliBootError(error instanceof Error ? error.message : String(error));
   }

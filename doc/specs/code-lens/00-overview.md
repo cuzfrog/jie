@@ -1,34 +1,43 @@
 # Code-Lens — Overview
 
-**Status: aspirational — no code yet.**
-
 ## Purpose
 
-Code-Lens is a standalone MCP server in `packages/code-lens/` that provides AST-only code-structure queries to any MCP client: exported symbols with canonical signatures, and the file-level import graph. It is deliberately not coupled to jie's team layer — within jie an agent consumes it like any other MCP server, and outside jie it serves IDE plugins, CI tooling, or other agent frameworks equally. Why standalone rather than in-process:
+Code-Lens is a standalone MCP server in `packages/code-lens/` that gives agents code-architecture facts — layered structure with implementation bodies stripped, plus dependency and coupling data — without implementation detail. It covers TypeScript, Python, Java, Rust, and Go on one shared pipeline (ADR 32): it is a read-only consumer of SCIP indexes, never an indexer. Two concerns are deliberately kept out: coupling *verdicts* (it emits facts — cycles, visibility-annotated cross-file references — and the consuming agent judges what counts as bad coupling) and enforcement (no-new-exports gating belongs elsewhere, not here). Why standalone rather than in-process:
 
 - Reuse: one MCP server serves any MCP client, not just jie.
 - Tool visibility: a soul declares `mcp:code-lens:*` in `tools:` and the body registers the tools with full schemas; the LLM sees them as first-class tools, no indirection.
-- Memory isolation: a large project's AST is hundreds of MB; it stays out of every team process.
-- Lifecycle: the server can outlive a team session, hold warm AST state across runs, and restart independently (warm state is lost on crash; re-index on next startup).
+- Memory isolation: a large project's index stays in the server process, out of every team process.
+- Lifecycle: the server restarts independently of team sessions.
 
-## Language adapters
+## Ingestion
 
-Language-pluggable via a `LanguageAdapter` interface:
+One SCIP protobuf index per workspace, read lazily on first tool call and cached for the process. The SCIP schema is the language-agnostic substrate: every language-specific concern is delegated to the existing SCIP indexers (scip-typescript, scip-python, scip-java, scip for Rust, scip-go), so code-lens has a single ingestion path, one model (`CodeIndex`: files with symbols and references, a symbol table keyed by SCIP symbol id), and one query layer for all languages. The protobuf bindings in `scip/` are generated from `scip.proto` and vendored — regenerated with `protobufjs-cli`, never hand-edited.
 
-```typescript
-interface LanguageAdapter {
-  language: string;    // e.g. 'typescript'
-  extensions: string[]; // e.g. ['.ts', '.tsx']
-  extract_exports(file: string): Promise<{ name: string; signature: string }[]>;
-  signature_equal(a: string, b: string): boolean;
-  import_graph(root: string): Promise<{ from: string; to: string }[]>;
-}
-```
+Provider activation is the user's act: code-lens never runs an indexer. When no index is found, the server still handshakes and registers its tools, but every tool call returns an `isError` result explaining that code-lens is unavailable and listing the per-language indexer setup steps. This keeps unavailability a tool-level fact rather than a failed MCP connection, so agents can surface "not available" and the platform's tool-resolution startup checks still pass.
 
-Signatures are opaque canonical text owned by the adapter; function bodies are stripped, so callers receive only names, signatures, and graph edges. v1 ships a single TypeScript adapter backed by `ts-morph` (the TypeScript compiler API): top-level exported declarations (unnamed defaults get the synthetic name `default`; re-exports excluded), structural signature canonicalization with exact-string equality after re-parse, and a static import graph resolved via the nearest `tsconfig.json` (path aliases included; `node_modules` edges and dynamic imports excluded).
+## Query surface
+
+Six read-only tools, all deterministic (sorted output, no wall-clock or randomness):
+
+| Tool | Returns |
+|---|---|
+| `index_status` | Indexer tool and version, project root, per-file symbol and reference counts. |
+| `code_structure` | Layered structure — files, top-level declarations, type members — with signatures and no bodies; optional `pathPrefix` filter. |
+| `import_graph` | File-level edges: A -> B means file A references symbols defined in file B. |
+| `type_graph` | Type-level edges: implements and type-definition relationships between types. |
+| `cycles` | Cyclic dependencies in the file import graph (`scope: files`, default) or the type graph (`scope: types`). |
+| `boundary_references` | Cross-file references annotated with facts: target kind, where the target is defined, whether it is local to its file, whether the reference is an import. |
+
+The query layer is internal to the package; the library surface (`index.ts`) is ingestion and model only.
 
 ## MCP surface and deployment
 
-Two tools, dispatched to the adapter by file extension: `get_module_exports(path)` → per-file `{ name, signature }` entries, and `get_import_graph(root)` → workspace-relative `{ from, to }` edges. Both are read-only; unparseable files yield empty results rather than errors. Adapters cache parsed ASTs keyed by `(file_path, source_mtime)`, so repeated queries are cheap and output is deterministic for a given input.
+A hand-rolled newline-delimited JSON-RPC stdio server (`protocol.ts`/`server.ts`, `main.ts` as bin `code-lens`) — no MCP SDK, on either side of the wire. The index path defaults to `./index.scip`, overridable with `--index <path>`. Stdin end or stdout EPIPE exits 0, so platform-driven shutdown is clean.
 
-Code-Lens runs as a stdio MCP server configured in the client's MCP config — in jie it is an ordinary entry in the platform's MCP server configuration (see `jie-platform/10-configuration.md`), one instance per workspace, with no special-casing in the runtime.
+Within jie it is shipped as a built-in but configured like any other server in `.jie/mcp.json` (ADR 4), with no special-casing in the runtime:
+
+```json
+{ "servers": { "code-lens": { "transport": "stdio", "command": "bun", "args": ["packages/code-lens/main.ts"] } } }
+```
+
+Index freshness is the user's responsibility: re-run the indexer to refresh, and `index_status` reports what is loaded so staleness is self-evident.

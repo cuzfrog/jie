@@ -8,4 +8,7 @@ node_modules/
 tmp/
 
 .jie/*.db
+.jie/*.db-shm
+.jie/*.db-wal
 .jie/settings.json
+index.scip

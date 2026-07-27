@@ -1,11 +1,12 @@
 import { asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import type { Api, Model } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import type { ModelRegistry } from "../config";
 import type { PlatformCradle } from "../container";
 import type { EventManager } from "../event";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { AgentSoul } from "../team";
-import type { ToolRegistry } from "../tools";
+import type { Tool, ToolRegistry } from "../tools";
 import type { AgentBodyParams } from "./agent-body";
 import { registerCoreModule } from "./module";
 
@@ -29,9 +30,17 @@ const memoryManager = vi.mocked<MemoryManager>({
   renameSession: vi.fn(),
 });
 
+const stubTool: Tool = {
+  name: "stub",
+  description: "stub tool",
+  label: "stub",
+  parameters: Type.Object({}),
+  execute: vi.fn(async () => ({ content: "ok" })),
+};
+
 const toolRegistry = vi.mocked<ToolRegistry>({
   register: vi.fn(),
-  resolve: vi.fn(() => []),
+  resolve: vi.fn(() => [stubTool]),
   list: vi.fn(() => []),
 });
 

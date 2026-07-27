@@ -33,11 +33,10 @@ export class InMemoryToolRegistry implements ToolRegistry {
   }
 
   resolve(spec: string): Tool[] {
-    const pattern = parseToolPattern(spec);
-    let glob = this.globs.get(pattern);
+    let glob = this.globs.get(spec);
     if (glob === undefined) {
-      glob = new Bun.Glob(pattern);
-      this.globs.set(pattern, glob);
+      glob = new Bun.Glob(spec);
+      this.globs.set(spec, glob);
     }
     const matched: Tool[] = [];
     for (const [name, tool] of this.tools) {
@@ -69,10 +68,4 @@ function builtins(workspaceRoot: string, eventManager: EventManager, artifactSto
     { name: "web_fetch", tool: createWebFetchTool() as Tool },
     { name: "web_search", tool: createWebSearchTool({ provider: createWebSearchProvider() }) as Tool },
   ];
-}
-
-function parseToolPattern(toolSpec: string): string {
-  const lastColon = toolSpec.lastIndexOf(":");
-  if (lastColon === -1) return toolSpec;
-  return toolSpec.substring(lastColon + 1);
 }

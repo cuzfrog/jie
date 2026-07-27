@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Design decision for when the MCP client lands — no MCP code is implemented today; `mcp.json` is not loaded yet (`10-configuration.md` "MCP Server Configuration").
+Accepted and implemented. The minimal MCP client (stdio transport) lives in `packages/jie-platform/mcp/`; see `10-configuration.md` "MCP Server Configuration". The `http` transport is WARN+skipped in v1.
 
 ## Context
 
@@ -24,4 +24,5 @@ Code-Lens is just an MCP server we happen to ship in this monorepo. The CLI init
 
 - `code_lens_url` stays out of platform config and process topology. No port probing.
 - Any MCP server (GitHub, JIRA, custom) is a config entry away — no platform code change.
-- The `ToolSpec` syntax `mcp:<server>:<glob>` resolves against pre-registered tools. Until the MCP client ships, it matches zero tools, so a team `.md` listing MCP tools fails the cascade-policy startup check.
+- The `ToolSpec` syntax `mcp:<server>:<glob>` resolves against pre-registered tools; an agent `.md` listing an MCP tool whose server failed to connect fails the cascade-policy startup check.
+- The `Tool.name` registered with LLMs is sanitized to `[a-zA-Z0-9_-]{1,64}` because provider tool-name APIs reject colons; the registry key and `label` keep the colon form `mcp:<server>:<tool>`.

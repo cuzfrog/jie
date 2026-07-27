@@ -106,32 +106,27 @@ describe("InMemoryToolRegistry", () => {
     expect(reg.resolve("B*")).toEqual([b]);
   });
 
-  test("`mcp:server:tool` returns [] in v1 — no MCP client", () => {
+  test("`mcp:server:tool` resolves a tool registered under that exact name", () => {
     const reg = makeReg();
-    expect(reg.resolve("mcp:foo:bar")).toEqual([]);
+    const tool = makeTool("mcp:foo:bar");
+    reg.register("mcp:foo:bar", tool);
+    expect(reg.resolve("mcp:foo:bar")).toEqual([tool]);
   });
 
-  test("`mcp:foo:mock-tool-A*` matches the two A tools", () => {
+  test("`mcp:foo:*` matches only that server's tools, never builtins or other servers", () => {
     const reg = makeReg();
-    const a1 = makeTool("mock-tool-A1");
-    const a2 = makeTool("mock-tool-A2");
-    reg.register("mock-tool-A1", a1);
-    reg.register("mock-tool-A2", a2);
-    expect(
-      reg.resolve("mcp:foo:mock-tool-A*").sort((a, b) => a.name.localeCompare(b.name)),
-    ).toEqual([a1, a2]);
+    const a1 = makeTool("mcp:foo:mock-tool-A1");
+    const a2 = makeTool("mcp:foo:mock-tool-A2");
+    reg.register("mcp:foo:mock-tool-A1", a1);
+    reg.register("mcp:foo:mock-tool-A2", a2);
+    reg.register("mcp:bar:mock-tool-B1", makeTool("mcp:bar:mock-tool-B1"));
+    expect(reg.resolve("mcp:foo:*").sort((a, b) => a.name.localeCompare(b.name))).toEqual([a1, a2]);
   });
 
-  test("`mcp:foo:*` matches every tool (wildcard ignores the server prefix)", () => {
+  test("`mcp:foo:*` matches nothing when that server registered no tools", () => {
     const reg = makeReg();
     reg.register("mock-tool-A1", makeTool("mock-tool-A1"));
-    reg.register("mock-tool-A2", makeTool("mock-tool-A2"));
-    reg.register("mock-tool-B1", makeTool("mock-tool-B1"));
-    expect(reg.resolve("mcp:foo:mock-tool-*").map((t) => t.name).sort()).toEqual([
-      "mock-tool-A1",
-      "mock-tool-A2",
-      "mock-tool-B1",
-    ]);
+    expect(reg.resolve("mcp:foo:*")).toEqual([]);
   });
 
   test("duplicate register replaces the prior entry (last-writer-wins)", () => {

@@ -63,6 +63,14 @@
         "typescript": "catalog:",
       },
     },
+    "packages/jie-team": {
+      "name": "@cuzfrog/jie-team",
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@types/node": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/jie-tui": {
       "name": "@cuzfrog/jie-tui",
       "dependencies": {
@@ -177,6 +185,8 @@
     "@cuzfrog/jie-cli": ["@cuzfrog/jie-cli@workspace:packages/jie-cli"],
 
     "@cuzfrog/jie-platform": ["@cuzfrog/jie-platform@workspace:packages/jie-platform"],
+
+    "@cuzfrog/jie-team": ["@cuzfrog/jie-team@workspace:packages/jie-team"],
 
     "@cuzfrog/jie-tui": ["@cuzfrog/jie-tui@workspace:packages/jie-tui"],
 

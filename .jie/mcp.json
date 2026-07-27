@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "code-lens": {
+      "transport": "stdio",
+      "command": "bun",
+      "args": ["packages/code-lens/main.ts"]
+    }
+  }
+}

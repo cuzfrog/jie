@@ -52,6 +52,7 @@ function makePlatformHarness(): PlatformHarness {
     interrupt: () => undefined,
     execute: (async () => null) as JiePlatform["execute"],
     teams: () => [],
+    shutdown: () => Promise.resolve(),
   };
   return {
     platform,

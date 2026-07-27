@@ -31,6 +31,7 @@ function makePlatform(execute: ReturnType<typeof vi.fn>): JiePlatform {
     interrupt: vi.fn(),
     teams: vi.fn(() => []),
     execute,
+    shutdown: vi.fn(),
   });
 }
 
