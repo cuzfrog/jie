@@ -5,6 +5,7 @@ import { registerConfigModule, type AuthStore, type ModelRegistry, type Settings
 import { registerCoreModule, type AgentBody, type AgentBodyParams } from "./core";
 import { registerEventModule, type EventBus, type EventManager } from "./event";
 import type { JiePlatform, JiePlatformOptions } from "./jie-platform";
+import { registerMcpModule, type McpConnector, type McpManager, type SubprocessFactory } from "./mcp";
 import { registerPlatformModule } from "./module";
 import { registerServicesModule, type GitService } from "./services";
 import { registerStorageModule, type ArtifactStore, type MemoryManager, type Storage } from "./storage";
@@ -31,6 +32,9 @@ export interface PlatformCradle {
   readonly agentBodyFactory: (params: AgentBodyParams) => AgentBody;
   readonly teamManager: TeamManager;
   readonly commandExecutor: CommandExecutor;
+  readonly subprocessFactory: SubprocessFactory;
+  readonly mcpConnector: McpConnector;
+  readonly mcpManager: McpManager;
   readonly platform: JiePlatform;
 }
 
@@ -51,6 +55,7 @@ export function bootPlatform(options: JiePlatformOptions): AwilixContainer<Platf
   registerConfigModule(container);
   registerServicesModule(container);
   registerToolsModule(container);
+  registerMcpModule(container);
   registerCoreModule(container);
   registerTeamModule(container);
   registerCommandModule(container);
