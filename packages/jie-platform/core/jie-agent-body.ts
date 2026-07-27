@@ -6,6 +6,7 @@ import { Events, type AgentSender, type EventManager } from "../event";
 import type { AgentBody, AgentBodyParams } from "./agent-body";
 import { StreamPublisherImpl, type StreamPublisher } from "./streaming";
 import { adaptToolToAgent } from "./tool-adapter";
+import { JiePlatformError } from "../jie-platform-errors";
 import type { AgentInfo, EffortLevel, ModelInfo } from "../types";
 
 interface AgentBodyDeps {
@@ -279,6 +280,11 @@ function adaptAllTools(
   const out: AgentTool[] = [];
   for (const toolSpec of soul.tools) {
     const tools = toolRegistry.resolve(toolSpec);
+    if (tools.length === 0) {
+      throw new JiePlatformError("TOOL_SPEC_UNRESOLVED", {
+        detail: `agent '${soul.role}' (team '${executionContext.teamId}'): tool spec '${toolSpec}' resolved no tools`,
+      });
+    }
     for (const tool of tools) {
       out.push(adaptToolToAgent(tool, executionContext));
     }

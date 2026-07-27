@@ -1,6 +1,6 @@
 # Jie Team — Overview
 
-**Status: aspirational — the package has no code yet. The only shipped team is the built-in minimal team (`packages/jie-platform/team/minimal/`).**
+**Status: the package ships a blueprint installer (`installBlueprint` / `listBlueprints`) and a first `dev` blueprint — a lead plus an architect wired to code-lens (`mcp:code-lens:*`, ADR 32), coordinating on `structure.requested` / `structure.answered` notify topics. The full six-role pipeline below is the target design; the task lifecycle, artifacts, and the module-descriptor gate are not implemented yet.**
 
 ## Purpose
 

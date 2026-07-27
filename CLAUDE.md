@@ -93,7 +93,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 - write down your plan before execution (but do not enter plan mode, it will block your further execution).
 - when you have multiple steps in your execution, use a todo-list, divide and conquer.
 
-(Write temporary files to `./tmp/` only if you want me to reivew, otherwise write to `/tmp/`)
+(Write temporary files to `./tmp/` only if you want me to reivew, otherwise write to `/tmp/<space>/`)
 
 ## File Edit Checklist
 Pre-action:

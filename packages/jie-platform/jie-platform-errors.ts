@@ -42,6 +42,7 @@ const JiePlatformErrorMessages = {
   LEADER_UNKNOWN: "TEAM.md leader references unknown role",
   TEAM_FILE_REQUIRED: "TEAM.md is required for multi-agent teams",
   SUBSCRIBE_REJECTS_PLATFORM_TOPIC: "subscribe cannot target a platform topic",
+  TOOL_SPEC_UNRESOLVED: "Tool spec resolved no tools",
 
   OAUTH_NOT_SUPPORTED: "OAuth credentials are not supported in v1",
 

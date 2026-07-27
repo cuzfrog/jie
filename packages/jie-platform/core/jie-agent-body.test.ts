@@ -178,6 +178,7 @@ interface MakeBodyOverrides {
 
 interface Harness {
   events: EventManager;
+  toolRegistry: ReturnType<typeof vi.mocked<ToolRegistry>>;
   persisted: AgentMessage[];
   restore: ReturnType<typeof vi.fn>;
   cap: FakeAgentCapture;
@@ -250,6 +251,7 @@ function makeHarness(): Harness {
   };
   return {
     events,
+    toolRegistry,
     persisted,
     restore,
     cap,
@@ -285,6 +287,26 @@ describe("JieAgentBody — identity", () => {
     const h = makeHarness();
     const body = h.makeBody();
     expect(body.identity.model).toBeNull();
+  });
+});
+
+describe("JieAgentBody — tool resolution", () => {
+  test("construction fails when a tool spec resolves no tools", () => {
+    const h = makeHarness();
+    h.toolRegistry.resolve.mockReturnValue([]);
+    expect(() => h.makeBody({
+      teamId: "dev",
+      soul: makeSoul({ role: "architect", tools: ["mcp:code-lens:*"] }),
+    })).toThrow(expect.objectContaining({ code: "TOOL_SPEC_UNRESOLVED" }));
+  });
+
+  test("the error cites the role, team, and unresolved spec", () => {
+    const h = makeHarness();
+    h.toolRegistry.resolve.mockReturnValue([]);
+    expect(() => h.makeBody({
+      teamId: "dev",
+      soul: makeSoul({ role: "architect", tools: ["mcp:code-lens:*"] }),
+    })).toThrow("agent 'architect' (team 'dev'): tool spec 'mcp:code-lens:*' resolved no tools");
   });
 });
 

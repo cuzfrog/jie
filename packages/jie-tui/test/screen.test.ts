@@ -85,6 +85,7 @@ function makePlatform(handlers: Map<EventType, (env: AnyEventEnvelope) => void>)
       return Promise.resolve(null);
     }) as JiePlatform["execute"],
     teams: () => [],
+    shutdown: () => Promise.resolve(),
   };
 }
 

@@ -21,8 +21,8 @@ packages/
   jie-tui/        # Terminal UI (pi-tui-based inline renderer): chat column, editor, footer, slash commands; bootTui(options, deps)
   jie-utils/      # Process-level infra shared by all packages: diagnostic logger (tslog), Console output abstraction
   mock-llm-backend/  # OpenAI-compatible mock LLM server for e2e tests (bun mock:start)
-  jie-team/       # Aspirational dev-team blueprint — package has no code yet (doc/specs/jie-team/)
-  code-lens/      # Aspirational AST code-structure MCP server — package has no code yet (doc/specs/code-lens/)
+  jie-team/       # Team-blueprint installer (installBlueprint/listBlueprints) + shipped dev blueprint (lead + architect) (doc/specs/jie-team/)
+  code-lens/      # Standalone MCP server (bin: code-lens): code-architecture facts from SCIP indexes (doc/specs/code-lens/)
 ```
 
 ## Dependencies
@@ -32,7 +32,8 @@ jie-cli  → jie-platform, jie-tui, jie-utils   (composition root: calls bootPla
 jie-tui  → jie-platform, jie-utils, @earendil-works/pi-tui   (platform surface: JiePlatform handle + wire-format types only)
 jie-platform → jie-utils
 mock-llm-backend → jie-utils        (standalone test fixture)
-jie-team, code-lens                 (no code, no dependencies)
+code-lens → jie-utils               (standalone MCP server; protobufjs for SCIP decoding — runs as a child process, never imported)
+jie-team                            (blueprint data + installer; no runtime dependencies)
 ```
 
 **Agnosticism rule (ADR 11).** `jie-platform` has zero dependency on `jie-team` — no `import` in any form, including types. The platform reads team blueprints from filesystem paths (`.jie/teams/<id>/`, `~/.jie/teams/<id>/`) plus its built-in `minimal` fallback; a team is data, not code.
@@ -54,6 +55,10 @@ Every package exports `.` → `./index.ts`; the root `package.json` declares `"b
 
 `jie-utils/index.ts` exports `logger` (a tslog instance gated by `JIE_LOG_LEVEL`) and `Console` / `defaultConsole` — the output abstraction CLI commands write through and the logger's transport routes to stderr. It depends on no other jie package; diagnostic logging is orthogonal to app logic and is imported as a module-scope instance, not injected.
 
+`jie-team/index.ts` exports `installBlueprint` / `listBlueprints` — the installer that copies shipped blueprints (e.g. `dev`) into `.jie/teams/`; the platform discovers the installed blueprints from the filesystem (ADR 11 agnosticism).
+
+`code-lens/index.ts` is the minimal library surface (SCIP ingestion + `CodeIndex` model); the executable surface is the `code-lens` bin (`main.ts`), a stdio MCP server the platform spawns as a child process rather than imports.
+
 ## `jie-platform` Runtime Dependencies
 
 Small and fixed (via the root catalog):
@@ -68,11 +73,11 @@ Small and fixed (via the root catalog):
 | `node-html-parser` | HTML → text for the `web_fetch` tool (bun has no built-in HTML parser) |
 | `awilix` | DI container — per-boot composition (ADR 31): one container per `bootPlatform`/`bootTui` call, CLASSIC constructor injection; also used by jie-cli, jie-tui, and mock-llm-backend |
 
-`jie-utils`' only runtime dependency is `tslog` (structured logger, gated by `JIE_LOG_LEVEL`; silent when unset).
+`jie-utils`' only runtime dependency is `tslog` (structured logger, gated by `JIE_LOG_LEVEL`; silent when unset). `code-lens`' only runtime dependency is `protobufjs` (SCIP protobuf decoding via vendored generated bindings).
 
-**Bun built-ins** (no dep): `bun:sqlite` (`SqliteStorage`), `Bun.Glob` (`ToolRegistry` spec resolution), `fetch` (`web_search` / `web_fetch`), `Bun.spawn()` (`bash` tool; MCP stdio servers when the MCP client lands), `Bun.argv` (hand-rolled CLI parser), `import ... with { type: "text" }` (built-in minimal team).
+**Bun built-ins** (no dep): `bun:sqlite` (`SqliteStorage`), `Bun.Glob` (`ToolRegistry` spec resolution), `fetch` (`web_search` / `web_fetch`), `Bun.spawn()` (`bash` tool; MCP stdio subprocesses), `Bun.argv` (hand-rolled CLI parser), `import ... with { type: "text" }` (built-in minimal team).
 
-**No MCP SDK today.** MCP client integration is not implemented (ADR 4); `@modelcontextprotocol/sdk` is not a dependency. **No CLI / utility libraries** (`commander`, `lodash`, `chalk`, …): the CLI surface is small enough that hand-rolled parsing and merging stay smaller than the deps. (`awilix` is the DI composition mechanism, not a utility library — ADR 31.)
+**Still no MCP SDK.** The MCP client (stdio transport) is a hand-rolled JSON-RPC implementation in `packages/jie-platform/mcp/` (ADR 4), and code-lens's server side is equally hand-rolled; `@modelcontextprotocol/sdk` is not a dependency. **No CLI / utility libraries** (`commander`, `lodash`, `chalk`, …): the CLI surface is small enough that hand-rolled parsing and merging stay smaller than the deps. (`awilix` is the DI composition mechanism, not a utility library — ADR 31.)
 
 ## Testing
 

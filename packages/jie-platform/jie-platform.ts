@@ -1,6 +1,7 @@
 import { type Command, type CommandExecutor, type CommandName, type CommandResult } from "./command";
 import type { Settings, SettingsStore } from "./config";
 import { type EventEnvelope, type EventManager, type EventType, Events } from "./event";
+import type { McpManager } from "./mcp";
 import type { TeamManager } from "./team";
 import type { TeamInfo } from "./types";
 
@@ -21,6 +22,7 @@ export interface JiePlatform {
   subscribe<T extends EventType>(topic: T, callback: (event: EventEnvelope<T>) => void): () => void;
   execute<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>>;
   teams(): ReadonlyArray<TeamInfo>;
+  shutdown(): Promise<void>;
 }
 
 export class JiePlatformImpl implements JiePlatform {
@@ -31,6 +33,7 @@ export class JiePlatformImpl implements JiePlatform {
     private readonly eventManager: EventManager,
     private readonly commandExecutor: CommandExecutor,
     private readonly teamManager: TeamManager,
+    private readonly mcpManager: McpManager,
   ) {
     this.settings = settingsStore.load();
   }
@@ -53,5 +56,9 @@ export class JiePlatformImpl implements JiePlatform {
 
   teams(): ReadonlyArray<TeamInfo> {
     return [...this.teamManager.listLoaded().values()];
+  }
+
+  shutdown(): Promise<void> {
+    return this.mcpManager.dispose();
   }
 }

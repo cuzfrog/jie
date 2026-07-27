@@ -1,12 +1,13 @@
-import type {
-  Command,
-  CommandName,
-  CommandResult,
-  EventEnvelope,
-  EventType,
-  JiePlatform,
-  JiePlatformOptions,
-  TeamInfo,
+import {
+  Events,
+  type Command,
+  type CommandName,
+  type CommandResult,
+  type EventEnvelope,
+  type EventType,
+  type JiePlatform,
+  type JiePlatformOptions,
+  type TeamInfo,
 } from "@cuzfrog/jie-platform";
 import type { CreateTUIOptions, Tui, TuiDeps } from "@cuzfrog/jie-tui";
 import type { Console } from "@cuzfrog/jie-utils";
@@ -26,8 +27,10 @@ function makeConsoleMock(): Console & {
 
 interface FakePlatform extends JiePlatform {
   execute: ReturnType<typeof vi.fn>;
+  shutdown: ReturnType<typeof vi.fn>;
   subscribeCalls: EventType[];
   trace: TraceEvent[];
+  emit<T extends EventType>(topic: T, event: EventEnvelope<T>): void;
 }
 
 type TraceEvent =
@@ -37,14 +40,25 @@ type TraceEvent =
 function makeFakePlatform(): FakePlatform {
   const subscribeCalls: EventType[] = [];
   const trace: TraceEvent[] = [];
+  const subscribers = new Map<string, Array<(event: EventEnvelope<EventType>) => void>>();
   const fake: FakePlatform = {
     settings: {},
     subscribeCalls,
     trace,
-    subscribe<T extends EventType>(topic: T, _cb: (event: EventEnvelope<T>) => void): () => void {
+    subscribe<T extends EventType>(topic: T, cb: (event: EventEnvelope<T>) => void): () => void {
       subscribeCalls.push(topic);
       trace.push({ kind: "subscribe", topic });
-      return () => undefined;
+      const listeners = subscribers.get(topic) ?? [];
+      if (listeners.length === 0) subscribers.set(topic, listeners);
+      const stored = cb as (event: EventEnvelope<EventType>) => void;
+      listeners.push(stored);
+      return () => {
+        const index = listeners.indexOf(stored);
+        if (index !== -1) listeners.splice(index, 1);
+      };
+    },
+    emit<T extends EventType>(topic: T, event: EventEnvelope<T>): void {
+      for (const listener of subscribers.get(topic) ?? []) listener(event);
     },
     prompt: vi.fn(),
     interrupt: vi.fn(),
@@ -53,6 +67,7 @@ function makeFakePlatform(): FakePlatform {
       return dispatch(command) as CommandResult<T>;
     }),
     teams: () => [],
+    shutdown: vi.fn(),
   };
   return fake;
 }
@@ -101,7 +116,7 @@ function captureRun(platform: FakePlatform): CapturedRun {
   const startCalls = { value: 0 };
   const stopCalls = { value: 0 };
   const consoleMock = makeConsoleMock();
-  const bootPlatform = vi.fn((_options: JiePlatformOptions): JiePlatform => platform);
+  const bootPlatform = vi.fn(async (_options: JiePlatformOptions): Promise<JiePlatform> => platform);
   const bootTui = vi.fn((options: CreateTUIOptions, deps: TuiDeps): Tui => {
     tuiCalls.push({ options, deps });
     deps.platform.subscribe("system.team.loaded", () => undefined);
@@ -133,6 +148,7 @@ describe("_run — tui", () => {
     expect(captured.tuiCalls[0]?.options.cwd).toBe(process.cwd());
     expect(captured.tuiCalls[0]?.deps.platform).toBe(platform);
     expect(captured.startCalls.value).toBe(1);
+    expect(captured.fakePlatform.shutdown).toHaveBeenCalledTimes(1);
   });
 
   test("tui boot: calls tui.stop() after start resolves (restores terminal state)", async () => {
@@ -195,7 +211,7 @@ describe("_run — tui", () => {
     const consoleMock = makeConsoleMock();
     const run = (parsed: Parameters<typeof _run>[0]): Promise<number> =>
       _run(parsed, process.cwd(), "/tmp", {
-        bootPlatform: () => {
+        bootPlatform: async () => {
           throw new Error("boot blew up");
         },
         bootTui: vi.fn(),
@@ -257,6 +273,27 @@ describe("_run — print + apiKey", () => {
     expect(exit).toBe(3);
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: "minimal" });
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "stop" });
+    expect(captured.fakePlatform.shutdown).toHaveBeenCalledTimes(1);
+  });
+
+  test("print: shutdown waits until the command settles, never tearing down mid-command", async () => {
+    const platform = makeFakePlatform();
+    const captured = captureRun(platform);
+    const runPromise = captured.run({
+      kind: "print",
+      instruction: "hello",
+      team: "minimal",
+      timeout: 0,
+      json: false,
+      inMemory: false,
+    });
+    while (!platform.subscribeCalls.includes("agent.idle")) await Bun.sleep(1);
+    expect(platform.shutdown).not.toHaveBeenCalled();
+    platform.emit("agent.idle", Events.agentIdle({ kind: "agent", teamId: "minimal", agentKey: "general-1" }, "stop"));
+    const exit = await runPromise;
+    expect(exit).toBe(0);
+    expect(platform.execute).toHaveBeenCalledWith({ name: "stop" });
+    expect(platform.shutdown).toHaveBeenCalledTimes(1);
   });
 
   test("print with resume: passes resumeSessionId in bootPlatform options", async () => {
@@ -287,6 +324,7 @@ describe("_run — print + apiKey", () => {
     expect(exit).toBe(1);
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "setApiKey", apiKey: "sk-fail" });
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "stop" });
+    expect(captured.fakePlatform.shutdown).toHaveBeenCalledTimes(1);
     expect(captured.consoleMock.error).toHaveBeenCalledWith("setApiKey boom");
   });
 });
