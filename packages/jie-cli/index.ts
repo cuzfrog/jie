@@ -77,15 +77,15 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
         return 0;
       }
       case "login":
-        return runLogin(args, handle, deps.console);
+        return await runLogin(args, handle, deps.console);
       case "logout":
-        return runLogout(args, handle, deps.console);
+        return await runLogout(args, handle, deps.console);
       case "apiKey":
-        return runApiKey(args, handle, deps.console);
+        return await runApiKey(args, handle, deps.console);
       case "model":
-        return runModel(args, handle, deps.console);
+        return await runModel(args, handle, deps.console);
       case "team":
-        return runTeam(args, handle, deps.console);
+        return await runTeam(args, handle, deps.console);
       case "print": {
         const team = await handle.execute({ name: "team", teamId: args.team });
         if (args.apiKey !== undefined) {
@@ -97,7 +97,7 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
             return 1;
           }
         }
-        return runPrint(handle, team, args, deps.console);
+        return await runPrint(handle, team, args, deps.console);
       }
     }
   } finally {

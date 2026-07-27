@@ -1,12 +1,13 @@
-import type {
-  Command,
-  CommandName,
-  CommandResult,
-  EventEnvelope,
-  EventType,
-  JiePlatform,
-  JiePlatformOptions,
-  TeamInfo,
+import {
+  Events,
+  type Command,
+  type CommandName,
+  type CommandResult,
+  type EventEnvelope,
+  type EventType,
+  type JiePlatform,
+  type JiePlatformOptions,
+  type TeamInfo,
 } from "@cuzfrog/jie-platform";
 import type { CreateTUIOptions, Tui, TuiDeps } from "@cuzfrog/jie-tui";
 import type { Console } from "@cuzfrog/jie-utils";
@@ -29,6 +30,7 @@ interface FakePlatform extends JiePlatform {
   shutdown: ReturnType<typeof vi.fn>;
   subscribeCalls: EventType[];
   trace: TraceEvent[];
+  emit<T extends EventType>(topic: T, event: EventEnvelope<T>): void;
 }
 
 type TraceEvent =
@@ -38,14 +40,25 @@ type TraceEvent =
 function makeFakePlatform(): FakePlatform {
   const subscribeCalls: EventType[] = [];
   const trace: TraceEvent[] = [];
+  const subscribers = new Map<string, Array<(event: EventEnvelope<EventType>) => void>>();
   const fake: FakePlatform = {
     settings: {},
     subscribeCalls,
     trace,
-    subscribe<T extends EventType>(topic: T, _cb: (event: EventEnvelope<T>) => void): () => void {
+    subscribe<T extends EventType>(topic: T, cb: (event: EventEnvelope<T>) => void): () => void {
       subscribeCalls.push(topic);
       trace.push({ kind: "subscribe", topic });
-      return () => undefined;
+      const listeners = subscribers.get(topic) ?? [];
+      if (listeners.length === 0) subscribers.set(topic, listeners);
+      const stored = cb as (event: EventEnvelope<EventType>) => void;
+      listeners.push(stored);
+      return () => {
+        const index = listeners.indexOf(stored);
+        if (index !== -1) listeners.splice(index, 1);
+      };
+    },
+    emit<T extends EventType>(topic: T, event: EventEnvelope<T>): void {
+      for (const listener of subscribers.get(topic) ?? []) listener(event);
     },
     prompt: vi.fn(),
     interrupt: vi.fn(),
@@ -261,6 +274,26 @@ describe("_run — print + apiKey", () => {
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: "minimal" });
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "stop" });
     expect(captured.fakePlatform.shutdown).toHaveBeenCalledTimes(1);
+  });
+
+  test("print: shutdown waits until the command settles, never tearing down mid-command", async () => {
+    const platform = makeFakePlatform();
+    const captured = captureRun(platform);
+    const runPromise = captured.run({
+      kind: "print",
+      instruction: "hello",
+      team: "minimal",
+      timeout: 0,
+      json: false,
+      inMemory: false,
+    });
+    while (!platform.subscribeCalls.includes("agent.idle")) await Bun.sleep(1);
+    expect(platform.shutdown).not.toHaveBeenCalled();
+    platform.emit("agent.idle", Events.agentIdle({ kind: "agent", teamId: "minimal", agentKey: "general-1" }, "stop"));
+    const exit = await runPromise;
+    expect(exit).toBe(0);
+    expect(platform.execute).toHaveBeenCalledWith({ name: "stop" });
+    expect(platform.shutdown).toHaveBeenCalledTimes(1);
   });
 
   test("print with resume: passes resumeSessionId in bootPlatform options", async () => {
