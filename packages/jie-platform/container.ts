@@ -38,7 +38,7 @@ export interface PlatformCradle {
   readonly platform: JiePlatform;
 }
 
-export function bootPlatform(options: JiePlatformOptions): AwilixContainer<PlatformCradle> {
+export async function bootPlatform(options: JiePlatformOptions): Promise<AwilixContainer<PlatformCradle>> {
   mkdirSync(options.homeJieDir, { recursive: true, mode: 0o755 });
   const container = createContainer<PlatformCradle>({ injectionMode: InjectionMode.CLASSIC });
   container.register({
@@ -60,5 +60,6 @@ export function bootPlatform(options: JiePlatformOptions): AwilixContainer<Platf
   registerTeamModule(container);
   registerCommandModule(container);
   registerPlatformModule(container);
+  await container.resolve("mcpManager").connectAll();
   return container;
 }

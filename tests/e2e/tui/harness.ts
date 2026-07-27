@@ -61,9 +61,9 @@ export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> 
   process.env.LANG = LANG_DEFAULT;
   const prevLangAll = process.env.LC_ALL;
   process.env.LC_ALL = LANG_DEFAULT;
-  let platformContainer: ReturnType<typeof bootPlatform>;
+  let platformContainer: Awaited<ReturnType<typeof bootPlatform>>;
   try {
-    platformContainer = bootPlatform({ cwd: dir, homeJieDir: dir, projectJieDir: dir, resumeSessionId: opts.resumeSessionId });
+    platformContainer = await bootPlatform({ cwd: dir, homeJieDir: dir, projectJieDir: dir, resumeSessionId: opts.resumeSessionId });
   } catch (err) {
     restoreLang(prevLang, prevLangAll);
     if (opts.cwd === undefined) rmSync(dir, { recursive: true, force: true });
@@ -94,6 +94,7 @@ export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> 
 export async function stopTui(harness: TuiHarness): Promise<void> {
   harness.tui.stop();
   await harness.platform.execute({ name: "stop" });
+  await harness.platform.shutdown();
   if (harness.ownedDir) rmSync(harness.dir, { recursive: true, force: true });
 }
 

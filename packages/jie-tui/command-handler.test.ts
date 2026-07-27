@@ -19,6 +19,7 @@ function makePlatform(): PlatformHandle {
     interrupt: vi.fn(),
     teams: vi.fn(() => []),
     execute: vi.fn(async () => null),
+    shutdown: vi.fn(),
   });
   return { platform, execute: platform.execute, prompt: platform.prompt };
 }

@@ -26,6 +26,7 @@ function makeConsoleMock(): Console & {
 
 interface FakePlatform extends JiePlatform {
   execute: ReturnType<typeof vi.fn>;
+  shutdown: ReturnType<typeof vi.fn>;
   subscribeCalls: EventType[];
   trace: TraceEvent[];
 }
@@ -53,6 +54,7 @@ function makeFakePlatform(): FakePlatform {
       return dispatch(command) as CommandResult<T>;
     }),
     teams: () => [],
+    shutdown: vi.fn(),
   };
   return fake;
 }
@@ -101,7 +103,7 @@ function captureRun(platform: FakePlatform): CapturedRun {
   const startCalls = { value: 0 };
   const stopCalls = { value: 0 };
   const consoleMock = makeConsoleMock();
-  const bootPlatform = vi.fn((_options: JiePlatformOptions): JiePlatform => platform);
+  const bootPlatform = vi.fn(async (_options: JiePlatformOptions): Promise<JiePlatform> => platform);
   const bootTui = vi.fn((options: CreateTUIOptions, deps: TuiDeps): Tui => {
     tuiCalls.push({ options, deps });
     deps.platform.subscribe("system.team.loaded", () => undefined);
@@ -133,6 +135,7 @@ describe("_run — tui", () => {
     expect(captured.tuiCalls[0]?.options.cwd).toBe(process.cwd());
     expect(captured.tuiCalls[0]?.deps.platform).toBe(platform);
     expect(captured.startCalls.value).toBe(1);
+    expect(captured.fakePlatform.shutdown).toHaveBeenCalledTimes(1);
   });
 
   test("tui boot: calls tui.stop() after start resolves (restores terminal state)", async () => {
@@ -195,7 +198,7 @@ describe("_run — tui", () => {
     const consoleMock = makeConsoleMock();
     const run = (parsed: Parameters<typeof _run>[0]): Promise<number> =>
       _run(parsed, process.cwd(), "/tmp", {
-        bootPlatform: () => {
+        bootPlatform: async () => {
           throw new Error("boot blew up");
         },
         bootTui: vi.fn(),
@@ -257,6 +260,7 @@ describe("_run — print + apiKey", () => {
     expect(exit).toBe(3);
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: "minimal" });
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "stop" });
+    expect(captured.fakePlatform.shutdown).toHaveBeenCalledTimes(1);
   });
 
   test("print with resume: passes resumeSessionId in bootPlatform options", async () => {
@@ -287,6 +291,7 @@ describe("_run — print + apiKey", () => {
     expect(exit).toBe(1);
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "setApiKey", apiKey: "sk-fail" });
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "stop" });
+    expect(captured.fakePlatform.shutdown).toHaveBeenCalledTimes(1);
     expect(captured.consoleMock.error).toHaveBeenCalledWith("setApiKey boom");
   });
 });

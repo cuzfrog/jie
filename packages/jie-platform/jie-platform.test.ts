@@ -2,6 +2,7 @@ import type { Command, CommandExecutor, CommandName } from "./command";
 import type { Settings, SettingsStore } from "./config";
 import type { EventManager } from "./event";
 import { JiePlatformImpl } from "./jie-platform";
+import type { McpManager } from "./mcp";
 import type { TeamManager } from "./team";
 import type { ModelInfo, TeamInfo } from "./types";
 
@@ -33,13 +34,18 @@ const teamManager = vi.mocked<TeamManager>({
   stop: vi.fn(),
 });
 
+const mcpManager = vi.mocked<McpManager>({
+  connectAll: vi.fn(),
+  dispose: vi.fn(),
+});
+
 const DEFAULT_SETTINGS: Settings = {
   defaultProvider: "anthropic",
   defaultModel: "claude-sonnet-4-5",
 };
 
 function createPlatform(): JiePlatformImpl {
-  return new JiePlatformImpl(settingsStore, eventManager, commandExecutor, teamManager);
+  return new JiePlatformImpl(settingsStore, eventManager, commandExecutor, teamManager, mcpManager);
 }
 
 describe("JiePlatformImpl", () => {
@@ -140,6 +146,14 @@ describe("JiePlatformImpl", () => {
       teamManager.listLoaded.mockReturnValue(new Map([["alpha", alpha], ["beta", beta]]));
       expect(platform.teams()).toEqual([alpha, beta]);
       expect(teamManager.listLoaded).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("shutdown", () => {
+    test("disposes the MCP manager so spawned servers are torn down", async () => {
+      const platform = createPlatform();
+      await platform.shutdown();
+      expect(mcpManager.dispose).toHaveBeenCalledTimes(1);
     });
   });
 });

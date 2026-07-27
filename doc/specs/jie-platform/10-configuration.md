@@ -11,7 +11,7 @@ Platform-level configuration surface: how Jie discovers and loads settings, cred
 | `~/.jie/auth.json` | Global credentials | mode `0600` | API keys, OAuth tokens (schema owned by pi-ai) |
 | `~/.jie/models.json` | Global provider definitions | Plain JSON | Custom providers: base URLs, APIs, keys, model catalogs |
 | `.jie/models.json` | Project provider overrides | Plain JSON | Same shape; a project entry replaces the global entry of the same provider name |
-| `~/.jie/mcp.json`, `.jie/mcp.json` | MCP server definitions | Plain JSON | **Not loaded today** — forward-looking schema (ADR 4) |
+| `~/.jie/mcp.json`, `.jie/mcp.json` | MCP server definitions | Plain JSON | Platform connects stdio servers at startup; project overrides per name (ADR 4) |
 | `.jie/teams/<id>/TEAM.md` | Team wiring | Plain text | `leader:` declaration in YAML frontmatter + prose |
 | `.jie/teams/<id>/<role>.md` | Agent definition | Plain text | YAML frontmatter (`model?`, `tools`, `subscribe?`) + prose body (system prompt) |
 
@@ -158,15 +158,25 @@ A stale `defaultTeam` (set but not installed) is **not** a failure — it falls 
 
 ## MCP Server Configuration
 
-**Not implemented today** (ADR 4). The platform boot (`bootPlatform`) does not read `mcp.json`, no MCP client connects at startup, and the `ToolRegistry`'s `mcp:<server>:<tool>` / `mcp:<server>:*` spec syntax resolves to zero tools — an agent `.md` listing MCP tools fails tool resolution at team load. The schema below is the forward-looking design that ships when the MCP client lands; no corresponding type exists in the codebase yet:
+`bootPlatform` reads `mcp.json` from `~/.jie/` (global) and the project `.jie/` (walk-up); a project entry overrides the global entry of the same server name, other entries pass through. Schema (`McpServerConfig`):
 
 ```json
 { "servers": { "<name>": { "transport": "stdio", "command": "...", "args": ["..."], "auth": { "tokenEnv": "..." } } } }
 ```
 
-`transport` is `stdio` (`command` + `args`) or `http` (`url`); `auth.tokenEnv` names the env var holding the server's bearer token.
+`transport` is `stdio` (`command` + `args`) or `http` (`url`). Server names are restricted to `[A-Za-z0-9._-]{1,64}` so registry keys and `mcp:<server>:<glob>` tool specs stay unambiguous; `args` defaults to `[]` and `auth` to `null`.
 
-When it lands: `.jie/mcp.json` (project, walk-up) overrides `~/.jie/mcp.json` per server name; each server connects at startup and its catalog registers into `ToolRegistry`; a connect failure is WARN+skip (startup continues without that server's tools); tool-resolution failure inside an agent's `tools:` list fails the team load with an error citing the missing tool. `auth.tokenEnv` is the MCP server's token, not an LLM credential — the no-env-var rule below applies to LLM providers only.
+At startup the platform connects to every configured server and registers each catalog into the `ToolRegistry` as `mcp:<name>:<tool>`. The `Tool.name` the LLM sees is sanitized to `[a-zA-Z0-9_-]{1,64}` — provider tool-name APIs reject colons — while the human-facing `label` keeps the colon form.
+
+Failure modes:
+- Malformed `mcp.json` (parse error, unknown transport, missing `command`/`url`, invalid server name): hard `INVALID_CONFIG` at startup, like `settings.json`.
+- `http` transport: WARN+skip (v1 implements stdio only).
+- A server that fails to connect or list tools: WARN+skip; startup continues without that server's tools.
+- Tool-resolution failure inside an agent's `tools:` list fails the team load with an error citing the missing tool.
+
+`auth.tokenEnv` names the env var holding the MCP server's bearer token, not an LLM credential — the no-env-var rule below applies to LLM providers only. Stdio servers inherit the platform environment, so the token reaches them through env inheritance.
+
+Platform shutdown (`JiePlatform.shutdown()`, invoked by the CLI on every exit path) closes all stdio connections: end stdin, wait a grace period, then kill.
 
 ## LLM Provider Configuration
 

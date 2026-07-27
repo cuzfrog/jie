@@ -18,6 +18,9 @@ const SERVICE_KEYS = [
   "agentBodyFactory",
   "teamManager",
   "commandExecutor",
+  "subprocessFactory",
+  "mcpConnector",
+  "mcpManager",
   "platform",
 ] as const;
 
@@ -32,22 +35,22 @@ describe("bootPlatform", () => {
     rmSync(homeJieDir, { recursive: true, force: true });
   });
 
-  test("registers every PlatformCradle service", () => {
-    const container = bootPlatform({ cwd: tmpdir(), homeJieDir, projectJieDir: null });
+  test("registers every PlatformCradle service", async () => {
+    const container = await bootPlatform({ cwd: tmpdir(), homeJieDir, projectJieDir: null });
     for (const key of SERVICE_KEYS) {
       expect(container.hasRegistration(key)).toBe(true);
     }
   });
 
-  test("resolves commandExecutor and platform as singletons", () => {
-    const container = bootPlatform({ cwd: tmpdir(), homeJieDir, projectJieDir: null });
+  test("resolves commandExecutor and platform as singletons", async () => {
+    const container = await bootPlatform({ cwd: tmpdir(), homeJieDir, projectJieDir: null });
     expect(container.cradle.commandExecutor).toBe(container.cradle.commandExecutor);
     expect(container.cradle.platform).toBe(container.cradle.platform);
     expect(container.resolve("platform")).toBe(container.cradle.platform);
   });
 
-  test("cradle.platform resolves to a JiePlatformImpl instance", () => {
-    const container = bootPlatform({ cwd: tmpdir(), homeJieDir, projectJieDir: null });
+  test("cradle.platform resolves to a JiePlatformImpl instance", async () => {
+    const container = await bootPlatform({ cwd: tmpdir(), homeJieDir, projectJieDir: null });
     expect(container.cradle.platform).toBeInstanceOf(JiePlatformImpl);
   });
 });
