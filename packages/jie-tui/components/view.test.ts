@@ -1,5 +1,6 @@
 import { Actions } from "../state";
-import { _resolveGlobalKey } from "./view";
+import { makeTuiState } from "../test";
+import { _resolveGlobalKey, _shouldCommitTeamCursor } from "./view";
 
 describe("resolveGlobalKey", () => {
   test("ctrl+t maps to toggleThinking", () => {
@@ -29,5 +30,27 @@ describe("resolveGlobalKey", () => {
     expect(_resolveGlobalKey("a")).toBeNull();
     expect(_resolveGlobalKey("\r")).toBeNull();
     expect(_resolveGlobalKey("\x1b[A")).toBeNull();
+  });
+});
+
+describe("shouldCommitTeamCursor", () => {
+  test("true when the strip is visible and the cursor differs from the focused agent", () => {
+    const state = makeTuiState({ teamPanelVisible: true, focusedAgentId: "t:a-1", teamCursorAgentId: "t:b-1" });
+    expect(_shouldCommitTeamCursor(state)).toBe(true);
+  });
+
+  test("false when the cursor matches the focused agent", () => {
+    const state = makeTuiState({ teamPanelVisible: true, focusedAgentId: "t:a-1", teamCursorAgentId: "t:a-1" });
+    expect(_shouldCommitTeamCursor(state)).toBe(false);
+  });
+
+  test("false when there is no cursor", () => {
+    const state = makeTuiState({ teamPanelVisible: true, focusedAgentId: "t:a-1" });
+    expect(_shouldCommitTeamCursor(state)).toBe(false);
+  });
+
+  test("false when the strip is hidden", () => {
+    const state = makeTuiState({ teamPanelVisible: false, focusedAgentId: "t:a-1", teamCursorAgentId: "t:b-1" });
+    expect(_shouldCommitTeamCursor(state)).toBe(false);
   });
 });

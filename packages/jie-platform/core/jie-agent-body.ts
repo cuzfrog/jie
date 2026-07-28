@@ -105,6 +105,8 @@ export class JieAgentBody implements AgentBody {
       role: params.soul.role,
       agentKey: this.agentKey,
       isLeader: params.isLeader,
+      tools: params.soul.tools,
+      subscribe: params.soul.subscribe,
       model: bodyModel,
     };
     const unsubscribeAgent = this.agent.subscribe((event, _signal) => this.handlePiAgentEvent(event));

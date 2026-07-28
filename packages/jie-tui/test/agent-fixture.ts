@@ -8,6 +8,8 @@ export function makeAgentUiState(agentId: AgentId, overrides: Partial<AgentUiSta
     agentKey: agentId.slice(colonIndex + 1),
     role: "general",
     isLeader: false,
+    tools: [],
+    subscribe: [],
     status: "idle",
     model: null,
     queue: [],

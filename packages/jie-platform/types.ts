@@ -20,6 +20,8 @@ export interface AgentInfo {
     readonly role: string;
     readonly agentKey: string;
     readonly isLeader: boolean;
+    readonly tools: ReadonlyArray<string>;
+    readonly subscribe: ReadonlyArray<string>;
     readonly model: ModelInfo | null;
 }
 

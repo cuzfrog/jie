@@ -113,6 +113,8 @@ describe("registerCoreModule", () => {
       role: "general",
       agentKey: "leader-1",
       isLeader: true,
+      tools: [],
+      subscribe: [],
       model: null,
     });
     body.stop();

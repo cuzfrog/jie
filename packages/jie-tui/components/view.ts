@@ -1,4 +1,4 @@
-import { Container, Loader, type Component, type Editor, type TUI } from "@earendil-works/pi-tui";
+import { Container, Loader, matchesKey, type Component, type Editor, type TUI } from "@earendil-works/pi-tui";
 import { Actions, TuiState, type Action, type StateStore } from "../state";
 import type { ChatSync } from "../sync";
 import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, WORKING_LABEL, style } from "./themes";
@@ -56,9 +56,15 @@ export class TuiViewImpl implements TuiView {
     tui.setFocus(editor);
     this.unsubscribeKeys = tui.addInputListener((data) => {
       const action = resolveGlobalKey(data);
-      if (action === null) return undefined;
-      this.stateStore.dispatch(action);
-      return CONSUMED;
+      if (action !== null) {
+        this.stateStore.dispatch(action);
+        return CONSUMED;
+      }
+      if (matchesKey(data, "enter") && shouldCommitTeamCursor(this.stateStore.getState())) {
+        this.stateStore.dispatch(Actions.commitTeamCursor());
+        return CONSUMED;
+      }
+      return undefined;
     });
     this.chatSync = chatSyncFactory(chatContainer, () => tui.requestRender());
     this.unsubscribeActions = stateStore.subscribe(async (): Promise<void> => {
@@ -89,6 +95,10 @@ function resolveGlobalKey(data: string): Action | null {
   return null;
 }
 
+function shouldCommitTeamCursor(state: TuiState): boolean {
+  return state.teamPanelVisible && state.teamCursorAgentId !== null && state.teamCursorAgentId !== state.focusedAgentId;
+}
+
 function syncWorkingSlot(slot: Container, working: Loader, interrupted: Loader, busy: boolean, showInterrupted: boolean): boolean {
   const current = slot.children[0] ?? null;
   if (busy) {
@@ -110,4 +120,4 @@ function syncWorkingSlot(slot: Container, working: Loader, interrupted: Loader, 
   return true;
 }
 
-export { resolveGlobalKey as _resolveGlobalKey, syncWorkingSlot as _syncWorkingSlot };
+export { resolveGlobalKey as _resolveGlobalKey, shouldCommitTeamCursor as _shouldCommitTeamCursor, syncWorkingSlot as _syncWorkingSlot };

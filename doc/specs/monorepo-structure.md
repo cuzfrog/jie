@@ -21,7 +21,7 @@ packages/
   jie-tui/        # Terminal UI (pi-tui-based inline renderer): chat column, editor, footer, slash commands; bootTui(options, deps)
   jie-utils/      # Process-level infra shared by all packages: diagnostic logger (tslog), Console output abstraction
   mock-llm-backend/  # OpenAI-compatible mock LLM server for e2e tests (bun mock:start)
-  jie-team/       # Team-blueprint installer (installBlueprint/listBlueprints) + shipped dev blueprint (lead + architect) (doc/specs/jie-team/)
+  jie-team/       # Team-blueprint installer (installBlueprint/listBlueprints) + shipped `default` blueprint (six-role delivery pipeline) (doc/specs/jie-team/)
   code-lens/      # Standalone MCP server (bin: code-lens): code-architecture facts from SCIP indexes (doc/specs/code-lens/)
 ```
 
@@ -55,7 +55,7 @@ Every package exports `.` → `./index.ts`; the root `package.json` declares `"b
 
 `jie-utils/index.ts` exports `logger` (a tslog instance gated by `JIE_LOG_LEVEL`) and `Console` / `defaultConsole` — the output abstraction CLI commands write through and the logger's transport routes to stderr. It depends on no other jie package; diagnostic logging is orthogonal to app logic and is imported as a module-scope instance, not injected.
 
-`jie-team/index.ts` exports `installBlueprint` / `listBlueprints` — the installer that copies shipped blueprints (e.g. `dev`) into `.jie/teams/`; the platform discovers the installed blueprints from the filesystem (ADR 11 agnosticism).
+`jie-team/index.ts` exports `installBlueprint` / `listBlueprints` — the installer that copies shipped blueprints (the `default` six-role team) into `.jie/teams/`; the blueprint directories live at the package root (`<id>/TEAM.md` + `<role>.md`) and the platform discovers the installed copies from the filesystem (ADR 11 agnosticism).
 
 `code-lens/index.ts` is the minimal library surface (SCIP ingestion + `CodeIndex` model); the executable surface is the `code-lens` bin (`main.ts`), a stdio MCP server the platform spawns as a child process rather than imports.
 

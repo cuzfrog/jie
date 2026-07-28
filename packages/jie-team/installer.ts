@@ -46,5 +46,5 @@ export function installBlueprint(
 }
 
 function defaultBlueprintsDir(): string {
-  return join(import.meta.dir, "blueprints");
+  return import.meta.dir;
 }

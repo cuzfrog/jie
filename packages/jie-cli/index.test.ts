@@ -91,6 +91,8 @@ function dispatch(command: Command<CommandName>): CommandResult<CommandName> | n
           role: "general",
           agentKey: "general-1",
           isLeader: true,
+          tools: [],
+          subscribe: [],
           model: null,
         }],
       };

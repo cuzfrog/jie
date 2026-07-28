@@ -11,4 +11,5 @@ tmp/
 .jie/*.db-shm
 .jie/*.db-wal
 .jie/settings.json
+.jie/teams/default/
 index.scip

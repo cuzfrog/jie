@@ -11,13 +11,16 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
     case ActionTypes.TOGGLE_TOOL_CARDS:
       return { ...state, toolCardsExpanded: !state.toolCardsExpanded };
     case ActionTypes.SWITCH_CYCLE_AGENT:
-      return reduceAgentCursor(state, action.payload.direction);
+      return reduceTeamCursor(state, action.payload.direction);
+    case ActionTypes.COMMIT_TEAM_CURSOR:
+      return reduceTeamCursorCommit(state);
     case ActionTypes.CLEAR_TUI_STATE:
       return {
         ...state,
         agents: new Map(),
         leaderAgentId: null,
         focusedAgentId: null,
+        teamCursorAgentId: null,
         interruptedAgentId: null,
         infoEntries: [],
         nextEntrySeq: 0,
@@ -64,16 +67,24 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
   }
 }
 
-function reduceAgentCursor(state: TuiState, direction: 1 | -1): TuiState {
+function reduceTeamCursor(state: TuiState, direction: 1 | -1): TuiState {
   const roster = TuiState.rosterOrder(state);
   if (roster.length === 0) return state;
   if (!state.teamPanelVisible) {
-    const focused = state.focusedAgentId ?? roster[direction === 1 ? 0 : roster.length - 1]!.agentId;
-    return { ...state, teamPanelVisible: true, focusedAgentId: focused };
+    const cursor = state.teamCursorAgentId ?? state.focusedAgentId ?? roster[direction === 1 ? 0 : roster.length - 1]!.agentId;
+    return { ...state, teamPanelVisible: true, teamCursorAgentId: cursor };
   }
-  const index = roster.findIndex((agent) => agent.agentId === state.focusedAgentId);
-  if (index === -1) return { ...state, focusedAgentId: roster[0]!.agentId };
-  if (direction === -1 && index === 0) return { ...state, teamPanelVisible: false };
+  const current = state.teamCursorAgentId ?? state.focusedAgentId;
+  const index = roster.findIndex((agent) => agent.agentId === current);
+  if (index === -1) return { ...state, teamCursorAgentId: roster[0]!.agentId };
+  if (direction === -1 && index === 0) return { ...state, teamPanelVisible: false, teamCursorAgentId: null };
   const next = direction === 1 && index === roster.length - 1 ? 0 : index + direction;
-  return { ...state, focusedAgentId: roster[next]!.agentId };
+  return { ...state, teamCursorAgentId: roster[next]!.agentId };
+}
+
+function reduceTeamCursorCommit(state: TuiState): TuiState {
+  const cursor = state.teamCursorAgentId;
+  if (!state.teamPanelVisible || cursor === null || cursor === state.focusedAgentId) return state;
+  if (!state.agents.has(cursor)) return { ...state, teamCursorAgentId: null };
+  return { ...state, focusedAgentId: cursor };
 }

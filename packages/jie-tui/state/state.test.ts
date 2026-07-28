@@ -10,8 +10,8 @@ function loadDemoTeam(stateStore: StateStore): void {
         leaderKey: "general-1",
         history: [],
         agents: [
-          { teamId: "demo", role: "helper", agentKey: "helper-1", isLeader: false, model: null },
-          { teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, model: null },
+          { teamId: "demo", role: "helper", agentKey: "helper-1", isLeader: false, tools: [], subscribe: [], model: null },
+          { teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
         ],
       }),
     ),
@@ -33,13 +33,14 @@ describe("TuiState.getFocusedAgent", () => {
     expect(focused?.isLeader).toBe(true);
   });
 
-  test("reflects focus changes from Actions.switchCycleAgent", () => {
+  test("reflects focus changes only after the team cursor is committed", () => {
     const store = new StateStoreImpl();
     loadDemoTeam(store);
     store.dispatch(Actions.switchCycleAgent(1));
     store.dispatch(Actions.switchCycleAgent(1));
-    const focused = TuiState.getFocusedAgent(store.getState());
-    expect(focused?.agentKey).toBe("helper-1");
+    expect(TuiState.getFocusedAgent(store.getState())?.agentKey).toBe("general-1");
+    store.dispatch(Actions.commitTeamCursor());
+    expect(TuiState.getFocusedAgent(store.getState())?.agentKey).toBe("helper-1");
   });
 });
 

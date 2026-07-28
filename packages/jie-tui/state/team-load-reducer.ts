@@ -1,4 +1,4 @@
-import type { TeamInfo } from "@cuzfrog/jie-platform";
+import type { AgentInfo, TeamInfo } from "@cuzfrog/jie-platform";
 import type { AgentId, AgentUiState, TuiState } from "./state";
 import { hydrateHistory } from "./hydrate-history";
 import { estimateContextTokens } from "./context-tokens";
@@ -20,9 +20,16 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
     incomingIds.add(agentId);
     const existing = newAgents.get(agentId);
     if (existing !== undefined) {
-      newAgents.set(agentId, { ...existing, role: agent.role, isLeader: agent.isLeader, model: agent.model ?? existing.model });
+      newAgents.set(agentId, {
+        ...existing,
+        role: agent.role,
+        isLeader: agent.isLeader,
+        tools: agent.tools,
+        subscribe: agent.subscribe,
+        model: agent.model ?? existing.model,
+      });
     } else {
-      newAgents.set(agentId, emptyAgent(agentId, teamId, agent.agentKey, agent.role, agent.isLeader, agent.model));
+      newAgents.set(agentId, emptyAgent(agentId, teamId, agent));
     }
     if (agent.isLeader) leaderId = agentId;
   }
@@ -48,11 +55,14 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
   if (focused !== null && !newAgents.has(focused)) focused = null;
   if (focused === null && leaderId !== null && newAgents.has(leaderId)) focused = leaderId;
   if (leaderId !== null && !newAgents.has(leaderId)) leaderId = null;
+  let cursor = switching ? null : state.teamCursorAgentId;
+  if (cursor !== null && !newAgents.has(cursor)) cursor = null;
   return {
     ...state,
     teamId,
     leaderAgentId: leaderId,
     focusedAgentId: focused,
+    teamCursorAgentId: cursor,
     interruptedAgentId: null,
     infoEntries: switching ? [] : state.infoEntries,
     nextEntrySeq,
@@ -60,23 +70,18 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
   };
 }
 
-function emptyAgent(
-  agentId: AgentId,
-  teamId: string,
-  agentKey: string,
-  role: string,
-  isLeader: boolean,
-  model: AgentUiState["model"],
-): AgentUiState {
+function emptyAgent(agentId: AgentId, teamId: string, agent: AgentInfo): AgentUiState {
   return {
     agentId,
     teamId,
-    agentKey,
-    role,
-    isLeader,
+    agentKey: agent.agentKey,
+    role: agent.role,
+    isLeader: agent.isLeader,
+    tools: agent.tools,
+    subscribe: agent.subscribe,
     status: "idle",
     lastStopReason: null,
-    model,
+    model: agent.model,
     queue: [],
     history: [],
     currentTurn: null,
