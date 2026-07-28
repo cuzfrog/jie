@@ -1,3 +1,0 @@
----
-leader: lead
----

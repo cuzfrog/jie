@@ -1,6 +1,6 @@
 # Jie Team — Overview
 
-**Status: the package ships a blueprint installer (`installBlueprint` / `listBlueprints`) and a first `dev` blueprint — a lead plus an architect wired to code-lens (`mcp:code-lens:*`, ADR 32), coordinating on `structure.requested` / `structure.answered` notify topics. The full six-role pipeline below is the target design; the task lifecycle, artifacts, and the module-descriptor gate are not implemented yet.**
+**Status: the package ships a blueprint installer (`installBlueprint` / `listBlueprints`) and the `default` blueprint — the six-role pipeline below, with constrained per-role tool sets and the notify/artifact conventions as manifest prose. Not implemented platform-side: task-lifecycle transition enforcement (`illegal_transition`), `max_iterations`, and the module-descriptor write gate; the manifest instructs these conventions, the platform does not police them. The two-role code-lens team (lead + architect on `structure.requested` / `structure.answered`, `mcp:code-lens:*`, ADR 32) lives untracked at `.jie/teams/dev` as a local test fixture.**
 
 ## Purpose
 
