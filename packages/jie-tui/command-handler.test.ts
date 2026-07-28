@@ -270,7 +270,7 @@ describe("CommandHandlerImpl — /team", () => {
       id: "alpha",
       leaderKey: "general-1",
       history: [],
-      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
     }));
     const { handler, dispatch } = makeHandler(platform);
     handler.handle("/team alpha");
@@ -282,7 +282,7 @@ describe("CommandHandlerImpl — /team", () => {
       id: "alpha",
       leaderKey: "general-1",
       history: [],
-      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
     }));
   });
 
@@ -292,7 +292,7 @@ describe("CommandHandlerImpl — /team", () => {
       id: "alpha",
       leaderKey: "general-1",
       history: [],
-      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
     } as const;
     execute.mockImplementation(async () => identity);
     const { handler, dispatch } = makeHandler(platform);
@@ -343,7 +343,7 @@ describe("CommandHandlerImpl — /resume", () => {
       id: "minimal",
       leaderKey: "general-1",
       history: [],
-      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
     };
     execute.mockImplementationOnce(async () => identity);
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
@@ -358,7 +358,7 @@ describe("CommandHandlerImpl — /resume", () => {
       id: "minimal",
       leaderKey: "general-1",
       history: [],
-      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
     };
     execute.mockImplementationOnce(async () => identity);
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));

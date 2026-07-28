@@ -272,6 +272,7 @@ describe("JieAgentBody — identity", () => {
     const body = h.makeBody({
       agentKey: "leader-1",
       isLeader: true,
+      soul: makeSoul({ tools: ["notify", "read_file"], subscribe: ["task.recorded"] }),
       model: makeModel("anthropic", "claude-sonnet-4"),
     });
     expect(body.identity).toEqual({
@@ -279,6 +280,8 @@ describe("JieAgentBody — identity", () => {
       role: "general",
       agentKey: "leader-1",
       isLeader: true,
+      tools: ["notify", "read_file"],
+      subscribe: ["task.recorded"],
       model: { provider: "anthropic", id: "claude-sonnet-4", effort: "off", contextWindow: 200000 },
     });
   });

@@ -65,6 +65,8 @@ function makeFakeBody(params: AgentBodyParams, restored: ReadonlyArray<AgentMess
       role: params.soul.role,
       agentKey: params.agentKey,
       isLeader: params.isLeader,
+      tools: params.soul.tools,
+      subscribe: params.soul.subscribe,
       model: null,
     },
     restore: async () => restored,
@@ -235,7 +237,7 @@ describe("TeamManagerImpl — full surface", () => {
     test("cache hit carries the agents' live history and stays silent", async () => {
       const live: AgentMessage[] = [];
       const factory = (params: AgentBodyParams): AgentBody => ({
-        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, model: null },
+        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], model: null },
         restore: async () => [...live],
         messages: () => [...live],
         start: async () => {},

@@ -15,7 +15,7 @@ const TEAM_LOADED = Events.teamLoaded({ kind: "system" }, {
   id: "my-team",
   leaderKey: "general-1",
   history: [],
-  agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, model: null }],
+  agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
 });
 const SESSIONS: ReadonlyArray<SessionSummary> = [
   { sessionId: "alpha-1", messageCount: 3, lastActivity: "2026-07-21T00:00:00.000Z" },

@@ -10,8 +10,8 @@ function loadDemoTeam(stateStore: StateStore): void {
         leaderKey: "general-1",
         history: [],
         agents: [
-          { teamId: "demo", role: "helper", agentKey: "helper-1", isLeader: false, model: null },
-          { teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, model: null },
+          { teamId: "demo", role: "helper", agentKey: "helper-1", isLeader: false, tools: [], subscribe: [], model: null },
+          { teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
         ],
       }),
     ),
