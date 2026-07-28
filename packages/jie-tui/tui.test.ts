@@ -259,7 +259,7 @@ describe("bootTui — global keys", () => {
     await started;
   });
 
-  test("shift+down opens the team strip, then moves the cursor to the next team member", async () => {
+  test("shift+down moves the team cursor; enter commits it to the focused agent", async () => {
     let harness: TuiHarness | null = null;
     withTTY(true, () => {
       harness = bootHarness();
@@ -272,8 +272,12 @@ describe("bootTui — global keys", () => {
     harness!.stdin.write("\x1b[1;2B");
     await waitFrames(20);
     expect(harness!.stateStore.getState().teamPanelVisible).toBe(true);
-    expect(harness!.stateStore.getState().focusedAgentId).toBe("my-team:manager-1");
+    expect(harness!.stateStore.getState().teamCursorAgentId).toBe("my-team:manager-1");
     harness!.stdin.write("\x1b[1;2B");
+    await waitFrames(20);
+    expect(harness!.stateStore.getState().teamCursorAgentId).toBe("my-team:worker-1");
+    expect(harness!.stateStore.getState().focusedAgentId).toBe("my-team:manager-1");
+    harness!.stdin.write("\r");
     await waitFrames(20);
     expect(harness!.stateStore.getState().focusedAgentId).toBe("my-team:worker-1");
     harness!.tui.stop();

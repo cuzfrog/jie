@@ -45,6 +45,8 @@ export interface AgentUiState {
   readonly agentKey: string;
   readonly role: string;
   readonly isLeader: boolean;
+  readonly tools: ReadonlyArray<string>;
+  readonly subscribe: ReadonlyArray<string>;
   readonly status: AgentStatus;
   readonly model: ModelReference | null;
   readonly queue: ReadonlyArray<string>;
@@ -64,6 +66,7 @@ export interface TuiState {
   readonly leaderAgentId: AgentId | null;
   readonly agents: ReadonlyMap<AgentId, AgentUiState>;
   readonly focusedAgentId: AgentId | null;
+  readonly teamCursorAgentId: AgentId | null;
   readonly interruptedAgentId: AgentId | null;
   readonly infoEntries: ReadonlyArray<InfoEntry>;
   readonly nextEntrySeq: number;

@@ -6,7 +6,7 @@ The TUI is keyboard-driven. Editor keys are pi-tui `Editor` semantics verbatim p
 
 | Key | What it does | Notes |
 | --- | --- | --- |
-| `Enter` | Submit the editor buffer | pi semantics; `Shift+Enter` inserts a newline where the terminal reports modifyOtherKeys/Kitty (production path) |
+| `Enter` | Submit the editor buffer — except when the team strip is shown with its cursor on another agent: then it commits that agent as the focused one instead (`tui-team-panel.md`) | pi semantics; `Shift+Enter` inserts a newline where the terminal reports modifyOtherKeys/Kitty (production path) |
 | `Tab` | Complete the highlighted autocomplete suggestion | Inserts the completed token into the buffer; does **not** submit — submit is always `Enter` |
 | `↑` / `↓` | Walk prompt history (with draft capture) | pi editor owns this; the global listener does not intercept plain arrows |
 | `Esc` | Interrupt the focused agent's in-flight run | only when that agent is busy and no autocomplete popup is showing; otherwise pi closes the popup. The working slot then shows a static `Interrupted` until the agent's next turn starts or the user submits |
@@ -21,8 +21,8 @@ Everything else is pi-tui `Editor` behavior: cursor/word movement, undo, kill ri
 | --- | --- | --- |
 | `Ctrl+T` | Expand / collapse all thinking blocks | always |
 | `Ctrl+O` | Expand / collapse all tool cards | always |
-| `Shift+↓` | Call out the team strip, then move the cursor down (focus follows); wraps last → first (`tui-team-panel.md`) | always; no-op before a team is loaded |
-| `Shift+↑` | Move the cursor up; at the first agent, hide the strip | always; no-op before a team is loaded |
+| `Shift+↓` | Call out the team strip, then move the cursor down without switching the focused agent; wraps last → first (`tui-team-panel.md`) | always; no-op before a team is loaded |
+| `Shift+↑` | Move the cursor up; at the first agent, hide the strip and clear the cursor | always; no-op before a team is loaded |
 
 Only `Shift` arrows are bound — `Ctrl` arrows conflict with OS shortcuts and stay with the terminal. The first press while the strip is hidden shows it with the cursor on the focused agent and does not move; the asymmetry is deliberate: down wraps, up at the top closes (`tui-team-panel.md`, Interaction). The thinking/tool toggles are all-or-nothing across the focused agent's history + current turn (`state.thinkingExpanded` / `state.toolCardsExpanded`); mid-stream toggle re-renders on the next tick. There are **no** `PgUp`/`PgDn`/`Home`/`End`/wheel bindings: finished output is terminal scrollback; scroll and copy are the terminal's native behavior.
 
@@ -37,7 +37,7 @@ Typed into the editor like a prompt; the command handler (`command-handler.ts`) 
 | Command | Effect | Reply |
 | --- | --- | --- |
 | `/help` | Reprint the welcome info into the chat area as an info entry (the splash — mark, wordmark + tagline, team line, Commands and Shortcuts sections, the latter carrying the keybinding hints); the splash hides while the reprint is present (`tui-state.md`, entry sequence) | none |
-| `/clear` | Clear `agents`, `leaderAgentId`, `focusedAgentId`, info entries, and banners; reset the entry counter; memory rows on disk untouched | none |
+| `/clear` | Clear `agents`, `leaderAgentId`, `focusedAgentId`, `teamCursorAgentId`, info entries, and banners; reset the entry counter; memory rows on disk untouched | none |
 | `/exit` | Quit the TUI (same as `Ctrl+D` on an empty editor); no busy-state branch | none |
 | `/login <provider> <apiKey>` | Write one API key entry to `~/.jie/auth.json` (mode `0600` on POSIX). The provider is completed in-flow by autocomplete | `logged in to <provider>` |
 | `/logout [<provider>]` | Clear one or all entries from `~/.jie/auth.json` | `logged out of <provider>` (or `... of all providers`) |

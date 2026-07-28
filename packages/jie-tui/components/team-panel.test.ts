@@ -28,25 +28,58 @@ describe("TeamPanel", () => {
     expect(new TeamPanel(stateStore).render(80)).toEqual([]);
   });
 
-  test("renders one row per agent, leader first, regardless of map order", () => {
+  test("renders one row per agent, leader first, with empty columns as dashes", () => {
     stateStore.getState.mockReturnValue(teamState({ focusedAgentId: LEADER_ID }));
-    const text = new TeamPanel(stateStore).render(80).map(stripAnsi);
-    expect(text).toEqual(["▸ ★ general-1 · general", "  coder-1 · coder"]);
+    const text = new TeamPanel(stateStore).render(120).map(stripAnsi);
+    expect(text).toEqual(["▸ ★ general-1 · general  —  —  —  —", "  coder-1 · coder        —  —  —  —"]);
   });
 
-  test("marks the pointed agent with the cursor glyph and the accent key", () => {
-    stateStore.getState.mockReturnValue(teamState({ focusedAgentId: WORKER_ID }));
-    const lines = new TeamPanel(stateStore).render(80);
-    expect(stripAnsi(lines[0])).toBe("  ★ general-1 · general");
-    expect(stripAnsi(lines[1])).toBe("▸ coder-1 · coder");
-    expect(lines[1]).toContain(style("accent")("▸"));
+  test("points at the team cursor while keeping the focused agent key highlighted", () => {
+    stateStore.getState.mockReturnValue(teamState({ focusedAgentId: WORKER_ID, teamCursorAgentId: LEADER_ID }));
+    const lines = new TeamPanel(stateStore).render(120);
+    expect(lines[0]).toContain(style("accent")("▸"));
+    expect(lines[0]).toContain(style("accent")("general-1"));
+    expect(lines[1]).not.toContain(style("accent")("▸"));
     expect(lines[1]).toContain(style("accent")("coder-1"));
   });
 
-  test("shows no cursor when no agent is focused", () => {
+  test("without a cursor the pointer follows the focused agent", () => {
+    stateStore.getState.mockReturnValue(teamState({ focusedAgentId: WORKER_ID }));
+    const text = new TeamPanel(stateStore).render(120).map(stripAnsi);
+    expect(text[0].startsWith("  ★ general-1")).toBe(true);
+    expect(text[1].startsWith("▸ coder-1")).toBe(true);
+  });
+
+  test("shows no pointer when neither cursor nor focus is set", () => {
     stateStore.getState.mockReturnValue(teamState({ focusedAgentId: null }));
-    const text = new TeamPanel(stateStore).render(80).map(stripAnsi);
-    expect(text).toEqual(["  ★ general-1 · general", "  coder-1 · coder"]);
+    const text = new TeamPanel(stateStore).render(120).map(stripAnsi);
+    expect(text[0].startsWith("  ★ general-1")).toBe(true);
+    expect(text[1].startsWith("  coder-1")).toBe(true);
+  });
+
+  test("shows tools, subscriptions, model, and context usage columns", () => {
+    stateStore.getState.mockReturnValue(teamState({ focusedAgentId: LEADER_ID }, {
+      [LEADER_ID]: {
+        tools: ["notify", "read_file"],
+        subscribe: ["task.recorded"],
+        model: { provider: "local", id: "qwen3.5-4b", effort: "medium", contextWindow: 128000 },
+        contextTokensUsed: 32000,
+      },
+    }));
+    const row = stripAnsi(new TeamPanel(stateStore).render(160)[0]);
+    expect(row).toContain("notify read_file");
+    expect(row).toContain("task.recorded");
+    expect(row).toContain("qwen3.5-4b");
+    expect(row).toContain("25%/128k");
+  });
+
+  test("left-aligns columns across rows of differing widths", () => {
+    stateStore.getState.mockReturnValue(teamState({ focusedAgentId: LEADER_ID }, {
+      [LEADER_ID]: { tools: ["notify"], subscribe: ["task.failed"] },
+      [WORKER_ID]: { tools: ["bash", "read_file", "write_file", "edit"], subscribe: ["task.planned"] },
+    }));
+    const text = new TeamPanel(stateStore).render(160).map(stripAnsi);
+    expect(text[0].indexOf("task.failed")).toBe(text[1].indexOf("task.planned"));
   });
 
   test("shows a spinner frame for a busy agent", () => {
@@ -63,7 +96,7 @@ describe("TeamPanel", () => {
 
   test("tags the queue depth when prompts are queued", () => {
     stateStore.getState.mockReturnValue(teamState({}, { [WORKER_ID]: { queue: ["a", "b"] } }));
-    expect(stripAnsi(new TeamPanel(stateStore).render(80)[1])).toBe("  coder-1 · coder · q2");
+    expect(stripAnsi(new TeamPanel(stateStore).render(120)[1])).toContain("coder-1 · coder · q2");
   });
 
   test("truncates every row to the available width", () => {
