@@ -8,6 +8,7 @@ function loadDemoTeam(stateStore: StateStore): void {
       Events.teamLoaded({ kind: "system" }, {
         id: "demo",
         leaderKey: "general-1",
+        sessionName: null,
         history: [],
         agents: [
           { teamId: "demo", role: "helper", agentKey: "helper-1", isLeader: false, tools: [], subscribe: [], model: null },

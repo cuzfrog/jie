@@ -227,7 +227,9 @@ export class CommandHandlerImpl implements CommandHandler {
     const teamId = this.stateStore.getState().teamId;
     if (teamId === null) return { kind: "error", text: "/rename: no team loaded" };
     void this.platform.execute({ name: "renameSession", teamId, sessionName: name })
-      .then(() => undefined, (error: unknown) => {
+      .then(() => {
+        this.stateStore.dispatch(Actions.setSessionName(name));
+      }, (error: unknown) => {
         const reason = error instanceof Error ? error.message : String(error);
         this.stateStore.dispatch(Actions.setErrorMessage(`/rename failed: ${reason}`));
       });

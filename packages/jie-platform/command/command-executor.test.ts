@@ -288,6 +288,7 @@ describe("CommandExecutorImpl", () => {
       const identity: TeamInfo = {
         id: "alpha",
         leaderKey: "general-1",
+        sessionName: null,
         history: [],
         agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
       };
@@ -300,7 +301,7 @@ describe("CommandExecutorImpl", () => {
 
   describe("resumeSession", () => {
     test("delegates to teamManager.resumeSession with teamId and sessionId", async () => {
-      const identity: TeamInfo = { id: "alpha", leaderKey: "general-1", agents: [], history: [] };
+      const identity: TeamInfo = { id: "alpha", leaderKey: "general-1", sessionName: null, agents: [], history: [] };
       teamManager.resumeSession.mockResolvedValue(identity);
       const result = await executor.execute({ name: "resumeSession", teamId: "alpha", sessionId: "s1" });
       expect(result).toBe(identity);
@@ -389,8 +390,8 @@ describe("CommandExecutorImpl", () => {
   describe("dispatch", () => {
     test("executor.execute is the single entry point for every command name", async () => {
       teamManager.locate.mockReturnValue("user");
-      teamManager.load.mockResolvedValue({ id: "alpha", leaderKey: "general-1", agents: [], history: [] });
-      teamManager.resumeSession.mockResolvedValue({ id: "alpha", leaderKey: "general-1", agents: [], history: [] });
+      teamManager.load.mockResolvedValue({ id: "alpha", leaderKey: "general-1", sessionName: null, agents: [], history: [] });
+      teamManager.resumeSession.mockResolvedValue({ id: "alpha", leaderKey: "general-1", sessionName: null, agents: [], history: [] });
       teamManager.listInstalled.mockReturnValue([]);
       teamManager.listSessions.mockReturnValue([]);
       modelRegistry.listModels.mockReturnValue([]);

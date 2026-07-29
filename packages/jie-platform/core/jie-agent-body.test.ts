@@ -160,6 +160,7 @@ function makeFakeMemory(): {
     restore,
     hasSession: vi.fn(() => false),
     listSessions: vi.fn(() => []),
+    sessionName: vi.fn(() => null),
     renameSession: vi.fn(),
   });
   return { memory, persisted, restore };

@@ -140,6 +140,7 @@ describe("bootTui — surface contract", () => {
 const TEAM_LOADED = Events.teamLoaded({ kind: "system" }, {
   id: "my-team",
   leaderKey: "general-1",
+  sessionName: null,
   history: [],
   agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
 });
@@ -147,6 +148,7 @@ const TEAM_LOADED = Events.teamLoaded({ kind: "system" }, {
 const TWO_AGENT_TEAM = Events.teamLoaded({ kind: "system" }, {
   id: "my-team",
   leaderKey: "manager-1",
+  sessionName: null,
   history: [],
   agents: [
     { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, tools: [], subscribe: [], model: null },

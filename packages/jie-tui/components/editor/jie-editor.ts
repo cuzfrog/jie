@@ -19,6 +19,10 @@ const CTRL_D = "\x04";
 const FAKE_CURSOR = "\x1b[7m";
 const FAKE_CURSOR_END = "\x1b[0m";
 const SCROLL_INFO_PATTERN = /^\s*\((\d+)\/(\d+)\)\s*$/;
+const SESSION_LABEL_TRAILING_DASHES = 2;
+const CHIP_BACKGROUND_BORDER = "\x1b[44m";
+const CHIP_BACKGROUND_WARNING = "\x1b[43m";
+const CHIP_BACKGROUND_END = "\x1b[49m";
 
 const EDITOR_THEME: EditorTheme = {
   borderColor: style("border"),
@@ -35,6 +39,7 @@ export class JieEditor extends Editor {
   private readonly stateStore: StateStore;
   private readonly promptHistoryStore: PromptHistoryStore;
   private lastPersistedPrompt: string | null = null;
+  private bashMode = false;
   private ghost: GhostSelection | null = null;
   private popupFilteredOut: number | null = null;
 
@@ -56,7 +61,8 @@ export class JieEditor extends Editor {
     this.setAutocompleteProvider(tracking);
     this.seedHistory();
     this.onChange = (text: string): void => {
-      this.borderColor = text.startsWith("!") ? style("warning") : style("border");
+      this.bashMode = text.startsWith("!");
+      this.borderColor = this.bashMode ? style("warning") : style("border");
       this.stateStore.dispatch(Actions.setEditorText(text));
       if (this.stateStore.getState().errorBanner !== null && text.length > 0) {
         this.stateStore.dispatch(Actions.clearBanners());
@@ -91,6 +97,8 @@ export class JieEditor extends Editor {
 
   render(width: number): string[] {
     let lines = super.render(width);
+    const chipBackground = this.bashMode ? CHIP_BACKGROUND_WARNING : CHIP_BACKGROUND_BORDER;
+    lines = spliceSessionLabel(lines, this.stateStore.getState().sessionName, width, this.borderColor, chipBackground);
     if (this.isShowingAutocomplete() && this.popupFilteredOut !== null) lines = spliceScrollInfo(lines, this.popupFilteredOut);
     if (this.ghost === null || !this.isShowingAutocomplete()) return lines;
     const suffix = ghostSuffix(this.ghost.prefix, this.ghost.items[this.ghost.index]);
@@ -228,6 +236,25 @@ function injectGhost(line: string, ghost: string, ghostWidth: number): string {
   if (fit <= 0) return line;
   const shown = fit === ghostWidth ? ghost : truncateToWidth(ghost, fit);
   return line.slice(0, insertAt) + shown + tail.slice(0, tail.length - fit);
+}
+
+function spliceSessionLabel(
+  lines: string[],
+  name: string | null,
+  width: number,
+  borderColor: (text: string) => string,
+  chipBackground: string,
+): string[] {
+  if (name === null || name === "" || lines.length === 0) return lines;
+  const maxNameWidth = width - SESSION_LABEL_TRAILING_DASHES - 3;
+  if (maxNameWidth < 1) return lines;
+  const shown = visibleWidth(name) > maxNameWidth ? truncateToWidth(name, maxNameWidth, "") : name;
+  const label = ` ${shown} `;
+  const start = width - SESSION_LABEL_TRAILING_DASHES - visibleWidth(label);
+  const prefix = truncateToWidth(stripAnsi(lines[0]!), start, "");
+  const next = [...lines];
+  next[0] = borderColor(prefix) + chipBackground + label + CHIP_BACKGROUND_END + borderColor("─".repeat(SESSION_LABEL_TRAILING_DASHES));
+  return next;
 }
 
 function spliceScrollInfo(lines: string[], filteredOut: number): string[] {

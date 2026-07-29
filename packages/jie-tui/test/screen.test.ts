@@ -14,6 +14,7 @@ const AGENT_SENDER = { kind: "agent", teamId: "my-team", agentKey: "general-1" }
 const TEAM_LOADED = Events.teamLoaded({ kind: "system" }, {
   id: "my-team",
   leaderKey: "general-1",
+  sessionName: null,
   history: [],
   agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
 });

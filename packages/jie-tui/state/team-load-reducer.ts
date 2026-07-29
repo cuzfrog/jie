@@ -60,6 +60,7 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
   return {
     ...state,
     teamId,
+    sessionName: teamInfo.sessionName,
     leaderAgentId: leaderId,
     focusedAgentId: focused,
     teamCursorAgentId: cursor,

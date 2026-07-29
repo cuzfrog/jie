@@ -23,6 +23,7 @@ function loadedTeam(roles: ReadonlyArray<{ role: string; agent_key: string; is_l
   return reduceEvent(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, {
     id: "my-team",
     leaderKey,
+    sessionName: null,
     history: [],
     agents,
   }));
@@ -261,6 +262,19 @@ describe("clear", () => {
     expect(cleared.focusedAgentId).toBeNull();
     expect(cleared.transientMessage).toBeNull();
     expect(cleared.errorBanner).toBeNull();
+  });
+});
+
+describe("setSessionName", () => {
+  test("records the active session's name", () => {
+    const state = reduceUiAction(INITIAL_TUI_STATE, Actions.setSessionName("my session"));
+    expect(state.sessionName).toBe("my session");
+  });
+
+  test("clearTuiState resets the session name", () => {
+    const named = reduceUiAction(INITIAL_TUI_STATE, Actions.setSessionName("my session"));
+    const cleared = reduceUiAction(named, Actions.clearTuiState());
+    expect(cleared.sessionName).toBeNull();
   });
 });
 

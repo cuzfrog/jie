@@ -5,6 +5,7 @@ type InstalledTeams = CommandResult<"getTeamInfo">["installed"];
 export const ActionTypes = {
   RECEIVE_EVENT: "[bus] receive event from event bus",
   SWITCH_TEAM: "[ui] switch team",
+  SET_SESSION_NAME: "[ui] set session name",
   SET_INSTALLED_TEAMS: "[ui] set installed teams",
   TOGGLE_THINKING: "[ui] toggle thinking expanded",
   TOGGLE_TOOL_CARDS: "[ui] toggle tool cards expanded",
@@ -47,6 +48,7 @@ const showHelp = createAction(ActionTypes.SHOW_HELP);
 export const Actions = {
   receiveEvent: (event: AnyEventEnvelope) => createAction(ActionTypes.RECEIVE_EVENT, event),
 	switchTeam: (identity: TeamInfo) => createAction(ActionTypes.SWITCH_TEAM, identity),
+	setSessionName: (name: string | null) => createAction(ActionTypes.SET_SESSION_NAME, { name }),
 	setInstalledTeams: (teams: InstalledTeams) => createAction(ActionTypes.SET_INSTALLED_TEAMS, { teams }),
 	toggleThinking: () => toggleThinking,
 	toggleToolCards: () => toggleToolCards,

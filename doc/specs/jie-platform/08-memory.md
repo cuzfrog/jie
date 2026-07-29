@@ -15,6 +15,7 @@ interface MemoryManager {
   restore(agent_key: string, session_id: string, team_id: string): Promise<AgentMessage[]>;
   hasSession(team_id: string, session_id: string): boolean;   // --resume validation; pure read
   listSessions(team_id: string): SessionSummary[];            // /resume picker; one aggregate row per session, newest first
+  sessionName(session_id: string): string | null;             // session_metadata read; null when unnamed
   renameSession(session_id: string, name: string): void;      // upsert session_metadata
 }
 ```
@@ -44,7 +45,7 @@ The body's `session_id` is supplied by the platform (ADR 17): the platform's `Te
 
 ### List and rename
 
-`listSessions(team_id)` aggregates `memory_turns` into one `SessionSummary { sessionId, messageCount, lastActivity, name? }` per session, newest activity first; `name` comes from a LEFT JOIN on `session_metadata` and is absent for unnamed sessions. `renameSession(session_id, name)` upserts that table. The `renameSession` **command** (TUI `/rename <name>`) resolves the active `session_id` from `TeamManager`'s private `Map<team_id, session_id>` — no session loaded for that team fails `NO_TEAM` — trims the name (blank fails `INVALID_SESSION_NAME`), and calls the manager. Naming is a presentation concern over the durable id: `/resume` still commits the `session_id`, and the name follows the session across process restarts (the table persists; the in-memory map does not).
+`listSessions(team_id)` aggregates `memory_turns` into one `SessionSummary { sessionId, messageCount, lastActivity, name? }` per session, newest activity first; `name` comes from a LEFT JOIN on `session_metadata` and is absent for unnamed sessions. `renameSession(session_id, name)` upserts that table. The `renameSession` **command** (TUI `/rename <name>`) resolves the active `session_id` from `TeamManager`'s private `Map<team_id, session_id>` — no session loaded for that team fails `NO_TEAM` — trims the name (blank fails `INVALID_SESSION_NAME`), and calls the manager. Naming is a presentation concern over the durable id: `/resume` still commits the `session_id`, and the name follows the session across process restarts (the table persists; the in-memory map does not). `sessionName(session_id)` is the single-row read behind `TeamInfo.sessionName` — `TeamManager.toTeamInfo` resolves the team's active `session_id` from the same private map and reports its name (null when unnamed), so every `load`/`resumeSession` result and `system.team.loaded` payload carries the current name; the TUI labels the editor's top border with it (`tui-layout.md`, Borders).
 
 ## Persistence
 

@@ -36,6 +36,7 @@ const memoryManager = vi.mocked<MemoryManager>({
   restore: vi.fn(async () => []),
   hasSession: vi.fn(() => false),
   listSessions: vi.fn(() => []),
+  sessionName: vi.fn(() => null),
   renameSession: vi.fn(),
 });
 
@@ -407,6 +408,22 @@ describe("TeamManagerImpl — full surface", () => {
       const { manager } = makeManager(homeJieDir, null);
       expect(() => manager.renameSession("ghost", "x")).toThrow(/no session loaded for team 'ghost'/);
       expect(memoryManager.renameSession).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("sessionName exposure", () => {
+    test("load reports a null session name before any rename", async () => {
+      const { manager } = makeManager(homeJieDir, null);
+      const info = await manager.load("minimal");
+      expect(memoryManager.sessionName).toHaveBeenCalled();
+      expect(info.sessionName).toBeNull();
+    });
+
+    test("listLoaded reports the renamed session's name", async () => {
+      const { manager } = makeManager(homeJieDir, null);
+      await manager.load("minimal");
+      memoryManager.sessionName.mockReturnValue("my session");
+      expect(manager.listLoaded().get("minimal")?.sessionName).toBe("my session");
     });
   });
 

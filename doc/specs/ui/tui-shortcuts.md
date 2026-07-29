@@ -49,7 +49,7 @@ Typed into the editor like a prompt; the command handler (`command-handler.ts`) 
 | `/team` (no arg) | Usage error | `/team <teamId>` |
 | `/resume <sessionId>` | Resume one session of the loaded team (`execute({name:"resumeSession"})` then `Actions.switchTeam` with the resumed identity); unknown id or no team loaded is an error banner. The id is completed in-flow by autocomplete; a session named via `/rename` shows its name in the popup | `resuming session '<id>'` |
 | `/resume` (no arg) | Usage error | `/resume <sessionId>` |
-| `/rename <name>` | Name the loaded team's active session (`execute({name:"renameSession"})`; persisted in `session_metadata`, survives restarts). Multi-word names are joined; no team loaded is an error banner. The name becomes the `/resume` candidate's label | `session renamed to <name>` |
+| `/rename <name>` | Name the loaded team's active session (`execute({name:"renameSession"})`; persisted in `session_metadata`, survives restarts). Multi-word names are joined; no team loaded is an error banner. On success the name is recorded in `state.sessionName` — it labels the editor's top border (`tui-layout.md`, Borders) and becomes the `/resume` candidate's label | `session renamed to <name>` |
 | `/rename` (no arg) | Usage error | `/rename <name>` |
 
 ## Autocomplete

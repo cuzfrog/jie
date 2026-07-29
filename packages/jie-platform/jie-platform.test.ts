@@ -150,8 +150,8 @@ describe("JiePlatformImpl", () => {
   describe("teams", () => {
     test("returns the teams loaded in the team manager", () => {
       const platform = createPlatform();
-      const alpha: TeamInfo = { id: "alpha", leaderKey: "alpha-1", agents: [], history: [] };
-      const beta: TeamInfo = { id: "beta", leaderKey: "beta-1", agents: [], history: [] };
+      const alpha: TeamInfo = { id: "alpha", leaderKey: "alpha-1", sessionName: null, agents: [], history: [] };
+      const beta: TeamInfo = { id: "beta", leaderKey: "beta-1", sessionName: null, agents: [], history: [] };
       teamManager.listLoaded.mockReturnValue(new Map([["alpha", alpha], ["beta", beta]]));
       expect(platform.teams()).toEqual([alpha, beta]);
       expect(teamManager.listLoaded).toHaveBeenCalledTimes(1);

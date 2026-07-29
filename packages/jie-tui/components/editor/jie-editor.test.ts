@@ -154,6 +154,42 @@ describe("JieEditor — bash mode border", () => {
   });
 });
 
+describe("JieEditor — session name border label", () => {
+  test("renders the session name right-aligned in the top border", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ sessionName: "my-session" }));
+    const { editor } = bootEditor();
+    const raw = editor.render(80)[0]!;
+    expect(stripAnsi(raw).endsWith(" my-session ──")).toBe(true);
+    expect(raw).toContain("\x1b[44m my-session \x1b[49m");
+  });
+
+  test("renders a plain border when the session is unnamed", () => {
+    const { editor } = bootEditor();
+    expect(stripAnsi(editor.render(80)[0]!)).toBe("─".repeat(80));
+  });
+
+  test("the label chip follows the warning border in bash mode", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ sessionName: "my-session" }));
+    const { editor } = bootEditor();
+    editor.handleInput("!");
+    expect(editor.render(80)[0]).toContain("\x1b[43m my-session \x1b[49m");
+  });
+
+  test("truncates a long name so the border keeps the full width", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ sessionName: "x".repeat(100) }));
+    const { editor } = bootEditor();
+    const border = stripAnsi(editor.render(30)[0]!);
+    expect(visibleWidth(border)).toBe(30);
+    expect(border.endsWith("──")).toBe(true);
+  });
+
+  test("omits the label when the width cannot fit it", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ sessionName: "my-session" }));
+    const { editor } = bootEditor();
+    expect(stripAnsi(editor.render(5)[0]!)).toBe("─".repeat(5));
+  });
+});
+
 describe("JieEditor — prompt history", () => {
   test("up and down arrows walk submitted prompts and keep the store in sync", () => {
     const { editor } = bootEditor();

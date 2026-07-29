@@ -6,6 +6,8 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
   switch (action.type) {
     case ActionTypes.SWITCH_TEAM:
       return teamLoadReducer(state, action.payload);
+    case ActionTypes.SET_SESSION_NAME:
+      return { ...state, sessionName: action.payload.name };
     case ActionTypes.SET_INSTALLED_TEAMS:
       return { ...state, installedTeams: action.payload.teams };
     case ActionTypes.TOGGLE_THINKING:
@@ -22,6 +24,7 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
       return {
         ...state,
         agents: new Map(),
+        sessionName: null,
         leaderAgentId: null,
         focusedAgentId: null,
         teamCursorAgentId: null,

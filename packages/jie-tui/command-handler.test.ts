@@ -338,6 +338,7 @@ describe("CommandHandlerImpl — /team", () => {
     execute.mockImplementationOnce(async () => ({
       id: "alpha",
       leaderKey: "general-1",
+      sessionName: null,
       history: [],
       agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true }],
     }));
@@ -353,6 +354,7 @@ describe("CommandHandlerImpl — /team", () => {
     execute.mockImplementationOnce(async () => ({
       id: "alpha",
       leaderKey: "general-1",
+      sessionName: null,
       history: [],
       agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
     }));
@@ -365,6 +367,7 @@ describe("CommandHandlerImpl — /team", () => {
     expect(switchCalls[0]![0]).toEqual(Actions.switchTeam({
       id: "alpha",
       leaderKey: "general-1",
+      sessionName: null,
       history: [],
       agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
     }));
@@ -375,6 +378,7 @@ describe("CommandHandlerImpl — /team", () => {
     const identity = {
       id: "alpha",
       leaderKey: "general-1",
+      sessionName: null,
       history: [],
       agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
     } as const;
@@ -426,6 +430,7 @@ describe("CommandHandlerImpl — /resume", () => {
     const identity = {
       id: "minimal",
       leaderKey: "general-1",
+      sessionName: null,
       history: [],
       agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
     };
@@ -441,6 +446,7 @@ describe("CommandHandlerImpl — /resume", () => {
     const identity = {
       id: "minimal",
       leaderKey: "general-1",
+      sessionName: null,
       history: [],
       agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
     };
@@ -486,6 +492,25 @@ describe("CommandHandlerImpl — /rename", () => {
     handler.handle("/rename my cool session");
     expect(execute).toHaveBeenCalledWith({ name: "renameSession", teamId: "minimal", sessionName: "my cool session" });
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("session renamed to my cool session")));
+  });
+
+  test("/rename dispatches setSessionName once the rename succeeds", async () => {
+    const { platform } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    handler.handle("/rename my cool session");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setSessionName("my cool session"));
+  });
+
+  test("/rename does not dispatch setSessionName when the platform rejects", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async () => {
+      throw new Error("sqlite locked");
+    });
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    handler.handle("/rename x");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).not.toHaveBeenCalledWith(Actions.setSessionName(expect.anything()));
   });
 
   test("/rename surfaces platform errors as an error banner", async () => {

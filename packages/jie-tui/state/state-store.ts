@@ -12,6 +12,7 @@ const INITIAL_TUI_STATE: TuiState = Object.freeze({
   version: "",
   installedTeams: null,
   teamId: null,
+  sessionName: null,
   leaderAgentId: null,
   agents: new Map(),
   focusedAgentId: null,

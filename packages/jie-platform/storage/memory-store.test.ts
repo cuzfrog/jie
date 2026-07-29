@@ -223,3 +223,23 @@ describe("SqliteMemoryManager.renameSession", () => {
     expect((rows[0]![2] as string).length).toBeGreaterThan(0);
   });
 });
+
+describe("SqliteMemoryManager.sessionName", () => {
+  test("returns null for a session without metadata", () => {
+    const m = makeManager();
+    m.persist(userMessage("a"), "agent-1", "s1", "t1");
+    expect(m.sessionName("s1")).toBeNull();
+  });
+
+  test("returns the renamed session's name", () => {
+    const m = makeManager();
+    m.persist(userMessage("a"), "agent-1", "s1", "t1");
+    m.renameSession("s1", "my session");
+    expect(m.sessionName("s1")).toBe("my session");
+  });
+
+  test("returns null for an unknown session id", () => {
+    const m = makeManager();
+    expect(m.sessionName("ghost")).toBeNull();
+  });
+});

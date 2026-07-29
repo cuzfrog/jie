@@ -33,6 +33,7 @@ export interface AgentHistory {
 export interface TeamInfo {
     readonly id: string;
     readonly leaderKey: string;
+    readonly sessionName: string | null;
     readonly agents: ReadonlyArray<AgentInfo>;
     readonly history: ReadonlyArray<AgentHistory>;
 }

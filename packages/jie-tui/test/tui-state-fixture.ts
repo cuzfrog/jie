@@ -8,6 +8,7 @@ export function makeTuiState(overrides: Partial<TuiState> = {}): TuiState {
     version: "",
     installedTeams: null,
     teamId: null,
+    sessionName: null,
     leaderAgentId: null,
     agents: new Map(),
     focusedAgentId: null,

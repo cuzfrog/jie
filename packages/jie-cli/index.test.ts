@@ -85,6 +85,7 @@ function dispatch(command: Command<CommandName>): CommandResult<CommandName> | n
       const team: TeamInfo = {
         id: teamId,
         leaderKey: "general-1",
+        sessionName: null,
         history: [],
         agents: [{
           teamId,

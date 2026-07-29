@@ -19,6 +19,7 @@ function loadedState(): TuiState {
   return reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, {
     id: "my-team",
     leaderKey: "general-1",
+    sessionName: null,
     history: [],
     agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
   }));
@@ -28,6 +29,7 @@ function twoAgentState(): TuiState {
   return reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, {
     id: "my-team",
     leaderKey: "manager-1",
+    sessionName: null,
     history: [],
     agents: [
       { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, tools: [], subscribe: [], model: null },
@@ -51,6 +53,7 @@ describe("reduceTeamLoaded", () => {
     const state = reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, {
       id: "my-team",
       leaderKey: "general-1",
+      sessionName: null,
       history: [],
       agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
     }));
@@ -64,12 +67,14 @@ describe("reduceTeamLoaded", () => {
     const state1 = reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, {
       id: "my-team-1",
       leaderKey: "general-1",
+      sessionName: null,
       history: [],
       agents: [{ teamId: "my-team-1", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
     }));
     const state2 = reduce(state1, Events.teamLoaded(SYSTEM_SENDER, {
       id: "my-team-2",
       leaderKey: "general-1",
+      sessionName: null,
       history: [],
       agents: [{ teamId: "my-team-2", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
     }));
@@ -84,6 +89,7 @@ describe("reduceTeamLoaded", () => {
     const state = reduce(INITIAL_TUI_STATE, Events.teamLoaded(SYSTEM_SENDER, {
       id: "my-team",
       leaderKey: "manager-1",
+      sessionName: null,
       history: [],
       agents: [
         { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, tools: [], subscribe: [], model: null },
@@ -100,6 +106,7 @@ describe("Actions.switchTeam", () => {
     const identity = {
       id: "my-team",
       leaderKey: "general-1",
+      sessionName: null,
       history: [],
       agents: [
         { teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
@@ -117,12 +124,14 @@ describe("Actions.switchTeam", () => {
     const first = reduceAction(INITIAL_TUI_STATE, Actions.switchTeam({
       id: "team-a",
       leaderKey: "general-1",
+      sessionName: null,
       history: [],
       agents: [{ teamId: "team-a", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
     }));
     const second = reduceAction(first, Actions.switchTeam({
       id: "team-b",
       leaderKey: "worker-1",
+      sessionName: null,
       history: [],
       agents: [
         { teamId: "team-b", role: "manager", agentKey: "manager-1", isLeader: false, tools: [], subscribe: [], model: null },
@@ -142,6 +151,7 @@ describe("Actions.switchTeam", () => {
     const identity = {
       id: "minimal",
       leaderKey: "general-1",
+      sessionName: null,
       history: [],
       agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
     };
