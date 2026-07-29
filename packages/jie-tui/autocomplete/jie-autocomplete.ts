@@ -8,12 +8,13 @@ import {
 } from "@earendil-works/pi-tui";
 import { EFFORT_LEVELS, type JiePlatform } from "@cuzfrog/jie-platform";
 import { COMMAND_METADATA } from "../command-metadata";
+import { matchesModelFilter } from "../model-filter";
 import { filterFiles, type ScannedFile } from "../file-mention";
 import type { StateStore } from "../state";
 
 const MAX_SUGGESTIONS = 20;
 const AT_PREFIX_PATTERN = /(?:^|[\s"])@([\w./-]*)$/;
-const MODEL_FILTER_ACTIONS = ["add", "remove"] as const;
+const MODEL_FILTER_ACTIONS = ["add", "remove", "list"] as const;
 
 export interface JieSuggestions extends AutocompleteSuggestions {
   readonly filteredOut?: number;
@@ -162,11 +163,6 @@ async function modelItems(
   return matches.length === 0 ? null : matches;
 }
 
-function matchesModelFilter(model: { readonly provider: string; readonly id: string }, filters: ReadonlyArray<string>): boolean {
-  const target = `${model.provider}/${model.id}`.toLowerCase();
-  return filters.some((filter) => target.includes(filter.toLowerCase()));
-}
-
 async function logoutItems(platform: JiePlatform, prefix: string): Promise<AutocompleteItem[] | null> {
   const providers = await platform.execute({ name: "listProviders" });
   const items: AutocompleteItem[] = [
@@ -181,6 +177,7 @@ async function logoutItems(platform: JiePlatform, prefix: string): Promise<Autoc
 async function modelFilterItems(platform: JiePlatform, argumentText: string): Promise<AutocompleteItem[] | null> {
   const spaceIndex = argumentText.indexOf(" ");
   if (spaceIndex === -1) {
+    if (argumentText.toLowerCase() === "remove") return removePatternItems(platform, "");
     if (isAlreadyComplete(MODEL_FILTER_ACTIONS, argumentText)) return null;
     const items = MODEL_FILTER_ACTIONS.filter((action) => hasPrefix(action, argumentText))
       .map((action): AutocompleteItem => ({ value: action, label: action }));
@@ -188,7 +185,10 @@ async function modelFilterItems(platform: JiePlatform, argumentText: string): Pr
   }
   const action = argumentText.slice(0, spaceIndex);
   if (action !== "remove") return null;
-  const pattern = argumentText.slice(spaceIndex + 1);
+  return removePatternItems(platform, argumentText.slice(spaceIndex + 1));
+}
+
+async function removePatternItems(platform: JiePlatform, pattern: string): Promise<AutocompleteItem[] | null> {
   const filters = await platform.execute({ name: "getModelFilters" });
   if (isAlreadyComplete(filters, pattern)) return null;
   const items = filters

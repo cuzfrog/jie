@@ -147,10 +147,10 @@ describe("createJieAutocompleteProvider — unambiguous-command drill-down", () 
     expect(suggestions!.items[0]!.description).toBe("(default)");
   });
 
-  test("'/model-f' drills down to the add/remove actions", async () => {
+  test("'/model-f' drills down to the add/remove/list actions", async () => {
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, drillPlatform(), makeStateStore())
       .getSuggestions(["/model-f"], 0, 8, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["model-filter add", "model-filter remove"]);
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["model-filter add", "model-filter remove", "model-filter list"]);
   });
 
   test("'/eff' drills down to the effort-level rows", async () => {
@@ -425,10 +425,10 @@ describe("createJieAutocompleteProvider — /model-filter arguments", () => {
     }));
   }
 
-  test("suggests the add and remove actions after the command", async () => {
+  test("suggests the add, remove and list actions after the command", async () => {
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, filterPlatform([]), makeStateStore())
       .getSuggestions(["/model-filter "], 0, 14, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["add", "remove"]);
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["add", "remove", "list"]);
   });
 
   test("filters the actions by the typed prefix", async () => {
@@ -437,9 +437,36 @@ describe("createJieAutocompleteProvider — /model-filter arguments", () => {
     expect(suggestions!.items.map((item) => item.value)).toEqual(["remove"]);
   });
 
-  test("a fully typed action yields no suggestions", async () => {
+  test("the list action matches its own prefix", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, filterPlatform([]), makeStateStore())
+      .getSuggestions(["/model-filter l"], 0, 15, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["list"]);
+  });
+
+  test("a fully typed list yields no suggestions so Enter submits", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, filterPlatform([]), makeStateStore())
+      .getSuggestions(["/model-filter list"], 0, 18, { signal: signal() });
+    expect(suggestions).toBeNull();
+  });
+
+  test("a fully typed remove lists the stored patterns", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, filterPlatform(["qwen", "gpt"]), makeStateStore())
+      .getSuggestions(["/model-filter remove"], 0, 20, { signal: signal() });
+    expect(suggestions!.items).toEqual([
+      { value: "remove qwen", label: "qwen" },
+      { value: "remove gpt", label: "gpt" },
+    ]);
+  });
+
+  test("a fully typed remove yields no suggestions when no filter is stored", async () => {
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, filterPlatform([]), makeStateStore())
       .getSuggestions(["/model-filter remove"], 0, 20, { signal: signal() });
+    expect(suggestions).toBeNull();
+  });
+
+  test("a fully typed add yields no suggestions so Enter submits", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, filterPlatform(["qwen"]), makeStateStore())
+      .getSuggestions(["/model-filter add"], 0, 17, { signal: signal() });
     expect(suggestions).toBeNull();
   });
 

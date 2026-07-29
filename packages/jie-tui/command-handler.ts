@@ -1,6 +1,7 @@
 import { isEffortLevel, JiePlatformError, type CommandName, type JiePlatform } from "@cuzfrog/jie-platform";
 import { Actions, type StateStore, type TuiState } from "./state";
 import { bashDirective, parseBashCommand } from "./bash";
+import { matchesModelFilter, type ModelRef } from "./model-filter";
 
 type CommandOutcome =
   | { readonly kind: "reply"; readonly text: string }
@@ -124,7 +125,7 @@ export class CommandHandlerImpl implements CommandHandler {
     if (provider === undefined || apiKey === undefined) return { kind: "error", text: "/login <provider> <apiKey>" };
     void this.platform.execute({ name: "login", provider, apiKey })
       .then(() => undefined, (error: unknown) => {
-        const reason = error instanceof Error ? error.message : String(error);
+        const reason = errorReason(error);
         this.stateStore.dispatch(Actions.setErrorMessage(`/login failed: ${reason}`));
       });
     return { kind: "reply", text: `logged in to ${provider}` };
@@ -135,7 +136,7 @@ export class CommandHandlerImpl implements CommandHandler {
     if (provider === undefined) return { kind: "error", text: "/logout <provider>|*" };
     void this.platform.execute({ name: "logout", provider })
       .then(() => undefined, (error: unknown) => {
-        const reason = error instanceof Error ? error.message : String(error);
+        const reason = errorReason(error);
         this.stateStore.dispatch(Actions.setErrorMessage(`/logout failed: ${reason}`));
       });
     return { kind: "reply", text: provider === "*" ? "logged out of all providers" : `logged out of ${provider}` };
@@ -147,7 +148,7 @@ export class CommandHandlerImpl implements CommandHandler {
     if (parsed.kind === "error") return parsed;
     void this.platform.execute({ name: "setDefaultModel", provider: parsed.provider, id: parsed.modelId })
       .then(() => undefined, (error: unknown) => {
-        const reason = error instanceof Error ? error.message : String(error);
+        const reason = errorReason(error);
         this.stateStore.dispatch(Actions.setErrorMessage(`/model failed: ${reason}`));
       });
     return { kind: "reply", text: `default model set to ${parsed.provider}/${parsed.modelId}` };
@@ -155,28 +156,42 @@ export class CommandHandlerImpl implements CommandHandler {
 
   private interceptModelFilter(args: ReadonlyArray<string>): InterceptResult {
     const action = args[0];
-    const pattern = args[1];
-    if ((action !== "add" && action !== "remove") || pattern === undefined || pattern === "") {
-      return { kind: "error", text: "/model-filter <add|remove> <pattern>" };
+    if (action === "list") {
+      if (args.length !== 1) return { kind: "error", text: MODEL_FILTER_USAGE };
+      void this.platform.execute({ name: "getModelFilters" })
+        .then((filters) => {
+          const text = filters.length === 0 ? "no model filters set" : `model filters: ${filters.join(" · ")}`;
+          this.stateStore.dispatch(Actions.setTransientMessage(text));
+        }, (error: unknown) => {
+          this.stateStore.dispatch(Actions.setErrorMessage(`/model-filter failed: ${errorReason(error)}`));
+        });
+      return { kind: "silent" };
     }
-    void this.platform.execute({ name: "getModelFilters" })
-      .then((filters) => {
-        const next = action === "add" ? appendPattern(filters, pattern) : removePattern(filters, pattern);
+    const pattern = args[1];
+    const adding = action === "add";
+    if ((!adding && action !== "remove") || pattern === undefined || pattern === "") {
+      return { kind: "error", text: MODEL_FILTER_USAGE };
+    }
+    void Promise.all([this.platform.execute({ name: "getModelFilters" }), this.platform.execute({ name: "listModels" })])
+      .then(([filters, models]) => {
+        const next = adding ? appendPattern(filters, pattern) : removePattern(filters, pattern);
         if (next === null) {
           this.stateStore.dispatch(Actions.setErrorMessage(`/model-filter: pattern '${pattern}' is not set`));
           return;
         }
+        const rejection = adding ? filterAdditionRejection(pattern, filters, next, models.filter((model) => model.available)) : null;
+        if (rejection !== null) {
+          this.stateStore.dispatch(Actions.setErrorMessage(rejection));
+          return;
+        }
         void this.platform.execute({ name: "setModelFilters", filters: next })
           .then(() => {
-            const verb = action === "add" ? "added" : "removed";
-            this.stateStore.dispatch(Actions.setTransientMessage(`model filter ${verb}: ${pattern}`));
+            this.stateStore.dispatch(Actions.setTransientMessage(`model filter ${adding ? "added" : "removed"}: ${pattern}`));
           }, (error: unknown) => {
-            const reason = error instanceof Error ? error.message : String(error);
-            this.stateStore.dispatch(Actions.setErrorMessage(`/model-filter failed: ${reason}`));
+            this.stateStore.dispatch(Actions.setErrorMessage(`/model-filter failed: ${errorReason(error)}`));
           });
       }, (error: unknown) => {
-        const reason = error instanceof Error ? error.message : String(error);
-        this.stateStore.dispatch(Actions.setErrorMessage(`/model-filter failed: ${reason}`));
+        this.stateStore.dispatch(Actions.setErrorMessage(`/model-filter failed: ${errorReason(error)}`));
       });
     return { kind: "silent" };
   }
@@ -188,7 +203,7 @@ export class CommandHandlerImpl implements CommandHandler {
         .then((effort) => {
           this.stateStore.dispatch(Actions.setTransientMessage(`default effort: ${effort}`));
         }, (error: unknown) => {
-          const reason = error instanceof Error ? error.message : String(error);
+          const reason = errorReason(error);
           this.stateStore.dispatch(Actions.setErrorMessage(`/effort failed: ${reason}`));
         });
       return { kind: "silent" };
@@ -198,7 +213,7 @@ export class CommandHandlerImpl implements CommandHandler {
     }
     void this.platform.execute({ name: "setDefaultEffort", effort: argument })
       .then(() => undefined, (error: unknown) => {
-        const reason = error instanceof Error ? error.message : String(error);
+        const reason = errorReason(error);
         this.stateStore.dispatch(Actions.setErrorMessage(`/effort failed: ${reason}`));
       });
     return { kind: "reply", text: `default effort set to ${argument}` };
@@ -215,7 +230,7 @@ export class CommandHandlerImpl implements CommandHandler {
           this.stateStore.dispatch(Actions.setErrorMessage(error.message));
           return;
         }
-        const reason = error instanceof Error ? error.message : String(error);
+        const reason = errorReason(error);
         this.stateStore.dispatch(Actions.setErrorMessage(`load team '${argument}' failed: ${reason}`));
       });
     return { kind: "reply", text: `loading team '${argument}'` };
@@ -230,7 +245,7 @@ export class CommandHandlerImpl implements CommandHandler {
       .then(() => {
         this.stateStore.dispatch(Actions.setSessionName(name));
       }, (error: unknown) => {
-        const reason = error instanceof Error ? error.message : String(error);
+        const reason = errorReason(error);
         this.stateStore.dispatch(Actions.setErrorMessage(`/rename failed: ${reason}`));
       });
     return { kind: "reply", text: `session renamed to ${name}` };
@@ -245,7 +260,7 @@ export class CommandHandlerImpl implements CommandHandler {
       .then((identity) => {
         this.stateStore.dispatch(Actions.switchTeam(identity));
       }, (error: unknown) => {
-        const reason = error instanceof Error ? error.message : String(error);
+        const reason = errorReason(error);
         this.stateStore.dispatch(Actions.setErrorMessage(`/resume failed: ${reason}`));
       });
     return { kind: "reply", text: `resuming session '${sessionId}'` };
@@ -286,6 +301,8 @@ const LOCAL_COMMAND_NAMES = ["help", "clear", "exit"] as const satisfies Readonl
 
 const INTERCEPT_NAMES = ["login", "logout", "model", "model-filter", "effort", "team", "resume", "rename"] as const satisfies ReadonlyArray<InterceptName>;
 
+const MODEL_FILTER_USAGE = "/model-filter <add|remove|list> <pattern>";
+
 export const SLASH_COMMAND_NAMES: ReadonlyArray<TuiCommandName> = [...LOCAL_COMMAND_NAMES, ...INTERCEPT_NAMES];
 
 function parseModelArg(arg: string): { kind: "ok"; provider: string; modelId: string } | { kind: "error"; text: string } {
@@ -303,6 +320,21 @@ function appendPattern(filters: ReadonlyArray<string>, pattern: string): Readonl
 function removePattern(filters: ReadonlyArray<string>, pattern: string): ReadonlyArray<string> | null {
   if (!filters.includes(pattern)) return null;
   return filters.filter((existing) => existing !== pattern);
+}
+
+function filterAdditionRejection(
+  pattern: string,
+  existing: ReadonlyArray<string>,
+  combined: ReadonlyArray<string>,
+  available: ReadonlyArray<ModelRef>,
+): string | null {
+  if (available.length === 0 || available.some((model) => matchesModelFilter(model, combined))) return null;
+  const basis = existing.length === 0 ? "it matches none" : `combined with existing filters (${existing.join(", ")}) it matches none`;
+  return `/model-filter: pattern '${pattern}' rejected — ${basis} of the ${available.length} available models`;
+}
+
+function errorReason(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function routeTarget(stateStore: StateStore): AgentRoute | null {

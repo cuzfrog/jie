@@ -212,12 +212,22 @@ describe("CommandHandlerImpl — /model", () => {
 });
 
 describe("CommandHandlerImpl — /model-filter", () => {
+  type ModelRow = { readonly provider: string; readonly id: string; readonly name: string; readonly available: boolean };
+
+  function mockFilterBackend(execute: ReturnType<typeof vi.fn>, filters: ReadonlyArray<string>, models: ReadonlyArray<ModelRow>): void {
+    execute.mockImplementation(async (cmd: { name: string }) => {
+      if (cmd.name === "getModelFilters") return filters;
+      if (cmd.name === "listModels") return models;
+      return null;
+    });
+  }
+
   test("/model-filter with no args sets a usage error and does not call execute", () => {
     const { platform, execute } = makePlatform();
     const { handler, dispatch } = makeHandler(platform);
     handler.handle("/model-filter");
     expect(execute).not.toHaveBeenCalled();
-    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/model-filter <add|remove> <pattern>")));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/model-filter <add|remove|list> <pattern>")));
   });
 
   test("/model-filter add without a pattern sets a usage error", () => {
@@ -225,7 +235,7 @@ describe("CommandHandlerImpl — /model-filter", () => {
     const { handler, dispatch } = makeHandler(platform);
     handler.handle("/model-filter add");
     expect(execute).not.toHaveBeenCalled();
-    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/model-filter <add|remove> <pattern>")));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/model-filter <add|remove|list> <pattern>")));
   });
 
   test("/model-filter with an unknown action sets a usage error", () => {
@@ -233,47 +243,107 @@ describe("CommandHandlerImpl — /model-filter", () => {
     const { handler, dispatch } = makeHandler(platform);
     handler.handle("/model-filter toggle qwen");
     expect(execute).not.toHaveBeenCalled();
-    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/model-filter <add|remove> <pattern>")));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/model-filter <add|remove|list> <pattern>")));
+  });
+
+  test("/model-filter list prints the stored filters as a transient message", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => ["gpt", "qwen"]);
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/model-filter list");
+    await new Promise((r) => setImmediate(r));
+    expect(execute).toHaveBeenCalledWith({ name: "getModelFilters" });
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage("model filters: gpt · qwen"));
+  });
+
+  test("/model-filter list reports when no filter is stored", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => []);
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/model-filter list");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage("no model filters set"));
+  });
+
+  test("/model-filter list with an extra argument sets a usage error and does not call execute", () => {
+    const { platform, execute } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/model-filter list qwen");
+    expect(execute).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/model-filter <add|remove|list> <pattern>")));
   });
 
   test("/model-filter add <pattern> appends the pattern to the stored filters", async () => {
     const { platform, execute } = makePlatform();
-    execute.mockImplementationOnce(async () => ["gpt"]);
+    mockFilterBackend(execute, ["gpt"], [{ provider: "openai", id: "gpt-5", name: "GPT-5", available: true }]);
     const { handler, dispatch } = makeHandler(platform);
     handler.handle("/model-filter add qwen");
     await new Promise((r) => setImmediate(r));
-    expect(execute).toHaveBeenNthCalledWith(1, { name: "getModelFilters" });
-    expect(execute).toHaveBeenNthCalledWith(2, { name: "setModelFilters", filters: ["gpt", "qwen"] });
+    expect(execute).toHaveBeenCalledWith({ name: "getModelFilters" });
+    expect(execute).toHaveBeenCalledWith({ name: "listModels" });
+    expect(execute).toHaveBeenCalledWith({ name: "setModelFilters", filters: ["gpt", "qwen"] });
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("model filter added: qwen")));
   });
 
   test("/model-filter add <pattern> does not duplicate an existing pattern", async () => {
     const { platform, execute } = makePlatform();
-    execute.mockImplementationOnce(async () => ["qwen"]);
+    mockFilterBackend(execute, ["qwen"], [{ provider: "alibaba", id: "qwen3-coder", name: "Qwen3 Coder", available: true }]);
     const { handler, dispatch } = makeHandler(platform);
     handler.handle("/model-filter add qwen");
     await new Promise((r) => setImmediate(r));
-    expect(execute).toHaveBeenNthCalledWith(2, { name: "setModelFilters", filters: ["qwen"] });
+    expect(execute).toHaveBeenCalledWith({ name: "setModelFilters", filters: ["qwen"] });
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("model filter added: qwen")));
+  });
+
+  test("/model-filter add rejects a pattern that leaves no available model", async () => {
+    const { platform, execute } = makePlatform();
+    mockFilterBackend(execute, ["gpt"], [{ provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", available: true }]);
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/model-filter add xyz");
+    await new Promise((r) => setImmediate(r));
+    expect(execute).not.toHaveBeenCalledWith({ name: "setModelFilters", filters: expect.anything() });
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(
+      "/model-filter: pattern 'xyz' rejected — combined with existing filters (gpt) it matches none of the 1 available models"));
+  });
+
+  test("/model-filter add rejection omits the existing-filters clause when none is stored", async () => {
+    const { platform, execute } = makePlatform();
+    mockFilterBackend(execute, [], [{ provider: "openai", id: "gpt-5", name: "GPT-5", available: true }]);
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/model-filter add xyz");
+    await new Promise((r) => setImmediate(r));
+    expect(execute).not.toHaveBeenCalledWith({ name: "setModelFilters", filters: expect.anything() });
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(
+      "/model-filter: pattern 'xyz' rejected — it matches none of the 1 available models"));
+  });
+
+  test("/model-filter add validates against available models only", async () => {
+    const { platform, execute } = makePlatform();
+    mockFilterBackend(execute, [], [{ provider: "openai", id: "gpt-5", name: "GPT-5", available: false }]);
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/model-filter add gpt");
+    await new Promise((r) => setImmediate(r));
+    expect(execute).toHaveBeenCalledWith({ name: "setModelFilters", filters: ["gpt"] });
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("model filter added: gpt")));
   });
 
   test("/model-filter remove <pattern> drops the pattern from the stored filters", async () => {
     const { platform, execute } = makePlatform();
-    execute.mockImplementationOnce(async () => ["gpt", "qwen"]);
+    mockFilterBackend(execute, ["gpt", "qwen"], []);
     const { handler, dispatch } = makeHandler(platform);
     handler.handle("/model-filter remove qwen");
     await new Promise((r) => setImmediate(r));
-    expect(execute).toHaveBeenNthCalledWith(2, { name: "setModelFilters", filters: ["gpt"] });
+    expect(execute).toHaveBeenCalledWith({ name: "setModelFilters", filters: ["gpt"] });
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("model filter removed: qwen")));
   });
 
   test("/model-filter remove of an unset pattern sets an error and does not write", async () => {
     const { platform, execute } = makePlatform();
-    execute.mockImplementationOnce(async () => ["gpt"]);
+    mockFilterBackend(execute, ["gpt"], []);
     const { handler, dispatch } = makeHandler(platform);
     handler.handle("/model-filter remove qwen");
     await new Promise((r) => setImmediate(r));
-    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute).not.toHaveBeenCalledWith({ name: "setModelFilters", filters: expect.anything() });
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("pattern 'qwen' is not set")));
   });
 
