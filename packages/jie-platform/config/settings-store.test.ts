@@ -82,6 +82,23 @@ describe("SettingsStoreImpl", () => {
     expect(JSON.parse(readFileSync(join(homeJieDir, "settings.json"), "utf-8"))).toEqual({ defaultTeam: "dev" });
   });
 
+  test("setModelFilters writes modelFilters to ~/.jie/settings.json", () => {
+    const store = new SettingsStoreImpl(cwd, homeJieDir, null);
+    store.setModelFilters(["qwen", "gpt"]);
+    expect(JSON.parse(readFileSync(join(homeJieDir, "settings.json"), "utf-8"))).toEqual({ modelFilters: ["qwen", "gpt"] });
+  });
+
+  test("setModelFilters preserves existing settings fields", () => {
+    const store = new SettingsStoreImpl(cwd, homeJieDir, null);
+    store.setDefaultProvider("anthropic", "claude-sonnet-4");
+    store.setModelFilters(["qwen"]);
+    expect(JSON.parse(readFileSync(join(homeJieDir, "settings.json"), "utf-8"))).toEqual({
+      defaultProvider: "anthropic",
+      defaultModel: "claude-sonnet-4",
+      modelFilters: ["qwen"],
+    });
+  });
+
   test("setDefaultTeam with scope 'project' writes to the projectJieDir, not cwd", () => {
     const projectRoot = mkdtempSync(join(tmpdir(), "jie-cli-proj-"));
     const projectJieDir = join(projectRoot, ".jie");

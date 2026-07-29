@@ -11,6 +11,7 @@ const settingsStore = vi.mocked<SettingsStore>({
   setDefaultProvider: vi.fn(),
   setDefaultEffort: vi.fn(),
   setDefaultTeam: vi.fn(),
+  setModelFilters: vi.fn(),
 });
 
 const eventManager = vi.mocked<EventManager>({
@@ -65,13 +66,20 @@ describe("JiePlatformImpl", () => {
       const platform = createPlatform();
       const commands: ReadonlyArray<Command<CommandName>> = [
         { name: "login", provider: "anthropic", apiKey: "sk-test" },
-        { name: "logout" },
+        { name: "logout", provider: "*" },
         { name: "setApiKey", apiKey: "sk-test" },
         { name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5" },
         { name: "getDefaultModel" },
+        { name: "setDefaultEffort", effort: "high" },
+        { name: "getDefaultEffort" },
+        { name: "listModels" },
+        { name: "listProviders" },
+        { name: "setModelFilters", filters: ["qwen"] },
+        { name: "getModelFilters" },
         { name: "setDefaultTeam", teamId: "alpha" },
         { name: "team", teamId: "alpha" },
         { name: "resumeSession", teamId: "alpha", sessionId: "01-seeded" },
+        { name: "renameSession", teamId: "alpha", sessionName: "my session" },
         { name: "getTeamInfo" },
         { name: "getGitStatus" },
         { name: "stop" },

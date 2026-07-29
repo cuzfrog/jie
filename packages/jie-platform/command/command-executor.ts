@@ -30,6 +30,8 @@ export class CommandExecutorImpl implements CommandExecutor {
       getDefaultEffort: this.getDefaultEffort.bind(this),
       listModels: this.listModels.bind(this),
       listProviders: this.listProviders.bind(this),
+      setModelFilters: this.setModelFilters.bind(this),
+      getModelFilters: this.getModelFilters.bind(this),
       setDefaultTeam: this.setDefaultTeam.bind(this),
       team: this.team.bind(this),
       resumeSession: this.resumeSession.bind(this),
@@ -52,7 +54,7 @@ export class CommandExecutorImpl implements CommandExecutor {
   }
 
   private logout(command: Command<"logout">): CommandResult<"logout"> {
-    if (command.provider === undefined) {
+    if (command.provider === "*") {
       this.authStore.clear();
       return null;
     }
@@ -100,9 +102,16 @@ export class CommandExecutorImpl implements CommandExecutor {
   }
 
   private listModels(): CommandResult<"listModels"> {
-    return this.modelRegistry.providers().flatMap((provider) =>
-      this.modelRegistry.listModels(provider).map((model) => ({ provider, id: model.id, name: model.name })),
-    );
+    const auth = this.authStore.load();
+    return this.modelRegistry.listProviders().flatMap((provider) => {
+      const available = provider.configured || auth[provider.id] !== undefined;
+      return this.modelRegistry.listModels(provider.id).map((model) => ({
+        provider: provider.id,
+        id: model.id,
+        name: model.name,
+        available,
+      }));
+    });
   }
 
   private listProviders(): CommandResult<"listProviders"> {
@@ -110,6 +119,15 @@ export class CommandExecutorImpl implements CommandExecutor {
       const description = provider.envKeys[0] ?? (provider.configured ? "configured" : undefined);
       return description === undefined ? { id: provider.id } : { id: provider.id, description };
     });
+  }
+
+  private setModelFilters(command: Command<"setModelFilters">): CommandResult<"setModelFilters"> {
+    this.settingsStore.setModelFilters(command.filters);
+    return null;
+  }
+
+  private getModelFilters(): CommandResult<"getModelFilters"> {
+    return this.settingsStore.load().modelFilters ?? [];
   }
 
   private setDefaultTeam(command: Command<"setDefaultTeam">): CommandResult<"setDefaultTeam"> {

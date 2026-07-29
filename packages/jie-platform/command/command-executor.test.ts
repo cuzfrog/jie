@@ -18,6 +18,7 @@ const settingsStore = vi.mocked<SettingsStore>({
   setDefaultProvider: vi.fn(),
   setDefaultEffort: vi.fn(),
   setDefaultTeam: vi.fn(),
+  setModelFilters: vi.fn(),
 });
 
 const modelRegistry = vi.mocked<ModelRegistry>({
@@ -94,8 +95,8 @@ describe("CommandExecutorImpl", () => {
       expect(authStore.clear).not.toHaveBeenCalled();
     });
 
-    test("without provider, clears all providers", async () => {
-      const result = await executor.execute({ name: "logout" });
+    test("with '*', clears all providers", async () => {
+      const result = await executor.execute({ name: "logout", provider: "*" });
       expect(result).toBeNull();
       expect(authStore.clear).toHaveBeenCalled();
       expect(authStore.removeProvider).not.toHaveBeenCalled();
@@ -189,24 +190,50 @@ describe("CommandExecutorImpl", () => {
   });
 
   describe("listModels", () => {
-    test("flattens each provider's models into provider/id/name entries", async () => {
-      modelRegistry.providers.mockReturnValueOnce(["anthropic", "openai"]);
-      modelRegistry.listModels.mockImplementation((provider) => provider === "anthropic"
-        ? [fakeModel("anthropic", "claude-sonnet-4-5", "Claude Sonnet 4.5"), fakeModel("anthropic", "claude-opus-4-5", "Claude Opus 4.5")]
+    test("flattens each provider's models and marks availability from config or credentials", async () => {
+      modelRegistry.listProviders.mockReturnValueOnce([
+        { id: "anthropic", configured: false, envKeys: ["ANTHROPIC_API_KEY"] },
+        { id: "my-local", configured: true, envKeys: [] },
+        { id: "openai", configured: false, envKeys: [] },
+      ]);
+      authStore.load.mockReturnValueOnce({ anthropic: { type: "api_key", key: "sk-test" } });
+      modelRegistry.listModels.mockImplementation((provider) =>
+        provider === "anthropic" ? [fakeModel("anthropic", "claude-sonnet-4-5", "Claude Sonnet 4.5")]
+        : provider === "my-local" ? [fakeModel("openai", "qwen3.5-2b", "Qwen 3.5 2B")]
         : [fakeModel("openai", "gpt-5", "GPT-5")]);
       const result = await executor.execute({ name: "listModels" });
       expect(result).toEqual([
-        { provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5" },
-        { provider: "anthropic", id: "claude-opus-4-5", name: "Claude Opus 4.5" },
-        { provider: "openai", id: "gpt-5", name: "GPT-5" },
+        { provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", available: true },
+        { provider: "my-local", id: "qwen3.5-2b", name: "Qwen 3.5 2B", available: true },
+        { provider: "openai", id: "gpt-5", name: "GPT-5", available: false },
       ]);
       expect(modelRegistry.listModels).toHaveBeenCalledWith("anthropic");
-      expect(modelRegistry.listModels).toHaveBeenCalledWith("openai");
+      expect(modelRegistry.listModels).toHaveBeenCalledWith("my-local");
     });
 
     test("returns an empty array when no provider lists models", async () => {
+      modelRegistry.listProviders.mockReturnValueOnce([]);
       modelRegistry.listModels.mockReturnValue([]);
       const result = await executor.execute({ name: "listModels" });
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe("model filters", () => {
+    test("setModelFilters persists the patterns through the settings store", async () => {
+      const result = await executor.execute({ name: "setModelFilters", filters: ["qwen", "gpt"] });
+      expect(result).toBeNull();
+      expect(settingsStore.setModelFilters).toHaveBeenCalledWith(["qwen", "gpt"]);
+    });
+
+    test("getModelFilters returns the stored patterns", async () => {
+      settingsStore.load.mockReturnValueOnce({ ...DEFAULT_SETTINGS, modelFilters: ["qwen"] });
+      const result = await executor.execute({ name: "getModelFilters" });
+      expect(result).toEqual(["qwen"]);
+    });
+
+    test("getModelFilters returns an empty list when none are stored", async () => {
+      const result = await executor.execute({ name: "getModelFilters" });
       expect(result).toEqual([]);
     });
   });
@@ -367,15 +394,19 @@ describe("CommandExecutorImpl", () => {
       teamManager.listInstalled.mockReturnValue([]);
       teamManager.listSessions.mockReturnValue([]);
       modelRegistry.listModels.mockReturnValue([]);
+      modelRegistry.listProviders.mockReturnValue([]);
       const commands: Array<Parameters<typeof executor.execute>[0]> = [
         { name: "login", provider: "anthropic", apiKey: "sk-test" },
-        { name: "logout" },
+        { name: "logout", provider: "*" },
         { name: "setApiKey", apiKey: "sk-test" },
         { name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5" },
         { name: "getDefaultModel" },
         { name: "setDefaultEffort", effort: "high" },
         { name: "getDefaultEffort" },
         { name: "listModels" },
+        { name: "listProviders" },
+        { name: "setModelFilters", filters: ["qwen"] },
+        { name: "getModelFilters" },
         { name: "setDefaultTeam", teamId: "alpha" },
         { name: "team", teamId: "alpha" },
         { name: "resumeSession", teamId: "alpha", sessionId: "s1" },
