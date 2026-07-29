@@ -417,6 +417,66 @@ describe("createJieAutocompleteProvider — /model arguments", () => {
   });
 });
 
+describe("createJieAutocompleteProvider — /model-filter arguments", () => {
+  function filterPlatform(filters: ReadonlyArray<string>): JiePlatform {
+    return makePlatform(vi.fn(async (cmd: { name: string }) => {
+      if (cmd.name === "getModelFilters") return filters;
+      return null;
+    }));
+  }
+
+  test("suggests the add and remove actions after the command", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, filterPlatform([]), makeStateStore())
+      .getSuggestions(["/model-filter "], 0, 14, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["add", "remove"]);
+  });
+
+  test("filters the actions by the typed prefix", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, filterPlatform([]), makeStateStore())
+      .getSuggestions(["/model-filter r"], 0, 15, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["remove"]);
+  });
+
+  test("a fully typed action yields no suggestions", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, filterPlatform([]), makeStateStore())
+      .getSuggestions(["/model-filter remove"], 0, 20, { signal: signal() });
+    expect(suggestions).toBeNull();
+  });
+
+  test("after remove, suggests the stored filter patterns", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, filterPlatform(["qwen", "gpt"]), makeStateStore())
+      .getSuggestions(["/model-filter remove "], 0, 21, { signal: signal() });
+    expect(suggestions!.items).toEqual([
+      { value: "remove qwen", label: "qwen" },
+      { value: "remove gpt", label: "gpt" },
+    ]);
+  });
+
+  test("filters the stored patterns by the typed prefix", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, filterPlatform(["qwen", "gpt"]), makeStateStore())
+      .getSuggestions(["/model-filter remove q"], 0, 22, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["remove qwen"]);
+  });
+
+  test("a fully typed stored pattern yields no suggestions so Enter submits", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, filterPlatform(["qwen"]), makeStateStore())
+      .getSuggestions(["/model-filter remove qwen"], 0, 25, { signal: signal() });
+    expect(suggestions).toBeNull();
+  });
+
+  test("add stays free-form and suggests no stored patterns", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, filterPlatform(["qwen"]), makeStateStore())
+      .getSuggestions(["/model-filter add "], 0, 18, { signal: signal() });
+    expect(suggestions).toBeNull();
+  });
+
+  test("yields no patterns when no filter is stored", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, filterPlatform([]), makeStateStore())
+      .getSuggestions(["/model-filter remove "], 0, 21, { signal: signal() });
+    expect(suggestions).toBeNull();
+  });
+});
+
 describe("createJieAutocompleteProvider — /login arguments", () => {
   const PROVIDERS: ReadonlyArray<{ id: string; description?: string }> = [
     { id: "my-local", description: "configured" },
