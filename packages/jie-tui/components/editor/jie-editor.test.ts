@@ -1,6 +1,7 @@
-import { TUI, type AutocompleteProvider, type Editor, type Terminal } from "@earendil-works/pi-tui";
+import { TUI, visibleWidth, type AutocompleteProvider, type Editor, type Terminal } from "@earendil-works/pi-tui";
 import { Actions, type AgentId, type StateStore, type TuiState } from "../../state";
 import { makeAgentUiState, makeTuiState } from "../../test";
+import { style } from "../themes";
 import { JieEditor } from "./jie-editor";
 import type { PromptHistoryStore } from "./prompt-history";
 
@@ -45,9 +46,9 @@ interface EditorHarness {
   readonly submitted: string[];
 }
 
-function bootEditor(): EditorHarness {
+function bootEditor(provider: AutocompleteProvider = autocompleteProvider): EditorHarness {
   const ui = new TUI(new StubTerminal());
-  const editor = new JieEditor(ui, stateStore, autocompleteProvider, promptHistoryStore);
+  const editor = new JieEditor(ui, stateStore, provider, promptHistoryStore);
   const submitted: string[] = [];
   const submit = editor.onSubmit;
   editor.onSubmit = (text: string): void => {
@@ -228,4 +229,99 @@ function stateWithTeam(status: "idle" | "busy"): TuiState {
     focusedAgentId: LEADER_ID,
     agents: new Map([[LEADER_ID, makeAgentUiState(LEADER_ID, { isLeader: true, status })]]),
   });
+}
+
+describe("JieEditor — autocomplete ghost text", () => {
+  test("renders the selected completion's tail dimmed after the cursor", async () => {
+    const { editor } = bootEditor(fileGhostProvider());
+    for (const ch of "@a") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    const line = cursorLine(editor);
+    expect(line).toContain(style("dim")("lpha/one.ts"));
+    expect(stripAnsi(line)).toContain("@a lpha/one.ts");
+    expect(visibleWidth(line)).toBe(80);
+  });
+
+  test("the ghost follows the highlighted row as up and down move it", async () => {
+    const { editor } = bootEditor(fileGhostProvider());
+    for (const ch of "@a") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    editor.handleInput("\x1b[B");
+    expect(cursorLine(editor)).toContain(style("dim")("lpha/two.ts"));
+    editor.handleInput("\x1b[A");
+    expect(cursorLine(editor)).toContain(style("dim")("lpha/one.ts"));
+  });
+
+  test("tab completion clears the ghost once the popup closes", async () => {
+    const { editor } = bootEditor(fileGhostProvider());
+    for (const ch of "@a") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    editor.handleInput("\t");
+    expect(editor.getText()).toBe("@alpha/one.ts");
+    expect(cursorLine(editor)).not.toContain(style("dim")("lpha/one.ts"));
+  });
+
+  test("esc dismisses the popup and the ghost together", async () => {
+    const { editor } = bootEditor(fileGhostProvider());
+    for (const ch of "@a") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    editor.handleInput("\x1b");
+    expect(editor.getText()).toBe("@a");
+    expect(cursorLine(editor)).not.toContain(style("dim")("lpha/one.ts"));
+  });
+
+  test("shows no ghost when the selected value does not extend the typed prefix", async () => {
+    const provider = fileGhostProvider([{ value: "@unrelated.ts", label: "unrelated.ts" }]);
+    const { editor } = bootEditor(provider);
+    for (const ch of "@zz") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    expect(cursorLine(editor)).not.toContain(style("dim")("unrelated.ts"));
+  });
+
+  test("a slash command completion ghosts the command name past the typed prefix", async () => {
+    const provider = fileGhostProvider([{ value: "team", label: "team" }], "/te");
+    const { editor } = bootEditor(provider);
+    for (const ch of "/te") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    expect(cursorLine(editor)).toContain(style("dim")("am"));
+  });
+});
+
+function fileGhostProvider(items?: ReadonlyArray<{ value: string; label: string }>, prefix?: string): AutocompleteProvider {
+  const suggestions = items ?? [{ value: "@alpha/one.ts", label: "alpha/one.ts" }, { value: "@alpha/two.ts", label: "alpha/two.ts" }];
+  return {
+    triggerCharacters: ["@"],
+    getSuggestions: vi.fn((lines: string[], cursorLine: number, cursorCol: number) => {
+      const text = (lines[cursorLine] ?? "").slice(0, cursorCol);
+      if (prefix !== undefined ? !text.startsWith(prefix.slice(0, 1)) : !text.includes("@")) return Promise.resolve(null);
+      return Promise.resolve({ items: [...suggestions], prefix: prefix ?? `@${/@(\w*)$/.exec(text)?.[1] ?? ""}` });
+    }),
+    applyCompletion: vi.fn((lines: string[], cursorLine: number, cursorCol: number, item: { value: string }, completionPrefix: string) => {
+      const line = lines[cursorLine] ?? "";
+      const before = line.slice(0, cursorCol - completionPrefix.length);
+      const after = line.slice(cursorCol);
+      const next = [...lines];
+      next[cursorLine] = before + item.value + after;
+      return { lines: next, cursorLine, cursorCol: before.length + item.value.length };
+    }),
+  };
+}
+
+async function untilAutocomplete(editor: Editor): Promise<void> {
+  for (let i = 0; i < 100 && !editor.isShowingAutocomplete(); i++) await sleep(2);
+  expect(editor.isShowingAutocomplete()).toBe(true);
+}
+
+function cursorLine(editor: Editor): string {
+  const line = editor.render(80).find((candidate) => candidate.includes("\x1b[7m"));
+  expect(line).toBeDefined();
+  return line ?? "";
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function stripAnsi(text: string): string {
+  return text.replace(/\x1b\[[0-9;]*m/g, "");
 }
