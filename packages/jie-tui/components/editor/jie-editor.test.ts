@@ -343,7 +343,7 @@ describe("JieEditor — autocomplete ghost text", () => {
   test("an exact command match still ghosts its argument hint", async () => {
     const items = [
       { value: "model", label: "model", description: "<provider/modelId> — set the default model" },
-      { value: "model-filter", label: "model-filter", description: "<add|remove> <pattern> — manage model filters" },
+      { value: "model-filter", label: "model-filter", description: "<add|remove|list> <pattern> — manage model filters" },
     ];
     const { editor } = bootEditor(fileGhostProvider(items, "/model"));
     for (const ch of "/model") editor.handleInput(ch);
@@ -354,7 +354,7 @@ describe("JieEditor — autocomplete ghost text", () => {
   test("tab-committing a slash command leaves a static argument hint", async () => {
     const items = [
       { value: "model", label: "model", description: "<provider/modelId> — set the default model" },
-      { value: "model-filter", label: "model-filter", description: "<add|remove> <pattern> — manage model filters" },
+      { value: "model-filter", label: "model-filter", description: "<add|remove|list> <pattern> — manage model filters" },
     ];
     const { editor } = bootEditor(fileGhostProvider(items, "/model"));
     for (const ch of "/model") editor.handleInput(ch);
@@ -363,7 +363,7 @@ describe("JieEditor — autocomplete ghost text", () => {
     editor.handleInput("\t");
     expect(editor.getText()).toBe("/model-filter ");
     expect(editor.isShowingAutocomplete()).toBe(false);
-    expect(stripAnsi(cursorLine(editor))).toContain("/model-filter <add|remove> <pattern>");
+    expect(stripAnsi(cursorLine(editor))).toContain("/model-filter <add|remove|list> <pattern>");
   });
 
   test("the ghost omits a description that is not an argument hint", async () => {

@@ -14,7 +14,7 @@ import type { StateStore } from "../state";
 
 const MAX_SUGGESTIONS = 20;
 const AT_PREFIX_PATTERN = /(?:^|[\s"])@([\w./-]*)$/;
-const MODEL_FILTER_ACTIONS = ["add", "remove"] as const;
+const MODEL_FILTER_ACTIONS = ["add", "remove", "list"] as const;
 
 export interface JieSuggestions extends AutocompleteSuggestions {
   readonly filteredOut?: number;

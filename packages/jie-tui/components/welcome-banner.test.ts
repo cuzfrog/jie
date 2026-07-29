@@ -88,7 +88,7 @@ describe("WelcomeBanner", () => {
   });
 
   test("lays the commands out in two columns when the width allows", () => {
-    const lines = new WelcomeBanner(stateStore).render(120).map(stripAnsi);
+    const lines = new WelcomeBanner(stateStore).render(130).map(stripAnsi);
     const paired = lines.filter((line) => line.includes("/help") && line.includes("/model-filter"));
     expect(paired.length).toBe(1);
     expect(paired[0]).toContain("show this help");
