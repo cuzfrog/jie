@@ -85,7 +85,7 @@ function slashCommands(
     if (meta.name === "team") return { ...meta, getArgumentCompletions: (prefix) => teamItems(platform, prefix) };
     if (meta.name === "resume") return { ...meta, getArgumentCompletions: (prefix) => sessionItems(platform, stateStore, prefix) };
     if (meta.name === "model") return { ...meta, getArgumentCompletions: (prefix) => modelItems(platform, prefix, reportModelFilteredOut) };
-    if (meta.name === "model-filter") return { ...meta, getArgumentCompletions: (prefix) => modelFilterActionItems(prefix) };
+    if (meta.name === "model-filter") return { ...meta, getArgumentCompletions: (argumentText) => modelFilterItems(platform, argumentText) };
     if (meta.name === "login") return { ...meta, getArgumentCompletions: (prefix) => providerItems(platform, prefix) };
     if (meta.name === "logout") return { ...meta, getArgumentCompletions: (prefix) => logoutItems(platform, prefix) };
     if (meta.name === "effort") return { ...meta, getArgumentCompletions: async (prefix) => effortItems(prefix) };
@@ -178,10 +178,23 @@ async function logoutItems(platform: JiePlatform, prefix: string): Promise<Autoc
   return matches.length === 0 ? null : matches;
 }
 
-function modelFilterActionItems(prefix: string): AutocompleteItem[] | null {
-  if (isAlreadyComplete(MODEL_FILTER_ACTIONS, prefix)) return null;
-  const items = MODEL_FILTER_ACTIONS.filter((action) => hasPrefix(action, prefix))
-    .map((action): AutocompleteItem => ({ value: action, label: action }));
+async function modelFilterItems(platform: JiePlatform, argumentText: string): Promise<AutocompleteItem[] | null> {
+  const spaceIndex = argumentText.indexOf(" ");
+  if (spaceIndex === -1) {
+    if (isAlreadyComplete(MODEL_FILTER_ACTIONS, argumentText)) return null;
+    const items = MODEL_FILTER_ACTIONS.filter((action) => hasPrefix(action, argumentText))
+      .map((action): AutocompleteItem => ({ value: action, label: action }));
+    return items.length === 0 ? null : items;
+  }
+  const action = argumentText.slice(0, spaceIndex);
+  if (action !== "remove") return null;
+  const pattern = argumentText.slice(spaceIndex + 1);
+  const filters = await platform.execute({ name: "getModelFilters" });
+  if (isAlreadyComplete(filters, pattern)) return null;
+  const items = filters
+    .filter((filter) => hasPrefix(filter, pattern))
+    .slice(0, MAX_SUGGESTIONS)
+    .map((filter): AutocompleteItem => ({ value: `remove ${filter}`, label: filter }));
   return items.length === 0 ? null : items;
 }
 
