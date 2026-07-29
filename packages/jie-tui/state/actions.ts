@@ -6,6 +6,7 @@ export const ActionTypes = {
   TOGGLE_THINKING: "[ui] toggle thinking expanded",
   TOGGLE_TOOL_CARDS: "[ui] toggle tool cards expanded",
   SWITCH_CYCLE_AGENT: "[ui] switch and cycle focused agent",
+  TOGGLE_TEAM_PANEL: "[ui] toggle team panel visibility",
   COMMIT_TEAM_CURSOR: "[ui] commit team cursor to focused agent",
   CLEAR_TUI_STATE: "[ui] clear tui state",
   SET_TRANSIENT_MESSAGE: "[ui] transient message",
@@ -31,6 +32,7 @@ interface ActionDef<T extends ActionType, P> {
 
 const toggleThinking = createAction(ActionTypes.TOGGLE_THINKING);
 const toggleToolCards = createAction(ActionTypes.TOGGLE_TOOL_CARDS);
+const toggleTeamPanel = createAction(ActionTypes.TOGGLE_TEAM_PANEL);
 const commitTeamCursor = createAction(ActionTypes.COMMIT_TEAM_CURSOR);
 const clearTuiState = createAction(ActionTypes.CLEAR_TUI_STATE);
 const clearTransientMessage = createAction(ActionTypes.CLEAR_TRANSIENT_MESSAGE);
@@ -45,6 +47,7 @@ export const Actions = {
 	toggleThinking: () => toggleThinking,
 	toggleToolCards: () => toggleToolCards,
 	switchCycleAgent: (direction: 1 | -1) => createAction(ActionTypes.SWITCH_CYCLE_AGENT, { direction }),
+	toggleTeamPanel: () => toggleTeamPanel,
 	commitTeamCursor: () => commitTeamCursor,
 	clearTuiState: () => clearTuiState,
 	setTransientMessage: (text: string) => createAction(ActionTypes.SET_TRANSIENT_MESSAGE, { text }),

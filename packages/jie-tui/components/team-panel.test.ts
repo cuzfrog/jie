@@ -42,10 +42,11 @@ describe("TeamPanel", () => {
     stateStore.getState.mockReturnValue(teamState({ focusedAgentId: LEADER_ID }));
     const text = new TeamPanel(stateStore).render(120);
     expect(text[2]).toContain(style("dim")("leader"));
-    expect(stripAnsi(text[2])).toContain("general-1 leader ·");
-    for (const line of text.map(stripAnsi)) expect(line).not.toContain("★");
-    expect(stripAnsi(text[2])).not.toContain("· general");
-    expect(stripAnsi(text[3])).not.toContain("· coder");
+    expect(stripAnsi(text[2])).toContain("general-1 leader");
+    for (const line of text.map(stripAnsi)) {
+      expect(line).not.toContain("★");
+      expect(line).not.toContain("·");
+    }
     expect(stripAnsi(text[3]).startsWith("  coder-1")).toBe(true);
   });
 
@@ -156,7 +157,7 @@ describe("TeamPanel", () => {
 
   test("tags the queue depth when prompts are queued", () => {
     stateStore.getState.mockReturnValue(teamState({}, { [WORKER_ID]: { queue: ["a", "b"] } }));
-    expect(stripAnsi(new TeamPanel(stateStore).render(120)[3])).toContain("coder-1 · q2");
+    expect(stripAnsi(new TeamPanel(stateStore).render(120)[3])).toContain("coder-1 q2");
   });
 
   test("truncates every line to the available width", () => {

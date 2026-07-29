@@ -12,6 +12,8 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
       return { ...state, toolCardsExpanded: !state.toolCardsExpanded };
     case ActionTypes.SWITCH_CYCLE_AGENT:
       return reduceTeamCursor(state, action.payload.direction);
+    case ActionTypes.TOGGLE_TEAM_PANEL:
+      return reduceTeamPanelToggle(state);
     case ActionTypes.COMMIT_TEAM_CURSOR:
       return reduceTeamCursorCommit(state);
     case ActionTypes.CLEAR_TUI_STATE:
@@ -67,18 +69,22 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
   }
 }
 
-function reduceTeamCursor(state: TuiState, direction: 1 | -1): TuiState {
+function reduceTeamPanelToggle(state: TuiState): TuiState {
   const roster = TuiState.rosterOrder(state);
   if (roster.length === 0) return state;
-  if (!state.teamPanelVisible) {
-    const cursor = state.teamCursorAgentId ?? state.focusedAgentId ?? roster[direction === 1 ? 0 : roster.length - 1]!.agentId;
-    return { ...state, teamPanelVisible: true, teamCursorAgentId: cursor };
-  }
+  if (state.teamPanelVisible) return { ...state, teamPanelVisible: false, teamCursorAgentId: null };
+  const cursor = state.teamCursorAgentId ?? state.focusedAgentId ?? roster[0]!.agentId;
+  return { ...state, teamPanelVisible: true, teamCursorAgentId: cursor };
+}
+
+function reduceTeamCursor(state: TuiState, direction: 1 | -1): TuiState {
+  if (!state.teamPanelVisible) return state;
+  const roster = TuiState.rosterOrder(state);
+  if (roster.length === 0) return state;
   const current = state.teamCursorAgentId ?? state.focusedAgentId;
   const index = roster.findIndex((agent) => agent.agentId === current);
   if (index === -1) return { ...state, teamCursorAgentId: roster[0]!.agentId };
-  if (direction === -1 && index === 0) return { ...state, teamPanelVisible: false, teamCursorAgentId: null };
-  const next = direction === 1 && index === roster.length - 1 ? 0 : index + direction;
+  const next = (index + direction + roster.length) % roster.length;
   return { ...state, teamCursorAgentId: roster[next]!.agentId };
 }
 

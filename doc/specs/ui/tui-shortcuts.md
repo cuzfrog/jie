@@ -8,7 +8,7 @@ The TUI is keyboard-driven. Editor keys are pi-tui `Editor` semantics verbatim p
 | --- | --- | --- |
 | `Enter` | Submit the editor buffer — except when the team strip is shown with its cursor on another agent: then it commits that agent as the focused one instead (`tui-team-panel.md`) | pi semantics; `Shift+Enter` inserts a newline where the terminal reports modifyOtherKeys/Kitty (production path) |
 | `Tab` | Complete the highlighted autocomplete suggestion | Inserts the completed token into the buffer; does **not** submit — submit is always `Enter` |
-| `↑` / `↓` | Walk prompt history (with draft capture) | pi editor owns this; the global listener does not intercept plain arrows |
+| `↑` / `↓` | Walk prompt history (with draft capture) | pi editor owns this — except while the team strip is shown: then the global listener routes plain arrows to the strip's cursor instead (`tui-team-panel.md`) |
 | `Esc` | Interrupt the focused agent's in-flight run | only when that agent is busy and no autocomplete popup is showing; otherwise pi closes the popup. The working slot then shows a static `Interrupted` until the agent's next turn starts or the user submits |
 | `Ctrl+C` | Clear the editor if non-empty; otherwise quit | |
 | `Ctrl+D` | Quit when the editor is empty | single press — pi semantics |
@@ -21,10 +21,9 @@ Everything else is pi-tui `Editor` behavior: cursor/word movement, undo, kill ri
 | --- | --- | --- |
 | `Ctrl+T` | Expand / collapse all thinking blocks | always |
 | `Ctrl+O` | Expand / collapse all tool cards | always |
-| `Shift+↓` | Call out the team strip, then move the cursor down without switching the focused agent; wraps last → first (`tui-team-panel.md`) | always; no-op before a team is loaded |
-| `Shift+↑` | Move the cursor up; at the first agent, hide the strip and clear the cursor | always; no-op before a team is loaded |
+| `Ctrl+↓` | Toggle the team strip: show it with the cursor on the focused agent, or hide it and clear the cursor (`tui-team-panel.md`) | always; no-op before a team is loaded |
 
-Only `Shift` arrows are bound — `Ctrl` arrows conflict with OS shortcuts and stay with the terminal. The first press while the strip is hidden shows it with the cursor on the focused agent and does not move; the asymmetry is deliberate: down wraps, up at the top closes (`tui-team-panel.md`, Interaction). The thinking/tool toggles are all-or-nothing across the focused agent's history + current turn (`state.thinkingExpanded` / `state.toolCardsExpanded`); mid-stream toggle re-renders on the next tick. There are **no** `PgUp`/`PgDn`/`Home`/`End`/wheel bindings: finished output is terminal scrollback; scroll and copy are the terminal's native behavior.
+`Ctrl+↓` is the strip's only toggle; while the strip is shown, plain `↑`/`↓` move its cursor (cycling both ways) and the editor's history walk yields (`tui-team-panel.md`, Interaction). `Ctrl+↑` and the `Ctrl+←`/`Ctrl+→` word jumps stay with the editor/terminal. While the autocomplete popup is open, plain arrows navigate the popup, not the strip. The thinking/tool toggles are all-or-nothing across the focused agent's history + current turn (`state.thinkingExpanded` / `state.toolCardsExpanded`); mid-stream toggle re-renders on the next tick. There are **no** `PgUp`/`PgDn`/`Home`/`End`/wheel bindings: finished output is terminal scrollback; scroll and copy are the terminal's native behavior.
 
 ## Esc vs Ctrl+C vs Ctrl+D
 

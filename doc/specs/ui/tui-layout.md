@@ -33,7 +33,7 @@ Commands
 
 Shortcuts
 enter send · tab complete · @ mention a file · / commands · ctrl+t thinking
-ctrl+o tool output · shift+↑/↓ team panel · esc interrupt · ctrl+d quit
+ctrl+o tool output · ctrl+↓ team panel · esc interrupt · ctrl+d quit
 ────────────────────────────────────────────────────────────────────────────────
 
 ────────────────────────────────────────────────────────────────────────────────

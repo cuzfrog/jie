@@ -36,7 +36,7 @@ describe("TuiState.getFocusedAgent", () => {
   test("reflects focus changes only after the team cursor is committed", () => {
     const store = new StateStoreImpl();
     loadDemoTeam(store);
-    store.dispatch(Actions.switchCycleAgent(1));
+    store.dispatch(Actions.toggleTeamPanel());
     store.dispatch(Actions.switchCycleAgent(1));
     expect(TuiState.getFocusedAgent(store.getState())?.agentKey).toBe("general-1");
     store.dispatch(Actions.commitTeamCursor());

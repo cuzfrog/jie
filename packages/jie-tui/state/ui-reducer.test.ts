@@ -70,42 +70,57 @@ describe("team strip cursor", () => {
     ]);
   }
 
-  test("first press opens the strip and seeds the cursor on the focused agent", () => {
+  test("toggle opens the strip and seeds the cursor on the focused agent", () => {
     const state1 = twoAgent();
     expect(state1.focusedAgentId).toBe("my-team:manager-1");
-    const state2 = reduceUiAction(state1, Actions.switchCycleAgent(1));
+    const state2 = reduceUiAction(state1, Actions.toggleTeamPanel());
     expect(state2.teamPanelVisible).toBe(true);
     expect(state2.teamCursorAgentId).toBe("my-team:manager-1");
     expect(state2.focusedAgentId).toBe("my-team:manager-1");
   });
 
-  test("first press opens the strip even with a single agent", () => {
+  test("toggle opens the strip even with a single agent", () => {
     const state = loadedTeam([{ role: "general", agent_key: "general-1", is_leader: true }]);
-    const state2 = reduceUiAction(state, Actions.switchCycleAgent(1));
+    const state2 = reduceUiAction(state, Actions.toggleTeamPanel());
     expect(state2.teamPanelVisible).toBe(true);
     expect(state2.teamCursorAgentId).toBe("my-team:general-1");
   });
 
+  test("toggle hides the shown strip and clears the cursor", () => {
+    const opened = reduceUiAction(twoAgent(), Actions.toggleTeamPanel());
+    const moved = reduceUiAction(opened, Actions.switchCycleAgent(1));
+    const closed = reduceUiAction(moved, Actions.toggleTeamPanel());
+    expect(closed.teamPanelVisible).toBe(false);
+    expect(closed.teamCursorAgentId).toBeNull();
+    expect(closed.focusedAgentId).toBe("my-team:manager-1");
+  });
+
   test("is a no-op when no agents are loaded", () => {
+    expect(reduceUiAction(INITIAL_TUI_STATE, Actions.toggleTeamPanel())).toBe(INITIAL_TUI_STATE);
     expect(reduceUiAction(INITIAL_TUI_STATE, Actions.switchCycleAgent(1))).toBe(INITIAL_TUI_STATE);
     expect(reduceUiAction(INITIAL_TUI_STATE, Actions.switchCycleAgent(-1))).toBe(INITIAL_TUI_STATE);
   });
 
-  test("opening with no focus seeds the cursor on the first agent on down and the last on up", () => {
+  test("opening with no focus seeds the cursor on the first agent", () => {
     const base = { ...twoAgent(), focusedAgentId: null };
-    expect(reduceUiAction(base, Actions.switchCycleAgent(1)).teamCursorAgentId).toBe("my-team:manager-1");
-    expect(reduceUiAction(base, Actions.switchCycleAgent(-1)).teamCursorAgentId).toBe("my-team:worker-1");
+    expect(reduceUiAction(base, Actions.toggleTeamPanel()).teamCursorAgentId).toBe("my-team:manager-1");
+  });
+
+  test("cursor movement is a no-op while the strip is hidden", () => {
+    const state = twoAgent();
+    expect(reduceUiAction(state, Actions.switchCycleAgent(1))).toBe(state);
+    expect(reduceUiAction(state, Actions.switchCycleAgent(-1))).toBe(state);
   });
 
   test("moving the cursor does not switch the focused agent", () => {
-    const opened = reduceUiAction(twoAgent(), Actions.switchCycleAgent(1));
+    const opened = reduceUiAction(twoAgent(), Actions.toggleTeamPanel());
     const state2 = reduceUiAction(opened, Actions.switchCycleAgent(1));
     expect(state2.teamCursorAgentId).toBe("my-team:worker-1");
     expect(state2.focusedAgentId).toBe("my-team:manager-1");
   });
 
   test("down at the last agent wraps the cursor to the first", () => {
-    const opened = reduceUiAction(twoAgent(), Actions.switchCycleAgent(1));
+    const opened = reduceUiAction(twoAgent(), Actions.toggleTeamPanel());
     const atWorker = reduceUiAction(opened, Actions.switchCycleAgent(1));
     const wrapped = reduceUiAction(atWorker, Actions.switchCycleAgent(1));
     expect(wrapped.teamCursorAgentId).toBe("my-team:manager-1");
@@ -113,7 +128,7 @@ describe("team strip cursor", () => {
   });
 
   test("up from a middle agent moves the cursor without closing", () => {
-    let state = reduceUiAction(threeAgent(), Actions.switchCycleAgent(1));
+    let state = reduceUiAction(threeAgent(), Actions.toggleTeamPanel());
     state = reduceUiAction(state, Actions.switchCycleAgent(1));
     state = reduceUiAction(state, Actions.switchCycleAgent(1));
     expect(state.teamCursorAgentId).toBe("my-team:worker-2");
@@ -123,12 +138,12 @@ describe("team strip cursor", () => {
     expect(state.focusedAgentId).toBe("my-team:manager-1");
   });
 
-  test("up at the first agent closes the strip and clears the cursor", () => {
-    const opened = reduceUiAction(twoAgent(), Actions.switchCycleAgent(1));
-    const closed = reduceUiAction(opened, Actions.switchCycleAgent(-1));
-    expect(closed.teamPanelVisible).toBe(false);
-    expect(closed.teamCursorAgentId).toBeNull();
-    expect(closed.focusedAgentId).toBe("my-team:manager-1");
+  test("up at the first agent wraps the cursor to the last", () => {
+    const opened = reduceUiAction(twoAgent(), Actions.toggleTeamPanel());
+    const wrapped = reduceUiAction(opened, Actions.switchCycleAgent(-1));
+    expect(wrapped.teamPanelVisible).toBe(true);
+    expect(wrapped.teamCursorAgentId).toBe("my-team:worker-1");
+    expect(wrapped.focusedAgentId).toBe("my-team:manager-1");
   });
 
   test("navigates in leader-first order even when the leader is not first in the payload", () => {
@@ -136,14 +151,14 @@ describe("team strip cursor", () => {
       { role: "worker", agent_key: "worker-1", is_leader: false },
       { role: "manager", agent_key: "manager-1", is_leader: true },
     ]);
-    state = reduceUiAction(state, Actions.switchCycleAgent(1));
+    state = reduceUiAction(state, Actions.toggleTeamPanel());
     expect(state.teamCursorAgentId).toBe("my-team:manager-1");
     state = reduceUiAction(state, Actions.switchCycleAgent(1));
     expect(state.teamCursorAgentId).toBe("my-team:worker-1");
     state = reduceUiAction(state, Actions.switchCycleAgent(-1));
     expect(state.teamCursorAgentId).toBe("my-team:manager-1");
     state = reduceUiAction(state, Actions.switchCycleAgent(-1));
-    expect(state.teamPanelVisible).toBe(false);
+    expect(state.teamCursorAgentId).toBe("my-team:worker-1");
   });
 
   test("recovers a stale cursor to the first agent", () => {
@@ -154,7 +169,7 @@ describe("team strip cursor", () => {
   });
 
   test("clearTuiState keeps the strip visible and clears the cursor", () => {
-    let opened = reduceUiAction(twoAgent(), Actions.switchCycleAgent(1));
+    let opened = reduceUiAction(twoAgent(), Actions.toggleTeamPanel());
     opened = reduceUiAction(opened, Actions.switchCycleAgent(1));
     const cleared = reduceUiAction(opened, Actions.clearTuiState());
     expect(cleared.teamPanelVisible).toBe(true);
@@ -171,7 +186,7 @@ describe("commit team cursor", () => {
   }
 
   test("commit switches the focused agent to the cursor", () => {
-    let state = reduceUiAction(twoAgent(), Actions.switchCycleAgent(1));
+    let state = reduceUiAction(twoAgent(), Actions.toggleTeamPanel());
     state = reduceUiAction(state, Actions.switchCycleAgent(1));
     state = reduceUiAction(state, Actions.commitTeamCursor());
     expect(state.focusedAgentId).toBe("my-team:worker-1");
@@ -179,7 +194,7 @@ describe("commit team cursor", () => {
   });
 
   test("commit is a no-op when the cursor already matches the focused agent", () => {
-    const state = reduceUiAction(twoAgent(), Actions.switchCycleAgent(1));
+    const state = reduceUiAction(twoAgent(), Actions.toggleTeamPanel());
     expect(reduceUiAction(state, Actions.commitTeamCursor())).toBe(state);
   });
 
