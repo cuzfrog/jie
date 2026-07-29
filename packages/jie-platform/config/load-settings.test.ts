@@ -109,6 +109,13 @@ describe("loadMergedSettings", () => {
     expect(result.defaultEffort).toBe("high");
   });
 
+  test("accepts a valid modelFilters", () => {
+    const home = track(freshDir("jie-home-"));
+    writeJson(join(home, "settings.json"), { modelFilters: ["qwen", "gpt"] });
+    const result = loadMergedSettings(home, null);
+    expect(result.modelFilters).toEqual(["qwen", "gpt"]);
+  });
+
   test.each([
     {
       name: "defaultTeam with invalid characters",
@@ -151,6 +158,24 @@ describe("loadMergedSettings", () => {
       field: "defaultEffort",
       value: 42,
       match: /invalid defaultEffort/,
+    },
+    {
+      name: "non-array modelFilters",
+      field: "modelFilters",
+      value: "qwen",
+      match: /modelFilters must be an array of non-empty strings/,
+    },
+    {
+      name: "modelFilters containing an empty string",
+      field: "modelFilters",
+      value: ["qwen", ""],
+      match: /modelFilters must be an array of non-empty strings/,
+    },
+    {
+      name: "modelFilters containing a non-string",
+      field: "modelFilters",
+      value: [42],
+      match: /modelFilters must be an array of non-empty strings/,
     },
   ])("rejects $name with code INVALID_CONFIG", ({ field, value, match }) => {
     const home = track(freshDir("jie-home-"));

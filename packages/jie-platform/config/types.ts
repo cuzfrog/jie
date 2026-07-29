@@ -6,6 +6,7 @@ export interface Settings {
   readonly defaultModel?: string;
   readonly defaultTeam?: string;
   readonly defaultEffort?: EffortLevel;
+  readonly modelFilters?: ReadonlyArray<string>;
 }
 
 export type RawSettings = Record<string, unknown>;

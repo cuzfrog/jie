@@ -34,6 +34,8 @@ export interface MemoryManager {
 
   listSessions(teamId: string): ReadonlyArray<SessionSummary>;
 
+  sessionName(sessionId: string): string | null;
+
   renameSession(sessionId: string, name: string): void;
 }
 
@@ -147,6 +149,14 @@ export class SqliteMemoryManager implements MemoryManager {
       lastActivity: row[2] as string,
       name: (row[3] as string | null) ?? undefined,
     }));
+  }
+
+  sessionName(sessionId: string): string | null {
+    const rows = this.storage.query(
+      `SELECT name FROM session_metadata WHERE session_id = ?`,
+      [sessionId],
+    );
+    return (rows[0]?.[0] as string | undefined) ?? null;
   }
 
   renameSession(sessionId: string, name: string): void {

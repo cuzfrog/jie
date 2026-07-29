@@ -13,6 +13,7 @@ export interface TeamManager {
   load(teamId?: string): Promise<TeamInfo>;
   resumeSession(teamId: string, sessionId: string): Promise<TeamInfo>;
   listInstalled(): string[];
+  agentCount(teamId: string): number;
   listLoaded(): ReadonlyMap<string, TeamInfo>;
   locate(teamId: string): TeamBlueprintLocation;
   agents(teamId: string): ReadonlyArray<AgentInfo>;
@@ -51,10 +52,14 @@ export class TeamManagerImpl implements TeamManager {
     return this.teamRegistry.listInstalled();
   }
 
+  agentCount(teamId: string): number {
+    return this.teamRegistry.parseTeamManifest(teamId).roles.length;
+  }
+
   listLoaded(): ReadonlyMap<string, TeamInfo> {
     const result = new Map<string, TeamInfo>();
     for (const [id, bodies] of this.loadedTeams) {
-      result.set(id, toTeamInfo(id, bodies));
+      result.set(id, this.toTeamInfo(id, bodies));
     }
     return result;
   }
@@ -93,7 +98,7 @@ export class TeamManagerImpl implements TeamManager {
     const requested = this.resolveTeamId(teamId);
     const existing = this.loadedTeams.get(requested);
     if (existing !== undefined && overrideSessionId === undefined) {
-      return toTeamInfo(requested, existing);
+      return this.toTeamInfo(requested, existing);
     }
     if (existing !== undefined && overrideSessionId !== undefined) {
       for (const body of existing) body.stop();
@@ -127,7 +132,7 @@ export class TeamManagerImpl implements TeamManager {
     for (const body of bodies) {
       await body.start();
     }
-    return toTeamInfo(requested, bodies);
+    return this.toTeamInfo(requested, bodies);
   }
 
   private resolveTeamId(teamId?: string): string {
@@ -180,18 +185,20 @@ export class TeamManagerImpl implements TeamManager {
   }
 
   private publishTeamLoaded(teamId: string, bodies: AgentBody[]): void {
-    this.eventManager.publish(Events.teamLoaded({ kind: "system" }, toTeamInfo(teamId, bodies)));
+    this.eventManager.publish(Events.teamLoaded({ kind: "system" }, this.toTeamInfo(teamId, bodies)));
   }
-}
 
-function toTeamInfo(id: string, bodies: AgentBody[]): TeamInfo {
-  const identities = bodies.map((b) => b.identity);
-  const leader = identities.find((a) => a.isLeader);
-  if (leader === undefined) {
-    throw new JiePlatformError("NO_LEADER", {
-      detail: `team '${id}' has no agent marked as leader`,
-    });
+  private toTeamInfo(id: string, bodies: AgentBody[]): TeamInfo {
+    const identities = bodies.map((b) => b.identity);
+    const leader = identities.find((a) => a.isLeader);
+    if (leader === undefined) {
+      throw new JiePlatformError("NO_LEADER", {
+        detail: `team '${id}' has no agent marked as leader`,
+      });
+    }
+    const history: AgentHistory[] = bodies.map((b) => ({ agentKey: b.identity.agentKey, messages: b.messages() }));
+    const sessionId = this.sessionIds.get(id);
+    const sessionName = sessionId === undefined ? null : this.memoryManager.sessionName(sessionId);
+    return { id, leaderKey: leader.agentKey, sessionName, agents: identities, history };
   }
-  const history: AgentHistory[] = bodies.map((b) => ({ agentKey: b.identity.agentKey, messages: b.messages() }));
-  return { id, leaderKey: leader.agentKey, agents: identities, history };
 }

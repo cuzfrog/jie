@@ -61,18 +61,24 @@ describe("Scenario 2 — pass work in a team", () => {
     expect(readFileSync(join(harness.dir, "my-answer.txt"), "utf8")).toBe("Hello world");
   });
 
-  test("shift+down/shift+up move the team strip cursor without touching conversations", async () => {
+  test("ctrl+down toggles the team strip; arrows move its cursor; enter commits the focus", async () => {
     await sendLine(harness.stdin, "/team my-team");
     await waitForTeam(harness, "my-team");
     await waitForFocusedAgent(harness, "my-team:manager-1");
     const before = snapshotConversations(harness);
-    await sendCmd(harness.stdin, "\x1b[1;2B");
-    await sendCmd(harness.stdin, "\x1b[1;2B");
+    await sendCmd(harness.stdin, "\x1b[1;5B");
+    await waitForUi(harness, (state) => state.teamPanelVisible, "team panel visible");
+    await sendCmd(harness.stdin, "\x1b[B");
+    await waitForUi(harness, (state) => state.teamCursorAgentId === "my-team:worker-1", "cursor on worker-1");
+    expect(harness.stateStore.getState().focusedAgentId).toBe("my-team:manager-1");
+    await sendCmd(harness.stdin, "\r");
     await waitForFocusedAgent(harness, "my-team:worker-1");
-    await sendCmd(harness.stdin, "\x1b[1;2A");
+    await sendCmd(harness.stdin, "\x1b[A");
+    await waitForUi(harness, (state) => state.teamCursorAgentId === "my-team:manager-1", "cursor on manager-1");
+    await sendCmd(harness.stdin, "\r");
     await waitForFocusedAgent(harness, "my-team:manager-1");
-    await sendCmd(harness.stdin, "\x1b[1;2A");
-    expect(harness.stateStore.getState().teamPanelVisible).toBe(false);
+    await sendCmd(harness.stdin, "\x1b[1;5B");
+    await waitForUi(harness, (state) => !state.teamPanelVisible, "team panel hidden");
     expect(snapshotConversations(harness)).toEqual(before);
   });
 
@@ -91,4 +97,17 @@ function snapshotConversations(harness: TuiHarness): ReadonlyArray<Readonly<{ ag
       blocks: turns.flatMap((turn) => turn.blocks).map((block) => block.text),
     };
   });
+}
+
+async function waitForUi(
+  harness: TuiHarness,
+  predicate: (state: ReturnType<TuiHarness["stateStore"]["getState"]>) => boolean,
+  label: string,
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < 5000) {
+    if (predicate(harness.stateStore.getState())) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error(`waitForUi timed out waiting for: ${label}`);
 }

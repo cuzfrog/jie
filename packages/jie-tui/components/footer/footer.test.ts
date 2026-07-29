@@ -39,6 +39,19 @@ describe("Footer", () => {
     expect(lines[1]).toContain("—");
   });
 
+  test("renders only the identity line while the team panel is open", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ ...seededState(false), teamPanelVisible: true }));
+    const lines = new Footer(stateStore).render(80);
+    expect(lines.length).toBe(1);
+    expect(lines[0]).toContain("/repo (dev)");
+    expect(lines[0]).toContain("my-team:general-1");
+  });
+
+  test("keeps both lines when the panel flag is set but no team is loaded", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ teamPanelVisible: true, cwd: "/repo" }));
+    expect(new Footer(stateStore).render(80).length).toBe(2);
+  });
+
   test("line two keeps context on the left and right-aligns the model segment at the right edge", () => {
     stateStore.getState.mockReturnValue(seededStateWithModel());
     const lines = new Footer(stateStore).render(80);

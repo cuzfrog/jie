@@ -149,12 +149,12 @@ describe("CommandHandlerImpl — /login", () => {
 });
 
 describe("CommandHandlerImpl — /logout", () => {
-  test("/logout with no args dispatches logout with provider undefined", () => {
+  test("/logout with no args sets a usage error and does not call execute", () => {
     const { platform, execute } = makePlatform();
     const { handler, dispatch } = makeHandler(platform);
     handler.handle("/logout");
-    expect(execute).toHaveBeenCalledWith({ name: "logout", provider: undefined });
-    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("logged out of all providers")));
+    expect(execute).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/logout <provider>|*")));
   });
 
   test("/logout <provider> dispatches logout with that provider", () => {
@@ -163,6 +163,14 @@ describe("CommandHandlerImpl — /logout", () => {
     handler.handle("/logout anthropic");
     expect(execute).toHaveBeenCalledWith({ name: "logout", provider: "anthropic" });
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("logged out of anthropic")));
+  });
+
+  test("/logout * logs out of all providers", () => {
+    const { platform, execute } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/logout *");
+    expect(execute).toHaveBeenCalledWith({ name: "logout", provider: "*" });
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("logged out of all providers")));
   });
 });
 
@@ -200,6 +208,82 @@ describe("CommandHandlerImpl — /model", () => {
     handler.handle("/model");
     expect(execute).not.toHaveBeenCalled();
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/model <provider>/<modelId>")));
+  });
+});
+
+describe("CommandHandlerImpl — /model-filter", () => {
+  test("/model-filter with no args sets a usage error and does not call execute", () => {
+    const { platform, execute } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/model-filter");
+    expect(execute).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/model-filter <add|remove> <pattern>")));
+  });
+
+  test("/model-filter add without a pattern sets a usage error", () => {
+    const { platform, execute } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/model-filter add");
+    expect(execute).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/model-filter <add|remove> <pattern>")));
+  });
+
+  test("/model-filter with an unknown action sets a usage error", () => {
+    const { platform, execute } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/model-filter toggle qwen");
+    expect(execute).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/model-filter <add|remove> <pattern>")));
+  });
+
+  test("/model-filter add <pattern> appends the pattern to the stored filters", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => ["gpt"]);
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/model-filter add qwen");
+    await new Promise((r) => setImmediate(r));
+    expect(execute).toHaveBeenNthCalledWith(1, { name: "getModelFilters" });
+    expect(execute).toHaveBeenNthCalledWith(2, { name: "setModelFilters", filters: ["gpt", "qwen"] });
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("model filter added: qwen")));
+  });
+
+  test("/model-filter add <pattern> does not duplicate an existing pattern", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => ["qwen"]);
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/model-filter add qwen");
+    await new Promise((r) => setImmediate(r));
+    expect(execute).toHaveBeenNthCalledWith(2, { name: "setModelFilters", filters: ["qwen"] });
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("model filter added: qwen")));
+  });
+
+  test("/model-filter remove <pattern> drops the pattern from the stored filters", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => ["gpt", "qwen"]);
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/model-filter remove qwen");
+    await new Promise((r) => setImmediate(r));
+    expect(execute).toHaveBeenNthCalledWith(2, { name: "setModelFilters", filters: ["gpt"] });
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("model filter removed: qwen")));
+  });
+
+  test("/model-filter remove of an unset pattern sets an error and does not write", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => ["gpt"]);
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/model-filter remove qwen");
+    await new Promise((r) => setImmediate(r));
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("pattern 'qwen' is not set")));
+  });
+
+  test("/model-filter surfaces platform errors as error messages", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async () => { throw new Error("disk full"); });
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/model-filter add qwen");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/model-filter failed")));
   });
 });
 
@@ -254,6 +338,7 @@ describe("CommandHandlerImpl — /team", () => {
     execute.mockImplementationOnce(async () => ({
       id: "alpha",
       leaderKey: "general-1",
+      sessionName: null,
       history: [],
       agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true }],
     }));
@@ -269,6 +354,7 @@ describe("CommandHandlerImpl — /team", () => {
     execute.mockImplementationOnce(async () => ({
       id: "alpha",
       leaderKey: "general-1",
+      sessionName: null,
       history: [],
       agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
     }));
@@ -281,6 +367,7 @@ describe("CommandHandlerImpl — /team", () => {
     expect(switchCalls[0]![0]).toEqual(Actions.switchTeam({
       id: "alpha",
       leaderKey: "general-1",
+      sessionName: null,
       history: [],
       agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
     }));
@@ -291,6 +378,7 @@ describe("CommandHandlerImpl — /team", () => {
     const identity = {
       id: "alpha",
       leaderKey: "general-1",
+      sessionName: null,
       history: [],
       agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
     } as const;
@@ -342,6 +430,7 @@ describe("CommandHandlerImpl — /resume", () => {
     const identity = {
       id: "minimal",
       leaderKey: "general-1",
+      sessionName: null,
       history: [],
       agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
     };
@@ -357,6 +446,7 @@ describe("CommandHandlerImpl — /resume", () => {
     const identity = {
       id: "minimal",
       leaderKey: "general-1",
+      sessionName: null,
       history: [],
       agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
     };
@@ -404,6 +494,25 @@ describe("CommandHandlerImpl — /rename", () => {
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("session renamed to my cool session")));
   });
 
+  test("/rename dispatches setSessionName once the rename succeeds", async () => {
+    const { platform } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    handler.handle("/rename my cool session");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setSessionName("my cool session"));
+  });
+
+  test("/rename does not dispatch setSessionName when the platform rejects", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async () => {
+      throw new Error("sqlite locked");
+    });
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    handler.handle("/rename x");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).not.toHaveBeenCalledWith(Actions.setSessionName(expect.anything()));
+  });
+
   test("/rename surfaces platform errors as an error banner", async () => {
     const { platform, execute } = makePlatform();
     execute.mockImplementation(async () => {
@@ -425,6 +534,7 @@ describe("SLASH_COMMAND_NAMES", () => {
       "login",
       "logout",
       "model",
+      "model-filter",
       "effort",
       "team",
       "resume",

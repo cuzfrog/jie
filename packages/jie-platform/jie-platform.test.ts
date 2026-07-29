@@ -11,6 +11,7 @@ const settingsStore = vi.mocked<SettingsStore>({
   setDefaultProvider: vi.fn(),
   setDefaultEffort: vi.fn(),
   setDefaultTeam: vi.fn(),
+  setModelFilters: vi.fn(),
 });
 
 const eventManager = vi.mocked<EventManager>({
@@ -27,6 +28,7 @@ const teamManager = vi.mocked<TeamManager>({
   resumeSession: vi.fn(),
   renameSession: vi.fn(),
   listInstalled: vi.fn(),
+  agentCount: vi.fn(),
   listLoaded: vi.fn(),
   locate: vi.fn(),
   agents: vi.fn(),
@@ -64,13 +66,20 @@ describe("JiePlatformImpl", () => {
       const platform = createPlatform();
       const commands: ReadonlyArray<Command<CommandName>> = [
         { name: "login", provider: "anthropic", apiKey: "sk-test" },
-        { name: "logout" },
+        { name: "logout", provider: "*" },
         { name: "setApiKey", apiKey: "sk-test" },
         { name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5" },
         { name: "getDefaultModel" },
+        { name: "setDefaultEffort", effort: "high" },
+        { name: "getDefaultEffort" },
+        { name: "listModels" },
+        { name: "listProviders" },
+        { name: "setModelFilters", filters: ["qwen"] },
+        { name: "getModelFilters" },
         { name: "setDefaultTeam", teamId: "alpha" },
         { name: "team", teamId: "alpha" },
         { name: "resumeSession", teamId: "alpha", sessionId: "01-seeded" },
+        { name: "renameSession", teamId: "alpha", sessionName: "my session" },
         { name: "getTeamInfo" },
         { name: "getGitStatus" },
         { name: "stop" },
@@ -141,8 +150,8 @@ describe("JiePlatformImpl", () => {
   describe("teams", () => {
     test("returns the teams loaded in the team manager", () => {
       const platform = createPlatform();
-      const alpha: TeamInfo = { id: "alpha", leaderKey: "alpha-1", agents: [], history: [] };
-      const beta: TeamInfo = { id: "beta", leaderKey: "beta-1", agents: [], history: [] };
+      const alpha: TeamInfo = { id: "alpha", leaderKey: "alpha-1", sessionName: null, agents: [], history: [] };
+      const beta: TeamInfo = { id: "beta", leaderKey: "beta-1", sessionName: null, agents: [], history: [] };
       teamManager.listLoaded.mockReturnValue(new Map([["alpha", alpha], ["beta", beta]]));
       expect(platform.teams()).toEqual([alpha, beta]);
       expect(teamManager.listLoaded).toHaveBeenCalledTimes(1);

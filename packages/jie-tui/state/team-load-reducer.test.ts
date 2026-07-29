@@ -14,11 +14,12 @@ function team(agents: ReadonlyArray<{
   tools?: ReadonlyArray<string>;
   subscribe?: ReadonlyArray<string>;
   model: { provider: string; id: string; effort: "off" | "low" | "medium" | "high" | "max"; contextWindow: number | null } | null;
-}>): TeamInfo {
+}>, sessionName: string | null = null): TeamInfo {
   const leader = agents.find((a) => a.isLeader) ?? agents[0];
   return {
     id: "my-team",
     leaderKey: leader?.agentKey ?? "general-1",
+    sessionName,
     history: [],
     agents: agents.map((a) => ({
       teamId: "my-team",
@@ -41,6 +42,24 @@ describe("teamLoadReducer", () => {
     expect(state.agents.size).toBe(1);
     expect(state.leaderAgentId).toBe("my-team:general-1");
     expect(state.focusedAgentId).toBe("my-team:general-1");
+  });
+
+  test("carries the session name from the TeamInfo", () => {
+    const state = teamLoadReducer(INITIAL_TUI_STATE, team([
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
+    ], "my session"));
+    expect(state.sessionName).toBe("my session");
+  });
+
+  test("switching teams replaces the previous session name", () => {
+    const named = teamLoadReducer(INITIAL_TUI_STATE, team([
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
+    ], "old name"));
+    const switched = teamLoadReducer(named, {
+      ...team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }]),
+      id: "other-team",
+    });
+    expect(switched.sessionName).toBeNull();
   });
 
   test("seeds the model from the TeamInfo for new agents", () => {
@@ -84,6 +103,7 @@ describe("teamLoadReducer", () => {
     const second = teamLoadReducer(first, {
       id: "my-team-2",
       leaderKey: "worker-1",
+      sessionName: null,
       history: [],
       agents: [
         { teamId: "my-team-2", role: "manager", agentKey: "manager-1", isLeader: false, tools: [], subscribe: [], model: null },
@@ -123,6 +143,7 @@ describe("teamLoadReducer", () => {
     const switched = teamLoadReducer(withTodos, {
       id: "my-team-2",
       leaderKey: "worker-1",
+      sessionName: null,
       history: [],
       agents: [{ teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], model: null }],
     });
@@ -283,6 +304,7 @@ describe("teamLoadReducer — info entries", () => {
     const switched = teamLoadReducer(first, {
       id: "my-team-2",
       leaderKey: "worker-1",
+      sessionName: null,
       history: [],
       agents: [{ teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], model: null }],
     });

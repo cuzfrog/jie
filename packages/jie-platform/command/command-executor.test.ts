@@ -18,6 +18,7 @@ const settingsStore = vi.mocked<SettingsStore>({
   setDefaultProvider: vi.fn(),
   setDefaultEffort: vi.fn(),
   setDefaultTeam: vi.fn(),
+  setModelFilters: vi.fn(),
 });
 
 const modelRegistry = vi.mocked<ModelRegistry>({
@@ -33,6 +34,7 @@ const teamManager = vi.mocked<TeamManager>({
   resumeSession: vi.fn(),
   renameSession: vi.fn(),
   listInstalled: vi.fn(),
+  agentCount: vi.fn(),
   listLoaded: vi.fn(),
   locate: vi.fn(),
   agents: vi.fn(),
@@ -93,8 +95,8 @@ describe("CommandExecutorImpl", () => {
       expect(authStore.clear).not.toHaveBeenCalled();
     });
 
-    test("without provider, clears all providers", async () => {
-      const result = await executor.execute({ name: "logout" });
+    test("with '*', clears all providers", async () => {
+      const result = await executor.execute({ name: "logout", provider: "*" });
       expect(result).toBeNull();
       expect(authStore.clear).toHaveBeenCalled();
       expect(authStore.removeProvider).not.toHaveBeenCalled();
@@ -188,24 +190,50 @@ describe("CommandExecutorImpl", () => {
   });
 
   describe("listModels", () => {
-    test("flattens each provider's models into provider/id/name entries", async () => {
-      modelRegistry.providers.mockReturnValueOnce(["anthropic", "openai"]);
-      modelRegistry.listModels.mockImplementation((provider) => provider === "anthropic"
-        ? [fakeModel("anthropic", "claude-sonnet-4-5", "Claude Sonnet 4.5"), fakeModel("anthropic", "claude-opus-4-5", "Claude Opus 4.5")]
+    test("flattens each provider's models and marks availability from config or credentials", async () => {
+      modelRegistry.listProviders.mockReturnValueOnce([
+        { id: "anthropic", configured: false, envKeys: ["ANTHROPIC_API_KEY"] },
+        { id: "my-local", configured: true, envKeys: [] },
+        { id: "openai", configured: false, envKeys: [] },
+      ]);
+      authStore.load.mockReturnValueOnce({ anthropic: { type: "api_key", key: "sk-test" } });
+      modelRegistry.listModels.mockImplementation((provider) =>
+        provider === "anthropic" ? [fakeModel("anthropic", "claude-sonnet-4-5", "Claude Sonnet 4.5")]
+        : provider === "my-local" ? [fakeModel("openai", "qwen3.5-2b", "Qwen 3.5 2B")]
         : [fakeModel("openai", "gpt-5", "GPT-5")]);
       const result = await executor.execute({ name: "listModels" });
       expect(result).toEqual([
-        { provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5" },
-        { provider: "anthropic", id: "claude-opus-4-5", name: "Claude Opus 4.5" },
-        { provider: "openai", id: "gpt-5", name: "GPT-5" },
+        { provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", available: true },
+        { provider: "my-local", id: "qwen3.5-2b", name: "Qwen 3.5 2B", available: true },
+        { provider: "openai", id: "gpt-5", name: "GPT-5", available: false },
       ]);
       expect(modelRegistry.listModels).toHaveBeenCalledWith("anthropic");
-      expect(modelRegistry.listModels).toHaveBeenCalledWith("openai");
+      expect(modelRegistry.listModels).toHaveBeenCalledWith("my-local");
     });
 
     test("returns an empty array when no provider lists models", async () => {
+      modelRegistry.listProviders.mockReturnValueOnce([]);
       modelRegistry.listModels.mockReturnValue([]);
       const result = await executor.execute({ name: "listModels" });
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe("model filters", () => {
+    test("setModelFilters persists the patterns through the settings store", async () => {
+      const result = await executor.execute({ name: "setModelFilters", filters: ["qwen", "gpt"] });
+      expect(result).toBeNull();
+      expect(settingsStore.setModelFilters).toHaveBeenCalledWith(["qwen", "gpt"]);
+    });
+
+    test("getModelFilters returns the stored patterns", async () => {
+      settingsStore.load.mockReturnValueOnce({ ...DEFAULT_SETTINGS, modelFilters: ["qwen"] });
+      const result = await executor.execute({ name: "getModelFilters" });
+      expect(result).toEqual(["qwen"]);
+    });
+
+    test("getModelFilters returns an empty list when none are stored", async () => {
+      const result = await executor.execute({ name: "getModelFilters" });
       expect(result).toEqual([]);
     });
   });
@@ -260,6 +288,7 @@ describe("CommandExecutorImpl", () => {
       const identity: TeamInfo = {
         id: "alpha",
         leaderKey: "general-1",
+        sessionName: null,
         history: [],
         agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
       };
@@ -272,7 +301,7 @@ describe("CommandExecutorImpl", () => {
 
   describe("resumeSession", () => {
     test("delegates to teamManager.resumeSession with teamId and sessionId", async () => {
-      const identity: TeamInfo = { id: "alpha", leaderKey: "general-1", agents: [], history: [] };
+      const identity: TeamInfo = { id: "alpha", leaderKey: "general-1", sessionName: null, agents: [], history: [] };
       teamManager.resumeSession.mockResolvedValue(identity);
       const result = await executor.execute({ name: "resumeSession", teamId: "alpha", sessionId: "s1" });
       expect(result).toBe(identity);
@@ -284,15 +313,24 @@ describe("CommandExecutorImpl", () => {
     test("returns defaultTeam from settings and the installed list from teamManager", async () => {
       settingsStore.load.mockReturnValueOnce({ defaultProvider: "anthropic", defaultModel: "m", defaultTeam: "alpha" });
       teamManager.listInstalled.mockReturnValue(["minimal", "alpha", "beta"]);
+      teamManager.agentCount.mockImplementation((teamId: string) => (teamId === "alpha" ? 3 : 1));
       const result = await executor.execute({ name: "getTeamInfo" });
-      expect(result).toEqual({ defaultTeam: "alpha", installed: ["minimal", "alpha", "beta"] });
+      expect(result).toEqual({
+        defaultTeam: "alpha",
+        installed: [
+          { id: "minimal", agentCount: 1 },
+          { id: "alpha", agentCount: 3 },
+          { id: "beta", agentCount: 1 },
+        ],
+      });
     });
 
     test("returns defaultTeam: null when settings has no defaultTeam", async () => {
       settingsStore.load.mockReturnValueOnce({ defaultProvider: "anthropic", defaultModel: "m" });
       teamManager.listInstalled.mockReturnValue(["minimal"]);
+      teamManager.agentCount.mockReturnValue(2);
       const result = await executor.execute({ name: "getTeamInfo" });
-      expect(result).toEqual({ defaultTeam: null, installed: ["minimal"] });
+      expect(result).toEqual({ defaultTeam: null, installed: [{ id: "minimal", agentCount: 2 }] });
     });
   });
 
@@ -352,20 +390,24 @@ describe("CommandExecutorImpl", () => {
   describe("dispatch", () => {
     test("executor.execute is the single entry point for every command name", async () => {
       teamManager.locate.mockReturnValue("user");
-      teamManager.load.mockResolvedValue({ id: "alpha", leaderKey: "general-1", agents: [], history: [] });
-      teamManager.resumeSession.mockResolvedValue({ id: "alpha", leaderKey: "general-1", agents: [], history: [] });
+      teamManager.load.mockResolvedValue({ id: "alpha", leaderKey: "general-1", sessionName: null, agents: [], history: [] });
+      teamManager.resumeSession.mockResolvedValue({ id: "alpha", leaderKey: "general-1", sessionName: null, agents: [], history: [] });
       teamManager.listInstalled.mockReturnValue([]);
       teamManager.listSessions.mockReturnValue([]);
       modelRegistry.listModels.mockReturnValue([]);
+      modelRegistry.listProviders.mockReturnValue([]);
       const commands: Array<Parameters<typeof executor.execute>[0]> = [
         { name: "login", provider: "anthropic", apiKey: "sk-test" },
-        { name: "logout" },
+        { name: "logout", provider: "*" },
         { name: "setApiKey", apiKey: "sk-test" },
         { name: "setDefaultModel", provider: "anthropic", id: "claude-sonnet-4-5" },
         { name: "getDefaultModel" },
         { name: "setDefaultEffort", effort: "high" },
         { name: "getDefaultEffort" },
         { name: "listModels" },
+        { name: "listProviders" },
+        { name: "setModelFilters", filters: ["qwen"] },
+        { name: "getModelFilters" },
         { name: "setDefaultTeam", teamId: "alpha" },
         { name: "team", teamId: "alpha" },
         { name: "resumeSession", teamId: "alpha", sessionId: "s1" },

@@ -75,6 +75,15 @@ function validateSettings(raw: RawSettings, source: string): Settings {
     result.defaultEffort = raw.defaultEffort;
   }
 
+  if ("modelFilters" in raw && raw.modelFilters !== undefined) {
+    if (!Array.isArray(raw.modelFilters) || raw.modelFilters.some((filter) => typeof filter !== "string" || filter === "")) {
+      throw new JiePlatformError("INVALID_CONFIG", {
+        detail: `${source}: modelFilters must be an array of non-empty strings`,
+      });
+    }
+    result.modelFilters = raw.modelFilters;
+  }
+
   return result;
 }
 

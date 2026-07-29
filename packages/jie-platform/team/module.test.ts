@@ -20,6 +20,7 @@ const settingsStore = vi.mocked<SettingsStore>({
   setDefaultProvider: vi.fn(),
   setDefaultEffort: vi.fn(),
   setDefaultTeam: vi.fn(),
+  setModelFilters: vi.fn(),
 });
 
 const modelRegistry = vi.mocked<ModelRegistry>({
@@ -36,6 +37,7 @@ const memoryManager = vi.mocked<MemoryManager>({
   restore: vi.fn(),
   hasSession: vi.fn(() => false),
   listSessions: vi.fn(() => []),
+  sessionName: vi.fn(() => null),
   renameSession: vi.fn(),
 });
 

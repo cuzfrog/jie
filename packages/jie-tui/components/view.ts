@@ -12,8 +12,6 @@ export interface TuiView {
 
 const CTRL_T = "\x14";
 const CTRL_O = "\x0f";
-const SHIFT_UP = "\x1b[1;2A";
-const SHIFT_DOWN = "\x1b[1;2B";
 const CONSUMED = { consume: true } as const;
 const INTERRUPTED_LABEL = "Interrupted";
 const NO_SPINNER_FRAMES: string[] = [];
@@ -60,8 +58,14 @@ export class TuiViewImpl implements TuiView {
         this.stateStore.dispatch(action);
         return CONSUMED;
       }
-      if (matchesKey(data, "enter") && shouldCommitTeamCursor(this.stateStore.getState())) {
+      const state = this.stateStore.getState();
+      if (matchesKey(data, "enter") && shouldCommitTeamCursor(state)) {
         this.stateStore.dispatch(Actions.commitTeamCursor());
+        return CONSUMED;
+      }
+      const direction = resolveTeamCursorDirection(data, state, editor.isShowingAutocomplete());
+      if (direction !== null) {
+        this.stateStore.dispatch(Actions.switchCycleAgent(direction));
         return CONSUMED;
       }
       return undefined;
@@ -90,8 +94,14 @@ export class TuiViewImpl implements TuiView {
 function resolveGlobalKey(data: string): Action | null {
   if (data === CTRL_T) return Actions.toggleThinking();
   if (data === CTRL_O) return Actions.toggleToolCards();
-  if (data === SHIFT_UP) return Actions.switchCycleAgent(-1);
-  if (data === SHIFT_DOWN) return Actions.switchCycleAgent(1);
+  if (matchesKey(data, "ctrl+down")) return Actions.toggleTeamPanel();
+  return null;
+}
+
+function resolveTeamCursorDirection(data: string, state: TuiState, popupOpen: boolean): 1 | -1 | null {
+  if (!state.teamPanelVisible || popupOpen) return null;
+  if (matchesKey(data, "down")) return 1;
+  if (matchesKey(data, "up")) return -1;
   return null;
 }
 
@@ -120,4 +130,9 @@ function syncWorkingSlot(slot: Container, working: Loader, interrupted: Loader, 
   return true;
 }
 
-export { resolveGlobalKey as _resolveGlobalKey, shouldCommitTeamCursor as _shouldCommitTeamCursor, syncWorkingSlot as _syncWorkingSlot };
+export {
+  resolveGlobalKey as _resolveGlobalKey,
+  resolveTeamCursorDirection as _resolveTeamCursorDirection,
+  shouldCommitTeamCursor as _shouldCommitTeamCursor,
+  syncWorkingSlot as _syncWorkingSlot,
+};

@@ -142,18 +142,18 @@ jie login --provider <id> --api-key <key>        # headless: write a single API 
 
 **Exit codes:** 0 (success or cancel), 1 (write error).
 
-## `jie logout [<provider>]`
+## `jie logout [<provider>|*]`
 
-Clear provider credentials from `~/.jie/auth.json`.
+Clear provider credentials from `~/.jie/auth.json`. `*` clears every entry; no argument is the same as `*`.
 
 ```
-jie logout                # clear all entries
+jie logout                # clear all entries (same as `jie logout *`)
 jie logout anthropic      # clear only the anthropic entry
 ```
 
 ### Behavior
 
-- With no argument, the CLI lists current `auth.json` entries and asks for confirmation before clearing all.
+- With no argument (or an explicit `*`), the CLI clears every entry — the platform's `logout` command receives provider `*`.
 - With a provider argument, the CLI removes that provider's entry and exits.
 - On success, prints `logged out of <provider>` (or `logged out of all providers`) and exits 0.
 - The command does not start the team. The next `jie` run after a logout may fail at LLM-call time if no other credential source covers the resolved provider.

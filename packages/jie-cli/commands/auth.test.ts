@@ -59,11 +59,12 @@ describe("runLogout", () => {
     expect(execute).toHaveBeenCalledWith({ name: "logout", provider: "anthropic" });
   });
 
-  test("logout (no provider) -> dispatches logout with undefined provider", async () => {
+  test("logout (no provider) -> dispatches logout with '*' to log out of every provider", async () => {
     const { platform, execute } = makePlatform();
     const consoleMock = makeConsoleMock();
     await runLogout({ kind: "logout" }, platform, consoleMock);
-    expect(execute).toHaveBeenCalledWith({ name: "logout", provider: undefined });
+    expect(execute).toHaveBeenCalledWith({ name: "logout", provider: "*" });
+    expect(consoleMock.print).toHaveBeenCalledWith("logged out of all providers");
   });
 });
 

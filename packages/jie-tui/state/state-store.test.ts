@@ -8,6 +8,7 @@ describe("StateStore", () => {
     store.dispatch(Actions.receiveEvent(Events.teamLoaded({ kind: "system" }, {
       id: "my-team",
       leaderKey: "general-1",
+      sessionName: null,
       history: [],
       agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
     })));

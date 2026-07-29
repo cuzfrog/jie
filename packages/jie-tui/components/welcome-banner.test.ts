@@ -21,25 +21,51 @@ describe("WelcomeBanner", () => {
     expect(text).toContain("界");
   });
 
-  test("renders the team line with the leader mark once a team is loaded", () => {
-    stateStore.getState.mockReturnValue(stateWithTeam());
+  test("renders the installed teams once the platform reported them, loaded team first", () => {
+    stateStore.getState.mockReturnValue(stateWithInstalledTeams());
     const text = new WelcomeBanner(stateStore).render(80).map(stripAnsi).join("\n");
-    expect(text).toContain("team my-team");
-    expect(text).toContain("general-1 (leader)");
+    expect(text).toContain("Teams: solo(1) · my-team(2)");
   });
 
-  test("shows each agent's model on the roster", () => {
+  test("omits the teams line when no team is installed", () => {
+    const text = new WelcomeBanner(stateStore).render(80).map(stripAnsi).join("\n");
+    expect(text).not.toContain("Teams:");
+  });
+
+  test("shows a Team section with the roster table without the ctx column", () => {
     stateStore.getState.mockReturnValue(stateWithTeamAndModel());
     const text = new WelcomeBanner(stateStore).render(80).map(stripAnsi).join("\n");
-    expect(text).toContain("general-1 (leader)");
+    expect(text).toContain("general-1 leader");
     expect(text).toContain("qa-1");
-    expect(text).toContain("openai/gpt-4o");
+    expect(text).toContain("gpt-4o");
+    expect(text).not.toContain("ctx");
+  });
+
+  test("omits the Team section when no roster is loaded", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ installedTeams: [{ id: "my-team", agentCount: 2 }] }));
+    const lines = new WelcomeBanner(stateStore).render(80).map(stripAnsi);
+    expect(lines.some((line) => line.includes("Teams: "))).toBe(true);
+    expect(lines).not.toContain("Team");
+  });
+
+  test("shows the version next to the wordmark", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ version: "1.2.3" }));
+    const text = new WelcomeBanner(stateStore).render(80).map(stripAnsi).join("\n");
+    expect(text).toContain("jie v1.2.3");
+  });
+
+  test("shows no version suffix when the version is unknown", () => {
+    const text = new WelcomeBanner(stateStore).render(80).map(stripAnsi).join("\n");
+    expect(text).not.toContain("jie v");
   });
 
   test("shows a Commands section with every command, argument hint and description", () => {
     const text = new WelcomeBanner(stateStore).render(80).map(stripAnsi).join("\n");
     expect(text).toContain("Commands");
-    for (const command of ["/help", "/clear", "/exit", "/team", "/resume", "/rename", "/model", "/effort", "/login", "/logout"]) {
+    const commands = [
+      "/help", "/clear", "/exit", "/team", "/resume", "/rename", "/model", "/model-filter", "/effort", "/login", "/logout",
+    ];
+    for (const command of commands) {
       expect(text).toContain(command);
     }
     expect(text).toContain("<provider> <apiKey>");
@@ -54,10 +80,10 @@ describe("WelcomeBanner", () => {
 
   test("lays the commands out in two columns when the width allows", () => {
     const lines = new WelcomeBanner(stateStore).render(120).map(stripAnsi);
-    const paired = lines.filter((line) => line.includes("/help") && line.includes("/model"));
+    const paired = lines.filter((line) => line.includes("/help") && line.includes("/model-filter"));
     expect(paired.length).toBe(1);
     expect(paired[0]).toContain("show this help");
-    expect(paired[0]).toContain("set the default model");
+    expect(paired[0]).toContain("filter the /model list");
   });
 
   test("hides the mark when the width cannot fit it beside the identity", () => {
@@ -121,11 +147,13 @@ describe("WelcomeBanner", () => {
   });
 });
 
-function stateWithTeam(): TuiState {
+function stateWithInstalledTeams(): TuiState {
   return makeTuiState({
-    teamId: "my-team",
-    leaderAgentId: LEADER_ID,
-    agents: new Map([[LEADER_ID, makeAgentUiState(LEADER_ID, { isLeader: true })]]),
+    teamId: "solo",
+    installedTeams: [
+      { id: "my-team", agentCount: 2 },
+      { id: "solo", agentCount: 1 },
+    ],
   });
 }
 

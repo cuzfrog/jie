@@ -9,6 +9,7 @@ export interface SettingsStore {
   setDefaultProvider(provider: string, modelId: string): void;
   setDefaultEffort(effort: EffortLevel): void;
   setDefaultTeam(teamId: string, scope: "project" | "global"): void;
+  setModelFilters(filters: ReadonlyArray<string>): void;
 }
 
 export class SettingsStoreImpl implements SettingsStore {
@@ -50,6 +51,11 @@ export class SettingsStoreImpl implements SettingsStore {
     const path = scope === "project" ? this.projectPath : this.globalPath;
     const next: Settings = { ...readSettingsFile(path), defaultTeam: teamId };
     writeSettingsFile(path, next);
+  }
+
+  setModelFilters(filters: ReadonlyArray<string>): void {
+    const next: Settings = { ...readSettingsFile(this.globalPath), modelFilters: filters };
+    writeSettingsFile(this.globalPath, next);
   }
 }
 

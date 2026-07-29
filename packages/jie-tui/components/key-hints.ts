@@ -33,7 +33,7 @@ const HINTS: ReadonlyArray<readonly [string, string]> = [
   ["/", "commands"],
   ["ctrl+t", "thinking"],
   ["ctrl+o", "tool output"],
-  ["shift+↑/↓", "team panel"],
+  ["ctrl+↓", "team panel"],
   ["esc", "interrupt"],
   ["ctrl+d", "quit"],
 ];

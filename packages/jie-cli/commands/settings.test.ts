@@ -100,7 +100,11 @@ describe("runTeam", () => {
     const { platform, execute } = makePlatform();
     execute.mockImplementationOnce(async () => ({
       defaultTeam: "dev",
-      installed: ["minimal", "alpha", "beta"],
+      installed: [
+        { id: "minimal", agentCount: 1 },
+        { id: "alpha", agentCount: 2 },
+        { id: "beta", agentCount: 3 },
+      ],
     }));
     const consoleMock = makeConsoleMock();
     const code = await runTeam({ kind: "team" }, platform, consoleMock);
@@ -113,7 +117,7 @@ describe("runTeam", () => {
     const { platform, execute } = makePlatform();
     execute.mockImplementationOnce(async () => ({
       defaultTeam: null,
-      installed: ["minimal"],
+      installed: [{ id: "minimal", agentCount: 1 }],
     }));
     const consoleMock = makeConsoleMock();
     const code = await runTeam({ kind: "team" }, platform, consoleMock);

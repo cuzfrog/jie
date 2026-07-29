@@ -13,18 +13,35 @@ import type { StateStore } from "../state";
 
 const MAX_SUGGESTIONS = 20;
 const AT_PREFIX_PATTERN = /(?:^|[\s"])@([\w./-]*)$/;
+const MODEL_FILTER_ACTIONS = ["add", "remove"] as const;
 
-export class JieAutocompleteProviderImpl implements AutocompleteProvider {
+export interface JieSuggestions extends AutocompleteSuggestions {
+  readonly filteredOut?: number;
+}
+
+export interface JieAutocompleteProvider extends AutocompleteProvider {
+  getSuggestions(
+    lines: string[],
+    cursorLine: number,
+    cursorCol: number,
+    options: { signal: AbortSignal; force?: boolean },
+  ): Promise<JieSuggestions | null>;
+}
+
+export class JieAutocompleteProviderImpl implements JieAutocompleteProvider {
   readonly triggerCharacters = ["@", "/"];
   private readonly cwd: string;
   private readonly scan: (rootDir: string) => ReadonlyArray<ScannedFile>;
   private readonly commands: SlashCommand[];
   private readonly combined: CombinedAutocompleteProvider;
+  private modelFilteredOutCount: number | null = null;
 
   constructor(cwd: string, scan: (rootDir: string) => ReadonlyArray<ScannedFile>, platform: JiePlatform, stateStore: StateStore) {
     this.cwd = cwd;
     this.scan = scan;
-    this.commands = slashCommands(platform, stateStore);
+    this.commands = slashCommands(platform, stateStore, (count) => {
+      this.modelFilteredOutCount = count;
+    });
     this.combined = new CombinedAutocompleteProvider(this.commands, cwd, null);
   }
 
@@ -33,12 +50,15 @@ export class JieAutocompleteProviderImpl implements AutocompleteProvider {
     cursorLine: number,
     cursorCol: number,
     options: { signal: AbortSignal; force?: boolean },
-  ): Promise<AutocompleteSuggestions | null> {
+  ): Promise<JieSuggestions | null> {
+    this.modelFilteredOutCount = null;
     const textBeforeCursor = (lines[cursorLine] ?? "").slice(0, cursorCol);
     const query = atQuery(textBeforeCursor);
     if (query === null) {
       const drillDown = await drillDownSuggestions(this.commands, textBeforeCursor);
-      return drillDown ?? this.combined.getSuggestions(lines, cursorLine, cursorCol, options);
+      if (drillDown !== null) return withFilteredOut(drillDown, this.modelFilteredOutCount);
+      const combined = await this.combined.getSuggestions(lines, cursorLine, cursorCol, options);
+      return withFilteredOut(combined, this.modelFilteredOutCount);
     }
     const items = fileItems(query, this.scan, this.cwd);
     if (items.length === 0) return null;
@@ -56,12 +76,18 @@ export class JieAutocompleteProviderImpl implements AutocompleteProvider {
   }
 }
 
-function slashCommands(platform: JiePlatform, stateStore: StateStore): SlashCommand[] {
+function slashCommands(
+  platform: JiePlatform,
+  stateStore: StateStore,
+  reportModelFilteredOut: (count: number) => void,
+): SlashCommand[] {
   return COMMAND_METADATA.map((meta): SlashCommand => {
     if (meta.name === "team") return { ...meta, getArgumentCompletions: (prefix) => teamItems(platform, prefix) };
     if (meta.name === "resume") return { ...meta, getArgumentCompletions: (prefix) => sessionItems(platform, stateStore, prefix) };
-    if (meta.name === "model") return { ...meta, getArgumentCompletions: (prefix) => modelItems(platform, prefix) };
+    if (meta.name === "model") return { ...meta, getArgumentCompletions: (prefix) => modelItems(platform, prefix, reportModelFilteredOut) };
+    if (meta.name === "model-filter") return { ...meta, getArgumentCompletions: (prefix) => modelFilterActionItems(prefix) };
     if (meta.name === "login") return { ...meta, getArgumentCompletions: (prefix) => providerItems(platform, prefix) };
+    if (meta.name === "logout") return { ...meta, getArgumentCompletions: (prefix) => logoutItems(platform, prefix) };
     if (meta.name === "effort") return { ...meta, getArgumentCompletions: async (prefix) => effortItems(prefix) };
     return { ...meta };
   });
@@ -89,13 +115,15 @@ async function drillDownSuggestions(commands: SlashCommand[], textBeforeCursor: 
 
 async function teamItems(platform: JiePlatform, prefix: string): Promise<AutocompleteItem[] | null> {
   const info = await platform.execute({ name: "getTeamInfo" });
-  if (isAlreadyComplete(info.installed, prefix)) return null;
+  if (isAlreadyComplete(info.installed.map((team) => team.id), prefix)) return null;
   const items = info.installed
-    .filter((teamId) => hasPrefix(teamId, prefix))
+    .filter((team) => hasPrefix(team.id, prefix))
     .slice(0, MAX_SUGGESTIONS)
-    .map((teamId): AutocompleteItem => teamId === info.defaultTeam
-      ? { value: teamId, label: teamId, description: "(default)" }
-      : { value: teamId, label: teamId });
+    .map((team): AutocompleteItem => ({
+      value: team.id,
+      label: team.id,
+      description: team.id === info.defaultTeam ? "(default)" : team.agentCount === 1 ? "1 agent" : `${team.agentCount} agents`,
+    }));
   return items.length === 0 ? null : items;
 }
 
@@ -115,15 +143,46 @@ async function sessionItems(platform: JiePlatform, stateStore: StateStore, prefi
   return items.length === 0 ? null : items;
 }
 
-async function modelItems(platform: JiePlatform, prefix: string): Promise<AutocompleteItem[] | null> {
+async function modelItems(
+  platform: JiePlatform,
+  prefix: string,
+  reportFilteredOut: (count: number) => void,
+): Promise<AutocompleteItem[] | null> {
   const models = await platform.execute({ name: "listModels" });
-  const items = models.map((model): AutocompleteItem => {
+  const filters = await platform.execute({ name: "getModelFilters" });
+  const available = models.filter((model) => model.available);
+  const matched = filters.length === 0 ? available : available.filter((model) => matchesModelFilter(model, filters));
+  if (filters.length > 0) reportFilteredOut(available.length - matched.length);
+  const items = matched.map((model): AutocompleteItem => {
     const value = `${model.provider}/${model.id}`;
     return { value, label: value, description: model.name };
   });
   if (isAlreadyComplete(items.map((item) => item.value), prefix)) return null;
   const matches = items.filter((item) => hasPrefix(item.label, prefix)).slice(0, MAX_SUGGESTIONS);
   return matches.length === 0 ? null : matches;
+}
+
+function matchesModelFilter(model: { readonly provider: string; readonly id: string }, filters: ReadonlyArray<string>): boolean {
+  const target = `${model.provider}/${model.id}`.toLowerCase();
+  return filters.some((filter) => target.includes(filter.toLowerCase()));
+}
+
+async function logoutItems(platform: JiePlatform, prefix: string): Promise<AutocompleteItem[] | null> {
+  const providers = await platform.execute({ name: "listProviders" });
+  const items: AutocompleteItem[] = [
+    { value: "*", label: "*", description: "all providers" },
+    ...providers.map((provider): AutocompleteItem => ({ value: provider.id, label: provider.id, description: provider.description })),
+  ];
+  if (isAlreadyComplete(items.map((item) => item.value), prefix)) return null;
+  const matches = items.filter((item) => hasPrefix(item.label, prefix)).slice(0, MAX_SUGGESTIONS);
+  return matches.length === 0 ? null : matches;
+}
+
+function modelFilterActionItems(prefix: string): AutocompleteItem[] | null {
+  if (isAlreadyComplete(MODEL_FILTER_ACTIONS, prefix)) return null;
+  const items = MODEL_FILTER_ACTIONS.filter((action) => hasPrefix(action, prefix))
+    .map((action): AutocompleteItem => ({ value: action, label: action }));
+  return items.length === 0 ? null : items;
 }
 
 async function providerItems(platform: JiePlatform, prefix: string): Promise<AutocompleteItem[] | null> {
@@ -141,6 +200,11 @@ function effortItems(prefix: string): AutocompleteItem[] | null {
     .filter((level) => hasPrefix(level, prefix))
     .map((level): AutocompleteItem => ({ value: level, label: level }));
   return items.length === 0 ? null : items;
+}
+
+function withFilteredOut(suggestions: AutocompleteSuggestions | null, filteredOut: number | null): JieSuggestions | null {
+  if (suggestions === null) return null;
+  return filteredOut === null || filteredOut === 0 ? suggestions : { ...suggestions, filteredOut };
 }
 
 function atQuery(textBeforeCursor: string): string | null {

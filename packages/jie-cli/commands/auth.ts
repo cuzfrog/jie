@@ -21,7 +21,7 @@ export async function runLogout(
   platform: JiePlatform,
   console: Console,
 ): Promise<number> {
-  await platform.execute({ name: "logout", provider: parsed.provider });
+  await platform.execute({ name: "logout", provider: parsed.provider ?? "*" });
   console.print(parsed.provider === undefined ? "logged out of all providers" : `logged out of ${parsed.provider}`);
   return 0;
 }

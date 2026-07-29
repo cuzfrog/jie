@@ -17,6 +17,7 @@ const settingsStore = vi.mocked<SettingsStore>({
   setDefaultProvider: vi.fn(),
   setDefaultEffort: vi.fn(),
   setDefaultTeam: vi.fn(),
+  setModelFilters: vi.fn(),
 });
 
 const modelRegistry = vi.mocked<ModelRegistry>({
@@ -30,6 +31,7 @@ const modelRegistry = vi.mocked<ModelRegistry>({
 const teamManager = vi.mocked<TeamManager>({
   load: vi.fn(),
   listInstalled: vi.fn(),
+  agentCount: vi.fn(),
   listLoaded: vi.fn(),
   locate: vi.fn(),
   agents: vi.fn(),

@@ -8,6 +8,7 @@ function loadDemoTeam(stateStore: StateStore): void {
       Events.teamLoaded({ kind: "system" }, {
         id: "demo",
         leaderKey: "general-1",
+        sessionName: null,
         history: [],
         agents: [
           { teamId: "demo", role: "helper", agentKey: "helper-1", isLeader: false, tools: [], subscribe: [], model: null },
@@ -36,7 +37,7 @@ describe("TuiState.getFocusedAgent", () => {
   test("reflects focus changes only after the team cursor is committed", () => {
     const store = new StateStoreImpl();
     loadDemoTeam(store);
-    store.dispatch(Actions.switchCycleAgent(1));
+    store.dispatch(Actions.toggleTeamPanel());
     store.dispatch(Actions.switchCycleAgent(1));
     expect(TuiState.getFocusedAgent(store.getState())?.agentKey).toBe("general-1");
     store.dispatch(Actions.commitTeamCursor());

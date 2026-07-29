@@ -19,15 +19,15 @@ describe("InfoMessage", () => {
     expect(text).toContain("multi-agent");
   });
 
-  test("a help entry shows the team line once a team is loaded", () => {
+  test("a help entry shows the team table once a team is loaded", () => {
     stateStore.getState.mockReturnValue(makeTuiState({
       teamId: "my-team",
       leaderAgentId: LEADER_ID,
       agents: new Map([[LEADER_ID, makeAgentUiState(LEADER_ID, { isLeader: true })]]),
     }));
     const text = new InfoMessage(stateStore, HELP).render(200).map(stripAnsi).join("\n");
-    expect(text).toContain("team my-team");
-    expect(text).toContain("general-1 (leader)");
+    expect(text).toContain("Team");
+    expect(text).toContain("general-1 leader");
   });
 
   test("a help entry reprints the key hints", () => {
@@ -38,7 +38,10 @@ describe("InfoMessage", () => {
 
   test("a help entry lists every slash command including /resume", () => {
     const text = new InfoMessage(stateStore, HELP).render(200).map(stripAnsi).join("\n");
-    for (const command of ["/help", "/clear", "/exit", "/team", "/resume", "/rename", "/model", "/effort", "/login", "/logout"]) {
+    const commands = [
+      "/help", "/clear", "/exit", "/team", "/resume", "/rename", "/model", "/model-filter", "/effort", "/login", "/logout",
+    ];
+    for (const command of commands) {
       expect(text).toContain(command);
     }
   });

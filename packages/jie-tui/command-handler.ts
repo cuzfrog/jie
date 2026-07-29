@@ -21,7 +21,7 @@ interface AgentRoute {
   readonly agentKey: string;
 }
 
-type InterceptName = "model" | "effort" | "resume" | "rename" | Extract<CommandName, "login" | "logout" | "team">;
+type InterceptName = "model" | "model-filter" | "effort" | "resume" | "rename" | Extract<CommandName, "login" | "logout" | "team">;
 
 type TuiCommandName = "help" | "clear" | "exit" | InterceptName;
 
@@ -109,6 +109,7 @@ export class CommandHandlerImpl implements CommandHandler {
       case "login": return this.interceptLogin(args);
       case "logout": return this.interceptLogout(args);
       case "model": return this.interceptModel(args);
+      case "model-filter": return this.interceptModelFilter(args);
       case "effort": return this.interceptEffort(args);
       case "team": return this.interceptTeam(args);
       case "resume": return this.interceptResume(args);
@@ -131,12 +132,13 @@ export class CommandHandlerImpl implements CommandHandler {
 
   private interceptLogout(args: ReadonlyArray<string>): InterceptResult {
     const provider = args[0];
+    if (provider === undefined) return { kind: "error", text: "/logout <provider>|*" };
     void this.platform.execute({ name: "logout", provider })
       .then(() => undefined, (error: unknown) => {
         const reason = error instanceof Error ? error.message : String(error);
         this.stateStore.dispatch(Actions.setErrorMessage(`/logout failed: ${reason}`));
       });
-    return { kind: "reply", text: provider === undefined ? "logged out of all providers" : `logged out of ${provider}` };
+    return { kind: "reply", text: provider === "*" ? "logged out of all providers" : `logged out of ${provider}` };
   }
 
   private interceptModel(args: ReadonlyArray<string>): InterceptResult {
@@ -149,6 +151,34 @@ export class CommandHandlerImpl implements CommandHandler {
         this.stateStore.dispatch(Actions.setErrorMessage(`/model failed: ${reason}`));
       });
     return { kind: "reply", text: `default model set to ${parsed.provider}/${parsed.modelId}` };
+  }
+
+  private interceptModelFilter(args: ReadonlyArray<string>): InterceptResult {
+    const action = args[0];
+    const pattern = args[1];
+    if ((action !== "add" && action !== "remove") || pattern === undefined || pattern === "") {
+      return { kind: "error", text: "/model-filter <add|remove> <pattern>" };
+    }
+    void this.platform.execute({ name: "getModelFilters" })
+      .then((filters) => {
+        const next = action === "add" ? appendPattern(filters, pattern) : removePattern(filters, pattern);
+        if (next === null) {
+          this.stateStore.dispatch(Actions.setErrorMessage(`/model-filter: pattern '${pattern}' is not set`));
+          return;
+        }
+        void this.platform.execute({ name: "setModelFilters", filters: next })
+          .then(() => {
+            const verb = action === "add" ? "added" : "removed";
+            this.stateStore.dispatch(Actions.setTransientMessage(`model filter ${verb}: ${pattern}`));
+          }, (error: unknown) => {
+            const reason = error instanceof Error ? error.message : String(error);
+            this.stateStore.dispatch(Actions.setErrorMessage(`/model-filter failed: ${reason}`));
+          });
+      }, (error: unknown) => {
+        const reason = error instanceof Error ? error.message : String(error);
+        this.stateStore.dispatch(Actions.setErrorMessage(`/model-filter failed: ${reason}`));
+      });
+    return { kind: "silent" };
   }
 
   private interceptEffort(args: ReadonlyArray<string>): InterceptResult {
@@ -197,7 +227,9 @@ export class CommandHandlerImpl implements CommandHandler {
     const teamId = this.stateStore.getState().teamId;
     if (teamId === null) return { kind: "error", text: "/rename: no team loaded" };
     void this.platform.execute({ name: "renameSession", teamId, sessionName: name })
-      .then(() => undefined, (error: unknown) => {
+      .then(() => {
+        this.stateStore.dispatch(Actions.setSessionName(name));
+      }, (error: unknown) => {
         const reason = error instanceof Error ? error.message : String(error);
         this.stateStore.dispatch(Actions.setErrorMessage(`/rename failed: ${reason}`));
       });
@@ -252,7 +284,7 @@ const COMMANDS: ReadonlyMap<string, SlashCommand> = new Map<string, SlashCommand
 
 const LOCAL_COMMAND_NAMES = ["help", "clear", "exit"] as const satisfies ReadonlyArray<TuiCommandName>;
 
-const INTERCEPT_NAMES = ["login", "logout", "model", "effort", "team", "resume", "rename"] as const satisfies ReadonlyArray<InterceptName>;
+const INTERCEPT_NAMES = ["login", "logout", "model", "model-filter", "effort", "team", "resume", "rename"] as const satisfies ReadonlyArray<InterceptName>;
 
 export const SLASH_COMMAND_NAMES: ReadonlyArray<TuiCommandName> = [...LOCAL_COMMAND_NAMES, ...INTERCEPT_NAMES];
 
@@ -262,6 +294,15 @@ function parseModelArg(arg: string): { kind: "ok"; provider: string; modelId: st
   const provider = arg.slice(0, slash);
   const modelId = arg.slice(slash + 1);
   return { kind: "ok", provider, modelId };
+}
+
+function appendPattern(filters: ReadonlyArray<string>, pattern: string): ReadonlyArray<string> {
+  return filters.includes(pattern) ? filters : [...filters, pattern];
+}
+
+function removePattern(filters: ReadonlyArray<string>, pattern: string): ReadonlyArray<string> | null {
+  if (!filters.includes(pattern)) return null;
+  return filters.filter((existing) => existing !== pattern);
 }
 
 function routeTarget(stateStore: StateStore): AgentRoute | null {

@@ -66,7 +66,10 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
     switch (args.kind) {
       case "tui": {
         const git = await handle.execute({ name: "getGitStatus" });
-        const tui = deps.bootTui({ cwd }, { platform: handle, homeJieDir, gitBranch: git.branch, gitDirty: git.dirty });
+        const tui = deps.bootTui(
+          { cwd },
+          { platform: handle, homeJieDir, gitBranch: git.branch, gitDirty: git.dirty, version: VERSION },
+        );
         await handle.execute({ name: "team", teamId: args.team });
         try {
           await tui.start();

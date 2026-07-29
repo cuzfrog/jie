@@ -14,6 +14,7 @@ const AGENT_SENDER = { kind: "agent", teamId: "my-team", agentKey: "general-1" }
 const TEAM_LOADED = Events.teamLoaded({ kind: "system" }, {
   id: "my-team",
   leaderKey: "general-1",
+  sessionName: null,
   history: [],
   agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
 });
@@ -140,20 +141,23 @@ describe("screen rendering", () => {
     }
   });
 
-  test("shift+down calls out the team strip below the footer and shift+up at the first agent closes it", async () => {
+  test("ctrl+down calls out the team strip below the footer and toggles it closed again", async () => {
     const harness = await bootScreen();
     try {
       harness.emit(TEAM_LOADED);
       await harness.vt.waitForRender();
-      await press(harness, "\x1b[1;2B");
+      await press(harness, "\x1b[1;5B");
       await settle(harness);
       const shown = harness.vt.getViewport().map(stripAnsi).join("\n");
-      expect(shown).toContain("▸");
-      expect(shown).toContain("★");
+      expect(shown).toContain("ctx");
+      expect(shown).toContain("leader");
       expect(shown).toContain("general-1");
-      await press(harness, "\x1b[1;2A");
+      await press(harness, "\x1b[B");
       await settle(harness);
-      expect(harness.vt.getViewport().map(stripAnsi).join("\n")).not.toContain("▸");
+      expect(harness.vt.getViewport().map(stripAnsi).join("\n")).toContain("ctx");
+      await press(harness, "\x1b[1;5B");
+      await settle(harness);
+      expect(harness.vt.getViewport().map(stripAnsi).join("\n")).not.toContain("ctx");
     } finally {
       harness.tui.stop();
     }

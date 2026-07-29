@@ -27,6 +27,7 @@ const memoryManager = vi.mocked<MemoryManager>({
   restore: vi.fn(),
   hasSession: vi.fn(),
   listSessions: vi.fn(),
+  sessionName: vi.fn(() => null),
   renameSession: vi.fn(),
 });
 

@@ -1,6 +1,8 @@
-import { TUI, type AutocompleteProvider, type Editor, type Terminal } from "@earendil-works/pi-tui";
+import { TUI, visibleWidth, type Editor, type Terminal } from "@earendil-works/pi-tui";
+import { type JieAutocompleteProvider, type JieSuggestions } from "../../autocomplete";
 import { Actions, type AgentId, type StateStore, type TuiState } from "../../state";
 import { makeAgentUiState, makeTuiState } from "../../test";
+import { style } from "../themes";
 import { JieEditor } from "./jie-editor";
 import type { PromptHistoryStore } from "./prompt-history";
 
@@ -26,7 +28,7 @@ const LEADER_ID: AgentId = "my-team:general-1";
 
 const stateStore = vi.mocked<StateStore>({ getState: vi.fn(), dispatch: vi.fn(), subscribe: vi.fn(() => () => undefined) });
 
-const autocompleteProvider = vi.mocked<AutocompleteProvider>({
+const autocompleteProvider = vi.mocked<JieAutocompleteProvider>({
   getSuggestions: vi.fn(() => Promise.resolve(null)),
   applyCompletion: vi.fn(() => ({ lines: [], cursorLine: 0, cursorCol: 0 })),
 });
@@ -45,9 +47,9 @@ interface EditorHarness {
   readonly submitted: string[];
 }
 
-function bootEditor(): EditorHarness {
+function bootEditor(provider: JieAutocompleteProvider = autocompleteProvider): EditorHarness {
   const ui = new TUI(new StubTerminal());
-  const editor = new JieEditor(ui, stateStore, autocompleteProvider, promptHistoryStore);
+  const editor = new JieEditor(ui, stateStore, provider, promptHistoryStore);
   const submitted: string[] = [];
   const submit = editor.onSubmit;
   editor.onSubmit = (text: string): void => {
@@ -152,6 +154,42 @@ describe("JieEditor — bash mode border", () => {
   });
 });
 
+describe("JieEditor — session name border label", () => {
+  test("renders the session name right-aligned in the top border", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ sessionName: "my-session" }));
+    const { editor } = bootEditor();
+    const raw = editor.render(80)[0]!;
+    expect(stripAnsi(raw).endsWith(" my-session ──")).toBe(true);
+    expect(raw).toContain("\x1b[44m my-session \x1b[49m");
+  });
+
+  test("renders a plain border when the session is unnamed", () => {
+    const { editor } = bootEditor();
+    expect(stripAnsi(editor.render(80)[0]!)).toBe("─".repeat(80));
+  });
+
+  test("the label chip follows the warning border in bash mode", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ sessionName: "my-session" }));
+    const { editor } = bootEditor();
+    editor.handleInput("!");
+    expect(editor.render(80)[0]).toContain("\x1b[43m my-session \x1b[49m");
+  });
+
+  test("truncates a long name so the border keeps the full width", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ sessionName: "x".repeat(100) }));
+    const { editor } = bootEditor();
+    const border = stripAnsi(editor.render(30)[0]!);
+    expect(visibleWidth(border)).toBe(30);
+    expect(border.endsWith("──")).toBe(true);
+  });
+
+  test("omits the label when the width cannot fit it", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ sessionName: "my-session" }));
+    const { editor } = bootEditor();
+    expect(stripAnsi(editor.render(5)[0]!)).toBe("─".repeat(5));
+  });
+});
+
 describe("JieEditor — prompt history", () => {
   test("up and down arrows walk submitted prompts and keep the store in sync", () => {
     const { editor } = bootEditor();
@@ -228,4 +266,138 @@ function stateWithTeam(status: "idle" | "busy"): TuiState {
     focusedAgentId: LEADER_ID,
     agents: new Map([[LEADER_ID, makeAgentUiState(LEADER_ID, { isLeader: true, status })]]),
   });
+}
+
+describe("JieEditor — autocomplete ghost text", () => {
+  test("renders the selected completion's tail dimmed after the cursor", async () => {
+    const { editor } = bootEditor(fileGhostProvider());
+    for (const ch of "@a") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    const line = cursorLine(editor);
+    expect(line).toContain(style("dim")("lpha/one.ts"));
+    expect(stripAnsi(line)).toContain("@a lpha/one.ts");
+    expect(visibleWidth(line)).toBe(80);
+  });
+
+  test("the ghost follows the highlighted row as up and down move it", async () => {
+    const { editor } = bootEditor(fileGhostProvider());
+    for (const ch of "@a") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    editor.handleInput("\x1b[B");
+    expect(cursorLine(editor)).toContain(style("dim")("lpha/two.ts"));
+    editor.handleInput("\x1b[A");
+    expect(cursorLine(editor)).toContain(style("dim")("lpha/one.ts"));
+  });
+
+  test("tab completion clears the ghost once the popup closes", async () => {
+    const { editor } = bootEditor(fileGhostProvider());
+    for (const ch of "@a") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    editor.handleInput("\t");
+    expect(editor.getText()).toBe("@alpha/one.ts");
+    expect(cursorLine(editor)).not.toContain(style("dim")("lpha/one.ts"));
+  });
+
+  test("esc dismisses the popup and the ghost together", async () => {
+    const { editor } = bootEditor(fileGhostProvider());
+    for (const ch of "@a") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    editor.handleInput("\x1b");
+    expect(editor.getText()).toBe("@a");
+    expect(cursorLine(editor)).not.toContain(style("dim")("lpha/one.ts"));
+  });
+
+  test("shows no ghost when the selected value does not extend the typed prefix", async () => {
+    const provider = fileGhostProvider([{ value: "@unrelated.ts", label: "unrelated.ts" }]);
+    const { editor } = bootEditor(provider);
+    for (const ch of "@zz") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    expect(cursorLine(editor)).not.toContain(style("dim")("unrelated.ts"));
+  });
+
+  test("a slash command completion ghosts the command name past the typed prefix", async () => {
+    const provider = fileGhostProvider([{ value: "team", label: "team" }], "/te");
+    const { editor } = bootEditor(provider);
+    for (const ch of "/te") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    expect(cursorLine(editor)).toContain(style("dim")("am"));
+  });
+
+  test("the ghost carries the command's argument hint from its description", async () => {
+    const items = [{ value: "model", label: "model", description: "<provider/modelId> — set the default model" }];
+    const { editor } = bootEditor(fileGhostProvider(items, "/mo"));
+    for (const ch of "/mo") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    expect(cursorLine(editor)).toContain(style("dim")("del <provider/modelId>"));
+  });
+
+  test("the ghost omits a description that is not an argument hint", async () => {
+    const items = [{ value: "team", label: "team", description: "switch the active team" }];
+    const { editor } = bootEditor(fileGhostProvider(items, "/te"));
+    for (const ch of "/te") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    expect(stripAnsi(cursorLine(editor))).not.toContain("switch the active team");
+  });
+
+  test("the scroll info gains the filtered-out count when suggestions carry it", async () => {
+    const items = Array.from({ length: 6 }, (_, index) => ({ value: `m-${index}`, label: `m-${index}` }));
+    const { editor } = bootEditor(fileGhostProvider(items, "/mo", 4));
+    for (const ch of "/mo") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    const stripped = editor.render(80).map(stripAnsi);
+    expect(stripped.some((line) => line.includes("  (1/6 | 4 filtered)"))).toBe(true);
+  });
+
+  test("the scroll info stays plain when no filter count is reported", async () => {
+    const items = Array.from({ length: 6 }, (_, index) => ({ value: `m-${index}`, label: `m-${index}` }));
+    const { editor } = bootEditor(fileGhostProvider(items, "/mo"));
+    for (const ch of "/mo") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    const stripped = editor.render(80).map(stripAnsi);
+    expect(stripped.some((line) => line.includes("  (1/6)"))).toBe(true);
+  });
+});
+
+function fileGhostProvider(
+  items?: ReadonlyArray<{ value: string; label: string; description?: string }>,
+  prefix?: string,
+  filteredOut?: number,
+): JieAutocompleteProvider {
+  const suggestions = items ?? [{ value: "@alpha/one.ts", label: "alpha/one.ts" }, { value: "@alpha/two.ts", label: "alpha/two.ts" }];
+  return {
+    triggerCharacters: ["@"],
+    getSuggestions: vi.fn((lines: string[], cursorLine: number, cursorCol: number) => {
+      const text = (lines[cursorLine] ?? "").slice(0, cursorCol);
+      if (prefix !== undefined ? !text.startsWith(prefix.slice(0, 1)) : !text.includes("@")) return Promise.resolve(null);
+      const result: JieSuggestions = { items: [...suggestions], prefix: prefix ?? `@${/@(\w*)$/.exec(text)?.[1] ?? ""}` };
+      return Promise.resolve(filteredOut === undefined ? result : { ...result, filteredOut });
+    }),
+    applyCompletion: vi.fn((lines: string[], cursorLine: number, cursorCol: number, item: { value: string }, completionPrefix: string) => {
+      const line = lines[cursorLine] ?? "";
+      const before = line.slice(0, cursorCol - completionPrefix.length);
+      const after = line.slice(cursorCol);
+      const next = [...lines];
+      next[cursorLine] = before + item.value + after;
+      return { lines: next, cursorLine, cursorCol: before.length + item.value.length };
+    }),
+  };
+}
+
+async function untilAutocomplete(editor: Editor): Promise<void> {
+  for (let i = 0; i < 100 && !editor.isShowingAutocomplete(); i++) await sleep(2);
+  expect(editor.isShowingAutocomplete()).toBe(true);
+}
+
+function cursorLine(editor: Editor): string {
+  const line = editor.render(80).find((candidate) => candidate.includes("\x1b[7m"));
+  expect(line).toBeDefined();
+  return line ?? "";
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function stripAnsi(text: string): string {
+  return text.replace(/\x1b\[[0-9;]*m/g, "");
 }
