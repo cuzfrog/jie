@@ -41,6 +41,15 @@ describe("WelcomeBanner", () => {
     expect(text).not.toContain("ctx");
   });
 
+  test("the splash team table stays plain when an agent is focused or the team cursor is set", () => {
+    const state = stateWithTeamAndModel();
+    stateStore.getState.mockReturnValue({ ...state, focusedAgentId: LEADER_ID, teamCursorAgentId: QA_ID });
+    const lines = new WelcomeBanner(stateStore).render(80);
+    const text = lines.map(stripAnsi).join("\n");
+    expect(text).not.toContain("▸");
+    expect(lines.some((line) => line.includes("\x1b[36mgeneral-1"))).toBe(false);
+  });
+
   test("omits the Team section when no roster is loaded", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ installedTeams: [{ id: "my-team", agentCount: 2 }] }));
     const lines = new WelcomeBanner(stateStore).render(80).map(stripAnsi);

@@ -46,8 +46,8 @@ export class TuiViewImpl implements TuiView {
     tui.addChild(chatContainer);
     tui.addChild(todoList);
     tui.addChild(this.workingSlot);
-    tui.addChild(new StatusLine(stateStore));
     tui.addChild(new WelcomeBanner(stateStore));
+    tui.addChild(new StatusLine(stateStore));
     tui.addChild(editor);
     tui.addChild(footer);
     tui.addChild(new TeamPanel(stateStore));

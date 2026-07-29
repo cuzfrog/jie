@@ -71,8 +71,8 @@ function teamSection(state: TuiStateType, width: number): string[] {
   const roster = TuiState.rosterOrder(state);
   if (roster.length === 0) return [];
   const rows = renderTeamTable(roster, SPLASH_TEAM_COLUMNS, Math.max(1, width - SECTION_INDENT.length), {
-    pointed: state.teamCursorAgentId ?? state.focusedAgentId,
-    focused: state.focusedAgentId,
+    pointed: null,
+    focused: null,
   });
   return [style("text")(TEAM_HEADING), ...rows.map((row) => `${SECTION_INDENT}${row}`)];
 }
