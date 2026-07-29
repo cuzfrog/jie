@@ -1,6 +1,7 @@
 import { asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import type { AutocompleteProvider, Component, Container, Editor, Terminal, TUI } from "@earendil-works/pi-tui";
 import type { JiePlatform } from "@cuzfrog/jie-platform";
+import { logger } from "@cuzfrog/jie-utils";
 import { Actions, registerStateModule, type StateStore } from "./state";
 import { registerAutocompleteModule } from "./autocomplete";
 import type { ScannedFile } from "./file-mention";
@@ -12,6 +13,8 @@ import { registerComponentsModule, type TuiView } from "./components";
 import { registerTuiModule } from "./module";
 import type { CommandHandler } from "./command-handler";
 import type { CreateTUIOptions, Tui, TuiDeps, TuiStdout } from "./tui";
+
+const log = logger.getSubLogger({ name: "jie.tui.container" });
 
 export interface TuiCradle {
   readonly cwd: string;
@@ -56,7 +59,13 @@ export function bootTui(options: CreateTUIOptions, deps: TuiDeps): AwilixContain
   registerSyncModule(container);
   registerComponentsModule(container);
   registerTuiModule(container);
-  container.cradle.stateStore.dispatch(Actions.setEnvironment(options.cwd, deps.gitBranch ?? "", deps.gitDirty ?? false));
+  container.cradle.stateStore.dispatch(
+    Actions.setEnvironment(options.cwd, deps.gitBranch ?? "", deps.gitDirty ?? false, deps.version ?? ""),
+  );
+  void container.cradle.platform
+    .execute({ name: "getTeamInfo" })
+    .then((info) => container.cradle.stateStore.dispatch(Actions.setInstalledTeams(info.installed)))
+    .catch((error) => log.warn(`failed to load installed teams: ${String(error)}`));
   return container;
 }
 

@@ -115,7 +115,9 @@ describe("createJieAutocompleteProvider — slash commands", () => {
 describe("createJieAutocompleteProvider — unambiguous-command drill-down", () => {
   function drillPlatform(): JiePlatform {
     return makePlatform(vi.fn(async (cmd: { name: string }) => {
-      if (cmd.name === "getTeamInfo") return { defaultTeam: "alpha", installed: ["alpha", "beta"] };
+      if (cmd.name === "getTeamInfo") {
+        return { defaultTeam: "alpha", installed: [{ id: "alpha", agentCount: 2 }, { id: "beta", agentCount: 1 }] };
+      }
       if (cmd.name === "listSessions") {
         return [
           { sessionId: "alpha-1", messageCount: 3, lastActivity: "2026-07-22T00:00:00.000Z" },
@@ -184,7 +186,12 @@ describe("createJieAutocompleteProvider — unambiguous-command drill-down", () 
 describe("createJieAutocompleteProvider — /team arguments", () => {
   function teamPlatform(): JiePlatform {
     return makePlatform(vi.fn(async (cmd: { name: string }) => {
-      if (cmd.name === "getTeamInfo") return { defaultTeam: "alpha", installed: ["minimal", "alpha", "beta"] };
+      if (cmd.name === "getTeamInfo") {
+        return {
+          defaultTeam: "alpha",
+          installed: [{ id: "minimal", agentCount: 1 }, { id: "alpha", agentCount: 3 }, { id: "beta", agentCount: 2 }],
+        };
+      }
       return null;
     }));
   }
@@ -193,9 +200,9 @@ describe("createJieAutocompleteProvider — /team arguments", () => {
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, teamPlatform(), makeStateStore())
       .getSuggestions(["/team "], 0, 6, { signal: signal() });
     expect(suggestions!.items).toEqual([
-      { value: "minimal", label: "minimal" },
+      { value: "minimal", label: "minimal", description: "1 agent" },
       { value: "alpha", label: "alpha", description: "(default)" },
-      { value: "beta", label: "beta" },
+      { value: "beta", label: "beta", description: "2 agents" },
     ]);
   });
 

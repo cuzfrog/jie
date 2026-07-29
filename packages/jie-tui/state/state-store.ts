@@ -9,6 +9,8 @@ const INITIAL_TUI_STATE: TuiState = Object.freeze({
   cwd: null,
   gitBranch: null,
   gitDirty: false,
+  version: "",
+  installedTeams: null,
   teamId: null,
   leaderAgentId: null,
   agents: new Map(),

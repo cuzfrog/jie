@@ -13,6 +13,7 @@ export interface TeamManager {
   load(teamId?: string): Promise<TeamInfo>;
   resumeSession(teamId: string, sessionId: string): Promise<TeamInfo>;
   listInstalled(): string[];
+  agentCount(teamId: string): number;
   listLoaded(): ReadonlyMap<string, TeamInfo>;
   locate(teamId: string): TeamBlueprintLocation;
   agents(teamId: string): ReadonlyArray<AgentInfo>;
@@ -49,6 +50,10 @@ export class TeamManagerImpl implements TeamManager {
 
   listInstalled(): string[] {
     return this.teamRegistry.listInstalled();
+  }
+
+  agentCount(teamId: string): number {
+    return this.teamRegistry.parseTeamManifest(teamId).roles.length;
   }
 
   listLoaded(): ReadonlyMap<string, TeamInfo> {

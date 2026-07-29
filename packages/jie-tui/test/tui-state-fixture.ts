@@ -5,6 +5,8 @@ export function makeTuiState(overrides: Partial<TuiState> = {}): TuiState {
     cwd: null,
     gitBranch: null,
     gitDirty: false,
+    version: "",
+    installedTeams: null,
     teamId: null,
     leaderAgentId: null,
     agents: new Map(),

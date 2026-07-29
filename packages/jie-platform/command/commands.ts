@@ -21,7 +21,10 @@ interface CommandTypeMap {
   team: CommandDef<{ teamId?: string }, TeamInfo>;
   resumeSession: CommandDef<{ teamId: string; sessionId: string }, TeamInfo>;
   renameSession: CommandDef<{ teamId: string; sessionName: string }, null>;
-  getTeamInfo: CommandDef<{}, { defaultTeam: string | null; installed: ReadonlyArray<string> }>;
+  getTeamInfo: CommandDef<{}, {
+    defaultTeam: string | null;
+    installed: ReadonlyArray<{ readonly id: string; readonly agentCount: number }>;
+  }>;
   getGitStatus: CommandDef<{}, GitSnapshot>;
   stop: CommandDef<{}, null>;
   listSessions: CommandDef<{ teamId: string }, ReadonlyArray<SessionSummary>>;

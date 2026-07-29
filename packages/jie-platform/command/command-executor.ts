@@ -138,7 +138,7 @@ export class CommandExecutorImpl implements CommandExecutor {
     const settings = this.settingsStore.load();
     return {
       defaultTeam: settings.defaultTeam ?? null,
-      installed: this.teamManager.listInstalled(),
+      installed: this.teamManager.listInstalled().map((id) => ({ id, agentCount: this.teamManager.agentCount(id) })),
     };
   }
 

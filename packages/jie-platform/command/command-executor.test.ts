@@ -33,6 +33,7 @@ const teamManager = vi.mocked<TeamManager>({
   resumeSession: vi.fn(),
   renameSession: vi.fn(),
   listInstalled: vi.fn(),
+  agentCount: vi.fn(),
   listLoaded: vi.fn(),
   locate: vi.fn(),
   agents: vi.fn(),
@@ -284,15 +285,24 @@ describe("CommandExecutorImpl", () => {
     test("returns defaultTeam from settings and the installed list from teamManager", async () => {
       settingsStore.load.mockReturnValueOnce({ defaultProvider: "anthropic", defaultModel: "m", defaultTeam: "alpha" });
       teamManager.listInstalled.mockReturnValue(["minimal", "alpha", "beta"]);
+      teamManager.agentCount.mockImplementation((teamId: string) => (teamId === "alpha" ? 3 : 1));
       const result = await executor.execute({ name: "getTeamInfo" });
-      expect(result).toEqual({ defaultTeam: "alpha", installed: ["minimal", "alpha", "beta"] });
+      expect(result).toEqual({
+        defaultTeam: "alpha",
+        installed: [
+          { id: "minimal", agentCount: 1 },
+          { id: "alpha", agentCount: 3 },
+          { id: "beta", agentCount: 1 },
+        ],
+      });
     });
 
     test("returns defaultTeam: null when settings has no defaultTeam", async () => {
       settingsStore.load.mockReturnValueOnce({ defaultProvider: "anthropic", defaultModel: "m" });
       teamManager.listInstalled.mockReturnValue(["minimal"]);
+      teamManager.agentCount.mockReturnValue(2);
       const result = await executor.execute({ name: "getTeamInfo" });
-      expect(result).toEqual({ defaultTeam: null, installed: ["minimal"] });
+      expect(result).toEqual({ defaultTeam: null, installed: [{ id: "minimal", agentCount: 2 }] });
     });
   });
 

@@ -5,7 +5,7 @@ import { makeAgentUiState, makeTuiState } from "../test";
 import { ChatSyncImpl } from "./chat-sync";
 
 const AGENT_ID: AgentId = "my-team:general-1";
-const INERT_ACTION = Actions.setEnvironment("/tmp", "main", false);
+const INERT_ACTION = Actions.setEnvironment("/tmp", "main", false, "");
 
 function makeTurn(userPrompt: string, text: string | null = null, seq = 0): MessageTurn {
   return { userPrompt, cards: [], blocks: text === null ? [] : [{ kind: "text", text }], streamId: null, seq };

@@ -28,7 +28,7 @@ export async function runTeam(
   if (parsed.teamId === undefined) {
     const info = await platform.execute({ name: "getTeamInfo" });
     console.print(`defaultTeam: ${info.defaultTeam ?? "unset"}`);
-    console.print(`installed: ${info.installed.join(", ")}`);
+    console.print(`installed: ${info.installed.map((team) => team.id).join(", ")}`);
     return 0;
   }
   const teamId = parsed.teamId;

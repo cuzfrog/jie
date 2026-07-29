@@ -84,6 +84,7 @@ export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> 
     stderr,
     gitBranch: "main",
     gitDirty: false,
+    version: "0.0.0-test",
   });
   const tui = tuiContainer.cradle.tui;
   const stateStore = tuiContainer.cradle.stateStore;

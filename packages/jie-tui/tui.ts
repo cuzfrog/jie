@@ -21,6 +21,7 @@ export interface TuiDeps {
   readonly stderr?: NodeJS.WritableStream;
   readonly gitBranch?: string;
   readonly gitDirty?: boolean;
+  readonly version?: string;
 }
 
 export interface CreateTUIOptions {

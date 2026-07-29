@@ -1,8 +1,12 @@
 import { truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
+import type { CommandResult } from "@cuzfrog/jie-platform";
 import { COMMAND_METADATA, type CommandMeta } from "../command-metadata";
-import { TuiState, type AgentUiState, type StateStore } from "../state";
+import { TuiState, type StateStore, type TuiState as TuiStateType } from "../state";
 import { hintLines } from "./key-hints";
+import { renderTeamTable, type TeamTableColumn } from "./team-table";
 import { style } from "./themes";
+
+type InstalledTeams = CommandResult<"getTeamInfo">["installed"];
 
 export class WelcomeBanner implements Component {
   private readonly stateStore: StateStore;
@@ -19,14 +23,19 @@ export class WelcomeBanner implements Component {
   invalidate(): void {}
 }
 
-export function welcomeLines(state: TuiState, width: number): string[] {
+export function welcomeLines(state: TuiStateType, width: number): string[] {
   const w = Math.max(1, width);
-  return [...headerLines(state, w), "", ...commandSection(w), "", ...shortcutsSection(w)].map((line) => truncateToWidth(line, w));
+  const sections: string[][] = [headerLines(state, w)];
+  const team = teamSection(state, w);
+  if (team.length > 0) sections.push(team);
+  sections.push(commandSection(w), shortcutsSection(w));
+  return sections.flatMap((section, index) => (index === 0 ? section : ["", ...section])).map((line) => truncateToWidth(line, w));
 }
 
-function headerLines(state: TuiState, width: number): string[] {
+function headerLines(state: TuiStateType, width: number): string[] {
   const identity = identityLines(state);
-  if (width < MARK_MIN_WIDTH) return identity;
+  const minWidth = MARK_WIDTH + MARK_GAP + visibleWidth(identity[0]);
+  if (width < minWidth) return identity;
   const gap = " ".repeat(MARK_GAP);
   const rows: string[] = [];
   for (let i = 0; i < MARK_LINES.length; i++) {
@@ -37,27 +46,35 @@ function headerLines(state: TuiState, width: number): string[] {
   return rows;
 }
 
-function identityLines(state: TuiState): string[] {
+function identityLines(state: TuiStateType): string[] {
+  const version = state.version === "" ? "" : ` v${state.version}`;
   const lines = [
-    `${style("accent")(WORDMARK)}${style("muted")(`  ${TAGLINE}`)}`,
+    `${style("accent")(WORDMARK)}${style("muted")(`${version}  ${TAGLINE}`)}`,
     `${style("warning")(MARK_GLYPH)}${style("muted")(MARK_GLOSS)}`,
   ];
-  const team = teamLine(state);
-  if (team !== null) lines.push(team);
+  const teams = teamsLine(state);
+  if (teams !== null) lines.push(teams);
   return lines;
 }
 
-function teamLine(state: TuiState): string | null {
-  if (state.teamId === null) return null;
-  const roster = Array.from(state.agents.values(), describeAgent).join(ROSTER_SEPARATOR);
-  const suffix = roster === "" ? "" : `${ROSTER_SEPARATOR}${roster}`;
-  return `${style("accent")(`team ${state.teamId}`)}${style("muted")(suffix)}`;
+function teamsLine(state: TuiStateType): string | null {
+  const installed = state.installedTeams;
+  if (installed === null || installed.length === 0) return null;
+  const current = installed.find((team) => team.id === state.teamId);
+  const rest = installed.filter((team) => team.id !== state.teamId);
+  const ordered: InstalledTeams = current === undefined ? installed : [current, ...rest];
+  const list = ordered.map((team) => `${team.id}(${team.agentCount})`).join(TEAMS_SEPARATOR);
+  return `${style("accent")("Teams: ")}${style("muted")(list)}`;
 }
 
-function describeAgent(agent: AgentUiState): string {
-  const leader = agent.isLeader ? " (leader)" : "";
-  const model = agent.model === null ? "" : ` · ${agent.model.provider}/${agent.model.id}`;
-  return `${agent.agentKey}${leader}${model}`;
+function teamSection(state: TuiStateType, width: number): string[] {
+  const roster = TuiState.rosterOrder(state);
+  if (roster.length === 0) return [];
+  const rows = renderTeamTable(roster, SPLASH_TEAM_COLUMNS, Math.max(1, width - SECTION_INDENT.length), {
+    pointed: state.teamCursorAgentId ?? state.focusedAgentId,
+    focused: state.focusedAgentId,
+  });
+  return [style("text")(TEAM_HEADING), ...rows.map((row) => `${SECTION_INDENT}${row}`)];
 }
 
 function shortcutsSection(width: number): string[] {
@@ -115,8 +132,10 @@ const MARK_LINES: ReadonlyArray<string> = [
 ];
 const MARK_WIDTH = 15;
 const MARK_GAP = 4;
-const MARK_MIN_WIDTH = MARK_WIDTH + MARK_GAP + WORDMARK.length + 2 + TAGLINE.length;
 const COLUMN_GAP = 4;
+const TEAM_HEADING = "Team";
 const COMMANDS_HEADING = "Commands";
 const SHORTCUTS_HEADING = "Shortcuts";
-const ROSTER_SEPARATOR = " · ";
+const TEAMS_SEPARATOR = " · ";
+const SECTION_INDENT = "  ";
+const SPLASH_TEAM_COLUMNS: ReadonlyArray<TeamTableColumn> = ["agent", "tools", "subscribe", "model"];

@@ -148,15 +148,15 @@ describe("screen rendering", () => {
       await press(harness, "\x1b[1;5B");
       await settle(harness);
       const shown = harness.vt.getViewport().map(stripAnsi).join("\n");
-      expect(shown).toContain("▸");
+      expect(shown).toContain("ctx");
       expect(shown).toContain("leader");
       expect(shown).toContain("general-1");
       await press(harness, "\x1b[B");
       await settle(harness);
-      expect(harness.vt.getViewport().map(stripAnsi).join("\n")).toContain("▸");
+      expect(harness.vt.getViewport().map(stripAnsi).join("\n")).toContain("ctx");
       await press(harness, "\x1b[1;5B");
       await settle(harness);
-      expect(harness.vt.getViewport().map(stripAnsi).join("\n")).not.toContain("▸");
+      expect(harness.vt.getViewport().map(stripAnsi).join("\n")).not.toContain("ctx");
     } finally {
       harness.tui.stop();
     }

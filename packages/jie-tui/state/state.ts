@@ -1,10 +1,12 @@
 import type { StopReason } from "@earendil-works/pi-ai";
-import type { EffortLevel, ModelInfo } from "@cuzfrog/jie-platform";
+import type { CommandResult, EffortLevel, ModelInfo } from "@cuzfrog/jie-platform";
 import type { TodoItem } from "../todo";
 
 export type AgentStatus = "idle" | "busy";
 export { type EffortLevel };
 export type ModelReference = ModelInfo;
+
+type InstalledTeams = CommandResult<"getTeamInfo">["installed"];
 
 export interface MessageCard {
   readonly kind: "toolCall" | "toolResult";
@@ -62,6 +64,8 @@ export interface TuiState {
   readonly cwd: string | null;
   readonly gitBranch: string | null;
   readonly gitDirty: boolean;
+  readonly version: string;
+  readonly installedTeams: InstalledTeams | null;
   readonly teamId: string | null;
   readonly leaderAgentId: AgentId | null;
   readonly agents: ReadonlyMap<AgentId, AgentUiState>;

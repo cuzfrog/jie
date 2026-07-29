@@ -318,6 +318,18 @@ describe("TeamManagerImpl — full surface", () => {
       const { manager } = makeManager(homeJieDir, null);
       expect(manager.locate("ghost")).toBeNull();
     });
+
+    test("agentCount counts the roles declared by an installed team", () => {
+      const userTeams = join(homeJieDir, "teams");
+      writeTeam(userTeams, "alpha", "general", ["qa"]);
+      const { manager } = makeManager(homeJieDir, null);
+      expect(manager.agentCount("alpha")).toBe(2);
+    });
+
+    test("agentCount is one for the builtin minimal team", () => {
+      const { manager } = makeManager(homeJieDir, null);
+      expect(manager.agentCount("minimal")).toBe(1);
+    });
   });
 
   describe("listLoaded", () => {

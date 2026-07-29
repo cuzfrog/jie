@@ -89,13 +89,15 @@ async function drillDownSuggestions(commands: SlashCommand[], textBeforeCursor: 
 
 async function teamItems(platform: JiePlatform, prefix: string): Promise<AutocompleteItem[] | null> {
   const info = await platform.execute({ name: "getTeamInfo" });
-  if (isAlreadyComplete(info.installed, prefix)) return null;
+  if (isAlreadyComplete(info.installed.map((team) => team.id), prefix)) return null;
   const items = info.installed
-    .filter((teamId) => hasPrefix(teamId, prefix))
+    .filter((team) => hasPrefix(team.id, prefix))
     .slice(0, MAX_SUGGESTIONS)
-    .map((teamId): AutocompleteItem => teamId === info.defaultTeam
-      ? { value: teamId, label: teamId, description: "(default)" }
-      : { value: teamId, label: teamId });
+    .map((team): AutocompleteItem => ({
+      value: team.id,
+      label: team.id,
+      description: team.id === info.defaultTeam ? "(default)" : team.agentCount === 1 ? "1 agent" : `${team.agentCount} agents`,
+    }));
   return items.length === 0 ? null : items;
 }
 

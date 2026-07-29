@@ -6,6 +6,8 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
   switch (action.type) {
     case ActionTypes.SWITCH_TEAM:
       return teamLoadReducer(state, action.payload);
+    case ActionTypes.SET_INSTALLED_TEAMS:
+      return { ...state, installedTeams: action.payload.teams };
     case ActionTypes.TOGGLE_THINKING:
       return { ...state, thinkingExpanded: !state.thinkingExpanded };
     case ActionTypes.TOGGLE_TOOL_CARDS:
@@ -57,6 +59,7 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
         cwd: action.payload.cwd,
         gitBranch: action.payload.gitBranch,
         gitDirty: action.payload.gitDirty,
+        version: action.payload.version,
       };
     case ActionTypes.SHOW_HELP:
       return {

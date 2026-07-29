@@ -1,8 +1,11 @@
-import type { AnyEventEnvelope, TeamInfo } from "@cuzfrog/jie-platform";
+import type { AnyEventEnvelope, CommandResult, TeamInfo } from "@cuzfrog/jie-platform";
+
+type InstalledTeams = CommandResult<"getTeamInfo">["installed"];
 
 export const ActionTypes = {
   RECEIVE_EVENT: "[bus] receive event from event bus",
   SWITCH_TEAM: "[ui] switch team",
+  SET_INSTALLED_TEAMS: "[ui] set installed teams",
   TOGGLE_THINKING: "[ui] toggle thinking expanded",
   TOGGLE_TOOL_CARDS: "[ui] toggle tool cards expanded",
   SWITCH_CYCLE_AGENT: "[ui] switch and cycle focused agent",
@@ -44,6 +47,7 @@ const showHelp = createAction(ActionTypes.SHOW_HELP);
 export const Actions = {
   receiveEvent: (event: AnyEventEnvelope) => createAction(ActionTypes.RECEIVE_EVENT, event),
 	switchTeam: (identity: TeamInfo) => createAction(ActionTypes.SWITCH_TEAM, identity),
+	setInstalledTeams: (teams: InstalledTeams) => createAction(ActionTypes.SET_INSTALLED_TEAMS, { teams }),
 	toggleThinking: () => toggleThinking,
 	toggleToolCards: () => toggleToolCards,
 	switchCycleAgent: (direction: 1 | -1) => createAction(ActionTypes.SWITCH_CYCLE_AGENT, { direction }),
@@ -61,8 +65,8 @@ export const Actions = {
 	submitEditorText: (text: string) => createAction(ActionTypes.SUBMIT_EDITOR_TEXT, { text }),
 	requestInterrupt: (teamId: string, agentKey: string) =>
 		createAction(ActionTypes.REQUEST_INTERRUPT, { teamId, agentKey }),
-	setEnvironment: (cwd: string, gitBranch: string, gitDirty: boolean) =>
-		createAction(ActionTypes.SET_ENVIRONMENT, { cwd, gitBranch, gitDirty }),
+	setEnvironment: (cwd: string, gitBranch: string, gitDirty: boolean, version: string) =>
+		createAction(ActionTypes.SET_ENVIRONMENT, { cwd, gitBranch, gitDirty, version }),
 	showHelp: () => showHelp,
 } as const;
 
