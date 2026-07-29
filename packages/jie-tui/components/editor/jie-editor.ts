@@ -5,11 +5,11 @@ import {
   visibleWidth,
   type AutocompleteItem,
   type AutocompleteProvider,
-  type AutocompleteSuggestions,
   type EditorTheme,
   type TUI,
 } from "@earendil-works/pi-tui";
 import { Actions, type StateStore } from "../../state";
+import { type JieAutocompleteProvider, type JieSuggestions } from "../../autocomplete";
 import { style } from "../themes";
 import type { PromptHistoryStore } from "./prompt-history";
 
@@ -18,6 +18,7 @@ const CTRL_C = "\x03";
 const CTRL_D = "\x04";
 const FAKE_CURSOR = "\x1b[7m";
 const FAKE_CURSOR_END = "\x1b[0m";
+const SCROLL_INFO_PATTERN = /^\s*\((\d+)\/(\d+)\)\s*$/;
 
 const EDITOR_THEME: EditorTheme = {
   borderColor: style("border"),
@@ -35,11 +36,12 @@ export class JieEditor extends Editor {
   private readonly promptHistoryStore: PromptHistoryStore;
   private lastPersistedPrompt: string | null = null;
   private ghost: GhostSelection | null = null;
+  private popupFilteredOut: number | null = null;
 
   constructor(
     tui: TUI,
     stateStore: StateStore,
-    autocompleteProvider: AutocompleteProvider,
+    autocompleteProvider: JieAutocompleteProvider,
     promptHistoryStore: PromptHistoryStore,
     theme: EditorTheme = EDITOR_THEME,
   ) {
@@ -47,8 +49,9 @@ export class JieEditor extends Editor {
     this.stateStore = stateStore;
     this.promptHistoryStore = promptHistoryStore;
     const tracking = new GhostTrackingProvider(autocompleteProvider);
-    tracking.onSuggestions = (items, prefix): void => {
-      this.resetGhost(items, prefix);
+    tracking.onSuggestions = (suggestions): void => {
+      this.popupFilteredOut = suggestions.filteredOut ?? null;
+      this.resetGhost(suggestions.items, suggestions.prefix);
     };
     this.setAutocompleteProvider(tracking);
     this.seedHistory();
@@ -83,12 +86,14 @@ export class JieEditor extends Editor {
     super.handleInput(data);
     if (navigating) this.moveGhost(matchesKey(data, "down") ? 1 : -1);
     if (this.ghost !== null && !this.isShowingAutocomplete()) this.ghost = null;
+    if (!this.isShowingAutocomplete()) this.popupFilteredOut = null;
   }
 
   render(width: number): string[] {
-    const lines = super.render(width);
+    let lines = super.render(width);
+    if (this.isShowingAutocomplete() && this.popupFilteredOut !== null) lines = spliceScrollInfo(lines, this.popupFilteredOut);
     if (this.ghost === null || !this.isShowingAutocomplete()) return lines;
-    const suffix = ghostSuffix(this.ghost.prefix, this.ghost.items[this.ghost.index]?.value ?? "");
+    const suffix = ghostSuffix(this.ghost.prefix, this.ghost.items[this.ghost.index]);
     if (suffix === "") return lines;
     const cursorLineIndex = lines.findIndex((line) => line.includes(FAKE_CURSOR));
     if (cursorLineIndex === -1) return lines;
@@ -147,10 +152,10 @@ interface GhostSelection {
 
 class GhostTrackingProvider implements AutocompleteProvider {
   readonly triggerCharacters: string[] | undefined;
-  onSuggestions: ((items: ReadonlyArray<AutocompleteItem>, prefix: string) => void) | null = null;
-  private readonly inner: AutocompleteProvider;
+  onSuggestions: ((suggestions: JieSuggestions) => void) | null = null;
+  private readonly inner: JieAutocompleteProvider;
 
-  constructor(inner: AutocompleteProvider) {
+  constructor(inner: JieAutocompleteProvider) {
     this.inner = inner;
     this.triggerCharacters = inner.triggerCharacters;
   }
@@ -160,9 +165,9 @@ class GhostTrackingProvider implements AutocompleteProvider {
     cursorLine: number,
     cursorCol: number,
     options: { signal: AbortSignal; force?: boolean },
-  ): Promise<AutocompleteSuggestions | null> {
+  ): Promise<JieSuggestions | null> {
     return Promise.resolve(this.inner.getSuggestions(lines, cursorLine, cursorCol, options)).then((result) => {
-      if (result !== null && this.onSuggestions !== null) this.onSuggestions(result.items, result.prefix);
+      if (result !== null && this.onSuggestions !== null) this.onSuggestions(result);
       return result;
     });
   }
@@ -192,10 +197,24 @@ function bestMatchIndex(items: ReadonlyArray<AutocompleteItem>, prefix: string):
   return firstPrefixIndex === -1 ? 0 : firstPrefixIndex;
 }
 
-function ghostSuffix(prefix: string, value: string): string {
+function ghostSuffix(prefix: string, item: AutocompleteItem | undefined): string {
+  if (item === undefined) return "";
+  const suffix = valueRemainder(prefix, item.value);
+  if (suffix === "") return "";
+  const hint = argumentHintOf(item.description);
+  return hint === "" ? suffix : `${suffix} ${hint}`;
+}
+
+function valueRemainder(prefix: string, value: string): string {
   if (value.startsWith(prefix)) return value.slice(prefix.length);
   if (prefix.startsWith("/") && value.startsWith(prefix.slice(1))) return value.slice(prefix.length - 1);
   return "";
+}
+
+function argumentHintOf(description: string | undefined): string {
+  if (description === undefined) return "";
+  const head = description.split(" — ")[0] ?? "";
+  return head.startsWith("<") || head.startsWith("[") ? head : "";
 }
 
 function injectGhost(line: string, ghost: string, ghostWidth: number): string {
@@ -209,4 +228,17 @@ function injectGhost(line: string, ghost: string, ghostWidth: number): string {
   if (fit <= 0) return line;
   const shown = fit === ghostWidth ? ghost : truncateToWidth(ghost, fit);
   return line.slice(0, insertAt) + shown + tail.slice(0, tail.length - fit);
+}
+
+function spliceScrollInfo(lines: string[], filteredOut: number): string[] {
+  const index = lines.findIndex((line) => SCROLL_INFO_PATTERN.test(stripAnsi(line)));
+  if (index === -1) return lines;
+  const match = SCROLL_INFO_PATTERN.exec(stripAnsi(lines[index]!))!;
+  const next = [...lines];
+  next[index] = style("muted")(`  (${match[1]}/${match[2]} | ${filteredOut} filtered)`);
+  return next;
+}
+
+function stripAnsi(text: string): string {
+  return text.replace(/\x1b\[[0-9;]*m/g, "");
 }

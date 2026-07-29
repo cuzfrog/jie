@@ -1,4 +1,5 @@
-import { TUI, visibleWidth, type AutocompleteProvider, type Editor, type Terminal } from "@earendil-works/pi-tui";
+import { TUI, visibleWidth, type Editor, type Terminal } from "@earendil-works/pi-tui";
+import { type JieAutocompleteProvider, type JieSuggestions } from "../../autocomplete";
 import { Actions, type AgentId, type StateStore, type TuiState } from "../../state";
 import { makeAgentUiState, makeTuiState } from "../../test";
 import { style } from "../themes";
@@ -27,7 +28,7 @@ const LEADER_ID: AgentId = "my-team:general-1";
 
 const stateStore = vi.mocked<StateStore>({ getState: vi.fn(), dispatch: vi.fn(), subscribe: vi.fn(() => () => undefined) });
 
-const autocompleteProvider = vi.mocked<AutocompleteProvider>({
+const autocompleteProvider = vi.mocked<JieAutocompleteProvider>({
   getSuggestions: vi.fn(() => Promise.resolve(null)),
   applyCompletion: vi.fn(() => ({ lines: [], cursorLine: 0, cursorCol: 0 })),
 });
@@ -46,7 +47,7 @@ interface EditorHarness {
   readonly submitted: string[];
 }
 
-function bootEditor(provider: AutocompleteProvider = autocompleteProvider): EditorHarness {
+function bootEditor(provider: JieAutocompleteProvider = autocompleteProvider): EditorHarness {
   const ui = new TUI(new StubTerminal());
   const editor = new JieEditor(ui, stateStore, provider, promptHistoryStore);
   const submitted: string[] = [];
@@ -285,16 +286,55 @@ describe("JieEditor — autocomplete ghost text", () => {
     await untilAutocomplete(editor);
     expect(cursorLine(editor)).toContain(style("dim")("am"));
   });
+
+  test("the ghost carries the command's argument hint from its description", async () => {
+    const items = [{ value: "model", label: "model", description: "<provider/modelId> — set the default model" }];
+    const { editor } = bootEditor(fileGhostProvider(items, "/mo"));
+    for (const ch of "/mo") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    expect(cursorLine(editor)).toContain(style("dim")("del <provider/modelId>"));
+  });
+
+  test("the ghost omits a description that is not an argument hint", async () => {
+    const items = [{ value: "team", label: "team", description: "switch the active team" }];
+    const { editor } = bootEditor(fileGhostProvider(items, "/te"));
+    for (const ch of "/te") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    expect(stripAnsi(cursorLine(editor))).not.toContain("switch the active team");
+  });
+
+  test("the scroll info gains the filtered-out count when suggestions carry it", async () => {
+    const items = Array.from({ length: 6 }, (_, index) => ({ value: `m-${index}`, label: `m-${index}` }));
+    const { editor } = bootEditor(fileGhostProvider(items, "/mo", 4));
+    for (const ch of "/mo") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    const stripped = editor.render(80).map(stripAnsi);
+    expect(stripped.some((line) => line.includes("  (1/6 | 4 filtered)"))).toBe(true);
+  });
+
+  test("the scroll info stays plain when no filter count is reported", async () => {
+    const items = Array.from({ length: 6 }, (_, index) => ({ value: `m-${index}`, label: `m-${index}` }));
+    const { editor } = bootEditor(fileGhostProvider(items, "/mo"));
+    for (const ch of "/mo") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    const stripped = editor.render(80).map(stripAnsi);
+    expect(stripped.some((line) => line.includes("  (1/6)"))).toBe(true);
+  });
 });
 
-function fileGhostProvider(items?: ReadonlyArray<{ value: string; label: string }>, prefix?: string): AutocompleteProvider {
+function fileGhostProvider(
+  items?: ReadonlyArray<{ value: string; label: string; description?: string }>,
+  prefix?: string,
+  filteredOut?: number,
+): JieAutocompleteProvider {
   const suggestions = items ?? [{ value: "@alpha/one.ts", label: "alpha/one.ts" }, { value: "@alpha/two.ts", label: "alpha/two.ts" }];
   return {
     triggerCharacters: ["@"],
     getSuggestions: vi.fn((lines: string[], cursorLine: number, cursorCol: number) => {
       const text = (lines[cursorLine] ?? "").slice(0, cursorCol);
       if (prefix !== undefined ? !text.startsWith(prefix.slice(0, 1)) : !text.includes("@")) return Promise.resolve(null);
-      return Promise.resolve({ items: [...suggestions], prefix: prefix ?? `@${/@(\w*)$/.exec(text)?.[1] ?? ""}` });
+      const result: JieSuggestions = { items: [...suggestions], prefix: prefix ?? `@${/@(\w*)$/.exec(text)?.[1] ?? ""}` };
+      return Promise.resolve(filteredOut === undefined ? result : { ...result, filteredOut });
     }),
     applyCompletion: vi.fn((lines: string[], cursorLine: number, cursorCol: number, item: { value: string }, completionPrefix: string) => {
       const line = lines[cursorLine] ?? "";

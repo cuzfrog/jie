@@ -47,10 +47,11 @@ export interface Settings {
   readonly defaultModel?: string;
   readonly defaultTeam?: string;
   readonly defaultEffort?: EffortLevel;
+  readonly modelFilters?: ReadonlyArray<string>;
 }
 ```
 
-Each field may be absent (the user has not run `jie model` yet); the resolution chains below treat absent as "fall through to the next source". The platform never persists its own fields — the only writers are the `setDefaultProvider` / `setDefaultTeam` / `setDefaultEffort` commands (CLI `jie model` / `jie team`, TUI `/model` / `/effort`).
+Each field may be absent (the user has not run `jie model` yet); the resolution chains below treat absent as "fall through to the next source". The platform never persists its own fields — the only writers are the `setDefaultProvider` / `setDefaultTeam` / `setDefaultEffort` / `setModelFilters` commands (CLI `jie model` / `jie team`, TUI `/model` / `/effort` / `/model-filter`). `modelFilters` holds case-insensitive substring patterns that narrow the TUI's `/model` candidate list; it does not affect model resolution.
 
 ## Team Selection
 
@@ -194,7 +195,7 @@ Single location (`~/.jie/auth.json`), mode `0600`. The schema is whatever pi-ai'
 }
 ```
 
-The `key` field is a plain string — no `!cmd` interpolation, no `$ENV_VAR` expansion. `jie login` (interactive, or `--provider <id> --api-key <key>` for headless use) and `jie logout [<provider>]` are the supported mutators; the file is not edited by hand.
+The `key` field is a plain string — no `!cmd` interpolation, no `$ENV_VAR` expansion. `jie login` (interactive, or `--provider <id> --api-key <key>` for headless use) and `jie logout [<provider>|*]` are the supported mutators; the file is not edited by hand.
 
 ### Credentials Resolution
 
@@ -255,11 +256,11 @@ Commands that mutate persistent files:
 | Command | Writes | Notes |
 |---|---|---|
 | `jie login [--provider <id> --api-key <key>]` | `~/.jie/auth.json` | Interactive provider pick (OAuth or pasted key); flag form is headless. |
-| `jie logout [<provider>]` | `~/.jie/auth.json` | Clears one provider, or all. |
+| `jie logout [<provider>\|*]` | `~/.jie/auth.json` | Clears one provider, or all (`*`, the no-arg default). |
 | `jie model <provider>/<modelId>` | `~/.jie/settings.json` (global) | Splits on the first `/`. `jie model show` prints the current selection. |
 | `jie team <id>` | scope-aware `settings.json` | Persists `defaultTeam`; does not load the team. `jie team` prints current + installed. |
 | `jie --api-key <key>` | `~/.jie/auth.json` | Inlined login for the resolved provider. |
 
 Runtime flags (no persistence): `--team <id>` (one-shot load override for `jie` and `jie -p`), `--resume <sessionId>` (load a team on a prior session), `--in-memory` (SQLite `:memory:`; nothing persists), `-p "..."` (one-shot print mode).
 
-TUI slash commands run the same platform commands in-session — no restart: `/login`, `/logout`, `/model <provider>/<modelId>`, `/team [<id>]` (hot-load; "Team Swap" above), `/resume` (session picker), `/rename <name>` (names the active session; `08-memory.md` "List and rename"). The `<provider>/<modelId>` slash convention is pi's; two separate flags are not accepted.
+TUI slash commands run the same platform commands in-session — no restart: `/login`, `/logout <provider>|*`, `/model <provider>/<modelId>`, `/model-filter <add|remove> <pattern>` (settings `modelFilters`; narrows the `/model` popup), `/team [<id>]` (hot-load; "Team Swap" above), `/resume` (session picker), `/rename <name>` (names the active session; `08-memory.md` "List and rename"). The `<provider>/<modelId>` slash convention is pi's; two separate flags are not accepted.

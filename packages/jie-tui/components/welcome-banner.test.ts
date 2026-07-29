@@ -62,7 +62,10 @@ describe("WelcomeBanner", () => {
   test("shows a Commands section with every command, argument hint and description", () => {
     const text = new WelcomeBanner(stateStore).render(80).map(stripAnsi).join("\n");
     expect(text).toContain("Commands");
-    for (const command of ["/help", "/clear", "/exit", "/team", "/resume", "/rename", "/model", "/effort", "/login", "/logout"]) {
+    const commands = [
+      "/help", "/clear", "/exit", "/team", "/resume", "/rename", "/model", "/model-filter", "/effort", "/login", "/logout",
+    ];
+    for (const command of commands) {
       expect(text).toContain(command);
     }
     expect(text).toContain("<provider> <apiKey>");
@@ -77,10 +80,10 @@ describe("WelcomeBanner", () => {
 
   test("lays the commands out in two columns when the width allows", () => {
     const lines = new WelcomeBanner(stateStore).render(120).map(stripAnsi);
-    const paired = lines.filter((line) => line.includes("/help") && line.includes("/model"));
+    const paired = lines.filter((line) => line.includes("/help") && line.includes("/model-filter"));
     expect(paired.length).toBe(1);
     expect(paired[0]).toContain("show this help");
-    expect(paired[0]).toContain("set the default model");
+    expect(paired[0]).toContain("filter the /model list");
   });
 
   test("hides the mark when the width cannot fit it beside the identity", () => {

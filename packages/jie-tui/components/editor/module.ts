@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { asFunction, type AwilixContainer } from "awilix";
-import type { AutocompleteProvider, Editor, TUI } from "@earendil-works/pi-tui";
+import type { Editor, TUI } from "@earendil-works/pi-tui";
+import type { JieAutocompleteProvider } from "../../autocomplete";
 import type { StateStore } from "../../state";
 import type { TuiCradle } from "../../container";
 import { JieEditor } from "./jie-editor";
@@ -12,7 +13,7 @@ export function registerEditorModule(container: AwilixContainer<TuiCradle>): voi
   container.register({
     jieEditorFactory: asFunction((
       stateStore: StateStore,
-      autocompleteProvider: AutocompleteProvider,
+      autocompleteProvider: JieAutocompleteProvider,
       homeJieDir: string,
     ) => {
       const promptHistoryStore = createPromptHistoryStore(join(homeJieDir, PROMPT_HISTORY_FILE));

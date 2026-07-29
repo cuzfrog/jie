@@ -38,7 +38,10 @@ describe("InfoMessage", () => {
 
   test("a help entry lists every slash command including /resume", () => {
     const text = new InfoMessage(stateStore, HELP).render(200).map(stripAnsi).join("\n");
-    for (const command of ["/help", "/clear", "/exit", "/team", "/resume", "/rename", "/model", "/effort", "/login", "/logout"]) {
+    const commands = [
+      "/help", "/clear", "/exit", "/team", "/resume", "/rename", "/model", "/model-filter", "/effort", "/login", "/logout",
+    ];
+    for (const command of commands) {
       expect(text).toContain(command);
     }
   });

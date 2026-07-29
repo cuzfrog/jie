@@ -104,7 +104,7 @@ describe("createJieAutocompleteProvider — slash commands", () => {
   test("bare '/' lists every command with its argument hint and description", async () => {
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), makeStateStore())
       .getSuggestions(["/"], 0, 1, { signal: signal() });
-    expect(suggestions!.items).toHaveLength(10);
+    expect(suggestions!.items).toHaveLength(11);
     const team = suggestions!.items.find((item) => item.value === "team");
     expect(team!.description).toBe("<teamId> — switch the active team");
     const help = suggestions!.items.find((item) => item.value === "help");
@@ -124,7 +124,10 @@ describe("createJieAutocompleteProvider — unambiguous-command drill-down", () 
           { sessionId: "beta-2", messageCount: 12, lastActivity: "2026-07-21T00:00:00.000Z" },
         ];
       }
-      if (cmd.name === "listModels") return [{ provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5" }];
+      if (cmd.name === "listModels") {
+        return [{ provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", available: true }];
+      }
+      if (cmd.name === "getModelFilters") return [];
       return null;
     }));
   }
@@ -144,10 +147,10 @@ describe("createJieAutocompleteProvider — unambiguous-command drill-down", () 
     expect(suggestions!.items[0]!.description).toBe("(default)");
   });
 
-  test("'/mod' drills down keeping provider/model values", async () => {
+  test("'/model-f' drills down to the add/remove actions", async () => {
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, drillPlatform(), makeStateStore())
-      .getSuggestions(["/mod"], 0, 4, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["model anthropic/claude-sonnet-4-5"]);
+      .getSuggestions(["/model-f"], 0, 8, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["model-filter add", "model-filter remove"]);
   });
 
   test("'/eff' drills down to the effort-level rows", async () => {
@@ -316,15 +319,19 @@ describe("createJieAutocompleteProvider — /effort arguments", () => {
 });
 
 describe("createJieAutocompleteProvider — /model arguments", () => {
-  const MODELS = [
-    { provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5" },
-    { provider: "anthropic", id: "claude-opus-4-5", name: "Claude Opus 4.5" },
-    { provider: "openai", id: "gpt-5", name: "GPT-5" },
+  const MODELS: ReadonlyArray<{ provider: string; id: string; name: string; available: boolean }> = [
+    { provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", available: true },
+    { provider: "anthropic", id: "claude-opus-4-5", name: "Claude Opus 4.5", available: true },
+    { provider: "openai", id: "gpt-5", name: "GPT-5", available: true },
   ];
 
-  function modelPlatform(models: ReadonlyArray<{ provider: string; id: string; name: string }>): JiePlatform {
+  function modelPlatform(
+    models: ReadonlyArray<{ provider: string; id: string; name: string; available: boolean }>,
+    filters: ReadonlyArray<string> = [],
+  ): JiePlatform {
     return makePlatform(vi.fn(async (cmd: { name: string }) => {
       if (cmd.name === "listModels") return models;
+      if (cmd.name === "getModelFilters") return filters;
       return null;
     }));
   }
@@ -370,10 +377,43 @@ describe("createJieAutocompleteProvider — /model arguments", () => {
   });
 
   test("caps the suggestion list at twenty entries", async () => {
-    const many = Array.from({ length: 25 }, (_, index) => ({ provider: "anthropic", id: `model-${index}`, name: `Model ${index}` }));
+    const many = Array.from({ length: 25 }, (_, index) => ({
+      provider: "anthropic", id: `model-${index}`, name: `Model ${index}`, available: true,
+    }));
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, modelPlatform(many), makeStateStore())
       .getSuggestions(["/model "], 0, 7, { signal: signal() });
     expect(suggestions!.items).toHaveLength(20);
+  });
+
+  test("hides models whose provider is not available", async () => {
+    const models = [
+      { provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", available: true },
+      { provider: "openai", id: "gpt-5", name: "GPT-5", available: false },
+    ];
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, modelPlatform(models), makeStateStore())
+      .getSuggestions(["/model "], 0, 7, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["anthropic/claude-sonnet-4-5"]);
+    expect(suggestions!.filteredOut).toBeUndefined();
+  });
+
+  test("applies model filters and reports how many models were filtered out", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, modelPlatform(MODELS, ["gpt"]), makeStateStore())
+      .getSuggestions(["/model "], 0, 7, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["openai/gpt-5"]);
+    expect(suggestions!.filteredOut).toBe(2);
+  });
+
+  test("filter patterns match case-insensitively anywhere in provider/modelId", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, modelPlatform(MODELS, ["CLAUDE"]), makeStateStore())
+      .getSuggestions(["/model "], 0, 7, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["anthropic/claude-sonnet-4-5", "anthropic/claude-opus-4-5"]);
+    expect(suggestions!.filteredOut).toBe(1);
+  });
+
+  test("omits filteredOut when no filter is set", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, modelPlatform(MODELS), makeStateStore())
+      .getSuggestions(["/model "], 0, 7, { signal: signal() });
+    expect(suggestions!.filteredOut).toBeUndefined();
   });
 });
 
@@ -423,5 +463,32 @@ describe("createJieAutocompleteProvider — /login arguments", () => {
       .applyCompletion(["/login "], 0, 7, { value: "anthropic", label: "anthropic" }, "");
     expect(result.lines).toEqual(["/login anthropic"]);
     expect(result.cursorCol).toBe(16);
+  });
+});
+
+describe("createJieAutocompleteProvider — /logout arguments", () => {
+  function logoutPlatform(): JiePlatform {
+    return makePlatform(vi.fn(async (cmd: { name: string }) => {
+      if (cmd.name === "listProviders") {
+        return [{ id: "anthropic", description: "ANTHROPIC_API_KEY" }, { id: "openai" }];
+      }
+      return null;
+    }));
+  }
+
+  test("suggests the logout-all star first, then the providers", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, logoutPlatform(), makeStateStore())
+      .getSuggestions(["/logout "], 0, 8, { signal: signal() });
+    expect(suggestions!.items).toEqual([
+      { value: "*", label: "*", description: "all providers" },
+      { value: "anthropic", label: "anthropic", description: "ANTHROPIC_API_KEY" },
+      { value: "openai", label: "openai" },
+    ]);
+  });
+
+  test("a fully typed star yields no suggestions so Enter submits directly", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, logoutPlatform(), makeStateStore())
+      .getSuggestions(["/logout *"], 0, 9, { signal: signal() });
+    expect(suggestions).toBeNull();
   });
 });

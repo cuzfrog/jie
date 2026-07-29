@@ -1,9 +1,9 @@
 import { asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
-import type { AutocompleteProvider, Component, Container, Editor, Terminal, TUI } from "@earendil-works/pi-tui";
+import type { Component, Container, Editor, Terminal, TUI } from "@earendil-works/pi-tui";
 import type { JiePlatform } from "@cuzfrog/jie-platform";
 import { logger } from "@cuzfrog/jie-utils";
 import { Actions, registerStateModule, type StateStore } from "./state";
-import { registerAutocompleteModule } from "./autocomplete";
+import { registerAutocompleteModule, type JieAutocompleteProvider } from "./autocomplete";
 import type { ScannedFile } from "./file-mention";
 import { registerChatModule, type ChatMessages } from "./components/chat";
 import { registerFooterModule } from "./components/footer";
@@ -25,7 +25,7 @@ export interface TuiCradle {
   readonly stdout: TuiStdout | undefined;
   readonly stateStore: StateStore;
   readonly commandHandler: CommandHandler;
-  readonly autocompleteProvider: AutocompleteProvider;
+  readonly autocompleteProvider: JieAutocompleteProvider;
   readonly chatMessages: ChatMessages;
   readonly todoList: Component;
   readonly footer: Component;
