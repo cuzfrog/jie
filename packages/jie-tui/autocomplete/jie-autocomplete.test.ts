@@ -437,9 +437,24 @@ describe("createJieAutocompleteProvider — /model-filter arguments", () => {
     expect(suggestions!.items.map((item) => item.value)).toEqual(["remove"]);
   });
 
-  test("a fully typed action yields no suggestions", async () => {
+  test("a fully typed remove lists the stored patterns", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, filterPlatform(["qwen", "gpt"]), makeStateStore())
+      .getSuggestions(["/model-filter remove"], 0, 20, { signal: signal() });
+    expect(suggestions!.items).toEqual([
+      { value: "remove qwen", label: "qwen" },
+      { value: "remove gpt", label: "gpt" },
+    ]);
+  });
+
+  test("a fully typed remove yields no suggestions when no filter is stored", async () => {
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, filterPlatform([]), makeStateStore())
       .getSuggestions(["/model-filter remove"], 0, 20, { signal: signal() });
+    expect(suggestions).toBeNull();
+  });
+
+  test("a fully typed add yields no suggestions so Enter submits", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, filterPlatform(["qwen"]), makeStateStore())
+      .getSuggestions(["/model-filter add"], 0, 17, { signal: signal() });
     expect(suggestions).toBeNull();
   });
 
