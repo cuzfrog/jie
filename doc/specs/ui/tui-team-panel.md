@@ -4,7 +4,7 @@ A togglable bottom strip giving the team-at-a-glance view — roster, per-agent 
 
 ## Layout
 
-The strip is the last section of the single inline column (`tui-layout.md`): it renders **below the footer**, borrowing rows from the bottom of the frame, never width from the chat. pi-tui's viewport is bottom-anchored, so a taller frame scrolls the top (splash, older scrollback) off rather than pushing the strip out of view. Hidden, it renders zero rows. There is no border or chrome — the cursor glyph marks the pointed agent.
+The strip is the last section of the single inline column (`tui-layout.md`): it renders **below the footer**, borrowing rows from the bottom of the frame, never width from the chat. pi-tui's viewport is bottom-anchored, so a taller frame scrolls the top (splash, older scrollback) off rather than pushing the strip out of view. Hidden, it renders zero rows. Its first row is a thin `─` rule across the full width (`borderMuted`) separating it from the footer; its second row titles the columns in `dim`. The cursor glyph marks the pointed agent.
 
 ## Interaction
 
@@ -17,14 +17,18 @@ There is no Esc-to-close and no auto-close on submit; `teamPanelVisible` survive
 
 ## Content
 
-One row per agent, leader pinned first, the rest in map insertion order — `TuiState.rosterOrder` is the single shared ordering for both the cursor rule and the display. Each row is five left-aligned columns separated by two spaces; every column but the last is padded to the widest cell in the roster, and the whole row truncates to the available width:
+One row per agent, leader pinned first, the rest in map insertion order — `TuiState.rosterOrder` is the single shared ordering for both the cursor rule and the display. Columns, left to right: **agent**, **ctx**, **tools**, **subscribe** — left-aligned, each padded to the widest cell across the title row and the roster — then **model**, right-aligned flush to the screen's right edge. Every row is padded or truncated to the available width:
 
 ```
-▸ ★ dm-1 · dm                notify write_artifact read_artifact  task.review_passed task.failed  qwen3.5-4b  25%/128k
-  researcher-1 · researcher  web_search web_fetch                 task.recorded                   qwen3.5-4b  —
+───────────────────────────────────────────────────────────────────────────────────────────────
+agent           ctx       tools                                subscribe                       model
+▸ dm-1 leader   25%/128k  notify read_artifact write_artifact  task.review_passed task.failed  (lm-studio) qwen3.5-4b | medium
+  researcher-1  —         web_search web_fetch                 task.recorded                   (lm-studio) qwen3.5-4b | medium
 ```
 
-Per row: the identity column — cursor (`▸` in `accent` on the pointed agent — cursor, else focus — a space otherwise), leader mark (`★` in `accent`; absent for non-leaders), agent key (`accent` when pointed or focused), status glyph, role plus a queue-depth tag `· q<N>` (`muted`) when the queue is non-empty; then the soul's `tools` (`muted`), its `subscribe` topics (`muted`), the model id, and the context usage `N%/<window>k` colored by `contextPercentColor` — the footer's shared formatters (`footer/context-percent.ts`). Empty columns render `—`.
+Per row: the identity column — cursor (`▸` in `accent` on the pointed agent — cursor, else focus — a space otherwise), agent key (`accent` when pointed or focused; the key already carries the role, so the role is not repeated), a `leader` label (`dim`) for the leader, status glyph, and a queue-depth tag `q<N>` (`muted`) when the queue is non-empty; then the context usage `N%/<window>k` colored by `contextPercentColor` (`footer/context-percent.ts`), the soul's `tools` (`muted`), its `subscribe` topics (`muted`), and the model segment `(provider) modelId | effort` — the same `formatModelSegment` the footer uses (`footer/model-segment.ts`). Empty columns render `—`.
+
+**Adaptive width.** The identity and model columns always render. When the natural row width exceeds the available width, the middle columns drop right to left — `subscribe`, then `tools`, then `ctx` (their titles drop with them) — and if identity plus model still overflow, the model segment truncates to fit.
 
 **Status glyph**: `·` (`muted`) idle; a braille spinner frame derived from `Date.now() / SPINNER_INTERVAL_MS` (`accent`) busy — the same frames and interval as the working indicator; `✗` (`error`) idle with `lastStopReason === "error"`. The clock is read render-side, consistent with the reducer purity model (`tui-state.md`).
 

@@ -149,7 +149,7 @@ describe("screen rendering", () => {
       await settle(harness);
       const shown = harness.vt.getViewport().map(stripAnsi).join("\n");
       expect(shown).toContain("▸");
-      expect(shown).toContain("★");
+      expect(shown).toContain("leader");
       expect(shown).toContain("general-1");
       await press(harness, "\x1b[1;2A");
       await settle(harness);

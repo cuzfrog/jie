@@ -1,8 +1,8 @@
 import { truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
-import type { ModelInfo } from "@cuzfrog/jie-platform";
 import { TuiState, type AgentUiState, type StateStore } from "../../state";
 import { style } from "../themes";
 import { contextPercentColor, formatContextPercent } from "./context-percent";
+import { formatModelSegment } from "./model-segment";
 import { formatQueueIndicator } from "./queue-indicator";
 
 export class Footer implements Component {
@@ -19,19 +19,17 @@ export class Footer implements Component {
     const branch = state.gitBranch !== null && state.gitBranch !== "" ? state.gitBranch : "main";
     const identity = style("accent")(`${state.cwd ?? ""} (${branch}${state.gitDirty ? "*" : ""})`);
     const teamAgent = style("muted")(`${state.teamId ?? "no-team"}:${focused === null ? "—" : focused.agentKey}`);
+    const identityLine = rightAligned(identity, teamAgent, w);
+    if (state.teamId !== null && state.teamPanelVisible) return [identityLine];
     const stats: string[] = [style(contextSegmentColor(focused))(contextSegmentText(focused))];
     const queue = formatQueueIndicator(focused === null ? null : focused.queue);
     if (queue !== null) stats.push(style("warning")(queue));
-    const model = modelSegment(focused === null ? null : focused.model);
-    return [rightAligned(identity, teamAgent, w), rightAligned(stats.join("  "), model, w)];
+    const modelInfo = focused === null ? null : focused.model;
+    const model = modelInfo === null ? style("muted")("—") : formatModelSegment(modelInfo);
+    return [identityLine, rightAligned(stats.join("  "), model, w)];
   }
 
   invalidate(): void {}
-}
-
-function modelSegment(model: ModelInfo | null): string {
-  if (model === null) return style("muted")("—");
-  return `${style("muted")(`(${model.provider}) `)}${style("accent")(model.id)}${style("muted")(` | ${model.effort}`)}`;
 }
 
 function contextSegmentText(focused: AgentUiState | null): string {
