@@ -10,6 +10,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { Actions, type StateStore } from "../../state";
 import { type JieAutocompleteProvider, type JieSuggestions } from "../../autocomplete";
+import { COMMAND_METADATA } from "../../command-metadata";
 import { style } from "../themes";
 import type { PromptHistoryStore } from "./prompt-history";
 
@@ -19,6 +20,8 @@ const CTRL_D = "\x04";
 const FAKE_CURSOR = "\x1b[7m";
 const FAKE_CURSOR_END = "\x1b[0m";
 const SCROLL_INFO_PATTERN = /^\s*\((\d+)\/(\d+)\)\s*$/;
+const COMMAND_BOUNDARY_PATTERN = /^\/(\S+) $/;
+const LEAD_ANSI_PATTERN = /^(\x1b\[[0-9;]*m)*/;
 const SESSION_LABEL_TRAILING_DASHES = 2;
 const CHIP_BACKGROUND_BORDER = "\x1b[44m";
 const CHIP_BACKGROUND_WARNING = "\x1b[43m";
@@ -99,9 +102,10 @@ export class JieEditor extends Editor {
     let lines = super.render(width);
     const chipBackground = this.bashMode ? CHIP_BACKGROUND_WARNING : CHIP_BACKGROUND_BORDER;
     lines = spliceSessionLabel(lines, this.stateStore.getState().sessionName, width, this.borderColor, chipBackground);
-    if (this.isShowingAutocomplete() && this.popupFilteredOut !== null) lines = spliceScrollInfo(lines, this.popupFilteredOut);
-    if (this.ghost === null || !this.isShowingAutocomplete()) return lines;
-    const suffix = ghostSuffix(this.ghost.prefix, this.ghost.items[this.ghost.index]);
+    if (this.isShowingAutocomplete() && this.popupFilteredOut !== null && this.ghost !== null) {
+      lines = spliceFilteredInfo(lines, this.popupFilteredOut, this.ghost.index + 1, this.ghost.items.length);
+    }
+    const suffix = this.resolveGhostSuffix();
     if (suffix === "") return lines;
     const cursorLineIndex = lines.findIndex((line) => line.includes(FAKE_CURSOR));
     if (cursorLineIndex === -1) return lines;
@@ -149,6 +153,11 @@ export class JieEditor extends Editor {
     if (this.ghost === null || this.ghost.items.length === 0) return;
     const count = this.ghost.items.length;
     this.ghost.index = (this.ghost.index + direction + count) % count;
+  }
+
+  private resolveGhostSuffix(): string {
+    if (this.ghost !== null && this.isShowingAutocomplete()) return ghostSuffix(this.ghost.prefix, this.ghost.items[this.ghost.index]);
+    return commandBoundaryHint(this.getText());
   }
 }
 
@@ -208,8 +217,8 @@ function bestMatchIndex(items: ReadonlyArray<AutocompleteItem>, prefix: string):
 function ghostSuffix(prefix: string, item: AutocompleteItem | undefined): string {
   if (item === undefined) return "";
   const suffix = valueRemainder(prefix, item.value);
-  if (suffix === "") return "";
   const hint = argumentHintOf(item.description);
+  if (suffix === "" && hint === "") return "";
   return hint === "" ? suffix : `${suffix} ${hint}`;
 }
 
@@ -225,17 +234,35 @@ function argumentHintOf(description: string | undefined): string {
   return head.startsWith("<") || head.startsWith("[") ? head : "";
 }
 
+function commandBoundaryHint(text: string): string {
+  const match = COMMAND_BOUNDARY_PATTERN.exec(text);
+  if (match === null) return "";
+  const command = COMMAND_METADATA.find((entry) => entry.name === match[1]);
+  return command?.argumentHint ?? "";
+}
+
 function injectGhost(line: string, ghost: string, ghostWidth: number): string {
   const cursorStart = line.indexOf(FAKE_CURSOR);
   const cursorEnd = line.indexOf(FAKE_CURSOR_END, cursorStart);
   if (cursorStart === -1 || cursorEnd === -1) return line;
-  const insertAt = cursorEnd + FAKE_CURSOR_END.length;
-  const tail = line.slice(insertAt);
+  const cursorChar = line.slice(cursorStart + FAKE_CURSOR.length, cursorEnd);
+  const tail = line.slice(cursorEnd + FAKE_CURSOR_END.length);
   if (!/^ *$/.test(tail)) return line;
-  const fit = Math.min(ghostWidth, tail.length);
-  if (fit <= 0) return line;
+  const before = line.slice(0, cursorStart);
+  if (cursorChar.trim() !== "") {
+    const fit = Math.min(ghostWidth, tail.length);
+    if (fit <= 0) return line;
+    const shown = fit === ghostWidth ? ghost : truncateToWidth(ghost, fit);
+    return `${line.slice(0, cursorEnd + FAKE_CURSOR_END.length)}${shown}${tail.slice(0, tail.length - fit)}`;
+  }
+  const fit = Math.min(ghostWidth, tail.length + 1);
   const shown = fit === ghostWidth ? ghost : truncateToWidth(ghost, fit);
-  return line.slice(0, insertAt) + shown + tail.slice(0, tail.length - fit);
+  const leadAnsi = LEAD_ANSI_PATTERN.exec(shown)![0];
+  const point = shown.codePointAt(leadAnsi.length);
+  if (point === undefined) return line;
+  const first = String.fromCodePoint(point);
+  const rest = shown.slice(leadAnsi.length + first.length);
+  return `${before}${leadAnsi}${FAKE_CURSOR}${first}${FAKE_CURSOR_END}${leadAnsi}${rest}${tail.slice(fit - 1)}`;
 }
 
 function spliceSessionLabel(
@@ -257,13 +284,16 @@ function spliceSessionLabel(
   return next;
 }
 
-function spliceScrollInfo(lines: string[], filteredOut: number): string[] {
+function spliceFilteredInfo(lines: string[], filteredOut: number, selected: number, total: number): string[] {
   const index = lines.findIndex((line) => SCROLL_INFO_PATTERN.test(stripAnsi(line)));
-  if (index === -1) return lines;
-  const match = SCROLL_INFO_PATTERN.exec(stripAnsi(lines[index]!))!;
-  const next = [...lines];
-  next[index] = style("muted")(`  (${match[1]}/${match[2]} | ${filteredOut} filtered)`);
-  return next;
+  if (index !== -1) {
+    const match = SCROLL_INFO_PATTERN.exec(stripAnsi(lines[index]!))!;
+    const next = [...lines];
+    next[index] = style("muted")(`  (${match[1]}/${match[2]} | ${filteredOut} filtered)`);
+    return next;
+  }
+  if (total === 0) return lines;
+  return [...lines, style("muted")(`  (${selected}/${total} | ${filteredOut} filtered)`)];
 }
 
 function stripAnsi(text: string): string {

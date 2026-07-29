@@ -274,9 +274,18 @@ describe("JieEditor — autocomplete ghost text", () => {
     for (const ch of "@a") editor.handleInput(ch);
     await untilAutocomplete(editor);
     const line = cursorLine(editor);
-    expect(line).toContain(style("dim")("lpha/one.ts"));
-    expect(stripAnsi(line)).toContain("@a lpha/one.ts");
+    expect(line).toContain("\x1b[7ml\x1b[0m");
+    expect(stripAnsi(line)).toContain("@alpha/one.ts");
     expect(visibleWidth(line)).toBe(80);
+  });
+
+  test("the ghost's first character sits inside the cursor cell instead of pushing it", async () => {
+    const { editor } = bootEditor(fileGhostProvider());
+    for (const ch of "@a") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    const line = cursorLine(editor);
+    expect(line).toContain("\x1b[7ml\x1b[0m");
+    expect(line).not.toContain("\x1b[7m \x1b[0m");
   });
 
   test("the ghost follows the highlighted row as up and down move it", async () => {
@@ -284,9 +293,9 @@ describe("JieEditor — autocomplete ghost text", () => {
     for (const ch of "@a") editor.handleInput(ch);
     await untilAutocomplete(editor);
     editor.handleInput("\x1b[B");
-    expect(cursorLine(editor)).toContain(style("dim")("lpha/two.ts"));
+    expect(stripAnsi(cursorLine(editor))).toContain("@alpha/two.ts");
     editor.handleInput("\x1b[A");
-    expect(cursorLine(editor)).toContain(style("dim")("lpha/one.ts"));
+    expect(stripAnsi(cursorLine(editor))).toContain("@alpha/one.ts");
   });
 
   test("tab completion clears the ghost once the popup closes", async () => {
@@ -320,7 +329,7 @@ describe("JieEditor — autocomplete ghost text", () => {
     const { editor } = bootEditor(provider);
     for (const ch of "/te") editor.handleInput(ch);
     await untilAutocomplete(editor);
-    expect(cursorLine(editor)).toContain(style("dim")("am"));
+    expect(stripAnsi(cursorLine(editor))).toContain("/team");
   });
 
   test("the ghost carries the command's argument hint from its description", async () => {
@@ -328,7 +337,33 @@ describe("JieEditor — autocomplete ghost text", () => {
     const { editor } = bootEditor(fileGhostProvider(items, "/mo"));
     for (const ch of "/mo") editor.handleInput(ch);
     await untilAutocomplete(editor);
-    expect(cursorLine(editor)).toContain(style("dim")("del <provider/modelId>"));
+    expect(stripAnsi(cursorLine(editor))).toContain("/model <provider/modelId>");
+  });
+
+  test("an exact command match still ghosts its argument hint", async () => {
+    const items = [
+      { value: "model", label: "model", description: "<provider/modelId> — set the default model" },
+      { value: "model-filter", label: "model-filter", description: "<add|remove> <pattern> — manage model filters" },
+    ];
+    const { editor } = bootEditor(fileGhostProvider(items, "/model"));
+    for (const ch of "/model") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    expect(stripAnsi(cursorLine(editor))).toContain("/model <provider/modelId>");
+  });
+
+  test("tab-committing a slash command leaves a static argument hint", async () => {
+    const items = [
+      { value: "model", label: "model", description: "<provider/modelId> — set the default model" },
+      { value: "model-filter", label: "model-filter", description: "<add|remove> <pattern> — manage model filters" },
+    ];
+    const { editor } = bootEditor(fileGhostProvider(items, "/model"));
+    for (const ch of "/model") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    editor.handleInput("\x1b[B");
+    editor.handleInput("\t");
+    expect(editor.getText()).toBe("/model-filter ");
+    expect(editor.isShowingAutocomplete()).toBe(false);
+    expect(stripAnsi(cursorLine(editor))).toContain("/model-filter <add|remove> <pattern>");
   });
 
   test("the ghost omits a description that is not an argument hint", async () => {
@@ -346,6 +381,15 @@ describe("JieEditor — autocomplete ghost text", () => {
     await untilAutocomplete(editor);
     const stripped = editor.render(80).map(stripAnsi);
     expect(stripped.some((line) => line.includes("  (1/6 | 4 filtered)"))).toBe(true);
+  });
+
+  test("the filtered count shows below the popup even when the list does not scroll", async () => {
+    const items = Array.from({ length: 3 }, (_, index) => ({ value: `m-${index}`, label: `m-${index}` }));
+    const { editor } = bootEditor(fileGhostProvider(items, "/mo", 5));
+    for (const ch of "/mo") editor.handleInput(ch);
+    await untilAutocomplete(editor);
+    const stripped = editor.render(80).map(stripAnsi);
+    expect(stripped.some((line) => line.includes("  (1/3 | 5 filtered)"))).toBe(true);
   });
 
   test("the scroll info stays plain when no filter count is reported", async () => {
@@ -376,9 +420,10 @@ function fileGhostProvider(
       const line = lines[cursorLine] ?? "";
       const before = line.slice(0, cursorCol - completionPrefix.length);
       const after = line.slice(cursorCol);
+      const inserted = completionPrefix.startsWith("/") ? `/${item.value} ` : item.value;
       const next = [...lines];
-      next[cursorLine] = before + item.value + after;
-      return { lines: next, cursorLine, cursorCol: before.length + item.value.length };
+      next[cursorLine] = before + inserted + after;
+      return { lines: next, cursorLine, cursorCol: before.length + inserted.length };
     }),
   };
 }
