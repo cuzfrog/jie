@@ -68,14 +68,14 @@ class Agent {
 
 ## AgentOptions
 
-Constructor options for `Agent`. All optional. Jie sets `initialState` for system prompt, model, tools via `agent.state` after construction.
+Constructor options for `Agent`. `streamFn` is required; the rest are optional. Jie sets `initialState` for system prompt, model, tools via `agent.state` after construction.
 
 ```typescript
 interface AgentOptions {
   initialState?: Partial<Omit<AgentState, "pendingToolCalls" | "isStreaming" | "streamingMessage" | "errorMessage">>;
   convertToLlm?: (messages: AgentMessage[]) => Message[] | Promise<Message[]>;
   transformContext?: (messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]>;
-  streamFn?: StreamFn;
+  streamFn: StreamFn;
   getApiKey?: (provider: string) => Promise<string | undefined> | string | undefined;
   onPayload?: SimpleStreamOptions["onPayload"];
   onResponse?: SimpleStreamOptions["onResponse"];
@@ -92,7 +92,7 @@ interface AgentOptions {
 }
 ```
 
-**Jie's usage:** Jie sets `steeringMode: "all"`, `toolExecution: "sequential"`, and wires `beforeToolCall`, `afterToolCall`, `transformContext`, `convertToLlm` to bridge events and manage memory. `prepareNextTurn` is **not wired** in v1 — prompt injection uses `agent.prompt()` from the body's in-memory queue after `agent_end` (see `06-agent-model.md` "Subscription Model").
+**Jie's usage:** Jie passes `streamFn: streamSimple` from `@earendil-works/pi-ai/compat` (the full-provider stream function, same as pi coding-agent), sets `steeringMode: "all"`, `toolExecution: "sequential"`, and wires `beforeToolCall`, `afterToolCall`, `transformContext`, `convertToLlm` to bridge events and manage memory. `prepareNextTurn` is **not wired** in v1 — prompt injection uses `agent.prompt()` from the body's in-memory queue after `agent_end` (see `06-agent-model.md` "Subscription Model").
 
 ---
 
@@ -294,7 +294,7 @@ type AgentEvent =
 
 Hook functions wired at agent construction. Jie uses these for tool telemetry events.
 
-> **Note on the hook context (pi-agent-core 0.80.5).** The hook context shape is `{ assistantMessage, toolCall, args, context }`; the tool id and tool name are read from `ctx.toolCall.id` and `ctx.toolCall.name`. The `BeforeToolCallResult` shape is `{ block?, reason? }`.
+> **Note on the hook context (pi-agent-core 0.83.0).** The hook context shape is `{ assistantMessage, toolCall, args, context }`; the tool id and tool name are read from `ctx.toolCall.id` and `ctx.toolCall.name`. The `BeforeToolCallResult` shape is `{ block?, reason? }`.
 
 ```typescript
 interface BeforeToolCallContext {

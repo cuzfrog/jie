@@ -1,5 +1,6 @@
 import { Agent, type AgentMessage, type AgentEvent as PiAgentEvent, type AgentTool, type AgentToolResult, type ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Api, AssistantMessage, Model, StopReason, TextContent, UserMessage } from "@earendil-works/pi-ai";
+import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { ExecutionContext, ToolRegistry } from "../tools";
 import { Events, type AgentSender, type EventManager } from "../event";
@@ -57,6 +58,7 @@ export class JieAgentBody implements AgentBody {
     this.agent = createAgent({
       sessionId: this.sessionId,
       getApiKey: deps.getApiKey,
+      streamFn: streamSimple,
       transformContext: async (messages: AgentMessage[]) => messages,
       steeringMode: "all",
       followUpMode: "all",
