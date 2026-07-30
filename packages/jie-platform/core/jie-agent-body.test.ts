@@ -326,6 +326,7 @@ describe("JieAgentBody — agent construction wiring", () => {
     expect(passed.steeringMode).toBe("all");
     expect(passed.followUpMode).toBe("all");
     expect(passed.toolExecution).toBe("sequential");
+    expect(typeof passed.streamFn).toBe("function");
     expect(passed.convertToLlm).toBeUndefined();
   });
 
