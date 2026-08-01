@@ -1,9 +1,13 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { type StateStore } from "../../state";
+import { type MessageBlock, type StateStore } from "../../state";
 import { makeTuiState } from "../../test";
-import { ThinkingBlock } from "./thinking-block";
+import { ThinkingBlock, _formatThinkingDuration } from "./thinking-block";
 
 const stateStore = vi.mocked<StateStore>({ getState: vi.fn(), dispatch: vi.fn(), subscribe: vi.fn(() => () => undefined) });
+
+function thinking(text: string, durationMs?: number): MessageBlock {
+  return durationMs === undefined ? { kind: "thinking", text } : { kind: "thinking", text, durationMs };
+}
 
 describe("ThinkingBlock", () => {
   beforeEach(() => {
@@ -11,30 +15,60 @@ describe("ThinkingBlock", () => {
   });
 
   test("collapsed by default: only the dim label", () => {
-    const block = new ThinkingBlock("deep thought", stateStore);
+    const block = new ThinkingBlock(thinking("deep thought"), stateStore);
     expect(block.render(80)).toEqual(["\x1b[90mThinking...\x1b[39m"]);
   });
 
   test("expanded: label followed by dim wrapped text", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ thinkingExpanded: true }));
-    const block = new ThinkingBlock("deep thought", stateStore);
+    const block = new ThinkingBlock(thinking("deep thought"), stateStore);
     expect(block.render(80)).toEqual(["\x1b[90mThinking...\x1b[39m", "\x1b[90mdeep thought\x1b[39m"]);
   });
 
-  test("update replaces the streamed text", () => {
+  test("update replaces the streamed block", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ thinkingExpanded: true }));
-    const block = new ThinkingBlock("a", stateStore);
-    block.update("ab");
+    const block = new ThinkingBlock(thinking("a"), stateStore);
+    block.update(thinking("ab"));
     expect(block.render(80)[1]).toBe("\x1b[90mab\x1b[39m");
+  });
+
+  test("a completed block collapses to the elapsed-time label", () => {
+    const block = new ThinkingBlock(thinking("deep thought", 350), stateStore);
+    expect(block.render(80)).toEqual(["\x1b[90mThought for 350ms\x1b[39m"]);
+  });
+
+  test("a completed block expanded shows the elapsed-time label followed by the text", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ thinkingExpanded: true }));
+    const block = new ThinkingBlock(thinking("deep thought", 1500), stateStore);
+    expect(block.render(80)).toEqual(["\x1b[90mThought for 1.5s\x1b[39m", "\x1b[90mdeep thought\x1b[39m"]);
   });
 
   test("never renders a line wider than the given width (doRender guard)", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ thinkingExpanded: true }));
-    const block = new ThinkingBlock(`${"x".repeat(300)}${"中文🎉".repeat(40)}`, stateStore);
+    const block = new ThinkingBlock(thinking(`${"x".repeat(300)}${"中文🎉".repeat(40)}`), stateStore);
     for (const width of [13, 40, 61, 80, 139]) {
       for (const line of block.render(width)) {
         expect(visibleWidth(line)).toBeLessThanOrEqual(width);
       }
     }
+  });
+});
+
+describe("formatThinkingDuration", () => {
+  test("sub-second durations render as whole milliseconds", () => {
+    expect(_formatThinkingDuration(23)).toBe("23ms");
+    expect(_formatThinkingDuration(999)).toBe("999ms");
+  });
+
+  test("sub-minute durations render as seconds with one trimmed decimal", () => {
+    expect(_formatThinkingDuration(1000)).toBe("1s");
+    expect(_formatThinkingDuration(1234)).toBe("1.2s");
+    expect(_formatThinkingDuration(1500)).toBe("1.5s");
+    expect(_formatThinkingDuration(59949)).toBe("59.9s");
+  });
+
+  test("minute-scale durations render as minutes and seconds", () => {
+    expect(_formatThinkingDuration(60000)).toBe("1m 0s");
+    expect(_formatThinkingDuration(125000)).toBe("2m 5s");
   });
 });

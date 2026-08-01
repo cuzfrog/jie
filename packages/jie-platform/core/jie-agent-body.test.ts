@@ -1382,6 +1382,119 @@ describe("JieAgentBody — pi-agent event bridging", () => {
   });
 });
 
+describe("JieAgentBody — turn.start prompt payload", () => {
+  let h: Harness;
+
+  beforeEach(() => {
+    h = makeHarness();
+  });
+
+  test("turn_start after an immediate user ingress carries the raw prompt", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    h.subscribeSubject("agent.turn.start", (env) => turnStart.push(env));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "hello", "general-1"));
+    await flush();
+    h.fireEvent({ type: "turn_start" });
+    expect(turnStart).toHaveLength(1);
+    expect(turnStart[0]!.payload).toBe("hello");
+    body.stop();
+  });
+
+  test("the pending prompt is consumed once — a later turn_start carries null", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    h.subscribeSubject("agent.turn.start", (env) => turnStart.push(env));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "hello", "general-1"));
+    await flush();
+    h.fireEvent({ type: "turn_start" });
+    h.fireEvent({ type: "turn_start" });
+    expect(turnStart.map((env) => env.payload)).toEqual(["hello", null]);
+    body.stop();
+  });
+
+  test("turn_start after a custom-source ingress carries a null prompt", async () => {
+    const body = h.makeBody({ soul: makeSoul({ subscribe: ["task.researched"] }) });
+    await body.start();
+    const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    h.subscribeSubject("agent.turn.start", (env) => turnStart.push(env));
+    h.events.publish(Events.custom({ kind: "agent", teamId: "t1", agentKey: "researcher-1" }, "t1.task.researched", "report"));
+    await flush();
+    h.fireEvent({ type: "turn_start" });
+    expect(turnStart).toHaveLength(1);
+    expect(turnStart[0]!.payload).toBeNull();
+    body.stop();
+  });
+
+  test("queued ingress: the consuming turn_end hands the prompt to the next turn_start", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.turn.start", (env) => turnStart.push(env));
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "first queued", "general-1"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "second queued", "general-1"));
+    await flush();
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual(["first queued", "second queued"]);
+    h.state.isStreaming = false;
+    h.fireEvent({
+      type: "turn_end",
+      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
+      toolResults: [],
+    });
+    expect(h.followUp.mock.calls.length).toBe(1);
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual(["second queued"]);
+    h.fireEvent({ type: "turn_start" });
+    expect(turnStart[turnStart.length - 1]!.payload).toBe("first queued");
+    body.stop();
+  });
+
+  test("agent_end draining the queue hands the prompt to the next turn_start", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    h.subscribeSubject("agent.turn.start", (env) => turnStart.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "queued msg", "general-1"));
+    await flush();
+    h.state.isStreaming = false;
+    h.fireEvent({ type: "agent_end", messages: [] });
+    expect(h.followUp.mock.calls.length).toBe(1);
+    h.fireEvent({ type: "turn_start" });
+    expect(turnStart[turnStart.length - 1]!.payload).toBe("queued msg");
+    body.stop();
+  });
+
+  test("agent_end without a queue shift clears the pending prompt", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    h.subscribeSubject("agent.turn.start", (env) => turnStart.push(env));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "lost run", "general-1"));
+    await flush();
+    h.fireEvent({ type: "agent_end", messages: [] });
+    h.fireEvent({ type: "turn_start" });
+    expect(turnStart[turnStart.length - 1]!.payload).toBeNull();
+    body.stop();
+  });
+
+  test("queue snapshots carry the raw user text without the synthetic prefix", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "hello", "general-1"));
+    await flush();
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual(["hello"]);
+    body.stop();
+  });
+});
+
 describe("JieAgentBody — stop()", () => {
   test("stop() unsubscribes bus subscriptions registered via start()", async () => {
     const h = makeHarness();

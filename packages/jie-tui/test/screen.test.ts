@@ -115,7 +115,7 @@ describe("screen rendering", () => {
     try {
       harness.emit(TEAM_LOADED);
       await harness.vt.waitForRender();
-      harness.emit(Events.agentTurnStart(AGENT_SENDER));
+      harness.emit(Events.agentTurnStart(AGENT_SENDER, null));
       harness.emit(Events.agentStreamChunk(AGENT_SENDER, 1, 1, "text", "hello screen world"));
       await settle(harness);
       const screen = harness.vt.getViewport().join("\n");
@@ -131,7 +131,7 @@ describe("screen rendering", () => {
     try {
       harness.emit(TEAM_LOADED);
       await harness.vt.waitForRender();
-      harness.emit(Events.agentTurnStart(AGENT_SENDER));
+      harness.emit(Events.agentTurnStart(AGENT_SENDER, null));
       harness.emit(Events.agentStreamChunk(AGENT_SENDER, 1, 1, "text", "```ts\nconst x = 1;\n```"));
       await settle(harness);
       const styled = harness.vt.getStyledViewport().join("\n");
@@ -223,7 +223,7 @@ describe("screen rendering", () => {
     try {
       harness.emit(TEAM_LOADED);
       await harness.vt.waitForRender();
-      harness.emit(Events.agentTurnStart(AGENT_SENDER));
+      harness.emit(Events.agentTurnStart(AGENT_SENDER, null));
       harness.emit(Events.agentStreamChunk(AGENT_SENDER, 1, 1, "text", "x".repeat(500)));
       harness.emit(Events.agentToolCall(AGENT_SENDER, "c1", "bash", "y".repeat(500)));
       harness.emit(Events.agentToolResult(
@@ -256,7 +256,7 @@ describe("screen rendering", () => {
     try {
       harness.emit(TEAM_LOADED);
       await harness.vt.waitForRender();
-      harness.emit(Events.agentTurnStart(AGENT_SENDER));
+      harness.emit(Events.agentTurnStart(AGENT_SENDER, null));
       await settle(harness);
       const busy = harness.vt.getViewport().map(stripAnsi).join("\n");
       expect(busy).toContain("Working…");
@@ -267,7 +267,7 @@ describe("screen rendering", () => {
       expect(interrupted).toContain("Interrupted");
       expect(interrupted).not.toContain("Working…");
       expect(harness.stateStore.getState().interruptedAgentId).toBe("my-team:general-1");
-      harness.emit(Events.agentTurnStart(AGENT_SENDER));
+      harness.emit(Events.agentTurnStart(AGENT_SENDER, null));
       await settle(harness);
       const resumed = harness.vt.getViewport().map(stripAnsi).join("\n");
       expect(resumed).toContain("Working…");
@@ -295,7 +295,7 @@ describe("screen rendering", () => {
       const withTeam = harness.vt.getViewport().map(stripAnsi).join("\n");
       expect(withTeam).toContain("Commands");
       expect(withTeam).toContain("Shortcuts");
-      harness.emit(Events.agentTurnStart(AGENT_SENDER));
+      harness.emit(Events.agentTurnStart(AGENT_SENDER, null));
       harness.emit(Events.agentStreamChunk(AGENT_SENDER, 1, 1, "text", "hello splash"));
       await settle(harness);
       const after = harness.vt.getViewport().map(stripAnsi).join("\n");

@@ -76,7 +76,7 @@ describe("TuiState.isBusy", () => {
     loadDemoTeam(store);
     store.dispatch(
       Actions.receiveEvent(
-        Events.agentTurnStart({ kind: "agent", teamId: "demo", agentKey: "general-1" }),
+        Events.agentTurnStart({ kind: "agent", teamId: "demo", agentKey: "general-1" }, null),
       ),
     );
     expect(TuiState.isBusy(store.getState())).toBe(true);
@@ -93,7 +93,7 @@ describe("TuiState.isInterrupted", () => {
     const store = new StateStoreImpl();
     loadDemoTeam(store);
     const sender = { kind: "agent", teamId: "demo", agentKey: "general-1" } as const;
-    store.dispatch(Actions.receiveEvent(Events.agentTurnStart(sender)));
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart(sender, null)));
     store.dispatch(Actions.receiveEvent(Events.agentIdle(sender, "aborted")));
     expect(TuiState.isInterrupted(store.getState())).toBe(true);
   });
@@ -102,7 +102,7 @@ describe("TuiState.isInterrupted", () => {
     const store = new StateStoreImpl();
     loadDemoTeam(store);
     const sender = { kind: "agent", teamId: "demo", agentKey: "general-1" } as const;
-    store.dispatch(Actions.receiveEvent(Events.agentTurnStart(sender)));
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart(sender, null)));
     store.dispatch(Actions.receiveEvent(Events.agentIdle(sender, "aborted")));
     store.dispatch(Actions.submitEditorText("again"));
     expect(TuiState.isInterrupted(store.getState())).toBe(false);
@@ -118,7 +118,7 @@ describe("TuiState.hasChatContent", () => {
   test("returns true once an agent has a current turn", () => {
     const store = new StateStoreImpl();
     loadDemoTeam(store);
-    store.dispatch(Actions.receiveEvent(Events.agentTurnStart({ kind: "agent", teamId: "demo", agentKey: "general-1" })));
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart({ kind: "agent", teamId: "demo", agentKey: "general-1" }, null)));
     expect(TuiState.hasChatContent(store.getState())).toBe(true);
   });
 

@@ -15,7 +15,7 @@ describe("StateStore", () => {
     store.subscribe((action) => {
       if (action.type === Actions.submitEditorText("").type) {
         store.dispatch(
-          Actions.receiveEvent(Events.userPrompt({ kind: "user" }, "my-team", "hello", "general-1")),
+          Actions.receiveEvent(Events.agentTurnStart({ kind: "agent", teamId: "my-team", agentKey: "general-1" }, "hello")),
         );
         return Promise.resolve();
       }

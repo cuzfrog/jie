@@ -147,12 +147,12 @@ function subscribeToBus(platform: JiePlatform, onEvent: (event: AnyEventEnvelope
   const unsubscribes: Array<() => void> = [
     platform.subscribe("system.team.loaded", onEvent),
     platform.subscribe("system.error", onEvent),
-    platform.subscribe("user.prompt", onEvent),
     platform.subscribe("agent.model.assigned", onEvent),
     platform.subscribe("agent.prompt.queue.update", onEvent),
     platform.subscribe("agent.turn.start", onEvent),
     platform.subscribe("agent.idle", onEvent),
     platform.subscribe("agent.stream.chunk", onEvent),
+    platform.subscribe("agent.stream.end", onEvent),
     platform.subscribe("agent.tool.call", onEvent),
     platform.subscribe("agent.tool.result", onEvent),
     platform.subscribe("agent.usage", onEvent),

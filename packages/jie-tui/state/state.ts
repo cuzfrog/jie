@@ -24,6 +24,7 @@ export interface MessageCard {
 export interface MessageBlock {
   readonly kind: "text" | "thinking";
   readonly text: string;
+  readonly durationMs?: number;
 }
 
 export interface MessageTurn {

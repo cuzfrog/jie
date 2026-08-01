@@ -39,7 +39,8 @@ export class JieAgentBody implements AgentBody {
   private readonly agent: Agent;
   private readonly stream: StreamPublisher;
   private readonly sender: AgentSender;
-  private readonly queue: AgentMessage[] = [];
+  private readonly queue: QueuedPrompt[] = [];
+  private pendingTurnPrompt: string | null = null;
   private readonly unsubscribers: Array<() => void> = [];
   private readonly externalCleanups: Array<() => void> = [];
   private restored: ReadonlyArray<AgentMessage> | null = null;
@@ -190,7 +191,8 @@ export class JieAgentBody implements AgentBody {
 
     while (this.queue.length > 0) {
       const next = this.queue.shift()!;
-      await this.agent.prompt(next);
+      this.pendingTurnPrompt = next.userText;
+      await this.agent.prompt(next.message);
     }
   }
 
@@ -205,14 +207,16 @@ export class JieAgentBody implements AgentBody {
     const agentSender = this.sender;
     switch (event.type) {
       case "turn_start":
-        this.eventManager.publish(Events.agentTurnStart(agentSender));
+        this.eventManager.publish(Events.agentTurnStart(agentSender, this.pendingTurnPrompt));
+        this.pendingTurnPrompt = null;
         return;
       case "turn_end": {
         if (this.queue.length > 0) {
           const next = this.queue.shift()!;
-          this.agent.followUp(next);
+          this.pendingTurnPrompt = next.userText;
+          this.agent.followUp(next.message);
         }
-        this.eventManager.publish(Events.agentPromptQueueUpdate(agentSender, this.queue.map(userPromptText)));
+        this.publishQueueUpdate(agentSender);
         return;
       }
       case "agent_end": {
@@ -224,9 +228,12 @@ export class JieAgentBody implements AgentBody {
         void this.hookRunner.stop({ identity: this.hookIdentity });
         if (this.queue.length > 0) {
           const next = this.queue.shift()!;
-          this.agent.followUp(next);
+          this.pendingTurnPrompt = next.userText;
+          this.agent.followUp(next.message);
+        } else {
+          this.pendingTurnPrompt = null;
         }
-        this.eventManager.publish(Events.agentPromptQueueUpdate(agentSender, this.queue.map(userPromptText)));
+        this.publishQueueUpdate(agentSender);
         return;
       }
       case "message_start":
@@ -293,15 +300,15 @@ export class JieAgentBody implements AgentBody {
       return;
     }
     const prompt = outcome.additionalContext === null ? payload.prompt : `${payload.prompt}\n\n${outcome.additionalContext}`;
-    this.dispatchIngress("user", null, prompt);
+    this.dispatchIngress("user", null, prompt, payload.prompt);
   }
 
   private ingestCustom(topic: string, sender: AgentSender, payload: { message: string; truncated: boolean }): void {
     if (sender.agentKey === this.agentKey) return;
-    this.dispatchIngress(topic, sender.agentKey, payload.message);
+    this.dispatchIngress(topic, sender.agentKey, payload.message, null);
   }
 
-  private dispatchIngress(topic: string, source: string | null, prompt: string): void {
+  private dispatchIngress(topic: string, source: string | null, prompt: string, userText: string | null): void {
     const synthetic = source !== null
       ? `[${source} on '${topic}']: ${prompt}`
       : `[user]: ${prompt}`;
@@ -311,11 +318,17 @@ export class JieAgentBody implements AgentBody {
       timestamp: Date.now(),
     };
     if (this.agent.state.isStreaming) {
-      this.queue.push(message);
-      this.eventManager.publish(Events.agentPromptQueueUpdate(this.sender, this.queue.map(userPromptText)));
+      this.queue.push({ message, userText });
+      this.publishQueueUpdate(this.sender);
     } else {
+      this.pendingTurnPrompt = userText;
       void this.agent.prompt(message);
     }
+  }
+
+  private publishQueueUpdate(sender: AgentSender): void {
+    const prompts = this.queue.map((entry) => entry.userText ?? userPromptText(entry.message));
+    this.eventManager.publish(Events.agentPromptQueueUpdate(sender, prompts));
   }
 
   private interruptActiveRun(): void {
@@ -393,6 +406,11 @@ function jieToolResultOf(piResult: AgentToolResult<unknown>): JieToolResult {
     details: piResult.details,
     terminate: piResult.terminate ?? false,
   };
+}
+
+interface QueuedPrompt {
+  readonly message: AgentMessage;
+  readonly userText: string | null;
 }
 
 function userPromptText(message: AgentMessage): string {

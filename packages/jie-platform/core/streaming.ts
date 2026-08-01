@@ -18,6 +18,8 @@ export class StreamPublisherImpl implements StreamPublisher {
   private seq = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private totalChunks = 0;
+  private thinkingStartedAt: number | null = null;
+  private thinkingMs: number | null = null;
 
   constructor(
     private readonly events: EventManager,
@@ -30,12 +32,18 @@ export class StreamPublisherImpl implements StreamPublisher {
     this.totalChunks = 0;
     this.buffer = "";
     this.currentBlockType = null;
+    this.thinkingStartedAt = null;
+    this.thinkingMs = null;
     this.clearTimer();
   }
 
   append(blockType: BlockType, delta: string): void {
     if (this.currentBlockType !== null && this.currentBlockType !== blockType) {
+      this.finalizeThinking();
       this.flush();
+    }
+    if (blockType === "thinking" && this.thinkingStartedAt === null) {
+      this.thinkingStartedAt = Date.now();
     }
     this.currentBlockType = blockType;
     this.buffer += delta;
@@ -49,9 +57,17 @@ export class StreamPublisherImpl implements StreamPublisher {
   }
 
   endStream(): { streamId: number; totalChunks: number } {
+    this.finalizeThinking();
     this.flush();
-    this.events.publish(Events.agentStreamEnd(this.sender, this.streamId, this.totalChunks));
+    this.events.publish(Events.agentStreamEnd(this.sender, this.streamId, this.totalChunks, this.thinkingMs));
     return { streamId: this.streamId, totalChunks: this.totalChunks };
+  }
+
+  private finalizeThinking(): void {
+    if (this.thinkingStartedAt !== null) {
+      this.thinkingMs = (this.thinkingMs ?? 0) + (Date.now() - this.thinkingStartedAt);
+      this.thinkingStartedAt = null;
+    }
   }
 
   private flush(): void {

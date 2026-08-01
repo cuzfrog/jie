@@ -3,6 +3,7 @@ import { Actions, TuiState, type Action, type StateStore } from "../state";
 import type { ChatSync } from "../sync";
 import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, WORKING_LABEL, style } from "./themes";
 import { StatusLine } from "./status-line";
+import { QueuedPrompts } from "./queued-prompts";
 import { WelcomeBanner } from "./welcome-banner";
 import { TeamPanel } from "./team-panel";
 
@@ -48,6 +49,7 @@ export class TuiViewImpl implements TuiView {
     tui.addChild(this.workingSlot);
     tui.addChild(new WelcomeBanner(stateStore));
     tui.addChild(new StatusLine(stateStore));
+    tui.addChild(new QueuedPrompts(stateStore));
     tui.addChild(editor);
     tui.addChild(footer);
     tui.addChild(new TeamPanel(stateStore));

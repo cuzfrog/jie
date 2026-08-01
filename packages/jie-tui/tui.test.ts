@@ -232,7 +232,7 @@ describe("bootTui — working indicator", () => {
     const started = harness!.tui.start();
     await waitFrames(30);
     harness!.platform.emit(TEAM_LOADED);
-    harness!.platform.emit(Events.agentTurnStart({ kind: "agent", teamId: "my-team", agentKey: "general-1" }));
+    harness!.platform.emit(Events.agentTurnStart({ kind: "agent", teamId: "my-team", agentKey: "general-1" }, null));
     await waitFrames(60);
     expect(frames.join("")).toContain("Working");
     harness!.tui.stop();

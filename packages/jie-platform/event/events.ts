@@ -3,7 +3,7 @@ import type { TeamInfo } from "../types";
 
 type EventDef<S extends Sender, P = null> = { sender: S; payload: P };
 type EventDefinitions = {
-  "agent.turn.start": EventDef<AgentSender>;
+  "agent.turn.start": EventDef<AgentSender, string | null>;
   "agent.idle": EventDef<AgentSender, StopReason>;
   "agent.tool.call": EventDef<AgentSender, {
     tool_call_id: string;
@@ -26,7 +26,7 @@ type EventDefinitions = {
     block_type: "text" | "thinking";
     text: string;
   }>;
-  "agent.stream.end": EventDef<AgentSender, { stream_id: number; total_chunks: number }>;
+  "agent.stream.end": EventDef<AgentSender, { stream_id: number; total_chunks: number; thinking_ms: number | null }>;
   "agent.usage": EventDef<AgentSender, { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number }>;
   "agent.prompt.queue.update": EventDef<AgentSender, { prompts: string[] }>;
   "agent.model.assigned": EventDef<AgentSender, { provider: string; model: string; effort: "off" | "low" | "medium" | "high" | "max" }>;
@@ -60,16 +60,16 @@ export const EVENT_TEXT_TRUNCATION_BYTES: number = 4 * 1024;
 const EVENT_TEXT_TRUNCATION_MARKER = "...[%d chars truncated]...";
 
 export const Events = {
-  agentTurnStart: (sender: AgentSender): EventEnvelope<"agent.turn.start"> =>
-    createEvent("agent.turn.start", sender),
+  agentTurnStart: (sender: AgentSender, prompt: string | null): EventEnvelope<"agent.turn.start"> =>
+    createEvent("agent.turn.start", sender, prompt),
   agentIdle: (sender: AgentSender, stopReason: StopReason): EventEnvelope<"agent.idle"> =>
     createEvent("agent.idle", sender, stopReason),
   agentToolCall,
   agentToolResult,
   agentStreamChunk: (sender: AgentSender, stream_id: number, seq: number, block_type: "text" | "thinking", text: string): EventEnvelope<"agent.stream.chunk"> =>
     createEvent("agent.stream.chunk", sender, { stream_id, seq, block_type, text }),
-  agentStreamEnd: (sender: AgentSender, stream_id: number, total_chunks: number): EventEnvelope<"agent.stream.end"> =>
-    createEvent("agent.stream.end", sender, { stream_id, total_chunks }),
+  agentStreamEnd: (sender: AgentSender, stream_id: number, total_chunks: number, thinking_ms: number | null): EventEnvelope<"agent.stream.end"> =>
+    createEvent("agent.stream.end", sender, { stream_id, total_chunks, thinking_ms }),
   agentUsage: (sender: AgentSender, usage: { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number }): EventEnvelope<"agent.usage"> =>
     createEvent("agent.usage", sender, usage),
   agentPromptQueueUpdate: (sender: AgentSender, prompts: string[]): EventEnvelope<"agent.prompt.queue.update"> =>

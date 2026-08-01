@@ -1,5 +1,5 @@
 import { Markdown, visibleWidth, type Component } from "@earendil-works/pi-tui";
-import type { MessageCard, MessageTurn, StateStore } from "../../state";
+import type { MessageBlock, MessageCard, MessageTurn, StateStore } from "../../state";
 import { ASSISTANT_PREFIX, jieMarkdownTheme, style } from "../themes";
 import { ThinkingBlock } from "./thinking-block";
 import { ToolCard } from "./tool-card";
@@ -35,7 +35,7 @@ export class AssistantMessage implements Component {
     for (const block of turn.blocks) {
       if (block.text === "") continue;
       if (block.kind === "thinking") {
-        lines.push(...this.thinkingAt(thinkingOrdinal, block.text).render(w));
+        lines.push(...this.thinkingAt(thinkingOrdinal, block).render(w));
         thinkingOrdinal += 1;
         continue;
       }
@@ -73,14 +73,14 @@ export class AssistantMessage implements Component {
     return existing;
   }
 
-  private thinkingAt(ordinal: number, text: string): ThinkingBlock {
+  private thinkingAt(ordinal: number, block: MessageBlock): ThinkingBlock {
     const existing = this.thinkings[ordinal];
     if (existing === undefined) {
-      const created = new ThinkingBlock(text, this.stateStore);
+      const created = new ThinkingBlock(block, this.stateStore);
       this.thinkings.push(created);
       return created;
     }
-    existing.update(text);
+    existing.update(block);
     return existing;
   }
 

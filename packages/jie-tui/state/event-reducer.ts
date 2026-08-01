@@ -8,13 +8,13 @@ export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
   switch (event.type) {
     case "system.team.loaded": return reduceTeamLoaded(state, event);
     case "system.error": return reduceSystemError(state, event);
-    case "user.prompt": return reduceUserPrompt(state, event);
     case "agent.model.assigned": return reduceModelAssigned(state, event);
     case "agent.prompt.queue.update": return reduceQueueUpdate(state, event);
     case "agent.turn.start": return reduceTurnStart(state, event);
     case "agent.idle": return reduceIdle(state, event);
     case "agent.usage": return reduceUsage(state, event);
     case "agent.stream.chunk": return reduceStreamChunk(state, event);
+    case "agent.stream.end": return reduceStreamEnd(state, event);
     case "agent.tool.call": return reduceToolCall(state, event);
     case "agent.tool.result": return reduceToolResult(state, event);
     default: return state;
@@ -43,27 +43,6 @@ function formatSystemError(stopReason: string | null, error: string): string {
   return stopReason === null ? error : `[stop: ${stopReason}] ${error}`;
 }
 
-function reduceUserPrompt(state: TuiState, event: AnyEventEnvelope): TuiState {
-  if (event.type !== "user.prompt") return state;
-  if (state.teamId === null) return state;
-  if (event.payload.teamId !== state.teamId) return state;
-  const agentId = composeAgentId(event.payload.teamId, event.payload.agentKey);
-  const existing = state.agents.get(agentId);
-  if (existing === undefined) return state;
-  const newAgents = new Map(state.agents);
-  const turn = existing.currentTurn;
-  if (turnIsPopulated(turn)) {
-    const nextTurn = freshTurn(event.payload.prompt, state.nextEntrySeq);
-    const contextTokensUsed = estimateContextTokens([...existing.history, turn!], nextTurn);
-    newAgents.set(agentId, { ...existing, history: [...existing.history, turn!], currentTurn: nextTurn, contextTokensUsed });
-    return { ...state, agents: newAgents, nextEntrySeq: state.nextEntrySeq + 1 };
-  }
-  const nextTurn = freshTurn(event.payload.prompt, state.nextEntrySeq);
-  const contextTokensUsed = estimateContextTokens(existing.history, nextTurn);
-  newAgents.set(agentId, { ...existing, currentTurn: nextTurn, contextTokensUsed });
-  return { ...state, agents: newAgents, nextEntrySeq: state.nextEntrySeq + 1 };
-}
-
 function reduceModelAssigned(state: TuiState, event: AnyEventEnvelope): TuiState {
   const resolved = resolveAgent(state, event);
   if (resolved === null) return state;
@@ -84,15 +63,23 @@ function reduceQueueUpdate(state: TuiState, event: AnyEventEnvelope): TuiState {
 function reduceTurnStart(state: TuiState, event: AnyEventEnvelope): TuiState {
   const resolved = resolveAgent(state, event);
   if (resolved === null) return state;
+  if (event.type !== "agent.turn.start") return state;
   const { agentId, agent } = resolved;
+  const prompt = event.payload ?? "";
   const seq = state.nextEntrySeq;
-  const rotated = rotateTurnIfPopulated(agent, seq);
-  const created = rotated !== agent || rotated.currentTurn === null;
-  const currentTurn = rotated.currentTurn ?? freshTurn("", seq);
-  const nextEntrySeq = created ? seq + 1 : seq;
-  const next: AgentUiState = { ...rotated, status: "busy", currentTurn };
   const interruptedAgentId = state.interruptedAgentId === agentId ? null : state.interruptedAgentId;
-  return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId, nextEntrySeq });
+  const turn = agent.currentTurn;
+  if (turn !== null && !turnIsPopulated(turn) && turn.userPrompt === "") {
+    const currentTurn = { ...turn, userPrompt: prompt };
+    const contextTokensUsed = estimateContextTokens(agent.history, currentTurn);
+    const next: AgentUiState = { ...agent, status: "busy", currentTurn, contextTokensUsed };
+    return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId });
+  }
+  const history = turn === null ? agent.history : [...agent.history, turn];
+  const currentTurn = freshTurn(prompt, seq);
+  const contextTokensUsed = estimateContextTokens(history, currentTurn);
+  const next: AgentUiState = { ...agent, status: "busy", history, currentTurn, contextTokensUsed };
+  return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId, nextEntrySeq: seq + 1 });
 }
 
 function reduceIdle(state: TuiState, event: AnyEventEnvelope): TuiState {
@@ -134,6 +121,29 @@ function reduceStreamChunk(state: TuiState, event: AnyEventEnvelope): TuiState {
   const contextTokensUsed = estimateContextTokens(agent.history, nextTurn);
   const next: AgentUiState = { ...agent, currentTurn: nextTurn, contextTokensUsed };
   return withAgent(state, agentId, next);
+}
+
+function reduceStreamEnd(state: TuiState, event: AnyEventEnvelope): TuiState {
+  const resolved = resolveAgent(state, event);
+  if (resolved === null) return state;
+  if (event.type !== "agent.stream.end") return state;
+  const { agentId, agent } = resolved;
+  const turn = agent.currentTurn;
+  if (turn === null) return state;
+  const { stream_id, thinking_ms } = event.payload;
+  if (thinking_ms === null) return state;
+  if (turn.streamId !== stream_id) return state;
+  const blocks = [...turn.blocks];
+  let stamped = false;
+  for (let i = blocks.length - 1; i >= 0; i -= 1) {
+    const block = blocks[i]!;
+    if (block.kind !== "thinking" || block.durationMs !== undefined) continue;
+    blocks[i] = { ...block, durationMs: thinking_ms };
+    stamped = true;
+  }
+  if (!stamped) return state;
+  const nextTurn = { ...turn, blocks };
+  return withAgent(state, agentId, { ...agent, currentTurn: nextTurn });
 }
 
 function reduceToolCall(state: TuiState, event: AnyEventEnvelope): TuiState {
@@ -208,13 +218,6 @@ function withAgent(state: TuiState, agentId: AgentId, agent: AgentUiState, extra
 
 function freshTurn(userPrompt: string, seq: number): MessageTurn {
   return { userPrompt, cards: [], blocks: [], streamId: null, seq };
-}
-
-function rotateTurnIfPopulated(agent: AgentUiState, seq: number): AgentUiState {
-  if (agent.currentTurn === null) return agent;
-  const turn = agent.currentTurn;
-  if (!turnIsPopulated(turn)) return agent;
-  return { ...agent, history: [...agent.history, turn], currentTurn: { userPrompt: "", cards: [], blocks: [], streamId: null, seq } };
 }
 
 function turnIsPopulated(turn: MessageTurn | null): boolean {

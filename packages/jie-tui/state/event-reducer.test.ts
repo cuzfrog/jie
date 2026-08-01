@@ -39,12 +39,12 @@ function twoAgentState(): TuiState {
 }
 
 function promptedState(): TuiState {
-  return reduce(loadedState(), Events.userPrompt(USER_SENDER, "my-team", "hi", "general-1"));
+  return reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
 }
 
 function interruptedState(): TuiState {
   let state = loadedState();
-  state = reduce(state, Events.agentTurnStart(AGENT_SENDER));
+  state = reduce(state, Events.agentTurnStart(AGENT_SENDER, null));
   return reduce(state, Events.agentIdle(AGENT_SENDER, "aborted"));
 }
 
@@ -160,26 +160,11 @@ describe("Actions.switchTeam", () => {
   });
 });
 
-describe("reduceUserPrompt", () => {
-  test("starts a fresh turn when none is in flight", () => {
-    const state = reduce(loadedState(), Events.userPrompt(USER_SENDER, "my-team", "hello", "general-1"));
-    expect(state.agents.get("my-team:general-1")?.currentTurn?.userPrompt).toBe("hello");
-  });
-
-  test("assigns the next seq to the new turn and advances nextEntrySeq", () => {
-    const state = reduce(loadedState(), Events.userPrompt(USER_SENDER, "my-team", "hello", "general-1"));
-    expect(state.agents.get("my-team:general-1")?.currentTurn?.seq).toBe(0);
-    expect(state.nextEntrySeq).toBe(1);
-  });
-
-  test("rotating a populated turn numbers the new turn after it", () => {
-    let state = reduce(loadedState(), Events.userPrompt(USER_SENDER, "my-team", "first", "general-1"));
-    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "answer"));
-    state = reduce(state, Events.userPrompt(USER_SENDER, "my-team", "second", "general-1"));
-    const agent = state.agents.get("my-team:general-1");
-    expect(agent?.history[0]?.seq).toBe(0);
-    expect(agent?.currentTurn?.seq).toBe(1);
-    expect(state.nextEntrySeq).toBe(2);
+describe("user.prompt", () => {
+  test("is not reduced — turns are created by agent.turn.start", () => {
+    const loaded = loadedState();
+    const state = reduce(loaded, Events.userPrompt(USER_SENDER, "my-team", "hello", "general-1"));
+    expect(state).toBe(loaded);
   });
 });
 
@@ -241,37 +226,80 @@ describe("reduceQueueUpdate", () => {
 
 describe("reduceTurnStart", () => {
   test("sets focused agent status to busy", () => {
-    const state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER));
+    const state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, null));
     expect(state.agents.get("my-team:general-1")?.status).toBe("busy");
   });
 
   test("clears the error banner when the next turn starts", () => {
     let state = loadedState();
     state = { ...state, errorBanner: "No model" };
-    const state2 = reduce(state, Events.agentTurnStart(AGENT_SENDER));
+    const state2 = reduce(state, Events.agentTurnStart(AGENT_SENDER, null));
     expect(state2.errorBanner).toBeNull();
     expect(state2.agents.get("my-team:general-1")?.status).toBe("busy");
   });
 
   test("opens an empty turn so stream chunks after a prompt-less turn.start are captured", () => {
-    const state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER));
+    const state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, null));
     const agent = state.agents.get("my-team:general-1");
     expect(agent?.currentTurn).toEqual({ userPrompt: "", cards: [], blocks: [], streamId: null, seq: 0 });
     const state2 = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "hello"));
     expect(state2.agents.get("my-team:general-1")?.currentTurn?.blocks).toEqual([{ kind: "text", text: "hello" }]);
   });
 
-  test("reuses the prompt's turn when turn.start follows user.prompt (no seq consumed)", () => {
-    let state = reduce(loadedState(), Events.userPrompt(USER_SENDER, "my-team", "hello", "general-1"));
-    state = reduce(state, Events.agentTurnStart(AGENT_SENDER));
+  test("creates the turn with the event's prompt", () => {
+    const state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hello"));
+    expect(state.agents.get("my-team:general-1")?.currentTurn?.userPrompt).toBe("hello");
     expect(state.agents.get("my-team:general-1")?.currentTurn?.seq).toBe(0);
     expect(state.nextEntrySeq).toBe(1);
   });
 
-  test("rotating a populated turn on the next turn.start assigns the following seq", () => {
-    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER));
+  test("a prompt-bearing turn.start on a populated turn rotates it", () => {
+    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "first"));
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "answer"));
-    state = reduce(state, Events.agentTurnStart(AGENT_SENDER));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, "second"));
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.history[0]?.userPrompt).toBe("first");
+    expect(agent?.currentTurn?.userPrompt).toBe("second");
+    expect(agent?.currentTurn?.seq).toBe(1);
+    expect(state.nextEntrySeq).toBe(2);
+  });
+
+  test("a prompt-bearing turn.start on an unpopulated prompted turn rotates it (no clobber)", () => {
+    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "first"));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, "second"));
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.history[0]?.userPrompt).toBe("first");
+    expect(agent?.currentTurn?.userPrompt).toBe("second");
+  });
+
+  test("turn.start adopts an unpopulated empty-prompt turn without consuming seq", () => {
+    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, null));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, "queued"));
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.currentTurn?.userPrompt).toBe("queued");
+    expect(agent?.currentTurn?.seq).toBe(0);
+    expect(state.nextEntrySeq).toBe(1);
+  });
+
+  test("three prompts fired in a row each keep their own turn (no prompt lost)", () => {
+    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "P1"));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "text", "resp1"));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, "P2"));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 2, 0, "text", "resp2"));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, "P3"));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 3, 0, "text", "resp3"));
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.history.map((turn) => turn.userPrompt)).toEqual(["P1", "P2"]);
+    expect(agent?.currentTurn?.userPrompt).toBe("P3");
+    expect(agent?.history[0]?.blocks).toEqual([{ kind: "text", text: "resp1" }]);
+    expect(agent?.history[1]?.blocks).toEqual([{ kind: "text", text: "resp2" }]);
+    expect(agent?.currentTurn?.blocks).toEqual([{ kind: "text", text: "resp3" }]);
+  });
+
+  test("rotating a populated turn on the next turn.start assigns the following seq", () => {
+    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, null));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "answer"));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, null));
     const agent = state.agents.get("my-team:general-1");
     expect(agent?.history[0]?.seq).toBe(0);
     expect(agent?.currentTurn?.seq).toBe(1);
@@ -279,7 +307,7 @@ describe("reduceTurnStart", () => {
   });
 
   test("records tool calls after a prompt-less turn.start", () => {
-    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER));
+    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, null));
     state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
     const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
     expect(card?.kind).toBe("toolCall");
@@ -289,21 +317,21 @@ describe("reduceTurnStart", () => {
   test("rejects events from a foreign team (cross-team guard)", () => {
     const state = loadedState();
     const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
-    const state2 = reduce(state, Events.agentTurnStart(foreign));
+    const state2 = reduce(state, Events.agentTurnStart(foreign, null));
     expect(state2).toBe(state);
   });
 
   test("clears interruptedAgentId when the interrupted agent starts its next turn", () => {
-    const state = reduce(interruptedState(), Events.agentTurnStart(AGENT_SENDER));
+    const state = reduce(interruptedState(), Events.agentTurnStart(AGENT_SENDER, null));
     expect(state.interruptedAgentId).toBeNull();
   });
 
   test("keeps interruptedAgentId when a different agent starts a turn", () => {
     let state = twoAgentState();
-    state = reduce(state, Events.agentTurnStart(MANAGER_SENDER));
+    state = reduce(state, Events.agentTurnStart(MANAGER_SENDER, null));
     state = reduce(state, Events.agentIdle(MANAGER_SENDER, "aborted"));
     expect(state.interruptedAgentId).toBe("my-team:manager-1");
-    state = reduce(state, Events.agentTurnStart(WORKER_SENDER));
+    state = reduce(state, Events.agentTurnStart(WORKER_SENDER, null));
     expect(state.interruptedAgentId).toBe("my-team:manager-1");
   });
 });
@@ -311,7 +339,7 @@ describe("reduceTurnStart", () => {
 describe("reduceIdle", () => {
   test("sets status idle and stamps lastStopReason", () => {
     let state = loadedState();
-    state = reduce(state, Events.agentTurnStart(AGENT_SENDER));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, null));
     const state2 = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
     const agent = state2.agents.get("my-team:general-1");
     expect(agent?.status).toBe("idle");
@@ -320,7 +348,7 @@ describe("reduceIdle", () => {
 
   test("keeps a populated currentTurn for the next turn to rotate (tui-state.md)", () => {
     let state = loadedState();
-    state = reduce(state, Events.agentTurnStart(AGENT_SENDER));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, null));
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "answer"));
     state = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
     const agent = state.agents.get("my-team:general-1");
@@ -343,14 +371,14 @@ describe("reduceIdle", () => {
 
   test("leaves interruptedAgentId null when the focused agent idles with a normal stop", () => {
     let state = loadedState();
-    state = reduce(state, Events.agentTurnStart(AGENT_SENDER));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, null));
     state = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
     expect(state.interruptedAgentId).toBeNull();
   });
 
   test("leaves interruptedAgentId null when a non-focused agent idles aborted", () => {
     let state = twoAgentState();
-    state = reduce(state, Events.agentTurnStart(WORKER_SENDER));
+    state = reduce(state, Events.agentTurnStart(WORKER_SENDER, null));
     state = reduce(state, Events.agentIdle(WORKER_SENDER, "aborted"));
     expect(state.interruptedAgentId).toBeNull();
   });
@@ -372,7 +400,7 @@ describe("reduceUsage", () => {
 
   test("agent.usage overrides prior estimate-based contextTokensUsed", () => {
     let state = loadedState();
-    state = reduce(state, Events.userPrompt(USER_SENDER, "my-team", "hello", "general-1"));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, "hello"));
     const before = state.agents.get("my-team:general-1")?.contextTokensUsed ?? 0;
     const state2 = reduce(state, Events.agentUsage(AGENT_SENDER, {
       input: 10,
@@ -416,8 +444,7 @@ describe("reduceUsage", () => {
 describe("reduceIdle after agent.usage", () => {
   test("agent.idle preserves the precise contextTokensUsed set by a prior agent.usage", () => {
     let state = loadedState();
-    state = reduce(state, Events.userPrompt(USER_SENDER, "my-team", "hi", "general-1"));
-    state = reduce(state, Events.agentTurnStart(AGENT_SENDER));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, "hi"));
     state = reduce(state, Events.agentUsage(AGENT_SENDER, {
       input: 10, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 480,
     }));
@@ -429,8 +456,7 @@ describe("reduceIdle after agent.usage", () => {
 
   test("agent.idle falls back to the estimator when no agent.usage has fired yet", () => {
     let state = loadedState();
-    state = reduce(state, Events.userPrompt(USER_SENDER, "my-team", "hi", "general-1"));
-    state = reduce(state, Events.agentTurnStart(AGENT_SENDER));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, "hi"));
     const state2 = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
     const agent = state2.agents.get("my-team:general-1");
     expect(agent?.contextTokensUsed).toBeGreaterThan(0);
@@ -473,6 +499,52 @@ describe("reduceStreamChunk", () => {
     const state = promptedState();
     const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
     const state2 = reduce(state, Events.agentStreamChunk(foreign, 1, 1, "text", "x"));
+    expect(state2).toBe(state);
+  });
+});
+
+describe("reduceStreamEnd", () => {
+  test("stamps durationMs onto the turn's thinking blocks", () => {
+    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "ponder"));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "answer"));
+    state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 2, 350));
+    expect(state.agents.get("my-team:general-1")?.currentTurn?.blocks).toEqual([
+      { kind: "thinking", text: "ponder", durationMs: 350 },
+      { kind: "text", text: "answer" },
+    ]);
+  });
+
+  test("stamps every thinking block when a stream had two", () => {
+    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "a"));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "mid"));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 2, "thinking", "b"));
+    state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 3, 350));
+    const blocks = state.agents.get("my-team:general-1")?.currentTurn?.blocks;
+    expect(blocks?.[0]).toEqual({ kind: "thinking", text: "a", durationMs: 350 });
+    expect(blocks?.[2]).toEqual({ kind: "thinking", text: "b", durationMs: 350 });
+  });
+
+  test("thinking_ms null leaves the state untouched", () => {
+    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "text", "answer"));
+    const state2 = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 1, null));
+    expect(state2).toBe(state);
+  });
+
+  test("ignores a stream id that does not match the current turn", () => {
+    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "ponder"));
+    const state2 = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 2, 1, 100));
+    expect(state2).toBe(state);
+  });
+
+  test("rejects events from a foreign team", () => {
+    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "ponder"));
+    const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
+    const state2 = reduce(state, Events.agentStreamEnd(foreign, 1, 1, 100));
     expect(state2).toBe(state);
   });
 });

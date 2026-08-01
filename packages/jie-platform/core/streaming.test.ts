@@ -80,7 +80,51 @@ describe("StreamPublisherImpl", () => {
     expect(result).toEqual({ streamId: 1, totalChunks: 2 });
     const ends = endEnvelopes();
     expect(ends).toHaveLength(1);
-    expect(ends[0]!.payload).toEqual({ stream_id: 1, total_chunks: 2 });
+    expect(ends[0]!.payload).toEqual({ stream_id: 1, total_chunks: 2, thinking_ms: null });
+  });
+
+  test("a thinking block that switches to text reports its elapsed duration as thinking_ms", () => {
+    const publisher = new StreamPublisherImpl(events, sender);
+    publisher.beginStream();
+    publisher.append("thinking", "hmm");
+    vi.advanceTimersByTime(500);
+    publisher.append("text", "x".repeat(64));
+    publisher.endStream();
+    expect(endEnvelopes()[0]!.payload).toMatchObject({ stream_id: 1, thinking_ms: 500 });
+  });
+
+  test("a thinking-only stream finalizes thinking_ms at endStream", () => {
+    const publisher = new StreamPublisherImpl(events, sender);
+    publisher.beginStream();
+    publisher.append("thinking", "ponder");
+    vi.advanceTimersByTime(120);
+    publisher.endStream();
+    expect(endEnvelopes()[0]!.payload).toMatchObject({ stream_id: 1, thinking_ms: 120 });
+  });
+
+  test("thinking_ms sums the durations of multiple thinking segments", () => {
+    const publisher = new StreamPublisherImpl(events, sender);
+    publisher.beginStream();
+    publisher.append("thinking", "first");
+    vi.advanceTimersByTime(100);
+    publisher.append("text", "x".repeat(64));
+    publisher.append("thinking", "second");
+    vi.advanceTimersByTime(250);
+    publisher.append("text", "y".repeat(64));
+    publisher.endStream();
+    expect(endEnvelopes()[0]!.payload).toMatchObject({ thinking_ms: 350 });
+  });
+
+  test("beginStream resets the thinking duration measurement", () => {
+    const publisher = new StreamPublisherImpl(events, sender);
+    publisher.beginStream();
+    publisher.append("thinking", "a");
+    publisher.endStream();
+    publisher.beginStream();
+    vi.advanceTimersByTime(500);
+    publisher.append("text", "x".repeat(64));
+    publisher.endStream();
+    expect(endEnvelopes()[1]!.payload).toMatchObject({ stream_id: 2, thinking_ms: null });
   });
 
   test("envelopes are stamped with the sender from the constructor", () => {
