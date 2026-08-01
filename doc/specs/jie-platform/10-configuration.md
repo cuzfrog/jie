@@ -148,7 +148,7 @@ Hooks live under the `hooks` key of `settings.json` (`~/.jie/settings.json` glob
 }
 ```
 
-Each event maps to an array of matcher groups; a group carries a `matcher` and an array of command handlers under `hooks`. A handler's `type` must be `"command"`; `timeout` is in seconds (default `60`). Parsing is lenient — malformed groups, handlers, and unknown event keys are skipped, never a startup failure.
+Each event maps to an array of matcher groups; a group carries a `matcher` and an array of command handlers under `hooks`. A handler's `type` must be `"command"`; `timeout` is in seconds (default `60`). Parsing is lenient — a broken hooks block never fails startup and never discards the rest of the settings. A malformed group or handler is skipped and reported as a `jie.platform.hooks` WARN diagnostic naming the offending file (consistent with the skills/MCP loaders); an absent `hooks` key is normal and silent, and unknown event keys are ignored silently for forward compatibility.
 
 ### Events
 

@@ -23,6 +23,21 @@ export const EMPTY_HOOKS_CONFIG: HooksConfig = {
 
 export const DEFAULT_HOOK_TIMEOUT_MS = 60_000;
 
+export interface HookSource {
+  readonly path: string;
+  readonly hooks: unknown;
+}
+
+export interface HookDiagnostic {
+  readonly path: string;
+  readonly message: string;
+}
+
+export interface LoadHooksResult {
+  readonly config: HooksConfig;
+  readonly diagnostics: ReadonlyArray<HookDiagnostic>;
+}
+
 export interface HookIdentity {
   readonly sessionId: string;
   readonly cwd: string;
