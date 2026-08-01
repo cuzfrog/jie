@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createBashTool } from "./bash";
@@ -116,5 +116,16 @@ describe("bash", () => {
     expect(exitMatch).not.toBeNull();
     const exitCode = Number(exitMatch![1]);
     expect([137, 143]).toContain(exitCode);
+  });
+
+  test("abort kill reaches backgrounded descendants, not just the shell", async () => {
+    const marker = join(workspace, "marker");
+    const tool = createBashTool({ workspaceRoot: workspace });
+    const ac = new AbortController();
+    const resultPromise = tool.execute({ command: `(sleep 1; touch ${marker}) & wait` }, makeEmptyContext(), ac.signal);
+    setTimeout(() => ac.abort(), 100);
+    await resultPromise;
+    await new Promise((resolve) => setTimeout(resolve, 1300));
+    expect(existsSync(marker)).toBe(false);
   });
 });

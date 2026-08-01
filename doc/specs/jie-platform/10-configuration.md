@@ -215,7 +215,7 @@ Hard caps and charsets; not user-configurable. Each row points at the doc that a
 | `read_file` default truncation | **2000 lines OR 50 KiB** (whichever first; `offset` / `limit` override) | `read_file` | `06-agent-model.md` |
 | Tool telemetry truncation | **4 KiB**, middle-truncated | `agent.tool.call` / `agent.tool.result` payloads (LLM conversation is untruncated) | `03-event-system.md` |
 | Tool default timeout | **120 s** (combined with pi-agent's signal via `AbortSignal.any`) | All tools unless overridden | `06-agent-model.md` |
-| `bash` timeout | **300 s** (SIGTERM then SIGKILL) | `bash` | `06-agent-model.md` |
+| `bash` timeout | **300 s** (SIGTERM then SIGKILL, whole process group) | `bash` | `06-agent-model.md` |
 | `session_id` | **26 chars** (ULID) | Per process × team | `08-memory.md`, ADR 17 |
 | `team_id` charset | `[A-Za-z0-9_-]{1,32}` | `defaultTeam`, `--team`, blueprint loader (hard fail `invalid team_id: <value>`; blocks path traversal) | this doc |
 | Role (filename stem) charset | `[A-Za-z0-9_-]{1,64}` | Blueprint loader (hard fail `invalid role: <stem>`); constrains `agent_key = {role}-{N}` | `06-agent-model.md` |

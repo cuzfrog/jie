@@ -132,7 +132,7 @@ Shared conventions: file paths resolve against the workspace root and must stay 
 bash(input: { command: string; workdir?: string })
 ```
 
-Execs `/bin/sh -c` in the workspace root (or a `workdir` resolved inside it via `realpath`; escape throws `workdir_escape`). The platform's own 300s timeout sends SIGTERM then SIGKILL after a 5s grace and throws `command_timed_out`; OS-level signal kills from outside the platform surface as normal non-zero exits (`exit_code: 143` for SIGTERM, `137` for SIGKILL) — the LLM branches on `exit_code > 128`. stdout and stderr are captured independently, each clipped at 32 KiB with a `[truncated to 32 KiB]` marker. The `content` format:
+Execs `/bin/sh -c` in the workspace root (or a `workdir` resolved inside it via `realpath`; escape throws `workdir_escape`). The platform's own 300s timeout sends SIGTERM then SIGKILL after a 5s grace and throws `command_timed_out`; abort sends SIGTERM without throwing. The shell is spawned detached, so either kill reaches the whole process group, backgrounded descendants included; OS-level signal kills from outside the platform surface as normal non-zero exits (`exit_code: 143` for SIGTERM, `137` for SIGKILL) — the LLM branches on `exit_code > 128`. stdout and stderr are captured independently, each clipped at 32 KiB with a `[truncated to 32 KiB]` marker. The `content` format:
 
 ```
 exit_code: <N>[ ( command failed)  when N != 0]

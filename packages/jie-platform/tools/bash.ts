@@ -7,6 +7,8 @@ import { JiePlatformError } from "../jie-platform-errors";
 const STREAM_CAP = 32 * 1024;
 const TRUNCATION_MARKER = "[truncated to 32 KiB]";
 const TIMEOUT_MS = 300_000;
+const KILL_GRACE_MS = 5_000;
+const DRAIN_TIMEOUT_MS = 500;
 
 const BASH_DESCRIPTION = `Execute a shell command in \`/bin/sh\` (POSIX) within the workspace root. The
 command runs with a 300s timeout (SIGTERM, then SIGKILL after a brief grace).
@@ -49,27 +51,21 @@ export function createBashTool(dependencies: BashDeps): Tool<BashInput> {
       const proc = Bun.spawn(["/bin/sh", "-c", input.command], {
         cwd,
         env: process.env,
+        detached: true,
         stdout: "pipe",
         stderr: "pipe",
       });
 
       let timedOut = false;
+      let killTimer: ReturnType<typeof setTimeout> | undefined;
       const timer = setTimeout(() => {
         timedOut = true;
-        proc.kill("SIGTERM");
-        setTimeout(() => {
-          try {
-            proc.kill("SIGKILL");
-          } catch {
-          }
-        }, 5_000);
+        killProcessGroup(proc.pid, "SIGTERM");
+        killTimer = setTimeout(() => killProcessGroup(proc.pid, "SIGKILL"), KILL_GRACE_MS);
       }, TIMEOUT_MS);
 
       const abortHandler = () => {
-        try {
-          proc.kill("SIGTERM");
-        } catch {
-        }
+        killProcessGroup(proc.pid, "SIGTERM");
       };
       signal?.addEventListener("abort", abortHandler);
 
@@ -114,13 +110,17 @@ export function createBashTool(dependencies: BashDeps): Tool<BashInput> {
 
       const exitCode = await proc.exited;
       clearTimeout(timer);
+      clearTimeout(killTimer);
       signal?.removeEventListener("abort", abortHandler);
 
-      const drainTimeout = 500;
+      let drainTimer: ReturnType<typeof setTimeout> | undefined;
       await Promise.race([
         Promise.allSettled([stdoutReader, stderrReader]),
-        new Promise((resolve) => setTimeout(resolve, drainTimeout)),
+        new Promise<void>((resolve) => {
+          drainTimer = setTimeout(resolve, DRAIN_TIMEOUT_MS);
+        }),
       ]);
+      clearTimeout(drainTimer);
 
       if (timedOut) {
         throw new JiePlatformError("COMMAND_TIMED_OUT", { detail: input.command });
@@ -169,6 +169,13 @@ function resolveWorkdir(
     throw new JiePlatformError("WORKDIR_ESCAPE", { detail: workdir });
   }
   return real;
+}
+
+function killProcessGroup(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-pid, signal);
+  } catch {
+  }
 }
 
 function captureStream(buf: Buffer, cap: number): { text: string; truncated: boolean } {
