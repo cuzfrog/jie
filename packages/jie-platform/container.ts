@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import { asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import { registerCommandModule, type CommandExecutor } from "./command";
 import { registerConfigModule, type AuthStore, type ModelRegistry, type SettingsStore } from "./config";
+import { registerContextModule } from "./context";
 import { registerCoreModule, type AgentBody, type AgentBodyParams } from "./core";
 import { registerEventModule, type EventBus, type EventManager } from "./event";
 import type { JiePlatform, JiePlatformOptions } from "./jie-platform";
@@ -31,6 +32,7 @@ export interface PlatformCradle {
   readonly gitService: GitService;
   readonly toolRegistry: ToolRegistry;
   readonly skillManager: SkillManager;
+  readonly systemContextBlock: string;
   readonly agentBodyFactory: (params: AgentBodyParams) => AgentBody;
   readonly teamManager: TeamManager;
   readonly commandExecutor: CommandExecutor;
@@ -58,6 +60,7 @@ export async function bootPlatform(options: JiePlatformOptions): Promise<AwilixC
   registerServicesModule(container);
   registerToolsModule(container);
   registerSkillsModule(container);
+  registerContextModule(container);
   registerMcpModule(container);
   registerCoreModule(container);
   registerTeamModule(container);

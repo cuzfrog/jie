@@ -67,6 +67,7 @@ function bootedContainer(): AwilixContainer<PlatformCradle> {
     memoryManager: asValue(memoryManager),
     toolRegistry: asValue(toolRegistry),
     skillManager: asValue(skillManager),
+    systemContextBlock: asValue(""),
     modelRegistry: asValue(modelRegistry),
   });
   registerCoreModule(container);

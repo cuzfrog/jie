@@ -16,6 +16,8 @@ Platform-level configuration surface: how Jie discovers and loads settings, cred
 | `.jie/teams/<id>/<role>.md` | Agent definition | Plain text | YAML frontmatter (`model?`, `tools`, `subscribe?`, `skills?`) + prose body (system prompt) |
 | `~/.jie/skills/<name>/SKILL.md` | Global skill | Plain text | YAML frontmatter (`name?`, `description`) + prose body; see "Skills" |
 | `.jie/skills/<name>/SKILL.md` | Project skill | Plain text | Same shape; a project skill overrides a global skill of the same name |
+| `~/.jie/AGENTS.md`, `~/.jie/CLAUDE.md` | Global context | Plain text | Auto-loaded instructions; see "Context Files" |
+| `<ancestor>/AGENTS.md`, `<ancestor>/CLAUDE.md` | Project context | Plain text | Read from every ancestor of CWD (root→CWD); see "Context Files" |
 
 `.jie/settings.json` is the only project-level user settings file — there is no project-level `auth.json`; credentials are global by design. The role identifier is the `.md` filename stem; there is no `name` frontmatter field.
 
@@ -123,6 +125,10 @@ An invalid skill (bad name charset, missing/over-long description, name/director
 ### Manifest opt-in
 
 A skill is visible to an agent only if the agent's `skills:` frontmatter lists it (spec strings, wildcards allowed, resolved through the `SkillManager` with the same anchored-glob semantics as `tools`). Matched skills are rendered into an `<available_skills>` block appended to the agent's system prompt — name, description, and location only; the agent reads the body with `read_file`, resolving relative paths against the skill directory. Skills not listed for an agent are never surfaced to it.
+
+## Context Files
+
+`AGENTS.md` and `CLAUDE.md` are auto-loaded instruction files injected into every agent's system prompt — shared project state, with no manifest opt-in (unlike skills). The platform reads them, in order, from the home jie dir (`~/.jie/`) and then from every ancestor of the CWD ordered root-down-to-CWD; within a directory `AGENTS.md` precedes `CLAUDE.md`. Missing or unreadable files are skipped and a path is read at most once. The assembled `<context_files>` block is the boot-time `systemContextBlock` cradle singleton, which the prompt composer places before the role prose; file content is injected verbatim.
 
 ## Workspace Inference
 

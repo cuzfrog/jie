@@ -7,9 +7,10 @@ packages/
   jie-platform/   # Platform runtime lib — composition root: container.ts (bootPlatform, ADR 31)
     command/         # Platform commands (team, resumeSession, setDefaultModel, login, …) + executor
     config/          # Settings, auth, models.json loading, model registry (10-configuration.md)
+    context/         # Auto-loaded context files (AGENTS.md/CLAUDE.md ancestor walk) → systemContextBlock (10-configuration.md "Context Files")
     core/            # AgentBody: event loop (jie-agent-body.ts), pi-agent wiring, streaming, tool adapter
     event/           # EventBus (InProcessEventBus), EventManager, Events factory (03-event-system.md)
-    prompt/          # composeSystemPrompt — assembles the LLM system prompt (role prose + skills block)
+    prompt/          # composeSystemPrompt — assembles the LLM system prompt (context block + role prose + skills block)
     services/        # GitService (branch / dirty status; consumed by the command surface and by jie-cli for the TUI footer)
     skills/          # Skill discovery (SKILL.md), SkillManager (glob resolution), prompt formatting (10-configuration.md "Skills")
     storage/         # Storage + SqliteStorage, schema bootstrap, ArtifactStore, MemoryManager (04-storage.md, 08-memory.md)

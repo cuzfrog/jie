@@ -16,6 +16,7 @@ export function registerCoreModule(container: AwilixContainer<PlatformCradle>): 
       memoryManager: MemoryManager,
       toolRegistry: ToolRegistry,
       skillManager: SkillManager,
+      systemContextBlock: string,
       modelRegistry: ModelRegistry,
     ) =>
       (params: AgentBodyParams): AgentBody =>
@@ -25,6 +26,7 @@ export function registerCoreModule(container: AwilixContainer<PlatformCradle>): 
           memory: memoryManager,
           toolRegistry,
           skillManager,
+          systemContextBlock,
           getApiKey: (provider) => modelRegistry.getApiKey(provider),
         })
     ).singleton(),

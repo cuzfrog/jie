@@ -177,6 +177,7 @@ interface MakeBodyOverrides {
   model?: Model<Api>;
   effort?: EffortLevel;
   factory?: (opts: ConstructorParameters<typeof PiAgent>[0]) => PiAgent;
+  systemContextBlock?: string;
 }
 
 interface Harness {
@@ -249,6 +250,7 @@ function makeHarness(): Harness {
       memory,
       toolRegistry,
       skillManager,
+      systemContextBlock: overrides.systemContextBlock ?? "",
       getApiKey: () => undefined,
       createAgent: overrides.factory ?? cap.factory,
     });
@@ -297,6 +299,12 @@ describe("JieAgentBody — system prompt composition", () => {
     const h = makeHarness();
     h.makeBody({ soul: makeSoul() });
     expect(h.state.systemPrompt).toBe("you are a general assistant");
+  });
+
+  test("the shared context block is prepended before the role prompt", () => {
+    const h = makeHarness();
+    h.makeBody({ systemContextBlock: "<context_files>X</context_files>" });
+    expect(h.state.systemPrompt).toBe("<context_files>X</context_files>\n\nyou are a general assistant");
   });
 });
 

@@ -265,7 +265,7 @@ The `agentBodyFactory` cradle entry (registered in `core/module.ts`, invoked by 
 
 **`start()` ordering.** (1) Register the subscriptions above. (2) `memory.restore(agentKey, sessionId, teamId)` and push the rows into `agent.state.messages`. (3) If the restored history ends with a `user` or `toolResult` message, `agent.continue()` to resume the in-flight turn. (4) Drain anything that arrived on subscribed topics during startup via `agent.prompt()`. The body does not publish `agent.idle` at startup — a body that has never run a turn is idle by default. `stop()` unsubscribes everything.
 
-**Agent construction.** The `Agent` is created with `sessionId`, `getApiKey`, an identity `transformContext` (compaction not wired in v1), `steeringMode: "all"`, `followUpMode: "all"`, `toolExecution: "sequential"`, and the telemetry hooks below. The body then sets `agent.state.systemPrompt` (the soul's prose), `agent.state.model` (publishing `agent.model.assigned` when a model is assigned), and `agent.state.tools` (the adapted `AgentTool[]`).
+**Agent construction.** The `Agent` is created with `sessionId`, `getApiKey`, an identity `transformContext` (compaction not wired in v1), `steeringMode: "all"`, `followUpMode: "all"`, `toolExecution: "sequential"`, and the telemetry hooks below. The body then sets `agent.state.systemPrompt` via `composeSystemPrompt` (the shared context-files block, then the soul's prose, then the resolved skills block), `agent.state.model` (publishing `agent.model.assigned` when a model is assigned), and `agent.state.tools` (the adapted `AgentTool[]`).
 
 ### Event Bridging
 

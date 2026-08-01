@@ -18,6 +18,7 @@ interface AgentBodyDeps {
   readonly memory: MemoryManager;
   readonly toolRegistry: ToolRegistry;
   readonly skillManager: SkillManager;
+  readonly systemContextBlock: string;
   getApiKey(provider: string): Promise<string | undefined> | string | undefined;
   readonly createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
 }
@@ -98,6 +99,7 @@ export class JieAgentBody implements AgentBody {
     const resolvedSkills = params.soul.skills.flatMap((spec) => deps.skillManager.resolve(spec));
     this.agent.state.systemPrompt = composeSystemPrompt({
       rolePrompt: params.soul.systemPrompt,
+      contextBlock: deps.systemContextBlock,
       skills: resolvedSkills,
     });
     this.agent.state.thinkingLevel = effortToThinkingLevel(params.effort);
