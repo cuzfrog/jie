@@ -178,6 +178,7 @@ export class JieAgentBody implements AgentBody {
     this.started = true;
 
     this.registerSubscriptions();
+    await this.hookRunner.sessionStart({ identity: this.hookIdentity });
 
     const restored = this.restored ?? await this.restore();
     if (restored.length > 0) {
@@ -220,6 +221,7 @@ export class JieAgentBody implements AgentBody {
         if (final.isError && final.errorMessage !== null) {
           this.eventManager.publish(Events.systemError({ kind: "system" }, final.errorMessage));
         }
+        void this.hookRunner.stop({ identity: this.hookIdentity });
         if (this.queue.length > 0) {
           const next = this.queue.shift()!;
           this.agent.followUp(next);
@@ -268,7 +270,7 @@ export class JieAgentBody implements AgentBody {
     this.unsubscribers.push(
       this.eventManager.subscribe("user.prompt", (env) => {
         if (env.payload.teamId !== this.teamId || env.payload.agentKey !== this.agentKey) return;
-        this.ingestUserPrompt(env.payload);
+        void this.ingestUserPrompt(env.payload);
       }),
       this.eventManager.subscribe("agent.interrupt", (env) => {
         if (env.payload.teamId !== this.teamId || env.payload.agentKey !== this.agentKey) return;
@@ -284,8 +286,14 @@ export class JieAgentBody implements AgentBody {
     }
   }
 
-  private ingestUserPrompt(payload: { teamId: string; agentKey: string; prompt: string }): void {
-    this.dispatchIngress("user", null, payload.prompt);
+  private async ingestUserPrompt(payload: { teamId: string; agentKey: string; prompt: string }): Promise<void> {
+    const outcome = await this.hookRunner.userPromptSubmit({ identity: this.hookIdentity, prompt: payload.prompt });
+    if (outcome.block) {
+      this.eventManager.publish(Events.systemError({ kind: "system" }, outcome.reason ?? "prompt blocked by UserPromptSubmit hook"));
+      return;
+    }
+    const prompt = outcome.additionalContext === null ? payload.prompt : `${payload.prompt}\n\n${outcome.additionalContext}`;
+    this.dispatchIngress("user", null, prompt);
   }
 
   private ingestCustom(topic: string, sender: AgentSender, payload: { message: string; truncated: boolean }): void {
