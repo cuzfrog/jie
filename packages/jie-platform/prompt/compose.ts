@@ -1,5 +1,4 @@
-import type { Skill } from "../skills";
-import { formatSkillsForPrompt } from "../skills";
+import { formatSkillsForPrompt, type Skill } from "../skills";
 
 export interface ComposeSystemPromptInput {
   readonly rolePrompt: string;

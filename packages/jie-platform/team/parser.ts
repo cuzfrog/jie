@@ -243,8 +243,7 @@ function parseAgentFile(
     throw new JiePlatformError("INVALID_MODEL_STRING", { detail: `invalid model string: ${model}` });
   }
 
-  const skills =
-    frontmatter.skills === undefined ? [] : asStringList(frontmatter.skills, "skills", file);
+  const skills = frontmatter.skills === undefined ? [] : asStringList(frontmatter.skills, "skills", file);
 
   return {
     role,

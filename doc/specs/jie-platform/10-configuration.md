@@ -160,7 +160,7 @@ Each event maps to an array of matcher groups; a group carries a `matcher` and a
 | `SessionStart` | once when a body starts | none | informational (output ignored) |
 | `Stop` | when an agent run ends (`agent_end`) | none | informational (output ignored) |
 
-A `matcher` is a regular expression tested against the tool name; an absent, empty, or `*` matcher matches every tool and an invalid regex matches none. `PreToolUse` and `PostToolUse` short-circuit on the first blocking handler; `PostToolUse` and `UserPromptSubmit` accumulate `additionalContext` (last non-null wins).
+A `matcher` is a regular expression tested against the tool name; an absent, empty, or `*` matcher matches every tool. Matchers apply only to the tool events: an invalid regex, or any matcher set on a non-tool event, is reported as a diagnostic and treated as match-all. `PreToolUse` and `PostToolUse` short-circuit on the first blocking handler; `PostToolUse` and `UserPromptSubmit` accumulate `additionalContext` (last non-null wins).
 
 ### Execution contract
 
@@ -170,7 +170,7 @@ Each handler runs as `/bin/sh -c "<command>"` with the identity's `cwd`, the pla
 { "session_id": "...", "hook_event_name": "PreToolUse", "cwd": "...", "team_id": "...", "agent_key": "...", "role": "...", "tool_name": "bash", "tool_input": {} }
 ```
 
-Event-specific fields: `tool_name` + `tool_input` (PreToolUse), plus `tool_response` (PostToolUse), plus `prompt` (UserPromptSubmit); SessionStart and Stop add none. A handler that exceeds its timeout is killed (SIGTERM then SIGKILL) and treated as non-blocking.
+Event-specific fields: `tool_name` + `tool_input` (PreToolUse), plus `tool_response` (PostToolUse), plus `prompt` (UserPromptSubmit); SessionStart and Stop add none. A handler that exceeds its timeout is killed as a whole — the `/bin/sh` session is spawned detached, so SIGTERM (then SIGKILL after a 5s grace) reaches the entire process group, backgrounded descendants included — and is treated as non-blocking. A handler that fails to execute at all (e.g. a stale `cwd`) is likewise a non-blocking error, never a crash.
 
 The exit code and stdout decide the outcome:
 
@@ -180,6 +180,7 @@ The exit code and stdout decide the outcome:
 | stdout JSON `continue: false` or `decision: "block"` | block; reason from JSON `reason` |
 | stdout JSON `hookSpecificOutput.additionalContext` | context appended to the tool result / prompt |
 | exit `0`, no blocking JSON | allow, no effect |
+| any other non-zero exit, no blocking JSON | non-blocking error; a failed handler never blocks the agent |
 
 stdout that is not a valid JSON object is ignored (treated as no output).
 

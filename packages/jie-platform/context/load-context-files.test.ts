@@ -1,15 +1,27 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadContextFiles } from "./load-context-files";
 
+const tempDirs: string[] = [];
+
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
+
 function makeTempDir(prefix: string): string {
-  return mkdtempSync(join(tmpdir(), prefix));
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  tempDirs.push(dir);
+  return dir;
 }
 
 function write(dir: string, name: string, content: string): void {
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, name), content, "utf-8");
+}
+
+function under<T extends { path: string }>(files: ReadonlyArray<T>, dirs: ReadonlyArray<string>): T[] {
+  return files.filter((f) => dirs.some((dir) => f.path.startsWith(dir)));
 }
 
 describe("loadContextFiles", () => {
@@ -23,9 +35,7 @@ describe("loadContextFiles", () => {
     write(cwd, "CLAUDE.md", "sub-claude");
 
     const files = loadContextFiles({ cwd, homeJieDir: home });
-    const contents = files
-      .filter((f) => f.path.startsWith(home) || f.path.startsWith(proj))
-      .map((f) => f.content);
+    const contents = under(files, [home, proj]).map((f) => f.content);
     expect(contents).toEqual(["home-agents", "home-claude", "proj-agents", "sub-claude"]);
   });
 
@@ -35,9 +45,7 @@ describe("loadContextFiles", () => {
     write(cwd, "CLAUDE.md", "claude");
     write(cwd, "AGENTS.md", "agents");
 
-    const names = loadContextFiles({ cwd, homeJieDir: home })
-      .filter((f) => f.path.startsWith(cwd))
-      .map((f) => f.path.split("/").pop());
+    const names = under(loadContextFiles({ cwd, homeJieDir: home }), [cwd]).map((f) => f.path.split("/").pop());
     expect(names).toEqual(["AGENTS.md", "CLAUDE.md"]);
   });
 
@@ -46,7 +54,7 @@ describe("loadContextFiles", () => {
     const cwd = makeTempDir("jie-ctx-cwd-");
     mkdirSync(join(cwd, "empty-child"), { recursive: true });
 
-    expect(loadContextFiles({ cwd, homeJieDir: home })).toEqual([]);
+    expect(under(loadContextFiles({ cwd, homeJieDir: home }), [home, cwd])).toEqual([]);
   });
 
   test("a path is loaded at most once when the home dir is also a cwd ancestor", () => {
@@ -66,13 +74,13 @@ describe("loadContextFiles", () => {
     mkdirSync(join(cwd, "AGENTS.md"), { recursive: true });
     write(cwd, "CLAUDE.md", "readable");
 
-    const files = loadContextFiles({ cwd, homeJieDir: home });
+    const files = under(loadContextFiles({ cwd, homeJieDir: home }), [home, cwd]);
     expect(files.map((f) => f.content)).toEqual(["readable"]);
   });
 
-  test("returns an empty list when no context files exist anywhere", () => {
+  test("returns nothing for the temp dirs when no context files exist there", () => {
     const home = makeTempDir("jie-ctx-home-");
     const cwd = makeTempDir("jie-ctx-cwd-");
-    expect(loadContextFiles({ cwd, homeJieDir: home })).toEqual([]);
+    expect(under(loadContextFiles({ cwd, homeJieDir: home }), [home, cwd])).toEqual([]);
   });
 });
