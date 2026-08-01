@@ -104,6 +104,13 @@ describe("HookRunner — preToolUse", () => {
     expect(executor.execute).not.toHaveBeenCalled();
     expect(outcome.block).toBe(false);
   });
+
+  test("a non-zero exit other than 2 is a non-blocking error and does not surface the reason", async () => {
+    const { runner, executor } = makeRunner(config({ PreToolUse: [{ matcher: null, hooks: [cmd("x")] }] }));
+    executor.execute.mockResolvedValue(result({ exitCode: 1, stderr: "boom\n" }));
+    const outcome = await runner.preToolUse({ identity: identity(), toolName: "bash", toolInput: {} });
+    expect(outcome).toEqual({ block: false, reason: null });
+  });
 });
 
 describe("HookRunner — postToolUse", () => {
@@ -150,5 +157,23 @@ describe("HookRunner — userPromptSubmit / lifecycle", () => {
     await runner.sessionStart({ identity: identity() });
     await runner.stop({ identity: identity() });
     expect(executor.execute).toHaveBeenCalledTimes(2);
+  });
+
+  test("an executor rejection is contained and never blocks any event", async () => {
+    const { runner, executor } = makeRunner(config({
+      PreToolUse: [{ matcher: null, hooks: [cmd("x")] }],
+      PostToolUse: [{ matcher: null, hooks: [cmd("x")] }],
+      UserPromptSubmit: [{ matcher: null, hooks: [cmd("x")] }],
+      SessionStart: [{ matcher: null, hooks: [cmd("x")] }],
+      Stop: [{ matcher: null, hooks: [cmd("x")] }],
+    }));
+    executor.execute.mockRejectedValue(new Error("spawn ENOENT"));
+    expect(await runner.preToolUse({ identity: identity(), toolName: "bash", toolInput: {} })).toEqual({ block: false, reason: null });
+    expect(await runner.postToolUse({ identity: identity(), toolName: "bash", toolInput: {}, toolResponse: "ok" }))
+      .toEqual({ block: false, reason: null, additionalContext: null });
+    expect(await runner.userPromptSubmit({ identity: identity(), prompt: "hello" }))
+      .toEqual({ block: false, reason: null, additionalContext: null });
+    await runner.sessionStart({ identity: identity() });
+    await runner.stop({ identity: identity() });
   });
 });

@@ -1,6 +1,7 @@
 import type {
   CommandExecutor,
   HookCommand,
+  HookCommandResult,
   HookEvent,
   HookIdentity,
   HookMatcher,
@@ -92,12 +93,12 @@ export class HookRunnerImpl implements HookRunner {
       role: identity.role,
       ...fields,
     });
-    const result = await this.executor.execute({
-      command: command.command,
-      timeoutMs: command.timeoutMs,
-      stdin,
-      cwd: identity.cwd,
-    });
+    let result: HookCommandResult;
+    try {
+      result = await this.executor.execute({ command: command.command, timeoutMs: command.timeoutMs, stdin, cwd: identity.cwd });
+    } catch {
+      return NO_OUTPUT;
+    }
     if (result.timedOut) return NO_OUTPUT;
     return interpret(result.exitCode, result.stdout, result.stderr);
   }
@@ -127,11 +128,7 @@ function interpret(exitCode: number, stdout: string, stderr: string): HookOutput
   const blockedByJson = parsed?.continue === false || parsed?.decision === "block";
   const blockedByExit = exitCode === 2;
   const shouldBlock = blockedByJson || blockedByExit;
-  const reason = typeof parsed?.reason === "string"
-    ? parsed.reason
-    : blockedByExit && stderr.trim() !== ""
-      ? stderr.trim()
-      : null;
+  const reason = typeof parsed?.reason === "string" ? parsed.reason : blockedByExit && stderr.trim() !== "" ? stderr.trim() : null;
   const hookSpecific = parsed?.hookSpecificOutput;
   const context = isObject(hookSpecific) ? hookSpecific.additionalContext : null;
   const additionalContext = typeof context === "string" ? context : null;

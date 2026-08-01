@@ -1,4 +1,6 @@
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ShCommandExecutor } from "./command-executor";
 import type { HookCommandRequest } from "./types";
 
@@ -34,5 +36,25 @@ describe("ShCommandExecutor", () => {
   test("kills a long-running command and reports timedOut", async () => {
     const result = await executor.execute(request("sleep 5", { timeoutMs: 150 }));
     expect(result.timedOut).toBe(true);
+  });
+
+  test("timeout kill reaches backgrounded descendants, not just the shell", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "jie-executor-kill-"));
+    const marker = join(dir, "marker");
+    try {
+      const result = await executor.execute(request(`(sleep 1; touch ${marker}) & wait`, { timeoutMs: 150, cwd: dir }));
+      expect(result.timedOut).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, 1300));
+      expect(existsSync(marker)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a spawn failure resolves as a non-zero result with the error on stderr", async () => {
+    const result = await executor.execute(request("true", { cwd: "/definitely/not/a/directory" }));
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).not.toBe("");
+    expect(result.timedOut).toBe(false);
   });
 });

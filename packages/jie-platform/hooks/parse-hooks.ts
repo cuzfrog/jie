@@ -70,6 +70,8 @@ function parseMatcherGroup(path: string, event: HookEvent, group: unknown, diagn
   return { matcher, hooks };
 }
 
+const TOOL_EVENTS: ReadonlyArray<HookEvent> = ["PreToolUse", "PostToolUse"];
+
 function parseMatcher(path: string, event: HookEvent, value: unknown, diagnostics: HookDiagnostic[]): string | null {
   if (value === undefined) return null;
   if (typeof value !== "string") {
@@ -77,7 +79,25 @@ function parseMatcher(path: string, event: HookEvent, value: unknown, diagnostic
     return null;
   }
   const trimmed = value.trim();
-  return trimmed === "" || trimmed === "*" ? null : trimmed;
+  if (trimmed === "" || trimmed === "*") return null;
+  if (!TOOL_EVENTS.includes(event)) {
+    diagnostics.push({ path, message: `'${event}' is not a tool event; its 'matcher' is ignored; treating as match-all` });
+    return null;
+  }
+  if (!isValidRegex(trimmed)) {
+    diagnostics.push({ path, message: `'${event}' 'matcher' is not a valid regular expression; treating as match-all` });
+    return null;
+  }
+  return trimmed;
+}
+
+function isValidRegex(pattern: string): boolean {
+  try {
+    new RegExp(pattern);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function parseCommand(path: string, event: HookEvent, value: unknown, diagnostics: HookDiagnostic[]): HookCommand | null {

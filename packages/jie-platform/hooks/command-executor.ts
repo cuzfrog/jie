@@ -5,35 +5,52 @@ const DRAIN_TIMEOUT_MS = 500;
 
 export class ShCommandExecutor implements CommandExecutor {
   async execute(request: HookCommandRequest): Promise<HookCommandResult> {
-    const proc = Bun.spawn(["/bin/sh", "-c", request.command], {
-      cwd: request.cwd,
-      env: process.env,
-      stdin: new TextEncoder().encode(request.stdin),
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    try {
+      return await runCommand(request);
+    } catch (error) {
+      return { exitCode: 1, stdout: "", stderr: error instanceof Error ? error.message : String(error), timedOut: false };
+    }
+  }
+}
 
-    let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      proc.kill("SIGTERM");
-      setTimeout(() => {
-        try {
-          proc.kill("SIGKILL");
-        } catch {
-        }
-      }, KILL_GRACE_MS);
-    }, request.timeoutMs);
+async function runCommand(request: HookCommandRequest): Promise<HookCommandResult> {
+  const proc = Bun.spawn(["/bin/sh", "-c", request.command], {
+    cwd: request.cwd,
+    env: process.env,
+    detached: true,
+    stdin: new TextEncoder().encode(request.stdin),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
 
-    const stdout = readStream(proc.stdout);
-    const stderr = readStream(proc.stderr);
-    const exitCode = await proc.exited;
-    clearTimeout(timer);
-    const [stdoutText, stderrText] = await Promise.race([
-      Promise.all([stdout, stderr]),
-      new Promise<[string, string]>((resolve) => setTimeout(() => resolve(["", ""]), DRAIN_TIMEOUT_MS)),
-    ]);
-    return { exitCode: exitCode ?? 1, stdout: stdoutText, stderr: stderrText, timedOut };
+  let timedOut = false;
+  let killTimer: ReturnType<typeof setTimeout> | undefined;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    killProcessGroup(proc.pid, "SIGTERM");
+    killTimer = setTimeout(() => killProcessGroup(proc.pid, "SIGKILL"), KILL_GRACE_MS);
+  }, request.timeoutMs);
+
+  const stdout = readStream(proc.stdout);
+  const stderr = readStream(proc.stderr);
+  const exitCode = await proc.exited;
+  clearTimeout(timer);
+  clearTimeout(killTimer);
+  let drainTimer: ReturnType<typeof setTimeout> | undefined;
+  const [stdoutText, stderrText] = await Promise.race([
+    Promise.all([stdout, stderr]),
+    new Promise<[string, string]>((resolve) => {
+      drainTimer = setTimeout(() => resolve(["", ""]), DRAIN_TIMEOUT_MS);
+    }),
+  ]);
+  clearTimeout(drainTimer);
+  return { exitCode: exitCode ?? 1, stdout: stdoutText, stderr: stderrText, timedOut };
+}
+
+function killProcessGroup(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-pid, signal);
+  } catch {
   }
 }
 

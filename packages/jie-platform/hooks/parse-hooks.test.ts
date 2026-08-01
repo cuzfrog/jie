@@ -123,6 +123,22 @@ describe("parseHooksConfig — diagnostics", () => {
     expect(result.config.PreToolUse[0]!.matcher).toBeNull();
   });
 
+  test("an invalid regex matcher is reported and treated as match-all", () => {
+    const result = parseHooksConfig([source({ PreToolUse: [{ matcher: "[", hooks: [command("ok")] }] })]);
+    expect(result.diagnostics.map((d) => d.message))
+      .toEqual(["'PreToolUse' 'matcher' is not a valid regular expression; treating as match-all"]);
+    expect(result.config.PreToolUse[0]!.matcher).toBeNull();
+    expect(result.config.PreToolUse[0]!.hooks).toHaveLength(1);
+  });
+
+  test("a matcher on a non-tool event is reported and treated as match-all", () => {
+    const result = parseHooksConfig([source({ UserPromptSubmit: [{ matcher: "bash", hooks: [command("ok")] }] })]);
+    expect(result.diagnostics.map((d) => d.message))
+      .toEqual(["'UserPromptSubmit' is not a tool event; its 'matcher' is ignored; treating as match-all"]);
+    expect(result.config.UserPromptSubmit[0]!.matcher).toBeNull();
+    expect(result.config.UserPromptSubmit[0]!.hooks).toHaveLength(1);
+  });
+
   test("diagnostics carry the path of the scope they came from", () => {
     const global = { PreToolUse: [{ hooks: [{ type: "nope" }] }] };
     const project = { Stop: "bad" };
