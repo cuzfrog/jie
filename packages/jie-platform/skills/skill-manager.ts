@@ -20,8 +20,4 @@ export class InMemorySkillManager implements SkillManager {
     }
     return matched;
   }
-
-  list(): Skill[] {
-    return [...this.skills.values()];
-  }
 }

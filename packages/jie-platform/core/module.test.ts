@@ -49,7 +49,6 @@ const toolRegistry = vi.mocked<ToolRegistry>({
 
 const skillManager = vi.mocked<SkillManager>({
   resolve: vi.fn(() => []),
-  list: vi.fn(() => []),
 });
 
 const hookRunner = vi.mocked<HookRunner>({

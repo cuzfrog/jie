@@ -23,8 +23,4 @@ describe("InMemorySkillManager", () => {
   test("resolve no match returns empty", () => {
     expect(manager.resolve("missing")).toEqual([]);
   });
-
-  test("list returns all skills", () => {
-    expect(manager.list().map((s) => s.name).sort()).toEqual(["deploy", "deploy-prod", "test-unit"]);
-  });
 });

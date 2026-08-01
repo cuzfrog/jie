@@ -17,5 +17,4 @@ export interface LoadSkillsResult {
 
 export interface SkillManager {
   resolve(spec: string): Skill[];
-  list(): Skill[];
 }

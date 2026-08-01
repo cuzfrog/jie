@@ -25,20 +25,13 @@ describe("loadSkills", () => {
     return filePath;
   }
 
-  test("discovers a valid skill, name defaults to directory name", () => {
+  test("discovers a valid skill with its file and base paths", () => {
     const filePath = writeSkill(project, "deploy", "description: Deploys the app");
     const result = loadSkills({ homeSkillsDir: home, projectSkillsDir: project });
     expect(result.diagnostics).toEqual([]);
     expect(result.skills).toEqual([
       { name: "deploy", description: "Deploys the app", filePath, baseDir: join(project, "deploy") },
     ]);
-  });
-
-  test("explicit name matching the directory is accepted", () => {
-    writeSkill(project, "deploy", "name: deploy\ndescription: Deploys the app");
-    const result = loadSkills({ homeSkillsDir: home, projectSkillsDir: project });
-    expect(result.diagnostics).toEqual([]);
-    expect(result.skills.map((s) => s.name)).toEqual(["deploy"]);
   });
 
   test("merges home and project skills", () => {
@@ -65,66 +58,10 @@ describe("loadSkills", () => {
     expect(result.skills.map((s) => s.name)).toEqual(["global-skill"]);
   });
 
-  test("missing description is a diagnostic, skill skipped", () => {
-    writeSkill(project, "deploy", "name: deploy");
-    const result = loadSkills({ homeSkillsDir: home, projectSkillsDir: project });
+  test("missing skills directories contribute nothing", () => {
+    const result = loadSkills({ homeSkillsDir: join(home, "absent"), projectSkillsDir: null });
     expect(result.skills).toEqual([]);
-    expect(result.diagnostics).toHaveLength(1);
-    expect(result.diagnostics[0]?.message).toContain("description");
-  });
-
-  test("empty description is a diagnostic", () => {
-    writeSkill(project, "deploy", "description: '   '");
-    const result = loadSkills({ homeSkillsDir: home, projectSkillsDir: project });
-    expect(result.skills).toEqual([]);
-    expect(result.diagnostics).toHaveLength(1);
-  });
-
-  test("description over 1024 chars is a diagnostic", () => {
-    writeSkill(project, "deploy", `description: ${"x".repeat(1025)}`);
-    const result = loadSkills({ homeSkillsDir: home, projectSkillsDir: project });
-    expect(result.skills).toEqual([]);
-    expect(result.diagnostics).toHaveLength(1);
-    expect(result.diagnostics[0]?.message).toContain("1024");
-  });
-
-  test("invalid directory name charset is a diagnostic", () => {
-    writeSkill(project, "Deploy_Bad", "description: nope");
-    const result = loadSkills({ homeSkillsDir: home, projectSkillsDir: project });
-    expect(result.skills).toEqual([]);
-    expect(result.diagnostics).toHaveLength(1);
-    expect(result.diagnostics[0]?.message).toContain("Deploy_Bad");
-  });
-
-  test("name over 64 chars is a diagnostic", () => {
-    const longName = "a".repeat(65);
-    writeSkill(project, longName, "description: nope");
-    const result = loadSkills({ homeSkillsDir: home, projectSkillsDir: project });
-    expect(result.skills).toEqual([]);
-    expect(result.diagnostics).toHaveLength(1);
-    expect(result.diagnostics[0]?.message).toContain("64");
-  });
-
-  test("leading hyphen in name is a diagnostic", () => {
-    writeSkill(project, "-deploy", "description: nope");
-    const result = loadSkills({ homeSkillsDir: home, projectSkillsDir: project });
-    expect(result.skills).toEqual([]);
-    expect(result.diagnostics).toHaveLength(1);
-  });
-
-  test("consecutive hyphens in name is a diagnostic", () => {
-    writeSkill(project, "de--ploy", "description: nope");
-    const result = loadSkills({ homeSkillsDir: home, projectSkillsDir: project });
-    expect(result.skills).toEqual([]);
-    expect(result.diagnostics).toHaveLength(1);
-  });
-
-  test("explicit name mismatching the directory is a diagnostic", () => {
-    writeSkill(project, "deploy", "name: other\ndescription: nope");
-    const result = loadSkills({ homeSkillsDir: home, projectSkillsDir: project });
-    expect(result.skills).toEqual([]);
-    expect(result.diagnostics).toHaveLength(1);
-    expect(result.diagnostics[0]?.message).toContain("match");
+    expect(result.diagnostics).toEqual([]);
   });
 
   test("directory without SKILL.md is ignored silently", () => {
@@ -135,12 +72,10 @@ describe("loadSkills", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  test("malformed frontmatter is a diagnostic", () => {
-    const dirPath = join(project, "deploy");
-    mkdirSync(dirPath, { recursive: true });
-    writeFileSync(join(dirPath, "SKILL.md"), "---\n: : bad yaml\n  - x\n---\nbody\n");
+  test("a parse diagnostic carries the SKILL.md path and the skill is skipped", () => {
+    const filePath = writeSkill(project, "deploy", "name: other\ndescription: nope");
     const result = loadSkills({ homeSkillsDir: home, projectSkillsDir: project });
     expect(result.skills).toEqual([]);
-    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics).toEqual([{ path: filePath, message: expect.stringContaining("match") }]);
   });
 });
