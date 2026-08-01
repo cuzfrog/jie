@@ -13,6 +13,7 @@ import type { AgentBodyParams } from "./agent-body";
 import { Events, type EventEnvelope, type EventManager, type EventType } from "../event";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { Tool, ToolRegistry, ToolResult } from "../tools";
+import type { Skill, SkillManager } from "../skills";
 import type { AgentSoul } from "../team";
 import type { EffortLevel } from "../types";
 
@@ -38,6 +39,7 @@ function makeSoul(overrides: Partial<AgentSoul> = {}): AgentSoul {
     systemPrompt: "you are a general assistant",
     tools: [],
     subscribe: [],
+    skills: [],
     ...overrides,
   };
 }
@@ -180,6 +182,7 @@ interface MakeBodyOverrides {
 interface Harness {
   events: EventManager;
   toolRegistry: ReturnType<typeof vi.mocked<ToolRegistry>>;
+  skillManager: ReturnType<typeof vi.mocked<SkillManager>>;
   persisted: AgentMessage[];
   restore: ReturnType<typeof vi.fn>;
   cap: FakeAgentCapture;
@@ -219,6 +222,10 @@ function makeHarness(): Harness {
     resolve: vi.fn(() => [makeNoopTool()]),
     list: vi.fn(() => []),
   });
+  const skillManager = vi.mocked<SkillManager>({
+    resolve: vi.fn(() => []),
+    list: vi.fn(() => []),
+  });
   const artifactStore = vi.mocked<ArtifactStore>({
     write: vi.fn(),
     read: vi.fn(),
@@ -241,6 +248,7 @@ function makeHarness(): Harness {
       artifactStore,
       memory,
       toolRegistry,
+      skillManager,
       getApiKey: () => undefined,
       createAgent: overrides.factory ?? cap.factory,
     });
@@ -253,6 +261,7 @@ function makeHarness(): Harness {
   return {
     events,
     toolRegistry,
+    skillManager,
     persisted,
     restore,
     cap,
@@ -266,6 +275,30 @@ function makeHarness(): Harness {
     makeBody,
   };
 }
+
+describe("JieAgentBody — system prompt composition", () => {
+  const deploySkill: Skill = {
+    name: "deploy",
+    description: "Deploys the app",
+    filePath: "/deploy/SKILL.md",
+    baseDir: "/deploy",
+  };
+
+  test("resolved skills are appended to the role prompt", () => {
+    const h = makeHarness();
+    h.skillManager.resolve.mockReturnValue([deploySkill]);
+    h.makeBody({ soul: makeSoul({ skills: ["deploy"] }) });
+    expect(h.skillManager.resolve).toHaveBeenCalledWith("deploy");
+    expect(h.state.systemPrompt).toContain("you are a general assistant");
+    expect(h.state.systemPrompt).toContain("<name>deploy</name>");
+  });
+
+  test("no skills leaves the role prompt verbatim", () => {
+    const h = makeHarness();
+    h.makeBody({ soul: makeSoul() });
+    expect(h.state.systemPrompt).toBe("you are a general assistant");
+  });
+});
 
 describe("JieAgentBody — identity", () => {
   test("identity reflects the params and the resolved model info", () => {

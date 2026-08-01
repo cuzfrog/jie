@@ -11,6 +11,7 @@ interface AgentSoul {
   readonly systemPrompt: string;               // prose body of the agent's .md file, verbatim
   readonly tools: ReadonlyArray<string>;       // tool spec strings, resolved through the ToolRegistry
   readonly subscribe: ReadonlyArray<string>;   // un-scoped domain topics; body listens on custom.{teamId}.{topic}
+  readonly skills: ReadonlyArray<string>;      // skill spec strings, resolved through the SkillManager
 }
 ```
 
@@ -48,6 +49,7 @@ The blueprint lives at `.jie/teams/<team_id>/` (file layout, discovery, model re
 | `model` | no | `<provider>/<model_id>`; when absent, inherited from the user's global default (`10-configuration.md` "Model Resolution"). Always a resolved string by soul-construction time. |
 | `tools` | yes | Tool spec strings resolved through the `ToolRegistry` at body construction. |
 | `subscribe` | no | Un-scoped domain topic names. Entries starting with `agent.` are rejected at parse time (`subscribe_rejects_platform_topic: <topic>`) and the team fails to start — platform events (`agent.*`) are observer-only, never agent-consumed; the platform manages isolation so team authors never see platform subjects. |
+| `skills` | no | Skill spec strings resolved through the `SkillManager` at body construction (wildcards allowed, same anchored-glob semantics as `tools`). Each matched skill is listed in the agent's system prompt; the agent loads a skill body on demand with `read_file` (`10-configuration.md` "Skills"). |
 
 Each role maps to a persistent `agentKey = {role}-{N}`; v1 has exactly one instance per role (keys are `{role}-1`). Leader identification is a team-level fact: a multi-agent team (≥2 `.md` files) requires `TEAM.md` with a `leader:` field referencing an existing role; a single-agent team without `TEAM.md` makes its only role the leader implicitly. The loader passes `isLeader` to the body's constructor; it surfaces in `AgentInfo` (carried by `system.team.loaded`) and is **not** used for event routing — every body is addressed by `agentKey` (see "Subscription Model" below).
 

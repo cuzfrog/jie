@@ -13,7 +13,9 @@ Platform-level configuration surface: how Jie discovers and loads settings, cred
 | `.jie/models.json` | Project provider overrides | Plain JSON | Same shape; a project entry replaces the global entry of the same provider name |
 | `~/.jie/mcp.json`, `.jie/mcp.json` | MCP server definitions | Plain JSON | Platform connects stdio servers at startup; project overrides per name (ADR 4) |
 | `.jie/teams/<id>/TEAM.md` | Team wiring | Plain text | `leader:` declaration in YAML frontmatter + prose |
-| `.jie/teams/<id>/<role>.md` | Agent definition | Plain text | YAML frontmatter (`model?`, `tools`, `subscribe?`) + prose body (system prompt) |
+| `.jie/teams/<id>/<role>.md` | Agent definition | Plain text | YAML frontmatter (`model?`, `tools`, `subscribe?`, `skills?`) + prose body (system prompt) |
+| `~/.jie/skills/<name>/SKILL.md` | Global skill | Plain text | YAML frontmatter (`name?`, `description`) + prose body; see "Skills" |
+| `.jie/skills/<name>/SKILL.md` | Project skill | Plain text | Same shape; a project skill overrides a global skill of the same name |
 
 `.jie/settings.json` is the only project-level user settings file — there is no project-level `auth.json`; credentials are global by design. The role identifier is the `.md` filename stem; there is no `name` frontmatter field.
 
@@ -100,6 +102,27 @@ TUI `/effort <level>` executes `setDefaultEffort`, writing `defaultEffort` to th
 The TUI re-renders from `system.team.loaded` (agent roster, leader focused) and thereafter publishes prompts to the focused agent's `agentKey` via `handle.prompt` — there is no leader-specific prompt topic. **The previously-active team is not stopped**: its bodies keep their `memory_turns` rows, in-memory prompt queue, and LLM context, and continue processing queued prompts autonomously — the platform holds no active-team state (ADR 26); the TUI just stops displaying it.
 
 Load failures fail the command, not the process: an unresolvable soul is skipped; a team with no resolvable model at all fails with `NO_MODEL_ERROR`. Other loaded teams continue unaffected.
+
+## Skills
+
+Skills are project/global instruction sets an agent loads on demand (progressive disclosure). A skill is a directory `<name>/SKILL.md` with YAML frontmatter and a prose body.
+
+### Discovery
+
+The `SkillManager` cradle singleton is built at platform boot by scanning `~/.jie/skills/` (global) and `.jie/skills/` (project, walk-up); a project skill overrides a global skill of the same name. Only `<dir>/SKILL.md` entries are considered; other files and directories without a `SKILL.md` are ignored.
+
+### SKILL.md format
+
+| Field | Required | Meaning |
+|---|---|---|
+| `name` | no | Defaults to the directory name; when present must equal it. Charset `[a-z0-9-]{1,64}`, no leading/trailing/consecutive hyphens — the directory name carries the constraint. |
+| `description` | yes | Non-empty, ≤ 1024 chars. Surfaced to the model so it can decide when to load the skill. |
+
+An invalid skill (bad name charset, missing/over-long description, name/directory mismatch, malformed frontmatter) is reported as a diagnostic and skipped (WARN), never a startup failure — consistent with MCP resource loading.
+
+### Manifest opt-in
+
+A skill is visible to an agent only if the agent's `skills:` frontmatter lists it (spec strings, wildcards allowed, resolved through the `SkillManager` with the same anchored-glob semantics as `tools`). Matched skills are rendered into an `<available_skills>` block appended to the agent's system prompt — name, description, and location only; the agent reads the body with `read_file`, resolving relative paths against the skill directory. Skills not listed for an agent are never surfaced to it.
 
 ## Workspace Inference
 

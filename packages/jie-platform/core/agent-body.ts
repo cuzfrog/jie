@@ -10,6 +10,7 @@ export interface AgentBodyParams {
     readonly systemPrompt: string;
     readonly tools: ReadonlyArray<string>;
     readonly subscribe: ReadonlyArray<string>;
+    readonly skills: ReadonlyArray<string>;
   };
   readonly isLeader: boolean;
   readonly sessionId: string;

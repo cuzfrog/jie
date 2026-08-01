@@ -3,6 +3,8 @@ import type { Api, AssistantMessage, Model, StopReason, TextContent, UserMessage
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { ExecutionContext, ToolRegistry } from "../tools";
+import type { SkillManager } from "../skills";
+import { composeSystemPrompt } from "../prompt";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { AgentBody, AgentBodyParams } from "./agent-body";
 import { StreamPublisherImpl, type StreamPublisher } from "./streaming";
@@ -15,6 +17,7 @@ interface AgentBodyDeps {
   readonly artifactStore: ArtifactStore;
   readonly memory: MemoryManager;
   readonly toolRegistry: ToolRegistry;
+  readonly skillManager: SkillManager;
   getApiKey(provider: string): Promise<string | undefined> | string | undefined;
   readonly createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
 }
@@ -92,7 +95,11 @@ export class JieAgentBody implements AgentBody {
         return undefined;
       },
     });
-    this.agent.state.systemPrompt = params.soul.systemPrompt;
+    const resolvedSkills = params.soul.skills.flatMap((spec) => deps.skillManager.resolve(spec));
+    this.agent.state.systemPrompt = composeSystemPrompt({
+      rolePrompt: params.soul.systemPrompt,
+      skills: resolvedSkills,
+    });
     this.agent.state.thinkingLevel = effortToThinkingLevel(params.effort);
     const bodyModel = resolveBodyModelInfo(params.model, this.agent.state.thinkingLevel);
     if (params.model !== undefined) {

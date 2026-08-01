@@ -8,6 +8,7 @@ import type { JiePlatform, JiePlatformOptions } from "./jie-platform";
 import { registerMcpModule, type McpConnector, type McpManager, type SubprocessFactory } from "./mcp";
 import { registerPlatformModule } from "./module";
 import { registerServicesModule, type GitService } from "./services";
+import { registerSkillsModule, type SkillManager } from "./skills";
 import { registerStorageModule, type ArtifactStore, type MemoryManager, type Storage } from "./storage";
 import { registerTeamModule, type TeamManager } from "./team";
 import { registerToolsModule, type ToolRegistry } from "./tools";
@@ -29,6 +30,7 @@ export interface PlatformCradle {
   readonly settingsStore: SettingsStore;
   readonly gitService: GitService;
   readonly toolRegistry: ToolRegistry;
+  readonly skillManager: SkillManager;
   readonly agentBodyFactory: (params: AgentBodyParams) => AgentBody;
   readonly teamManager: TeamManager;
   readonly commandExecutor: CommandExecutor;
@@ -55,6 +57,7 @@ export async function bootPlatform(options: JiePlatformOptions): Promise<AwilixC
   registerConfigModule(container);
   registerServicesModule(container);
   registerToolsModule(container);
+  registerSkillsModule(container);
   registerMcpModule(container);
   registerCoreModule(container);
   registerTeamModule(container);

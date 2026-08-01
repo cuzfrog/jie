@@ -1,6 +1,7 @@
 import { asFunction, type AwilixContainer } from "awilix";
 import type { ModelRegistry } from "../config";
 import type { EventManager } from "../event";
+import type { SkillManager } from "../skills";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { ToolRegistry } from "../tools";
 import type { PlatformCradle } from "../container";
@@ -14,6 +15,7 @@ export function registerCoreModule(container: AwilixContainer<PlatformCradle>): 
       artifactStore: ArtifactStore,
       memoryManager: MemoryManager,
       toolRegistry: ToolRegistry,
+      skillManager: SkillManager,
       modelRegistry: ModelRegistry,
     ) =>
       (params: AgentBodyParams): AgentBody =>
@@ -22,6 +24,7 @@ export function registerCoreModule(container: AwilixContainer<PlatformCradle>): 
           artifactStore,
           memory: memoryManager,
           toolRegistry,
+          skillManager,
           getApiKey: (provider) => modelRegistry.getApiKey(provider),
         })
     ).singleton(),

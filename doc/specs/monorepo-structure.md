@@ -9,7 +9,9 @@ packages/
     config/          # Settings, auth, models.json loading, model registry (10-configuration.md)
     core/            # AgentBody: event loop (jie-agent-body.ts), pi-agent wiring, streaming, tool adapter
     event/           # EventBus (InProcessEventBus), EventManager, Events factory (03-event-system.md)
+    prompt/          # composeSystemPrompt — assembles the LLM system prompt (role prose + skills block)
     services/        # GitService (branch / dirty status; consumed by the command surface and by jie-cli for the TUI footer)
+    skills/          # Skill discovery (SKILL.md), SkillManager (glob resolution), prompt formatting (10-configuration.md "Skills")
     storage/         # Storage + SqliteStorage, schema bootstrap, ArtifactStore, MemoryManager (04-storage.md, 08-memory.md)
     team/            # Blueprint parser, team registry (discovery, ADR 24), TeamManager, built-in minimal/ team
     tools/           # Built-in tools: notify, bash, read_file, write_file, edit, todo_write,
