@@ -6,8 +6,8 @@ Platform-level configuration surface: how Jie discovers and loads settings, cred
 
 | File | Scope | Sensitivity | Holds |
 |---|---|---|---|
-| `~/.jie/settings.json` | Global user settings | Plain JSON | `defaultProvider`, `defaultModel`, `defaultTeam`, `defaultEffort` |
-| `.jie/settings.json` | Project override | Plain JSON | Same fields, deep-merge over global |
+| `~/.jie/settings.json` | Global user settings | Plain JSON | `defaultProvider`, `defaultModel`, `defaultTeam`, `defaultEffort`, `hooks` (see "Hooks") |
+| `.jie/settings.json` | Project override | Plain JSON | Same fields; deep-merge over global, except `hooks` which merge additively |
 | `~/.jie/auth.json` | Global credentials | mode `0600` | API keys, OAuth tokens (schema owned by pi-ai) |
 | `~/.jie/models.json` | Global provider definitions | Plain JSON | Custom providers: base URLs, APIs, keys, model catalogs |
 | `.jie/models.json` | Project provider overrides | Plain JSON | Same shape; a project entry replaces the global entry of the same provider name |
@@ -129,6 +129,59 @@ A skill is visible to an agent only if the agent's `skills:` frontmatter lists i
 ## Context Files
 
 `AGENTS.md` and `CLAUDE.md` are auto-loaded instruction files injected into every agent's system prompt — shared project state, with no manifest opt-in (unlike skills). The platform reads them, in order, from the home jie dir (`~/.jie/`) and then from every ancestor of the CWD ordered root-down-to-CWD; within a directory `AGENTS.md` precedes `CLAUDE.md`. Missing or unreadable files are skipped and a path is read at most once. The assembled `<context_files>` block is the boot-time `systemContextBlock` cradle singleton, which the prompt composer places before the role prose; file content is injected verbatim.
+
+## Hooks
+
+Hooks run user-defined shell commands at agent-lifecycle points, following the Claude Code hook pattern. They are shared project state (no manifest opt-in) and apply to every agent.
+
+### Configuration
+
+Hooks live under the `hooks` key of `settings.json` (`~/.jie/settings.json` global, `.jie/settings.json` project). This key is read directly by the hooks module — it is *not* surfaced on `Settings` and does *not* follow the settings deep-merge: handlers from both scopes are concatenated **additively** per event (global first, then project), so a project `hooks` entry adds to, never replaces, the global handlers.
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "bash|write_file", "hooks": [ { "type": "command", "command": "./guard.sh", "timeout": 30 } ] }
+    ]
+  }
+}
+```
+
+Each event maps to an array of matcher groups; a group carries a `matcher` and an array of command handlers under `hooks`. A handler's `type` must be `"command"`; `timeout` is in seconds (default `60`). Parsing is lenient — malformed groups, handlers, and unknown event keys are skipped, never a startup failure.
+
+### Events
+
+| Event | Fires | Matcher | Effect |
+|---|---|---|---|
+| `PreToolUse` | before each tool call (pi `beforeToolCall`) | tool-name regex | block → the tool is not executed; the agent gets an error tool result with the reason |
+| `PostToolUse` | after each tool call (pi `afterToolCall`) | tool-name regex | block → the tool result is replaced with an error result (reason); `additionalContext` → appended to the tool result content |
+| `UserPromptSubmit` | before a user prompt is dispatched | none | block → the prompt is dropped and a `system.error` carries the reason; `additionalContext` → appended to the prompt text |
+| `SessionStart` | once when a body starts | none | informational (output ignored) |
+| `Stop` | when an agent run ends (`agent_end`) | none | informational (output ignored) |
+
+A `matcher` is a regular expression tested against the tool name; an absent, empty, or `*` matcher matches every tool and an invalid regex matches none. `PreToolUse` and `PostToolUse` short-circuit on the first blocking handler; `PostToolUse` and `UserPromptSubmit` accumulate `additionalContext` (last non-null wins).
+
+### Execution contract
+
+Each handler runs as `/bin/sh -c "<command>"` with the identity's `cwd`, the platform environment, and a JSON payload on stdin. The common fields are always present; event-specific fields are added per event:
+
+```json
+{ "session_id": "...", "hook_event_name": "PreToolUse", "cwd": "...", "team_id": "...", "agent_key": "...", "role": "...", "tool_name": "bash", "tool_input": {} }
+```
+
+Event-specific fields: `tool_name` + `tool_input` (PreToolUse), plus `tool_response` (PostToolUse), plus `prompt` (UserPromptSubmit); SessionStart and Stop add none. A handler that exceeds its timeout is killed (SIGTERM then SIGKILL) and treated as non-blocking.
+
+The exit code and stdout decide the outcome:
+
+| Signal | Meaning |
+|---|---|
+| exit `2` | block; reason is the JSON `reason` if present, else the trimmed stderr |
+| stdout JSON `continue: false` or `decision: "block"` | block; reason from JSON `reason` |
+| stdout JSON `hookSpecificOutput.additionalContext` | context appended to the tool result / prompt |
+| exit `0`, no blocking JSON | allow, no effect |
+
+stdout that is not a valid JSON object is ignored (treated as no output).
 
 ## Workspace Inference
 
