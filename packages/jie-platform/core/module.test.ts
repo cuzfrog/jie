@@ -4,6 +4,7 @@ import { Type } from "typebox";
 import type { ModelRegistry } from "../config";
 import type { PlatformCradle } from "../container";
 import type { EventManager } from "../event";
+import type { HookRunner } from "../hooks";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { AgentSoul } from "../team";
 import type { SkillManager } from "../skills";
@@ -51,6 +52,14 @@ const skillManager = vi.mocked<SkillManager>({
   list: vi.fn(() => []),
 });
 
+const hookRunner = vi.mocked<HookRunner>({
+  preToolUse: vi.fn(async () => ({ block: false, reason: null })),
+  postToolUse: vi.fn(async () => ({ block: false, reason: null, additionalContext: null })),
+  userPromptSubmit: vi.fn(async () => ({ block: false, reason: null, additionalContext: null })),
+  sessionStart: vi.fn(async () => {}),
+  stop: vi.fn(async () => {}),
+});
+
 const modelRegistry = vi.mocked<ModelRegistry>({
   providers: vi.fn(() => []),
   listProviders: vi.fn(() => []),
@@ -68,6 +77,8 @@ function bootedContainer(): AwilixContainer<PlatformCradle> {
     toolRegistry: asValue(toolRegistry),
     skillManager: asValue(skillManager),
     systemContextBlock: asValue(""),
+    hookRunner: asValue(hookRunner),
+    cwd: asValue("/work"),
     modelRegistry: asValue(modelRegistry),
   });
   registerCoreModule(container);

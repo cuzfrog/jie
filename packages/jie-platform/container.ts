@@ -5,6 +5,7 @@ import { registerConfigModule, type AuthStore, type ModelRegistry, type Settings
 import { registerContextModule } from "./context";
 import { registerCoreModule, type AgentBody, type AgentBodyParams } from "./core";
 import { registerEventModule, type EventBus, type EventManager } from "./event";
+import { registerHooksModule, type HookRunner } from "./hooks";
 import type { JiePlatform, JiePlatformOptions } from "./jie-platform";
 import { registerMcpModule, type McpConnector, type McpManager, type SubprocessFactory } from "./mcp";
 import { registerPlatformModule } from "./module";
@@ -33,6 +34,7 @@ export interface PlatformCradle {
   readonly toolRegistry: ToolRegistry;
   readonly skillManager: SkillManager;
   readonly systemContextBlock: string;
+  readonly hookRunner: HookRunner;
   readonly agentBodyFactory: (params: AgentBodyParams) => AgentBody;
   readonly teamManager: TeamManager;
   readonly commandExecutor: CommandExecutor;
@@ -61,6 +63,7 @@ export async function bootPlatform(options: JiePlatformOptions): Promise<AwilixC
   registerToolsModule(container);
   registerSkillsModule(container);
   registerContextModule(container);
+  registerHooksModule(container);
   registerMcpModule(container);
   registerCoreModule(container);
   registerTeamModule(container);

@@ -14,6 +14,7 @@ import { Events, type EventEnvelope, type EventManager, type EventType } from ".
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { Tool, ToolRegistry, ToolResult } from "../tools";
 import type { Skill, SkillManager } from "../skills";
+import type { HookRunner } from "../hooks";
 import type { AgentSoul } from "../team";
 import type { EffortLevel } from "../types";
 
@@ -184,6 +185,7 @@ interface Harness {
   events: EventManager;
   toolRegistry: ReturnType<typeof vi.mocked<ToolRegistry>>;
   skillManager: ReturnType<typeof vi.mocked<SkillManager>>;
+  hookRunner: ReturnType<typeof vi.mocked<HookRunner>>;
   persisted: AgentMessage[];
   restore: ReturnType<typeof vi.fn>;
   cap: FakeAgentCapture;
@@ -227,6 +229,13 @@ function makeHarness(): Harness {
     resolve: vi.fn(() => []),
     list: vi.fn(() => []),
   });
+  const hookRunner = vi.mocked<HookRunner>({
+    preToolUse: vi.fn(async () => ({ block: false, reason: null })),
+    postToolUse: vi.fn(async () => ({ block: false, reason: null, additionalContext: null })),
+    userPromptSubmit: vi.fn(async () => ({ block: false, reason: null, additionalContext: null })),
+    sessionStart: vi.fn(async () => {}),
+    stop: vi.fn(async () => {}),
+  });
   const artifactStore = vi.mocked<ArtifactStore>({
     write: vi.fn(),
     read: vi.fn(),
@@ -251,6 +260,8 @@ function makeHarness(): Harness {
       toolRegistry,
       skillManager,
       systemContextBlock: overrides.systemContextBlock ?? "",
+      hookRunner,
+      cwd: "/work",
       getApiKey: () => undefined,
       createAgent: overrides.factory ?? cap.factory,
     });
@@ -264,6 +275,7 @@ function makeHarness(): Harness {
     events,
     toolRegistry,
     skillManager,
+    hookRunner,
     persisted,
     restore,
     cap,
@@ -555,6 +567,74 @@ describe("JieAgentBody — agent construction wiring", () => {
     const env = results[0]!;
     expect(env.payload.output).toBeNull();
     expect(env.payload.error).toBe("boom");
+  });
+});
+
+describe("JieAgentBody — hook gating", () => {
+  function beforeCtx(): BeforeToolCallContext {
+    return {
+      assistantMessage: makeAssistantMessage(),
+      toolCall: { type: "toolCall", id: "c1", name: "bash", arguments: { command: "ls" } },
+      args: { command: "ls" },
+      context: makeAgentContext(),
+    };
+  }
+
+  function afterCtx(): AfterToolCallContext {
+    return {
+      assistantMessage: makeAssistantMessage(),
+      toolCall: { type: "toolCall", id: "c1", name: "bash", arguments: { command: "ls" } },
+      args: { command: "ls" },
+      context: makeAgentContext(),
+      result: { content: [{ type: "text", text: "ok" }], details: {}, terminate: false },
+      isError: false,
+    };
+  }
+
+  test("beforeToolCall blocks the tool when the PreToolUse hook blocks", async () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    h.hookRunner.preToolUse.mockResolvedValue({ block: true, reason: "denied" });
+    h.makeBody({ factory: cap.factory });
+    const hook = cap.lastOpts()?.beforeToolCall;
+    if (hook === undefined) throw new Error("beforeToolCall hook not provided");
+    expect(await hook(beforeCtx())).toEqual({ block: true, reason: "denied" });
+  });
+
+  test("beforeToolCall allows the tool and forwards identity + tool fields to the hook", async () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    h.makeBody({ factory: cap.factory });
+    const hook = cap.lastOpts()?.beforeToolCall;
+    if (hook === undefined) throw new Error("beforeToolCall hook not provided");
+    expect(await hook(beforeCtx())).toBeUndefined();
+    expect(h.hookRunner.preToolUse).toHaveBeenCalledWith({
+      identity: { sessionId: "s1", cwd: "/work", teamId: "t1", agentKey: "general-1", role: "general" },
+      toolName: "bash",
+      toolInput: { command: "ls" },
+    });
+  });
+
+  test("afterToolCall marks the result an error when the PostToolUse hook blocks", async () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    h.hookRunner.postToolUse.mockResolvedValue({ block: true, reason: "bad", additionalContext: null });
+    h.makeBody({ factory: cap.factory });
+    const hook = cap.lastOpts()?.afterToolCall;
+    if (hook === undefined) throw new Error("afterToolCall hook not provided");
+    expect(await hook(afterCtx())).toEqual({ isError: true, content: [{ type: "text", text: "bad" }] });
+  });
+
+  test("afterToolCall appends additionalContext to the tool result content", async () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    h.hookRunner.postToolUse.mockResolvedValue({ block: false, reason: null, additionalContext: "note" });
+    h.makeBody({ factory: cap.factory });
+    const hook = cap.lastOpts()?.afterToolCall;
+    if (hook === undefined) throw new Error("afterToolCall hook not provided");
+    expect(await hook(afterCtx())).toEqual({
+      content: [{ type: "text", text: "ok" }, { type: "text", text: "note" }],
+    });
   });
 });
 

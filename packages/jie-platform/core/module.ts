@@ -1,6 +1,7 @@
 import { asFunction, type AwilixContainer } from "awilix";
 import type { ModelRegistry } from "../config";
 import type { EventManager } from "../event";
+import type { HookRunner } from "../hooks";
 import type { SkillManager } from "../skills";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { ToolRegistry } from "../tools";
@@ -17,6 +18,8 @@ export function registerCoreModule(container: AwilixContainer<PlatformCradle>): 
       toolRegistry: ToolRegistry,
       skillManager: SkillManager,
       systemContextBlock: string,
+      hookRunner: HookRunner,
+      cwd: string,
       modelRegistry: ModelRegistry,
     ) =>
       (params: AgentBodyParams): AgentBody =>
@@ -27,6 +30,8 @@ export function registerCoreModule(container: AwilixContainer<PlatformCradle>): 
           toolRegistry,
           skillManager,
           systemContextBlock,
+          hookRunner,
+          cwd,
           getApiKey: (provider) => modelRegistry.getApiKey(provider),
         })
     ).singleton(),

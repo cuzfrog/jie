@@ -4,6 +4,7 @@ import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { ExecutionContext, ToolRegistry } from "../tools";
 import type { SkillManager } from "../skills";
+import type { HookIdentity, HookRunner } from "../hooks";
 import { composeSystemPrompt } from "../prompt";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { AgentBody, AgentBodyParams } from "./agent-body";
@@ -19,6 +20,8 @@ interface AgentBodyDeps {
   readonly toolRegistry: ToolRegistry;
   readonly skillManager: SkillManager;
   readonly systemContextBlock: string;
+  readonly hookRunner: HookRunner;
+  readonly cwd: string;
   getApiKey(provider: string): Promise<string | undefined> | string | undefined;
   readonly createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
 }
@@ -31,6 +34,8 @@ export class JieAgentBody implements AgentBody {
   private readonly sessionId: string;
   private readonly eventManager: EventManager;
   private readonly memory: MemoryManager;
+  private readonly hookRunner: HookRunner;
+  private readonly hookIdentity: HookIdentity;
   private readonly agent: Agent;
   private readonly stream: StreamPublisher;
   private readonly sender: AgentSender;
@@ -47,6 +52,14 @@ export class JieAgentBody implements AgentBody {
     this.sessionId = params.sessionId;
     this.eventManager = deps.eventManager;
     this.memory = deps.memory;
+    this.hookRunner = deps.hookRunner;
+    this.hookIdentity = {
+      sessionId: this.sessionId,
+      cwd: deps.cwd,
+      teamId: this.teamId,
+      agentKey: this.agentKey,
+      role: params.soul.role,
+    };
     this.sender = { kind: "agent", teamId: this.teamId, agentKey: this.agentKey };
     this.stream = new StreamPublisherImpl(deps.eventManager, this.sender);
     const executionContext: ExecutionContext = {
@@ -76,6 +89,12 @@ export class JieAgentBody implements AgentBody {
           context.toolCall.name,
           JSON.stringify(context.args),
         ));
+        const preOutcome = await this.hookRunner.preToolUse({
+          identity: this.hookIdentity,
+          toolName: context.toolCall.name,
+          toolInput: context.args,
+        });
+        if (preOutcome.block) return { block: true, reason: preOutcome.reason ?? undefined };
         return undefined;
       },
       afterToolCall: async (context) => {
@@ -93,6 +112,18 @@ export class JieAgentBody implements AgentBody {
           error,
           output?.details ?? null,
         ));
+        const postOutcome = await this.hookRunner.postToolUse({
+          identity: this.hookIdentity,
+          toolName: context.toolCall.name,
+          toolInput: context.args,
+          toolResponse: output === null ? "" : JSON.stringify(output),
+        });
+        if (postOutcome.block) {
+          return { isError: true, content: [{ type: "text", text: postOutcome.reason ?? "blocked by PostToolUse hook" }] };
+        }
+        if (postOutcome.additionalContext !== null) {
+          return { content: [...context.result.content, { type: "text", text: postOutcome.additionalContext }] };
+        }
         return undefined;
       },
     });
