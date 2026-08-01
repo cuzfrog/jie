@@ -11,6 +11,7 @@ interface AgentSoul {
   readonly systemPrompt: string;               // prose body of the agent's .md file, verbatim
   readonly tools: ReadonlyArray<string>;       // tool spec strings, resolved through the ToolRegistry
   readonly subscribe: ReadonlyArray<string>;   // un-scoped domain topics; body listens on custom.{teamId}.{topic}
+  readonly skills: ReadonlyArray<string>;      // skill spec strings, resolved through the SkillManager
 }
 ```
 
@@ -48,6 +49,7 @@ The blueprint lives at `.jie/teams/<team_id>/` (file layout, discovery, model re
 | `model` | no | `<provider>/<model_id>`; when absent, inherited from the user's global default (`10-configuration.md` "Model Resolution"). Always a resolved string by soul-construction time. |
 | `tools` | yes | Tool spec strings resolved through the `ToolRegistry` at body construction. |
 | `subscribe` | no | Un-scoped domain topic names. Entries starting with `agent.` are rejected at parse time (`subscribe_rejects_platform_topic: <topic>`) and the team fails to start — platform events (`agent.*`) are observer-only, never agent-consumed; the platform manages isolation so team authors never see platform subjects. |
+| `skills` | no | Skill spec strings resolved through the `SkillManager` at body construction (wildcards allowed, same anchored-glob semantics as `tools`; a spec matching nothing is silently discarded, unlike tool specs, which fail team load). Each matched skill is listed in the agent's system prompt; the agent loads a skill body on demand with `read_file` (`10-configuration.md` "Skills"). |
 
 Each role maps to a persistent `agentKey = {role}-{N}`; v1 has exactly one instance per role (keys are `{role}-1`). Leader identification is a team-level fact: a multi-agent team (≥2 `.md` files) requires `TEAM.md` with a `leader:` field referencing an existing role; a single-agent team without `TEAM.md` makes its only role the leader implicitly. The loader passes `isLeader` to the body's constructor; it surfaces in `AgentInfo` (carried by `system.team.loaded`) and is **not** used for event routing — every body is addressed by `agentKey` (see "Subscription Model" below).
 
@@ -247,6 +249,8 @@ Ingress formats the notification as a synthetic `user` message and feeds it to p
 
 If `agent.state.isStreaming`, the message goes onto the body's FIFO in-memory queue (not persisted; lost on restart); otherwise it is dispatched immediately via `agent.prompt()`. Queued messages are drained one at a time via `agent.followUp()` on `turn_end` / `agent_end`. Every enqueue and dequeue publishes `agent.prompt.queue.update` with `{ prompts: string[] }` — a snapshot of the synthetic message texts — which the TUI renders as the queued-prompt indicator. The queue is intentionally unbounded in v1.
 
+A `user.prompt` first runs the `UserPromptSubmit` hook (10-configuration.md "Hooks") before the queue/dispatch decision: a block drops the prompt and publishes `system.error` with the reason, and a non-null `additionalContext` is appended to `{prompt}`. Peer notifications (`custom.*`) do not run this hook. Because the hook may block, prompt ingress is asynchronous.
+
 ## AgentBody
 
 The public contract:
@@ -259,11 +263,11 @@ interface AgentBody {
 }
 ```
 
-The `agentBodyFactory` cradle entry (registered in `core/module.ts`, invoked by `TeamManager.load`) builds the single concrete implementation: per-body `AgentBodyParams` (`agentKey`, `teamId`, `soul`, `isLeader`, `sessionId`, and the resolved pi-ai `Model`) plus cradle-scoped deps (`eventManager`, `artifactStore`, `memoryManager`, `toolRegistry`, `getApiKey` derived from the model registry). No inheritance — the body wraps pi-agent-core's `Agent`, which owns the LLM loop, tool execution, streaming, and context transformation. The soul is immutable; the body is the only publisher on the bus.
+The `agentBodyFactory` cradle entry (registered in `core/module.ts`, invoked by `TeamManager.load`) builds the single concrete implementation: per-body `AgentBodyParams` (`agentKey`, `teamId`, `soul`, `isLeader`, `sessionId`, and the resolved pi-ai `Model`) plus cradle-scoped deps (`eventManager`, `artifactStore`, `memoryManager`, `toolRegistry`, `skillManager`, `systemContextBlock`, `hookRunner`, `cwd`, `getApiKey` derived from the model registry). No inheritance — the body wraps pi-agent-core's `Agent`, which owns the LLM loop, tool execution, streaming, and context transformation. The soul is immutable; the body is the only publisher on the bus.
 
-**`start()` ordering.** (1) Register the subscriptions above. (2) `memory.restore(agentKey, sessionId, teamId)` and push the rows into `agent.state.messages`. (3) If the restored history ends with a `user` or `toolResult` message, `agent.continue()` to resume the in-flight turn. (4) Drain anything that arrived on subscribed topics during startup via `agent.prompt()`. The body does not publish `agent.idle` at startup — a body that has never run a turn is idle by default. `stop()` unsubscribes everything.
+**`start()` ordering.** (1) Register the subscriptions above and fire the `SessionStart` hook (once per body — `start()` is idempotent; 10-configuration.md "Hooks"). (2) `memory.restore(agentKey, sessionId, teamId)` and push the rows into `agent.state.messages`. (3) If the restored history ends with a `user` or `toolResult` message, `agent.continue()` to resume the in-flight turn. (4) Drain anything that arrived on subscribed topics during startup via `agent.prompt()`. The body does not publish `agent.idle` at startup — a body that has never run a turn is idle by default. `stop()` unsubscribes everything.
 
-**Agent construction.** The `Agent` is created with `sessionId`, `getApiKey`, an identity `transformContext` (compaction not wired in v1), `steeringMode: "all"`, `followUpMode: "all"`, `toolExecution: "sequential"`, and the telemetry hooks below. The body then sets `agent.state.systemPrompt` (the soul's prose), `agent.state.model` (publishing `agent.model.assigned` when a model is assigned), and `agent.state.tools` (the adapted `AgentTool[]`).
+**Agent construction.** The `Agent` is created with `sessionId`, `getApiKey`, an identity `transformContext` (compaction not wired in v1), `steeringMode: "all"`, `followUpMode: "all"`, `toolExecution: "sequential"`, and the telemetry hooks below. The body then sets `agent.state.systemPrompt` via `composeSystemPrompt` (the shared context-files block, then the soul's prose, then the resolved skills block), `agent.state.model` (publishing `agent.model.assigned` when a model is assigned), and `agent.state.tools` (the adapted `AgentTool[]`).
 
 ### Event Bridging
 
@@ -275,12 +279,12 @@ The body subscribes to pi-agent's `AgentEvent` stream and bridges to the bus:
 | `message_start`, `message_update`, `message_end` (assistant) | streaming pipeline → `agent.stream.chunk` / `agent.stream.end`; assistant `message_end` also publishes `agent.usage` when the message carries usage |
 | `message_end` (every role) | `memory.persist(message, agentKey, sessionId, teamId)` — unconditional, no role check |
 | `turn_end` | dequeue one queued message via `agent.followUp()`; publish `agent.prompt.queue.update` |
-| `agent_end` | `agent.idle` with the final `stopReason`; also `system.error` when the run ended `error`/`aborted` with a message; then dequeue as on `turn_end` |
+| `agent_end` | `agent.idle` with the final `stopReason`; also `system.error` when the run ended `error`/`aborted` with a message; fire the `Stop` hook; then dequeue as on `turn_end` |
 | `agent_start`, `tool_execution_*` | not bridged — tool telemetry comes from the `beforeToolCall`/`afterToolCall` hooks |
 
 **Streaming.** `message_update` text/thinking deltas buffer per block type and flush as `agent.stream.chunk` `{ stream_id, seq, block_type, text }` at ≥ 64 chars or on a 200ms timer (a block-type change flushes the prior buffer first); the assistant `message_end` flushes the remainder and publishes `agent.stream.end` `{ stream_id, total_chunks }`.
 
-**Tool telemetry hooks.** `beforeToolCall` publishes `agent.tool.call` `{ tool_call_id, name, input, input_truncated }`; `afterToolCall` publishes `agent.tool.result` `{ tool_call_id, name, output, output_truncated, duration_ms, error, details }`. `tool_call_id` is pi-agent's provider-defined id passed through as-is — the same string in both events is the correlation key for observers. `output` serializes the whole Jie `ToolResult` (content, details, terminate), not just the LLM-visible text, and `details` is additionally carried first-class in the payload. Both text fields are middle-truncated to 4 KiB (`EVENT_TEXT_TRUNCATION_BYTES`, marker `...[N chars truncated]...`) — events only; the LLM always sees untruncated tool input and output. Both events are observer-only: no agent subscribes to them.
+**Tool telemetry hooks.** `beforeToolCall` publishes `agent.tool.call` `{ tool_call_id, name, input, input_truncated }`; `afterToolCall` publishes `agent.tool.result` `{ tool_call_id, name, output, output_truncated, duration_ms, error, details }`. `tool_call_id` is pi-agent's provider-defined id passed through as-is — the same string in both events is the correlation key for observers. `output` serializes the whole Jie `ToolResult` (content, details, terminate), not just the LLM-visible text, and `details` is additionally carried first-class in the payload. Both text fields are middle-truncated to 4 KiB (`EVENT_TEXT_TRUNCATION_BYTES`, marker `...[N chars truncated]...`) — events only; the LLM always sees untruncated tool input and output. Both events are observer-only: no agent subscribes to them. The same two seams run the user's command hooks (10-configuration.md "Hooks"): `beforeToolCall` runs `PreToolUse` after publishing telemetry — a block prevents execution and the agent receives an error tool result carrying the reason; `afterToolCall` runs `PostToolUse` — a block replaces the result with an error result, and `additionalContext` is appended to the result content. Telemetry is published regardless of hook outcome.
 
 ### Agent Loop and Termination
 

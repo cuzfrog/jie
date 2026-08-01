@@ -3,6 +3,9 @@ import type { Api, AssistantMessage, Model, StopReason, TextContent, UserMessage
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { ExecutionContext, ToolRegistry } from "../tools";
+import type { SkillManager } from "../skills";
+import type { HookIdentity, HookRunner } from "../hooks";
+import { composeSystemPrompt } from "../prompt";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { AgentBody, AgentBodyParams } from "./agent-body";
 import { StreamPublisherImpl, type StreamPublisher } from "./streaming";
@@ -15,6 +18,10 @@ interface AgentBodyDeps {
   readonly artifactStore: ArtifactStore;
   readonly memory: MemoryManager;
   readonly toolRegistry: ToolRegistry;
+  readonly skillManager: SkillManager;
+  readonly systemContextBlock: string;
+  readonly hookRunner: HookRunner;
+  readonly cwd: string;
   getApiKey(provider: string): Promise<string | undefined> | string | undefined;
   readonly createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
 }
@@ -27,6 +34,8 @@ export class JieAgentBody implements AgentBody {
   private readonly sessionId: string;
   private readonly eventManager: EventManager;
   private readonly memory: MemoryManager;
+  private readonly hookRunner: HookRunner;
+  private readonly hookIdentity: HookIdentity;
   private readonly agent: Agent;
   private readonly stream: StreamPublisher;
   private readonly sender: AgentSender;
@@ -43,6 +52,14 @@ export class JieAgentBody implements AgentBody {
     this.sessionId = params.sessionId;
     this.eventManager = deps.eventManager;
     this.memory = deps.memory;
+    this.hookRunner = deps.hookRunner;
+    this.hookIdentity = {
+      sessionId: this.sessionId,
+      cwd: deps.cwd,
+      teamId: this.teamId,
+      agentKey: this.agentKey,
+      role: params.soul.role,
+    };
     this.sender = { kind: "agent", teamId: this.teamId, agentKey: this.agentKey };
     this.stream = new StreamPublisherImpl(deps.eventManager, this.sender);
     const executionContext: ExecutionContext = {
@@ -72,6 +89,12 @@ export class JieAgentBody implements AgentBody {
           context.toolCall.name,
           JSON.stringify(context.args),
         ));
+        const preOutcome = await this.hookRunner.preToolUse({
+          identity: this.hookIdentity,
+          toolName: context.toolCall.name,
+          toolInput: context.args,
+        });
+        if (preOutcome.block) return { block: true, reason: preOutcome.reason ?? undefined };
         return undefined;
       },
       afterToolCall: async (context) => {
@@ -89,10 +112,27 @@ export class JieAgentBody implements AgentBody {
           error,
           output?.details ?? null,
         ));
+        const postOutcome = await this.hookRunner.postToolUse({
+          identity: this.hookIdentity,
+          toolName: context.toolCall.name,
+          toolInput: context.args,
+          toolResponse: output === null ? "" : JSON.stringify(output),
+        });
+        if (postOutcome.block) {
+          return { isError: true, content: [{ type: "text", text: postOutcome.reason ?? "blocked by PostToolUse hook" }] };
+        }
+        if (postOutcome.additionalContext !== null) {
+          return { content: [...context.result.content, { type: "text", text: postOutcome.additionalContext }] };
+        }
         return undefined;
       },
     });
-    this.agent.state.systemPrompt = params.soul.systemPrompt;
+    const resolvedSkills = params.soul.skills.flatMap((spec) => deps.skillManager.resolve(spec));
+    this.agent.state.systemPrompt = composeSystemPrompt({
+      rolePrompt: params.soul.systemPrompt,
+      contextBlock: deps.systemContextBlock,
+      skills: resolvedSkills,
+    });
     this.agent.state.thinkingLevel = effortToThinkingLevel(params.effort);
     const bodyModel = resolveBodyModelInfo(params.model, this.agent.state.thinkingLevel);
     if (params.model !== undefined) {
@@ -138,6 +178,7 @@ export class JieAgentBody implements AgentBody {
     this.started = true;
 
     this.registerSubscriptions();
+    await this.hookRunner.sessionStart({ identity: this.hookIdentity });
 
     const restored = this.restored ?? await this.restore();
     if (restored.length > 0) {
@@ -180,6 +221,7 @@ export class JieAgentBody implements AgentBody {
         if (final.isError && final.errorMessage !== null) {
           this.eventManager.publish(Events.systemError({ kind: "system" }, final.errorMessage));
         }
+        void this.hookRunner.stop({ identity: this.hookIdentity });
         if (this.queue.length > 0) {
           const next = this.queue.shift()!;
           this.agent.followUp(next);
@@ -228,7 +270,7 @@ export class JieAgentBody implements AgentBody {
     this.unsubscribers.push(
       this.eventManager.subscribe("user.prompt", (env) => {
         if (env.payload.teamId !== this.teamId || env.payload.agentKey !== this.agentKey) return;
-        this.ingestUserPrompt(env.payload);
+        void this.ingestUserPrompt(env.payload);
       }),
       this.eventManager.subscribe("agent.interrupt", (env) => {
         if (env.payload.teamId !== this.teamId || env.payload.agentKey !== this.agentKey) return;
@@ -244,8 +286,14 @@ export class JieAgentBody implements AgentBody {
     }
   }
 
-  private ingestUserPrompt(payload: { teamId: string; agentKey: string; prompt: string }): void {
-    this.dispatchIngress("user", null, payload.prompt);
+  private async ingestUserPrompt(payload: { teamId: string; agentKey: string; prompt: string }): Promise<void> {
+    const outcome = await this.hookRunner.userPromptSubmit({ identity: this.hookIdentity, prompt: payload.prompt });
+    if (outcome.block) {
+      this.eventManager.publish(Events.systemError({ kind: "system" }, outcome.reason ?? "prompt blocked by UserPromptSubmit hook"));
+      return;
+    }
+    const prompt = outcome.additionalContext === null ? payload.prompt : `${payload.prompt}\n\n${outcome.additionalContext}`;
+    this.dispatchIngress("user", null, prompt);
   }
 
   private ingestCustom(topic: string, sender: AgentSender, payload: { message: string; truncated: boolean }): void {

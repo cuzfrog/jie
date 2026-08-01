@@ -4,6 +4,7 @@ export interface AgentSoul {
   readonly systemPrompt: string;
   readonly tools: ReadonlyArray<string>;
   readonly subscribe: ReadonlyArray<string>;
+  readonly skills: ReadonlyArray<string>;
 }
 
 export interface TeamBlueprint {

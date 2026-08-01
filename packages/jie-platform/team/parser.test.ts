@@ -81,6 +81,21 @@ describe("loadTeamFromDir", () => {
     expect(bp.roles[0]?.subscribe).toEqual(["task.recorded"]);
   });
 
+  test("skills: with spec strings is accepted and stored", () => {
+    writeFileSync(
+      join(dir, "general.md"),
+      `---\ntools:\n  - bash\nskills:\n  - deploy\n  - "test-*"\n---\nbody`,
+    );
+    const bp = loadTeamFromDir(dir);
+    expect(bp.roles[0]?.skills).toEqual(["deploy", "test-*"]);
+  });
+
+  test("absent skills defaults to an empty list", () => {
+    writeFileSync(join(dir, "general.md"), `---\ntools:\n  - bash\n---\nbody`);
+    const bp = loadTeamFromDir(dir);
+    expect(bp.roles[0]?.skills).toEqual([]);
+  });
+
   test("agent with model field is parsed; model format validated", () => {
     writeFileSync(
       join(dir, "general.md"),
@@ -189,6 +204,12 @@ describe("loadTeamFromDir — typed error codes", () => {
     {
       name: "invalid_field_type (tools not a list)",
       setup: () => setupFiles({ "general.md": "---\ntools: bash\n---\n" }),
+      act: () => loadTeamFromDir(dir),
+      code: "INVALID_FIELD_TYPE",
+    },
+    {
+      name: "invalid_field_type (skills not a list)",
+      setup: () => setupFiles({ "general.md": "---\ntools:\n  - bash\nskills: deploy\n---\n" }),
       act: () => loadTeamFromDir(dir),
       code: "INVALID_FIELD_TYPE",
     },

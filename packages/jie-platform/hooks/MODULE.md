@@ -1,0 +1,17 @@
+---
+no-new-exports:
+  - command-executor.ts
+  - hook-runner.ts
+  - index.ts
+  - load-hooks.ts
+  - module.ts
+  - parse-hooks.ts
+  - types.ts
+---
+
+## Contracts
+
+- Hooks are configured under the `hooks` key of `settings.json` (claude-code shape): `{ "<Event>": [ { "matcher"?, "hooks": [ { "type": "command", "command", "timeout"? } ] } ] }`. `loadHooksConfig` reads the key from `~/.jie/settings.json` then `.jie/settings.json` (each tagged with its file path as a `HookSource`) and `parseHooksConfig` merges the two scopes additively (project matchers run after global), returning `{ config, diagnostics }`. Parsing is lenient: unknown event keys, non-`command` handler types, and malformed groups are skipped, never thrown — a broken hooks block must not discard the rest of the settings. Every skipped group/handler yields a `HookDiagnostic` (`{ path, message }`); the DI edge (`module.ts`) logs each as a WARN via the `jie.platform.hooks` sub-logger, consistent with the skills/MCP loaders (issue #202). An absent `hooks` key is normal and yields no diagnostic.
+- v1 events: `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `SessionStart`, `Stop`. Only `command` handlers are supported. `matcher` is a tool-name regex (absent/`""`/`"*"` matches every tool); it applies only to the tool events. An invalid regex, or a matcher set on a non-tool event, is a parse-time diagnostic and is treated as match-all.
+- Each handler runs as `/bin/sh -c <command>` with a JSON payload on stdin (`session_id`, `hook_event_name`, `cwd`, `team_id`, `agent_key`, `role`, plus event fields) and a per-handler timeout (default 60s). The shell is spawned detached, so the timeout kill (SIGTERM, then SIGKILL after a 5s grace) reaches the handler's whole process group, backgrounded descendants included. Exit `2` blocks; a JSON stdout of `{ "continue": false }` or `{ "decision": "block", "reason" }` blocks; `hookSpecificOutput.additionalContext` injects context where the event supports it. Other non-zero exits are non-blocking errors. A timeout and a spawn/IO failure (e.g. a stale `cwd`) are non-blocking and never thrown: a hook must not crash the platform.
+- `PreToolUse` maps to pi-agent `beforeToolCall` (a block returns `{ block: true, reason }`, which pi turns into an error tool result). `PostToolUse` maps to `afterToolCall` (block marks the result an error; `additionalContext` appends to the tool result). `UserPromptSubmit`, `SessionStart`, `Stop` fire on the body lifecycle. Implementation classes (`HookRunnerImpl`, `ShCommandExecutor`) are module-private; only `HookRunner` and the input/outcome types cross the boundary. The load/parse types (`HookSource`, `HookDiagnostic`, `LoadHooksResult`) are likewise module-internal — used only by `load-hooks.ts`, `parse-hooks.ts`, and `module.ts`, and deliberately not re-exported from `index.ts`.

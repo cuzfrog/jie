@@ -4,8 +4,10 @@ import { Type } from "typebox";
 import type { ModelRegistry } from "../config";
 import type { PlatformCradle } from "../container";
 import type { EventManager } from "../event";
+import type { HookRunner } from "../hooks";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { AgentSoul } from "../team";
+import type { SkillManager } from "../skills";
 import type { Tool, ToolRegistry } from "../tools";
 import type { AgentBodyParams } from "./agent-body";
 import { registerCoreModule } from "./module";
@@ -45,6 +47,18 @@ const toolRegistry = vi.mocked<ToolRegistry>({
   list: vi.fn(() => []),
 });
 
+const skillManager = vi.mocked<SkillManager>({
+  resolve: vi.fn(() => []),
+});
+
+const hookRunner = vi.mocked<HookRunner>({
+  preToolUse: vi.fn(async () => ({ block: false, reason: null })),
+  postToolUse: vi.fn(async () => ({ block: false, reason: null, additionalContext: null })),
+  userPromptSubmit: vi.fn(async () => ({ block: false, reason: null, additionalContext: null })),
+  sessionStart: vi.fn(async () => {}),
+  stop: vi.fn(async () => {}),
+});
+
 const modelRegistry = vi.mocked<ModelRegistry>({
   providers: vi.fn(() => []),
   listProviders: vi.fn(() => []),
@@ -60,6 +74,10 @@ function bootedContainer(): AwilixContainer<PlatformCradle> {
     artifactStore: asValue(artifactStore),
     memoryManager: asValue(memoryManager),
     toolRegistry: asValue(toolRegistry),
+    skillManager: asValue(skillManager),
+    systemContextBlock: asValue(""),
+    hookRunner: asValue(hookRunner),
+    cwd: asValue("/work"),
     modelRegistry: asValue(modelRegistry),
   });
   registerCoreModule(container);
@@ -73,6 +91,7 @@ function makeSoul(overrides: Partial<AgentSoul> = {}): AgentSoul {
     systemPrompt: "you are a general assistant",
     tools: [],
     subscribe: [],
+    skills: [],
     ...overrides,
   };
 }

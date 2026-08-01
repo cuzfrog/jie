@@ -13,8 +13,14 @@ import type { AgentBodyParams } from "./agent-body";
 import { Events, type EventEnvelope, type EventManager, type EventType } from "../event";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { Tool, ToolRegistry, ToolResult } from "../tools";
+import type { Skill, SkillManager } from "../skills";
+import type { HookRunner } from "../hooks";
 import type { AgentSoul } from "../team";
 import type { EffortLevel } from "../types";
+
+async function flush(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
 
 function makeModel(provider: string, id: string): Model<Api> {
   return {
@@ -38,6 +44,7 @@ function makeSoul(overrides: Partial<AgentSoul> = {}): AgentSoul {
     systemPrompt: "you are a general assistant",
     tools: [],
     subscribe: [],
+    skills: [],
     ...overrides,
   };
 }
@@ -175,11 +182,14 @@ interface MakeBodyOverrides {
   model?: Model<Api>;
   effort?: EffortLevel;
   factory?: (opts: ConstructorParameters<typeof PiAgent>[0]) => PiAgent;
+  systemContextBlock?: string;
 }
 
 interface Harness {
   events: EventManager;
   toolRegistry: ReturnType<typeof vi.mocked<ToolRegistry>>;
+  skillManager: ReturnType<typeof vi.mocked<SkillManager>>;
+  hookRunner: ReturnType<typeof vi.mocked<HookRunner>>;
   persisted: AgentMessage[];
   restore: ReturnType<typeof vi.fn>;
   cap: FakeAgentCapture;
@@ -219,6 +229,16 @@ function makeHarness(): Harness {
     resolve: vi.fn(() => [makeNoopTool()]),
     list: vi.fn(() => []),
   });
+  const skillManager = vi.mocked<SkillManager>({
+    resolve: vi.fn(() => []),
+  });
+  const hookRunner = vi.mocked<HookRunner>({
+    preToolUse: vi.fn(async () => ({ block: false, reason: null })),
+    postToolUse: vi.fn(async () => ({ block: false, reason: null, additionalContext: null })),
+    userPromptSubmit: vi.fn(async () => ({ block: false, reason: null, additionalContext: null })),
+    sessionStart: vi.fn(async () => {}),
+    stop: vi.fn(async () => {}),
+  });
   const artifactStore = vi.mocked<ArtifactStore>({
     write: vi.fn(),
     read: vi.fn(),
@@ -241,6 +261,10 @@ function makeHarness(): Harness {
       artifactStore,
       memory,
       toolRegistry,
+      skillManager,
+      systemContextBlock: overrides.systemContextBlock ?? "",
+      hookRunner,
+      cwd: "/work",
       getApiKey: () => undefined,
       createAgent: overrides.factory ?? cap.factory,
     });
@@ -253,6 +277,8 @@ function makeHarness(): Harness {
   return {
     events,
     toolRegistry,
+    skillManager,
+    hookRunner,
     persisted,
     restore,
     cap,
@@ -266,6 +292,36 @@ function makeHarness(): Harness {
     makeBody,
   };
 }
+
+describe("JieAgentBody — system prompt composition", () => {
+  const deploySkill: Skill = {
+    name: "deploy",
+    description: "Deploys the app",
+    filePath: "/deploy/SKILL.md",
+    baseDir: "/deploy",
+  };
+
+  test("resolved skills are appended to the role prompt", () => {
+    const h = makeHarness();
+    h.skillManager.resolve.mockReturnValue([deploySkill]);
+    h.makeBody({ soul: makeSoul({ skills: ["deploy"] }) });
+    expect(h.skillManager.resolve).toHaveBeenCalledWith("deploy");
+    expect(h.state.systemPrompt).toContain("you are a general assistant");
+    expect(h.state.systemPrompt).toContain("<name>deploy</name>");
+  });
+
+  test("no skills leaves the role prompt verbatim", () => {
+    const h = makeHarness();
+    h.makeBody({ soul: makeSoul() });
+    expect(h.state.systemPrompt).toBe("you are a general assistant");
+  });
+
+  test("the shared context block is prepended before the role prompt", () => {
+    const h = makeHarness();
+    h.makeBody({ systemContextBlock: "<context_files>X</context_files>" });
+    expect(h.state.systemPrompt).toBe("<context_files>X</context_files>\n\nyou are a general assistant");
+  });
+});
 
 describe("JieAgentBody — identity", () => {
   test("identity reflects the params and the resolved model info", () => {
@@ -517,6 +573,161 @@ describe("JieAgentBody — agent construction wiring", () => {
   });
 });
 
+describe("JieAgentBody — hook gating", () => {
+  function beforeCtx(): BeforeToolCallContext {
+    return {
+      assistantMessage: makeAssistantMessage(),
+      toolCall: { type: "toolCall", id: "c1", name: "bash", arguments: { command: "ls" } },
+      args: { command: "ls" },
+      context: makeAgentContext(),
+    };
+  }
+
+  function afterCtx(): AfterToolCallContext {
+    return {
+      assistantMessage: makeAssistantMessage(),
+      toolCall: { type: "toolCall", id: "c1", name: "bash", arguments: { command: "ls" } },
+      args: { command: "ls" },
+      context: makeAgentContext(),
+      result: { content: [{ type: "text", text: "ok" }], details: {}, terminate: false },
+      isError: false,
+    };
+  }
+
+  test("beforeToolCall blocks the tool when the PreToolUse hook blocks", async () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    h.hookRunner.preToolUse.mockResolvedValue({ block: true, reason: "denied" });
+    h.makeBody({ factory: cap.factory });
+    const hook = cap.lastOpts()?.beforeToolCall;
+    if (hook === undefined) throw new Error("beforeToolCall hook not provided");
+    expect(await hook(beforeCtx())).toEqual({ block: true, reason: "denied" });
+  });
+
+  test("beforeToolCall allows the tool and forwards identity + tool fields to the hook", async () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    h.makeBody({ factory: cap.factory });
+    const hook = cap.lastOpts()?.beforeToolCall;
+    if (hook === undefined) throw new Error("beforeToolCall hook not provided");
+    expect(await hook(beforeCtx())).toBeUndefined();
+    expect(h.hookRunner.preToolUse).toHaveBeenCalledWith({
+      identity: { sessionId: "s1", cwd: "/work", teamId: "t1", agentKey: "general-1", role: "general" },
+      toolName: "bash",
+      toolInput: { command: "ls" },
+    });
+  });
+
+  test("afterToolCall marks the result an error when the PostToolUse hook blocks", async () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    h.hookRunner.postToolUse.mockResolvedValue({ block: true, reason: "bad", additionalContext: null });
+    h.makeBody({ factory: cap.factory });
+    const hook = cap.lastOpts()?.afterToolCall;
+    if (hook === undefined) throw new Error("afterToolCall hook not provided");
+    expect(await hook(afterCtx())).toEqual({ isError: true, content: [{ type: "text", text: "bad" }] });
+  });
+
+  test("afterToolCall appends additionalContext to the tool result content", async () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    h.hookRunner.postToolUse.mockResolvedValue({ block: false, reason: null, additionalContext: "note" });
+    h.makeBody({ factory: cap.factory });
+    const hook = cap.lastOpts()?.afterToolCall;
+    if (hook === undefined) throw new Error("afterToolCall hook not provided");
+    expect(await hook(afterCtx())).toEqual({
+      content: [{ type: "text", text: "ok" }, { type: "text", text: "note" }],
+    });
+  });
+});
+
+describe("JieAgentBody — lifecycle hooks", () => {
+  const identity = { sessionId: "s1", cwd: "/work", teamId: "t1", agentKey: "general-1", role: "general" };
+
+  test("start() fires the SessionStart hook once with the body identity", async () => {
+    const h = makeHarness();
+    const body = h.makeBody();
+    await body.start();
+    expect(h.hookRunner.sessionStart).toHaveBeenCalledTimes(1);
+    expect(h.hookRunner.sessionStart).toHaveBeenCalledWith({ identity });
+    body.stop();
+  });
+
+  test("repeated start() fires SessionStart only once (start is idempotent)", async () => {
+    const h = makeHarness();
+    const body = h.makeBody();
+    await body.start();
+    await body.start();
+    expect(h.hookRunner.sessionStart).toHaveBeenCalledTimes(1);
+    body.stop();
+  });
+
+  test("agent_end fires the Stop hook with the body identity", () => {
+    const h = makeHarness();
+    h.makeBody();
+    h.fireEvent({ type: "agent_end", messages: [] });
+    expect(h.hookRunner.stop).toHaveBeenCalledTimes(1);
+    expect(h.hookRunner.stop).toHaveBeenCalledWith({ identity });
+  });
+
+  test("UserPromptSubmit receives the prompt and identity before dispatch", async () => {
+    const h = makeHarness();
+    const body = h.makeBody();
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "hello", "general-1"));
+    await flush();
+    expect(h.hookRunner.userPromptSubmit).toHaveBeenCalledWith({ identity, prompt: "hello" });
+    expect(h.prompt.mock.calls.length).toBe(1);
+    body.stop();
+  });
+
+  test("a blocking UserPromptSubmit hook prevents dispatch and surfaces the reason as system.error", async () => {
+    const h = makeHarness();
+    h.hookRunner.userPromptSubmit.mockResolvedValue({ block: true, reason: "nope", additionalContext: null });
+    const errors: EventEnvelope<"system.error">[] = [];
+    h.subscribeSubject("system.error", (env) => {
+      errors.push(env);
+    });
+    const body = h.makeBody();
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "hello", "general-1"));
+    await flush();
+    expect(h.prompt.mock.calls.length).toBe(0);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]!.payload.error).toBe("nope");
+    body.stop();
+  });
+
+  test("a blocking UserPromptSubmit hook with no reason falls back to a default message", async () => {
+    const h = makeHarness();
+    h.hookRunner.userPromptSubmit.mockResolvedValue({ block: true, reason: null, additionalContext: null });
+    const errors: EventEnvelope<"system.error">[] = [];
+    h.subscribeSubject("system.error", (env) => {
+      errors.push(env);
+    });
+    const body = h.makeBody();
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "hello", "general-1"));
+    await flush();
+    expect(h.prompt.mock.calls.length).toBe(0);
+    expect(errors[0]!.payload.error).toBe("prompt blocked by UserPromptSubmit hook");
+    body.stop();
+  });
+
+  test("UserPromptSubmit additionalContext is appended to the dispatched prompt", async () => {
+    const h = makeHarness();
+    h.hookRunner.userPromptSubmit.mockResolvedValue({ block: false, reason: null, additionalContext: "extra" });
+    const body = h.makeBody();
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "hello", "general-1"));
+    await flush();
+    expect(h.prompt.mock.calls.length).toBe(1);
+    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
+    expect((synthetic as { content: unknown }).content).toBe("[user]: hello\n\nextra");
+    body.stop();
+  });
+});
+
 describe("JieAgentBody — agent.model.assigned publication", () => {
   test("publishes with effort 'off' when the effort param is 'off'", () => {
     const h = makeHarness();
@@ -597,9 +808,11 @@ describe("JieAgentBody — start() subscriptions", () => {
     await body.start();
     await b2.start();
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "for worker", "worker-1"));
+    await flush();
     expect(cap2.fake.prompt.mock.calls.length).toBe(1);
     expect(h.prompt.mock.calls.length).toBe(0);
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "for general", "general-1"));
+    await flush();
     expect(h.prompt.mock.calls.length).toBe(1);
     expect(cap2.fake.prompt.mock.calls.length).toBe(1);
     b2.stop();
@@ -846,6 +1059,7 @@ describe("JieAgentBody — prompt ingress format", () => {
     const body = h.makeBody();
     await body.start();
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "hello", "general-1"));
+    await flush();
     expect(h.prompt.mock.calls.length).toBeGreaterThan(0);
     const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
     expect(synthetic.role).toBe("user");
@@ -1098,6 +1312,7 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     await body.start();
     h.state.isStreaming = true;
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "queued msg", "general-1"));
+    await flush();
     expect(h.followUp.mock.calls.length).toBe(0);
     expect(h.prompt.mock.calls.length).toBe(0);
     h.state.isStreaming = false;
@@ -1133,6 +1348,7 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     await body.start();
     h.state.isStreaming = true;
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "queued msg", "general-1"));
+    await flush();
     h.state.isStreaming = false;
     h.fireEvent({
       type: "turn_end",
@@ -1172,12 +1388,14 @@ describe("JieAgentBody — stop()", () => {
     const body = h.makeBody();
     await body.start();
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "before stop", "general-1"));
+    await flush();
     h.state.isStreaming = true;
     h.events.publish(Events.agentInterrupt({ kind: "user" }, "t1", "general-1"));
     expect(h.prompt.mock.calls.length).toBe(1);
     expect(h.abort.mock.calls.length).toBe(1);
     body.stop();
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "after stop", "general-1"));
+    await flush();
     h.events.publish(Events.agentInterrupt({ kind: "user" }, "t1", "general-1"));
     expect(h.prompt.mock.calls.length).toBe(1);
     expect(h.abort.mock.calls.length).toBe(1);
@@ -1189,6 +1407,7 @@ describe("JieAgentBody — stop()", () => {
     await body.start();
     await body.start();
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "once", "general-1"));
+    await flush();
     expect(h.prompt.mock.calls.length).toBe(1);
     body.stop();
   });
