@@ -137,6 +137,7 @@ describe("registerCoreModule", () => {
       isLeader: true,
       tools: [],
       subscribe: [],
+      skills: [],
       model: null,
     });
     body.stop();

@@ -13,6 +13,7 @@ function team(agents: ReadonlyArray<{
   isLeader: boolean;
   tools?: ReadonlyArray<string>;
   subscribe?: ReadonlyArray<string>;
+  skills?: ReadonlyArray<string>;
   model: { provider: string; id: string; effort: "off" | "low" | "medium" | "high" | "max"; contextWindow: number | null } | null;
 }>, sessionName: string | null = null): TeamInfo {
   const leader = agents.find((a) => a.isLeader) ?? agents[0];
@@ -28,6 +29,7 @@ function team(agents: ReadonlyArray<{
       isLeader: a.isLeader,
       tools: a.tools ?? [],
       subscribe: a.subscribe ?? [],
+      skills: a.skills ?? [],
       model: a.model,
     })),
   };
@@ -36,7 +38,7 @@ function team(agents: ReadonlyArray<{
 describe("teamLoadReducer", () => {
   test("seeds agents and focuses the leader", () => {
     const state = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
     ]));
     expect(state.teamId).toBe("my-team");
     expect(state.agents.size).toBe(1);
@@ -46,17 +48,17 @@ describe("teamLoadReducer", () => {
 
   test("carries the session name from the TeamInfo", () => {
     const state = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
     ], "my session"));
     expect(state.sessionName).toBe("my session");
   });
 
   test("switching teams replaces the previous session name", () => {
     const named = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
     ], "old name"));
     const switched = teamLoadReducer(named, {
-      ...team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }]),
+      ...team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }]),
       id: "other-team",
     });
     expect(switched.sessionName).toBeNull();
@@ -81,12 +83,29 @@ describe("teamLoadReducer", () => {
     expect(state.agents.get("my-team:general-1")?.model?.contextWindow).toBe(200000);
   });
 
+  test("seeds the resolved skill names from TeamInfo", () => {
+    const state = teamLoadReducer(INITIAL_TUI_STATE, team([
+      { role: "general", agentKey: "general-1", isLeader: true, skills: ["say-hello", "deploy"], model: null },
+    ]));
+    expect(state.agents.get("my-team:general-1")?.skills).toEqual(["say-hello", "deploy"]);
+  });
+
+  test("refreshes skills when a team is reloaded with a changed manifest", () => {
+    const first = teamLoadReducer(INITIAL_TUI_STATE, team([
+      { role: "general", agentKey: "general-1", isLeader: true, skills: ["say-hello"], model: null },
+    ]));
+    const second = teamLoadReducer(first, team([
+      { role: "general", agentKey: "general-1", isLeader: true, skills: [], model: null },
+    ]));
+    expect(second.agents.get("my-team:general-1")?.skills).toEqual([]);
+  });
+
   test("preserves the existing model when the new payload carries model: null (no overwrite)", () => {
     const first = teamLoadReducer(INITIAL_TUI_STATE, team([
       { role: "general", agentKey: "general-1", isLeader: true, model: { provider: "lm-studio", id: "ornith-1.0-9b-mtp", effort: "off", contextWindow: null } },
     ]));
     const second = teamLoadReducer(first, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
     ]));
     expect(second.agents.get("my-team:general-1")?.model).toEqual({
       provider: "lm-studio",
@@ -98,7 +117,7 @@ describe("teamLoadReducer", () => {
 
   test("team switch clears the agent map and leader focus from the prior team", () => {
     const first = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
     ]));
     const second = teamLoadReducer(first, {
       id: "my-team-2",
@@ -106,8 +125,8 @@ describe("teamLoadReducer", () => {
       sessionName: null,
       history: [],
       agents: [
-        { teamId: "my-team-2", role: "manager", agentKey: "manager-1", isLeader: false, tools: [], subscribe: [], model: null },
-        { teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], model: null },
+        { teamId: "my-team-2", role: "manager", agentKey: "manager-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null },
+        { teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
       ],
     });
     expect(second.teamId).toBe("my-team-2");
@@ -120,11 +139,11 @@ describe("teamLoadReducer", () => {
 
   test("same-team reload preserves agents that still exist", () => {
     const first = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
-      { role: "helper", agentKey: "helper-1", isLeader: false, tools: [], subscribe: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+      { role: "helper", agentKey: "helper-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null },
     ]));
     const second = teamLoadReducer(first, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
     ]));
     expect(second.agents.size).toBe(1);
     expect(second.agents.has("my-team:general-1")).toBe(true);
@@ -133,7 +152,7 @@ describe("teamLoadReducer", () => {
 
   test("team switch resets every agent's todos to []", () => {
     const first = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
     ]));
     const seededAgents = new Map(first.agents);
     const withTodosAgent = seededAgents.get("my-team:general-1");
@@ -145,14 +164,14 @@ describe("teamLoadReducer", () => {
       leaderKey: "worker-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], model: null }],
+      agents: [{ teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     });
     expect(switched.agents.get("my-team-2:worker-1")?.todos).toEqual([]);
   });
 
   test("same-team reload preserves an agent's existing todos", () => {
     const first = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
     ]));
     const firstAgent = first.agents.get("my-team:general-1");
     if (firstAgent === undefined) throw new Error("seed missing");
@@ -160,18 +179,18 @@ describe("teamLoadReducer", () => {
     seededAgents.set("my-team:general-1", { ...firstAgent, todos: [{ content: "still here", status: "pending" }] });
     const withTodos: TuiState = { ...first, agents: seededAgents };
     const second = teamLoadReducer(withTodos, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
     ]));
     expect(second.agents.get("my-team:general-1")?.todos).toEqual([{ content: "still here", status: "pending" }]);
   });
 
   test("team load clears the interrupted marker", () => {
     const first = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
     ]));
     const marked: TuiState = { ...first, interruptedAgentId: "my-team:general-1" };
     const second = teamLoadReducer(marked, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
     ]));
     expect(second.interruptedAgentId).toBeNull();
   });
@@ -206,7 +225,7 @@ function usage(): Usage {
 
 describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
   test("non-empty messages hydrate the matching agent's currentTurn", () => {
-    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }]);
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }]);
     const state = teamLoadReducer(INITIAL_TUI_STATE, {
       ...info,
       history: [{ agentKey: "general-1", messages: [user("hello"), assistantText("world")] }],
@@ -224,7 +243,7 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
 
   test("earlier turns rotate into history and todos restore from the last todo result", () => {
     const todos = [{ content: "a", status: "completed" as const }];
-    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }]);
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }]);
     const state = teamLoadReducer(INITIAL_TUI_STATE, {
       ...info,
       history: [{
@@ -244,7 +263,7 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
 
   test("empty messages preserve an existing slot (switchTeam identity must not clobber live state)", () => {
     const seeded = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
     ]));
     const existing = seeded.agents.get("my-team:general-1");
     if (existing === undefined) throw new Error("seed missing");
@@ -252,13 +271,13 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
     const liveAgents = new Map(seeded.agents);
     liveAgents.set("my-team:general-1", { ...existing, currentTurn: streamingTurn });
     const withLive: TuiState = { ...seeded, agents: liveAgents };
-    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }]);
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }]);
     const after = teamLoadReducer(withLive, { ...info, history: [{ agentKey: "general-1", messages: [] }] });
     expect(after.agents.get("my-team:general-1")?.currentTurn).toBe(streamingTurn);
   });
 
   test("history for an agentKey absent from the payload is skipped without creating a slot", () => {
-    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }]);
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }]);
     const state = teamLoadReducer(INITIAL_TUI_STATE, {
       ...info,
       history: [{ agentKey: "ghost-1", messages: [user("boo"), assistantText("gone")] }],
@@ -268,7 +287,7 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
   });
 
   test("contextTokensUsed is estimated from the hydrated content", () => {
-    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }]);
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }]);
     const state = teamLoadReducer(INITIAL_TUI_STATE, {
       ...info,
       history: [{ agentKey: "general-1", messages: [user("count me"), assistantText("twelve chars")] }],
@@ -277,7 +296,7 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
   });
 
   test("hydrated turns are numbered sequentially and nextEntrySeq advances past them", () => {
-    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }]);
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }]);
     const state = teamLoadReducer(INITIAL_TUI_STATE, {
       ...info,
       history: [{
@@ -299,14 +318,14 @@ describe("teamLoadReducer — info entries", () => {
 
   test("team switch resets info entries and the seq counter", () => {
     const first = withInfoEntry(teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
     ])));
     const switched = teamLoadReducer(first, {
       id: "my-team-2",
       leaderKey: "worker-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], model: null }],
+      agents: [{ teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     });
     expect(switched.infoEntries).toEqual([]);
     expect(switched.nextEntrySeq).toBe(0);
@@ -314,10 +333,10 @@ describe("teamLoadReducer — info entries", () => {
 
   test("same-team reload preserves info entries", () => {
     const first = withInfoEntry(teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
     ])));
     const second = teamLoadReducer(first, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
     ]));
     expect(second.infoEntries).toEqual([{ seq: 0, kind: "help" }]);
     expect(second.nextEntrySeq).toBe(3);

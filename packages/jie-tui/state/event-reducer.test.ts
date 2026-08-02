@@ -21,7 +21,7 @@ function loadedState(): TuiState {
     leaderKey: "general-1",
     sessionName: null,
     history: [],
-    agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+    agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
   }));
 }
 
@@ -32,8 +32,8 @@ function twoAgentState(): TuiState {
     sessionName: null,
     history: [],
     agents: [
-      { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, tools: [], subscribe: [], model: null },
-      { teamId: "my-team", role: "worker", agentKey: "worker-1", isLeader: false, tools: [], subscribe: [], model: null },
+      { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+      { teamId: "my-team", role: "worker", agentKey: "worker-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null },
     ],
   }));
 }
@@ -55,7 +55,7 @@ describe("reduceTeamLoaded", () => {
       leaderKey: "general-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+      agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     }));
     expect(state.teamId).toBe("my-team");
     expect(state.agents.size).toBe(1);
@@ -69,14 +69,14 @@ describe("reduceTeamLoaded", () => {
       leaderKey: "general-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "my-team-1", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+      agents: [{ teamId: "my-team-1", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     }));
     const state2 = reduce(state1, Events.teamLoaded(SYSTEM_SENDER, {
       id: "my-team-2",
       leaderKey: "general-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "my-team-2", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+      agents: [{ teamId: "my-team-2", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     }));
     expect(state2.teamId).toBe("my-team-2");
     expect(state2.agents.size).toBe(1);
@@ -92,8 +92,8 @@ describe("reduceTeamLoaded", () => {
       sessionName: null,
       history: [],
       agents: [
-        { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, tools: [], subscribe: [], model: null },
-        { teamId: "my-team", role: "worker", agentKey: "worker-1", isLeader: false, tools: [], subscribe: [], model: null },
+        { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+        { teamId: "my-team", role: "worker", agentKey: "worker-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null },
       ],
     }));
     expect(state.leaderAgentId).toBe("my-team:manager-1");
@@ -109,7 +109,7 @@ describe("Actions.switchTeam", () => {
       sessionName: null,
       history: [],
       agents: [
-        { teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
+        { teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
       ],
     };
     const state = reduceAction(INITIAL_TUI_STATE, Actions.switchTeam(identity));
@@ -126,7 +126,7 @@ describe("Actions.switchTeam", () => {
       leaderKey: "general-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "team-a", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+      agents: [{ teamId: "team-a", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     }));
     const second = reduceAction(first, Actions.switchTeam({
       id: "team-b",
@@ -134,8 +134,8 @@ describe("Actions.switchTeam", () => {
       sessionName: null,
       history: [],
       agents: [
-        { teamId: "team-b", role: "manager", agentKey: "manager-1", isLeader: false, tools: [], subscribe: [], model: null },
-        { teamId: "team-b", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], model: null },
+        { teamId: "team-b", role: "manager", agentKey: "manager-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null },
+        { teamId: "team-b", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
       ],
     }));
     expect(second.teamId).toBe("team-b");
@@ -153,7 +153,7 @@ describe("Actions.switchTeam", () => {
       leaderKey: "general-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     };
     const state = reduceAction(INITIAL_TUI_STATE, Actions.switchTeam(identity));
     expect(state.agents.get("minimal:general-1")?.role).toBe("general");

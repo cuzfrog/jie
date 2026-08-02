@@ -308,7 +308,7 @@ describe("CommandExecutorImpl", () => {
         leaderKey: "general-1",
         sessionName: null,
         history: [],
-        agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+        agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
       };
       teamManager.load.mockResolvedValue(identity);
       const result = await executor.execute({ name: "team", teamId: "alpha" });

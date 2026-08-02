@@ -17,7 +17,18 @@ describe("parseSkill", () => {
       description: "Deploys the app",
       filePath: "/skills/deploy/SKILL.md",
       baseDir: "/skills/deploy",
+      body: "body",
     });
+  });
+
+  test("the body is the content after the frontmatter, trimmed", () => {
+    const { skill } = parseSkill(input("---\ndescription: Deploys the app\n---\n\nstep one\nstep two\n\n"));
+    expect(skill?.body).toBe("step one\nstep two");
+  });
+
+  test("a skill file with no content after the frontmatter has an empty body", () => {
+    const { skill } = parseSkill(input("---\ndescription: Deploys the app\n---\n"));
+    expect(skill?.body).toBe("");
   });
 
   test("an explicit name matching the directory is accepted", () => {

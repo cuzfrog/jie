@@ -11,8 +11,8 @@ function loadDemoTeam(stateStore: StateStore): void {
         sessionName: null,
         history: [],
         agents: [
-          { teamId: "demo", role: "helper", agentKey: "helper-1", isLeader: false, tools: [], subscribe: [], model: null },
-          { teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null },
+          { teamId: "demo", role: "helper", agentKey: "helper-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null },
+          { teamId: "demo", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
         ],
       }),
     ),

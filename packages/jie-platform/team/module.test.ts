@@ -95,6 +95,7 @@ function makeFakeBody(params: AgentBodyParams): AgentBody {
       isLeader: params.isLeader,
       tools: params.soul.tools,
       subscribe: params.soul.subscribe,
+      skills: params.soul.skills,
       model: null,
     },
     restore: async () => [],

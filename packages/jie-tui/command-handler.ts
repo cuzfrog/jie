@@ -1,5 +1,5 @@
 import { isEffortLevel, JiePlatformError, type CommandName, type JiePlatform } from "@cuzfrog/jie-platform";
-import { Actions, TuiState, type StateStore } from "./state";
+import { Actions, TuiState, type AgentUiState, type StateStore } from "./state";
 import { bashDirective, parseBashCommand } from "./bash";
 import { matchesModelFilter, type ModelRef } from "./model-filter";
 
@@ -62,6 +62,11 @@ export class CommandHandlerImpl implements CommandHandler {
       return;
     }
 
+    if (name.startsWith("skill:")) {
+      this.routeSkillInvocation(name, trimmed);
+      return;
+    }
+
     const outcome = runCommand(trimmed);
     switch (outcome.kind) {
       case "clearState":
@@ -103,6 +108,24 @@ export class CommandHandlerImpl implements CommandHandler {
       return;
     }
     this.platform.prompt(target.teamId, target.agentKey, trimmed);
+  }
+
+  private routeSkillInvocation(name: string, trimmed: string): void {
+    const skillName = name.slice("skill:".length);
+    if (skillName === "") {
+      this.stateStore.dispatch(Actions.setErrorMessage("usage: /skill:<name> [args]"));
+      return;
+    }
+    const agent = routeTargetAgent(this.stateStore);
+    if (agent === null) {
+      this.stateStore.dispatch(Actions.setErrorMessage("no team loaded — load a team first"));
+      return;
+    }
+    if (!agent.skills.includes(skillName)) {
+      this.stateStore.dispatch(Actions.setErrorMessage(`skill '${skillName}' is not available on agent '${agent.agentKey}'`));
+      return;
+    }
+    this.platform.prompt(agent.teamId, agent.agentKey, trimmed);
   }
 
   private runIntercepts(name: string, args: ReadonlyArray<string>): InterceptResult {
@@ -355,12 +378,16 @@ function errorReason(error: unknown): string {
 }
 
 function routeTarget(stateStore: StateStore): AgentRoute | null {
-  const state = stateStore.getState();
-  return agentTarget(state, state.focusedAgentId) ?? agentTarget(state, state.leaderAgentId);
+  const agent = routeTargetAgent(stateStore);
+  return agent === null ? null : { teamId: agent.teamId, agentKey: agent.agentKey };
 }
 
-function agentTarget(state: TuiState, agentId: TuiState["focusedAgentId"]): AgentRoute | null {
+function routeTargetAgent(stateStore: StateStore): AgentUiState | null {
+  const state = stateStore.getState();
+  return agentAt(state, state.focusedAgentId) ?? agentAt(state, state.leaderAgentId);
+}
+
+function agentAt(state: TuiState, agentId: TuiState["focusedAgentId"]): AgentUiState | null {
   if (agentId === null) return null;
-  const agent = state.agents.get(agentId);
-  return agent === undefined ? null : { teamId: agent.teamId, agentKey: agent.agentKey };
+  return state.agents.get(agentId) ?? null;
 }

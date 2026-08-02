@@ -121,6 +121,56 @@ describe("CommandHandlerImpl — prompt routing", () => {
   });
 });
 
+describe("CommandHandlerImpl — skill invocation", () => {
+  function stateWithSkill(teamId: string, agentFocused: boolean): TuiState {
+    const agent = makeAgentUiState(`${teamId}:general-1`, { isLeader: true, skills: ["say-hello"] });
+    return makeTuiState({
+      teamId,
+      leaderAgentId: agent.agentId,
+      focusedAgentId: agentFocused ? agent.agentId : null,
+      agents: new Map([[agent.agentId, agent]]),
+    });
+  }
+
+  test("routes a skill the target agent has, passing the text through verbatim", () => {
+    const { platform, prompt } = makePlatform();
+    const { handler } = makeHandler(platform, stateWithSkill("alpha", true));
+    handler.handle("/skill:say-hello Cause");
+    expect(prompt).toHaveBeenCalledWith("alpha", "general-1", "/skill:say-hello Cause");
+  });
+
+  test("falls back to the leader when no agent is focused", () => {
+    const { platform, prompt } = makePlatform();
+    const { handler } = makeHandler(platform, stateWithSkill("alpha", false));
+    handler.handle("/skill:say-hello");
+    expect(prompt).toHaveBeenCalledWith("alpha", "general-1", "/skill:say-hello");
+  });
+
+  test("rejects a skill the target agent does not have", () => {
+    const { platform, prompt } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform, stateWithSkill("alpha", true));
+    handler.handle("/skill:deploy now");
+    expect(prompt).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("deploy")));
+  });
+
+  test("rejects a skill invocation when no team is loaded", () => {
+    const { platform, prompt } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/skill:say-hello");
+    expect(prompt).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("no team loaded")));
+  });
+
+  test("rejects a missing skill name", () => {
+    const { platform, prompt } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform, stateWithSkill("alpha", true));
+    handler.handle("/skill:");
+    expect(prompt).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/skill:<name>")));
+  });
+});
+
 describe("CommandHandlerImpl — /login", () => {
   test("/login <provider> <apiKey> dispatches login command and replies", () => {
     const { platform, execute } = makePlatform();
@@ -401,7 +451,7 @@ describe("CommandHandlerImpl — /reload", () => {
     leaderKey: "general-1",
     sessionName: null,
     history: [],
-    agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+    agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
   };
 
   test("/reload while any agent is busy sets an error banner and does not call execute", () => {
@@ -487,7 +537,7 @@ describe("CommandHandlerImpl — /team", () => {
       leaderKey: "general-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     }));
     const { handler, dispatch } = makeHandler(platform);
     handler.handle("/team alpha");
@@ -500,7 +550,7 @@ describe("CommandHandlerImpl — /team", () => {
       leaderKey: "general-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     }));
   });
 
@@ -511,7 +561,7 @@ describe("CommandHandlerImpl — /team", () => {
       leaderKey: "general-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     } as const;
     execute.mockImplementation(async () => identity);
     const { handler, dispatch } = makeHandler(platform);
@@ -563,7 +613,7 @@ describe("CommandHandlerImpl — /resume", () => {
       leaderKey: "general-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     };
     execute.mockImplementationOnce(async () => identity);
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
@@ -579,7 +629,7 @@ describe("CommandHandlerImpl — /resume", () => {
       leaderKey: "general-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     };
     execute.mockImplementationOnce(async () => identity);
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));

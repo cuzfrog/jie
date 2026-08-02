@@ -17,6 +17,7 @@ function loadedTeam(roles: ReadonlyArray<{ role: string; agent_key: string; is_l
     isLeader: r.is_leader,
     tools: [],
     subscribe: [],
+    skills: [],
     model: null,
   }));
   const leaderKey = agents.find((a) => a.isLeader)?.agentKey ?? agents[0]?.agentKey ?? "general-1";

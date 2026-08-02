@@ -22,8 +22,9 @@ export function parseSkill(input: ParseSkillInput): ParseSkillResult {
   if (nameError !== null) return { skill: null, diagnostic: nameError };
 
   let frontmatter: Record<string, unknown>;
+  let body: string;
   try {
-    frontmatter = parseFrontmatter(input.content);
+    ({ frontmatter, body } = parseFrontmatter(input.content));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return { skill: null, diagnostic: `invalid frontmatter: ${message}` };
@@ -39,17 +40,19 @@ export function parseSkill(input: ParseSkillInput): ParseSkillResult {
   const descriptionError = validateDescription(frontmatter.description);
   if (descriptionError !== null) return { skill: null, diagnostic: descriptionError };
 
-  const skill: Skill = { name: input.dirName, description: String(frontmatter.description), filePath: input.filePath, baseDir: input.baseDir };
+  const skill: Skill = {
+    name: input.dirName, description: String(frontmatter.description), filePath: input.filePath, baseDir: input.baseDir, body: body.trim(),
+  };
   return { skill, diagnostic: null };
 }
 
-function parseFrontmatter(content: string): Record<string, unknown> {
+function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } {
   const lines = content.split("\n");
-  if (lines[0]?.trim() !== "---") return {};
+  if (lines[0]?.trim() !== "---") return { frontmatter: {}, body: content };
   const closingIndex = lines.indexOf("---", 1);
-  if (closingIndex === -1) return {};
+  if (closingIndex === -1) return { frontmatter: {}, body: content };
   const parsed: unknown = parseYaml(lines.slice(1, closingIndex).join("\n"));
-  return isObject(parsed) ? parsed : {};
+  return { frontmatter: isObject(parsed) ? parsed : {}, body: lines.slice(closingIndex + 1).join("\n") };
 }
 
 function validateName(name: string): string | null {

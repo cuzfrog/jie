@@ -10,7 +10,7 @@ describe("StateStore", () => {
       leaderKey: "general-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+      agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     })));
     store.subscribe((action) => {
       if (action.type === Actions.submitEditorText("").type) {

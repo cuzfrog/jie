@@ -39,7 +39,7 @@ Identity travels in the envelope, not in the subject. `topic` equals `type` for 
 | `user.prompt.dequeue` | user | `{ teamId, agentKey, prompt }` — cancel the most recently queued user prompt whose raw text equals `prompt` |
 | `user.effort.update` | user | `{ effort }` — broadcast a new default effort; every live body applies it (`06-agent-model.md`) |
 | `agent.interrupt` | any | `{ teamId, agentKey }` |
-| `system.team.loaded` | system | `TeamInfo` — `{ id, leaderKey, agents: [{ teamId, role, agentKey, isLeader, model }] }` |
+| `system.team.loaded` | system | `TeamInfo` — `{ id, leaderKey, agents: [{ teamId, role, agentKey, isLeader, tools, subscribe, skills, model }] }` |
 | `system.error` | system | `{ error: string }` |
 | `custom.${clientTopic}` | agent | `{ message: string, truncated: boolean }` |
 

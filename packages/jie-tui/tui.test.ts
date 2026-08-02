@@ -154,7 +154,7 @@ const TEAM_LOADED = Events.teamLoaded({ kind: "system" }, {
   leaderKey: "general-1",
   sessionName: null,
   history: [],
-  agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+  agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
 });
 
 const TWO_AGENT_TEAM = Events.teamLoaded({ kind: "system" }, {
@@ -163,8 +163,8 @@ const TWO_AGENT_TEAM = Events.teamLoaded({ kind: "system" }, {
   sessionName: null,
   history: [],
   agents: [
-    { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, tools: [], subscribe: [], model: null },
-    { teamId: "my-team", role: "worker", agentKey: "worker-1", isLeader: false, tools: [], subscribe: [], model: null },
+    { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+    { teamId: "my-team", role: "worker", agentKey: "worker-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null },
   ],
 });
 

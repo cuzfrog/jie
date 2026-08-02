@@ -3,7 +3,7 @@ import type { Api, AssistantMessage, Model, StopReason, TextContent, UserMessage
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { ExecutionContext, ToolRegistry } from "../tools";
-import type { SkillManager } from "../skills";
+import { expandSkillInvocation, type Skill, type SkillManager } from "../skills";
 import type { HookIdentity, HookRunner } from "../hooks";
 import { composeSystemPrompt } from "../prompt";
 import { Events, type AgentSender, type EventManager } from "../event";
@@ -40,6 +40,7 @@ export class JieAgentBody implements AgentBody {
   private readonly stream: StreamPublisher;
   private readonly sender: AgentSender;
   private readonly queue: QueuedPrompt[] = [];
+  private readonly resolvedSkills: ReadonlyArray<Skill>;
   private modelInfo: ModelInfo | null;
   private pendingTurnPrompt: string | null = null;
   private readonly unsubscribers: Array<() => void> = [];
@@ -129,11 +130,11 @@ export class JieAgentBody implements AgentBody {
         return undefined;
       },
     });
-    const resolvedSkills = params.soul.skills.flatMap((spec) => deps.skillManager.resolve(spec));
+    this.resolvedSkills = params.soul.skills.flatMap((spec) => deps.skillManager.resolve(spec));
     this.agent.state.systemPrompt = composeSystemPrompt({
       rolePrompt: params.soul.systemPrompt,
       contextBlock: deps.systemContextBlock,
-      skills: resolvedSkills,
+      skills: this.resolvedSkills,
     });
     this.isLeader = params.isLeader;
     this.agent.state.thinkingLevel = effortToThinkingLevel(params.effort);
@@ -157,6 +158,7 @@ export class JieAgentBody implements AgentBody {
       isLeader: this.isLeader,
       tools: this.soul.tools,
       subscribe: this.soul.subscribe,
+      skills: this.resolvedSkills.map((skill) => skill.name),
       model: this.modelInfo,
     };
   }
@@ -311,7 +313,8 @@ export class JieAgentBody implements AgentBody {
       this.eventManager.publish(Events.systemError({ kind: "system" }, outcome.reason ?? "prompt blocked by UserPromptSubmit hook"));
       return;
     }
-    const prompt = outcome.additionalContext === null ? payload.prompt : `${payload.prompt}\n\n${outcome.additionalContext}`;
+    const expanded = expandSkillInvocation(payload.prompt, this.resolvedSkills) ?? payload.prompt;
+    const prompt = outcome.additionalContext === null ? expanded : `${expanded}\n\n${outcome.additionalContext}`;
     this.dispatchIngress("user", null, prompt, payload.prompt);
   }
 

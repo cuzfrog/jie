@@ -50,6 +50,7 @@ export interface AgentUiState {
   readonly isLeader: boolean;
   readonly tools: ReadonlyArray<string>;
   readonly subscribe: ReadonlyArray<string>;
+  readonly skills: ReadonlyArray<string>;
   readonly status: AgentStatus;
   readonly model: ModelReference | null;
   readonly queue: ReadonlyArray<{ readonly text: string; readonly source: "user" | "peer" }>;

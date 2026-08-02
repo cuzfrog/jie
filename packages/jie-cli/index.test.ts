@@ -95,6 +95,7 @@ function dispatch(command: Command<CommandName>): CommandResult<CommandName> | n
           isLeader: true,
           tools: [],
           subscribe: [],
+          skills: [],
           model: null,
         }],
       };

@@ -49,6 +49,14 @@ function makeSoul(overrides: Partial<AgentSoul> = {}): AgentSoul {
   };
 }
 
+const deploySkill: Skill = {
+  name: "deploy",
+  description: "Deploys the app",
+  filePath: "/deploy/SKILL.md",
+  baseDir: "/deploy",
+  body: "Run the deploy pipeline.",
+};
+
 function makeNoopTool(): Tool {
   return {
     name: "noop",
@@ -295,13 +303,6 @@ function makeHarness(): Harness {
 }
 
 describe("JieAgentBody — system prompt composition", () => {
-  const deploySkill: Skill = {
-    name: "deploy",
-    description: "Deploys the app",
-    filePath: "/deploy/SKILL.md",
-    baseDir: "/deploy",
-  };
-
   test("resolved skills are appended to the role prompt", () => {
     const h = makeHarness();
     h.skillManager.resolve.mockReturnValue([deploySkill]);
@@ -340,8 +341,16 @@ describe("JieAgentBody — identity", () => {
       isLeader: true,
       tools: ["notify", "read_file"],
       subscribe: ["task.recorded"],
+      skills: [],
       model: { provider: "anthropic", id: "claude-sonnet-4", effort: "off", contextWindow: 200000 },
     });
+  });
+
+  test("identity.skills carries the resolved skill names", () => {
+    const h = makeHarness();
+    h.skillManager.resolve.mockReturnValue([deploySkill]);
+    const body = h.makeBody({ soul: makeSoul({ skills: ["dep*"] }) });
+    expect(body.identity.skills).toEqual(["deploy"]);
   });
 
   test("identity.model is null when no model is given", () => {
@@ -1079,6 +1088,83 @@ describe("JieAgentBody — prompt ingress format", () => {
     const content = (synthetic as { content: unknown }).content;
     expect(content).toBe(
       "[researcher-1 on 'task.researched']: report",
+    );
+    body.stop();
+  });
+});
+
+describe("JieAgentBody — skill invocation expansion", () => {
+  let h: Harness;
+
+  beforeEach(() => {
+    h = makeHarness();
+  });
+
+  test("a /skill: invocation of a resolved skill is expanded for the LLM message", async () => {
+    h.skillManager.resolve.mockReturnValue([deploySkill]);
+    const body = h.makeBody({ soul: makeSoul({ skills: ["deploy"] }) });
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "/skill:deploy now", "general-1"));
+    await flush();
+    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
+    expect((synthetic as { content: unknown }).content).toBe(
+      '[user]: <skill name="deploy" location="/deploy/SKILL.md">\nReferences are relative to /deploy.\n\nRun the deploy pipeline.\n</skill>\n\nnow',
+    );
+    body.stop();
+  });
+
+  test("turn.start carries the raw invocation, not the expansion", async () => {
+    h.skillManager.resolve.mockReturnValue([deploySkill]);
+    const body = h.makeBody({ soul: makeSoul({ skills: ["deploy"] }) });
+    await body.start();
+    const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    h.subscribeSubject("agent.turn.start", (env) => turnStart.push(env));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "/skill:deploy now", "general-1"));
+    await flush();
+    h.fireEvent({ type: "turn_start" });
+    expect(turnStart[0]!.payload).toBe("/skill:deploy now");
+    body.stop();
+  });
+
+  test("an invocation of a skill not in the resolved set passes through unchanged", async () => {
+    const body = h.makeBody();
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "/skill:deploy now", "general-1"));
+    await flush();
+    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
+    expect((synthetic as { content: unknown }).content).toBe("[user]: /skill:deploy now");
+    body.stop();
+  });
+
+  test("the UserPromptSubmit hook sees the raw invocation; its context appends after the expansion", async () => {
+    h.skillManager.resolve.mockReturnValue([deploySkill]);
+    h.hookRunner.userPromptSubmit.mockResolvedValue({ block: false, reason: null, additionalContext: "extra" });
+    const body = h.makeBody({ soul: makeSoul({ skills: ["deploy"] }) });
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "/skill:deploy", "general-1"));
+    await flush();
+    expect(h.hookRunner.userPromptSubmit).toHaveBeenCalledWith(expect.objectContaining({ prompt: "/skill:deploy" }));
+    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
+    const content = (synthetic as { content: unknown }).content as string;
+    expect(content.endsWith("</skill>\n\nextra")).toBe(true);
+    body.stop();
+  });
+
+  test("a queued invocation keeps the expanded message and the raw queue display", async () => {
+    h.skillManager.resolve.mockReturnValue([deploySkill]);
+    const body = h.makeBody({ soul: makeSoul({ skills: ["deploy"] }) });
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "/skill:deploy now", "general-1"));
+    await flush();
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "/skill:deploy now", source: "user" }]);
+    h.state.isStreaming = false;
+    h.fireEvent({ type: "agent_end", messages: [] });
+    const drained = h.followUp.mock.calls[0]![0] as AgentMessage;
+    expect((drained as { content: unknown }).content).toBe(
+      '[user]: <skill name="deploy" location="/deploy/SKILL.md">\nReferences are relative to /deploy.\n\nRun the deploy pipeline.\n</skill>\n\nnow',
     );
     body.stop();
   });

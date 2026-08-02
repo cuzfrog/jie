@@ -48,7 +48,7 @@ function makeTeam(teamId: string, agentKeys: ReadonlyArray<string>, leaderKey: s
     id: teamId,
     leaderKey,
     sessionName: null,
-    agents: agentKeys.map((k) => ({ teamId, role: k, agentKey: k, isLeader: k === leaderKey, tools: [], subscribe: [], model: null })),
+    agents: agentKeys.map((k) => ({ teamId, role: k, agentKey: k, isLeader: k === leaderKey, tools: [], subscribe: [], skills: [], model: null })),
     history: [],
   };
 }
