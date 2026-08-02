@@ -2,6 +2,7 @@ import { truncateToWidth, wrapTextWithAnsi, type Component } from "@earendil-wor
 import type { MessageCard, StateStore } from "../../state";
 import { style } from "../themes";
 import { DiffView } from "./diff-view";
+import { formatDuration } from "./format-duration";
 
 export class ToolCard implements Component {
   private readonly stateStore: StateStore;
@@ -23,7 +24,7 @@ export class ToolCard implements Component {
     const card = this.card;
     const isError = card.error !== undefined && card.error !== null && card.error !== "";
     const headerColor = isError ? "error" : "toolTitle";
-    const duration = card.durationMs !== undefined ? `  ${card.durationMs}ms` : "";
+    const duration = card.durationMs !== undefined ? `  ${formatDuration(card.durationMs)}` : "";
     const header = truncateToWidth(style(headerColor)(`${isError ? "✗" : "✓"} ${card.name}${duration}`), w);
     if (!this.stateStore.getState().toolCardsExpanded) return [header];
     const lines = [header];

@@ -19,8 +19,8 @@ Everything else is pi-tui `Editor` behavior: cursor/word movement, undo, kill ri
 
 | Key | What it does | Active when |
 | --- | --- | --- |
-| `Ctrl+T` | Expand / collapse all thinking blocks | always |
-| `Ctrl+O` | Expand / collapse all tool cards | always |
+| `Ctrl+T` | Expand / collapse all thinking blocks (collapsed completed blocks fold into the work summary) | always |
+| `Ctrl+O` | Expand / collapse all tool cards (collapsed successful diff-less results fold into the work summary) | always |
 | `Ctrl+↓` | Toggle the team strip: show it with the cursor on the focused agent, or hide it and clear the cursor (`tui-team-panel.md`) | always; no-op before a team is loaded |
 
 `Ctrl+↓` is the strip's only toggle; while the strip is shown, plain `↑`/`↓` move its cursor (cycling both ways) and the editor's history walk yields (`tui-team-panel.md`, Interaction). `Ctrl+↑` and the `Ctrl+←`/`Ctrl+→` word jumps stay with the editor/terminal. While the autocomplete popup is open, plain arrows navigate the popup, not the strip. The thinking/tool toggles are all-or-nothing across the focused agent's history + current turn (`state.thinkingExpanded` / `state.toolCardsExpanded`); mid-stream toggle re-renders on the next tick. There are **no** `PgUp`/`PgDn`/`Home`/`End`/wheel bindings: finished output is terminal scrollback; scroll and copy are the terminal's native behavior.

@@ -1,7 +1,7 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { type MessageBlock, type StateStore } from "../../state";
 import { makeTuiState } from "../../test";
-import { ThinkingBlock, _formatThinkingDuration } from "./thinking-block";
+import { ThinkingBlock } from "./thinking-block";
 
 const stateStore = vi.mocked<StateStore>({ getState: vi.fn(), dispatch: vi.fn(), subscribe: vi.fn(() => () => undefined) });
 
@@ -51,24 +51,5 @@ describe("ThinkingBlock", () => {
         expect(visibleWidth(line)).toBeLessThanOrEqual(width);
       }
     }
-  });
-});
-
-describe("formatThinkingDuration", () => {
-  test("sub-second durations render as whole milliseconds", () => {
-    expect(_formatThinkingDuration(23)).toBe("23ms");
-    expect(_formatThinkingDuration(999)).toBe("999ms");
-  });
-
-  test("sub-minute durations render as seconds with one trimmed decimal", () => {
-    expect(_formatThinkingDuration(1000)).toBe("1s");
-    expect(_formatThinkingDuration(1234)).toBe("1.2s");
-    expect(_formatThinkingDuration(1500)).toBe("1.5s");
-    expect(_formatThinkingDuration(59949)).toBe("59.9s");
-  });
-
-  test("minute-scale durations render as minutes and seconds", () => {
-    expect(_formatThinkingDuration(60000)).toBe("1m 0s");
-    expect(_formatThinkingDuration(125000)).toBe("2m 5s");
   });
 });
