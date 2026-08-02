@@ -9,7 +9,7 @@ The platform's built-in minimal team lives at `packages/jie-platform/team/minima
 ```
 team/minimal/
   TEAM.md      # frontmatter: leader: general
-  general.md   # role: general, tools: [bash, read_file, write_file]
+  general.md   # role: general, tools: [bash, read_file, write_file, edit]
 ```
 
 These two files are the **last-resort fallback** in the team selection chain — used only when no user-installed team is selected (no `--team` flag, no `defaultTeam` in settings, and no user team manifests available at the standard paths). The parser's `loadMinimalTeam()` reads them via `import` attributes (bun 1.3+) at module-load time:
@@ -34,14 +34,14 @@ The parser is the same one used for user teams; the only difference is where the
 | Roles | 1 (`general`). The role id is the filename stem (`general.md` → role `general`). |
 | Leader | `general-1` (the only agent; user prompts reach it via the `user.prompt` topic. No `subscribe:` in frontmatter, so no domain topics.) The agent key is `<role>-1`. |
 | Domain topics | None (no subscription graph; the leader is the only agent) |
-| Tools | `bash`, `read_file`, `write_file`, `notify` (`notify` is auto-registered) |
+| Tools | `bash`, `read_file`, `write_file`, `edit`, `notify` (`notify` is auto-registered) |
 | Model | Inherited from merged settings — see "Model" below |
 | System prompt | A general-purpose assistant prompt — see "Built-in System Prompt" below |
 
 ### Built-in System Prompt
 
 ```
-You are a general-purpose assistant running inside the Jie (界) platform. The user will send you prompts. Use your tools (`bash`, `read_file`, `write_file`, `notify`) to help them. Tell the user they can install a custom team blueprint for complex work.
+You are a general-purpose assistant running inside the Jie (界) platform. The user will send you prompts. Use your tools (`bash`, `read_file`, `write_file`, `edit`, `notify`) to help them. Tell the user they can install a custom team blueprint for complex work.
 ```
 
 The system prompt is intentionally short: it establishes identity and points users at the right next step for richer workflows.
@@ -66,7 +66,7 @@ Users who want a different model globally run `jie model <provider>/<modelId>` (
 
 ## Behavior
 
-The leader processes a single user prompt per turn. There are no domain topics, so no inter-agent coordination happens. The leader's tools (`bash`, `read_file`, `write_file`, `notify`) are available for direct work in the workspace — no artifact store is exposed because there are no peers to coordinate with.
+The leader processes a single user prompt per turn. There are no domain topics, so no inter-agent coordination happens. The leader's tools (`bash`, `read_file`, `write_file`, `edit`, `notify`) are available for direct work in the workspace — no artifact store is exposed because there are no peers to coordinate with.
 
 ## Why a Built-in Fallback
 
