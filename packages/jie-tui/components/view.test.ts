@@ -1,6 +1,40 @@
+import { PassThrough } from "node:stream";
+import { TUI } from "@earendil-works/pi-tui";
 import { Actions } from "../state";
+import { StreamTerminalImpl } from "../stream-terminal";
 import { makeTuiState } from "../test";
-import { _resolveGlobalKey, _resolveTeamCursorDirection, _shouldCommitTeamCursor } from "./view";
+import { _FlushLoader, _resolveGlobalKey, _resolveTeamCursorDirection, _shouldCommitTeamCursor } from "./view";
+
+describe("FlushLoader", () => {
+  test("renders the spinner at the chat column, without the loader's left padding", () => {
+    const loader = makeFlushLoader("Working…", ["⠋"]);
+    try {
+      const lines = loader.render(80);
+      expect(lines[0]).toBe("");
+      expect(lines[1]!.trimEnd()).toBe("⠋ Working…");
+    } finally {
+      loader.stop();
+    }
+  });
+
+  test("renders a frameless indicator label at the chat column", () => {
+    const loader = makeFlushLoader("Interrupted", []);
+    try {
+      const lines = loader.render(80);
+      expect(lines[0]).toBe("");
+      expect(lines[1]!.trimEnd()).toBe("Interrupted");
+    } finally {
+      loader.stop();
+    }
+  });
+});
+
+function makeFlushLoader(message: string, frames: ReadonlyArray<string>): InstanceType<typeof _FlushLoader> {
+  const stdout = Object.assign(new PassThrough(), { columns: 80, rows: 30 });
+  const ui = new TUI(new StreamTerminalImpl(new PassThrough(), stdout));
+  const identity = (text: string): string => text;
+  return new _FlushLoader(ui, identity, identity, message, { frames: [...frames] });
+}
 
 describe("resolveGlobalKey", () => {
   test("ctrl+t maps to toggleThinking", () => {
