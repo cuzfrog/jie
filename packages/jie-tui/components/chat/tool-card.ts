@@ -23,9 +23,9 @@ export class ToolCard implements Component {
     const w = Math.max(1, width);
     const card = this.card;
     const isError = card.error !== undefined && card.error !== null && card.error !== "";
-    const headerColor = isError ? "error" : "toolTitle";
+    const glyph = isError ? style("error")("✗") : style("success")("✓");
     const duration = card.durationMs !== undefined ? `  ${formatDuration(card.durationMs)}` : "";
-    const header = truncateToWidth(style(headerColor)(`${isError ? "✗" : "✓"} ${card.name}${duration}`), w);
+    const header = truncateToWidth(`${glyph} ${style(isError ? "error" : "toolTitle")(`${card.name}${duration}`)}`, w);
     if (!this.stateStore.getState().toolCardsExpanded) return [header];
     const lines = [header];
     if (card.input !== undefined && card.input !== "") {

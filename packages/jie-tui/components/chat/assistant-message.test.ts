@@ -85,7 +85,7 @@ describe("AssistantMessage — tool cards", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ toolCardsExpanded: true }));
     const message = new AssistantMessage(turn({ cards: [card({ output: "ok" })] }), stateStore);
     const lines = message.render(80);
-    expect(lines[0]).toBe("\x1b[37m✓ bash\x1b[39m");
+    expect(lines[0]).toBe("\x1b[32m✓\x1b[39m \x1b[37mbash\x1b[39m");
     expect(lines[1]).toBe("\x1b[90moutput:\x1b[39m");
     expect(lines[2]).toBe("\x1b[90mok\x1b[39m");
   });
@@ -129,17 +129,17 @@ describe("AssistantMessage — work summary", () => {
 
   test("error cards stay individual", () => {
     const message = new AssistantMessage(turn({ cards: [card({ error: "boom" })] }), stateStore);
-    expect(message.render(80)).toEqual(["\x1b[31m✗ bash\x1b[39m"]);
+    expect(message.render(80)).toEqual(["\x1b[31m✗\x1b[39m \x1b[31mbash\x1b[39m"]);
   });
 
   test("running tool calls stay individual", () => {
     const message = new AssistantMessage(turn({ cards: [card({ kind: "toolCall" })] }), stateStore);
-    expect(message.render(80)).toEqual(["\x1b[37m✓ bash\x1b[39m"]);
+    expect(message.render(80)).toEqual(["\x1b[32m✓\x1b[39m \x1b[37mbash\x1b[39m"]);
   });
 
   test("diff cards stay individual", () => {
     const message = new AssistantMessage(turn({ cards: [card({ details: { kind: "diff", diff: "+a" } })] }), stateStore);
-    expect(message.render(80)).toEqual(["\x1b[37m✓ bash\x1b[39m"]);
+    expect(message.render(80)).toEqual(["\x1b[32m✓\x1b[39m \x1b[37mbash\x1b[39m"]);
   });
 
   test("ctrl+t restores the individual thinking blocks", () => {
@@ -161,7 +161,7 @@ describe("AssistantMessage — work summary", () => {
   test("ctrl+o restores the individual tool cards", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ toolCardsExpanded: true }));
     const message = new AssistantMessage(turn({ cards: [card({ durationMs: 12 }), card({ durationMs: 8 })] }), stateStore);
-    expect(message.render(80)).toEqual(["\x1b[37m✓ bash  12ms\x1b[39m", "\x1b[37m✓ bash  8ms\x1b[39m"]);
+    expect(message.render(80)).toEqual(["\x1b[32m✓\x1b[39m \x1b[37mbash  12ms\x1b[39m", "\x1b[32m✓\x1b[39m \x1b[37mbash  8ms\x1b[39m"]);
   });
 
   test("the summary follows the text blocks and individual cards", () => {
@@ -171,7 +171,7 @@ describe("AssistantMessage — work summary", () => {
     }), stateStore);
     expect(message.render(80).map((line) => line.trimEnd())).toEqual([
       "\x1b[36m● \x1b[39manswer",
-      "\x1b[31m✗ bash\x1b[39m",
+      "\x1b[31m✗\x1b[39m \x1b[31mbash\x1b[39m",
       "\x1b[90mThought for 1s, used bash 1 time, total 1.5s\x1b[39m",
     ]);
   });

@@ -16,19 +16,19 @@ describe("ToolCard", () => {
 
   test("collapsed by default: a single header line", () => {
     const view = new ToolCard(card({ output: "ok", durationMs: 12 }), stateStore);
-    expect(view.render(80)).toEqual(["\x1b[37m✓ bash  12ms\x1b[39m"]);
+    expect(view.render(80)).toEqual(["\x1b[32m✓\x1b[39m \x1b[37mbash  12ms\x1b[39m"]);
   });
 
   test("error cards use the error glyph and color", () => {
     const view = new ToolCard(card({ error: "boom" }), stateStore);
-    expect(view.render(80)).toEqual(["\x1b[31m✗ bash\x1b[39m"]);
+    expect(view.render(80)).toEqual(["\x1b[31m✗\x1b[39m \x1b[31mbash\x1b[39m"]);
   });
 
   test("expanded: input, output and error sections appear", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ toolCardsExpanded: true }));
     const view = new ToolCard(card({ input: "ls", output: "ok", error: "boom" }), stateStore);
     const lines = view.render(80);
-    expect(lines[0]).toBe("\x1b[31m✗ bash\x1b[39m");
+    expect(lines[0]).toBe("\x1b[31m✗\x1b[39m \x1b[31mbash\x1b[39m");
     expect(lines[1]).toBe("\x1b[90minput:\x1b[39m");
     expect(lines[2]).toBe("\x1b[90mls\x1b[39m");
     expect(lines[3]).toBe("\x1b[90moutput:\x1b[39m");
