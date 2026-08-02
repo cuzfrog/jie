@@ -1,4 +1,5 @@
 import type { AuthStore, ModelRegistry, SettingsStore } from "../config";
+import { Events, type EventManager } from "../event";
 import { JiePlatformError } from "../jie-platform-errors";
 import type { GitService } from "../services";
 import type { TeamManager } from "../team";
@@ -19,6 +20,7 @@ export class CommandExecutorImpl implements CommandExecutor {
     private readonly modelRegistry: ModelRegistry,
     private readonly teamManager: TeamManager,
     private readonly gitService: GitService,
+    private readonly eventManager: EventManager,
   ) {
     this.handlers = {
       login: this.login.bind(this),
@@ -94,6 +96,7 @@ export class CommandExecutorImpl implements CommandExecutor {
 
   private setDefaultEffort(command: Command<"setDefaultEffort">): CommandResult<"setDefaultEffort"> {
     this.settingsStore.setDefaultEffort(command.effort);
+    this.eventManager.publish(Events.userEffortUpdate({ kind: "user" }, command.effort));
     return null;
   }
 

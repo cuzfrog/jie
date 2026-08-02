@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
-import { bootPlatform, type JiePlatform } from "@cuzfrog/jie-platform";
+import { bootPlatform, type EffortLevel, type JiePlatform } from "@cuzfrog/jie-platform";
 import { bootTui, type CreateTUIOptions, type Tui, type TuiCradle } from "@cuzfrog/jie-tui";
 import { writeModelsJsonTo, writeSettingsJson } from "../_fixture.ts";
 
@@ -281,6 +281,10 @@ export async function waitForInfoEntry(harness: TuiHarness, timeoutMs = 60000): 
 
 export async function waitForEditorText(harness: TuiHarness, expected: string, timeoutMs = 60000): Promise<void> {
   await waitFor(() => harness.stateStore.getState().editorText === expected, timeoutMs, `editorText === '${expected}'`);
+}
+
+export async function waitForAgentEffort(harness: TuiHarness, agentId: AgentId, effort: EffortLevel, timeoutMs = 60000): Promise<void> {
+  await waitFor(() => harness.stateStore.getState().agents.get(agentId)?.model?.effort === effort, timeoutMs, `agent '${agentId}' model effort === '${effort}'`);
 }
 
 export async function waitForTransient(harness: TuiHarness, contains: string, timeoutMs = 60000): Promise<void> {

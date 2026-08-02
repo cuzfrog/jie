@@ -1,6 +1,6 @@
 import { assertLlmReachable, seedTeam, FIXTURE } from "../_fixture.ts";
 import { loadMockExpectations } from "../../../packages/mock-llm-backend";
-import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, waitForTransient, sendCmd, sendLine, type TuiHarness } from "./harness";
+import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, waitForTransient, waitForAgentEffort, sendCmd, sendLine, type TuiHarness } from "./harness";
 import expectations from "./scenario-1.llm.ts";
 
 describe("Scenario 1 — simple agent", () => {
@@ -45,14 +45,15 @@ describe("Scenario 1 — simple agent", () => {
     expect(agent?.contextTokensUsed).toBeGreaterThan(0);
   });
 
-  test("/effort high becomes the default effort for teams loaded thereafter", async () => {
-    await sendLine(harness.stdin, "/effort high");
-    await waitForTransient(harness, "default effort set to high");
+  test("/effort high applies immediately to the live agent", async () => {
     await sendLine(harness.stdin, "/team my-team");
     await waitForTeam(harness, "my-team");
+    expect(harness.stateStore.getState().agents.get("my-team:general-1")?.model?.effort).toBe("off");
+    await sendLine(harness.stdin, "/effort high");
+    await waitForTransient(harness, "effort set to high");
+    await waitForAgentEffort(harness, "my-team:general-1", "high");
     const agent = harness.stateStore.getState().agents.get("my-team:general-1");
     expect(agent?.model?.provider).toBe(FIXTURE.provider);
-    expect(agent?.model?.effort).toBe("high");
   });
 
   test("/rename names the active session and the name appears in listSessions", async () => {

@@ -1598,6 +1598,74 @@ describe("JieAgentBody — user.prompt.dequeue", () => {
   });
 });
 
+describe("JieAgentBody — user.effort.update", () => {
+  let h: Harness;
+
+  beforeEach(() => {
+    h = makeHarness();
+  });
+
+  test("updates the agent thinkingLevel and republishes agent.model.assigned with the new effort", async () => {
+    const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4") });
+    await body.start();
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    h.subscribeSubject("agent.model.assigned", (env) => received.push(env));
+    h.events.publish(Events.userEffortUpdate({ kind: "user" }, "high"));
+    expect(h.state.thinkingLevel).toBe("high");
+    expect(received).toHaveLength(1);
+    expect(received[0]!.payload).toEqual({ provider: "anthropic", model: "claude-sonnet-4", effort: "high" });
+    body.stop();
+  });
+
+  test("maps effort 'max' to the 'xhigh' thinkingLevel while reporting 'max'", async () => {
+    const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4") });
+    await body.start();
+    h.events.publish(Events.userEffortUpdate({ kind: "user" }, "max"));
+    expect(h.state.thinkingLevel).toBe("xhigh");
+    body.stop();
+  });
+
+  test("identity.model reflects the updated effort", async () => {
+    const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4") });
+    await body.start();
+    h.events.publish(Events.userEffortUpdate({ kind: "user" }, "medium"));
+    expect(body.identity.model).toEqual({ provider: "anthropic", id: "claude-sonnet-4", effort: "medium", contextWindow: 200000 });
+    body.stop();
+  });
+
+  test("without a model the thinkingLevel still updates but nothing is republished", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    h.subscribeSubject("agent.model.assigned", (env) => received.push(env));
+    h.events.publish(Events.userEffortUpdate({ kind: "user" }, "low"));
+    expect(h.state.thinkingLevel).toBe("low");
+    expect(received).toHaveLength(0);
+    body.stop();
+  });
+
+  test("applies to every live body regardless of team and agent key", async () => {
+    const cap2 = makeFakeAgentFactory();
+    const second = h.makeBody({ agentKey: "worker-1", teamId: "t2", factory: cap2.factory });
+    const body = h.makeBody();
+    await body.start();
+    await second.start();
+    h.events.publish(Events.userEffortUpdate({ kind: "user" }, "high"));
+    expect(h.state.thinkingLevel).toBe("high");
+    expect(cap2.fake.state.thinkingLevel).toBe("high");
+    body.stop();
+    second.stop();
+  });
+
+  test("stop() unsubscribes from user.effort.update", async () => {
+    const body = h.makeBody();
+    await body.start();
+    body.stop();
+    h.events.publish(Events.userEffortUpdate({ kind: "user" }, "high"));
+    expect(h.state.thinkingLevel).toBe("off");
+  });
+});
+
 describe("JieAgentBody — stop()", () => {
   test("stop() unsubscribes bus subscriptions registered via start()", async () => {
     const h = makeHarness();

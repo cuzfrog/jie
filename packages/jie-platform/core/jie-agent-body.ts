@@ -27,10 +27,10 @@ interface AgentBodyDeps {
 }
 
 export class JieAgentBody implements AgentBody {
-  readonly identity: AgentInfo;
   private readonly agentKey: string;
   private readonly teamId: string;
   private readonly soul: AgentBodyParams["soul"];
+  private readonly isLeader: boolean;
   private readonly sessionId: string;
   private readonly eventManager: EventManager;
   private readonly memory: MemoryManager;
@@ -40,6 +40,7 @@ export class JieAgentBody implements AgentBody {
   private readonly stream: StreamPublisher;
   private readonly sender: AgentSender;
   private readonly queue: QueuedPrompt[] = [];
+  private modelInfo: ModelInfo | null;
   private pendingTurnPrompt: string | null = null;
   private readonly unsubscribers: Array<() => void> = [];
   private readonly externalCleanups: Array<() => void> = [];
@@ -134,26 +135,30 @@ export class JieAgentBody implements AgentBody {
       contextBlock: deps.systemContextBlock,
       skills: resolvedSkills,
     });
+    this.isLeader = params.isLeader;
     this.agent.state.thinkingLevel = effortToThinkingLevel(params.effort);
-    const bodyModel = resolveBodyModelInfo(params.model, this.agent.state.thinkingLevel);
+    this.modelInfo = resolveBodyModelInfo(params.model, this.agent.state.thinkingLevel);
     if (params.model !== undefined) {
       this.agent.state.model = params.model;
-      if (bodyModel !== null) {
-        this.eventManager.publish(Events.agentModelAssigned(this.sender, bodyModel.provider, bodyModel.id, bodyModel.effort));
+      if (this.modelInfo !== null) {
+        this.eventManager.publish(Events.agentModelAssigned(this.sender, this.modelInfo.provider, this.modelInfo.id, this.modelInfo.effort));
       }
     }
     this.agent.state.tools = adaptedTools;
-    this.identity = {
-      teamId: this.teamId,
-      role: params.soul.role,
-      agentKey: this.agentKey,
-      isLeader: params.isLeader,
-      tools: params.soul.tools,
-      subscribe: params.soul.subscribe,
-      model: bodyModel,
-    };
     const unsubscribeAgent = this.agent.subscribe((event, _signal) => this.handlePiAgentEvent(event));
     this.externalCleanups.push(unsubscribeAgent);
+  }
+
+  get identity(): AgentInfo {
+    return {
+      teamId: this.teamId,
+      role: this.soul.role,
+      agentKey: this.agentKey,
+      isLeader: this.isLeader,
+      tools: this.soul.tools,
+      subscribe: this.soul.subscribe,
+      model: this.modelInfo,
+    };
   }
 
   async restore(): Promise<ReadonlyArray<AgentMessage>> {
@@ -287,6 +292,9 @@ export class JieAgentBody implements AgentBody {
         if (env.payload.teamId !== this.teamId || env.payload.agentKey !== this.agentKey) return;
         this.dequeuePrompt(env.payload.prompt);
       }),
+      this.eventManager.subscribe("user.effort.update", (env) => {
+        this.applyEffort(env.payload.effort);
+      }),
     );
     for (const topic of this.soul.subscribe) {
       this.unsubscribers.push(
@@ -350,6 +358,13 @@ export class JieAgentBody implements AgentBody {
   private interruptActiveRun(): void {
     if (!this.agent.state.isStreaming) return;
     this.agent.abort();
+  }
+
+  private applyEffort(effort: EffortLevel): void {
+    this.agent.state.thinkingLevel = effortToThinkingLevel(effort);
+    if (this.modelInfo === null) return;
+    this.modelInfo = { ...this.modelInfo, effort };
+    this.eventManager.publish(Events.agentModelAssigned(this.sender, this.modelInfo.provider, this.modelInfo.id, effort));
   }
 }
 

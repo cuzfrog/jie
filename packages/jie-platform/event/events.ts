@@ -32,6 +32,7 @@ type EventDefinitions = {
   "agent.model.assigned": EventDef<AgentSender, { provider: string; model: string; effort: "off" | "low" | "medium" | "high" | "max" }>;
   "user.prompt": EventDef<UserSender, { teamId: string; agentKey: string; prompt: string }>;
   "user.prompt.dequeue": EventDef<UserSender, { teamId: string; agentKey: string; prompt: string }>;
+  "user.effort.update": EventDef<UserSender, { effort: "off" | "low" | "medium" | "high" | "max" }>;
   "system.team.loaded": EventDef<SystemSender, TeamInfo>;
   "agent.interrupt": EventDef<Sender, { teamId: string; agentKey: string }>;
   "system.error": EventDef<SystemSender, { error: string }>;
@@ -81,6 +82,8 @@ export const Events = {
     createEvent("user.prompt", sender, { teamId, prompt, agentKey }),
   userPromptDequeue: (sender: UserSender, teamId: string, agentKey: string, prompt: string): EventEnvelope<"user.prompt.dequeue"> =>
     createEvent("user.prompt.dequeue", sender, { teamId, agentKey, prompt }),
+  userEffortUpdate: (sender: UserSender, effort: "off" | "low" | "medium" | "high" | "max"): EventEnvelope<"user.effort.update"> =>
+    createEvent("user.effort.update", sender, { effort }),
   teamLoaded: (sender: SystemSender, info: TeamInfo): EventEnvelope<"system.team.loaded"> =>
     createEvent("system.team.loaded", sender, info),
   agentInterrupt: (sender: Sender, teamId: string, agentKey: string): EventEnvelope<"agent.interrupt"> =>

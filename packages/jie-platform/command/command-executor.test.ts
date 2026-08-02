@@ -1,5 +1,6 @@
 import { type Api, type Model } from "@earendil-works/pi-ai";
 import { type AuthStore, type ModelRegistry, type Settings, type SettingsStore } from "../config";
+import { type EventManager } from "../event";
 import { JiePlatformError } from "../jie-platform-errors";
 import { type GitService, type GitSnapshot } from "../services";
 import { type TeamManager } from "../team";
@@ -46,6 +47,11 @@ const gitService = vi.mocked<GitService>({
   getSnapshot: vi.fn(),
 });
 
+const eventManager = vi.mocked<EventManager>({
+  publish: vi.fn(),
+  subscribe: vi.fn(),
+});
+
 const DEFAULT_SETTINGS: Settings = {
   defaultProvider: "anthropic",
   defaultModel: "claude-sonnet-4-5",
@@ -71,7 +77,7 @@ function fakeModel(provider: "anthropic" | "openai", id: string, name: string): 
 let executor: CommandExecutorImpl;
 
 beforeEach(() => {
-  executor = new CommandExecutorImpl(authStore, settingsStore, modelRegistry, teamManager, gitService);
+  executor = new CommandExecutorImpl(authStore, settingsStore, modelRegistry, teamManager, gitService, eventManager);
   settingsStore.load.mockReturnValue(DEFAULT_SETTINGS);
   authStore.load.mockReturnValue({});
   gitService.getSnapshot.mockReturnValue(EMPTY_GIT_SNAPSHOT);
@@ -172,6 +178,16 @@ describe("CommandExecutorImpl", () => {
       const result = await executor.execute({ name: "setDefaultEffort", effort: "high" });
       expect(result).toBeNull();
       expect(settingsStore.setDefaultEffort).toHaveBeenCalledWith("high");
+    });
+
+    test("publishes user.effort.update so live agents apply the new effort", async () => {
+      await executor.execute({ name: "setDefaultEffort", effort: "high" });
+      expect(eventManager.publish).toHaveBeenCalledWith(expect.objectContaining({ type: "user.effort.update", payload: { effort: "high" } }));
+    });
+
+    test("does not publish for other commands", async () => {
+      await executor.execute({ name: "getDefaultEffort" });
+      expect(eventManager.publish).not.toHaveBeenCalled();
     });
   });
 

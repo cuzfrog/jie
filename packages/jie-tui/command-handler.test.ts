@@ -364,7 +364,7 @@ describe("CommandHandlerImpl — /effort", () => {
     const { handler, dispatch } = makeHandler(platform);
     handler.handle("/effort high");
     expect(execute).toHaveBeenCalledWith({ name: "setDefaultEffort", effort: "high" });
-    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("default effort set to high")));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("effort set to high")));
   });
 
   test("/effort with an unknown level sets an error and does not dispatch", () => {

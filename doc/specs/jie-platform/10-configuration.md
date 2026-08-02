@@ -38,7 +38,7 @@ Two locations, **project overrides global with deep-merge** (nested objects merg
 | `defaultProvider` | string | Provider id (e.g. `anthropic`, `openai`). |
 | `defaultModel` | string | Model id within the provider. |
 | `defaultTeam` | string | Last user-selected team. Charset `[A-Za-z0-9_-]{1,32}`. |
-| `defaultEffort` | string | Default reasoning effort for team loads: one of `off` \| `low` \| `medium` \| `high` \| `max`. Absent means `off`. |
+| `defaultEffort` | string | Default reasoning effort: one of `off` \| `low` \| `medium` \| `high` \| `max`. Absent means `off`. Applied at team load and live to running agents inheriting it. |
 
 **Unknown field policy.** Unrecognized top-level fields are tolerated (warned, ignored) so future versions can land new settings without breaking old files. Unrecognized *values* for recognized fields follow the same policy — e.g. an unknown `defaultProvider` is WARN+ignore (treated as absent; model resolution falls through and may surface `NO_MODEL_ERROR` at team load). Shape errors (e.g. `defaultProvider: 42`) are a hard fail — malformed input, not an unfamiliar value.
 
@@ -91,7 +91,7 @@ TUI `/team <id>` does **not** persist; it hot-loads the team in the running sess
 
 ### Setting `defaultEffort`
 
-TUI `/effort <level>` executes `setDefaultEffort`, writing `defaultEffort` to the **global** `settings.json` (like `setDefaultProvider`). `/effort` with no argument executes `getDefaultEffort` and shows the current default (`off` when absent). The value applies at team load — same semantics as `defaultModel`, no hot-swap of running agents: `TeamManager.load` reads the merged setting and threads it into `AgentBodyParams.effort`; `JieAgentBody` maps it onto the pi-agent `thinkingLevel` (`max` → `xhigh`, other levels pass through; pi's own `off` level means no extended thinking) and reports it through `agent.model.assigned` and `ModelInfo.effort`. Out-of-vocabulary values in the file hard-fail `INVALID_CONFIG` (closed vocabulary, like the `defaultTeam` charset).
+TUI `/effort <level>` executes `setDefaultEffort`, writing `defaultEffort` to the **global** `settings.json` (like `setDefaultProvider`). `/effort` with no argument executes `getDefaultEffort` and shows the current default (`off` when absent). The value applies at team load — `TeamManager.load` reads the merged setting and threads it into `AgentBodyParams.effort` — and immediately to every live agent inheriting the default: the command publishes `user.effort.update` after the write, and each body applies it (`06-agent-model.md`, "Effort update"). `JieAgentBody` maps effort onto the pi-agent `thinkingLevel` (`max` → `xhigh`, other levels pass through; pi's own `off` level means no extended thinking) and reports it through `agent.model.assigned` and `ModelInfo.effort`. Out-of-vocabulary values in the file hard-fail `INVALID_CONFIG` (closed vocabulary, like the `defaultTeam` charset).
 
 ### Team Swap (TUI)
 

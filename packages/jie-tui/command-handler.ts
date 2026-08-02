@@ -216,7 +216,7 @@ export class CommandHandlerImpl implements CommandHandler {
         const reason = errorReason(error);
         this.stateStore.dispatch(Actions.setErrorMessage(`/effort failed: ${reason}`));
       });
-    return { kind: "reply", text: `default effort set to ${argument}` };
+    return { kind: "reply", text: `effort set to ${argument}` };
   }
 
   private interceptTeam(args: ReadonlyArray<string>): InterceptResult {

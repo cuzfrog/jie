@@ -58,3 +58,13 @@ describe("Events.userPromptDequeue", () => {
     expect(env.payload).toEqual({ teamId: "my-team", agentKey: "general-1", prompt: "queued text" });
   });
 });
+
+describe("Events.userEffortUpdate", () => {
+  test("builds a user.effort.update envelope carrying the effort level", () => {
+    const env = Events.userEffortUpdate(USER_SENDER, "high");
+    expect(env.type).toBe("user.effort.update");
+    expect(env.topic).toBe("user.effort.update");
+    expect(env.sender).toBe(USER_SENDER);
+    expect(env.payload).toEqual({ effort: "high" });
+  });
+});
