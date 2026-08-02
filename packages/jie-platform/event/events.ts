@@ -28,9 +28,10 @@ type EventDefinitions = {
   }>;
   "agent.stream.end": EventDef<AgentSender, { stream_id: number; total_chunks: number; thinking_ms: number | null }>;
   "agent.usage": EventDef<AgentSender, { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number }>;
-  "agent.prompt.queue.update": EventDef<AgentSender, { prompts: string[] }>;
+  "agent.prompt.queue.update": EventDef<AgentSender, { prompts: Array<{ text: string; source: "user" | "peer" }> }>;
   "agent.model.assigned": EventDef<AgentSender, { provider: string; model: string; effort: "off" | "low" | "medium" | "high" | "max" }>;
   "user.prompt": EventDef<UserSender, { teamId: string; agentKey: string; prompt: string }>;
+  "user.prompt.dequeue": EventDef<UserSender, { teamId: string; agentKey: string; prompt: string }>;
   "system.team.loaded": EventDef<SystemSender, TeamInfo>;
   "agent.interrupt": EventDef<Sender, { teamId: string; agentKey: string }>;
   "system.error": EventDef<SystemSender, { error: string }>;
@@ -72,12 +73,14 @@ export const Events = {
     createEvent("agent.stream.end", sender, { stream_id, total_chunks, thinking_ms }),
   agentUsage: (sender: AgentSender, usage: { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number }): EventEnvelope<"agent.usage"> =>
     createEvent("agent.usage", sender, usage),
-  agentPromptQueueUpdate: (sender: AgentSender, prompts: string[]): EventEnvelope<"agent.prompt.queue.update"> =>
+  agentPromptQueueUpdate: (sender: AgentSender, prompts: Array<{ text: string; source: "user" | "peer" }>): EventEnvelope<"agent.prompt.queue.update"> =>
     createEvent("agent.prompt.queue.update", sender, { prompts }),
   agentModelAssigned: (sender: AgentSender, provider: string, model: string, effort: "off" | "low" | "medium" | "high" | "max"): EventEnvelope<"agent.model.assigned"> =>
     createEvent("agent.model.assigned", sender, { provider, model, effort }),
   userPrompt: (sender: UserSender, teamId: string, prompt: string, agentKey: string): EventEnvelope<"user.prompt"> =>
     createEvent("user.prompt", sender, { teamId, prompt, agentKey }),
+  userPromptDequeue: (sender: UserSender, teamId: string, agentKey: string, prompt: string): EventEnvelope<"user.prompt.dequeue"> =>
+    createEvent("user.prompt.dequeue", sender, { teamId, agentKey, prompt }),
   teamLoaded: (sender: SystemSender, info: TeamInfo): EventEnvelope<"system.team.loaded"> =>
     createEvent("system.team.loaded", sender, info),
   agentInterrupt: (sender: Sender, teamId: string, agentKey: string): EventEnvelope<"agent.interrupt"> =>

@@ -18,6 +18,7 @@ export interface JiePlatform {
 
   prompt(teamId: string, agentKey: string, text: string): void;
   interrupt(teamId: string, agentKey: string): void;
+  dequeuePrompt(teamId: string, agentKey: string, prompt: string): void;
 
   subscribe<T extends EventType>(topic: T, callback: (event: EventEnvelope<T>) => void): () => void;
   execute<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>>;
@@ -44,6 +45,10 @@ export class JiePlatformImpl implements JiePlatform {
 
   interrupt(teamId: string, agentKey: string): void {
     this.eventManager.publish(Events.agentInterrupt({ kind: "user" }, teamId, agentKey));
+  }
+
+  dequeuePrompt(teamId: string, agentKey: string, prompt: string): void {
+    this.eventManager.publish(Events.userPromptDequeue({ kind: "user" }, teamId, agentKey, prompt));
   }
 
   subscribe<T extends EventType>(topic: T, callback: (event: EventEnvelope<T>) => void): () => void {

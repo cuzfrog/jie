@@ -52,7 +52,7 @@ export interface AgentUiState {
   readonly subscribe: ReadonlyArray<string>;
   readonly status: AgentStatus;
   readonly model: ModelReference | null;
-  readonly queue: ReadonlyArray<string>;
+  readonly queue: ReadonlyArray<{ readonly text: string; readonly source: "user" | "peer" }>;
   readonly history: MessageTurn[];
   readonly currentTurn: MessageTurn | null;
   readonly lastStopReason: StopReason | null;

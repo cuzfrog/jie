@@ -23,6 +23,7 @@ export const ActionTypes = {
   SET_EDITOR_TEXT: "[ui] set editor text",
   SUBMIT_EDITOR_TEXT: "[ui] submit editor text",
   REQUEST_INTERRUPT: "[ui] request interrupt focused agent",
+  REQUEST_DEQUEUE: "[ui] request dequeue queued prompt",
   SET_ENVIRONMENT: "[ui] set environment",
   SHOW_HELP: "[ui] show help in the chat area",
 } as const;
@@ -67,6 +68,8 @@ export const Actions = {
 	submitEditorText: (text: string) => createAction(ActionTypes.SUBMIT_EDITOR_TEXT, { text }),
 	requestInterrupt: (teamId: string, agentKey: string) =>
 		createAction(ActionTypes.REQUEST_INTERRUPT, { teamId, agentKey }),
+	requestDequeue: (teamId: string, agentKey: string, prompt: string) =>
+		createAction(ActionTypes.REQUEST_DEQUEUE, { teamId, agentKey, prompt }),
 	setEnvironment: (cwd: string, gitBranch: string, gitDirty: boolean, version: string) =>
 		createAction(ActionTypes.SET_ENVIRONMENT, { cwd, gitBranch, gitDirty, version }),
 	showHelp: () => showHelp,

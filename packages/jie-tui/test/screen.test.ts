@@ -81,6 +81,7 @@ function makePlatform(handlers: Map<EventType, (env: AnyEventEnvelope) => void>)
     },
     prompt: () => undefined,
     interrupt: () => undefined,
+    dequeuePrompt: () => undefined,
     execute: ((command: { readonly name: string }) => {
       if (command.name === "listSessions") return Promise.resolve(SESSIONS);
       return Promise.resolve(null);

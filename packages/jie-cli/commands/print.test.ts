@@ -23,6 +23,7 @@ function makeHandle(): { handle: JiePlatform; subscribes: Map<string, Handler> }
     subscribe: subscribeSpy,
     prompt: vi.fn(),
     interrupt: vi.fn(),
+    dequeuePrompt: vi.fn(),
     execute: dispatch,
     teams: () => [],
     shutdown: vi.fn(),

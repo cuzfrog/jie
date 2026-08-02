@@ -194,13 +194,30 @@ describe("reduceModelAssigned", () => {
 
 describe("reduceQueueUpdate", () => {
   test("replaces the agent's queue with the snapshot", () => {
-    const state = reduce(loadedState(), Events.agentPromptQueueUpdate(AGENT_SENDER, ["alpha", "beta"]));
-    expect(state.agents.get("my-team:general-1")?.queue).toEqual(["alpha", "beta"]);
+    const state = reduce(loadedState(), Events.agentPromptQueueUpdate(AGENT_SENDER, [
+      { text: "alpha", source: "user" },
+      { text: "beta", source: "user" },
+    ]));
+    expect(state.agents.get("my-team:general-1")?.queue).toEqual([
+      { text: "alpha", source: "user" },
+      { text: "beta", source: "user" },
+    ]);
+  });
+
+  test("preserves the source tag on each entry", () => {
+    const state = reduce(loadedState(), Events.agentPromptQueueUpdate(AGENT_SENDER, [
+      { text: "hello", source: "user" },
+      { text: "[qa-1 on 'task.recorded']: report", source: "peer" },
+    ]));
+    expect(state.agents.get("my-team:general-1")?.queue).toEqual([
+      { text: "hello", source: "user" },
+      { text: "[qa-1 on 'task.recorded']: report", source: "peer" },
+    ]);
   });
 
   test("clears the queue when the body publishes an empty array", () => {
     let state = loadedState();
-    state = reduce(state, Events.agentPromptQueueUpdate(AGENT_SENDER, ["queued"]));
+    state = reduce(state, Events.agentPromptQueueUpdate(AGENT_SENDER, [{ text: "queued", source: "user" }]));
     state = reduce(state, Events.agentPromptQueueUpdate(AGENT_SENDER, []));
     expect(state.agents.get("my-team:general-1")?.queue).toEqual([]);
   });
@@ -208,18 +225,18 @@ describe("reduceQueueUpdate", () => {
   test("ignores events for a foreign team", () => {
     const state = loadedState();
     const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
-    const state2 = reduce(state, Events.agentPromptQueueUpdate(foreign, ["x"]));
+    const state2 = reduce(state, Events.agentPromptQueueUpdate(foreign, [{ text: "x", source: "user" }]));
     expect(state2.agents.get("my-team:general-1")?.queue).toEqual([]);
   });
 
   test("ignores events for an unknown agent in the loaded team", () => {
     const stranger: AgentSender = { kind: "agent", teamId: "my-team", agentKey: "ghost" };
-    const state = reduce(loadedState(), Events.agentPromptQueueUpdate(stranger, ["x"]));
+    const state = reduce(loadedState(), Events.agentPromptQueueUpdate(stranger, [{ text: "x", source: "user" }]));
     expect(state.agents.get("my-team:general-1")?.queue).toEqual([]);
   });
 
   test("ignores events before any team is loaded", () => {
-    const state = reduce(INITIAL_TUI_STATE, Events.agentPromptQueueUpdate(AGENT_SENDER, ["x"]));
+    const state = reduce(INITIAL_TUI_STATE, Events.agentPromptQueueUpdate(AGENT_SENDER, [{ text: "x", source: "user" }]));
     expect(state).toBe(INITIAL_TUI_STATE);
   });
 });

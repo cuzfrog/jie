@@ -1,6 +1,7 @@
-import { Events, type AgentSender } from "./events";
+import { Events, type AgentSender, type UserSender } from "./events";
 
 const AGENT_SENDER: AgentSender = { kind: "agent", teamId: "my-team", agentKey: "general-1" };
+const USER_SENDER: UserSender = { kind: "user" };
 
 describe("Events.agentUsage", () => {
   test("builds an agent.usage envelope with the supplied usage payload", () => {
@@ -32,5 +33,28 @@ describe("Events.agentUsage", () => {
     });
     expect(env.version).toBe(1);
     expect(env.topic).toBe("agent.usage");
+  });
+});
+
+describe("Events.agentPromptQueueUpdate", () => {
+  test("builds an agent.prompt.queue.update envelope carrying typed entries", () => {
+    const prompts = [
+      { text: "first", source: "user" },
+      { text: "[qa-1 on 'task.recorded']: report", source: "peer" },
+    ] as const;
+    const env = Events.agentPromptQueueUpdate(AGENT_SENDER, [...prompts]);
+    expect(env.type).toBe("agent.prompt.queue.update");
+    expect(env.topic).toBe("agent.prompt.queue.update");
+    expect(env.payload.prompts).toEqual([...prompts]);
+  });
+});
+
+describe("Events.userPromptDequeue", () => {
+  test("builds a user.prompt.dequeue envelope addressed to one agent", () => {
+    const env = Events.userPromptDequeue(USER_SENDER, "my-team", "general-1", "queued text");
+    expect(env.type).toBe("user.prompt.dequeue");
+    expect(env.topic).toBe("user.prompt.dequeue");
+    expect(env.sender).toBe(USER_SENDER);
+    expect(env.payload).toEqual({ teamId: "my-team", agentKey: "general-1", prompt: "queued text" });
   });
 });

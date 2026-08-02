@@ -28,15 +28,23 @@ interface PromptCall {
   readonly text: string;
 }
 
+interface DequeueCall {
+  readonly teamId: string;
+  readonly agentKey: string;
+  readonly prompt: string;
+}
+
 interface PlatformHarness {
   readonly platform: JiePlatform;
   readonly promptCalls: ReadonlyArray<PromptCall>;
+  readonly dequeueCalls: ReadonlyArray<DequeueCall>;
   emit(event: AnyEventEnvelope): void;
 }
 
 function makePlatformHarness(): PlatformHarness {
   const handlers = new Map<EventType, (env: AnyEventEnvelope) => void>();
   const recorded: PromptCall[] = [];
+  const dequeues: DequeueCall[] = [];
   const platform: JiePlatform = {
     settings: { defaultTeam: undefined, defaultProvider: undefined, defaultModel: undefined },
     subscribe: <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void) => {
@@ -50,6 +58,9 @@ function makePlatformHarness(): PlatformHarness {
       recorded.push({ teamId, agentKey, text });
     },
     interrupt: () => undefined,
+    dequeuePrompt: (teamId, agentKey, prompt) => {
+      dequeues.push({ teamId, agentKey, prompt });
+    },
     execute: (async () => null) as JiePlatform["execute"],
     teams: () => [],
     shutdown: () => Promise.resolve(),
@@ -57,6 +68,7 @@ function makePlatformHarness(): PlatformHarness {
   return {
     platform,
     promptCalls: recorded,
+    dequeueCalls: dequeues,
     emit: (event) => {
       handlers.get(event.type)?.(event);
     },
@@ -193,6 +205,18 @@ describe("bootTui — submit pipeline", () => {
     expect(harness!.platform.promptCalls).toEqual([{ teamId: "my-team", agentKey: "general-1", text: "hi" }]);
     harness!.tui.stop();
     await started;
+  });
+});
+
+describe("bootTui — dequeue pipeline", () => {
+  test("requestDequeue action forwards to platform.dequeuePrompt", () => {
+    let harness: TuiHarness | null = null;
+    withTTY(true, () => {
+      harness = bootHarness();
+    });
+    harness!.stateStore.dispatch(Actions.requestDequeue("my-team", "general-1", "queued text"));
+    expect(harness!.platform.dequeueCalls).toEqual([{ teamId: "my-team", agentKey: "general-1", prompt: "queued text" }]);
+    harness!.tui.stop();
   });
 });
 

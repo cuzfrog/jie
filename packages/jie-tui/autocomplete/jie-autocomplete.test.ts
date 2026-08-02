@@ -29,6 +29,7 @@ function makePlatform(execute: ReturnType<typeof vi.fn>): JiePlatform {
     subscribe: vi.fn(() => () => undefined),
     prompt: vi.fn(),
     interrupt: vi.fn(),
+    dequeuePrompt: vi.fn(),
     teams: vi.fn(() => []),
     execute,
     shutdown: vi.fn(),

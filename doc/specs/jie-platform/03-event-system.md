@@ -33,9 +33,10 @@ Identity travels in the envelope, not in the subject. `topic` equals `type` for 
 | `agent.stream.chunk` | agent | `{ stream_id, seq, block_type: "text" \| "thinking", text }` |
 | `agent.stream.end` | agent | `{ stream_id, total_chunks, thinking_ms: number \| null }` |
 | `agent.usage` | agent | `{ input, output, cacheRead, cacheWrite, totalTokens }` |
-| `agent.prompt.queue.update` | agent | `{ prompts: string[] }` |
+| `agent.prompt.queue.update` | agent | `{ prompts: Array<{ text: string; source: "user" \| "peer" }> }` |
 | `agent.model.assigned` | agent | `{ provider, model, effort }` |
 | `user.prompt` | user | `{ teamId, agentKey, prompt }` |
+| `user.prompt.dequeue` | user | `{ teamId, agentKey, prompt }` — cancel the most recently queued user prompt whose raw text equals `prompt` |
 | `agent.interrupt` | any | `{ teamId, agentKey }` |
 | `system.team.loaded` | system | `TeamInfo` — `{ id, leaderKey, agents: [{ teamId, role, agentKey, isLeader, model }] }` |
 | `system.error` | system | `{ error: string }` |
@@ -56,7 +57,7 @@ interface EventManager {
 
 `EventManagerImpl` takes the `eventBus` cradle entry (an in-process bus by default, registered alongside it by `registerEventModule`); tests register a mock bus instead. `JiePlatform` wraps the manager: `handle.subscribe(topic, cb)` is the consumer surface (ADR 13) — the bus never reaches consumer code.
 
-Each known type has a flat-args factory method (`Events.agentTurnStart(sender, prompt)`, `Events.agentIdle(sender, stopReason)`, `Events.userPrompt(sender, teamId, prompt, agentKey)`, `Events.teamLoaded(sender, teamInfo)`, …). `Events.custom(sender, clientTopic, message)` is the client-topic factory: the bus subject becomes `custom.${clientTopic}`.
+Each known type has a flat-args factory method (`Events.agentTurnStart(sender, prompt)`, `Events.agentIdle(sender, stopReason)`, `Events.userPrompt(sender, teamId, prompt, agentKey)`, `Events.userPromptDequeue(sender, teamId, agentKey, prompt)`, `Events.teamLoaded(sender, teamInfo)`, …). `Events.custom(sender, clientTopic, message)` is the client-topic factory: the bus subject becomes `custom.${clientTopic}`.
 
 ## Subscription model
 
@@ -64,6 +65,7 @@ Each `AgentBody` subscribes to exactly:
 
 - `"user.prompt"` — filtered on `payload.agentKey === own agentKey`; this is the sole user prompt ingress (CLI `-p` and TUI both publish here via `handle.prompt(teamId, agentKey, text)`). There are no per-agent subjects and no leader-only ingress.
 - `"agent.interrupt"` — filtered on `teamId` + `agentKey`.
+- `"user.prompt.dequeue"` — filtered on `teamId` + `agentKey`; removes the queue's tail-most user entry matching the text and republishes `agent.prompt.queue.update` (even on a miss, resyncing stale observers). Peer notifications cannot be dequeued (`06-agent-model.md`).
 - `custom.${teamId}.${topic}` for each entry of the soul's `subscribe:` frontmatter.
 
 The team author writes **unscoped** topic names in `.md` frontmatter and in `notify` calls (`task.recorded`, another agent's key for direct addressing); the platform applies the `custom.${teamId}.` prefix at body construction (subscriptions) and at publish time (`notify` → `Events.custom`). Self-receipts are filtered in the body's callback by matching the sender's `agentKey` against its own — the bus stays identity-agnostic.

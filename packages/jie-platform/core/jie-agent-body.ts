@@ -283,6 +283,10 @@ export class JieAgentBody implements AgentBody {
         if (env.payload.teamId !== this.teamId || env.payload.agentKey !== this.agentKey) return;
         this.interruptActiveRun();
       }),
+      this.eventManager.subscribe("user.prompt.dequeue", (env) => {
+        if (env.payload.teamId !== this.teamId || env.payload.agentKey !== this.agentKey) return;
+        this.dequeuePrompt(env.payload.prompt);
+      }),
     );
     for (const topic of this.soul.subscribe) {
       this.unsubscribers.push(
@@ -327,8 +331,20 @@ export class JieAgentBody implements AgentBody {
   }
 
   private publishQueueUpdate(sender: AgentSender): void {
-    const prompts = this.queue.map((entry) => entry.userText ?? userPromptText(entry.message));
+    const prompts = this.queue.map((entry) => entry.userText !== null
+      ? { text: entry.userText, source: "user" as const }
+      : { text: userPromptText(entry.message), source: "peer" as const });
     this.eventManager.publish(Events.agentPromptQueueUpdate(sender, prompts));
+  }
+
+  private dequeuePrompt(prompt: string): void {
+    for (let i = this.queue.length - 1; i >= 0; i--) {
+      if (this.queue[i]!.userText === prompt) {
+        this.queue.splice(i, 1);
+        break;
+      }
+    }
+    this.publishQueueUpdate(this.sender);
   }
 
   private interruptActiveRun(): void {

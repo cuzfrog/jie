@@ -8,6 +8,7 @@ import { createTransientAger } from "./transient-ager";
 
 const SUBMIT_EDITOR_TEXT = Actions.submitEditorText("").type;
 const REQUEST_INTERRUPT = Actions.requestInterrupt("", "").type;
+const REQUEST_DEQUEUE = Actions.requestDequeue("", "", "").type;
 const REQUEST_QUIT = Actions.requestQuit().type;
 const log = logger.getSubLogger({ name: "jie.tui" });
 
@@ -79,6 +80,10 @@ export class TuiImpl implements Tui {
       }
       if (action.type === REQUEST_INTERRUPT) {
         this.platform.interrupt(action.payload.teamId, action.payload.agentKey);
+        return;
+      }
+      if (action.type === REQUEST_DEQUEUE) {
+        this.platform.dequeuePrompt(action.payload.teamId, action.payload.agentKey, action.payload.prompt);
         return;
       }
       if (action.type === REQUEST_QUIT) {

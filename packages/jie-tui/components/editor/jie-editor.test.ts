@@ -1,6 +1,6 @@
 import { TUI, visibleWidth, type Editor, type Terminal } from "@earendil-works/pi-tui";
 import { type JieAutocompleteProvider, type JieSuggestions } from "../../autocomplete";
-import { Actions, type AgentId, type StateStore, type TuiState } from "../../state";
+import { Actions, TuiState, type AgentId, type StateStore } from "../../state";
 import { makeAgentUiState, makeTuiState } from "../../test";
 import { style } from "../themes";
 import { JieEditor } from "./jie-editor";
@@ -40,6 +40,7 @@ const promptHistoryStore = vi.mocked<PromptHistoryStore>({
 
 beforeEach(() => {
   stateStore.getState.mockReturnValue(makeTuiState());
+  promptHistoryStore.load.mockReturnValue([]);
 });
 
 interface EditorHarness {
@@ -267,6 +268,198 @@ function stateWithTeam(status: "idle" | "busy"): TuiState {
     agents: new Map([[LEADER_ID, makeAgentUiState(LEADER_ID, { isLeader: true, status })]]),
   });
 }
+
+function userEntry(text: string): { text: string; source: "user" | "peer" } {
+  return { text, source: "user" };
+}
+
+function peerEntry(text: string): { text: string; source: "user" | "peer" } {
+  return { text, source: "peer" };
+}
+
+function stateWithQueue(queue: ReadonlyArray<{ text: string; source: "user" | "peer" }>): TuiState {
+  return makeTuiState({
+    teamId: "my-team",
+    leaderAgentId: LEADER_ID,
+    focusedAgentId: LEADER_ID,
+    agents: new Map([[LEADER_ID, makeAgentUiState(LEADER_ID, { isLeader: true, queue })]]),
+  });
+}
+
+function wireQueueRoundTrip(initial: TuiState): void {
+  let current = initial;
+  stateStore.getState.mockImplementation(() => current);
+  stateStore.dispatch.mockImplementation((action) => {
+    if (action.type !== Actions.requestDequeue("", "", "").type) return;
+    const focused = TuiState.getFocusedAgent(current);
+    if (focused === null) return;
+    const queue = [...focused.queue];
+    for (let i = queue.length - 1; i >= 0; i--) {
+      if (queue[i]!.source === "user" && queue[i]!.text === action.payload.prompt) {
+        queue.splice(i, 1);
+        break;
+      }
+    }
+    const agents = new Map(current.agents);
+    agents.set(focused.agentId, { ...focused, queue });
+    current = { ...current, agents };
+  });
+}
+
+describe("JieEditor — queue browse", () => {
+  test("up with an empty editor pulls the most recently queued user prompt", () => {
+    const { editor } = bootEditor();
+    wireQueueRoundTrip(stateWithQueue([userEntry("first"), userEntry("second")]));
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("second");
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.requestDequeue("my-team", "general-1", "second"));
+  });
+
+  test("a second up pulls the next user prompt from the tail", () => {
+    const { editor } = bootEditor();
+    wireQueueRoundTrip(stateWithQueue([userEntry("first"), userEntry("second")]));
+    editor.handleInput("\x1b[A");
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("first");
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.requestDequeue("my-team", "general-1", "first"));
+  });
+
+  test("down walks back to the draft and ends the session", () => {
+    const { editor } = bootEditor();
+    wireQueueRoundTrip(stateWithQueue([userEntry("first"), userEntry("second")]));
+    editor.handleInput("\x1b[A");
+    editor.handleInput("\x1b[A");
+    editor.handleInput("\x1b[B");
+    expect(editor.getText()).toBe("second");
+    editor.handleInput("\x1b[B");
+    expect(editor.getText()).toBe("");
+    editor.handleInput("\x1b[B");
+    expect(editor.getText()).toBe("");
+  });
+
+  test("up with editor content dequeues and down restores the draft", () => {
+    const { editor } = bootEditor();
+    wireQueueRoundTrip(stateWithQueue([userEntry("queued")]));
+    for (const ch of "draft") editor.handleInput(ch);
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("queued");
+    editor.handleInput("\x1b[B");
+    expect(editor.getText()).toBe("draft");
+  });
+
+  test("up with content and an empty queue saves the draft to history before walking it", () => {
+    promptHistoryStore.load.mockReturnValue(["old"]);
+    const { editor } = bootEditor();
+    wireQueueRoundTrip(stateWithQueue([]));
+    for (const ch of "draft") editor.handleInput(ch);
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("old");
+    editor.handleInput("\x1b[B");
+    expect(editor.getText()).toBe("draft");
+    editor.handleInput("\x03");
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("draft");
+  });
+
+  test("an exhausted queue continues into prompt history, most recent first", () => {
+    promptHistoryStore.load.mockReturnValue(["h1", "h2"]);
+    const { editor } = bootEditor();
+    wireQueueRoundTrip(stateWithQueue([userEntry("q1")]));
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("q1");
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("h2");
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("h1");
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("h1");
+    editor.handleInput("\x1b[B");
+    expect(editor.getText()).toBe("h2");
+    editor.handleInput("\x1b[B");
+    expect(editor.getText()).toBe("q1");
+    editor.handleInput("\x1b[B");
+    expect(editor.getText()).toBe("");
+  });
+
+  test("peer notifications are skipped and never dequeued", () => {
+    const { editor } = bootEditor();
+    wireQueueRoundTrip(stateWithQueue([userEntry("u1"), peerEntry("[peer]: note"), userEntry("u2")]));
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("u2");
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("u1");
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("u1");
+    expect(stateStore.dispatch).not.toHaveBeenCalledWith(Actions.requestDequeue("my-team", "general-1", "[peer]: note"));
+  });
+
+  test("editing mid-browse abandons the session", () => {
+    const { editor } = bootEditor();
+    wireQueueRoundTrip(stateWithQueue([userEntry("b"), userEntry("a")]));
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("a");
+    editor.handleInput("x");
+    expect(editor.getText()).toBe("ax");
+    editor.handleInput("\x1b[B");
+    expect(editor.getText()).toBe("ax");
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("b");
+    editor.handleInput("\x1b[B");
+    expect(editor.getText()).toBe("ax");
+  });
+
+  test("up from the top line dequeues regardless of the cursor column", () => {
+    const { editor } = bootEditor();
+    wireQueueRoundTrip(stateWithQueue([userEntry("queued")]));
+    editor.handleInput("a");
+    editor.handleInput("b");
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("queued");
+  });
+
+  test("up moves the cursor up from a lower line before dequeuing", () => {
+    const { editor } = bootEditor();
+    wireQueueRoundTrip(stateWithQueue([userEntry("queued")]));
+    editor.handleInput("a");
+    editor.handleInput("\n");
+    editor.handleInput("b");
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("a\nb");
+    expect(editor.getCursor()).toEqual({ line: 0, col: 1 });
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("queued");
+  });
+
+  test("down restores the draft only from the last line", () => {
+    const { editor } = bootEditor();
+    wireQueueRoundTrip(stateWithQueue([userEntry("l1\nl2")]));
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("l1\nl2");
+    editor.handleInput("\x1b[A");
+    expect(editor.getCursor().line).toBe(0);
+    editor.handleInput("\x1b[B");
+    expect(editor.getText()).toBe("l1\nl2");
+    expect(editor.getCursor().line).toBe(1);
+    editor.handleInput("\x1b[B");
+    expect(editor.getText()).toBe("");
+  });
+
+  test("up with an empty queue falls back to native history", () => {
+    promptHistoryStore.load.mockReturnValue(["old"]);
+    const { editor } = bootEditor();
+    wireQueueRoundTrip(stateWithQueue([]));
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("old");
+  });
+
+  test("up does nothing special when no agent is focused", () => {
+    const { editor } = bootEditor();
+    editor.handleInput("x");
+    editor.handleInput("\x1b[D");
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("x");
+  });
+});
 
 describe("JieEditor — autocomplete ghost text", () => {
   test("renders the selected completion's tail dimmed after the cursor", async () => {

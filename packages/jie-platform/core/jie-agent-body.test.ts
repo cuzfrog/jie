@@ -1439,7 +1439,10 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "first queued", "general-1"));
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "second queued", "general-1"));
     await flush();
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual(["first queued", "second queued"]);
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([
+      { text: "first queued", source: "user" },
+      { text: "second queued", source: "user" },
+    ]);
     h.state.isStreaming = false;
     h.fireEvent({
       type: "turn_end",
@@ -1447,7 +1450,7 @@ describe("JieAgentBody — turn.start prompt payload", () => {
       toolResults: [],
     });
     expect(h.followUp.mock.calls.length).toBe(1);
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual(["second queued"]);
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "second queued", source: "user" }]);
     h.fireEvent({ type: "turn_start" });
     expect(turnStart[turnStart.length - 1]!.payload).toBe("first queued");
     body.stop();
@@ -1490,8 +1493,108 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     h.state.isStreaming = true;
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "hello", "general-1"));
     await flush();
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual(["hello"]);
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "hello", source: "user" }]);
     body.stop();
+  });
+});
+
+describe("JieAgentBody — user.prompt.dequeue", () => {
+  let h: Harness;
+
+  beforeEach(() => {
+    h = makeHarness();
+  });
+
+  test("removes the last queue entry matching the raw user text and republishes the snapshot", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "first", "general-1"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "second", "general-1"));
+    await flush();
+    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "second"));
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "first", source: "user" }]);
+    body.stop();
+  });
+
+  test("with duplicated texts, removes the tail-most match only", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "same", "general-1"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "same", "general-1"));
+    await flush();
+    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "same"));
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "same", source: "user" }]);
+    body.stop();
+  });
+
+  test("removes the last user entry while peer notifications stay queued", async () => {
+    const body = h.makeBody({ soul: makeSoul({ subscribe: ["task.recorded"] }) });
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "hello", "general-1"));
+    await flush();
+    h.events.publish(Events.custom({ kind: "agent", teamId: "t1", agentKey: "leader-1" }, "t1.task.recorded", "do X"));
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([
+      { text: "hello", source: "user" },
+      { text: "[leader-1 on 'task.recorded']: do X", source: "peer" },
+    ]);
+    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "hello"));
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([
+      { text: "[leader-1 on 'task.recorded']: do X", source: "peer" },
+    ]);
+    body.stop();
+  });
+
+  test("no match: nothing is removed and the snapshot is republished so a stale observer resyncs", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "first", "general-1"));
+    await flush();
+    const countBefore = queueUpdates.length;
+    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "already consumed"));
+    expect(queueUpdates.length).toBe(countBefore + 1);
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "first", source: "user" }]);
+    body.stop();
+  });
+
+  test("dequeue addressed to another agent or team is ignored", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "first", "general-1"));
+    await flush();
+    const countBefore = queueUpdates.length;
+    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "worker-1", "first"));
+    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t2", "general-1", "first"));
+    expect(queueUpdates.length).toBe(countBefore);
+    body.stop();
+  });
+
+  test("stop() unsubscribes from user.prompt.dequeue", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "first", "general-1"));
+    await flush();
+    const countBefore = queueUpdates.length;
+    body.stop();
+    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "first"));
+    expect(queueUpdates.length).toBe(countBefore);
   });
 });
 

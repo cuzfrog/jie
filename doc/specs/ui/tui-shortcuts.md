@@ -1,6 +1,6 @@
 # TUI Keybinding Matrix
 
-The TUI is keyboard-driven. Editor keys are pi-tui `Editor` semantics verbatim plus three jie keys; global keys are handled by the TUI's input listener before they reach the editor. All bindings are implemented in `components/editor/jie-editor.ts` (editor keys) and `components/view.ts` (global keys). The core keys are also listed under the Shortcuts heading of the welcome splash and the `/help` reprint (`tui-layout.md`, "keybinding hints").
+The TUI is keyboard-driven. Editor keys are pi-tui `Editor` semantics verbatim plus jie extensions (`Esc` interrupt, `Ctrl+C` clear-or-quit, `Ctrl+D` quit, queue-aware `↑`/`↓`); global keys are handled by the TUI's input listener before they reach the editor. All bindings are implemented in `components/editor/jie-editor.ts` (editor keys) and `components/view.ts` (global keys). The core keys are also listed under the Shortcuts heading of the welcome splash and the `/help` reprint (`tui-layout.md`, "keybinding hints").
 
 ## Editor
 
@@ -8,7 +8,7 @@ The TUI is keyboard-driven. Editor keys are pi-tui `Editor` semantics verbatim p
 | --- | --- | --- |
 | `Enter` | Submit the editor buffer — except when the team strip is shown with its cursor on another agent: then it commits that agent as the focused one instead (`tui-team-panel.md`) | pi semantics; `Shift+Enter` inserts a newline where the terminal reports modifyOtherKeys/Kitty (production path) |
 | `Tab` | Complete the highlighted autocomplete suggestion | Inserts the completed token into the buffer; does **not** submit — submit is always `Enter` |
-| `↑` / `↓` | Walk prompt history (with draft capture) | pi editor owns this — except while the team strip is shown: then the global listener routes plain arrows to the strip's cursor instead (`tui-team-panel.md`) |
+| `↑` / `↓` | Browse queued prompts, then prompt history (with draft capture) | When anything is browsable — the focused agent's queue holds `"user"` entries, or history is non-empty — jie takes the arrows over: from the top line, `↑` pulls the tail-most queued user prompt first (into the editor and cancelled on the agent via `Actions.requestDequeue`; `tui-state.md`), then walks history newest-first; a non-empty draft is saved to history before the first pull, and `↓` from the bottom line walks the stack back to it, ending the session. Gated on line boundaries (top line for `↑`, bottom line for `↓`) and suppressed while the autocomplete popup is open; any manual edit abandons the browse session. When nothing is browsable, pi's native history walk applies — except while the team strip is shown: then the global listener routes plain arrows to the strip's cursor instead (`tui-team-panel.md`) |
 | `Esc` | Interrupt the focused agent's in-flight run | only when that agent is busy and no autocomplete popup is showing; otherwise pi closes the popup. The working slot then shows a static `Interrupted` until the agent's next turn starts or the user submits |
 | `Ctrl+C` | Clear the editor if non-empty; otherwise quit | |
 | `Ctrl+D` | Quit when the editor is empty | single press — pi semantics |
