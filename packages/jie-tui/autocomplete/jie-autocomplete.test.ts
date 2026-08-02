@@ -105,7 +105,7 @@ describe("createJieAutocompleteProvider — slash commands", () => {
   test("bare '/' lists every command with its argument hint and description", async () => {
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), makeStateStore())
       .getSuggestions(["/"], 0, 1, { signal: signal() });
-    expect(suggestions!.items).toHaveLength(11);
+    expect(suggestions!.items).toHaveLength(12);
     const team = suggestions!.items.find((item) => item.value === "team");
     expect(team!.description).toBe("<teamId> — switch the active team");
     const help = suggestions!.items.find((item) => item.value === "help");
@@ -164,7 +164,7 @@ describe("createJieAutocompleteProvider — unambiguous-command drill-down", () 
   test("a multi-match prefix keeps the plain command candidates", async () => {
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, drillPlatform(), storeWithTeam())
       .getSuggestions(["/re"], 0, 3, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value).sort()).toEqual(["rename", "resume"]);
+    expect(suggestions!.items.map((item) => item.value).sort()).toEqual(["reload", "rename", "resume"]);
   });
 
   test("falls back to the command candidate when argument completion is empty", async () => {

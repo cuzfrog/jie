@@ -7,6 +7,7 @@ import type { ModelRegistry, Settings, SettingsStore } from "../config";
 import type { PlatformCradle } from "../container";
 import type { AgentBody, AgentBodyParams } from "../core";
 import type { EventManager } from "../event";
+import type { SkillManager } from "../skills";
 import type { MemoryManager } from "../storage";
 import { registerTeamModule } from "./module";
 
@@ -29,6 +30,12 @@ const modelRegistry = vi.mocked<ModelRegistry>({
   resolve: vi.fn(() => undefined),
   listModels: vi.fn(() => []),
   getApiKey: vi.fn(() => undefined),
+  reload: vi.fn(),
+});
+
+const skillManager = vi.mocked<SkillManager>({
+  resolve: vi.fn(() => []),
+  reload: vi.fn(),
 });
 
 const memoryManager = vi.mocked<MemoryManager>({
@@ -57,6 +64,7 @@ function bootedContainer(homeJieDir: string, projectJieDir: string | null): Awil
     settingsStore: asValue(settingsStore),
     modelRegistry: asValue(modelRegistry),
     memoryManager: asValue(memoryManager),
+    skillManager: asValue(skillManager),
     agentBodyFactory: asValue(agentBodyFactory),
   });
   registerTeamModule(container);

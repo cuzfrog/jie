@@ -105,6 +105,10 @@ The TUI re-renders from `system.team.loaded` (agent roster, leader focused) and 
 
 Load failures fail the command, not the process: an unresolvable soul is skipped; a team with no resolvable model at all fails with `NO_MODEL_ERROR`. Other loaded teams continue unaffected.
 
+### Reload (TUI)
+
+`/reload` refreshes the process-lifetime configuration caches without restarting: `ModelRegistry.reload()` re-reads `models.json` (both scopes), `SkillManager.reload()` rescans the skill directories, and every loaded team is rebuilt in place on its current session id — old bodies are stopped, manifests and merged settings (including `defaultEffort`) are re-read, and `system.team.loaded` is re-published per team. Context files need no cache refresh: the body factory calls `loadSystemContextBlock` per construction, so rebuilt bodies carry the edited files. Teams not yet loaded are untouched, and a rebuild never validates the session id against storage (a zero-message session is valid). The TUI refuses `/reload` while any agent is busy.
+
 ## Skills
 
 Skills are project/global instruction sets an agent loads on demand (progressive disclosure). A skill is a directory `<name>/SKILL.md` with YAML frontmatter and a prose body.
@@ -128,7 +132,7 @@ A skill is visible to an agent only if the agent's `skills:` frontmatter lists i
 
 ## Context Files
 
-`AGENTS.md` and `CLAUDE.md` are auto-loaded instruction files injected into every agent's system prompt — shared project state, with no manifest opt-in (unlike skills). The platform reads them, in order, from the home jie dir (`~/.jie/`) and then from every ancestor of the CWD ordered root-down-to-CWD; within a directory `AGENTS.md` precedes `CLAUDE.md`. Missing or unreadable files are skipped and a path is read at most once. The assembled `<context_files>` block is the boot-time `systemContextBlock` cradle singleton, which the prompt composer places before the role prose; file content is injected verbatim.
+`AGENTS.md` and `CLAUDE.md` are auto-loaded instruction files injected into every agent's system prompt — shared project state, with no manifest opt-in (unlike skills). The platform reads them, in order, from the home jie dir (`~/.jie/`) and then from every ancestor of the CWD ordered root-down-to-CWD; within a directory `AGENTS.md` precedes `CLAUDE.md`. Missing or unreadable files are skipped and a path is read at most once. The cradle exposes `loadSystemContextBlock`, a loader that re-reads and assembles the `<context_files>` block on every call; the prompt composer calls it once per agent-body construction and places the block before the role prose, so edits are picked up by the next load or `/reload` rebuild without re-registration. File content is injected verbatim.
 
 ## Hooks
 
@@ -346,4 +350,4 @@ Commands that mutate persistent files:
 
 Runtime flags (no persistence): `--team <id>` (one-shot load override for `jie` and `jie -p`), `--resume <sessionId>` (load a team on a prior session), `--in-memory` (SQLite `:memory:`; nothing persists), `-p "..."` (one-shot print mode).
 
-TUI slash commands run the same platform commands in-session — no restart: `/login`, `/logout <provider>|*`, `/model <provider>/<modelId>`, `/model-filter <add|remove|list> <pattern>` (settings `modelFilters`; narrows the `/model` popup; `list` prints the stored patterns; an `add` that would match no available model is rejected), `/team [<id>]` (hot-load; "Team Swap" above), `/resume` (session picker), `/rename <name>` (names the active session; `08-memory.md` "List and rename"). The `<provider>/<modelId>` slash convention is pi's; two separate flags are not accepted.
+TUI slash commands run the same platform commands in-session — no restart: `/login`, `/logout <provider>|*`, `/model <provider>/<modelId>`, `/model-filter <add|remove|list> <pattern>` (settings `modelFilters`; narrows the `/model` popup; `list` prints the stored patterns; an `add` that would match no available model is rejected), `/effort [<level>]` ("Setting `defaultEffort`" above), `/reload` ("Reload (TUI)" above), `/team [<id>]` (hot-load; "Team Swap" above), `/resume` (session picker), `/rename <name>` (names the active session; `08-memory.md` "List and rename"). The `<provider>/<modelId>` slash convention is pi's; two separate flags are not accepted.

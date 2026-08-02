@@ -1,11 +1,23 @@
+import { logger } from "@cuzfrog/jie-utils";
+import { type LoadSkillsOptions, loadSkills } from "./load-skills";
 import type { Skill, SkillManager } from "./types";
 
-export class InMemorySkillManager implements SkillManager {
-  private readonly skills: Map<string, Skill>;
+const log = logger.getSubLogger({ name: "jie.platform.skills" });
+
+export class SkillManagerImpl implements SkillManager {
+  private skills = new Map<string, Skill>();
   private readonly globs = new Map<string, Bun.Glob>();
 
-  constructor(skills: ReadonlyArray<Skill>) {
-    this.skills = new Map(skills.map((skill) => [skill.name, skill]));
+  constructor(private readonly options: LoadSkillsOptions) {
+    this.reload();
+  }
+
+  reload(): void {
+    const result = loadSkills(this.options);
+    for (const diagnostic of result.diagnostics) {
+      log.warn(`skill at ${diagnostic.path} skipped: ${diagnostic.message}`);
+    }
+    this.skills = new Map(result.skills.map((skill) => [skill.name, skill]));
   }
 
   resolve(spec: string): Skill[] {

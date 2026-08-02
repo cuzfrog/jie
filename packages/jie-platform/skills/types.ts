@@ -17,4 +17,5 @@ export interface LoadSkillsResult {
 
 export interface SkillManager {
   resolve(spec: string): Skill[];
+  reload(): void;
 }

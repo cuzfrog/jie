@@ -17,13 +17,22 @@ export interface ModelRegistry {
   resolve(provider: string, modelId: string): Model<Api> | undefined;
   listModels(provider: string): ReadonlyArray<Model<Api>>;
   getApiKey(provider: string): string | undefined;
+  reload(): void;
 }
 
 export class PiModelRegistry implements ModelRegistry {
-  private readonly custom: ResolvedModelsConfig;
+  private custom: ResolvedModelsConfig;
 
-  constructor(homeJieDir: string, projectJieDir: string | null, private readonly authStore: AuthStore) {
+  constructor(
+    private readonly homeJieDir: string,
+    private readonly projectJieDir: string | null,
+    private readonly authStore: AuthStore,
+  ) {
     this.custom = loadModelsConfig(homeJieDir, projectJieDir);
+  }
+
+  reload(): void {
+    this.custom = loadModelsConfig(this.homeJieDir, this.projectJieDir);
   }
 
   providers(): string[] {

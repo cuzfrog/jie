@@ -33,7 +33,7 @@ export interface PlatformCradle {
   readonly gitService: GitService;
   readonly toolRegistry: ToolRegistry;
   readonly skillManager: SkillManager;
-  readonly systemContextBlock: string;
+  readonly loadSystemContextBlock: () => string;
   readonly hookRunner: HookRunner;
   readonly agentBodyFactory: (params: AgentBodyParams) => AgentBody;
   readonly teamManager: TeamManager;

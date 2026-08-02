@@ -231,6 +231,7 @@ function makeHarness(): Harness {
   });
   const skillManager = vi.mocked<SkillManager>({
     resolve: vi.fn(() => []),
+    reload: vi.fn(),
   });
   const hookRunner = vi.mocked<HookRunner>({
     preToolUse: vi.fn(async () => ({ block: false, reason: null })),

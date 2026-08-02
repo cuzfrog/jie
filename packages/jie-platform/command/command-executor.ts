@@ -36,6 +36,7 @@ export class CommandExecutorImpl implements CommandExecutor {
       getModelFilters: this.getModelFilters.bind(this),
       setDefaultTeam: this.setDefaultTeam.bind(this),
       team: this.team.bind(this),
+      reload: this.reload.bind(this),
       resumeSession: this.resumeSession.bind(this),
       renameSession: this.renameSession.bind(this),
       getTeamInfo: this.getTeamInfo.bind(this),
@@ -144,6 +145,10 @@ export class CommandExecutorImpl implements CommandExecutor {
 
   private team(command: Command<"team">): Promise<CommandResult<"team">> {
     return this.teamManager.load(command.teamId);
+  }
+
+  private reload(): Promise<CommandResult<"reload">> {
+    return this.teamManager.reload();
   }
 
   private resumeSession(command: Command<"resumeSession">): Promise<CommandResult<"resumeSession">> {

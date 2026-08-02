@@ -395,6 +395,66 @@ describe("CommandHandlerImpl — /effort", () => {
   });
 });
 
+describe("CommandHandlerImpl — /reload", () => {
+  const minimalIdentity = {
+    id: "minimal",
+    leaderKey: "general-1",
+    sessionName: null,
+    history: [],
+    agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+  };
+
+  test("/reload while any agent is busy sets an error banner and does not call execute", () => {
+    const { platform, execute } = makePlatform();
+    const busyAgent = makeAgentUiState("alpha:general-1", { isLeader: true, status: "busy" });
+    const state = makeTuiState({ teamId: "alpha", leaderAgentId: busyAgent.agentId, agents: new Map([[busyAgent.agentId, busyAgent]]) });
+    const { handler, dispatch } = makeHandler(platform, state);
+    handler.handle("/reload");
+    expect(execute).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("wait for the current response to finish")));
+  });
+
+  test("/reload dispatches the reload command and replies", () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => [minimalIdentity]);
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    handler.handle("/reload");
+    expect(execute).toHaveBeenCalledWith({ name: "reload" });
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("reloaded settings, manifests, and context files")));
+  });
+
+  test("/reload rehydrates the active team via switchTeam with its reloaded identity", async () => {
+    const { platform, execute } = makePlatform();
+    const alphaIdentity = { ...minimalIdentity, id: "alpha", agents: [{ ...minimalIdentity.agents[0]!, teamId: "alpha" }] };
+    execute.mockImplementationOnce(async () => [minimalIdentity, alphaIdentity]);
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("alpha", true));
+    handler.handle("/reload");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.switchTeam(alphaIdentity));
+  });
+
+  test("/reload with no team loaded replies without dispatching switchTeam", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => []);
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/reload");
+    await new Promise((r) => setImmediate(r));
+    expect(execute).toHaveBeenCalledWith({ name: "reload" });
+    const switchCalls = dispatch.mock.calls.filter(([a]) => a.type === "[ui] switch team");
+    expect(switchCalls).toHaveLength(0);
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("reloaded settings, manifests, and context files")));
+  });
+
+  test("/reload surfaces platform errors as an error banner", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async () => { throw new Error("manifest broken"); });
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    handler.handle("/reload");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/reload failed")));
+  });
+});
+
 describe("CommandHandlerImpl — /team", () => {
   test("/team (no args) sets a usage error and does not call execute", () => {
     const { platform, execute } = makePlatform();
@@ -607,6 +667,7 @@ describe("SLASH_COMMAND_NAMES", () => {
       "model",
       "model-filter",
       "effort",
+      "reload",
       "team",
       "resume",
       "rename",

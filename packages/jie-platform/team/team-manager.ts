@@ -5,12 +5,14 @@ import { type EventManager, Events } from "../event";
 import { JiePlatformError } from "../jie-platform-errors";
 import type { MemoryManager, SessionSummary } from "../storage";
 import { type ModelRegistry, type SettingsStore } from "../config";
+import type { SkillManager } from "../skills";
 import { type AgentSoul, type TeamBlueprint, type TeamBlueprintLocation, BUILTIN_MINIMAL_TEAM_ID } from "./types";
 import { type TeamRegistry, createTeamRegistry } from "./registry";
 import type { AgentHistory, AgentInfo, TeamInfo } from "../types";
 
 export interface TeamManager {
   load(teamId?: string): Promise<TeamInfo>;
+  reload(): Promise<ReadonlyArray<TeamInfo>>;
   resumeSession(teamId: string, sessionId: string): Promise<TeamInfo>;
   listInstalled(): string[];
   agentCount(teamId: string): number;
@@ -34,6 +36,7 @@ export class TeamManagerImpl implements TeamManager {
     private readonly settingsStore: SettingsStore,
     private readonly modelRegistry: ModelRegistry,
     private readonly memoryManager: MemoryManager,
+    private readonly skillManager: SkillManager,
     private readonly agentBodyFactory: (params: AgentBodyParams) => AgentBody,
     private readonly resumeSessionId: string | undefined = undefined,
   ) {
@@ -42,6 +45,20 @@ export class TeamManagerImpl implements TeamManager {
 
   async load(teamId?: string): Promise<TeamInfo> {
     return this.loadImpl(teamId);
+  }
+
+  async reload(): Promise<ReadonlyArray<TeamInfo>> {
+    this.modelRegistry.reload();
+    this.skillManager.reload();
+    const infos: TeamInfo[] = [];
+    for (const [teamId, bodies] of [...this.loadedTeams]) {
+      const sessionId = this.sessionIds.get(teamId);
+      if (sessionId === undefined) continue;
+      for (const body of bodies) body.stop();
+      this.loadedTeams.delete(teamId);
+      infos.push(await this.buildTeam(teamId, sessionId));
+    }
+    return infos;
   }
 
   async resumeSession(teamId: string, sessionId: string): Promise<TeamInfo> {
@@ -105,9 +122,13 @@ export class TeamManagerImpl implements TeamManager {
       this.loadedTeams.delete(requested);
       this.sessionIds.delete(requested);
     }
-    const blueprint: TeamBlueprint = this.teamRegistry.parseTeamManifest(requested);
     const sessionId = this.resolveSessionId(requested, overrideSessionId);
-    this.sessionIds.set(requested, sessionId);
+    return this.buildTeam(requested, sessionId);
+  }
+
+  private async buildTeam(teamId: string, sessionId: string): Promise<TeamInfo> {
+    const blueprint: TeamBlueprint = this.teamRegistry.parseTeamManifest(teamId);
+    this.sessionIds.set(teamId, sessionId);
     const effort = this.settingsStore.load().defaultEffort ?? "off";
     const bodies: AgentBody[] = [];
     for (const soul of blueprint.roles) {
@@ -115,7 +136,7 @@ export class TeamManagerImpl implements TeamManager {
       if (resolvedModel === undefined) continue;
       const body = this.agentBodyFactory({
         agentKey: `${soul.role}-1`,
-        teamId: requested,
+        teamId,
         soul,
         isLeader: soul.role === blueprint.leaderRole,
         sessionId,
@@ -127,12 +148,12 @@ export class TeamManagerImpl implements TeamManager {
     for (const body of bodies) {
       await body.restore();
     }
-    this.loadedTeams.set(requested, bodies);
-    this.publishTeamLoaded(requested, bodies);
+    this.loadedTeams.set(teamId, bodies);
+    this.publishTeamLoaded(teamId, bodies);
     for (const body of bodies) {
       await body.start();
     }
-    return this.toTeamInfo(requested, bodies);
+    return this.toTeamInfo(teamId, bodies);
   }
 
   private resolveTeamId(teamId?: string): string {

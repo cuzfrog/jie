@@ -27,10 +27,12 @@ const modelRegistry = vi.mocked<ModelRegistry>({
   resolve: vi.fn(),
   listModels: vi.fn(),
   getApiKey: vi.fn(),
+  reload: vi.fn(),
 });
 
 const teamManager = vi.mocked<TeamManager>({
   load: vi.fn(),
+  reload: vi.fn(),
   listInstalled: vi.fn(),
   agentCount: vi.fn(),
   listLoaded: vi.fn(),

@@ -1,6 +1,6 @@
 import { assertLlmReachable, seedTeam, FIXTURE } from "../_fixture.ts";
 import { loadMockExpectations } from "../../../packages/mock-llm-backend";
-import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, waitForTransient, waitForAgentEffort, sendCmd, sendLine, type TuiHarness } from "./harness";
+import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, waitForTransient, waitForAgent, waitForAgentEffort, sendCmd, sendLine, type TuiHarness } from "./harness";
 import expectations from "./scenario-1.llm.ts";
 
 describe("Scenario 1 — simple agent", () => {
@@ -54,6 +54,22 @@ describe("Scenario 1 — simple agent", () => {
     await waitForAgentEffort(harness, "my-team:general-1", "high");
     const agent = harness.stateStore.getState().agents.get("my-team:general-1");
     expect(agent?.model?.provider).toBe(FIXTURE.provider);
+  });
+
+  test("/reload rebuilds the loaded team from the edited manifest", async () => {
+    await sendLine(harness.stdin, "/team my-team");
+    await waitForTeam(harness, "my-team");
+    expect(harness.stateStore.getState().agents.has("my-team:qa-1")).toBe(false);
+    seedTeam(harness.dir, "my-team", "general", [
+      { role: "general", systemPrompt: "You answer briefly.", tools: [] },
+      { role: "qa", systemPrompt: "You review.", tools: [] },
+    ]);
+    await sendLine(harness.stdin, "/reload");
+    await waitForTransient(harness, "reloaded settings, manifests, and context files");
+    await waitForAgent(harness, "my-team:qa-1");
+    const state = harness.stateStore.getState();
+    expect(state.teamId).toBe("my-team");
+    expect(state.agents.get("my-team:general-1")?.status).toBe("idle");
   });
 
   test("/rename names the active session and the name appears in listSessions", async () => {

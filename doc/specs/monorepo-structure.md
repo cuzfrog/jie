@@ -7,7 +7,7 @@ packages/
   jie-platform/   # Platform runtime lib — composition root: container.ts (bootPlatform, ADR 31)
     command/         # Platform commands (team, resumeSession, setDefaultModel, login, …) + executor
     config/          # Settings, auth, models.json loading, model registry (10-configuration.md)
-    context/         # Auto-loaded context files (AGENTS.md/CLAUDE.md ancestor walk) → systemContextBlock (10-configuration.md "Context Files")
+    context/         # Auto-loaded context files (AGENTS.md/CLAUDE.md ancestor walk) → loadSystemContextBlock (10-configuration.md "Context Files")
     core/            # AgentBody: event loop (jie-agent-body.ts), pi-agent wiring, streaming, tool adapter
     event/           # EventBus (InProcessEventBus), EventManager, Events factory (03-event-system.md)
     hooks/           # settings.json command hooks: parse, HookRunner, sh executor; gates tool calls + lifecycle (10-configuration.md "Hooks")

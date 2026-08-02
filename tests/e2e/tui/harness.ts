@@ -146,6 +146,14 @@ export async function waitForTeam(harness: TuiHarness, teamId: string, timeoutMs
   );
 }
 
+export async function waitForAgent(harness: TuiHarness, agentId: AgentId, timeoutMs = 60000): Promise<void> {
+  await waitFor(
+    () => harness.stateStore.getState().agents.has(agentId),
+    timeoutMs,
+    `agent ${agentId} in the roster`,
+  );
+}
+
 export async function waitForAgentIdle(harness: TuiHarness, agentId: AgentId, timeoutMs = 60000): Promise<void> {
   await waitFor(
     () => harness.stateStore.getState().agents.get(agentId)?.status === "idle",

@@ -28,10 +28,12 @@ const modelRegistry = vi.mocked<ModelRegistry>({
   resolve: vi.fn(),
   listModels: vi.fn(),
   getApiKey: vi.fn(),
+  reload: vi.fn(),
 });
 
 const teamManager = vi.mocked<TeamManager>({
   load: vi.fn(),
+  reload: vi.fn(),
   resumeSession: vi.fn(),
   renameSession: vi.fn(),
   listInstalled: vi.fn(),
@@ -315,6 +317,19 @@ describe("CommandExecutorImpl", () => {
     });
   });
 
+  describe("reload", () => {
+    test("delegates to teamManager.reload and returns the reloaded teams", async () => {
+      const identities: TeamInfo[] = [
+        { id: "minimal", leaderKey: "general-1", sessionName: null, agents: [], history: [] },
+        { id: "alpha", leaderKey: "general-1", sessionName: null, agents: [], history: [] },
+      ];
+      teamManager.reload.mockResolvedValue(identities);
+      const result = await executor.execute({ name: "reload" });
+      expect(result).toBe(identities);
+      expect(teamManager.reload).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("resumeSession", () => {
     test("delegates to teamManager.resumeSession with teamId and sessionId", async () => {
       const identity: TeamInfo = { id: "alpha", leaderKey: "general-1", sessionName: null, agents: [], history: [] };
@@ -426,6 +441,7 @@ describe("CommandExecutorImpl", () => {
         { name: "getModelFilters" },
         { name: "setDefaultTeam", teamId: "alpha" },
         { name: "team", teamId: "alpha" },
+        { name: "reload" },
         { name: "resumeSession", teamId: "alpha", sessionId: "s1" },
         { name: "renameSession", teamId: "alpha", sessionName: "my session" },
         { name: "getTeamInfo" },
