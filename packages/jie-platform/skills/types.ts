@@ -1,6 +1,7 @@
 export interface Skill {
   readonly name: string;
   readonly description: string;
+  readonly argumentHint: string | null;
   readonly filePath: string;
   readonly baseDir: string;
   readonly body: string;

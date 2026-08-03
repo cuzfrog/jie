@@ -5,6 +5,7 @@ function makeSkill(overrides: Partial<Skill> = {}): Skill {
   return {
     name: "say-hello",
     description: "greet the user",
+    argumentHint: null,
     filePath: "/skills/say-hello/SKILL.md",
     baseDir: "/skills/say-hello",
     body: "Greet the user warmly.",
@@ -75,5 +76,50 @@ describe("expandSkillInvocation", () => {
 
   test("returns null when no skills are configured", () => {
     expect(expandSkillInvocation("/skill:say-hello", [])).toBeNull();
+  });
+
+  test("interpolates $ARGUMENTS with all arguments", () => {
+    const skill = makeSkill({ body: "Greet $ARGUMENTS warmly." });
+    expect(expandSkillInvocation("/skill:say-hello Alice and Bob", [skill])).toContain("Greet Alice and Bob warmly.");
+  });
+
+  test("interpolates positional $1 and $2 with individual arguments", () => {
+    const skill = makeSkill({ body: "Greet $1 on behalf of $2." });
+    expect(expandSkillInvocation("/skill:say-hello Alice Bob", [skill])).toContain("Greet Alice on behalf of Bob.");
+  });
+
+  test("a missing positional interpolates to the empty string", () => {
+    const skill = makeSkill({ body: "Greet $1 on behalf of $2." });
+    expect(expandSkillInvocation("/skill:say-hello Alice", [skill])).toContain("Greet Alice on behalf of .");
+  });
+
+  test("a bare invocation of a placeholder skill interpolates empty args", () => {
+    const skill = makeSkill({ body: "Greet $ARGUMENTS." });
+    expect(expandSkillInvocation("/skill:say-hello", [skill])).toContain("Greet .");
+  });
+
+  test("placeholders suppress the trailing args append", () => {
+    const skill = makeSkill({ body: "Greet $ARGUMENTS." });
+    expect(expandSkillInvocation("/skill:say-hello Alice", [skill])?.endsWith("</skill>")).toBe(true);
+  });
+
+  test("$10 refers to the tenth argument, not $1 followed by 0", () => {
+    const skill = makeSkill({ body: "arg: $10" });
+    expect(expandSkillInvocation("/skill:say-hello a b c d e f g h i j", [skill])).toContain("arg: j");
+  });
+
+  test("args with replacement-pattern text like $& and $$ are inserted verbatim", () => {
+    const skill = makeSkill({ body: "Execute: $ARGUMENTS" });
+    expect(expandSkillInvocation("/skill:say-hello a $& b $$5", [skill])).toContain("Execute: a $& b $$5");
+  });
+
+  test("placeholder-looking tokens inside the args are not re-expanded", () => {
+    const skill = makeSkill({ body: "Execute: $ARGUMENTS" });
+    expect(expandSkillInvocation("/skill:say-hello echo $1", [skill])).toContain("Execute: echo $1");
+  });
+
+  test("a body mixing $ARGUMENTS and positionals interpolates each in one pass", () => {
+    const skill = makeSkill({ body: "Greet $1, all: $ARGUMENTS" });
+    expect(expandSkillInvocation("/skill:say-hello Alice Bob", [skill])).toContain("Greet Alice, all: Alice Bob");
   });
 });

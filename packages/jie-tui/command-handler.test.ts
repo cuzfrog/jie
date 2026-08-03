@@ -1,4 +1,4 @@
-import { JiePlatformError, type JiePlatform } from "@cuzfrog/jie-platform";
+import { JiePlatformError, type JiePlatform, type SkillInfo } from "@cuzfrog/jie-platform";
 import { CommandHandlerImpl, SLASH_COMMAND_NAMES, type CommandHandler } from "./command-handler";
 import { Actions, type StateStore, type TuiState } from "./state";
 import { makeAgentUiState, makeTuiState } from "./test";
@@ -123,8 +123,10 @@ describe("CommandHandlerImpl — prompt routing", () => {
 });
 
 describe("CommandHandlerImpl — skill invocation", () => {
+  const sayHello: SkillInfo = { name: "say-hello", description: "greets", argumentHint: null };
+
   function stateWithSkill(teamId: string, agentFocused: boolean): TuiState {
-    const agent = makeAgentUiState(`${teamId}:general-1`, { isLeader: true, skills: ["say-hello"] });
+    const agent = makeAgentUiState(`${teamId}:general-1`, { isLeader: true, skills: [sayHello] });
     return makeTuiState({
       teamId,
       leaderAgentId: agent.agentId,

@@ -40,8 +40,12 @@ export function parseSkill(input: ParseSkillInput): ParseSkillResult {
   const descriptionError = validateDescription(frontmatter.description);
   if (descriptionError !== null) return { skill: null, diagnostic: descriptionError };
 
+  const { argumentHint, error: argumentHintError } = parseArgumentHint(frontmatter["argument-hint"]);
+  if (argumentHintError !== null) return { skill: null, diagnostic: argumentHintError };
+
   const skill: Skill = {
-    name: input.dirName, description: String(frontmatter.description), filePath: input.filePath, baseDir: input.baseDir, body: body.trim(),
+    name: input.dirName, description: String(frontmatter.description), argumentHint,
+    filePath: input.filePath, baseDir: input.baseDir, body: body.trim(),
   };
   return { skill, diagnostic: null };
 }
@@ -79,6 +83,12 @@ function validateDescription(description: unknown): string | null {
     return `skill description exceeds ${MAX_DESCRIPTION_LENGTH} characters`;
   }
   return null;
+}
+
+function parseArgumentHint(value: unknown): { argumentHint: string | null; error: string | null } {
+  if (value === undefined || value === null) return { argumentHint: null, error: null };
+  if (typeof value !== "string") return { argumentHint: null, error: "skill argument-hint must be a string" };
+  return { argumentHint: value.trim() !== "" ? value.trim() : null, error: null };
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

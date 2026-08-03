@@ -1,4 +1,4 @@
-import { type AgentMessage, type TeamInfo } from "@cuzfrog/jie-platform";
+import { type AgentMessage, type SkillInfo, type TeamInfo } from "@cuzfrog/jie-platform";
 import type { Usage } from "@earendil-works/pi-ai";
 import { teamLoadReducer } from "./team-load-reducer";
 import { StateStoreImpl } from "./state-store";
@@ -13,7 +13,7 @@ function team(agents: ReadonlyArray<{
   isLeader: boolean;
   tools?: ReadonlyArray<string>;
   subscribe?: ReadonlyArray<string>;
-  skills?: ReadonlyArray<string>;
+  skills?: ReadonlyArray<SkillInfo>;
   model: { provider: string; id: string; effort: "off" | "low" | "medium" | "high" | "max"; contextWindow: number | null } | null;
 }>, sessionName: string | null = null): TeamInfo {
   const leader = agents.find((a) => a.isLeader) ?? agents[0];
@@ -83,16 +83,23 @@ describe("teamLoadReducer", () => {
     expect(state.agents.get("my-team:general-1")?.model?.contextWindow).toBe(200000);
   });
 
-  test("seeds the resolved skill names from TeamInfo", () => {
+  test("seeds the resolved skill metadata from TeamInfo", () => {
+    const skills = [
+      { name: "say-hello", description: "greets", argumentHint: null },
+      { name: "deploy", description: "deploys", argumentHint: "<env>" },
+    ];
     const state = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, skills: ["say-hello", "deploy"], model: null },
+      { role: "general", agentKey: "general-1", isLeader: true, skills, model: null },
     ]));
-    expect(state.agents.get("my-team:general-1")?.skills).toEqual(["say-hello", "deploy"]);
+    expect(state.agents.get("my-team:general-1")?.skills).toEqual(skills);
   });
 
   test("refreshes skills when a team is reloaded with a changed manifest", () => {
     const first = teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, skills: ["say-hello"], model: null },
+      {
+        role: "general", agentKey: "general-1", isLeader: true,
+        skills: [{ name: "say-hello", description: "greets", argumentHint: null }], model: null,
+      },
     ]));
     const second = teamLoadReducer(first, team([
       { role: "general", agentKey: "general-1", isLeader: true, skills: [], model: null },

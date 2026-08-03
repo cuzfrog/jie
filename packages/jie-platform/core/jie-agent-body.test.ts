@@ -52,6 +52,7 @@ function makeSoul(overrides: Partial<AgentSoul> = {}): AgentSoul {
 const deploySkill: Skill = {
   name: "deploy",
   description: "Deploys the app",
+  argumentHint: null,
   filePath: "/deploy/SKILL.md",
   baseDir: "/deploy",
   body: "Run the deploy pipeline.",
@@ -367,11 +368,11 @@ describe("JieAgentBody — identity", () => {
     });
   });
 
-  test("identity.skills carries the resolved skill names", () => {
+  test("identity.skills carries the resolved skill metadata", () => {
     const h = makeHarness();
     h.skillManager.resolve.mockReturnValue([deploySkill]);
     const body = h.makeBody({ soul: makeSoul({ skills: ["dep*"] }) });
-    expect(body.identity.skills).toEqual(["deploy"]);
+    expect(body.identity.skills).toEqual([{ name: "deploy", description: "Deploys the app", argumentHint: null }]);
   });
 
   test("identity.model is null when no model is given", () => {

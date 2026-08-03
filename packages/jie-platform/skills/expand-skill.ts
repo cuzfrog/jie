@@ -11,8 +11,20 @@ export function expandSkillInvocation(text: string, skills: ReadonlyArray<Skill>
   const skill = skills.find((candidate) => candidate.name === name);
   if (skill === undefined) return null;
   const args = separatorIndex === -1 ? "" : rest.slice(separatorIndex + 1).trim();
+  const interpolates = usesArgumentPlaceholders(skill.body);
+  const body = interpolates ? interpolateArguments(skill.body, args) : skill.body;
   const block =
     `<skill name="${skill.name}" location="${skill.filePath}">\n`
-    + `References are relative to ${skill.baseDir}.\n\n${skill.body}\n</skill>`;
-  return args === "" ? block : `${block}\n\n${args}`;
+    + `References are relative to ${skill.baseDir}.\n\n${body}\n</skill>`;
+  return !interpolates && args !== "" ? `${block}\n\n${args}` : block;
+}
+
+function usesArgumentPlaceholders(body: string): boolean {
+  return /\$ARGUMENTS\b|\$\d+\b/.test(body);
+}
+
+function interpolateArguments(body: string, args: string): string {
+  const parts = args === "" ? [] : args.split(/\s+/);
+  return body.replace(/\$ARGUMENTS\b|\$(\d+)\b/g, (_match, index: string | undefined) =>
+    index === undefined ? args : parts[Number(index) - 1] ?? "");
 }
