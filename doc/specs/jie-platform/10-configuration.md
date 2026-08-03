@@ -14,7 +14,7 @@ Platform-level configuration surface: how Jie discovers and loads settings, cred
 | `~/.jie/mcp.json`, `.jie/mcp.json` | MCP server definitions | Plain JSON | Platform connects stdio servers at startup; project overrides per name (ADR 4) |
 | `.jie/teams/<id>/TEAM.md` | Team wiring | Plain text | `leader:` declaration in YAML frontmatter + prose |
 | `.jie/teams/<id>/<role>.md` | Agent definition | Plain text | YAML frontmatter (`model?`, `tools`, `subscribe?`, `skills?`) + prose body (system prompt) |
-| `~/.jie/skills/<name>/SKILL.md` | Global skill | Plain text | YAML frontmatter (`name?`, `description`) + prose body; see "Skills" |
+| `~/.jie/skills/<name>/SKILL.md` | Global skill | Plain text | YAML frontmatter (`name?`, `description`, `argument-hint?`) + prose body; see "Skills" |
 | `.jie/skills/<name>/SKILL.md` | Project skill | Plain text | Same shape; a project skill overrides a global skill of the same name |
 | `~/.jie/AGENTS.md`, `~/.jie/CLAUDE.md` | Global context | Plain text | Auto-loaded instructions; see "Context Files" |
 | `<ancestor>/AGENTS.md`, `<ancestor>/CLAUDE.md` | Project context | Plain text | Read from every ancestor of CWD (root→CWD); see "Context Files" |
@@ -123,8 +123,9 @@ The `SkillManager` cradle singleton is built at platform boot by scanning `~/.ji
 |---|---|---|
 | `name` | no | Defaults to the directory name; when present must equal it. Charset `[a-z0-9-]{1,64}`, no leading/trailing/consecutive hyphens — the directory name carries the constraint. |
 | `description` | yes | Non-empty, ≤ 1024 chars. Surfaced to the model so it can decide when to load the skill. |
+| `argument-hint` | no | Short placeholder hint for the invocation args (e.g. `<file> <pattern>`), trimmed; blank means none. Shown by the TUI autocomplete after the skill name, ahead of the description. |
 
-An invalid skill (bad name charset, missing/over-long description, name/directory mismatch, malformed frontmatter) is reported as a diagnostic and skipped (WARN), never a startup failure — consistent with MCP resource loading.
+An invalid skill (bad name charset, missing/over-long description, non-string argument-hint, name/directory mismatch, malformed frontmatter) is reported as a diagnostic and skipped (WARN), never a startup failure — consistent with MCP resource loading.
 
 ### Manifest opt-in
 
@@ -132,7 +133,7 @@ A skill is visible to an agent only if the agent's `skills:` frontmatter lists i
 
 ### Invocation
 
-A user can invoke a skill explicitly from a prompt with `/skill:<name> [args]`, mirroring pi. The body expands the invocation before ingress (`06-agent-model.md`, "Skill invocation"): `expandSkillInvocation` resolves `<name>` against the agent's own resolved skills and rewrites the prompt into a `<skill name location>` block carrying the skill body (relative references resolve against the skill directory), appending any args. The original text is what the TUI echoes and stores as the turn prompt; the expansion is what reaches the model and memory. An unknown name, or a name the target agent does not have, is not expanded. The TUI gates invocation: `/skill:` autocompletes only the focused/leader agent's skills, and submitting a skill that agent lacks is an error banner, not a prompt. `jie -p "/skill:<name> …"` gets the same expansion through the same ingress.
+A user can invoke a skill explicitly from a prompt with `/skill:<name> [args]`, mirroring pi. The body expands the invocation before ingress (`06-agent-model.md`, "Skill invocation"): `expandSkillInvocation` resolves `<name>` against the agent's own resolved skills and rewrites the prompt into a `<skill name location>` block carrying the skill body (relative references resolve against the skill directory). When the body contains `$ARGUMENTS` or positional `$1`..`$n` placeholders, the args are interpolated into it — `$ARGUMENTS` expands to the whole args string, each `$n` to the n-th whitespace-separated arg (a missing positional expands to nothing); any occurrence counts, so a `$`-plus-digits mention in prose or a code fence switches the body to interpolation mode. Otherwise the args are appended after the block. The original text is what the TUI echoes and stores as the turn prompt; the expansion is what reaches the model and memory. An unknown name, or a name the target agent does not have, is not expanded. The TUI gates invocation: `/skill:` autocompletes only the focused/leader agent's skills, and submitting a skill that agent lacks is an error banner, not a prompt. `jie -p "/skill:<name> …"` gets the same expansion through the same ingress.
 
 ## Context Files
 

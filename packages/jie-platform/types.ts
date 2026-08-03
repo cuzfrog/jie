@@ -15,6 +15,12 @@ export interface ModelInfo {
     readonly contextWindow: number | null;
 }
 
+export interface SkillInfo {
+    readonly name: string;
+    readonly description: string;
+    readonly argumentHint: string | null;
+}
+
 export interface AgentInfo {
     readonly teamId: string;
     readonly role: string;
@@ -22,7 +28,7 @@ export interface AgentInfo {
     readonly isLeader: boolean;
     readonly tools: ReadonlyArray<string>;
     readonly subscribe: ReadonlyArray<string>;
-    readonly skills: ReadonlyArray<string>;
+    readonly skills: ReadonlyArray<SkillInfo>;
     readonly model: ModelInfo | null;
 }
 

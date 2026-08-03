@@ -1,4 +1,4 @@
-import { type JiePlatform } from "@cuzfrog/jie-platform";
+import { type JiePlatform, type SkillInfo } from "@cuzfrog/jie-platform";
 import { type ScannedFile } from "../file-mention";
 import { type StateStore, type TuiState } from "../state";
 import { makeAgentUiState, makeTuiState } from "../test";
@@ -115,7 +115,11 @@ describe("createJieAutocompleteProvider — slash commands", () => {
 });
 
 describe("createJieAutocompleteProvider — skill invocations", () => {
-  function storeWithSkills(skills: ReadonlyArray<string>): StateStore {
+  function skillInfo(name: string, overrides: Partial<SkillInfo> = {}): SkillInfo {
+    return { name, description: `run ${name}`, argumentHint: null, ...overrides };
+  }
+
+  function storeWithSkills(skills: ReadonlyArray<SkillInfo>): StateStore {
     const agent = makeAgentUiState("my-team:general-1", { isLeader: true, skills });
     return makeStateStore(makeTuiState({
       teamId: "my-team",
@@ -126,21 +130,30 @@ describe("createJieAutocompleteProvider — skill invocations", () => {
   }
 
   test("bare '/' appends the focused agent's skills after the commands", async () => {
-    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), storeWithSkills(["say-hello"]))
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), storeWithSkills([skillInfo("say-hello")]))
       .getSuggestions(["/"], 0, 1, { signal: signal() });
     expect(suggestions!.items).toHaveLength(13);
-    expect(suggestions!.items.at(-1)).toEqual({ value: "skill:say-hello", label: "skill:say-hello" });
+    expect(suggestions!.items.at(-1)).toEqual({ value: "skill:say-hello", label: "skill:say-hello", description: "run say-hello" });
+  });
+
+  test("skill rows show the argument hint before the description", async () => {
+    const store = storeWithSkills([skillInfo("deploy", { argumentHint: "<env>", description: "deploys the app" })]);
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), store)
+      .getSuggestions(["/skill:"], 0, 7, { signal: signal() });
+    expect(suggestions!.items[0]!.description).toBe("<env> — deploys the app");
   });
 
   test("'/skill:' lists the focused agent's skills", async () => {
-    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), storeWithSkills(["say-hello", "deploy"]))
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(),
+      storeWithSkills([skillInfo("say-hello"), skillInfo("deploy")]))
       .getSuggestions(["/skill:"], 0, 7, { signal: signal() });
     expect(suggestions!.prefix).toBe("/skill:");
     expect(suggestions!.items.map((item) => item.value)).toEqual(["skill:say-hello", "skill:deploy"]);
   });
 
   test("'/skill:say' filters skills by the typed prefix", async () => {
-    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), storeWithSkills(["say-hello", "deploy"]))
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(),
+      storeWithSkills([skillInfo("say-hello"), skillInfo("deploy")]))
       .getSuggestions(["/skill:say"], 0, 10, { signal: signal() });
     expect(suggestions!.prefix).toBe("/skill:say");
     expect(suggestions!.items.map((item) => item.value)).toEqual(["skill:say-hello"]);
@@ -162,7 +175,7 @@ describe("createJieAutocompleteProvider — skill invocations", () => {
   });
 
   test("skill completion inserts the invocation and a trailing space", () => {
-    const result = new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), storeWithSkills(["say-hello"]))
+    const result = new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), storeWithSkills([skillInfo("say-hello")]))
       .applyCompletion(["/skill:say"], 0, 10, { value: "skill:say-hello", label: "skill:say-hello" }, "/skill:say");
     expect(result.lines).toEqual(["/skill:say-hello "]);
     expect(result.cursorCol).toBe(17);

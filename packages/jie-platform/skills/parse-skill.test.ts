@@ -15,10 +15,40 @@ describe("parseSkill", () => {
     expect(skill).toEqual({
       name: "deploy",
       description: "Deploys the app",
+      argumentHint: null,
       filePath: "/skills/deploy/SKILL.md",
       baseDir: "/skills/deploy",
       body: "body",
     });
+  });
+
+  test("argument-hint is captured trimmed", () => {
+    const { skill, diagnostic } = parseSkill(input(skillFile("description: Deploys the app\nargument-hint: ' [file] <pattern> '")));
+    expect(diagnostic).toBeNull();
+    expect(skill?.argumentHint).toBe("[file] <pattern>");
+  });
+
+  test("a blank argument-hint is null", () => {
+    const { skill } = parseSkill(input(skillFile("description: Deploys the app\nargument-hint: '   '")));
+    expect(skill?.argumentHint).toBeNull();
+  });
+
+  test("a non-string argument-hint is a diagnostic", () => {
+    const { skill, diagnostic } = parseSkill(input(skillFile("description: Deploys the app\nargument-hint: 42")));
+    expect(skill).toBeNull();
+    expect(diagnostic).toContain("argument-hint");
+  });
+
+  test("a value-less argument-hint is null, not a diagnostic", () => {
+    const { skill, diagnostic } = parseSkill(input(skillFile("description: Deploys the app\nargument-hint:")));
+    expect(diagnostic).toBeNull();
+    expect(skill?.argumentHint).toBeNull();
+  });
+
+  test("an unquoted bracket argument-hint parses as a yaml sequence and is a diagnostic", () => {
+    const { skill, diagnostic } = parseSkill(input(skillFile("description: Deploys the app\nargument-hint: [file]")));
+    expect(skill).toBeNull();
+    expect(diagnostic).toContain("argument-hint");
   });
 
   test("the body is the content after the frontmatter, trimmed", () => {

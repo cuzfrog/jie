@@ -1,5 +1,5 @@
 import type { StopReason } from "@earendil-works/pi-ai";
-import type { CommandResult, EffortLevel, ModelInfo } from "@cuzfrog/jie-platform";
+import type { CommandResult, EffortLevel, ModelInfo, SkillInfo } from "@cuzfrog/jie-platform";
 import type { TodoItem } from "../todo";
 
 export type AgentStatus = "idle" | "busy";
@@ -50,7 +50,7 @@ export interface AgentUiState {
   readonly isLeader: boolean;
   readonly tools: ReadonlyArray<string>;
   readonly subscribe: ReadonlyArray<string>;
-  readonly skills: ReadonlyArray<string>;
+  readonly skills: ReadonlyArray<SkillInfo>;
   readonly status: AgentStatus;
   readonly model: ModelReference | null;
   readonly queue: ReadonlyArray<{ readonly text: string; readonly source: "user" | "peer" }>;

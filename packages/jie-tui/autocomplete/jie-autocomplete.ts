@@ -6,7 +6,7 @@ import {
   type AutocompleteSuggestions,
   type SlashCommand,
 } from "@earendil-works/pi-tui";
-import { EFFORT_LEVELS, type JiePlatform } from "@cuzfrog/jie-platform";
+import { EFFORT_LEVELS, type JiePlatform, type SkillInfo } from "@cuzfrog/jie-platform";
 import { COMMAND_METADATA } from "../command-metadata";
 import { matchesModelFilter } from "../model-filter";
 import { filterFiles, type ScannedFile } from "../file-mention";
@@ -84,12 +84,16 @@ export class JieAutocompleteProviderImpl implements JieAutocompleteProvider {
   private skillSuggestions(textBeforeCursor: string): AutocompleteSuggestions | null {
     if (!textBeforeCursor.startsWith("/") || /\s/.test(textBeforeCursor)) return null;
     const query = textBeforeCursor.slice(1);
-    const candidates = targetAgentSkills(this.stateStore).map((name) => `skill:${name}`);
-    if (candidates.length === 0 || isAlreadyComplete(candidates, query)) return null;
-    const matches = fuzzyFilter(candidates, query, (candidate) => candidate).slice(0, MAX_SUGGESTIONS);
+    const skills = targetAgentSkills(this.stateStore);
+    if (skills.length === 0 || isAlreadyComplete(skills.map((skill) => `skill:${skill.name}`), query)) return null;
+    const matches = fuzzyFilter([...skills], query, (skill) => `skill:${skill.name}`).slice(0, MAX_SUGGESTIONS);
     if (matches.length === 0) return null;
     return {
-      items: matches.map((candidate): AutocompleteItem => ({ value: candidate, label: candidate })),
+      items: matches.map((skill): AutocompleteItem => ({
+        value: `skill:${skill.name}`,
+        label: `skill:${skill.name}`,
+        description: skill.argumentHint !== null ? `${skill.argumentHint} — ${skill.description}` : skill.description,
+      })),
       prefix: textBeforeCursor,
     };
   }
@@ -233,7 +237,7 @@ function effortItems(prefix: string): AutocompleteItem[] | null {
   return items.length === 0 ? null : items;
 }
 
-function targetAgentSkills(stateStore: StateStore): ReadonlyArray<string> {
+function targetAgentSkills(stateStore: StateStore): ReadonlyArray<SkillInfo> {
   const state = stateStore.getState();
   for (const agentId of [state.focusedAgentId, state.leaderAgentId]) {
     if (agentId === null) continue;

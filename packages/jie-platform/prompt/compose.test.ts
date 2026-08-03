@@ -2,7 +2,7 @@ import type { Skill } from "../skills";
 import { composeSystemPrompt } from "./compose";
 
 function skill(name: string, description: string): Skill {
-  return { name, description, filePath: `/${name}/SKILL.md`, baseDir: `/${name}`, body: "body" };
+  return { name, description, argumentHint: null, filePath: `/${name}/SKILL.md`, baseDir: `/${name}`, body: "body" };
 }
 
 describe("composeSystemPrompt", () => {

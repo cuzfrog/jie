@@ -30,8 +30,14 @@ describe("loadSkills", () => {
     const result = loadSkills({ homeSkillsDir: home, projectSkillsDir: project });
     expect(result.diagnostics).toEqual([]);
     expect(result.skills).toEqual([
-      { name: "deploy", description: "Deploys the app", filePath, baseDir: join(project, "deploy"), body: "body" },
+      { name: "deploy", description: "Deploys the app", argumentHint: null, filePath, baseDir: join(project, "deploy"), body: "body" },
     ]);
+  });
+
+  test("argument-hint from the frontmatter is captured", () => {
+    writeSkill(project, "deploy", "description: Deploys the app\nargument-hint: <file>");
+    const result = loadSkills({ homeSkillsDir: home, projectSkillsDir: project });
+    expect(result.skills[0]?.argumentHint).toBe("<file>");
   });
 
   test("merges home and project skills", () => {

@@ -164,7 +164,7 @@ export class JieAgentBody implements AgentBody {
       isLeader: this.isLeader,
       tools: this.soul.tools,
       subscribe: this.soul.subscribe,
-      skills: this.resolvedSkills.map((skill) => skill.name),
+      skills: this.resolvedSkills.map((skill) => ({ name: skill.name, description: skill.description, argumentHint: skill.argumentHint })),
       model: this.modelInfo,
     };
   }

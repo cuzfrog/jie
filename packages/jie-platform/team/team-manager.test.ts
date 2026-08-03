@@ -76,7 +76,7 @@ function makeFakeBody(params: AgentBodyParams, restored: ReadonlyArray<AgentMess
       isLeader: params.isLeader,
       tools: params.soul.tools,
       subscribe: params.soul.subscribe,
-      skills: params.soul.skills,
+      skills: params.soul.skills.map((name) => ({ name, description: "", argumentHint: null })),
       model: null,
     },
     restore: async () => restored,

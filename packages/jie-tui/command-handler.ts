@@ -121,7 +121,7 @@ export class CommandHandlerImpl implements CommandHandler {
       this.stateStore.dispatch(Actions.setErrorMessage("no team loaded — load a team first"));
       return;
     }
-    if (!agent.skills.includes(skillName)) {
+    if (!agent.skills.some((skill) => skill.name === skillName)) {
       this.stateStore.dispatch(Actions.setErrorMessage(`skill '${skillName}' is not available on agent '${agent.agentKey}'`));
       return;
     }
