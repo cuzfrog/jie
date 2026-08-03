@@ -15,12 +15,15 @@ const CTRL_T = "\x14";
 const CTRL_O = "\x0f";
 const CONSUMED = { consume: true } as const;
 const INTERRUPTED_LABEL = "Interrupted";
+const TEAM_WORKING_LABEL = "Team working…";
+const TEAM_SPINNER_INTERVAL_MS = 1000;
 const NO_SPINNER_FRAMES: string[] = [];
 
 export class TuiViewImpl implements TuiView {
   private readonly stateStore: StateStore;
   private readonly workingSlot: Container;
   private readonly workingIndicator: Loader;
+  private readonly teamWorkingIndicator: Loader;
   private readonly interruptedIndicator: Loader;
   private readonly chatSync: ChatSync;
   private readonly unsubscribeActions: () => void;
@@ -40,6 +43,9 @@ export class TuiViewImpl implements TuiView {
     this.workingSlot = new Container();
     this.workingIndicator = new FlushLoader(tui, style("accent"), style("muted"), WORKING_LABEL, {
       frames: [...SPINNER_FRAMES], intervalMs: SPINNER_INTERVAL_MS,
+    });
+    this.teamWorkingIndicator = new FlushLoader(tui, style("accent"), style("muted"), TEAM_WORKING_LABEL, {
+      frames: [...SPINNER_FRAMES], intervalMs: TEAM_SPINNER_INTERVAL_MS,
     });
     this.interruptedIndicator = new FlushLoader(tui, style("muted"), style("muted"), INTERRUPTED_LABEL, {
       frames: NO_SPINNER_FRAMES,
@@ -80,6 +86,7 @@ export class TuiViewImpl implements TuiView {
 
   stop(): void {
     this.workingIndicator.stop();
+    this.teamWorkingIndicator.stop();
     this.chatSync.stop();
     this.unsubscribeKeys();
     this.unsubscribeActions();
@@ -87,9 +94,9 @@ export class TuiViewImpl implements TuiView {
 
   private syncWorkingIndicator(): boolean {
     const state = this.stateStore.getState();
-    const busy = TuiState.isBusy(state);
-    const interrupted = TuiState.isInterrupted(state);
-    return syncWorkingSlot(this.workingSlot, this.workingIndicator, this.interruptedIndicator, busy, interrupted);
+    const kind = TuiState.workingKind(state);
+    const mode = kind === "none" && TuiState.isInterrupted(state) ? "interrupted" : kind;
+    return syncWorkingSlot(this.workingSlot, this.workingIndicator, this.teamWorkingIndicator, this.interruptedIndicator, mode);
   }
 }
 
@@ -117,24 +124,18 @@ function shouldCommitTeamCursor(state: TuiState): boolean {
   return state.teamPanelVisible && state.teamCursorAgentId !== null && state.teamCursorAgentId !== state.focusedAgentId;
 }
 
-function syncWorkingSlot(slot: Container, working: Loader, interrupted: Loader, busy: boolean, showInterrupted: boolean): boolean {
+type WorkingSlotMode = ReturnType<typeof TuiState.workingKind> | "interrupted";
+
+function syncWorkingSlot(slot: Container, working: Loader, teamWorking: Loader, interrupted: Loader, mode: WorkingSlotMode): boolean {
+  const target = mode === "focused" ? working : mode === "team" ? teamWorking : mode === "interrupted" ? interrupted : null;
   const current = slot.children[0] ?? null;
-  if (busy) {
-    if (current === working) return false;
-    slot.clear();
-    slot.addChild(working);
-    working.start();
-    return true;
-  }
+  if (current === target) return false;
   if (current === working) working.stop();
-  if (showInterrupted) {
-    if (current === interrupted) return false;
-    slot.clear();
-    slot.addChild(interrupted);
-    return true;
-  }
-  if (current === null) return false;
+  if (current === teamWorking) teamWorking.stop();
   slot.clear();
+  if (target === null) return true;
+  slot.addChild(target);
+  if (mode === "focused" || mode === "team") target.start();
   return true;
 }
 

@@ -83,6 +83,52 @@ describe("TuiState.isBusy", () => {
   });
 });
 
+describe("TuiState.workingKind", () => {
+  test("returns none when no team is loaded", () => {
+    const store = new StateStoreImpl();
+    expect(TuiState.workingKind(store.getState())).toBe("none");
+  });
+
+  test("returns none when all agents are idle", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    expect(TuiState.workingKind(store.getState())).toBe("none");
+  });
+
+  test("returns focused when the focused agent is busy", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart({ kind: "agent", teamId: "demo", agentKey: "general-1" }, null)));
+    expect(TuiState.workingKind(store.getState())).toBe("focused");
+  });
+
+  test("returns team when only an unfocused agent is busy", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart({ kind: "agent", teamId: "demo", agentKey: "helper-1" }, null)));
+    expect(TuiState.workingKind(store.getState())).toBe("team");
+  });
+
+  test("returns focused when the focused agent is busy alongside another agent", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart({ kind: "agent", teamId: "demo", agentKey: "helper-1" }, null)));
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart({ kind: "agent", teamId: "demo", agentKey: "general-1" }, null)));
+    expect(TuiState.workingKind(store.getState())).toBe("focused");
+  });
+
+  test("tracks the focus when the team cursor is committed", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart({ kind: "agent", teamId: "demo", agentKey: "helper-1" }, null)));
+    expect(TuiState.workingKind(store.getState())).toBe("team");
+    store.dispatch(Actions.toggleTeamPanel());
+    store.dispatch(Actions.switchCycleAgent(1));
+    store.dispatch(Actions.commitTeamCursor());
+    expect(TuiState.workingKind(store.getState())).toBe("focused");
+  });
+});
+
 describe("TuiState.isInterrupted", () => {
   test("returns false on the initial state", () => {
     const store = new StateStoreImpl();

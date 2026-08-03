@@ -105,6 +105,12 @@ function isBusy(state: TuiState): boolean {
   return false;
 }
 
+function workingKind(state: TuiState): "focused" | "team" | "none" {
+  const focused = getFocusedAgent(state);
+  if (focused !== null && focused.status === "busy") return "focused";
+  return isBusy(state) ? "team" : "none";
+}
+
 function isInterrupted(state: TuiState): boolean {
   return state.interruptedAgentId !== null;
 }
@@ -125,6 +131,7 @@ export const TuiState = {
   getFocusedAgent,
   rosterOrder,
   isBusy,
+  workingKind,
   isInterrupted,
   shouldShowErrorBanner,
   hasChatContent,
