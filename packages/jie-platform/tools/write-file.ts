@@ -1,9 +1,10 @@
-import { mkdirSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync, writeFileSync, type Stats } from "node:fs";
 import { dirname } from "node:path";
 import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
 import { mapErrno, resolveWithinWorkspace } from "./path-utils";
+import { renderUnifiedDiff } from "./unified-diff";
 
 const CONTENT_CAP = 5 * 1024 * 1024;
 
@@ -58,6 +59,8 @@ export function createWriteFileTool(dependencies: WriteFileDeps): Tool<WriteFile
         throw new JiePlatformError("IS_A_DIRECTORY", { detail: input.path });
       }
 
+      const before = readBeforeContent(realPath, stat);
+
       try {
         mkdirSync(dirname(realPath), { recursive: true });
       } catch (error) {
@@ -77,14 +80,36 @@ export function createWriteFileTool(dependencies: WriteFileDeps): Tool<WriteFile
         createdAt = new Date().toISOString();
       }
 
+      const details: WriteFileResultDetails = {
+        kind: "diff",
+        path: input.path,
+        bytesWritten: input.content.length,
+        createdAt,
+        diff: before === null ? null : renderUnifiedDiff(before, input.content),
+      };
       return {
         content: `Successfully wrote ${input.content.length} bytes to ${input.path}`,
-        details: {
-          path: input.path,
-          bytesWritten: input.content.length,
-          createdAt,
-        },
+        details,
       };
     },
   };
+}
+
+interface WriteFileResultDetails {
+  readonly kind: "diff";
+  readonly path: string;
+  readonly bytesWritten: number;
+  readonly createdAt: string;
+  readonly diff: string | null;
+}
+
+function readBeforeContent(realPath: string, stat: Stats | null): string | null {
+  if (stat === null) return "";
+  if (stat.size > CONTENT_CAP) return null;
+  try {
+    const bytes = new Uint8Array(readFileSync(realPath));
+    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+  } catch {
+    return null;
+  }
 }

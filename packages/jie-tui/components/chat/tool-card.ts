@@ -26,13 +26,13 @@ export class ToolCard implements Component {
     const glyph = isError ? style("error")("✗") : style("success")("✓");
     const duration = card.durationMs !== undefined ? `  ${formatDuration(card.durationMs)}` : "";
     const header = truncateToWidth(`${glyph} ${style(isError ? "error" : "toolTitle")(`${card.name}${duration}`)}`, w);
-    if (!this.stateStore.getState().toolCardsExpanded) return [header];
+    const expanded = this.stateStore.getState().toolCardsExpanded;
     const lines = [header];
-    if (card.input !== undefined && card.input !== "") {
+    if (expanded && card.input !== undefined && card.input !== "") {
       lines.push(style("muted")("input:"));
       lines.push(...wrapTextWithAnsi(style("toolOutput")(card.input + (card.inputTruncated === true ? "…" : "")), w));
     }
-    if (card.output !== undefined && card.output !== null && card.output !== "") {
+    if (expanded && card.output !== undefined && card.output !== null && card.output !== "") {
       lines.push(style("muted")("output:"));
       lines.push(...wrapTextWithAnsi(style("toolOutput")(card.output + (card.outputTruncated === true ? "…" : "")), w));
     }
@@ -45,7 +45,7 @@ export class ToolCard implements Component {
       lines.push(style("muted")("diff:"));
       if (this.diffView !== null) lines.push(...this.diffView.render(w));
     }
-    if (isError) lines.push(truncateToWidth(style("error")(`error: ${card.error ?? ""}`), w));
+    if (expanded && isError) lines.push(truncateToWidth(style("error")(`error: ${card.error ?? ""}`), w));
     return lines;
   }
 
