@@ -48,6 +48,8 @@ export class JieEditor extends Editor {
   private popupFilteredOut: number | null = null;
   private readonly historyMirror: string[] = [];
   private browse: QueueBrowse | null = null;
+  private lastSeenQueue: ReadonlyArray<{ readonly text: string; readonly source: "user" | "peer" }> | null = null;
+  private pendingDequeues = 0;
   private programmaticChange = false;
 
   constructor(
@@ -164,7 +166,7 @@ export class JieEditor extends Editor {
     const session = this.browse!;
     session.stack.push(value);
     session.index += 1;
-    this.applyBrowseText(value);
+    this.applyBrowseText(value.text);
     return true;
   }
 
@@ -176,25 +178,35 @@ export class JieEditor extends Editor {
     const trimmed = draft.trim();
     const pushed = trimmed !== "" && this.historyMirror[0] !== trimmed;
     if (trimmed !== "") this.addToHistory(draft);
-    this.browse = { stack: [draft], index: 0, historyOffset: pushed ? 1 : 0, historySteps: 0 };
+    this.browse = { stack: [{ text: draft, dequeuedFrom: null }], index: 0, historyOffset: pushed ? 1 : 0, historySteps: 0 };
     return true;
   }
 
-  private nextBrowseValue(): string | null {
+  private nextBrowseValue(): BrowseEntry | null {
     const focused = TuiState.getFocusedAgent(this.stateStore.getState());
     if (focused !== null) {
+      if (focused.queue !== this.lastSeenQueue) {
+        this.lastSeenQueue = focused.queue;
+        this.pendingDequeues = 0;
+      }
+      let skipped = 0;
       for (let i = focused.queue.length - 1; i >= 0; i--) {
         const entry = focused.queue[i]!;
         if (entry.source !== "user") continue;
+        if (skipped < this.pendingDequeues) {
+          skipped += 1;
+          continue;
+        }
+        this.pendingDequeues += 1;
         this.stateStore.dispatch(Actions.requestDequeue(focused.teamId, focused.agentKey, entry.text));
-        return entry.text;
+        return { text: entry.text, dequeuedFrom: { teamId: focused.teamId, agentKey: focused.agentKey } };
       }
     }
     const session = this.browse!;
     const value = this.historyMirror[session.historyOffset + session.historySteps];
     if (value === undefined) return null;
     session.historySteps += 1;
-    return value;
+    return { text: value, dequeuedFrom: null };
   }
 
   private tryBrowseDown(): boolean {
@@ -202,10 +214,15 @@ export class JieEditor extends Editor {
     if (session === null) return false;
     if (this.getCursor().line !== this.getLines().length - 1) return false;
     if (session.index === 0) return true;
+    const leaving = session.stack[session.index]!;
+    if (leaving.dequeuedFrom !== null) {
+      this.pendingDequeues = Math.max(0, this.pendingDequeues - 1);
+      this.stateStore.dispatch(Actions.requestRequeue(leaving.dequeuedFrom.teamId, leaving.dequeuedFrom.agentKey, leaving.text));
+    }
     session.index -= 1;
     const value = session.stack[session.index]!;
     if (session.index === 0) this.browse = null;
-    this.applyBrowseText(value);
+    this.applyBrowseText(value.text);
     return true;
   }
 
@@ -246,10 +263,15 @@ interface GhostSelection {
 }
 
 interface QueueBrowse {
-  readonly stack: string[];
+  readonly stack: BrowseEntry[];
   index: number;
   readonly historyOffset: number;
   historySteps: number;
+}
+
+interface BrowseEntry {
+  readonly text: string;
+  readonly dequeuedFrom: { readonly teamId: string; readonly agentKey: string } | null;
 }
 
 class GhostTrackingProvider implements AutocompleteProvider {

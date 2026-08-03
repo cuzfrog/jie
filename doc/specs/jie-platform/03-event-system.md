@@ -37,6 +37,7 @@ Identity travels in the envelope, not in the subject. `topic` equals `type` for 
 | `agent.model.assigned` | agent | `{ provider, model, effort }` |
 | `user.prompt` | user | `{ teamId, agentKey, prompt }` |
 | `user.prompt.dequeue` | user | `{ teamId, agentKey, prompt }` — cancel the most recently queued user prompt whose raw text equals `prompt` |
+| `user.prompt.requeue` | user | `{ teamId, agentKey, prompt }` — restore the most recently dequeued user prompt whose raw text equals `prompt` to the queue's tail |
 | `user.effort.update` | user | `{ effort }` — broadcast a new default effort; every live body applies it (`06-agent-model.md`) |
 | `agent.interrupt` | any | `{ teamId, agentKey }` |
 | `system.team.loaded` | system | `TeamInfo` — `{ id, leaderKey, agents: [{ teamId, role, agentKey, isLeader, tools, subscribe, skills, model }] }` |
@@ -58,7 +59,7 @@ interface EventManager {
 
 `EventManagerImpl` takes the `eventBus` cradle entry (an in-process bus by default, registered alongside it by `registerEventModule`); tests register a mock bus instead. `JiePlatform` wraps the manager: `handle.subscribe(topic, cb)` is the consumer surface (ADR 13) — the bus never reaches consumer code.
 
-Each known type has a flat-args factory method (`Events.agentTurnStart(sender, prompt)`, `Events.agentIdle(sender, stopReason)`, `Events.userPrompt(sender, teamId, prompt, agentKey)`, `Events.userPromptDequeue(sender, teamId, agentKey, prompt)`, `Events.userEffortUpdate(sender, effort)`, `Events.teamLoaded(sender, teamInfo)`, …). `Events.custom(sender, clientTopic, message)` is the client-topic factory: the bus subject becomes `custom.${clientTopic}`.
+Each known type has a flat-args factory method (`Events.agentTurnStart(sender, prompt)`, `Events.agentIdle(sender, stopReason)`, `Events.userPrompt(sender, teamId, agentKey, prompt)`, `Events.userPromptDequeue(sender, teamId, agentKey, prompt)`, `Events.userPromptRequeue(sender, teamId, agentKey, prompt)`, `Events.userEffortUpdate(sender, effort)`, `Events.teamLoaded(sender, teamInfo)`, …). `Events.custom(sender, clientTopic, message)` is the client-topic factory: the bus subject becomes `custom.${clientTopic}`.
 
 ## Subscription model
 
@@ -67,6 +68,7 @@ Each `AgentBody` subscribes to exactly:
 - `"user.prompt"` — filtered on `payload.agentKey === own agentKey`; this is the sole user prompt ingress (CLI `-p` and TUI both publish here via `handle.prompt(teamId, agentKey, text)`). There are no per-agent subjects and no leader-only ingress.
 - `"agent.interrupt"` — filtered on `teamId` + `agentKey`.
 - `"user.prompt.dequeue"` — filtered on `teamId` + `agentKey`; removes the queue's tail-most user entry matching the text and republishes `agent.prompt.queue.update` (even on a miss, resyncing stale observers). Peer notifications cannot be dequeued (`06-agent-model.md`).
+- `"user.prompt.requeue"` — filtered on `teamId` + `agentKey`; restores the most recently dequeued user entry matching the text to the queue's tail, republishes `agent.prompt.queue.update`, and drains — an idle agent starts the restored prompt immediately (`06-agent-model.md`).
 - `"user.effort.update"` — unfiltered (broadcast); every body applies the effort to its agent and, when a model is assigned, republishes `agent.model.assigned` with the new effort (`06-agent-model.md`).
 - `custom.${teamId}.${topic}` for each entry of the soul's `subscribe:` frontmatter.
 
@@ -86,7 +88,7 @@ Every tool call emits `agent.tool.call` before execution and `agent.tool.result`
 
 ## Event-Order Contract
 
-**Body-side alternation.** Per body, `agent.turn.start` and `agent.idle` strictly alternate: exactly one `agent.turn.start` per pi-agent `turn_start`, exactly one `agent.idle` per `agent_end` (regardless of `stopReason`), start always before idle for the same turn. A body that has not started any turn has published nothing — observers treat it as **idle by default**; the "this agent exists" signal at boot is `system.team.loaded`, not a startup `agent.idle`.
+**Body-side alternation.** Per body, `agent.turn.start` and `agent.idle` strictly alternate: exactly one `agent.turn.start` per pi-agent `turn_start`, exactly one `agent.idle` per `agent_end` (regardless of `stopReason`), start always before idle for the same turn. A body that has not started any turn has published nothing — observers treat it as **idle by default**; the "this agent exists" signal at boot is `system.team.loaded`, not a startup `agent.idle`. The publication of `agent.turn.start` is deferred from pi's `turn_start` (which carries no prompt identity) to the turn's next pi event, where the body resolves the payload; the deferred publication precedes all of the turn's own events on the bus, so the ordering above holds.
 
 **Bus-side in-order delivery.** `InProcessEventBus` dispatches synchronously in subscription order, so per-body event order is preserved end-to-end.
 

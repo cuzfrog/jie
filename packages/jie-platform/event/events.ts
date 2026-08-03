@@ -32,6 +32,7 @@ type EventDefinitions = {
   "agent.model.assigned": EventDef<AgentSender, { provider: string; model: string; effort: "off" | "low" | "medium" | "high" | "max" }>;
   "user.prompt": EventDef<UserSender, { teamId: string; agentKey: string; prompt: string }>;
   "user.prompt.dequeue": EventDef<UserSender, { teamId: string; agentKey: string; prompt: string }>;
+  "user.prompt.requeue": EventDef<UserSender, { teamId: string; agentKey: string; prompt: string }>;
   "user.effort.update": EventDef<UserSender, { effort: "off" | "low" | "medium" | "high" | "max" }>;
   "system.team.loaded": EventDef<SystemSender, TeamInfo>;
   "agent.interrupt": EventDef<Sender, { teamId: string; agentKey: string }>;
@@ -78,10 +79,12 @@ export const Events = {
     createEvent("agent.prompt.queue.update", sender, { prompts }),
   agentModelAssigned: (sender: AgentSender, provider: string, model: string, effort: "off" | "low" | "medium" | "high" | "max"): EventEnvelope<"agent.model.assigned"> =>
     createEvent("agent.model.assigned", sender, { provider, model, effort }),
-  userPrompt: (sender: UserSender, teamId: string, prompt: string, agentKey: string): EventEnvelope<"user.prompt"> =>
-    createEvent("user.prompt", sender, { teamId, prompt, agentKey }),
+  userPrompt: (sender: UserSender, teamId: string, agentKey: string, prompt: string): EventEnvelope<"user.prompt"> =>
+    createEvent("user.prompt", sender, { teamId, agentKey, prompt }),
   userPromptDequeue: (sender: UserSender, teamId: string, agentKey: string, prompt: string): EventEnvelope<"user.prompt.dequeue"> =>
     createEvent("user.prompt.dequeue", sender, { teamId, agentKey, prompt }),
+  userPromptRequeue: (sender: UserSender, teamId: string, agentKey: string, prompt: string): EventEnvelope<"user.prompt.requeue"> =>
+    createEvent("user.prompt.requeue", sender, { teamId, agentKey, prompt }),
   userEffortUpdate: (sender: UserSender, effort: "off" | "low" | "medium" | "high" | "max"): EventEnvelope<"user.effort.update"> =>
     createEvent("user.effort.update", sender, { effort }),
   teamLoaded: (sender: SystemSender, info: TeamInfo): EventEnvelope<"system.team.loaded"> =>

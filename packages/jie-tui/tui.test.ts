@@ -28,7 +28,7 @@ interface PromptCall {
   readonly text: string;
 }
 
-interface DequeueCall {
+interface QueueCall {
   readonly teamId: string;
   readonly agentKey: string;
   readonly prompt: string;
@@ -37,14 +37,16 @@ interface DequeueCall {
 interface PlatformHarness {
   readonly platform: JiePlatform;
   readonly promptCalls: ReadonlyArray<PromptCall>;
-  readonly dequeueCalls: ReadonlyArray<DequeueCall>;
+  readonly dequeueCalls: ReadonlyArray<QueueCall>;
+  readonly requeueCalls: ReadonlyArray<QueueCall>;
   emit(event: AnyEventEnvelope): void;
 }
 
 function makePlatformHarness(): PlatformHarness {
   const handlers = new Map<EventType, (env: AnyEventEnvelope) => void>();
   const recorded: PromptCall[] = [];
-  const dequeues: DequeueCall[] = [];
+  const dequeues: QueueCall[] = [];
+  const requeues: QueueCall[] = [];
   const platform: JiePlatform = {
     settings: { defaultTeam: undefined, defaultProvider: undefined, defaultModel: undefined },
     subscribe: <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void) => {
@@ -61,6 +63,9 @@ function makePlatformHarness(): PlatformHarness {
     dequeuePrompt: (teamId, agentKey, prompt) => {
       dequeues.push({ teamId, agentKey, prompt });
     },
+    requeuePrompt: (teamId, agentKey, prompt) => {
+      requeues.push({ teamId, agentKey, prompt });
+    },
     execute: (async () => null) as JiePlatform["execute"],
     teams: () => [],
     shutdown: () => Promise.resolve(),
@@ -69,6 +74,7 @@ function makePlatformHarness(): PlatformHarness {
     platform,
     promptCalls: recorded,
     dequeueCalls: dequeues,
+    requeueCalls: requeues,
     emit: (event) => {
       handlers.get(event.type)?.(event);
     },
@@ -216,6 +222,16 @@ describe("bootTui — dequeue pipeline", () => {
     });
     harness!.stateStore.dispatch(Actions.requestDequeue("my-team", "general-1", "queued text"));
     expect(harness!.platform.dequeueCalls).toEqual([{ teamId: "my-team", agentKey: "general-1", prompt: "queued text" }]);
+    harness!.tui.stop();
+  });
+
+  test("requestRequeue action forwards to platform.requeuePrompt", () => {
+    let harness: TuiHarness | null = null;
+    withTTY(true, () => {
+      harness = bootHarness();
+    });
+    harness!.stateStore.dispatch(Actions.requestRequeue("my-team", "general-1", "abandoned text"));
+    expect(harness!.platform.requeueCalls).toEqual([{ teamId: "my-team", agentKey: "general-1", prompt: "abandoned text" }]);
     harness!.tui.stop();
   });
 });

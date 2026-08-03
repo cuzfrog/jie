@@ -59,6 +59,16 @@ describe("Events.userPromptDequeue", () => {
   });
 });
 
+describe("Events.userPromptRequeue", () => {
+  test("builds a user.prompt.requeue envelope addressed to one agent", () => {
+    const env = Events.userPromptRequeue(USER_SENDER, "my-team", "general-1", "dequeued text");
+    expect(env.type).toBe("user.prompt.requeue");
+    expect(env.topic).toBe("user.prompt.requeue");
+    expect(env.sender).toBe(USER_SENDER);
+    expect(env.payload).toEqual({ teamId: "my-team", agentKey: "general-1", prompt: "dequeued text" });
+  });
+});
+
 describe("Events.userEffortUpdate", () => {
   test("builds a user.effort.update envelope carrying the effort level", () => {
     const env = Events.userEffortUpdate(USER_SENDER, "high");

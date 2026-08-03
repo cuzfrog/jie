@@ -22,6 +22,7 @@ function makePlatform(): { platform: JiePlatform; execute: ReturnType<typeof vi.
     prompt: vi.fn(),
     interrupt: vi.fn(),
     dequeuePrompt: vi.fn(),
+    requeuePrompt: vi.fn(),
     execute: dispatch,
     teams: () => [...teams.values()],
     shutdown: vi.fn(),

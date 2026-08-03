@@ -290,20 +290,31 @@ function wireQueueRoundTrip(initial: TuiState): void {
   let current = initial;
   stateStore.getState.mockImplementation(() => current);
   stateStore.dispatch.mockImplementation((action) => {
-    if (action.type !== Actions.requestDequeue("", "", "").type) return;
     const focused = TuiState.getFocusedAgent(current);
     if (focused === null) return;
-    const queue = [...focused.queue];
-    for (let i = queue.length - 1; i >= 0; i--) {
-      if (queue[i]!.source === "user" && queue[i]!.text === action.payload.prompt) {
-        queue.splice(i, 1);
-        break;
+    let queue = [...focused.queue];
+    if (action.type === Actions.requestDequeue("", "", "").type) {
+      for (let i = queue.length - 1; i >= 0; i--) {
+        if (queue[i]!.source === "user" && queue[i]!.text === action.payload.prompt) {
+          queue.splice(i, 1);
+          break;
+        }
       }
+    } else if (action.type === Actions.requestRequeue("", "", "").type) {
+      queue = [...queue, { text: action.payload.prompt, source: "user" as const }];
+    } else {
+      return;
     }
     const agents = new Map(current.agents);
     agents.set(focused.agentId, { ...focused, queue });
     current = { ...current, agents };
   });
+}
+
+type PromptRequestAction = ReturnType<typeof Actions.requestDequeue> | ReturnType<typeof Actions.requestRequeue>;
+
+function dispatchedActions(type: string): ReadonlyArray<PromptRequestAction> {
+  return stateStore.dispatch.mock.calls.map((call) => call[0]).filter((action): action is PromptRequestAction => action.type === type);
 }
 
 describe("JieEditor — queue browse", () => {
@@ -322,6 +333,20 @@ describe("JieEditor — queue browse", () => {
     editor.handleInput("\x1b[A");
     expect(editor.getText()).toBe("first");
     expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.requestDequeue("my-team", "general-1", "first"));
+  });
+
+  test("rapid up before the dequeue round-trip skips already dispatched entries", () => {
+    const { editor } = bootEditor();
+    stateStore.getState.mockReturnValue(stateWithQueue([userEntry("first"), userEntry("second")]));
+    editor.handleInput("\x1b[A");
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("first");
+    const dequeueType = Actions.requestDequeue("", "", "").type;
+    const dequeues = stateStore.dispatch.mock.calls.map((call) => call[0]).filter((action) => action.type === dequeueType);
+    expect(dequeues).toEqual([
+      Actions.requestDequeue("my-team", "general-1", "second"),
+      Actions.requestDequeue("my-team", "general-1", "first"),
+    ]);
   });
 
   test("down walks back to the draft and ends the session", () => {
@@ -345,6 +370,68 @@ describe("JieEditor — queue browse", () => {
     expect(editor.getText()).toBe("queued");
     editor.handleInput("\x1b[B");
     expect(editor.getText()).toBe("draft");
+  });
+
+  test("down requeues an abandoned dequeued prompt", () => {
+    const { editor } = bootEditor();
+    wireQueueRoundTrip(stateWithQueue([userEntry("queued")]));
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("queued");
+    editor.handleInput("\x1b[B");
+    expect(editor.getText()).toBe("");
+    expect(dispatchedActions(Actions.requestRequeue("", "", "").type)).toEqual([
+      Actions.requestRequeue("my-team", "general-1", "queued"),
+    ]);
+  });
+
+  test("a requeued prompt is dequeued again by the next up", () => {
+    const { editor } = bootEditor();
+    wireQueueRoundTrip(stateWithQueue([userEntry("queued")]));
+    editor.handleInput("\x1b[A");
+    editor.handleInput("\x1b[B");
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("queued");
+  });
+
+  test("down requeues each abandoned prompt in turn", () => {
+    const { editor } = bootEditor();
+    wireQueueRoundTrip(stateWithQueue([userEntry("first"), userEntry("second")]));
+    editor.handleInput("\x1b[A");
+    editor.handleInput("\x1b[A");
+    editor.handleInput("\x1b[B");
+    editor.handleInput("\x1b[B");
+    expect(editor.getText()).toBe("");
+    expect(dispatchedActions(Actions.requestRequeue("", "", "").type)).toEqual([
+      Actions.requestRequeue("my-team", "general-1", "first"),
+      Actions.requestRequeue("my-team", "general-1", "second"),
+    ]);
+  });
+
+  test("submitting a dequeued prompt does not requeue it", () => {
+    const { editor } = bootEditor();
+    wireQueueRoundTrip(stateWithQueue([userEntry("queued")]));
+    editor.handleInput("\x1b[A");
+    editor.handleInput("\r");
+    expect(dispatchedActions(Actions.requestRequeue("", "", "").type)).toEqual([]);
+  });
+
+  test("editing a dequeued prompt adopts it without requeue", () => {
+    const { editor } = bootEditor();
+    wireQueueRoundTrip(stateWithQueue([userEntry("queued")]));
+    editor.handleInput("\x1b[A");
+    editor.handleInput("x");
+    editor.handleInput("\x1b[B");
+    expect(editor.getText()).toBe("queuedx");
+    expect(dispatchedActions(Actions.requestRequeue("", "", "").type)).toEqual([]);
+  });
+
+  test("ctrl+c discards a dequeued prompt without requeue", () => {
+    const { editor } = bootEditor();
+    wireQueueRoundTrip(stateWithQueue([userEntry("queued")]));
+    editor.handleInput("\x1b[A");
+    editor.handleInput("\x03");
+    expect(editor.getText()).toBe("");
+    expect(dispatchedActions(Actions.requestRequeue("", "", "").type)).toEqual([]);
   });
 
   test("up with content and an empty queue saves the draft to history before walking it", () => {

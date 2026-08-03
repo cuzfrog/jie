@@ -18,6 +18,7 @@ function makePlatform(): PlatformHandle {
     prompt: vi.fn(),
     interrupt: vi.fn(),
     dequeuePrompt: vi.fn(),
+    requeuePrompt: vi.fn(),
     teams: vi.fn(() => []),
     execute: vi.fn(async () => null),
     shutdown: vi.fn(),
