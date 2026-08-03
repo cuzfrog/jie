@@ -29,6 +29,11 @@ describe("UserMessage", () => {
     expect(message.render(80)).toEqual(["\x1b[36m› ⚡ \x1b[39msay-hello Cause"]);
   });
 
+  test("a skill invocation without arguments renders the skill icon", () => {
+    const message = new UserMessage("/skill:deploy");
+    expect(message.render(80)).toEqual(["\x1b[36m› ⚡ \x1b[39mdeploy"]);
+  });
+
   test("update to a skill invocation switches to the skill icon", () => {
     const message = new UserMessage("plain");
     message.update(turn("/skill:deploy now"));
