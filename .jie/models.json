@@ -2,7 +2,7 @@
   "providers": {
     "lm-studio": {
       "name": "LM Studio",
-      "baseUrl": "http://192.168.1.6:12345/v1",
+      "baseUrl": "http://localhost:12345/v1",
       "api": "openai-completions",
       "apiKey": "not-needed",
       "compat": {
