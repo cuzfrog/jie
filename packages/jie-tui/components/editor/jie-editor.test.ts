@@ -95,6 +95,19 @@ describe("JieEditor — onSubmit wiring", () => {
     expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.submitEditorText("hi"));
     expect(editor.getText()).toBe("");
   });
+
+  test("enter on an empty editor does not submit", () => {
+    const { editor } = bootEditor();
+    editor.handleInput("\r");
+    expect(stateStore.dispatch).not.toHaveBeenCalledWith(Actions.submitEditorText(""));
+  });
+
+  test("enter on whitespace-only text does not submit", () => {
+    const { editor } = bootEditor();
+    editor.handleInput(" ");
+    editor.handleInput("\r");
+    expect(stateStore.dispatch).not.toHaveBeenCalledWith(Actions.submitEditorText(""));
+  });
 });
 
 describe("JieEditor — control keys", () => {

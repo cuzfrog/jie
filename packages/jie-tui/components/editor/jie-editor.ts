@@ -79,7 +79,8 @@ export class JieEditor extends Editor {
       }
     };
     this.onSubmit = (text: string): void => {
-      if (text !== "") this.addToHistory(text);
+      if (text.trim() === "") return;
+      this.addToHistory(text);
       this.persistPrompt(text);
       this.stateStore.dispatch(Actions.submitEditorText(text));
     };
