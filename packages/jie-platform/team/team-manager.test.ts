@@ -197,6 +197,49 @@ describe("TeamManagerImpl — full surface", () => {
       expect(manager.load("ghost")).rejects.toThrow();
     });
 
+    test("rejects and leaves the team unloaded when a body fails to start", async () => {
+      const factory = vi.fn((params: AgentBodyParams): AgentBody => ({
+        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null },
+        restore: async () => [],
+        messages: () => [],
+        start: async () => { throw new Error("start failure"); },
+        stop: vi.fn(),
+      }));
+      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, memoryManager, skillManager, factory);
+      await expect(manager.load("minimal")).rejects.toThrow("start failure");
+      expect(teamLoadedEvents()).toHaveLength(0);
+      expect(manager.listLoaded().size).toBe(0);
+    });
+
+    test("rejects NO_LEADER before starting any body when the leader role's model does not resolve", async () => {
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: acme/gone\ntools:\n  - bash\n---\nlead");
+      writeFileSync(join(teamDir, "worker.md"), "---\ntools:\n  - bash\n---\nworker");
+      modelRegistry.resolve.mockImplementation((provider, modelId) => (modelId === "gone" ? undefined : makeModel(provider, modelId)));
+      const started: string[] = [];
+      const factory = vi.fn((params: AgentBodyParams): AgentBody => ({
+        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null },
+        restore: async () => [],
+        messages: () => [],
+        start: async () => { started.push(params.agentKey); },
+        stop: () => {},
+      }));
+      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, memoryManager, skillManager, factory);
+      await expect(manager.load("dev")).rejects.toMatchObject({ code: "NO_LEADER" });
+      expect(started).toEqual([]);
+      expect(manager.listLoaded().size).toBe(0);
+    });
+
+    test("rejects NO_LEADER when no role's model resolves at all", async () => {
+      modelRegistry.resolve.mockReturnValue(undefined);
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await expect(manager.load("minimal")).rejects.toMatchObject({ code: "NO_LEADER" });
+      expect(agentBodyFactory).not.toHaveBeenCalled();
+      expect(manager.listLoaded().size).toBe(0);
+    });
+
     test("UNKNOWN_SESSION propagates out of load", async () => {
       const { manager } = makeManager(homeJieDir, null, "not-a-real-id");
       expect(manager.load("minimal")).rejects.toThrow(/unknown session_id/);
@@ -366,6 +409,91 @@ describe("TeamManagerImpl — full surface", () => {
       expect(skillManager.reload).toHaveBeenCalledTimes(1);
       expect(agentBodyFactory).not.toHaveBeenCalled();
       expect(teamLoadedEvents()).toHaveLength(0);
+    });
+
+    test("keeps the running team intact and fails the command when the manifest fails to parse", async () => {
+      const userTeams = join(homeJieDir, "teams");
+      writeTeam(userTeams, "alpha", "general");
+      const stops: string[] = [];
+      const factory = vi.fn((params: AgentBodyParams): AgentBody => ({
+        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null },
+        restore: async () => [],
+        messages: () => [],
+        start: async () => {},
+        stop: () => { stops.push(params.agentKey); },
+      }));
+      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, memoryManager, skillManager, factory);
+      await manager.load("alpha");
+      writeFileSync(join(userTeams, "alpha", "TEAM.md"), "leader: [unclosed");
+      await expect(manager.reload()).rejects.toMatchObject({ code: "RELOAD_FAILED" });
+      expect(stops).toEqual([]);
+      expect(manager.agents("alpha")).toHaveLength(1);
+    });
+
+    test("keeps the previous entry and reports RELOAD_FAILED when a replacement body fails to start", async () => {
+      const stops: string[] = [];
+      let generation = 0;
+      const factory = vi.fn((params: AgentBodyParams): AgentBody => {
+        const created = generation;
+        return {
+          identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null },
+          restore: async () => [],
+          messages: () => [],
+          start: async () => { if (created > 0) throw new Error("start failure"); },
+          stop: () => { stops.push(`gen${created}:${params.agentKey}`); },
+        };
+      });
+      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, memoryManager, skillManager, factory);
+      await manager.load("minimal");
+      generation = 1;
+      eventManager.publish.mockClear();
+      await expect(manager.reload()).rejects.toMatchObject({ code: "RELOAD_FAILED" });
+      expect(stops).toEqual(["gen0:general-1", "gen1:general-1"]);
+      expect(teamLoadedEvents()).toHaveLength(0);
+      expect(manager.agents("minimal")).toHaveLength(1);
+    });
+
+    test("keeps the running team intact when the leader model no longer resolves", async () => {
+      const stops: string[] = [];
+      const factory = vi.fn((params: AgentBodyParams): AgentBody => ({
+        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null },
+        restore: async () => [],
+        messages: () => [],
+        start: async () => {},
+        stop: () => { stops.push(params.agentKey); },
+      }));
+      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, memoryManager, skillManager, factory);
+      await manager.load("minimal");
+      modelRegistry.resolve.mockReturnValue(undefined);
+      await expect(manager.reload()).rejects.toMatchObject({ code: "RELOAD_FAILED" });
+      expect(stops).toEqual([]);
+      expect(manager.agents("minimal")).toHaveLength(1);
+    });
+
+    test("rebuilds the remaining teams when one team fails to parse", async () => {
+      const userTeams = join(homeJieDir, "teams");
+      writeTeam(userTeams, "alpha", "general");
+      writeTeam(userTeams, "beta", "general");
+      const created: string[] = [];
+      const factory = vi.fn((params: AgentBodyParams): AgentBody => {
+        created.push(`${params.teamId}:${params.agentKey}`);
+        return {
+          identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null },
+          restore: async () => [],
+          messages: () => [],
+          start: async () => {},
+          stop: () => {},
+        };
+      });
+      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, memoryManager, skillManager, factory);
+      await manager.load("alpha");
+      await manager.load("beta");
+      created.length = 0;
+      writeFileSync(join(userTeams, "beta", "TEAM.md"), "leader: [unclosed");
+      await expect(manager.reload()).rejects.toMatchObject({ code: "RELOAD_FAILED" });
+      expect(created).toEqual(["alpha:general-1"]);
+      expect(manager.agents("alpha")).toHaveLength(1);
+      expect(manager.agents("beta")).toHaveLength(1);
     });
   });
 

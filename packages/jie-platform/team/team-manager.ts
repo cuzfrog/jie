@@ -51,12 +51,21 @@ export class TeamManagerImpl implements TeamManager {
     this.modelRegistry.reload();
     this.skillManager.reload();
     const infos: TeamInfo[] = [];
+    const failures: string[] = [];
     for (const [teamId, bodies] of [...this.loadedTeams]) {
       const sessionId = this.sessionIds.get(teamId);
       if (sessionId === undefined) continue;
-      for (const body of bodies) body.stop();
-      this.loadedTeams.delete(teamId);
-      infos.push(await this.buildTeam(teamId, sessionId));
+      try {
+        const rebuilt = await this.constructTeam(teamId, sessionId);
+        for (const body of bodies) body.stop();
+        await this.startTeam(rebuilt);
+        infos.push(this.commitTeam(teamId, sessionId, rebuilt));
+      } catch (error) {
+        failures.push(`team '${teamId}': ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    if (failures.length > 0) {
+      throw new JiePlatformError("RELOAD_FAILED", { detail: failures.join("; ") });
     }
     return infos;
   }
@@ -127,8 +136,13 @@ export class TeamManagerImpl implements TeamManager {
   }
 
   private async buildTeam(teamId: string, sessionId: string): Promise<TeamInfo> {
+    const bodies = await this.constructTeam(teamId, sessionId);
+    await this.startTeam(bodies);
+    return this.commitTeam(teamId, sessionId, bodies);
+  }
+
+  private async constructTeam(teamId: string, sessionId: string): Promise<AgentBody[]> {
     const blueprint: TeamBlueprint = this.teamRegistry.parseTeamManifest(teamId);
-    this.sessionIds.set(teamId, sessionId);
     const effort = this.settingsStore.load().defaultEffort ?? "off";
     const bodies: AgentBody[] = [];
     for (const soul of blueprint.roles) {
@@ -145,14 +159,28 @@ export class TeamManagerImpl implements TeamManager {
       });
       bodies.push(body);
     }
+    if (!bodies.some((body) => body.identity.isLeader)) {
+      throw new JiePlatformError("NO_LEADER", { detail: `team '${teamId}' has no agent marked as leader` });
+    }
     for (const body of bodies) {
       await body.restore();
     }
+    return bodies;
+  }
+
+  private async startTeam(bodies: ReadonlyArray<AgentBody>): Promise<void> {
+    try {
+      for (const body of bodies) await body.start();
+    } catch (error) {
+      for (const body of bodies) body.stop();
+      throw error;
+    }
+  }
+
+  private commitTeam(teamId: string, sessionId: string, bodies: AgentBody[]): TeamInfo {
+    this.sessionIds.set(teamId, sessionId);
     this.loadedTeams.set(teamId, bodies);
     this.publishTeamLoaded(teamId, bodies);
-    for (const body of bodies) {
-      await body.start();
-    }
     return this.toTeamInfo(teamId, bodies);
   }
 
