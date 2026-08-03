@@ -31,7 +31,7 @@ Identity travels in the envelope, not in the subject. `topic` equals `type` for 
 | `agent.tool.call` | agent | `{ tool_call_id, name, input, input_truncated }` |
 | `agent.tool.result` | agent | `{ tool_call_id, name, output: string \| null, output_truncated, duration_ms, error: string \| null, details }` |
 | `agent.stream.chunk` | agent | `{ stream_id, seq, block_type: "text" \| "thinking", text }` |
-| `agent.stream.end` | agent | `{ stream_id, total_chunks, thinking_ms: number \| null }` |
+| `agent.stream.end` | agent | `{ stream_id, total_chunks, thinking_durations: number[] }` |
 | `agent.usage` | agent | `{ input, output, cacheRead, cacheWrite, totalTokens }` |
 | `agent.prompt.queue.update` | agent | `{ prompts: Array<{ text: string; source: "user" \| "peer" }> }` |
 | `agent.model.assigned` | agent | `{ provider, model, effort }` |
@@ -76,7 +76,7 @@ Multiple teams' bodies coexist on the same bus; `teamId` in senders and payloads
 
 ## Streaming
 
-LLM output originates from pi-agent's `message_update` deltas. The body buffers per `block_type` (`"text"` / `"thinking"`; tool-call deltas are not streamed) and publishes `agent.stream.chunk`; `stream_id` is a per-LLM-invocation counter, `seq` the chunk ordinal. On `message_end` the remaining buffer flushes and `agent.stream.end` follows, carrying `thinking_ms` — the sum of all thinking-segment durations in that stream, measured at the streaming edge (`Date.now()` around thinking blocks; null when the stream had no thinking). Flush triggers: `stream_chunk_size` chars (64), `stream_flush_ms` (200 ms), or a `block_type` change — tunables in `10-configuration.md` "Streaming Tunables"; the body-side pipeline is in `06-agent-model.md`.
+LLM output originates from pi-agent's `message_update` deltas. The body buffers per `block_type` (`"text"` / `"thinking"`; tool-call deltas are not streamed) and publishes `agent.stream.chunk`; `stream_id` is a per-LLM-invocation counter, `seq` the chunk ordinal. On `message_end` the remaining buffer flushes and `agent.stream.end` follows, carrying `thinking_durations` — one duration per thinking segment in that stream, in segment order, measured at the streaming edge (`Date.now()` around each thinking block; empty when the stream had no thinking). Flush triggers: `stream_chunk_size` chars (64), `stream_flush_ms` (200 ms), or a `block_type` change — tunables in `10-configuration.md` "Streaming Tunables"; the body-side pipeline is in `06-agent-model.md`.
 
 ## Tool Telemetry and Truncation
 

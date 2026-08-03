@@ -26,7 +26,7 @@ type EventDefinitions = {
     block_type: "text" | "thinking";
     text: string;
   }>;
-  "agent.stream.end": EventDef<AgentSender, { stream_id: number; total_chunks: number; thinking_ms: number | null }>;
+  "agent.stream.end": EventDef<AgentSender, { stream_id: number; total_chunks: number; thinking_durations: ReadonlyArray<number> }>;
   "agent.usage": EventDef<AgentSender, { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number }>;
   "agent.prompt.queue.update": EventDef<AgentSender, { prompts: Array<{ text: string; source: "user" | "peer" }> }>;
   "agent.model.assigned": EventDef<AgentSender, { provider: string; model: string; effort: "off" | "low" | "medium" | "high" | "max" }>;
@@ -70,8 +70,8 @@ export const Events = {
   agentToolResult,
   agentStreamChunk: (sender: AgentSender, stream_id: number, seq: number, block_type: "text" | "thinking", text: string): EventEnvelope<"agent.stream.chunk"> =>
     createEvent("agent.stream.chunk", sender, { stream_id, seq, block_type, text }),
-  agentStreamEnd: (sender: AgentSender, stream_id: number, total_chunks: number, thinking_ms: number | null): EventEnvelope<"agent.stream.end"> =>
-    createEvent("agent.stream.end", sender, { stream_id, total_chunks, thinking_ms }),
+  agentStreamEnd: (sender: AgentSender, stream_id: number, total_chunks: number, thinking_durations: ReadonlyArray<number>): EventEnvelope<"agent.stream.end"> =>
+    createEvent("agent.stream.end", sender, { stream_id, total_chunks, thinking_durations }),
   agentUsage: (sender: AgentSender, usage: { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number }): EventEnvelope<"agent.usage"> =>
     createEvent("agent.usage", sender, usage),
   agentPromptQueueUpdate: (sender: AgentSender, prompts: Array<{ text: string; source: "user" | "peer" }>): EventEnvelope<"agent.prompt.queue.update"> =>

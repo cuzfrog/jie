@@ -163,7 +163,7 @@ describe("Actions.switchTeam", () => {
 describe("user.prompt", () => {
   test("is not reduced — turns are created by agent.turn.start", () => {
     const loaded = loadedState();
-    const state = reduce(loaded, Events.userPrompt(USER_SENDER, "my-team", "hello", "general-1"));
+    const state = reduce(loaded, Events.userPrompt(USER_SENDER, "my-team", "general-1", "hello"));
     expect(state).toBe(loaded);
   });
 });
@@ -525,35 +525,57 @@ describe("reduceStreamEnd", () => {
     let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "ponder"));
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "answer"));
-    state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 2, 350));
+    state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 2, [350]));
     expect(state.agents.get("my-team:general-1")?.currentTurn?.blocks).toEqual([
       { kind: "thinking", text: "ponder", durationMs: 350 },
       { kind: "text", text: "answer" },
     ]);
   });
 
-  test("stamps every thinking block when a stream had two", () => {
+  test("stamps each thinking block with its own segment duration, in order", () => {
     let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "a"));
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "mid"));
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 2, "thinking", "b"));
-    state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 3, 350));
+    state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 3, [100, 250]));
     const blocks = state.agents.get("my-team:general-1")?.currentTurn?.blocks;
-    expect(blocks?.[0]).toEqual({ kind: "thinking", text: "a", durationMs: 350 });
-    expect(blocks?.[2]).toEqual({ kind: "thinking", text: "b", durationMs: 350 });
+    expect(blocks?.[0]).toEqual({ kind: "thinking", text: "a", durationMs: 100 });
+    expect(blocks?.[2]).toEqual({ kind: "thinking", text: "b", durationMs: 250 });
   });
 
-  test("thinking_ms null leaves the state untouched", () => {
+  test("extra durations beyond the thinking blocks are ignored", () => {
+    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "a"));
+    state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 1, [100, 250]));
+    expect(state.agents.get("my-team:general-1")?.currentTurn?.blocks).toEqual([
+      { kind: "thinking", text: "a", durationMs: 100 },
+    ]);
+  });
+
+  test("fewer durations than thinking blocks leave the remaining blocks unstamped", () => {
+    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "a"));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 1, "text", "mid"));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 2, "thinking", "b"));
+    state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 3, [100]));
+    expect(state.agents.get("my-team:general-1")?.currentTurn?.blocks).toEqual([
+      { kind: "thinking", text: "a", durationMs: 100 },
+      { kind: "text", text: "mid" },
+      { kind: "thinking", text: "b" },
+    ]);
+  });
+
+  test("empty durations leave the state untouched", () => {
     let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "text", "answer"));
-    const state2 = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 1, null));
+    const state2 = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 1, []));
     expect(state2).toBe(state);
   });
 
   test("ignores a stream id that does not match the current turn", () => {
     let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "ponder"));
-    const state2 = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 2, 1, 100));
+    const state2 = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 2, 1, [100]));
     expect(state2).toBe(state);
   });
 
@@ -561,7 +583,7 @@ describe("reduceStreamEnd", () => {
     let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "hi"));
     state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "ponder"));
     const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
-    const state2 = reduce(state, Events.agentStreamEnd(foreign, 1, 1, 100));
+    const state2 = reduce(state, Events.agentStreamEnd(foreign, 1, 1, [100]));
     expect(state2).toBe(state);
   });
 });

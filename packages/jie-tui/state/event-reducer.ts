@@ -130,18 +130,18 @@ function reduceStreamEnd(state: TuiState, event: AnyEventEnvelope): TuiState {
   const { agentId, agent } = resolved;
   const turn = agent.currentTurn;
   if (turn === null) return state;
-  const { stream_id, thinking_ms } = event.payload;
-  if (thinking_ms === null) return state;
+  const { stream_id, thinking_durations } = event.payload;
+  if (thinking_durations.length === 0) return state;
   if (turn.streamId !== stream_id) return state;
   const blocks = [...turn.blocks];
-  let stamped = false;
-  for (let i = blocks.length - 1; i >= 0; i -= 1) {
+  let durationIndex = 0;
+  for (let i = 0; i < blocks.length && durationIndex < thinking_durations.length; i += 1) {
     const block = blocks[i]!;
     if (block.kind !== "thinking" || block.durationMs !== undefined) continue;
-    blocks[i] = { ...block, durationMs: thinking_ms };
-    stamped = true;
+    blocks[i] = { ...block, durationMs: thinking_durations[durationIndex]! };
+    durationIndex += 1;
   }
-  if (!stamped) return state;
+  if (durationIndex === 0) return state;
   const nextTurn = { ...turn, blocks };
   return withAgent(state, agentId, { ...agent, currentTurn: nextTurn });
 }

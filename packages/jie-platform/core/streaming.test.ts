@@ -80,29 +80,29 @@ describe("StreamPublisherImpl", () => {
     expect(result).toEqual({ streamId: 1, totalChunks: 2 });
     const ends = endEnvelopes();
     expect(ends).toHaveLength(1);
-    expect(ends[0]!.payload).toEqual({ stream_id: 1, total_chunks: 2, thinking_ms: null });
+    expect(ends[0]!.payload).toEqual({ stream_id: 1, total_chunks: 2, thinking_durations: [] });
   });
 
-  test("a thinking block that switches to text reports its elapsed duration as thinking_ms", () => {
+  test("a thinking block that switches to text reports its elapsed duration as one segment", () => {
     const publisher = new StreamPublisherImpl(events, sender);
     publisher.beginStream();
     publisher.append("thinking", "hmm");
     vi.advanceTimersByTime(500);
     publisher.append("text", "x".repeat(64));
     publisher.endStream();
-    expect(endEnvelopes()[0]!.payload).toMatchObject({ stream_id: 1, thinking_ms: 500 });
+    expect(endEnvelopes()[0]!.payload).toMatchObject({ stream_id: 1, thinking_durations: [500] });
   });
 
-  test("a thinking-only stream finalizes thinking_ms at endStream", () => {
+  test("a thinking-only stream finalizes its segment duration at endStream", () => {
     const publisher = new StreamPublisherImpl(events, sender);
     publisher.beginStream();
     publisher.append("thinking", "ponder");
     vi.advanceTimersByTime(120);
     publisher.endStream();
-    expect(endEnvelopes()[0]!.payload).toMatchObject({ stream_id: 1, thinking_ms: 120 });
+    expect(endEnvelopes()[0]!.payload).toMatchObject({ stream_id: 1, thinking_durations: [120] });
   });
 
-  test("thinking_ms sums the durations of multiple thinking segments", () => {
+  test("multiple thinking segments report their durations separately, in order", () => {
     const publisher = new StreamPublisherImpl(events, sender);
     publisher.beginStream();
     publisher.append("thinking", "first");
@@ -112,7 +112,7 @@ describe("StreamPublisherImpl", () => {
     vi.advanceTimersByTime(250);
     publisher.append("text", "y".repeat(64));
     publisher.endStream();
-    expect(endEnvelopes()[0]!.payload).toMatchObject({ thinking_ms: 350 });
+    expect(endEnvelopes()[0]!.payload).toMatchObject({ thinking_durations: [100, 250] });
   });
 
   test("beginStream resets the thinking duration measurement", () => {
@@ -124,7 +124,7 @@ describe("StreamPublisherImpl", () => {
     vi.advanceTimersByTime(500);
     publisher.append("text", "x".repeat(64));
     publisher.endStream();
-    expect(endEnvelopes()[1]!.payload).toMatchObject({ stream_id: 2, thinking_ms: null });
+    expect(endEnvelopes()[1]!.payload).toMatchObject({ stream_id: 2, thinking_durations: [] });
   });
 
   test("envelopes are stamped with the sender from the constructor", () => {

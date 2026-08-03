@@ -19,7 +19,7 @@ export class StreamPublisherImpl implements StreamPublisher {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private totalChunks = 0;
   private thinkingStartedAt: number | null = null;
-  private thinkingMs: number | null = null;
+  private thinkingDurations: number[] = [];
 
   constructor(
     private readonly events: EventManager,
@@ -33,7 +33,7 @@ export class StreamPublisherImpl implements StreamPublisher {
     this.buffer = "";
     this.currentBlockType = null;
     this.thinkingStartedAt = null;
-    this.thinkingMs = null;
+    this.thinkingDurations = [];
     this.clearTimer();
   }
 
@@ -59,13 +59,13 @@ export class StreamPublisherImpl implements StreamPublisher {
   endStream(): { streamId: number; totalChunks: number } {
     this.finalizeThinking();
     this.flush();
-    this.events.publish(Events.agentStreamEnd(this.sender, this.streamId, this.totalChunks, this.thinkingMs));
+    this.events.publish(Events.agentStreamEnd(this.sender, this.streamId, this.totalChunks, this.thinkingDurations));
     return { streamId: this.streamId, totalChunks: this.totalChunks };
   }
 
   private finalizeThinking(): void {
     if (this.thinkingStartedAt !== null) {
-      this.thinkingMs = (this.thinkingMs ?? 0) + (Date.now() - this.thinkingStartedAt);
+      this.thinkingDurations.push(Date.now() - this.thinkingStartedAt);
       this.thinkingStartedAt = null;
     }
   }

@@ -6,7 +6,7 @@ The state shape, action union, and reducer implementations live in `packages/jie
 
 ## Reducer purity model
 
-The reducer is a pure function `(state, action) → state`. `StateStoreImpl` (`packages/jie-tui/state/state-store.ts`, constructed by the `bootTui` container) wraps the pure reducer in a `dispatch` function on the `StateStore`; re-render is driven through the store's subscriber line. **The clock is not read inside the reducer** — spinner frames and transient-message aging live entirely on the render side, and thinking duration arrives pre-measured (`thinking_ms` on `agent.stream.end`, timed at the platform's streaming edge); the reducer only stamps it. UI actions like `Actions.setTransientMessage(text)` carry no timestamp; the renderer records `Date.now()` when it dispatches.
+The reducer is a pure function `(state, action) → state`. `StateStoreImpl` (`packages/jie-tui/state/state-store.ts`, constructed by the `bootTui` container) wraps the pure reducer in a `dispatch` function on the `StateStore`; re-render is driven through the store's subscriber line. **The clock is not read inside the reducer** — spinner frames and transient-message aging live entirely on the render side, and thinking durations arrive pre-measured (`thinking_durations` on `agent.stream.end`, timed at the platform's streaming edge); the reducer only stamps them. UI actions like `Actions.setTransientMessage(text)` carry no timestamp; the renderer records `Date.now()` when it dispatches.
 
 ## Identifier mapping (wire → state)
 
@@ -22,7 +22,7 @@ Per CLAUDE.md, serialized events use snake_case on the wire; TypeScript identifi
 | `input_truncated` | `card.inputTruncated` | `agent.tool.call` |
 | `output_truncated` | `card.outputTruncated` | `agent.tool.result` |
 | `stream_id` | `turn.streamId` | `agent.stream.chunk` |
-| `thinking_ms` | `block.durationMs` | `agent.stream.end` |
+| `thinking_durations` | `block.durationMs` (per segment, in order) | `agent.stream.end` |
 | `prompts` | `agent.queue` | `agent.prompt.queue.update` |
 
 The composite runtime key is `AgentId = \`${teamId}:${agentKey}\`` (see `00-overview.md` glossary). The reducer's `state.agents` map is keyed by `AgentId`, not by `agentKey`, to disambiguate agents across coexisting teams.
@@ -89,7 +89,7 @@ Set `contextTokensUsed` and `lastReportedTotalTokens` from `payload.totalTokens`
 
 ### `agent.stream.end`
 
-Stamps thinking duration: when `payload.thinking_ms` is non-null and `payload.stream_id` matches `currentTurn.streamId`, every thinking block of the current turn lacking a `durationMs` receives it (a stream may carry several thinking segments; the payload is their sum, measured at the platform's streaming edge — the reducer never reads the clock). `thinking_ms === null` (the stream had no thinking), a mismatched `stream_id`, or no unstamped thinking block returns `state` unchanged. No context recompute — block count and text are unchanged.
+Stamps thinking duration: when `payload.thinking_durations` is non-empty and `payload.stream_id` matches `currentTurn.streamId`, the current turn's thinking blocks that lack a `durationMs` receive the segment durations in order — the first unstamped block gets `thinking_durations[0]`, the second `[1]`, and so on (a stream may carry several thinking segments; the payload carries one duration per segment, measured at the platform's streaming edge — the reducer never reads the clock). An empty array (the stream had no thinking), a mismatched `stream_id`, or no unstamped thinking block returns `state` unchanged. No context recompute — block count and text are unchanged.
 
 ### `agent.tool.call`
 
