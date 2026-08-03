@@ -18,6 +18,10 @@ describe("formatQueueIndicator", () => {
     expect(formatQueueIndicator([entry("a"), entry("b")])).toBe("2 prompts queued  > a");
   });
 
+  test("flattens newlines so the indicator stays on one line", () => {
+    expect(formatQueueIndicator([entry("first\nsecond\r\nthird")])).toBe("1 prompt queued  > first second third");
+  });
+
   test("truncates long previews", () => {
     const long = "x".repeat(200);
     const out = formatQueueIndicator([entry(long)]);

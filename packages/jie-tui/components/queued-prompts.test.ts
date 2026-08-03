@@ -40,6 +40,12 @@ describe("QueuedPrompts", () => {
     ]);
   });
 
+  test("flattens newlines so each entry renders on a single line", () => {
+    stateStore.getState.mockReturnValue(stateWithQueue([userEntry("line one\nline two\r\nline three")]));
+    const component = new QueuedPrompts(stateStore);
+    expect(component.render(80)).toEqual(["\x1b[90mQueued: line one line two line three\x1b[39m"]);
+  });
+
   test("renders nothing when the queue is empty", () => {
     stateStore.getState.mockReturnValue(stateWithQueue([]));
     const component = new QueuedPrompts(stateStore);

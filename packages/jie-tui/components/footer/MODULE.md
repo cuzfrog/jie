@@ -5,4 +5,6 @@ no-new-exports:
   - footer.ts
   - queue-indicator.test.ts
   - queue-indicator.ts
+  - single-line.test.ts
+  - single-line.ts
 ---
