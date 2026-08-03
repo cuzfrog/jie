@@ -32,7 +32,7 @@ interface NumberedDiffLine extends DiffLine {
 function renderLine(line: NumberedDiffLine, numberWidth: number): string {
   const color = diffColor(line.kind);
   if (line.number === null) return style(color)(line.prefix + line.text);
-  return style(color)(line.prefix) + style("muted")(`${String(line.number).padStart(numberWidth)} `) + style(color)(line.text);
+  return style("muted")(`${String(line.number).padStart(numberWidth)} `) + style(color)(`${line.prefix} ${line.text}`);
 }
 
 function diffColor(kind: DiffLine["kind"]): "success" | "error" | "text" | "muted" {

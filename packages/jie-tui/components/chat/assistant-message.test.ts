@@ -141,7 +141,6 @@ describe("AssistantMessage — work summary", () => {
     const message = new AssistantMessage(turn({ cards: [card({ details: { kind: "diff", diff: "+a" } })] }), stateStore);
     expect(message.render(80)).toEqual([
       "\x1b[32m✓\x1b[39m \x1b[37mbash\x1b[39m",
-      "\x1b[90mdiff:\x1b[39m",
       "\x1b[32m+a\x1b[39m",
     ]);
   });
@@ -176,10 +175,9 @@ describe("AssistantMessage — work summary", () => {
     expect(message.render(80).map((line) => line.trimEnd())).toEqual([
       "\x1b[36m● \x1b[39manswer",
       "\x1b[32m✓\x1b[39m \x1b[37mbash\x1b[39m",
-      "\x1b[90mdiff:\x1b[39m",
       "\x1b[90m@@ -1,1 +1,1 @@\x1b[39m",
-      "\x1b[31m-\x1b[39m\x1b[90m1 \x1b[39m\x1b[31ma\x1b[39m",
-      "\x1b[32m+\x1b[39m\x1b[90m1 \x1b[39m\x1b[32mb\x1b[39m",
+      "\x1b[90m1 \x1b[39m\x1b[31m- a\x1b[39m",
+      "\x1b[90m1 \x1b[39m\x1b[32m+ b\x1b[39m",
       "\x1b[90mused bash 1 time, total 500ms\x1b[39m",
     ]);
   });

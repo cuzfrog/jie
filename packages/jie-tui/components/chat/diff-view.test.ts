@@ -6,33 +6,33 @@ describe("DiffView", () => {
     expect(new DiffView("").render(80)).toEqual(["\x1b[90m(no textual diff)\x1b[39m"]);
   });
 
-  test("colors add, del, ctx and meta lines", () => {
+  test("colors add, del, ctx and meta lines, with the line number ahead of the marker", () => {
     const lines = new DiffView("@@ -1,1 +1,1 @@\n-old\n+new\n same").render(80);
     expect(lines[0]).toBe("\x1b[90m@@ -1,1 +1,1 @@\x1b[39m");
-    expect(lines[1]).toBe("\x1b[31m-\x1b[39m\x1b[90m1 \x1b[39m\x1b[31mold\x1b[39m");
-    expect(lines[2]).toBe("\x1b[32m+\x1b[39m\x1b[90m1 \x1b[39m\x1b[32mnew\x1b[39m");
-    expect(lines[3]).toBe("\x1b[37m \x1b[39m\x1b[90m2 \x1b[39m\x1b[37msame\x1b[39m");
+    expect(lines[1]).toBe("\x1b[90m1 \x1b[39m\x1b[31m- old\x1b[39m");
+    expect(lines[2]).toBe("\x1b[90m1 \x1b[39m\x1b[32m+ new\x1b[39m");
+    expect(lines[3]).toBe("\x1b[90m2 \x1b[39m\x1b[37m  same\x1b[39m");
   });
 
   test("del lines carry the old-file number, add and ctx lines the new-file number", () => {
     const lines = new DiffView("@@ -10,2 +20,2 @@\n ctx\n-gone\n+added").render(80);
-    expect(lines[1]).toBe("\x1b[37m \x1b[39m\x1b[90m20 \x1b[39m\x1b[37mctx\x1b[39m");
-    expect(lines[2]).toBe("\x1b[31m-\x1b[39m\x1b[90m11 \x1b[39m\x1b[31mgone\x1b[39m");
-    expect(lines[3]).toBe("\x1b[32m+\x1b[39m\x1b[90m21 \x1b[39m\x1b[32madded\x1b[39m");
+    expect(lines[1]).toBe("\x1b[90m20 \x1b[39m\x1b[37m  ctx\x1b[39m");
+    expect(lines[2]).toBe("\x1b[90m11 \x1b[39m\x1b[31m- gone\x1b[39m");
+    expect(lines[3]).toBe("\x1b[90m21 \x1b[39m\x1b[32m+ added\x1b[39m");
   });
 
   test("line numbers are padded to the widest number in the diff", () => {
     const lines = new DiffView("@@ -8,2 +8,4 @@\n ctx\n+added nine\n+added ten\n ctx").render(80);
-    expect(lines[1]).toBe("\x1b[37m \x1b[39m\x1b[90m 8 \x1b[39m\x1b[37mctx\x1b[39m");
-    expect(lines[2]).toBe("\x1b[32m+\x1b[39m\x1b[90m 9 \x1b[39m\x1b[32madded nine\x1b[39m");
-    expect(lines[3]).toBe("\x1b[32m+\x1b[39m\x1b[90m10 \x1b[39m\x1b[32madded ten\x1b[39m");
-    expect(lines[4]).toBe("\x1b[37m \x1b[39m\x1b[90m11 \x1b[39m\x1b[37mctx\x1b[39m");
+    expect(lines[1]).toBe("\x1b[90m 8 \x1b[39m\x1b[37m  ctx\x1b[39m");
+    expect(lines[2]).toBe("\x1b[90m 9 \x1b[39m\x1b[32m+ added nine\x1b[39m");
+    expect(lines[3]).toBe("\x1b[90m10 \x1b[39m\x1b[32m+ added ten\x1b[39m");
+    expect(lines[4]).toBe("\x1b[90m11 \x1b[39m\x1b[37m  ctx\x1b[39m");
   });
 
   test("headers without a count default to one line", () => {
     const lines = new DiffView("@@ -1 +1 @@\n-old\n+new").render(80);
-    expect(lines[1]).toBe("\x1b[31m-\x1b[39m\x1b[90m1 \x1b[39m\x1b[31mold\x1b[39m");
-    expect(lines[2]).toBe("\x1b[32m+\x1b[39m\x1b[90m1 \x1b[39m\x1b[32mnew\x1b[39m");
+    expect(lines[1]).toBe("\x1b[90m1 \x1b[39m\x1b[31m- old\x1b[39m");
+    expect(lines[2]).toBe("\x1b[90m1 \x1b[39m\x1b[32m+ new\x1b[39m");
   });
 
   test("lines without a diff marker render as unnumbered context", () => {

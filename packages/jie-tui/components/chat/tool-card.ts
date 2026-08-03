@@ -42,7 +42,6 @@ export class ToolCard implements Component {
         this.diffSource = diff;
         this.diffView = new DiffView(diff);
       }
-      lines.push(style("muted")("diff:"));
       if (this.diffView !== null) lines.push(...this.diffView.render(w));
     }
     if (expanded && isError) lines.push(truncateToWidth(style("error")(`error: ${card.error ?? ""}`), w));
