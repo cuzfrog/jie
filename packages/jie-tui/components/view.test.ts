@@ -1,9 +1,9 @@
 import { PassThrough } from "node:stream";
-import { TUI } from "@earendil-works/pi-tui";
+import { Container, TUI } from "@earendil-works/pi-tui";
 import { Actions } from "../state";
 import { StreamTerminalImpl } from "../stream-terminal";
 import { makeTuiState } from "../test";
-import { _FlushLoader, _resolveGlobalKey, _resolveTeamCursorDirection, _shouldCommitTeamCursor } from "./view";
+import { _FlushLoader, _resolveGlobalKey, _resolveTeamCursorDirection, _shouldCommitTeamCursor, _syncWorkingSlot } from "./view";
 
 describe("FlushLoader", () => {
   test("renders the spinner at the chat column, without the loader's left padding", () => {
@@ -35,6 +35,80 @@ function makeFlushLoader(message: string, frames: ReadonlyArray<string>): Instan
   const identity = (text: string): string => text;
   return new _FlushLoader(ui, identity, identity, message, { frames: [...frames] });
 }
+
+describe("syncWorkingSlot", () => {
+  let slot: Container;
+  let working: InstanceType<typeof _FlushLoader>;
+  let teamWorking: InstanceType<typeof _FlushLoader>;
+  let interrupted: InstanceType<typeof _FlushLoader>;
+
+  beforeEach(() => {
+    slot = new Container();
+    working = makeFlushLoader("Working…", ["⠋"]);
+    teamWorking = makeFlushLoader("Team working…", ["⠙"]);
+    interrupted = makeFlushLoader("Interrupted", []);
+  });
+
+  afterEach(() => {
+    working.stop();
+    teamWorking.stop();
+    interrupted.stop();
+  });
+
+  test("an empty slot shows the focused indicator in focused mode", () => {
+    expect(_syncWorkingSlot(slot, working, teamWorking, interrupted, "focused")).toBe(true);
+    expect(slot.children).toEqual([working]);
+  });
+
+  test("an empty slot shows the team indicator in team mode", () => {
+    expect(_syncWorkingSlot(slot, working, teamWorking, interrupted, "team")).toBe(true);
+    expect(slot.children).toEqual([teamWorking]);
+  });
+
+  test("an empty slot shows the interrupted indicator in interrupted mode without starting it", () => {
+    const start = vi.spyOn(interrupted, "start");
+    expect(_syncWorkingSlot(slot, working, teamWorking, interrupted, "interrupted")).toBe(true);
+    expect(slot.children).toEqual([interrupted]);
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  test("none mode leaves an empty slot untouched", () => {
+    expect(_syncWorkingSlot(slot, working, teamWorking, interrupted, "none")).toBe(false);
+    expect(slot.children).toEqual([]);
+  });
+
+  test("returns false and does not restart when the target indicator is already shown", () => {
+    _syncWorkingSlot(slot, working, teamWorking, interrupted, "focused");
+    const start = vi.spyOn(working, "start");
+    expect(_syncWorkingSlot(slot, working, teamWorking, interrupted, "focused")).toBe(false);
+    expect(slot.children).toEqual([working]);
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  test("switching from focused to team stops the focused spinner and starts the team spinner", () => {
+    _syncWorkingSlot(slot, working, teamWorking, interrupted, "focused");
+    const stopWorking = vi.spyOn(working, "stop");
+    const startTeam = vi.spyOn(teamWorking, "start");
+    expect(_syncWorkingSlot(slot, working, teamWorking, interrupted, "team")).toBe(true);
+    expect(stopWorking).toHaveBeenCalledTimes(1);
+    expect(startTeam).toHaveBeenCalledTimes(1);
+    expect(slot.children).toEqual([teamWorking]);
+  });
+
+  test("leaving team mode for none stops the team spinner and clears the slot", () => {
+    _syncWorkingSlot(slot, working, teamWorking, interrupted, "team");
+    const stopTeam = vi.spyOn(teamWorking, "stop");
+    expect(_syncWorkingSlot(slot, working, teamWorking, interrupted, "none")).toBe(true);
+    expect(stopTeam).toHaveBeenCalledTimes(1);
+    expect(slot.children).toEqual([]);
+  });
+
+  test("the interrupted indicator gives way to the focused spinner", () => {
+    _syncWorkingSlot(slot, working, teamWorking, interrupted, "interrupted");
+    expect(_syncWorkingSlot(slot, working, teamWorking, interrupted, "focused")).toBe(true);
+    expect(slot.children).toEqual([working]);
+  });
+});
 
 describe("resolveGlobalKey", () => {
   test("ctrl+t maps to toggleThinking", () => {
