@@ -17,6 +17,8 @@ no-new-exports:
   - tool-registry.test.ts
   - tool-registry.ts
   - types.ts
+  - unified-diff.test.ts
+  - unified-diff.ts
   - web-fetch.test.ts
   - web-fetch.ts
   - web-search.test.ts

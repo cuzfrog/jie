@@ -25,13 +25,16 @@ interface DiffHunk {
 }
 
 interface RawHunk {
-  readonly opStart: number;
-  readonly opEnd: number;
   readonly oldStart: number;
   readonly oldLines: number;
   readonly newStart: number;
   readonly newLines: number;
   readonly lines: ReadonlyArray<LineOp>;
+}
+
+interface ChangeRunGroup {
+  start: number;
+  end: number;
 }
 
 type LineOp = { kind: "equal"; oldIndex: number; newIndex: number; text: string }
@@ -51,24 +54,28 @@ function splitLines(text: string): string[] {
 }
 
 function buildHunks(ops: ReadonlyArray<LineOp>, context: number): DiffHunk[] {
-  const raws: RawHunk[] = [];
+  const hunks: DiffHunk[] = [];
+  for (const group of groupChangeRuns(ops, context * 2)) {
+    const opStart = Math.max(0, group.start - context);
+    const opEnd = Math.min(ops.length, group.end + context);
+    hunks.push(renderRawHunk(toRawHunk(ops, opStart, opEnd)));
+  }
+  return hunks;
+}
+
+function groupChangeRuns(ops: ReadonlyArray<LineOp>, mergeGap: number): ChangeRunGroup[] {
+  const groups: ChangeRunGroup[] = [];
   let cursor = 0;
   while (cursor < ops.length) {
     while (cursor < ops.length && ops[cursor]!.kind === "equal") cursor++;
     if (cursor >= ops.length) break;
-    const opStart = Math.max(0, cursor - context);
-    let opEnd = cursor;
-    while (opEnd < ops.length && ops[opEnd]!.kind !== "equal") opEnd++;
-    let trailingEqual = 0;
-    while (opEnd + trailingEqual < ops.length && ops[opEnd + trailingEqual]!.kind === "equal" && trailingEqual < context * 2) {
-      trailingEqual++;
-    }
-    opEnd += trailingEqual;
-    raws.push(toRawHunk(ops, opStart, opEnd));
-    cursor = opEnd;
+    const start = cursor;
+    while (cursor < ops.length && ops[cursor]!.kind !== "equal") cursor++;
+    const previous = groups[groups.length - 1];
+    if (previous !== undefined && start - previous.end <= mergeGap) previous.end = cursor;
+    else groups.push({ start, end: cursor });
   }
-  const merged = mergeAdjacentRaws(raws, context * 2);
-  return merged.map(renderRawHunk);
+  return groups;
 }
 
 function toRawHunk(ops: ReadonlyArray<LineOp>, opStart: number, opEnd: number): RawHunk {
@@ -86,57 +93,15 @@ function toRawHunk(ops: ReadonlyArray<LineOp>, opStart: number, opEnd: number): 
     }
   }
   const firstOp = ops[opStart]!;
-  const oldStart = (firstOp.kind === "equal" ? firstOp.oldIndex : opStart) + 1;
-  const newStart = (firstOp.kind === "equal" ? firstOp.newIndex : opStart) + 1;
+  const oldStart = oldLines === 0 ? 0 : (firstOp.kind === "equal" ? firstOp.oldIndex : opStart) + 1;
+  const newStart = newLines === 0 ? 0 : (firstOp.kind === "equal" ? firstOp.newIndex : opStart) + 1;
   return {
-    opStart,
-    opEnd,
     oldStart,
     oldLines,
     newStart,
     newLines,
     lines: ops.slice(opStart, opEnd),
   };
-}
-
-function mergeAdjacentRaws(raws: ReadonlyArray<RawHunk>, gapLimit: number): RawHunk[] {
-  if (raws.length === 0) return [];
-  const out: RawHunk[] = [raws[0]!];
-  for (let i = 1; i < raws.length; i++) {
-    const previous = out[out.length - 1]!;
-    const next = raws[i]!;
-    const gap = next.opStart - previous.opEnd;
-    if (gap <= gapLimit) {
-      const mergedLines = [...previous.lines, ...next.lines];
-      let oldLines = 0;
-      let newLines = 0;
-      for (const op of mergedLines) {
-        if (op.kind === "equal") {
-          oldLines++;
-          newLines++;
-        } else if (op.kind === "delete") {
-          oldLines++;
-        } else {
-          newLines++;
-        }
-      }
-      const firstOp = mergedLines[0]!;
-      const oldStart = (firstOp.kind === "equal" ? firstOp.oldIndex : 0) + 1;
-      const newStart = (firstOp.kind === "equal" ? firstOp.newIndex : 0) + 1;
-      out[out.length - 1] = {
-        opStart: previous.opStart,
-        opEnd: next.opEnd,
-        oldStart,
-        oldLines,
-        newStart,
-        newLines,
-        lines: mergedLines,
-      };
-    } else {
-      out.push(next);
-    }
-  }
-  return out;
 }
 
 function renderRawHunk(raw: RawHunk): DiffHunk {

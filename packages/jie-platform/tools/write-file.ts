@@ -80,15 +80,16 @@ export function createWriteFileTool(dependencies: WriteFileDeps): Tool<WriteFile
         createdAt = new Date().toISOString();
       }
 
+      const bytesWritten = new TextEncoder().encode(input.content).length;
       const details: WriteFileResultDetails = {
         kind: "diff",
         path: input.path,
-        bytesWritten: input.content.length,
+        bytesWritten,
         createdAt,
         diff: before === null ? null : renderUnifiedDiff(before, input.content),
       };
       return {
-        content: `Successfully wrote ${input.content.length} bytes to ${input.path}`,
+        content: `Successfully wrote ${bytesWritten} bytes to ${input.path}`,
         details,
       };
     },

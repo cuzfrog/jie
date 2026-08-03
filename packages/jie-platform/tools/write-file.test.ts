@@ -32,6 +32,16 @@ describe("write_file", () => {
     expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("hello");
   });
 
+  test("multi-byte content reports UTF-8 bytes, not UTF-16 length", async () => {
+    const tool = createWriteFileTool({ workspaceRoot: workspace });
+    const result = await tool.execute(
+      { path: "a.txt", content: "你好" },
+      makeEmptyContext(),
+    );
+    expect(result.content).toBe("Successfully wrote 6 bytes to a.txt");
+    expect(result.details).toMatchObject({ bytesWritten: 6 });
+  });
+
   test("overwrites an existing file (idempotent)", async () => {
     writeFileSync(join(workspace, "a.txt"), "old");
     const tool = createWriteFileTool({ workspaceRoot: workspace });
@@ -115,7 +125,7 @@ describe("write_file", () => {
       { path: "a.txt", content: "one\ntwo\n" },
       makeEmptyContext(),
     );
-    expect(result.details).toMatchObject({ diff: "@@ -1,0 +1,2 @@\n+one\n+two" });
+    expect(result.details).toMatchObject({ diff: "@@ -0,0 +1,2 @@\n+one\n+two" });
   });
 
   test("overwriting an existing file reports a unified diff of the change", async () => {
