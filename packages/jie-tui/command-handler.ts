@@ -1,5 +1,5 @@
 import { isEffortLevel, JiePlatformError, type CommandName, type JiePlatform } from "@cuzfrog/jie-platform";
-import { Actions, type StateStore, type TuiState } from "./state";
+import { Actions, TuiState, type AgentUiState, type StateStore } from "./state";
 import { bashDirective, parseBashCommand } from "./bash";
 import { matchesModelFilter, type ModelRef } from "./model-filter";
 
@@ -22,7 +22,7 @@ interface AgentRoute {
   readonly agentKey: string;
 }
 
-type InterceptName = "model" | "model-filter" | "effort" | "resume" | "rename" | Extract<CommandName, "login" | "logout" | "team">;
+type InterceptName = "model" | "model-filter" | "effort" | "reload" | "resume" | "rename" | Extract<CommandName, "login" | "logout" | "team">;
 
 type TuiCommandName = "help" | "clear" | "exit" | InterceptName;
 
@@ -59,6 +59,11 @@ export class CommandHandlerImpl implements CommandHandler {
     if (intercepted !== null) {
       if (intercepted.kind === "reply") this.stateStore.dispatch(Actions.setTransientMessage(intercepted.text));
       else if (intercepted.kind === "error") this.stateStore.dispatch(Actions.setErrorMessage(intercepted.text));
+      return;
+    }
+
+    if (name.startsWith("skill:")) {
+      this.routeSkillInvocation(name, trimmed);
       return;
     }
 
@@ -105,6 +110,24 @@ export class CommandHandlerImpl implements CommandHandler {
     this.platform.prompt(target.teamId, target.agentKey, trimmed);
   }
 
+  private routeSkillInvocation(name: string, trimmed: string): void {
+    const skillName = name.slice("skill:".length);
+    if (skillName === "") {
+      this.stateStore.dispatch(Actions.setErrorMessage("usage: /skill:<name> [args]"));
+      return;
+    }
+    const agent = routeTargetAgent(this.stateStore);
+    if (agent === null) {
+      this.stateStore.dispatch(Actions.setErrorMessage("no team loaded — load a team first"));
+      return;
+    }
+    if (!agent.skills.includes(skillName)) {
+      this.stateStore.dispatch(Actions.setErrorMessage(`skill '${skillName}' is not available on agent '${agent.agentKey}'`));
+      return;
+    }
+    this.platform.prompt(agent.teamId, agent.agentKey, trimmed);
+  }
+
   private runIntercepts(name: string, args: ReadonlyArray<string>): InterceptResult {
     switch (name) {
       case "login": return this.interceptLogin(args);
@@ -112,6 +135,7 @@ export class CommandHandlerImpl implements CommandHandler {
       case "model": return this.interceptModel(args);
       case "model-filter": return this.interceptModelFilter(args);
       case "effort": return this.interceptEffort(args);
+      case "reload": return this.interceptReload();
       case "team": return this.interceptTeam(args);
       case "resume": return this.interceptResume(args);
       case "rename": return this.interceptRename(args);
@@ -216,7 +240,23 @@ export class CommandHandlerImpl implements CommandHandler {
         const reason = errorReason(error);
         this.stateStore.dispatch(Actions.setErrorMessage(`/effort failed: ${reason}`));
       });
-    return { kind: "reply", text: `default effort set to ${argument}` };
+    return { kind: "reply", text: `effort set to ${argument}` };
+  }
+
+  private interceptReload(): InterceptResult {
+    if (TuiState.isBusy(this.stateStore.getState())) {
+      return { kind: "error", text: "wait for the current response to finish before reloading" };
+    }
+    void this.platform.execute({ name: "reload" })
+      .then((teams) => {
+        const activeTeamId = this.stateStore.getState().teamId;
+        const active = teams.find((team) => team.id === activeTeamId);
+        if (active !== undefined) this.stateStore.dispatch(Actions.switchTeam(active));
+      }, (error: unknown) => {
+        const reason = errorReason(error);
+        this.stateStore.dispatch(Actions.setErrorMessage(`/reload failed: ${reason}`));
+      });
+    return { kind: "reply", text: "reloaded settings, manifests, and context files" };
   }
 
   private interceptTeam(args: ReadonlyArray<string>): InterceptResult {
@@ -299,7 +339,7 @@ const COMMANDS: ReadonlyMap<string, SlashCommand> = new Map<string, SlashCommand
 
 const LOCAL_COMMAND_NAMES = ["help", "clear", "exit"] as const satisfies ReadonlyArray<TuiCommandName>;
 
-const INTERCEPT_NAMES = ["login", "logout", "model", "model-filter", "effort", "team", "resume", "rename"] as const satisfies ReadonlyArray<InterceptName>;
+const INTERCEPT_NAMES = ["login", "logout", "model", "model-filter", "effort", "reload", "team", "resume", "rename"] as const satisfies ReadonlyArray<InterceptName>;
 
 const MODEL_FILTER_USAGE = "/model-filter <add|remove|list> <pattern>";
 
@@ -338,12 +378,16 @@ function errorReason(error: unknown): string {
 }
 
 function routeTarget(stateStore: StateStore): AgentRoute | null {
-  const state = stateStore.getState();
-  return agentTarget(state, state.focusedAgentId) ?? agentTarget(state, state.leaderAgentId);
+  const agent = routeTargetAgent(stateStore);
+  return agent === null ? null : { teamId: agent.teamId, agentKey: agent.agentKey };
 }
 
-function agentTarget(state: TuiState, agentId: TuiState["focusedAgentId"]): AgentRoute | null {
+function routeTargetAgent(stateStore: StateStore): AgentUiState | null {
+  const state = stateStore.getState();
+  return agentAt(state, state.focusedAgentId) ?? agentAt(state, state.leaderAgentId);
+}
+
+function agentAt(state: TuiState, agentId: TuiState["focusedAgentId"]): AgentUiState | null {
   if (agentId === null) return null;
-  const agent = state.agents.get(agentId);
-  return agent === undefined ? null : { teamId: agent.teamId, agentKey: agent.agentKey };
+  return state.agents.get(agentId) ?? null;
 }

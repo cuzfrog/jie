@@ -1,6 +1,8 @@
-export function formatQueueIndicator(queue: ReadonlyArray<string> | null | undefined): string | null {
+import { singleLine } from "./single-line";
+
+export function formatQueueIndicator(queue: ReadonlyArray<{ readonly text: string }> | null | undefined): string | null {
   if (queue === undefined || queue === null || queue.length === 0) return null;
-  const next = queue[0] ?? "";
+  const next = singleLine(queue[0]?.text ?? "");
   const preview = truncateCodePoints(next, QUEUE_PREVIEW_MAX_CHARS);
   const truncated = next.length > preview.length;
   const shown = truncated ? `${preview}…` : preview;

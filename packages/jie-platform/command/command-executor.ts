@@ -1,4 +1,5 @@
 import type { AuthStore, ModelRegistry, SettingsStore } from "../config";
+import { Events, type EventManager } from "../event";
 import { JiePlatformError } from "../jie-platform-errors";
 import type { GitService } from "../services";
 import type { TeamManager } from "../team";
@@ -19,6 +20,7 @@ export class CommandExecutorImpl implements CommandExecutor {
     private readonly modelRegistry: ModelRegistry,
     private readonly teamManager: TeamManager,
     private readonly gitService: GitService,
+    private readonly eventManager: EventManager,
   ) {
     this.handlers = {
       login: this.login.bind(this),
@@ -34,6 +36,7 @@ export class CommandExecutorImpl implements CommandExecutor {
       getModelFilters: this.getModelFilters.bind(this),
       setDefaultTeam: this.setDefaultTeam.bind(this),
       team: this.team.bind(this),
+      reload: this.reload.bind(this),
       resumeSession: this.resumeSession.bind(this),
       renameSession: this.renameSession.bind(this),
       getTeamInfo: this.getTeamInfo.bind(this),
@@ -94,6 +97,7 @@ export class CommandExecutorImpl implements CommandExecutor {
 
   private setDefaultEffort(command: Command<"setDefaultEffort">): CommandResult<"setDefaultEffort"> {
     this.settingsStore.setDefaultEffort(command.effort);
+    this.eventManager.publish(Events.userEffortUpdate({ kind: "user" }, command.effort));
     return null;
   }
 
@@ -141,6 +145,10 @@ export class CommandExecutorImpl implements CommandExecutor {
 
   private team(command: Command<"team">): Promise<CommandResult<"team">> {
     return this.teamManager.load(command.teamId);
+  }
+
+  private reload(): Promise<CommandResult<"reload">> {
+    return this.teamManager.reload();
   }
 
   private resumeSession(command: Command<"resumeSession">): Promise<CommandResult<"resumeSession">> {

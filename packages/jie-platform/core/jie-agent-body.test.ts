@@ -49,6 +49,14 @@ function makeSoul(overrides: Partial<AgentSoul> = {}): AgentSoul {
   };
 }
 
+const deploySkill: Skill = {
+  name: "deploy",
+  description: "Deploys the app",
+  filePath: "/deploy/SKILL.md",
+  baseDir: "/deploy",
+  body: "Run the deploy pipeline.",
+};
+
 function makeNoopTool(): Tool {
   return {
     name: "noop",
@@ -109,9 +117,11 @@ interface FakeAgentCapture {
     steer: ReturnType<typeof vi.fn>;
     abort: ReturnType<typeof vi.fn>;
     continue: ReturnType<typeof vi.fn>;
+    waitForIdle: ReturnType<typeof vi.fn>;
   };
   lastOpts: () => ConstructorParameters<typeof PiAgent>[0] | undefined;
   readonly agentListener: ((event: PiAgentEvent) => void) | undefined;
+  settleIdle: () => void;
 }
 
 function makeFakeAgentFactory(): FakeAgentCapture {
@@ -124,6 +134,8 @@ function makeFakeAgentFactory(): FakeAgentCapture {
     isStreaming: false,
     thinkingLevel: "off",
   };
+  let idlePromise: Promise<void> | undefined;
+  let resolveIdle: (() => void) | undefined;
   const fake = {
     state,
     subscribe: vi.fn((l: (event: PiAgentEvent) => void) => {
@@ -135,6 +147,14 @@ function makeFakeAgentFactory(): FakeAgentCapture {
     steer: vi.fn(() => {}),
     abort: vi.fn(() => {}),
     continue: vi.fn(async () => {}),
+    waitForIdle: vi.fn((): Promise<void> => {
+      if (idlePromise === undefined) {
+        idlePromise = new Promise<void>((resolve) => {
+          resolveIdle = resolve;
+        });
+      }
+      return idlePromise;
+    }),
   };
   const stub = fake as unknown as PiAgent;
   let captured: ConstructorParameters<typeof PiAgent>[0] | undefined;
@@ -147,6 +167,9 @@ function makeFakeAgentFactory(): FakeAgentCapture {
     lastOpts: () => captured,
     get agentListener() {
       return listener;
+    },
+    settleIdle: () => {
+      resolveIdle?.();
     },
   };
 }
@@ -201,6 +224,7 @@ interface Harness {
   subscribeSubject: <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void) => () => void;
   fireEvent: (event: PiAgentEvent) => void;
   makeBody: (overrides?: MakeBodyOverrides) => JieAgentBody;
+  settleIdle: () => void;
 }
 
 function makeFakeEventManager(): EventManager {
@@ -231,6 +255,7 @@ function makeHarness(): Harness {
   });
   const skillManager = vi.mocked<SkillManager>({
     resolve: vi.fn(() => []),
+    reload: vi.fn(),
   });
   const hookRunner = vi.mocked<HookRunner>({
     preToolUse: vi.fn(async () => ({ block: false, reason: null })),
@@ -274,6 +299,10 @@ function makeHarness(): Harness {
     if (listener === undefined) throw new Error("agent listener not captured");
     listener(event);
   };
+  const settleIdle = (): void => {
+    cap.fake.state.isStreaming = false;
+    cap.settleIdle();
+  };
   return {
     events,
     toolRegistry,
@@ -290,17 +319,11 @@ function makeHarness(): Harness {
     subscribeSubject,
     fireEvent,
     makeBody,
+    settleIdle,
   };
 }
 
 describe("JieAgentBody — system prompt composition", () => {
-  const deploySkill: Skill = {
-    name: "deploy",
-    description: "Deploys the app",
-    filePath: "/deploy/SKILL.md",
-    baseDir: "/deploy",
-  };
-
   test("resolved skills are appended to the role prompt", () => {
     const h = makeHarness();
     h.skillManager.resolve.mockReturnValue([deploySkill]);
@@ -339,8 +362,16 @@ describe("JieAgentBody — identity", () => {
       isLeader: true,
       tools: ["notify", "read_file"],
       subscribe: ["task.recorded"],
+      skills: [],
       model: { provider: "anthropic", id: "claude-sonnet-4", effort: "off", contextWindow: 200000 },
     });
+  });
+
+  test("identity.skills carries the resolved skill names", () => {
+    const h = makeHarness();
+    h.skillManager.resolve.mockReturnValue([deploySkill]);
+    const body = h.makeBody({ soul: makeSoul({ skills: ["dep*"] }) });
+    expect(body.identity.skills).toEqual(["deploy"]);
   });
 
   test("identity.model is null when no model is given", () => {
@@ -674,7 +705,7 @@ describe("JieAgentBody — lifecycle hooks", () => {
     const h = makeHarness();
     const body = h.makeBody();
     await body.start();
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "hello", "general-1"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
     await flush();
     expect(h.hookRunner.userPromptSubmit).toHaveBeenCalledWith({ identity, prompt: "hello" });
     expect(h.prompt.mock.calls.length).toBe(1);
@@ -690,7 +721,7 @@ describe("JieAgentBody — lifecycle hooks", () => {
     });
     const body = h.makeBody();
     await body.start();
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "hello", "general-1"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
     await flush();
     expect(h.prompt.mock.calls.length).toBe(0);
     expect(errors).toHaveLength(1);
@@ -707,7 +738,7 @@ describe("JieAgentBody — lifecycle hooks", () => {
     });
     const body = h.makeBody();
     await body.start();
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "hello", "general-1"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
     await flush();
     expect(h.prompt.mock.calls.length).toBe(0);
     expect(errors[0]!.payload.error).toBe("prompt blocked by UserPromptSubmit hook");
@@ -719,7 +750,7 @@ describe("JieAgentBody — lifecycle hooks", () => {
     h.hookRunner.userPromptSubmit.mockResolvedValue({ block: false, reason: null, additionalContext: "extra" });
     const body = h.makeBody();
     await body.start();
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "hello", "general-1"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
     await flush();
     expect(h.prompt.mock.calls.length).toBe(1);
     const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
@@ -798,7 +829,7 @@ describe("JieAgentBody — start() subscriptions", () => {
     h.events.subscribe("user.prompt", () => {
       received = true;
     });
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "hi", "general-1"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hi"));
     expect(received).toBe(true);
   });
 
@@ -807,11 +838,11 @@ describe("JieAgentBody — start() subscriptions", () => {
     const b2 = h.makeBody({ agentKey: "worker-1", factory: cap2.factory });
     await body.start();
     await b2.start();
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "for worker", "worker-1"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "worker-1", "for worker"));
     await flush();
     expect(cap2.fake.prompt.mock.calls.length).toBe(1);
     expect(h.prompt.mock.calls.length).toBe(0);
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "for general", "general-1"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "for general"));
     await flush();
     expect(h.prompt.mock.calls.length).toBe(1);
     expect(cap2.fake.prompt.mock.calls.length).toBe(1);
@@ -1058,7 +1089,7 @@ describe("JieAgentBody — prompt ingress format", () => {
   test("`agent.prompt` (no source) is formatted as `[user]: <prompt>`", async () => {
     const body = h.makeBody();
     await body.start();
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "hello", "general-1"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
     await flush();
     expect(h.prompt.mock.calls.length).toBeGreaterThan(0);
     const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
@@ -1083,6 +1114,85 @@ describe("JieAgentBody — prompt ingress format", () => {
   });
 });
 
+describe("JieAgentBody — skill invocation expansion", () => {
+  let h: Harness;
+
+  beforeEach(() => {
+    h = makeHarness();
+  });
+
+  test("a /skill: invocation of a resolved skill is expanded for the LLM message", async () => {
+    h.skillManager.resolve.mockReturnValue([deploySkill]);
+    const body = h.makeBody({ soul: makeSoul({ skills: ["deploy"] }) });
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "/skill:deploy now"));
+    await flush();
+    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
+    expect((synthetic as { content: unknown }).content).toBe(
+      '[user]: <skill name="deploy" location="/deploy/SKILL.md">\nReferences are relative to /deploy.\n\nRun the deploy pipeline.\n</skill>\n\nnow',
+    );
+    body.stop();
+  });
+
+  test("turn.start carries the raw invocation, not the expansion", async () => {
+    h.skillManager.resolve.mockReturnValue([deploySkill]);
+    const body = h.makeBody({ soul: makeSoul({ skills: ["deploy"] }) });
+    await body.start();
+    const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    h.subscribeSubject("agent.turn.start", (env) => turnStart.push(env));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "/skill:deploy now"));
+    await flush();
+    h.fireEvent({ type: "turn_start" });
+    h.fireEvent({ type: "message_start", message: h.prompt.mock.calls[0]![0] as AgentMessage });
+    expect(turnStart[0]!.payload).toBe("/skill:deploy now");
+    body.stop();
+  });
+
+  test("an invocation of a skill not in the resolved set passes through unchanged", async () => {
+    const body = h.makeBody();
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "/skill:deploy now"));
+    await flush();
+    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
+    expect((synthetic as { content: unknown }).content).toBe("[user]: /skill:deploy now");
+    body.stop();
+  });
+
+  test("the UserPromptSubmit hook sees the raw invocation; its context appends after the expansion", async () => {
+    h.skillManager.resolve.mockReturnValue([deploySkill]);
+    h.hookRunner.userPromptSubmit.mockResolvedValue({ block: false, reason: null, additionalContext: "extra" });
+    const body = h.makeBody({ soul: makeSoul({ skills: ["deploy"] }) });
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "/skill:deploy"));
+    await flush();
+    expect(h.hookRunner.userPromptSubmit).toHaveBeenCalledWith(expect.objectContaining({ prompt: "/skill:deploy" }));
+    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
+    const content = (synthetic as { content: unknown }).content as string;
+    expect(content.endsWith("</skill>\n\nextra")).toBe(true);
+    body.stop();
+  });
+
+  test("a queued invocation keeps the expanded message and the raw queue display", async () => {
+    h.skillManager.resolve.mockReturnValue([deploySkill]);
+    const body = h.makeBody({ soul: makeSoul({ skills: ["deploy"] }) });
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "/skill:deploy now"));
+    await flush();
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "/skill:deploy now", source: "user" }]);
+    h.fireEvent({ type: "agent_end", messages: [] });
+    h.settleIdle();
+    await flush();
+    const drained = h.prompt.mock.calls[0]![0] as AgentMessage;
+    expect((drained as { content: unknown }).content).toBe(
+      '[user]: <skill name="deploy" location="/deploy/SKILL.md">\nReferences are relative to /deploy.\n\nRun the deploy pipeline.\n</skill>\n\nnow',
+    );
+    body.stop();
+  });
+});
+
 describe("JieAgentBody — pi-agent event bridging", () => {
   let h: Harness;
 
@@ -1090,16 +1200,33 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     h = makeHarness();
   });
 
-  test("turn_start publishes agent.turn.start with a null payload", () => {
+  test("turn_start defers agent.turn.start until the turn's next pi event", () => {
     const turnStart: EventEnvelope<"agent.turn.start">[] = [];
     h.subscribeSubject("agent.turn.start", (env) => {
       turnStart.push(env);
     });
     h.makeBody();
     h.fireEvent({ type: "turn_start" });
+    expect(turnStart).toHaveLength(0);
+    h.fireEvent({
+      type: "turn_end",
+      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
+      toolResults: [],
+    });
     expect(turnStart).toHaveLength(1);
     expect(turnStart[0]!.topic).toBe("agent.turn.start");
     expect(turnStart[0]!.payload).toBeNull();
+  });
+
+  test("the deferred agent.turn.start precedes the turn's own stream events", () => {
+    const sequence: string[] = [];
+    h.subscribeSubject("agent.turn.start", () => sequence.push("turn.start"));
+    h.subscribeSubject("agent.stream.end", () => sequence.push("stream.end"));
+    h.makeBody();
+    h.fireEvent({ type: "turn_start" });
+    h.fireEvent({ type: "message_start", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
+    h.fireEvent({ type: "message_end", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
+    expect(sequence).toEqual(["turn.start", "stream.end"]);
   });
 
   test("agent_end publishes agent.idle with the final stopReason", () => {
@@ -1307,24 +1434,93 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     expect(h.persisted).toHaveLength(1);
   });
 
-  test("agent_end drains the queue: the dequeued message goes to followUp (not prompt)", async () => {
+  test("agent_end drains the queue only after the run settles: the entry goes to prompt (not followUp)", async () => {
     const body = h.makeBody();
     await body.start();
     h.state.isStreaming = true;
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "queued msg", "general-1"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "queued msg"));
     await flush();
     expect(h.followUp.mock.calls.length).toBe(0);
     expect(h.prompt.mock.calls.length).toBe(0);
-    h.state.isStreaming = false;
     h.fireEvent({ type: "agent_end", messages: [] });
-    expect(h.followUp.mock.calls.length).toBe(1);
+    expect(h.followUp.mock.calls.length).toBe(0);
     expect(h.prompt.mock.calls.length).toBe(0);
+    h.settleIdle();
+    await flush();
+    expect(h.followUp.mock.calls.length).toBe(0);
+    expect(h.prompt.mock.calls.length).toBe(1);
+    expect(h.prompt.mock.calls[0]![0]).toMatchObject({ role: "user", content: "[user]: queued msg" });
     body.stop();
   });
 
-  test("agent_end with no queued message: followUp not called", () => {
+  test("a prompt ingested between agent_end dispatch and run settlement is drained after settle (no stuck prompt)", async () => {
+    const body = h.makeBody();
+    await body.start();
+    let releaseHook: (() => void) | undefined;
+    h.hookRunner.userPromptSubmit.mockReturnValueOnce(
+      new Promise((resolve) => {
+        releaseHook = () => resolve({ block: false, reason: null, additionalContext: null });
+      }),
+    );
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "racing prompt"));
+    await flush();
+    h.fireEvent({ type: "agent_end", messages: [] });
+    releaseHook!();
+    await flush();
+    expect(h.prompt.mock.calls.length).toBe(0);
+    expect(h.followUp.mock.calls.length).toBe(0);
+    h.settleIdle();
+    await flush();
+    expect(h.prompt.mock.calls.length).toBe(1);
+    expect(h.prompt.mock.calls[0]![0]).toMatchObject({ role: "user", content: "[user]: racing prompt" });
+    body.stop();
+  });
+
+  test("an entry waiting at agent_end stays dequeueable until the run settles", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "removable"));
+    await flush();
+    h.fireEvent({ type: "agent_end", messages: [] });
+    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "removable"));
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([]);
+    h.settleIdle();
+    await flush();
+    expect(h.prompt.mock.calls.length).toBe(0);
+    expect(h.followUp.mock.calls.length).toBe(0);
+    body.stop();
+  });
+
+  test("successive runs drain the queue in arrival order", async () => {
+    const body = h.makeBody();
+    await body.start();
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "second"));
+    await flush();
+    h.fireEvent({ type: "agent_end", messages: [] });
+    h.settleIdle();
+    await flush();
+    expect(h.prompt.mock.calls.length).toBe(1);
+    h.state.isStreaming = true;
+    h.fireEvent({ type: "agent_end", messages: [] });
+    h.state.isStreaming = false;
+    await flush();
+    expect(h.prompt.mock.calls.length).toBe(2);
+    expect(h.prompt.mock.calls[0]![0]).toMatchObject({ content: "[user]: first" });
+    expect(h.prompt.mock.calls[1]![0]).toMatchObject({ content: "[user]: second" });
+    body.stop();
+  });
+
+  test("agent_end with no queued message: neither followUp nor prompt is called", async () => {
     h.makeBody();
     h.fireEvent({ type: "agent_end", messages: [] });
+    h.settleIdle();
+    await flush();
     expect(h.followUp.mock.calls.length).toBe(0);
     expect(h.prompt.mock.calls.length).toBe(0);
   });
@@ -1347,7 +1543,7 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     const body = h.makeBody();
     await body.start();
     h.state.isStreaming = true;
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "queued msg", "general-1"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "queued msg"));
     await flush();
     h.state.isStreaming = false;
     h.fireEvent({
@@ -1357,6 +1553,51 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     });
     expect(h.followUp.mock.calls.length).toBe(1);
     expect(h.prompt.mock.calls.length).toBe(0);
+    body.stop();
+  });
+
+  test("turn_end with an aborted turn does not feed followUp; the entry drains as a new run after settle", async () => {
+    const body = h.makeBody();
+    await body.start();
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "queued msg"));
+    await flush();
+    h.fireEvent({
+      type: "turn_end",
+      message: makeAssistantMessage({ stopReason: "aborted" }),
+      toolResults: [],
+    });
+    expect(h.followUp.mock.calls.length).toBe(0);
+    h.fireEvent({ type: "agent_end", messages: [] });
+    expect(h.prompt.mock.calls.length).toBe(0);
+    h.settleIdle();
+    await flush();
+    expect(h.prompt.mock.calls.length).toBe(1);
+    expect(h.prompt.mock.calls[0]![0]).toMatchObject({ role: "user", content: "[user]: queued msg" });
+    body.stop();
+  });
+
+  test("a new prompt submitted behind a leftover queue waits its turn", async () => {
+    const body = h.makeBody();
+    await body.start();
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "leftover"));
+    await flush();
+    h.fireEvent({
+      type: "turn_end",
+      message: makeAssistantMessage({ stopReason: "aborted" }),
+      toolResults: [],
+    });
+    h.fireEvent({ type: "agent_end", messages: [] });
+    h.state.isStreaming = false;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "fresh"));
+    await flush();
+    expect(h.prompt.mock.calls.length).toBe(1);
+    expect(h.prompt.mock.calls[0]![0]).toMatchObject({ content: "[user]: leftover" });
+    h.settleIdle();
+    await flush();
+    expect(h.prompt.mock.calls.length).toBe(2);
+    expect(h.prompt.mock.calls[1]![0]).toMatchObject({ content: "[user]: fresh" });
     body.stop();
   });
 
@@ -1382,23 +1623,544 @@ describe("JieAgentBody — pi-agent event bridging", () => {
   });
 });
 
+describe("JieAgentBody — turn.start prompt payload", () => {
+  let h: Harness;
+
+  beforeEach(() => {
+    h = makeHarness();
+  });
+
+  test("turn_start after an immediate user ingress carries the raw prompt", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    h.subscribeSubject("agent.turn.start", (env) => turnStart.push(env));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
+    await flush();
+    h.fireEvent({ type: "turn_start" });
+    h.fireEvent({ type: "message_start", message: h.prompt.mock.calls[0]![0] as AgentMessage });
+    expect(turnStart).toHaveLength(1);
+    expect(turnStart[0]!.payload).toBe("hello");
+    body.stop();
+  });
+
+  test("the pending prompt is consumed once — a later turn_start carries null", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    h.subscribeSubject("agent.turn.start", (env) => turnStart.push(env));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
+    await flush();
+    h.fireEvent({ type: "turn_start" });
+    h.fireEvent({ type: "message_start", message: h.prompt.mock.calls[0]![0] as AgentMessage });
+    h.fireEvent({ type: "message_end", message: makeAssistantMessage() });
+    h.fireEvent({
+      type: "turn_end",
+      message: makeAssistantMessage(),
+      toolResults: [],
+    });
+    h.fireEvent({ type: "agent_end", messages: [] });
+    h.fireEvent({ type: "turn_start" });
+    h.fireEvent({
+      type: "turn_end",
+      message: makeAssistantMessage(),
+      toolResults: [],
+    });
+    expect(turnStart.map((env) => env.payload)).toEqual(["hello", null]);
+    body.stop();
+  });
+
+  test("turn_start after a custom-source ingress carries a null prompt", async () => {
+    const body = h.makeBody({ soul: makeSoul({ subscribe: ["task.researched"] }) });
+    await body.start();
+    const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    h.subscribeSubject("agent.turn.start", (env) => turnStart.push(env));
+    h.events.publish(Events.custom({ kind: "agent", teamId: "t1", agentKey: "researcher-1" }, "t1.task.researched", "report"));
+    await flush();
+    h.fireEvent({ type: "turn_start" });
+    h.fireEvent({ type: "message_start", message: h.prompt.mock.calls[0]![0] as AgentMessage });
+    expect(turnStart).toHaveLength(1);
+    expect(turnStart[0]!.payload).toBeNull();
+    body.stop();
+  });
+
+  test("queued ingress: the consuming turn_end hands the prompt to the next turn_start", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.turn.start", (env) => turnStart.push(env));
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first queued"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "second queued"));
+    await flush();
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([
+      { text: "first queued", source: "user" },
+      { text: "second queued", source: "user" },
+    ]);
+    h.state.isStreaming = false;
+    h.fireEvent({
+      type: "turn_end",
+      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
+      toolResults: [],
+    });
+    expect(h.followUp.mock.calls.length).toBe(1);
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "second queued", source: "user" }]);
+    h.fireEvent({ type: "turn_start" });
+    h.fireEvent({ type: "message_start", message: h.followUp.mock.calls[0]![0] as AgentMessage });
+    expect(turnStart[turnStart.length - 1]!.payload).toBe("first queued");
+    body.stop();
+  });
+
+  test("agent_end draining the queue hands the prompt to the next turn_start", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    h.subscribeSubject("agent.turn.start", (env) => turnStart.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "queued msg"));
+    await flush();
+    h.fireEvent({ type: "agent_end", messages: [] });
+    h.settleIdle();
+    await flush();
+    expect(h.prompt.mock.calls.length).toBe(1);
+    h.fireEvent({ type: "turn_start" });
+    h.fireEvent({ type: "message_start", message: h.prompt.mock.calls[0]![0] as AgentMessage });
+    expect(turnStart[turnStart.length - 1]!.payload).toBe("queued msg");
+    body.stop();
+  });
+
+  test("agent_end without a queue shift clears the pending prompt", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    h.subscribeSubject("agent.turn.start", (env) => turnStart.push(env));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "lost run"));
+    await flush();
+    h.fireEvent({ type: "agent_end", messages: [] });
+    h.fireEvent({ type: "turn_start" });
+    h.fireEvent({
+      type: "turn_end",
+      message: makeAssistantMessage(),
+      toolResults: [],
+    });
+    expect(turnStart[turnStart.length - 1]!.payload).toBeNull();
+    body.stop();
+  });
+
+  test("a followUp fed at turn_end labels its own turn, not the intervening tool-continuation turn", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    h.subscribeSubject("agent.turn.start", (env) => turnStart.push(env));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
+    await flush();
+    const firstMessage = h.prompt.mock.calls[0]![0] as AgentMessage;
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "second"));
+    await flush();
+    h.fireEvent({ type: "turn_start" });
+    h.fireEvent({ type: "message_start", message: firstMessage });
+    h.fireEvent({ type: "message_end", message: makeAssistantMessage() });
+    h.fireEvent({ type: "turn_end", message: makeAssistantMessage({ stopReason: "toolUse" }), toolResults: [] });
+    expect(h.followUp.mock.calls.length).toBe(1);
+    const followUpMessage = h.followUp.mock.calls[0]![0] as AgentMessage;
+    h.fireEvent({ type: "turn_start" });
+    h.fireEvent({ type: "message_start", message: makeAssistantMessage() });
+    h.fireEvent({ type: "message_end", message: makeAssistantMessage({ stopReason: "toolUse" }) });
+    h.fireEvent({ type: "turn_end", message: makeAssistantMessage({ stopReason: "toolUse" }), toolResults: [] });
+    h.fireEvent({ type: "turn_start" });
+    h.fireEvent({ type: "message_start", message: followUpMessage });
+    expect(turnStart.map((env) => env.payload)).toEqual(["first", null, "second"]);
+    body.stop();
+  });
+
+  test("a followUp-fed peer notification keeps a null turn.start payload", async () => {
+    const body = h.makeBody({ soul: makeSoul({ subscribe: ["task.recorded"] }) });
+    await body.start();
+    const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    h.subscribeSubject("agent.turn.start", (env) => turnStart.push(env));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
+    await flush();
+    h.state.isStreaming = true;
+    h.events.publish(Events.custom({ kind: "agent", teamId: "t1", agentKey: "leader-1" }, "t1.task.recorded", "do X"));
+    await flush();
+    h.fireEvent({ type: "turn_start" });
+    h.fireEvent({ type: "message_start", message: h.prompt.mock.calls[0]![0] as AgentMessage });
+    h.fireEvent({ type: "message_end", message: makeAssistantMessage() });
+    h.fireEvent({ type: "turn_end", message: makeAssistantMessage({ stopReason: "toolUse" }), toolResults: [] });
+    const followUpMessage = h.followUp.mock.calls[0]![0] as AgentMessage;
+    h.fireEvent({ type: "turn_start" });
+    h.fireEvent({ type: "message_start", message: followUpMessage });
+    expect(turnStart.map((env) => env.payload)).toEqual(["first", null]);
+    body.stop();
+  });
+
+  test("queue snapshots carry the raw user text without the synthetic prefix", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
+    await flush();
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "hello", source: "user" }]);
+    body.stop();
+  });
+});
+
+describe("JieAgentBody — user.prompt.dequeue", () => {
+  let h: Harness;
+
+  beforeEach(() => {
+    h = makeHarness();
+  });
+
+  test("removes the last queue entry matching the raw user text and republishes the snapshot", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "second"));
+    await flush();
+    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "second"));
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "first", source: "user" }]);
+    body.stop();
+  });
+
+  test("with duplicated texts, removes the tail-most match only", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "same"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "same"));
+    await flush();
+    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "same"));
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "same", source: "user" }]);
+    body.stop();
+  });
+
+  test("removes the last user entry while peer notifications stay queued", async () => {
+    const body = h.makeBody({ soul: makeSoul({ subscribe: ["task.recorded"] }) });
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
+    await flush();
+    h.events.publish(Events.custom({ kind: "agent", teamId: "t1", agentKey: "leader-1" }, "t1.task.recorded", "do X"));
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([
+      { text: "hello", source: "user" },
+      { text: "[leader-1 on 'task.recorded']: do X", source: "peer" },
+    ]);
+    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "hello"));
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([
+      { text: "[leader-1 on 'task.recorded']: do X", source: "peer" },
+    ]);
+    body.stop();
+  });
+
+  test("no match: nothing is removed and the snapshot is republished so a stale observer resyncs", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
+    await flush();
+    const countBefore = queueUpdates.length;
+    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "already consumed"));
+    expect(queueUpdates.length).toBe(countBefore + 1);
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "first", source: "user" }]);
+    body.stop();
+  });
+
+  test("dequeue addressed to another agent or team is ignored", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
+    await flush();
+    const countBefore = queueUpdates.length;
+    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "worker-1", "first"));
+    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t2", "general-1", "first"));
+    expect(queueUpdates.length).toBe(countBefore);
+    body.stop();
+  });
+
+  test("stop() unsubscribes from user.prompt.dequeue", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
+    await flush();
+    const countBefore = queueUpdates.length;
+    body.stop();
+    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "first"));
+    expect(queueUpdates.length).toBe(countBefore);
+  });
+});
+
+describe("JieAgentBody — user.prompt.requeue", () => {
+  let h: Harness;
+
+  beforeEach(() => {
+    h = makeHarness();
+  });
+
+  test("restores a dequeued user prompt to the queue tail and republishes the snapshot", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "second"));
+    await flush();
+    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "second"));
+    h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "second"));
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([
+      { text: "first", source: "user" },
+      { text: "second", source: "user" },
+    ]);
+    body.stop();
+  });
+
+  test("the restored entry keeps its constructed message when drained", async () => {
+    const body = h.makeBody();
+    await body.start();
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
+    await flush();
+    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "hello"));
+    h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "hello"));
+    h.fireEvent({ type: "agent_end", messages: [] });
+    h.settleIdle();
+    await flush();
+    expect(h.prompt.mock.calls.length).toBe(1);
+    expect(h.prompt.mock.calls[0]![0]).toMatchObject({ role: "user", content: "[user]: hello" });
+    body.stop();
+  });
+
+  test("requeuing while idle drains the restored entry immediately", async () => {
+    const body = h.makeBody();
+    await body.start();
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
+    await flush();
+    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "first"));
+    h.fireEvent({ type: "agent_end", messages: [] });
+    h.settleIdle();
+    await flush();
+    expect(h.prompt.mock.calls.length).toBe(0);
+    h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "first"));
+    await flush();
+    expect(h.prompt.mock.calls.length).toBe(1);
+    expect(h.prompt.mock.calls[0]![0]).toMatchObject({ role: "user", content: "[user]: first" });
+    body.stop();
+  });
+
+  test("no matching dequeued entry: the queue is unchanged and the snapshot is republished", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
+    await flush();
+    const countBefore = queueUpdates.length;
+    h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "never dequeued"));
+    expect(queueUpdates.length).toBe(countBefore + 1);
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "first", source: "user" }]);
+    body.stop();
+  });
+
+  test("a resubmitted dequeued prompt is consumed and not restored a second time", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
+    await flush();
+    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "first"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
+    await flush();
+    h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "first"));
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "first", source: "user" }]);
+    body.stop();
+  });
+
+  test("requeue addressed to another agent or team is ignored", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
+    await flush();
+    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "first"));
+    const countBefore = queueUpdates.length;
+    h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "worker-1", "first"));
+    h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t2", "general-1", "first"));
+    expect(queueUpdates.length).toBe(countBefore);
+    body.stop();
+  });
+
+  test("stop() unsubscribes from user.prompt.requeue", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
+    await flush();
+    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "first"));
+    const countBefore = queueUpdates.length;
+    body.stop();
+    h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "first"));
+    expect(queueUpdates.length).toBe(countBefore);
+  });
+
+  test("the parked pile is capped: dequeuing past the cap evicts the oldest parked prompts", async () => {
+    const body = h.makeBody();
+    await body.start();
+    h.state.isStreaming = true;
+    for (let i = 0; i < 33; i++) {
+      h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", `prompt-${i}`));
+    }
+    await flush();
+    for (let i = 0; i < 33; i++) {
+      h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", `prompt-${i}`));
+    }
+    await flush();
+    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
+    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
+    h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "prompt-0"));
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([]);
+    h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "prompt-32"));
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "prompt-32", source: "user" }]);
+    body.stop();
+  });
+});
+
+describe("JieAgentBody — user.effort.update", () => {
+  let h: Harness;
+
+  beforeEach(() => {
+    h = makeHarness();
+  });
+
+  test("updates the agent thinkingLevel and republishes agent.model.assigned with the new effort", async () => {
+    const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4") });
+    await body.start();
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    h.subscribeSubject("agent.model.assigned", (env) => received.push(env));
+    h.events.publish(Events.userEffortUpdate({ kind: "user" }, "high"));
+    expect(h.state.thinkingLevel).toBe("high");
+    expect(received).toHaveLength(1);
+    expect(received[0]!.payload).toEqual({ provider: "anthropic", model: "claude-sonnet-4", effort: "high" });
+    body.stop();
+  });
+
+  test("maps effort 'max' to the 'xhigh' thinkingLevel while reporting 'max'", async () => {
+    const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4") });
+    await body.start();
+    h.events.publish(Events.userEffortUpdate({ kind: "user" }, "max"));
+    expect(h.state.thinkingLevel).toBe("xhigh");
+    body.stop();
+  });
+
+  test("identity.model reflects the updated effort", async () => {
+    const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4") });
+    await body.start();
+    h.events.publish(Events.userEffortUpdate({ kind: "user" }, "medium"));
+    expect(body.identity.model).toEqual({ provider: "anthropic", id: "claude-sonnet-4", effort: "medium", contextWindow: 200000 });
+    body.stop();
+  });
+
+  test("without a model the thinkingLevel still updates but nothing is republished", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    h.subscribeSubject("agent.model.assigned", (env) => received.push(env));
+    h.events.publish(Events.userEffortUpdate({ kind: "user" }, "low"));
+    expect(h.state.thinkingLevel).toBe("low");
+    expect(received).toHaveLength(0);
+    body.stop();
+  });
+
+  test("applies to every live body regardless of team and agent key", async () => {
+    const cap2 = makeFakeAgentFactory();
+    const second = h.makeBody({ agentKey: "worker-1", teamId: "t2", factory: cap2.factory });
+    const body = h.makeBody();
+    await body.start();
+    await second.start();
+    h.events.publish(Events.userEffortUpdate({ kind: "user" }, "high"));
+    expect(h.state.thinkingLevel).toBe("high");
+    expect(cap2.fake.state.thinkingLevel).toBe("high");
+    body.stop();
+    second.stop();
+  });
+
+  test("stop() unsubscribes from user.effort.update", async () => {
+    const body = h.makeBody();
+    await body.start();
+    body.stop();
+    h.events.publish(Events.userEffortUpdate({ kind: "user" }, "high"));
+    expect(h.state.thinkingLevel).toBe("off");
+  });
+});
+
 describe("JieAgentBody — stop()", () => {
   test("stop() unsubscribes bus subscriptions registered via start()", async () => {
     const h = makeHarness();
     const body = h.makeBody();
     await body.start();
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "before stop", "general-1"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "before stop"));
     await flush();
     h.state.isStreaming = true;
     h.events.publish(Events.agentInterrupt({ kind: "user" }, "t1", "general-1"));
     expect(h.prompt.mock.calls.length).toBe(1);
     expect(h.abort.mock.calls.length).toBe(1);
     body.stop();
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "after stop", "general-1"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "after stop"));
     await flush();
     h.events.publish(Events.agentInterrupt({ kind: "user" }, "t1", "general-1"));
     expect(h.prompt.mock.calls.length).toBe(1);
     expect(h.abort.mock.calls.length).toBe(1);
+  });
+
+  test("stop() during start()'s drain wait ends start() without draining the queue", async () => {
+    const h = makeHarness();
+    let releaseRestore: ((messages: AgentMessage[]) => void) | undefined;
+    h.restore.mockReturnValueOnce(new Promise<AgentMessage[]>((resolve) => {
+      releaseRestore = resolve;
+    }));
+    const body = h.makeBody();
+    const startPromise = body.start();
+    await flush();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
+    await flush();
+    expect(h.prompt.mock.calls.length).toBe(1);
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "second"));
+    await flush();
+    releaseRestore!([]);
+    await flush();
+    body.stop();
+    h.settleIdle();
+    await startPromise;
+    expect(h.prompt.mock.calls.length).toBe(1);
   });
 
   test("start() is idempotent (second call does not re-subscribe)", async () => {
@@ -1406,7 +2168,7 @@ describe("JieAgentBody — stop()", () => {
     const body = h.makeBody();
     await body.start();
     await body.start();
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "once", "general-1"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "once"));
     await flush();
     expect(h.prompt.mock.calls.length).toBe(1);
     body.stop();

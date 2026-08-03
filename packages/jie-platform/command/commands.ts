@@ -26,6 +26,7 @@ interface CommandTypeMap {
   getModelFilters: CommandDef<{}, ReadonlyArray<string>>;
   setDefaultTeam: CommandDef<{ teamId: string }, null>;
   team: CommandDef<{ teamId?: string }, TeamInfo>;
+  reload: CommandDef<{}, ReadonlyArray<TeamInfo>>;
   resumeSession: CommandDef<{ teamId: string; sessionId: string }, TeamInfo>;
   renameSession: CommandDef<{ teamId: string; sessionName: string }, null>;
   getTeamInfo: CommandDef<{}, {

@@ -8,6 +8,8 @@ import { createTransientAger } from "./transient-ager";
 
 const SUBMIT_EDITOR_TEXT = Actions.submitEditorText("").type;
 const REQUEST_INTERRUPT = Actions.requestInterrupt("", "").type;
+const REQUEST_DEQUEUE = Actions.requestDequeue("", "", "").type;
+const REQUEST_REQUEUE = Actions.requestRequeue("", "", "").type;
 const REQUEST_QUIT = Actions.requestQuit().type;
 const log = logger.getSubLogger({ name: "jie.tui" });
 
@@ -81,6 +83,14 @@ export class TuiImpl implements Tui {
         this.platform.interrupt(action.payload.teamId, action.payload.agentKey);
         return;
       }
+      if (action.type === REQUEST_DEQUEUE) {
+        this.platform.dequeuePrompt(action.payload.teamId, action.payload.agentKey, action.payload.prompt);
+        return;
+      }
+      if (action.type === REQUEST_REQUEUE) {
+        this.platform.requeuePrompt(action.payload.teamId, action.payload.agentKey, action.payload.prompt);
+        return;
+      }
       if (action.type === REQUEST_QUIT) {
         await this.quit();
         return;
@@ -147,12 +157,12 @@ function subscribeToBus(platform: JiePlatform, onEvent: (event: AnyEventEnvelope
   const unsubscribes: Array<() => void> = [
     platform.subscribe("system.team.loaded", onEvent),
     platform.subscribe("system.error", onEvent),
-    platform.subscribe("user.prompt", onEvent),
     platform.subscribe("agent.model.assigned", onEvent),
     platform.subscribe("agent.prompt.queue.update", onEvent),
     platform.subscribe("agent.turn.start", onEvent),
     platform.subscribe("agent.idle", onEvent),
     platform.subscribe("agent.stream.chunk", onEvent),
+    platform.subscribe("agent.stream.end", onEvent),
     platform.subscribe("agent.tool.call", onEvent),
     platform.subscribe("agent.tool.result", onEvent),
     platform.subscribe("agent.usage", onEvent),

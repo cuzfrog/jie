@@ -38,7 +38,7 @@ Two locations, **project overrides global with deep-merge** (nested objects merg
 | `defaultProvider` | string | Provider id (e.g. `anthropic`, `openai`). |
 | `defaultModel` | string | Model id within the provider. |
 | `defaultTeam` | string | Last user-selected team. Charset `[A-Za-z0-9_-]{1,32}`. |
-| `defaultEffort` | string | Default reasoning effort for team loads: one of `off` \| `low` \| `medium` \| `high` \| `max`. Absent means `off`. |
+| `defaultEffort` | string | Default reasoning effort: one of `off` \| `low` \| `medium` \| `high` \| `max`. Absent means `off`. Applied at team load and live to running agents inheriting it. |
 
 **Unknown field policy.** Unrecognized top-level fields are tolerated (warned, ignored) so future versions can land new settings without breaking old files. Unrecognized *values* for recognized fields follow the same policy — e.g. an unknown `defaultProvider` is WARN+ignore (treated as absent; model resolution falls through and may surface `NO_MODEL_ERROR` at team load). Shape errors (e.g. `defaultProvider: 42`) are a hard fail — malformed input, not an unfamiliar value.
 
@@ -91,7 +91,7 @@ TUI `/team <id>` does **not** persist; it hot-loads the team in the running sess
 
 ### Setting `defaultEffort`
 
-TUI `/effort <level>` executes `setDefaultEffort`, writing `defaultEffort` to the **global** `settings.json` (like `setDefaultProvider`). `/effort` with no argument executes `getDefaultEffort` and shows the current default (`off` when absent). The value applies at team load — same semantics as `defaultModel`, no hot-swap of running agents: `TeamManager.load` reads the merged setting and threads it into `AgentBodyParams.effort`; `JieAgentBody` maps it onto the pi-agent `thinkingLevel` (`max` → `xhigh`, other levels pass through; pi's own `off` level means no extended thinking) and reports it through `agent.model.assigned` and `ModelInfo.effort`. Out-of-vocabulary values in the file hard-fail `INVALID_CONFIG` (closed vocabulary, like the `defaultTeam` charset).
+TUI `/effort <level>` executes `setDefaultEffort`, writing `defaultEffort` to the **global** `settings.json` (like `setDefaultProvider`). `/effort` with no argument executes `getDefaultEffort` and shows the current default (`off` when absent). The value applies at team load — `TeamManager.load` reads the merged setting and threads it into `AgentBodyParams.effort` — and immediately to every live agent inheriting the default: the command publishes `user.effort.update` after the write, and each body applies it (`06-agent-model.md`, "Effort update"). `JieAgentBody` maps effort onto the pi-agent `thinkingLevel` (`max` → `xhigh`, other levels pass through; pi's own `off` level means no extended thinking) and reports it through `agent.model.assigned` and `ModelInfo.effort`. Out-of-vocabulary values in the file hard-fail `INVALID_CONFIG` (closed vocabulary, like the `defaultTeam` charset).
 
 ### Team Swap (TUI)
 
@@ -104,6 +104,10 @@ TUI `/effort <level>` executes `setDefaultEffort`, writing `defaultEffort` to th
 The TUI re-renders from `system.team.loaded` (agent roster, leader focused) and thereafter publishes prompts to the focused agent's `agentKey` via `handle.prompt` — there is no leader-specific prompt topic. **The previously-active team is not stopped**: its bodies keep their `memory_turns` rows, in-memory prompt queue, and LLM context, and continue processing queued prompts autonomously — the platform holds no active-team state (ADR 26); the TUI just stops displaying it.
 
 Load failures fail the command, not the process: an unresolvable soul is skipped; a team with no resolvable model at all fails with `NO_MODEL_ERROR`. Other loaded teams continue unaffected.
+
+### Reload (TUI)
+
+`/reload` refreshes the process-lifetime configuration caches without restarting: `ModelRegistry.reload()` re-reads `models.json` (both scopes), `SkillManager.reload()` rescans the skill directories, and every loaded team is rebuilt in place on its current session id — old bodies are stopped, manifests and merged settings (including `defaultEffort`) are re-read, and `system.team.loaded` is re-published per team. Context files need no cache refresh: the body factory calls `loadSystemContextBlock` per construction, so rebuilt bodies carry the edited files. Teams not yet loaded are untouched, and a rebuild never validates the session id against storage (a zero-message session is valid). Rebuild keeps the running bodies intact as long as the replacement can still be built: the replacement bodies are constructed (and `restore()`d) before the old bodies are stopped, so a team whose manifest fails to parse keeps its running bodies untouched. A team is committed — registered and `system.team.loaded` published — only after every replacement body has started; if a start fails, the replacement set is stopped and the team is reported as failed, leaving its previous entry (whose bodies are already stopped) registered until another `/reload` rebuilds it. The stop-before-start ordering is deliberate: pi's `Agent.continue()` awaits the full run, so a replacement's `start()` can block for a whole LLM turn (a restored session ending on `user`/`toolResult` resumes it), and starting replacements while the old bodies are still subscribed would put two agents ingesting and persisting on one session concurrently. Closing that stopped-entry window would need pause/resume and ingress gating on the `AgentBody` contract, which it does not provide today. A failing team does not block the others; each loaded team is rebuilt independently, and if any failed the command fails with `RELOAD_FAILED` listing them. The TUI refuses `/reload` while any agent is busy.
 
 ## Skills
 
@@ -126,9 +130,13 @@ An invalid skill (bad name charset, missing/over-long description, name/director
 
 A skill is visible to an agent only if the agent's `skills:` frontmatter lists it (spec strings, wildcards allowed, resolved through the `SkillManager` with the same anchored-glob semantics as `tools`). Matched skills are rendered into an `<available_skills>` block appended to the agent's system prompt — name, description, and location only; the agent reads the body with `read_file`, resolving relative paths against the skill directory. Skills not listed for an agent are never surfaced to it.
 
+### Invocation
+
+A user can invoke a skill explicitly from a prompt with `/skill:<name> [args]`, mirroring pi. The body expands the invocation before ingress (`06-agent-model.md`, "Skill invocation"): `expandSkillInvocation` resolves `<name>` against the agent's own resolved skills and rewrites the prompt into a `<skill name location>` block carrying the skill body (relative references resolve against the skill directory), appending any args. The original text is what the TUI echoes and stores as the turn prompt; the expansion is what reaches the model and memory. An unknown name, or a name the target agent does not have, is not expanded. The TUI gates invocation: `/skill:` autocompletes only the focused/leader agent's skills, and submitting a skill that agent lacks is an error banner, not a prompt. `jie -p "/skill:<name> …"` gets the same expansion through the same ingress.
+
 ## Context Files
 
-`AGENTS.md` and `CLAUDE.md` are auto-loaded instruction files injected into every agent's system prompt — shared project state, with no manifest opt-in (unlike skills). The platform reads them, in order, from the home jie dir (`~/.jie/`) and then from every ancestor of the CWD ordered root-down-to-CWD; within a directory `AGENTS.md` precedes `CLAUDE.md`. Missing or unreadable files are skipped and a path is read at most once. The assembled `<context_files>` block is the boot-time `systemContextBlock` cradle singleton, which the prompt composer places before the role prose; file content is injected verbatim.
+`AGENTS.md` and `CLAUDE.md` are auto-loaded instruction files injected into every agent's system prompt — shared project state, with no manifest opt-in (unlike skills). The platform reads them, in order, from the home jie dir (`~/.jie/`) and then from every ancestor of the CWD ordered root-down-to-CWD; within a directory `AGENTS.md` precedes `CLAUDE.md`. Missing or unreadable files are skipped and a path is read at most once. The cradle exposes `loadSystemContextBlock`, a loader that re-reads and assembles the `<context_files>` block on every call; the prompt composer calls it once per agent-body construction and places the block before the role prose, so edits are picked up by the next load or `/reload` rebuild without re-registration. File content is injected verbatim.
 
 ## Hooks
 
@@ -215,7 +223,7 @@ Hard caps and charsets; not user-configurable. Each row points at the doc that a
 | `read_file` default truncation | **2000 lines OR 50 KiB** (whichever first; `offset` / `limit` override) | `read_file` | `06-agent-model.md` |
 | Tool telemetry truncation | **4 KiB**, middle-truncated | `agent.tool.call` / `agent.tool.result` payloads (LLM conversation is untruncated) | `03-event-system.md` |
 | Tool default timeout | **120 s** (combined with pi-agent's signal via `AbortSignal.any`) | All tools unless overridden | `06-agent-model.md` |
-| `bash` timeout | **300 s** (SIGTERM then SIGKILL) | `bash` | `06-agent-model.md` |
+| `bash` timeout | **300 s** (SIGTERM then SIGKILL, whole process group) | `bash` | `06-agent-model.md` |
 | `session_id` | **26 chars** (ULID) | Per process × team | `08-memory.md`, ADR 17 |
 | `team_id` charset | `[A-Za-z0-9_-]{1,32}` | `defaultTeam`, `--team`, blueprint loader (hard fail `invalid team_id: <value>`; blocks path traversal) | this doc |
 | Role (filename stem) charset | `[A-Za-z0-9_-]{1,64}` | Blueprint loader (hard fail `invalid role: <stem>`); constrains `agent_key = {role}-{N}` | `06-agent-model.md` |
@@ -346,4 +354,4 @@ Commands that mutate persistent files:
 
 Runtime flags (no persistence): `--team <id>` (one-shot load override for `jie` and `jie -p`), `--resume <sessionId>` (load a team on a prior session), `--in-memory` (SQLite `:memory:`; nothing persists), `-p "..."` (one-shot print mode).
 
-TUI slash commands run the same platform commands in-session — no restart: `/login`, `/logout <provider>|*`, `/model <provider>/<modelId>`, `/model-filter <add|remove|list> <pattern>` (settings `modelFilters`; narrows the `/model` popup; `list` prints the stored patterns; an `add` that would match no available model is rejected), `/team [<id>]` (hot-load; "Team Swap" above), `/resume` (session picker), `/rename <name>` (names the active session; `08-memory.md` "List and rename"). The `<provider>/<modelId>` slash convention is pi's; two separate flags are not accepted.
+TUI slash commands run the same platform commands in-session — no restart: `/login`, `/logout <provider>|*`, `/model <provider>/<modelId>`, `/model-filter <add|remove|list> <pattern>` (settings `modelFilters`; narrows the `/model` popup; `list` prints the stored patterns; an `add` that would match no available model is rejected), `/effort [<level>]` ("Setting `defaultEffort`" above), `/reload` ("Reload (TUI)" above), `/team [<id>]` (hot-load; "Team Swap" above), `/resume` (session picker), `/rename <name>` (names the active session; `08-memory.md` "List and rename"). The `<provider>/<modelId>` slash convention is pi's; two separate flags are not accepted.

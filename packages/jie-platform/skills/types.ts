@@ -3,6 +3,7 @@ export interface Skill {
   readonly description: string;
   readonly filePath: string;
   readonly baseDir: string;
+  readonly body: string;
 }
 
 export interface SkillDiagnostic {
@@ -17,4 +18,5 @@ export interface LoadSkillsResult {
 
 export interface SkillManager {
   resolve(spec: string): Skill[];
+  reload(): void;
 }

@@ -62,6 +62,8 @@ function makeFakePlatform(): FakePlatform {
     },
     prompt: vi.fn(),
     interrupt: vi.fn(),
+    dequeuePrompt: vi.fn(),
+    requeuePrompt: vi.fn(),
     execute: vi.fn(async <T extends CommandName>(command: Command<T>): Promise<CommandResult<T>> => {
       trace.push({ kind: "execute", commandName: command.name });
       return dispatch(command) as CommandResult<T>;
@@ -94,6 +96,7 @@ function dispatch(command: Command<CommandName>): CommandResult<CommandName> | n
           isLeader: true,
           tools: [],
           subscribe: [],
+          skills: [],
           model: null,
         }],
       };

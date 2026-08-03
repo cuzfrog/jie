@@ -22,6 +22,7 @@ export interface AgentInfo {
     readonly isLeader: boolean;
     readonly tools: ReadonlyArray<string>;
     readonly subscribe: ReadonlyArray<string>;
+    readonly skills: ReadonlyArray<string>;
     readonly model: ModelInfo | null;
 }
 

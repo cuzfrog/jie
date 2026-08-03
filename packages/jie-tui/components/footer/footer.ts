@@ -24,6 +24,7 @@ export class Footer implements Component {
     const stats: string[] = [style(contextSegmentColor(focused))(contextSegmentText(focused))];
     const queue = formatQueueIndicator(focused === null ? null : focused.queue);
     if (queue !== null) stats.push(style("warning")(queue));
+    stats.push(`${style("accent")("/help")}${style("muted")(" to show commands and shortcuts")}`);
     const modelInfo = focused === null ? null : focused.model;
     const model = modelInfo === null ? style("muted")("—") : formatModelSegment(modelInfo);
     return [identityLine, rightAligned(stats.join("  "), model, w)];

@@ -370,4 +370,4 @@ type ToolExecutionMode = "sequential" | "parallel";
 type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 ```
 
-**Jie v1 defaults:** `steeringMode: "all"`, `toolExecution: "sequential"`. `followUpMode` left at pi-agent default (`"one-at-a-time"`).
+**Jie v1 defaults:** `steeringMode: "all"`, `followUpMode: "all"`, `toolExecution: "sequential"`.

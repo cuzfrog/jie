@@ -26,18 +26,21 @@ Identity travels in the envelope, not in the subject. `topic` equals `type` for 
 
 | Topic | Sender | Payload |
 |---|---|---|
-| `agent.turn.start` | agent | `null` |
+| `agent.turn.start` | agent | `string \| null` — the raw user text this turn consumes; null for peer-notification and startup-resumed turns |
 | `agent.idle` | agent | pi-ai `StopReason` (`"stop"` / `"length"` / `"error"` / `"aborted"`) |
 | `agent.tool.call` | agent | `{ tool_call_id, name, input, input_truncated }` |
 | `agent.tool.result` | agent | `{ tool_call_id, name, output: string \| null, output_truncated, duration_ms, error: string \| null, details }` |
 | `agent.stream.chunk` | agent | `{ stream_id, seq, block_type: "text" \| "thinking", text }` |
-| `agent.stream.end` | agent | `{ stream_id, total_chunks }` |
+| `agent.stream.end` | agent | `{ stream_id, total_chunks, thinking_durations: number[] }` |
 | `agent.usage` | agent | `{ input, output, cacheRead, cacheWrite, totalTokens }` |
-| `agent.prompt.queue.update` | agent | `{ prompts: string[] }` |
+| `agent.prompt.queue.update` | agent | `{ prompts: Array<{ text: string; source: "user" \| "peer" }> }` |
 | `agent.model.assigned` | agent | `{ provider, model, effort }` |
 | `user.prompt` | user | `{ teamId, agentKey, prompt }` |
+| `user.prompt.dequeue` | user | `{ teamId, agentKey, prompt }` — cancel the most recently queued user prompt whose raw text equals `prompt` |
+| `user.prompt.requeue` | user | `{ teamId, agentKey, prompt }` — restore the most recently dequeued user prompt whose raw text equals `prompt` to the queue's tail |
+| `user.effort.update` | user | `{ effort }` — broadcast a new default effort; every live body applies it (`06-agent-model.md`) |
 | `agent.interrupt` | any | `{ teamId, agentKey }` |
-| `system.team.loaded` | system | `TeamInfo` — `{ id, leaderKey, agents: [{ teamId, role, agentKey, isLeader, model }] }` |
+| `system.team.loaded` | system | `TeamInfo` — `{ id, leaderKey, agents: [{ teamId, role, agentKey, isLeader, tools, subscribe, skills, model }] }` |
 | `system.error` | system | `{ error: string }` |
 | `custom.${clientTopic}` | agent | `{ message: string, truncated: boolean }` |
 
@@ -56,7 +59,7 @@ interface EventManager {
 
 `EventManagerImpl` takes the `eventBus` cradle entry (an in-process bus by default, registered alongside it by `registerEventModule`); tests register a mock bus instead. `JiePlatform` wraps the manager: `handle.subscribe(topic, cb)` is the consumer surface (ADR 13) — the bus never reaches consumer code.
 
-Each known type has a flat-args factory method (`Events.agentTurnStart(sender)`, `Events.agentIdle(sender, stopReason)`, `Events.userPrompt(sender, teamId, prompt, agentKey)`, `Events.teamLoaded(sender, teamInfo)`, …). `Events.custom(sender, clientTopic, message)` is the client-topic factory: the bus subject becomes `custom.${clientTopic}`.
+Each known type has a flat-args factory method (`Events.agentTurnStart(sender, prompt)`, `Events.agentIdle(sender, stopReason)`, `Events.userPrompt(sender, teamId, agentKey, prompt)`, `Events.userPromptDequeue(sender, teamId, agentKey, prompt)`, `Events.userPromptRequeue(sender, teamId, agentKey, prompt)`, `Events.userEffortUpdate(sender, effort)`, `Events.teamLoaded(sender, teamInfo)`, …). `Events.custom(sender, clientTopic, message)` is the client-topic factory: the bus subject becomes `custom.${clientTopic}`.
 
 ## Subscription model
 
@@ -64,6 +67,9 @@ Each `AgentBody` subscribes to exactly:
 
 - `"user.prompt"` — filtered on `payload.agentKey === own agentKey`; this is the sole user prompt ingress (CLI `-p` and TUI both publish here via `handle.prompt(teamId, agentKey, text)`). There are no per-agent subjects and no leader-only ingress.
 - `"agent.interrupt"` — filtered on `teamId` + `agentKey`.
+- `"user.prompt.dequeue"` — filtered on `teamId` + `agentKey`; removes the queue's tail-most user entry matching the text and republishes `agent.prompt.queue.update` (even on a miss, resyncing stale observers). Peer notifications cannot be dequeued (`06-agent-model.md`).
+- `"user.prompt.requeue"` — filtered on `teamId` + `agentKey`; restores the most recently dequeued user entry matching the text to the queue's tail, republishes `agent.prompt.queue.update`, and drains — an idle agent starts the restored prompt immediately (`06-agent-model.md`).
+- `"user.effort.update"` — unfiltered (broadcast); every body applies the effort to its agent and, when a model is assigned, republishes `agent.model.assigned` with the new effort (`06-agent-model.md`).
 - `custom.${teamId}.${topic}` for each entry of the soul's `subscribe:` frontmatter.
 
 The team author writes **unscoped** topic names in `.md` frontmatter and in `notify` calls (`task.recorded`, another agent's key for direct addressing); the platform applies the `custom.${teamId}.` prefix at body construction (subscriptions) and at publish time (`notify` → `Events.custom`). Self-receipts are filtered in the body's callback by matching the sender's `agentKey` against its own — the bus stays identity-agnostic.
@@ -72,7 +78,7 @@ Multiple teams' bodies coexist on the same bus; `teamId` in senders and payloads
 
 ## Streaming
 
-LLM output originates from pi-agent's `message_update` deltas. The body buffers per `block_type` (`"text"` / `"thinking"`; tool-call deltas are not streamed) and publishes `agent.stream.chunk`; `stream_id` is a per-LLM-invocation counter, `seq` the chunk ordinal. On `message_end` the remaining buffer flushes and `agent.stream.end` follows. Flush triggers: `stream_chunk_size` chars (64), `stream_flush_ms` (200 ms), or a `block_type` change — tunables in `10-configuration.md` "Streaming Tunables"; the body-side pipeline is in `06-agent-model.md`.
+LLM output originates from pi-agent's `message_update` deltas. The body buffers per `block_type` (`"text"` / `"thinking"`; tool-call deltas are not streamed) and publishes `agent.stream.chunk`; `stream_id` is a per-LLM-invocation counter, `seq` the chunk ordinal. On `message_end` the remaining buffer flushes and `agent.stream.end` follows, carrying `thinking_durations` — one duration per thinking segment in that stream, in segment order, measured at the streaming edge (`Date.now()` around each thinking block; empty when the stream had no thinking). Flush triggers: `stream_chunk_size` chars (64), `stream_flush_ms` (200 ms), or a `block_type` change — tunables in `10-configuration.md` "Streaming Tunables"; the body-side pipeline is in `06-agent-model.md`.
 
 ## Tool Telemetry and Truncation
 
@@ -82,7 +88,7 @@ Every tool call emits `agent.tool.call` before execution and `agent.tool.result`
 
 ## Event-Order Contract
 
-**Body-side alternation.** Per body, `agent.turn.start` and `agent.idle` strictly alternate: exactly one `agent.turn.start` per pi-agent `turn_start`, exactly one `agent.idle` per `agent_end` (regardless of `stopReason`), start always before idle for the same turn. A body that has not started any turn has published nothing — observers treat it as **idle by default**; the "this agent exists" signal at boot is `system.team.loaded`, not a startup `agent.idle`.
+**Body-side alternation.** Per body, `agent.turn.start` and `agent.idle` strictly alternate: exactly one `agent.turn.start` per pi-agent `turn_start`, exactly one `agent.idle` per `agent_end` (regardless of `stopReason`), start always before idle for the same turn. A body that has not started any turn has published nothing — observers treat it as **idle by default**; the "this agent exists" signal at boot is `system.team.loaded`, not a startup `agent.idle`. The publication of `agent.turn.start` is deferred from pi's `turn_start` (which carries no prompt identity) to the turn's next pi event, where the body resolves the payload; the deferred publication precedes all of the turn's own events on the bus, so the ordering above holds.
 
 **Bus-side in-order delivery.** `InProcessEventBus` dispatches synchronously in subscription order, so per-body event order is preserved end-to-end.
 

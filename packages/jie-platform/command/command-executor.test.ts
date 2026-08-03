@@ -1,5 +1,6 @@
 import { type Api, type Model } from "@earendil-works/pi-ai";
 import { type AuthStore, type ModelRegistry, type Settings, type SettingsStore } from "../config";
+import { type EventManager } from "../event";
 import { JiePlatformError } from "../jie-platform-errors";
 import { type GitService, type GitSnapshot } from "../services";
 import { type TeamManager } from "../team";
@@ -27,10 +28,12 @@ const modelRegistry = vi.mocked<ModelRegistry>({
   resolve: vi.fn(),
   listModels: vi.fn(),
   getApiKey: vi.fn(),
+  reload: vi.fn(),
 });
 
 const teamManager = vi.mocked<TeamManager>({
   load: vi.fn(),
+  reload: vi.fn(),
   resumeSession: vi.fn(),
   renameSession: vi.fn(),
   listInstalled: vi.fn(),
@@ -44,6 +47,11 @@ const teamManager = vi.mocked<TeamManager>({
 
 const gitService = vi.mocked<GitService>({
   getSnapshot: vi.fn(),
+});
+
+const eventManager = vi.mocked<EventManager>({
+  publish: vi.fn(),
+  subscribe: vi.fn(),
 });
 
 const DEFAULT_SETTINGS: Settings = {
@@ -71,7 +79,7 @@ function fakeModel(provider: "anthropic" | "openai", id: string, name: string): 
 let executor: CommandExecutorImpl;
 
 beforeEach(() => {
-  executor = new CommandExecutorImpl(authStore, settingsStore, modelRegistry, teamManager, gitService);
+  executor = new CommandExecutorImpl(authStore, settingsStore, modelRegistry, teamManager, gitService, eventManager);
   settingsStore.load.mockReturnValue(DEFAULT_SETTINGS);
   authStore.load.mockReturnValue({});
   gitService.getSnapshot.mockReturnValue(EMPTY_GIT_SNAPSHOT);
@@ -172,6 +180,16 @@ describe("CommandExecutorImpl", () => {
       const result = await executor.execute({ name: "setDefaultEffort", effort: "high" });
       expect(result).toBeNull();
       expect(settingsStore.setDefaultEffort).toHaveBeenCalledWith("high");
+    });
+
+    test("publishes user.effort.update so live agents apply the new effort", async () => {
+      await executor.execute({ name: "setDefaultEffort", effort: "high" });
+      expect(eventManager.publish).toHaveBeenCalledWith(expect.objectContaining({ type: "user.effort.update", payload: { effort: "high" } }));
+    });
+
+    test("does not publish for other commands", async () => {
+      await executor.execute({ name: "getDefaultEffort" });
+      expect(eventManager.publish).not.toHaveBeenCalled();
     });
   });
 
@@ -290,12 +308,25 @@ describe("CommandExecutorImpl", () => {
         leaderKey: "general-1",
         sessionName: null,
         history: [],
-        agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+        agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
       };
       teamManager.load.mockResolvedValue(identity);
       const result = await executor.execute({ name: "team", teamId: "alpha" });
       expect(result).toBe(identity);
       expect(teamManager.load).toHaveBeenCalledWith("alpha");
+    });
+  });
+
+  describe("reload", () => {
+    test("delegates to teamManager.reload and returns the reloaded teams", async () => {
+      const identities: TeamInfo[] = [
+        { id: "minimal", leaderKey: "general-1", sessionName: null, agents: [], history: [] },
+        { id: "alpha", leaderKey: "general-1", sessionName: null, agents: [], history: [] },
+      ];
+      teamManager.reload.mockResolvedValue(identities);
+      const result = await executor.execute({ name: "reload" });
+      expect(result).toBe(identities);
+      expect(teamManager.reload).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -410,6 +441,7 @@ describe("CommandExecutorImpl", () => {
         { name: "getModelFilters" },
         { name: "setDefaultTeam", teamId: "alpha" },
         { name: "team", teamId: "alpha" },
+        { name: "reload" },
         { name: "resumeSession", teamId: "alpha", sessionId: "s1" },
         { name: "renameSession", teamId: "alpha", sessionName: "my session" },
         { name: "getTeamInfo" },

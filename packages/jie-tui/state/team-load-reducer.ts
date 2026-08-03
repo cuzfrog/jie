@@ -26,6 +26,7 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
         isLeader: agent.isLeader,
         tools: agent.tools,
         subscribe: agent.subscribe,
+        skills: agent.skills,
         model: agent.model ?? existing.model,
       });
     } else {
@@ -80,6 +81,7 @@ function emptyAgent(agentId: AgentId, teamId: string, agent: AgentInfo): AgentUi
     isLeader: agent.isLeader,
     tools: agent.tools,
     subscribe: agent.subscribe,
+    skills: agent.skills,
     status: "idle",
     lastStopReason: null,
     model: agent.model,

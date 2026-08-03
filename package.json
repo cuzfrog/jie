@@ -1,6 +1,6 @@
 {
   "name": "@cuzfrog/jie",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "workspaces": ["packages/*"],
   "catalog": {
     "typescript": "7.0.2",

@@ -17,6 +17,8 @@ function makePlatform(): PlatformHandle {
     subscribe: vi.fn(() => () => undefined),
     prompt: vi.fn(),
     interrupt: vi.fn(),
+    dequeuePrompt: vi.fn(),
+    requeuePrompt: vi.fn(),
     teams: vi.fn(() => []),
     execute: vi.fn(async () => null),
     shutdown: vi.fn(),
@@ -117,6 +119,56 @@ describe("CommandHandlerImpl — prompt routing", () => {
     handler.handle("!ls");
     expect(prompt).not.toHaveBeenCalled();
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("no team loaded")));
+  });
+});
+
+describe("CommandHandlerImpl — skill invocation", () => {
+  function stateWithSkill(teamId: string, agentFocused: boolean): TuiState {
+    const agent = makeAgentUiState(`${teamId}:general-1`, { isLeader: true, skills: ["say-hello"] });
+    return makeTuiState({
+      teamId,
+      leaderAgentId: agent.agentId,
+      focusedAgentId: agentFocused ? agent.agentId : null,
+      agents: new Map([[agent.agentId, agent]]),
+    });
+  }
+
+  test("routes a skill the target agent has, passing the text through verbatim", () => {
+    const { platform, prompt } = makePlatform();
+    const { handler } = makeHandler(platform, stateWithSkill("alpha", true));
+    handler.handle("/skill:say-hello Cause");
+    expect(prompt).toHaveBeenCalledWith("alpha", "general-1", "/skill:say-hello Cause");
+  });
+
+  test("falls back to the leader when no agent is focused", () => {
+    const { platform, prompt } = makePlatform();
+    const { handler } = makeHandler(platform, stateWithSkill("alpha", false));
+    handler.handle("/skill:say-hello");
+    expect(prompt).toHaveBeenCalledWith("alpha", "general-1", "/skill:say-hello");
+  });
+
+  test("rejects a skill the target agent does not have", () => {
+    const { platform, prompt } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform, stateWithSkill("alpha", true));
+    handler.handle("/skill:deploy now");
+    expect(prompt).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("deploy")));
+  });
+
+  test("rejects a skill invocation when no team is loaded", () => {
+    const { platform, prompt } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/skill:say-hello");
+    expect(prompt).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("no team loaded")));
+  });
+
+  test("rejects a missing skill name", () => {
+    const { platform, prompt } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform, stateWithSkill("alpha", true));
+    handler.handle("/skill:");
+    expect(prompt).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/skill:<name>")));
   });
 });
 
@@ -363,7 +415,7 @@ describe("CommandHandlerImpl — /effort", () => {
     const { handler, dispatch } = makeHandler(platform);
     handler.handle("/effort high");
     expect(execute).toHaveBeenCalledWith({ name: "setDefaultEffort", effort: "high" });
-    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("default effort set to high")));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("effort set to high")));
   });
 
   test("/effort with an unknown level sets an error and does not dispatch", () => {
@@ -391,6 +443,66 @@ describe("CommandHandlerImpl — /effort", () => {
     handler.handle("/effort high");
     await new Promise((r) => setImmediate(r));
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/effort failed")));
+  });
+});
+
+describe("CommandHandlerImpl — /reload", () => {
+  const minimalIdentity = {
+    id: "minimal",
+    leaderKey: "general-1",
+    sessionName: null,
+    history: [],
+    agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+  };
+
+  test("/reload while any agent is busy sets an error banner and does not call execute", () => {
+    const { platform, execute } = makePlatform();
+    const busyAgent = makeAgentUiState("alpha:general-1", { isLeader: true, status: "busy" });
+    const state = makeTuiState({ teamId: "alpha", leaderAgentId: busyAgent.agentId, agents: new Map([[busyAgent.agentId, busyAgent]]) });
+    const { handler, dispatch } = makeHandler(platform, state);
+    handler.handle("/reload");
+    expect(execute).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("wait for the current response to finish")));
+  });
+
+  test("/reload dispatches the reload command and replies", () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => [minimalIdentity]);
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    handler.handle("/reload");
+    expect(execute).toHaveBeenCalledWith({ name: "reload" });
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("reloaded settings, manifests, and context files")));
+  });
+
+  test("/reload rehydrates the active team via switchTeam with its reloaded identity", async () => {
+    const { platform, execute } = makePlatform();
+    const alphaIdentity = { ...minimalIdentity, id: "alpha", agents: [{ ...minimalIdentity.agents[0]!, teamId: "alpha" }] };
+    execute.mockImplementationOnce(async () => [minimalIdentity, alphaIdentity]);
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("alpha", true));
+    handler.handle("/reload");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.switchTeam(alphaIdentity));
+  });
+
+  test("/reload with no team loaded replies without dispatching switchTeam", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => []);
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/reload");
+    await new Promise((r) => setImmediate(r));
+    expect(execute).toHaveBeenCalledWith({ name: "reload" });
+    const switchCalls = dispatch.mock.calls.filter(([a]) => a.type === "[ui] switch team");
+    expect(switchCalls).toHaveLength(0);
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("reloaded settings, manifests, and context files")));
+  });
+
+  test("/reload surfaces platform errors as an error banner", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async () => { throw new Error("manifest broken"); });
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    handler.handle("/reload");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/reload failed")));
   });
 });
 
@@ -426,7 +538,7 @@ describe("CommandHandlerImpl — /team", () => {
       leaderKey: "general-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     }));
     const { handler, dispatch } = makeHandler(platform);
     handler.handle("/team alpha");
@@ -439,7 +551,7 @@ describe("CommandHandlerImpl — /team", () => {
       leaderKey: "general-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     }));
   });
 
@@ -450,7 +562,7 @@ describe("CommandHandlerImpl — /team", () => {
       leaderKey: "general-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+      agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     } as const;
     execute.mockImplementation(async () => identity);
     const { handler, dispatch } = makeHandler(platform);
@@ -502,7 +614,7 @@ describe("CommandHandlerImpl — /resume", () => {
       leaderKey: "general-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     };
     execute.mockImplementationOnce(async () => identity);
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
@@ -518,7 +630,7 @@ describe("CommandHandlerImpl — /resume", () => {
       leaderKey: "general-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     };
     execute.mockImplementationOnce(async () => identity);
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
@@ -606,6 +718,7 @@ describe("SLASH_COMMAND_NAMES", () => {
       "model",
       "model-filter",
       "effort",
+      "reload",
       "team",
       "resume",
       "rename",

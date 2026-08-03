@@ -17,7 +17,7 @@ describe("EventManagerImpl", () => {
   });
 
   test("publish forwards the envelope to the bus keyed by its topic", () => {
-    const envelope = Events.userPrompt(sender, "t1", "hello", "general-1");
+    const envelope = Events.userPrompt(sender, "t1", "general-1", "hello");
     manager.publish(envelope);
     expect(bus.publish).toHaveBeenCalledWith("user.prompt", envelope);
   });
@@ -29,7 +29,7 @@ describe("EventManagerImpl", () => {
     });
     expect(bus.subscribe).toHaveBeenCalledTimes(1);
     const busCallback = bus.subscribe.mock.calls[0]![1]!;
-    const envelope = Events.userPrompt(sender, "t1", "hello", "general-1");
+    const envelope = Events.userPrompt(sender, "t1", "general-1", "hello");
     busCallback("user.prompt", envelope);
     expect(received).toEqual([envelope]);
   });

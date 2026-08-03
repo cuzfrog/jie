@@ -111,6 +111,7 @@ export interface SeedRole {
   readonly tools?: ReadonlyArray<string>;
   readonly model?: string;
   readonly subscribe?: ReadonlyArray<string>;
+  readonly skills?: ReadonlyArray<string>;
 }
 
 export function seedTeam(jieDir: string, teamId: string, leaderRole: string, roles: ReadonlyArray<SeedRole>): void {
@@ -126,9 +127,20 @@ export function seedTeam(jieDir: string, teamId: string, leaderRole: string, rol
     const modelLine = role.model !== undefined ? `model: ${role.model}\n` : "";
     const subscribe = role.subscribe ?? [];
     const subscribeYaml = subscribe.length === 0 ? "" : `\nsubscribe:\n${subscribe.map((t) => `  - ${t}`).join("\n")}`;
+    const skills = role.skills ?? [];
+    const skillsYaml = skills.length === 0 ? "" : `\nskills:\n${skills.map((s) => `  - ${s}`).join("\n")}`;
     writeFileSync(
       join(teamsDir, `${role.role}.md`),
-      `---\n${modelLine}${toolsYaml}${subscribeYaml}\n---\n${role.systemPrompt}\n`,
+      `---\n${modelLine}${toolsYaml}${subscribeYaml}${skillsYaml}\n---\n${role.systemPrompt}\n`,
     );
   }
+}
+
+export function seedSkill(jieDir: string, name: string, description: string, body: string): void {
+  const skillDir = join(jieDir, "skills", name);
+  mkdirSync(skillDir, { recursive: true });
+  writeFileSync(
+    join(skillDir, "SKILL.md"),
+    `---\ndescription: ${description}\n---\n${body}\n`,
+  );
 }

@@ -51,6 +51,8 @@ const JiePlatformErrorMessages = {
 
   INVALID_CONFIG: "Invalid configuration",
 
+  RELOAD_FAILED: "Reload failed to rebuild a team",
+
   NO_DEFAULT_PROVIDER: "No default provider is set",
   NO_TEAM: "No team is defined",
   NO_LEADER: "Team has no leader",

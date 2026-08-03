@@ -1,24 +1,26 @@
 import { truncateToWidth, wrapTextWithAnsi, type Component } from "@earendil-works/pi-tui";
-import type { StateStore } from "../../state";
+import type { MessageBlock, StateStore } from "../../state";
 import { THINKING_LABEL, style } from "../themes";
+import { formatDuration } from "./format-duration";
 
 export class ThinkingBlock implements Component {
   private readonly stateStore: StateStore;
-  private text: string;
+  private block: MessageBlock;
 
-  constructor(text: string, stateStore: StateStore) {
-    this.text = text;
+  constructor(block: MessageBlock, stateStore: StateStore) {
+    this.block = block;
     this.stateStore = stateStore;
   }
 
-  update(text: string): void {
-    this.text = text;
+  update(block: MessageBlock): void {
+    this.block = block;
   }
 
   render(width: number): string[] {
     const w = Math.max(1, width);
-    if (!this.stateStore.getState().thinkingExpanded) return [truncateToWidth(style("thinkingText")(THINKING_LABEL), w)];
-    return [style("thinkingText")(THINKING_LABEL), ...wrapTextWithAnsi(style("thinkingText")(this.text), w)];
+    const label = this.block.durationMs === undefined ? THINKING_LABEL : `Thought for ${formatDuration(this.block.durationMs)}`;
+    if (!this.stateStore.getState().thinkingExpanded) return [truncateToWidth(style("thinkingText")(label), w)];
+    return [style("thinkingText")(label), ...wrapTextWithAnsi(style("thinkingText")(this.block.text), w)];
   }
 
   invalidate(): void {}

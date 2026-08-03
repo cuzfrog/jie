@@ -30,6 +30,6 @@ export class ChatMessagesImpl implements ChatMessages {
   }
 
   createInfoMessage(entry: InfoEntry): Component {
-    return new InfoMessage(this.stateStore, entry);
+    return new InfoMessage(entry);
   }
 }

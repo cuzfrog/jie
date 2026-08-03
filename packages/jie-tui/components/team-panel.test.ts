@@ -156,7 +156,7 @@ describe("TeamPanel", () => {
   });
 
   test("tags the queue depth when prompts are queued", () => {
-    stateStore.getState.mockReturnValue(teamState({}, { [WORKER_ID]: { queue: ["a", "b"] } }));
+    stateStore.getState.mockReturnValue(teamState({}, { [WORKER_ID]: { queue: [{ text: "a", source: "user" }, { text: "b", source: "user" }] } }));
     expect(stripAnsi(new TeamPanel(stateStore).render(120)[3])).toContain("coder-1 q2");
   });
 

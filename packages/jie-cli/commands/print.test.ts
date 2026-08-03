@@ -23,6 +23,8 @@ function makeHandle(): { handle: JiePlatform; subscribes: Map<string, Handler> }
     subscribe: subscribeSpy,
     prompt: vi.fn(),
     interrupt: vi.fn(),
+    dequeuePrompt: vi.fn(),
+    requeuePrompt: vi.fn(),
     execute: dispatch,
     teams: () => [],
     shutdown: vi.fn(),
@@ -47,14 +49,27 @@ function makeTeam(teamId: string, agentKeys: ReadonlyArray<string>, leaderKey: s
     id: teamId,
     leaderKey,
     sessionName: null,
-    agents: agentKeys.map((k) => ({ teamId, role: k, agentKey: k, isLeader: k === leaderKey, tools: [], subscribe: [], model: null })),
+    agents: agentKeys.map((k) => ({ teamId, role: k, agentKey: k, isLeader: k === leaderKey, tools: [], subscribe: [], skills: [], model: null })),
     history: [],
   };
 }
 
 const baseArgs = { kind: "print", instruction: "hi", team: undefined, timeout: 30, json: false, apiKey: undefined, resume: undefined, inMemory: false } as const;
 
+class ProcessExitError extends Error {
+  constructor(readonly exitCode: number | undefined) {
+    super(`process.exit(${exitCode})`);
+  }
+}
+
 describe("runPrint", () => {
+  let processExitSpy: { mockRestore(): void } | null = null;
+
+  afterEach(() => {
+    processExitSpy?.mockRestore();
+    processExitSpy = null;
+  });
+
   test("happy path: subscribes to agent.stream.chunk, publishes leader.prompt, waits for agent.idle, then stop()s", async () => {
     const { handle, subscribes } = makeHandle();
     const teamId = "t1";
@@ -161,6 +176,96 @@ describe("runPrint", () => {
     const elapsed = Date.now() - start;
     expect(code).toBe(0);
     expect(elapsed).toBeGreaterThanOrEqual(25);
+  });
+
+  test("SIGINT interrupts the leader instead of exiting, and returns 130 once the team idles", async () => {
+    const { handle, subscribes } = makeHandle();
+    const teamId = "t1";
+    const leaderKey = "general-1";
+    const team = makeTeam(teamId, [leaderKey], leaderKey);
+
+    setImmediate(() => {
+      subscribes.get("agent.turn.start")?.({
+        sender: { kind: "agent", teamId, agentKey: leaderKey },
+        payload: {},
+      });
+      process.emit("SIGINT");
+      setTimeout(() => {
+        subscribes.get("agent.idle")?.({
+          sender: { kind: "agent", teamId, agentKey: leaderKey },
+          payload: {},
+        });
+      }, 10);
+    });
+
+    const code = await runPrint(handle, team, baseArgs, makeConsoleMock());
+    expect(code).toBe(130);
+    expect(handle.interrupt).toHaveBeenCalledWith(teamId, leaderKey);
+    expect(handle.execute).toHaveBeenCalledWith({ name: "stop" });
+  });
+
+  test("a second SIGINT exits with code 130 without interrupting again", async () => {
+    const { handle, subscribes } = makeHandle();
+    const teamId = "t1";
+    const leaderKey = "general-1";
+    const team = makeTeam(teamId, [leaderKey], leaderKey);
+
+    const exitCodes: number[] = [];
+    processExitSpy = vi.spyOn(process, "exit").mockImplementation((code?: number): never => {
+      exitCodes.push(code ?? 0);
+      throw new ProcessExitError(code);
+    });
+
+    const baselineListeners = new Set(process.listeners("SIGINT"));
+    setImmediate(() => {
+      subscribes.get("agent.turn.start")?.({
+        sender: { kind: "agent", teamId, agentKey: leaderKey },
+        payload: {},
+      });
+      const sigintListeners = process.listeners("SIGINT").filter((l) => !baselineListeners.has(l));
+      expect(sigintListeners).toHaveLength(1);
+      const fireSigint = sigintListeners[0]!;
+      fireSigint("SIGINT");
+      try {
+        fireSigint("SIGINT");
+      } catch (error) {
+        if (!(error instanceof ProcessExitError)) throw error;
+      }
+      setTimeout(() => {
+        subscribes.get("agent.idle")?.({
+          sender: { kind: "agent", teamId, agentKey: leaderKey },
+          payload: {},
+        });
+      }, 10);
+    });
+
+    const code = await runPrint(handle, team, baseArgs, makeConsoleMock());
+    expect(exitCodes).toEqual([130]);
+    expect(code).toBe(130);
+    expect(handle.interrupt).toHaveBeenCalledTimes(1);
+    expect(handle.interrupt).toHaveBeenCalledWith(teamId, leaderKey);
+  });
+
+  test("SIGINT before a gate timeout turns the timeout exit into 130", async () => {
+    const { handle, subscribes } = makeHandle();
+    const teamId = "t1";
+    const leaderKey = "general-1";
+    const team = makeTeam(teamId, [leaderKey], leaderKey);
+    const consoleMock = makeConsoleMock();
+
+    setImmediate(() => {
+      subscribes.get("agent.turn.start")?.({
+        sender: { kind: "agent", teamId, agentKey: leaderKey },
+        payload: {},
+      });
+      process.emit("SIGINT");
+    });
+
+    const code = await runPrint(handle, team, { ...baseArgs, timeout: 0.05 }, consoleMock);
+    expect(code).toBe(130);
+    expect(handle.interrupt).toHaveBeenCalledWith(teamId, leaderKey);
+    expect(handle.execute).toHaveBeenCalledWith({ name: "stop" });
+    expect(consoleMock.error).toHaveBeenCalledWith("no response from team within 0.05s");
   });
 
   test("agent.stream.chunk: only the leader's chunks are written; foreign-team and non-leader chunks are dropped", async () => {

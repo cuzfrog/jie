@@ -3,7 +3,7 @@ import type { TeamInfo } from "../types";
 
 type EventDef<S extends Sender, P = null> = { sender: S; payload: P };
 type EventDefinitions = {
-  "agent.turn.start": EventDef<AgentSender>;
+  "agent.turn.start": EventDef<AgentSender, string | null>;
   "agent.idle": EventDef<AgentSender, StopReason>;
   "agent.tool.call": EventDef<AgentSender, {
     tool_call_id: string;
@@ -26,11 +26,14 @@ type EventDefinitions = {
     block_type: "text" | "thinking";
     text: string;
   }>;
-  "agent.stream.end": EventDef<AgentSender, { stream_id: number; total_chunks: number }>;
+  "agent.stream.end": EventDef<AgentSender, { stream_id: number; total_chunks: number; thinking_durations: ReadonlyArray<number> }>;
   "agent.usage": EventDef<AgentSender, { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number }>;
-  "agent.prompt.queue.update": EventDef<AgentSender, { prompts: string[] }>;
+  "agent.prompt.queue.update": EventDef<AgentSender, { prompts: Array<{ text: string; source: "user" | "peer" }> }>;
   "agent.model.assigned": EventDef<AgentSender, { provider: string; model: string; effort: "off" | "low" | "medium" | "high" | "max" }>;
   "user.prompt": EventDef<UserSender, { teamId: string; agentKey: string; prompt: string }>;
+  "user.prompt.dequeue": EventDef<UserSender, { teamId: string; agentKey: string; prompt: string }>;
+  "user.prompt.requeue": EventDef<UserSender, { teamId: string; agentKey: string; prompt: string }>;
+  "user.effort.update": EventDef<UserSender, { effort: "off" | "low" | "medium" | "high" | "max" }>;
   "system.team.loaded": EventDef<SystemSender, TeamInfo>;
   "agent.interrupt": EventDef<Sender, { teamId: string; agentKey: string }>;
   "system.error": EventDef<SystemSender, { error: string }>;
@@ -60,24 +63,30 @@ export const EVENT_TEXT_TRUNCATION_BYTES: number = 4 * 1024;
 const EVENT_TEXT_TRUNCATION_MARKER = "...[%d chars truncated]...";
 
 export const Events = {
-  agentTurnStart: (sender: AgentSender): EventEnvelope<"agent.turn.start"> =>
-    createEvent("agent.turn.start", sender),
+  agentTurnStart: (sender: AgentSender, prompt: string | null): EventEnvelope<"agent.turn.start"> =>
+    createEvent("agent.turn.start", sender, prompt),
   agentIdle: (sender: AgentSender, stopReason: StopReason): EventEnvelope<"agent.idle"> =>
     createEvent("agent.idle", sender, stopReason),
   agentToolCall,
   agentToolResult,
   agentStreamChunk: (sender: AgentSender, stream_id: number, seq: number, block_type: "text" | "thinking", text: string): EventEnvelope<"agent.stream.chunk"> =>
     createEvent("agent.stream.chunk", sender, { stream_id, seq, block_type, text }),
-  agentStreamEnd: (sender: AgentSender, stream_id: number, total_chunks: number): EventEnvelope<"agent.stream.end"> =>
-    createEvent("agent.stream.end", sender, { stream_id, total_chunks }),
+  agentStreamEnd: (sender: AgentSender, stream_id: number, total_chunks: number, thinking_durations: ReadonlyArray<number>): EventEnvelope<"agent.stream.end"> =>
+    createEvent("agent.stream.end", sender, { stream_id, total_chunks, thinking_durations }),
   agentUsage: (sender: AgentSender, usage: { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number }): EventEnvelope<"agent.usage"> =>
     createEvent("agent.usage", sender, usage),
-  agentPromptQueueUpdate: (sender: AgentSender, prompts: string[]): EventEnvelope<"agent.prompt.queue.update"> =>
+  agentPromptQueueUpdate: (sender: AgentSender, prompts: Array<{ text: string; source: "user" | "peer" }>): EventEnvelope<"agent.prompt.queue.update"> =>
     createEvent("agent.prompt.queue.update", sender, { prompts }),
   agentModelAssigned: (sender: AgentSender, provider: string, model: string, effort: "off" | "low" | "medium" | "high" | "max"): EventEnvelope<"agent.model.assigned"> =>
     createEvent("agent.model.assigned", sender, { provider, model, effort }),
-  userPrompt: (sender: UserSender, teamId: string, prompt: string, agentKey: string): EventEnvelope<"user.prompt"> =>
-    createEvent("user.prompt", sender, { teamId, prompt, agentKey }),
+  userPrompt: (sender: UserSender, teamId: string, agentKey: string, prompt: string): EventEnvelope<"user.prompt"> =>
+    createEvent("user.prompt", sender, { teamId, agentKey, prompt }),
+  userPromptDequeue: (sender: UserSender, teamId: string, agentKey: string, prompt: string): EventEnvelope<"user.prompt.dequeue"> =>
+    createEvent("user.prompt.dequeue", sender, { teamId, agentKey, prompt }),
+  userPromptRequeue: (sender: UserSender, teamId: string, agentKey: string, prompt: string): EventEnvelope<"user.prompt.requeue"> =>
+    createEvent("user.prompt.requeue", sender, { teamId, agentKey, prompt }),
+  userEffortUpdate: (sender: UserSender, effort: "off" | "low" | "medium" | "high" | "max"): EventEnvelope<"user.effort.update"> =>
+    createEvent("user.effort.update", sender, { effort }),
   teamLoaded: (sender: SystemSender, info: TeamInfo): EventEnvelope<"system.team.loaded"> =>
     createEvent("system.team.loaded", sender, info),
   agentInterrupt: (sender: Sender, teamId: string, agentKey: string): EventEnvelope<"agent.interrupt"> =>

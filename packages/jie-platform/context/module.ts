@@ -5,7 +5,7 @@ import { loadContextFiles } from "./load-context-files";
 
 export function registerContextModule(container: AwilixContainer<PlatformCradle>): void {
   container.register({
-    systemContextBlock: asFunction((cwd: string, homeJieDir: string) =>
+    loadSystemContextBlock: asFunction((cwd: string, homeJieDir: string) => () =>
       formatContextFilesForPrompt(loadContextFiles({ cwd, homeJieDir }))
     ).singleton(),
   });

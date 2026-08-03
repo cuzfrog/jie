@@ -1,6 +1,6 @@
 import { assertLlmReachable, seedTeam, FIXTURE } from "../_fixture.ts";
 import { loadMockExpectations } from "../../../packages/mock-llm-backend";
-import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, waitForTransient, sendCmd, sendLine, type TuiHarness } from "./harness";
+import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, waitForTransient, waitForAgent, waitForAgentEffort, sendCmd, sendLine, type TuiHarness } from "./harness";
 import expectations from "./scenario-1.llm.ts";
 
 describe("Scenario 1 — simple agent", () => {
@@ -45,14 +45,31 @@ describe("Scenario 1 — simple agent", () => {
     expect(agent?.contextTokensUsed).toBeGreaterThan(0);
   });
 
-  test("/effort high becomes the default effort for teams loaded thereafter", async () => {
-    await sendLine(harness.stdin, "/effort high");
-    await waitForTransient(harness, "default effort set to high");
+  test("/effort high applies immediately to the live agent", async () => {
     await sendLine(harness.stdin, "/team my-team");
     await waitForTeam(harness, "my-team");
+    expect(harness.stateStore.getState().agents.get("my-team:general-1")?.model?.effort).toBe("off");
+    await sendLine(harness.stdin, "/effort high");
+    await waitForTransient(harness, "effort set to high");
+    await waitForAgentEffort(harness, "my-team:general-1", "high");
     const agent = harness.stateStore.getState().agents.get("my-team:general-1");
     expect(agent?.model?.provider).toBe(FIXTURE.provider);
-    expect(agent?.model?.effort).toBe("high");
+  });
+
+  test("/reload rebuilds the loaded team from the edited manifest", async () => {
+    await sendLine(harness.stdin, "/team my-team");
+    await waitForTeam(harness, "my-team");
+    expect(harness.stateStore.getState().agents.has("my-team:qa-1")).toBe(false);
+    seedTeam(harness.dir, "my-team", "general", [
+      { role: "general", systemPrompt: "You answer briefly.", tools: [] },
+      { role: "qa", systemPrompt: "You review.", tools: [] },
+    ]);
+    await sendLine(harness.stdin, "/reload");
+    await waitForTransient(harness, "reloaded settings, manifests, and context files");
+    await waitForAgent(harness, "my-team:qa-1");
+    const state = harness.stateStore.getState();
+    expect(state.teamId).toBe("my-team");
+    expect(state.agents.get("my-team:general-1")?.status).toBe("idle");
   });
 
   test("/rename names the active session and the name appears in listSessions", async () => {

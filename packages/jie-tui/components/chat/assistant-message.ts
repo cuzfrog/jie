@@ -1,6 +1,7 @@
-import { Markdown, visibleWidth, type Component } from "@earendil-works/pi-tui";
-import type { MessageCard, MessageTurn, StateStore } from "../../state";
+import { Markdown, truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
+import type { MessageBlock, MessageCard, MessageTurn, StateStore } from "../../state";
 import { ASSISTANT_PREFIX, jieMarkdownTheme, style } from "../themes";
+import { formatDuration } from "./format-duration";
 import { ThinkingBlock } from "./thinking-block";
 import { ToolCard } from "./tool-card";
 
@@ -27,15 +28,21 @@ export class AssistantMessage implements Component {
     const turn = this.turn;
     if (turn === null) return [];
     const w = Math.max(1, width);
+    const { thinkingExpanded, toolCardsExpanded } = this.stateStore.getState();
     const lines: string[] = [];
     let textOrdinal = 0;
     let thinkingOrdinal = 0;
     let cardOrdinal = 0;
     let prefixed = false;
+    let aggregatedThinkingMs: number | null = null;
     for (const block of turn.blocks) {
       if (block.text === "") continue;
       if (block.kind === "thinking") {
-        lines.push(...this.thinkingAt(thinkingOrdinal, block.text).render(w));
+        if (!thinkingExpanded && block.durationMs !== undefined) {
+          aggregatedThinkingMs = (aggregatedThinkingMs ?? 0) + block.durationMs;
+          continue;
+        }
+        lines.push(...this.thinkingAt(thinkingOrdinal, block).render(w));
         thinkingOrdinal += 1;
         continue;
       }
@@ -49,10 +56,17 @@ export class AssistantMessage implements Component {
       }
       prefixed = true;
     }
+    const aggregatedCards: MessageCard[] = [];
     for (const card of turn.cards) {
+      if (!toolCardsExpanded && isAggregatableCard(card)) {
+        aggregatedCards.push(card);
+        continue;
+      }
       lines.push(...this.cardAt(cardOrdinal, card).render(w));
       cardOrdinal += 1;
     }
+    const summary = summarizeWork(aggregatedThinkingMs, aggregatedCards);
+    if (summary !== null) lines.push(truncateToWidth(style("thinkingText")(summary), w));
     return lines;
   }
 
@@ -73,14 +87,14 @@ export class AssistantMessage implements Component {
     return existing;
   }
 
-  private thinkingAt(ordinal: number, text: string): ThinkingBlock {
+  private thinkingAt(ordinal: number, block: MessageBlock): ThinkingBlock {
     const existing = this.thinkings[ordinal];
     if (existing === undefined) {
-      const created = new ThinkingBlock(text, this.stateStore);
+      const created = new ThinkingBlock(block, this.stateStore);
       this.thinkings.push(created);
       return created;
     }
-    existing.update(text);
+    existing.update(block);
     return existing;
   }
 
@@ -95,3 +109,29 @@ export class AssistantMessage implements Component {
     return existing;
   }
 }
+
+function isAggregatableCard(card: MessageCard): boolean {
+  if (card.kind !== "toolResult") return false;
+  if (card.error !== undefined && card.error !== null && card.error !== "") return false;
+  return !hasDiffDetail(card.details);
+}
+
+function hasDiffDetail(details: MessageCard["details"]): boolean {
+  return typeof details === "object" && details !== null && "kind" in details && details.kind === "diff";
+}
+
+function summarizeWork(thinkingMs: number | null, cards: ReadonlyArray<MessageCard>): string | null {
+  if (thinkingMs === null && cards.length === 0) return null;
+  const parts: string[] = [];
+  if (thinkingMs !== null) parts.push(`Thought for ${formatDuration(thinkingMs)}`);
+  const usageCounts = new Map<string, number>();
+  for (const card of cards) usageCounts.set(card.name, (usageCounts.get(card.name) ?? 0) + 1);
+  for (const [name, count] of usageCounts) parts.push(`used ${name} ${count} ${count === 1 ? "time" : "times"}`);
+  if (cards.length > 0) {
+    const totalMs = (thinkingMs ?? 0) + cards.reduce((sum, card) => sum + (card.durationMs ?? 0), 0);
+    if (totalMs > 0) parts.push(`total ${formatDuration(totalMs)}`);
+  }
+  return parts.join(", ");
+}
+
+export { summarizeWork as _summarizeWork };

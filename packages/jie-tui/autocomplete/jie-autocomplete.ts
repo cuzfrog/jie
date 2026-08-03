@@ -33,6 +33,7 @@ export class JieAutocompleteProviderImpl implements JieAutocompleteProvider {
   readonly triggerCharacters = ["@", "/"];
   private readonly cwd: string;
   private readonly scan: (rootDir: string) => ReadonlyArray<ScannedFile>;
+  private readonly stateStore: StateStore;
   private readonly commands: SlashCommand[];
   private readonly combined: CombinedAutocompleteProvider;
   private modelFilteredOutCount: number | null = null;
@@ -40,6 +41,7 @@ export class JieAutocompleteProviderImpl implements JieAutocompleteProvider {
   constructor(cwd: string, scan: (rootDir: string) => ReadonlyArray<ScannedFile>, platform: JiePlatform, stateStore: StateStore) {
     this.cwd = cwd;
     this.scan = scan;
+    this.stateStore = stateStore;
     this.commands = slashCommands(platform, stateStore, (count) => {
       this.modelFilteredOutCount = count;
     });
@@ -59,7 +61,10 @@ export class JieAutocompleteProviderImpl implements JieAutocompleteProvider {
       const drillDown = await drillDownSuggestions(this.commands, textBeforeCursor);
       if (drillDown !== null) return withFilteredOut(drillDown, this.modelFilteredOutCount);
       const combined = await this.combined.getSuggestions(lines, cursorLine, cursorCol, options);
-      return withFilteredOut(combined, this.modelFilteredOutCount);
+      const skills = this.skillSuggestions(textBeforeCursor);
+      if (skills === null) return withFilteredOut(combined, this.modelFilteredOutCount);
+      if (combined === null) return withFilteredOut(skills, this.modelFilteredOutCount);
+      return withFilteredOut({ items: [...combined.items, ...skills.items], prefix: combined.prefix }, this.modelFilteredOutCount);
     }
     const items = fileItems(query, this.scan, this.cwd);
     if (items.length === 0) return null;
@@ -74,6 +79,19 @@ export class JieAutocompleteProviderImpl implements JieAutocompleteProvider {
     prefix: string,
   ): { lines: string[]; cursorLine: number; cursorCol: number } {
     return this.combined.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
+  }
+
+  private skillSuggestions(textBeforeCursor: string): AutocompleteSuggestions | null {
+    if (!textBeforeCursor.startsWith("/") || /\s/.test(textBeforeCursor)) return null;
+    const query = textBeforeCursor.slice(1);
+    const candidates = targetAgentSkills(this.stateStore).map((name) => `skill:${name}`);
+    if (candidates.length === 0 || isAlreadyComplete(candidates, query)) return null;
+    const matches = fuzzyFilter(candidates, query, (candidate) => candidate).slice(0, MAX_SUGGESTIONS);
+    if (matches.length === 0) return null;
+    return {
+      items: matches.map((candidate): AutocompleteItem => ({ value: candidate, label: candidate })),
+      prefix: textBeforeCursor,
+    };
   }
 }
 
@@ -213,6 +231,16 @@ function effortItems(prefix: string): AutocompleteItem[] | null {
     .filter((level) => hasPrefix(level, prefix))
     .map((level): AutocompleteItem => ({ value: level, label: level }));
   return items.length === 0 ? null : items;
+}
+
+function targetAgentSkills(stateStore: StateStore): ReadonlyArray<string> {
+  const state = stateStore.getState();
+  for (const agentId of [state.focusedAgentId, state.leaderAgentId]) {
+    if (agentId === null) continue;
+    const agent = state.agents.get(agentId);
+    if (agent !== undefined) return agent.skills;
+  }
+  return [];
 }
 
 function withFilteredOut(suggestions: AutocompleteSuggestions | null, filteredOut: number | null): JieSuggestions | null {

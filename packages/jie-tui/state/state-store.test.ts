@@ -10,12 +10,12 @@ describe("StateStore", () => {
       leaderKey: "general-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+      agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     })));
     store.subscribe((action) => {
       if (action.type === Actions.submitEditorText("").type) {
         store.dispatch(
-          Actions.receiveEvent(Events.userPrompt({ kind: "user" }, "my-team", "hello", "general-1")),
+          Actions.receiveEvent(Events.agentTurnStart({ kind: "agent", teamId: "my-team", agentKey: "general-1" }, "hello")),
         );
         return Promise.resolve();
       }

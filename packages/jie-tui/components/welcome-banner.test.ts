@@ -1,7 +1,7 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { type AgentId, type AgentUiState, type MessageTurn, type StateStore, type TuiState } from "../state";
 import { makeAgentUiState, makeTuiState } from "../test";
-import { WelcomeBanner, welcomeLines } from "./welcome-banner";
+import { WelcomeBanner, helpLines } from "./welcome-banner";
 
 const LEADER_ID: AgentId = "my-team:general-1";
 const QA_ID: AgentId = "my-team:qa-1";
@@ -32,29 +32,11 @@ describe("WelcomeBanner", () => {
     expect(text).not.toContain("Teams:");
   });
 
-  test("shows a Team section with the roster table without the ctx column", () => {
+  test("omits the roster even when a team is loaded — the team strip shows it", () => {
     stateStore.getState.mockReturnValue(stateWithTeamAndModel());
     const text = new WelcomeBanner(stateStore).render(80).map(stripAnsi).join("\n");
-    expect(text).toContain("general-1 leader");
-    expect(text).toContain("qa-1");
-    expect(text).toContain("gpt-4o");
-    expect(text).not.toContain("ctx");
-  });
-
-  test("the splash team table stays plain when an agent is focused or the team cursor is set", () => {
-    const state = stateWithTeamAndModel();
-    stateStore.getState.mockReturnValue({ ...state, focusedAgentId: LEADER_ID, teamCursorAgentId: QA_ID });
-    const lines = new WelcomeBanner(stateStore).render(80);
-    const text = lines.map(stripAnsi).join("\n");
-    expect(text).not.toContain("▸");
-    expect(lines.some((line) => line.includes("\x1b[36mgeneral-1"))).toBe(false);
-  });
-
-  test("omits the Team section when no roster is loaded", () => {
-    stateStore.getState.mockReturnValue(makeTuiState({ installedTeams: [{ id: "my-team", agentCount: 2 }] }));
-    const lines = new WelcomeBanner(stateStore).render(80).map(stripAnsi);
-    expect(lines.some((line) => line.includes("Teams: "))).toBe(true);
-    expect(lines).not.toContain("Team");
+    expect(text).not.toContain("general-1");
+    expect(text).not.toContain("gpt-4o");
   });
 
   test("shows the version next to the wordmark", () => {
@@ -121,9 +103,14 @@ describe("WelcomeBanner", () => {
     expect(lines.some((line) => line.includes("\x1b[33m<provider> <apiKey>\x1b[39m"))).toBe(true);
   });
 
-  test("the splash renders exactly the full /help content", () => {
-    stateStore.getState.mockReturnValue(stateWithTeamAndModel());
-    expect(new WelcomeBanner(stateStore).render(80)).toEqual(welcomeLines(stateStore.getState(), 80));
+  test("helpLines renders Commands and Shortcuts without the mark or identity", () => {
+    const text = helpLines(80).map(stripAnsi).join("\n");
+    expect(text).toContain("Commands");
+    expect(text).toContain("Shortcuts");
+    expect(text).not.toContain("█");
+    expect(text).not.toContain("(jiè)");
+    expect(text).not.toContain("Teams:");
+    expect(text).not.toContain("general-1");
   });
 
   test("hides the banner once a turn is in progress", () => {
@@ -147,9 +134,8 @@ describe("WelcomeBanner", () => {
   });
 
   test("every full-help line fits the given width", () => {
-    stateStore.getState.mockReturnValue(stateWithTeamAndModel());
     for (const width of [13, 40, 60, 80, 139]) {
-      for (const line of welcomeLines(stateStore.getState(), width)) {
+      for (const line of helpLines(width)) {
         expect(visibleWidth(line)).toBeLessThanOrEqual(width);
       }
     }

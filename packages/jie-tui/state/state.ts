@@ -24,6 +24,7 @@ export interface MessageCard {
 export interface MessageBlock {
   readonly kind: "text" | "thinking";
   readonly text: string;
+  readonly durationMs?: number;
 }
 
 export interface MessageTurn {
@@ -49,9 +50,10 @@ export interface AgentUiState {
   readonly isLeader: boolean;
   readonly tools: ReadonlyArray<string>;
   readonly subscribe: ReadonlyArray<string>;
+  readonly skills: ReadonlyArray<string>;
   readonly status: AgentStatus;
   readonly model: ModelReference | null;
-  readonly queue: ReadonlyArray<string>;
+  readonly queue: ReadonlyArray<{ readonly text: string; readonly source: "user" | "peer" }>;
   readonly history: MessageTurn[];
   readonly currentTurn: MessageTurn | null;
   readonly lastStopReason: StopReason | null;

@@ -3,6 +3,7 @@ import { Actions, TuiState, type Action, type StateStore } from "../state";
 import type { ChatSync } from "../sync";
 import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, WORKING_LABEL, style } from "./themes";
 import { StatusLine } from "./status-line";
+import { QueuedPrompts } from "./queued-prompts";
 import { WelcomeBanner } from "./welcome-banner";
 import { TeamPanel } from "./team-panel";
 
@@ -37,10 +38,10 @@ export class TuiViewImpl implements TuiView {
     const chatContainer = new Container();
     const editor = jieEditorFactory(tui);
     this.workingSlot = new Container();
-    this.workingIndicator = new Loader(tui, style("accent"), style("muted"), WORKING_LABEL, {
+    this.workingIndicator = new FlushLoader(tui, style("accent"), style("muted"), WORKING_LABEL, {
       frames: [...SPINNER_FRAMES], intervalMs: SPINNER_INTERVAL_MS,
     });
-    this.interruptedIndicator = new Loader(tui, style("muted"), style("muted"), INTERRUPTED_LABEL, {
+    this.interruptedIndicator = new FlushLoader(tui, style("muted"), style("muted"), INTERRUPTED_LABEL, {
       frames: NO_SPINNER_FRAMES,
     });
     tui.addChild(chatContainer);
@@ -48,6 +49,7 @@ export class TuiViewImpl implements TuiView {
     tui.addChild(this.workingSlot);
     tui.addChild(new WelcomeBanner(stateStore));
     tui.addChild(new StatusLine(stateStore));
+    tui.addChild(new QueuedPrompts(stateStore));
     tui.addChild(editor);
     tui.addChild(footer);
     tui.addChild(new TeamPanel(stateStore));
@@ -91,6 +93,12 @@ export class TuiViewImpl implements TuiView {
   }
 }
 
+class FlushLoader extends Loader {
+  render(width: number): string[] {
+    return super.render(width).map((line) => (line.startsWith(" ") ? line.slice(1) : line));
+  }
+}
+
 function resolveGlobalKey(data: string): Action | null {
   if (data === CTRL_T) return Actions.toggleThinking();
   if (data === CTRL_O) return Actions.toggleToolCards();
@@ -131,6 +139,7 @@ function syncWorkingSlot(slot: Container, working: Loader, interrupted: Loader, 
 }
 
 export {
+  FlushLoader as _FlushLoader,
   resolveGlobalKey as _resolveGlobalKey,
   resolveTeamCursorDirection as _resolveTeamCursorDirection,
   shouldCommitTeamCursor as _shouldCommitTeamCursor,

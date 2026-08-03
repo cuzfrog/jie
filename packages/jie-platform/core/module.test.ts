@@ -49,6 +49,7 @@ const toolRegistry = vi.mocked<ToolRegistry>({
 
 const skillManager = vi.mocked<SkillManager>({
   resolve: vi.fn(() => []),
+  reload: vi.fn(),
 });
 
 const hookRunner = vi.mocked<HookRunner>({
@@ -65,6 +66,7 @@ const modelRegistry = vi.mocked<ModelRegistry>({
   resolve: vi.fn(() => undefined),
   listModels: vi.fn(() => []),
   getApiKey: vi.fn(() => undefined),
+  reload: vi.fn(),
 });
 
 function bootedContainer(): AwilixContainer<PlatformCradle> {
@@ -75,7 +77,7 @@ function bootedContainer(): AwilixContainer<PlatformCradle> {
     memoryManager: asValue(memoryManager),
     toolRegistry: asValue(toolRegistry),
     skillManager: asValue(skillManager),
-    systemContextBlock: asValue(""),
+    loadSystemContextBlock: asValue(() => ""),
     hookRunner: asValue(hookRunner),
     cwd: asValue("/work"),
     modelRegistry: asValue(modelRegistry),
@@ -135,6 +137,7 @@ describe("registerCoreModule", () => {
       isLeader: true,
       tools: [],
       subscribe: [],
+      skills: [],
       model: null,
     });
     body.stop();

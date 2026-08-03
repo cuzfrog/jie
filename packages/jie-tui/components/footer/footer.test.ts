@@ -62,6 +62,13 @@ describe("Footer", () => {
     expect(plain.trimStart().startsWith("(anthropic)")).toBe(false);
   });
 
+  test("line two shows the /help hint between the context metrics and the model", () => {
+    stateStore.getState.mockReturnValue(seededStateWithModel());
+    const plain = stripAnsi(new Footer(stateStore).render(80)[1]);
+    expect(plain).toContain("/help to show commands and shortcuts");
+    expect(plain.indexOf("/help to show commands and shortcuts")).toBeLessThan(plain.indexOf("(anthropic)"));
+  });
+
   test("every line fits the given width", () => {
     stateStore.getState.mockReturnValue(seededState(true));
     const lines = new Footer(stateStore).render(60);

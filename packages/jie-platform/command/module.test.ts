@@ -1,6 +1,7 @@
 import { asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import type { AuthStore, ModelRegistry, SettingsStore } from "../config";
 import type { PlatformCradle } from "../container";
+import type { EventManager } from "../event";
 import type { GitService, GitSnapshot } from "../services";
 import type { TeamManager } from "../team";
 import { registerCommandModule } from "./module";
@@ -26,10 +27,12 @@ const modelRegistry = vi.mocked<ModelRegistry>({
   resolve: vi.fn(),
   listModels: vi.fn(),
   getApiKey: vi.fn(),
+  reload: vi.fn(),
 });
 
 const teamManager = vi.mocked<TeamManager>({
   load: vi.fn(),
+  reload: vi.fn(),
   listInstalled: vi.fn(),
   agentCount: vi.fn(),
   listLoaded: vi.fn(),
@@ -45,6 +48,11 @@ const gitService = vi.mocked<GitService>({
   getSnapshot: vi.fn(),
 });
 
+const eventManager = vi.mocked<EventManager>({
+  publish: vi.fn(),
+  subscribe: vi.fn(),
+});
+
 function bootedContainer(): AwilixContainer<PlatformCradle> {
   const container = createContainer<PlatformCradle>({ injectionMode: InjectionMode.CLASSIC });
   container.register({
@@ -53,6 +61,7 @@ function bootedContainer(): AwilixContainer<PlatformCradle> {
     modelRegistry: asValue(modelRegistry),
     teamManager: asValue(teamManager),
     gitService: asValue(gitService),
+    eventManager: asValue(eventManager),
   });
   registerCommandModule(container);
   return container;

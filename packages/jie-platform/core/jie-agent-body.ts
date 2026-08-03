@@ -3,7 +3,7 @@ import type { Api, AssistantMessage, Model, StopReason, TextContent, UserMessage
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { ExecutionContext, ToolRegistry } from "../tools";
-import type { SkillManager } from "../skills";
+import { expandSkillInvocation, type Skill, type SkillManager } from "../skills";
 import type { HookIdentity, HookRunner } from "../hooks";
 import { composeSystemPrompt } from "../prompt";
 import { Events, type AgentSender, type EventManager } from "../event";
@@ -12,6 +12,8 @@ import { StreamPublisherImpl, type StreamPublisher } from "./streaming";
 import { adaptToolToAgent } from "./tool-adapter";
 import { JiePlatformError } from "../jie-platform-errors";
 import type { AgentInfo, EffortLevel, ModelInfo } from "../types";
+
+const DEQUEUED_PROMPT_CAP = 32;
 
 interface AgentBodyDeps {
   readonly eventManager: EventManager;
@@ -27,10 +29,10 @@ interface AgentBodyDeps {
 }
 
 export class JieAgentBody implements AgentBody {
-  readonly identity: AgentInfo;
   private readonly agentKey: string;
   private readonly teamId: string;
   private readonly soul: AgentBodyParams["soul"];
+  private readonly isLeader: boolean;
   private readonly sessionId: string;
   private readonly eventManager: EventManager;
   private readonly memory: MemoryManager;
@@ -39,11 +41,18 @@ export class JieAgentBody implements AgentBody {
   private readonly agent: Agent;
   private readonly stream: StreamPublisher;
   private readonly sender: AgentSender;
-  private readonly queue: AgentMessage[] = [];
+  private readonly queue: QueuedPrompt[] = [];
+  private readonly dequeuedPrompts: QueuedPrompt[] = [];
+  private readonly resolvedSkills: ReadonlyArray<Skill>;
+  private modelInfo: ModelInfo | null;
+  private pendingTurnPrompt: string | null = null;
+  private turnStartPending = false;
+  private readonly followUpLabels: Map<AgentMessage, string | null> = new Map();
   private readonly unsubscribers: Array<() => void> = [];
   private readonly externalCleanups: Array<() => void> = [];
   private restored: ReadonlyArray<AgentMessage> | null = null;
   private started = false;
+  private stopped = false;
 
   constructor(params: AgentBodyParams, deps: AgentBodyDeps) {
     this.agentKey = params.agentKey;
@@ -127,32 +136,37 @@ export class JieAgentBody implements AgentBody {
         return undefined;
       },
     });
-    const resolvedSkills = params.soul.skills.flatMap((spec) => deps.skillManager.resolve(spec));
+    this.resolvedSkills = params.soul.skills.flatMap((spec) => deps.skillManager.resolve(spec));
     this.agent.state.systemPrompt = composeSystemPrompt({
       rolePrompt: params.soul.systemPrompt,
       contextBlock: deps.systemContextBlock,
-      skills: resolvedSkills,
+      skills: this.resolvedSkills,
     });
+    this.isLeader = params.isLeader;
     this.agent.state.thinkingLevel = effortToThinkingLevel(params.effort);
-    const bodyModel = resolveBodyModelInfo(params.model, this.agent.state.thinkingLevel);
+    this.modelInfo = resolveBodyModelInfo(params.model, this.agent.state.thinkingLevel);
     if (params.model !== undefined) {
       this.agent.state.model = params.model;
-      if (bodyModel !== null) {
-        this.eventManager.publish(Events.agentModelAssigned(this.sender, bodyModel.provider, bodyModel.id, bodyModel.effort));
+      if (this.modelInfo !== null) {
+        this.eventManager.publish(Events.agentModelAssigned(this.sender, this.modelInfo.provider, this.modelInfo.id, this.modelInfo.effort));
       }
     }
     this.agent.state.tools = adaptedTools;
-    this.identity = {
-      teamId: this.teamId,
-      role: params.soul.role,
-      agentKey: this.agentKey,
-      isLeader: params.isLeader,
-      tools: params.soul.tools,
-      subscribe: params.soul.subscribe,
-      model: bodyModel,
-    };
     const unsubscribeAgent = this.agent.subscribe((event, _signal) => this.handlePiAgentEvent(event));
     this.externalCleanups.push(unsubscribeAgent);
+  }
+
+  get identity(): AgentInfo {
+    return {
+      teamId: this.teamId,
+      role: this.soul.role,
+      agentKey: this.agentKey,
+      isLeader: this.isLeader,
+      tools: this.soul.tools,
+      subscribe: this.soul.subscribe,
+      skills: this.resolvedSkills.map((skill) => skill.name),
+      model: this.modelInfo,
+    };
   }
 
   async restore(): Promise<ReadonlyArray<AgentMessage>> {
@@ -188,13 +202,14 @@ export class JieAgentBody implements AgentBody {
       }
     }
 
-    while (this.queue.length > 0) {
-      const next = this.queue.shift()!;
-      await this.agent.prompt(next);
+    while (!this.stopped && this.queue.length > 0) {
+      this.drainQueue();
+      await this.agent.waitForIdle();
     }
   }
 
   stop(): void {
+    this.stopped = true;
     for (const off of this.unsubscribers) off();
     for (const off of this.externalCleanups) off();
     this.unsubscribers.length = 0;
@@ -203,16 +218,19 @@ export class JieAgentBody implements AgentBody {
 
   private handlePiAgentEvent(event: PiAgentEvent): void {
     const agentSender = this.sender;
+    if (event.type !== "turn_start") this.flushTurnStart(event);
     switch (event.type) {
       case "turn_start":
-        this.eventManager.publish(Events.agentTurnStart(agentSender));
+        this.turnStartPending = true;
         return;
       case "turn_end": {
-        if (this.queue.length > 0) {
+        const final = readFinalStopReason(event);
+        if (!final.isError && this.queue.length > 0) {
           const next = this.queue.shift()!;
-          this.agent.followUp(next);
+          this.followUpLabels.set(next.message, next.userText);
+          this.agent.followUp(next.message);
         }
-        this.eventManager.publish(Events.agentPromptQueueUpdate(agentSender, this.queue.map(userPromptText)));
+        this.publishQueueUpdate(agentSender);
         return;
       }
       case "agent_end": {
@@ -222,14 +240,13 @@ export class JieAgentBody implements AgentBody {
           this.eventManager.publish(Events.systemError({ kind: "system" }, final.errorMessage));
         }
         void this.hookRunner.stop({ identity: this.hookIdentity });
-        if (this.queue.length > 0) {
-          const next = this.queue.shift()!;
-          this.agent.followUp(next);
-        }
-        this.eventManager.publish(Events.agentPromptQueueUpdate(agentSender, this.queue.map(userPromptText)));
+        this.pendingTurnPrompt = null;
+        this.publishQueueUpdate(agentSender);
+        void this.agent.waitForIdle().then(() => this.drainQueue());
         return;
       }
       case "message_start":
+        if (event.message.role === "user") this.followUpLabels.delete(event.message);
         this.stream.beginStream();
         return;
       case "message_update": {
@@ -266,6 +283,18 @@ export class JieAgentBody implements AgentBody {
     }
   }
 
+  private flushTurnStart(event: PiAgentEvent): void {
+    if (!this.turnStartPending) return;
+    this.turnStartPending = false;
+    let label = this.pendingTurnPrompt;
+    this.pendingTurnPrompt = null;
+    if (event.type === "message_start" && event.message.role === "user") {
+      const supplied = this.followUpLabels.get(event.message);
+      if (supplied !== undefined) label = supplied;
+    }
+    this.eventManager.publish(Events.agentTurnStart(this.sender, label));
+  }
+
   private registerSubscriptions(): void {
     this.unsubscribers.push(
       this.eventManager.subscribe("user.prompt", (env) => {
@@ -275,6 +304,17 @@ export class JieAgentBody implements AgentBody {
       this.eventManager.subscribe("agent.interrupt", (env) => {
         if (env.payload.teamId !== this.teamId || env.payload.agentKey !== this.agentKey) return;
         this.interruptActiveRun();
+      }),
+      this.eventManager.subscribe("user.prompt.dequeue", (env) => {
+        if (env.payload.teamId !== this.teamId || env.payload.agentKey !== this.agentKey) return;
+        this.dequeuePrompt(env.payload.prompt);
+      }),
+      this.eventManager.subscribe("user.prompt.requeue", (env) => {
+        if (env.payload.teamId !== this.teamId || env.payload.agentKey !== this.agentKey) return;
+        this.requeuePrompt(env.payload.prompt);
+      }),
+      this.eventManager.subscribe("user.effort.update", (env) => {
+        this.applyEffort(env.payload.effort);
       }),
     );
     for (const topic of this.soul.subscribe) {
@@ -292,16 +332,19 @@ export class JieAgentBody implements AgentBody {
       this.eventManager.publish(Events.systemError({ kind: "system" }, outcome.reason ?? "prompt blocked by UserPromptSubmit hook"));
       return;
     }
-    const prompt = outcome.additionalContext === null ? payload.prompt : `${payload.prompt}\n\n${outcome.additionalContext}`;
-    this.dispatchIngress("user", null, prompt);
+    const expanded = expandSkillInvocation(payload.prompt, this.resolvedSkills) ?? payload.prompt;
+    const prompt = outcome.additionalContext === null ? expanded : `${expanded}\n\n${outcome.additionalContext}`;
+    const consumed = this.dequeuedPrompts.findIndex((entry) => entry.userText === payload.prompt);
+    if (consumed !== -1) this.dequeuedPrompts.splice(consumed, 1);
+    this.dispatchIngress("user", null, prompt, payload.prompt);
   }
 
   private ingestCustom(topic: string, sender: AgentSender, payload: { message: string; truncated: boolean }): void {
     if (sender.agentKey === this.agentKey) return;
-    this.dispatchIngress(topic, sender.agentKey, payload.message);
+    this.dispatchIngress(topic, sender.agentKey, payload.message, null);
   }
 
-  private dispatchIngress(topic: string, source: string | null, prompt: string): void {
+  private dispatchIngress(topic: string, source: string | null, prompt: string, userText: string | null): void {
     const synthetic = source !== null
       ? `[${source} on '${topic}']: ${prompt}`
       : `[user]: ${prompt}`;
@@ -310,17 +353,62 @@ export class JieAgentBody implements AgentBody {
       content: synthetic,
       timestamp: Date.now(),
     };
-    if (this.agent.state.isStreaming) {
-      this.queue.push(message);
-      this.eventManager.publish(Events.agentPromptQueueUpdate(this.sender, this.queue.map(userPromptText)));
-    } else {
-      void this.agent.prompt(message);
+    this.queue.push({ message, userText });
+    this.publishQueueUpdate(this.sender);
+    this.drainQueue();
+  }
+
+  private drainQueue(): void {
+    if (this.stopped || this.agent.state.isStreaming || this.queue.length === 0) return;
+    const next = this.queue.shift()!;
+    this.pendingTurnPrompt = next.userText;
+    this.publishQueueUpdate(this.sender);
+    void this.agent.prompt(next.message);
+  }
+
+  private publishQueueUpdate(sender: AgentSender): void {
+    const prompts = this.queue.map((entry) => entry.userText !== null
+      ? { text: entry.userText, source: "user" as const }
+      : { text: userPromptText(entry.message), source: "peer" as const });
+    this.eventManager.publish(Events.agentPromptQueueUpdate(sender, prompts));
+  }
+
+  private dequeuePrompt(prompt: string): void {
+    for (let i = this.queue.length - 1; i >= 0; i--) {
+      if (this.queue[i]!.userText === prompt) {
+        const removed = this.queue.splice(i, 1)[0];
+        if (removed !== undefined) {
+          this.dequeuedPrompts.push(removed);
+          if (this.dequeuedPrompts.length > DEQUEUED_PROMPT_CAP) this.dequeuedPrompts.shift();
+        }
+        break;
+      }
     }
+    this.publishQueueUpdate(this.sender);
+  }
+
+  private requeuePrompt(prompt: string): void {
+    for (let i = this.dequeuedPrompts.length - 1; i >= 0; i--) {
+      if (this.dequeuedPrompts[i]!.userText === prompt) {
+        const restored = this.dequeuedPrompts.splice(i, 1)[0];
+        if (restored !== undefined) this.queue.push(restored);
+        break;
+      }
+    }
+    this.publishQueueUpdate(this.sender);
+    this.drainQueue();
   }
 
   private interruptActiveRun(): void {
     if (!this.agent.state.isStreaming) return;
     this.agent.abort();
+  }
+
+  private applyEffort(effort: EffortLevel): void {
+    this.agent.state.thinkingLevel = effortToThinkingLevel(effort);
+    if (this.modelInfo === null) return;
+    this.modelInfo = { ...this.modelInfo, effort };
+    this.eventManager.publish(Events.agentModelAssigned(this.sender, this.modelInfo.provider, this.modelInfo.id, effort));
   }
 }
 
@@ -393,6 +481,11 @@ function jieToolResultOf(piResult: AgentToolResult<unknown>): JieToolResult {
     details: piResult.details,
     terminate: piResult.terminate ?? false,
   };
+}
+
+interface QueuedPrompt {
+  readonly message: AgentMessage;
+  readonly userText: string | null;
 }
 
 function userPromptText(message: AgentMessage): string {

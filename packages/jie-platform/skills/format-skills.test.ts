@@ -2,7 +2,7 @@ import type { Skill } from "./types";
 import { formatSkillsForPrompt } from "./format-skills";
 
 function skill(name: string, description: string, filePath = `/${name}/SKILL.md`): Skill {
-  return { name, description, filePath, baseDir: `/${name}` };
+  return { name, description, filePath, baseDir: `/${name}`, body: "body" };
 }
 
 describe("formatSkillsForPrompt", () => {

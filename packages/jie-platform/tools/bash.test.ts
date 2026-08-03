@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createBashTool } from "./bash";
@@ -117,4 +117,24 @@ describe("bash", () => {
     const exitCode = Number(exitMatch![1]);
     expect([137, 143]).toContain(exitCode);
   });
+
+  test("abort kill reaches backgrounded descendants, not just the shell", async () => {
+    const marker = join(workspace, "marker");
+    const tool = createBashTool({ workspaceRoot: workspace });
+    const ac = new AbortController();
+    const resultPromise = tool.execute({ command: `(sleep 1; touch ${marker}) & wait` }, makeEmptyContext(), ac.signal);
+    setTimeout(() => ac.abort(), 100);
+    await resultPromise;
+    await new Promise((resolve) => setTimeout(resolve, 1300));
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  test("abort escalates to SIGKILL for a SIGTERM-resistant process", async () => {
+    const tool = createBashTool({ workspaceRoot: workspace });
+    const ac = new AbortController();
+    const resultPromise = tool.execute({ command: "trap '' TERM; exec sleep 30" }, makeEmptyContext(), ac.signal);
+    setTimeout(() => ac.abort(), 100);
+    const result = await resultPromise;
+    expect(result.content).toContain("exit_code: 137");
+  }, 10_000);
 });

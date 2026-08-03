@@ -2,6 +2,7 @@ import { truncateToWidth, wrapTextWithAnsi, type Component } from "@earendil-wor
 import type { MessageCard, StateStore } from "../../state";
 import { style } from "../themes";
 import { DiffView } from "./diff-view";
+import { formatDuration } from "./format-duration";
 
 export class ToolCard implements Component {
   private readonly stateStore: StateStore;
@@ -22,16 +23,16 @@ export class ToolCard implements Component {
     const w = Math.max(1, width);
     const card = this.card;
     const isError = card.error !== undefined && card.error !== null && card.error !== "";
-    const headerColor = isError ? "error" : "toolTitle";
-    const duration = card.durationMs !== undefined ? `  ${card.durationMs}ms` : "";
-    const header = truncateToWidth(style(headerColor)(`${isError ? "✗" : "✓"} ${card.name}${duration}`), w);
-    if (!this.stateStore.getState().toolCardsExpanded) return [header];
+    const glyph = isError ? style("error")("✗") : style("success")("✓");
+    const duration = card.durationMs !== undefined ? `  ${formatDuration(card.durationMs)}` : "";
+    const header = truncateToWidth(`${glyph} ${style(isError ? "error" : "toolTitle")(`${card.name}${duration}`)}`, w);
+    const expanded = this.stateStore.getState().toolCardsExpanded;
     const lines = [header];
-    if (card.input !== undefined && card.input !== "") {
+    if (expanded && card.input !== undefined && card.input !== "") {
       lines.push(style("muted")("input:"));
       lines.push(...wrapTextWithAnsi(style("toolOutput")(card.input + (card.inputTruncated === true ? "…" : "")), w));
     }
-    if (card.output !== undefined && card.output !== null && card.output !== "") {
+    if (expanded && card.output !== undefined && card.output !== null && card.output !== "") {
       lines.push(style("muted")("output:"));
       lines.push(...wrapTextWithAnsi(style("toolOutput")(card.output + (card.outputTruncated === true ? "…" : "")), w));
     }
@@ -44,7 +45,7 @@ export class ToolCard implements Component {
       lines.push(style("muted")("diff:"));
       if (this.diffView !== null) lines.push(...this.diffView.render(w));
     }
-    if (isError) lines.push(truncateToWidth(style("error")(`error: ${card.error ?? ""}`), w));
+    if (expanded && isError) lines.push(truncateToWidth(style("error")(`error: ${card.error ?? ""}`), w));
     return lines;
   }
 

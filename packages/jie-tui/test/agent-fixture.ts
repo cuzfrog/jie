@@ -10,6 +10,7 @@ export function makeAgentUiState(agentId: AgentId, overrides: Partial<AgentUiSta
     isLeader: false,
     tools: [],
     subscribe: [],
+    skills: [],
     status: "idle",
     model: null,
     queue: [],

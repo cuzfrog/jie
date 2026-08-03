@@ -28,15 +28,25 @@ interface PromptCall {
   readonly text: string;
 }
 
+interface QueueCall {
+  readonly teamId: string;
+  readonly agentKey: string;
+  readonly prompt: string;
+}
+
 interface PlatformHarness {
   readonly platform: JiePlatform;
   readonly promptCalls: ReadonlyArray<PromptCall>;
+  readonly dequeueCalls: ReadonlyArray<QueueCall>;
+  readonly requeueCalls: ReadonlyArray<QueueCall>;
   emit(event: AnyEventEnvelope): void;
 }
 
 function makePlatformHarness(): PlatformHarness {
   const handlers = new Map<EventType, (env: AnyEventEnvelope) => void>();
   const recorded: PromptCall[] = [];
+  const dequeues: QueueCall[] = [];
+  const requeues: QueueCall[] = [];
   const platform: JiePlatform = {
     settings: { defaultTeam: undefined, defaultProvider: undefined, defaultModel: undefined },
     subscribe: <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void) => {
@@ -50,6 +60,12 @@ function makePlatformHarness(): PlatformHarness {
       recorded.push({ teamId, agentKey, text });
     },
     interrupt: () => undefined,
+    dequeuePrompt: (teamId, agentKey, prompt) => {
+      dequeues.push({ teamId, agentKey, prompt });
+    },
+    requeuePrompt: (teamId, agentKey, prompt) => {
+      requeues.push({ teamId, agentKey, prompt });
+    },
     execute: (async () => null) as JiePlatform["execute"],
     teams: () => [],
     shutdown: () => Promise.resolve(),
@@ -57,6 +73,8 @@ function makePlatformHarness(): PlatformHarness {
   return {
     platform,
     promptCalls: recorded,
+    dequeueCalls: dequeues,
+    requeueCalls: requeues,
     emit: (event) => {
       handlers.get(event.type)?.(event);
     },
@@ -142,7 +160,7 @@ const TEAM_LOADED = Events.teamLoaded({ kind: "system" }, {
   leaderKey: "general-1",
   sessionName: null,
   history: [],
-  agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], model: null }],
+  agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
 });
 
 const TWO_AGENT_TEAM = Events.teamLoaded({ kind: "system" }, {
@@ -151,8 +169,8 @@ const TWO_AGENT_TEAM = Events.teamLoaded({ kind: "system" }, {
   sessionName: null,
   history: [],
   agents: [
-    { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, tools: [], subscribe: [], model: null },
-    { teamId: "my-team", role: "worker", agentKey: "worker-1", isLeader: false, tools: [], subscribe: [], model: null },
+    { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+    { teamId: "my-team", role: "worker", agentKey: "worker-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null },
   ],
 });
 
@@ -196,6 +214,28 @@ describe("bootTui — submit pipeline", () => {
   });
 });
 
+describe("bootTui — dequeue pipeline", () => {
+  test("requestDequeue action forwards to platform.dequeuePrompt", () => {
+    let harness: TuiHarness | null = null;
+    withTTY(true, () => {
+      harness = bootHarness();
+    });
+    harness!.stateStore.dispatch(Actions.requestDequeue("my-team", "general-1", "queued text"));
+    expect(harness!.platform.dequeueCalls).toEqual([{ teamId: "my-team", agentKey: "general-1", prompt: "queued text" }]);
+    harness!.tui.stop();
+  });
+
+  test("requestRequeue action forwards to platform.requeuePrompt", () => {
+    let harness: TuiHarness | null = null;
+    withTTY(true, () => {
+      harness = bootHarness();
+    });
+    harness!.stateStore.dispatch(Actions.requestRequeue("my-team", "general-1", "abandoned text"));
+    expect(harness!.platform.requeueCalls).toEqual([{ teamId: "my-team", agentKey: "general-1", prompt: "abandoned text" }]);
+    harness!.tui.stop();
+  });
+});
+
 describe("bootTui — event bus wiring", () => {
   test("agent.usage events update the agent's reported context tokens", async () => {
     let harness: TuiHarness | null = null;
@@ -232,7 +272,7 @@ describe("bootTui — working indicator", () => {
     const started = harness!.tui.start();
     await waitFrames(30);
     harness!.platform.emit(TEAM_LOADED);
-    harness!.platform.emit(Events.agentTurnStart({ kind: "agent", teamId: "my-team", agentKey: "general-1" }));
+    harness!.platform.emit(Events.agentTurnStart({ kind: "agent", teamId: "my-team", agentKey: "general-1" }, null));
     await waitFrames(60);
     expect(frames.join("")).toContain("Working");
     harness!.tui.stop();

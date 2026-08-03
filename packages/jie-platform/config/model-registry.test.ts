@@ -247,6 +247,64 @@ describe("PiModelRegistry", () => {
     expect(providers[0]).toEqual({ id: "lm-studio", configured: true, envKeys: [] });
   });
 
+  test("reload picks up a provider added to models.json after construction", () => {
+    mkdirSync(homeJieDir, { recursive: true });
+    writeFileSync(join(homeJieDir, "models.json"), JSON.stringify({ providers: {} }));
+    const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
+    expect(reg.providers()).not.toContain("lm-studio");
+    writeFileSync(
+      join(homeJieDir, "models.json"),
+      JSON.stringify({
+        providers: {
+          "lm-studio": {
+            baseUrl: "http://localhost:1234/v1",
+            api: "openai-completions",
+            apiKey: "x",
+            models: [{ id: "qwen3.5-2b", contextWindow: 4096, maxTokens: 1024 }],
+          },
+        },
+      }),
+    );
+    reg.reload();
+    expect(reg.providers()).toContain("lm-studio");
+    expect(reg.resolve("lm-studio", "qwen3.5-2b")?.baseUrl).toBe("http://localhost:1234/v1");
+  });
+
+  test("reload drops a provider removed from models.json", () => {
+    mkdirSync(homeJieDir, { recursive: true });
+    writeFileSync(
+      join(homeJieDir, "models.json"),
+      JSON.stringify({
+        providers: {
+          "lm-studio": { baseUrl: "http://x", api: "openai-completions", models: [{ id: "m1" }] },
+        },
+      }),
+    );
+    const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
+    expect(reg.resolve("lm-studio", "m1")).toBeDefined();
+    writeFileSync(join(homeJieDir, "models.json"), JSON.stringify({ providers: {} }));
+    reg.reload();
+    expect(reg.providers()).not.toContain("lm-studio");
+    expect(reg.resolve("lm-studio", "m1")).toBeUndefined();
+  });
+
+  test("reload without a models.json falls back to built-ins only", () => {
+    mkdirSync(homeJieDir, { recursive: true });
+    writeFileSync(
+      join(homeJieDir, "models.json"),
+      JSON.stringify({
+        providers: {
+          "lm-studio": { baseUrl: "http://x", api: "openai-completions", models: [] },
+        },
+      }),
+    );
+    const reg = new PiModelRegistry(homeJieDir, projectJieDir, authStore);
+    rmSync(join(homeJieDir, "models.json"));
+    reg.reload();
+    expect(reg.providers()).not.toContain("lm-studio");
+    expect(reg.providers()).toContain("anthropic");
+  });
+
   test("listProviders: reports the env var names set for a built-in provider", () => {
     const original = process.env.ANTHROPIC_API_KEY;
     process.env.ANTHROPIC_API_KEY = "sk-test";

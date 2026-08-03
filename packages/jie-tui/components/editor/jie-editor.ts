@@ -8,7 +8,7 @@ import {
   type EditorTheme,
   type TUI,
 } from "@earendil-works/pi-tui";
-import { Actions, type StateStore } from "../../state";
+import { Actions, TuiState, type StateStore } from "../../state";
 import { type JieAutocompleteProvider, type JieSuggestions } from "../../autocomplete";
 import { COMMAND_METADATA } from "../../command-metadata";
 import { style } from "../themes";
@@ -23,6 +23,7 @@ const SCROLL_INFO_PATTERN = /^\s*\((\d+)\/(\d+)\)\s*$/;
 const COMMAND_BOUNDARY_PATTERN = /^\/(\S+) $/;
 const LEAD_ANSI_PATTERN = /^(\x1b\[[0-9;]*m)*/;
 const SESSION_LABEL_TRAILING_DASHES = 2;
+const HISTORY_MAX_SIZE = 100;
 const CHIP_BACKGROUND_BORDER = "\x1b[44m";
 const CHIP_BACKGROUND_WARNING = "\x1b[43m";
 const CHIP_BACKGROUND_END = "\x1b[49m";
@@ -45,6 +46,11 @@ export class JieEditor extends Editor {
   private bashMode = false;
   private ghost: GhostSelection | null = null;
   private popupFilteredOut: number | null = null;
+  private readonly historyMirror: string[] = [];
+  private browse: QueueBrowse | null = null;
+  private lastSeenQueue: ReadonlyArray<{ readonly text: string; readonly source: "user" | "peer" }> | null = null;
+  private pendingDequeues = 0;
+  private programmaticChange = false;
 
   constructor(
     tui: TUI,
@@ -64,6 +70,7 @@ export class JieEditor extends Editor {
     this.setAutocompleteProvider(tracking);
     this.seedHistory();
     this.onChange = (text: string): void => {
+      if (!this.programmaticChange) this.browse = null;
       this.bashMode = text.startsWith("!");
       this.borderColor = this.bashMode ? style("warning") : style("border");
       this.stateStore.dispatch(Actions.setEditorText(text));
@@ -91,6 +98,7 @@ export class JieEditor extends Editor {
       this.stateStore.dispatch(Actions.requestQuit());
       return;
     }
+    if (this.tryBrowseNavigation(data)) return;
     const navigating = this.isShowingAutocomplete() && this.ghost !== null && (matchesKey(data, "up") || matchesKey(data, "down"));
     super.handleInput(data);
     if (navigating) this.moveGhost(matchesKey(data, "down") ? 1 : -1);
@@ -116,6 +124,14 @@ export class JieEditor extends Editor {
     return next;
   }
 
+  addToHistory(text: string): void {
+    super.addToHistory(text);
+    const trimmed = text.trim();
+    if (trimmed === "" || this.historyMirror[0] === trimmed) return;
+    this.historyMirror.unshift(trimmed);
+    if (this.historyMirror.length > HISTORY_MAX_SIZE) this.historyMirror.pop();
+  }
+
   private seedHistory(): void {
     const entries = this.promptHistoryStore.load();
     for (const entry of entries) this.addToHistory(entry);
@@ -130,11 +146,90 @@ export class JieEditor extends Editor {
   }
 
   private interruptFocusedAgent(): void {
-    const state = this.stateStore.getState();
-    if (state.teamId === null || state.focusedAgentId === null) return;
-    const focused = state.agents.get(state.focusedAgentId);
-    if (focused === undefined || focused.status !== "busy") return;
+    const focused = TuiState.getFocusedAgent(this.stateStore.getState());
+    if (focused === null || focused.status !== "busy") return;
     this.stateStore.dispatch(Actions.requestInterrupt(focused.teamId, focused.agentKey));
+  }
+
+  private tryBrowseNavigation(data: string): boolean {
+    if (this.isShowingAutocomplete()) return false;
+    if (matchesKey(data, "up")) return this.tryBrowseUp();
+    if (matchesKey(data, "down")) return this.tryBrowseDown();
+    return false;
+  }
+
+  private tryBrowseUp(): boolean {
+    if (this.getCursor().line !== 0) return false;
+    if (this.browse === null && !this.startBrowse()) return false;
+    const value = this.nextBrowseValue();
+    if (value === null) return true;
+    const session = this.browse!;
+    session.stack.push(value);
+    session.index += 1;
+    this.applyBrowseText(value.text);
+    return true;
+  }
+
+  private startBrowse(): boolean {
+    const focused = TuiState.getFocusedAgent(this.stateStore.getState());
+    const hasQueuedUserPrompt = focused !== null && focused.queue.some((entry) => entry.source === "user");
+    if (!hasQueuedUserPrompt && this.historyMirror.length === 0) return false;
+    const draft = this.getText();
+    const trimmed = draft.trim();
+    const pushed = trimmed !== "" && this.historyMirror[0] !== trimmed;
+    if (trimmed !== "") this.addToHistory(draft);
+    this.browse = { stack: [{ text: draft, dequeuedFrom: null }], index: 0, historyOffset: pushed ? 1 : 0, historySteps: 0 };
+    return true;
+  }
+
+  private nextBrowseValue(): BrowseEntry | null {
+    const focused = TuiState.getFocusedAgent(this.stateStore.getState());
+    if (focused !== null) {
+      if (focused.queue !== this.lastSeenQueue) {
+        this.lastSeenQueue = focused.queue;
+        this.pendingDequeues = 0;
+      }
+      let skipped = 0;
+      for (let i = focused.queue.length - 1; i >= 0; i--) {
+        const entry = focused.queue[i]!;
+        if (entry.source !== "user") continue;
+        if (skipped < this.pendingDequeues) {
+          skipped += 1;
+          continue;
+        }
+        this.pendingDequeues += 1;
+        this.stateStore.dispatch(Actions.requestDequeue(focused.teamId, focused.agentKey, entry.text));
+        return { text: entry.text, dequeuedFrom: { teamId: focused.teamId, agentKey: focused.agentKey } };
+      }
+    }
+    const session = this.browse!;
+    const value = this.historyMirror[session.historyOffset + session.historySteps];
+    if (value === undefined) return null;
+    session.historySteps += 1;
+    return { text: value, dequeuedFrom: null };
+  }
+
+  private tryBrowseDown(): boolean {
+    const session = this.browse;
+    if (session === null) return false;
+    if (this.getCursor().line !== this.getLines().length - 1) return false;
+    if (session.index === 0) return true;
+    const leaving = session.stack[session.index]!;
+    if (leaving.dequeuedFrom !== null) {
+      this.pendingDequeues = Math.max(0, this.pendingDequeues - 1);
+      this.stateStore.dispatch(Actions.requestRequeue(leaving.dequeuedFrom.teamId, leaving.dequeuedFrom.agentKey, leaving.text));
+    }
+    session.index -= 1;
+    const value = session.stack[session.index]!;
+    if (session.index === 0) this.browse = null;
+    this.applyBrowseText(value.text);
+    return true;
+  }
+
+  private applyBrowseText(text: string): void {
+    this.programmaticChange = true;
+    this.setText(text);
+    this.programmaticChange = false;
   }
 
   private clearOrQuit(): void {
@@ -165,6 +260,18 @@ interface GhostSelection {
   readonly items: ReadonlyArray<AutocompleteItem>;
   readonly prefix: string;
   index: number;
+}
+
+interface QueueBrowse {
+  readonly stack: BrowseEntry[];
+  index: number;
+  readonly historyOffset: number;
+  historySteps: number;
+}
+
+interface BrowseEntry {
+  readonly text: string;
+  readonly dequeuedFrom: { readonly teamId: string; readonly agentKey: string } | null;
 }
 
 class GhostTrackingProvider implements AutocompleteProvider {

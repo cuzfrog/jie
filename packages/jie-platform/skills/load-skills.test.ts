@@ -30,7 +30,7 @@ describe("loadSkills", () => {
     const result = loadSkills({ homeSkillsDir: home, projectSkillsDir: project });
     expect(result.diagnostics).toEqual([]);
     expect(result.skills).toEqual([
-      { name: "deploy", description: "Deploys the app", filePath, baseDir: join(project, "deploy") },
+      { name: "deploy", description: "Deploys the app", filePath, baseDir: join(project, "deploy"), body: "body" },
     ]);
   });
 

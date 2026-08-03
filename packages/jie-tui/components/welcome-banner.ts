@@ -3,7 +3,6 @@ import type { CommandResult } from "@cuzfrog/jie-platform";
 import { COMMAND_METADATA, type CommandMeta } from "../command-metadata";
 import { TuiState, type StateStore, type TuiState as TuiStateType } from "../state";
 import { hintLines } from "./key-hints";
-import { renderTeamTable, type TeamTableColumn } from "./team-table";
 import { style } from "./themes";
 
 type InstalledTeams = CommandResult<"getTeamInfo">["installed"];
@@ -25,11 +24,20 @@ export class WelcomeBanner implements Component {
 
 export function welcomeLines(state: TuiStateType, width: number): string[] {
   const w = Math.max(1, width);
-  const sections: string[][] = [headerLines(state, w)];
-  const team = teamSection(state, w);
-  if (team.length > 0) sections.push(team);
-  sections.push(commandSection(w), shortcutsSection(w));
-  return sections.flatMap((section, index) => (index === 0 ? section : ["", ...section])).map((line) => truncateToWidth(line, w));
+  return joinSections([headerLines(state, w), ...infoSections(w)], w);
+}
+
+export function helpLines(width: number): string[] {
+  const w = Math.max(1, width);
+  return joinSections(infoSections(w), w);
+}
+
+function infoSections(width: number): string[][] {
+  return [commandSection(width), shortcutsSection(width)];
+}
+
+function joinSections(sections: ReadonlyArray<ReadonlyArray<string>>, width: number): string[] {
+  return sections.flatMap((section, index) => (index === 0 ? [...section] : ["", ...section])).map((line) => truncateToWidth(line, width));
 }
 
 function headerLines(state: TuiStateType, width: number): string[] {
@@ -65,16 +73,6 @@ function teamsLine(state: TuiStateType): string | null {
   const ordered: InstalledTeams = current === undefined ? installed : [current, ...rest];
   const list = ordered.map((team) => `${team.id}(${team.agentCount})`).join(TEAMS_SEPARATOR);
   return `${style("accent")("Teams: ")}${style("muted")(list)}`;
-}
-
-function teamSection(state: TuiStateType, width: number): string[] {
-  const roster = TuiState.rosterOrder(state);
-  if (roster.length === 0) return [];
-  const rows = renderTeamTable(roster, SPLASH_TEAM_COLUMNS, Math.max(1, width - SECTION_INDENT.length), {
-    pointed: null,
-    focused: null,
-  });
-  return [style("text")(TEAM_HEADING), ...rows.map((row) => `${SECTION_INDENT}${row}`)];
 }
 
 function shortcutsSection(width: number): string[] {
@@ -133,9 +131,6 @@ const MARK_LINES: ReadonlyArray<string> = [
 const MARK_WIDTH = 15;
 const MARK_GAP = 4;
 const COLUMN_GAP = 4;
-const TEAM_HEADING = "Team";
 const COMMANDS_HEADING = "Commands";
 const SHORTCUTS_HEADING = "Shortcuts";
 const TEAMS_SEPARATOR = " · ";
-const SECTION_INDENT = "  ";
-const SPLASH_TEAM_COLUMNS: ReadonlyArray<TeamTableColumn> = ["agent", "tools", "subscribe", "model"];

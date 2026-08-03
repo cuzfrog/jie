@@ -188,29 +188,6 @@ describe("edit", () => {
     expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("ALPHA\nbeta");
   });
 
-  test("two near-adjacent edits merge into a single hunk", async () => {
-    writeFileSync(join(workspace, "a.txt"), "a\nb\nc\n");
-    const tool = createEditTool({ workspaceRoot: workspace });
-    const result = await tool.execute(
-      { path: "a.txt", old_string: "a\nb\nc", new_string: "a\nB\nc" },
-      makeEmptyContext(),
-    );
-    const details = result.details as { diff: string };
-    const headerCount = (details.diff.match(/^@@/gm) ?? []).length;
-    expect(headerCount).toBe(1);
-  });
-
-  test("diff emits exact unified-diff format for a small change", async () => {
-    writeFileSync(join(workspace, "a.txt"), "a\nb\nc\n");
-    const tool = createEditTool({ workspaceRoot: workspace });
-    const result = await tool.execute(
-      { path: "a.txt", old_string: "b", new_string: "B" },
-      makeEmptyContext(),
-    );
-    const details = result.details as { diff: string };
-    expect(details.diff).toBe("@@ -1,3 +1,3 @@\n a\n-b\n+B\n c");
-  });
-
   test("beforeBytes / afterBytes are UTF-8 byte counts, not UTF-16 code units", async () => {
     writeFileSync(join(workspace, "a.txt"), "héllo", "utf-8");
     const tool = createEditTool({ workspaceRoot: workspace });

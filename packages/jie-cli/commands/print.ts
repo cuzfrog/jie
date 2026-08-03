@@ -25,22 +25,33 @@ export async function runPrint(
 
   handle.prompt(team.id, team.leaderKey, args.instruction);
 
+  let interrupted = false;
+  const sigintListener = (): void => {
+    if (interrupted) process.exit(130);
+    interrupted = true;
+    for (const agentKey of agentKeys) handle.interrupt(team.id, agentKey);
+  };
+  process.on("SIGINT", sigintListener);
   try {
-    await setupIdleGate(handle, agentKeys, args.timeout);
-  } catch (error) {
-    if (!args.json) console.write("\n");
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    if (errorMessage === "timeout") {
-      console.error(`no response from team within ${args.timeout}s`);
-    } else {
-      console.error(errorMessage);
+    try {
+      await setupIdleGate(handle, agentKeys, args.timeout);
+    } catch (error) {
+      if (!args.json) console.write("\n");
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage === "timeout") {
+        console.error(`no response from team within ${args.timeout}s`);
+      } else {
+        console.error(errorMessage);
+      }
+      await handle.execute({ name: "stop" });
+      return interrupted ? 130 : 3;
     }
+    if (!args.json) console.write("\n");
     await handle.execute({ name: "stop" });
-    return 3;
+    return interrupted ? 130 : 0;
+  } finally {
+    process.removeListener("SIGINT", sigintListener);
   }
-  if (!args.json) console.write("\n");
-  await handle.execute({ name: "stop" });
-  return 0;
 }
 
 function setupIdleGate(handle: JiePlatform, agentKeys: ReadonlyArray<string>, timeoutSec: number): Promise<void> {
