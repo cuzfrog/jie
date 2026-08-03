@@ -36,14 +36,15 @@ describe("ToolCard", () => {
     expect(lines[5]).toBe("\x1b[31merror: boom\x1b[39m");
   });
 
-  test("collapsed: a diff detail renders the diff block under the header", () => {
+  test("collapsed: a diff detail renders the diff block directly under the header, without a diff: label", () => {
     const view = new ToolCard(card({ details: { kind: "diff", diff: "@@ -1,1 +1,1 @@\n-a\n+b" } }), stateStore);
     const lines = view.render(80);
-    expect(lines[0]).toBe("\x1b[32m✓\x1b[39m \x1b[37mbash\x1b[39m");
-    expect(lines[1]).toBe("\x1b[90mdiff:\x1b[39m");
-    expect(lines[2]).toBe("\x1b[90m@@ -1,1 +1,1 @@\x1b[39m");
-    expect(lines[3]).toBe("\x1b[31m-\x1b[39m\x1b[90m1 \x1b[39m\x1b[31ma\x1b[39m");
-    expect(lines[4]).toBe("\x1b[32m+\x1b[39m\x1b[90m1 \x1b[39m\x1b[32mb\x1b[39m");
+    expect(lines).toEqual([
+      "\x1b[32m✓\x1b[39m \x1b[37mbash\x1b[39m",
+      "\x1b[90m@@ -1,1 +1,1 @@\x1b[39m",
+      "\x1b[90m1 \x1b[39m\x1b[31m- a\x1b[39m",
+      "\x1b[90m1 \x1b[39m\x1b[32m+ b\x1b[39m",
+    ]);
   });
 
   test("collapsed: a null diff detail renders the header alone", () => {
@@ -59,10 +60,9 @@ describe("ToolCard", () => {
     expect(lines[2]).toBe("\x1b[90min\x1b[39m");
     expect(lines[3]).toBe("\x1b[90moutput:\x1b[39m");
     expect(lines[4]).toBe("\x1b[90mok\x1b[39m");
-    expect(lines[5]).toBe("\x1b[90mdiff:\x1b[39m");
-    expect(lines[6]).toBe("\x1b[90m@@ -1,1 +1,1 @@\x1b[39m");
-    expect(lines[7]).toBe("\x1b[31m-\x1b[39m\x1b[90m1 \x1b[39m\x1b[31ma\x1b[39m");
-    expect(lines[8]).toBe("\x1b[32m+\x1b[39m\x1b[90m1 \x1b[39m\x1b[32mb\x1b[39m");
+    expect(lines[5]).toBe("\x1b[90m@@ -1,1 +1,1 @@\x1b[39m");
+    expect(lines[6]).toBe("\x1b[90m1 \x1b[39m\x1b[31m- a\x1b[39m");
+    expect(lines[7]).toBe("\x1b[90m1 \x1b[39m\x1b[32m+ b\x1b[39m");
   });
 
   test("non-diff details render no diff section", () => {
