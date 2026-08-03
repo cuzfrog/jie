@@ -1,5 +1,6 @@
 import {
   type Mock,
+  setSystemTime as _bunSetSystemTime,
   vi as _bunVi,
   test as _test,
   expect as _expect,
@@ -12,6 +13,10 @@ import {
 
 process.env.FORCE_COLOR = '1';
 
+const _bunFn = _bunVi.fn;
+const _bunSpyOn = _bunVi.spyOn;
+const registeredMocks: Array<{ reset(): void }> = [];
+
 // this is hacking for test setup, exempted from context rules.
 const _vi = Object.assign(_bunVi, {
   mocked: <T>(item: T): T extends (...args: any[]) => any
@@ -19,6 +24,28 @@ const _vi = Object.assign(_bunVi, {
     : T extends Record<string, any>
       ? { [K in keyof T]: T[K] extends (...args: any[]) => any ? Mock<T[K]> : T[K] }
       : T => item as never,
+  fn: function <T extends (...args: any[]) => any>(implementation?: T): Mock<T> {
+    const mock = _bunFn(implementation);
+    registeredMocks.push({
+      reset: function (): void {
+        mock.mockReset();
+        if (implementation !== undefined) mock.mockImplementation(implementation);
+      },
+    });
+    return mock;
+  },
+  spyOn: function <T extends object, K extends keyof T>(obj: T, key: K): Mock<Extract<T[K], (...args: any[]) => any>> {
+    const mock = _bunSpyOn(obj, key);
+    registeredMocks.push({
+      reset: function (): void {
+        mock.mockRestore();
+      },
+    });
+    return mock;
+  },
+  setSystemTime: function (now?: number | Date): void {
+    _bunSetSystemTime(now);
+  },
 });
 
 Object.assign(globalThis, {
@@ -34,6 +61,7 @@ Object.assign(globalThis, {
 
 beforeEach(() => {
   _vi.resetAllMocks();
+  for (const mock of registeredMocks) mock.reset();
 });
 
 declare global {
