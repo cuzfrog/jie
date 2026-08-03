@@ -24,6 +24,22 @@ describe("UserMessage", () => {
     expect(message.render(80)).toEqual(["\x1b[36m› \x1b[39mb"]);
   });
 
+  test("a skill invocation renders the skill icon in place of the /skill: prefix", () => {
+    const message = new UserMessage("/skill:say-hello Cause");
+    expect(message.render(80)).toEqual(["\x1b[36m› ⚡ \x1b[39msay-hello Cause"]);
+  });
+
+  test("update to a skill invocation switches to the skill icon", () => {
+    const message = new UserMessage("plain");
+    message.update(turn("/skill:deploy now"));
+    expect(message.render(80)).toEqual(["\x1b[36m› ⚡ \x1b[39mdeploy now"]);
+  });
+
+  test("text merely containing /skill: mid-line keeps the plain prefix", () => {
+    const message = new UserMessage("run /skill:say-hello for me");
+    expect(message.render(80)).toEqual(["\x1b[36m› \x1b[39mrun /skill:say-hello for me"]);
+  });
+
   test("renders nothing for an empty prompt (tool-continuation turns)", () => {
     const message = new UserMessage("");
     expect(message.render(80)).toEqual([]);
