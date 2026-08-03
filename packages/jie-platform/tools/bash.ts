@@ -57,17 +57,20 @@ export function createBashTool(dependencies: BashDeps): Tool<BashInput> {
       });
 
       let timedOut = false;
+      let killing = false;
       let killTimer: ReturnType<typeof setTimeout> | undefined;
-      const timer = setTimeout(() => {
-        timedOut = true;
+      const killWithEscalation = () => {
+        if (killing) return;
+        killing = true;
         killProcessGroup(proc.pid, "SIGTERM");
         killTimer = setTimeout(() => killProcessGroup(proc.pid, "SIGKILL"), KILL_GRACE_MS);
+      };
+      const timer = setTimeout(() => {
+        timedOut = true;
+        killWithEscalation();
       }, TIMEOUT_MS);
 
-      const abortHandler = () => {
-        killProcessGroup(proc.pid, "SIGTERM");
-      };
-      signal?.addEventListener("abort", abortHandler);
+      signal?.addEventListener("abort", killWithEscalation);
 
       let stdoutBuf: Buffer = Buffer.alloc(0);
       let stderrBuf: Buffer = Buffer.alloc(0);
@@ -111,7 +114,7 @@ export function createBashTool(dependencies: BashDeps): Tool<BashInput> {
       const exitCode = await proc.exited;
       clearTimeout(timer);
       clearTimeout(killTimer);
-      signal?.removeEventListener("abort", abortHandler);
+      signal?.removeEventListener("abort", killWithEscalation);
 
       let drainTimer: ReturnType<typeof setTimeout> | undefined;
       await Promise.race([

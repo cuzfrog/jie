@@ -128,4 +128,13 @@ describe("bash", () => {
     await new Promise((resolve) => setTimeout(resolve, 1300));
     expect(existsSync(marker)).toBe(false);
   });
+
+  test("abort escalates to SIGKILL for a SIGTERM-resistant process", async () => {
+    const tool = createBashTool({ workspaceRoot: workspace });
+    const ac = new AbortController();
+    const resultPromise = tool.execute({ command: "trap '' TERM; exec sleep 30" }, makeEmptyContext(), ac.signal);
+    setTimeout(() => ac.abort(), 100);
+    const result = await resultPromise;
+    expect(result.content).toContain("exit_code: 137");
+  }, 10_000);
 });
