@@ -48,8 +48,13 @@ function reduceModelAssigned(state: TuiState, event: AnyEventEnvelope): TuiState
   if (resolved === null) return state;
   if (event.type !== "agent.model.assigned") return state;
   const { agentId, agent } = resolved;
-  const priorContextWindow = agent.model === null ? null : agent.model.contextWindow;
-  return withAgent(state, agentId, { ...agent, model: { provider: event.payload.provider, id: event.payload.model, effort: event.payload.effort, contextWindow: priorContextWindow } });
+  const model = {
+    provider: event.payload.provider,
+    id: event.payload.model,
+    effort: event.payload.effort,
+    contextWindow: event.payload.contextWindow,
+  };
+  return withAgent(state, agentId, { ...agent, model });
 }
 
 function reduceQueueUpdate(state: TuiState, event: AnyEventEnvelope): TuiState {

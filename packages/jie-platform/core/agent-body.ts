@@ -11,6 +11,7 @@ export interface AgentBodyParams {
     readonly tools: ReadonlyArray<string>;
     readonly subscribe: ReadonlyArray<string>;
     readonly skills: ReadonlyArray<string>;
+    readonly model: string;
   };
   readonly isLeader: boolean;
   readonly sessionId: string;

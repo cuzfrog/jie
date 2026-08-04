@@ -81,6 +81,7 @@ export class CommandExecutorImpl implements CommandExecutor {
       throw new JiePlatformError("UNKNOWN_PROVIDER", { detail: command.provider });
     }
     this.settingsStore.setDefaultProvider(command.provider, command.id);
+    this.eventManager.publish(Events.userModelUpdate({ kind: "user" }, command.provider, command.id));
     return null;
   }
 

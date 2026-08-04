@@ -3,7 +3,7 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import type { ModelRegistry } from "../config";
 import type { PlatformCradle } from "../container";
-import type { EventManager } from "../event";
+import { Events, type EventEnvelope, type EventManager, type EventType } from "../event";
 import type { HookRunner } from "../hooks";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { AgentSoul } from "../team";
@@ -164,5 +164,29 @@ describe("registerCoreModule", () => {
   test("registers a singleton factory", () => {
     const container = bootedContainer();
     expect(container.cradle.agentBodyFactory).toBe(container.resolve("agentBodyFactory"));
+  });
+
+  test("wires resolveModel from modelRegistry so user.model.update hot-swaps the agent model", async () => {
+    const subscribers = new Map<string, (event: EventEnvelope<EventType>) => void>();
+    eventManager.subscribe.mockImplementation((eventType: string, callback: (event: EventEnvelope<EventType>) => void) => {
+      subscribers.set(eventType, callback);
+      return () => {
+        subscribers.delete(eventType);
+      };
+    });
+    memoryManager.restore.mockResolvedValue([]);
+    modelRegistry.resolve.mockReturnValue(makeModel("lm-studio", "qwen3.5-2b"));
+    const container = bootedContainer();
+    const body = container.cradle.agentBodyFactory(makeParams({
+      soul: makeSoul({ model: "" }),
+      model: makeModel("anthropic", "claude-sonnet-4"),
+    }));
+    await body.start();
+    subscribers.get("user.model.update")!(Events.userModelUpdate({ kind: "user" }, "lm-studio", "qwen3.5-2b"));
+    expect(modelRegistry.resolve).toHaveBeenCalledWith("lm-studio", "qwen3.5-2b");
+    const last = eventManager.publish.mock.calls[eventManager.publish.mock.calls.length - 1]![0]!;
+    expect(last.topic).toBe("agent.model.assigned");
+    expect(last.payload).toMatchObject({ provider: "lm-studio", model: "qwen3.5-2b" });
+    body.stop();
   });
 });
