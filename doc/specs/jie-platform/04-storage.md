@@ -75,4 +75,4 @@ Agents see the store through two built-in tools — `write_artifact(key, content
 
 ## Retention and Scope
 
-All rows are kept indefinitely; no GC, archival, or compaction runs today. `descriptor_patch` / `file_snapshot` artifacts are intentionally out of scope — file history is owned by git; agents do not snapshot files into a parallel store.
+All rows are kept indefinitely — conversation compaction (`08-memory.md` "Compact") flags summarized turns `compacted=1` but never deletes them; no other GC or archival. `descriptor_patch` / `file_snapshot` artifacts are intentionally out of scope — file history is owned by git; agents do not snapshot files into a parallel store.
