@@ -5,7 +5,7 @@ import type { ArtifactStore, MemoryManager } from "../storage";
 import type { ExecutionContext, ToolRegistry } from "../tools";
 import type { Skill, SkillManager } from "../skills";
 import type { HookIdentity, HookRunner } from "../hooks";
-import { composeSystemPrompt } from "../prompt";
+import { composeSystemPrompt } from "./system-prompt";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { AgentBody, AgentBodyParams } from "./agent-body";
 import type { Compactor } from "./compaction";

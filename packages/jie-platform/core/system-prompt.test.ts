@@ -1,5 +1,5 @@
 import type { Skill } from "../skills";
-import { composeSystemPrompt } from "./compose";
+import { composeSystemPrompt } from "./system-prompt";
 
 function skill(name: string, entry: string): Skill {
   return {

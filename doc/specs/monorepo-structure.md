@@ -8,10 +8,9 @@ packages/
     command/         # Platform commands (team, resumeSession, setDefaultModel, login, …) + executor
     config/          # Settings, auth, models.json loading, model registry (10-configuration.md)
     context/         # Auto-loaded context files (AGENTS.md/CLAUDE.md ancestor walk) → loadSystemContextBlock (10-configuration.md "Context Files")
-    core/            # AgentBody: event loop (jie-agent-body.ts), pi-agent wiring, streaming, tool adapter
+    core/            # AgentBody: event loop (jie-agent-body.ts), pi-agent wiring, streaming, tool adapter, system-prompt composition
     event/           # EventBus (InProcessEventBus), EventManager, Events factory (03-event-system.md)
     hooks/           # settings.json command hooks: parse, HookRunner, sh executor; gates tool calls + lifecycle (10-configuration.md "Hooks")
-    prompt/          # composeSystemPrompt — assembles the LLM system prompt (context block + role prose + skills block)
     services/        # GitService (branch / dirty status; consumed by the command surface and by jie-cli for the TUI footer)
     skills/          # Skill discovery (SKILL.md), SkillManager (glob resolution), prompt formatting (10-configuration.md "Skills")
     storage/         # Storage + SqliteStorage, schema bootstrap, ArtifactStore, MemoryManager (04-storage.md, 08-memory.md)
