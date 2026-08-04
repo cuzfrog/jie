@@ -1,4 +1,5 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { UserMessage } from "@earendil-works/pi-ai";
 
 export const EFFORT_LEVELS = ["off", "low", "medium", "high", "max"] as const;
 
@@ -35,6 +36,10 @@ export interface AgentInfo {
 export interface AgentHistory {
     readonly agentKey: string;
     readonly messages: ReadonlyArray<AgentMessage>;
+}
+
+export interface UserIngressMessage extends UserMessage {
+    readonly displayText?: string;
 }
 
 export interface TeamInfo {

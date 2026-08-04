@@ -1,5 +1,5 @@
 import { Agent, type AgentMessage, type AgentEvent as PiAgentEvent, type AgentTool, type AgentToolResult, type ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { Api, AssistantMessage, Model, StopReason, TextContent, UserMessage } from "@earendil-works/pi-ai";
+import type { Api, AssistantMessage, Model, StopReason, TextContent } from "@earendil-works/pi-ai";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { ExecutionContext, ToolRegistry } from "../tools";
@@ -11,7 +11,7 @@ import type { AgentBody, AgentBodyParams } from "./agent-body";
 import { StreamPublisherImpl, type StreamPublisher } from "./streaming";
 import { adaptToolToAgent } from "./tool-adapter";
 import { JiePlatformError } from "../jie-platform-errors";
-import type { AgentInfo, EffortLevel, ModelInfo } from "../types";
+import type { AgentInfo, EffortLevel, ModelInfo, UserIngressMessage } from "../types";
 
 const DEQUEUED_PROMPT_CAP = 32;
 
@@ -355,11 +355,9 @@ export class JieAgentBody implements AgentBody {
     const synthetic = source !== null
       ? `[${source} on '${topic}']: ${prompt}`
       : `[user]: ${prompt}`;
-    const message: UserMessage = {
-      role: "user",
-      content: synthetic,
-      timestamp: Date.now(),
-    };
+    const message: UserIngressMessage = userText === null
+      ? { role: "user", content: synthetic, timestamp: Date.now() }
+      : { role: "user", content: synthetic, timestamp: Date.now(), displayText: userText };
     this.queue.push({ message, userText });
     this.publishQueueUpdate(this.sender);
     this.drainQueue();

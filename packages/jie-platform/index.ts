@@ -6,7 +6,7 @@ export {
     type JiePlatformErrorOptions,
 } from "./jie-platform-errors";
 
-export type { TeamInfo, ModelInfo, AgentInfo, SkillInfo, AgentHistory, EffortLevel } from "./types";
+export type { TeamInfo, ModelInfo, AgentInfo, SkillInfo, AgentHistory, EffortLevel, UserIngressMessage } from "./types";
 export { EFFORT_LEVELS, isEffortLevel, isTodoDetails, type TodoItem, type TodoStatus, type TodoDetailsPayload } from "./types";
 export type { AgentMessage } from "@earendil-works/pi-agent-core";
 

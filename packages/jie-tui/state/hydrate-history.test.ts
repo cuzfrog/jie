@@ -1,9 +1,13 @@
-import type { AgentMessage } from "@cuzfrog/jie-platform";
+import type { AgentMessage, UserIngressMessage } from "@cuzfrog/jie-platform";
 import type { Usage } from "@earendil-works/pi-ai";
 import { hydrateHistory } from "./hydrate-history";
 
 function user(prompt: string): AgentMessage {
   return { role: "user", content: `[user]: ${prompt}`, timestamp: 0 };
+}
+function userWithDisplay(displayText: string, expandedContent: string): AgentMessage {
+  const message: UserIngressMessage = { role: "user", content: `[user]: ${expandedContent}`, timestamp: 0, displayText };
+  return message;
 }
 function assistantText(text: string): AgentMessage {
   return {
@@ -57,6 +61,17 @@ describe("hydrateHistory", () => {
   test("strips the [user]: ingress prefix from the user prompt", () => {
     const result = hydrateHistory([user("tell me a joke"), assistantText("ok")], 0);
     expect(result.currentTurn?.userPrompt).toBe("tell me a joke");
+  });
+
+  test("prefers displayText over the expanded content for the user prompt", () => {
+    const expanded = '<skill name="deploy" location="/deploy/SKILL.md">\nRun the deploy pipeline.\n</skill>';
+    const result = hydrateHistory([userWithDisplay("/skill:deploy now", expanded), assistantText("ok")], 0);
+    expect(result.currentTurn?.userPrompt).toBe("/skill:deploy now");
+  });
+
+  test("derives the prompt from content when displayText is absent", () => {
+    const result = hydrateHistory([user('<skill name="deploy">body</skill>'), assistantText("ok")], 0);
+    expect(result.currentTurn?.userPrompt).toBe('<skill name="deploy">body</skill>');
   });
 
   test("multiple turns rotate earlier ones into history, numbered from startSeq", () => {
