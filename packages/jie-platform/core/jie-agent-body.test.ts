@@ -78,7 +78,7 @@ function makeUtilityTool(): Tool {
     isUtility: true,
     parameters: Type.Object({}),
     async execute(): Promise<ToolResult> {
-      return { content: "todos" };
+      return { content: "cards" };
     },
   };
 }

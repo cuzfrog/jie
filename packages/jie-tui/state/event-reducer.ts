@@ -2,7 +2,7 @@ import type { AnyEventEnvelope } from "@cuzfrog/jie-platform";
 import type { AgentId, AgentUiState, MessageCard, TuiState, MessageTurn } from "./state";
 import { teamLoadReducer } from "./team-load-reducer";
 import { estimateContextTokens } from "./context-tokens";
-import { isKanbanDetails } from "../kanban";
+import { isKanbanDetails, type KanbanDetailsPayload } from "../kanban";
 
 export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
   switch (event.type) {
@@ -198,8 +198,7 @@ function reduceToolResult(state: TuiState, event: AnyEventEnvelope): TuiState {
   return withAgent(state, agentId, next);
 }
 
-function withKanbanDetails(agent: AgentUiState, details: unknown): AgentUiState {
-  if (!isKanbanDetails(details)) return agent;
+function withKanbanDetails(agent: AgentUiState, details: KanbanDetailsPayload): AgentUiState {
   return { ...agent, cards: details.cards };
 }
 
