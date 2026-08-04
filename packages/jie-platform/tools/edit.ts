@@ -67,15 +67,20 @@ export function createEditTool(dependencies: EditDeps): Tool<EditInput> {
       }
 
       const bytes = new Uint8Array(readFileSync(realPath));
-      let before: string;
+      let decoded: string;
       try {
-        before = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+        decoded = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
       } catch {
         throw new JiePlatformError("UNSUPPORTED_ENCODING", { detail: input.path });
       }
 
+      const bom = decoded.startsWith("\uFEFF") ? "\uFEFF" : "";
+      const raw = decoded.slice(bom.length);
+      const lineEnding = detectLineEnding(raw);
+      const before = normalizeToLF(raw);
       const replaceAll = input.replace_all === true;
-      const matches = findAllOccurrences(before, input.old_string);
+      const needle = normalizeToLF(input.old_string);
+      const matches = findAllOccurrences(before, needle);
       if (matches.length === 0) {
         throw new JiePlatformError("NO_MATCH", { detail: input.path });
       }
@@ -85,7 +90,8 @@ export function createEditTool(dependencies: EditDeps): Tool<EditInput> {
         });
       }
 
-      const after = applyReplacements(before, matches, input.old_string, input.new_string, replaceAll);
+      const edited = applyReplacements(before, matches, needle, normalizeToLF(input.new_string), replaceAll);
+      const after = bom + restoreLineEndings(edited, lineEnding);
 
       try {
         writeFileSync(realPath, after, "utf-8");
@@ -94,9 +100,9 @@ export function createEditTool(dependencies: EditDeps): Tool<EditInput> {
       }
 
       const replacementsCount = replaceAll ? matches.length : 1;
-      const beforeBytes = new TextEncoder().encode(before).length;
+      const beforeBytes = new TextEncoder().encode(decoded).length;
       const afterBytes = new TextEncoder().encode(after).length;
-      const diff = renderUnifiedDiff(before, after);
+      const diff = renderUnifiedDiff(before, edited);
       const content = `Edited ${input.path}: ${replacementsCount} replacement${replacementsCount === 1 ? "" : "s"}`;
       const details: EditResultDetails = {
         kind: "diff",
@@ -140,5 +146,20 @@ function applyReplacements(
   }
   parts.push(before.substring(cursor));
   return parts.join("");
+}
+
+function detectLineEnding(content: string): "\r\n" | "\n" {
+  const crlfIndex = content.indexOf("\r\n");
+  const lfIndex = content.indexOf("\n");
+  if (lfIndex === -1 || crlfIndex === -1) return "\n";
+  return crlfIndex < lfIndex ? "\r\n" : "\n";
+}
+
+function normalizeToLF(text: string): string {
+  return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+function restoreLineEndings(text: string, ending: "\r\n" | "\n"): string {
+  return ending === "\r\n" ? text.replace(/\n/g, "\r\n") : text;
 }
 
