@@ -76,31 +76,69 @@ describe("SqliteMemoryManager", () => {
     expect(rows).toEqual([[1], [1], [1], [2]]);
   });
 
-  test("restore returns rows in seq order, skipping compacted=1", async () => {
+  test("restore returns the summary first, then remaining rows in seq order, skipping compacted=1", async () => {
     const m = makeManager();
     m.persist(userMessage("a"), "agent-1", "s1", "t1");
     m.persist(userMessage("b"), "agent-1", "s1", "t1");
     m.persist(userMessage("c"), "agent-1", "s1", "t1");
-    m.compact([1, 2], summaryMessage("sum"), "agent-1", "s1", "t1");
+    m.compact(2, summaryMessage("sum"), "agent-1", "s1", "t1");
     const restored = await m.restore("agent-1", "s1", "t1");
     expect(restored).toHaveLength(2);
     const [first, second] = restored as Array<{ role: string; content: unknown }>;
-    expect(first.content).toBe("c");
-    expect(second.role).toBe("compactionSummary");
+    expect(first.role).toBe("compactionSummary");
+    expect(second.content).toBe("c");
   });
 
-  test("compact flips compacted=1 on the seq range", () => {
+  test("compact flips compacted=1 on the oldest N non-compacted rows", () => {
     const m = makeManager();
     m.persist(userMessage("a"), "agent-1", "s1", "t1");
     m.persist(userMessage("b"), "agent-1", "s1", "t1");
     m.persist(userMessage("c"), "agent-1", "s1", "t1");
-    m.compact([1, 2], summaryMessage("sum"), "agent-1", "s1", "t1");
+    m.compact(2, summaryMessage("sum"), "agent-1", "s1", "t1");
     const rows = (
       m as unknown as { storage: Storage }
     ).storage.query(
-      "SELECT compacted FROM memory_turns WHERE seq IN (1,2) ORDER BY seq",
+      "SELECT compacted FROM memory_turns ORDER BY seq",
     );
-    expect(rows).toEqual([[1], [1]]);
+    expect(rows).toEqual([[1], [1], [0], [0]]);
+  });
+
+  test("compact places the summary row between the compacted prefix and the retained tail", () => {
+    const m = makeManager();
+    m.persist(userMessage("a"), "agent-1", "s1", "t1");
+    m.persist(userMessage("b"), "agent-1", "s1", "t1");
+    m.persist(userMessage("c"), "agent-1", "s1", "t1");
+    m.compact(2, summaryMessage("sum"), "agent-1", "s1", "t1");
+    const rows = (
+      m as unknown as { storage: Storage }
+    ).storage.query(
+      "SELECT role FROM memory_turns ORDER BY seq",
+    );
+    expect(rows).toEqual([["user"], ["user"], ["compactionSummary"], ["user"]]);
+  });
+
+  test("a second compaction consumes the previous summary row", async () => {
+    const m = makeManager();
+    m.persist(userMessage("a"), "agent-1", "s1", "t1");
+    m.persist(userMessage("b"), "agent-1", "s1", "t1");
+    m.persist(userMessage("c"), "agent-1", "s1", "t1");
+    m.persist(userMessage("d"), "agent-1", "s1", "t1");
+    m.compact(2, summaryMessage("sum-1"), "agent-1", "s1", "t1");
+    m.compact(2, summaryMessage("sum-2"), "agent-1", "s1", "t1");
+    const restored = await m.restore("agent-1", "s1", "t1") as Array<{ role: string; summary?: string }>;
+    expect(restored).toHaveLength(2);
+    expect(restored[0]).toMatchObject({ role: "compactionSummary", summary: "sum-2" });
+    expect(restored[1]).toMatchObject({ role: "user", content: "d" });
+  });
+
+  test("compact clamps when the count exceeds the non-compacted rows", async () => {
+    const m = makeManager();
+    m.persist(userMessage("a"), "agent-1", "s1", "t1");
+    m.persist(userMessage("b"), "agent-1", "s1", "t1");
+    m.compact(99, summaryMessage("sum"), "agent-1", "s1", "t1");
+    const restored = await m.restore("agent-1", "s1", "t1");
+    expect(restored).toHaveLength(1);
+    expect((restored[0] as { role: string }).role).toBe("compactionSummary");
   });
 
   test("compact throws and the synthetic error surfaces", () => {
@@ -109,7 +147,7 @@ describe("SqliteMemoryManager", () => {
 
     expect(() =>
       throwing.compact(
-        [1, 2],
+        2,
         summaryMessage("sum"),
         "agent-1",
         "s1",
@@ -186,7 +224,7 @@ describe("SqliteMemoryManager.listSessions", () => {
     const m = makeManager();
     m.persist(userMessage("a"), "agent-1", "s1", "t1");
     m.persist(userMessage("b"), "agent-1", "s1", "t1");
-    m.compact([1, 2], summaryMessage("sum"), "agent-1", "s1", "t1");
+    m.compact(2, summaryMessage("sum"), "agent-1", "s1", "t1");
     expect(m.listSessions("t1")[0]?.messageCount).toBe(3);
   });
 
