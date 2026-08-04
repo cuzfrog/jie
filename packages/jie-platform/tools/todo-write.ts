@@ -21,6 +21,7 @@ export function createTodoWriteTool(): Tool<TodoWriteInput> {
     name: "todo_write",
     description: TODO_WRITE_DESCRIPTION,
     label: "Update Todos",
+    isUtility: true,
     parameters: Type.Object({
       todos: Type.Array(
         Type.Object({

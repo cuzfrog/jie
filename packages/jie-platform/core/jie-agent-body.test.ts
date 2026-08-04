@@ -70,6 +70,19 @@ function makeNoopTool(): Tool {
   };
 }
 
+function makeUtilityTool(): Tool {
+  return {
+    name: "todo_write",
+    description: "update todos",
+    label: "Todos",
+    isUtility: true,
+    parameters: Type.Object({}),
+    async execute(): Promise<ToolResult> {
+      return { content: "todos" };
+    },
+  };
+}
+
 function makeAssistantMessage(overrides: Partial<AssistantMessage> = {}): AssistantMessage {
   return {
     role: "assistant",
@@ -403,6 +416,46 @@ describe("JieAgentBody — tool resolution", () => {
       teamId: "dev",
       soul: makeSoul({ role: "architect", tools: ["mcp:code-lens:*"] }),
     })).toThrow("agent 'architect' (team 'dev'): tool spec 'mcp:code-lens:*' resolved no tools");
+  });
+
+  test("utility tools are implicitly assigned even when no soul spec lists them", () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    h.toolRegistry.list.mockReturnValue([makeUtilityTool()]);
+    h.makeBody({ soul: makeSoul({ tools: ["noop"] }), factory: cap.factory });
+    const names = (cap.fake.state.tools as Array<{ name: string }>).map((t) => t.name);
+    expect(names).toEqual(["noop", "todo_write"]);
+  });
+
+  test("a utility tool already matched by a soul spec is not added twice", () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    const utility = makeUtilityTool();
+    h.toolRegistry.resolve.mockReturnValue([utility]);
+    h.toolRegistry.list.mockReturnValue([utility]);
+    h.makeBody({ soul: makeSoul({ tools: ["todo_write"] }), factory: cap.factory });
+    const names = (cap.fake.state.tools as Array<{ name: string }>).map((t) => t.name);
+    expect(names).toEqual(["todo_write"]);
+  });
+
+  test("a non-utility tool in the registry is not implicitly assigned", () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    const utility = makeUtilityTool();
+    h.toolRegistry.resolve.mockReturnValue([utility]);
+    h.toolRegistry.list.mockReturnValue([makeNoopTool(), utility]);
+    h.makeBody({ soul: makeSoul({ tools: ["todo_write"] }), factory: cap.factory });
+    const names = (cap.fake.state.tools as Array<{ name: string }>).map((t) => t.name);
+    expect(names).toEqual(["todo_write"]);
+  });
+
+  test("an empty soul tool list still receives the utility tools", () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    h.toolRegistry.list.mockReturnValue([makeUtilityTool()]);
+    h.makeBody({ factory: cap.factory });
+    const names = (cap.fake.state.tools as Array<{ name: string }>).map((t) => t.name);
+    expect(names).toEqual(["todo_write"]);
   });
 });
 

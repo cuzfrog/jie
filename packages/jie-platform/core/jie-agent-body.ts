@@ -436,6 +436,7 @@ function adaptAllTools(
   executionContext: ExecutionContext,
 ): AgentTool[] {
   const out: AgentTool[] = [];
+  const assigned = new Set<string>();
   for (const toolSpec of soul.tools) {
     const tools = toolRegistry.resolve(toolSpec);
     if (tools.length === 0) {
@@ -444,8 +445,15 @@ function adaptAllTools(
       });
     }
     for (const tool of tools) {
+      if (assigned.has(tool.name)) continue;
+      assigned.add(tool.name);
       out.push(adaptToolToAgent(tool, executionContext));
     }
+  }
+  for (const tool of toolRegistry.list()) {
+    if (tool.isUtility !== true || assigned.has(tool.name)) continue;
+    assigned.add(tool.name);
+    out.push(adaptToolToAgent(tool, executionContext));
   }
   return out;
 }

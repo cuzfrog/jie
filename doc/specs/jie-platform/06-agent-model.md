@@ -29,7 +29,7 @@ interface ToolRegistry {
 }
 ```
 
-Each entry in `AgentSoul.tools` is a spec string. `resolve` matches the segment after the last `:` (the whole string when there is none) against registered tool names using anchored `Bun.Glob` matching (`*`, `?`): a plain name resolves to itself, a glob to zero-or-more tools. Whether zero matches is a startup failure is the caller's policy (`10-configuration.md` "MCP Server Configuration"). Built-ins are registered at platform startup; MCP-provided and user-defined tools are registered onto the registry by the platform — the body cannot tell where a tool executes (ADR 4).
+Each entry in `AgentSoul.tools` is a spec string. `resolve` matches the segment after the last `:` (the whole string when there is none) against registered tool names using anchored `Bun.Glob` matching (`*`, `?`): a plain name resolves to itself, a glob to zero-or-more tools. Whether zero matches is a startup failure is the caller's policy (`10-configuration.md` "MCP Server Configuration"). Built-ins are registered at platform startup; MCP-provided and user-defined tools are registered onto the registry by the platform — the body cannot tell where a tool executes (ADR 4). A tool flagged `isUtility` is agent-internal tooling without project side-effects and is implicitly assigned to every agent at body construction, listed by a soul spec or not; a spec that already matches it does not assign it twice.
 
 ## Team Blueprint
 
@@ -47,7 +47,7 @@ The blueprint lives at `.jie/teams/<team_id>/` (file layout, discovery, model re
 | Field | Required | Meaning |
 |---|---|---|
 | `model` | no | `<provider>/<model_id>`; when absent, inherited from the user's global default (`10-configuration.md` "Model Resolution"). Always a resolved string by soul-construction time. |
-| `tools` | yes | Tool spec strings resolved through the `ToolRegistry` at body construction. |
+| `tools` | yes | Tool spec strings resolved through the `ToolRegistry` at body construction (utility tools are assigned implicitly regardless of the specs). |
 | `subscribe` | no | Un-scoped domain topic names. Entries starting with `agent.` are rejected at parse time (`subscribe_rejects_platform_topic: <topic>`) and the team fails to start — platform events (`agent.*`) are observer-only, never agent-consumed; the platform manages isolation so team authors never see platform subjects. |
 | `skills` | no | Skill spec strings resolved through the `SkillManager` at body construction (wildcards allowed, same anchored-glob semantics as `tools`; a spec matching nothing is silently discarded, unlike tool specs, which fail team load). Each matched skill is listed in the agent's system prompt; the agent loads a skill body on demand with `read_file` (`10-configuration.md` "Skills"). |
 
@@ -79,6 +79,7 @@ interface Tool<TInput = unknown> {
   readonly description: string;
   readonly label: string;          // human-readable name for UI / telemetry
   readonly timeout?: number;       // per-invocation timeout in ms (default 120_000)
+  readonly isUtility?: boolean;    // utility tools are implicitly assigned to every agent
   readonly parameters: TSchema;    // TypeBox schema — the LLM-visible tool schema
   execute(input: TInput, executionContext: ExecutionContext, signal?: AbortSignal): Promise<ToolResult>;
 }
@@ -120,7 +121,7 @@ Registered at platform startup by the `InMemoryToolRegistry` constructor (a crad
 | `write_file` | text-file writes (overwrite) |
 | `edit` | search-and-replace inside a file, with diff preview |
 | `read_artifact` / `write_artifact` | key-value work-product store |
-| `todo_write` | live task checklist |
+| `todo_write` | live task checklist (utility — implicitly assigned to every agent) |
 | `notify` | publish to the team event bus (see "notify and the Subscription Model") |
 | `web_search` / `web_fetch` | web access |
 
