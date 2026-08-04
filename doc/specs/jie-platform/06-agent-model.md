@@ -86,7 +86,7 @@ interface Tool<TInput = unknown> {
 
 interface ToolResult {
   readonly content: string;        // text returned to the LLM conversation
-  readonly details?: unknown;      // structured payload for afterToolCall hooks / telemetry; never shown to the LLM
+  readonly details?: unknown;      // structured payload for afterToolCall hooks / telemetry / TUI display; never shown to the LLM; dropped at persist unless kind is "diff" or "kanban"
   readonly terminate?: boolean;    // pi-agent hint: stop after this tool batch
 }
 ```
@@ -294,7 +294,7 @@ The body subscribes to pi-agent's `AgentEvent` stream and bridges to the bus:
 |---|---|
 | `turn_start` | `agent.turn.start` — deferred to the turn's next pi event and published before that event; payload is the prompt this turn consumes (raw user text for a `user.prompt`, null otherwise), resolved from the body's pending dispatch for a `prompt()`-started turn or from a label keyed by the supplied message for a `followUp()`-fed turn, consumed once |
 | `message_start`, `message_update`, `message_end` (assistant) | streaming pipeline → `agent.stream.chunk` / `agent.stream.end`; assistant `message_end` also publishes `agent.usage` when the message carries usage |
-| `message_end` (every role) | `memory.persist(message, agentKey, sessionId, teamId)` — unconditional, no role check |
+| `message_end` (every role) | `memory.persist(message, agentKey, sessionId, teamId)` — unconditional, no role check; a `toolResult` message is projected first: its `details` is dropped unless `kind` is `"diff"` or `"kanban"` (see Memory Integration) |
 | `turn_end` | on a healthy turn (final `stopReason` not `error`/`aborted`), dequeue one queued message via `agent.followUp()` to continue this run; publish `agent.prompt.queue.update` |
 | `agent_end` | `agent.idle` with the final `stopReason`; also `system.error` when the run ended `error`/`aborted` with a message; fire the `Stop` hook; then defer a drain until pi settles the run — the queue head starts a new run via `agent.prompt()` (an error/aborted `turn_end` feeds nothing, so its queued entries survive to this drain) |
 | `agent_start`, `tool_execution_*` | not bridged — tool telemetry comes from the `beforeToolCall`/`afterToolCall` hooks |
@@ -311,7 +311,7 @@ A prompt drives one pi-agent run: think → optionally call tools → think → 
 
 Two facts belong here; the full contract is canonical in `08-memory.md`.
 
-- **Write-through persist.** Every pi-agent `message_end` → `memory.persist(...)` to SQLite, unconditionally (no role check, no buffering).
+- **Write-through persist.** Every pi-agent `message_end` → `memory.persist(...)` to SQLite, unconditionally (no role check, no buffering). Before persisting, the body projects a `toolResult` message to its persistable form: `details` is dropped unless `kind` is `"diff"` or `"kanban"` — those two are TUI display payloads (diff view, kanban panel) that hydration reads back; every other kind serves only hooks and live telemetry, which never read stored rows. The live message in pi-agent state is not mutated, so same-process history and `agent.tool.result` events keep the full payload.
 - **Session identity.** The `sessionId` is minted per process run × team by the platform (`TeamManager`) and passed to the body (ADR 17); all agents of one team in one process share it. `jie --resume <id>` validates via `memory.hasSession` and fails hard with `unknown_session` on a miss. `restore()` on `start()` returns the prior rows for `(teamId, agentKey, sessionId)`; a fresh session restores empty.
 
 The `transformContext` passed to pi-agent is identity in v1 — compaction, and the `memory.compact()` storage seam it drives, is not wired. See `08-memory.md` "Integration with pi-agent" for the Day-2 wrapper contract.

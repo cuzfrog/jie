@@ -6,7 +6,7 @@ import type {
   BeforeToolCallContext,
   ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
-import type { Api, AssistantMessage, AssistantMessageEvent, Model } from "@earendil-works/pi-ai";
+import type { Api, AssistantMessage, AssistantMessageEvent, Model, ToolResultMessage } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { JieAgentBody } from "./jie-agent-body";
 import type { AgentBodyParams } from "./agent-body";
@@ -102,6 +102,19 @@ function makeAssistantMessage(overrides: Partial<AssistantMessage> = {}): Assist
     timestamp: 0,
     ...overrides,
   };
+}
+
+function makeToolResultMessage(details?: object): ToolResultMessage {
+  const message: ToolResultMessage = {
+    role: "toolResult",
+    toolCallId: "call_x",
+    toolName: "bash",
+    content: [{ type: "text", text: "ok" }],
+    isError: false,
+    timestamp: 0,
+  };
+  if (details !== undefined) message.details = details;
+  return message;
 }
 
 function makeAgentContext(overrides: Partial<{ systemPrompt: string; messages: AgentMessage[] }> = {}): { systemPrompt: string; messages: AgentMessage[] } {
@@ -1522,6 +1535,52 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     h.fireEvent({ type: "message_end", message: msg });
     await Promise.resolve();
     expect(h.persisted).toHaveLength(1);
+  });
+
+  test("message_end strips toolResult details that no display consumer reads", async () => {
+    h.makeBody();
+    h.fireEvent({ type: "message_end", message: makeToolResultMessage({ kind: "bash", exitCode: 0 }) });
+    await Promise.resolve();
+    expect(h.persisted).toHaveLength(1);
+    expect(h.persisted[0]).not.toHaveProperty("details");
+    expect(h.persisted[0]).toMatchObject({ role: "toolResult", toolCallId: "call_x", toolName: "bash", isError: false });
+  });
+
+  test("message_end strips toolResult details without a kind discriminator", async () => {
+    h.makeBody();
+    h.fireEvent({ type: "message_end", message: makeToolResultMessage({ exitCode: 0 }) });
+    await Promise.resolve();
+    expect(h.persisted).toHaveLength(1);
+    expect(h.persisted[0]).not.toHaveProperty("details");
+  });
+
+  test("message_end keeps diff and kanban details for the display consumers", async () => {
+    h.makeBody();
+    const diffDetails = { kind: "diff", path: "a.txt", diff: "-x\n+y" };
+    const kanbanDetails = { kind: "kanban", cards: [{ content: "task", status: "in_progress" }] };
+    h.fireEvent({ type: "message_end", message: makeToolResultMessage(diffDetails) });
+    h.fireEvent({ type: "message_end", message: makeToolResultMessage(kanbanDetails) });
+    await Promise.resolve();
+    expect(h.persisted).toHaveLength(2);
+    expect(h.persisted[0]).toMatchObject({ details: diffDetails });
+    expect(h.persisted[1]).toMatchObject({ details: kanbanDetails });
+  });
+
+  test("message_end persists a toolResult without details unchanged", async () => {
+    h.makeBody();
+    h.fireEvent({ type: "message_end", message: makeToolResultMessage() });
+    await Promise.resolve();
+    expect(h.persisted).toHaveLength(1);
+    expect(h.persisted[0]).toMatchObject({ role: "toolResult", toolCallId: "call_x" });
+    expect(h.persisted[0]).not.toHaveProperty("details");
+  });
+
+  test("message_end stripping does not mutate the live message", async () => {
+    h.makeBody();
+    const message = makeToolResultMessage({ kind: "bash", exitCode: 0 });
+    h.fireEvent({ type: "message_end", message });
+    await Promise.resolve();
+    expect(message.details).toEqual({ kind: "bash", exitCode: 0 });
   });
 
   test("agent_end drains the queue only after the run settles: the entry goes to prompt (not followUp)", async () => {

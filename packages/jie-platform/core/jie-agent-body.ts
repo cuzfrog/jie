@@ -276,7 +276,7 @@ export class JieAgentBody implements AgentBody {
           }
         }
         this.memory.persist(
-          event.message,
+          persistableMessage(event.message),
           this.agentKey,
           this.sessionId,
           this.teamId,
@@ -505,6 +505,17 @@ function jieToolResultOf(piResult: AgentToolResult<unknown>): JieToolResult {
     details: piResult.details,
     terminate: piResult.terminate ?? false,
   };
+}
+
+function persistableMessage(message: AgentMessage): AgentMessage {
+  if (message.role !== "toolResult" || isDisplayDetails(message.details)) return message;
+  const { details: _stripped, ...persistable } = message;
+  return persistable;
+}
+
+function isDisplayDetails(details: unknown): boolean {
+  if (typeof details !== "object" || details === null || !("kind" in details)) return false;
+  return details.kind === "diff" || details.kind === "kanban";
 }
 
 interface QueuedPrompt {
