@@ -88,4 +88,21 @@ describe("fileMutationQueue", () => {
     await second;
     expect(order).toEqual(["first-start", "first-end", "second"]);
   });
+
+  test("a path whose realpath cannot be resolved rejects without poisoning the queue", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "jie-queue-"));
+    try {
+      const loopA = join(dir, "a.txt");
+      const loopB = join(dir, "b.txt");
+      symlinkSync(loopB, loopA);
+      symlinkSync(loopA, loopB);
+      const queue = createFileMutationQueue();
+      await expect(queue.run(loopA, async () => 1)).rejects.toMatchObject({ code: "ELOOP" });
+      const order: string[] = [];
+      await queue.run(join(dir, "c.txt"), async () => { order.push("after"); });
+      expect(order).toEqual(["after"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
