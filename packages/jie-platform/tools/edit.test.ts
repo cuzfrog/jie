@@ -480,6 +480,25 @@ describe("edit with multiple disjoint edits", () => {
     expect(result.details).toMatchObject({ replacementsCount: 3 });
   });
 
+  test("replace_all spans of one entry colliding with another entry -> overlapping_edits", async () => {
+    writeFileSync(join(workspace, "a.txt"), "aba");
+    const tool = createEditTool({ workspaceRoot: workspace });
+    await expect(
+      tool.execute(
+        {
+          path: "a.txt",
+          edits: [
+            { old_string: "a", new_string: "X" },
+            { old_string: "ab", new_string: "Y" },
+          ],
+          replace_all: true,
+        },
+        makeEmptyContext(),
+      ),
+    ).rejects.toMatchObject({ code: "OVERLAPPING_EDITS" });
+    expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("aba");
+  });
+
   test("an empty old_string in an entry -> no_match", async () => {
     writeFileSync(join(workspace, "a.txt"), "hello");
     const tool = createEditTool({ workspaceRoot: workspace });
@@ -562,5 +581,17 @@ describe("edit prepareArguments", () => {
     const tool = createEditTool({ workspaceRoot: "/tmp" });
     expect(tool.prepareArguments!("nonsense")).toBe("nonsense");
     expect(tool.prepareArguments!(null)).toBeNull();
+  });
+
+  test("an unparseable JSON-string edits value passes through for schema rejection", () => {
+    const tool = createEditTool({ workspaceRoot: "/tmp" });
+    const input = { path: "a.txt", edits: "[not json" };
+    expect(tool.prepareArguments!(input)).toBe(input);
+  });
+
+  test("a JSON-string edits value parsing to a non-array passes through for schema rejection", () => {
+    const tool = createEditTool({ workspaceRoot: "/tmp" });
+    const input = { path: "a.txt", edits: "{\"old_string\": \"x\"}" };
+    expect(tool.prepareArguments!(input)).toBe(input);
   });
 });
