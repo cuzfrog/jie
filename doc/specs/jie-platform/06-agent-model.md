@@ -81,6 +81,7 @@ interface Tool<TInput = unknown> {
   readonly timeout?: number;       // per-invocation timeout in ms (default 120_000)
   readonly isUtility?: boolean;    // utility tools are implicitly assigned to every agent
   readonly parameters: TSchema;    // TypeBox schema — the LLM-visible tool schema
+  prepareArguments?(raw: unknown): unknown;  // optional compat shim run before schema validation
   execute(input: TInput, executionContext: ExecutionContext, signal?: AbortSignal): Promise<ToolResult>;
 }
 
@@ -104,7 +105,7 @@ At body construction, each Jie `Tool` is wrapped into pi-agent-core's `AgentTool
 | pi-agent field | Adaptation |
 |---|---|
 | `name`, `description`, `label`, `parameters` | Copied from `Tool` (the TypeBox schema is passed directly) |
-| `prepareArguments(raw)` | `Value.Check(parameters, raw)`; throws on mismatch and pi-agent surfaces the throw as a tool error. No coercion — the LLM's args must already match the schema. |
+| `prepareArguments(raw)` | Runs the tool's own optional `prepareArguments` shim first (e.g. `edit` rewriting the legacy single-pair form into `edits`), then `Value.Check(parameters, prepared)`; throws on mismatch and pi-agent surfaces the throw as a tool error. No coercion beyond the tool's shim — the LLM's args must match the schema. |
 | `execute(toolCallId, params, signal?, onUpdate?)` | Combines signals per the timeout rule, calls `tool.execute(params, ctx, combined)`, wraps the return as `{ content: [{ type: "text", text: result.content }], details: result.details, terminate: result.terminate ?? false }`. Throws (including `AbortError`) propagate. The `onUpdate` callback is not bridged — v1 tools return one final `ToolResult`. |
 | `executionMode` | Always `"sequential"` |
 
@@ -157,10 +158,10 @@ The platform enforces workspace-root containment only (`path_escape`); module-bo
 ### edit
 
 ```typescript
-edit(input: { path: string; old_string: string; new_string: string; replace_all?: boolean })
+edit(input: { path: string; edits: ReadonlyArray<{ old_string: string; new_string: string }>; replace_all?: boolean })
 ```
 
-Search-and-replace inside a workspace text file. Zero occurrences throws `no_match`; more than one with `replace_all` false throws `ambiguous_match` — the LLM must narrow `old_string` or opt into `replace_all`. Matching is tolerant of encoding artifacts: a leading UTF-8 BOM is stripped for matching and restored on write, and both the file content and the `old_string`/`new_string` arguments are normalized to LF for matching; on write the file's detected original line ending (first CRLF vs LF occurrence wins) is restored throughout. On success `content` is a one-line ack (`Edited <path>: <n> replacement(s)`) — the model never sees the diff, keeping it out of subsequent LLM context; for files over 5000 lines the diff is omitted (use `write_file` for wholesale rewrites). `details: { kind: "diff", path, replacementsCount, beforeBytes, afterBytes, diff }` — the TUI renders the diff from the telemetry payload. Both tools share the unified-diff renderer: 3 context lines, hunks merged across gaps of ≤ 6 unchanged lines, `null` above the 5000-line cap. Same workspace/encoding errors as `read_file`, plus `disk_full` on write.
+Search-and-replace inside a workspace text file. Every entry of `edits` is matched against the original file content — not against the result of earlier entries — and all replacements are applied in one atomic write. Each `old_string` must occur exactly once unless `replace_all` is true (`ambiguous_match` otherwise), and the entries' matched regions must be pairwise disjoint (`overlapping_edits` otherwise); zero occurrences throws `no_match`. With multiple entries the error detail names the offending one (`edits[i] of <path>`). The legacy single-pair form (`old_string`/`new_string` at the top level) is still accepted: the tool's `prepareArguments` shim rewrites it into a one-entry `edits` array before schema validation, and unwraps an `edits` value serialized as a JSON string. Matching is tolerant of encoding artifacts: a leading UTF-8 BOM is stripped for matching and restored on write, and both the file content and the `old_string`/`new_string` arguments are normalized to LF for matching; on write the file's detected original line ending (first CRLF vs LF occurrence wins) is restored throughout. On success `content` is a one-line ack (`Edited <path>: <n> replacement(s)`, n counting every applied replacement) — the model never sees the diff, keeping it out of subsequent LLM context; for files over 5000 lines the diff is omitted (use `write_file` for wholesale rewrites). `details: { kind: "diff", path, replacementsCount, beforeBytes, afterBytes, diff }` — the TUI renders the diff from the telemetry payload. Both tools share the unified-diff renderer: 3 context lines, hunks merged across gaps of ≤ 6 unchanged lines, `null` above the 5000-line cap. Same workspace/encoding errors as `read_file`, plus `disk_full` on write.
 
 ### kanban_write
 

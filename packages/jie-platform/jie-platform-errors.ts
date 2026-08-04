@@ -13,6 +13,7 @@ const JiePlatformErrorMessages = {
   IO_ERROR: "I/O error",
   NO_MATCH: "old_string was not found in the file",
   AMBIGUOUS_MATCH: "old_string matched more than one location in the file",
+  OVERLAPPING_EDITS: "edits overlap each other in the file",
 
   KANBAN_WRITE_INVALID: "Kanban board violates the kanban_write contract",
 

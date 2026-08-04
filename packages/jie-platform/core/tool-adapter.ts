@@ -12,12 +12,13 @@ export function adaptToolToAgent(
     label: tool.label,
     parameters: tool.parameters,
     prepareArguments(raw: unknown) {
-      if (!Value.Check(tool.parameters, raw)) {
+      const prepared = tool.prepareArguments ? tool.prepareArguments(raw) : raw;
+      if (!Value.Check(tool.parameters, prepared)) {
         throw new Error(
           `Tool ${tool.name}: argument does not match schema`,
         );
       }
-      return raw as ReturnType<typeof Value.Create>;
+      return prepared as ReturnType<typeof Value.Create>;
     },
     execute: async (
       toolCallId: string,

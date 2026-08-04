@@ -19,7 +19,7 @@ describe("edit", () => {
     writeFileSync(join(workspace, "a.txt"), "alpha\nbeta\ngamma\n");
     const tool = createEditTool({ workspaceRoot: workspace });
     const result = await tool.execute(
-      { path: "a.txt", old_string: "beta", new_string: "BETA" },
+      { path: "a.txt", edits: [{ old_string: "beta", new_string: "BETA" }] },
       makeEmptyContext(),
     );
     expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("alpha\nBETA\ngamma\n");
@@ -34,7 +34,7 @@ describe("edit", () => {
     const tool = createEditTool({ workspaceRoot: workspace });
     await expect(
       tool.execute(
-        { path: "a.txt", old_string: "x", new_string: "X" },
+        { path: "a.txt", edits: [{ old_string: "x", new_string: "X" }] },
         makeEmptyContext(),
       ),
     ).rejects.toMatchObject({ code: "AMBIGUOUS_MATCH" });
@@ -45,7 +45,7 @@ describe("edit", () => {
     writeFileSync(join(workspace, "a.txt"), "x y x y x");
     const tool = createEditTool({ workspaceRoot: workspace });
     const result = await tool.execute(
-      { path: "a.txt", old_string: "x", new_string: "X", replace_all: true },
+      { path: "a.txt", edits: [{ old_string: "x", new_string: "X" }], replace_all: true },
       makeEmptyContext(),
     );
     expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("X y X y X");
@@ -57,7 +57,7 @@ describe("edit", () => {
     const tool = createEditTool({ workspaceRoot: workspace });
     await expect(
       tool.execute(
-        { path: "a.txt", old_string: "missing", new_string: "X" },
+        { path: "a.txt", edits: [{ old_string: "missing", new_string: "X" }] },
         makeEmptyContext(),
       ),
     ).rejects.toMatchObject({ code: "NO_MATCH" });
@@ -68,7 +68,7 @@ describe("edit", () => {
     const tool = createEditTool({ workspaceRoot: workspace });
     await expect(
       tool.execute(
-        { path: "ghost.txt", old_string: "x", new_string: "y" },
+        { path: "ghost.txt", edits: [{ old_string: "x", new_string: "y" }] },
         makeEmptyContext(),
       ),
     ).rejects.toMatchObject({ code: "FILE_NOT_FOUND" });
@@ -78,7 +78,7 @@ describe("edit", () => {
     const tool = createEditTool({ workspaceRoot: workspace });
     await expect(
       tool.execute(
-        { path: "/etc/passwd", old_string: "root", new_string: "ROOT" },
+        { path: "/etc/passwd", edits: [{ old_string: "root", new_string: "ROOT" }] },
         makeEmptyContext(),
       ),
     ).rejects.toMatchObject({ code: "PATH_ESCAPE" });
@@ -88,7 +88,7 @@ describe("edit", () => {
     writeFileSync(join(workspace, "a.txt"), "line1\nline2\nline3\nline4\n");
     const tool = createEditTool({ workspaceRoot: workspace });
     await tool.execute(
-      { path: "a.txt", old_string: "line2\nline3", new_string: "REPLACED" },
+      { path: "a.txt", edits: [{ old_string: "line2\nline3", new_string: "REPLACED" }] },
       makeEmptyContext(),
     );
     expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("line1\nREPLACED\nline4\n");
@@ -98,7 +98,7 @@ describe("edit", () => {
     writeFileSync(join(workspace, "a.txt"), "short\n");
     const tool = createEditTool({ workspaceRoot: workspace });
     await tool.execute(
-      { path: "a.txt", old_string: "short", new_string: "a much longer replacement string" },
+      { path: "a.txt", edits: [{ old_string: "short", new_string: "a much longer replacement string" }] },
       makeEmptyContext(),
     );
     expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe(
@@ -110,7 +110,7 @@ describe("edit", () => {
     writeFileSync(join(workspace, "a.txt"), "aaaa");
     const tool = createEditTool({ workspaceRoot: workspace });
     const result = await tool.execute(
-      { path: "a.txt", old_string: "aa", new_string: "X", replace_all: true },
+      { path: "a.txt", edits: [{ old_string: "aa", new_string: "X" }], replace_all: true },
       makeEmptyContext(),
     );
     expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("XX");
@@ -121,7 +121,7 @@ describe("edit", () => {
     writeFileSync(join(workspace, "a.txt"), "a\nb\nc\n");
     const tool = createEditTool({ workspaceRoot: workspace });
     const result = await tool.execute(
-      { path: "a.txt", old_string: "b", new_string: "B" },
+      { path: "a.txt", edits: [{ old_string: "b", new_string: "B" }] },
       makeEmptyContext(),
     );
     const details = result.details as { diff: string };
@@ -135,7 +135,7 @@ describe("edit", () => {
     const tool = createEditTool({ workspaceRoot: workspace });
     await expect(
       tool.execute(
-        { path: "a.txt", old_string: "", new_string: "x" },
+        { path: "a.txt", edits: [{ old_string: "", new_string: "x" }] },
         makeEmptyContext(),
       ),
     ).rejects.toMatchObject({ code: "NO_MATCH" });
@@ -145,7 +145,7 @@ describe("edit", () => {
     writeFileSync(join(workspace, "a.txt"), "alpha\nbeta\n");
     const tool = createEditTool({ workspaceRoot: workspace });
     const result = await tool.execute(
-      { path: "a.txt", old_string: "beta", new_string: "BETA" },
+      { path: "a.txt", edits: [{ old_string: "beta", new_string: "BETA" }] },
       makeEmptyContext(),
     );
     expect(result.content).toBe("Edited a.txt: 1 replacement");
@@ -157,7 +157,7 @@ describe("edit", () => {
     writeFileSync(join(workspace, "a.txt"), "alpha\nbeta\n");
     const tool = createEditTool({ workspaceRoot: workspace });
     const result = await tool.execute(
-      { path: "a.txt", old_string: "beta", new_string: "beta" },
+      { path: "a.txt", edits: [{ old_string: "beta", new_string: "beta" }] },
       makeEmptyContext(),
     );
     expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("alpha\nbeta\n");
@@ -172,7 +172,7 @@ describe("edit", () => {
     writeFileSync(join(workspace, "a.txt"), "axbxcxd");
     const tool = createEditTool({ workspaceRoot: workspace });
     const result = await tool.execute(
-      { path: "a.txt", old_string: "x", new_string: "", replace_all: true },
+      { path: "a.txt", edits: [{ old_string: "x", new_string: "" }], replace_all: true },
       makeEmptyContext(),
     );
     expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("abcd");
@@ -183,7 +183,7 @@ describe("edit", () => {
     writeFileSync(join(workspace, "a.txt"), "alpha\nbeta");
     const tool = createEditTool({ workspaceRoot: workspace });
     await tool.execute(
-      { path: "a.txt", old_string: "alpha", new_string: "ALPHA" },
+      { path: "a.txt", edits: [{ old_string: "alpha", new_string: "ALPHA" }] },
       makeEmptyContext(),
     );
     expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("ALPHA\nbeta");
@@ -193,7 +193,7 @@ describe("edit", () => {
     writeFileSync(join(workspace, "a.txt"), "héllo", "utf-8");
     const tool = createEditTool({ workspaceRoot: workspace });
     const result = await tool.execute(
-      { path: "a.txt", old_string: "héllo", new_string: "héllo!" },
+      { path: "a.txt", edits: [{ old_string: "héllo", new_string: "héllo!" }] },
       makeEmptyContext(),
     );
     const details = result.details as { beforeBytes: number; afterBytes: number };
@@ -206,7 +206,7 @@ describe("edit", () => {
     writeFileSync(join(workspace, "big.txt"), big);
     const tool = createEditTool({ workspaceRoot: workspace });
     const result = await tool.execute(
-      { path: "big.txt", old_string: "line 0", new_string: "LINE 0" },
+      { path: "big.txt", edits: [{ old_string: "line 0", new_string: "LINE 0" }] },
       makeEmptyContext(),
     );
     const details = result.details as { diff: string | null; replacementsCount: number };
@@ -218,7 +218,7 @@ describe("edit", () => {
     writeFileSync(join(workspace, "a.txt"), "x");
     const tool = createEditTool({ workspaceRoot: workspace });
     const result = await tool.execute(
-      { path: "a.txt", old_string: "x", new_string: "y" },
+      { path: "a.txt", edits: [{ old_string: "x", new_string: "y" }] },
       makeEmptyContext(),
     );
     expect(result.details).toMatchObject({ kind: "diff" });
@@ -240,7 +240,7 @@ describe("edit line-ending and BOM tolerance", () => {
     writeFileSync(join(workspace, "a.txt"), "alpha\r\nbeta\r\ngamma\r\n");
     const tool = createEditTool({ workspaceRoot: workspace });
     await tool.execute(
-      { path: "a.txt", old_string: "alpha\nbeta", new_string: "X" },
+      { path: "a.txt", edits: [{ old_string: "alpha\nbeta", new_string: "X" }] },
       makeEmptyContext(),
     );
     expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("X\r\ngamma\r\n");
@@ -250,7 +250,7 @@ describe("edit line-ending and BOM tolerance", () => {
     writeFileSync(join(workspace, "a.txt"), "alpha\nbeta\n");
     const tool = createEditTool({ workspaceRoot: workspace });
     await tool.execute(
-      { path: "a.txt", old_string: "alpha\r\nbeta", new_string: "X" },
+      { path: "a.txt", edits: [{ old_string: "alpha\r\nbeta", new_string: "X" }] },
       makeEmptyContext(),
     );
     expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("X\n");
@@ -260,7 +260,7 @@ describe("edit line-ending and BOM tolerance", () => {
     writeFileSync(join(workspace, "a.txt"), "alpha\r\nbeta\r\n");
     const tool = createEditTool({ workspaceRoot: workspace });
     await tool.execute(
-      { path: "a.txt", old_string: "beta", new_string: "one\ntwo" },
+      { path: "a.txt", edits: [{ old_string: "beta", new_string: "one\ntwo" }] },
       makeEmptyContext(),
     );
     expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("alpha\r\none\r\ntwo\r\n");
@@ -270,7 +270,7 @@ describe("edit line-ending and BOM tolerance", () => {
     writeFileSync(join(workspace, "a.txt"), "\uFEFFalpha\nbeta\n");
     const tool = createEditTool({ workspaceRoot: workspace });
     await tool.execute(
-      { path: "a.txt", old_string: "alpha", new_string: "ALPHA" },
+      { path: "a.txt", edits: [{ old_string: "alpha", new_string: "ALPHA" }] },
       makeEmptyContext(),
     );
     const after = readFileSync(join(workspace, "a.txt"), "utf-8");
@@ -282,7 +282,7 @@ describe("edit line-ending and BOM tolerance", () => {
     writeFileSync(join(workspace, "a.txt"), "\uFEFFalpha\r\nbeta\r\n");
     const tool = createEditTool({ workspaceRoot: workspace });
     await tool.execute(
-      { path: "a.txt", old_string: "alpha\nbeta", new_string: "X" },
+      { path: "a.txt", edits: [{ old_string: "alpha\nbeta", new_string: "X" }] },
       makeEmptyContext(),
     );
     expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("\uFEFFX\r\n");
@@ -292,7 +292,7 @@ describe("edit line-ending and BOM tolerance", () => {
     writeFileSync(join(workspace, "a.txt"), "\uFEFFa\r\nb\r\n");
     const tool = createEditTool({ workspaceRoot: workspace });
     const result = await tool.execute(
-      { path: "a.txt", old_string: "b", new_string: "B" },
+      { path: "a.txt", edits: [{ old_string: "b", new_string: "B" }] },
       makeEmptyContext(),
     );
     const details = result.details as { beforeBytes: number; afterBytes: number };
@@ -304,11 +304,263 @@ describe("edit line-ending and BOM tolerance", () => {
     writeFileSync(join(workspace, "a.txt"), "alpha\r\nbeta\r\n");
     const tool = createEditTool({ workspaceRoot: workspace });
     const result = await tool.execute(
-      { path: "a.txt", old_string: "beta", new_string: "BETA" },
+      { path: "a.txt", edits: [{ old_string: "beta", new_string: "BETA" }] },
       makeEmptyContext(),
     );
     const details = result.details as { diff: string };
     expect(details.diff).toContain("-beta");
     expect(details.diff).not.toContain("\r");
+  });
+});
+
+describe("edit with multiple disjoint edits", () => {
+  let workspace: string;
+
+  beforeEach(() => {
+    workspace = mkdtempSync(join(tmpdir(), "jie-edit-"));
+  });
+
+  afterEach(() => {
+    rmSync(workspace, { recursive: true, force: true });
+  });
+
+  test("applies several disjoint edits in one call, each matched against the original content", async () => {
+    writeFileSync(join(workspace, "a.txt"), "alpha\nbeta\ngamma\n");
+    const tool = createEditTool({ workspaceRoot: workspace });
+    const result = await tool.execute(
+      {
+        path: "a.txt",
+        edits: [
+          { old_string: "beta", new_string: "BETA" },
+          { old_string: "alpha", new_string: "ALPHA" },
+        ],
+      },
+      makeEmptyContext(),
+    );
+    expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("ALPHA\nBETA\ngamma\n");
+    expect(result.details).toMatchObject({ replacementsCount: 2 });
+    expect(result.content).toBe("Edited a.txt: 2 replacements");
+  });
+
+  test("an earlier edit's replacement is not visible to a later edit's matching", async () => {
+    writeFileSync(join(workspace, "a.txt"), "one\ntwo\n");
+    const tool = createEditTool({ workspaceRoot: workspace });
+    await tool.execute(
+      {
+        path: "a.txt",
+        edits: [
+          { old_string: "one", new_string: "two" },
+          { old_string: "two", new_string: "TWO" },
+        ],
+      },
+      makeEmptyContext(),
+    );
+    expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("two\nTWO\n");
+  });
+
+  test("overlapping edits -> overlapping_edits, file untouched", async () => {
+    writeFileSync(join(workspace, "a.txt"), "abcdef");
+    const tool = createEditTool({ workspaceRoot: workspace });
+    await expect(
+      tool.execute(
+        {
+          path: "a.txt",
+          edits: [
+            { old_string: "abc", new_string: "X" },
+            { old_string: "cde", new_string: "Y" },
+          ],
+        },
+        makeEmptyContext(),
+      ),
+    ).rejects.toMatchObject({ code: "OVERLAPPING_EDITS" });
+    expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("abcdef");
+  });
+
+  test("nested edits -> overlapping_edits", async () => {
+    writeFileSync(join(workspace, "a.txt"), "abcdef");
+    const tool = createEditTool({ workspaceRoot: workspace });
+    await expect(
+      tool.execute(
+        {
+          path: "a.txt",
+          edits: [
+            { old_string: "abcd", new_string: "X" },
+            { old_string: "bc", new_string: "Y" },
+          ],
+        },
+        makeEmptyContext(),
+      ),
+    ).rejects.toMatchObject({ code: "OVERLAPPING_EDITS" });
+  });
+
+  test("duplicate entries targeting the same region -> overlapping_edits", async () => {
+    writeFileSync(join(workspace, "a.txt"), "abc");
+    const tool = createEditTool({ workspaceRoot: workspace });
+    await expect(
+      tool.execute(
+        {
+          path: "a.txt",
+          edits: [
+            { old_string: "ab", new_string: "X" },
+            { old_string: "ab", new_string: "Y" },
+          ],
+        },
+        makeEmptyContext(),
+      ),
+    ).rejects.toMatchObject({ code: "OVERLAPPING_EDITS" });
+  });
+
+  test("adjacent edits sharing a boundary are applied", async () => {
+    writeFileSync(join(workspace, "a.txt"), "abcd");
+    const tool = createEditTool({ workspaceRoot: workspace });
+    await tool.execute(
+      {
+        path: "a.txt",
+        edits: [
+          { old_string: "ab", new_string: "X" },
+          { old_string: "cd", new_string: "Y" },
+        ],
+      },
+      makeEmptyContext(),
+    );
+    expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("XY");
+  });
+
+  test("a twice-matching entry without replace_all -> ambiguous_match naming the edit", async () => {
+    writeFileSync(join(workspace, "a.txt"), "x y x z");
+    const tool = createEditTool({ workspaceRoot: workspace });
+    await expect(
+      tool.execute(
+        {
+          path: "a.txt",
+          edits: [
+            { old_string: "z", new_string: "Z" },
+            { old_string: "x", new_string: "X" },
+          ],
+        },
+        makeEmptyContext(),
+      ),
+    ).rejects.toMatchObject({ code: "AMBIGUOUS_MATCH", detail: "2 matches in edits[1] of a.txt" });
+    expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("x y x z");
+  });
+
+  test("a missing entry -> no_match naming the edit", async () => {
+    writeFileSync(join(workspace, "a.txt"), "alpha\nbeta\n");
+    const tool = createEditTool({ workspaceRoot: workspace });
+    await expect(
+      tool.execute(
+        {
+          path: "a.txt",
+          edits: [
+            { old_string: "alpha", new_string: "ALPHA" },
+            { old_string: "missing", new_string: "X" },
+          ],
+        },
+        makeEmptyContext(),
+      ),
+    ).rejects.toMatchObject({ code: "NO_MATCH", detail: "edits[1] of a.txt" });
+    expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("alpha\nbeta\n");
+  });
+
+  test("replace_all applies to every entry of the batch", async () => {
+    writeFileSync(join(workspace, "a.txt"), "x a x b");
+    const tool = createEditTool({ workspaceRoot: workspace });
+    const result = await tool.execute(
+      {
+        path: "a.txt",
+        edits: [
+          { old_string: "x", new_string: "X" },
+          { old_string: "a", new_string: "A" },
+        ],
+        replace_all: true,
+      },
+      makeEmptyContext(),
+    );
+    expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("X A X b");
+    expect(result.details).toMatchObject({ replacementsCount: 3 });
+  });
+
+  test("an empty old_string in an entry -> no_match", async () => {
+    writeFileSync(join(workspace, "a.txt"), "hello");
+    const tool = createEditTool({ workspaceRoot: workspace });
+    await expect(
+      tool.execute(
+        { path: "a.txt", edits: [{ old_string: "", new_string: "x" }] },
+        makeEmptyContext(),
+      ),
+    ).rejects.toMatchObject({ code: "NO_MATCH" });
+  });
+
+  test("batch edits compose with line-ending normalization", async () => {
+    writeFileSync(join(workspace, "a.txt"), "alpha\r\nbeta\r\n");
+    const tool = createEditTool({ workspaceRoot: workspace });
+    await tool.execute(
+      {
+        path: "a.txt",
+        edits: [
+          { old_string: "alpha\nbeta", new_string: "X\nY" },
+        ],
+      },
+      makeEmptyContext(),
+    );
+    expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("X\r\nY\r\n");
+  });
+
+  test("the diff covers every edit of the batch", async () => {
+    writeFileSync(join(workspace, "a.txt"), "alpha\nbeta\ngamma\n");
+    const tool = createEditTool({ workspaceRoot: workspace });
+    const result = await tool.execute(
+      {
+        path: "a.txt",
+        edits: [
+          { old_string: "alpha", new_string: "ALPHA" },
+          { old_string: "gamma", new_string: "GAMMA" },
+        ],
+      },
+      makeEmptyContext(),
+    );
+    const details = result.details as { diff: string };
+    expect(details.diff).toContain("-alpha");
+    expect(details.diff).toContain("+ALPHA");
+    expect(details.diff).toContain("-gamma");
+    expect(details.diff).toContain("+GAMMA");
+  });
+});
+
+describe("edit prepareArguments", () => {
+  test("rewrites the legacy single-pair form into an edits array", () => {
+    const tool = createEditTool({ workspaceRoot: "/tmp" });
+    const prepared = tool.prepareArguments!({
+      path: "a.txt",
+      old_string: "x",
+      new_string: "y",
+      replace_all: true,
+    });
+    expect(prepared).toEqual({
+      path: "a.txt",
+      edits: [{ old_string: "x", new_string: "y" }],
+      replace_all: true,
+    });
+  });
+
+  test("parses a JSON-string edits array", () => {
+    const tool = createEditTool({ workspaceRoot: "/tmp" });
+    const prepared = tool.prepareArguments!({
+      path: "a.txt",
+      edits: JSON.stringify([{ old_string: "x", new_string: "y" }]),
+    });
+    expect(prepared).toEqual({ path: "a.txt", edits: [{ old_string: "x", new_string: "y" }] });
+  });
+
+  test("passes canonical input through unchanged", () => {
+    const tool = createEditTool({ workspaceRoot: "/tmp" });
+    const input = { path: "a.txt", edits: [{ old_string: "x", new_string: "y" }] };
+    expect(tool.prepareArguments!(input)).toEqual(input);
+  });
+
+  test("passes non-object input through for schema rejection", () => {
+    const tool = createEditTool({ workspaceRoot: "/tmp" });
+    expect(tool.prepareArguments!("nonsense")).toBe("nonsense");
+    expect(tool.prepareArguments!(null)).toBeNull();
   });
 });

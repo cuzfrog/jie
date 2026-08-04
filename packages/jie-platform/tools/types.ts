@@ -22,6 +22,7 @@ export interface Tool<TInput = unknown> {
   readonly timeout?: number;
   readonly isUtility?: boolean;
   readonly parameters: TSchema;
+  prepareArguments?(raw: unknown): unknown;
   execute(
     input: TInput,
     executionContext: ExecutionContext,
