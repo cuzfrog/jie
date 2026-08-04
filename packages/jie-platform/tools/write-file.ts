@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
+import type { FileMutationQueue } from "./file-mutation-queue";
 import { mapErrno, resolveWithinWorkspace } from "./path-utils";
 import { renderUnifiedDiff } from "./unified-diff";
 
@@ -16,6 +17,7 @@ blueprint's role system prompt / descriptor contract applies on top.`;
 
 export interface WriteFileDeps {
   workspaceRoot: string;
+  fileMutationQueue: FileMutationQueue;
 }
 
 const ERRNO_MAP: Record<string, JiePlatformErrorCode> = {
@@ -46,53 +48,56 @@ export function createWriteFileTool(dependencies: WriteFileDeps): Tool<WriteFile
       }
 
       const realPath = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
-
-      let stat;
-      try {
-        stat = statSync(realPath);
-      } catch (error) {
-        const errno = error as NodeJS.ErrnoException;
-        if (errno.code !== "ENOENT") throw mapErrno(error, ERRNO_MAP);
-        stat = null;
-      }
-      if (stat !== null && stat.isDirectory()) {
-        throw new JiePlatformError("IS_A_DIRECTORY", { detail: input.path });
-      }
-
-      const before = readBeforeContent(realPath, stat);
-
-      try {
-        mkdirSync(dirname(realPath), { recursive: true });
-      } catch (error) {
-        throw mapErrno(error, ERRNO_MAP);
-      }
-
-      try {
-        writeFileSync(realPath, input.content, "utf-8");
-      } catch (error) {
-        throw mapErrno(error, ERRNO_MAP);
-      }
-
-      let createdAt: string;
-      try {
-        createdAt = statSync(realPath).mtime.toISOString();
-      } catch {
-        createdAt = new Date().toISOString();
-      }
-
-      const bytesWritten = new TextEncoder().encode(input.content).length;
-      const details: WriteFileResultDetails = {
-        kind: "diff",
-        path: input.path,
-        bytesWritten,
-        createdAt,
-        diff: before === null ? null : renderUnifiedDiff(before, input.content),
-      };
-      return {
-        content: `Successfully wrote ${bytesWritten} bytes to ${input.path}`,
-        details,
-      };
+      return dependencies.fileMutationQueue.run(realPath, () => applyWrite(input, realPath));
     },
+  };
+}
+
+async function applyWrite(input: WriteFileInput, realPath: string): Promise<ToolResult> {
+  let stat;
+  try {
+    stat = statSync(realPath);
+  } catch (error) {
+    const errno = error as NodeJS.ErrnoException;
+    if (errno.code !== "ENOENT") throw mapErrno(error, ERRNO_MAP);
+    stat = null;
+  }
+  if (stat !== null && stat.isDirectory()) {
+    throw new JiePlatformError("IS_A_DIRECTORY", { detail: input.path });
+  }
+
+  const before = readBeforeContent(realPath, stat);
+
+  try {
+    mkdirSync(dirname(realPath), { recursive: true });
+  } catch (error) {
+    throw mapErrno(error, ERRNO_MAP);
+  }
+
+  try {
+    writeFileSync(realPath, input.content, "utf-8");
+  } catch (error) {
+    throw mapErrno(error, ERRNO_MAP);
+  }
+
+  let createdAt: string;
+  try {
+    createdAt = statSync(realPath).mtime.toISOString();
+  } catch {
+    createdAt = new Date().toISOString();
+  }
+
+  const bytesWritten = new TextEncoder().encode(input.content).length;
+  const details: WriteFileResultDetails = {
+    kind: "diff",
+    path: input.path,
+    bytesWritten,
+    createdAt,
+    diff: before === null ? null : renderUnifiedDiff(before, input.content),
+  };
+  return {
+    content: `Successfully wrote ${bytesWritten} bytes to ${input.path}`,
+    details,
   };
 }
 

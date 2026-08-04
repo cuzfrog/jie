@@ -8,8 +8,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createFileMutationQueue, type FileMutationQueue } from "./file-mutation-queue";
 import { createWriteFileTool } from "./write-file";
 import { makeEmptyContext } from "./_test-context";
+
+const fileMutationQueue = createFileMutationQueue();
 
 describe("write_file", () => {
   let workspace: string;
@@ -23,7 +26,7 @@ describe("write_file", () => {
   });
 
   test("writes a file; LLM content reports bytes written", async () => {
-    const tool = createWriteFileTool({ workspaceRoot: workspace });
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     const result = await tool.execute(
       { path: "a.txt", content: "hello" },
       makeEmptyContext(),
@@ -32,8 +35,22 @@ describe("write_file", () => {
     expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("hello");
   });
 
+  test("execute acquires the mutation queue on the resolved path", async () => {
+    const queuedPaths: string[] = [];
+    const queue: FileMutationQueue = {
+      run(path, operation) {
+        queuedPaths.push(path);
+        return operation();
+      },
+    };
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue: queue });
+    const result = await tool.execute({ path: "a.txt", content: "hello" }, makeEmptyContext());
+    expect(queuedPaths).toEqual([join(workspace, "a.txt")]);
+    expect(result.details).toMatchObject({ bytesWritten: 5 });
+  });
+
   test("multi-byte content reports UTF-8 bytes, not UTF-16 length", async () => {
-    const tool = createWriteFileTool({ workspaceRoot: workspace });
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     const result = await tool.execute(
       { path: "a.txt", content: "你好" },
       makeEmptyContext(),
@@ -44,13 +61,13 @@ describe("write_file", () => {
 
   test("overwrites an existing file (idempotent)", async () => {
     writeFileSync(join(workspace, "a.txt"), "old");
-    const tool = createWriteFileTool({ workspaceRoot: workspace });
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     await tool.execute({ path: "a.txt", content: "new" }, makeEmptyContext());
     expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("new");
   });
 
   test("auto-creates missing parent directories", async () => {
-    const tool = createWriteFileTool({ workspaceRoot: workspace });
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     await tool.execute(
       { path: "deep/nested/dir/a.txt", content: "x" },
       makeEmptyContext(),
@@ -59,7 +76,7 @@ describe("write_file", () => {
   });
 
   test("content over 5 MiB -> file_too_large", async () => {
-    const tool = createWriteFileTool({ workspaceRoot: workspace });
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     const huge = "x".repeat(5 * 1024 * 1024 + 1);
     await expect(
       tool.execute({ path: "a.txt", content: huge }, makeEmptyContext()),
@@ -70,7 +87,7 @@ describe("write_file", () => {
   });
 
   test("content exactly at 5 MiB is accepted", async () => {
-    const tool = createWriteFileTool({ workspaceRoot: workspace });
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     const max = "x".repeat(5 * 1024 * 1024);
     const result = await tool.execute(
       { path: "a.txt", content: max },
@@ -80,7 +97,7 @@ describe("write_file", () => {
   });
 
   test("path outside the workspace -> path_escape", async () => {
-    const tool = createWriteFileTool({ workspaceRoot: workspace });
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     await expect(
       tool.execute(
         { path: "/etc/cant-touch-this", content: "x" },
@@ -91,7 +108,7 @@ describe("write_file", () => {
 
   test("path is a directory -> is_a_directory", async () => {
     mkdirSync(join(workspace, "subdir"));
-    const tool = createWriteFileTool({ workspaceRoot: workspace });
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     await expect(
       tool.execute(
         { path: "subdir", content: "x" },
@@ -101,7 +118,7 @@ describe("write_file", () => {
   });
 
   test("details carries path, bytes_written, created_at", async () => {
-    const tool = createWriteFileTool({ workspaceRoot: workspace });
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     const result = await tool.execute(
       { path: "a.txt", content: "hello" },
       makeEmptyContext(),
@@ -114,13 +131,13 @@ describe("write_file", () => {
   });
 
   test("details carries the discriminator kind: 'diff'", async () => {
-    const tool = createWriteFileTool({ workspaceRoot: workspace });
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     const result = await tool.execute({ path: "a.txt", content: "x" }, makeEmptyContext());
     expect(result.details).toMatchObject({ kind: "diff" });
   });
 
   test("a new file reports an all-added diff", async () => {
-    const tool = createWriteFileTool({ workspaceRoot: workspace });
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     const result = await tool.execute(
       { path: "a.txt", content: "one\ntwo\n" },
       makeEmptyContext(),
@@ -130,7 +147,7 @@ describe("write_file", () => {
 
   test("overwriting an existing file reports a unified diff of the change", async () => {
     writeFileSync(join(workspace, "a.txt"), "a\nb\nc\n");
-    const tool = createWriteFileTool({ workspaceRoot: workspace });
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     const result = await tool.execute(
       { path: "a.txt", content: "a\nB\nc\n" },
       makeEmptyContext(),
@@ -140,7 +157,7 @@ describe("write_file", () => {
 
   test("rewriting identical content reports an empty diff", async () => {
     writeFileSync(join(workspace, "a.txt"), "same\n");
-    const tool = createWriteFileTool({ workspaceRoot: workspace });
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     const result = await tool.execute(
       { path: "a.txt", content: "same\n" },
       makeEmptyContext(),
@@ -150,7 +167,7 @@ describe("write_file", () => {
 
   test("overwriting a non-UTF-8 file succeeds with a null diff", async () => {
     writeFileSync(join(workspace, "a.bin"), new Uint8Array([0xff, 0xfe, 0x00, 0x01]));
-    const tool = createWriteFileTool({ workspaceRoot: workspace });
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     const result = await tool.execute(
       { path: "a.bin", content: "text now" },
       makeEmptyContext(),
@@ -162,7 +179,7 @@ describe("write_file", () => {
   test("overwriting a file beyond the diff line cap reports a null diff", async () => {
     const big = Array.from({ length: 6_000 }, (_, i) => `line ${i}`).join("\n");
     writeFileSync(join(workspace, "big.txt"), big);
-    const tool = createWriteFileTool({ workspaceRoot: workspace });
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     const result = await tool.execute(
       { path: "big.txt", content: `${big}\nnew line` },
       makeEmptyContext(),
@@ -172,7 +189,7 @@ describe("write_file", () => {
 
   test("the LLM content stays the summary line without the diff", async () => {
     writeFileSync(join(workspace, "a.txt"), "old\n");
-    const tool = createWriteFileTool({ workspaceRoot: workspace });
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     const result = await tool.execute(
       { path: "a.txt", content: "new\n" },
       makeEmptyContext(),

@@ -4,6 +4,8 @@ no-new-exports:
   - bash.ts
   - edit.test.ts
   - edit.ts
+  - file-mutation-queue.test.ts
+  - file-mutation-queue.ts
   - index.ts
   - notify.test.ts
   - notify.ts
