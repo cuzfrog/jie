@@ -224,3 +224,91 @@ describe("edit", () => {
     expect(result.details).toMatchObject({ kind: "diff" });
   });
 });
+
+describe("edit line-ending and BOM tolerance", () => {
+  let workspace: string;
+
+  beforeEach(() => {
+    workspace = mkdtempSync(join(tmpdir(), "jie-edit-"));
+  });
+
+  afterEach(() => {
+    rmSync(workspace, { recursive: true, force: true });
+  });
+
+  test("CRLF file matches an LF old_string and keeps CRLF on write", async () => {
+    writeFileSync(join(workspace, "a.txt"), "alpha\r\nbeta\r\ngamma\r\n");
+    const tool = createEditTool({ workspaceRoot: workspace });
+    await tool.execute(
+      { path: "a.txt", old_string: "alpha\nbeta", new_string: "X" },
+      makeEmptyContext(),
+    );
+    expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("X\r\ngamma\r\n");
+  });
+
+  test("LF file matches a CRLF old_string and stays LF on write", async () => {
+    writeFileSync(join(workspace, "a.txt"), "alpha\nbeta\n");
+    const tool = createEditTool({ workspaceRoot: workspace });
+    await tool.execute(
+      { path: "a.txt", old_string: "alpha\r\nbeta", new_string: "X" },
+      makeEmptyContext(),
+    );
+    expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("X\n");
+  });
+
+  test("new_string line endings follow the file's detected ending", async () => {
+    writeFileSync(join(workspace, "a.txt"), "alpha\r\nbeta\r\n");
+    const tool = createEditTool({ workspaceRoot: workspace });
+    await tool.execute(
+      { path: "a.txt", old_string: "beta", new_string: "one\ntwo" },
+      makeEmptyContext(),
+    );
+    expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("alpha\r\none\r\ntwo\r\n");
+  });
+
+  test("a BOM is ignored for matching and preserved on write", async () => {
+    writeFileSync(join(workspace, "a.txt"), "\uFEFFalpha\nbeta\n");
+    const tool = createEditTool({ workspaceRoot: workspace });
+    await tool.execute(
+      { path: "a.txt", old_string: "alpha", new_string: "ALPHA" },
+      makeEmptyContext(),
+    );
+    const after = readFileSync(join(workspace, "a.txt"), "utf-8");
+    expect(after.charCodeAt(0)).toBe(0xfeff);
+    expect(after).toBe("\uFEFFALPHA\nbeta\n");
+  });
+
+  test("BOM+CRLF file matches an LF old_string at the first line and keeps both", async () => {
+    writeFileSync(join(workspace, "a.txt"), "\uFEFFalpha\r\nbeta\r\n");
+    const tool = createEditTool({ workspaceRoot: workspace });
+    await tool.execute(
+      { path: "a.txt", old_string: "alpha\nbeta", new_string: "X" },
+      makeEmptyContext(),
+    );
+    expect(readFileSync(join(workspace, "a.txt"), "utf-8")).toBe("\uFEFFX\r\n");
+  });
+
+  test("beforeBytes / afterBytes count the actual file bytes including CRLF and BOM", async () => {
+    writeFileSync(join(workspace, "a.txt"), "\uFEFFa\r\nb\r\n");
+    const tool = createEditTool({ workspaceRoot: workspace });
+    const result = await tool.execute(
+      { path: "a.txt", old_string: "b", new_string: "B" },
+      makeEmptyContext(),
+    );
+    const details = result.details as { beforeBytes: number; afterBytes: number };
+    expect(details.beforeBytes).toBe(9);
+    expect(details.afterBytes).toBe(9);
+  });
+
+  test("the diff preview renders normalized LF content without carriage returns", async () => {
+    writeFileSync(join(workspace, "a.txt"), "alpha\r\nbeta\r\n");
+    const tool = createEditTool({ workspaceRoot: workspace });
+    const result = await tool.execute(
+      { path: "a.txt", old_string: "beta", new_string: "BETA" },
+      makeEmptyContext(),
+    );
+    const details = result.details as { diff: string };
+    expect(details.diff).toContain("-beta");
+    expect(details.diff).not.toContain("\r");
+  });
+});
