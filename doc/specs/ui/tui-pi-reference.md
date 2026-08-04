@@ -106,11 +106,11 @@ Bash-mode border is also driven by theme: `bashMode` → dark `#b5bd68`, light `
   - `DynamicBorder`: renders `"─".repeat(Math.max(1, width))` (`dynamic-border.ts:23`). Default color is `border` (`#5f87ff` dark / `#547da7` light). Used inside `bash-execution.ts` (top + bottom, color = `bashMode` or `dim` for `!!`), `BorderedLoader` (`border`), and around sections that need a thin rule.
   - Markdown `---` hr: `─` repeated up to `min(width, 80)` (`markdown.ts:464`), color = `mdHr`.
   - Inside a markdown table: `┌─…─┬─…─┐`, `├─…─┼─…─┤`, `└─…─┴─…─┘` borders drawn with `─` (`markdown.ts:803-851`); not theme-colored, raw glyphs.
-- No vertical rail-and-chat separator is used in the built-in TUI — pi's TUI is a single column. Jie's team strip stays in that single column below the footer and adds no separator of its own (`tui-team-panel.md`).
+- No vertical rail-and-chat separator is used in the built-in TUI — pi's TUI is a single column. Jie's team panel stays in that single column below the footer, framed in its own thin box (`tui-team-panel.md`).
 
-## 4. Team strip styling
+## 4. Team panel styling
 
-Jie's team strip is a net-new surface — pi's built-in TUI has no equivalent (single column, §3). The jie-specific color choices live in `tui-team-panel.md`. This doc only lists pi's tokens; the application of those tokens to the strip is a jie-side decision.
+Jie's team panel is a net-new surface — pi's built-in TUI has no equivalent (single column, §3). The jie-specific color choices live in `tui-team-panel.md`. This doc only lists pi's tokens; the application of those tokens to the panel is a jie-side decision.
 
 ## 5. Footer styling
 

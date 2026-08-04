@@ -24,13 +24,20 @@ export class Footer implements Component {
     const stats: string[] = [style(contextSegmentColor(focused))(contextSegmentText(focused))];
     const queue = formatQueueIndicator(focused === null ? null : focused.queue);
     if (queue !== null) stats.push(style("warning")(queue));
-    stats.push(`${style("accent")("/help")}${style("muted")(" to show commands and shortcuts")}`);
+    stats.push(footerHelpInfo(state));
     const modelInfo = focused === null ? null : focused.model;
     const model = modelInfo === null ? style("muted")("—") : formatModelSegment(modelInfo);
     return [identityLine, rightAligned(stats.join("  "), model, w)];
   }
 
   invalidate(): void {}
+}
+
+function footerHelpInfo(state: TuiState): string {
+  if (state.teamId !== null && state.editorCursorAtStart) {
+    return `${style("accent")("←")}${style("muted")(" to toggle team panel")}`;
+  }
+  return `${style("accent")("/help")}${style("muted")(" to show commands and shortcuts")}`;
 }
 
 function contextSegmentText(focused: AgentUiState | null): string {

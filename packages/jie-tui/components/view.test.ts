@@ -112,30 +112,41 @@ describe("syncWorkingSlot", () => {
 
 describe("resolveGlobalKey", () => {
   test("ctrl+t maps to toggleThinking", () => {
-    expect(_resolveGlobalKey("\x14")).toEqual(Actions.toggleThinking());
+    expect(_resolveGlobalKey("\x14", makeTuiState())).toEqual(Actions.toggleThinking());
   });
 
   test("ctrl+o maps to toggleToolCards", () => {
-    expect(_resolveGlobalKey("\x0f")).toEqual(Actions.toggleToolCards());
+    expect(_resolveGlobalKey("\x0f", makeTuiState())).toEqual(Actions.toggleToolCards());
   });
 
-  test("ctrl+down maps to toggling the team panel", () => {
-    expect(_resolveGlobalKey("\x1b[1;5B")).toEqual(Actions.toggleTeamPanel());
+  test("left maps to toggling the team panel while the editor cursor sits at the buffer start", () => {
+    expect(_resolveGlobalKey("\x1b[D", makeTuiState({ editorCursorAtStart: true }))).toEqual(Actions.toggleTeamPanel());
+  });
+
+  test("left is left to the editor once the cursor moves away from the buffer start", () => {
+    expect(_resolveGlobalKey("\x1b[D", makeTuiState({ editorCursorAtStart: false }))).toBeNull();
+  });
+
+  test("ctrl+down no longer toggles the team panel", () => {
+    expect(_resolveGlobalKey("\x1b[1;5B", makeTuiState({ editorCursorAtStart: true }))).toBeNull();
   });
 
   test("plain, shift and other ctrl arrows are left to the editor", () => {
-    expect(_resolveGlobalKey("\x1b[A")).toBeNull();
-    expect(_resolveGlobalKey("\x1b[B")).toBeNull();
-    expect(_resolveGlobalKey("\x1b[1;2A")).toBeNull();
-    expect(_resolveGlobalKey("\x1b[1;2B")).toBeNull();
-    expect(_resolveGlobalKey("\x1b[1;5A")).toBeNull();
-    expect(_resolveGlobalKey("\x1b[1;2D")).toBeNull();
-    expect(_resolveGlobalKey("\x1b[1;5D")).toBeNull();
+    const state = makeTuiState({ editorCursorAtStart: true });
+    expect(_resolveGlobalKey("\x1b[A", state)).toBeNull();
+    expect(_resolveGlobalKey("\x1b[B", state)).toBeNull();
+    expect(_resolveGlobalKey("\x1b[C", state)).toBeNull();
+    expect(_resolveGlobalKey("\x1b[1;2A", state)).toBeNull();
+    expect(_resolveGlobalKey("\x1b[1;2B", state)).toBeNull();
+    expect(_resolveGlobalKey("\x1b[1;5A", state)).toBeNull();
+    expect(_resolveGlobalKey("\x1b[1;2D", state)).toBeNull();
+    expect(_resolveGlobalKey("\x1b[1;5D", state)).toBeNull();
   });
 
   test("any other key is left to the editor", () => {
-    expect(_resolveGlobalKey("a")).toBeNull();
-    expect(_resolveGlobalKey("\r")).toBeNull();
+    const state = makeTuiState({ editorCursorAtStart: true });
+    expect(_resolveGlobalKey("a", state)).toBeNull();
+    expect(_resolveGlobalKey("\r", state)).toBeNull();
   });
 });
 

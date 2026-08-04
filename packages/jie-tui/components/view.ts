@@ -61,12 +61,12 @@ export class TuiViewImpl implements TuiView {
     tui.addChild(new TeamPanel(stateStore));
     tui.setFocus(editor);
     this.unsubscribeKeys = tui.addInputListener((data) => {
-      const action = resolveGlobalKey(data);
+      const state = this.stateStore.getState();
+      const action = resolveGlobalKey(data, state);
       if (action !== null) {
         this.stateStore.dispatch(action);
         return CONSUMED;
       }
-      const state = this.stateStore.getState();
       if (matchesKey(data, "enter") && shouldCommitTeamCursor(state)) {
         this.stateStore.dispatch(Actions.commitTeamCursor());
         return CONSUMED;
@@ -106,10 +106,10 @@ class FlushLoader extends Loader {
   }
 }
 
-function resolveGlobalKey(data: string): Action | null {
+function resolveGlobalKey(data: string, state: TuiState): Action | null {
   if (data === CTRL_T) return Actions.toggleThinking();
   if (data === CTRL_O) return Actions.toggleToolCards();
-  if (matchesKey(data, "ctrl+down")) return Actions.toggleTeamPanel();
+  if (matchesKey(data, "left") && state.editorCursorAtStart) return Actions.toggleTeamPanel();
   return null;
 }
 

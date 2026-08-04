@@ -266,6 +266,24 @@ describe("clear", () => {
   });
 });
 
+describe("editorCursorAtStart", () => {
+  test("starts as true in initial state", () => {
+    expect(INITIAL_TUI_STATE.editorCursorAtStart).toBe(true);
+  });
+
+  test("setEditorCursorAtStart records whether the editor cursor sits at the buffer start", () => {
+    const away = reduceUiAction(INITIAL_TUI_STATE, Actions.setEditorCursorAtStart(false));
+    expect(away.editorCursorAtStart).toBe(false);
+    const back = reduceUiAction(away, Actions.setEditorCursorAtStart(true));
+    expect(back.editorCursorAtStart).toBe(true);
+  });
+
+  test("clearTuiState does not touch the flag, as /clear does not move the cursor", () => {
+    const away = reduceUiAction(INITIAL_TUI_STATE, Actions.setEditorCursorAtStart(false));
+    expect(reduceUiAction(away, Actions.clearTuiState()).editorCursorAtStart).toBe(false);
+  });
+});
+
 describe("setSessionName", () => {
   test("records the active session's name", () => {
     const state = reduceUiAction(INITIAL_TUI_STATE, Actions.setSessionName("my session"));

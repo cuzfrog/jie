@@ -14,10 +14,10 @@ The TUI's acceptance surface. Each scenario corresponds to one e2e test file —
 
 1. Under a directory with a team at `.jie/teams/my-team/` — `manager` (leader) and `worker`, both with the `bash` tool. A TUI opens.
 2. Prompt the `manager`: `Read file1.txt and write its content to my-answer.txt`. The manager drives the `bash` tool to completion — at least one `bash` tool-result card with no error.
-3. Call out the team strip (`Shift+↓`), move the cursor to the `worker` (a second `Shift+↓`) — the focused agent does not change until `Enter` commits the cursor; commit back to the `manager` (`Shift+↑`, `Enter`). Each agent's conversation continues independently, and the footer line-1 right segment tracks the focused agent only on commit. A further `Shift+↑` at the leader hides the strip.
+3. Call out the team panel (`←` with the editor cursor at the buffer start), move the cursor to the `worker` (`↓`) — the focused agent does not change until `Enter` commits the cursor; commit back to the `manager` (`↑`, `Enter`). Each agent's conversation continues independently, and the footer line-1 right segment tracks the focused agent only on commit. A further `←` hides the panel.
 4. Press `Ctrl+D` (editor empty). The process exits 0.
 
-**Observable outputs.** `state.leaderAgentId === "my-team:manager-1"`; the manager's turns carry the `bash` tool cards and streamed text; moving the strip cursor does not mutate any agent's turn state.
+**Observable outputs.** `state.leaderAgentId === "my-team:manager-1"`; the manager's turns carry the `bash` tool cards and streamed text; moving the panel cursor does not mutate any agent's turn state.
 
 ## Scenario 3: switch teams
 
@@ -53,7 +53,7 @@ The TUI's acceptance surface. Each scenario corresponds to one e2e test file —
 
 1. Run `jie` with a two-agent team (manager + worker; the worker subscribes to the manager's `task` topic).
 2. Prompt the manager: `send 5 math tasks to the worker 1 per message`. The manager calls `notify` 5 times — five tool cards — then becomes idle.
-3. The worker receives the messages via subscription; while it is busy with one, the rest queue up (`agent.prompt.queue.update` carries the full queue snapshot). Moving the team-strip cursor to the worker (`Shift+↓` ×2) and committing (`Enter`) focuses it and shows the footer line-2 queue segment `N prompts queued` with the next-task preview; the worker's strip row tags `· q<N>`.
+3. The worker receives the messages via subscription; while it is busy with one, the rest queue up (`agent.prompt.queue.update` carries the full queue snapshot). Moving the team-panel cursor to the worker (`←` at the editor start, then `↓`) and committing (`Enter`) focuses it and shows the footer line-2 queue segment `N prompts queued` with the next-task preview; the worker's panel row tags `q<N>`.
 4. The worker drains the queue one message per turn, then becomes idle.
 
 **Observable outputs.** `state.agents[my-team:manager-1]` shows the 5 `notify` cards; the worker's `queue` grows then drains to `[]` (the indicator clears when the body publishes the empty snapshot before `agent.turn.start`); the worker ends `idle`.

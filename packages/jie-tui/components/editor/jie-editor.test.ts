@@ -85,6 +85,61 @@ describe("JieEditor — onChange wiring", () => {
   });
 });
 
+describe("JieEditor — editorCursorAtStart sync", () => {
+  test("typing a character reports the cursor left the buffer start", () => {
+    const { editor } = bootEditor();
+    editor.handleInput("a");
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.setEditorCursorAtStart(false));
+  });
+
+  test("moving the cursor away from the start with an arrow reports the change once", () => {
+    const { editor } = bootEditor();
+    editor.handleInput("a");
+    editor.handleInput("b");
+    stateStore.dispatch.mockClear();
+    editor.handleInput("\x1b[D");
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.setEditorCursorAtStart(false));
+    stateStore.dispatch.mockClear();
+    editor.handleInput("\x1b[D");
+    expect(stateStore.dispatch).not.toHaveBeenCalledWith(Actions.setEditorCursorAtStart(false));
+  });
+
+  test("deleting back to an empty buffer reports the cursor returned to the start", () => {
+    const { editor } = bootEditor();
+    editor.handleInput("a");
+    stateStore.getState.mockReturnValue(makeTuiState({ editorCursorAtStart: false }));
+    stateStore.dispatch.mockClear();
+    editor.handleInput("\x7f");
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.setEditorCursorAtStart(true));
+  });
+
+  test("returning to the start with arrows reports the change", () => {
+    const { editor } = bootEditor();
+    editor.handleInput("a");
+    editor.handleInput("\x1b[D");
+    stateStore.getState.mockReturnValue(makeTuiState({ editorCursorAtStart: false }));
+    stateStore.dispatch.mockClear();
+    editor.handleInput("\x1b[D");
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.setEditorCursorAtStart(true));
+  });
+
+  test("ctrl+c clearing the buffer reports the cursor returned to the start", () => {
+    const { editor } = bootEditor();
+    editor.handleInput("a");
+    stateStore.getState.mockReturnValue(makeTuiState({ editorCursorAtStart: false }));
+    stateStore.dispatch.mockClear();
+    editor.handleInput("\x03");
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.setEditorCursorAtStart(true));
+  });
+
+  test("a no-op left arrow at the start dispatches nothing", () => {
+    const { editor } = bootEditor();
+    editor.handleInput("\x1b[D");
+    expect(stateStore.dispatch).not.toHaveBeenCalledWith(Actions.setEditorCursorAtStart(false));
+    expect(stateStore.dispatch).not.toHaveBeenCalledWith(Actions.setEditorCursorAtStart(true));
+  });
+});
+
 describe("JieEditor — onSubmit wiring", () => {
   test("enter submits the text and the editor self-clears", () => {
     const { editor, submitted } = bootEditor();

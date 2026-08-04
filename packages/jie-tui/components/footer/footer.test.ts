@@ -63,10 +63,24 @@ describe("Footer", () => {
   });
 
   test("line two shows the /help hint between the context metrics and the model", () => {
-    stateStore.getState.mockReturnValue(seededStateWithModel());
+    stateStore.getState.mockReturnValue(makeTuiState({ ...seededStateWithModel(), editorCursorAtStart: false }));
     const plain = stripAnsi(new Footer(stateStore).render(80)[1]);
     expect(plain).toContain("/help to show commands and shortcuts");
     expect(plain.indexOf("/help to show commands and shortcuts")).toBeLessThan(plain.indexOf("(anthropic)"));
+  });
+
+  test("line two swaps the /help hint for the team panel shortcut hint while the shortcut is activated", () => {
+    stateStore.getState.mockReturnValue(seededStateWithModel());
+    const plain = stripAnsi(new Footer(stateStore).render(80)[1]);
+    expect(plain).toContain("← to toggle team panel");
+    expect(plain).not.toContain("/help to show commands and shortcuts");
+    expect(plain.indexOf("← to toggle team panel")).toBeLessThan(plain.indexOf("(anthropic)"));
+  });
+
+  test("line two keeps the /help hint before a team is loaded even with the cursor at the start", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ cwd: "/repo", editorCursorAtStart: true }));
+    const plain = stripAnsi(new Footer(stateStore).render(80)[1]);
+    expect(plain).toContain("/help to show commands and shortcuts");
   });
 
   test("every line fits the given width", () => {

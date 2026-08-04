@@ -143,21 +143,24 @@ describe("screen rendering", () => {
     }
   });
 
-  test("ctrl+down calls out the team strip below the footer and toggles it closed again", async () => {
+  test("left at the editor start calls out the boxed team panel below the footer and toggles it closed again", async () => {
     const harness = await bootScreen();
     try {
       harness.emit(TEAM_LOADED);
       await harness.vt.waitForRender();
-      await press(harness, "\x1b[1;5B");
+      await press(harness, "\x1b[D");
       await settle(harness);
       const shown = harness.vt.getViewport().map(stripAnsi).join("\n");
       expect(shown).toContain("ctx");
       expect(shown).toContain("leader");
       expect(shown).toContain("general-1");
+      expect(shown).toContain("┌");
+      expect(shown).toContain("└");
+      expect(shown).toContain("│");
       await press(harness, "\x1b[B");
       await settle(harness);
       expect(harness.vt.getViewport().map(stripAnsi).join("\n")).toContain("ctx");
-      await press(harness, "\x1b[1;5B");
+      await press(harness, "\x1b[D");
       await settle(harness);
       expect(harness.vt.getViewport().map(stripAnsi).join("\n")).not.toContain("ctx");
     } finally {

@@ -77,6 +77,7 @@ export class JieEditor extends Editor {
       if (this.stateStore.getState().errorBanner !== null && text.length > 0) {
         this.stateStore.dispatch(Actions.clearBanners());
       }
+      this.syncCursorAtStart();
     };
     this.onSubmit = (text: string): void => {
       if (text.trim() === "") return;
@@ -105,6 +106,7 @@ export class JieEditor extends Editor {
     if (navigating) this.moveGhost(matchesKey(data, "down") ? 1 : -1);
     if (this.ghost !== null && !this.isShowingAutocomplete()) this.ghost = null;
     if (!this.isShowingAutocomplete()) this.popupFilteredOut = null;
+    this.syncCursorAtStart();
   }
 
   render(width: number): string[] {
@@ -150,6 +152,13 @@ export class JieEditor extends Editor {
     const focused = TuiState.getFocusedAgent(this.stateStore.getState());
     if (focused === null || focused.status !== "busy") return;
     this.stateStore.dispatch(Actions.requestInterrupt(focused.teamId, focused.agentKey));
+  }
+
+  private syncCursorAtStart(): void {
+    const cursor = this.getCursor();
+    const atStart = cursor.line === 0 && cursor.col === 0;
+    if (this.stateStore.getState().editorCursorAtStart === atStart) return;
+    this.stateStore.dispatch(Actions.setEditorCursorAtStart(atStart));
   }
 
   private tryBrowseNavigation(data: string): boolean {
