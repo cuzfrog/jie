@@ -16,7 +16,7 @@ packages/
     skills/          # Skill discovery (SKILL.md), SkillManager (glob resolution), prompt formatting (10-configuration.md "Skills")
     storage/         # Storage + SqliteStorage, schema bootstrap, ArtifactStore, MemoryManager (04-storage.md, 08-memory.md)
     team/            # Blueprint parser, team registry (discovery, ADR 24), TeamManager, built-in default-solo/ team
-    tools/           # Built-in tools: notify, bash, read_file, write_file, edit, todo_write,
+    tools/           # Built-in tools: notify, bash, read_file, write_file, edit, kanban_write,
                        web_search, web_fetch, write_artifact, read_artifact + ToolRegistry
     container.ts       # Composition root: bootPlatform(options): AwilixContainer<PlatformCradle> (ADR 31)
     jie-platform.ts  # JiePlatform handle interface + implementation (registered in module.ts)

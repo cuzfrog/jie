@@ -12,8 +12,8 @@ no-new-exports:
   - read-artifact.ts
   - read-file.test.ts
   - read-file.ts
-  - todo-write.test.ts
-  - todo-write.ts
+  - kanban-write.test.ts
+  - kanban-write.ts
   - tool-registry.test.ts
   - tool-registry.ts
   - types.ts

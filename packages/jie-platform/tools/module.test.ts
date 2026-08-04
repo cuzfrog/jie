@@ -33,10 +33,10 @@ describe("registerToolsModule", () => {
     expect(names).toEqual([
       "bash",
       "edit",
+      "kanban_write",
       "notify",
       "read_artifact",
       "read_file",
-      "todo_write",
       "web_fetch",
       "web_search",
       "write_artifact",
