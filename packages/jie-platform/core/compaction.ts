@@ -8,8 +8,18 @@ import {
   shouldCompact,
   type AgentMessage,
   type CompactionSummaryMessage,
+  type CustomMessage,
 } from "@earendil-works/pi-agent-core";
-import { contentText, retryAssistantCall, uuidv7, type Api, type AssistantMessage, type Model } from "@earendil-works/pi-ai";
+import {
+  contentText,
+  retryAssistantCall,
+  uuidv7,
+  type Api,
+  type AssistantMessage,
+  type Model,
+  type ToolResultMessage,
+  type UserMessage,
+} from "@earendil-works/pi-ai";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { Settings } from "../config";
 import type { MemoryManager } from "../storage";
@@ -33,6 +43,7 @@ export interface CompactionResult {
 
 export interface Compactor {
   compact(input: CompactionInput): Promise<CompactionResult | null>;
+  fitToWindow(messages: ReadonlyArray<AgentMessage>, model: Model<Api>): ReadonlyArray<AgentMessage>;
 }
 
 type SummarizeFn = (input: SummarizeInput) => Promise<string>;
@@ -87,6 +98,12 @@ export class CompactorImpl implements Compactor {
     const summaryMessage = createCompactionSummaryMessage(summaryText, tokensBefore, new Date().toISOString());
     this.memory.compact(preparation.firstKeptIndex, summaryMessage, input.agentKey, input.sessionId, input.teamId);
     return { summaryMessage, firstKeptIndex: preparation.firstKeptIndex, tokensBefore };
+  }
+
+  fitToWindow(messages: ReadonlyArray<AgentMessage>, model: Model<Api>): ReadonlyArray<AgentMessage> {
+    const settings = resolveSettings(this.getSettings?.());
+    const budget = settings.reserveTokens < model.contextWindow ? model.contextWindow - settings.reserveTokens : model.contextWindow;
+    return fitMessages(messages, budget);
   }
 }
 
@@ -175,6 +192,127 @@ async function summarizeConversation(input: SummarizeInput): Promise<string> {
   }
   return contentText(response.content);
 }
+
+function fitMessages(messages: ReadonlyArray<AgentMessage>, budgetTokens: number): ReadonlyArray<AgentMessage> {
+  const entries = messages.map((message, index) => ({ index, message, tokens: estimateTokens(message) }));
+  const total = entries.reduce((sum, entry) => sum + entry.tokens, 0);
+  if (total <= budgetTokens) return messages;
+  const result = [...messages];
+  let remaining = total;
+  entries.sort((a, b) => b.tokens - a.tokens);
+  for (const entry of entries) {
+    if (remaining <= budgetTokens) break;
+    const target = Math.max(entry.tokens - (remaining - budgetTokens), 0);
+    const truncated = truncateMessage(entry.message, target);
+    if (truncated === entry.message) continue;
+    const truncatedTokens = estimateTokens(truncated);
+    result[entry.index] = truncated;
+    remaining = remaining - entry.tokens + truncatedTokens;
+  }
+  return result;
+}
+
+function truncateMessage(message: AgentMessage, targetTokens: number): AgentMessage {
+  if (estimateTokens(message) <= targetTokens) return message;
+  switch (message.role) {
+    case "user":
+      return truncateUserMessage(message, targetTokens);
+    case "assistant":
+      return truncateAssistantMessage(message, targetTokens);
+    case "toolResult":
+    case "custom":
+      return truncateBlockContentMessage(message, targetTokens);
+    case "bashExecution":
+      return truncateTexts([message.output], targetTokens, (texts) => ({ ...message, output: texts[0]! }));
+    case "branchSummary":
+    case "compactionSummary":
+      return truncateTexts([message.summary], targetTokens, (texts) => ({ ...message, summary: texts[0]! }));
+    default:
+      return message;
+  }
+}
+
+function truncateUserMessage(message: UserMessage, targetTokens: number): AgentMessage {
+  if (typeof message.content === "string") {
+    return truncateTexts([message.content], targetTokens, (texts) => ({ ...message, content: texts[0]! }));
+  }
+  return truncateBlockContentMessage(message, targetTokens);
+}
+
+function truncateBlockContentMessage(message: UserMessage | ToolResultMessage | CustomMessage, targetTokens: number): AgentMessage {
+  if (typeof message.content === "string") return message;
+  const content = message.content;
+  const slots = content.flatMap((block, index) => (block.type === "text" ? [{ index, text: block.text }] : []));
+  if (slots.length === 0) return message;
+  return truncateTexts(slots.map((slot) => slot.text), targetTokens, (truncated) => ({
+    ...message,
+    content: content.map((block, index) => {
+      const position = slots.findIndex((slot) => slot.index === index);
+      return block.type === "text" && position !== -1 ? { ...block, text: truncated[position]! } : block;
+    }),
+  }));
+}
+
+function truncateAssistantMessage(message: AssistantMessage, targetTokens: number): AgentMessage {
+  const slots = message.content.flatMap((block, index) => {
+    if (block.type === "text") return [{ index, text: block.text }];
+    if (block.type === "thinking") return [{ index, text: block.thinking }];
+    return [];
+  });
+  if (slots.length === 0) return message;
+  return truncateTexts(slots.map((slot) => slot.text), targetTokens, (truncated) => ({
+    ...message,
+    content: message.content.map((block, index) => {
+      const position = slots.findIndex((slot) => slot.index === index);
+      if (position === -1) return block;
+      if (block.type === "text") return { ...block, text: truncated[position]! };
+      if (block.type === "thinking") return { ...block, thinking: truncated[position]! };
+      return block;
+    }),
+  }));
+}
+
+function truncateTexts(
+  texts: ReadonlyArray<string>,
+  targetTokens: number,
+  rebuild: (truncated: ReadonlyArray<string>) => AgentMessage,
+): AgentMessage {
+  const allowances = texts.map((text) => text.length);
+  let attempt = rebuild(texts);
+  let overshoot = estimateTokens(attempt) - targetTokens;
+  while (overshoot > 0) {
+    let charsToShave = overshoot * 4;
+    let shaved = false;
+    for (const index of largestFirst(allowances)) {
+      if (charsToShave <= 0) break;
+      if (allowances[index]! === texts[index]!.length) charsToShave += TRUNCATION_MARKER.length;
+      const shave = Math.min(allowances[index]!, charsToShave);
+      if (shave === 0) continue;
+      allowances[index]! -= shave;
+      charsToShave -= shave;
+      shaved = true;
+    }
+    if (!shaved) break;
+    attempt = rebuild(texts.map((text, index) => truncateText(text, allowances[index]!)));
+    overshoot = estimateTokens(attempt) - targetTokens;
+  }
+  return attempt;
+}
+
+function largestFirst(allowances: ReadonlyArray<number>): number[] {
+  return allowances
+    .map((allowance, index) => ({ allowance, index }))
+    .filter((entry) => entry.allowance > 0)
+    .sort((a, b) => b.allowance - a.allowance)
+    .map((entry) => entry.index);
+}
+
+function truncateText(text: string, allowance: number): string {
+  if (allowance >= text.length) return text;
+  return text.slice(0, allowance) + TRUNCATION_MARKER;
+}
+
+const TRUNCATION_MARKER = "[content truncated to fit the context window]";
 
 const SUMMARIZATION_SYSTEM_PROMPT = `You are a context summarization assistant. Your task is to read a conversation between a user and an AI assistant, then produce a structured summary following the exact format specified.
 

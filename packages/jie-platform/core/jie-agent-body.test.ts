@@ -28,6 +28,9 @@ const noopCompactor: Compactor = {
   async compact() {
     return null;
   },
+  fitToWindow(messages) {
+    return messages;
+  },
 };
 
 function makeModel(provider: string, id: string): Model<Api> {
@@ -2487,7 +2490,8 @@ describe("JieAgentBody — compaction", () => {
 
   function makeFakeCompactor(): { compactor: Compactor; compact: ReturnType<typeof vi.fn<(input: CompactionInput) => Promise<CompactionResult | null>>> } {
     const compact = vi.fn<(input: CompactionInput) => Promise<CompactionResult | null>>(async () => null);
-    return { compactor: { compact }, compact };
+    const compactor: Compactor = { compact, fitToWindow: (messages) => messages };
+    return { compactor, compact };
   }
 
   test("agent_end settle compacts and rewrites state to [summary, ...retainedTail]", async () => {
