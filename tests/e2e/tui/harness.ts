@@ -268,6 +268,18 @@ export async function waitForConversationText(harness: TuiHarness, agentId: Agen
   );
 }
 
+export async function waitForCompactionMarker(harness: TuiHarness, agentId: AgentId, summaryContains: string, timeoutMs = 60000): Promise<void> {
+  await waitFor(
+    () => {
+      const agent = harness.stateStore.getState().agents.get(agentId);
+      if (agent === undefined) return false;
+      return agent.compactionMarker !== null && agent.compactionMarker.summary.includes(summaryContains);
+    },
+    timeoutMs,
+    `agent ${agentId} compaction marker summary contains '${summaryContains}'`,
+  );
+}
+
 export async function waitForErrorBanner(harness: TuiHarness, contains: string, timeoutMs = 60000): Promise<void> {
   await waitFor(
     () => {
