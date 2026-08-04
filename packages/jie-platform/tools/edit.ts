@@ -6,13 +6,14 @@ import { mapErrno, resolveWithinWorkspace } from "./path-utils";
 import { renderUnifiedDiff } from "./unified-diff";
 
 const EDIT_DESCRIPTION = `Search-and-replace inside a text file. Reads \`path\` (relative to workspace root, or
-absolute within workspace), replaces occurrences of \`old_string\` with \`new_string\`, and writes the
-result back. If \`old_string\` does not appear the call fails with NO_MATCH. If it appears more
-than once and \`replace_all\` is false the call fails with AMBIGUOUS_MATCH (so the model must
-either narrow \`old_string\` or opt in to \`replace_all\`). On success returns a one-line ack; the
-unified-diff preview lives only in \`details.diff\` for the UI — it is not part of the model-visible
-result. For edits larger than 5000 lines the diff is omitted and \`details.diff\` is null (use
-\`write_file\` for wholesale rewrites). Text only; UTF-8.`;
+absolute within workspace) and applies every entry of \`edits\`: each \`{old_string, new_string}\`
+pair is matched against the original file content — not against the result of earlier entries —
+and must occur exactly once unless \`replace_all\` is true; entries must not overlap each other's
+matches. Any violation fails the whole call with NO_MATCH, AMBIGUOUS_MATCH, or OVERLAPPING_EDITS
+and leaves the file untouched. On success returns a one-line ack; the unified-diff preview lives
+only in \`details.diff\` for the UI — it is not part of the model-visible result. For edits larger
+than 5000 lines the diff is omitted and \`details.diff\` is null (use \`write_file\` for wholesale
+rewrites). Text only; UTF-8.`;
 
 interface EditDeps {
   workspaceRoot: string;
@@ -27,10 +28,14 @@ const ERRNO_MAP: Record<string, JiePlatformErrorCode> = {
   ENOSPC: "DISK_FULL",
 };
 
-interface EditInput {
-  path: string;
+interface EditReplacement {
   old_string: string;
   new_string: string;
+}
+
+interface EditInput {
+  path: string;
+  edits: ReadonlyArray<EditReplacement>;
   replace_all?: boolean;
 }
 
@@ -50,10 +55,38 @@ export function createEditTool(dependencies: EditDeps): Tool<EditInput> {
     label: "Edit File",
     parameters: Type.Object({
       path: Type.String(),
-      old_string: Type.String(),
-      new_string: Type.String(),
+      edits: Type.Array(
+        Type.Object({
+          old_string: Type.String(),
+          new_string: Type.String(),
+        }),
+        { minItems: 1 },
+      ),
       replace_all: Type.Optional(Type.Boolean()),
     }),
+    prepareArguments(rawInput: unknown): unknown {
+      if (rawInput === null || typeof rawInput !== "object") return rawInput;
+      const args = rawInput as Record<string, unknown>;
+      if (Array.isArray(args.edits)) return args;
+      if (typeof args.edits === "string") {
+        try {
+          const parsed: unknown = JSON.parse(args.edits);
+          if (Array.isArray(parsed)) {
+            return { path: args.path, edits: parsed, replace_all: args.replace_all };
+          }
+        } catch {
+          return args;
+        }
+      }
+      if (typeof args.old_string === "string" && typeof args.new_string === "string") {
+        return {
+          path: args.path,
+          edits: [{ old_string: args.old_string, new_string: args.new_string }],
+          replace_all: args.replace_all,
+        };
+      }
+      return args;
+    },
     async execute(input: EditInput): Promise<ToolResult> {
       const realPath = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
       let stat;
@@ -79,18 +112,12 @@ export function createEditTool(dependencies: EditDeps): Tool<EditInput> {
       const lineEnding = detectLineEnding(raw);
       const before = normalizeToLF(raw);
       const replaceAll = input.replace_all === true;
-      const needle = normalizeToLF(input.old_string);
-      const matches = findAllOccurrences(before, needle);
-      if (matches.length === 0) {
-        throw new JiePlatformError("NO_MATCH", { detail: input.path });
-      }
-      if (matches.length > 1 && !replaceAll) {
-        throw new JiePlatformError("AMBIGUOUS_MATCH", {
-          detail: `${matches.length} matches in ${input.path}`,
-        });
-      }
-
-      const edited = applyReplacements(before, matches, needle, normalizeToLF(input.new_string), replaceAll);
+      const edits = input.edits.map((edit) => ({
+        needle: normalizeToLF(edit.old_string),
+        replacement: normalizeToLF(edit.new_string),
+      }));
+      const spans = matchEdits(before, edits, input.path, replaceAll);
+      const edited = applySpans(before, spans);
       const after = bom + restoreLineEndings(edited, lineEnding);
 
       try {
@@ -99,7 +126,7 @@ export function createEditTool(dependencies: EditDeps): Tool<EditInput> {
         throw mapErrno(error, ERRNO_MAP);
       }
 
-      const replacementsCount = replaceAll ? matches.length : 1;
+      const replacementsCount = spans.length;
       const beforeBytes = new TextEncoder().encode(decoded).length;
       const afterBytes = new TextEncoder().encode(after).length;
       const diff = renderUnifiedDiff(before, edited);
@@ -118,6 +145,60 @@ export function createEditTool(dependencies: EditDeps): Tool<EditInput> {
   };
 }
 
+interface ReplacementSpan {
+  readonly editIndex: number;
+  readonly start: number;
+  readonly end: number;
+  readonly replacement: string;
+}
+
+function matchEdits(
+  content: string,
+  edits: ReadonlyArray<{ needle: string; replacement: string }>,
+  path: string,
+  replaceAll: boolean,
+): ReplacementSpan[] {
+  const spans: ReplacementSpan[] = [];
+  for (let editIndex = 0; editIndex < edits.length; editIndex++) {
+    const edit = edits[editIndex]!;
+    const matches = findAllOccurrences(content, edit.needle);
+    if (matches.length === 0) {
+      throw new JiePlatformError("NO_MATCH", { detail: editLocation(path, editIndex, edits.length) });
+    }
+    if (matches.length > 1 && !replaceAll) {
+      throw new JiePlatformError("AMBIGUOUS_MATCH", {
+        detail: `${matches.length} matches in ${editLocation(path, editIndex, edits.length)}`,
+      });
+    }
+    for (const matchIndex of matches) {
+      spans.push({ editIndex, start: matchIndex, end: matchIndex + edit.needle.length, replacement: edit.replacement });
+    }
+  }
+  spans.sort((a, b) => a.start - b.start);
+  for (let index = 1; index < spans.length; index++) {
+    const previous = spans[index - 1]!;
+    const current = spans[index]!;
+    if (current.start < previous.end) {
+      throw new JiePlatformError("OVERLAPPING_EDITS", {
+        detail: `edits[${previous.editIndex}] and edits[${current.editIndex}] in ${path}`,
+      });
+    }
+  }
+  return spans;
+}
+
+function applySpans(before: string, spans: ReadonlyArray<ReplacementSpan>): string {
+  const parts: string[] = [];
+  let cursor = 0;
+  for (const span of spans) {
+    parts.push(before.substring(cursor, span.start));
+    parts.push(span.replacement);
+    cursor = span.end;
+  }
+  parts.push(before.substring(cursor));
+  return parts.join("");
+}
+
 function findAllOccurrences(haystack: string, needle: string): number[] {
   if (needle.length === 0) return [];
   const out: number[] = [];
@@ -129,23 +210,8 @@ function findAllOccurrences(haystack: string, needle: string): number[] {
   return out;
 }
 
-function applyReplacements(
-  before: string,
-  matches: ReadonlyArray<number>,
-  needle: string,
-  replacement: string,
-  replaceAll: boolean,
-): string {
-  const useMatches = replaceAll ? matches : matches.slice(0, 1);
-  const parts: string[] = [];
-  let cursor = 0;
-  for (const matchIndex of useMatches) {
-    parts.push(before.substring(cursor, matchIndex));
-    parts.push(replacement);
-    cursor = matchIndex + needle.length;
-  }
-  parts.push(before.substring(cursor));
-  return parts.join("");
+function editLocation(path: string, editIndex: number, total: number): string {
+  return total === 1 ? path : `edits[${editIndex}] of ${path}`;
 }
 
 function detectLineEnding(content: string): "\r\n" | "\n" {
@@ -162,4 +228,3 @@ function normalizeToLF(text: string): string {
 function restoreLineEndings(text: string, ending: "\r\n" | "\n"): string {
   return ending === "\r\n" ? text.replace(/\n/g, "\r\n") : text;
 }
-
