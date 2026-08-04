@@ -29,7 +29,7 @@ describe("loadSkills", () => {
     const filePath = writeSkill(project, "deploy", "description: Deploys the app");
     const result = loadSkills({ homeSkillsDir: home, projectSkillsDir: project });
     expect(result.diagnostics).toEqual([]);
-    expect(result.skills).toEqual([
+    expect(result.skills).toMatchObject([
       { name: "deploy", description: "Deploys the app", argumentHint: null, filePath, baseDir: join(project, "deploy"), body: "body" },
     ]);
   });

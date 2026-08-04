@@ -57,14 +57,16 @@ function makeSoul(overrides: Partial<AgentSoul> = {}): AgentSoul {
   };
 }
 
-const deploySkill: Skill = {
+const deploySkill = vi.mocked<Skill>({
   name: "deploy",
   description: "Deploys the app",
   argumentHint: null,
   filePath: "/deploy/SKILL.md",
   baseDir: "/deploy",
   body: "Run the deploy pipeline.",
-};
+  expandInvocation: vi.fn(),
+  promptEntry: vi.fn(),
+});
 
 function makeNoopTool(): Tool {
   return {
@@ -366,13 +368,17 @@ function makeHarness(): Harness {
 }
 
 describe("JieAgentBody — system prompt composition", () => {
+  beforeEach(() => {
+    deploySkill.promptEntry.mockReturnValue("SKILL-ENTRY-deploy");
+  });
+
   test("resolved skills are appended to the role prompt", () => {
     const h = makeHarness();
     h.skillManager.resolve.mockReturnValue([deploySkill]);
     h.makeBody({ soul: makeSoul({ skills: ["deploy"] }) });
     expect(h.skillManager.resolve).toHaveBeenCalledWith("deploy");
     expect(h.state.systemPrompt).toContain("you are a general assistant");
-    expect(h.state.systemPrompt).toContain("<name>deploy</name>");
+    expect(h.state.systemPrompt).toContain("SKILL-ENTRY-deploy");
   });
 
   test("no skills leaves the role prompt verbatim", () => {
@@ -1243,18 +1249,18 @@ describe("JieAgentBody — skill invocation expansion", () => {
 
   beforeEach(() => {
     h = makeHarness();
+    deploySkill.expandInvocation.mockReturnValue("EXPANDED");
   });
 
   test("a /skill: invocation of a resolved skill is expanded for the LLM message", async () => {
     h.skillManager.resolve.mockReturnValue([deploySkill]);
     const body = h.makeBody({ soul: makeSoul({ skills: ["deploy"] }) });
     await body.start();
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "/skill:deploy now"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "/skill:deploy   now  "));
     await flush();
+    expect(deploySkill.expandInvocation).toHaveBeenCalledWith("now");
     const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
-    expect((synthetic as { content: unknown }).content).toBe(
-      '[user]: <skill name="deploy" location="/deploy/SKILL.md">\nReferences are relative to /deploy.\n\nRun the deploy pipeline.\n</skill>\n\nnow',
-    );
+    expect((synthetic as { content: unknown }).content).toBe("[user]: EXPANDED");
     body.stop();
   });
 
@@ -1303,7 +1309,30 @@ describe("JieAgentBody — skill invocation expansion", () => {
     expect(h.hookRunner.userPromptSubmit).toHaveBeenCalledWith(expect.objectContaining({ prompt: "/skill:deploy" }));
     const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
     const content = (synthetic as { content: unknown }).content as string;
-    expect(content.endsWith("</skill>\n\nextra")).toBe(true);
+    expect(content.endsWith("EXPANDED\n\nextra")).toBe(true);
+    body.stop();
+  });
+
+  test("a name prefix does not match a resolved skill", async () => {
+    h.skillManager.resolve.mockReturnValue([deploySkill]);
+    const body = h.makeBody({ soul: makeSoul({ skills: ["deploy"] }) });
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "/skill:dep now"));
+    await flush();
+    expect(deploySkill.expandInvocation).not.toHaveBeenCalled();
+    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
+    expect((synthetic as { content: unknown }).content).toBe("[user]: /skill:dep now");
+    body.stop();
+  });
+
+  test("an empty skill name passes through unchanged", async () => {
+    h.skillManager.resolve.mockReturnValue([deploySkill]);
+    const body = h.makeBody({ soul: makeSoul({ skills: ["deploy"] }) });
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "/skill: now"));
+    await flush();
+    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
+    expect((synthetic as { content: unknown }).content).toBe("[user]: /skill: now");
     body.stop();
   });
 
@@ -1321,9 +1350,7 @@ describe("JieAgentBody — skill invocation expansion", () => {
     h.settleIdle();
     await flush();
     const drained = h.prompt.mock.calls[0]![0] as AgentMessage;
-    expect((drained as { content: unknown }).content).toBe(
-      '[user]: <skill name="deploy" location="/deploy/SKILL.md">\nReferences are relative to /deploy.\n\nRun the deploy pipeline.\n</skill>\n\nnow',
-    );
+    expect((drained as { content: unknown }).content).toBe("[user]: EXPANDED");
     body.stop();
   });
 });

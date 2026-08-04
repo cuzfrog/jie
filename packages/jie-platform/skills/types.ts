@@ -5,6 +5,8 @@ export interface Skill {
   readonly filePath: string;
   readonly baseDir: string;
   readonly body: string;
+  expandInvocation(args: string): string;
+  promptEntry(): string;
 }
 
 export interface SkillDiagnostic {
