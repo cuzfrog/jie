@@ -33,6 +33,9 @@ function assistantToolCall(id: string, name: string, args: Record<string, unknow
 function toolResult(toolCallId: string, toolName: string, text: string, isError = false, details?: unknown): AgentMessage {
   return { role: "toolResult", toolCallId, toolName, content: [{ type: "text", text }], isError, details, timestamp: 0 };
 }
+function compactionSummary(summary: string, tokensBefore: number): AgentMessage {
+  return { role: "compactionSummary", summary, tokensBefore, timestamp: 0 };
+}
 function usage(): Usage {
   return {
     input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
@@ -42,7 +45,7 @@ function usage(): Usage {
 
 describe("hydrateHistory", () => {
   test("empty messages yields empty history and null current turn", () => {
-    expect(hydrateHistory([], 0)).toEqual({ history: [], currentTurn: null, cards: [], nextSeq: 0 });
+    expect(hydrateHistory([], 0)).toEqual({ history: [], currentTurn: null, compactionMarker: null, cards: [], nextSeq: 0 });
   });
 
   test("single completed turn becomes currentTurn with empty history", () => {
@@ -143,5 +146,28 @@ describe("hydrateHistory", () => {
       assistantText("done"),
     ], 0);
     expect(result.cards).toEqual(cards);
+  });
+
+  test("a leading compaction summary becomes the marker consuming the first seq, turns number after it", () => {
+    const result = hydrateHistory([
+      compactionSummary("the summary", 500),
+      user("kept"), assistantText("a1"),
+      user("kept2"), assistantText("a2"),
+    ], 7);
+    expect(result.compactionMarker).toEqual({ seq: 7, summary: "the summary", tokensBefore: 500 });
+    expect(result.history[0]?.seq).toBe(8);
+    expect(result.currentTurn?.seq).toBe(9);
+    expect(result.nextSeq).toBe(10);
+  });
+
+  test("a summary-only transcript yields just the marker", () => {
+    const result = hydrateHistory([compactionSummary("the summary", 500)], 3);
+    expect(result).toEqual({
+      history: [],
+      currentTurn: null,
+      compactionMarker: { seq: 3, summary: "the summary", tokensBefore: 500 },
+      cards: [],
+      nextSeq: 4,
+    });
   });
 });

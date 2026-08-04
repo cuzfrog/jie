@@ -166,6 +166,7 @@ function subscribeToBus(platform: JiePlatform, onEvent: (event: AnyEventEnvelope
     platform.subscribe("agent.tool.call", onEvent),
     platform.subscribe("agent.tool.result", onEvent),
     platform.subscribe("agent.usage", onEvent),
+    platform.subscribe("agent.compacted", onEvent),
   ];
   let unsubscribed = false;
   return (): void => {

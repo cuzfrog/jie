@@ -16,6 +16,7 @@ export function makeAgentUiState(agentId: AgentId, overrides: Partial<AgentUiSta
     queue: [],
     history: [],
     currentTurn: null,
+    compactionMarker: null,
     lastStopReason: null,
     contextTokensUsed: 0,
     lastReportedTotalTokens: null,

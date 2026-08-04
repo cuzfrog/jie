@@ -8,10 +8,11 @@ import {
   startTui,
   stopTui,
   submitAndWaitForAgentIdle,
+  waitForCompactionMarker,
   waitForConversationText,
   waitForTeam,
 } from "./harness";
-import expectations from "./scenario-14.llm.ts";
+import expectations, { SUMMARY_TEXT } from "./scenario-14.llm.ts";
 
 const AGENT_ID = "my-team:general-1";
 
@@ -42,8 +43,10 @@ describe("Scenario 14 — compaction rewrites history with a summary", () => {
       await sendLine(harness.stdin, "/team my-team");
       await waitForTeam(harness, "my-team");
       await submitAndWaitForAgentIdle(harness, "produce a very long answer", AGENT_ID);
+      await waitForCompactionMarker(harness, AGENT_ID, SUMMARY_TEXT);
       await submitAndWaitForAgentIdle(harness, "continue", AGENT_ID);
       await waitForConversationText(harness, AGENT_ID, "COMPACTED-CONTINUATION-OK");
+      await waitForCompactionMarker(harness, AGENT_ID, SUMMARY_TEXT);
     } finally {
       await stopTui(harness);
     }

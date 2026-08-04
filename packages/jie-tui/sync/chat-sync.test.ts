@@ -34,9 +34,11 @@ interface SyncHarness {
   readonly createUserMessage: ReturnType<typeof vi.fn>;
   readonly createAssistantMessage: ReturnType<typeof vi.fn>;
   readonly createInfoMessage: ReturnType<typeof vi.fn>;
+  readonly createCompactionMarker: ReturnType<typeof vi.fn>;
   readonly userMessages: ReadonlyArray<UserMessageComponent>;
   readonly assistantMessages: ReadonlyArray<AssistantMessageComponent>;
   readonly infoMessages: ReadonlyArray<Component>;
+  readonly compactionMarkers: ReadonlyArray<Component>;
 }
 
 function bootSync(): SyncHarness {
@@ -48,6 +50,7 @@ function bootSync(): SyncHarness {
   const userMessages: UserMessageComponent[] = [];
   const assistantMessages: AssistantMessageComponent[] = [];
   const infoMessages: Component[] = [];
+  const compactionMarkers: Component[] = [];
   const chatMessages = vi.mocked<ChatMessages>({
     createUserMessage: vi.fn(() => {
       const component: UserMessageComponent = { render: vi.fn(() => []), invalidate: vi.fn(), update: vi.fn() };
@@ -62,6 +65,11 @@ function bootSync(): SyncHarness {
     createInfoMessage: vi.fn(() => {
       const component: Component = { render: vi.fn(() => []), invalidate: vi.fn() };
       infoMessages.push(component);
+      return component;
+    }),
+    createCompactionMarker: vi.fn(() => {
+      const component: Component = { render: vi.fn(() => []), invalidate: vi.fn() };
+      compactionMarkers.push(component);
       return component;
     }),
   });
@@ -88,9 +96,11 @@ function bootSync(): SyncHarness {
     createUserMessage: chatMessages.createUserMessage,
     createAssistantMessage: chatMessages.createAssistantMessage,
     createInfoMessage: chatMessages.createInfoMessage,
+    createCompactionMarker: chatMessages.createCompactionMarker,
     userMessages,
     assistantMessages,
     infoMessages,
+    compactionMarkers,
   };
 }
 
@@ -221,5 +231,48 @@ describe("ChatSyncImpl", () => {
     expect(addChild).toHaveBeenCalledTimes(3);
     await notify(teamState([agent], AGENT_ID));
     expect(removeChild).toHaveBeenCalledTimes(1);
+  });
+
+  test("a compaction marker renders before the turns that follow it", async () => {
+    const { notify, addChild, createCompactionMarker, userMessages, assistantMessages, compactionMarkers } = bootSync();
+    const marker = { seq: 0, summary: "the summary", tokensBefore: 500 };
+    const agent = makeAgentUiState(AGENT_ID, { isLeader: true, compactionMarker: marker, currentTurn: makeTurn("kept", null, 1) });
+    await notify(teamState([agent], AGENT_ID));
+    expect(createCompactionMarker).toHaveBeenCalledWith(marker);
+    expect(addChild.mock.calls.map((call) => call[0])).toEqual([compactionMarkers[0], userMessages[0], assistantMessages[0]]);
+  });
+
+  test("an unchanged compaction marker is not re-created on the next action", async () => {
+    const { notify, createCompactionMarker } = bootSync();
+    const agent = makeAgentUiState(AGENT_ID, {
+      isLeader: true,
+      compactionMarker: { seq: 0, summary: "s", tokensBefore: 1 },
+      currentTurn: makeTurn("kept", null, 1),
+    });
+    const state = teamState([agent], AGENT_ID);
+    await notify(state);
+    await notify(state);
+    expect(createCompactionMarker).toHaveBeenCalledTimes(1);
+  });
+
+  test("a re-compaction replaces the marker and the renumbered turns", async () => {
+    const { notify, addChild, removeChild, createCompactionMarker } = bootSync();
+    const before = makeAgentUiState(AGENT_ID, {
+      isLeader: true,
+      compactionMarker: { seq: 0, summary: "first", tokensBefore: 100 },
+      history: [makeTurn("kept", null, 1)],
+      currentTurn: makeTurn("live", null, 2),
+    });
+    await notify(teamState([before], AGENT_ID));
+    expect(addChild).toHaveBeenCalledTimes(5);
+    const after = makeAgentUiState(AGENT_ID, {
+      isLeader: true,
+      compactionMarker: { seq: 3, summary: "second", tokensBefore: 200 },
+      currentTurn: makeTurn("live", null, 4),
+    });
+    await notify(teamState([after], AGENT_ID));
+    expect(removeChild).toHaveBeenCalledTimes(5);
+    expect(addChild).toHaveBeenCalledTimes(8);
+    expect(createCompactionMarker).toHaveBeenCalledTimes(2);
   });
 });

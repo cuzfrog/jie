@@ -49,6 +49,7 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
       ...existing,
       history: hydrated.history,
       currentTurn: hydrated.currentTurn,
+      compactionMarker: hydrated.compactionMarker,
       cards: hydrated.cards,
       contextTokensUsed: estimateContextTokens(hydrated.history, hydrated.currentTurn),
     });
@@ -88,6 +89,7 @@ function emptyAgent(agentId: AgentId, teamId: string, agent: AgentInfo): AgentUi
     queue: [],
     history: [],
     currentTurn: null,
+    compactionMarker: null,
     contextTokensUsed: 0,
     lastReportedTotalTokens: null,
     cards: [],

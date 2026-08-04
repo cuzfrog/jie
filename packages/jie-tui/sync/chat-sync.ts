@@ -6,6 +6,8 @@ export interface ChatSync {
   stop(): void;
 }
 
+type CompactionMarker = NonNullable<AgentUiState["compactionMarker"]>;
+
 interface TurnPair {
   readonly user: UserMessageComponent;
   readonly assistant: AssistantMessageComponent;
@@ -13,11 +15,13 @@ interface TurnPair {
 
 type ChatEntry =
   | { readonly kind: "turn"; readonly turn: MessageTurn }
-  | { readonly kind: "info"; readonly entry: InfoEntry };
+  | { readonly kind: "info"; readonly entry: InfoEntry }
+  | { readonly kind: "compaction"; readonly marker: CompactionMarker };
 
 type SyncedEntry =
   | { readonly kind: "turn"; readonly seq: number; readonly pair: TurnPair }
-  | { readonly kind: "info"; readonly seq: number; readonly component: Component };
+  | { readonly kind: "info"; readonly seq: number; readonly component: Component }
+  | { readonly kind: "compaction"; readonly seq: number; readonly component: Component };
 
 export class ChatSyncImpl implements ChatSync {
   private readonly stateStore: StateStore;
@@ -49,7 +53,7 @@ export class ChatSyncImpl implements ChatSync {
       this.chatContainer.clear();
       this.synced.length = 0;
     }
-    const entries = mergeEntries(focused === null ? [] : turnsOf(focused), state.infoEntries);
+    const entries = mergeEntries(focused, state.infoEntries);
     let firstMismatch = 0;
     while (
       firstMismatch < this.synced.length &&
@@ -81,6 +85,9 @@ export class ChatSyncImpl implements ChatSync {
     if (entry.kind === "info") {
       return { kind: "info", seq: entry.entry.seq, component: this.chatMessages.createInfoMessage(entry.entry) };
     }
+    if (entry.kind === "compaction") {
+      return { kind: "compaction", seq: entry.marker.seq, component: this.chatMessages.createCompactionMarker(entry.marker) };
+    }
     const pair: TurnPair = {
       user: this.chatMessages.createUserMessage(entry.turn.userPrompt),
       assistant: this.chatMessages.createAssistantMessage(entry.turn),
@@ -89,39 +96,44 @@ export class ChatSyncImpl implements ChatSync {
   }
 
   private addEntry(synced: SyncedEntry): void {
-    if (synced.kind === "info") {
-      this.chatContainer.addChild(synced.component);
+    if (synced.kind === "turn") {
+      this.chatContainer.addChild(synced.pair.user);
+      this.chatContainer.addChild(synced.pair.assistant);
       return;
     }
-    this.chatContainer.addChild(synced.pair.user);
-    this.chatContainer.addChild(synced.pair.assistant);
+    this.chatContainer.addChild(synced.component);
   }
 
   private removeEntry(synced: SyncedEntry): void {
-    if (synced.kind === "info") {
-      this.chatContainer.removeChild(synced.component);
+    if (synced.kind === "turn") {
+      this.chatContainer.removeChild(synced.pair.user);
+      this.chatContainer.removeChild(synced.pair.assistant);
       return;
     }
-    this.chatContainer.removeChild(synced.pair.user);
-    this.chatContainer.removeChild(synced.pair.assistant);
+    this.chatContainer.removeChild(synced.component);
   }
 }
 
-function mergeEntries(turns: ReadonlyArray<MessageTurn>, infos: ReadonlyArray<InfoEntry>): ChatEntry[] {
-  const entries: ChatEntry[] = [
-    ...turns.map((turn): ChatEntry => ({ kind: "turn", turn })),
-    ...infos.map((entry): ChatEntry => ({ kind: "info", entry })),
-  ];
+function mergeEntries(agent: AgentUiState | null, infos: ReadonlyArray<InfoEntry>): ChatEntry[] {
+  const entries: ChatEntry[] = infos.map((entry): ChatEntry => ({ kind: "info", entry }));
+  if (agent !== null) {
+    for (const turn of turnsOf(agent)) entries.push({ kind: "turn", turn });
+    if (agent.compactionMarker !== null) entries.push({ kind: "compaction", marker: agent.compactionMarker });
+  }
   return entries.sort((a, b) => seqOf(a) - seqOf(b));
 }
 
 function seqOf(entry: ChatEntry): number {
-  return entry.kind === "turn" ? entry.turn.seq : entry.entry.seq;
+  if (entry.kind === "turn") return entry.turn.seq;
+  if (entry.kind === "info") return entry.entry.seq;
+  return entry.marker.seq;
 }
 
 function sameEntry(synced: SyncedEntry, entry: ChatEntry): boolean {
   if (synced.kind !== entry.kind) return false;
-  return entry.kind === "turn" ? synced.seq === entry.turn.seq : synced.seq === entry.entry.seq;
+  if (entry.kind === "turn") return synced.seq === entry.turn.seq;
+  if (entry.kind === "info") return synced.seq === entry.entry.seq;
+  return synced.seq === entry.marker.seq;
 }
 
 function turnsOf(agent: AgentUiState): MessageTurn[] {
