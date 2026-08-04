@@ -26,6 +26,15 @@
           "contextWindow": 64000,
           "maxTokens": 16384,
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        },
+        {
+          "id": "e2e-tiny",
+          "name": "e2e-tiny",
+          "reasoning": false,
+          "input": ["text"],
+          "contextWindow": 38000,
+          "maxTokens": 16384,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
         }
       ]
     }
