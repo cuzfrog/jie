@@ -2504,13 +2504,17 @@ describe("JieAgentBody — compaction", () => {
     body.stop();
   });
 
-  test("stop() aborts an in-flight compaction", async () => {
+  test("stop() aborts an in-flight compaction without publishing an error", async () => {
     const { compactor, compact } = makeFakeCompactor();
     let captured: AbortSignal | undefined;
     compact.mockImplementationOnce((input) => {
       captured = input.signal;
-      return new Promise<CompactionResult | null>(() => {});
+      return new Promise<CompactionResult | null>((_resolve, reject) => {
+        input.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+      });
     });
+    const errors: EventEnvelope<"system.error">[] = [];
+    h.subscribeSubject("system.error", (env) => errors.push(env));
     const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), compactor });
     await body.start();
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
@@ -2519,20 +2523,26 @@ describe("JieAgentBody — compaction", () => {
     expect(captured.aborted).toBe(false);
     body.stop();
     expect(captured.aborted).toBe(true);
+    await flush();
+    expect(errors).toHaveLength(0);
   });
 
-  test("a failed compaction publishes system.error and still dispatches the queue", async () => {
+  test("a failed compaction publishes system.error and leaves the history untouched", async () => {
     const { compactor, compact } = makeFakeCompactor();
     compact.mockRejectedValueOnce(new Error("boom"));
     const errors: EventEnvelope<"system.error">[] = [];
     h.subscribeSubject("system.error", (env) => errors.push(env));
     const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), compactor });
     await body.start();
+    const first = makeUserMessage("m1");
+    const second = makeAssistantMessage({ content: [{ type: "text", text: "m2" }] });
+    h.state.messages = [first, second];
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
     await flush();
     expect(errors).toHaveLength(1);
     expect(errors[0]!.payload.error).toContain("boom");
     expect(h.prompt.mock.calls.length).toBe(1);
+    expect(h.state.messages).toEqual([first, second]);
     body.stop();
   });
 });

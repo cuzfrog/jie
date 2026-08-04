@@ -66,6 +66,10 @@ export class CompactorImpl implements Compactor {
     if (!shouldCompact(tokensBefore, input.contextWindow, settings)) return null;
     const preparation = prepareCompaction(input.messages, settings.keepRecentTokens);
     if (preparation === null) return null;
+    const storedCount = (await this.memory.restore(input.agentKey, input.sessionId, input.teamId)).length;
+    if (storedCount !== input.messages.length) {
+      throw new Error(`history out of sync with storage: ${storedCount} stored rows, ${input.messages.length} messages`);
+    }
     const summaryText = await this.summarize({
       systemPrompt: SUMMARIZATION_SYSTEM_PROMPT,
       userPrompt: buildSummaryPrompt(input.messages.slice(0, preparation.firstKeptIndex), preparation.previousSummary),

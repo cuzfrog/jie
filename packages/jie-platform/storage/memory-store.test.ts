@@ -141,19 +141,24 @@ describe("SqliteMemoryManager", () => {
     expect((restored[0] as { role: string }).role).toBe("compactionSummary");
   });
 
-  test("compact throws and the synthetic error surfaces", () => {
-    const { storage } = makeThrowingStorage("exec", 2);
+  test("compact throws and the transaction rolls back, leaving the rows untouched", async () => {
+    const { storage, inner } = makeThrowingStorage("exec", 3);
+    const seeding = new SqliteMemoryManager(inner);
+    seeding.persist(userMessage("a"), "agent-1", "s1", "t1");
+    seeding.persist(userMessage("b"), "agent-1", "s1", "t1");
     const throwing = new SqliteMemoryManager(storage);
 
     expect(() =>
       throwing.compact(
-        2,
+        1,
         summaryMessage("sum"),
         "agent-1",
         "s1",
         "t1",
       ),
     ).toThrow("synthetic storage failure");
+    const restored = await throwing.restore("agent-1", "s1", "t1") as Array<{ content: unknown }>;
+    expect(restored.map((row) => row.content)).toEqual(["a", "b"]);
   });
 
   test("hasSession is false before any persist, true after", () => {
@@ -220,12 +225,13 @@ describe("SqliteMemoryManager.listSessions", () => {
     expect(ids).toEqual(["s-new", "s-old"]);
   });
 
-  test("includes compaction summary rows in messageCount", () => {
+  test("messageCount counts non-compacted rows only, including the summary row", () => {
     const m = makeManager();
     m.persist(userMessage("a"), "agent-1", "s1", "t1");
     m.persist(userMessage("b"), "agent-1", "s1", "t1");
+    m.persist(userMessage("c"), "agent-1", "s1", "t1");
     m.compact(2, summaryMessage("sum"), "agent-1", "s1", "t1");
-    expect(m.listSessions("t1")[0]?.messageCount).toBe(3);
+    expect(m.listSessions("t1")[0]?.messageCount).toBe(2);
   });
 
   test("surfaces a renamed session's name", () => {

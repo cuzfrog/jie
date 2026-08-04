@@ -376,7 +376,7 @@ export class JieAgentBody implements AgentBody {
 
   private async settleAfterRun(): Promise<void> {
     await this.ensureCompacted();
-    await this.dispatchNext();
+    this.dispatchHead();
   }
 
   private async dispatchNext(): Promise<void> {
@@ -384,14 +384,18 @@ export class JieAgentBody implements AgentBody {
     this.dispatching = true;
     try {
       await this.ensureCompacted();
-      if (this.stopped || this.agent.state.isStreaming || this.queue.length === 0) return;
-      const next = this.queue.shift()!;
-      this.pendingTurnPrompt = next.userText;
-      this.publishQueueUpdate(this.sender);
-      void this.agent.prompt(next.message);
     } finally {
       this.dispatching = false;
     }
+    this.dispatchHead();
+  }
+
+  private dispatchHead(): void {
+    if (this.dispatching || this.stopped || this.agent.state.isStreaming || this.queue.length === 0) return;
+    const next = this.queue.shift()!;
+    this.pendingTurnPrompt = next.userText;
+    this.publishQueueUpdate(this.sender);
+    void this.agent.prompt(next.message);
   }
 
   private ensureCompacted(): Promise<void> {

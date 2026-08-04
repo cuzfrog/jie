@@ -147,7 +147,7 @@ export class SqliteMemoryManager implements MemoryManager {
 
   listSessions(teamId: string): ReadonlyArray<SessionSummary> {
     const rows = this.storage.query(
-      `SELECT t.session_id, COUNT(*) AS cnt, MAX(t.created_at) AS last_activity, m.name
+      `SELECT t.session_id, COUNT(CASE WHEN t.compacted = 0 THEN 1 END) AS cnt, MAX(t.created_at) AS last_activity, m.name
        FROM memory_turns t
        LEFT JOIN session_metadata m ON m.session_id = t.session_id
        WHERE t.team_id = ?

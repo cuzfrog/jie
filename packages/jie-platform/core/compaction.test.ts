@@ -106,6 +106,7 @@ describe("CompactorImpl.compact", () => {
     const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
     const compactor = makeCompactor(memory, summarize);
     const messages = [userMsg("please do the thing"), assistantMsg(BIG)];
+    memory.restore.mockResolvedValue([...messages]);
     const result = await compactor.compact(makeInput(messages));
     expect(result).not.toBeNull();
     expect(result?.firstKeptIndex).toBe(1);
@@ -138,7 +139,9 @@ describe("CompactorImpl.compact", () => {
       return "the-summary";
     });
     const compactor = makeCompactor(memory, summarize);
-    await compactor.compact(makeInput([userMsg("please do the thing"), assistantMsg(BIG)]));
+    const messages = [userMsg("please do the thing"), assistantMsg(BIG)];
+    memory.restore.mockResolvedValue([...messages]);
+    await compactor.compact(makeInput(messages));
     expect(memory.compact).toHaveBeenCalledTimes(1);
   });
 
@@ -147,6 +150,7 @@ describe("CompactorImpl.compact", () => {
     const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
     const compactor = makeCompactor(memory, summarize);
     const messages = [userMsg("please do the thing"), assistantMsg("calling tool"), toolResultMsg(BIG), userMsg("tail prompt")];
+    memory.restore.mockResolvedValue([...messages]);
     const result = await compactor.compact(makeInput(messages));
     expect(result?.firstKeptIndex).toBe(3);
     const call = summarize.mock.calls[0]![0];
@@ -190,6 +194,7 @@ describe("CompactorImpl.compact", () => {
     const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary-2");
     const compactor = makeCompactor(memory, summarize);
     const messages = [summaryMsg("old summary", 1000), userMsg(BIG), assistantMsg(BIG)];
+    memory.restore.mockResolvedValue([...messages]);
     const result = await compactor.compact(makeInput(messages));
     expect(result?.firstKeptIndex).toBe(2);
     const call = summarize.mock.calls[0]![0];
@@ -220,6 +225,7 @@ describe("CompactorImpl.compact", () => {
     const freshUsage: Usage = { input: 1_900_000, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 1_900_000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
     const model = makeModel(200_000, 8192);
     const messages = [summaryMsg("old summary", 1000), userMsg(BIG), assistantMsg(BIG, 6000, freshUsage)];
+    memory.restore.mockResolvedValue([...messages]);
     const result = await compactor.compact(makeInput(messages, model));
     expect(result?.firstKeptIndex).toBe(2);
     expect(result?.tokensBefore).toBeGreaterThan(200_000 - 16384);
@@ -229,6 +235,7 @@ describe("CompactorImpl.compact", () => {
     const memory = makeMemory();
     const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
     const compactor = makeCompactor(memory, summarize);
+    memory.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
     await compactor.compact(makeInput([userMsg("please do the thing"), assistantMsg(BIG)], makeModel(THRESHOLD_WINDOW, 1024)));
     expect(summarize.mock.calls[0]![0].maxTokens).toBe(1024);
   });
@@ -237,6 +244,7 @@ describe("CompactorImpl.compact", () => {
     const memory = makeMemory();
     const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
     const compactor = makeCompactor(memory, summarize);
+    memory.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
     await compactor.compact(makeInput([userMsg("please do the thing"), assistantMsg(BIG)], makeModel(THRESHOLD_WINDOW, 100_000)));
     expect(summarize.mock.calls[0]![0].maxTokens).toBe(Math.floor(0.8 * 16384));
   });
@@ -245,6 +253,7 @@ describe("CompactorImpl.compact", () => {
     const memory = makeMemory();
     const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
     const compactor = makeCompactor(memory, summarize);
+    memory.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
     const controller = new AbortController();
     await compactor.compact({ ...makeInput([userMsg("please do the thing"), assistantMsg(BIG)]), signal: controller.signal });
     expect(summarize.mock.calls[0]![0].signal).toBe(controller.signal);
@@ -256,7 +265,18 @@ describe("CompactorImpl.compact", () => {
       throw new Error("summarization failed");
     });
     const compactor = makeCompactor(memory, summarize);
+    memory.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
     await expect(compactor.compact(makeInput([userMsg("please do the thing"), assistantMsg(BIG)]))).rejects.toThrow("summarization failed");
+    expect(memory.compact).not.toHaveBeenCalled();
+  });
+
+  test("rejects when the stored history diverges from the in-memory messages", async () => {
+    const memory = makeMemory();
+    const summarize = vi.fn(async (_input: SummarizeCall) => "summary");
+    const compactor = makeCompactor(memory, summarize);
+    memory.restore.mockResolvedValue([userMsg("only one stored row")]);
+    await expect(compactor.compact(makeInput([userMsg("please do the thing"), assistantMsg(BIG)]))).rejects.toThrow("out of sync");
+    expect(summarize).not.toHaveBeenCalled();
     expect(memory.compact).not.toHaveBeenCalled();
   });
 });
