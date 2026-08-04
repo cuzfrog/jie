@@ -60,7 +60,7 @@ A user can place `TEAM.md` and `general.md` (the minimal-team shape) at `~/.jie/
 
 The minimal team does not pin a model. The leader's `(provider, modelId)` is resolved from the user's merged settings at startup, following the chain in `10-configuration.md` "Model Resolution".
 
-Model resolution happens at team load: if no model is configured (the soul pins none and settings define no `defaultProvider`/`defaultModel`), load fails with `NO_MODEL_ERROR` and the CLI exits 1; a soul whose model string fails to resolve is skipped. A missing model is thus a load-time error, not a runtime one.
+Model resolution happens at team load: if no model is configured (the soul pins none and settings define no `defaultProvider`/`defaultModel`), load fails with `NO_MODEL_ERROR` and the CLI exits 1; a model string that fails to resolve throws `MODEL_UNRESOLVED` naming the model and role — the single-agent team's only role is its leader, so an unresolvable default model fails the load rather than producing a leaderless team. A missing model is thus a load-time error, not a runtime one.
 
 Users who want a different model globally run `jie model <provider>/<modelId>` (or edit `~/.jie/settings.json` directly). Users who want a different model for the minimal team specifically can install their own `general.md` (which can pin a model in frontmatter) and place it at one of the standard paths.
 

@@ -1,5 +1,6 @@
 const JiePlatformErrorMessages = {
   NO_MODEL_ERROR: "No model has been selected, please login and select a default model.",
+  MODEL_UNRESOLVED: "Model could not be resolved",
 
   FILE_NOT_FOUND: "File not found",
   PATH_ESCAPE: "Path escapes the workspace root",

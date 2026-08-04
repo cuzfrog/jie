@@ -211,7 +211,7 @@ describe("TeamManagerImpl — full surface", () => {
       expect(manager.listLoaded().size).toBe(0);
     });
 
-    test("rejects NO_LEADER before starting any body when the leader role's model does not resolve", async () => {
+    test("rejects MODEL_UNRESOLVED before starting any body when the leader role's model does not resolve", async () => {
       const teamDir = join(homeJieDir, "teams", "dev");
       mkdirSync(teamDir, { recursive: true });
       writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
@@ -227,17 +227,37 @@ describe("TeamManagerImpl — full surface", () => {
         stop: () => {},
       }));
       const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, memoryManager, skillManager, factory);
-      await expect(manager.load("dev")).rejects.toMatchObject({ code: "NO_LEADER" });
+      await expect(manager.load("dev")).rejects.toMatchObject({ code: "MODEL_UNRESOLVED" });
       expect(started).toEqual([]);
       expect(manager.listLoaded().size).toBe(0);
     });
 
-    test("rejects NO_LEADER when no role's model resolves at all", async () => {
+    test("rejects MODEL_UNRESOLVED when the built-in leader's inherited model does not resolve", async () => {
       modelRegistry.resolve.mockReturnValue(undefined);
       const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
-      await expect(manager.load("minimal")).rejects.toMatchObject({ code: "NO_LEADER" });
+      await expect(manager.load("minimal")).rejects.toMatchObject({ code: "MODEL_UNRESOLVED" });
       expect(agentBodyFactory).not.toHaveBeenCalled();
       expect(manager.listLoaded().size).toBe(0);
+    });
+
+    test("names the unresolvable model and role in the MODEL_UNRESOLVED detail", async () => {
+      modelRegistry.resolve.mockReturnValue(undefined);
+      const { manager } = makeManager(homeJieDir, null);
+      await expect(manager.load("minimal")).rejects.toThrow(/anthropic\/claude-sonnet-4-5/);
+      await expect(manager.load("minimal")).rejects.toThrow(/general/);
+    });
+
+    test("skips a non-leader role whose pinned model does not resolve and loads the leader", async () => {
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\ntools:\n  - bash\n---\nlead");
+      writeFileSync(join(teamDir, "worker.md"), "---\nmodel: acme/gone\ntools:\n  - bash\n---\nworker");
+      modelRegistry.resolve.mockImplementation((provider, modelId) => (modelId === "gone" ? undefined : makeModel(provider, modelId)));
+      const { manager } = makeManager(homeJieDir, null);
+      const team = await manager.load("dev");
+      expect(team.leaderKey).toBe("lead-1");
+      expect(team.agents.map((agent) => agent.agentKey)).toEqual(["lead-1"]);
     });
 
     test("UNKNOWN_SESSION propagates out of load", async () => {
