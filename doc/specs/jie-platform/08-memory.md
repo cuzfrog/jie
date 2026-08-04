@@ -24,7 +24,7 @@ The manager holds no in-memory copy of the conversation — pi-agent's `state.me
 
 ### Persist
 
-Called on every pi-agent `message_end`: the message is serialized (`JSON.stringify(AgentMessage)`) and written to `memory_turns` immediately — no buffering. `persist` never writes a `compactionSummary` row; that role is owned by `compact` (writes use `INSERT OR REPLACE`, so a redundant write from any future behavior change is harmless).
+Called on every pi-agent `message_end`: the message is serialized (`JSON.stringify(AgentMessage)`) and written to `memory_turns` immediately — no buffering. The store persists what it is handed verbatim; the body projects the message before the call (non-display `toolResult` details are dropped — `06-agent-model.md` "Memory Integration"). `persist` never writes a `compactionSummary` row; that role is owned by `compact` (writes use `INSERT OR REPLACE`, so a redundant write from any future behavior change is harmless).
 
 ### Compact
 
