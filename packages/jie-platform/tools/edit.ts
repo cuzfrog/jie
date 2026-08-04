@@ -9,9 +9,10 @@ const EDIT_DESCRIPTION = `Search-and-replace inside a text file. Reads \`path\` 
 absolute within workspace), replaces occurrences of \`old_string\` with \`new_string\`, and writes the
 result back. If \`old_string\` does not appear the call fails with NO_MATCH. If it appears more
 than once and \`replace_all\` is false the call fails with AMBIGUOUS_MATCH (so the model must
-either narrow \`old_string\` or opt in to \`replace_all\`). On success returns a unified-diff preview
-in \`details.diff\` for the TUI to render; for edits larger than 5000 lines the diff is
-omitted and \`details.diff\` is null (use \`write_file\` for wholesale rewrites). Text only; UTF-8.`;
+either narrow \`old_string\` or opt in to \`replace_all\`). On success returns a one-line ack; the
+unified-diff preview lives only in \`details.diff\` for the UI — it is not part of the model-visible
+result. For edits larger than 5000 lines the diff is omitted and \`details.diff\` is null (use
+\`write_file\` for wholesale rewrites). Text only; UTF-8.`;
 
 interface EditDeps {
   workspaceRoot: string;
@@ -96,8 +97,7 @@ export function createEditTool(dependencies: EditDeps): Tool<EditInput> {
       const beforeBytes = new TextEncoder().encode(before).length;
       const afterBytes = new TextEncoder().encode(after).length;
       const diff = renderUnifiedDiff(before, after);
-      const summary = `Edited ${input.path}: ${replacementsCount} replacement${replacementsCount === 1 ? "" : "s"}`;
-      const content = diff === null || diff === "" ? summary : `${summary}\n${diff}`;
+      const content = `Edited ${input.path}: ${replacementsCount} replacement${replacementsCount === 1 ? "" : "s"}`;
       const details: EditResultDetails = {
         kind: "diff",
         path: input.path,
