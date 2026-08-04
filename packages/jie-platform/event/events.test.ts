@@ -78,3 +78,23 @@ describe("Events.userEffortUpdate", () => {
     expect(env.payload).toEqual({ effort: "high" });
   });
 });
+
+describe("Events.userModelUpdate", () => {
+  test("builds a user.model.update envelope carrying the model reference", () => {
+    const env = Events.userModelUpdate(USER_SENDER, "lm-studio", "qwen3.5-2b");
+    expect(env.type).toBe("user.model.update");
+    expect(env.topic).toBe("user.model.update");
+    expect(env.sender).toBe(USER_SENDER);
+    expect(env.payload).toEqual({ provider: "lm-studio", modelId: "qwen3.5-2b" });
+  });
+});
+
+describe("Events.agentModelAssigned", () => {
+  test("builds an agent.model.assigned envelope carrying the model reference, effort, and context window", () => {
+    const env = Events.agentModelAssigned(AGENT_SENDER, "anthropic", "claude-sonnet-4", "high", 200000);
+    expect(env.type).toBe("agent.model.assigned");
+    expect(env.topic).toBe("agent.model.assigned");
+    expect(env.sender).toBe(AGENT_SENDER);
+    expect(env.payload).toEqual({ provider: "anthropic", model: "claude-sonnet-4", effort: "high", contextWindow: 200000 });
+  });
+});
