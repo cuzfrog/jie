@@ -25,6 +25,7 @@ const INITIAL_TUI_STATE: TuiState = Object.freeze({
   thinkingExpanded: false,
   toolCardsExpanded: false,
   teamPanelVisible: false,
+  kanbanPanelVisible: false,
   pendingQuit: false,
   editorText: "",
   editorCursorAtStart: true,

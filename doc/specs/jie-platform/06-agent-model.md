@@ -121,7 +121,7 @@ Registered at platform startup by the `InMemoryToolRegistry` constructor (a crad
 | `write_file` | text-file writes (overwrite) |
 | `edit` | search-and-replace inside a file, with diff preview |
 | `read_artifact` / `write_artifact` | key-value work-product store |
-| `todo_write` | live task checklist (utility — implicitly assigned to every agent) |
+| `kanban_write` | live kanban board (utility — implicitly assigned to every agent) |
 | `notify` | publish to the team event bus (see "notify and the Subscription Model") |
 | `web_search` / `web_fetch` | web access |
 
@@ -162,19 +162,19 @@ edit(input: { path: string; old_string: string; new_string: string; replace_all?
 
 Search-and-replace inside a workspace text file. Zero occurrences throws `no_match`; more than one with `replace_all` false throws `ambiguous_match` — the LLM must narrow `old_string` or opt into `replace_all`. On success `content` is a summary line plus a unified-diff preview; for files over 5000 lines the diff is omitted (use `write_file` for wholesale rewrites). `details: { kind: "diff", path, replacementsCount, beforeBytes, afterBytes, diff }` — the TUI renders the diff from the telemetry payload. Both tools share the unified-diff renderer: 3 context lines, hunks merged across gaps of ≤ 6 unchanged lines, `null` above the 5000-line cap. Same workspace/encoding errors as `read_file`, plus `disk_full` on write.
 
-### todo_write
+### kanban_write
 
 ```typescript
-todo_write(input: { todos: ReadonlyArray<TodoItem> })
+kanban_write(input: { cards: ReadonlyArray<KanbanCard> })
 
-interface TodoItem {
+interface KanbanCard {
   readonly content: string;
   readonly status: "pending" | "in_progress" | "completed";
   readonly active_form?: string;
 }
 ```
 
-Replaces (does not merge with) the agent's live checklist. The tool enforces: exactly one `in_progress` item when the list is non-empty (zero clears), no duplicate `content`, no empty `content` — violations throw `todo_write_invalid`. `content` summarizes the list and the current item; `details: { kind: "todos", todos }` carries the full list so the TUI renders the checklist from the same payload.
+Replaces (does not merge with) the agent's live kanban board; `status` is the card's column. The tool enforces: no duplicate `content`, no empty `content` — violations throw `kanban_write_invalid`. Any number of cards may be `in_progress` (the board's WIP is not limited); an empty list clears the board. `content` summarizes the card count and the in-progress count; `details: { kind: "kanban", cards }` carries the full board so the TUI renders it from the same payload.
 
 ### write_artifact and read_artifact
 

@@ -27,7 +27,7 @@ export interface TuiCradle {
   readonly commandHandler: CommandHandler;
   readonly autocompleteProvider: JieAutocompleteProvider;
   readonly chatMessages: ChatMessages;
-  readonly todoList: Component;
+  readonly kanbanList: Component;
   readonly footer: Component;
   readonly jieEditorFactory: (tui: TUI) => Editor;
   readonly chatSyncFactory: (chatContainer: Container, requestRender: () => void) => ChatSync;

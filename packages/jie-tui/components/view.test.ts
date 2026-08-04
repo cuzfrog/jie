@@ -119,9 +119,14 @@ describe("resolveGlobalKey", () => {
     expect(_resolveGlobalKey("\x0f", makeTuiState(), false)).toEqual(Actions.toggleToolCards());
   });
 
-  test("ctrl+t and ctrl+o stay active while the autocomplete popup is open", () => {
+  test("ctrl+k maps to toggleKanbanPanel", () => {
+    expect(_resolveGlobalKey("\x0b", makeTuiState(), false)).toEqual(Actions.toggleKanbanPanel());
+  });
+
+  test("ctrl+t, ctrl+o and ctrl+k stay active while the autocomplete popup is open", () => {
     expect(_resolveGlobalKey("\x14", makeTuiState(), true)).toEqual(Actions.toggleThinking());
     expect(_resolveGlobalKey("\x0f", makeTuiState(), true)).toEqual(Actions.toggleToolCards());
+    expect(_resolveGlobalKey("\x0b", makeTuiState(), true)).toEqual(Actions.toggleKanbanPanel());
   });
 
   test("left maps to toggling the team panel while the editor cursor sits at the buffer start", () => {

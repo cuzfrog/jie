@@ -179,6 +179,58 @@ describe("team strip cursor", () => {
   });
 });
 
+describe("kanban panel toggle", () => {
+  function twoAgent(): TuiState {
+    return loadedTeam([
+      { role: "manager", agent_key: "manager-1", is_leader: true },
+      { role: "worker", agent_key: "worker-1", is_leader: false },
+    ]);
+  }
+
+  test("starts hidden in initial state", () => {
+    expect(INITIAL_TUI_STATE.kanbanPanelVisible).toBe(false);
+  });
+
+  test("toggle shows the kanban panel", () => {
+    const state = reduceUiAction(twoAgent(), Actions.toggleKanbanPanel());
+    expect(state.kanbanPanelVisible).toBe(true);
+  });
+
+  test("toggle hides the shown kanban panel", () => {
+    const opened = reduceUiAction(twoAgent(), Actions.toggleKanbanPanel());
+    const closed = reduceUiAction(opened, Actions.toggleKanbanPanel());
+    expect(closed.kanbanPanelVisible).toBe(false);
+  });
+
+  test("is a no-op when no agent is focused", () => {
+    expect(reduceUiAction(INITIAL_TUI_STATE, Actions.toggleKanbanPanel())).toBe(INITIAL_TUI_STATE);
+  });
+
+  test("opening the kanban panel hides the team panel and clears its cursor", () => {
+    const opened = reduceUiAction(twoAgent(), Actions.toggleTeamPanel());
+    const moved = reduceUiAction(opened, Actions.switchCycleAgent(1));
+    const kanban = reduceUiAction(moved, Actions.toggleKanbanPanel());
+    expect(kanban.kanbanPanelVisible).toBe(true);
+    expect(kanban.teamPanelVisible).toBe(false);
+    expect(kanban.teamCursorAgentId).toBeNull();
+    expect(kanban.focusedAgentId).toBe("my-team:manager-1");
+  });
+
+  test("opening the team panel hides the kanban panel", () => {
+    const opened = reduceUiAction(twoAgent(), Actions.toggleKanbanPanel());
+    const team = reduceUiAction(opened, Actions.toggleTeamPanel());
+    expect(team.teamPanelVisible).toBe(true);
+    expect(team.teamCursorAgentId).toBe("my-team:manager-1");
+    expect(team.kanbanPanelVisible).toBe(false);
+  });
+
+  test("clearTuiState keeps the kanban panel visible", () => {
+    const opened = reduceUiAction(twoAgent(), Actions.toggleKanbanPanel());
+    const cleared = reduceUiAction(opened, Actions.clearTuiState());
+    expect(cleared.kanbanPanelVisible).toBe(true);
+  });
+});
+
 describe("commit team cursor", () => {
   function twoAgent(): TuiState {
     return loadedTeam([

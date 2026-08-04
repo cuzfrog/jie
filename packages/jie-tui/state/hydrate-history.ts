@@ -1,6 +1,6 @@
 import type { AgentMessage, UserIngressMessage } from "@cuzfrog/jie-platform";
 import type { AssistantMessage, TextContent, ToolResultMessage } from "@earendil-works/pi-ai";
-import { isTodoDetails, type TodoItem } from "../todo";
+import { isKanbanDetails, type KanbanCard } from "../kanban";
 import type { MessageCard, MessageTurn } from "./state";
 
 const USER_INGRESS_PREFIX = "[user]: ";
@@ -8,7 +8,7 @@ const USER_INGRESS_PREFIX = "[user]: ";
 export interface HydratedHistory {
   readonly history: MessageTurn[];
   readonly currentTurn: MessageTurn | null;
-  readonly todos: ReadonlyArray<TodoItem>;
+  readonly cards: ReadonlyArray<KanbanCard>;
   readonly nextSeq: number;
 }
 
@@ -36,18 +36,18 @@ export function hydrateHistory(messages: ReadonlyArray<AgentMessage>, startSeq: 
     }
   }
   if (current !== null) turns.push(current);
-  if (turns.length === 0) return { history: [], currentTurn: null, todos: [], nextSeq };
-  return { history: turns.slice(0, turns.length - 1), currentTurn: turns[turns.length - 1]!, todos: deriveTodos(turns), nextSeq };
+  if (turns.length === 0) return { history: [], currentTurn: null, cards: [], nextSeq };
+  return { history: turns.slice(0, turns.length - 1), currentTurn: turns[turns.length - 1]!, cards: deriveCards(turns), nextSeq };
 }
 
-function deriveTodos(turns: ReadonlyArray<MessageTurn>): ReadonlyArray<TodoItem> {
-  let todos: ReadonlyArray<TodoItem> = [];
+function deriveCards(turns: ReadonlyArray<MessageTurn>): ReadonlyArray<KanbanCard> {
+  let cards: ReadonlyArray<KanbanCard> = [];
   for (const turn of turns) {
     for (const card of turn.cards) {
-      if (card.kind === "toolResult" && isTodoDetails(card.details)) todos = card.details.todos;
+      if (card.kind === "toolResult" && isKanbanDetails(card.details)) cards = card.details.cards;
     }
   }
-  return todos;
+  return cards;
 }
 
 function userPromptText(message: UserIngressMessage): string {

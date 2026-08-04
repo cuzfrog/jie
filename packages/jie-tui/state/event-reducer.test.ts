@@ -698,38 +698,38 @@ describe("reduceToolCall + reduceToolResult", () => {
     }
   });
 
-  test("a todo_write tool result updates the agent's todos from details.kind === 'todos'", () => {
+  test("a kanban_write tool result updates the agent's cards from details.kind === 'kanban'", () => {
     let state = promptedState();
-    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "todo_write", "{}"));
-    const todos = [
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "kanban_write", "{}"));
+    const cards = [
       { content: "alpha", status: "completed" },
       { content: "beta", status: "in_progress" },
       { content: "gamma", status: "pending" },
     ] as const;
-    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "todo_write", "ok", 5, null, { kind: "todos", todos }));
-    expect(state.agents.get("my-team:general-1")?.todos).toEqual(todos);
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "kanban_write", "ok", 5, null, { kind: "kanban", cards }));
+    expect(state.agents.get("my-team:general-1")?.cards).toEqual(cards);
   });
 
-  test("an empty todo list clears the agent's todos", () => {
+  test("an empty kanban board clears the agent's cards", () => {
     let state = promptedState();
-    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "todo_write", "{}"));
-    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "todo_write", "ok", 5, null, { kind: "todos", todos: [] }));
-    expect(state.agents.get("my-team:general-1")?.todos).toEqual([]);
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "kanban_write", "{}"));
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "kanban_write", "ok", 5, null, { kind: "kanban", cards: [] }));
+    expect(state.agents.get("my-team:general-1")?.cards).toEqual([]);
   });
 
-  test("a tool result with non-todo details does not touch the agent's todos", () => {
+  test("a tool result with non-kanban details does not touch the agent's cards", () => {
     let state = promptedState();
     state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
     state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", "out", 5, null, { kind: "diff", diff: "@@ -1 +1 @@\n-a\n+A" }));
-    expect(state.agents.get("my-team:general-1")?.todos).toEqual([]);
+    expect(state.agents.get("my-team:general-1")?.cards).toEqual([]);
   });
 
-  test("a todo_write tool result for a foreign team is ignored", () => {
+  test("a kanban_write tool result for a foreign team is ignored", () => {
     const state = promptedState();
     const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
-    const state2 = reduce(state, Events.agentToolResult(foreign, "c1", "todo_write", "ok", 5, null, { kind: "todos", todos: [{ content: "x", status: "in_progress" }] }));
+    const state2 = reduce(state, Events.agentToolResult(foreign, "c1", "kanban_write", "ok", 5, null, { kind: "kanban", cards: [{ content: "x", status: "in_progress" }] }));
     expect(state2).toBe(state);
-    expect(state2.agents.get("my-team:general-1")?.todos).toEqual([]);
+    expect(state2.agents.get("my-team:general-1")?.cards).toEqual([]);
   });
 });
 

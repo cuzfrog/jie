@@ -6,6 +6,7 @@ import { StatusLine } from "./status-line";
 import { QueuedPrompts } from "./queued-prompts";
 import { WelcomeBanner } from "./welcome-banner";
 import { TeamPanel } from "./team-panel";
+import { KanbanPanel } from "./kanban-panel";
 
 export interface TuiView {
   stop(): void;
@@ -13,6 +14,7 @@ export interface TuiView {
 
 const CTRL_T = "\x14";
 const CTRL_O = "\x0f";
+const CTRL_K = "\x0b";
 const CONSUMED = { consume: true } as const;
 const INTERRUPTED_LABEL = "Interrupted";
 const TEAM_WORKING_LABEL = "Team working…";
@@ -33,7 +35,7 @@ export class TuiViewImpl implements TuiView {
     tui: TUI,
     stateStore: StateStore,
     chatSyncFactory: (chatContainer: Container, requestRender: () => void) => ChatSync,
-    todoList: Component,
+    kanbanList: Component,
     footer: Component,
     jieEditorFactory: (tui: TUI) => Editor,
   ) {
@@ -51,7 +53,7 @@ export class TuiViewImpl implements TuiView {
       frames: NO_SPINNER_FRAMES,
     });
     tui.addChild(chatContainer);
-    tui.addChild(todoList);
+    tui.addChild(kanbanList);
     tui.addChild(this.workingSlot);
     tui.addChild(new WelcomeBanner(stateStore));
     tui.addChild(new StatusLine(stateStore));
@@ -59,6 +61,7 @@ export class TuiViewImpl implements TuiView {
     tui.addChild(editor);
     tui.addChild(footer);
     tui.addChild(new TeamPanel(stateStore));
+    tui.addChild(new KanbanPanel(stateStore));
     tui.setFocus(editor);
     this.unsubscribeKeys = tui.addInputListener((data) => {
       const state = this.stateStore.getState();
@@ -110,6 +113,7 @@ class FlushLoader extends Loader {
 function resolveGlobalKey(data: string, state: TuiState, popupOpen: boolean): Action | null {
   if (data === CTRL_T) return Actions.toggleThinking();
   if (data === CTRL_O) return Actions.toggleToolCards();
+  if (data === CTRL_K) return Actions.toggleKanbanPanel();
   if (matchesKey(data, "left") && state.editorCursorAtStart && !popupOpen) return Actions.toggleTeamPanel();
   return null;
 }

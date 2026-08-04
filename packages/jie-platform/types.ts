@@ -50,27 +50,27 @@ export interface TeamInfo {
     readonly history: ReadonlyArray<AgentHistory>;
 }
 
-export type TodoStatus = "pending" | "in_progress" | "completed";
+export type KanbanStatus = "pending" | "in_progress" | "completed";
 
-export interface TodoItem {
+export interface KanbanCard {
     readonly content: string;
-    readonly status: TodoStatus;
+    readonly status: KanbanStatus;
     readonly active_form?: string;
 }
 
-export interface TodoDetailsPayload {
-    readonly kind: "todos";
-    readonly todos: ReadonlyArray<TodoItem>;
+export interface KanbanDetailsPayload {
+    readonly kind: "kanban";
+    readonly cards: ReadonlyArray<KanbanCard>;
 }
 
-export function isTodoDetails(value: unknown): value is TodoDetailsPayload {
+export function isKanbanDetails(value: unknown): value is KanbanDetailsPayload {
     if (typeof value !== "object" || value === null) return false;
-    if (!("kind" in value) || value.kind !== "todos") return false;
-    if (!("todos" in value) || !Array.isArray(value.todos)) return false;
-    return value.todos.every(isTodoItem);
+    if (!("kind" in value) || value.kind !== "kanban") return false;
+    if (!("cards" in value) || !Array.isArray(value.cards)) return false;
+    return value.cards.every(isKanbanCard);
 }
 
-function isTodoItem(value: unknown): value is TodoItem {
+function isKanbanCard(value: unknown): value is KanbanCard {
     if (typeof value !== "object" || value === null) return false;
     if (!("content" in value) || typeof value.content !== "string") return false;
     if (!("status" in value)) return false;

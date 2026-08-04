@@ -1,8 +1,8 @@
 ---
 no-new-exports:
-  # ungated for DI review: todo tool-result DTOs (TodoItem/TodoStatus/TodoDetailsPayload/
-  # isTodoDetails) are cross-boundary DTOs consumed by jie-tui; they must leave through
-  # the package surface instead of the current cross-package deep import of types/todo.ts.
+  # ungated for DI review: kanban tool-result DTOs (KanbanCard/KanbanStatus/KanbanDetailsPayload/
+  # isKanbanDetails) are cross-boundary DTOs consumed by jie-tui; they must leave through
+  # the package surface, not a cross-package deep import of types.ts.
   - container.test.ts
   - container.ts
   # - index.ts

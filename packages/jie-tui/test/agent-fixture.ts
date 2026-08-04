@@ -19,7 +19,7 @@ export function makeAgentUiState(agentId: AgentId, overrides: Partial<AgentUiSta
     lastStopReason: null,
     contextTokensUsed: 0,
     lastReportedTotalTokens: null,
-    todos: [],
+    cards: [],
     ...overrides,
   };
 }

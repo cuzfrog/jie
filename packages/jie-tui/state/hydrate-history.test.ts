@@ -42,7 +42,7 @@ function usage(): Usage {
 
 describe("hydrateHistory", () => {
   test("empty messages yields empty history and null current turn", () => {
-    expect(hydrateHistory([], 0)).toEqual({ history: [], currentTurn: null, todos: [], nextSeq: 0 });
+    expect(hydrateHistory([], 0)).toEqual({ history: [], currentTurn: null, cards: [], nextSeq: 0 });
   });
 
   test("single completed turn becomes currentTurn with empty history", () => {
@@ -128,20 +128,20 @@ describe("hydrateHistory", () => {
     const result = hydrateHistory([user("pending")], 0);
     expect(result.history).toEqual([]);
     expect(result.currentTurn).toEqual({ userPrompt: "pending", cards: [], blocks: [], streamId: null, seq: 0 });
-    expect(result.todos).toEqual([]);
+    expect(result.cards).toEqual([]);
   });
 
-  test("restores todos from the last todo tool-result details", () => {
-    const todos = [
+  test("restores cards from the last kanban tool-result details", () => {
+    const cards = [
       { content: "a", status: "completed" as const },
       { content: "b", status: "in_progress" as const, active_form: "doing b" },
     ];
     const result = hydrateHistory([
       user("plan"),
-      assistantToolCall("c1", "todo", {}),
-      toolResult("c1", "todo", "ok", false, { kind: "todos", todos }),
+      assistantToolCall("c1", "kanban", {}),
+      toolResult("c1", "kanban", "ok", false, { kind: "kanban", cards }),
       assistantText("done"),
     ], 0);
-    expect(result.todos).toEqual(todos);
+    expect(result.cards).toEqual(cards);
   });
 });

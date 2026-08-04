@@ -176,10 +176,10 @@ describe("InMemoryToolRegistry — built-in installation", () => {
     expect(names).toEqual([
       "bash",
       "edit",
+      "kanban_write",
       "notify",
       "read_artifact",
       "read_file",
-      "todo_write",
       "web_fetch",
       "web_search",
       "write_artifact",
@@ -189,7 +189,7 @@ describe("InMemoryToolRegistry — built-in installation", () => {
 
   test("populated registry: resolve() returns the matching installed tool for each built-in", () => {
     const reg = makeReg();
-    for (const name of ["bash", "read_file", "write_file", "edit", "notify", "web_search", "web_fetch", "read_artifact", "write_artifact", "todo_write"]) {
+    for (const name of ["bash", "read_file", "write_file", "edit", "notify", "web_search", "web_fetch", "read_artifact", "write_artifact", "kanban_write"]) {
       const matches = reg.resolve(name);
       expect(matches).toHaveLength(1);
       expect(matches[0]!.name).toBe(name);
