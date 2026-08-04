@@ -160,7 +160,7 @@ The platform enforces workspace-root containment only (`path_escape`); module-bo
 edit(input: { path: string; old_string: string; new_string: string; replace_all?: boolean })
 ```
 
-Search-and-replace inside a workspace text file. Zero occurrences throws `no_match`; more than one with `replace_all` false throws `ambiguous_match` — the LLM must narrow `old_string` or opt into `replace_all`. On success `content` is a summary line plus a unified-diff preview; for files over 5000 lines the diff is omitted (use `write_file` for wholesale rewrites). `details: { kind: "diff", path, replacementsCount, beforeBytes, afterBytes, diff }` — the TUI renders the diff from the telemetry payload. Both tools share the unified-diff renderer: 3 context lines, hunks merged across gaps of ≤ 6 unchanged lines, `null` above the 5000-line cap. Same workspace/encoding errors as `read_file`, plus `disk_full` on write.
+Search-and-replace inside a workspace text file. Zero occurrences throws `no_match`; more than one with `replace_all` false throws `ambiguous_match` — the LLM must narrow `old_string` or opt into `replace_all`. On success `content` is a one-line ack (`Edited <path>: <n> replacement(s)`) — the model never sees the diff, keeping it out of subsequent LLM context; for files over 5000 lines the diff is omitted (use `write_file` for wholesale rewrites). `details: { kind: "diff", path, replacementsCount, beforeBytes, afterBytes, diff }` — the TUI renders the diff from the telemetry payload. Both tools share the unified-diff renderer: 3 context lines, hunks merged across gaps of ≤ 6 unchanged lines, `null` above the 5000-line cap. Same workspace/encoding errors as `read_file`, plus `disk_full` on write.
 
 ### kanban_write
 

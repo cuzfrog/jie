@@ -15,7 +15,7 @@
           "name": "ornith-1.0-9b-mtp",
           "reasoning": true,
           "input": ["text"],
-          "contextWindow": 100000,
+          "contextWindow": 40192,
           "maxTokens": 4096,
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
         },
@@ -24,7 +24,7 @@
           "name": "qwen3.5-4b",
           "reasoning": true,
           "input": ["text"],
-          "contextWindow": 60000,
+          "contextWindow": 40192,
           "maxTokens": 4096,
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
         },
@@ -33,7 +33,7 @@
           "name": "qwen3.5-2b",
           "reasoning": true,
           "input": ["text"],
-          "contextWindow": 100000,
+          "contextWindow": 40192,
           "maxTokens": 4096,
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
         }

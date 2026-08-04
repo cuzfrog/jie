@@ -63,6 +63,7 @@
 - Logic should be put in pure functions as much as possible. A function is pure when it has no I/O, no state, no dependency on external data, and no side effect on its arguments. Any side effect, e.g. IO, should be limited to the edge layers with minimal logic. This makes the code easier to test where a module's dependencies are mockable in tests so that unit tests can be done with mocks without creating actual dependency.
 - A feature cannot ship by deferring an NFR(non-functional requirement); the NFR must be met in the same change. Do not be scared of change scopes, divide and conquer. Maintain good code architecture, follow context rules even if changes are big.
 - No cyclical dependencies.
+- LLM context is precious, whenever functions touch the chat/message, need to carefully check the context usage. Reduce unnecessary info in the context.
 
 #### Module visibility
 Minimal visibility or public surface of a type or a module. This ensures loose coupling and separation of concerns. If this is violated, e.g. a type or a module exposes multiple functions, it usually means the design is wrong. Do not add `export` unless it's proven neccessary.

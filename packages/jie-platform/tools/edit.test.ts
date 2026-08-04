@@ -141,15 +141,16 @@ describe("edit", () => {
     ).rejects.toMatchObject({ code: "NO_MATCH" });
   });
 
-  test("LLM-facing content summarizes the change in plain text", async () => {
+  test("LLM-facing content is a one-line ack without the diff", async () => {
     writeFileSync(join(workspace, "a.txt"), "alpha\nbeta\n");
     const tool = createEditTool({ workspaceRoot: workspace });
     const result = await tool.execute(
       { path: "a.txt", old_string: "beta", new_string: "BETA" },
       makeEmptyContext(),
     );
-    expect(result.content).toContain("a.txt");
-    expect(result.content).toContain("1 replacement");
+    expect(result.content).toBe("Edited a.txt: 1 replacement");
+    expect(result.content).not.toContain("@@");
+    expect(result.content).not.toContain("-beta");
   });
 
   test("no-op edit (old_string === new_string) still writes the file and reports 1 replacement", async () => {
