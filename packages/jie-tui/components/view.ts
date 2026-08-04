@@ -62,7 +62,8 @@ export class TuiViewImpl implements TuiView {
     tui.setFocus(editor);
     this.unsubscribeKeys = tui.addInputListener((data) => {
       const state = this.stateStore.getState();
-      const action = resolveGlobalKey(data, state);
+      const popupOpen = editor.isShowingAutocomplete();
+      const action = resolveGlobalKey(data, state, popupOpen);
       if (action !== null) {
         this.stateStore.dispatch(action);
         return CONSUMED;
@@ -71,7 +72,7 @@ export class TuiViewImpl implements TuiView {
         this.stateStore.dispatch(Actions.commitTeamCursor());
         return CONSUMED;
       }
-      const direction = resolveTeamCursorDirection(data, state, editor.isShowingAutocomplete());
+      const direction = resolveTeamCursorDirection(data, state, popupOpen);
       if (direction !== null) {
         this.stateStore.dispatch(Actions.switchCycleAgent(direction));
         return CONSUMED;
@@ -106,10 +107,10 @@ class FlushLoader extends Loader {
   }
 }
 
-function resolveGlobalKey(data: string, state: TuiState): Action | null {
+function resolveGlobalKey(data: string, state: TuiState, popupOpen: boolean): Action | null {
   if (data === CTRL_T) return Actions.toggleThinking();
   if (data === CTRL_O) return Actions.toggleToolCards();
-  if (matchesKey(data, "left") && state.editorCursorAtStart) return Actions.toggleTeamPanel();
+  if (matchesKey(data, "left") && state.editorCursorAtStart && !popupOpen) return Actions.toggleTeamPanel();
   return null;
 }
 

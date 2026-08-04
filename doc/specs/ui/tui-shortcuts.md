@@ -21,7 +21,7 @@ Everything else is pi-tui `Editor` behavior: cursor/word movement, undo, kill ri
 | --- | --- | --- |
 | `Ctrl+T` | Expand / collapse all thinking blocks (collapsed completed blocks fold into the work summary) | always |
 | `Ctrl+O` | Expand / collapse all tool cards (collapsed successful diff-less results fold into the work summary) | always |
-| `←` | Toggle the team panel: show it with the cursor on the focused agent, or hide it and clear the cursor (`tui-team-panel.md`) | only while the editor cursor sits at the buffer start (`state.editorCursorAtStart`); a `←` anywhere else stays with the editor; no-op before a team is loaded |
+| `←` | Toggle the team panel: show it with the cursor on the focused agent, or hide it and clear the cursor (`tui-team-panel.md`) | only while the editor cursor sits at the buffer start (`state.editorCursorAtStart`) and no autocomplete popup is showing; a `←` anywhere else stays with the editor; no-op before a team is loaded |
 
 `←` at the buffer start is the panel's only toggle; while the panel is shown, plain `↑`/`↓` move its cursor (cycling both ways) and the editor's history walk yields (`tui-team-panel.md`, Interaction). All other arrow chords — `Ctrl+↑`, `Ctrl+↓`, the `Ctrl+←`/`Ctrl+→` word jumps, and a `←` away from the buffer start — stay with the editor/terminal. While the autocomplete popup is open, plain arrows navigate the popup, not the panel. The thinking/tool toggles are all-or-nothing across the focused agent's history + current turn (`state.thinkingExpanded` / `state.toolCardsExpanded`); mid-stream toggle re-renders on the next tick. There are **no** `PgUp`/`PgDn`/`Home`/`End`/wheel bindings: finished output is terminal scrollback; scroll and copy are the terminal's native behavior.
 
