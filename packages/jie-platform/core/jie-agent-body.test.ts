@@ -1,15 +1,17 @@
-import type {
-  Agent as PiAgent,
-  AgentEvent as PiAgentEvent,
-  AgentMessage,
-  AfterToolCallContext,
-  BeforeToolCallContext,
-  ThinkingLevel,
+import {
+  createCompactionSummaryMessage,
+  type Agent as PiAgent,
+  type AgentEvent as PiAgentEvent,
+  type AgentMessage,
+  type AfterToolCallContext,
+  type BeforeToolCallContext,
+  type ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
 import type { Api, AssistantMessage, AssistantMessageEvent, Model, ToolResultMessage } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { JieAgentBody } from "./jie-agent-body";
 import type { AgentBodyParams } from "./agent-body";
+import type { CompactionInput, CompactionResult, Compactor } from "./compaction";
 import { Events, type EventEnvelope, type EventManager, type EventType } from "../event";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { Tool, ToolRegistry, ToolResult } from "../tools";
@@ -21,6 +23,12 @@ import type { EffortLevel, UserIngressMessage } from "../types";
 async function flush(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
+
+const noopCompactor: Compactor = {
+  async compact() {
+    return null;
+  },
+};
 
 function makeModel(provider: string, id: string): Model<Api> {
   return {
@@ -233,6 +241,8 @@ interface MakeBodyOverrides {
   effort?: EffortLevel;
   factory?: (opts: ConstructorParameters<typeof PiAgent>[0]) => PiAgent;
   systemContextBlock?: string;
+  compactor?: Compactor;
+  getApiKey?: (provider: string) => string | undefined;
 }
 
 interface Harness {
@@ -319,9 +329,10 @@ function makeHarness(): Harness {
       systemContextBlock: overrides.systemContextBlock ?? "",
       hookRunner,
       cwd: "/work",
-      getApiKey: () => undefined,
+      getApiKey: overrides.getApiKey ?? (() => undefined),
       resolveModel,
       createAgent: overrides.factory ?? cap.factory,
+      compactor: overrides.compactor ?? noopCompactor,
     });
   };
   const fireEvent = (event: PiAgentEvent): void => {
@@ -485,7 +496,25 @@ describe("JieAgentBody — agent construction wiring", () => {
     expect(passed.followUpMode).toBe("all");
     expect(passed.toolExecution).toBe("sequential");
     expect(typeof passed.streamFn).toBe("function");
-    expect(passed.convertToLlm).toBeUndefined();
+    expect(typeof passed.convertToLlm).toBe("function");
+  });
+
+  test("convertToLlm maps a compactionSummary into a user message carrying the summary", async () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    h.makeBody({ factory: cap.factory });
+    const converter = cap.lastOpts()?.convertToLlm;
+    if (converter === undefined) throw new Error("convertToLlm not provided");
+    const converted = await converter([createCompactionSummaryMessage("the summary", 100, "2026-01-01T00:00:00.000Z")]);
+    expect(converted).toHaveLength(1);
+    const message = converted[0]!;
+    if (message.role !== "user") throw new Error("expected a user message");
+    const parts = message.content;
+    if (typeof parts === "string") throw new Error("expected content parts");
+    const first = parts[0];
+    if (first === undefined || first.type !== "text") throw new Error("expected a text part");
+    expect(first.text).toContain("compacted into the following summary");
+    expect(first.text).toContain("the summary");
   });
 
   test("assigns soul.systemPrompt, model and adapted tools onto agent.state", () => {
@@ -982,6 +1011,7 @@ describe("JieAgentBody — start() subscriptions", () => {
       "t1.task.recorded",
       "do X",
     ));
+    await flush();
     expect(h.prompt.mock.calls.length).toBe(1);
     b2.stop();
   });
@@ -1176,6 +1206,7 @@ describe("JieAgentBody — prompt ingress format", () => {
     });
     await body.start();
     h.events.publish(Events.custom({ kind: "agent", teamId: "t1", agentKey: "researcher-1" }, "t1.task.researched", "report"));
+    await flush();
     const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
     const content = (synthetic as { content: unknown }).content;
     expect(content).toBe(
@@ -1200,6 +1231,7 @@ describe("JieAgentBody — prompt ingress format", () => {
     });
     await body.start();
     h.events.publish(Events.custom({ kind: "agent", teamId: "t1", agentKey: "researcher-1" }, "t1.task.researched", "report"));
+    await flush();
     const synthetic = h.prompt.mock.calls[0]![0] as UserIngressMessage;
     expect(synthetic.displayText).toBeUndefined();
     body.stop();
@@ -2339,6 +2371,166 @@ describe("JieAgentBody — user.model.update", () => {
     body.stop();
     h.events.publish(Events.userModelUpdate({ kind: "user" }, "lm-studio", "qwen3.5-2b"));
     expect(h.resolveModel).not.toHaveBeenCalled();
+  });
+});
+
+describe("JieAgentBody — compaction", () => {
+  let h: Harness;
+
+  beforeEach(() => {
+    h = makeHarness();
+  });
+
+  function makeUserMessage(content: string): AgentMessage {
+    return { role: "user", content, timestamp: 0 };
+  }
+
+  function makeFakeCompactor(): { compactor: Compactor; compact: ReturnType<typeof vi.fn<(input: CompactionInput) => Promise<CompactionResult | null>>> } {
+    const compact = vi.fn<(input: CompactionInput) => Promise<CompactionResult | null>>(async () => null);
+    return { compactor: { compact }, compact };
+  }
+
+  test("agent_end settle compacts and rewrites state to [summary, ...retainedTail]", async () => {
+    const { compactor, compact } = makeFakeCompactor();
+    const model = makeModel("anthropic", "claude-sonnet-4");
+    const body = h.makeBody({ model, compactor });
+    await body.start();
+    const first = makeUserMessage("m1");
+    const second = makeAssistantMessage({ content: [{ type: "text", text: "m2" }] });
+    const third = makeUserMessage("m3");
+    h.state.messages = [first, second, third];
+    const summary = createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z");
+    compact.mockResolvedValueOnce({ summaryMessage: summary, firstKeptIndex: 1, tokensBefore: 500 });
+    h.fireEvent({ type: "agent_end", messages: [] });
+    h.settleIdle();
+    await flush();
+    expect(compact).toHaveBeenCalledTimes(1);
+    const input = compact.mock.calls[0]![0]!;
+    expect(input.messages).toEqual([first, second, third]);
+    expect(input.contextWindow).toBe(200000);
+    expect(input.model).toBe(model);
+    expect(h.state.messages).toEqual([summary, second, third]);
+    body.stop();
+  });
+
+  test("agent_end settle compacts even with an empty queue", async () => {
+    const { compactor, compact } = makeFakeCompactor();
+    const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), compactor });
+    h.fireEvent({ type: "agent_end", messages: [] });
+    h.settleIdle();
+    await flush();
+    expect(compact).toHaveBeenCalledTimes(1);
+    body.stop();
+  });
+
+  test("a null compaction result leaves state.messages untouched", async () => {
+    const { compactor, compact } = makeFakeCompactor();
+    const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), compactor });
+    await body.start();
+    const first = makeUserMessage("m1");
+    const second = makeAssistantMessage({ content: [{ type: "text", text: "m2" }] });
+    h.state.messages = [first, second];
+    h.fireEvent({ type: "agent_end", messages: [] });
+    h.settleIdle();
+    await flush();
+    expect(compact).toHaveBeenCalledTimes(1);
+    expect(h.state.messages).toEqual([first, second]);
+    body.stop();
+  });
+
+  test("without a model compaction is skipped and the prompt still dispatches", async () => {
+    const { compactor, compact } = makeFakeCompactor();
+    const body = h.makeBody({ compactor });
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
+    await flush();
+    expect(compact).not.toHaveBeenCalled();
+    expect(h.prompt.mock.calls.length).toBe(1);
+    body.stop();
+  });
+
+  test("compaction resolves the api key from the model provider", async () => {
+    const { compactor, compact } = makeFakeCompactor();
+    const body = h.makeBody({
+      model: makeModel("anthropic", "claude-sonnet-4"),
+      compactor,
+      getApiKey: (provider) => `key-for-${provider}`,
+    });
+    h.fireEvent({ type: "agent_end", messages: [] });
+    h.settleIdle();
+    await flush();
+    expect(compact.mock.calls[0]![0]!.apiKey).toBe("key-for-anthropic");
+    body.stop();
+  });
+
+  test("dispatch waits for an in-flight compaction before prompting", async () => {
+    const { compactor, compact } = makeFakeCompactor();
+    let release: ((result: CompactionResult | null) => void) | undefined;
+    compact.mockReturnValueOnce(new Promise<CompactionResult | null>((resolve) => {
+      release = resolve;
+    }));
+    const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), compactor });
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
+    await flush();
+    expect(h.prompt.mock.calls.length).toBe(0);
+    release!(null);
+    await flush();
+    expect(h.prompt.mock.calls.length).toBe(1);
+    body.stop();
+  });
+
+  test("settle and dispatch share one in-flight compaction", async () => {
+    const { compactor, compact } = makeFakeCompactor();
+    let release: ((result: CompactionResult | null) => void) | undefined;
+    compact.mockReturnValueOnce(new Promise<CompactionResult | null>((resolve) => {
+      release = resolve;
+    }));
+    const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), compactor });
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
+    await flush();
+    expect(compact).toHaveBeenCalledTimes(1);
+    h.fireEvent({ type: "agent_end", messages: [] });
+    h.settleIdle();
+    await flush();
+    release!(null);
+    await flush();
+    expect(compact).toHaveBeenCalledTimes(1);
+    expect(h.prompt.mock.calls.length).toBe(1);
+    body.stop();
+  });
+
+  test("stop() aborts an in-flight compaction", async () => {
+    const { compactor, compact } = makeFakeCompactor();
+    let captured: AbortSignal | undefined;
+    compact.mockImplementationOnce((input) => {
+      captured = input.signal;
+      return new Promise<CompactionResult | null>(() => {});
+    });
+    const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), compactor });
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
+    await flush();
+    if (captured === undefined) throw new Error("compaction signal not captured");
+    expect(captured.aborted).toBe(false);
+    body.stop();
+    expect(captured.aborted).toBe(true);
+  });
+
+  test("a failed compaction publishes system.error and still dispatches the queue", async () => {
+    const { compactor, compact } = makeFakeCompactor();
+    compact.mockRejectedValueOnce(new Error("boom"));
+    const errors: EventEnvelope<"system.error">[] = [];
+    h.subscribeSubject("system.error", (env) => errors.push(env));
+    const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), compactor });
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
+    await flush();
+    expect(errors).toHaveLength(1);
+    expect(errors[0]!.payload.error).toContain("boom");
+    expect(h.prompt.mock.calls.length).toBe(1);
+    body.stop();
   });
 });
 

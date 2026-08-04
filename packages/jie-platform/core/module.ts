@@ -7,6 +7,7 @@ import type { ArtifactStore, MemoryManager } from "../storage";
 import type { ToolRegistry } from "../tools";
 import type { PlatformCradle } from "../container";
 import type { AgentBody, AgentBodyParams } from "./agent-body";
+import { CompactorImpl } from "./compaction";
 import { JieAgentBody } from "./jie-agent-body";
 
 export function registerCoreModule(container: AwilixContainer<PlatformCradle>): void {
@@ -34,6 +35,12 @@ export function registerCoreModule(container: AwilixContainer<PlatformCradle>): 
           cwd,
           getApiKey: (provider) => modelRegistry.getApiKey(provider),
           resolveModel: (provider, modelId) => modelRegistry.resolve(provider, modelId),
+          compactor: new CompactorImpl({
+            memory: memoryManager,
+            agentKey: params.agentKey,
+            sessionId: params.sessionId,
+            teamId: params.teamId,
+          }),
         })
     ).singleton(),
   });

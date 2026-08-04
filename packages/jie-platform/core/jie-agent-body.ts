@@ -1,4 +1,4 @@
-import { Agent, type AgentMessage, type AgentEvent as PiAgentEvent, type AgentTool, type AgentToolResult, type ThinkingLevel } from "@earendil-works/pi-agent-core";
+import { Agent, convertToLlm, type AgentMessage, type AgentEvent as PiAgentEvent, type AgentTool, type AgentToolResult, type ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Api, AssistantMessage, Model, StopReason, TextContent } from "@earendil-works/pi-ai";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { ArtifactStore, MemoryManager } from "../storage";
@@ -8,6 +8,7 @@ import type { HookIdentity, HookRunner } from "../hooks";
 import { composeSystemPrompt } from "../prompt";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { AgentBody, AgentBodyParams } from "./agent-body";
+import type { Compactor } from "./compaction";
 import { StreamPublisherImpl, type StreamPublisher } from "./streaming";
 import { adaptToolToAgent } from "./tool-adapter";
 import { JiePlatformError } from "../jie-platform-errors";
@@ -27,6 +28,7 @@ interface AgentBodyDeps {
   getApiKey(provider: string): Promise<string | undefined> | string | undefined;
   resolveModel(provider: string, modelId: string): Model<Api> | undefined;
   readonly createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
+  readonly compactor: Compactor;
 }
 
 export class JieAgentBody implements AgentBody {
@@ -40,9 +42,14 @@ export class JieAgentBody implements AgentBody {
   private readonly hookRunner: HookRunner;
   private readonly hookIdentity: HookIdentity;
   private readonly resolveModel: (provider: string, modelId: string) => Model<Api> | undefined;
+  private readonly getApiKey: (provider: string) => Promise<string | undefined> | string | undefined;
+  private readonly compactor: Compactor;
   private readonly agent: Agent;
   private readonly stream: StreamPublisher;
   private readonly sender: AgentSender;
+  private compactionPromise: Promise<void> | null = null;
+  private compactionController: AbortController | null = null;
+  private dispatching = false;
   private readonly queue: QueuedPrompt[] = [];
   private readonly dequeuedPrompts: QueuedPrompt[] = [];
   private readonly resolvedSkills: ReadonlyArray<Skill>;
@@ -65,6 +72,8 @@ export class JieAgentBody implements AgentBody {
     this.memory = deps.memory;
     this.hookRunner = deps.hookRunner;
     this.resolveModel = deps.resolveModel;
+    this.getApiKey = deps.getApiKey;
+    this.compactor = deps.compactor;
     this.hookIdentity = {
       sessionId: this.sessionId,
       cwd: deps.cwd,
@@ -88,6 +97,7 @@ export class JieAgentBody implements AgentBody {
       sessionId: this.sessionId,
       getApiKey: deps.getApiKey,
       streamFn: streamSimple,
+      convertToLlm,
       transformContext: async (messages: AgentMessage[]) => messages,
       steeringMode: "all",
       followUpMode: "all",
@@ -207,13 +217,14 @@ export class JieAgentBody implements AgentBody {
     }
 
     while (!this.stopped && this.queue.length > 0) {
-      this.drainQueue();
+      await this.dispatchNext();
       await this.agent.waitForIdle();
     }
   }
 
   stop(): void {
     this.stopped = true;
+    this.compactionController?.abort();
     for (const off of this.unsubscribers) off();
     for (const off of this.externalCleanups) off();
     this.unsubscribers.length = 0;
@@ -246,7 +257,7 @@ export class JieAgentBody implements AgentBody {
         void this.hookRunner.stop({ identity: this.hookIdentity });
         this.pendingTurnPrompt = null;
         this.publishQueueUpdate(agentSender);
-        void this.agent.waitForIdle().then(() => this.drainQueue());
+        void this.agent.waitForIdle().then(() => this.settleAfterRun());
         return;
       }
       case "message_start":
@@ -360,15 +371,61 @@ export class JieAgentBody implements AgentBody {
       : { role: "user", content: synthetic, timestamp: Date.now(), displayText: userText };
     this.queue.push({ message, userText });
     this.publishQueueUpdate(this.sender);
-    this.drainQueue();
+    void this.dispatchNext();
   }
 
-  private drainQueue(): void {
-    if (this.stopped || this.agent.state.isStreaming || this.queue.length === 0) return;
-    const next = this.queue.shift()!;
-    this.pendingTurnPrompt = next.userText;
-    this.publishQueueUpdate(this.sender);
-    void this.agent.prompt(next.message);
+  private async settleAfterRun(): Promise<void> {
+    await this.ensureCompacted();
+    await this.dispatchNext();
+  }
+
+  private async dispatchNext(): Promise<void> {
+    if (this.dispatching || this.stopped || this.agent.state.isStreaming || this.queue.length === 0) return;
+    this.dispatching = true;
+    try {
+      await this.ensureCompacted();
+      if (this.stopped || this.agent.state.isStreaming || this.queue.length === 0) return;
+      const next = this.queue.shift()!;
+      this.pendingTurnPrompt = next.userText;
+      this.publishQueueUpdate(this.sender);
+      void this.agent.prompt(next.message);
+    } finally {
+      this.dispatching = false;
+    }
+  }
+
+  private ensureCompacted(): Promise<void> {
+    if (this.compactionPromise === null) {
+      this.compactionPromise = this.runCompaction().finally(() => {
+        this.compactionPromise = null;
+      });
+    }
+    return this.compactionPromise;
+  }
+
+  private async runCompaction(): Promise<void> {
+    if (this.modelInfo === null) return;
+    const model = this.agent.state.model;
+    const controller = new AbortController();
+    this.compactionController = controller;
+    try {
+      const result = await this.compactor.compact({
+        messages: this.agent.state.messages,
+        contextWindow: model.contextWindow,
+        model,
+        apiKey: await this.getApiKey(model.provider),
+        signal: controller.signal,
+      });
+      if (result === null || this.stopped) return;
+      this.agent.state.messages = [result.summaryMessage, ...this.agent.state.messages.slice(result.firstKeptIndex)];
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.eventManager.publish(Events.systemError({ kind: "system" }, `compaction failed: ${message}`));
+      }
+    } finally {
+      if (this.compactionController === controller) this.compactionController = null;
+    }
   }
 
   private publishQueueUpdate(sender: AgentSender): void {
@@ -401,7 +458,7 @@ export class JieAgentBody implements AgentBody {
       }
     }
     this.publishQueueUpdate(this.sender);
-    this.drainQueue();
+    void this.dispatchNext();
   }
 
   private interruptActiveRun(): void {
