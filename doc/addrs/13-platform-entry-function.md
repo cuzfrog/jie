@@ -38,7 +38,7 @@ The handle is intentionally minimal:
 
 - **Lifecycle is commands, not handle methods.** `execute({ name: "team", teamId? })` loads the selected team through `TeamManager.load` (resolving the id when omitted) and returns its `TeamInfo`; `execute({ name: "stop" })` stops all loaded bodies. There is no `start()` / `stop()` on the handle.
 - **All team-level state flows as events.** `system.team.loaded` is published once per loaded team; per-agent transitions flow as `agent.*` topics. The TUI derives everything from the event stream (ADR 25).
-- **Selection is a consumer concern.** `prompt` and `interrupt` take `teamId` explicitly; the platform tracks no active team (ADR 26). The CLI resolves `args.teamId ?? settings.defaultTeam ?? "minimal"` and passes it.
+- **Selection is a consumer concern.** `prompt` and `interrupt` take `teamId` explicitly; the platform tracks no active team (ADR 26). The CLI resolves `args.teamId ?? settings.defaultTeam ?? "default-solo"` and passes it.
 - **The in-memory `Map<team_id, session_id>` is a private closure field** of the platform construction (ADR 17), not part of the interface; it is lost on process exit.
 - Team load failures (missing/invalid manifest, unknown `--resume` session) throw `JiePlatformError`; the CLI prints the message and exits 1. Souls whose model cannot resolve are skipped silently — a team with no loadable agents is a consumer-side guard. `system.error` is the agent-loop error channel (tool/turn failures); the CLI subscribes and prints it as a warning.
 

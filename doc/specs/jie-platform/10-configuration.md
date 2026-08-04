@@ -65,8 +65,8 @@ The platform resolves which team to run in this order (`TeamManager.resolveTeamI
 |---|---|---|
 |1 | Explicit id — `--team <id>` flag, or the `team` / `resumeSession` command's `teamId` | Hard fail (`TEAM_NOT_FOUND`) if not installed. |
 |2 | Merged settings: `defaultTeam` | Used only if it resolves to an installed manifest; a stale value falls through (not an error). |
-|3 | First installed user team | Alphabetical across `.jie/teams/*` and `~/.jie/teams/*`, deduped by id, excluding the built-in `minimal`. |
-|4 | Built-in `minimal` team | Hardcoded last-resort fallback. See `minimal-team.md`. |
+|3 | First installed user team | Alphabetical across `.jie/teams/*` and `~/.jie/teams/*`, deduped by id, excluding the built-in `default-solo`. |
+|4 | Built-in `default-solo` team | Hardcoded last-resort fallback. See `default-solo-team.md`. |
 
 The platform never fails on "no teams available": step 4 always succeeds.
 

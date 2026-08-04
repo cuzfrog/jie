@@ -1,10 +1,10 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { parse as parseYaml } from "yaml";
-import type { AgentSoul, TeamBlueprint } from "./types";
+import { BUILTIN_DEFAULT_SOLO_TEAM_ID, type AgentSoul, type TeamBlueprint } from "./types";
 import { JiePlatformError } from "../jie-platform-errors";
-import MINIMAL_TEAM_MD from "./minimal/TEAM.md" with { type: "text" };
-import MINIMAL_GENERAL_MD from "./minimal/general.md" with { type: "text" };
+import DEFAULT_SOLO_TEAM_MD from "./default-solo/TEAM.md" with { type: "text" };
+import DEFAULT_SOLO_GENERAL_MD from "./default-solo/general.md" with { type: "text" };
 
 const TEAM_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
 const ROLE_STEM_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -131,13 +131,13 @@ export function loadTeamFromDir(dirPath: string): TeamBlueprint {
   });
 }
 
-export function loadMinimalTeam(): TeamBlueprint {
+export function loadDefaultSoloTeam(): TeamBlueprint {
   return parseTeamFromManifests(
     {
-      "TEAM.md": MINIMAL_TEAM_MD,
-      "general.md": MINIMAL_GENERAL_MD,
+      "TEAM.md": DEFAULT_SOLO_TEAM_MD,
+      "general.md": DEFAULT_SOLO_GENERAL_MD,
     },
-    { teamId: "minimal" },
+    { teamId: BUILTIN_DEFAULT_SOLO_TEAM_ID },
   );
 }
 

@@ -137,15 +137,15 @@ describe("TeamManagerImpl — full surface", () => {
   });
 
   describe("load", () => {
-    test("loads the built-in minimal team when no teamId is given", async () => {
+    test("loads the built-in default-solo team when no teamId is given", async () => {
       const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
       const team = await manager.load();
-      expect(team.id).toBe("minimal");
+      expect(team.id).toBe("default-solo");
       expect(team.leaderKey).toBe("general-1");
       expect(team.agents).toHaveLength(1);
       expect(team.agents[0]?.isLeader).toBe(true);
       expect(agentBodyFactory).toHaveBeenCalledTimes(1);
-      expect(teamLoadedEvents().map((e) => e.payload.id)).toContain("minimal");
+      expect(teamLoadedEvents().map((e) => e.payload.id)).toContain("default-solo");
     });
 
     test("uses defaultTeam from settings when no teamId is given", async () => {
@@ -166,11 +166,11 @@ describe("TeamManagerImpl — full surface", () => {
       expect(team.id).toBe("alpha");
     });
 
-    test("stale defaultTeam with no user teams falls back to minimal", async () => {
+    test("stale defaultTeam with no user teams falls back to default-solo", async () => {
       settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, defaultTeam: "ghost" });
       const { manager } = makeManager(homeJieDir, null);
       const team = await manager.load();
-      expect(team.id).toBe("minimal");
+      expect(team.id).toBe("default-solo");
     });
 
     test("derived resolution never persists the auto-selected team", async () => {
@@ -206,7 +206,7 @@ describe("TeamManagerImpl — full surface", () => {
         stop: vi.fn(),
       }));
       const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, memoryManager, skillManager, factory);
-      await expect(manager.load("minimal")).rejects.toThrow("start failure");
+      await expect(manager.load("default-solo")).rejects.toThrow("start failure");
       expect(teamLoadedEvents()).toHaveLength(0);
       expect(manager.listLoaded().size).toBe(0);
     });
@@ -235,7 +235,7 @@ describe("TeamManagerImpl — full surface", () => {
     test("rejects MODEL_UNRESOLVED when the built-in leader's inherited model does not resolve", async () => {
       modelRegistry.resolve.mockReturnValue(undefined);
       const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
-      await expect(manager.load("minimal")).rejects.toMatchObject({ code: "MODEL_UNRESOLVED" });
+      await expect(manager.load("default-solo")).rejects.toMatchObject({ code: "MODEL_UNRESOLVED" });
       expect(agentBodyFactory).not.toHaveBeenCalled();
       expect(manager.listLoaded().size).toBe(0);
     });
@@ -243,8 +243,8 @@ describe("TeamManagerImpl — full surface", () => {
     test("names the unresolvable model and role in the MODEL_UNRESOLVED detail", async () => {
       modelRegistry.resolve.mockReturnValue(undefined);
       const { manager } = makeManager(homeJieDir, null);
-      await expect(manager.load("minimal")).rejects.toThrow(/anthropic\/claude-sonnet-4-5/);
-      await expect(manager.load("minimal")).rejects.toThrow(/general/);
+      await expect(manager.load("default-solo")).rejects.toThrow(/anthropic\/claude-sonnet-4-5/);
+      await expect(manager.load("default-solo")).rejects.toThrow(/general/);
     });
 
     test("skips a non-leader role whose pinned model does not resolve and loads the leader", async () => {
@@ -262,26 +262,26 @@ describe("TeamManagerImpl — full surface", () => {
 
     test("UNKNOWN_SESSION propagates out of load", async () => {
       const { manager } = makeManager(homeJieDir, null, "not-a-real-id");
-      expect(manager.load("minimal")).rejects.toThrow(/unknown session_id/);
+      expect(manager.load("default-solo")).rejects.toThrow(/unknown session_id/);
     });
 
     test("resumeSession(teamId, sessionId) loads with the named session and rejects unknown ones", async () => {
       memoryManager.hasSession.mockImplementation((_teamId, sessionId) => sessionId === "01-real-session");
       const { manager } = makeManager(homeJieDir, null);
-      await manager.load("minimal");
-      const reloaded = await manager.resumeSession("minimal", "01-real-session");
-      expect(reloaded.id).toBe("minimal");
+      await manager.load("default-solo");
+      const reloaded = await manager.resumeSession("default-solo", "01-real-session");
+      expect(reloaded.id).toBe("default-solo");
 
       const freshManager = makeManager(homeJieDir, null).manager;
-      expect(freshManager.resumeSession("minimal", "01-not-real")).rejects.toThrow(/unknown session_id/);
+      expect(freshManager.resumeSession("default-solo", "01-not-real")).rejects.toThrow(/unknown session_id/);
     });
 
     test("system.team.loaded and the returned identity both carry restored history", async () => {
       memoryManager.hasSession.mockReturnValue(true);
       const seeded: ReadonlyArray<AgentMessage> = [{ role: "user", content: "[user]: hello", timestamp: 1 }, assistantMessage("hi there", 2)];
       const { manager } = makeManager(homeJieDir, null, undefined, seeded);
-      const identity = await manager.resumeSession("minimal", "01-seeded");
-      const payload = teamLoadedEvents().find((e) => e.payload.id === "minimal")?.payload;
+      const identity = await manager.resumeSession("default-solo", "01-seeded");
+      const payload = teamLoadedEvents().find((e) => e.payload.id === "default-solo")?.payload;
       expect(payload?.history).toHaveLength(1);
       expect(payload?.history[0]?.agentKey).toBe("general-1");
       expect(payload?.history[0]?.messages).toHaveLength(2);
@@ -293,18 +293,18 @@ describe("TeamManagerImpl — full surface", () => {
       memoryManager.hasSession.mockReturnValue(true);
       const seeded: ReadonlyArray<AgentMessage> = [{ role: "user", content: "[user]: hello", timestamp: 1 }, assistantMessage("hi there", 2)];
       const { manager } = makeManager(homeJieDir, null, undefined, seeded);
-      await manager.load("minimal");
+      await manager.load("default-solo");
       eventManager.publish.mockClear();
-      await manager.resumeSession("minimal", "01-seeded");
+      await manager.resumeSession("default-solo", "01-seeded");
       expect(teamLoadedEvents()).toHaveLength(1);
       expect(teamLoadedEvents()[0]?.payload.history[0]?.messages).toHaveLength(2);
     });
 
     test("second call to load() returns the cached identity without rebuilding", async () => {
       const { manager } = makeManager(homeJieDir, null);
-      await manager.load("minimal");
-      await manager.load("minimal");
-      expect(teamLoadedEvents().filter((e) => e.payload.id === "minimal")).toHaveLength(1);
+      await manager.load("default-solo");
+      await manager.load("default-solo");
+      expect(teamLoadedEvents().filter((e) => e.payload.id === "default-solo")).toHaveLength(1);
     });
 
     test("cache hit carries the agents' live history and stays silent", async () => {
@@ -317,11 +317,11 @@ describe("TeamManagerImpl — full surface", () => {
         stop: () => {},
       });
       const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, memoryManager, skillManager, factory);
-      const first = await manager.load("minimal");
+      const first = await manager.load("default-solo");
       expect(first.history[0]?.messages).toEqual([]);
       live.push({ role: "user", content: "[user]: hello", timestamp: 1 }, assistantMessage("hi there", 2));
-      const cached = await manager.load("minimal");
-      expect(teamLoadedEvents().filter((e) => e.payload.id === "minimal")).toHaveLength(1);
+      const cached = await manager.load("default-solo");
+      expect(teamLoadedEvents().filter((e) => e.payload.id === "default-solo")).toHaveLength(1);
       expect(cached.history[0]?.messages).toHaveLength(2);
       expect(cached.history[0]?.messages[0]).toMatchObject({ role: "user" });
       expect(cached.history[0]?.messages[1]).toMatchObject({ role: "assistant" });
@@ -330,13 +330,13 @@ describe("TeamManagerImpl — full surface", () => {
     test("passes the configured defaultEffort to the agent body factory", async () => {
       settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, defaultEffort: "high" });
       const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
-      await manager.load("minimal");
+      await manager.load("default-solo");
       expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("high");
     });
 
     test("passes effort 'off' to the agent body factory when no defaultEffort is configured", async () => {
       const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
-      await manager.load("minimal");
+      await manager.load("default-solo");
       expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("off");
     });
 
@@ -344,10 +344,10 @@ describe("TeamManagerImpl — full surface", () => {
       const userTeams = join(homeJieDir, "teams");
       writeTeam(userTeams, "alpha", "general");
       const { manager } = makeManager(homeJieDir, null);
-      await manager.load("minimal");
+      await manager.load("default-solo");
       await manager.load("alpha");
       const loadedIds = teamLoadedEvents().map((e) => e.payload.id);
-      expect(loadedIds).toContain("minimal");
+      expect(loadedIds).toContain("default-solo");
       expect(loadedIds).toContain("alpha");
     });
   });
@@ -355,7 +355,7 @@ describe("TeamManagerImpl — full surface", () => {
   describe("reload", () => {
     test("refreshes the model registry and skills before rebuilding teams", async () => {
       const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
-      await manager.load("minimal");
+      await manager.load("default-solo");
       await manager.reload();
       expect(modelRegistry.reload).toHaveBeenCalledTimes(1);
       expect(skillManager.reload).toHaveBeenCalledTimes(1);
@@ -366,7 +366,7 @@ describe("TeamManagerImpl — full surface", () => {
 
     test("rebuilds the loaded team in place on the same session id without session validation", async () => {
       const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
-      await manager.load("minimal");
+      await manager.load("default-solo");
       const sessionId = agentBodyFactory.mock.calls[0]![0]!.sessionId;
       memoryManager.hasSession.mockClear();
       await manager.reload();
@@ -379,12 +379,12 @@ describe("TeamManagerImpl — full surface", () => {
       const userTeams = join(homeJieDir, "teams");
       writeTeam(userTeams, "alpha", "general");
       const { manager } = makeManager(homeJieDir, null);
-      await manager.load("minimal");
+      await manager.load("default-solo");
       await manager.load("alpha");
       eventManager.publish.mockClear();
       const infos = await manager.reload();
-      expect(teamLoadedEvents().map((e) => e.payload.id).sort()).toEqual(["alpha", "minimal"]);
-      expect(infos.map((info) => info.id).sort()).toEqual(["alpha", "minimal"]);
+      expect(teamLoadedEvents().map((e) => e.payload.id).sort()).toEqual(["alpha", "default-solo"]);
+      expect(infos.map((info) => info.id).sort()).toEqual(["alpha", "default-solo"]);
     });
 
     test("picks up a manifest edited after load", async () => {
@@ -413,7 +413,7 @@ describe("TeamManagerImpl — full surface", () => {
         };
       });
       const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, memoryManager, skillManager, factory);
-      await manager.load("minimal");
+      await manager.load("default-solo");
       generation = 1;
       await manager.reload();
       expect(stops).toEqual(["gen0:general-1"]);
@@ -464,13 +464,13 @@ describe("TeamManagerImpl — full surface", () => {
         };
       });
       const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, memoryManager, skillManager, factory);
-      await manager.load("minimal");
+      await manager.load("default-solo");
       generation = 1;
       eventManager.publish.mockClear();
       await expect(manager.reload()).rejects.toMatchObject({ code: "RELOAD_FAILED" });
       expect(stops).toEqual(["gen0:general-1", "gen1:general-1"]);
       expect(teamLoadedEvents()).toHaveLength(0);
-      expect(manager.agents("minimal")).toHaveLength(1);
+      expect(manager.agents("default-solo")).toHaveLength(1);
     });
 
     test("keeps the running team intact when the leader model no longer resolves", async () => {
@@ -483,11 +483,11 @@ describe("TeamManagerImpl — full surface", () => {
         stop: () => { stops.push(params.agentKey); },
       }));
       const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, memoryManager, skillManager, factory);
-      await manager.load("minimal");
+      await manager.load("default-solo");
       modelRegistry.resolve.mockReturnValue(undefined);
       await expect(manager.reload()).rejects.toMatchObject({ code: "RELOAD_FAILED" });
       expect(stops).toEqual([]);
-      expect(manager.agents("minimal")).toHaveLength(1);
+      expect(manager.agents("default-solo")).toHaveLength(1);
     });
 
     test("rebuilds the remaining teams when one team fails to parse", async () => {
@@ -518,23 +518,23 @@ describe("TeamManagerImpl — full surface", () => {
   });
 
   describe("listInstalled / locate (registry pass-through)", () => {
-    test("listInstalled always includes 'minimal'", () => {
+    test("listInstalled always includes 'default-solo'", () => {
       const { manager } = makeManager(homeJieDir, null);
-      expect(manager.listInstalled()).toContain("minimal");
+      expect(manager.listInstalled()).toContain("default-solo");
     });
 
-    test("listInstalled includes user teams in addition to 'minimal'", () => {
+    test("listInstalled includes user teams in addition to 'default-solo'", () => {
       const userTeams = join(homeJieDir, "teams");
       writeTeam(userTeams, "alpha", "general");
       const { manager } = makeManager(homeJieDir, null);
       const installed = manager.listInstalled();
-      expect(installed).toContain("minimal");
+      expect(installed).toContain("default-solo");
       expect(installed).toContain("alpha");
     });
 
-    test("locate returns 'builtin' for the minimal team", () => {
+    test("locate returns 'builtin' for the default-solo team", () => {
       const { manager } = makeManager(homeJieDir, null);
-      expect(manager.locate("minimal")).toBe("builtin");
+      expect(manager.locate("default-solo")).toBe("builtin");
     });
 
     test("locate returns 'user' for a team in ~/.jie/teams/", () => {
@@ -564,9 +564,9 @@ describe("TeamManagerImpl — full surface", () => {
       expect(manager.agentCount("alpha")).toBe(2);
     });
 
-    test("agentCount is one for the builtin minimal team", () => {
+    test("agentCount is one for the builtin default-solo team", () => {
       const { manager } = makeManager(homeJieDir, null);
-      expect(manager.agentCount("minimal")).toBe(1);
+      expect(manager.agentCount("default-solo")).toBe(1);
     });
   });
 
@@ -580,20 +580,20 @@ describe("TeamManagerImpl — full surface", () => {
       const userTeams = join(homeJieDir, "teams");
       writeTeam(userTeams, "alpha", "general");
       const { manager } = makeManager(homeJieDir, null);
-      await manager.load("minimal");
+      await manager.load("default-solo");
       await manager.load("alpha");
       const loaded = manager.listLoaded();
-      expect(loaded.has("minimal")).toBe(true);
+      expect(loaded.has("default-solo")).toBe(true);
       expect(loaded.has("alpha")).toBe(true);
-      expect(loaded.get("minimal")?.leaderKey).toBe("general-1");
+      expect(loaded.get("default-solo")?.leaderKey).toBe("general-1");
     });
   });
 
   describe("agents", () => {
     test("returns the loaded team's identities", async () => {
       const { manager } = makeManager(homeJieDir, null);
-      await manager.load("minimal");
-      const identities = manager.agents("minimal");
+      await manager.load("default-solo");
+      const identities = manager.agents("default-solo");
       expect(identities).toHaveLength(1);
       expect(identities[0]?.agentKey).toBe("general-1");
     });
@@ -612,7 +612,7 @@ describe("TeamManagerImpl — full surface", () => {
 
     test("can be called after load without throwing", async () => {
       const { manager } = makeManager(homeJieDir, null);
-      await manager.load("minimal");
+      await manager.load("default-solo");
       expect(() => manager.stop()).not.toThrow();
     });
   });
@@ -620,23 +620,23 @@ describe("TeamManagerImpl — full surface", () => {
   describe("renameSession", () => {
     test("renames the loaded team's active session via the memory manager", async () => {
       const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
-      await manager.load("minimal");
+      await manager.load("default-solo");
       const sessionId = agentBodyFactory.mock.calls[0]![0]!.sessionId;
-      manager.renameSession("minimal", "my session");
+      manager.renameSession("default-solo", "my session");
       expect(memoryManager.renameSession).toHaveBeenCalledWith(sessionId, "my session");
     });
 
     test("trims the name before persisting", async () => {
       const { manager } = makeManager(homeJieDir, null);
-      await manager.load("minimal");
-      manager.renameSession("minimal", "  padded  ");
+      await manager.load("default-solo");
+      manager.renameSession("default-solo", "  padded  ");
       expect(memoryManager.renameSession).toHaveBeenCalledWith(expect.anything(), "padded");
     });
 
     test("rejects an empty name without touching the memory manager", async () => {
       const { manager } = makeManager(homeJieDir, null);
-      await manager.load("minimal");
-      expect(() => manager.renameSession("minimal", "   ")).toThrow(/name must not be empty/);
+      await manager.load("default-solo");
+      expect(() => manager.renameSession("default-solo", "   ")).toThrow(/name must not be empty/);
       expect(memoryManager.renameSession).not.toHaveBeenCalled();
     });
 
@@ -650,16 +650,16 @@ describe("TeamManagerImpl — full surface", () => {
   describe("sessionName exposure", () => {
     test("load reports a null session name before any rename", async () => {
       const { manager } = makeManager(homeJieDir, null);
-      const info = await manager.load("minimal");
+      const info = await manager.load("default-solo");
       expect(memoryManager.sessionName).toHaveBeenCalled();
       expect(info.sessionName).toBeNull();
     });
 
     test("listLoaded reports the renamed session's name", async () => {
       const { manager } = makeManager(homeJieDir, null);
-      await manager.load("minimal");
+      await manager.load("default-solo");
       memoryManager.sessionName.mockReturnValue("my session");
-      expect(manager.listLoaded().get("minimal")?.sessionName).toBe("my session");
+      expect(manager.listLoaded().get("default-solo")?.sessionName).toBe("my session");
     });
   });
 
@@ -677,8 +677,8 @@ describe("TeamManagerImpl — full surface", () => {
       ];
       memoryManager.listSessions.mockReturnValue(sessions);
       const { manager } = makeManager(homeJieDir, null);
-      expect(manager.listSessions("minimal")).toBe(sessions);
-      expect(memoryManager.listSessions).toHaveBeenCalledWith("minimal");
+      expect(manager.listSessions("default-solo")).toBe(sessions);
+      expect(memoryManager.listSessions).toHaveBeenCalledWith("default-solo");
     });
   });
 });

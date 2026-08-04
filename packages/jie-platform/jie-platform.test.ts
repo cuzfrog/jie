@@ -125,26 +125,26 @@ describe("JiePlatformImpl", () => {
   describe("prompt", () => {
     test("publishes a user.prompt event addressed to the given agent", () => {
       const platform = createPlatform();
-      platform.prompt("minimal", "general-1", "hello");
+      platform.prompt("default-solo", "general-1", "hello");
       expect(eventManager.publish).toHaveBeenCalledTimes(1);
       const envelope = eventManager.publish.mock.calls[0]![0]!;
       expect(envelope.type).toBe("user.prompt");
       expect(envelope.topic).toBe("user.prompt");
       expect(envelope.sender).toEqual({ kind: "user" });
-      expect(envelope.payload).toEqual({ teamId: "minimal", agentKey: "general-1", prompt: "hello" });
+      expect(envelope.payload).toEqual({ teamId: "default-solo", agentKey: "general-1", prompt: "hello" });
     });
   });
 
   describe("interrupt", () => {
     test("publishes an agent.interrupt event addressed to the given agent", () => {
       const platform = createPlatform();
-      platform.interrupt("minimal", "general-1");
+      platform.interrupt("default-solo", "general-1");
       expect(eventManager.publish).toHaveBeenCalledTimes(1);
       const envelope = eventManager.publish.mock.calls[0]![0]!;
       expect(envelope.type).toBe("agent.interrupt");
       expect(envelope.topic).toBe("agent.interrupt");
       expect(envelope.sender).toEqual({ kind: "user" });
-      expect(envelope.payload).toEqual({ teamId: "minimal", agentKey: "general-1" });
+      expect(envelope.payload).toEqual({ teamId: "default-solo", agentKey: "general-1" });
     });
   });
 

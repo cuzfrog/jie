@@ -3,29 +3,29 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   isValidTeamId,
-  loadMinimalTeam,
+  loadDefaultSoloTeam,
   loadTeamFromDir,
   parseTeamFromManifests,
 } from "./parser";
 import type { JiePlatformErrorCode } from "../jie-platform-errors";
 
-describe("loadMinimalTeam", () => {
+describe("loadDefaultSoloTeam", () => {
   test("returns one soul with role 'general' and leaderRole 'general'", () => {
-    const bp = loadMinimalTeam();
+    const bp = loadDefaultSoloTeam();
     expect(bp.leaderRole).toBe("general");
     expect(bp.roles).toHaveLength(1);
     expect(bp.roles[0]?.role).toBe("general");
   });
 
   test("the general soul has tools [bash, read_file, write_file, edit] and empty subscribe", () => {
-    const bp = loadMinimalTeam();
+    const bp = loadDefaultSoloTeam();
     const soul = bp.roles[0]!;
     expect(soul.tools).toEqual(["bash", "read_file", "write_file", "edit"]);
     expect(soul.subscribe).toEqual([]);
   });
 
   test("the general soul has a non-empty system_prompt and no model pinned", () => {
-    const bp = loadMinimalTeam();
+    const bp = loadDefaultSoloTeam();
     const soul = bp.roles[0]!;
     expect(soul.systemPrompt.length).toBeGreaterThan(0);
     expect(soul.model).toBe("");
@@ -127,7 +127,7 @@ describe("isValidTeamId", () => {
     expect(isValidTeamId("team")).toBe(true);
     expect(isValidTeamId("team_1")).toBe(true);
     expect(isValidTeamId("team-1")).toBe(true);
-    expect(isValidTeamId("minimal")).toBe(true);
+    expect(isValidTeamId("default-solo")).toBe(true);
     expect(isValidTeamId("ABCxyz0123")).toBe(true);
     expect(isValidTeamId("a".repeat(32))).toBe(true);
   });

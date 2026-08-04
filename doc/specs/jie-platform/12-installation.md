@@ -57,7 +57,7 @@ After either path, `jie --version` confirms the binary is callable.
 
 `jie-platform` and `jie-tui` are bundled via workspace dependencies in `@cuzfrog/jie`. The user does not install them separately.
 
-Team manifests are plain `.md` files placed at the standard paths described in `10-configuration.md` "Team Selection". The platform ships the built-in minimal team; richer team manifests are user-installed at `~/.jie/teams/<id>/` or `.jie/teams/<id>/` by hand.
+Team manifests are plain `.md` files placed at the standard paths described in `10-configuration.md` "Team Selection". The platform ships the built-in default-solo team; richer team manifests are user-installed at `~/.jie/teams/<id>/` or `.jie/teams/<id>/` by hand.
 
 External tool dependencies (linters, formatters, test runners) are **not** installed by Jie. Agents invoke them via the `bash` tool; they must be present in the workspace's `node_modules` or system `PATH`.
 
@@ -77,7 +77,7 @@ jie model <provider>/<modelId>             # one-time: sets the global default m
 jie                                        # now the team runs
 ```
 
-After the first two commands, subsequent `jie` (and `jie -p`) invocations proceed without setup. Credentials and model persist across runs; nothing else needs to be configured to get a runnable agent. The platform's built-in minimal team is the last-resort fallback when no user team is selected — see `minimal-team.md`. A user with only `jie login` and `jie model` set up can run `jie` immediately; the platform picks the built-in minimal team.
+After the first two commands, subsequent `jie` (and `jie -p`) invocations proceed without setup. Credentials and model persist across runs; nothing else needs to be configured to get a runnable agent. The platform's built-in default-solo team is the last-resort fallback when no user team is selected — see `default-solo-team.md`. A user with only `jie login` and `jie model` set up can run `jie` immediately; the platform picks the built-in default-solo team.
 
 For project-level model overrides (e.g. a team pinned to a specific model id), create `.jie/settings.json` in the project root by hand. It deep-merges over `~/.jie/settings.json`.
 
@@ -85,12 +85,12 @@ For project-level model overrides (e.g. a team pinned to a specific model id), c
 
 User-installed teams are plain files — no platform-managed install step. The platform looks them up by name at the standard paths. See `10-configuration.md` "Team Selection" for the resolution rules.
 
-The platform's **built-in minimal team** is always available as a last-resort fallback and requires no installation. To override the built-in's defaults (system prompt, tools, default model), place `TEAM.md` and `general.md` (the minimal-team shape) at one of:
+The platform's **built-in default-solo team** is always available as a last-resort fallback and requires no installation. To override the built-in's defaults (system prompt, tools, default model), place `TEAM.md` and `general.md` (the default-solo-team shape) at one of:
 
-- `~/.jie/teams/minimal/` — global, applies to every project for the current user
-- `<project>/.jie/teams/minimal/` — project-local (discovered by walking up from CWD to find `.jie/`); overrides the global copy
+- `~/.jie/teams/default-solo/` — global, applies to every project for the current user
+- `<project>/.jie/teams/default-solo/` — project-local (discovered by walking up from CWD to find `.jie/`); overrides the global copy
 
-Once installed, the user-installed `minimal` team takes precedence over the platform's built-in.
+Once installed, the user-installed `default-solo` team takes precedence over the platform's built-in.
 
 The same pattern applies to any other team: place `TEAM.md` and one `.md` per agent role at the standard paths.
 

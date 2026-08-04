@@ -32,9 +32,9 @@ jie [--team <id>] [--resume <id>] [--in-memory]
    - If `--team <id>` is given → use `<id>`; hard fail if not installed.
    - Else read `defaultTeam` from merged settings → use it if installed; a stale value falls through (not an error).
    - Else pick the first installed user team alphabetically across `.jie/teams/*` and `~/.jie/teams/*` (excluding the built-in).
-   - Else use the platform's built-in minimal team (`packages/jie-platform/team/minimal/`, see `minimal-team.md`). The platform always has a runnable team.
+   - Else use the platform's built-in default-solo team (`packages/jie-platform/team/default-solo/`, see `default-solo-team.md`). The platform always has a runnable team.
 4. Open storage: SQLite at `~/.jie/storage.db`, or an in-memory store when `--in-memory` is given. On failure → exit 1.
-5. `bootPlatform` composes the container; resolving `cradle.platform` yields the handle without eagerly loading a team. The fallback chain above (`--team` → `defaultTeam` → first user team → built-in minimal) is `TeamManager.resolveTeamId`, applied at load time; see `10-configuration.md` "Team Selection".
+5. `bootPlatform` composes the container; resolving `cradle.platform` yields the handle without eagerly loading a team. The fallback chain above (`--team` → `defaultTeam` → first user team → built-in default-solo) is `TeamManager.resolveTeamId`, applied at load time; see `10-configuration.md` "Team Selection".
 6. (MCP server connection — not implemented today (ADR 4); this step is a no-op.)
 7. Construct the TUI **before** triggering the team load. Ordering is: (a) `bootTui({cwd}, { platform: handle, gitBranch, gitDirty }).cradle.tui` — resolving the TUI constructs it, and its constructor subscribes (via `handle.subscribe`) to `system.team.loaded`, `system.error`, and the agent topics (`agent.turn.start`, `agent.stream.chunk`, `agent.tool.call`, `agent.tool.result`, etc.). `gitBranch`/`gitDirty` come from a git snapshot the CLI reads at this point (`gitService.getSnapshot()` from the platform container's cradle) and feed the footer's identity strip (`ui/tui-layout.md`). (b) `await handle.execute({ name: "team", teamId: <resolved> })` — triggers `TeamManager.load(<resolved>)`, which publishes `system.team.loaded` to the now-attached TUI subscriber. `TuiDeps` additionally allows optional `stdin`/`stdout`/`stderr` streams (injection points used by tests); the TUI reads `platform.subscribe(...)`, `platform.prompt(...)`, `platform.interrupt(...)`, and the slash-command operations directly from the handle. The TUI's role stems and per-agent roster come from the `system.team.loaded` event (per ADR 25). Subsequent in-session team switches (the `/team <id>` slash command, its id completed in-flow by the editor's autocomplete) execute the platform's `team` command and apply the returned identity via `Actions.switchTeam` — a UI concern, no `system.team.switched` event (the platform does not own which team the TUI is watching).
 8. TUI is the main event loop — renders agent streams, tool calls, pipeline events. User prompts flow through `platform.prompt(teamId, agentKey, text)`, which constructs the `user.prompt` envelope per the wire-format contract in `02-protocol-stack.md` "Prompt Ingress" and `ui/tui-overview.md` "Role".
@@ -218,7 +218,7 @@ The command does not start the team. The change takes effect on next `jie` invoc
 2. Scan `.jie/teams/*` and `~/.jie/teams/*`; list installed team ids (deduped, alphabetical).
 3. Exit 0.
 
-There is no explicit unset command. A `defaultTeam` pointing at a removed blueprint is stale; at load the platform treats it as absent and falls back to the first installed user team, else the built-in minimal team. To change the default, run `jie team <id>` with a valid id.
+There is no explicit unset command. A `defaultTeam` pointing at a removed blueprint is stale; at load the platform treats it as absent and falls back to the first installed user team, else the built-in default-solo team. To change the default, run `jie team <id>` with a valid id.
 
 **Exit codes:** 0 (success or no-op), 1 (invalid id, team not installed, write error).
 

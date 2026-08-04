@@ -149,14 +149,14 @@ describe("Actions.switchTeam", () => {
 
   test("switchTeam carries the full identity a consumer needs (no platform round-trip in reducer)", () => {
     const identity = {
-      id: "minimal",
+      id: "default-solo",
       leaderKey: "general-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+      agents: [{ teamId: "default-solo", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     };
     const state = reduceAction(INITIAL_TUI_STATE, Actions.switchTeam(identity));
-    expect(state.agents.get("minimal:general-1")?.role).toBe("general");
+    expect(state.agents.get("default-solo:general-1")?.role).toBe("general");
   });
 });
 

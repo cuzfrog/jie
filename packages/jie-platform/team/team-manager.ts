@@ -6,7 +6,7 @@ import { JiePlatformError } from "../jie-platform-errors";
 import type { MemoryManager, SessionSummary } from "../storage";
 import { type ModelRegistry, type SettingsStore } from "../config";
 import type { SkillManager } from "../skills";
-import { type AgentSoul, type TeamBlueprint, type TeamBlueprintLocation, BUILTIN_MINIMAL_TEAM_ID } from "./types";
+import { type AgentSoul, type TeamBlueprint, type TeamBlueprintLocation, BUILTIN_DEFAULT_SOLO_TEAM_ID } from "./types";
 import { type TeamRegistry, createTeamRegistry } from "./registry";
 import type { AgentHistory, AgentInfo, TeamInfo } from "../types";
 
@@ -197,7 +197,7 @@ export class TeamManagerImpl implements TeamManager {
     if (settings.defaultTeam !== undefined && this.teamRegistry.locate(settings.defaultTeam) !== null) {
       return settings.defaultTeam;
     }
-    return this.teamRegistry.listInstalled().find((id) => id !== BUILTIN_MINIMAL_TEAM_ID) ?? BUILTIN_MINIMAL_TEAM_ID;
+    return this.teamRegistry.listInstalled().find((id) => id !== BUILTIN_DEFAULT_SOLO_TEAM_ID) ?? BUILTIN_DEFAULT_SOLO_TEAM_ID;
   }
 
   private resolveSessionId(teamId: string, overrideSessionId?: string): string {

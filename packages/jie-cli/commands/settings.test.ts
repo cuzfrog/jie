@@ -103,7 +103,7 @@ describe("runTeam", () => {
     execute.mockImplementationOnce(async () => ({
       defaultTeam: "dev",
       installed: [
-        { id: "minimal", agentCount: 1 },
+        { id: "default-solo", agentCount: 1 },
         { id: "alpha", agentCount: 2 },
         { id: "beta", agentCount: 3 },
       ],
@@ -112,14 +112,14 @@ describe("runTeam", () => {
     const code = await runTeam({ kind: "team" }, platform, consoleMock);
     expect(code).toBe(0);
     expect(consoleMock.print).toHaveBeenCalledWith("defaultTeam: dev");
-    expect(consoleMock.print).toHaveBeenCalledWith("installed: minimal, alpha, beta");
+    expect(consoleMock.print).toHaveBeenCalledWith("installed: default-solo, alpha, beta");
   });
 
   test("prints defaultTeam: unset when none is set", async () => {
     const { platform, execute } = makePlatform();
     execute.mockImplementationOnce(async () => ({
       defaultTeam: null,
-      installed: [{ id: "minimal", agentCount: 1 }],
+      installed: [{ id: "default-solo", agentCount: 1 }],
     }));
     const consoleMock = makeConsoleMock();
     const code = await runTeam({ kind: "team" }, platform, consoleMock);

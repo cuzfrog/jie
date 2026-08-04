@@ -6,7 +6,7 @@ Accepted. All team-discovery logic lives in `jie-platform`; the CLI and TUI are 
 
 ## Context
 
-"Where is team X installed?" (`.jie/teams/<id>/` project-local, `~/.jie/teams/<id>/` global, built-in `minimal` fallback) is a domain concept, not a CLI concept. An early design re-implemented installed/locate/list in the CLI alongside the platform's own copies; the two drifted (the CLI added the built-in team to listings, the platform did not; the CLI's `locate` semantic had no platform equivalent). The platform already opens the storage, resolves the model, and loads the blueprint — it should also own discovery. With the TUI as a second consumer, two re-implementations would drift again.
+"Where is team X installed?" (`.jie/teams/<id>/` project-local, `~/.jie/teams/<id>/` global, built-in `default-solo` fallback) is a domain concept, not a CLI concept. An early design re-implemented installed/locate/list in the CLI alongside the platform's own copies; the two drifted (the CLI added the built-in team to listings, the platform did not; the CLI's `locate` semantic had no platform equivalent). The platform already opens the storage, resolves the model, and loads the blueprint — it should also own discovery. With the TUI as a second consumer, two re-implementations would drift again.
 
 ## Decision
 
@@ -15,8 +15,8 @@ Accepted. All team-discovery logic lives in `jie-platform`; the CLI and TUI are 
 `jie-platform`'s `team/` module owns:
 
 - `locate(teamId): "project" | "global" | null` — "project wins over global" is platform-level (it matches the `models.json` / `settings.json` discovery order in `10-configuration.md`).
-- `listInstalled(): string[]` — always includes the built-in `minimal`.
-- The constant `BUILTIN_MINIMAL_TEAM_ID = "minimal"`.
+- `listInstalled(): string[]` — always includes the built-in `default-solo`.
+- The constant `BUILTIN_DEFAULT_SOLO_TEAM_ID = "default-solo"`.
 
 ### 2. The CLI and TUI are thin consumers
 
@@ -30,6 +30,6 @@ No discovery code in the CLI or TUI. Team operations surface as platform command
 
 ## Consequences
 
-- Team discovery lives in the platform's `team/` module (`TeamRegistry` / `TeamManager`); `BUILTIN_MINIMAL_TEAM_ID` is in `team/types.ts`.
+- Team discovery lives in the platform's `team/` module (`TeamRegistry` / `TeamManager`); `BUILTIN_DEFAULT_SOLO_TEAM_ID` is in `team/types.ts`.
 - The CLI has no team-discovery code — its team subcommands go through the platform's commands, and the TUI consumes the same commands.
 - `SettingsStore` receives team location as an injected lookup (`locateTeam`), keeping config resolution on the same discovery source.

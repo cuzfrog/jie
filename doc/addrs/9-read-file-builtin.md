@@ -19,7 +19,7 @@ write_file(input: { path: string; content: string }): { path: string; bytes_writ
 
 Shared scope: UTF-8 text only; 120s default timeout. `read_file` truncates at 2000 lines or 50 KiB, whichever first; image MIME types are a tool error (`unsupported_media_type`). `write_file` overwrites (idempotent, no append mode) and auto-creates parent directories.
 
-The minimal team ships `[bash, read_file, write_file, notify]` and no artifact tools — the artifact store is for inter-agent coordination, and a single-agent team has no peers.
+The default-solo team ships `[bash, read_file, write_file, notify]` and no artifact tools — the artifact store is for inter-agent coordination, and a single-agent team has no peers.
 
 ## Rationale
 
