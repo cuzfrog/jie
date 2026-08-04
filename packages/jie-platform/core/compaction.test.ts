@@ -294,6 +294,7 @@ describe("CompactorImpl.compact", () => {
     const result = await compactor.compact(makeInput([userMsg("please do the thing"), assistantMsg(BIG)]));
     expect(result).toBeNull();
     expect(summarize).not.toHaveBeenCalled();
+    expect(memory.restore).not.toHaveBeenCalled();
     expect(memory.compact).not.toHaveBeenCalled();
   });
 
