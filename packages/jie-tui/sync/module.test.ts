@@ -15,6 +15,7 @@ function bootContainer(): AwilixContainer<TuiCradle> {
     createUserMessage: vi.fn(),
     createAssistantMessage: vi.fn(),
     createInfoMessage: vi.fn(),
+    createCompactionMarker: vi.fn(),
   });
   container.register({
     stateStore: asValue(stateStore),

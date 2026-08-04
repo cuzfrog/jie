@@ -1,8 +1,11 @@
 import { type Component } from "@earendil-works/pi-tui";
-import type { InfoEntry, MessageTurn, StateStore } from "../../state";
+import type { AgentUiState, InfoEntry, MessageTurn, StateStore } from "../../state";
 import { AssistantMessage } from "./assistant-message";
+import { CompactionMarkerMessage } from "./compaction-marker";
 import { InfoMessage } from "./info-message";
 import { UserMessage } from "./user-message";
+
+type CompactionMarker = NonNullable<AgentUiState["compactionMarker"]>;
 
 export interface UserMessageComponent extends Component {
   update(turn: MessageTurn): void;
@@ -16,6 +19,7 @@ export interface ChatMessages {
   createUserMessage(userPrompt: string): UserMessageComponent;
   createAssistantMessage(turn: MessageTurn | null): AssistantMessageComponent;
   createInfoMessage(entry: InfoEntry): Component;
+  createCompactionMarker(marker: CompactionMarker): Component;
 }
 
 export class ChatMessagesImpl implements ChatMessages {
@@ -31,5 +35,9 @@ export class ChatMessagesImpl implements ChatMessages {
 
   createInfoMessage(entry: InfoEntry): Component {
     return new InfoMessage(entry);
+  }
+
+  createCompactionMarker(marker: CompactionMarker): Component {
+    return new CompactionMarkerMessage(marker);
   }
 }
