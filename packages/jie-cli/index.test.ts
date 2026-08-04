@@ -83,7 +83,7 @@ function dispatch(command: Command<CommandName>): CommandResult<CommandName> | n
     case "getDefaultModel":
       return { provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null };
     case "team": {
-      const teamId = command.teamId ?? "minimal";
+      const teamId = command.teamId ?? "default-solo";
       const team: TeamInfo = {
         id: teamId,
         leaderKey: "general-1",
@@ -271,13 +271,13 @@ describe("_run — print + apiKey", () => {
     const exit = await captured.run({
       kind: "print",
       instruction: "hello",
-      team: "minimal",
+      team: "default-solo",
       timeout: 1,
       json: false,
       inMemory: false,
     });
     expect(exit).toBe(3);
-    expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: "minimal" });
+    expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: "default-solo" });
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "stop" });
     expect(captured.fakePlatform.shutdown).toHaveBeenCalledTimes(1);
   });
@@ -288,14 +288,14 @@ describe("_run — print + apiKey", () => {
     const runPromise = captured.run({
       kind: "print",
       instruction: "hello",
-      team: "minimal",
+      team: "default-solo",
       timeout: 0,
       json: false,
       inMemory: false,
     });
     while (!platform.subscribeCalls.includes("agent.idle")) await Bun.sleep(1);
     expect(platform.shutdown).not.toHaveBeenCalled();
-    platform.emit("agent.idle", Events.agentIdle({ kind: "agent", teamId: "minimal", agentKey: "general-1" }, "stop"));
+    platform.emit("agent.idle", Events.agentIdle({ kind: "agent", teamId: "default-solo", agentKey: "general-1" }, "stop"));
     const exit = await runPromise;
     expect(exit).toBe(0);
     expect(platform.execute).toHaveBeenCalledWith({ name: "stop" });
@@ -380,9 +380,9 @@ describe("_run — dispatch to command handlers", () => {
   test("team with id dispatches to runTeam which calls setDefaultTeam", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    const exit = await captured.run({ kind: "team", teamId: "minimal" });
+    const exit = await captured.run({ kind: "team", teamId: "default-solo" });
     expect(exit).toBe(0);
-    expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "setDefaultTeam", teamId: "minimal" });
-    expect(captured.consoleMock.print).toHaveBeenCalledWith("default team set to 'minimal'");
+    expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "setDefaultTeam", teamId: "default-solo" });
+    expect(captured.consoleMock.print).toHaveBeenCalledWith("default team set to 'default-solo'");
   });
 });

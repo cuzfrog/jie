@@ -6,7 +6,7 @@ import { JiePlatformError } from "../jie-platform-errors";
 import type { MemoryManager, SessionSummary } from "../storage";
 import { type ModelRegistry, type SettingsStore } from "../config";
 import type { SkillManager } from "../skills";
-import { type AgentSoul, type TeamBlueprint, type TeamBlueprintLocation, BUILTIN_MINIMAL_TEAM_ID } from "./types";
+import { type AgentSoul, type TeamBlueprint, type TeamBlueprintLocation, BUILTIN_DEFAULT_SOLO_TEAM_ID } from "./types";
 import { type TeamRegistry, createTeamRegistry } from "./registry";
 import type { AgentHistory, AgentInfo, TeamInfo } from "../types";
 
@@ -146,8 +146,15 @@ export class TeamManagerImpl implements TeamManager {
     const effort = this.settingsStore.load().defaultEffort ?? "off";
     const bodies: AgentBody[] = [];
     for (const soul of blueprint.roles) {
-      const resolvedModel = this.resolveSoulModel(soul);
-      if (resolvedModel === undefined) continue;
+      let resolvedModel: Model<Api>;
+      try {
+        resolvedModel = this.resolveSoulModel(soul);
+      } catch (error) {
+        if (error instanceof JiePlatformError && error.code === "MODEL_UNRESOLVED" && soul.role !== blueprint.leaderRole) {
+          continue;
+        }
+        throw error;
+      }
       const body = this.agentBodyFactory({
         agentKey: `${soul.role}-1`,
         teamId,
@@ -190,7 +197,7 @@ export class TeamManagerImpl implements TeamManager {
     if (settings.defaultTeam !== undefined && this.teamRegistry.locate(settings.defaultTeam) !== null) {
       return settings.defaultTeam;
     }
-    return this.teamRegistry.listInstalled().find((id) => id !== BUILTIN_MINIMAL_TEAM_ID) ?? BUILTIN_MINIMAL_TEAM_ID;
+    return this.teamRegistry.listInstalled().find((id) => id !== BUILTIN_DEFAULT_SOLO_TEAM_ID) ?? BUILTIN_DEFAULT_SOLO_TEAM_ID;
   }
 
   private resolveSessionId(teamId: string, overrideSessionId?: string): string {
@@ -215,7 +222,7 @@ export class TeamManagerImpl implements TeamManager {
     return ulid();
   }
 
-  private resolveSoulModel(soul: AgentSoul): Model<Api> | undefined {
+  private resolveSoulModel(soul: AgentSoul): Model<Api> {
     const settings = this.settingsStore.load();
     const hasSettingsModel = settings.defaultProvider !== undefined && settings.defaultModel !== undefined;
     if (soul.model === "" && !hasSettingsModel) {
@@ -223,14 +230,20 @@ export class TeamManagerImpl implements TeamManager {
     }
     const modelStr = soul.model !== "" ? soul.model : `${settings.defaultProvider}/${settings.defaultModel}`;
     const slash = modelStr.indexOf("/");
-    if (slash === -1) return undefined;
-    const provider = modelStr.slice(0, slash);
-    const modelId = modelStr.slice(slash + 1);
-    try {
-      return this.modelRegistry.resolve(provider, modelId);
-    } catch {
-      return undefined;
+    let model: Model<Api> | undefined;
+    if (slash !== -1) {
+      try {
+        model = this.modelRegistry.resolve(modelStr.slice(0, slash), modelStr.slice(slash + 1));
+      } catch {
+        model = undefined;
+      }
     }
+    if (model === undefined) {
+      throw new JiePlatformError("MODEL_UNRESOLVED", {
+        detail: `model '${modelStr}' for role '${soul.role}' is not available; check the provider and model id`,
+      });
+    }
+    return model;
   }
 
   private publishTeamLoaded(teamId: string, bodies: AgentBody[]): void {

@@ -29,7 +29,7 @@ There is no `teamId` getter, no `loadTeam` method, no `bodies()` accessor, no `s
 
 ### 2. Teams load through the `team` command
 
-`execute({ name: "team", teamId? })` delegates to `TeamManager.load`: it resolves the id (`teamId ?? settings.defaultTeam ?? "minimal"`), parses the manifest, resolves session and models, starts bodies, and publishes `system.team.loaded` with the roster. Loaded teams stay loaded (their bodies keep running); `execute({ name: "stop" })` halts everything. The platform tracks loaded teams internally — but never "which one is active".
+`execute({ name: "team", teamId? })` delegates to `TeamManager.load`: it resolves the id (`teamId ?? settings.defaultTeam ?? "default-solo"`), parses the manifest, resolves session and models, starts bodies, and publishes `system.team.loaded` with the roster. Loaded teams stay loaded (their bodies keep running); `execute({ name: "stop" })` halts everything. The platform tracks loaded teams internally — but never "which one is active".
 
 ### 3. CLI / TUI pick the team from their own context
 

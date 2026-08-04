@@ -449,12 +449,12 @@ describe("CommandHandlerImpl — /effort", () => {
 });
 
 describe("CommandHandlerImpl — /reload", () => {
-  const minimalIdentity = {
-    id: "minimal",
+  const soloIdentity = {
+    id: "default-solo",
     leaderKey: "general-1",
     sessionName: null,
     history: [],
-    agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+    agents: [{ teamId: "default-solo", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
   };
 
   test("/reload while any agent is busy sets an error banner and does not call execute", () => {
@@ -469,8 +469,8 @@ describe("CommandHandlerImpl — /reload", () => {
 
   test("/reload dispatches the reload command and replies", () => {
     const { platform, execute } = makePlatform();
-    execute.mockImplementationOnce(async () => [minimalIdentity]);
-    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    execute.mockImplementationOnce(async () => [soloIdentity]);
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("default-solo", true));
     handler.handle("/reload");
     expect(execute).toHaveBeenCalledWith({ name: "reload" });
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("reloaded settings, manifests, and context files")));
@@ -478,8 +478,8 @@ describe("CommandHandlerImpl — /reload", () => {
 
   test("/reload rehydrates the active team via switchTeam with its reloaded identity", async () => {
     const { platform, execute } = makePlatform();
-    const alphaIdentity = { ...minimalIdentity, id: "alpha", agents: [{ ...minimalIdentity.agents[0]!, teamId: "alpha" }] };
-    execute.mockImplementationOnce(async () => [minimalIdentity, alphaIdentity]);
+    const alphaIdentity = { ...soloIdentity, id: "alpha", agents: [{ ...soloIdentity.agents[0]!, teamId: "alpha" }] };
+    execute.mockImplementationOnce(async () => [soloIdentity, alphaIdentity]);
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("alpha", true));
     handler.handle("/reload");
     await new Promise((r) => setImmediate(r));
@@ -501,7 +501,7 @@ describe("CommandHandlerImpl — /reload", () => {
   test("/reload surfaces platform errors as an error banner", async () => {
     const { platform, execute } = makePlatform();
     execute.mockImplementation(async () => { throw new Error("manifest broken"); });
-    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("default-solo", true));
     handler.handle("/reload");
     await new Promise((r) => setImmediate(r));
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/reload failed")));
@@ -595,7 +595,7 @@ describe("CommandHandlerImpl — /team", () => {
 describe("CommandHandlerImpl — /resume", () => {
   test("/resume (no args) sets a usage error and does not call execute", () => {
     const { platform, execute } = makePlatform();
-    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("default-solo", true));
     handler.handle("/resume");
     expect(execute).not.toHaveBeenCalled();
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/resume <sessionId>")));
@@ -612,30 +612,30 @@ describe("CommandHandlerImpl — /resume", () => {
   test("/resume <sessionId> dispatches resumeSession for the loaded team and replies", () => {
     const { platform, execute } = makePlatform();
     const identity = {
-      id: "minimal",
+      id: "default-solo",
       leaderKey: "general-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+      agents: [{ teamId: "default-solo", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     };
     execute.mockImplementationOnce(async () => identity);
-    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("default-solo", true));
     handler.handle("/resume s1");
-    expect(execute).toHaveBeenCalledWith({ name: "resumeSession", teamId: "minimal", sessionId: "s1" });
+    expect(execute).toHaveBeenCalledWith({ name: "resumeSession", teamId: "default-solo", sessionId: "s1" });
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("resuming session 's1'")));
   });
 
   test("/resume <sessionId> dispatches switchTeam with the resumed identity", async () => {
     const { platform, execute } = makePlatform();
     const identity = {
-      id: "minimal",
+      id: "default-solo",
       leaderKey: "general-1",
       sessionName: null,
       history: [],
-      agents: [{ teamId: "minimal", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+      agents: [{ teamId: "default-solo", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     };
     execute.mockImplementationOnce(async () => identity);
-    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("default-solo", true));
     handler.handle("/resume s1");
     await new Promise((r) => setImmediate(r));
     expect(dispatch).toHaveBeenCalledWith(Actions.switchTeam(identity));
@@ -646,7 +646,7 @@ describe("CommandHandlerImpl — /resume", () => {
     execute.mockImplementation(async () => {
       throw new Error("sqlite locked");
     });
-    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("default-solo", true));
     handler.handle("/resume s1");
     await new Promise((r) => setImmediate(r));
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/resume failed")));
@@ -656,7 +656,7 @@ describe("CommandHandlerImpl — /resume", () => {
 describe("CommandHandlerImpl — /rename", () => {
   test("/rename (no args) sets a usage error and does not call execute", () => {
     const { platform, execute } = makePlatform();
-    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("default-solo", true));
     handler.handle("/rename");
     expect(execute).not.toHaveBeenCalled();
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/rename <name>")));
@@ -672,15 +672,15 @@ describe("CommandHandlerImpl — /rename", () => {
 
   test("/rename joins multi-word args and dispatches renameSession for the loaded team", () => {
     const { platform, execute } = makePlatform();
-    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("default-solo", true));
     handler.handle("/rename my cool session");
-    expect(execute).toHaveBeenCalledWith({ name: "renameSession", teamId: "minimal", sessionName: "my cool session" });
+    expect(execute).toHaveBeenCalledWith({ name: "renameSession", teamId: "default-solo", sessionName: "my cool session" });
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("session renamed to my cool session")));
   });
 
   test("/rename dispatches setSessionName once the rename succeeds", async () => {
     const { platform } = makePlatform();
-    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("default-solo", true));
     handler.handle("/rename my cool session");
     await new Promise((r) => setImmediate(r));
     expect(dispatch).toHaveBeenCalledWith(Actions.setSessionName("my cool session"));
@@ -691,7 +691,7 @@ describe("CommandHandlerImpl — /rename", () => {
     execute.mockImplementation(async () => {
       throw new Error("sqlite locked");
     });
-    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("default-solo", true));
     handler.handle("/rename x");
     await new Promise((r) => setImmediate(r));
     expect(dispatch).not.toHaveBeenCalledWith(Actions.setSessionName(expect.anything()));
@@ -702,7 +702,7 @@ describe("CommandHandlerImpl — /rename", () => {
     execute.mockImplementation(async () => {
       throw new Error("sqlite locked");
     });
-    const { handler, dispatch } = makeHandler(platform, stateWithTeam("minimal", true));
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("default-solo", true));
     handler.handle("/rename x");
     await new Promise((r) => setImmediate(r));
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/rename failed")));

@@ -65,8 +65,8 @@ The platform resolves which team to run in this order (`TeamManager.resolveTeamI
 |---|---|---|
 |1 | Explicit id — `--team <id>` flag, or the `team` / `resumeSession` command's `teamId` | Hard fail (`TEAM_NOT_FOUND`) if not installed. |
 |2 | Merged settings: `defaultTeam` | Used only if it resolves to an installed manifest; a stale value falls through (not an error). |
-|3 | First installed user team | Alphabetical across `.jie/teams/*` and `~/.jie/teams/*`, deduped by id, excluding the built-in `minimal`. |
-|4 | Built-in `minimal` team | Hardcoded last-resort fallback. See `minimal-team.md`. |
+|3 | First installed user team | Alphabetical across `.jie/teams/*` and `~/.jie/teams/*`, deduped by id, excluding the built-in `default-solo`. |
+|4 | Built-in `default-solo` team | Hardcoded last-resort fallback. See `default-solo-team.md`. |
 
 The platform never fails on "no teams available": step 4 always succeeds.
 
@@ -103,7 +103,7 @@ TUI `/effort <level>` executes `setDefaultEffort`, writing `defaultEffort` to th
 
 The TUI re-renders from `system.team.loaded` (agent roster, leader focused) and thereafter publishes prompts to the focused agent's `agentKey` via `handle.prompt` — there is no leader-specific prompt topic. **The previously-active team is not stopped**: its bodies keep their `memory_turns` rows, in-memory prompt queue, and LLM context, and continue processing queued prompts autonomously — the platform holds no active-team state (ADR 26); the TUI just stops displaying it.
 
-Load failures fail the command, not the process: an unresolvable soul is skipped; a team with no resolvable model at all fails with `NO_MODEL_ERROR`. Other loaded teams continue unaffected.
+Load failures fail the command, not the process: an unresolvable non-leader soul is skipped, an unresolvable leader model fails with `MODEL_UNRESOLVED`, and a team with no model configured at all fails with `NO_MODEL_ERROR`. Other loaded teams continue unaffected.
 
 ### Reload (TUI)
 
@@ -309,9 +309,9 @@ Per-soul at team load (`TeamManager.loadImpl`), before any body is constructed; 
 |1 | `model: <provider>/<modelId>` in the agent's frontmatter | Always wins when present. |
 |2 | Merged settings: `defaultProvider` + `defaultModel` | Agent has no `model:` and both settings fields are set. |
 
-An agent with no `model:` **and** no complete settings pair fails the team load with `NO_MODEL_ERROR` ("No model has been selected, please login and select a default model."). Otherwise the `provider/modelId` string (split on the first `/`) resolves through `ModelRegistry`: providers and models declared in `models.json` take precedence, falling back to pi-ai's built-in provider catalog. An unresolvable tuple (unknown provider or model, malformed string) **skips that soul silently** — a team can load with fewer agents than its blueprint declares; `system.team.loaded` carries only the agents that resolved.
+An agent with no `model:` **and** no complete settings pair fails the team load with `NO_MODEL_ERROR` ("No model has been selected, please login and select a default model."). Otherwise the `provider/modelId` string (split on the first `/`) resolves through `ModelRegistry`: providers and models declared in `models.json` take precedence, falling back to pi-ai's built-in provider catalog. An unresolvable tuple (unknown provider or model, malformed string) throws `MODEL_UNRESOLVED` naming the model string and the role; for a non-leader soul the load **skips it silently** — a team can load with fewer agents than its blueprint declares, and `system.team.loaded` carries only the agents that resolved — but the leader role is indispensable, so an unresolvable leader model fails the load outright instead of surfacing the downstream "no agent marked as leader" error.
 
-`jie model <provider>/<modelId>` (TUI `/model`) executes `setDefaultModel`: it persists the pair with the scope rule above and takes effect at the next team load; additionally the command publishes `user.model.update`, so every live body whose soul does not pin a model hot-swaps immediately ("Model update" in 06-agent-model.md). The provider must be registered (`UNKNOWN_PROVIDER` otherwise); the model id itself is not validated at command level — an unresolvable reference is ignored by bodies, mirroring the silent soul-skip at load.
+`jie model <provider>/<modelId>` (TUI `/model`) executes `setDefaultModel`: it persists the pair with the scope rule above and takes effect at the next team load; additionally the command publishes `user.model.update`, so every live body whose soul does not pin a model hot-swaps immediately ("Model update" in 06-agent-model.md). The provider must be registered (`UNKNOWN_PROVIDER` otherwise); the model id itself is not validated at command level — an unresolvable reference is ignored by bodies, mirroring the non-leader soul-skip at load.
 
 ### Provider Configuration: `models.json`
 

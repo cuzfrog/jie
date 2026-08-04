@@ -34,14 +34,14 @@ describe("createTeamRegistry", () => {
   });
 
   describe("parseTeamManifest", () => {
-    test("parseTeamManifest('minimal') returns the built-in minimal team", () => {
+    test("parseTeamManifest('default-solo') returns the built-in default-solo team", () => {
       const r = createTeamRegistry({ homeJieDir, projectJieDir });
-      const team = r.parseTeamManifest("minimal");
+      const team = r.parseTeamManifest("default-solo");
       expect(team.leaderRole).toBe("general");
       expect(team.roles).toHaveLength(1);
     });
 
-    test("parseTeamManifest(undefined) returns the built-in minimal team (fallback)", () => {
+    test("parseTeamManifest(undefined) returns the built-in default-solo team (fallback)", () => {
       const r = createTeamRegistry({ homeJieDir, projectJieDir });
       const team = r.parseTeamManifest();
       expect(team.leaderRole).toBe("general");
@@ -94,12 +94,12 @@ describe("createTeamRegistry", () => {
   });
 
   describe("listInstalled", () => {
-    test("includes 'minimal' when nothing is installed", () => {
+    test("includes 'default-solo' when nothing is installed", () => {
       const r = createTeamRegistry({ homeJieDir, projectJieDir });
-      expect(r.listInstalled()).toEqual(["minimal"]);
+      expect(r.listInstalled()).toEqual(["default-solo"]);
     });
 
-    test("merges project and user teams, sorts, dedupes, includes 'minimal'", () => {
+    test("merges project and user teams, sorts, dedupes, includes 'default-solo'", () => {
       const projJie = join(workspace, ".jie");
       const projectTeams = join(projJie, "teams");
       const userTeams = join(homeJieDir, "teams");
@@ -109,7 +109,7 @@ describe("createTeamRegistry", () => {
       writeTeam(userTeams, "shared", "user-shared-leader");
       const r = createTeamRegistry({ homeJieDir, projectJieDir: projJie });
       const list = r.listInstalled();
-      expect(list).toEqual(["alpha", "beta", "minimal", "shared"]);
+      expect(list).toEqual(["alpha", "beta", "default-solo", "shared"]);
     });
 
     test("skips hidden (dot-prefixed) entries", () => {
@@ -157,9 +157,9 @@ describe("createTeamRegistry", () => {
         expected: "user",
       },
       {
-        name: "minimal team (shipped with the platform)",
+        name: "default-solo team (shipped with the platform)",
         setup: (): string | null => null,
-        teamId: "minimal",
+        teamId: "default-solo",
         expected: "builtin",
       },
       {

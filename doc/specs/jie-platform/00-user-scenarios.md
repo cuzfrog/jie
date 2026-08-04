@@ -16,7 +16,7 @@ The acceptance surface. Each scenario describes a sequence of user actions and t
 4. The process exits 0.
 5. `file2.txt` contains "Hello123888"
 
-The platform falls back to the built-in minimal team (per `06-agent-model.md` "Team Blueprint" and `minimal-team.md`).
+The platform falls back to the built-in default-solo team (per `06-agent-model.md` "Team Blueprint" and `default-solo-team.md`).
 
 ## Scenario 2: one-shot print mode with `--team`
 

@@ -1,8 +1,8 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { isValidTeamId, loadMinimalTeam, loadTeamFromDir } from "./parser";
+import { isValidTeamId, loadDefaultSoloTeam, loadTeamFromDir } from "./parser";
 import { JiePlatformError } from "../jie-platform-errors";
-import { BUILTIN_MINIMAL_TEAM_ID, type TeamBlueprint, type TeamBlueprintLocation } from "./types";
+import { BUILTIN_DEFAULT_SOLO_TEAM_ID, type TeamBlueprint, type TeamBlueprintLocation } from "./types";
 
 export interface TeamRegistryOptions {
   readonly homeJieDir: string;
@@ -23,8 +23,8 @@ export function createTeamRegistry(options: TeamRegistryOptions): TeamRegistry {
     return projectJieDir === null ? null : join(projectJieDir, "teams");
   }
 
-  function isMinimal(id: string): boolean {
-    return id === BUILTIN_MINIMAL_TEAM_ID;
+  function isDefaultSolo(id: string): boolean {
+    return id === BUILTIN_DEFAULT_SOLO_TEAM_ID;
   }
   function isProjectTeam(id: string): boolean {
     const dir = projectTeamsDir();
@@ -36,13 +36,13 @@ export function createTeamRegistry(options: TeamRegistryOptions): TeamRegistry {
 
   function parseFromDir(dir: string): TeamBlueprint {
     const blueprint = loadTeamFromDir(dir);
-    return blueprint.roles.length === 0 ? loadMinimalTeam() : blueprint;
+    return blueprint.roles.length === 0 ? loadDefaultSoloTeam() : blueprint;
   }
 
   return {
     parseTeamManifest(teamId) {
-      if (teamId === undefined || isMinimal(teamId)) {
-        return loadMinimalTeam();
+      if (teamId === undefined || isDefaultSolo(teamId)) {
+        return loadDefaultSoloTeam();
       }
       if (!isValidTeamId(teamId)) {
         throw new JiePlatformError("INVALID_TEAM_ID", { detail: `invalid team_id: ${teamId}` });
@@ -58,7 +58,7 @@ export function createTeamRegistry(options: TeamRegistryOptions): TeamRegistry {
     },
     listInstalled() {
       const ids = new Set<string>();
-      ids.add(BUILTIN_MINIMAL_TEAM_ID);
+      ids.add(BUILTIN_DEFAULT_SOLO_TEAM_ID);
       for (const dir of [projectTeamsDir(), userTeamsDir]) {
         if (dir === null) continue;
         let entries: string[];
@@ -75,7 +75,7 @@ export function createTeamRegistry(options: TeamRegistryOptions): TeamRegistry {
       return [...ids].sort();
     },
     locate(id) {
-      if (isMinimal(id)) return "builtin";
+      if (isDefaultSolo(id)) return "builtin";
       if (isProjectTeam(id)) return "project";
       if (isUserTeam(id)) return "user";
       return null;

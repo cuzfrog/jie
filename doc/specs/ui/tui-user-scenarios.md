@@ -4,7 +4,7 @@ The TUI's acceptance surface. Each scenario corresponds to one e2e test file —
 
 ## Scenario 1: simple agent
 
-1. Run `jie` under a fresh directory without any team definitions. A TUI opens on the built-in minimal team.
+1. Run `jie` under a fresh directory without any team definitions. A TUI opens on the built-in default-solo team.
 2. Prompt `Tell me a story`. The response streams into the conversation area.
 3. Press `Ctrl+D` (editor empty). The process exits 0.
 

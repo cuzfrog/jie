@@ -331,7 +331,7 @@ describe("CommandExecutorImpl", () => {
   describe("reload", () => {
     test("delegates to teamManager.reload and returns the reloaded teams", async () => {
       const identities: TeamInfo[] = [
-        { id: "minimal", leaderKey: "general-1", sessionName: null, agents: [], history: [] },
+        { id: "default-solo", leaderKey: "general-1", sessionName: null, agents: [], history: [] },
         { id: "alpha", leaderKey: "general-1", sessionName: null, agents: [], history: [] },
       ];
       teamManager.reload.mockResolvedValue(identities);
@@ -354,13 +354,13 @@ describe("CommandExecutorImpl", () => {
   describe("getTeamInfo", () => {
     test("returns defaultTeam from settings and the installed list from teamManager", async () => {
       settingsStore.load.mockReturnValueOnce({ defaultProvider: "anthropic", defaultModel: "m", defaultTeam: "alpha" });
-      teamManager.listInstalled.mockReturnValue(["minimal", "alpha", "beta"]);
+      teamManager.listInstalled.mockReturnValue(["default-solo", "alpha", "beta"]);
       teamManager.agentCount.mockImplementation((teamId: string) => (teamId === "alpha" ? 3 : 1));
       const result = await executor.execute({ name: "getTeamInfo" });
       expect(result).toEqual({
         defaultTeam: "alpha",
         installed: [
-          { id: "minimal", agentCount: 1 },
+          { id: "default-solo", agentCount: 1 },
           { id: "alpha", agentCount: 3 },
           { id: "beta", agentCount: 1 },
         ],
@@ -369,10 +369,10 @@ describe("CommandExecutorImpl", () => {
 
     test("returns defaultTeam: null when settings has no defaultTeam", async () => {
       settingsStore.load.mockReturnValueOnce({ defaultProvider: "anthropic", defaultModel: "m" });
-      teamManager.listInstalled.mockReturnValue(["minimal"]);
+      teamManager.listInstalled.mockReturnValue(["default-solo"]);
       teamManager.agentCount.mockReturnValue(2);
       const result = await executor.execute({ name: "getTeamInfo" });
-      expect(result).toEqual({ defaultTeam: null, installed: [{ id: "minimal", agentCount: 2 }] });
+      expect(result).toEqual({ defaultTeam: null, installed: [{ id: "default-solo", agentCount: 2 }] });
     });
   });
 

@@ -262,7 +262,7 @@ describe("createJieAutocompleteProvider — /team arguments", () => {
       if (cmd.name === "getTeamInfo") {
         return {
           defaultTeam: "alpha",
-          installed: [{ id: "minimal", agentCount: 1 }, { id: "alpha", agentCount: 3 }, { id: "beta", agentCount: 2 }],
+          installed: [{ id: "default-solo", agentCount: 1 }, { id: "alpha", agentCount: 3 }, { id: "beta", agentCount: 2 }],
         };
       }
       return null;
@@ -273,7 +273,7 @@ describe("createJieAutocompleteProvider — /team arguments", () => {
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, teamPlatform(), makeStateStore())
       .getSuggestions(["/team "], 0, 6, { signal: signal() });
     expect(suggestions!.items).toEqual([
-      { value: "minimal", label: "minimal", description: "1 agent" },
+      { value: "default-solo", label: "default-solo", description: "1 agent" },
       { value: "alpha", label: "alpha", description: "(default)" },
       { value: "beta", label: "beta", description: "2 agents" },
     ]);

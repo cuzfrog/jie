@@ -15,7 +15,7 @@ packages/
     services/        # GitService (branch / dirty status; consumed by the command surface and by jie-cli for the TUI footer)
     skills/          # Skill discovery (SKILL.md), SkillManager (glob resolution), prompt formatting (10-configuration.md "Skills")
     storage/         # Storage + SqliteStorage, schema bootstrap, ArtifactStore, MemoryManager (04-storage.md, 08-memory.md)
-    team/            # Blueprint parser, team registry (discovery, ADR 24), TeamManager, built-in minimal/ team
+    team/            # Blueprint parser, team registry (discovery, ADR 24), TeamManager, built-in default-solo/ team
     tools/           # Built-in tools: notify, bash, read_file, write_file, edit, todo_write,
                        web_search, web_fetch, write_artifact, read_artifact + ToolRegistry
     container.ts       # Composition root: bootPlatform(options): AwilixContainer<PlatformCradle> (ADR 31)
@@ -25,7 +25,7 @@ packages/
   jie-tui/        # Terminal UI (pi-tui-based inline renderer): chat column, editor, footer, slash commands; bootTui(options, deps)
   jie-utils/      # Process-level infra shared by all packages: diagnostic logger (tslog), Console output abstraction
   mock-llm-backend/  # OpenAI-compatible mock LLM server for e2e tests (bun mock:start)
-  jie-team/       # Team-blueprint installer (installBlueprint/listBlueprints) + shipped `default` blueprint (six-role delivery pipeline) (doc/specs/jie-team/)
+  jie-team/       # Team-blueprint installer (installBlueprint/listBlueprints) + shipped `default-coders` blueprint (six-role delivery pipeline) (doc/specs/jie-team/)
   code-lens/      # Standalone MCP server (bin: code-lens): code-architecture facts from SCIP indexes (doc/specs/code-lens/)
 ```
 
@@ -40,7 +40,7 @@ code-lens → jie-utils               (standalone MCP server; protobufjs for SCI
 jie-team                            (blueprint data + installer; no runtime dependencies)
 ```
 
-**Agnosticism rule (ADR 11).** `jie-platform` has zero dependency on `jie-team` — no `import` in any form, including types. The platform reads team blueprints from filesystem paths (`.jie/teams/<id>/`, `~/.jie/teams/<id>/`) plus its built-in `minimal` fallback; a team is data, not code.
+**Agnosticism rule (ADR 11).** `jie-platform` has zero dependency on `jie-team` — no `import` in any form, including types. The platform reads team blueprints from filesystem paths (`.jie/teams/<id>/`, `~/.jie/teams/<id>/`) plus its built-in `default-solo` fallback; a team is data, not code.
 
 ## Build System
 
@@ -59,7 +59,7 @@ Every package exports `.` → `./index.ts`; the root `package.json` declares `"b
 
 `jie-utils/index.ts` exports `logger` (a tslog instance gated by `JIE_LOG_LEVEL`) and `Console` / `defaultConsole` — the output abstraction CLI commands write through and the logger's transport routes to stderr. It depends on no other jie package; diagnostic logging is orthogonal to app logic and is imported as a module-scope instance, not injected.
 
-`jie-team/index.ts` exports `installBlueprint` / `listBlueprints` — the installer that copies shipped blueprints (the `default` six-role team) into `.jie/teams/`; the blueprint directories live at the package root (`<id>/TEAM.md` + `<role>.md`) and the platform discovers the installed copies from the filesystem (ADR 11 agnosticism).
+`jie-team/index.ts` exports `installBlueprint` / `listBlueprints` — the installer that copies shipped blueprints (the `default-coders` six-role team) into `.jie/teams/`; the blueprint directories live at the package root (`<id>/TEAM.md` + `<role>.md`) and the platform discovers the installed copies from the filesystem (ADR 11 agnosticism).
 
 `code-lens/index.ts` is the minimal library surface (SCIP ingestion + `CodeIndex` model); the executable surface is the `code-lens` bin (`main.ts`), a stdio MCP server the platform spawns as a child process rather than imports.
 
@@ -79,7 +79,7 @@ Small and fixed (via the root catalog):
 
 `jie-utils`' only runtime dependency is `tslog` (structured logger, gated by `JIE_LOG_LEVEL`; silent when unset). `code-lens`' only runtime dependency is `protobufjs` (SCIP protobuf decoding via vendored generated bindings).
 
-**Bun built-ins** (no dep): `bun:sqlite` (`SqliteStorage`), `Bun.Glob` (`ToolRegistry` spec resolution), `fetch` (`web_search` / `web_fetch`), `Bun.spawn()` (`bash` tool; MCP stdio subprocesses), `Bun.argv` (hand-rolled CLI parser), `import ... with { type: "text" }` (built-in minimal team).
+**Bun built-ins** (no dep): `bun:sqlite` (`SqliteStorage`), `Bun.Glob` (`ToolRegistry` spec resolution), `fetch` (`web_search` / `web_fetch`), `Bun.spawn()` (`bash` tool; MCP stdio subprocesses), `Bun.argv` (hand-rolled CLI parser), `import ... with { type: "text" }` (built-in default-solo team).
 
 **Still no MCP SDK.** The MCP client (stdio transport) is a hand-rolled JSON-RPC implementation in `packages/jie-platform/mcp/` (ADR 4), and code-lens's server side is equally hand-rolled; `@modelcontextprotocol/sdk` is not a dependency. **No CLI / utility libraries** (`commander`, `lodash`, `chalk`, …): the CLI surface is small enough that hand-rolled parsing and merging stay smaller than the deps. (`awilix` is the DI composition mechanism, not a utility library — ADR 31.)
 

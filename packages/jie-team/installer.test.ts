@@ -40,7 +40,7 @@ describe("installer", () => {
     });
 
     test("finds the shipped blueprints from the package source", () => {
-      expect(listBlueprints()).toContain("default");
+      expect(listBlueprints()).toContain("default-coders");
     });
   });
 
