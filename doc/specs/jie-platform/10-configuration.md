@@ -137,7 +137,7 @@ A user can invoke a skill explicitly from a prompt with `/skill:<name> [args]`, 
 
 ## Context Files
 
-`AGENTS.md` and `CLAUDE.md` are auto-loaded instruction files injected into every agent's system prompt — shared project state, with no manifest opt-in (unlike skills). The platform reads them, in order, from the home jie dir (`~/.jie/`) and then from every ancestor of the CWD ordered root-down-to-CWD; within a directory `AGENTS.md` precedes `CLAUDE.md`. Missing or unreadable files are skipped and a path is read at most once. The cradle exposes `loadSystemContextBlock`, a loader that re-reads and assembles the `<context_files>` block on every call; the prompt composer calls it once per agent-body construction and places the block before the role prose, so edits are picked up by the next load or `/reload` rebuild without re-registration. File content is injected verbatim.
+`AGENTS.md` and `CLAUDE.md` are auto-loaded instruction files injected into every agent's system prompt — shared project state, with no manifest opt-in (unlike skills). The platform reads them, in order, from the home jie dir (`~/.jie/`) and then from every ancestor of the CWD ordered root-down-to-CWD; within a directory `AGENTS.md` precedes `CLAUDE.md`. Missing or unreadable files are skipped and a path is read at most once. The cradle exposes `loadSystemContextBlock`, a loader that re-reads and assembles the `<context_files>` block on every call; the system-prompt composer in core calls it once per agent-body construction and places the block before the role prose, so edits are picked up by the next load or `/reload` rebuild without re-registration. File content is injected verbatim.
 
 ## Hooks
 
