@@ -222,11 +222,11 @@ function truncateMessage(message: AgentMessage, targetTokens: number): AgentMess
   if (estimateTokens(message) <= targetTokens) return message;
   switch (message.role) {
     case "user":
-      return truncateUserMessage(message, targetTokens);
+    case "custom":
+      return truncateStringOrBlockContentMessage(message, targetTokens);
     case "assistant":
       return truncateAssistantMessage(message, targetTokens);
     case "toolResult":
-    case "custom":
       return truncateBlockContentMessage(message, targetTokens);
     case "bashExecution":
       return truncateTexts([message.output], targetTokens, (texts) => ({ ...message, output: texts[0]! }));
@@ -238,7 +238,7 @@ function truncateMessage(message: AgentMessage, targetTokens: number): AgentMess
   }
 }
 
-function truncateUserMessage(message: UserMessage, targetTokens: number): AgentMessage {
+function truncateStringOrBlockContentMessage(message: UserMessage | CustomMessage, targetTokens: number): AgentMessage {
   if (typeof message.content === "string") {
     return truncateTexts([message.content], targetTokens, (texts) => ({ ...message, content: texts[0]! }));
   }

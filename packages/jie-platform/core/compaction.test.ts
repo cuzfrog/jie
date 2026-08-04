@@ -79,6 +79,10 @@ function toolResultMsg(text: string, timestamp = 0): ToolResultMessage {
   };
 }
 
+function customMsg(text: string, timestamp = 0): AgentMessage {
+  return { role: "custom", customType: "note", content: text, display: true, timestamp };
+}
+
 function summaryMsg(text: string, timestamp: number): CompactionSummaryMessage {
   return createCompactionSummaryMessage(text, 1000, new Date(timestamp).toISOString());
 }
@@ -430,6 +434,28 @@ describe("CompactorImpl.fitToWindow", () => {
     if (summary === undefined || summary.role !== "compactionSummary") throw new Error("expected a summary message");
     expect(summary.summary.endsWith(MARKER)).toBe(true);
     expect(totalTokens(result)).toBeLessThanOrEqual(THRESHOLD_WINDOW - 16384);
+  });
+
+  test("truncates a custom message with string content", () => {
+    const compactor = makeCompactor(makeMemory(), async () => "summary");
+    const messages: AgentMessage[] = [customMsg(HUGE), userMsg("tail")];
+    const result = compactor.fitToWindow(messages, makeModel(THRESHOLD_WINDOW, 8192));
+    const custom = result[0];
+    if (custom === undefined || custom.role !== "custom" || typeof custom.content !== "string") {
+      throw new Error("expected a custom message with string content");
+    }
+    expect(custom.content.startsWith(HUGE.slice(0, 1000))).toBe(true);
+    expect(custom.content.endsWith(MARKER)).toBe(true);
+    expect(totalTokens(result)).toBeLessThanOrEqual(THRESHOLD_WINDOW - 16384);
+  });
+
+  test("passes through a message with nothing shrinkable", () => {
+    const compactor = makeCompactor(makeMemory(), async () => "summary");
+    const toolCall = { type: "toolCall", id: "call_1", name: "bash", arguments: { command: "ls" } } as const;
+    const toolCallOnly: AgentMessage = { ...assistantMsg("small"), content: [toolCall] };
+    const result = compactor.fitToWindow([toolCallOnly, userMsg(HUGE)], makeModel(THRESHOLD_WINDOW, 8192));
+    expect(result[0]).toBe(toolCallOnly);
+    expect(result[1]).not.toEqual(userMsg(HUGE));
   });
 
   test("applies the reserveTokens override to the budget", () => {
