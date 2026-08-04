@@ -78,6 +78,19 @@ describe("SettingsStoreImpl", () => {
     expect(existsSync(join(homeJieDir, "settings.json"))).toBe(false);
   });
 
+  test("setDefaultProvider writes to the project settings when they define only defaultModel", () => {
+    const projectJieDir = join(cwd, ".jie");
+    mkdirSync(projectJieDir, { recursive: true });
+    writeFileSync(join(projectJieDir, "settings.json"), `${JSON.stringify({ defaultModel: "gpt-4o" })}\n`);
+    const store = new SettingsStoreImpl(cwd, homeJieDir, projectJieDir);
+    store.setDefaultProvider("lm-studio", "qwen3.5-2b");
+    expect(JSON.parse(readFileSync(join(projectJieDir, "settings.json"), "utf-8"))).toEqual({
+      defaultProvider: "lm-studio",
+      defaultModel: "qwen3.5-2b",
+    });
+    expect(existsSync(join(homeJieDir, "settings.json"))).toBe(false);
+  });
+
   test("setDefaultProvider writes to global when the project settings define neither model key", () => {
     const projectJieDir = join(cwd, ".jie");
     mkdirSync(projectJieDir, { recursive: true });
