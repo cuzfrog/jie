@@ -2516,6 +2516,32 @@ describe("JieAgentBody — compaction", () => {
     body.stop();
   });
 
+  test("a successful compaction publishes agent.compacted with the summary and prefix counts", async () => {
+    const { compactor, compact } = makeFakeCompactor();
+    const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), compactor });
+    await body.start();
+    h.state.messages = [
+      makeUserMessage("m1"),
+      makeAssistantMessage({ content: [{ type: "text", text: "m2" }] }),
+      makeUserMessage("m3"),
+      makeAssistantMessage({ content: [{ type: "text", text: "m4" }] }),
+    ];
+    const compacted: EventEnvelope<"agent.compacted">[] = [];
+    h.subscribeSubject("agent.compacted", (env) => compacted.push(env));
+    compact.mockResolvedValueOnce({
+      summaryMessage: createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z"),
+      firstKeptIndex: 3,
+      tokensBefore: 500,
+    });
+    h.fireEvent({ type: "agent_end", messages: [] });
+    h.settleIdle();
+    await flush();
+    expect(compacted).toHaveLength(1);
+    expect(compacted[0]!.sender).toEqual({ kind: "agent", teamId: "t1", agentKey: "general-1" });
+    expect(compacted[0]!.payload).toEqual({ summary: "the summary", tokens_before: 500, summarized_prompts: 2 });
+    body.stop();
+  });
+
   test("agent_end settle compacts even with an empty queue", async () => {
     const { compactor, compact } = makeFakeCompactor();
     const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), compactor });
@@ -2526,18 +2552,21 @@ describe("JieAgentBody — compaction", () => {
     body.stop();
   });
 
-  test("a null compaction result leaves state.messages untouched", async () => {
+  test("a null compaction result leaves state.messages untouched and publishes nothing", async () => {
     const { compactor, compact } = makeFakeCompactor();
     const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), compactor });
     await body.start();
     const first = makeUserMessage("m1");
     const second = makeAssistantMessage({ content: [{ type: "text", text: "m2" }] });
     h.state.messages = [first, second];
+    const compacted: EventEnvelope<"agent.compacted">[] = [];
+    h.subscribeSubject("agent.compacted", (env) => compacted.push(env));
     h.fireEvent({ type: "agent_end", messages: [] });
     h.settleIdle();
     await flush();
     expect(compact).toHaveBeenCalledTimes(1);
     expect(h.state.messages).toEqual([first, second]);
+    expect(compacted).toHaveLength(0);
     body.stop();
   });
 

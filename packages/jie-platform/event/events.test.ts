@@ -98,3 +98,14 @@ describe("Events.agentModelAssigned", () => {
     expect(env.payload).toEqual({ provider: "anthropic", model: "claude-sonnet-4", effort: "high", contextWindow: 200000 });
   });
 });
+
+describe("Events.agentCompacted", () => {
+  test("builds an agent.compacted envelope carrying the summary and token counts without truncation", () => {
+    const summary = "s".repeat(8 * 1024);
+    const env = Events.agentCompacted(AGENT_SENDER, summary, 500, 3);
+    expect(env.type).toBe("agent.compacted");
+    expect(env.topic).toBe("agent.compacted");
+    expect(env.sender).toBe(AGENT_SENDER);
+    expect(env.payload).toEqual({ summary, tokens_before: 500, summarized_prompts: 3 });
+  });
+});

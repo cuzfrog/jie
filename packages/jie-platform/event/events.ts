@@ -30,6 +30,7 @@ type EventDefinitions = {
   "agent.usage": EventDef<AgentSender, { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number }>;
   "agent.prompt.queue.update": EventDef<AgentSender, { prompts: Array<{ text: string; source: "user" | "peer" }> }>;
   "agent.model.assigned": EventDef<AgentSender, { provider: string; model: string; effort: "off" | "low" | "medium" | "high" | "max"; contextWindow: number | null }>;
+  "agent.compacted": EventDef<AgentSender, { summary: string; tokens_before: number; summarized_prompts: number }>;
   "user.prompt": EventDef<UserSender, { teamId: string; agentKey: string; prompt: string }>;
   "user.prompt.dequeue": EventDef<UserSender, { teamId: string; agentKey: string; prompt: string }>;
   "user.prompt.requeue": EventDef<UserSender, { teamId: string; agentKey: string; prompt: string }>;
@@ -80,6 +81,8 @@ export const Events = {
     createEvent("agent.prompt.queue.update", sender, { prompts }),
   agentModelAssigned: (sender: AgentSender, provider: string, model: string, effort: "off" | "low" | "medium" | "high" | "max", contextWindow: number | null): EventEnvelope<"agent.model.assigned"> =>
     createEvent("agent.model.assigned", sender, { provider, model, effort, contextWindow }),
+  agentCompacted: (sender: AgentSender, summary: string, tokens_before: number, summarized_prompts: number): EventEnvelope<"agent.compacted"> =>
+    createEvent("agent.compacted", sender, { summary, tokens_before, summarized_prompts }),
   userPrompt: (sender: UserSender, teamId: string, agentKey: string, prompt: string): EventEnvelope<"user.prompt"> =>
     createEvent("user.prompt", sender, { teamId, agentKey, prompt }),
   userPromptDequeue: (sender: UserSender, teamId: string, agentKey: string, prompt: string): EventEnvelope<"user.prompt.dequeue"> =>

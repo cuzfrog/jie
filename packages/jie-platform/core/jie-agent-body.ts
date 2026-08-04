@@ -437,7 +437,10 @@ export class JieAgentBody implements AgentBody {
         signal: controller.signal,
       });
       if (result === null || this.stopped) return;
+      const summarizedPrefix = this.agent.state.messages.slice(0, result.firstKeptIndex);
       this.agent.state.messages = [result.summaryMessage, ...this.agent.state.messages.slice(result.firstKeptIndex)];
+      const summarizedPrompts = summarizedPrefix.reduce((count, message) => message.role === "user" ? count + 1 : count, 0);
+      this.eventManager.publish(Events.agentCompacted(this.sender, result.summaryMessage.summary, result.tokensBefore, summarizedPrompts));
     } catch (error) {
       if (!controller.signal.aborted) {
         const message = error instanceof Error ? error.message : String(error);
