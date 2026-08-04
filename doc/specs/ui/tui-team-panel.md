@@ -1,6 +1,6 @@
 # Team panel
 
-A togglable bottom panel giving the team-at-a-glance view — roster, per-agent status and configuration, queue depth — that the footer (focused agent, per-agent model) does not convey. `←` toggles it while the editor cursor sits at the buffer start (`tui-shortcuts.md`); while shown, plain `↑`/`↓` move the cursor between agents without switching context and `Enter` commits the pointed agent as the focused one. Hidden by default; session-only (never persisted), and preserved across `/clear` like the other view toggles.
+A togglable bottom panel giving the team-at-a-glance view — roster, per-agent status and configuration, queue depth — that the footer (focused agent, per-agent model) does not convey. `←` toggles it while the editor cursor sits at the buffer start (`tui-shortcuts.md`); while shown, plain `↑`/`↓` move the cursor between agents without switching context and `Enter` commits the pointed agent as the focused one. Hidden by default; session-only (never persisted), and preserved across `/clear` like the other view toggles. It shares its bottom slot with the kanban panel and the two are mutually exclusive: showing one hides the other, enforced by both toggles in the reducer (`tui-kanban-panel.md`).
 
 ## Layout
 
@@ -8,7 +8,7 @@ The panel is the last section of the single inline column (`tui-layout.md`): it 
 
 ## Interaction
 
-- `←` hidden, editor cursor at the buffer start (`state.editorCursorAtStart`): show the panel with the cursor (`state.teamCursorAgentId`) on the focused agent (the first agent when the focus is null). `←` shown: hide the panel and clear the cursor. A `←` anywhere else in the buffer stays with the editor; the footer's help-info hint swaps to the shortcut hint while the shortcut is activated (`tui-layout.md`, Footer).
+- `←` hidden, editor cursor at the buffer start (`state.editorCursorAtStart`): show the panel with the cursor (`state.teamCursorAgentId`) on the focused agent (the first agent when the focus is null); showing it hides the kanban panel. `←` shown: hide the panel and clear the cursor. A `←` anywhere else in the buffer stays with the editor; the footer's help-info hint swaps to the shortcut hint while the shortcut is activated (`tui-layout.md`, Footer).
 - Shown + `↓` / `↑`: move the cursor without switching the focused agent, cycling both ways (last → first and first → last). The editor's prompt-history walk yields while the panel is shown; while the autocomplete popup is open, plain arrows navigate the popup instead (`tui-shortcuts.md`).
 - Shown + `Enter` while the cursor is on another agent: commit — `focusedAgentId` becomes the cursor and the panel stays shown; that keypress does not submit the editor. Otherwise `Enter` falls through to editor submit (`tui-shortcuts.md`).
 - No agents loaded: `←` is a no-op.
