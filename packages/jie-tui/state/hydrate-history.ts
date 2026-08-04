@@ -1,5 +1,5 @@
-import type { AgentMessage } from "@cuzfrog/jie-platform";
-import type { AssistantMessage, TextContent, ToolResultMessage, UserMessage } from "@earendil-works/pi-ai";
+import type { AgentMessage, UserIngressMessage } from "@cuzfrog/jie-platform";
+import type { AssistantMessage, TextContent, ToolResultMessage } from "@earendil-works/pi-ai";
 import { isTodoDetails, type TodoItem } from "../todo";
 import type { MessageCard, MessageTurn } from "./state";
 
@@ -50,7 +50,8 @@ function deriveTodos(turns: ReadonlyArray<MessageTurn>): ReadonlyArray<TodoItem>
   return todos;
 }
 
-function userPromptText(message: UserMessage): string {
+function userPromptText(message: UserIngressMessage): string {
+  if (message.displayText !== undefined) return message.displayText;
   const content = message.content;
   const raw = typeof content === "string" ? content : content.filter(isTextContent).map((part) => part.text).join("");
   return raw.startsWith(USER_INGRESS_PREFIX) ? raw.slice(USER_INGRESS_PREFIX.length) : raw;

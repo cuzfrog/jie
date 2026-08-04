@@ -16,7 +16,7 @@ import type { Tool, ToolRegistry, ToolResult } from "../tools";
 import type { Skill, SkillManager } from "../skills";
 import type { HookRunner } from "../hooks";
 import type { AgentSoul } from "../team";
-import type { EffortLevel } from "../types";
+import type { EffortLevel, UserIngressMessage } from "../types";
 
 async function flush(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1170,6 +1170,27 @@ describe("JieAgentBody — prompt ingress format", () => {
     );
     body.stop();
   });
+
+  test("the dispatched user message carries the raw prompt as displayText", async () => {
+    const body = h.makeBody();
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
+    await flush();
+    const synthetic = h.prompt.mock.calls[0]![0] as UserIngressMessage;
+    expect(synthetic.displayText).toBe("hello");
+    body.stop();
+  });
+
+  test("a notify-sourced message carries no displayText", async () => {
+    const body = h.makeBody({
+      soul: makeSoul({ subscribe: ["task.researched"] }),
+    });
+    await body.start();
+    h.events.publish(Events.custom({ kind: "agent", teamId: "t1", agentKey: "researcher-1" }, "t1.task.researched", "report"));
+    const synthetic = h.prompt.mock.calls[0]![0] as UserIngressMessage;
+    expect(synthetic.displayText).toBeUndefined();
+    body.stop();
+  });
 });
 
 describe("JieAgentBody — skill invocation expansion", () => {
@@ -1203,6 +1224,17 @@ describe("JieAgentBody — skill invocation expansion", () => {
     h.fireEvent({ type: "turn_start" });
     h.fireEvent({ type: "message_start", message: h.prompt.mock.calls[0]![0] as AgentMessage });
     expect(turnStart[0]!.payload).toBe("/skill:deploy now");
+    body.stop();
+  });
+
+  test("the expanded message still carries the raw invocation as displayText", async () => {
+    h.skillManager.resolve.mockReturnValue([deploySkill]);
+    const body = h.makeBody({ soul: makeSoul({ skills: ["deploy"] }) });
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "/skill:deploy now"));
+    await flush();
+    const synthetic = h.prompt.mock.calls[0]![0] as UserIngressMessage;
+    expect(synthetic.displayText).toBe("/skill:deploy now");
     body.stop();
   });
 
