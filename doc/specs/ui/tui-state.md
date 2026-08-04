@@ -24,6 +24,8 @@ Per CLAUDE.md, serialized events use snake_case on the wire; TypeScript identifi
 | `stream_id` | `turn.streamId` | `agent.stream.chunk` |
 | `thinking_durations` | `block.durationMs` (per segment, in order) | `agent.stream.end` |
 | `prompts` | `agent.queue` | `agent.prompt.queue.update` |
+| `summary` | `compactionMarker.summary` | `agent.compacted` |
+| `tokens_before` | `compactionMarker.tokensBefore` | `agent.compacted` |
 
 The composite runtime key is `AgentId = \`${teamId}:${agentKey}\`` (see `00-overview.md` glossary). The reducer's `state.agents` map is keyed by `AgentId`, not by `agentKey`, to disambiguate agents across coexisting teams.
 
@@ -83,7 +85,7 @@ Set `contextTokensUsed` and `lastReportedTotalTokens` from `payload.totalTokens`
 
 ### `agent.compacted`
 
-The platform rewrote the agent's history to a summary plus a kept tail (`06-agent-model.md`, "Compaction"). The reducer mirrors the rewrite: from `history + currentTurn` it drops the first `payload.summarized_prompts` turns — never the last one, since a full-user summarize means the tail holds mid-turn fragments and dropping everything would hide kept content — then assigns fresh entry numbers to the marker and the survivors: the marker takes `seq = state.nextEntrySeq`, the surviving turns renumber sequentially after it, and the counter advances past them all (the renumbering rebuilds the chat column's tail — the same mechanism as a focused-agent switch). The marker is stored on `agent.compactionMarker` as `{ seq, summary, tokensBefore }`; a later compaction replaces it. `contextTokensUsed` re-estimates over the kept content and `lastReportedTotalTokens` nulls — the last usage total refers to the pre-compaction context.
+The platform rewrote the agent's history to a summary plus a kept tail (`06-agent-model.md`, "Compaction"). The reducer mirrors the rewrite: from `history + currentTurn` it drops the first `payload.summarized_prompts` turns — never the last one, since a full-user summarize means the tail holds mid-turn fragments and dropping everything would hide kept content — then assigns fresh entry numbers to the marker and the survivors: the marker takes `seq = state.nextEntrySeq`, the surviving turns renumber sequentially after it, and the counter advances past them all (the renumbering rebuilds the chat column's tail — the same mechanism as a focused-agent switch). The marker is stored on `agent.compactionMarker` as `{ seq, summary, tokensBefore }`; a later compaction replaces it. `contextTokensUsed` re-estimates over the kept turns (the summary itself is not estimated; the next `agent.usage` reports the true post-compaction total) and `lastReportedTotalTokens` nulls — the last usage total refers to the pre-compaction context.
 
 ### `agent.stream.chunk`
 

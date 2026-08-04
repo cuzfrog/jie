@@ -2656,6 +2656,34 @@ describe("JieAgentBody — compaction", () => {
     expect(errors).toHaveLength(0);
   });
 
+  test("a compaction that resolves after stop() neither rewrites the history nor publishes", async () => {
+    const { compactor, compact } = makeFakeCompactor();
+    let release: ((result: CompactionResult | null) => void) | undefined;
+    compact.mockReturnValueOnce(new Promise<CompactionResult | null>((resolve) => {
+      release = resolve;
+    }));
+    const compacted: EventEnvelope<"agent.compacted">[] = [];
+    h.subscribeSubject("agent.compacted", (env) => compacted.push(env));
+    const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), compactor });
+    await body.start();
+    const first = makeUserMessage("m1");
+    const second = makeAssistantMessage({ content: [{ type: "text", text: "m2" }] });
+    h.state.messages = [first, second];
+    h.fireEvent({ type: "agent_end", messages: [] });
+    h.settleIdle();
+    await flush();
+    expect(compact).toHaveBeenCalledTimes(1);
+    body.stop();
+    release!({
+      summaryMessage: createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z"),
+      firstKeptIndex: 1,
+      tokensBefore: 500,
+    });
+    await flush();
+    expect(compacted).toHaveLength(0);
+    expect(h.state.messages).toEqual([first, second]);
+  });
+
   test("a failed compaction publishes system.error and leaves the history untouched", async () => {
     const { compactor, compact } = makeFakeCompactor();
     compact.mockRejectedValueOnce(new Error("boom"));

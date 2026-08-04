@@ -35,7 +35,7 @@ Identity travels in the envelope, not in the subject. `topic` equals `type` for 
 | `agent.usage` | agent | `{ input, output, cacheRead, cacheWrite, totalTokens }` |
 | `agent.prompt.queue.update` | agent | `{ prompts: Array<{ text: string; source: "user" \| "peer" }> }` |
 | `agent.model.assigned` | agent | `{ provider, model, effort, contextWindow: number \| null }` |
-| `agent.compacted` | agent | `{ summary, tokens_before, summarized_prompts }` — published after a successful compaction rewrite: the summary text, the context tokens before the cut, and the number of user prompts in the summarized prefix (`06-agent-model.md`, "Compaction") |
+| `agent.compacted` | agent | `{ summary, tokens_before, summarized_prompts }` — published after a successful compaction rewrite: the summary text, the context tokens before the cut, and the count of `user`-role messages in the summarized prefix (`06-agent-model.md`, "Compaction") |
 | `user.prompt` | user | `{ teamId, agentKey, prompt }` |
 | `user.prompt.dequeue` | user | `{ teamId, agentKey, prompt }` — cancel the most recently queued user prompt whose raw text equals `prompt` |
 | `user.prompt.requeue` | user | `{ teamId, agentKey, prompt }` — restore the most recently dequeued user prompt whose raw text equals `prompt` to the queue's tail |
@@ -87,7 +87,7 @@ LLM output originates from pi-agent's `message_update` deltas. The body buffers 
 
 Every tool call emits `agent.tool.call` before execution and `agent.tool.result` after. `tool_call_id` is pi-agent's opaque id from its `beforeToolCall` / `afterToolCall` hooks, passed through verbatim so observers can correlate the pair. `output` is the whole `ToolResult = { content, details?, terminate? }` JSON-serialized (undefined fields dropped by `JSON.stringify`); on a thrown `execute`, `output` is `null` and `error` carries the message.
 
-`Events` factory truncates `agent.tool.call.input`, `agent.tool.result.output`, and `custom` messages at `EVENT_TEXT_TRUNCATION_BYTES` (4096) with **middle truncation**: head and tail preserved, marker `...[N chars truncated]...` at the cut, and the `*_truncated` / `truncated` flag set. Other event payloads are bounded by their upstream contracts and are not truncated.
+`Events` factory truncates `agent.tool.call.input`, `agent.tool.result.output`, and `custom` messages at `EVENT_TEXT_TRUNCATION_BYTES` (4096) with **middle truncation**: head and tail preserved, marker `...[N chars truncated]...` at the cut, and the `*_truncated` / `truncated` flag set. Other event payloads are bounded by their upstream contracts and are not truncated; `agent.compacted.summary` is the exception — LLM output bounded only by the summarization `maxTokens`, it passes through untruncated so the TUI marker matches the persisted summary row.
 
 ## Event-Order Contract
 

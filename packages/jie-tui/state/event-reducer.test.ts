@@ -540,6 +540,19 @@ describe("reduceCompacted", () => {
     const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
     expect(reduce(state, Events.agentCompacted(foreign, "s", 1, 0))).toBe(state);
   });
+
+  test("a later compaction replaces the marker and keeps the entry counter monotonic", () => {
+    let state = reduce(threeTurnState(), Events.agentCompacted(AGENT_SENDER, "first summary", 500, 1));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, "four"));
+    state = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
+    const compacted = reduce(state, Events.agentCompacted(AGENT_SENDER, "second summary", 700, 2));
+    const agent = compacted.agents.get("my-team:general-1");
+    expect(agent?.compactionMarker).toEqual({ seq: 7, summary: "second summary", tokensBefore: 700 });
+    expect(agent?.history).toEqual([]);
+    expect(agent?.currentTurn?.userPrompt).toBe("four");
+    expect(agent?.currentTurn?.seq).toBe(8);
+    expect(compacted.nextEntrySeq).toBe(9);
+  });
 });
 
 describe("reduceStreamChunk", () => {
