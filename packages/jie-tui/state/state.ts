@@ -82,6 +82,7 @@ export interface TuiState {
   readonly thinkingExpanded: boolean;
   readonly toolCardsExpanded: boolean;
   readonly teamPanelVisible: boolean;
+  readonly kanbanPanelVisible: boolean;
   readonly pendingQuit: boolean;
   readonly editorText: string;
   readonly editorCursorAtStart: boolean;

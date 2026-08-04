@@ -21,6 +21,7 @@ export function makeTuiState(overrides: Partial<TuiState> = {}): TuiState {
     thinkingExpanded: false,
     toolCardsExpanded: false,
     teamPanelVisible: false,
+    kanbanPanelVisible: false,
     pendingQuit: false,
     editorText: "",
     editorCursorAtStart: true,

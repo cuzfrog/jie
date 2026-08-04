@@ -18,6 +18,8 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
       return reduceTeamCursor(state, action.payload.direction);
     case ActionTypes.TOGGLE_TEAM_PANEL:
       return reduceTeamPanelToggle(state);
+    case ActionTypes.TOGGLE_KANBAN_PANEL:
+      return reduceKanbanPanelToggle(state);
     case ActionTypes.COMMIT_TEAM_CURSOR:
       return reduceTeamCursorCommit(state);
     case ActionTypes.CLEAR_TUI_STATE:
@@ -83,7 +85,13 @@ function reduceTeamPanelToggle(state: TuiState): TuiState {
   if (roster.length === 0) return state;
   if (state.teamPanelVisible) return { ...state, teamPanelVisible: false, teamCursorAgentId: null };
   const cursor = state.teamCursorAgentId ?? state.focusedAgentId ?? roster[0]!.agentId;
-  return { ...state, teamPanelVisible: true, teamCursorAgentId: cursor };
+  return { ...state, teamPanelVisible: true, teamCursorAgentId: cursor, kanbanPanelVisible: false };
+}
+
+function reduceKanbanPanelToggle(state: TuiState): TuiState {
+  if (state.focusedAgentId === null) return state;
+  if (state.kanbanPanelVisible) return { ...state, kanbanPanelVisible: false };
+  return { ...state, kanbanPanelVisible: true, teamPanelVisible: false, teamCursorAgentId: null };
 }
 
 function reduceTeamCursor(state: TuiState, direction: 1 | -1): TuiState {
