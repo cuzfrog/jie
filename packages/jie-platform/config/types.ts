@@ -7,6 +7,11 @@ export interface Settings {
   readonly defaultTeam?: string;
   readonly defaultEffort?: EffortLevel;
   readonly modelFilters?: ReadonlyArray<string>;
+  readonly compaction?: {
+    readonly enabled?: boolean;
+    readonly reserveTokens?: number;
+    readonly keepRecentTokens?: number;
+  };
 }
 
 export type RawSettings = Record<string, unknown>;

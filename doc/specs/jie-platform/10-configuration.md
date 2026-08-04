@@ -6,7 +6,7 @@ Platform-level configuration surface: how Jie discovers and loads settings, cred
 
 | File | Scope | Sensitivity | Holds |
 |---|---|---|---|
-| `~/.jie/settings.json` | Global user settings | Plain JSON | `defaultProvider`, `defaultModel`, `defaultTeam`, `defaultEffort`, `hooks` (see "Hooks") |
+| `~/.jie/settings.json` | Global user settings | Plain JSON | `defaultProvider`, `defaultModel`, `defaultTeam`, `defaultEffort`, `modelFilters`, `compaction`, `hooks` (see "Hooks") |
 | `.jie/settings.json` | Project override | Plain JSON | Same fields; deep-merge over global, except `hooks` which merge additively |
 | `~/.jie/auth.json` | Global credentials | mode `0600` | API keys, OAuth tokens (schema owned by pi-ai) |
 | `~/.jie/models.json` | Global provider definitions | Plain JSON | Custom providers: base URLs, APIs, keys, model catalogs |
@@ -39,6 +39,7 @@ Two locations, **project overrides global with deep-merge** (nested objects merg
 | `defaultModel` | string | Model id within the provider. |
 | `defaultTeam` | string | Last user-selected team. Charset `[A-Za-z0-9_-]{1,32}`. |
 | `defaultEffort` | string | Default reasoning effort: one of `off` \| `low` \| `medium` \| `high` \| `max`. Absent means `off`. Applied at team load and live to running agents inheriting it. |
+| `compaction` | object | Overrides for automatic context compaction — `enabled` (boolean), `reserveTokens` / `keepRecentTokens` (positive integers). Each absent field falls back to pi's defaults; read at each compaction trigger (`06-agent-model.md`, "Compaction"). |
 
 **Unknown field policy.** Unrecognized top-level fields are tolerated (warned, ignored) so future versions can land new settings without breaking old files. Unrecognized *values* for recognized fields follow the same policy — e.g. an unknown `defaultProvider` is WARN+ignore (treated as absent; model resolution falls through and may surface `NO_MODEL_ERROR` at team load). Shape errors (e.g. `defaultProvider: 42`) are a hard fail — malformed input, not an unfamiliar value.
 
@@ -52,10 +53,15 @@ export interface Settings {
   readonly defaultTeam?: string;
   readonly defaultEffort?: EffortLevel;
   readonly modelFilters?: ReadonlyArray<string>;
+  readonly compaction?: {
+    readonly enabled?: boolean;
+    readonly reserveTokens?: number;
+    readonly keepRecentTokens?: number;
+  };
 }
 ```
 
-Each field may be absent (the user has not run `jie model` yet); the resolution chains below treat absent as "fall through to the next source". The platform never persists its own fields — the only writers are the `setDefaultProvider` / `setDefaultTeam` / `setDefaultEffort` / `setModelFilters` commands (CLI `jie model` / `jie team`, TUI `/model` / `/effort` / `/model-filter`). `setDefaultProvider` writes the `defaultProvider`/`defaultModel` pair to the project `settings.json` when it defines either of the two keys, else to the global file — the project file shadows the global one field-by-field, so a global write while the project defines either key would be partially or fully ineffective. `modelFilters` holds case-insensitive substring patterns that narrow the TUI's `/model` candidate list; it does not affect model resolution.
+Each field may be absent (the user has not run `jie model` yet); the resolution chains below treat absent as "fall through to the next source". The platform never persists its own fields — the only writers are the `setDefaultProvider` / `setDefaultTeam` / `setDefaultEffort` / `setModelFilters` commands (CLI `jie model` / `jie team`, TUI `/model` / `/effort` / `/model-filter`). `setDefaultProvider` writes the `defaultProvider`/`defaultModel` pair to the project `settings.json` when it defines either of the two keys, else to the global file — the project file shadows the global one field-by-field, so a global write while the project defines either key would be partially or fully ineffective. `modelFilters` holds case-insensitive substring patterns that narrow the TUI's `/model` candidate list; it does not affect model resolution. `compaction` is likewise hand-edited — no command writes it; the compactor reads it at each trigger ("Compaction" in `06-agent-model.md`), so an edit applies at the next compaction without `/reload`.
 
 ## Team Selection
 
@@ -244,6 +250,7 @@ The platform validates settings at startup. **Hard fail (exit 1):**
 | `settings.json` JSON parse error | Line/column from the parser. |
 | `defaultProvider` / `defaultModel` wrong JSON shape | `<field> must be a string` |
 | `defaultTeam` outside `[A-Za-z0-9_-]{1,32}` | `invalid defaultTeam: <value>` |
+| `compaction` not an object, `enabled` not a boolean, or `reserveTokens` / `keepRecentTokens` not a positive integer | `compaction must be an object` / `compaction.<field> must be a boolean` / `compaction.<field> must be a positive integer` |
 | `--team <id>` not installed | `TEAM_NOT_FOUND` — `team '<id>' not found` |
 | `models.json` malformed | `INVALID_CONFIG` with the file path and parser message |
 

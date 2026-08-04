@@ -1,5 +1,5 @@
 import { asFunction, type AwilixContainer } from "awilix";
-import type { ModelRegistry } from "../config";
+import type { ModelRegistry, SettingsStore } from "../config";
 import type { EventManager } from "../event";
 import type { HookRunner } from "../hooks";
 import type { SkillManager } from "../skills";
@@ -22,8 +22,12 @@ export function registerCoreModule(container: AwilixContainer<PlatformCradle>): 
       hookRunner: HookRunner,
       cwd: string,
       modelRegistry: ModelRegistry,
+      settingsStore: SettingsStore,
     ) => {
-      const compactor = new CompactorImpl({ memory: memoryManager });
+      const compactor = new CompactorImpl({
+        memory: memoryManager,
+        getSettings: () => settingsStore.load().compaction,
+      });
       return (params: AgentBodyParams): AgentBody =>
         new JieAgentBody(params, {
           eventManager,

@@ -1,7 +1,7 @@
 import { asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
-import type { ModelRegistry } from "../config";
+import type { ModelRegistry, SettingsStore } from "../config";
 import type { PlatformCradle } from "../container";
 import { Events, type EventEnvelope, type EventManager, type EventType } from "../event";
 import type { HookRunner } from "../hooks";
@@ -69,6 +69,14 @@ const modelRegistry = vi.mocked<ModelRegistry>({
   reload: vi.fn(),
 });
 
+const settingsStore = vi.mocked<SettingsStore>({
+  load: vi.fn(() => ({})),
+  setDefaultProvider: vi.fn(),
+  setDefaultEffort: vi.fn(),
+  setDefaultTeam: vi.fn(),
+  setModelFilters: vi.fn(),
+});
+
 function bootedContainer(): AwilixContainer<PlatformCradle> {
   const container = createContainer<PlatformCradle>({ injectionMode: InjectionMode.CLASSIC });
   container.register({
@@ -81,6 +89,7 @@ function bootedContainer(): AwilixContainer<PlatformCradle> {
     hookRunner: asValue(hookRunner),
     cwd: asValue("/work"),
     modelRegistry: asValue(modelRegistry),
+    settingsStore: asValue(settingsStore),
   });
   registerCoreModule(container);
   return container;
@@ -164,6 +173,13 @@ describe("registerCoreModule", () => {
   test("registers a singleton factory", () => {
     const container = bootedContainer();
     expect(container.cradle.agentBodyFactory).toBe(container.resolve("agentBodyFactory"));
+  });
+
+  test("does not snapshot settings at body construction so compaction settings stay live", () => {
+    const container = bootedContainer();
+    const body = container.cradle.agentBodyFactory(makeParams());
+    expect(settingsStore.load).not.toHaveBeenCalled();
+    body.stop();
   });
 
   test("wires resolveModel from modelRegistry so user.model.update hot-swaps the agent model", async () => {
