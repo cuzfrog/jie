@@ -2,6 +2,7 @@ import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
+import type { FileMutationQueue } from "./file-mutation-queue";
 import { mapErrno, resolveWithinWorkspace } from "./path-utils";
 import { renderUnifiedDiff } from "./unified-diff";
 
@@ -17,6 +18,7 @@ rewrites). Text only; UTF-8.`;
 
 interface EditDeps {
   workspaceRoot: string;
+  fileMutationQueue: FileMutationQueue;
 }
 
 const ERRNO_MAP: Record<string, JiePlatformErrorCode> = {
@@ -89,60 +91,64 @@ export function createEditTool(dependencies: EditDeps): Tool<EditInput> {
     },
     async execute(input: EditInput): Promise<ToolResult> {
       const realPath = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
-      let stat;
-      try {
-        stat = statSync(realPath);
-      } catch (error) {
-        throw mapErrno(error, ERRNO_MAP);
-      }
-      if (stat.isDirectory()) {
-        throw new JiePlatformError("IS_A_DIRECTORY", { detail: input.path });
-      }
-
-      const bytes = new Uint8Array(readFileSync(realPath));
-      let decoded: string;
-      try {
-        decoded = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
-      } catch {
-        throw new JiePlatformError("UNSUPPORTED_ENCODING", { detail: input.path });
-      }
-
-      const bom = decoded.startsWith("\uFEFF") ? "\uFEFF" : "";
-      const raw = decoded.slice(bom.length);
-      const lineEnding = detectLineEnding(raw);
-      const before = normalizeToLF(raw);
-      const replaceAll = input.replace_all === true;
-      const edits = input.edits.map((edit) => ({
-        needle: normalizeToLF(edit.old_string),
-        replacement: normalizeToLF(edit.new_string),
-      }));
-      const spans = matchEdits(before, edits, input.path, replaceAll);
-      const edited = applySpans(before, spans);
-      const after = bom + restoreLineEndings(edited, lineEnding);
-
-      try {
-        writeFileSync(realPath, after, "utf-8");
-      } catch (error) {
-        throw mapErrno(error, ERRNO_MAP);
-      }
-
-      const replacementsCount = spans.length;
-      const beforeBytes = new TextEncoder().encode(decoded).length;
-      const afterBytes = new TextEncoder().encode(after).length;
-      const diff = renderUnifiedDiff(before, edited);
-      const content = `Edited ${input.path}: ${replacementsCount} replacement${replacementsCount === 1 ? "" : "s"}`;
-      const details: EditResultDetails = {
-        kind: "diff",
-        path: input.path,
-        replacementsCount,
-        beforeBytes,
-        afterBytes,
-        diff,
-      };
-
-      return { content, details };
+      return dependencies.fileMutationQueue.run(realPath, () => applyEdits(input, realPath));
     },
   };
+}
+
+async function applyEdits(input: EditInput, realPath: string): Promise<ToolResult> {
+  let stat;
+  try {
+    stat = statSync(realPath);
+  } catch (error) {
+    throw mapErrno(error, ERRNO_MAP);
+  }
+  if (stat.isDirectory()) {
+    throw new JiePlatformError("IS_A_DIRECTORY", { detail: input.path });
+  }
+
+  const bytes = new Uint8Array(readFileSync(realPath));
+  let decoded: string;
+  try {
+    decoded = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+  } catch {
+    throw new JiePlatformError("UNSUPPORTED_ENCODING", { detail: input.path });
+  }
+
+  const bom = decoded.startsWith("\uFEFF") ? "\uFEFF" : "";
+  const raw = decoded.slice(bom.length);
+  const lineEnding = detectLineEnding(raw);
+  const before = normalizeToLF(raw);
+  const replaceAll = input.replace_all === true;
+  const edits = input.edits.map((edit) => ({
+    needle: normalizeToLF(edit.old_string),
+    replacement: normalizeToLF(edit.new_string),
+  }));
+  const spans = matchEdits(before, edits, input.path, replaceAll);
+  const edited = applySpans(before, spans);
+  const after = bom + restoreLineEndings(edited, lineEnding);
+
+  try {
+    writeFileSync(realPath, after, "utf-8");
+  } catch (error) {
+    throw mapErrno(error, ERRNO_MAP);
+  }
+
+  const replacementsCount = spans.length;
+  const beforeBytes = new TextEncoder().encode(decoded).length;
+  const afterBytes = new TextEncoder().encode(after).length;
+  const diff = renderUnifiedDiff(before, edited);
+  const content = `Edited ${input.path}: ${replacementsCount} replacement${replacementsCount === 1 ? "" : "s"}`;
+  const details: EditResultDetails = {
+    kind: "diff",
+    path: input.path,
+    replacementsCount,
+    beforeBytes,
+    afterBytes,
+    diff,
+  };
+
+  return { content, details };
 }
 
 interface ReplacementSpan {

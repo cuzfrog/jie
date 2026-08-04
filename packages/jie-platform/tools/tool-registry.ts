@@ -1,6 +1,7 @@
 import type { Tool } from "./types";
 import { createBashTool } from "./bash";
 import { createEditTool } from "./edit";
+import { createFileMutationQueue } from "./file-mutation-queue";
 import { createNotifyTool } from "./notify";
 import { createReadArtifactTool } from "./read-artifact";
 import { createReadFileTool } from "./read-file";
@@ -56,11 +57,12 @@ interface BuiltinTool {
 }
 
 function builtins(workspaceRoot: string, eventManager: EventManager, artifactStore: ArtifactStore): BuiltinTool[] {
+  const fileMutationQueue = createFileMutationQueue();
   return [
     { name: "bash", tool: createBashTool({ workspaceRoot }) as Tool },
     { name: "read_file", tool: createReadFileTool({ workspaceRoot }) as Tool },
-    { name: "write_file", tool: createWriteFileTool({ workspaceRoot }) as Tool },
-    { name: "edit", tool: createEditTool({ workspaceRoot }) as Tool },
+    { name: "write_file", tool: createWriteFileTool({ workspaceRoot, fileMutationQueue }) as Tool },
+    { name: "edit", tool: createEditTool({ workspaceRoot, fileMutationQueue }) as Tool },
     { name: "read_artifact", tool: createReadArtifactTool({ artifactStore }) as Tool },
     { name: "write_artifact", tool: createWriteArtifactTool({ artifactStore }) as Tool },
     { name: "kanban_write", tool: createKanbanWriteTool() as Tool },
