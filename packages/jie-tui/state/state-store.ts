@@ -27,6 +27,7 @@ const INITIAL_TUI_STATE: TuiState = Object.freeze({
   teamPanelVisible: false,
   pendingQuit: false,
   editorText: "",
+  editorCursorAtStart: true,
 } as const);
 
 /** a subscriber can perform side effect */

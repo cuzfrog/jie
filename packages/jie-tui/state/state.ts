@@ -84,6 +84,7 @@ export interface TuiState {
   readonly teamPanelVisible: boolean;
   readonly pendingQuit: boolean;
   readonly editorText: string;
+  readonly editorCursorAtStart: boolean;
 }
 
 function getFocusedAgent(state: TuiState): AgentUiState | null {

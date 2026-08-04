@@ -51,6 +51,9 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
       return state;
     case ActionTypes.SET_EDITOR_TEXT:
       return { ...state, editorText: action.payload.text };
+    case ActionTypes.SET_EDITOR_CURSOR_AT_START:
+      if (state.editorCursorAtStart === action.payload.atStart) return state;
+      return { ...state, editorCursorAtStart: action.payload.atStart };
     case ActionTypes.SUBMIT_EDITOR_TEXT:
       if (state.interruptedAgentId === null) return state;
       return { ...state, interruptedAgentId: null };

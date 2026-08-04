@@ -21,6 +21,7 @@ export const ActionTypes = {
   REQUEST_QUIT: "[ui] request quit",
   REQUEST_RENDER: "[ui] request render",
   SET_EDITOR_TEXT: "[ui] set editor text",
+  SET_EDITOR_CURSOR_AT_START: "[ui] set editor cursor at start",
   SUBMIT_EDITOR_TEXT: "[ui] submit editor text",
   REQUEST_INTERRUPT: "[ui] request interrupt focused agent",
   REQUEST_DEQUEUE: "[ui] request dequeue queued prompt",
@@ -66,6 +67,7 @@ export const Actions = {
 	requestQuit: () => createAction(ActionTypes.REQUEST_QUIT),
 	requestRender: () => createAction(ActionTypes.REQUEST_RENDER),
 	setEditorText: (text: string) => createAction(ActionTypes.SET_EDITOR_TEXT, { text }),
+	setEditorCursorAtStart: (atStart: boolean) => createAction(ActionTypes.SET_EDITOR_CURSOR_AT_START, { atStart }),
 	submitEditorText: (text: string) => createAction(ActionTypes.SUBMIT_EDITOR_TEXT, { text }),
 	requestInterrupt: (teamId: string, agentKey: string) =>
 		createAction(ActionTypes.REQUEST_INTERRUPT, { teamId, agentKey }),

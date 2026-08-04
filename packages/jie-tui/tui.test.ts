@@ -301,7 +301,7 @@ describe("bootTui — global keys", () => {
     await started;
   });
 
-  test("ctrl+down toggles the team panel; arrows move the cursor; enter commits it to the focused agent", async () => {
+  test("left at the editor start toggles the team panel; arrows move the cursor; enter commits it to the focused agent", async () => {
     let harness: TuiHarness | null = null;
     withTTY(true, () => {
       harness = bootHarness();
@@ -311,7 +311,8 @@ describe("bootTui — global keys", () => {
     harness!.platform.emit(TWO_AGENT_TEAM);
     await waitFrames(20);
     expect(harness!.stateStore.getState().focusedAgentId).toBe("my-team:manager-1");
-    harness!.stdin.write("\x1b[1;5B");
+    expect(harness!.stateStore.getState().editorCursorAtStart).toBe(true);
+    harness!.stdin.write("\x1b[D");
     await waitFrames(20);
     expect(harness!.stateStore.getState().teamPanelVisible).toBe(true);
     expect(harness!.stateStore.getState().teamCursorAgentId).toBe("my-team:manager-1");
@@ -322,10 +323,36 @@ describe("bootTui — global keys", () => {
     harness!.stdin.write("\r");
     await waitFrames(20);
     expect(harness!.stateStore.getState().focusedAgentId).toBe("my-team:worker-1");
-    harness!.stdin.write("\x1b[1;5B");
+    harness!.stdin.write("\x1b[D");
     await waitFrames(20);
     expect(harness!.stateStore.getState().teamPanelVisible).toBe(false);
     expect(harness!.stateStore.getState().teamCursorAgentId).toBeNull();
+    harness!.tui.stop();
+    await started;
+  });
+
+  test("left away from the editor start moves the cursor without toggling the team panel", async () => {
+    let harness: TuiHarness | null = null;
+    withTTY(true, () => {
+      harness = bootHarness();
+    });
+    const started = harness!.tui.start();
+    await waitFrames(30);
+    harness!.platform.emit(TWO_AGENT_TEAM);
+    await waitFrames(20);
+    harness!.stdin.write("hi");
+    await waitFrames(20);
+    expect(harness!.stateStore.getState().editorCursorAtStart).toBe(false);
+    harness!.stdin.write("\x1b[D");
+    await waitFrames(20);
+    expect(harness!.stateStore.getState().teamPanelVisible).toBe(false);
+    expect(harness!.stateStore.getState().editorCursorAtStart).toBe(false);
+    harness!.stdin.write("\x1b[D");
+    await waitFrames(20);
+    expect(harness!.stateStore.getState().editorCursorAtStart).toBe(true);
+    harness!.stdin.write("\x1b[D");
+    await waitFrames(20);
+    expect(harness!.stateStore.getState().teamPanelVisible).toBe(true);
     harness!.tui.stop();
     await started;
   });

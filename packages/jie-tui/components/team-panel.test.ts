@@ -28,14 +28,15 @@ describe("TeamPanel", () => {
     expect(new TeamPanel(stateStore).render(80)).toEqual([]);
   });
 
-  test("draws a border line and dim column titles above one row per agent", () => {
+  test("draws a thin full box around dim column titles above one row per agent", () => {
     stateStore.getState.mockReturnValue(teamState({ focusedAgentId: LEADER_ID }));
     const lines = new TeamPanel(stateStore).render(120);
-    expect(lines[0]).toBe(style("borderMuted")("─".repeat(120)));
+    expect(lines[0]).toBe(style("borderMuted")(`┌${"─".repeat(118)}┐`));
+    expect(lines[4]).toBe(style("borderMuted")(`└${"─".repeat(118)}┘`));
     for (const title of ["agent", "ctx", "tools", "subscribe", "model"]) expect(lines[1]).toContain(style("dim")(title));
-    expect(lines.length).toBe(4);
-    expect(stripAnsi(lines[2]).startsWith("▸ general-1 leader")).toBe(true);
-    expect(stripAnsi(lines[3]).startsWith("  coder-1")).toBe(true);
+    expect(lines.length).toBe(5);
+    expect(stripAnsi(lines[2]).startsWith("│ ▸ general-1 leader")).toBe(true);
+    expect(stripAnsi(lines[3]).startsWith("│   coder-1")).toBe(true);
   });
 
   test("identifies the leader with a dim label instead of a mark, and drops the role from the identity", () => {
@@ -47,7 +48,7 @@ describe("TeamPanel", () => {
       expect(line).not.toContain("★");
       expect(line).not.toContain("·");
     }
-    expect(stripAnsi(text[3]).startsWith("  coder-1")).toBe(true);
+    expect(stripAnsi(text[3]).startsWith("│   coder-1")).toBe(true);
   });
 
   test("points at the team cursor while keeping the focused agent key highlighted", () => {
@@ -62,15 +63,15 @@ describe("TeamPanel", () => {
   test("without a cursor the pointer follows the focused agent", () => {
     stateStore.getState.mockReturnValue(teamState({ focusedAgentId: WORKER_ID }));
     const text = new TeamPanel(stateStore).render(120).map(stripAnsi);
-    expect(text[2].startsWith("  general-1 leader")).toBe(true);
-    expect(text[3].startsWith("▸ coder-1")).toBe(true);
+    expect(text[2].startsWith("│   general-1 leader")).toBe(true);
+    expect(text[3].startsWith("│ ▸ coder-1")).toBe(true);
   });
 
   test("shows no pointer when neither cursor nor focus is set", () => {
     stateStore.getState.mockReturnValue(teamState({ focusedAgentId: null }));
     const text = new TeamPanel(stateStore).render(120).map(stripAnsi);
-    expect(text[2].startsWith("  general-1 leader")).toBe(true);
-    expect(text[3].startsWith("  coder-1")).toBe(true);
+    expect(text[2].startsWith("│   general-1 leader")).toBe(true);
+    expect(text[3].startsWith("│   coder-1")).toBe(true);
   });
 
   test("shows context right after the key, then tools, subscriptions, and the full model segment", () => {
@@ -86,20 +87,20 @@ describe("TeamPanel", () => {
     expect(row).toContain("25%/128k");
     expect(row).toContain("notify read_file");
     expect(row).toContain("task.recorded");
-    expect(row.trimEnd().endsWith("(local) qwen3.5-4b | medium")).toBe(true);
+    expect(row.endsWith("(local) qwen3.5-4b | medium │")).toBe(true);
     expect(row.indexOf("25%/128k")).toBeLessThan(row.indexOf("notify read_file"));
     expect(row.indexOf("notify read_file")).toBeLessThan(row.indexOf("task.recorded"));
   });
 
-  test("right-aligns the model column at the screen edge and pads every line to the full width", () => {
+  test("right-aligns the model column one cell inside the box and pads every line to the full width", () => {
     stateStore.getState.mockReturnValue(teamState({ focusedAgentId: LEADER_ID }, {
       [LEADER_ID]: { model: { provider: "local", id: "qwen3.5-4b", effort: "medium", contextWindow: 128000 } },
     }));
     const lines = new TeamPanel(stateStore).render(160);
     for (const line of lines) expect(visibleWidth(line)).toBe(160);
-    expect(stripAnsi(lines[1]).trimEnd().endsWith("model")).toBe(true);
-    expect(stripAnsi(lines[2]).trimEnd().endsWith("(local) qwen3.5-4b | medium")).toBe(true);
-    expect(stripAnsi(lines[3]).trimEnd().endsWith("—")).toBe(true);
+    expect(stripAnsi(lines[1]).endsWith("model │")).toBe(true);
+    expect(stripAnsi(lines[2]).endsWith("(local) qwen3.5-4b | medium │")).toBe(true);
+    expect(stripAnsi(lines[3]).endsWith("— │")).toBe(true);
   });
 
   test("left-aligns the middle columns across rows of differing widths", () => {
@@ -121,14 +122,14 @@ describe("TeamPanel", () => {
       },
     }));
     const panel = new TeamPanel(stateStore);
-    const wide = stripAnsi(panel.render(100)[2]);
+    const wide = stripAnsi(panel.render(104)[2]);
     expect(wide).toContain("25%/128k");
     expect(wide).toContain("alpha beta gamma");
     expect(wide).not.toContain("task.review_passed");
-    const medium = stripAnsi(panel.render(70)[2]);
+    const medium = stripAnsi(panel.render(74)[2]);
     expect(medium).toContain("25%/128k");
     expect(medium).not.toContain("alpha");
-    const narrow = stripAnsi(panel.render(60)[2]);
+    const narrow = stripAnsi(panel.render(64)[2]);
     expect(narrow).not.toContain("25%/128k");
     expect(narrow).toContain("general-1 leader");
     expect(narrow).toContain("| medium");
@@ -140,7 +141,7 @@ describe("TeamPanel", () => {
     }));
     const row = stripAnsi(new TeamPanel(stateStore).render(40)[2]);
     expect(visibleWidth(row)).toBeLessThanOrEqual(40);
-    expect(row.startsWith("▸ general-1 leader")).toBe(true);
+    expect(row.startsWith("│ ▸ general-1 leader")).toBe(true);
   });
 
   test("shows a spinner frame for a busy agent", () => {

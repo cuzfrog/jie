@@ -23,6 +23,7 @@ export function makeTuiState(overrides: Partial<TuiState> = {}): TuiState {
     teamPanelVisible: false,
     pendingQuit: false,
     editorText: "",
+    editorCursorAtStart: true,
     ...overrides,
   };
 }

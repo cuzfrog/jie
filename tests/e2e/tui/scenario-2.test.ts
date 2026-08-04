@@ -61,12 +61,12 @@ describe("Scenario 2 — pass work in a team", () => {
     expect(readFileSync(join(harness.dir, "my-answer.txt"), "utf8")).toBe("Hello world");
   });
 
-  test("ctrl+down toggles the team strip; arrows move its cursor; enter commits the focus", async () => {
+  test("left at the editor start toggles the team panel; arrows move its cursor; enter commits the focus", async () => {
     await sendLine(harness.stdin, "/team my-team");
     await waitForTeam(harness, "my-team");
     await waitForFocusedAgent(harness, "my-team:manager-1");
     const before = snapshotConversations(harness);
-    await sendCmd(harness.stdin, "\x1b[1;5B");
+    await sendCmd(harness.stdin, "\x1b[D");
     await waitForUi(harness, (state) => state.teamPanelVisible, "team panel visible");
     await sendCmd(harness.stdin, "\x1b[B");
     await waitForUi(harness, (state) => state.teamCursorAgentId === "my-team:worker-1", "cursor on worker-1");
@@ -77,7 +77,7 @@ describe("Scenario 2 — pass work in a team", () => {
     await waitForUi(harness, (state) => state.teamCursorAgentId === "my-team:manager-1", "cursor on manager-1");
     await sendCmd(harness.stdin, "\r");
     await waitForFocusedAgent(harness, "my-team:manager-1");
-    await sendCmd(harness.stdin, "\x1b[1;5B");
+    await sendCmd(harness.stdin, "\x1b[D");
     await waitForUi(harness, (state) => !state.teamPanelVisible, "team panel hidden");
     expect(snapshotConversations(harness)).toEqual(before);
   });
