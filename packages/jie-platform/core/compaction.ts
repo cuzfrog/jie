@@ -87,9 +87,11 @@ export class CompactorImpl implements Compactor {
     if (storedCount !== input.messages.length) {
       throw new Error(`history out of sync with storage: ${storedCount} stored rows, ${input.messages.length} messages`);
     }
+    const prefixBudget = summaryPrefixBudget(input.model, settings.reserveTokens);
+    const summarizedPrefix = fitMessages(input.messages.slice(0, preparation.firstKeptIndex), prefixBudget);
     const summaryText = await this.summarize({
       systemPrompt: SUMMARIZATION_SYSTEM_PROMPT,
-      userPrompt: buildSummaryPrompt(input.messages.slice(0, preparation.firstKeptIndex), preparation.previousSummary),
+      userPrompt: buildSummaryPrompt(summarizedPrefix, preparation.previousSummary),
       model: input.model,
       apiKey: input.apiKey,
       maxTokens: summaryMaxTokens(input.model, settings.reserveTokens),
@@ -162,6 +164,10 @@ function buildSummaryPrompt(summarized: ReadonlyArray<AgentMessage>, previousSum
   if (previousSummary !== null) prompt += `<previous-summary>\n${previousSummary}\n</previous-summary>\n\n`;
   prompt += previousSummary !== null ? UPDATE_SUMMARIZATION_PROMPT : SUMMARIZATION_PROMPT;
   return prompt;
+}
+
+function summaryPrefixBudget(model: Model<Api>, reserveTokens: number): number {
+  return Math.max(model.contextWindow - summaryMaxTokens(model, reserveTokens) - SUMMARY_PROMPT_SLACK, 0);
 }
 
 function summaryMaxTokens(model: Model<Api>, reserveTokens: number): number {
@@ -311,6 +317,8 @@ function truncateText(text: string, allowance: number): string {
   if (allowance >= text.length) return text;
   return text.slice(0, allowance) + TRUNCATION_MARKER;
 }
+
+const SUMMARY_PROMPT_SLACK = 2048;
 
 const TRUNCATION_MARKER = "[content truncated to fit the context window]";
 

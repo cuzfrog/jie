@@ -10,6 +10,7 @@ import type { Settings } from "../config";
 import type { MemoryManager } from "../storage";
 
 const BIG = "x".repeat(100_000);
+const HUGE = "y".repeat(200_000);
 const THRESHOLD_WINDOW = 30_000;
 
 type CompactionOverrides = NonNullable<Settings["compaction"]>;
@@ -351,10 +352,23 @@ describe("CompactorImpl.compact", () => {
     expect(await compactor.compact(makeInput(messages))).not.toBeNull();
     expect(summarize).toHaveBeenCalledTimes(1);
   });
+
+  test("caps the summarized prefix so an oversized prefix message cannot overflow the summarization call", async () => {
+    const memory = makeMemory();
+    const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
+    const compactor = makeCompactor(memory, summarize, () => ({ keepRecentTokens: 2 }));
+    const messages = [userMsg(HUGE, 0), assistantMsg("a", 1000), userMsg("b", 2000), assistantMsg("c", 3000)];
+    memory.restore.mockResolvedValue([...messages]);
+    const result = await compactor.compact(makeInput(messages));
+    expect(result?.firstKeptIndex).toBe(2);
+    expect(summarize).toHaveBeenCalledTimes(1);
+    const prompt = summarize.mock.calls[0]![0]!.userPrompt;
+    expect(prompt).toContain("[content truncated to fit the context window]");
+    expect(prompt).not.toContain(HUGE);
+  });
 });
 
 describe("CompactorImpl.fitToWindow", () => {
-  const HUGE = "y".repeat(200_000);
   const MARKER = "[content truncated to fit the context window]";
 
   function totalTokens(messages: ReadonlyArray<AgentMessage>): number {
