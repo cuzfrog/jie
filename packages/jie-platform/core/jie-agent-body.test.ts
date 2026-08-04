@@ -537,6 +537,24 @@ describe("JieAgentBody — agent construction wiring", () => {
     expect(first.text).toContain("the summary");
   });
 
+  test("transformContext fits the history through compactor.fitToWindow with the live agent model", async () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    type FitToWindow = (messages: ReadonlyArray<AgentMessage>, model: Model<Api>) => ReadonlyArray<AgentMessage>;
+    const fitToWindow = vi.fn<FitToWindow>((messages) => messages);
+    const compactor: Compactor = { compact: async () => null, fitToWindow };
+    h.makeBody({ factory: cap.factory, compactor, model: makeModel("anthropic", "claude-sonnet-4") });
+    const transform = cap.lastOpts()?.transformContext;
+    if (transform === undefined) throw new Error("transformContext not provided");
+    const hotSwapped = makeModel("lm-studio", "qwen3.5-2b");
+    cap.fake.state.model = hotSwapped;
+    const messages: AgentMessage[] = [{ role: "user", content: "hi", timestamp: 0 }];
+    const result = await transform(messages);
+    expect(fitToWindow).toHaveBeenCalledWith(messages, hotSwapped);
+    expect(result).not.toBe(messages);
+    expect(result).toEqual(messages);
+  });
+
   test("assigns soul.systemPrompt, model and adapted tools onto agent.state", () => {
     const h = makeHarness();
     const cap = makeFakeAgentFactory();
