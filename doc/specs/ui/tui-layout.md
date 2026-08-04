@@ -112,7 +112,7 @@ left: "0%/200k"  [queue]     right: "(<provider>) <modelId> | <effort>"
 
 - **Stats** (left): context usage for the focused agent, e.g. `12%/200k`, colored `muted` → `warning` at 70% → `error` at 90%. Sourced from `agent.usage` events (`contextTokensUsed` per `tui-state.md`); `—` when no agent or model is focused.
 - **Queue** (conditional): `N prompt(s) queued` + next-prompt preview when the focused agent's queue is non-empty, in `warning`. Absent otherwise. See `tui-state.md` "agent.prompt.queue.update".
-- **Right**: the focused agent's `(provider) modelId | effort`, `muted` with the model id in `accent`; `—` when no agent is focused. Cycling focus swaps this segment. It reflects the focused agent's *running* model: `/model` sets the default for teams loaded thereafter and does not hot-swap a running agent, so the model part updates at the next team load; `/effort` updates the effort part live (`tui-shortcuts.md`).
+- **Right**: the focused agent's `(provider) modelId | effort`, `muted` with the model id in `accent`; `—` when no agent is focused. Cycling focus swaps this segment. It reflects the focused agent's *running* model: `/model` and `/effort` both update it live for agents inheriting the default (the resync rides `agent.model.assigned`); agents whose soul pins a model keep their pinned model across `/model` (`tui-shortcuts.md`).
 
 ## Borders
 

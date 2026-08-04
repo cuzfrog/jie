@@ -55,7 +55,7 @@ export interface Settings {
 }
 ```
 
-Each field may be absent (the user has not run `jie model` yet); the resolution chains below treat absent as "fall through to the next source". The platform never persists its own fields — the only writers are the `setDefaultProvider` / `setDefaultTeam` / `setDefaultEffort` / `setModelFilters` commands (CLI `jie model` / `jie team`, TUI `/model` / `/effort` / `/model-filter`). `modelFilters` holds case-insensitive substring patterns that narrow the TUI's `/model` candidate list; it does not affect model resolution.
+Each field may be absent (the user has not run `jie model` yet); the resolution chains below treat absent as "fall through to the next source". The platform never persists its own fields — the only writers are the `setDefaultProvider` / `setDefaultTeam` / `setDefaultEffort` / `setModelFilters` commands (CLI `jie model` / `jie team`, TUI `/model` / `/effort` / `/model-filter`). `setDefaultProvider` writes the `defaultProvider`/`defaultModel` pair to the project `settings.json` when it defines either of the two keys, else to the global file — the project file shadows the global one field-by-field, so a global write while the project defines either key would be partially or fully ineffective. `modelFilters` holds case-insensitive substring patterns that narrow the TUI's `/model` candidate list; it does not affect model resolution.
 
 ## Team Selection
 
@@ -91,7 +91,7 @@ TUI `/team <id>` does **not** persist; it hot-loads the team in the running sess
 
 ### Setting `defaultEffort`
 
-TUI `/effort <level>` executes `setDefaultEffort`, writing `defaultEffort` to the **global** `settings.json` (like `setDefaultProvider`). `/effort` with no argument executes `getDefaultEffort` and shows the current default (`off` when absent). The value applies at team load — `TeamManager.load` reads the merged setting and threads it into `AgentBodyParams.effort` — and immediately to every live agent inheriting the default: the command publishes `user.effort.update` after the write, and each body applies it (`06-agent-model.md`, "Effort update"). `JieAgentBody` maps effort onto the pi-agent `thinkingLevel` (`max` → `xhigh`, other levels pass through; pi's own `off` level means no extended thinking) and reports it through `agent.model.assigned` and `ModelInfo.effort`. Out-of-vocabulary values in the file hard-fail `INVALID_CONFIG` (closed vocabulary, like the `defaultTeam` charset).
+TUI `/effort <level>` executes `setDefaultEffort`, writing `defaultEffort` to the **global** `settings.json` (effort has no scope rule, unlike `setDefaultProvider` — see "`settings.json`" above). `/effort` with no argument executes `getDefaultEffort` and shows the current default (`off` when absent). The value applies at team load — `TeamManager.load` reads the merged setting and threads it into `AgentBodyParams.effort` — and immediately to every live agent inheriting the default: the command publishes `user.effort.update` after the write, and each body applies it (`06-agent-model.md`, "Effort update"). `JieAgentBody` maps effort onto the pi-agent `thinkingLevel` (`max` → `xhigh`, other levels pass through; pi's own `off` level means no extended thinking) and reports it through `agent.model.assigned` and `ModelInfo.effort`. Out-of-vocabulary values in the file hard-fail `INVALID_CONFIG` (closed vocabulary, like the `defaultTeam` charset).
 
 ### Team Swap (TUI)
 
@@ -311,7 +311,7 @@ Per-soul at team load (`TeamManager.loadImpl`), before any body is constructed; 
 
 An agent with no `model:` **and** no complete settings pair fails the team load with `NO_MODEL_ERROR` ("No model has been selected, please login and select a default model."). Otherwise the `provider/modelId` string (split on the first `/`) resolves through `ModelRegistry`: providers and models declared in `models.json` take precedence, falling back to pi-ai's built-in provider catalog. An unresolvable tuple (unknown provider or model, malformed string) **skips that soul silently** — a team can load with fewer agents than its blueprint declares; `system.team.loaded` carries only the agents that resolved.
 
-`jie model <provider>/<modelId>` writes global settings (`setDefaultModel`) and takes effect at the next team load — bodies fix their model at construction, so a running team is unaffected until it is (re)loaded.
+`jie model <provider>/<modelId>` (TUI `/model`) executes `setDefaultModel`: it persists the pair with the scope rule above and takes effect at the next team load; additionally the command publishes `user.model.update`, so every live body whose soul does not pin a model hot-swaps immediately ("Model update" in 06-agent-model.md). The provider must be registered (`UNKNOWN_PROVIDER` otherwise); the model id itself is not validated at command level — an unresolvable reference is ignored by bodies, mirroring the silent soul-skip at load.
 
 ### Provider Configuration: `models.json`
 
@@ -349,7 +349,7 @@ Commands that mutate persistent files:
 |---|---|---|
 | `jie login [--provider <id> --api-key <key>]` | `~/.jie/auth.json` | Interactive provider pick (OAuth or pasted key); flag form is headless. |
 | `jie logout [<provider>\|*]` | `~/.jie/auth.json` | Clears one provider, or all (`*`, the no-arg default). |
-| `jie model <provider>/<modelId>` | `~/.jie/settings.json` (global) | Splits on the first `/`. `jie model show` prints the current selection. |
+| `jie model <provider>/<modelId>` | scope-aware `settings.json` | Splits on the first `/`; project file when it defines `defaultProvider` or `defaultModel`, else global (see "`settings.json`" above). Live bodies hot-swap via `user.model.update`. |
 | `jie team <id>` | scope-aware `settings.json` | Persists `defaultTeam`; does not load the team. `jie team` prints current + installed. |
 | `jie --api-key <key>` | `~/.jie/auth.json` | Inlined login for the resolved provider. |
 

@@ -163,7 +163,7 @@ jie logout anthropic      # clear only the anthropic entry
 
 ## `jie model <provider>/<modelId>`
 
-Set the global default model. Writes to `~/.jie/settings.json` (not the project file — project overrides go in `.jie/settings.json` by hand). Applies to teams and sessions loaded thereafter — a running agent's model is not hot-swapped.
+Set the default model. Writes to the project `.jie/settings.json` when it defines `defaultProvider` or `defaultModel`, else to `~/.jie/settings.json` (`10-configuration.md`, "`settings.json`"). Applies to teams and sessions loaded thereafter; the command also publishes `user.model.update`, so in a running TUI session live agents that do not pin a model hot-swap immediately — the one-shot CLI run itself has no subscribers.
 
 ```
 jie model anthropic/claude-sonnet-4-20250514
@@ -179,13 +179,13 @@ jie model openai/gpt-4o
 ### Behavior
 
 1. Parse the argument: split on the first `/`. Both pieces must be non-empty.
-2. If `<provider>` is not a known `KnownProvider`, **WARN to stderr** (`unknown provider: <value>`) but continue — the platform's policy is to write what the user supplied; an unknown provider surfaces at model-resolution time (init-state behavior, see `10-configuration.md` Config Validation).
-3. Read the current `~/.jie/settings.json` (if any), set `defaultProvider` and `defaultModel`, deep-merge if other settings are present, write back with mode `0644`.
+2. If `<provider>` is not registered (neither a pi-ai built-in nor declared in `models.json`), print `unknown provider: <value>` to stderr and exit 1 (`UNKNOWN_PROVIDER`). The model id itself is not validated; an unresolvable model surfaces at model-resolution time (`10-configuration.md`, "Model Resolution").
+3. Read the target settings file (scope rule above), set `defaultProvider` and `defaultModel`, preserve the other fields, write back.
 4. Print `default model set to <provider>/<modelId>` and exit 0.
 
-The command does not start the team, does not load `.jie/settings.json`, and does not touch `auth.json`. Project-level overrides (`.jie/settings.json`) are not written by `jie model`; users edit that file directly.
+The command does not start the team and does not touch `auth.json`.
 
-**Exit codes:** 0 (success), 1 (malformed argument, write error).
+**Exit codes:** 0 (success), 1 (malformed argument, unknown provider, write error).
 
 ## `jie team`
 
