@@ -50,8 +50,14 @@ describe("SettingsStoreImpl", () => {
     const projectJieDir = join(cwd, ".jie");
     mkdirSync(projectJieDir, { recursive: true });
     mkdirSync(homeJieDir, { recursive: true });
-    writeFileSync(join(projectJieDir, "settings.json"), `${JSON.stringify({ defaultProvider: "openai", defaultModel: "gpt-4o", defaultEffort: "high" })}\n`);
-    writeFileSync(join(homeJieDir, "settings.json"), `${JSON.stringify({ defaultProvider: "anthropic", defaultModel: "claude-sonnet-4" })}\n`);
+    writeFileSync(
+      join(projectJieDir, "settings.json"),
+      `${JSON.stringify({ defaultProvider: "openai", defaultModel: "gpt-4o", defaultEffort: "high" })}\n`,
+    );
+    writeFileSync(
+      join(homeJieDir, "settings.json"),
+      `${JSON.stringify({ defaultProvider: "anthropic", defaultModel: "claude-sonnet-4" })}\n`,
+    );
     const store = new SettingsStoreImpl(cwd, homeJieDir, projectJieDir);
     store.setDefaultProvider("lm-studio", "qwen3.5-2b");
     expect(JSON.parse(readFileSync(join(projectJieDir, "settings.json"), "utf-8"))).toEqual({
