@@ -132,7 +132,7 @@ The union of all message types in the agent's conversation transcript.
 type AgentMessage = Message | CustomAgentMessages[keyof CustomAgentMessages];
 ```
 
-The `CustomAgentMessages` interface is extensible via TypeScript declaration merging. pi-agent-core ships it empty — there are no built-in extensions; apps add their own message roles by extending it.
+The `CustomAgentMessages` interface is extensible via TypeScript declaration merging; apps add their own message roles by extending it. pi-agent-core's harness submodule (re-exported from the package root) ships four extensions — `compactionSummary`, `branchSummary`, `bashExecution`, `custom` — of which jie uses `compactionSummary` (below); the others are unused.
 
 The base `Message` type (from `@earendil-works/pi-ai`):
 
@@ -182,6 +182,19 @@ interface ToolResultMessage<TDetails = any> {
   timestamp: number;
 }
 ```
+
+### CompactionSummaryMessage
+
+```typescript
+interface CompactionSummaryMessage {
+  role: "compactionSummary";
+  summary: string;
+  tokensBefore: number;
+  timestamp: number;               // Unix ms
+}
+```
+
+Created with `createCompactionSummaryMessage(summary, tokensBefore, timestamp)`. The harness's `convertToLlm` maps the role to a `UserMessage` whose text wraps the summary: `The conversation history before this point was compacted into the following summary:\n\n<summary>\n{summary}\n</summary>`. Jie passes this `convertToLlm` to its `Agent` (`06-agent-model.md` "Compaction") and writes the message through `memory.compact` (`08-memory.md` "Compact").
 
 ### Content Blocks
 

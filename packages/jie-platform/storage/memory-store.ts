@@ -17,7 +17,7 @@ export interface MemoryManager {
   ): void;
 
   compact(
-    compactedSeqRange: [number, number],
+    compactedCount: number,
     summary: AgentMessage,
     agentKey: string,
     sessionId: string,
@@ -70,42 +70,54 @@ export class SqliteMemoryManager implements MemoryManager {
   }
 
   compact(
-    compactedSeqRange: [number, number],
+    compactedCount: number,
     summary: AgentMessage,
     agentKey: string,
     sessionId: string,
     teamId: string,
   ): void {
     this.storage.transaction((s) => {
-      const rows = s.query(
-        `SELECT COALESCE(MAX(seq), 0) + 1 FROM memory_turns
+      s.exec(
+        `UPDATE memory_turns SET compacted = 1
+         WHERE team_id = ? AND agent_key = ? AND session_id = ? AND compacted = 0
+           AND seq IN (
+             SELECT seq FROM memory_turns
+             WHERE team_id = ? AND agent_key = ? AND session_id = ? AND compacted = 0
+             ORDER BY seq LIMIT ?)`,
+        [teamId, agentKey, sessionId, teamId, agentKey, sessionId, compactedCount],
+      );
+      const tail = s.query(
+        `SELECT seq, role, content, created_at FROM memory_turns
+         WHERE team_id = ? AND agent_key = ? AND session_id = ? AND compacted = 0
+         ORDER BY seq`,
+        [teamId, agentKey, sessionId],
+      );
+      s.exec(
+        `DELETE FROM memory_turns
+         WHERE team_id = ? AND agent_key = ? AND session_id = ? AND compacted = 0`,
+        [teamId, agentKey, sessionId],
+      );
+      const prefix = s.query(
+        `SELECT COALESCE(MAX(seq), 0) FROM memory_turns
          WHERE team_id = ? AND agent_key = ? AND session_id = ?`,
         [teamId, agentKey, sessionId],
       );
-      const summarySeq = rows[0]![0] as number;
-      const summaryContent = JSON.stringify(summary);
-      const summaryRole = (summary as { role: string }).role;
-      const summaryCreatedAt = new Date().toISOString();
+      let nextSeq = (prefix[0]![0] as number) + 1;
       s.exec(
         `INSERT INTO memory_turns
            (team_id, session_id, agent_key, seq, role, content, compacted, created_at)
          VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
-        [
-          teamId,
-          sessionId,
-          agentKey,
-          summarySeq,
-          summaryRole,
-          summaryContent,
-          summaryCreatedAt,
-        ],
+        [teamId, sessionId, agentKey, nextSeq, (summary as { role: string }).role, JSON.stringify(summary), new Date().toISOString()],
       );
-      s.exec(
-        `UPDATE memory_turns SET compacted = 1
-         WHERE team_id = ? AND agent_key = ? AND session_id = ?
-           AND seq BETWEEN ? AND ?`,
-        [teamId, agentKey, sessionId, compactedSeqRange[0], compactedSeqRange[1]],
-      );
+      for (const row of tail) {
+        nextSeq += 1;
+        s.exec(
+          `INSERT INTO memory_turns
+             (team_id, session_id, agent_key, seq, role, content, compacted, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
+          [teamId, sessionId, agentKey, nextSeq, row[1] as string, row[2] as string, row[3] as string],
+        );
+      }
     });
   }
 
@@ -135,7 +147,7 @@ export class SqliteMemoryManager implements MemoryManager {
 
   listSessions(teamId: string): ReadonlyArray<SessionSummary> {
     const rows = this.storage.query(
-      `SELECT t.session_id, COUNT(*) AS cnt, MAX(t.created_at) AS last_activity, m.name
+      `SELECT t.session_id, COUNT(CASE WHEN t.compacted = 0 THEN 1 END) AS cnt, MAX(t.created_at) AS last_activity, m.name
        FROM memory_turns t
        LEFT JOIN session_metadata m ON m.session_id = t.session_id
        WHERE t.team_id = ?

@@ -1,0 +1,243 @@
+import {
+  convertToLlm,
+  createCompactionSummaryMessage,
+  DEFAULT_COMPACTION_SETTINGS,
+  estimateContextTokens,
+  estimateTokens,
+  serializeConversation,
+  shouldCompact,
+  type AgentMessage,
+  type CompactionSummaryMessage,
+} from "@earendil-works/pi-agent-core";
+import { contentText, retryAssistantCall, uuidv7, type Api, type AssistantMessage, type Model } from "@earendil-works/pi-ai";
+import { streamSimple } from "@earendil-works/pi-ai/compat";
+import type { MemoryManager } from "../storage";
+
+export interface CompactionInput {
+  readonly messages: ReadonlyArray<AgentMessage>;
+  readonly contextWindow: number;
+  readonly model: Model<Api>;
+  readonly apiKey: string | undefined;
+  readonly agentKey: string;
+  readonly sessionId: string;
+  readonly teamId: string;
+  readonly signal?: AbortSignal;
+}
+
+export interface CompactionResult {
+  readonly summaryMessage: CompactionSummaryMessage;
+  readonly firstKeptIndex: number;
+  readonly tokensBefore: number;
+}
+
+export interface Compactor {
+  compact(input: CompactionInput): Promise<CompactionResult | null>;
+}
+
+type SummarizeFn = (input: SummarizeInput) => Promise<string>;
+
+interface SummarizeInput {
+  readonly systemPrompt: string;
+  readonly userPrompt: string;
+  readonly model: Model<Api>;
+  readonly apiKey: string | undefined;
+  readonly maxTokens: number;
+  readonly signal?: AbortSignal;
+}
+
+interface CompactorDeps {
+  readonly memory: MemoryManager;
+  readonly summarize?: SummarizeFn;
+}
+
+export class CompactorImpl implements Compactor {
+  private readonly memory: MemoryManager;
+  private readonly summarize: SummarizeFn;
+
+  constructor(deps: CompactorDeps) {
+    this.memory = deps.memory;
+    this.summarize = deps.summarize ?? summarizeConversation;
+  }
+
+  async compact(input: CompactionInput): Promise<CompactionResult | null> {
+    const settings = DEFAULT_COMPACTION_SETTINGS;
+    if (!settings.enabled) return null;
+    const tokensBefore = contextTokensSince(input.messages, lastSummaryTimestamp(input.messages));
+    if (!shouldCompact(tokensBefore, input.contextWindow, settings)) return null;
+    const preparation = prepareCompaction(input.messages, settings.keepRecentTokens);
+    if (preparation === null) return null;
+    const storedCount = (await this.memory.restore(input.agentKey, input.sessionId, input.teamId)).length;
+    if (storedCount !== input.messages.length) {
+      throw new Error(`history out of sync with storage: ${storedCount} stored rows, ${input.messages.length} messages`);
+    }
+    const summaryText = await this.summarize({
+      systemPrompt: SUMMARIZATION_SYSTEM_PROMPT,
+      userPrompt: buildSummaryPrompt(input.messages.slice(0, preparation.firstKeptIndex), preparation.previousSummary),
+      model: input.model,
+      apiKey: input.apiKey,
+      maxTokens: summaryMaxTokens(input.model, settings.reserveTokens),
+      signal: input.signal,
+    });
+    const summaryMessage = createCompactionSummaryMessage(summaryText, tokensBefore, new Date().toISOString());
+    this.memory.compact(preparation.firstKeptIndex, summaryMessage, input.agentKey, input.sessionId, input.teamId);
+    return { summaryMessage, firstKeptIndex: preparation.firstKeptIndex, tokensBefore };
+  }
+}
+
+function lastSummaryTimestamp(messages: ReadonlyArray<AgentMessage>): number {
+  const first = messages[0];
+  return first !== undefined && first.role === "compactionSummary" ? first.timestamp : 0;
+}
+
+function contextTokensSince(messages: ReadonlyArray<AgentMessage>, sinceTimestamp: number): number {
+  const estimate = estimateContextTokens([...messages]);
+  if (estimate.lastUsageIndex === null) return estimate.tokens;
+  const usageMessage = messages[estimate.lastUsageIndex];
+  if (usageMessage !== undefined && usageMessage.timestamp <= sinceTimestamp) {
+    return messages.reduce((sum, message) => sum + estimateTokens(message), 0);
+  }
+  return estimate.tokens;
+}
+
+interface CompactionPreparation {
+  readonly firstKeptIndex: number;
+  readonly previousSummary: string | null;
+}
+
+function prepareCompaction(messages: ReadonlyArray<AgentMessage>, keepRecentTokens: number): CompactionPreparation | null {
+  const cutPoints: number[] = [];
+  for (let i = 0; i < messages.length; i++) {
+    const role = messages[i]!.role;
+    if (role === "user" || role === "assistant") cutPoints.push(i);
+  }
+  if (cutPoints.length === 0) return null;
+  let firstKeptIndex = cutPoints[0]!;
+  let accumulatedTokens = 0;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    accumulatedTokens += estimateTokens(messages[i]!);
+    if (accumulatedTokens >= keepRecentTokens) {
+      const cutPoint = cutPoints.find((candidate) => candidate >= i);
+      if (cutPoint !== undefined) firstKeptIndex = cutPoint;
+      break;
+    }
+  }
+  const summarized = messages.slice(0, firstKeptIndex);
+  if (summarized.length === 0) return null;
+  if (summarized.every((message) => message.role === "compactionSummary")) return null;
+  const first = messages[0];
+  const previousSummary = first !== undefined && first.role === "compactionSummary" ? first.summary : null;
+  return { firstKeptIndex, previousSummary };
+}
+
+function buildSummaryPrompt(summarized: ReadonlyArray<AgentMessage>, previousSummary: string | null): string {
+  const conversationText = serializeConversation(convertToLlm([...summarized]));
+  let prompt = `<conversation>\n${conversationText}\n</conversation>\n\n`;
+  if (previousSummary !== null) prompt += `<previous-summary>\n${previousSummary}\n</previous-summary>\n\n`;
+  prompt += previousSummary !== null ? UPDATE_SUMMARIZATION_PROMPT : SUMMARIZATION_PROMPT;
+  return prompt;
+}
+
+function summaryMaxTokens(model: Model<Api>, reserveTokens: number): number {
+  const cap = model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY;
+  return Math.min(Math.floor(0.8 * reserveTokens), cap);
+}
+
+async function summarizeConversation(input: SummarizeInput): Promise<string> {
+  const response = await retryAssistantCall(async (): Promise<AssistantMessage> => {
+    const stream = streamSimple(
+      input.model,
+      {
+        systemPrompt: input.systemPrompt,
+        messages: [{ role: "user", content: [{ type: "text", text: input.userPrompt }], timestamp: Date.now() }],
+      },
+      {
+        maxTokens: input.maxTokens,
+        apiKey: input.apiKey,
+        signal: input.signal,
+        cacheRetention: "none",
+        sessionId: uuidv7(),
+      },
+    );
+    return stream.result();
+  }, undefined, input.signal);
+  if (response.stopReason === "error" || response.stopReason === "aborted") {
+    throw new Error(response.errorMessage ?? `summarization ${response.stopReason}`);
+  }
+  return contentText(response.content);
+}
+
+const SUMMARIZATION_SYSTEM_PROMPT = `You are a context summarization assistant. Your task is to read a conversation between a user and an AI assistant, then produce a structured summary following the exact format specified.
+
+Do NOT continue the conversation. Do NOT respond to any questions in the conversation. ONLY output the structured summary.`;
+
+const SUMMARIZATION_PROMPT = `The messages above are a conversation to summarize. Create a structured context checkpoint summary that another LLM will use to continue the work.
+
+Use this EXACT format:
+
+## Goal
+[What is the user trying to accomplish? Can be multiple items if the session covers different tasks.]
+
+## Constraints & Preferences
+- [Any constraints, preferences, or requirements mentioned by user]
+- [Or "(none)" if none were mentioned]
+
+## Progress
+### Done
+- [x] [Completed tasks/changes]
+
+### In Progress
+- [ ] [Current work]
+
+### Blocked
+- [Issues preventing progress, if any]
+
+## Key Decisions
+- **[Decision]**: [Brief rationale]
+
+## Next Steps
+1. [Ordered list of what should happen next]
+
+## Critical Context
+- [Any data, examples, or references needed to continue]
+- [Or "(none)" if not applicable]
+
+Keep each section concise. Preserve exact file paths, function names, and error messages.`;
+
+const UPDATE_SUMMARIZATION_PROMPT = `The messages above are NEW conversation messages to incorporate into the existing summary provided in <previous-summary> tags.
+
+Update the existing structured summary with new information. RULES:
+- PRESERVE all existing information from the previous summary
+- ADD new progress, decisions, and context from the new messages
+- UPDATE the Progress section: move items from "In Progress" to "Done" when completed
+- UPDATE "Next Steps" based on what was accomplished
+- PRESERVE exact file paths, function names, and error messages
+- If something is no longer relevant, you may remove it
+
+Use this EXACT format:
+
+## Goal
+[Preserve existing goals, add new ones if the task expanded]
+
+## Constraints & Preferences
+- [Preserve existing, add new ones discovered]
+
+## Progress
+### Done
+- [x] [Include previously done items AND newly completed items]
+
+### In Progress
+- [ ] [Current work - update based on progress]
+
+### Blocked
+- [Current blockers - remove if resolved]
+
+## Key Decisions
+- **[Decision]**: [Brief rationale] (preserve all previous, add new)
+
+## Next Steps
+1. [Update based on current state]
+
+## Critical Context
+- [Preserve important context, add new if needed]
+
+Keep each section concise. Preserve exact file paths, function names, and error messages.`;
