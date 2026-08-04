@@ -11,6 +11,7 @@ import {
 } from "@earendil-works/pi-agent-core";
 import { contentText, retryAssistantCall, uuidv7, type Api, type AssistantMessage, type Model } from "@earendil-works/pi-ai";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
+import type { Settings } from "../config";
 import type { MemoryManager } from "../storage";
 
 export interface CompactionInput {
@@ -45,22 +46,27 @@ interface SummarizeInput {
   readonly signal?: AbortSignal;
 }
 
+type CompactionOverrides = NonNullable<Settings["compaction"]>;
+
 interface CompactorDeps {
   readonly memory: MemoryManager;
   readonly summarize?: SummarizeFn;
+  readonly getSettings?: () => CompactionOverrides | undefined;
 }
 
 export class CompactorImpl implements Compactor {
   private readonly memory: MemoryManager;
   private readonly summarize: SummarizeFn;
+  private readonly getSettings: (() => CompactionOverrides | undefined) | undefined;
 
   constructor(deps: CompactorDeps) {
     this.memory = deps.memory;
     this.summarize = deps.summarize ?? summarizeConversation;
+    this.getSettings = deps.getSettings;
   }
 
   async compact(input: CompactionInput): Promise<CompactionResult | null> {
-    const settings = DEFAULT_COMPACTION_SETTINGS;
+    const settings = resolveSettings(this.getSettings?.());
     if (!settings.enabled) return null;
     const tokensBefore = contextTokensSince(input.messages, lastSummaryTimestamp(input.messages));
     if (!shouldCompact(tokensBefore, input.contextWindow, settings)) return null;
@@ -82,6 +88,10 @@ export class CompactorImpl implements Compactor {
     this.memory.compact(preparation.firstKeptIndex, summaryMessage, input.agentKey, input.sessionId, input.teamId);
     return { summaryMessage, firstKeptIndex: preparation.firstKeptIndex, tokensBefore };
   }
+}
+
+function resolveSettings(overrides: CompactionOverrides | undefined): typeof DEFAULT_COMPACTION_SETTINGS {
+  return { ...DEFAULT_COMPACTION_SETTINGS, ...overrides };
 }
 
 function lastSummaryTimestamp(messages: ReadonlyArray<AgentMessage>): number {

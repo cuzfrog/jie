@@ -1,10 +1,13 @@
 import { createCompactionSummaryMessage, type AgentMessage, type CompactionSummaryMessage } from "@earendil-works/pi-agent-core";
 import type { Api, AssistantMessage, Model, ToolResultMessage, Usage } from "@earendil-works/pi-ai";
 import { CompactorImpl, type CompactionInput } from "./compaction";
+import type { Settings } from "../config";
 import type { MemoryManager } from "../storage";
 
 const BIG = "x".repeat(100_000);
 const THRESHOLD_WINDOW = 30_000;
+
+type CompactionOverrides = NonNullable<Settings["compaction"]>;
 
 interface SummarizeCall {
   readonly systemPrompt: string;
@@ -86,8 +89,12 @@ function makeInput(messages: ReadonlyArray<AgentMessage>, model?: Model<Api>): C
   };
 }
 
-function makeCompactor(memory: MemoryManager, summarize: (input: SummarizeCall) => Promise<string>): CompactorImpl {
-  return new CompactorImpl({ memory, summarize });
+function makeCompactor(
+  memory: MemoryManager,
+  summarize: (input: SummarizeCall) => Promise<string>,
+  getSettings?: () => CompactionOverrides | undefined,
+): CompactorImpl {
+  return new CompactorImpl({ memory, summarize, getSettings });
 }
 
 describe("CompactorImpl.compact", () => {
@@ -278,5 +285,64 @@ describe("CompactorImpl.compact", () => {
     await expect(compactor.compact(makeInput([userMsg("please do the thing"), assistantMsg(BIG)]))).rejects.toThrow("out of sync");
     expect(summarize).not.toHaveBeenCalled();
     expect(memory.compact).not.toHaveBeenCalled();
+  });
+
+  test("skips compaction when the overrides disable it", async () => {
+    const memory = makeMemory();
+    const summarize = vi.fn(async (_input: SummarizeCall) => "summary");
+    const compactor = makeCompactor(memory, summarize, () => ({ enabled: false }));
+    const result = await compactor.compact(makeInput([userMsg("please do the thing"), assistantMsg(BIG)]));
+    expect(result).toBeNull();
+    expect(summarize).not.toHaveBeenCalled();
+    expect(memory.compact).not.toHaveBeenCalled();
+  });
+
+  test("applies the reserveTokens override while keepRecentTokens falls back to the default", async () => {
+    const memory = makeMemory();
+    const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
+    const compactor = makeCompactor(memory, summarize, () => ({ reserveTokens: 32768 }));
+    memory.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
+    const result = await compactor.compact(
+      makeInput([userMsg("please do the thing"), assistantMsg(BIG)], makeModel(THRESHOLD_WINDOW, 100_000)),
+    );
+    expect(summarize.mock.calls[0]![0].maxTokens).toBe(Math.floor(0.8 * 32768));
+    expect(result?.firstKeptIndex).toBe(1);
+  });
+
+  test("applies the keepRecentTokens override to the cut point", async () => {
+    const memory = makeMemory();
+    const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
+    const compactor = makeCompactor(memory, summarize, () => ({ keepRecentTokens: 1 }));
+    const messages = [userMsg("please do the thing"), assistantMsg(BIG), userMsg("tail prompt")];
+    memory.restore.mockResolvedValue([...messages]);
+    const result = await compactor.compact(makeInput(messages));
+    expect(result?.firstKeptIndex).toBe(2);
+    const call = summarize.mock.calls[0]![0];
+    expect(call.userPrompt).toContain(BIG.slice(0, 100));
+    expect(call.userPrompt).not.toContain("tail prompt");
+  });
+
+  test("falls back to the defaults for absent overrides", async () => {
+    const memory = makeMemory();
+    const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
+    memory.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
+    const input = makeInput([userMsg("please do the thing"), assistantMsg(BIG)], makeModel(THRESHOLD_WINDOW, 100_000));
+    await makeCompactor(memory, summarize, () => undefined).compact(input);
+    await makeCompactor(memory, summarize, () => ({})).compact(input);
+    expect(summarize.mock.calls[0]![0].maxTokens).toBe(Math.floor(0.8 * 16384));
+    expect(summarize.mock.calls[1]![0].maxTokens).toBe(Math.floor(0.8 * 16384));
+  });
+
+  test("reads the overrides at each compact call", async () => {
+    const memory = makeMemory();
+    const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
+    let overrides: CompactionOverrides | undefined = { enabled: false };
+    const compactor = makeCompactor(memory, summarize, () => overrides);
+    const messages = [userMsg("please do the thing"), assistantMsg(BIG)];
+    memory.restore.mockResolvedValue([...messages]);
+    expect(await compactor.compact(makeInput(messages))).toBeNull();
+    overrides = undefined;
+    expect(await compactor.compact(makeInput(messages))).not.toBeNull();
+    expect(summarize).toHaveBeenCalledTimes(1);
   });
 });
