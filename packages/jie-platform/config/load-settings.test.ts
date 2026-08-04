@@ -116,6 +116,59 @@ describe("loadMergedSettings", () => {
     expect(result.modelFilters).toEqual(["qwen", "gpt"]);
   });
 
+  test("accepts a valid compaction block", () => {
+    const home = track(freshDir("jie-home-"));
+    writeJson(join(home, "settings.json"), {
+      compaction: { enabled: false, reserveTokens: 8192, keepRecentTokens: 10000 },
+    });
+    const result = loadMergedSettings(home, null);
+    expect(result.compaction).toEqual({ enabled: false, reserveTokens: 8192, keepRecentTokens: 10000 });
+  });
+
+  test("accepts a partial compaction block and keeps unset fields absent", () => {
+    const home = track(freshDir("jie-home-"));
+    writeJson(join(home, "settings.json"), { compaction: { enabled: false } });
+    const result = loadMergedSettings(home, null);
+    expect(result.compaction).toEqual({ enabled: false });
+  });
+
+  test("ignores unknown keys inside compaction", () => {
+    const home = track(freshDir("jie-home-"));
+    writeJson(join(home, "settings.json"), { compaction: { enabled: true, foo: "bar" } });
+    const result = loadMergedSettings(home, null);
+    expect(result.compaction).toEqual({ enabled: true });
+  });
+
+  test("deep-merges compaction per field while other keys override shallowly", () => {
+    const home = track(freshDir("jie-home-"));
+    const project = track(freshDir("jie-project-"));
+    writeJson(join(home, "settings.json"), {
+      defaultProvider: "anthropic",
+      compaction: { enabled: true, reserveTokens: 8192 },
+    });
+    writeJson(join(project, "settings.json"), {
+      defaultProvider: "openai",
+      compaction: { reserveTokens: 4096 },
+    });
+    const result = loadMergedSettings(home, project);
+    expect(result).toEqual({
+      defaultProvider: "openai",
+      compaction: { enabled: true, reserveTokens: 4096 },
+    });
+  });
+
+  test("project-only compaction passes through the merge", () => {
+    const home = track(freshDir("jie-home-"));
+    const project = track(freshDir("jie-project-"));
+    writeJson(join(home, "settings.json"), { defaultProvider: "anthropic" });
+    writeJson(join(project, "settings.json"), { compaction: { keepRecentTokens: 10000 } });
+    const result = loadMergedSettings(home, project);
+    expect(result).toEqual({
+      defaultProvider: "anthropic",
+      compaction: { keepRecentTokens: 10000 },
+    });
+  });
+
   test.each([
     {
       name: "defaultTeam with invalid characters",
@@ -176,6 +229,54 @@ describe("loadMergedSettings", () => {
       field: "modelFilters",
       value: [42],
       match: /modelFilters must be an array of non-empty strings/,
+    },
+    {
+      name: "non-object compaction",
+      field: "compaction",
+      value: "on",
+      match: /compaction must be an object/,
+    },
+    {
+      name: "array compaction",
+      field: "compaction",
+      value: [16384],
+      match: /compaction must be an object/,
+    },
+    {
+      name: "null compaction",
+      field: "compaction",
+      value: null,
+      match: /compaction must be an object/,
+    },
+    {
+      name: "non-boolean compaction.enabled",
+      field: "compaction",
+      value: { enabled: "yes" },
+      match: /compaction\.enabled must be a boolean/,
+    },
+    {
+      name: "non-number compaction.reserveTokens",
+      field: "compaction",
+      value: { reserveTokens: "8192" },
+      match: /compaction\.reserveTokens must be a positive integer/,
+    },
+    {
+      name: "non-integer compaction.reserveTokens",
+      field: "compaction",
+      value: { reserveTokens: 8192.5 },
+      match: /compaction\.reserveTokens must be a positive integer/,
+    },
+    {
+      name: "zero compaction.reserveTokens",
+      field: "compaction",
+      value: { reserveTokens: 0 },
+      match: /compaction\.reserveTokens must be a positive integer/,
+    },
+    {
+      name: "negative compaction.keepRecentTokens",
+      field: "compaction",
+      value: { keepRecentTokens: -1 },
+      match: /compaction\.keepRecentTokens must be a positive integer/,
     },
   ])("rejects $name with code INVALID_CONFIG", ({ field, value, match }) => {
     const home = track(freshDir("jie-home-"));

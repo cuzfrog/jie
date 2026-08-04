@@ -84,13 +84,47 @@ function validateSettings(raw: RawSettings, source: string): Settings {
     result.modelFilters = raw.modelFilters;
   }
 
+  if ("compaction" in raw && raw.compaction !== undefined) {
+    result.compaction = validateCompaction(raw.compaction, source);
+  }
+
   return result;
 }
 
-// stub for future config shape where deep merge is needed.
+function validateCompaction(value: unknown, source: string): Settings["compaction"] {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new JiePlatformError("INVALID_CONFIG", { detail: `${source}: compaction must be an object` });
+  }
+  const raw = value as Record<string, unknown>;
+  const result: { -readonly [K in keyof NonNullable<Settings["compaction"]>]: NonNullable<Settings["compaction"]>[K] } = {};
+  if ("enabled" in raw && raw.enabled !== undefined) {
+    if (typeof raw.enabled !== "boolean") {
+      throw new JiePlatformError("INVALID_CONFIG", { detail: `${source}: compaction.enabled must be a boolean` });
+    }
+    result.enabled = raw.enabled;
+  }
+  if ("reserveTokens" in raw && raw.reserveTokens !== undefined) {
+    result.reserveTokens = validatePositiveInteger(raw.reserveTokens, "compaction.reserveTokens", source);
+  }
+  if ("keepRecentTokens" in raw && raw.keepRecentTokens !== undefined) {
+    result.keepRecentTokens = validatePositiveInteger(raw.keepRecentTokens, "compaction.keepRecentTokens", source);
+  }
+  return result;
+}
+
+function validatePositiveInteger(value: unknown, label: string, source: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    throw new JiePlatformError("INVALID_CONFIG", { detail: `${source}: ${label} must be a positive integer` });
+  }
+  return value;
+}
+
 function deepMergeSettings(
   base: Settings,
   override: Settings,
 ): Settings {
-  return { ...base, ...override };
+  if (base.compaction === undefined || override.compaction === undefined) {
+    return { ...base, ...override };
+  }
+  return { ...base, ...override, compaction: { ...base.compaction, ...override.compaction } };
 }
