@@ -99,7 +99,7 @@ export class JieAgentBody implements AgentBody {
       getApiKey: deps.getApiKey,
       streamFn: streamSimple,
       convertToLlm,
-      transformContext: async (messages: AgentMessage[]) => messages,
+      transformContext: async (messages: AgentMessage[]) => [...this.compactor.fitToWindow(messages, this.agent.state.model)],
       steeringMode: "all",
       followUpMode: "all",
       toolExecution: "sequential",

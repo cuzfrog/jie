@@ -1,10 +1,16 @@
-import { createCompactionSummaryMessage, type AgentMessage, type CompactionSummaryMessage } from "@earendil-works/pi-agent-core";
+import {
+  createCompactionSummaryMessage,
+  estimateTokens,
+  type AgentMessage,
+  type CompactionSummaryMessage,
+} from "@earendil-works/pi-agent-core";
 import type { Api, AssistantMessage, Model, ToolResultMessage, Usage } from "@earendil-works/pi-ai";
 import { CompactorImpl, type CompactionInput } from "./compaction";
 import type { Settings } from "../config";
 import type { MemoryManager } from "../storage";
 
 const BIG = "x".repeat(100_000);
+const HUGE = "y".repeat(200_000);
 const THRESHOLD_WINDOW = 30_000;
 
 type CompactionOverrides = NonNullable<Settings["compaction"]>;
@@ -71,6 +77,10 @@ function toolResultMsg(text: string, timestamp = 0): ToolResultMessage {
     isError: false,
     timestamp,
   };
+}
+
+function customMsg(text: string, timestamp = 0): AgentMessage {
+  return { role: "custom", customType: "note", content: text, display: true, timestamp };
 }
 
 function summaryMsg(text: string, timestamp: number): CompactionSummaryMessage {
@@ -345,5 +355,121 @@ describe("CompactorImpl.compact", () => {
     overrides = undefined;
     expect(await compactor.compact(makeInput(messages))).not.toBeNull();
     expect(summarize).toHaveBeenCalledTimes(1);
+  });
+
+  test("caps the summarized prefix so an oversized prefix message cannot overflow the summarization call", async () => {
+    const memory = makeMemory();
+    const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
+    const compactor = makeCompactor(memory, summarize, () => ({ keepRecentTokens: 2 }));
+    const messages = [userMsg(HUGE, 0), assistantMsg("a", 1000), userMsg("b", 2000), assistantMsg("c", 3000)];
+    memory.restore.mockResolvedValue([...messages]);
+    const result = await compactor.compact(makeInput(messages));
+    expect(result?.firstKeptIndex).toBe(2);
+    expect(summarize).toHaveBeenCalledTimes(1);
+    const prompt = summarize.mock.calls[0]![0]!.userPrompt;
+    expect(prompt).toContain("[content truncated to fit the context window]");
+    expect(prompt).not.toContain(HUGE);
+  });
+});
+
+describe("CompactorImpl.fitToWindow", () => {
+  const MARKER = "[content truncated to fit the context window]";
+
+  function totalTokens(messages: ReadonlyArray<AgentMessage>): number {
+    return messages.reduce((sum, message) => sum + estimateTokens(message), 0);
+  }
+
+  test("returns the same array when the history fits the budget", () => {
+    const compactor = makeCompactor(makeMemory(), async () => "summary");
+    const messages = [userMsg("hello"), assistantMsg("hi")];
+    expect(compactor.fitToWindow(messages, makeModel(THRESHOLD_WINDOW, 8192))).toBe(messages);
+  });
+
+  test("truncates the largest message until the total fits the budget", () => {
+    const compactor = makeCompactor(makeMemory(), async () => "summary");
+    const messages: AgentMessage[] = [userMsg(HUGE), assistantMsg("small tail")];
+    const result = compactor.fitToWindow(messages, makeModel(THRESHOLD_WINDOW, 8192));
+    expect(result).not.toBe(messages);
+    expect(result).toHaveLength(2);
+    expect(result[1]).toBe(messages[1]);
+    const truncated = result[0];
+    if (truncated === undefined || truncated.role !== "user" || typeof truncated.content !== "string") {
+      throw new Error("expected a user message with string content");
+    }
+    expect(truncated.content.startsWith(HUGE.slice(0, 1000))).toBe(true);
+    expect(truncated.content.endsWith(MARKER)).toBe(true);
+    expect(totalTokens(result)).toBeLessThanOrEqual(THRESHOLD_WINDOW - 16384);
+    expect(messages[0]).toEqual(userMsg(HUGE));
+  });
+
+  test("truncates text and thinking blocks but leaves toolCall blocks untouched", () => {
+    const compactor = makeCompactor(makeMemory(), async () => "summary");
+    const toolCall = { type: "toolCall", id: "call_1", name: "bash", arguments: { command: "ls" } } as const;
+    const heavyAssistant: AgentMessage = {
+      ...assistantMsg("small"),
+      content: [{ type: "thinking", thinking: BIG }, { type: "text", text: BIG }, toolCall],
+    };
+    const messages: AgentMessage[] = [heavyAssistant, toolResultMsg(BIG)];
+    const result = compactor.fitToWindow(messages, makeModel(THRESHOLD_WINDOW, 8192));
+    const assistant = result[0];
+    if (assistant === undefined || assistant.role !== "assistant") throw new Error("expected an assistant message");
+    expect(assistant.content).toHaveLength(3);
+    expect(assistant.content[2]).toEqual(toolCall);
+    const blocks = assistant.content;
+    for (const block of blocks.slice(0, 2)) {
+      const text = block.type === "thinking" ? block.thinking : block.type === "text" ? block.text : "";
+      expect(text.endsWith(MARKER)).toBe(true);
+    }
+    expect(totalTokens(result)).toBeLessThanOrEqual(THRESHOLD_WINDOW - 16384);
+    expect(heavyAssistant.content).toHaveLength(3);
+    if (heavyAssistant.content[1]!.type !== "text") throw new Error("expected a text block");
+    expect(heavyAssistant.content[1]!.text).toBe(BIG);
+  });
+
+  test("truncates the summary field of a compactionSummary message", () => {
+    const compactor = makeCompactor(makeMemory(), async () => "summary");
+    const messages: AgentMessage[] = [summaryMsg(HUGE, 1000), userMsg("tail")];
+    const result = compactor.fitToWindow(messages, makeModel(THRESHOLD_WINDOW, 8192));
+    const summary = result[0];
+    if (summary === undefined || summary.role !== "compactionSummary") throw new Error("expected a summary message");
+    expect(summary.summary.endsWith(MARKER)).toBe(true);
+    expect(totalTokens(result)).toBeLessThanOrEqual(THRESHOLD_WINDOW - 16384);
+  });
+
+  test("truncates a custom message with string content", () => {
+    const compactor = makeCompactor(makeMemory(), async () => "summary");
+    const messages: AgentMessage[] = [customMsg(HUGE), userMsg("tail")];
+    const result = compactor.fitToWindow(messages, makeModel(THRESHOLD_WINDOW, 8192));
+    const custom = result[0];
+    if (custom === undefined || custom.role !== "custom" || typeof custom.content !== "string") {
+      throw new Error("expected a custom message with string content");
+    }
+    expect(custom.content.startsWith(HUGE.slice(0, 1000))).toBe(true);
+    expect(custom.content.endsWith(MARKER)).toBe(true);
+    expect(totalTokens(result)).toBeLessThanOrEqual(THRESHOLD_WINDOW - 16384);
+  });
+
+  test("passes through a message with nothing shrinkable", () => {
+    const compactor = makeCompactor(makeMemory(), async () => "summary");
+    const toolCall = { type: "toolCall", id: "call_1", name: "bash", arguments: { command: "ls" } } as const;
+    const toolCallOnly: AgentMessage = { ...assistantMsg("small"), content: [toolCall] };
+    const result = compactor.fitToWindow([toolCallOnly, userMsg(HUGE)], makeModel(THRESHOLD_WINDOW, 8192));
+    expect(result[0]).toBe(toolCallOnly);
+    expect(result[1]).not.toEqual(userMsg(HUGE));
+  });
+
+  test("applies the reserveTokens override to the budget", () => {
+    const compactor = makeCompactor(makeMemory(), async () => "summary", () => ({ reserveTokens: 29000 }));
+    const result = compactor.fitToWindow([userMsg(HUGE)], makeModel(THRESHOLD_WINDOW, 8192));
+    expect(result).toHaveLength(1);
+    expect(totalTokens(result)).toBeLessThanOrEqual(THRESHOLD_WINDOW - 29000);
+  });
+
+  test("falls back to the full window when reserveTokens reaches the window", () => {
+    const compactor = makeCompactor(makeMemory(), async () => "summary", () => ({ reserveTokens: 40000 }));
+    const result = compactor.fitToWindow([userMsg(HUGE)], makeModel(THRESHOLD_WINDOW, 8192));
+    expect(result).toHaveLength(1);
+    expect(totalTokens(result)).toBeLessThanOrEqual(THRESHOLD_WINDOW);
+    expect(result[0]).not.toEqual(userMsg(HUGE));
   });
 });

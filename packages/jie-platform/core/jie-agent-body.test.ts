@@ -28,6 +28,9 @@ const noopCompactor: Compactor = {
   async compact() {
     return null;
   },
+  fitToWindow(messages) {
+    return messages;
+  },
 };
 
 function makeModel(provider: string, id: string): Model<Api> {
@@ -532,6 +535,24 @@ describe("JieAgentBody — agent construction wiring", () => {
     if (first === undefined || first.type !== "text") throw new Error("expected a text part");
     expect(first.text).toContain("compacted into the following summary");
     expect(first.text).toContain("the summary");
+  });
+
+  test("transformContext fits the history through compactor.fitToWindow with the live agent model", async () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    type FitToWindow = (messages: ReadonlyArray<AgentMessage>, model: Model<Api>) => ReadonlyArray<AgentMessage>;
+    const fitToWindow = vi.fn<FitToWindow>((messages) => messages);
+    const compactor: Compactor = { compact: async () => null, fitToWindow };
+    h.makeBody({ factory: cap.factory, compactor, model: makeModel("anthropic", "claude-sonnet-4") });
+    const transform = cap.lastOpts()?.transformContext;
+    if (transform === undefined) throw new Error("transformContext not provided");
+    const hotSwapped = makeModel("lm-studio", "qwen3.5-2b");
+    cap.fake.state.model = hotSwapped;
+    const messages: AgentMessage[] = [{ role: "user", content: "hi", timestamp: 0 }];
+    const result = await transform(messages);
+    expect(fitToWindow).toHaveBeenCalledWith(messages, hotSwapped);
+    expect(result).not.toBe(messages);
+    expect(result).toEqual(messages);
   });
 
   test("assigns soul.systemPrompt, model and adapted tools onto agent.state", () => {
@@ -2487,7 +2508,8 @@ describe("JieAgentBody — compaction", () => {
 
   function makeFakeCompactor(): { compactor: Compactor; compact: ReturnType<typeof vi.fn<(input: CompactionInput) => Promise<CompactionResult | null>>> } {
     const compact = vi.fn<(input: CompactionInput) => Promise<CompactionResult | null>>(async () => null);
-    return { compactor: { compact }, compact };
+    const compactor: Compactor = { compact, fitToWindow: (messages) => messages };
+    return { compactor, compact };
   }
 
   test("agent_end settle compacts and rewrites state to [summary, ...retainedTail]", async () => {
