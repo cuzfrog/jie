@@ -414,6 +414,9 @@ export class JieAgentBody implements AgentBody {
         contextWindow: model.contextWindow,
         model,
         apiKey: await this.getApiKey(model.provider),
+        agentKey: this.agentKey,
+        sessionId: this.sessionId,
+        teamId: this.teamId,
         signal: controller.signal,
       });
       if (result === null || this.stopped) return;

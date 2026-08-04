@@ -18,6 +18,9 @@ export interface CompactionInput {
   readonly contextWindow: number;
   readonly model: Model<Api>;
   readonly apiKey: string | undefined;
+  readonly agentKey: string;
+  readonly sessionId: string;
+  readonly teamId: string;
   readonly signal?: AbortSignal;
 }
 
@@ -44,24 +47,15 @@ interface SummarizeInput {
 
 interface CompactorDeps {
   readonly memory: MemoryManager;
-  readonly agentKey: string;
-  readonly sessionId: string;
-  readonly teamId: string;
   readonly summarize?: SummarizeFn;
 }
 
 export class CompactorImpl implements Compactor {
   private readonly memory: MemoryManager;
-  private readonly agentKey: string;
-  private readonly sessionId: string;
-  private readonly teamId: string;
   private readonly summarize: SummarizeFn;
 
   constructor(deps: CompactorDeps) {
     this.memory = deps.memory;
-    this.agentKey = deps.agentKey;
-    this.sessionId = deps.sessionId;
-    this.teamId = deps.teamId;
     this.summarize = deps.summarize ?? summarizeConversation;
   }
 
@@ -81,7 +75,7 @@ export class CompactorImpl implements Compactor {
       signal: input.signal,
     });
     const summaryMessage = createCompactionSummaryMessage(summaryText, tokensBefore, new Date().toISOString());
-    this.memory.compact(preparation.firstKeptIndex, summaryMessage, this.agentKey, this.sessionId, this.teamId);
+    this.memory.compact(preparation.firstKeptIndex, summaryMessage, input.agentKey, input.sessionId, input.teamId);
     return { summaryMessage, firstKeptIndex: preparation.firstKeptIndex, tokensBefore };
   }
 }

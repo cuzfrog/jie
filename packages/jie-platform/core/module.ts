@@ -22,8 +22,9 @@ export function registerCoreModule(container: AwilixContainer<PlatformCradle>): 
       hookRunner: HookRunner,
       cwd: string,
       modelRegistry: ModelRegistry,
-    ) =>
-      (params: AgentBodyParams): AgentBody =>
+    ) => {
+      const compactor = new CompactorImpl({ memory: memoryManager });
+      return (params: AgentBodyParams): AgentBody =>
         new JieAgentBody(params, {
           eventManager,
           artifactStore,
@@ -35,13 +36,8 @@ export function registerCoreModule(container: AwilixContainer<PlatformCradle>): 
           cwd,
           getApiKey: (provider) => modelRegistry.getApiKey(provider),
           resolveModel: (provider, modelId) => modelRegistry.resolve(provider, modelId),
-          compactor: new CompactorImpl({
-            memory: memoryManager,
-            agentKey: params.agentKey,
-            sessionId: params.sessionId,
-            teamId: params.teamId,
-          }),
-        })
-    ).singleton(),
+          compactor,
+        });
+    }).singleton(),
   });
 }

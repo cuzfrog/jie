@@ -2409,6 +2409,9 @@ describe("JieAgentBody — compaction", () => {
     expect(input.messages).toEqual([first, second, third]);
     expect(input.contextWindow).toBe(200000);
     expect(input.model).toBe(model);
+    expect(input.agentKey).toBe("general-1");
+    expect(input.sessionId).toBe("s1");
+    expect(input.teamId).toBe("t1");
     expect(h.state.messages).toEqual([summary, second, third]);
     body.stop();
   });

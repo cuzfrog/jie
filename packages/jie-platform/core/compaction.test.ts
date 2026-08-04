@@ -80,11 +80,14 @@ function makeInput(messages: ReadonlyArray<AgentMessage>, model?: Model<Api>): C
     contextWindow: (model ?? makeModel(THRESHOLD_WINDOW, 8192)).contextWindow,
     model: model ?? makeModel(THRESHOLD_WINDOW, 8192),
     apiKey: "key-1",
+    agentKey: "worker-1",
+    sessionId: "s1",
+    teamId: "t1",
   };
 }
 
 function makeCompactor(memory: MemoryManager, summarize: (input: SummarizeCall) => Promise<string>): CompactorImpl {
-  return new CompactorImpl({ memory, agentKey: "worker-1", sessionId: "s1", teamId: "t1", summarize });
+  return new CompactorImpl({ memory, summarize });
 }
 
 describe("CompactorImpl.compact", () => {
