@@ -1,4 +1,5 @@
 import { parse as parseYaml } from "yaml";
+import { createSkill } from "./skill";
 import type { Skill } from "./types";
 
 const SKILL_NAME_PATTERN = /^[a-z0-9-]+$/;
@@ -43,10 +44,10 @@ export function parseSkill(input: ParseSkillInput): ParseSkillResult {
   const { argumentHint, error: argumentHintError } = parseArgumentHint(frontmatter["argument-hint"]);
   if (argumentHintError !== null) return { skill: null, diagnostic: argumentHintError };
 
-  const skill: Skill = {
+  const skill: Skill = createSkill({
     name: input.dirName, description: String(frontmatter.description), argumentHint,
     filePath: input.filePath, baseDir: input.baseDir, body: body.trim(),
-  };
+  });
   return { skill, diagnostic: null };
 }
 

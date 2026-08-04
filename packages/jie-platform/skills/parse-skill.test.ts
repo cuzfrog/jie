@@ -12,7 +12,7 @@ describe("parseSkill", () => {
   test("a valid skill, name defaults to the directory name", () => {
     const { skill, diagnostic } = parseSkill(input(skillFile("description: Deploys the app")));
     expect(diagnostic).toBeNull();
-    expect(skill).toEqual({
+    expect(skill).toMatchObject({
       name: "deploy",
       description: "Deploys the app",
       argumentHint: null,

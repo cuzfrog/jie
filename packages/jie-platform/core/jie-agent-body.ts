@@ -3,7 +3,7 @@ import type { Api, AssistantMessage, Model, StopReason, TextContent } from "@ear
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { ExecutionContext, ToolRegistry } from "../tools";
-import { expandSkillInvocation, type Skill, type SkillManager } from "../skills";
+import type { Skill, SkillManager } from "../skills";
 import type { HookIdentity, HookRunner } from "../hooks";
 import { composeSystemPrompt } from "../prompt";
 import { Events, type AgentSender, type EventManager } from "../event";
@@ -15,6 +15,7 @@ import { JiePlatformError } from "../jie-platform-errors";
 import type { AgentInfo, EffortLevel, ModelInfo, UserIngressMessage } from "../types";
 
 const DEQUEUED_PROMPT_CAP = 32;
+const SKILL_INVOCATION_PREFIX = "/skill:";
 
 interface AgentBodyDeps {
   readonly eventManager: EventManager;
@@ -350,11 +351,23 @@ export class JieAgentBody implements AgentBody {
       this.eventManager.publish(Events.systemError({ kind: "system" }, outcome.reason ?? "prompt blocked by UserPromptSubmit hook"));
       return;
     }
-    const expanded = expandSkillInvocation(payload.prompt, this.resolvedSkills) ?? payload.prompt;
+    const expanded = this.expandSkillInvocation(payload.prompt) ?? payload.prompt;
     const prompt = outcome.additionalContext === null ? expanded : `${expanded}\n\n${outcome.additionalContext}`;
     const consumed = this.dequeuedPrompts.findIndex((entry) => entry.userText === payload.prompt);
     if (consumed !== -1) this.dequeuedPrompts.splice(consumed, 1);
     this.dispatchIngress("user", null, prompt, payload.prompt);
+  }
+
+  private expandSkillInvocation(text: string): string | null {
+    if (!text.startsWith(SKILL_INVOCATION_PREFIX)) return null;
+    const rest = text.slice(SKILL_INVOCATION_PREFIX.length);
+    const separatorIndex = rest.search(/\s/);
+    const name = separatorIndex === -1 ? rest : rest.slice(0, separatorIndex);
+    if (name === "") return null;
+    const skill = this.resolvedSkills.find((candidate) => candidate.name === name);
+    if (skill === undefined) return null;
+    const args = separatorIndex === -1 ? "" : rest.slice(separatorIndex + 1).trim();
+    return skill.expandInvocation(args);
   }
 
   private ingestCustom(topic: string, sender: AgentSender, payload: { message: string; truncated: boolean }): void {
