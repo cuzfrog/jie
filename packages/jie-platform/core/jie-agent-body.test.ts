@@ -68,6 +68,17 @@ const deploySkill = vi.mocked<Skill>({
   promptEntry: vi.fn(),
 });
 
+const backupSkill = vi.mocked<Skill>({
+  name: "backup",
+  description: "Backs up the data",
+  argumentHint: null,
+  filePath: "/backup/SKILL.md",
+  baseDir: "/backup",
+  body: "Run the backup pipeline.",
+  expandInvocation: vi.fn(),
+  promptEntry: vi.fn(),
+});
+
 function makeNoopTool(): Tool {
   return {
     name: "noop",
@@ -1333,6 +1344,68 @@ describe("JieAgentBody — skill invocation expansion", () => {
     await flush();
     const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
     expect((synthetic as { content: unknown }).content).toBe("[user]: /skill: now");
+    body.stop();
+  });
+
+  test("an invocation selects the matching skill from a multi-skill resolved set", async () => {
+    backupSkill.expandInvocation.mockReturnValue("BACKUP-EXPANDED");
+    h.skillManager.resolve.mockReturnValue([deploySkill, backupSkill]);
+    const body = h.makeBody({ soul: makeSoul({ skills: ["deploy", "backup"] }) });
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "/skill:backup now"));
+    await flush();
+    expect(deploySkill.expandInvocation).not.toHaveBeenCalled();
+    expect(backupSkill.expandInvocation).toHaveBeenCalledWith("now");
+    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
+    expect((synthetic as { content: unknown }).content).toBe("[user]: BACKUP-EXPANDED");
+    body.stop();
+  });
+
+  test("a newline separates the skill name from the args", async () => {
+    h.skillManager.resolve.mockReturnValue([deploySkill]);
+    const body = h.makeBody({ soul: makeSoul({ skills: ["deploy"] }) });
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "/skill:deploy\nnow"));
+    await flush();
+    expect(deploySkill.expandInvocation).toHaveBeenCalledWith("now");
+    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
+    expect((synthetic as { content: unknown }).content).toBe("[user]: EXPANDED");
+    body.stop();
+  });
+
+  test("a tab separates the skill name from the args", async () => {
+    h.skillManager.resolve.mockReturnValue([deploySkill]);
+    const body = h.makeBody({ soul: makeSoul({ skills: ["deploy"] }) });
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "/skill:deploy\tnow"));
+    await flush();
+    expect(deploySkill.expandInvocation).toHaveBeenCalledWith("now");
+    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
+    expect((synthetic as { content: unknown }).content).toBe("[user]: EXPANDED");
+    body.stop();
+  });
+
+  test("an invocation embedded mid-text is not expanded", async () => {
+    h.skillManager.resolve.mockReturnValue([deploySkill]);
+    const body = h.makeBody({ soul: makeSoul({ skills: ["deploy"] }) });
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "please /skill:deploy now"));
+    await flush();
+    expect(deploySkill.expandInvocation).not.toHaveBeenCalled();
+    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
+    expect((synthetic as { content: unknown }).content).toBe("[user]: please /skill:deploy now");
+    body.stop();
+  });
+
+  test("a bare /skill: without a name passes through unchanged", async () => {
+    h.skillManager.resolve.mockReturnValue([deploySkill]);
+    const body = h.makeBody({ soul: makeSoul({ skills: ["deploy"] }) });
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "/skill:"));
+    await flush();
+    expect(deploySkill.expandInvocation).not.toHaveBeenCalled();
+    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
+    expect((synthetic as { content: unknown }).content).toBe("[user]: /skill:");
     body.stop();
   });
 
