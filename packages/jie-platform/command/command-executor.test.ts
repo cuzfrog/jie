@@ -147,6 +147,17 @@ describe("CommandExecutorImpl", () => {
       await expect(pending).rejects.toMatchObject({ code: "UNKNOWN_PROVIDER" });
       expect(settingsStore.setDefaultProvider).not.toHaveBeenCalled();
     });
+
+    test("publishes user.model.update so live agents apply the new model", async () => {
+      await executor.execute({ name: "setDefaultModel", provider: "my-local", id: "qwen3.5-2b" });
+      expect(eventManager.publish).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "user.model.update", payload: { provider: "my-local", modelId: "qwen3.5-2b" } }));
+    });
+
+    test("does not publish user.model.update when the provider is unknown", async () => {
+      await expect(executor.execute({ name: "setDefaultModel", provider: "no-such-provider", id: "x" })).rejects.toThrow(JiePlatformError);
+      expect(eventManager.publish).not.toHaveBeenCalled();
+    });
   });
 
   describe("getDefaultModel", () => {

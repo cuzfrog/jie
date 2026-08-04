@@ -17,6 +17,15 @@
           "contextWindow": 128000,
           "maxTokens": 16384,
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        },
+        {
+          "id": "e2e-alt",
+          "name": "e2e-alt",
+          "reasoning": false,
+          "input": ["text"],
+          "contextWindow": 64000,
+          "maxTokens": 16384,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
         }
       ]
     }

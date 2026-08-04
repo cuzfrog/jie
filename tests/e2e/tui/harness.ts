@@ -295,6 +295,10 @@ export async function waitForAgentEffort(harness: TuiHarness, agentId: AgentId, 
   await waitFor(() => harness.stateStore.getState().agents.get(agentId)?.model?.effort === effort, timeoutMs, `agent '${agentId}' model effort === '${effort}'`);
 }
 
+export async function waitForAgentModelId(harness: TuiHarness, agentId: AgentId, modelId: string, timeoutMs = 60000): Promise<void> {
+  await waitFor(() => harness.stateStore.getState().agents.get(agentId)?.model?.id === modelId, timeoutMs, `agent '${agentId}' model id === '${modelId}'`);
+}
+
 export async function waitForTransient(harness: TuiHarness, contains: string, timeoutMs = 60000): Promise<void> {
   await waitFor(
     () => {

@@ -33,6 +33,7 @@ export function registerCoreModule(container: AwilixContainer<PlatformCradle>): 
           hookRunner,
           cwd,
           getApiKey: (provider) => modelRegistry.getApiKey(provider),
+          resolveModel: (provider, modelId) => modelRegistry.resolve(provider, modelId),
         })
     ).singleton(),
   });

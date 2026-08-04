@@ -1,6 +1,9 @@
 import { assertLlmReachable, seedTeam, FIXTURE } from "../_fixture.ts";
 import { loadMockExpectations } from "../../../packages/mock-llm-backend";
-import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, waitForTransient, waitForAgent, waitForAgentEffort, sendCmd, sendLine, type TuiHarness } from "./harness";
+import {
+  startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, waitForTransient, waitForAgent,
+  waitForAgentEffort, waitForAgentModelId, sendCmd, sendLine, type TuiHarness,
+} from "./harness";
 import expectations from "./scenario-1.llm.ts";
 
 describe("Scenario 1 — simple agent", () => {
@@ -54,6 +57,20 @@ describe("Scenario 1 — simple agent", () => {
     await waitForAgentEffort(harness, "my-team:general-1", "high");
     const agent = harness.stateStore.getState().agents.get("my-team:general-1");
     expect(agent?.model?.provider).toBe(FIXTURE.provider);
+  });
+
+  test("/model applies immediately to the live agent and persists", async () => {
+    await sendLine(harness.stdin, "/team my-team");
+    await waitForTeam(harness, "my-team");
+    expect(harness.stateStore.getState().agents.get("my-team:general-1")?.model?.id).toBe(FIXTURE.modelId);
+    await sendLine(harness.stdin, "/model e2e/e2e-alt");
+    await waitForTransient(harness, "default model set to e2e/e2e-alt");
+    await waitForAgentModelId(harness, "my-team:general-1", "e2e-alt");
+    const agent = harness.stateStore.getState().agents.get("my-team:general-1");
+    expect(agent?.model?.provider).toBe("e2e");
+    expect(agent?.model?.contextWindow).toBe(64000);
+    const defaultModel = await harness.platform.execute({ name: "getDefaultModel" });
+    expect(defaultModel).toMatchObject({ provider: "e2e", id: "e2e-alt" });
   });
 
   test("/reload rebuilds the loaded team from the edited manifest", async () => {

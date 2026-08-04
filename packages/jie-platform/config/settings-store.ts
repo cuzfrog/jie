@@ -34,12 +34,12 @@ export class SettingsStoreImpl implements SettingsStore {
   }
 
   setDefaultProvider(provider: string, modelId: string): void {
-    const next: Settings = {
-      ...readSettingsFile(this.globalPath),
-      defaultProvider: provider,
-      defaultModel: modelId,
-    };
-    writeSettingsFile(this.globalPath, next);
+    const projectSettings = readSettingsFile(this.projectPath);
+    const usesProjectScope = projectSettings.defaultProvider !== undefined || projectSettings.defaultModel !== undefined;
+    const path = usesProjectScope ? this.projectPath : this.globalPath;
+    const base = usesProjectScope ? projectSettings : readSettingsFile(this.globalPath);
+    const next: Settings = { ...base, defaultProvider: provider, defaultModel: modelId };
+    writeSettingsFile(path, next);
   }
 
   setDefaultEffort(effort: EffortLevel): void {

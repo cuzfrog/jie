@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SettingsStoreImpl } from "./settings-store";
@@ -35,11 +35,75 @@ describe("SettingsStoreImpl", () => {
     });
   });
 
-  test("setDefaultProvider always writes to global, even when projectJieDir is set", () => {
+  test("setDefaultProvider writes to global when the project settings file is absent", () => {
     const projectJieDir = join(cwd, ".jie");
     const store = new SettingsStoreImpl(cwd, homeJieDir, projectJieDir);
     store.setDefaultProvider("anthropic", "claude-sonnet-4");
     expect(existsSync(join(projectJieDir, "settings.json"))).toBe(false);
+    expect(JSON.parse(readFileSync(join(homeJieDir, "settings.json"), "utf-8"))).toEqual({
+      defaultProvider: "anthropic",
+      defaultModel: "claude-sonnet-4",
+    });
+  });
+
+  test("setDefaultProvider writes to the project settings when they define defaultModel", () => {
+    const projectJieDir = join(cwd, ".jie");
+    mkdirSync(projectJieDir, { recursive: true });
+    mkdirSync(homeJieDir, { recursive: true });
+    writeFileSync(
+      join(projectJieDir, "settings.json"),
+      `${JSON.stringify({ defaultProvider: "openai", defaultModel: "gpt-4o", defaultEffort: "high" })}\n`,
+    );
+    writeFileSync(
+      join(homeJieDir, "settings.json"),
+      `${JSON.stringify({ defaultProvider: "anthropic", defaultModel: "claude-sonnet-4" })}\n`,
+    );
+    const store = new SettingsStoreImpl(cwd, homeJieDir, projectJieDir);
+    store.setDefaultProvider("lm-studio", "qwen3.5-2b");
+    expect(JSON.parse(readFileSync(join(projectJieDir, "settings.json"), "utf-8"))).toEqual({
+      defaultProvider: "lm-studio",
+      defaultModel: "qwen3.5-2b",
+      defaultEffort: "high",
+    });
+    expect(JSON.parse(readFileSync(join(homeJieDir, "settings.json"), "utf-8"))).toEqual({
+      defaultProvider: "anthropic",
+      defaultModel: "claude-sonnet-4",
+    });
+  });
+
+  test("setDefaultProvider writes to the project settings when they define only defaultProvider", () => {
+    const projectJieDir = join(cwd, ".jie");
+    mkdirSync(projectJieDir, { recursive: true });
+    writeFileSync(join(projectJieDir, "settings.json"), `${JSON.stringify({ defaultProvider: "openai" })}\n`);
+    const store = new SettingsStoreImpl(cwd, homeJieDir, projectJieDir);
+    store.setDefaultProvider("lm-studio", "qwen3.5-2b");
+    expect(JSON.parse(readFileSync(join(projectJieDir, "settings.json"), "utf-8"))).toEqual({
+      defaultProvider: "lm-studio",
+      defaultModel: "qwen3.5-2b",
+    });
+    expect(existsSync(join(homeJieDir, "settings.json"))).toBe(false);
+  });
+
+  test("setDefaultProvider writes to the project settings when they define only defaultModel", () => {
+    const projectJieDir = join(cwd, ".jie");
+    mkdirSync(projectJieDir, { recursive: true });
+    writeFileSync(join(projectJieDir, "settings.json"), `${JSON.stringify({ defaultModel: "gpt-4o" })}\n`);
+    const store = new SettingsStoreImpl(cwd, homeJieDir, projectJieDir);
+    store.setDefaultProvider("lm-studio", "qwen3.5-2b");
+    expect(JSON.parse(readFileSync(join(projectJieDir, "settings.json"), "utf-8"))).toEqual({
+      defaultProvider: "lm-studio",
+      defaultModel: "qwen3.5-2b",
+    });
+    expect(existsSync(join(homeJieDir, "settings.json"))).toBe(false);
+  });
+
+  test("setDefaultProvider writes to global when the project settings define neither model key", () => {
+    const projectJieDir = join(cwd, ".jie");
+    mkdirSync(projectJieDir, { recursive: true });
+    writeFileSync(join(projectJieDir, "settings.json"), `${JSON.stringify({ defaultEffort: "high" })}\n`);
+    const store = new SettingsStoreImpl(cwd, homeJieDir, projectJieDir);
+    store.setDefaultProvider("anthropic", "claude-sonnet-4");
+    expect(JSON.parse(readFileSync(join(projectJieDir, "settings.json"), "utf-8"))).toEqual({ defaultEffort: "high" });
     expect(JSON.parse(readFileSync(join(homeJieDir, "settings.json"), "utf-8"))).toEqual({
       defaultProvider: "anthropic",
       defaultModel: "claude-sonnet-4",

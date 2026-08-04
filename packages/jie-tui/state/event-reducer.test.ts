@@ -169,25 +169,36 @@ describe("user.prompt", () => {
 });
 
 describe("reduceModelAssigned", () => {
-  test("populates focused agent's model", () => {
-    const state = reduce(loadedState(), Events.agentModelAssigned(AGENT_SENDER, "openai", "gpt-4", "high"));
+  test("populates focused agent's model with the payload context window", () => {
+    const state = reduce(loadedState(), Events.agentModelAssigned(AGENT_SENDER, "openai", "gpt-4", "high", 128000));
     expect(state.agents.get("my-team:general-1")?.model).toEqual({
       provider: "openai",
       id: "gpt-4",
       effort: "high",
-      contextWindow: null,
+      contextWindow: 128000,
+    });
+  });
+
+  test("follows a hot swap with the new model's context window", () => {
+    const assigned = reduce(loadedState(), Events.agentModelAssigned(AGENT_SENDER, "openai", "gpt-4", "high", 128000));
+    const swapped = reduce(assigned, Events.agentModelAssigned(AGENT_SENDER, "lm-studio", "qwen3.5-2b", "high", 32000));
+    expect(swapped.agents.get("my-team:general-1")?.model).toEqual({
+      provider: "lm-studio",
+      id: "qwen3.5-2b",
+      effort: "high",
+      contextWindow: 32000,
     });
   });
 
   test("ignores events for a foreign team", () => {
     const state = loadedState();
     const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
-    const state2 = reduce(state, Events.agentModelAssigned(foreign, "anthropic", "claude", "low"));
+    const state2 = reduce(state, Events.agentModelAssigned(foreign, "anthropic", "claude", "low", null));
     expect(state2.agents.get("my-team:general-1")?.model).toBeNull();
   });
 
   test("ignores events before any team is loaded", () => {
-    const state = reduce(INITIAL_TUI_STATE, Events.agentModelAssigned(AGENT_SENDER, "openai", "gpt-4", "high"));
+    const state = reduce(INITIAL_TUI_STATE, Events.agentModelAssigned(AGENT_SENDER, "openai", "gpt-4", "high", 128000));
     expect(state).toBe(INITIAL_TUI_STATE);
   });
 });

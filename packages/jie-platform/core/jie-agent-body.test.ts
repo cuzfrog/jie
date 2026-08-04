@@ -211,6 +211,7 @@ interface MakeBodyOverrides {
 
 interface Harness {
   events: EventManager;
+  resolveModel: ReturnType<typeof vi.fn<(provider: string, modelId: string) => Model<Api> | undefined>>;
   toolRegistry: ReturnType<typeof vi.mocked<ToolRegistry>>;
   skillManager: ReturnType<typeof vi.mocked<SkillManager>>;
   hookRunner: ReturnType<typeof vi.mocked<HookRunner>>;
@@ -249,6 +250,7 @@ function makeHarness(): Harness {
   const events: EventManager = makeFakeEventManager();
   const { memory, persisted, restore } = makeFakeMemory();
   const cap = makeFakeAgentFactory();
+  const resolveModel = vi.fn<(provider: string, modelId: string) => Model<Api> | undefined>(() => undefined);
   const toolRegistry = vi.mocked<ToolRegistry>({
     register: vi.fn(),
     resolve: vi.fn(() => [makeNoopTool()]),
@@ -292,6 +294,7 @@ function makeHarness(): Harness {
       hookRunner,
       cwd: "/work",
       getApiKey: () => undefined,
+      resolveModel,
       createAgent: overrides.factory ?? cap.factory,
     });
   };
@@ -306,6 +309,7 @@ function makeHarness(): Harness {
   };
   return {
     events,
+    resolveModel,
     toolRegistry,
     skillManager,
     hookRunner,
@@ -770,7 +774,7 @@ describe("JieAgentBody — agent.model.assigned publication", () => {
     });
     h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), factory: cap.factory });
     expect(received).toHaveLength(1);
-    expect(received[0]!.payload).toEqual({ provider: "anthropic", model: "claude-sonnet-4", effort: "off" });
+    expect(received[0]!.payload).toEqual({ provider: "anthropic", model: "claude-sonnet-4", effort: "off", contextWindow: 200000 });
     expect(cap.fake.state.thinkingLevel).toBe("off");
   });
 
@@ -784,7 +788,7 @@ describe("JieAgentBody — agent.model.assigned publication", () => {
     h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), effort: "high", factory: cap.factory });
     expect(cap.fake.state.thinkingLevel).toBe("high");
     expect(received).toHaveLength(1);
-    expect(received[0]!.payload).toEqual({ provider: "anthropic", model: "claude-sonnet-4", effort: "high" });
+    expect(received[0]!.payload).toEqual({ provider: "anthropic", model: "claude-sonnet-4", effort: "high", contextWindow: 200000 });
   });
 
   test("maps effort 'max' to the 'xhigh' thinkingLevel while reporting 'max' effort", () => {
@@ -2069,7 +2073,7 @@ describe("JieAgentBody — user.effort.update", () => {
     h.events.publish(Events.userEffortUpdate({ kind: "user" }, "high"));
     expect(h.state.thinkingLevel).toBe("high");
     expect(received).toHaveLength(1);
-    expect(received[0]!.payload).toEqual({ provider: "anthropic", model: "claude-sonnet-4", effort: "high" });
+    expect(received[0]!.payload).toEqual({ provider: "anthropic", model: "claude-sonnet-4", effort: "high", contextWindow: 200000 });
     body.stop();
   });
 
@@ -2119,6 +2123,78 @@ describe("JieAgentBody — user.effort.update", () => {
     body.stop();
     h.events.publish(Events.userEffortUpdate({ kind: "user" }, "high"));
     expect(h.state.thinkingLevel).toBe("off");
+  });
+});
+
+describe("JieAgentBody — user.model.update", () => {
+  let h: Harness;
+
+  beforeEach(() => {
+    h = makeHarness();
+  });
+
+  test("swaps the agent model and republishes agent.model.assigned with the new model", async () => {
+    const nextModel = makeModel("lm-studio", "qwen3.5-2b");
+    h.resolveModel.mockReturnValue(nextModel);
+    const body = h.makeBody({ soul: makeSoul({ model: "" }), model: makeModel("anthropic", "claude-sonnet-4") });
+    await body.start();
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    h.subscribeSubject("agent.model.assigned", (env) => received.push(env));
+    h.events.publish(Events.userModelUpdate({ kind: "user" }, "lm-studio", "qwen3.5-2b"));
+    expect(h.resolveModel).toHaveBeenCalledWith("lm-studio", "qwen3.5-2b");
+    expect(h.state.model).toBe(nextModel);
+    expect(received).toHaveLength(1);
+    expect(received[0]!.payload).toEqual({ provider: "lm-studio", model: "qwen3.5-2b", effort: "off", contextWindow: 200000 });
+    expect(body.identity.model).toEqual({ provider: "lm-studio", id: "qwen3.5-2b", effort: "off", contextWindow: 200000 });
+    body.stop();
+  });
+
+  test("preserves the current effort across the swap", async () => {
+    h.resolveModel.mockReturnValue(makeModel("lm-studio", "qwen3.5-2b"));
+    const body = h.makeBody({ soul: makeSoul({ model: "" }), model: makeModel("anthropic", "claude-sonnet-4"), effort: "high" });
+    await body.start();
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    h.subscribeSubject("agent.model.assigned", (env) => received.push(env));
+    h.events.publish(Events.userModelUpdate({ kind: "user" }, "lm-studio", "qwen3.5-2b"));
+    expect(received).toHaveLength(1);
+    expect(received[0]!.payload).toEqual({ provider: "lm-studio", model: "qwen3.5-2b", effort: "high", contextWindow: 200000 });
+    body.stop();
+  });
+
+  test("ignores the update when the soul pins a model", async () => {
+    const pinned = makeModel("anthropic", "claude-sonnet-4");
+    const body = h.makeBody({ model: pinned });
+    await body.start();
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    h.subscribeSubject("agent.model.assigned", (env) => received.push(env));
+    h.events.publish(Events.userModelUpdate({ kind: "user" }, "lm-studio", "qwen3.5-2b"));
+    expect(h.resolveModel).not.toHaveBeenCalled();
+    expect(h.state.model).toBe(pinned);
+    expect(received).toHaveLength(0);
+    expect(body.identity.model).toEqual({ provider: "anthropic", id: "claude-sonnet-4", effort: "off", contextWindow: 200000 });
+    body.stop();
+  });
+
+  test("ignores an unresolvable model reference", async () => {
+    const initial = makeModel("anthropic", "claude-sonnet-4");
+    const body = h.makeBody({ soul: makeSoul({ model: "" }), model: initial });
+    await body.start();
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    h.subscribeSubject("agent.model.assigned", (env) => received.push(env));
+    h.events.publish(Events.userModelUpdate({ kind: "user" }, "lm-studio", "no-such-model"));
+    expect(h.resolveModel).toHaveBeenCalledWith("lm-studio", "no-such-model");
+    expect(h.state.model).toBe(initial);
+    expect(received).toHaveLength(0);
+    body.stop();
+  });
+
+  test("stop() unsubscribes from user.model.update", async () => {
+    h.resolveModel.mockReturnValue(makeModel("lm-studio", "qwen3.5-2b"));
+    const body = h.makeBody({ soul: makeSoul({ model: "" }), model: makeModel("anthropic", "claude-sonnet-4") });
+    await body.start();
+    body.stop();
+    h.events.publish(Events.userModelUpdate({ kind: "user" }, "lm-studio", "qwen3.5-2b"));
+    expect(h.resolveModel).not.toHaveBeenCalled();
   });
 });
 
