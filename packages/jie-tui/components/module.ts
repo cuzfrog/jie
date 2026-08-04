@@ -10,11 +10,11 @@ export function registerComponentsModule(container: AwilixContainer<TuiCradle>):
     viewFactory: asFunction((
       stateStore: StateStore,
       chatSyncFactory: (chatContainer: Container, requestRender: () => void) => ChatSync,
-      todoList: Component,
+      kanbanList: Component,
       footer: Component,
       jieEditorFactory: (tui: TUI) => Editor,
     ) =>
-      (tui: TUI): TuiView => new TuiViewImpl(tui, stateStore, chatSyncFactory, todoList, footer, jieEditorFactory)
+      (tui: TUI): TuiView => new TuiViewImpl(tui, stateStore, chatSyncFactory, kanbanList, footer, jieEditorFactory)
     ).singleton(),
   });
 }

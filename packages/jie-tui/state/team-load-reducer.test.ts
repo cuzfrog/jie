@@ -157,38 +157,38 @@ describe("teamLoadReducer", () => {
     expect(second.agents.has("my-team:helper-1")).toBe(false);
   });
 
-  test("team switch resets every agent's todos to []", () => {
+  test("team switch resets every agent's cards to []", () => {
     const first = teamLoadReducer(INITIAL_TUI_STATE, team([
       { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
     ]));
     const seededAgents = new Map(first.agents);
-    const withTodosAgent = seededAgents.get("my-team:general-1");
-    if (withTodosAgent === undefined) throw new Error("seed missing");
-    seededAgents.set("my-team:general-1", { ...withTodosAgent, todos: [{ content: "carry-over", status: "in_progress" }] });
-    const withTodos: TuiState = { ...first, agents: seededAgents };
-    const switched = teamLoadReducer(withTodos, {
+    const withCardsAgent = seededAgents.get("my-team:general-1");
+    if (withCardsAgent === undefined) throw new Error("seed missing");
+    seededAgents.set("my-team:general-1", { ...withCardsAgent, cards: [{ content: "carry-over", status: "in_progress" }] });
+    const withCards: TuiState = { ...first, agents: seededAgents };
+    const switched = teamLoadReducer(withCards, {
       id: "my-team-2",
       leaderKey: "worker-1",
       sessionName: null,
       history: [],
       agents: [{ teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     });
-    expect(switched.agents.get("my-team-2:worker-1")?.todos).toEqual([]);
+    expect(switched.agents.get("my-team-2:worker-1")?.cards).toEqual([]);
   });
 
-  test("same-team reload preserves an agent's existing todos", () => {
+  test("same-team reload preserves an agent's existing cards", () => {
     const first = teamLoadReducer(INITIAL_TUI_STATE, team([
       { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
     ]));
     const firstAgent = first.agents.get("my-team:general-1");
     if (firstAgent === undefined) throw new Error("seed missing");
     const seededAgents = new Map(first.agents);
-    seededAgents.set("my-team:general-1", { ...firstAgent, todos: [{ content: "still here", status: "pending" }] });
-    const withTodos: TuiState = { ...first, agents: seededAgents };
-    const second = teamLoadReducer(withTodos, team([
+    seededAgents.set("my-team:general-1", { ...firstAgent, cards: [{ content: "still here", status: "pending" }] });
+    const withCards: TuiState = { ...first, agents: seededAgents };
+    const second = teamLoadReducer(withCards, team([
       { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
     ]));
-    expect(second.agents.get("my-team:general-1")?.todos).toEqual([{ content: "still here", status: "pending" }]);
+    expect(second.agents.get("my-team:general-1")?.cards).toEqual([{ content: "still here", status: "pending" }]);
   });
 
   test("team load clears the interrupted marker", () => {
@@ -248,8 +248,8 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
     });
   });
 
-  test("earlier turns rotate into history and todos restore from the last todo result", () => {
-    const todos = [{ content: "a", status: "completed" as const }];
+  test("earlier turns rotate into history and cards restore from the last kanban result", () => {
+    const cards = [{ content: "a", status: "completed" as const }];
     const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }]);
     const state = teamLoadReducer(INITIAL_TUI_STATE, {
       ...info,
@@ -257,7 +257,7 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
         agentKey: "general-1",
         messages: [
           user("first"), assistantText("a1"),
-          user("second"), assistantToolCall("c1", "todo", {}), toolResult("c1", "todo", "ok", { kind: "todos", todos }),
+          user("second"), assistantToolCall("c1", "kanban", {}), toolResult("c1", "kanban", "ok", { kind: "kanban", cards }),
         ],
       }],
     });
@@ -265,7 +265,7 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
     expect(agent?.history).toHaveLength(1);
     expect(agent?.history[0]?.userPrompt).toBe("first");
     expect(agent?.currentTurn?.userPrompt).toBe("second");
-    expect(agent?.todos).toEqual(todos);
+    expect(agent?.cards).toEqual(cards);
   });
 
   test("empty messages preserve an existing slot (switchTeam identity must not clobber live state)", () => {

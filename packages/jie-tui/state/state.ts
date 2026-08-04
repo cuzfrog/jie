@@ -1,6 +1,6 @@
 import type { StopReason } from "@earendil-works/pi-ai";
 import type { CommandResult, EffortLevel, ModelInfo, SkillInfo } from "@cuzfrog/jie-platform";
-import type { TodoItem } from "../todo";
+import type { KanbanCard } from "../kanban";
 
 export type AgentStatus = "idle" | "busy";
 export { type EffortLevel };
@@ -59,7 +59,7 @@ export interface AgentUiState {
   readonly lastStopReason: StopReason | null;
   readonly contextTokensUsed: number;
   readonly lastReportedTotalTokens: number | null;
-  readonly todos: ReadonlyArray<TodoItem>;
+  readonly cards: ReadonlyArray<KanbanCard>;
 }
 
 export interface TuiState {

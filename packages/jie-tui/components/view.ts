@@ -33,7 +33,7 @@ export class TuiViewImpl implements TuiView {
     tui: TUI,
     stateStore: StateStore,
     chatSyncFactory: (chatContainer: Container, requestRender: () => void) => ChatSync,
-    todoList: Component,
+    kanbanList: Component,
     footer: Component,
     jieEditorFactory: (tui: TUI) => Editor,
   ) {
@@ -51,7 +51,7 @@ export class TuiViewImpl implements TuiView {
       frames: NO_SPINNER_FRAMES,
     });
     tui.addChild(chatContainer);
-    tui.addChild(todoList);
+    tui.addChild(kanbanList);
     tui.addChild(this.workingSlot);
     tui.addChild(new WelcomeBanner(stateStore));
     tui.addChild(new StatusLine(stateStore));
