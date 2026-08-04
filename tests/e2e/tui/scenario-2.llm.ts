@@ -20,6 +20,25 @@ const expectations: Expectation[] = [
       { kind: "finish", reason: "stop" },
     ],
   },
+  {
+    match: { lastUserContains: "Update your kanban board", toolName: "kanban_write", maxAssistantMessages: 0 },
+    responseChunks: [
+      {
+        kind: "tool_call",
+        id: "kanban_call",
+        name: "kanban_write",
+        argumentsChunks: ['{"cards": [{"content": "write the report", "status": "in_progress"}]}'],
+      },
+      { kind: "finish", reason: "tool_calls" },
+    ],
+  },
+  {
+    match: { lastUserContains: "Update your kanban board", toolName: "kanban_write", minAssistantMessages: 1 },
+    responseChunks: [
+      { kind: "text", delta: "board updated." },
+      { kind: "finish", reason: "stop" },
+    ],
+  },
 ];
 
 export default expectations;
