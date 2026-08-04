@@ -223,6 +223,9 @@ function assistantToolCall(id: string, name: string, args: Record<string, unknow
 function toolResult(toolCallId: string, toolName: string, text: string, details?: unknown): AgentMessage {
   return { role: "toolResult", toolCallId, toolName, content: [{ type: "text", text }], isError: false, details, timestamp: 0 };
 }
+function compactionSummary(summary: string, tokensBefore: number): AgentMessage {
+  return { role: "compactionSummary", summary, tokensBefore, timestamp: 0 };
+}
 function usage(): Usage {
   return {
     input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
@@ -315,6 +318,28 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
     expect(agent?.history[0]?.seq).toBe(0);
     expect(agent?.currentTurn?.seq).toBe(1);
     expect(state.nextEntrySeq).toBe(2);
+  });
+
+  test("a leading compaction summary wires the marker and numbers turns after it", () => {
+    const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }]);
+    const state = teamLoadReducer(INITIAL_TUI_STATE, {
+      ...info,
+      history: [{
+        agentKey: "general-1",
+        messages: [compactionSummary("the summary", 500), user("kept"), assistantText("a1")],
+      }],
+    });
+    const agent = state.agents.get("my-team:general-1");
+    expect(agent?.compactionMarker).toEqual({ seq: 0, summary: "the summary", tokensBefore: 500 });
+    expect(agent?.currentTurn?.seq).toBe(1);
+    expect(state.nextEntrySeq).toBe(2);
+  });
+
+  test("a fresh agent starts without a compaction marker", () => {
+    const state = teamLoadReducer(INITIAL_TUI_STATE, team([
+      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+    ]));
+    expect(state.agents.get("my-team:general-1")?.compactionMarker).toBeNull();
   });
 });
 

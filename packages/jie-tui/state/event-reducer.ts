@@ -13,6 +13,7 @@ export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
     case "agent.turn.start": return reduceTurnStart(state, event);
     case "agent.idle": return reduceIdle(state, event);
     case "agent.usage": return reduceUsage(state, event);
+    case "agent.compacted": return reduceCompacted(state, event);
     case "agent.stream.chunk": return reduceStreamChunk(state, event);
     case "agent.stream.end": return reduceStreamEnd(state, event);
     case "agent.tool.call": return reduceToolCall(state, event);
@@ -104,6 +105,28 @@ function reduceUsage(state: TuiState, event: AnyEventEnvelope): TuiState {
   if (event.type !== "agent.usage") return state;
   const { agentId, agent } = resolved;
   return withAgent(state, agentId, { ...agent, contextTokensUsed: event.payload.totalTokens, lastReportedTotalTokens: event.payload.totalTokens });
+}
+
+function reduceCompacted(state: TuiState, event: AnyEventEnvelope): TuiState {
+  const resolved = resolveAgent(state, event);
+  if (resolved === null) return state;
+  if (event.type !== "agent.compacted") return state;
+  const { agentId, agent } = resolved;
+  const turns = agent.currentTurn === null ? [...agent.history] : [...agent.history, agent.currentTurn];
+  const dropCount = Math.min(event.payload.summarized_prompts, Math.max(turns.length - 1, 0));
+  const markerSeq = state.nextEntrySeq;
+  const survivors = turns.slice(dropCount).map((turn, index) => ({ ...turn, seq: markerSeq + 1 + index }));
+  const history = survivors.slice(0, survivors.length - 1);
+  const currentTurn = survivors.length === 0 ? null : survivors[survivors.length - 1]!;
+  const next: AgentUiState = {
+    ...agent,
+    history,
+    currentTurn,
+    compactionMarker: { seq: markerSeq, summary: event.payload.summary, tokensBefore: event.payload.tokens_before },
+    contextTokensUsed: estimateContextTokens(history, currentTurn),
+    lastReportedTotalTokens: null,
+  };
+  return withAgent(state, agentId, next, { nextEntrySeq: markerSeq + 1 + survivors.length });
 }
 
 function reduceStreamChunk(state: TuiState, event: AnyEventEnvelope): TuiState {

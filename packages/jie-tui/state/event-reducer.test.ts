@@ -492,6 +492,56 @@ describe("reduceIdle after agent.usage", () => {
   });
 });
 
+describe("reduceCompacted", () => {
+  function threeTurnState(): TuiState {
+    let state = loadedState();
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, "one"));
+    state = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, "two"));
+    state = reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
+    state = reduce(state, Events.agentTurnStart(AGENT_SENDER, "three"));
+    return reduce(state, Events.agentIdle(AGENT_SENDER, "stop"));
+  }
+
+  test("drops the summarized turns, keeps the tail renumbered after the marker", () => {
+    let state = threeTurnState();
+    state = reduce(state, Events.agentUsage(AGENT_SENDER, {
+      input: 10, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 99999,
+    }));
+    const compacted = reduce(state, Events.agentCompacted(AGENT_SENDER, "the summary", 500, 2));
+    const agent = compacted.agents.get("my-team:general-1");
+    expect(agent?.compactionMarker).toEqual({ seq: 3, summary: "the summary", tokensBefore: 500 });
+    expect(agent?.history).toEqual([]);
+    expect(agent?.currentTurn?.userPrompt).toBe("three");
+    expect(agent?.currentTurn?.seq).toBe(4);
+    expect(compacted.nextEntrySeq).toBe(5);
+    expect(agent?.lastReportedTotalTokens).toBeNull();
+    expect(agent?.contextTokensUsed).not.toBe(99999);
+  });
+
+  test("keeps at least one turn when summarized_prompts exceeds the known turns", () => {
+    const compacted = reduce(threeTurnState(), Events.agentCompacted(AGENT_SENDER, "s", 1, 10));
+    const agent = compacted.agents.get("my-team:general-1");
+    expect(agent?.history).toEqual([]);
+    expect(agent?.currentTurn?.userPrompt).toBe("three");
+  });
+
+  test("without any turns only the marker is recorded", () => {
+    const compacted = reduce(loadedState(), Events.agentCompacted(AGENT_SENDER, "s", 1, 0));
+    const agent = compacted.agents.get("my-team:general-1");
+    expect(agent?.compactionMarker).toEqual({ seq: 0, summary: "s", tokensBefore: 1 });
+    expect(agent?.history).toEqual([]);
+    expect(agent?.currentTurn).toBeNull();
+    expect(compacted.nextEntrySeq).toBe(1);
+  });
+
+  test("rejects compaction events from a foreign team", () => {
+    const state = loadedState();
+    const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
+    expect(reduce(state, Events.agentCompacted(foreign, "s", 1, 0))).toBe(state);
+  });
+});
+
 describe("reduceStreamChunk", () => {
   test("appends to the current block of the same type", () => {
     let state = promptedState();

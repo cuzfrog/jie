@@ -8,6 +8,7 @@ const USER_INGRESS_PREFIX = "[user]: ";
 export interface HydratedHistory {
   readonly history: MessageTurn[];
   readonly currentTurn: MessageTurn | null;
+  readonly compactionMarker: { readonly seq: number; readonly summary: string; readonly tokensBefore: number } | null;
   readonly cards: ReadonlyArray<KanbanCard>;
   readonly nextSeq: number;
 }
@@ -15,6 +16,7 @@ export interface HydratedHistory {
 export function hydrateHistory(messages: ReadonlyArray<AgentMessage>, startSeq: number): HydratedHistory {
   const turns: MessageTurn[] = [];
   let current: MessageTurn | null = null;
+  let compactionMarker: HydratedHistory["compactionMarker"] = null;
   let nextSeq = startSeq;
   for (const message of messages) {
     if (message.role === "user") {
@@ -33,11 +35,14 @@ export function hydrateHistory(messages: ReadonlyArray<AgentMessage>, startSeq: 
         nextSeq += 1;
       }
       appendToolResult(current, message);
+    } else if (message.role === "compactionSummary") {
+      compactionMarker = { seq: nextSeq, summary: message.summary, tokensBefore: message.tokensBefore };
+      nextSeq += 1;
     }
   }
   if (current !== null) turns.push(current);
-  if (turns.length === 0) return { history: [], currentTurn: null, cards: [], nextSeq };
-  return { history: turns.slice(0, turns.length - 1), currentTurn: turns[turns.length - 1]!, cards: deriveCards(turns), nextSeq };
+  if (turns.length === 0) return { history: [], currentTurn: null, compactionMarker, cards: [], nextSeq };
+  return { history: turns.slice(0, turns.length - 1), currentTurn: turns[turns.length - 1]!, compactionMarker, cards: deriveCards(turns), nextSeq };
 }
 
 function deriveCards(turns: ReadonlyArray<MessageTurn>): ReadonlyArray<KanbanCard> {
