@@ -247,6 +247,14 @@ describe("TeamManagerImpl — full surface", () => {
       await expect(manager.load("default-solo")).rejects.toThrow(/general/);
     });
 
+    test("rejects NO_MODEL_ERROR when the soul has no model and settings define none", async () => {
+      settingsStore.load.mockReturnValue({});
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await expect(manager.load("default-solo")).rejects.toMatchObject({ code: "NO_MODEL_ERROR" });
+      expect(agentBodyFactory).not.toHaveBeenCalled();
+      expect(manager.listLoaded().size).toBe(0);
+    });
+
     test("skips a non-leader role whose pinned model does not resolve and loads the leader", async () => {
       const teamDir = join(homeJieDir, "teams", "dev");
       mkdirSync(teamDir, { recursive: true });

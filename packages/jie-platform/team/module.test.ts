@@ -135,7 +135,8 @@ describe("registerTeamModule", () => {
     expect(team.id).toBe("default-solo");
     expect(team.leaderKey).toBe("general-1");
     expect(agentBodyFactory).toHaveBeenCalledTimes(1);
-    expect(agentBodyFactory).toHaveBeenCalledWith(expect.objectContaining({ agentKey: "general-1", teamId: "default-solo", isLeader: true }));
+    expect(agentBodyFactory).toHaveBeenCalledWith(
+      expect.objectContaining({ agentKey: "general-1", teamId: "default-solo", isLeader: true }));
     container.cradle.teamManager.stop();
   });
 });

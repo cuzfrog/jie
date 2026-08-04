@@ -36,7 +36,7 @@ Each entry in `AgentSoul.tools` is a spec string. `resolve` matches the segment 
 The blueprint lives at `.jie/teams/<team_id>/` (file layout, discovery, model resolution: `10-configuration.md`):
 
 ```
-.jie/teams/default/
+.jie/teams/myteam/
   TEAM.md              # YAML frontmatter: leader
   leader.md            # one .md per role — the filename stem is the role identifier
   worker_a.md
