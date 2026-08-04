@@ -47,8 +47,17 @@ describe("Footer", () => {
     expect(lines[0]).toContain("my-team:general-1");
   });
 
-  test("keeps both lines when the panel flag is set but no team is loaded", () => {
+  test("renders only the identity line while the kanban panel is open", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ ...seededState(false), kanbanPanelVisible: true }));
+    const lines = new Footer(stateStore).render(80);
+    expect(lines.length).toBe(1);
+    expect(lines[0]).toContain("/repo (dev)");
+  });
+
+  test("keeps both lines when a panel flag is set but no team is loaded", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ teamPanelVisible: true, cwd: "/repo" }));
+    expect(new Footer(stateStore).render(80).length).toBe(2);
+    stateStore.getState.mockReturnValue(makeTuiState({ kanbanPanelVisible: true, cwd: "/repo" }));
     expect(new Footer(stateStore).render(80).length).toBe(2);
   });
 

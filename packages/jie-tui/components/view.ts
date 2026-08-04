@@ -14,6 +14,7 @@ export interface TuiView {
 
 const CTRL_T = "\x14";
 const CTRL_O = "\x0f";
+const CTRL_K = "\x0b";
 const CONSUMED = { consume: true } as const;
 const INTERRUPTED_LABEL = "Interrupted";
 const TEAM_WORKING_LABEL = "Team working…";
@@ -112,6 +113,7 @@ class FlushLoader extends Loader {
 function resolveGlobalKey(data: string, state: TuiState, popupOpen: boolean): Action | null {
   if (data === CTRL_T) return Actions.toggleThinking();
   if (data === CTRL_O) return Actions.toggleToolCards();
+  if (data === CTRL_K) return Actions.toggleKanbanPanel();
   if (matchesKey(data, "left") && state.editorCursorAtStart && !popupOpen) return Actions.toggleTeamPanel();
   return null;
 }

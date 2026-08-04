@@ -7,6 +7,7 @@ describe("hintLines", () => {
     expect(text).toContain("enter send");
     expect(text).toContain("tab complete");
     expect(text).toContain("mention a file");
+    expect(text).toContain("ctrl+k kanban panel");
     expect(text).toContain("ctrl+d quit");
   });
 
