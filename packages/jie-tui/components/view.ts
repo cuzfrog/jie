@@ -6,6 +6,7 @@ import { StatusLine } from "./status-line";
 import { QueuedPrompts } from "./queued-prompts";
 import { WelcomeBanner } from "./welcome-banner";
 import { TeamPanel } from "./team-panel";
+import { KanbanPanel } from "./kanban-panel";
 
 export interface TuiView {
   stop(): void;
@@ -59,6 +60,7 @@ export class TuiViewImpl implements TuiView {
     tui.addChild(editor);
     tui.addChild(footer);
     tui.addChild(new TeamPanel(stateStore));
+    tui.addChild(new KanbanPanel(stateStore));
     tui.setFocus(editor);
     this.unsubscribeKeys = tui.addInputListener((data) => {
       const state = this.stateStore.getState();
