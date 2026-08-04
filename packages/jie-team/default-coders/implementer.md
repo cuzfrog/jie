@@ -5,7 +5,6 @@ tools:
   - read_file
   - write_file
   - edit
-  - todo_write
   - read_artifact
 subscribe:
   - task.planned

@@ -20,6 +20,7 @@ export interface Tool<TInput = unknown> {
   readonly description: string;
   readonly label: string;
   readonly timeout?: number;
+  readonly isUtility?: boolean;
   readonly parameters: TSchema;
   execute(
     input: TInput,

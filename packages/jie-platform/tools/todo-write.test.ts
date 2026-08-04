@@ -3,6 +3,11 @@ import { createTodoWriteTool } from "./todo-write";
 import { makeEmptyContext } from "./_test-context";
 
 describe("todo_write", () => {
+  test("is a utility tool, implicitly available to every agent", () => {
+    const tool = createTodoWriteTool();
+    expect(tool.isUtility).toBe(true);
+  });
+
   test("single in_progress todo is accepted as the canonical shape", async () => {
     const tool = createTodoWriteTool();
     const todos: TodoItem[] = [{ content: "write tests", status: "in_progress", active_form: "Writing tests" }];
