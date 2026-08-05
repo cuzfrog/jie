@@ -296,6 +296,7 @@ describe("AgentEventBridge — persistence", () => {
       makeAssistantMessage({ content: [{ type: "text", text: "x" }] }),
       { role: "user", content: "hi", timestamp: 0 },
       makeToolResultMessage(),
+      { role: "custom", customType: "test", content: "x", display: false, timestamp: 0 },
     ];
     for (const message of cases) {
       bridge.handleEvent({ type: "message_end", message });
