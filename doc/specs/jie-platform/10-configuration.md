@@ -247,7 +247,7 @@ The platform validates settings at startup. **Hard fail (exit 1):**
 
 | Condition | Error |
 |---|---|
-| `settings.json` JSON parse error | Line/column from the parser. |
+| `settings.json` JSON parse error | `INVALID_CONFIG` with the file path and the parser's line/column. The settings write path throws likewise — a corrupt file is never silently reset. |
 | `defaultProvider` / `defaultModel` wrong JSON shape | `<field> must be a string` |
 | `defaultTeam` outside `[A-Za-z0-9_-]{1,32}` | `invalid defaultTeam: <value>` |
 | `compaction` not an object, `enabled` not a boolean, or `reserveTokens` / `keepRecentTokens` not a positive integer | `compaction must be an object` / `compaction.<field> must be a boolean` / `compaction.<field> must be a positive integer` |

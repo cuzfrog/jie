@@ -34,7 +34,12 @@ function readSettingsFile(path: string): RawSettings | null {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;
   }
-  return JSON.parse(text) as RawSettings;
+  try {
+    return JSON.parse(text) as RawSettings;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new JiePlatformError("INVALID_CONFIG", { detail: `${path}: ${message}` });
+  }
 }
 
 function validateSettings(raw: RawSettings, source: string): Settings {
