@@ -1,11 +1,11 @@
 import { realpathSync } from "node:fs";
-import { isAbsolute, resolve } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
 
 export function resolveWithinWorkspace(
   path: string,
   workspaceRoot: string,
-): string {
+): { readonly realPath: string; readonly relativePath: string } {
   const abs = isAbsolute(path) ? path : resolve(workspaceRoot, path);
   let real: string;
   try {
@@ -22,7 +22,7 @@ export function resolveWithinWorkspace(
   if (real !== rootReal && !real.startsWith(rootReal + "/")) {
     throw new JiePlatformError("PATH_ESCAPE", { detail: path });
   }
-  return real;
+  return { realPath: real, relativePath: relative(rootReal, real) };
 }
 
 export function mapErrno(

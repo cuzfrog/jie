@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createEditTool } from "./edit";
 import { createFileMutationQueue, type FileMutationQueue } from "./file-mutation-queue";
 import { makeEmptyContext } from "./_test-context";
+import type { ExecutionContext } from "./types";
 
 const fileMutationQueue = createFileMutationQueue();
 
@@ -614,5 +615,46 @@ describe("edit prepareArguments", () => {
     const tool = createEditTool({ workspaceRoot: "/tmp", fileMutationQueue });
     const input = { path: "a.txt", edits: "{\"old_string\": \"x\"}" };
     expect(tool.prepareArguments!(input)).toBe(input);
+  });
+});
+
+describe("edit — write gates", () => {
+  let workspace: string;
+
+  beforeEach(() => {
+    workspace = mkdtempSync(join(tmpdir(), "jie-edit-gate-"));
+  });
+
+  afterEach(() => {
+    rmSync(workspace, { recursive: true, force: true });
+  });
+
+  function gatedContext(role: string): ExecutionContext {
+    return {
+      ...makeEmptyContext(),
+      agentRole: role,
+      lifecycle: {
+        maxIterations: 5,
+        permanentPhases: [],
+        transitions: [],
+        writeGates: [{ pattern: "**/CONTEXT.md", roles: ["architect"] }],
+      },
+    };
+  }
+
+  test("denies editing a gated path for a role outside the gate and leaves the file untouched", async () => {
+    writeFileSync(join(workspace, "CONTEXT.md"), "old\n");
+    const tool = createEditTool({ workspaceRoot: workspace, fileMutationQueue });
+    await expect(
+      tool.execute({ path: "CONTEXT.md", edits: [{ old_string: "old", new_string: "new" }] }, gatedContext("implementer")),
+    ).rejects.toMatchObject({ code: "WRITE_GATE_DENIED" });
+    expect(readFileSync(join(workspace, "CONTEXT.md"), "utf-8")).toBe("old\n");
+  });
+
+  test("allows editing a gated path for a listed role", async () => {
+    writeFileSync(join(workspace, "CONTEXT.md"), "old\n");
+    const tool = createEditTool({ workspaceRoot: workspace, fileMutationQueue });
+    await tool.execute({ path: "CONTEXT.md", edits: [{ old_string: "old", new_string: "new" }] }, gatedContext("architect"));
+    expect(readFileSync(join(workspace, "CONTEXT.md"), "utf-8")).toBe("new\n");
   });
 });

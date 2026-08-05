@@ -1,8 +1,9 @@
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { Type } from "typebox";
-import type { Tool, ToolResult } from "./types";
+import type { ExecutionContext, Tool, ToolResult } from "./types";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
 import type { FileMutationQueue } from "./file-mutation-queue";
+import { checkWriteGates } from "./write-gate";
 import { mapErrno, resolveWithinWorkspace } from "./path-utils";
 import { renderUnifiedDiff } from "./unified-diff";
 
@@ -89,8 +90,11 @@ export function createEditTool(dependencies: EditDeps): Tool<EditInput> {
       }
       return args;
     },
-    async execute(input: EditInput): Promise<ToolResult> {
-      const realPath = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
+    async execute(input: EditInput, executionContext: ExecutionContext): Promise<ToolResult> {
+      const { realPath, relativePath } = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
+      if (executionContext.lifecycle !== null) {
+        checkWriteGates(relativePath, executionContext.agentRole, executionContext.lifecycle.writeGates);
+      }
       return dependencies.fileMutationQueue.run(realPath, () => applyEdits(input, realPath));
     },
   };

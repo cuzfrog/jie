@@ -1,9 +1,10 @@
 import { mkdirSync, readFileSync, statSync, writeFileSync, type Stats } from "node:fs";
 import { dirname } from "node:path";
 import { Type } from "typebox";
-import type { Tool, ToolResult } from "./types";
+import type { ExecutionContext, Tool, ToolResult } from "./types";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
 import type { FileMutationQueue } from "./file-mutation-queue";
+import { checkWriteGates } from "./write-gate";
 import { mapErrno, resolveWithinWorkspace } from "./path-utils";
 import { renderUnifiedDiff } from "./unified-diff";
 
@@ -42,12 +43,15 @@ export function createWriteFileTool(dependencies: WriteFileDeps): Tool<WriteFile
       path: Type.String(),
       content: Type.String(),
     }),
-    async execute(input: WriteFileInput): Promise<ToolResult> {
+    async execute(input: WriteFileInput, executionContext: ExecutionContext): Promise<ToolResult> {
       if (input.content.length > CONTENT_CAP) {
         throw new JiePlatformError("FILE_TOO_LARGE", { detail: `${input.content.length}` });
       }
 
-      const realPath = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
+      const { realPath, relativePath } = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
+      if (executionContext.lifecycle !== null) {
+        checkWriteGates(relativePath, executionContext.agentRole, executionContext.lifecycle.writeGates);
+      }
       return dependencies.fileMutationQueue.run(realPath, () => applyWrite(input, realPath));
     },
   };

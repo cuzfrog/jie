@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { createFileMutationQueue, type FileMutationQueue } from "./file-mutation-queue";
 import { createWriteFileTool } from "./write-file";
 import { makeEmptyContext } from "./_test-context";
+import type { ExecutionContext } from "./types";
 
 const fileMutationQueue = createFileMutationQueue();
 
@@ -195,5 +196,57 @@ describe("write_file", () => {
       makeEmptyContext(),
     );
     expect(result.content).toBe("Successfully wrote 4 bytes to a.txt");
+  });
+});
+
+describe("write_file — write gates", () => {
+  let workspace: string;
+
+  beforeEach(() => {
+    workspace = mkdtempSync(join(tmpdir(), "jie-write-gate-"));
+  });
+
+  afterEach(() => {
+    rmSync(workspace, { recursive: true, force: true });
+  });
+
+  function gatedContext(role: string): ExecutionContext {
+    return {
+      ...makeEmptyContext(),
+      agentRole: role,
+      lifecycle: {
+        maxIterations: 5,
+        permanentPhases: [],
+        transitions: [],
+        writeGates: [{ pattern: "**/CONTEXT.md", roles: ["architect"] }],
+      },
+    };
+  }
+
+  test("denies a gated path for a role outside the gate and leaves no file", async () => {
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
+    await expect(
+      tool.execute({ path: "docs/CONTEXT.md", content: "x" }, gatedContext("implementer")),
+    ).rejects.toMatchObject({ code: "WRITE_GATE_DENIED" });
+    expect(existsSync(join(workspace, "docs/CONTEXT.md"))).toBe(false);
+  });
+
+  test("denies a gated path given as an absolute path too", async () => {
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
+    await expect(
+      tool.execute({ path: join(workspace, "docs", "CONTEXT.md"), content: "x" }, gatedContext("implementer")),
+    ).rejects.toMatchObject({ code: "WRITE_GATE_DENIED" });
+  });
+
+  test("allows a gated path for a listed role", async () => {
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
+    await tool.execute({ path: "docs/CONTEXT.md", content: "ctx" }, gatedContext("architect"));
+    expect(readFileSync(join(workspace, "docs/CONTEXT.md"), "utf-8")).toBe("ctx");
+  });
+
+  test("teams without a lifecycle can write gate-shaped paths", async () => {
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
+    await tool.execute({ path: "docs/CONTEXT.md", content: "free" }, makeEmptyContext());
+    expect(readFileSync(join(workspace, "docs/CONTEXT.md"), "utf-8")).toBe("free");
   });
 });

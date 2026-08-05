@@ -27,6 +27,8 @@ no-new-exports:
   - web-fetch.ts
   - web-search.test.ts
   - web-search.ts
+  - write-gate.test.ts
+  - write-gate.ts
   - write-artifact.test.ts
   - write-artifact.ts
   - write-file.test.ts
