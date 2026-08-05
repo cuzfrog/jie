@@ -78,24 +78,25 @@ export function createNotifyTool(dependencies: NotifyDeps): Tool<NotifyInput> {
       }
 
       const lifecycle = executionContext.lifecycle;
+      const taskId = input.task_id === "" ? undefined : input.task_id;
       const isLifecycleTopic = lifecycle !== null && lifecycle.transitions.some((rule) => rule.topic === input.topic);
       let transition: TaskTransitionOutcome | null = null;
       if (lifecycle !== null && isLifecycleTopic) {
-        if (input.task_id === undefined || input.task_id === "") {
+        if (taskId === undefined) {
           throw new JiePlatformError("MISSING_REQUIRED_FIELD", {
             detail: `task_id is required for lifecycle topic '${input.topic}'`,
           });
         }
-        if (!TASK_ID_PATTERN.test(input.task_id)) {
-          throw new JiePlatformError("INVALID_TASK_ID", { detail: input.task_id });
+        if (!TASK_ID_PATTERN.test(taskId)) {
+          throw new JiePlatformError("INVALID_TASK_ID", { detail: taskId });
         }
         transition = await dependencies.taskLifecycleGuard.applyTransition({
           lifecycle,
-          taskId: input.task_id,
+          taskId,
           topic: input.topic,
           agentRole: executionContext.agentRole,
         });
-      } else if (input.task_id !== undefined) {
+      } else if (taskId !== undefined) {
         throw new JiePlatformError("INVALID_TASK_ID", {
           detail: `task_id is not accepted on non-lifecycle topic '${input.topic}'`,
         });
@@ -107,9 +108,10 @@ export function createNotifyTool(dependencies: NotifyDeps): Tool<NotifyInput> {
       dependencies.eventManager.publish(envelope);
 
       if (transition !== null) {
+        const ack = `(task '${taskId}' moved to phase '${transition.phase}', iteration ${transition.iteration})`;
         return {
-          content: `Notification published on '${input.topic}' (task '${input.task_id}' moved to phase '${transition.phase}', iteration ${transition.iteration})`,
-          details: { topic: input.topic, task_id: input.task_id, phase: transition.phase, iteration: transition.iteration },
+          content: `Notification published on '${input.topic}' ${ack}`,
+          details: { topic: input.topic, task_id: taskId, phase: transition.phase, iteration: transition.iteration },
         };
       }
       return {

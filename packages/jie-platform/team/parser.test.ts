@@ -458,6 +458,64 @@ describe("parseTeamFromManifests — lifecycle", () => {
 `),
     ).toThrow(expect.objectContaining({ code: "MISSING_REQUIRED_FIELD" }));
   });
+
+  test("empty topic is rejected", () => {
+    expect(() =>
+      parse(`lifecycle:
+  transitions:
+    - topic: ""
+      role: dm
+      from: any
+      phase: recorded
+`),
+    ).toThrow(expect.objectContaining({ code: "INVALID_LIFECYCLE" }));
+  });
+
+  test("empty phase is rejected", () => {
+    expect(() =>
+      parse(`lifecycle:
+  transitions:
+    - topic: task.recorded
+      role: dm
+      from: any
+      phase: ""
+`),
+    ).toThrow(expect.objectContaining({ code: "INVALID_LIFECYCLE" }));
+  });
+
+  test("empty from phase is rejected as string and inside a list", () => {
+    expect(() =>
+      parse(`lifecycle:
+  transitions:
+    - topic: task.recorded
+      role: dm
+      from: ""
+      phase: recorded
+`),
+    ).toThrow(expect.objectContaining({ code: "INVALID_LIFECYCLE" }));
+    expect(() =>
+      parse(`lifecycle:
+  transitions:
+    - topic: task.recorded
+      role: dm
+      from:
+        - designed
+        - ""
+      phase: recorded
+`),
+    ).toThrow(expect.objectContaining({ code: "INVALID_LIFECYCLE" }));
+  });
+
+  test("empty write gate pattern is rejected", () => {
+    expect(() =>
+      parse(`lifecycle:
+  write_gates:
+    - pattern: ""
+      roles:
+        - dm
+`),
+    ).toThrow(expect.objectContaining({ code: "INVALID_LIFECYCLE" }));
+  });
 });
 
 describe("loadTeamFromDir — shipped default-coders blueprint", () => {

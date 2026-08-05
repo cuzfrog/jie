@@ -303,4 +303,21 @@ describe("notify — lifecycle enforcement", () => {
     ).rejects.toMatchObject({ code: "INVALID_TASK_ID" });
     expect(taskLifecycleGuard.applyTransition).not.toHaveBeenCalled();
   });
+
+  test("an empty task_id counts as missing on a lifecycle topic", async () => {
+    const { events, received } = makeLifecycleHarness();
+    const tool = createNotifyTool({ eventManager: events, taskLifecycleGuard });
+    await expect(
+      tool.execute({ topic: "task.recorded", prompt: "x", task_id: "" }, makeLifecycleCtx()),
+    ).rejects.toMatchObject({ code: "MISSING_REQUIRED_FIELD" });
+    expect(received).toHaveLength(0);
+  });
+
+  test("an empty task_id is ignored on a non-lifecycle topic", async () => {
+    const events = makeFakeEventManager();
+    const tool = createNotifyTool({ eventManager: events, taskLifecycleGuard });
+    const result = await tool.execute({ topic: "chit-chat", prompt: "hi", task_id: "" }, makeLifecycleCtx());
+    expect(result.content).toBe("Notification published on 'chit-chat'");
+    expect(taskLifecycleGuard.applyTransition).not.toHaveBeenCalled();
+  });
 });

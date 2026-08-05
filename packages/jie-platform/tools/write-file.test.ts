@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -197,6 +198,17 @@ describe("write_file", () => {
     );
     expect(result.content).toBe("Successfully wrote 4 bytes to a.txt");
   });
+
+  test("new file through a directory symlink escaping the workspace -> path_escape", async () => {
+    const outside = mkdtempSync(join(tmpdir(), "jie-outside-"));
+    symlinkSync(outside, join(workspace, "evil"));
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
+    await expect(
+      tool.execute({ path: "evil/x.md", content: "x" }, makeEmptyContext()),
+    ).rejects.toMatchObject({ code: "PATH_ESCAPE" });
+    expect(existsSync(join(outside, "x.md"))).toBe(false);
+    rmSync(outside, { recursive: true, force: true });
+  });
 });
 
 describe("write_file — write gates", () => {
@@ -248,5 +260,25 @@ describe("write_file — write gates", () => {
     const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     await tool.execute({ path: "docs/CONTEXT.md", content: "free" }, makeEmptyContext());
     expect(readFileSync(join(workspace, "docs/CONTEXT.md"), "utf-8")).toBe("free");
+  });
+
+  test("denies a new file under a gated directory reached through a directory symlink", async () => {
+    mkdirSync(join(workspace, "docs"));
+    symlinkSync(join(workspace, "docs"), join(workspace, "alias"));
+    const context: ExecutionContext = {
+      ...makeEmptyContext(),
+      agentRole: "implementer",
+      lifecycle: {
+        maxIterations: 5,
+        permanentPhases: [],
+        transitions: [],
+        writeGates: [{ pattern: "docs/**", roles: ["architect"] }],
+      },
+    };
+    const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
+    await expect(
+      tool.execute({ path: "alias/notes.md", content: "x" }, context),
+    ).rejects.toMatchObject({ code: "WRITE_GATE_DENIED" });
+    expect(existsSync(join(workspace, "docs/notes.md"))).toBe(false);
   });
 });

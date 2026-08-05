@@ -168,6 +168,23 @@ describe("createTaskLifecycleGuard", () => {
     expect(otherOutcome.phase).toBe("generic");
   });
 
+  test("exact-role rules shadow the wildcard even when their from-phases do not match", async () => {
+    const custom: TaskLifecycle = {
+      maxIterations: 5,
+      permanentPhases: [],
+      transitions: [
+        transition({ topic: "task.x", role: "dm", fromPhases: ["somewhere"], toPhase: "specific" }),
+        transition({ topic: "task.x", role: "any", toPhase: "generic" }),
+      ],
+      writeGates: [],
+    };
+    const guard = createTaskLifecycleGuard(artifactStore);
+    await expect(
+      guard.applyTransition({ lifecycle: custom, taskId: "T-1", topic: "task.x", agentRole: "dm" }),
+    ).rejects.toMatchObject({ code: "ILLEGAL_TRANSITION" });
+    expect(artifactStore.write).not.toHaveBeenCalled();
+  });
+
   test("a malformed status row is treated as absent", async () => {
     artifactStore.list.mockResolvedValue([row("T-1/status/0001", "2026-01-01T00:00:01.000Z")]);
     artifactStore.read.mockResolvedValue({ key: "T-1/status/0001", content: "not json", created_at: "2026-01-01T00:00:01.000Z" });

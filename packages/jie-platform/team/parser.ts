@@ -320,6 +320,12 @@ function parseTransitions(value: unknown, roleStems: ReadonlySet<string>, file: 
     const topic = requiredString(row, "topic", name, file);
     const role = requiredString(row, "role", name, file);
     const toPhase = requiredString(row, "phase", name, file);
+    if (topic === "") {
+      throw new JiePlatformError("INVALID_LIFECYCLE", { detail: `${file}: ${name}.topic must not be empty` });
+    }
+    if (toPhase === "") {
+      throw new JiePlatformError("INVALID_LIFECYCLE", { detail: `${file}: ${name}.phase must not be empty` });
+    }
     const fromPhases = parseFromPhases(row.from, name, file);
     if (role !== "any" && !roleStems.has(role)) {
       throw new JiePlatformError("INVALID_LIFECYCLE", { detail: `${file}: ${name} references unknown role '${role}'` });
@@ -354,10 +360,18 @@ function parseFromPhases(value: unknown, name: string, file: string): ReadonlyAr
     throw new JiePlatformError("MISSING_REQUIRED_FIELD", { detail: `missing required field 'from' in ${name} (${file})` });
   }
   if (value === "any") return "any";
-  if (typeof value === "string") return [value];
+  if (typeof value === "string") {
+    if (value === "") {
+      throw new JiePlatformError("INVALID_LIFECYCLE", { detail: `${file}: ${name}.from must not be empty` });
+    }
+    return [value];
+  }
   const phases = asStringList(value, `${name}.from`, file);
   if (phases.length === 0) {
     throw new JiePlatformError("INVALID_LIFECYCLE", { detail: `${file}: ${name}.from must not be empty` });
+  }
+  if (phases.some((phase) => phase === "")) {
+    throw new JiePlatformError("INVALID_LIFECYCLE", { detail: `${file}: ${name}.from must not contain empty phases` });
   }
   return phases;
 }
@@ -384,6 +398,9 @@ function parseWriteGates(value: unknown, roleStems: ReadonlySet<string>, file: s
     const name = `lifecycle.write_gates[${index}]`;
     const row = asMapping(value[index], name, file);
     const pattern = requiredString(row, "pattern", name, file);
+    if (pattern === "") {
+      throw new JiePlatformError("INVALID_LIFECYCLE", { detail: `${file}: ${name}.pattern must not be empty` });
+    }
     if (!("roles" in row) || row.roles === undefined) {
       throw new JiePlatformError("MISSING_REQUIRED_FIELD", { detail: `missing required field 'roles' in ${name} (${file})` });
     }
