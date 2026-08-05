@@ -19,6 +19,7 @@ const JiePlatformErrorMessages = {
 
   INVALID_ARTIFACT_KEY: "Invalid artifact key",
   ARTIFACT_TOO_LARGE: "Artifact content exceeds the maximum allowed size",
+  ARTIFACT_KEY_RESERVED: "Artifact key is reserved by the platform",
 
   COMMAND_TIMED_OUT: "Command exceeded the time limit",
 
