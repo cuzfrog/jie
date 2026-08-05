@@ -14,11 +14,11 @@ import type { AgentBodyParams } from "./agent-body";
 import type { CompactionInput, CompactionResult, Compactor } from "./compaction";
 import { Events, type EventEnvelope, type EventManager, type EventType } from "../event";
 import type { ArtifactStore, MemoryManager } from "../storage";
-import type { Tool, ToolRegistry, ToolResult } from "../tools";
+import type { ExecutionContext, Tool, ToolRegistry, ToolResult } from "../tools";
 import type { Skill, SkillManager } from "../skills";
 import type { HookRunner } from "../hooks";
 import type { AgentSoul } from "../team";
-import type { EffortLevel, UserIngressMessage } from "../types";
+import type { EffortLevel, TaskLifecycle, UserIngressMessage } from "../types";
 
 async function flush(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -255,6 +255,7 @@ interface MakeBodyOverrides {
   sessionId?: string;
   model?: Model<Api>;
   effort?: EffortLevel;
+  lifecycle?: TaskLifecycle | null;
   factory?: (opts: ConstructorParameters<typeof PiAgent>[0]) => PiAgent;
   systemContextBlock?: string;
   compactor?: Compactor;
@@ -335,6 +336,7 @@ function makeHarness(): Harness {
       sessionId: overrides.sessionId ?? "s1",
       model: overrides.model,
       effort: overrides.effort ?? "off",
+      lifecycle: overrides.lifecycle ?? null,
     };
     return new JieAgentBody(params, {
       eventManager: events,
@@ -500,6 +502,52 @@ describe("JieAgentBody — tool resolution", () => {
     h.makeBody({ factory: cap.factory });
     const names = (cap.fake.state.tools as Array<{ name: string }>).map((t) => t.name);
     expect(names).toEqual(["kanban_write"]);
+  });
+});
+
+describe("JieAgentBody — execution context lifecycle wiring", () => {
+  function makeCapturingTool(received: Array<ExecutionContext["lifecycle"]>): Tool {
+    return {
+      name: "noop",
+      description: "no-op",
+      label: "Noop",
+      parameters: Type.Object({}),
+      async execute(_input, executionContext): Promise<ToolResult> {
+        received.push(executionContext.lifecycle);
+        return { content: "ok" };
+      },
+    };
+  }
+
+  async function executeFirstTool(cap: FakeAgentCapture): Promise<void> {
+    const adapted = (cap.fake.state.tools as Array<{ execute: (toolCallId: string, params: unknown) => Promise<unknown> }>)[0]!;
+    await adapted.execute("call-1", {});
+  }
+
+  test("adapted tools receive the lifecycle declared on the body params", async () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    const lifecycle: TaskLifecycle = {
+      maxIterations: 2,
+      permanentPhases: ["done"],
+      transitions: [{ topic: "task.recorded", role: "dm", fromPhases: "any", toPhase: "recorded", iteration: "reset" }],
+      writeGates: [],
+    };
+    const received: Array<TaskLifecycle | null> = [];
+    h.toolRegistry.resolve.mockReturnValue([makeCapturingTool(received)]);
+    h.makeBody({ soul: makeSoul({ tools: ["noop"] }), factory: cap.factory, lifecycle });
+    await executeFirstTool(cap);
+    expect(received).toEqual([lifecycle]);
+  });
+
+  test("adapted tools receive a null lifecycle when the team declares none", async () => {
+    const h = makeHarness();
+    const cap = makeFakeAgentFactory();
+    const received: Array<TaskLifecycle | null> = [];
+    h.toolRegistry.resolve.mockReturnValue([makeCapturingTool(received)]);
+    h.makeBody({ soul: makeSoul({ tools: ["noop"] }), factory: cap.factory });
+    await executeFirstTool(cap);
+    expect(received).toEqual([null]);
   });
 });
 

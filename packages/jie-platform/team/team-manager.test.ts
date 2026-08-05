@@ -148,6 +148,31 @@ describe("TeamManagerImpl — full surface", () => {
       expect(teamLoadedEvents().map((e) => e.payload.id)).toContain("default-solo");
     });
 
+    test("passes the blueprint lifecycle to the body factory", async () => {
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(
+        join(teamDir, "TEAM.md"),
+        `---\nleader: dm\nlifecycle:\n  transitions:\n    - topic: task.recorded\n      role: dm\n      from: any\n      phase: recorded\n---\n`,
+      );
+      writeFileSync(join(teamDir, "dm.md"), `---\ntools:\n  - bash\n---\ndm`);
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(agentBodyFactory.mock.calls[0]![0]!.lifecycle).toEqual({
+        maxIterations: 5,
+        permanentPhases: [],
+        transitions: [{ topic: "task.recorded", role: "dm", fromPhases: "any", toPhase: "recorded", iteration: null }],
+        writeGates: [],
+      });
+    });
+
+    test("passes a null lifecycle for teams without a lifecycle declaration", async () => {
+      writeTeam(join(homeJieDir, "teams"), "dev", "leader");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(agentBodyFactory.mock.calls[0]![0]!.lifecycle).toBeNull();
+    });
+
     test("uses defaultTeam from settings when no teamId is given", async () => {
       const userTeams = join(homeJieDir, "teams");
       writeTeam(userTeams, "dev", "leader");

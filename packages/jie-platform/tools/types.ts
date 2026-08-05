@@ -1,5 +1,6 @@
 import type { TSchema } from "typebox";
 import type { ArtifactStore } from "../storage";
+import type { TaskLifecycle } from "../types";
 
 export interface ExecutionContext {
   readonly sessionId: string;
@@ -7,6 +8,7 @@ export interface ExecutionContext {
   readonly agentKey: string;
   readonly agentRole: string;
   readonly artifactStore: ArtifactStore;
+  readonly lifecycle: TaskLifecycle | null;
 }
 
 export interface ToolResult {

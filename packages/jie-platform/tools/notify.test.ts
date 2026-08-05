@@ -16,6 +16,7 @@ function makeCtx(): ExecutionContext {
     agentKey: "leader-1",
     agentRole: "leader",
     artifactStore: stubArtifactStore(),
+    lifecycle: null,
   };
 }
 
