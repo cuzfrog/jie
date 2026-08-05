@@ -3,11 +3,13 @@ import { basename, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { BUILTIN_DEFAULT_SOLO_TEAM_ID, type AgentSoul, type TeamBlueprint } from "./types";
 import { JiePlatformError } from "../jie-platform-errors";
+import type { TaskLifecycle, TaskTransitionRule, WriteGateRule } from "../types";
 import DEFAULT_SOLO_TEAM_MD from "./default-solo/TEAM.md" with { type: "text" };
 import DEFAULT_SOLO_GENERAL_MD from "./default-solo/general.md" with { type: "text" };
 
 const TEAM_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
 const ROLE_STEM_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+const DEFAULT_MAX_ITERATIONS = 5;
 
 const FRONTMATTER_DELIMITER = "---";
 
@@ -63,10 +65,16 @@ export function parseTeamFromManifests(
   roles.sort((a, b) => a.role.localeCompare(b.role));
 
   let leaderRole: string | null = null;
+  let lifecycle: TaskLifecycle | null = null;
+  const roleStems = new Set(roles.map((r) => r.role));
 
   if (teamFile !== undefined) {
     const teamContent = teamFile[1];
-    const { leader } = parseTeamFile(teamContent, "TEAM.md");
+    const { leader, frontmatter } = parseTeamFile(teamContent, "TEAM.md");
+    lifecycle =
+      frontmatter.lifecycle === undefined || frontmatter.lifecycle === null
+        ? null
+        : parseLifecycle(frontmatter.lifecycle, roleStems, "TEAM.md");
     if (leader === null) {
       if (agentFiles.length >= 2) {
         throw new JiePlatformError("LEADER_REQUIRED", {
@@ -77,7 +85,6 @@ export function parseTeamFromManifests(
         leaderRole = roles[0]!.role;
       }
     } else {
-      const roleStems = new Set(roles.map((r) => r.role));
       if (agentFiles.length === 0) {
         throw new JiePlatformError("LEADER_UNKNOWN", {
           detail: `TEAM.md 'leader' field references unknown role '${leader}'; checked ${sourceDir || teamId}/`,
@@ -113,7 +120,7 @@ export function parseTeamFromManifests(
     }
   }
 
-  return { id: teamId, roles, leaderRole };
+  return { id: teamId, roles, leaderRole, lifecycle };
 }
 
 export function loadTeamFromDir(dirPath: string): TeamBlueprint {
@@ -147,6 +154,7 @@ interface RawFrontmatter {
   subscribe?: unknown;
   skills?: unknown;
   leader?: unknown;
+  lifecycle?: unknown;
 }
 
 function splitFrontmatter(content: string): {
@@ -258,7 +266,7 @@ function parseAgentFile(
 function parseTeamFile(
   content: string,
   file: string,
-): { leader: string | null; frontmatter: RawFrontmatter | null } {
+): { leader: string | null; frontmatter: RawFrontmatter } {
   const { frontmatter, body: _body } = splitFrontmatter(content);
   if (frontmatter === null) {
     throw new JiePlatformError("INVALID_FRONTMATTER", {
@@ -270,4 +278,153 @@ function parseTeamFile(
     return { leader: null, frontmatter };
   }
   return { leader: asString(leader, "leader", file), frontmatter };
+}
+
+function parseLifecycle(value: unknown, roleStems: ReadonlySet<string>, file: string): TaskLifecycle {
+  const block = asMapping(value, "lifecycle", file);
+  const maxIterations = parseMaxIterations(block.max_iterations, file);
+  const permanentPhases =
+    block.permanent_phases === undefined ? [] : asStringList(block.permanent_phases, "lifecycle.permanent_phases", file);
+  const transitions = parseTransitions(block.transitions, roleStems, file);
+  const writeGates = parseWriteGates(block.write_gates, roleStems, file);
+  return { maxIterations, permanentPhases, transitions, writeGates };
+}
+
+function parseMaxIterations(value: unknown, file: string): number {
+  if (value === undefined) return DEFAULT_MAX_ITERATIONS;
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new JiePlatformError("INVALID_FIELD_TYPE", {
+      detail: `${file}: field 'lifecycle.max_iterations' must be an integer`,
+    });
+  }
+  if (value < 1) {
+    throw new JiePlatformError("INVALID_LIFECYCLE", {
+      detail: `${file}: lifecycle.max_iterations must be at least 1`,
+    });
+  }
+  return value;
+}
+
+function parseTransitions(value: unknown, roleStems: ReadonlySet<string>, file: string): TaskTransitionRule[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    throw new JiePlatformError("INVALID_FIELD_TYPE", {
+      detail: `${file}: field 'lifecycle.transitions' must be a list`,
+    });
+  }
+  const rules: TaskTransitionRule[] = [];
+  const seen = new Map<string, Set<string> | "any">();
+  for (let index = 0; index < value.length; index += 1) {
+    const name = `lifecycle.transitions[${index}]`;
+    const row = asMapping(value[index], name, file);
+    const topic = requiredString(row, "topic", name, file);
+    const role = requiredString(row, "role", name, file);
+    const toPhase = requiredString(row, "phase", name, file);
+    if (topic === "") {
+      throw new JiePlatformError("INVALID_LIFECYCLE", { detail: `${file}: ${name}.topic must not be empty` });
+    }
+    if (toPhase === "") {
+      throw new JiePlatformError("INVALID_LIFECYCLE", { detail: `${file}: ${name}.phase must not be empty` });
+    }
+    const fromPhases = parseFromPhases(row.from, name, file);
+    if (role !== "any" && !roleStems.has(role)) {
+      throw new JiePlatformError("INVALID_LIFECYCLE", { detail: `${file}: ${name} references unknown role '${role}'` });
+    }
+    const pair = `${topic}\u0000${role}`;
+    const previous = seen.get(pair);
+    if (fromPhases === "any") {
+      if (previous !== undefined) {
+        throw new JiePlatformError("INVALID_LIFECYCLE", { detail: `${file}: ${name} duplicates an earlier transition` });
+      }
+      seen.set(pair, "any");
+    } else {
+      if (previous === "any") {
+        throw new JiePlatformError("INVALID_LIFECYCLE", { detail: `${file}: ${name} duplicates an earlier transition` });
+      }
+      const phases = previous ?? new Set<string>();
+      for (const phase of fromPhases) {
+        if (phases.has(phase)) {
+          throw new JiePlatformError("INVALID_LIFECYCLE", { detail: `${file}: ${name} duplicates an earlier transition` });
+        }
+        phases.add(phase);
+      }
+      seen.set(pair, phases);
+    }
+    rules.push({ topic, role, fromPhases, toPhase, iteration: parseIterationFlag(row.iteration, name, file) });
+  }
+  return rules;
+}
+
+function parseFromPhases(value: unknown, name: string, file: string): ReadonlyArray<string> | "any" {
+  if (value === undefined) {
+    throw new JiePlatformError("MISSING_REQUIRED_FIELD", { detail: `missing required field 'from' in ${name} (${file})` });
+  }
+  if (value === "any") return "any";
+  if (typeof value === "string") {
+    if (value === "") {
+      throw new JiePlatformError("INVALID_LIFECYCLE", { detail: `${file}: ${name}.from must not be empty` });
+    }
+    return [value];
+  }
+  const phases = asStringList(value, `${name}.from`, file);
+  if (phases.length === 0) {
+    throw new JiePlatformError("INVALID_LIFECYCLE", { detail: `${file}: ${name}.from must not be empty` });
+  }
+  if (phases.some((phase) => phase === "")) {
+    throw new JiePlatformError("INVALID_LIFECYCLE", { detail: `${file}: ${name}.from must not contain empty phases` });
+  }
+  return phases;
+}
+
+function parseIterationFlag(value: unknown, name: string, file: string): "reset" | "increment" | null {
+  if (value === undefined) return null;
+  if (value !== "reset" && value !== "increment") {
+    throw new JiePlatformError("INVALID_FIELD_TYPE", {
+      detail: `${file}: field '${name}.iteration' must be 'reset' or 'increment'`,
+    });
+  }
+  return value;
+}
+
+function parseWriteGates(value: unknown, roleStems: ReadonlySet<string>, file: string): WriteGateRule[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    throw new JiePlatformError("INVALID_FIELD_TYPE", {
+      detail: `${file}: field 'lifecycle.write_gates' must be a list`,
+    });
+  }
+  const gates: WriteGateRule[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const name = `lifecycle.write_gates[${index}]`;
+    const row = asMapping(value[index], name, file);
+    const pattern = requiredString(row, "pattern", name, file);
+    if (pattern === "") {
+      throw new JiePlatformError("INVALID_LIFECYCLE", { detail: `${file}: ${name}.pattern must not be empty` });
+    }
+    if (!("roles" in row) || row.roles === undefined) {
+      throw new JiePlatformError("MISSING_REQUIRED_FIELD", { detail: `missing required field 'roles' in ${name} (${file})` });
+    }
+    const roles = asStringList(row.roles, `${name}.roles`, file);
+    for (const role of roles) {
+      if (role !== "any" && !roleStems.has(role)) {
+        throw new JiePlatformError("INVALID_LIFECYCLE", { detail: `${file}: ${name} references unknown role '${role}'` });
+      }
+    }
+    gates.push({ pattern, roles });
+  }
+  return gates;
+}
+
+function requiredString(row: Record<string, unknown>, field: string, name: string, file: string): string {
+  if (!(field in row) || row[field] === undefined) {
+    throw new JiePlatformError("MISSING_REQUIRED_FIELD", { detail: `missing required field '${field}' in ${name} (${file})` });
+  }
+  return asString(row[field], `${name}.${field}`, file);
+}
+
+function asMapping(value: unknown, name: string, file: string): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new JiePlatformError("INVALID_FIELD_TYPE", { detail: `${file}: field '${name}' must be a mapping` });
+  }
+  return value as Record<string, unknown>;
 }

@@ -13,5 +13,6 @@ export function makeEmptyContext(): ExecutionContext {
     agentKey: "general-1",
     agentRole: "general",
     artifactStore,
+    lifecycle: null,
   };
 }

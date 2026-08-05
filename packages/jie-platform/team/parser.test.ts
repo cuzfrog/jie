@@ -270,3 +270,276 @@ describe("loadTeamFromDir — typed error codes", () => {
     expectCode(act, code);
   });
 });
+
+describe("parseTeamFromManifests — lifecycle", () => {
+  const roleFiles: Record<string, string> = {
+    "dm.md": "---\ntools:\n  - notify\n---\ndm",
+    "researcher.md": "---\ntools:\n  - notify\n---\nresearcher",
+    "architect.md": "---\ntools:\n  - notify\n---\narchitect",
+    "planner.md": "---\ntools:\n  - notify\n---\nplanner",
+    "implementer.md": "---\ntools:\n  - notify\n---\nimplementer",
+    "reviewer.md": "---\ntools:\n  - notify\n---\nreviewer",
+  };
+
+  function parse(lifecycleYaml: string) {
+    return parseTeamFromManifests(
+      { ...roleFiles, "TEAM.md": `---\nleader: dm\n${lifecycleYaml}---\nProse.` },
+      { teamId: "t" },
+    );
+  }
+
+  test("absent lifecycle parses to null", () => {
+    expect(parse("").lifecycle).toBeNull();
+  });
+
+  test("parses transitions, iteration flags, wildcards, and write gates", () => {
+    const lifecycle = parse(
+      `lifecycle:
+  max_iterations: 3
+  permanent_phases:
+    - done
+  transitions:
+    - topic: task.recorded
+      role: dm
+      from: any
+      phase: recorded
+      iteration: reset
+    - topic: task.planned
+      role: planner
+      from:
+        - designed
+        - review_failed
+      phase: planned
+      iteration: increment
+    - topic: task.failed
+      role: any
+      from: any
+      phase: failed
+  write_gates:
+    - pattern: "**/CONTEXT.md"
+      roles:
+        - architect
+`,
+    ).lifecycle;
+    expect(lifecycle).toEqual({
+      maxIterations: 3,
+      permanentPhases: ["done"],
+      transitions: [
+        { topic: "task.recorded", role: "dm", fromPhases: "any", toPhase: "recorded", iteration: "reset" },
+        { topic: "task.planned", role: "planner", fromPhases: ["designed", "review_failed"], toPhase: "planned", iteration: "increment" },
+        { topic: "task.failed", role: "any", fromPhases: "any", toPhase: "failed", iteration: null },
+      ],
+      writeGates: [{ pattern: "**/CONTEXT.md", roles: ["architect"] }],
+    });
+  });
+
+  test("max_iterations defaults to 5, permanent_phases and write_gates to empty", () => {
+    const lifecycle = parse(
+      `lifecycle:
+  transitions:
+    - topic: task.recorded
+      role: dm
+      from: any
+      phase: recorded
+`,
+    ).lifecycle;
+    expect(lifecycle?.maxIterations).toBe(5);
+    expect(lifecycle?.permanentPhases).toEqual([]);
+    expect(lifecycle?.writeGates).toEqual([]);
+  });
+
+  test("from: single string normalizes to a one-phase list", () => {
+    const lifecycle = parse(
+      `lifecycle:
+  transitions:
+    - topic: task.researched
+      role: researcher
+      from: recorded
+      phase: researched
+`,
+    ).lifecycle;
+    expect(lifecycle?.transitions[0]?.fromPhases).toEqual(["recorded"]);
+  });
+
+  test("lifecycle must be a mapping", () => {
+    expect(() => parse("lifecycle: dm\n")).toThrow(expect.objectContaining({ code: "INVALID_FIELD_TYPE" }));
+  });
+
+  test("transition row requires topic, from, and phase", () => {
+    expect(() =>
+      parse(`lifecycle:
+  transitions:
+    - role: dm
+      from: any
+      phase: recorded
+`),
+    ).toThrow(expect.objectContaining({ code: "MISSING_REQUIRED_FIELD" }));
+  });
+
+  test("unknown role in a transition is rejected", () => {
+    expect(() =>
+      parse(`lifecycle:
+  transitions:
+    - topic: task.recorded
+      role: ghost
+      from: any
+      phase: recorded
+`),
+    ).toThrow(expect.objectContaining({ code: "INVALID_LIFECYCLE" }));
+  });
+
+  test("unknown role in a write gate is rejected", () => {
+    expect(() =>
+      parse(`lifecycle:
+  write_gates:
+    - pattern: "**/CONTEXT.md"
+      roles:
+        - ghost
+`),
+    ).toThrow(expect.objectContaining({ code: "INVALID_LIFECYCLE" }));
+  });
+
+  test("empty from list is rejected", () => {
+    expect(() =>
+      parse(`lifecycle:
+  transitions:
+    - topic: task.recorded
+      role: dm
+      from: []
+      phase: recorded
+`),
+    ).toThrow(expect.objectContaining({ code: "INVALID_LIFECYCLE" }));
+  });
+
+  test("invalid iteration value is rejected", () => {
+    expect(() =>
+      parse(`lifecycle:
+  transitions:
+    - topic: task.recorded
+      role: dm
+      from: any
+      phase: recorded
+      iteration: double
+`),
+    ).toThrow(expect.objectContaining({ code: "INVALID_FIELD_TYPE" }));
+  });
+
+  test("max_iterations must be a positive integer", () => {
+    expect(() => parse("lifecycle:\n  max_iterations: 0\n")).toThrow(
+      expect.objectContaining({ code: "INVALID_LIFECYCLE" }),
+    );
+    expect(() => parse("lifecycle:\n  max_iterations: many\n")).toThrow(
+      expect.objectContaining({ code: "INVALID_FIELD_TYPE" }),
+    );
+  });
+
+  test("duplicate transition for the same topic, role, and from-phase is rejected", () => {
+    expect(() =>
+      parse(`lifecycle:
+  transitions:
+    - topic: task.planned
+      role: planner
+      from: designed
+      phase: planned
+    - topic: task.planned
+      role: planner
+      from: designed
+      phase: planned
+`),
+    ).toThrow(expect.objectContaining({ code: "INVALID_LIFECYCLE" }));
+  });
+
+  test("write gate requires pattern and roles", () => {
+    expect(() =>
+      parse(`lifecycle:
+  write_gates:
+    - roles:
+        - architect
+`),
+    ).toThrow(expect.objectContaining({ code: "MISSING_REQUIRED_FIELD" }));
+  });
+
+  test("empty topic is rejected", () => {
+    expect(() =>
+      parse(`lifecycle:
+  transitions:
+    - topic: ""
+      role: dm
+      from: any
+      phase: recorded
+`),
+    ).toThrow(expect.objectContaining({ code: "INVALID_LIFECYCLE" }));
+  });
+
+  test("empty phase is rejected", () => {
+    expect(() =>
+      parse(`lifecycle:
+  transitions:
+    - topic: task.recorded
+      role: dm
+      from: any
+      phase: ""
+`),
+    ).toThrow(expect.objectContaining({ code: "INVALID_LIFECYCLE" }));
+  });
+
+  test("empty from phase is rejected as string and inside a list", () => {
+    expect(() =>
+      parse(`lifecycle:
+  transitions:
+    - topic: task.recorded
+      role: dm
+      from: ""
+      phase: recorded
+`),
+    ).toThrow(expect.objectContaining({ code: "INVALID_LIFECYCLE" }));
+    expect(() =>
+      parse(`lifecycle:
+  transitions:
+    - topic: task.recorded
+      role: dm
+      from:
+        - designed
+        - ""
+      phase: recorded
+`),
+    ).toThrow(expect.objectContaining({ code: "INVALID_LIFECYCLE" }));
+  });
+
+  test("empty write gate pattern is rejected", () => {
+    expect(() =>
+      parse(`lifecycle:
+  write_gates:
+    - pattern: ""
+      roles:
+        - dm
+`),
+    ).toThrow(expect.objectContaining({ code: "INVALID_LIFECYCLE" }));
+  });
+});
+
+describe("loadTeamFromDir — shipped default-coders blueprint", () => {
+  const defaultCodersDir = join(import.meta.dir, "../../jie-team/default-coders");
+
+  test("parses with the declared lifecycle", () => {
+    const blueprint = loadTeamFromDir(defaultCodersDir);
+    expect(blueprint.leaderRole).toBe("dm");
+    expect(blueprint.lifecycle).toEqual({
+      maxIterations: 5,
+      permanentPhases: ["done"],
+      transitions: [
+        { topic: "task.recorded", role: "dm", fromPhases: "any", toPhase: "recorded", iteration: "reset" },
+        { topic: "task.researched", role: "researcher", fromPhases: ["recorded"], toPhase: "researched", iteration: null },
+        { topic: "task.designed", role: "architect", fromPhases: ["researched"], toPhase: "designed", iteration: null },
+        { topic: "task.planned", role: "planner", fromPhases: ["designed"], toPhase: "planned", iteration: null },
+        { topic: "task.planned", role: "planner", fromPhases: ["review_failed"], toPhase: "planned", iteration: "increment" },
+        { topic: "task.implemented", role: "implementer", fromPhases: ["planned"], toPhase: "implemented", iteration: null },
+        { topic: "task.review_passed", role: "reviewer", fromPhases: ["implemented"], toPhase: "review_passed", iteration: null },
+        { topic: "task.review_failed", role: "reviewer", fromPhases: ["implemented"], toPhase: "review_failed", iteration: null },
+        { topic: "task.done", role: "dm", fromPhases: ["review_passed"], toPhase: "done", iteration: null },
+        { topic: "task.failed", role: "any", fromPhases: "any", toPhase: "failed", iteration: null },
+      ],
+      writeGates: [{ pattern: "**/CONTEXT.md", roles: ["architect"] }],
+    });
+  });
+});

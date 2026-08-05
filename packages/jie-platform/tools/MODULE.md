@@ -16,6 +16,8 @@ no-new-exports:
   - read-file.ts
   - kanban-write.test.ts
   - kanban-write.ts
+  - task-lifecycle.test.ts
+  - task-lifecycle.ts
   - tool-registry.test.ts
   - tool-registry.ts
   - types.ts
@@ -25,6 +27,8 @@ no-new-exports:
   - web-fetch.ts
   - web-search.test.ts
   - web-search.ts
+  - write-gate.test.ts
+  - write-gate.ts
   - write-artifact.test.ts
   - write-artifact.ts
   - write-file.test.ts

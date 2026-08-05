@@ -16,6 +16,7 @@ const executionContext: ExecutionContext = {
   agentKey: "agent-1",
   agentRole: "engineer",
   artifactStore,
+  lifecycle: null,
 };
 
 function fakeConnection() {

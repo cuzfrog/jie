@@ -1,3 +1,5 @@
+import type { TaskLifecycle } from "../types";
+
 export interface AgentSoul {
   readonly role: string;
   readonly model: string;
@@ -11,6 +13,7 @@ export interface TeamBlueprint {
   readonly id: string;
   readonly roles: ReadonlyArray<AgentSoul>;
   readonly leaderRole: string | null;
+  readonly lifecycle: TaskLifecycle | null;
 }
 export type TeamBlueprintLocation = "builtin" | "project" | "user" | null;
 

@@ -44,6 +44,29 @@ The blueprint lives at `.jie/teams/<team_id>/` (file layout, discovery, model re
 
 `TEAM.md` declares `leader: <role>`. Every other `.md` file is an agent definition: YAML frontmatter declares the mechanical surface, the prose body becomes `AgentSoul.systemPrompt`.
 
+`TEAM.md` may also declare a `lifecycle` block; the platform parses it into the blueprint and enforces it generically (ADR 33):
+
+```yaml
+lifecycle:
+  max_iterations: 5            # optional, default 5
+  permanent_phases: [done]     # optional, default []
+  transitions:                 # rows: (topic, role, from) -> phase, plus an iteration effect
+    - topic: task.recorded
+      role: dm                 # or "any"
+      from: any                # "any", one phase, or a list of phases
+      phase: recorded
+      iteration: reset         # reset | increment | absent (preserve)
+  write_gates:                 # optional; glob patterns with the roles allowed to write them
+    - pattern: "**/CONTEXT.md"
+      roles: [architect]
+```
+
+- **Transitions.** A row authorizes the role (exact match, or `any`) to move a task to `phase` when its current phase is in `from` — `any` means no status row yet or any non-permanent phase. Exact-role rows take precedence over `any` rows on the same topic; among candidates the first matching `from` wins. Duplicate `(topic, role, from)` rows, roles not present in the blueprint, and empty `topic`/`phase`/`from` values are parse errors (`invalid_lifecycle`), as is an empty write-gate pattern.
+- **Enforcement.** Lifecycle topics require `notify` to carry the `task_id` (rejected on other topics); the guard authorizes the caller's role and the task's current phase, writes the new status row, and only then publishes. A denied transition throws `illegal_transition` — nothing published, no row.
+- **Iteration.** `reset` sets it to 1, `increment` adds 1 to the current value (denied above `max_iterations`), absence preserves it; a task without a status row counts as iteration 1.
+- **Permanent phases** admit no outgoing transition.
+- **Write gates** are checked by `write_file` and `edit` against the workspace-relative path before any mutation; every matching gate must admit the caller's role (`any` in `roles` admits everyone), else `write_gate_denied`. `read_file` and `bash` are not gated.
+
 | Field | Required | Meaning |
 |---|---|---|
 | `model` | no | `<provider>/<model_id>`; when absent, inherited from the user's global default (`10-configuration.md` "Model Resolution"). Always a resolved string by soul-construction time. |
@@ -66,6 +89,7 @@ interface ExecutionContext {
   readonly agentKey: string;       // {role}-{N}
   readonly agentRole: string;
   readonly artifactStore: ArtifactStore;
+  readonly lifecycle: TaskLifecycle | null;  // the team's lifecycle declaration (ADR 33); null when undeclared
 }
 ```
 
@@ -92,7 +116,7 @@ interface ToolResult {
 }
 ```
 
-Except for the built-in `notify` (which receives its `EventManager` as a construction dependency), tools have no awareness of the event bus; custom team-defined tools cannot publish events. Business identifiers (`task_id`, work ids, …) are never a platform concept — the platform treats tool inputs as opaque and the receiving LLM extracts identifiers from message text.
+Except for the built-in `notify` (which receives its `EventManager` as a construction dependency), tools have no awareness of the event bus; custom team-defined tools cannot publish events. Business identifiers (work ids, …) are opaque to the platform and the receiving LLM extracts them from message text, with one exception: when a team declares a lifecycle, `notify` takes the `task_id` as a first-class input so the platform can authorize and record the transition ("notify" below, ADR 33).
 
 **Errors.** Failures throw `JiePlatformError` (typed code + human-readable message); pi-agent surfaces the throw as an `isError` tool result and the LLM reads the message text and reasons. Error codes below are cited in lowercase for readability; the canonical codes are the `JiePlatformError` constants.
 
@@ -153,7 +177,7 @@ read_file(input: { path: string; offset?: number; limit?: number })
 write_file(input: { path: string; content: string })
 ```
 
-The platform enforces workspace-root containment only (`path_escape`); module-boundary enforcement is the team's concern (see "Boundary Enforcement"). `read_file`: `offset` is a 1-indexed line number clamped to ≥ 1, `limit` is a line count (values < 1 mean unbounded); default truncation is 2000 lines or 50 KiB whichever first, with a `[Truncated: showing X of Y lines (50 KiB limit)]` marker; non-UTF-8 bytes throw `unsupported_encoding`; other errors: `file_not_found`, `is_a_directory`, `permission_denied`, `i_o_error`. `write_file`: writes `content` verbatim, overwrites (idempotent, no append mode), auto-creates parent directories, caps content at 5 MiB (`file_too_large`); LLM-visible text is `Successfully wrote <N> bytes to <path>` — the summary alone, since the model just wrote the content and echoing a file-sized diff back wastes tokens (unlike `edit`, whose diff confirms a targeted change). `details: { kind: "diff", path, bytesWritten, createdAt, diff }`: `diff` is the shared unified-diff renderer's output against the previous content (all-added hunk for a new file, `""` when unchanged), `null` when the previous content is undecodable as UTF-8, exceeds 5 MiB, or either side exceeds 5000 lines — a TUI-only payload (`tui-layout.md`). Full rationale in ADR 9.
+The platform enforces workspace-root containment (`path_escape`) plus, when the team declares a lifecycle, its write gates (`write_gate_denied`); module-boundary enforcement beyond that is the team's concern (see "Boundary Enforcement"). `read_file`: `offset` is a 1-indexed line number clamped to ≥ 1, `limit` is a line count (values < 1 mean unbounded); default truncation is 2000 lines or 50 KiB whichever first, with a `[Truncated: showing X of Y lines (50 KiB limit)]` marker; non-UTF-8 bytes throw `unsupported_encoding`; other errors: `file_not_found`, `is_a_directory`, `permission_denied`, `i_o_error`. `write_file`: writes `content` verbatim, overwrites (idempotent, no append mode), auto-creates parent directories, caps content at 5 MiB (`file_too_large`); LLM-visible text is `Successfully wrote <N> bytes to <path>` — the summary alone, since the model just wrote the content and echoing a file-sized diff back wastes tokens (unlike `edit`, whose diff confirms a targeted change). `details: { kind: "diff", path, bytesWritten, createdAt, diff }`: `diff` is the shared unified-diff renderer's output against the previous content (all-added hunk for a new file, `""` when unchanged), `null` when the previous content is undecodable as UTF-8, exceeds 5 MiB, or either side exceeds 5000 lines — a TUI-only payload (`tui-layout.md`). Full rationale in ADR 9.
 
 ### edit
 
@@ -163,7 +187,7 @@ edit(input: { path: string; edits: ReadonlyArray<{ old_string: string; new_strin
 
 Search-and-replace inside a workspace text file. Every entry of `edits` is matched against the original file content — not against the result of earlier entries — and all replacements are applied in one atomic write. Each `old_string` must occur exactly once unless `replace_all` is true (`ambiguous_match` otherwise), and the entries' matched regions must be pairwise disjoint (`overlapping_edits` otherwise); zero occurrences throws `no_match`. With multiple entries the error detail names the offending one (`edits[i] of <path>`). The legacy single-pair form (`old_string`/`new_string` at the top level) is still accepted: the tool's `prepareArguments` shim rewrites it into a one-entry `edits` array before schema validation, and unwraps an `edits` value serialized as a JSON string. Matching is tolerant of encoding artifacts: a leading UTF-8 BOM is stripped for matching and restored on write, and both the file content and the `old_string`/`new_string` arguments are normalized to LF for matching; on write the file's detected original line ending (first CRLF vs LF occurrence wins) is restored throughout. On success `content` is a one-line ack (`Edited <path>: <n> replacement(s)`, n counting every applied replacement) — the model never sees the diff, keeping it out of subsequent LLM context; for files over 5000 lines the diff is omitted (use `write_file` for wholesale rewrites). `details: { kind: "diff", path, replacementsCount, beforeBytes, afterBytes, diff }` — the TUI renders the diff from the telemetry payload. Both tools share the unified-diff renderer: 3 context lines, hunks merged across gaps of ≤ 6 unchanged lines, `null` above the 5000-line cap. Same workspace/encoding errors as `read_file`, plus `disk_full` on write.
 
-`write_file` and `edit` mutations are serialized per real path: concurrent calls targeting the same file — from one agent or several — never interleave their read-modify-write cycles; they run in call order. The queue key is the file's realpath (the resolved path when the file does not exist yet), so symlinked aliases of one file share one queue; operations on different files run concurrently.
+`write_file` and `edit` mutations are serialized per real path: concurrent calls targeting the same file — from one agent or several — never interleave their read-modify-write cycles; they run in call order. The queue key is the file's realpath (the resolved path when the file does not exist yet), so symlinked aliases of one file share one queue; operations on different files run concurrently. Both tools also run the team's lifecycle write gates before any mutation — against the workspace-relative path, so absolute-path and symlinked spellings of a gated file are denied alike (`write_gate_denied`; ADR 33).
 
 ### kanban_write
 
@@ -221,16 +245,17 @@ web_fetch(input: { url: string })   // content text + details { status, truncate
 A built-in tool; an agent can publish if and only if its soul lists `notify` in `tools`. It is the LLM's sole means of publishing an event.
 
 ```typescript
-notify(input: { topic: string; prompt: string })
+notify(input: { topic: string; prompt: string; task_id?: string })
 ```
 
 Behavior:
 
 1. **Topic validation.** Rejects with `notify_invalid_topic: <reason>` when the topic is empty (`empty`), starts with `agent.` (`starts_with_agent_prefix` — platform events are observer-only), starts with `{team_id}.` (`starts_with_team_prefix` — the platform manages the scoping), or contains a null byte or control character (`contains_null_byte`).
 2. **Prompt validation.** Rejects with `notify_prompt_too_long` when the prompt exceeds `EVENT_TEXT_TRUNCATION_BYTES` (4096 chars) — so `custom.*` payloads published via `notify` are never truncated in flight.
-3. **Publish.** `Events.custom(sender, `${teamId}.${topic}`, prompt)` → bus topic `custom.{teamId}.{topic}`, envelope `sender: { kind: "agent", teamId, agentKey }`, payload `{ message, truncated }`. The LLM supplies the un-scoped topic; the body prefixes `{team_id}.` and the bus adds the `custom.` prefix.
+3. **Lifecycle enforcement** (ADR 33), only when the team declares a lifecycle. When the topic is one of the lifecycle's transition topics, `task_id` is required (`missing_required_field`) and must match `^[A-Za-z0-9_.-]{1,128}$` (`invalid_task_id`); the lifecycle guard authorizes the caller's role and the task's current phase against the transition table and writes the new status row `{task_id}/status/{seq}` — denial throws `illegal_transition` and nothing is published. On any other topic a supplied `task_id` is rejected (`invalid_task_id`).
+4. **Publish.** `Events.custom(sender, `${teamId}.${topic}`, prompt)` → bus topic `custom.{teamId}.{topic}`, envelope `sender: { kind: "agent", teamId, agentKey }`, payload `{ message, truncated }`. The LLM supplies the un-scoped topic; the body prefixes `{team_id}.` and the bus adds the `custom.` prefix.
 
-Returns `Notification published on '<topic>'` with `details: { topic }`. The LLM continues processing — `notify` is a regular tool, not a loop-control signal, and does not end the turn (ADR 6).
+Returns `Notification published on '<topic>'` with `details: { topic }`; for lifecycle topics the content adds `(task '<task_id>' moved to phase '<phase>', iteration <n>)` and details gain `{ task_id, phase, iteration }`. The LLM continues processing — `notify` is a regular tool, not a loop-control signal, and does not end the turn (ADR 6).
 
 ### Subscription Model
 
@@ -283,7 +308,7 @@ interface AgentBody {
 }
 ```
 
-The `agentBodyFactory` cradle entry (registered in `core/module.ts`, invoked by `TeamManager` on team load and reload) builds the single concrete implementation: per-body `AgentBodyParams` (`agentKey`, `teamId`, `soul`, `isLeader`, `sessionId`, `effort`, and the resolved pi-ai `Model`) plus cradle-scoped deps (`eventManager`, `artifactStore`, `memoryManager`, `toolRegistry`, `skillManager`, the `loadSystemContextBlock` loader invoked per body, `hookRunner`, `cwd`, `getApiKey` and `resolveModel` derived from the model registry, and the `settingsStore` feeding the compactor's settings getter); the factory also constructs one shared `Compactor` over the `memoryManager` for all bodies ("Compaction" below; session identity travels per `compact` call). No inheritance — the body wraps pi-agent-core's `Agent`, which owns the LLM loop, tool execution, streaming, and context transformation. The soul is immutable; the body is the only publisher on the bus.
+The `agentBodyFactory` cradle entry (registered in `core/module.ts`, invoked by `TeamManager` on team load and reload) builds the single concrete implementation: per-body `AgentBodyParams` (`agentKey`, `teamId`, `soul`, `isLeader`, `sessionId`, `effort`, `lifecycle`, and the resolved pi-ai `Model`) plus cradle-scoped deps (`eventManager`, `artifactStore`, `memoryManager`, `toolRegistry`, `skillManager`, the `loadSystemContextBlock` loader invoked per body, `hookRunner`, `cwd`, `getApiKey` and `resolveModel` derived from the model registry, and the `settingsStore` feeding the compactor's settings getter); the factory also constructs one shared `Compactor` over the `memoryManager` for all bodies ("Compaction" below; session identity travels per `compact` call). No inheritance — the body wraps pi-agent-core's `Agent`, which owns the LLM loop, tool execution, streaming, and context transformation. The soul is immutable; the body is the only publisher on the bus.
 
 **`start()` ordering.** (1) Register the subscriptions above and fire the `SessionStart` hook (once per body — `start()` is idempotent; 10-configuration.md "Hooks"). (2) `memory.restore(agentKey, sessionId, teamId)` and push the rows into `agent.state.messages`. (3) If the restored history ends with a `user` or `toolResult` message, `agent.continue()` to resume the in-flight turn. (4) Drain anything that arrived on subscribed topics during startup via `agent.prompt()`. The body does not publish `agent.idle` at startup — a body that has never run a turn is idle by default. `stop()` unsubscribes everything.
 
@@ -334,11 +359,12 @@ Two trigger points, both single-flight (a concurrent trigger awaits the in-progr
 
 ## Boundary Enforcement (Platform vs Team)
 
-The platform's file tools — `read_file`, `write_file`, `edit`, and `bash`'s `workdir` — enforce **workspace-root containment only**: the resolved absolute path must stay inside the resolved workspace root, or a typed `path_escape` / `workdir_escape` error results. They do not enforce module boundaries, no-new-exports rules, or any team-defined constraint (ADR 9):
+The platform's file tools — `read_file`, `write_file`, `edit`, and `bash`'s `workdir` — enforce **workspace-root containment**: the resolved absolute path must stay inside the resolved workspace root, or a typed `path_escape` / `workdir_escape` error results. On top of that, `write_file` and `edit` enforce manifest-declared lifecycle write gates (ADR 33). Beyond both, module boundaries and no-new-exports rules remain team-defined constraints (ADR 9):
 
 | Layer | Enforces | Status |
 |---|---|---|
 | Platform file tools | "inside the workspace root" | v1 |
+| Lifecycle `write_gates` (declared in TEAM.md, enforced by `write_file`/`edit`) | path patterns per role | v1 |
 | Team blueprint (role system prompt, or a wrapper tool the team defines) | "inside the allowed module boundary" | Day 2, team-owned |
 
-Consequence: in v1 an agent with `write_file` can write any file inside the workspace root, including files in a sealed module. Preventing that is the team layer's contract, by design.
+Consequence: in v1 an agent with `write_file` can write any ungated file inside the workspace root, including files in a sealed module, and `bash` bypasses the gates entirely — the gates police cooperative file-tool writes on declared paths, not the shell. Preventing more than that is the team layer's contract, by design.

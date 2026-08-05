@@ -57,7 +57,7 @@ export function createReadFileTool(dependencies: ReadFileDeps): Tool<ReadFileInp
       limit: Type.Optional(Type.Number()),
     }),
     async execute(input: ReadFileInput): Promise<ToolResult> {
-      const realPath = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
+      const { realPath } = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
 
       let stat;
       try {

@@ -131,6 +131,7 @@ function makeParams(overrides: Partial<AgentBodyParams> = {}): AgentBodyParams {
     sessionId: "s1",
     model: undefined,
     effort: "off",
+    lifecycle: null,
     ...overrides,
   };
 }

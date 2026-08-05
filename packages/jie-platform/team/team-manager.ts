@@ -163,6 +163,7 @@ export class TeamManagerImpl implements TeamManager {
         sessionId,
         model: resolvedModel,
         effort,
+        lifecycle: blueprint.lifecycle,
       });
       bodies.push(body);
     }

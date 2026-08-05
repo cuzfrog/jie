@@ -1,18 +1,13 @@
 import { realpathSync } from "node:fs";
-import { isAbsolute, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
 
 export function resolveWithinWorkspace(
   path: string,
   workspaceRoot: string,
-): string {
+): { readonly realPath: string; readonly relativePath: string } {
   const abs = isAbsolute(path) ? path : resolve(workspaceRoot, path);
-  let real: string;
-  try {
-    real = realpathSync(abs);
-  } catch {
-    real = abs;
-  }
+  const real = realpathOfDeepestExisting(abs);
   let rootReal: string;
   try {
     rootReal = realpathSync(workspaceRoot);
@@ -22,7 +17,7 @@ export function resolveWithinWorkspace(
   if (real !== rootReal && !real.startsWith(rootReal + "/")) {
     throw new JiePlatformError("PATH_ESCAPE", { detail: path });
   }
-  return real;
+  return { realPath: real, relativePath: relative(rootReal, real) };
 }
 
 export function mapErrno(
@@ -40,4 +35,20 @@ export function mapErrno(
     }
   }
   return errno instanceof Error ? errno : new Error(String(error));
+}
+
+function realpathOfDeepestExisting(abs: string): string {
+  const tail: string[] = [];
+  let current = abs;
+  for (;;) {
+    try {
+      const real = realpathSync(current);
+      return tail.length === 0 ? real : join(real, ...tail);
+    } catch {
+      const parent = dirname(current);
+      if (parent === current) return abs;
+      tail.unshift(basename(current));
+      current = parent;
+    }
+  }
 }

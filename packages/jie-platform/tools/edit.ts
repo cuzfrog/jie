@@ -1,8 +1,9 @@
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { Type } from "typebox";
-import type { Tool, ToolResult } from "./types";
+import type { ExecutionContext, Tool, ToolResult } from "./types";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
 import type { FileMutationQueue } from "./file-mutation-queue";
+import { checkWriteGates } from "./write-gate";
 import { mapErrno, resolveWithinWorkspace } from "./path-utils";
 import { renderUnifiedDiff } from "./unified-diff";
 
@@ -14,7 +15,8 @@ matches. Any violation fails the whole call with NO_MATCH, AMBIGUOUS_MATCH, or O
 and leaves the file untouched. On success returns a one-line ack; the unified-diff preview lives
 only in \`details.diff\` for the UI — it is not part of the model-visible result. For edits larger
 than 5000 lines the diff is omitted and \`details.diff\` is null (use \`write_file\` for wholesale
-rewrites). Text only; UTF-8.`;
+rewrites). Text only; UTF-8. Teams with a declared lifecycle may gate paths: a matching
+edit is rejected with WRITE_GATE_DENIED unless a gate admits your role.`;
 
 interface EditDeps {
   workspaceRoot: string;
@@ -89,8 +91,11 @@ export function createEditTool(dependencies: EditDeps): Tool<EditInput> {
       }
       return args;
     },
-    async execute(input: EditInput): Promise<ToolResult> {
-      const realPath = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
+    async execute(input: EditInput, executionContext: ExecutionContext): Promise<ToolResult> {
+      const { realPath, relativePath } = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
+      if (executionContext.lifecycle !== null) {
+        checkWriteGates(relativePath, executionContext.agentRole, executionContext.lifecycle.writeGates);
+      }
       return dependencies.fileMutationQueue.run(realPath, () => applyEdits(input, realPath));
     },
   };

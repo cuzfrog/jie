@@ -90,6 +90,7 @@ export class JieAgentBody implements AgentBody {
       agentKey: this.agentKey,
       agentRole: params.soul.role,
       artifactStore: deps.artifactStore,
+      lifecycle: params.lifecycle,
     };
     const adaptedTools = adaptAllTools(params.soul, deps.toolRegistry, executionContext);
     const toolTimestamps = new Map<string, number>();

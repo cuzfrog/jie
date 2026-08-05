@@ -6,6 +6,7 @@ import { createNotifyTool } from "./notify";
 import { createReadArtifactTool } from "./read-artifact";
 import { createReadFileTool } from "./read-file";
 import { createKanbanWriteTool } from "./kanban-write";
+import { createTaskLifecycleGuard } from "./task-lifecycle";
 import { createWebFetchTool } from "./web-fetch";
 import { createWebSearchProvider, createWebSearchTool } from "./web-search";
 import { createWriteArtifactTool } from "./write-artifact";
@@ -58,6 +59,7 @@ interface BuiltinTool {
 
 function builtins(workspaceRoot: string, eventManager: EventManager, artifactStore: ArtifactStore): BuiltinTool[] {
   const fileMutationQueue = createFileMutationQueue();
+  const taskLifecycleGuard = createTaskLifecycleGuard(artifactStore);
   return [
     { name: "bash", tool: createBashTool({ workspaceRoot }) as Tool },
     { name: "read_file", tool: createReadFileTool({ workspaceRoot }) as Tool },
@@ -66,7 +68,7 @@ function builtins(workspaceRoot: string, eventManager: EventManager, artifactSto
     { name: "read_artifact", tool: createReadArtifactTool({ artifactStore }) as Tool },
     { name: "write_artifact", tool: createWriteArtifactTool({ artifactStore }) as Tool },
     { name: "kanban_write", tool: createKanbanWriteTool() as Tool },
-    { name: "notify", tool: createNotifyTool({ eventManager }) as Tool },
+    { name: "notify", tool: createNotifyTool({ eventManager, taskLifecycleGuard }) as Tool },
     { name: "web_fetch", tool: createWebFetchTool() as Tool },
     { name: "web_search", tool: createWebSearchTool({ provider: createWebSearchProvider() }) as Tool },
   ];
