@@ -50,6 +50,26 @@ export interface TeamInfo {
     readonly history: ReadonlyArray<AgentHistory>;
 }
 
+export interface TaskTransitionRule {
+    readonly topic: string;
+    readonly role: string;
+    readonly fromPhases: ReadonlyArray<string> | "any";
+    readonly toPhase: string;
+    readonly iteration: "reset" | "increment" | null;
+}
+
+export interface WriteGateRule {
+    readonly pattern: string;
+    readonly roles: ReadonlyArray<string>;
+}
+
+export interface TaskLifecycle {
+    readonly maxIterations: number;
+    readonly permanentPhases: ReadonlyArray<string>;
+    readonly transitions: ReadonlyArray<TaskTransitionRule>;
+    readonly writeGates: ReadonlyArray<WriteGateRule>;
+}
+
 export type KanbanStatus = "pending" | "in_progress" | "completed";
 
 export interface KanbanCard {
