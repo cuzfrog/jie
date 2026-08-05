@@ -9,12 +9,12 @@ import { composeSystemPrompt } from "./system-prompt";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { AgentBody, AgentBodyParams } from "./agent-body";
 import type { Compactor } from "./compaction";
+import { PromptQueueImpl, type PromptQueue } from "./prompt-queue";
 import { StreamPublisherImpl, type StreamPublisher } from "./streaming";
 import { adaptToolToAgent } from "./tool-adapter";
 import { JiePlatformError } from "../jie-platform-errors";
-import type { AgentInfo, EffortLevel, ModelInfo, UserIngressMessage } from "../types";
+import type { AgentInfo, EffortLevel, ModelInfo } from "../types";
 
-const DEQUEUED_PROMPT_CAP = 32;
 const SKILL_INVOCATION_PREFIX = "/skill:";
 
 interface AgentBodyDeps {
@@ -48,16 +48,12 @@ export class JieAgentBody implements AgentBody {
   private readonly agent: Agent;
   private readonly stream: StreamPublisher;
   private readonly sender: AgentSender;
+  private readonly promptQueue: PromptQueue;
   private compactionPromise: Promise<void> | null = null;
   private compactionController: AbortController | null = null;
-  private dispatching = false;
-  private readonly queue: QueuedPrompt[] = [];
-  private readonly dequeuedPrompts: QueuedPrompt[] = [];
   private readonly resolvedSkills: ReadonlyArray<Skill>;
   private modelInfo: ModelInfo | null;
-  private pendingTurnPrompt: string | null = null;
   private turnStartPending = false;
-  private readonly followUpLabels: Map<AgentMessage, string | null> = new Map();
   private readonly cleanups: Array<() => void> = [];
   private restored: ReadonlyArray<AgentMessage> | null = null;
   private started = false;
@@ -83,6 +79,16 @@ export class JieAgentBody implements AgentBody {
     };
     this.sender = { kind: "agent", teamId: this.teamId, agentKey: this.agentKey };
     this.stream = new StreamPublisherImpl(deps.eventManager, this.sender);
+    this.promptQueue = new PromptQueueImpl({
+      dispatcher: {
+        prompt: (message) => void this.agent.prompt(message),
+        followUp: (message) => this.agent.followUp(message),
+        isStreaming: () => this.agent.state.isStreaming,
+      },
+      eventManager: deps.eventManager,
+      sender: this.sender,
+      beforeDispatch: () => this.ensureCompacted(),
+    });
     const executionContext: ExecutionContext = {
       sessionId: this.sessionId,
       teamId: this.teamId,
@@ -217,8 +223,8 @@ export class JieAgentBody implements AgentBody {
       }
     }
 
-    while (!this.stopped && this.queue.length > 0) {
-      await this.dispatchNext();
+    while (!this.stopped && !this.promptQueue.isEmpty()) {
+      await this.promptQueue.dispatchNext();
       await this.agent.waitForIdle();
     }
   }
@@ -226,6 +232,7 @@ export class JieAgentBody implements AgentBody {
   stop(): void {
     this.stopped = true;
     this.compactionController?.abort();
+    this.promptQueue.stop();
     for (const off of this.cleanups) off();
     this.cleanups.length = 0;
   }
@@ -239,12 +246,7 @@ export class JieAgentBody implements AgentBody {
         return;
       case "turn_end": {
         const final = readFinalStopReason(event);
-        if (!final.isError && this.queue.length > 0) {
-          const next = this.queue.shift()!;
-          this.followUpLabels.set(next.message, next.userText);
-          this.agent.followUp(next.message);
-        }
-        this.publishQueueUpdate(agentSender);
+        this.promptQueue.drainForFollowUp(final.isError);
         return;
       }
       case "agent_end": {
@@ -254,13 +256,13 @@ export class JieAgentBody implements AgentBody {
           this.eventManager.publish(Events.systemError({ kind: "system" }, final.errorMessage));
         }
         void this.hookRunner.stop({ identity: this.hookIdentity });
-        this.pendingTurnPrompt = null;
-        this.publishQueueUpdate(agentSender);
-        void this.agent.waitForIdle().then(() => this.settleAfterRun());
+        this.promptQueue.clearPendingLabel();
+        this.promptQueue.publishQueueUpdate();
+        void this.agent.waitForIdle().then(() => this.promptQueue.settle());
         return;
       }
       case "message_start":
-        if (event.message.role === "user") this.followUpLabels.delete(event.message);
+        if (event.message.role === "user") this.promptQueue.dropFollowUpLabel(event.message);
         this.stream.beginStream();
         return;
       case "message_update": {
@@ -300,13 +302,8 @@ export class JieAgentBody implements AgentBody {
   private flushTurnStart(event: PiAgentEvent): void {
     if (!this.turnStartPending) return;
     this.turnStartPending = false;
-    let label = this.pendingTurnPrompt;
-    this.pendingTurnPrompt = null;
-    if (event.type === "message_start" && event.message.role === "user") {
-      const supplied = this.followUpLabels.get(event.message);
-      if (supplied !== undefined) label = supplied;
-    }
-    this.eventManager.publish(Events.agentTurnStart(this.sender, label));
+    const message = event.type === "message_start" && event.message.role === "user" ? event.message : null;
+    this.eventManager.publish(Events.agentTurnStart(this.sender, this.promptQueue.takeTurnStartLabel(message)));
   }
 
   private registerSubscriptions(): void {
@@ -321,11 +318,11 @@ export class JieAgentBody implements AgentBody {
       }),
       this.eventManager.subscribe("user.prompt.dequeue", (env) => {
         if (env.payload.teamId !== this.teamId || env.payload.agentKey !== this.agentKey) return;
-        this.dequeuePrompt(env.payload.prompt);
+        this.promptQueue.dequeue(env.payload.prompt);
       }),
       this.eventManager.subscribe("user.prompt.requeue", (env) => {
         if (env.payload.teamId !== this.teamId || env.payload.agentKey !== this.agentKey) return;
-        this.requeuePrompt(env.payload.prompt);
+        this.promptQueue.requeue(env.payload.prompt);
       }),
       this.eventManager.subscribe("user.effort.update", (env) => {
         this.applyEffort(env.payload.effort);
@@ -351,9 +348,8 @@ export class JieAgentBody implements AgentBody {
     }
     const expanded = this.expandSkillInvocation(payload.prompt) ?? payload.prompt;
     const prompt = outcome.additionalContext === null ? expanded : `${expanded}\n\n${outcome.additionalContext}`;
-    const consumed = this.dequeuedPrompts.findIndex((entry) => entry.userText === payload.prompt);
-    if (consumed !== -1) this.dequeuedPrompts.splice(consumed, 1);
-    this.dispatchIngress("user", null, prompt, payload.prompt);
+    this.promptQueue.consumeResubmitted(payload.prompt);
+    this.promptQueue.ingestUserPrompt(prompt, payload.prompt);
   }
 
   private expandSkillInvocation(text: string): string | null {
@@ -370,43 +366,7 @@ export class JieAgentBody implements AgentBody {
 
   private ingestCustom(topic: string, sender: AgentSender, payload: { message: string; truncated: boolean }): void {
     if (sender.agentKey === this.agentKey) return;
-    this.dispatchIngress(topic, sender.agentKey, payload.message, null);
-  }
-
-  private dispatchIngress(topic: string, source: string | null, prompt: string, userText: string | null): void {
-    const synthetic = source !== null
-      ? `[${source} on '${topic}']: ${prompt}`
-      : `[user]: ${prompt}`;
-    const message: UserIngressMessage = userText === null
-      ? { role: "user", content: synthetic, timestamp: Date.now() }
-      : { role: "user", content: synthetic, timestamp: Date.now(), displayText: userText };
-    this.queue.push({ message, userText });
-    this.publishQueueUpdate(this.sender);
-    void this.dispatchNext();
-  }
-
-  private async settleAfterRun(): Promise<void> {
-    await this.ensureCompacted();
-    this.dispatchHead();
-  }
-
-  private async dispatchNext(): Promise<void> {
-    if (this.dispatching || this.stopped || this.agent.state.isStreaming || this.queue.length === 0) return;
-    this.dispatching = true;
-    try {
-      await this.ensureCompacted();
-    } finally {
-      this.dispatching = false;
-    }
-    this.dispatchHead();
-  }
-
-  private dispatchHead(): void {
-    if (this.dispatching || this.stopped || this.agent.state.isStreaming || this.queue.length === 0) return;
-    const next = this.queue.shift()!;
-    this.pendingTurnPrompt = next.userText;
-    this.publishQueueUpdate(this.sender);
-    void this.agent.prompt(next.message);
+    this.promptQueue.ingestPeerNotification(topic, sender.agentKey, payload.message);
   }
 
   private ensureCompacted(): Promise<void> {
@@ -447,39 +407,6 @@ export class JieAgentBody implements AgentBody {
     } finally {
       if (this.compactionController === controller) this.compactionController = null;
     }
-  }
-
-  private publishQueueUpdate(sender: AgentSender): void {
-    const prompts = this.queue.map((entry) => entry.userText !== null
-      ? { text: entry.userText, source: "user" as const }
-      : { text: userPromptText(entry.message), source: "peer" as const });
-    this.eventManager.publish(Events.agentPromptQueueUpdate(sender, prompts));
-  }
-
-  private dequeuePrompt(prompt: string): void {
-    for (let i = this.queue.length - 1; i >= 0; i--) {
-      if (this.queue[i]!.userText === prompt) {
-        const removed = this.queue.splice(i, 1)[0];
-        if (removed !== undefined) {
-          this.dequeuedPrompts.push(removed);
-          if (this.dequeuedPrompts.length > DEQUEUED_PROMPT_CAP) this.dequeuedPrompts.shift();
-        }
-        break;
-      }
-    }
-    this.publishQueueUpdate(this.sender);
-  }
-
-  private requeuePrompt(prompt: string): void {
-    for (let i = this.dequeuedPrompts.length - 1; i >= 0; i--) {
-      if (this.dequeuedPrompts[i]!.userText === prompt) {
-        const restored = this.dequeuedPrompts.splice(i, 1)[0];
-        if (restored !== undefined) this.queue.push(restored);
-        break;
-      }
-    }
-    this.publishQueueUpdate(this.sender);
-    void this.dispatchNext();
   }
 
   private interruptActiveRun(): void {
@@ -594,21 +521,6 @@ function persistableMessage(message: AgentMessage): AgentMessage {
 function isDisplayDetails(details: unknown): boolean {
   if (typeof details !== "object" || details === null || !("kind" in details)) return false;
   return details.kind === "diff" || details.kind === "kanban";
-}
-
-interface QueuedPrompt {
-  readonly message: AgentMessage;
-  readonly userText: string | null;
-}
-
-function userPromptText(message: AgentMessage): string {
-  if (message.role !== "user") return "";
-  const content = message.content;
-  if (typeof content === "string") return content;
-  return content
-    .filter((part): part is { type: "text"; text: string } => part.type === "text")
-    .map((part) => part.text)
-    .join("");
 }
 
 function readFinalStopReason(event: Extract<PiAgentEvent, { type: "agent_end" }> | Extract<PiAgentEvent, { type: "turn_end" }>): { stopReason: StopReason; isError: boolean; errorMessage: string | null } {

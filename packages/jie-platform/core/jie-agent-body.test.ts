@@ -1266,64 +1266,6 @@ describe("JieAgentBody — messages()", () => {
   });
 });
 
-describe("JieAgentBody — prompt ingress format", () => {
-  let h: Harness;
-
-  beforeEach(() => {
-    h = makeHarness();
-  });
-
-  test("`agent.prompt` (no source) is formatted as `[user]: <prompt>`", async () => {
-    const body = h.makeBody();
-    await body.start();
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
-    await flush();
-    expect(h.prompt.mock.calls.length).toBeGreaterThan(0);
-    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
-    expect(synthetic.role).toBe("user");
-    const content = (synthetic as { content: unknown }).content;
-    expect(content).toBe("[user]: hello");
-    body.stop();
-  });
-
-  test("notify-sourced event is formatted as `[<agentKey> on '<topic>']: <prompt>`", async () => {
-    const body = h.makeBody({
-      soul: makeSoul({ subscribe: ["task.researched"] }),
-    });
-    await body.start();
-    h.events.publish(Events.custom({ kind: "agent", teamId: "t1", agentKey: "researcher-1" }, "t1.task.researched", "report"));
-    await flush();
-    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
-    const content = (synthetic as { content: unknown }).content;
-    expect(content).toBe(
-      "[researcher-1 on 'task.researched']: report",
-    );
-    body.stop();
-  });
-
-  test("the dispatched user message carries the raw prompt as displayText", async () => {
-    const body = h.makeBody();
-    await body.start();
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
-    await flush();
-    const synthetic = h.prompt.mock.calls[0]![0] as UserIngressMessage;
-    expect(synthetic.displayText).toBe("hello");
-    body.stop();
-  });
-
-  test("a notify-sourced message carries no displayText", async () => {
-    const body = h.makeBody({
-      soul: makeSoul({ subscribe: ["task.researched"] }),
-    });
-    await body.start();
-    h.events.publish(Events.custom({ kind: "agent", teamId: "t1", agentKey: "researcher-1" }, "t1.task.researched", "report"));
-    await flush();
-    const synthetic = h.prompt.mock.calls[0]![0] as UserIngressMessage;
-    expect(synthetic.displayText).toBeUndefined();
-    body.stop();
-  });
-});
-
 describe("JieAgentBody — skill invocation expansion", () => {
   let h: Harness;
 
@@ -2167,69 +2109,6 @@ describe("JieAgentBody — user.prompt.dequeue", () => {
     h = makeHarness();
   });
 
-  test("removes the last queue entry matching the raw user text and republishes the snapshot", async () => {
-    const body = h.makeBody();
-    await body.start();
-    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
-    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
-    h.state.isStreaming = true;
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "second"));
-    await flush();
-    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "second"));
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "first", source: "user" }]);
-    body.stop();
-  });
-
-  test("with duplicated texts, removes the tail-most match only", async () => {
-    const body = h.makeBody();
-    await body.start();
-    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
-    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
-    h.state.isStreaming = true;
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "same"));
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "same"));
-    await flush();
-    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "same"));
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "same", source: "user" }]);
-    body.stop();
-  });
-
-  test("removes the last user entry while peer notifications stay queued", async () => {
-    const body = h.makeBody({ soul: makeSoul({ subscribe: ["task.recorded"] }) });
-    await body.start();
-    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
-    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
-    h.state.isStreaming = true;
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
-    await flush();
-    h.events.publish(Events.custom({ kind: "agent", teamId: "t1", agentKey: "leader-1" }, "t1.task.recorded", "do X"));
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([
-      { text: "hello", source: "user" },
-      { text: "[leader-1 on 'task.recorded']: do X", source: "peer" },
-    ]);
-    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "hello"));
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([
-      { text: "[leader-1 on 'task.recorded']: do X", source: "peer" },
-    ]);
-    body.stop();
-  });
-
-  test("no match: nothing is removed and the snapshot is republished so a stale observer resyncs", async () => {
-    const body = h.makeBody();
-    await body.start();
-    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
-    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
-    h.state.isStreaming = true;
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
-    await flush();
-    const countBefore = queueUpdates.length;
-    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "already consumed"));
-    expect(queueUpdates.length).toBe(countBefore + 1);
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "first", source: "user" }]);
-    body.stop();
-  });
-
   test("dequeue addressed to another agent or team is ignored", async () => {
     const body = h.makeBody();
     await body.start();
@@ -2285,55 +2164,6 @@ describe("JieAgentBody — user.prompt.requeue", () => {
     body.stop();
   });
 
-  test("the restored entry keeps its constructed message when drained", async () => {
-    const body = h.makeBody();
-    await body.start();
-    h.state.isStreaming = true;
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
-    await flush();
-    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "hello"));
-    h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "hello"));
-    h.fireEvent({ type: "agent_end", messages: [] });
-    h.settleIdle();
-    await flush();
-    expect(h.prompt.mock.calls.length).toBe(1);
-    expect(h.prompt.mock.calls[0]![0]).toMatchObject({ role: "user", content: "[user]: hello" });
-    body.stop();
-  });
-
-  test("requeuing while idle drains the restored entry immediately", async () => {
-    const body = h.makeBody();
-    await body.start();
-    h.state.isStreaming = true;
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
-    await flush();
-    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "first"));
-    h.fireEvent({ type: "agent_end", messages: [] });
-    h.settleIdle();
-    await flush();
-    expect(h.prompt.mock.calls.length).toBe(0);
-    h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "first"));
-    await flush();
-    expect(h.prompt.mock.calls.length).toBe(1);
-    expect(h.prompt.mock.calls[0]![0]).toMatchObject({ role: "user", content: "[user]: first" });
-    body.stop();
-  });
-
-  test("no matching dequeued entry: the queue is unchanged and the snapshot is republished", async () => {
-    const body = h.makeBody();
-    await body.start();
-    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
-    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
-    h.state.isStreaming = true;
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
-    await flush();
-    const countBefore = queueUpdates.length;
-    h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "never dequeued"));
-    expect(queueUpdates.length).toBe(countBefore + 1);
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "first", source: "user" }]);
-    body.stop();
-  });
-
   test("a resubmitted dequeued prompt is consumed and not restored a second time", async () => {
     const body = h.makeBody();
     await body.start();
@@ -2381,26 +2211,6 @@ describe("JieAgentBody — user.prompt.requeue", () => {
     expect(queueUpdates.length).toBe(countBefore);
   });
 
-  test("the parked pile is capped: dequeuing past the cap evicts the oldest parked prompts", async () => {
-    const body = h.makeBody();
-    await body.start();
-    h.state.isStreaming = true;
-    for (let i = 0; i < 33; i++) {
-      h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", `prompt-${i}`));
-    }
-    await flush();
-    for (let i = 0; i < 33; i++) {
-      h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", `prompt-${i}`));
-    }
-    await flush();
-    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
-    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
-    h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "prompt-0"));
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([]);
-    h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "prompt-32"));
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "prompt-32", source: "user" }]);
-    body.stop();
-  });
 });
 
 describe("JieAgentBody — user.effort.update", () => {
