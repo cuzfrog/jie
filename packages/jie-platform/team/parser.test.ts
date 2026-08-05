@@ -459,3 +459,29 @@ describe("parseTeamFromManifests — lifecycle", () => {
     ).toThrow(expect.objectContaining({ code: "MISSING_REQUIRED_FIELD" }));
   });
 });
+
+describe("loadTeamFromDir — shipped default-coders blueprint", () => {
+  const defaultCodersDir = join(import.meta.dir, "../../jie-team/default-coders");
+
+  test("parses with the declared lifecycle", () => {
+    const blueprint = loadTeamFromDir(defaultCodersDir);
+    expect(blueprint.leaderRole).toBe("dm");
+    expect(blueprint.lifecycle).toEqual({
+      maxIterations: 5,
+      permanentPhases: ["done"],
+      transitions: [
+        { topic: "task.recorded", role: "dm", fromPhases: "any", toPhase: "recorded", iteration: "reset" },
+        { topic: "task.researched", role: "researcher", fromPhases: ["recorded"], toPhase: "researched", iteration: null },
+        { topic: "task.designed", role: "architect", fromPhases: ["researched"], toPhase: "designed", iteration: null },
+        { topic: "task.planned", role: "planner", fromPhases: ["designed"], toPhase: "planned", iteration: null },
+        { topic: "task.planned", role: "planner", fromPhases: ["review_failed"], toPhase: "planned", iteration: "increment" },
+        { topic: "task.implemented", role: "implementer", fromPhases: ["planned"], toPhase: "implemented", iteration: null },
+        { topic: "task.review_passed", role: "reviewer", fromPhases: ["implemented"], toPhase: "review_passed", iteration: null },
+        { topic: "task.review_failed", role: "reviewer", fromPhases: ["implemented"], toPhase: "review_failed", iteration: null },
+        { topic: "task.done", role: "dm", fromPhases: ["review_passed"], toPhase: "done", iteration: null },
+        { topic: "task.failed", role: "any", fromPhases: "any", toPhase: "failed", iteration: null },
+      ],
+      writeGates: [{ pattern: "**/CONTEXT.md", roles: ["architect"] }],
+    });
+  });
+});

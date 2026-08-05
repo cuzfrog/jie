@@ -4,14 +4,18 @@ import type { ExecutionContext, Tool, ToolResult } from "./types";
 import type { TaskLifecycleGuard, TaskTransitionOutcome } from "./task-lifecycle";
 import { JiePlatformError } from "../jie-platform-errors";
 
-const NOTIFY_DESCRIPTION = `notify({ topic, prompt }): Publish a message to the team-scoped event bus on
-\`{team_id}.{topic}\`. The receiving agent (any agent whose \`subscribe:\` field
-lists this topic) will see the message as a synthetic user-style entry:
+const NOTIFY_DESCRIPTION = `notify({ topic, prompt, task_id? }): Publish a message to the team-scoped event
+bus on \`{team_id}.{topic}\`. The receiving agent (any agent whose \`subscribe:\`
+field lists this topic) will see the message as a synthetic user-style entry:
 \`[{source_agent_key} on '{topic}']: {prompt}\`. Topic names must not start
 with \`agent.\` (platform events; observer-only) or with \`{team_id}.\` (the
 platform manages the prefix); empty topics and control characters are
-rejected. \`notify\` is the SOLE means of inter-agent communication. Does NOT
-end the turn.`;
+rejected. \`task_id\` is REQUIRED when the team declares a lifecycle and this
+topic is one of its transitions: the platform records the phase transition
+before publishing and rejects missing or invalid ids and transitions the
+lifecycle table does not allow; on other topics it must be omitted.
+\`notify\` is the SOLE means of inter-agent communication. Does NOT end the
+turn.`;
 
 export interface NotifyDeps {
   eventManager: EventManager;
