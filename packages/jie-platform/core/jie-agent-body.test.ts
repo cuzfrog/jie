@@ -7,7 +7,7 @@ import {
   type BeforeToolCallContext,
   type ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
-import type { Api, AssistantMessage, AssistantMessageEvent, Model, ToolResultMessage } from "@earendil-works/pi-ai";
+import type { Api, AssistantMessage, Model } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { JieAgentBody } from "./jie-agent-body";
 import type { AgentBodyParams } from "./agent-body";
@@ -126,19 +126,6 @@ function makeAssistantMessage(overrides: Partial<AssistantMessage> = {}): Assist
     timestamp: 0,
     ...overrides,
   };
-}
-
-function makeToolResultMessage(details?: object): ToolResultMessage {
-  const message: ToolResultMessage = {
-    role: "toolResult",
-    toolCallId: "call_x",
-    toolName: "bash",
-    content: [{ type: "text", text: "ok" }],
-    isError: false,
-    timestamp: 0,
-  };
-  if (details !== undefined) message.details = details;
-  return message;
 }
 
 function makeAgentContext(overrides: Partial<{ systemPrompt: string; messages: AgentMessage[] }> = {}): { systemPrompt: string; messages: AgentMessage[] } {
@@ -1268,65 +1255,6 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     h = makeHarness();
   });
 
-  test("turn_start defers agent.turn.start until the turn's next pi event", () => {
-    const turnStart: EventEnvelope<"agent.turn.start">[] = [];
-    h.subscribeSubject("agent.turn.start", (env) => {
-      turnStart.push(env);
-    });
-    h.makeBody();
-    h.fireEvent({ type: "turn_start" });
-    expect(turnStart).toHaveLength(0);
-    h.fireEvent({
-      type: "turn_end",
-      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
-      toolResults: [],
-    });
-    expect(turnStart).toHaveLength(1);
-    expect(turnStart[0]!.topic).toBe("agent.turn.start");
-    expect(turnStart[0]!.payload).toBeNull();
-  });
-
-  test("the deferred agent.turn.start precedes the turn's own stream events", () => {
-    const sequence: string[] = [];
-    h.subscribeSubject("agent.turn.start", () => sequence.push("turn.start"));
-    h.subscribeSubject("agent.stream.end", () => sequence.push("stream.end"));
-    h.makeBody();
-    h.fireEvent({ type: "turn_start" });
-    h.fireEvent({ type: "message_start", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-    h.fireEvent({ type: "message_end", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-    expect(sequence).toEqual(["turn.start", "stream.end"]);
-  });
-
-  test("agent_end publishes agent.idle with the final stopReason", () => {
-    const idle: EventEnvelope<"agent.idle">[] = [];
-    h.subscribeSubject("agent.idle", (env) => {
-      idle.push(env);
-    });
-    h.makeBody();
-    h.fireEvent({ type: "agent_end", messages: [] });
-    expect(idle).toHaveLength(1);
-    expect(idle[0]!.payload).toBe("stop");
-  });
-
-  test("3 turns alternate strictly: turn_start, idle, turn_start, idle, ...", () => {
-    const sequence: string[] = [];
-    h.subscribeSubject("agent.turn.start", () => sequence.push("turn_start"));
-    h.subscribeSubject("agent.idle", () => sequence.push("idle"));
-    h.makeBody();
-    for (let i = 0; i < 3; i++) {
-      h.fireEvent({ type: "turn_start" });
-      h.fireEvent({ type: "agent_end", messages: [] });
-    }
-    expect(sequence).toEqual([
-      "turn_start",
-      "idle",
-      "turn_start",
-      "idle",
-      "turn_start",
-      "idle",
-    ]);
-  });
-
   test("start() does not emit agent.turn.start or agent.idle", async () => {
     const idleEvents: unknown[] = [];
     const turnStartEvents: unknown[] = [];
@@ -1337,215 +1265,6 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     expect(idleEvents).toHaveLength(0);
     expect(turnStartEvents).toHaveLength(0);
     body.stop();
-  });
-
-  test("message_start resets stream state: stream ids increment across streams", () => {
-    const ends: EventEnvelope<"agent.stream.end">[] = [];
-    h.subscribeSubject("agent.stream.end", (env) => {
-      ends.push(env);
-    });
-    h.makeBody();
-    for (let i = 0; i < 2; i++) {
-      h.fireEvent({ type: "message_start", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-      h.fireEvent({ type: "message_end", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-    }
-    expect(ends.map((env) => env.payload.stream_id)).toEqual([1, 2]);
-  });
-
-  test("message_update text_delta buffers text and flushes it on message_end", () => {
-    const chunks: EventEnvelope<"agent.stream.chunk">[] = [];
-    h.subscribeSubject("agent.stream.chunk", (env) => {
-      chunks.push(env);
-    });
-    h.makeBody();
-    h.fireEvent({ type: "message_start", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-    h.fireEvent({
-      type: "message_update",
-      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
-      assistantMessageEvent: {
-        type: "text_delta",
-        contentIndex: 0,
-        delta: "hello",
-        partial: { role: "assistant", content: [] } as unknown as AssistantMessage,
-      },
-    });
-    expect(chunks).toHaveLength(0);
-    h.fireEvent({ type: "message_end", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-    expect(chunks).toHaveLength(1);
-    expect(chunks[0]!.payload).toMatchObject({ stream_id: 1, seq: 0, block_type: "text", text: "hello" });
-  });
-
-  test("message_update thinking_delta publishes a chunk with block_type 'thinking'", () => {
-    const chunks: EventEnvelope<"agent.stream.chunk">[] = [];
-    h.subscribeSubject("agent.stream.chunk", (env) => {
-      chunks.push(env);
-    });
-    h.makeBody();
-    h.fireEvent({ type: "message_start", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-    h.fireEvent({
-      type: "message_update",
-      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
-      assistantMessageEvent: {
-        type: "thinking_delta",
-        contentIndex: 0,
-        delta: "hmm",
-        partial: { role: "assistant", content: [] } as unknown as AssistantMessage,
-      },
-    });
-    h.fireEvent({ type: "message_end", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-    expect(chunks).toHaveLength(1);
-    expect(chunks[0]!.payload.block_type).toBe("thinking");
-  });
-
-  test("message_update text_delta flushes synchronously once the buffer reaches 64 chars", () => {
-    const chunks: EventEnvelope<"agent.stream.chunk">[] = [];
-    h.subscribeSubject("agent.stream.chunk", (env) => {
-      chunks.push(env);
-    });
-    h.makeBody();
-    h.fireEvent({ type: "message_start", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-    const deltaEvent: AssistantMessageEvent = {
-      type: "text_delta",
-      contentIndex: 0,
-      delta: "x".repeat(64),
-      partial: { role: "assistant", content: [] } as unknown as AssistantMessage,
-    };
-    h.fireEvent({
-      type: "message_update",
-      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
-      assistantMessageEvent: deltaEvent,
-    });
-    expect(chunks).toHaveLength(1);
-    expect(chunks[0]!.payload).toMatchObject({
-      stream_id: 1,
-      seq: 0,
-      block_type: "text",
-      text: "x".repeat(64),
-    });
-  });
-
-  test("message_end (assistant) publishes agent.stream.end", () => {
-    const ends: EventEnvelope<"agent.stream.end">[] = [];
-    h.subscribeSubject("agent.stream.end", (env) => {
-      ends.push(env);
-    });
-    h.makeBody();
-    h.fireEvent({ type: "message_start", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-    h.fireEvent({ type: "message_end", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-    expect(ends).toHaveLength(1);
-    expect(ends[0]!.payload).toMatchObject({ stream_id: 1, total_chunks: 0 });
-  });
-
-  test("message_end with a reported usage publishes agent.usage", () => {
-    const usages: EventEnvelope<"agent.usage">[] = [];
-    h.subscribeSubject("agent.usage", (env) => {
-      usages.push(env);
-    });
-    h.makeBody();
-    const usage = { input: 10, output: 5, cacheRead: 2, cacheWrite: 1, totalTokens: 18, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
-    h.fireEvent({ type: "message_start", message: makeAssistantMessage() });
-    h.fireEvent({ type: "message_end", message: makeAssistantMessage({ usage }) });
-    expect(usages).toHaveLength(1);
-    expect(usages[0]!.payload).toMatchObject({ input: 10, output: 5, cacheRead: 2, cacheWrite: 1, totalTokens: 18 });
-  });
-
-  test("message_end with an all-zero usage publishes no agent.usage", () => {
-    const usages: EventEnvelope<"agent.usage">[] = [];
-    h.subscribeSubject("agent.usage", (env) => {
-      usages.push(env);
-    });
-    h.makeBody();
-    h.fireEvent({ type: "message_start", message: makeAssistantMessage() });
-    h.fireEvent({ type: "message_end", message: makeAssistantMessage() });
-    expect(usages).toHaveLength(0);
-  });
-
-  test("message_end with non-assistant role publishes no agent.stream.end", () => {
-    const ends: EventEnvelope<"agent.stream.end">[] = [];
-    h.subscribeSubject("agent.stream.end", (env) => {
-      ends.push(env);
-    });
-    h.makeBody();
-    h.fireEvent({
-      type: "message_end",
-      message: { role: "user", content: "hi" } as unknown as AgentMessage,
-    });
-    expect(ends).toHaveLength(0);
-  });
-
-  test("message_end persists every message role via memory.persist", async () => {
-    const cases: Array<Record<string, unknown>> = [
-      { role: "assistant", content: [{ type: "text", text: "x" }] },
-      { role: "user", content: "hi" },
-      { role: "toolResult", toolCallId: "call_x", content: "ok", isError: false, timestamp: 0 },
-      { role: "custom", customType: "test", content: "x", display: false, timestamp: 0 },
-    ];
-    h.makeBody();
-    for (const message of cases) {
-      h.fireEvent({ type: "message_end", message: message as unknown as AgentMessage });
-      await Promise.resolve();
-      expect(h.persisted.length).toBe(1);
-      h.persisted.length = 0;
-    }
-  });
-
-  test("message_end persists the assistant message end-to-end (start + end)", async () => {
-    h.makeBody();
-    const msg = {
-      role: "assistant",
-      content: [{ type: "text", text: "hello" }],
-      timestamp: 0,
-    } as unknown as AssistantMessage;
-    h.fireEvent({ type: "message_start", message: msg });
-    h.fireEvent({ type: "message_end", message: msg });
-    await Promise.resolve();
-    expect(h.persisted).toHaveLength(1);
-  });
-
-  test("message_end strips toolResult details that no display consumer reads", async () => {
-    h.makeBody();
-    h.fireEvent({ type: "message_end", message: makeToolResultMessage({ kind: "bash", exitCode: 0 }) });
-    await Promise.resolve();
-    expect(h.persisted).toHaveLength(1);
-    expect(h.persisted[0]).not.toHaveProperty("details");
-    expect(h.persisted[0]).toMatchObject({ role: "toolResult", toolCallId: "call_x", toolName: "bash", isError: false });
-  });
-
-  test("message_end strips toolResult details without a kind discriminator", async () => {
-    h.makeBody();
-    h.fireEvent({ type: "message_end", message: makeToolResultMessage({ exitCode: 0 }) });
-    await Promise.resolve();
-    expect(h.persisted).toHaveLength(1);
-    expect(h.persisted[0]).not.toHaveProperty("details");
-  });
-
-  test("message_end keeps diff and kanban details for the display consumers", async () => {
-    h.makeBody();
-    const diffDetails = { kind: "diff", path: "a.txt", diff: "-x\n+y" };
-    const kanbanDetails = { kind: "kanban", cards: [{ content: "task", status: "in_progress" }] };
-    h.fireEvent({ type: "message_end", message: makeToolResultMessage(diffDetails) });
-    h.fireEvent({ type: "message_end", message: makeToolResultMessage(kanbanDetails) });
-    await Promise.resolve();
-    expect(h.persisted).toHaveLength(2);
-    expect(h.persisted[0]).toMatchObject({ details: diffDetails });
-    expect(h.persisted[1]).toMatchObject({ details: kanbanDetails });
-  });
-
-  test("message_end persists a toolResult without details unchanged", async () => {
-    h.makeBody();
-    h.fireEvent({ type: "message_end", message: makeToolResultMessage() });
-    await Promise.resolve();
-    expect(h.persisted).toHaveLength(1);
-    expect(h.persisted[0]).toMatchObject({ role: "toolResult", toolCallId: "call_x" });
-    expect(h.persisted[0]).not.toHaveProperty("details");
-  });
-
-  test("message_end stripping does not mutate the live message", async () => {
-    h.makeBody();
-    const message = makeToolResultMessage({ kind: "bash", exitCode: 0 });
-    h.fireEvent({ type: "message_end", message });
-    await Promise.resolve();
-    expect(message.details).toEqual({ kind: "bash", exitCode: 0 });
   });
 
   test("agent_end drains the queue only after the run settles: the entry goes to prompt (not followUp)", async () => {
@@ -1639,20 +1358,6 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     expect(h.prompt.mock.calls.length).toBe(0);
   });
 
-  test("turn_end does NOT publish agent.idle (fix #89: no spurious idle on sub-turns)", () => {
-    let idleCount = 0;
-    h.subscribeSubject("agent.idle", () => {
-      idleCount += 1;
-    });
-    h.makeBody();
-    h.fireEvent({
-      type: "turn_end",
-      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
-      toolResults: [],
-    });
-    expect(idleCount).toBe(0);
-  });
-
   test("turn_end drains the queue via followUp (no idle publish) (#89)", async () => {
     const body = h.makeBody();
     await body.start();
@@ -1713,27 +1418,6 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     expect(h.prompt.mock.calls.length).toBe(2);
     expect(h.prompt.mock.calls[1]![0]).toMatchObject({ content: "[user]: fresh" });
     body.stop();
-  });
-
-  test("agent_end publishes agent.idle exactly once per run (#89)", () => {
-    let idleCount = 0;
-    h.subscribeSubject("agent.idle", () => {
-      idleCount += 1;
-    });
-    h.makeBody();
-    h.fireEvent({
-      type: "turn_end",
-      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
-      toolResults: [],
-    });
-    h.fireEvent({
-      type: "turn_end",
-      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
-      toolResults: [],
-    });
-    expect(idleCount).toBe(0);
-    h.fireEvent({ type: "agent_end", messages: [] });
-    expect(idleCount).toBe(1);
   });
 });
 

@@ -1,16 +1,16 @@
-import { Agent, convertToLlm, type AgentMessage, type AgentEvent as PiAgentEvent, type AgentTool, type ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { Api, AssistantMessage, Model, StopReason } from "@earendil-works/pi-ai";
+import { Agent, convertToLlm, type AgentMessage, type AgentTool, type ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { Api, Model } from "@earendil-works/pi-ai";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { ExecutionContext, ToolRegistry } from "../tools";
 import type { Skill, SkillManager } from "../skills";
 import type { HookIdentity, HookRunner } from "../hooks";
+import { AgentEventBridgeImpl } from "./agent-event-bridge";
 import { composeSystemPrompt } from "./system-prompt";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { AgentBody, AgentBodyParams } from "./agent-body";
 import type { Compactor } from "./compaction";
 import { PromptQueueImpl, type PromptQueue } from "./prompt-queue";
-import { StreamPublisherImpl, type StreamPublisher } from "./streaming";
 import { adaptToolToAgent } from "./tool-adapter";
 import { ToolCallObserverImpl } from "./tool-call-observer";
 import { JiePlatformError } from "../jie-platform-errors";
@@ -47,14 +47,12 @@ export class JieAgentBody implements AgentBody {
   private readonly getApiKey: (provider: string) => Promise<string | undefined> | string | undefined;
   private readonly compactor: Compactor;
   private readonly agent: Agent;
-  private readonly stream: StreamPublisher;
   private readonly sender: AgentSender;
   private readonly promptQueue: PromptQueue;
   private compactionPromise: Promise<void> | null = null;
   private compactionController: AbortController | null = null;
   private readonly resolvedSkills: ReadonlyArray<Skill>;
   private modelInfo: ModelInfo | null;
-  private turnStartPending = false;
   private readonly cleanups: Array<() => void> = [];
   private restored: ReadonlyArray<AgentMessage> | null = null;
   private started = false;
@@ -79,7 +77,6 @@ export class JieAgentBody implements AgentBody {
       role: params.soul.role,
     };
     this.sender = { kind: "agent", teamId: this.teamId, agentKey: this.agentKey };
-    this.stream = new StreamPublisherImpl(deps.eventManager, this.sender);
     this.promptQueue = new PromptQueueImpl({
       dispatcher: {
         prompt: (message) => void this.agent.prompt(message),
@@ -89,6 +86,15 @@ export class JieAgentBody implements AgentBody {
       eventManager: deps.eventManager,
       sender: this.sender,
       beforeDispatch: () => this.ensureCompacted(),
+    });
+    const eventBridge = new AgentEventBridgeImpl({
+      eventManager: deps.eventManager,
+      memory: this.memory,
+      hookRunner: this.hookRunner,
+      hookIdentity: this.hookIdentity,
+      sender: this.sender,
+      promptQueue: this.promptQueue,
+      onRunEnd: () => void this.agent.waitForIdle().then(() => this.promptQueue.settle()),
     });
     const executionContext: ExecutionContext = {
       sessionId: this.sessionId,
@@ -135,7 +141,7 @@ export class JieAgentBody implements AgentBody {
       }
     }
     this.agent.state.tools = adaptedTools;
-    const unsubscribeAgent = this.agent.subscribe((event, _signal) => this.handlePiAgentEvent(event));
+    const unsubscribeAgent = this.agent.subscribe((event, _signal) => eventBridge.handleEvent(event));
     this.cleanups.push(unsubscribeAgent);
   }
 
@@ -197,75 +203,6 @@ export class JieAgentBody implements AgentBody {
     this.promptQueue.stop();
     for (const off of this.cleanups) off();
     this.cleanups.length = 0;
-  }
-
-  private handlePiAgentEvent(event: PiAgentEvent): void {
-    const agentSender = this.sender;
-    if (event.type !== "turn_start") this.flushTurnStart(event);
-    switch (event.type) {
-      case "turn_start":
-        this.turnStartPending = true;
-        return;
-      case "turn_end": {
-        const final = readFinalStopReason(event);
-        this.promptQueue.drainForFollowUp(final.isError);
-        return;
-      }
-      case "agent_end": {
-        const final = readFinalStopReason(event);
-        this.eventManager.publish(Events.agentIdle(agentSender, final.stopReason));
-        if (final.isError && final.errorMessage !== null) {
-          this.eventManager.publish(Events.systemError({ kind: "system" }, final.errorMessage));
-        }
-        void this.hookRunner.stop({ identity: this.hookIdentity });
-        this.promptQueue.clearPendingLabel();
-        this.promptQueue.publishQueueUpdate();
-        void this.agent.waitForIdle().then(() => this.promptQueue.settle());
-        return;
-      }
-      case "message_start":
-        if (event.message.role === "user") this.promptQueue.dropFollowUpLabel(event.message);
-        this.stream.beginStream();
-        return;
-      case "message_update": {
-        const ame = event.assistantMessageEvent;
-        if (ame.type === "text_delta") {
-          this.stream.append("text", ame.delta);
-        } else if (ame.type === "thinking_delta") {
-          this.stream.append("thinking", ame.delta);
-        }
-        return;
-      }
-      case "message_end":
-        if (event.message.role === "assistant") {
-          this.stream.endStream();
-          if (event.message.usage !== undefined && event.message.usage.totalTokens > 0) {
-            this.eventManager.publish(Events.agentUsage(agentSender, {
-              input: event.message.usage.input,
-              output: event.message.usage.output,
-              cacheRead: event.message.usage.cacheRead,
-              cacheWrite: event.message.usage.cacheWrite,
-              totalTokens: event.message.usage.totalTokens,
-            }));
-          }
-        }
-        this.memory.persist(
-          persistableMessage(event.message),
-          this.agentKey,
-          this.sessionId,
-          this.teamId,
-        );
-        return;
-      default:
-        return;
-    }
-  }
-
-  private flushTurnStart(event: PiAgentEvent): void {
-    if (!this.turnStartPending) return;
-    this.turnStartPending = false;
-    const message = event.type === "message_start" && event.message.role === "user" ? event.message : null;
-    this.eventManager.publish(Events.agentTurnStart(this.sender, this.promptQueue.takeTurnStartLabel(message)));
   }
 
   private registerSubscriptions(): void {
@@ -440,30 +377,4 @@ function effortToThinkingLevel(effort: EffortLevel): ThinkingLevel {
 function resolveBodyModelInfo(model: Model<Api> | undefined, thinkingLevel: ThinkingLevel): ModelInfo | null {
   if (model === undefined) return null;
   return { provider: model.provider, id: model.id, effort: agentEffort(thinkingLevel), contextWindow: model.contextWindow };
-}
-
-function persistableMessage(message: AgentMessage): AgentMessage {
-  if (message.role !== "toolResult" || isDisplayDetails(message.details)) return message;
-  const { details: _stripped, ...persistable } = message;
-  return persistable;
-}
-
-function isDisplayDetails(details: unknown): boolean {
-  if (typeof details !== "object" || details === null || !("kind" in details)) return false;
-  return details.kind === "diff" || details.kind === "kanban";
-}
-
-function readFinalStopReason(event: Extract<PiAgentEvent, { type: "agent_end" }> | Extract<PiAgentEvent, { type: "turn_end" }>): { stopReason: StopReason; isError: boolean; errorMessage: string | null } {
-  const candidates: AgentMessage[] = event.type === "agent_end" ? event.messages : [event.message];
-  let lastAssistant: AssistantMessage | undefined;
-  for (let i = candidates.length - 1; i >= 0; i -= 1) {
-    const message = candidates[i];
-    if (message !== undefined && message.role === "assistant") {
-      lastAssistant = message;
-      break;
-    }
-  }
-  const stopReason: StopReason = lastAssistant?.stopReason ?? "stop";
-  const isError = stopReason === "error" || stopReason === "aborted";
-  return { stopReason, isError, errorMessage: lastAssistant?.errorMessage ?? null };
 }
