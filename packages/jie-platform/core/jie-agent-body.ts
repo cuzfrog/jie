@@ -58,8 +58,7 @@ export class JieAgentBody implements AgentBody {
   private pendingTurnPrompt: string | null = null;
   private turnStartPending = false;
   private readonly followUpLabels: Map<AgentMessage, string | null> = new Map();
-  private readonly unsubscribers: Array<() => void> = [];
-  private readonly externalCleanups: Array<() => void> = [];
+  private readonly cleanups: Array<() => void> = [];
   private restored: ReadonlyArray<AgentMessage> | null = null;
   private started = false;
   private stopped = false;
@@ -169,7 +168,7 @@ export class JieAgentBody implements AgentBody {
     }
     this.agent.state.tools = adaptedTools;
     const unsubscribeAgent = this.agent.subscribe((event, _signal) => this.handlePiAgentEvent(event));
-    this.externalCleanups.push(unsubscribeAgent);
+    this.cleanups.push(unsubscribeAgent);
   }
 
   get identity(): AgentInfo {
@@ -227,10 +226,8 @@ export class JieAgentBody implements AgentBody {
   stop(): void {
     this.stopped = true;
     this.compactionController?.abort();
-    for (const off of this.unsubscribers) off();
-    for (const off of this.externalCleanups) off();
-    this.unsubscribers.length = 0;
-    this.externalCleanups.length = 0;
+    for (const off of this.cleanups) off();
+    this.cleanups.length = 0;
   }
 
   private handlePiAgentEvent(event: PiAgentEvent): void {
@@ -313,7 +310,7 @@ export class JieAgentBody implements AgentBody {
   }
 
   private registerSubscriptions(): void {
-    this.unsubscribers.push(
+    this.cleanups.push(
       this.eventManager.subscribe("user.prompt", (env) => {
         if (env.payload.teamId !== this.teamId || env.payload.agentKey !== this.agentKey) return;
         void this.ingestUserPrompt(env.payload);
@@ -338,7 +335,7 @@ export class JieAgentBody implements AgentBody {
       }),
     );
     for (const topic of this.soul.subscribe) {
-      this.unsubscribers.push(
+      this.cleanups.push(
         this.eventManager.subscribe(`custom.${this.teamId}.${topic}`, (env) => {
           this.ingestCustom(topic, env.sender, env.payload);
         }),
