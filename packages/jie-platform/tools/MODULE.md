@@ -16,6 +16,8 @@ no-new-exports:
   - read-file.ts
   - kanban-write.test.ts
   - kanban-write.ts
+  - task-lifecycle.test.ts
+  - task-lifecycle.ts
   - tool-registry.test.ts
   - tool-registry.ts
   - types.ts
