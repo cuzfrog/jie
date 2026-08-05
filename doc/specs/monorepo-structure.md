@@ -8,7 +8,7 @@ packages/
     command/         # Platform commands (team, resumeSession, setDefaultModel, login, …) + executor
     config/          # Settings, auth, models.json loading, model registry (10-configuration.md)
     context/         # Auto-loaded context files (AGENTS.md/CLAUDE.md ancestor walk) → loadSystemContextBlock (10-configuration.md "Context Files")
-    core/            # AgentBody: event loop (jie-agent-body.ts), pi-agent wiring, streaming, tool adapter, system-prompt composition
+    core/            # AgentBody: event loop (jie-agent-body.ts) and its components (prompt queue, event bridge, tool-call observer, compaction runner, model controller), pi-agent wiring, streaming, tool adapter, system-prompt composition
     event/           # EventBus (InProcessEventBus), EventManager, Events factory (03-event-system.md)
     hooks/           # settings.json command hooks: parse, HookRunner, sh executor; gates tool calls + lifecycle (10-configuration.md "Hooks")
     services/        # GitService (branch / dirty status; consumed by the command surface and by jie-cli for the TUI footer)
