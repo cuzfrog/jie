@@ -10,6 +10,7 @@ import { composeSystemPrompt } from "./system-prompt";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { AgentBody, AgentBodyParams } from "./agent-body";
 import type { Compactor } from "./compaction";
+import { CompactionRunnerImpl, type CompactionRunner } from "./compaction-runner";
 import { PromptQueueImpl, type PromptQueue } from "./prompt-queue";
 import { adaptToolToAgent } from "./tool-adapter";
 import { ToolCallObserverImpl } from "./tool-call-observer";
@@ -49,8 +50,7 @@ export class JieAgentBody implements AgentBody {
   private readonly agent: Agent;
   private readonly sender: AgentSender;
   private readonly promptQueue: PromptQueue;
-  private compactionPromise: Promise<void> | null = null;
-  private compactionController: AbortController | null = null;
+  private readonly compactionRunner: CompactionRunner;
   private readonly resolvedSkills: ReadonlyArray<Skill>;
   private modelInfo: ModelInfo | null;
   private readonly cleanups: Array<() => void> = [];
@@ -86,6 +86,21 @@ export class JieAgentBody implements AgentBody {
       eventManager: deps.eventManager,
       sender: this.sender,
       beforeDispatch: () => this.ensureCompacted(),
+    });
+    this.compactionRunner = new CompactionRunnerImpl({
+      compactor: deps.compactor,
+      eventManager: deps.eventManager,
+      sender: this.sender,
+      getApiKey: this.getApiKey,
+      agentKey: this.agentKey,
+      sessionId: this.sessionId,
+      teamId: this.teamId,
+      conversation: {
+        getMessages: () => this.agent.state.messages,
+        setMessages: (messages) => {
+          this.agent.state.messages = [...messages];
+        },
+      },
     });
     const eventBridge = new AgentEventBridgeImpl({
       eventManager: deps.eventManager,
@@ -199,7 +214,7 @@ export class JieAgentBody implements AgentBody {
 
   stop(): void {
     this.stopped = true;
-    this.compactionController?.abort();
+    this.compactionRunner.abort();
     this.promptQueue.stop();
     for (const off of this.cleanups) off();
     this.cleanups.length = 0;
@@ -269,43 +284,8 @@ export class JieAgentBody implements AgentBody {
   }
 
   private ensureCompacted(): Promise<void> {
-    if (this.compactionPromise === null) {
-      this.compactionPromise = this.runCompaction().finally(() => {
-        this.compactionPromise = null;
-      });
-    }
-    return this.compactionPromise;
-  }
-
-  private async runCompaction(): Promise<void> {
-    if (this.modelInfo === null) return;
-    const model = this.agent.state.model;
-    const controller = new AbortController();
-    this.compactionController = controller;
-    try {
-      const result = await this.compactor.compact({
-        messages: this.agent.state.messages,
-        contextWindow: model.contextWindow,
-        model,
-        apiKey: await this.getApiKey(model.provider),
-        agentKey: this.agentKey,
-        sessionId: this.sessionId,
-        teamId: this.teamId,
-        signal: controller.signal,
-      });
-      if (result === null || this.stopped) return;
-      const summarizedPrefix = this.agent.state.messages.slice(0, result.firstKeptIndex);
-      this.agent.state.messages = [result.summaryMessage, ...this.agent.state.messages.slice(result.firstKeptIndex)];
-      const summarizedPrompts = summarizedPrefix.reduce((count, message) => message.role === "user" ? count + 1 : count, 0);
-      this.eventManager.publish(Events.agentCompacted(this.sender, result.summaryMessage.summary, result.tokensBefore, summarizedPrompts));
-    } catch (error) {
-      if (!controller.signal.aborted) {
-        const message = error instanceof Error ? error.message : String(error);
-        this.eventManager.publish(Events.systemError({ kind: "system" }, `compaction failed: ${message}`));
-      }
-    } finally {
-      if (this.compactionController === controller) this.compactionController = null;
-    }
+    if (this.modelInfo === null) return Promise.resolve();
+    return this.compactionRunner.ensure(this.agent.state.model);
   }
 
   private interruptActiveRun(): void {

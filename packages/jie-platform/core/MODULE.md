@@ -3,6 +3,8 @@ no-new-exports:
   - agent-body.ts
   - agent-event-bridge.test.ts
   - agent-event-bridge.ts
+  - compaction-runner.test.ts
+  - compaction-runner.ts
   - compaction.test.ts
   - compaction.ts
   - jie-agent-body.test.ts
