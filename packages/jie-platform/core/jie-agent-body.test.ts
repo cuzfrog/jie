@@ -999,6 +999,14 @@ describe("JieAgentBody — restore() snapshot phase", () => {
     body.stop();
   });
 
+  test("a failing memory store load degrades to context + role prose without failing restore", async () => {
+    h.memoryStore.top.mockRejectedValue(new Error("db locked"));
+    const body = h.makeBody({ systemContextBlock: "CONTEXT" });
+    await body.restore();
+    expect(h.state.systemPrompt).toBe("CONTEXT\n\nyou are a general assistant");
+    body.stop();
+  });
+
   test("loads the team memory block into the system prompt between context and role prose", async () => {
     h.memoryStore.top.mockResolvedValue([
       {

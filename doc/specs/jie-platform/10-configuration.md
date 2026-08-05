@@ -247,7 +247,7 @@ Hard caps and charsets; not user-configurable. Each row points at the doc that a
 | `subscribe:` topics | no `agent.` prefix (platform topics are reserved); exact match only, no wildcards | Blueprint loader | `06-agent-model.md` |
 | Workspace root | `process.cwd()` (not configurable) | All file-tool path resolution | `09-deployment.md` |
 | `auth.json` mode | `0600` | `jie login` / `jie logout` / `--api-key` | this doc, `12-installation.md` |
-| `storage.db` mode | `0600` (holds `memory_turns`) | First-open creation | `09-deployment.md` |
+| `storage.db` mode | `0600` (holds transcripts, artifacts, memory atoms) | First-open creation | `09-deployment.md` |
 | `.jie/` directory mode | `0755` | First creation by the platform | `09-deployment.md` |
 
 ## Config Validation

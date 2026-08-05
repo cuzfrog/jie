@@ -1,6 +1,7 @@
 ---
 no-new-exports:
   - index.ts
+  - memory-bootstrap.test.ts
   - memory-bootstrap.ts
   - memory-extractor.test.ts
   - memory-extractor.ts

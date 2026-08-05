@@ -127,6 +127,26 @@ describe("MemoryExtractorImpl.extract", () => {
     ]);
   });
 
+  test("accepts numeric-string priorities and clamps them", async () => {
+    llmService.complete.mockResolvedValue(
+      JSON.stringify([
+        {
+          scene: "s",
+          memories: [
+            { content: "a", type: "fact", priority: "80" },
+            { content: "b", type: "fact", priority: "not-a-number" },
+          ],
+        },
+      ]),
+    );
+    await makeService().extract(makeInput());
+    const atoms = memoryStore.add.mock.calls[0]![0];
+    expect(atoms).toEqual([
+      { content: "a", type: "fact", priority: 80, scene: "s" },
+      { content: "b", type: "fact", priority: 50, scene: "s" },
+    ]);
+  });
+
   test("skips scenes without a scene name and stores nothing when the batch is empty", async () => {
     llmService.complete.mockResolvedValue(JSON.stringify([{ scene: "", memories: [{ content: "x", type: "fact", priority: 50 }] }]));
     await makeService().extract(makeInput());

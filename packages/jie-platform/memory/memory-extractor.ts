@@ -43,6 +43,7 @@ export class MemoryExtractorImpl implements MemoryExtractor {
     try {
       await this.run(input);
     } catch (error) {
+      if (input.signal?.aborted) return;
       log.warn(`memory extraction failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -123,7 +124,7 @@ function parseAtom(entry: unknown): NewMemoryAtom | null {
   if (typeof content !== "string" || content === "") return null;
   const type = entry["type"];
   if (!isMemoryAtomType(type)) return null;
-  const priority = typeof entry["priority"] === "number" ? clampPriority(entry["priority"]) : 50;
+  const priority = parsePriority(entry["priority"]);
   return { content, type, priority: type === "instruction" ? 100 : priority, scene: "" };
 }
 
@@ -133,6 +134,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isMemoryAtomType(value: unknown): value is MemoryAtomType {
   return value === "fact" || value === "decision" || value === "method" || value === "instruction";
+}
+
+function parsePriority(value: unknown): number {
+  if (typeof value === "number") return clampPriority(value);
+  if (typeof value === "string") {
+    const parsed = Number(value.trim());
+    if (Number.isFinite(parsed)) return clampPriority(parsed);
+  }
+  return 50;
 }
 
 function clampPriority(value: number): number {

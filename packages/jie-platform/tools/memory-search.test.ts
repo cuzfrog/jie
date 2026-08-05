@@ -51,6 +51,20 @@ describe("memory_search", () => {
     expect(result.content).toBe("no matching memories");
   });
 
+  test("an empty or blank query returns 'no matching memories' without searching", async () => {
+    const tool = createMemorySearchTool({ memoryStore, settingsStore });
+    const result = await tool.execute({ query: "   " }, makeEmptyContext());
+    expect(result.content).toBe("no matching memories");
+    expect(memoryStore.search).not.toHaveBeenCalled();
+  });
+
+  test("a malformed FTS query degrades to 'no matching memories'", async () => {
+    memoryStore.search.mockRejectedValue(new Error("fts5: syntax error near \"?\""));
+    const tool = createMemorySearchTool({ memoryStore, settingsStore });
+    const result = await tool.execute({ query: "what is the auth module?" }, makeEmptyContext());
+    expect(result.content).toBe("no matching memories");
+  });
+
   test("memory disabled says so without searching", async () => {
     settingsStore.load.mockReturnValue({ memory: { enabled: false } });
     const tool = createMemorySearchTool({ memoryStore, settingsStore });

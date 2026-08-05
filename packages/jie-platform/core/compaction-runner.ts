@@ -35,6 +35,7 @@ export class CompactionRunnerImpl implements CompactionRunner {
   private readonly conversation: CompactionConversation;
   private readonly memoryExtractor: MemoryExtractor;
   private readonly extractionController = new AbortController();
+  private extractionPromise: Promise<void> | null = null;
   private promise: Promise<void> | null = null;
   private controller: AbortController | null = null;
   private aborted = false;
@@ -80,17 +81,21 @@ export class CompactionRunnerImpl implements CompactionRunner {
       });
       if (result === null || this.aborted) return;
       const messages = this.conversation.getMessages();
-      const summarizedPrefix = messages.slice(0, result.firstKeptIndex);
+      const summarizedMessages = messages.slice(0, result.firstKeptIndex);
       this.conversation.setMessages([result.summaryMessage, ...messages.slice(result.firstKeptIndex)]);
-      const summarizedPrompts = summarizedPrefix.reduce((count, message) => message.role === "user" ? count + 1 : count, 0);
+      const summarizedPrompts = summarizedMessages.reduce((count, message) => message.role === "user" ? count + 1 : count, 0);
       this.eventManager.publish(Events.agentCompacted(this.sender, result.summaryMessage.summary, result.tokensBefore, summarizedPrompts));
-      void this.memoryExtractor.extract({
-        messages: result.summarizedPrefix,
-        teamId: this.teamId,
-        sessionId: this.sessionId,
-        model,
-        signal: this.extractionController.signal,
-      });
+      if (this.extractionPromise === null) {
+        this.extractionPromise = this.memoryExtractor.extract({
+          messages: result.summarizedPrefix,
+          teamId: this.teamId,
+          sessionId: this.sessionId,
+          model,
+          signal: this.extractionController.signal,
+        }).finally(() => {
+          this.extractionPromise = null;
+        });
+      }
     } catch (error) {
       if (!controller.signal.aborted) {
         const message = error instanceof Error ? error.message : String(error);

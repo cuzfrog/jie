@@ -220,6 +220,28 @@ describe("CompactionRunner — dedupe and lifecycle", () => {
     await pending;
     expect(messages).toEqual(baseline);
     expect(envelopes("agent.compacted")).toHaveLength(0);
+    expect(memoryExtractor.extract).not.toHaveBeenCalled();
+  });
+
+  test("extraction is single-flighted per body", async () => {
+    let release: (() => void) | undefined;
+    memoryExtractor.extract.mockImplementation(async () => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    });
+    compactor.compact.mockResolvedValue({
+      summaryMessage: createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z"),
+      firstKeptIndex: 1,
+      tokensBefore: 500,
+      summarizedPrefix: messages.slice(0, 1),
+    });
+    const runner = makeRunner();
+    await runner.ensure(model);
+    await runner.ensure(model);
+    expect(memoryExtractor.extract).toHaveBeenCalledTimes(1);
+    release!();
+    await flush();
   });
 
   test("a failed compaction publishes system.error and leaves the conversation untouched", async () => {

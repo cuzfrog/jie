@@ -26,7 +26,7 @@ export function formatMemoryBootstrap(atoms: ReadonlyArray<MemoryAtom>, teamId: 
   const header = `<memory team="${teamId}">`;
   const footer = "</memory>";
   const lines: string[] = [];
-  let used = header.length + footer.length + 2;
+  let used = header.length + footer.length + 1;
   for (const atom of atoms) {
     const line = atomBootstrapLine(atom);
     const cost = line.length + 1;
