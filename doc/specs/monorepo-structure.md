@@ -11,12 +11,14 @@ packages/
     core/            # AgentBody: event loop (jie-agent-body.ts) and its components (prompt queue, event bridge, tool-call observer, compaction runner, model controller), pi-agent wiring, streaming, tool adapter, system-prompt composition
     event/           # EventBus (InProcessEventBus), EventManager, Events factory (03-event-system.md)
     hooks/           # settings.json command hooks: parse, HookRunner, sh executor; gates tool calls + lifecycle (10-configuration.md "Hooks")
+    llm/             # LlmService: one-shot model calls outside agent sessions (compaction, memory extraction) (07-llm-service.md)
+    memory/          # MemoryStore (memory_atoms + FTS5) + MemoryExtractor: team-scoped long-term memory (11-memory.md, ADR 34)
     services/        # GitService (branch / dirty status; consumed by the command surface and by jie-cli for the TUI footer)
     skills/          # Skill discovery (SKILL.md), SkillManager (glob resolution), prompt formatting (10-configuration.md "Skills")
-    storage/         # Storage + SqliteStorage, schema bootstrap, ArtifactStore, MemoryManager (04-storage.md, 08-memory.md)
+    storage/         # Storage + SqliteStorage, schema bootstrap, ArtifactStore, TranscriptStore (04-storage.md, 08-transcript.md)
     team/            # Blueprint parser, team registry (discovery, ADR 24), TeamManager, built-in default-solo/ team
     tools/           # Built-in tools: notify, bash, read_file, write_file, edit, kanban_write,
-                       web_search, web_fetch, write_artifact, read_artifact + ToolRegistry
+                       web_search, web_fetch, write_artifact, read_artifact, memory_search + ToolRegistry
     container.ts       # Composition root: bootPlatform(options): AwilixContainer<PlatformCradle> (ADR 31)
     jie-platform.ts  # JiePlatform handle interface + implementation (registered in module.ts)
     jie-platform-errors.ts

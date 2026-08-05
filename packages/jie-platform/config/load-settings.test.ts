@@ -169,6 +169,68 @@ describe("loadMergedSettings", () => {
     });
   });
 
+  test("accepts language en", () => {
+    const home = track(freshDir("jie-home-"));
+    writeJson(join(home, "settings.json"), { language: "en" });
+    const result = loadMergedSettings(home, null);
+    expect(result.language).toBe("en");
+  });
+
+  test("accepts language zh", () => {
+    const home = track(freshDir("jie-home-"));
+    writeJson(join(home, "settings.json"), { language: "zh" });
+    const result = loadMergedSettings(home, null);
+    expect(result.language).toBe("zh");
+  });
+
+  test("accepts a full memory block", () => {
+    const home = track(freshDir("jie-home-"));
+    writeJson(join(home, "settings.json"), {
+      memory: { enabled: false, model: "provider/model", bootstrapMaxEntries: 5, bootstrapMaxChars: 1000 },
+    });
+    const result = loadMergedSettings(home, null);
+    expect(result.memory).toEqual({ enabled: false, model: "provider/model", bootstrapMaxEntries: 5, bootstrapMaxChars: 1000 });
+  });
+
+  test("accepts a partial memory block and keeps unset fields absent", () => {
+    const home = track(freshDir("jie-home-"));
+    writeJson(join(home, "settings.json"), { memory: { enabled: false } });
+    const result = loadMergedSettings(home, null);
+    expect(result.memory).toEqual({ enabled: false });
+  });
+
+  test("ignores unknown keys inside memory", () => {
+    const home = track(freshDir("jie-home-"));
+    writeJson(join(home, "settings.json"), { memory: { enabled: true, foo: "bar" } });
+    const result = loadMergedSettings(home, null);
+    expect(result.memory).toEqual({ enabled: true });
+  });
+
+  test("deep-merges memory per field while other keys override shallowly", () => {
+    const home = track(freshDir("jie-home-"));
+    const project = track(freshDir("jie-project-"));
+    writeJson(join(home, "settings.json"), {
+      memory: { enabled: true, bootstrapMaxEntries: 12 },
+    });
+    writeJson(join(project, "settings.json"), {
+      memory: { bootstrapMaxEntries: 5 },
+    });
+    const result = loadMergedSettings(home, project);
+    expect(result.memory).toEqual({ enabled: true, bootstrapMaxEntries: 5 });
+  });
+
+  test("project-only memory passes through the merge", () => {
+    const home = track(freshDir("jie-home-"));
+    const project = track(freshDir("jie-project-"));
+    writeJson(join(home, "settings.json"), { defaultProvider: "anthropic" });
+    writeJson(join(project, "settings.json"), { memory: { model: "provider/model" } });
+    const result = loadMergedSettings(home, project);
+    expect(result).toEqual({
+      defaultProvider: "anthropic",
+      memory: { model: "provider/model" },
+    });
+  });
+
   test("rejects an unparseable settings file with code INVALID_CONFIG naming the file", () => {
     const home = track(freshDir("jie-home-"));
     writeFileSync(join(home, "settings.json"), "{ not json", "utf-8");
@@ -219,6 +281,78 @@ describe("loadMergedSettings", () => {
       field: "defaultEffort",
       value: 42,
       match: /invalid defaultEffort/,
+    },
+    {
+      name: "language not in the vocabulary",
+      field: "language",
+      value: "de",
+      match: /invalid language/,
+    },
+    {
+      name: "non-string language",
+      field: "language",
+      value: 42,
+      match: /invalid language/,
+    },
+    {
+      name: "non-object memory",
+      field: "memory",
+      value: "on",
+      match: /memory must be an object/,
+    },
+    {
+      name: "array memory",
+      field: "memory",
+      value: [],
+      match: /memory must be an object/,
+    },
+    {
+      name: "null memory",
+      field: "memory",
+      value: null,
+      match: /memory must be an object/,
+    },
+    {
+      name: "non-boolean memory.enabled",
+      field: "memory",
+      value: { enabled: "yes" },
+      match: /memory\.enabled must be a boolean/,
+    },
+    {
+      name: "non-string memory.model",
+      field: "memory",
+      value: { model: 42 },
+      match: /memory\.model must be a string/,
+    },
+    {
+      name: "non-number memory.bootstrapMaxEntries",
+      field: "memory",
+      value: { bootstrapMaxEntries: "5" },
+      match: /memory\.bootstrapMaxEntries must be a positive integer/,
+    },
+    {
+      name: "non-integer memory.bootstrapMaxEntries",
+      field: "memory",
+      value: { bootstrapMaxEntries: 5.5 },
+      match: /memory\.bootstrapMaxEntries must be a positive integer/,
+    },
+    {
+      name: "zero memory.bootstrapMaxEntries",
+      field: "memory",
+      value: { bootstrapMaxEntries: 0 },
+      match: /memory\.bootstrapMaxEntries must be a positive integer/,
+    },
+    {
+      name: "negative memory.bootstrapMaxEntries",
+      field: "memory",
+      value: { bootstrapMaxEntries: -1 },
+      match: /memory\.bootstrapMaxEntries must be a positive integer/,
+    },
+    {
+      name: "negative memory.bootstrapMaxChars",
+      field: "memory",
+      value: { bootstrapMaxChars: -1 },
+      match: /memory\.bootstrapMaxChars must be a positive integer/,
     },
     {
       name: "non-array modelFilters",

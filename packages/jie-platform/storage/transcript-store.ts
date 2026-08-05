@@ -8,7 +8,7 @@ export interface SessionSummary {
   readonly name?: string;
 }
 
-export interface MemoryManager {
+export interface TranscriptStore {
   persist(
     message: AgentMessage,
     agentKey: string,
@@ -39,7 +39,7 @@ export interface MemoryManager {
   renameSession(sessionId: string, name: string): void;
 }
 
-export class SqliteMemoryManager implements MemoryManager {
+export class SqliteTranscriptStore implements TranscriptStore {
   private readonly storage: Storage;
 
   constructor(storage: Storage) {

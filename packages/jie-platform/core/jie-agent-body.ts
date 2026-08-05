@@ -1,7 +1,9 @@
 import { Agent, convertToLlm, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
-import type { ArtifactStore, MemoryManager } from "../storage";
+import type { SettingsStore } from "../config";
+import { loadMemoryBootstrap, type MemoryExtractor, type MemoryStore } from "../memory";
+import type { ArtifactStore, TranscriptStore } from "../storage";
 import type { ExecutionContext, ToolRegistry } from "../tools";
 import type { Skill, SkillManager } from "../skills";
 import type { HookIdentity, HookRunner } from "../hooks";
@@ -23,7 +25,7 @@ const SKILL_INVOCATION_PREFIX = "/skill:";
 interface AgentBodyDeps {
   readonly eventManager: EventManager;
   readonly artifactStore: ArtifactStore;
-  readonly memory: MemoryManager;
+  readonly transcriptStore: TranscriptStore;
   readonly toolRegistry: ToolRegistry;
   readonly skillManager: SkillManager;
   readonly systemContextBlock: string;
@@ -33,6 +35,9 @@ interface AgentBodyDeps {
   resolveModel(provider: string, modelId: string): Model<Api> | undefined;
   readonly createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
   readonly compactor: Compactor;
+  readonly memoryStore: MemoryStore;
+  readonly memoryExtractor: MemoryExtractor;
+  readonly settingsStore: SettingsStore;
 }
 
 export class JieAgentBody implements AgentBody {
@@ -42,10 +47,13 @@ export class JieAgentBody implements AgentBody {
   private readonly isLeader: boolean;
   private readonly sessionId: string;
   private readonly eventManager: EventManager;
-  private readonly memory: MemoryManager;
+  private readonly transcriptStore: TranscriptStore;
   private readonly hookRunner: HookRunner;
   private readonly hookIdentity: HookIdentity;
   private readonly compactor: Compactor;
+  private readonly systemContextBlock: string;
+  private readonly memoryStore: MemoryStore;
+  private readonly settingsStore: SettingsStore;
   private readonly agent: Agent;
   private readonly sender: AgentSender;
   private readonly promptQueue: PromptQueue;
@@ -63,9 +71,12 @@ export class JieAgentBody implements AgentBody {
     this.soul = params.soul;
     this.sessionId = params.sessionId;
     this.eventManager = deps.eventManager;
-    this.memory = deps.memory;
+    this.transcriptStore = deps.transcriptStore;
     this.hookRunner = deps.hookRunner;
     this.compactor = deps.compactor;
+    this.systemContextBlock = deps.systemContextBlock;
+    this.memoryStore = deps.memoryStore;
+    this.settingsStore = deps.settingsStore;
     this.hookIdentity = {
       sessionId: this.sessionId,
       cwd: deps.cwd,
@@ -88,7 +99,6 @@ export class JieAgentBody implements AgentBody {
       compactor: deps.compactor,
       eventManager: deps.eventManager,
       sender: this.sender,
-      getApiKey: deps.getApiKey,
       agentKey: this.agentKey,
       sessionId: this.sessionId,
       teamId: this.teamId,
@@ -98,10 +108,11 @@ export class JieAgentBody implements AgentBody {
           this.agent.state.messages = [...messages];
         },
       },
+      memoryExtractor: deps.memoryExtractor,
     });
     const eventBridge = new AgentEventBridgeImpl({
       eventManager: deps.eventManager,
-      memory: this.memory,
+      transcriptStore: this.transcriptStore,
       hookRunner: this.hookRunner,
       hookIdentity: this.hookIdentity,
       sender: this.sender,
@@ -178,7 +189,7 @@ export class JieAgentBody implements AgentBody {
 
   async restore(): Promise<ReadonlyArray<AgentMessage>> {
     if (this.restored !== null) return this.restored;
-    const messages = await this.memory.restore(
+    const messages = await this.transcriptStore.restore(
       this.agentKey,
       this.sessionId,
       this.teamId,
@@ -187,7 +198,18 @@ export class JieAgentBody implements AgentBody {
       this.agent.state.messages = [...messages];
     }
     this.restored = messages;
+    await this.loadMemoryBlock();
     return messages;
+  }
+
+  private async loadMemoryBlock(): Promise<void> {
+    const memoryBlock = await loadMemoryBootstrap(this.memoryStore, this.settingsStore, this.teamId);
+    this.agent.state.systemPrompt = composeSystemPrompt({
+      rolePrompt: this.soul.systemPrompt,
+      contextBlock: this.systemContextBlock,
+      memoryBlock,
+      skills: this.resolvedSkills,
+    });
   }
 
   messages(): ReadonlyArray<AgentMessage> {

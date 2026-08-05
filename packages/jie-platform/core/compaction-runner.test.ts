@@ -3,6 +3,7 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import { CompactionRunnerImpl, type CompactionRunner } from "./compaction-runner";
 import type { CompactionResult, Compactor } from "./compaction";
 import type { AgentSender, EventEnvelope, EventManager, EventType } from "../event";
+import type { MemoryExtractor } from "../memory";
 
 async function flush(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -18,7 +19,7 @@ const compactor = vi.mocked<Compactor>({
   fitToWindow: vi.fn((messages) => messages),
 });
 
-const getApiKey = vi.fn((provider: string) => `key-for-${provider}`);
+const memoryExtractor = vi.mocked<MemoryExtractor>({ extract: vi.fn(async () => {}) });
 
 const sender: AgentSender = { kind: "agent", teamId: "t1", agentKey: "general-1" };
 
@@ -36,11 +37,11 @@ function makeRunner(): CompactionRunner {
     compactor,
     eventManager,
     sender,
-    getApiKey,
     agentKey: "general-1",
     sessionId: "s1",
     teamId: "t1",
     conversation,
+    memoryExtractor,
   });
 }
 
@@ -76,14 +77,13 @@ beforeEach(() => {
 });
 
 describe("CompactionRunner — compact input", () => {
-  test("ensure passes the conversation, model window, api key, and identity to the compactor", async () => {
+  test("ensure passes the conversation, model window, and identity to the compactor", async () => {
     await makeRunner().ensure(model);
     expect(compactor.compact).toHaveBeenCalledTimes(1);
     const input = compactor.compact.mock.calls[0]![0]!;
     expect(input.messages).toEqual(messages);
     expect(input.contextWindow).toBe(200000);
     expect(input.model).toBe(model);
-    expect(input.apiKey).toBe("key-for-anthropic");
     expect(input.agentKey).toBe("general-1");
     expect(input.sessionId).toBe("s1");
     expect(input.teamId).toBe("t1");
@@ -95,7 +95,7 @@ describe("CompactionRunner — applying the result", () => {
   test("a successful run rewrites the conversation to [summary, ...retainedTail]", async () => {
     const [, second, third] = messages;
     const summary = createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z");
-    compactor.compact.mockResolvedValueOnce({ summaryMessage: summary, firstKeptIndex: 1, tokensBefore: 500 });
+    compactor.compact.mockResolvedValueOnce({ summaryMessage: summary, firstKeptIndex: 1, tokensBefore: 500, summarizedPrefix: [messages[0]!] });
     await makeRunner().ensure(model);
     expect(messages).toEqual([summary, second, third]);
   });
@@ -106,12 +106,54 @@ describe("CompactionRunner — applying the result", () => {
       summaryMessage: createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z"),
       firstKeptIndex: 3,
       tokensBefore: 500,
+      summarizedPrefix: messages.slice(0, 3),
     });
     await makeRunner().ensure(model);
     const compacted = envelopes("agent.compacted");
     expect(compacted).toHaveLength(1);
     expect(compacted[0]!.sender).toEqual(sender);
     expect(compacted[0]!.payload).toEqual({ summary: "the summary", tokens_before: 500, summarized_prompts: 3 });
+  });
+
+  test("a successful run hands the summarized prefix to the extractor", async () => {
+    messages = [makeUserMessage("m1"), makeUserMessage("m2"), makeUserMessage("m3")];
+    compactor.compact.mockResolvedValueOnce({
+      summaryMessage: createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z"),
+      firstKeptIndex: 1,
+      tokensBefore: 500,
+      summarizedPrefix: messages.slice(0, 1),
+    });
+    await makeRunner().ensure(model);
+    expect(memoryExtractor.extract).toHaveBeenCalledTimes(1);
+    const input = memoryExtractor.extract.mock.calls[0]![0]!;
+    expect(input.messages).toEqual([makeUserMessage("m1")]);
+    expect(input.teamId).toBe("t1");
+    expect(input.sessionId).toBe("s1");
+    expect(input.model).toBe(model);
+  });
+
+  test("a null result never reaches the extractor", async () => {
+    await makeRunner().ensure(model);
+    expect(memoryExtractor.extract).not.toHaveBeenCalled();
+  });
+
+  test("abort() aborts the extraction signal", async () => {
+    let captured: AbortSignal | undefined;
+    memoryExtractor.extract.mockImplementationOnce(async (input) => {
+      captured = input.signal;
+    });
+    compactor.compact.mockResolvedValueOnce({
+      summaryMessage: createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z"),
+      firstKeptIndex: 1,
+      tokensBefore: 500,
+      summarizedPrefix: messages.slice(0, 1),
+    });
+    const runner = makeRunner();
+    await runner.ensure(model);
+    if (captured === undefined) throw new Error("extraction signal not captured");
+    expect(captured.aborted).toBe(false);
+    runner.abort();
+    expect(captured.aborted).toBe(true);
   });
 
   test("a null result leaves the conversation untouched and publishes nothing", async () => {
@@ -173,10 +215,33 @@ describe("CompactionRunner — dedupe and lifecycle", () => {
       summaryMessage: createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z"),
       firstKeptIndex: 1,
       tokensBefore: 500,
+      summarizedPrefix: [messages[0]!],
     });
     await pending;
     expect(messages).toEqual(baseline);
     expect(envelopes("agent.compacted")).toHaveLength(0);
+    expect(memoryExtractor.extract).not.toHaveBeenCalled();
+  });
+
+  test("extraction is single-flighted per body", async () => {
+    let release: (() => void) | undefined;
+    memoryExtractor.extract.mockImplementation(async () => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    });
+    compactor.compact.mockResolvedValue({
+      summaryMessage: createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z"),
+      firstKeptIndex: 1,
+      tokensBefore: 500,
+      summarizedPrefix: messages.slice(0, 1),
+    });
+    const runner = makeRunner();
+    await runner.ensure(model);
+    await runner.ensure(model);
+    expect(memoryExtractor.extract).toHaveBeenCalledTimes(1);
+    release!();
+    await flush();
   });
 
   test("a failed compaction publishes system.error and leaves the conversation untouched", async () => {

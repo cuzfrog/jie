@@ -7,11 +7,13 @@ import { registerCoreModule, type AgentBody, type AgentBodyParams } from "./core
 import { registerEventModule, type EventBus, type EventManager } from "./event";
 import { registerHooksModule, type HookRunner } from "./hooks";
 import type { JiePlatform, JiePlatformOptions } from "./jie-platform";
+import { registerLlmModule, type LlmService } from "./llm";
 import { registerMcpModule, type McpConnector, type McpManager, type SubprocessFactory } from "./mcp";
+import { registerMemoryModule, type MemoryExtractor, type MemoryStore } from "./memory";
 import { registerPlatformModule } from "./module";
 import { registerServicesModule, type GitService } from "./services";
 import { registerSkillsModule, type SkillManager } from "./skills";
-import { registerStorageModule, type ArtifactStore, type MemoryManager, type Storage } from "./storage";
+import { registerStorageModule, type ArtifactStore, type Storage, type TranscriptStore } from "./storage";
 import { registerTeamModule, type TeamManager } from "./team";
 import { registerToolsModule, type ToolRegistry } from "./tools";
 
@@ -26,10 +28,13 @@ export interface PlatformCradle {
   readonly eventManager: EventManager;
   readonly storage: Storage;
   readonly artifactStore: ArtifactStore;
-  readonly memoryManager: MemoryManager;
+  readonly transcriptStore: TranscriptStore;
   readonly authStore: AuthStore;
   readonly modelRegistry: ModelRegistry;
   readonly settingsStore: SettingsStore;
+  readonly llmService: LlmService;
+  readonly memoryStore: MemoryStore;
+  readonly memoryExtractor: MemoryExtractor;
   readonly gitService: GitService;
   readonly toolRegistry: ToolRegistry;
   readonly skillManager: SkillManager;
@@ -59,6 +64,8 @@ export async function bootPlatform(options: JiePlatformOptions): Promise<AwilixC
   registerEventModule(container);
   registerStorageModule(container);
   registerConfigModule(container);
+  registerLlmModule(container);
+  registerMemoryModule(container);
   registerServicesModule(container);
   registerToolsModule(container);
   registerSkillsModule(container);

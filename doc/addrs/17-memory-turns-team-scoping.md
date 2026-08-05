@@ -65,4 +65,4 @@ The CLI passes intent via `JiePlatformOptions.resumeSessionId`; `createJiePlatfo
 
 - `ExecutionContext` exposes `team_id`; tools that need team-scoped keys can use it.
 - `--resume` is team-scoped by the `hasSession` query; cross-team resume returns no rows and exits 1 (explicit cross-team resume is out of scope).
-- The cross-team collision section and startup WARN are gone from `08-memory.md`; the 4-step restore sequence there is canonical and written against this model.
+- The cross-team collision section and startup WARN are gone from `08-transcript.md` (then `08-memory.md`); the 4-step restore sequence there is canonical and written against this model.

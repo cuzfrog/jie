@@ -2,7 +2,7 @@ import type { AgentMessage, AgentEvent as PiAgentEvent } from "@earendil-works/p
 import type { AssistantMessage, StopReason } from "@earendil-works/pi-ai";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { HookIdentity, HookRunner } from "../hooks";
-import type { MemoryManager } from "../storage";
+import type { TranscriptStore } from "../storage";
 import type { PromptQueue } from "./prompt-queue";
 import { StreamPublisherImpl, type StreamPublisher } from "./streaming";
 
@@ -12,7 +12,7 @@ export interface AgentEventBridge {
 
 interface AgentEventBridgeDeps {
   readonly eventManager: EventManager;
-  readonly memory: MemoryManager;
+  readonly transcriptStore: TranscriptStore;
   readonly hookRunner: HookRunner;
   readonly hookIdentity: HookIdentity;
   readonly sender: AgentSender;
@@ -22,7 +22,7 @@ interface AgentEventBridgeDeps {
 
 export class AgentEventBridgeImpl implements AgentEventBridge {
   private readonly eventManager: EventManager;
-  private readonly memory: MemoryManager;
+  private readonly transcriptStore: TranscriptStore;
   private readonly hookRunner: HookRunner;
   private readonly hookIdentity: HookIdentity;
   private readonly sender: AgentSender;
@@ -33,7 +33,7 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
 
   constructor(deps: AgentEventBridgeDeps) {
     this.eventManager = deps.eventManager;
-    this.memory = deps.memory;
+    this.transcriptStore = deps.transcriptStore;
     this.hookRunner = deps.hookRunner;
     this.hookIdentity = deps.hookIdentity;
     this.sender = deps.sender;
@@ -91,7 +91,7 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
             }));
           }
         }
-        this.memory.persist(
+        this.transcriptStore.persist(
           persistableMessage(event.message),
           this.hookIdentity.agentKey,
           this.hookIdentity.sessionId,

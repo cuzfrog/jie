@@ -3,13 +3,20 @@ import type { Skill } from "../skills";
 export interface ComposeSystemPromptInput {
   readonly rolePrompt: string;
   readonly contextBlock?: string;
+  readonly memoryBlock?: string;
   readonly skills?: ReadonlyArray<Skill>;
 }
 
 export function composeSystemPrompt(input: ComposeSystemPromptInput): string {
   const skillsBlock = input.skills === undefined ? "" : formatSkillsBlock(input.skills);
-  const prefix = input.contextBlock === undefined || input.contextBlock === "" ? "" : `${input.contextBlock}\n\n`;
+  const prefix = blockPrefix(input.contextBlock, input.memoryBlock);
   return `${prefix}${input.rolePrompt}${skillsBlock}`;
+}
+
+function blockPrefix(...blocks: Array<string | undefined>): string {
+  const nonEmpty = blocks.filter((block): block is string => block !== undefined && block !== "");
+  if (nonEmpty.length === 0) return "";
+  return `${nonEmpty.join("\n\n")}\n\n`;
 }
 
 function formatSkillsBlock(skills: ReadonlyArray<Skill>): string {

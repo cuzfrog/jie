@@ -8,7 +8,7 @@ import type { PlatformCradle } from "../container";
 import type { AgentBody, AgentBodyParams } from "../core";
 import type { EventManager } from "../event";
 import type { SkillManager } from "../skills";
-import type { MemoryManager } from "../storage";
+import type { TranscriptStore } from "../storage";
 import { registerTeamModule } from "./module";
 
 const eventManager = vi.mocked<EventManager>({
@@ -38,7 +38,7 @@ const skillManager = vi.mocked<SkillManager>({
   reload: vi.fn(),
 });
 
-const memoryManager = vi.mocked<MemoryManager>({
+const transcriptStore = vi.mocked<TranscriptStore>({
   persist: vi.fn(),
   compact: vi.fn(),
   restore: vi.fn(),
@@ -63,7 +63,7 @@ function bootedContainer(homeJieDir: string, projectJieDir: string | null): Awil
     eventManager: asValue(eventManager),
     settingsStore: asValue(settingsStore),
     modelRegistry: asValue(modelRegistry),
-    memoryManager: asValue(memoryManager),
+    transcriptStore: asValue(transcriptStore),
     skillManager: asValue(skillManager),
     agentBodyFactory: asValue(agentBodyFactory),
   });

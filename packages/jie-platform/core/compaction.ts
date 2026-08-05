@@ -10,25 +10,15 @@ import {
   type CompactionSummaryMessage,
   type CustomMessage,
 } from "@earendil-works/pi-agent-core";
-import {
-  contentText,
-  retryAssistantCall,
-  uuidv7,
-  type Api,
-  type AssistantMessage,
-  type Model,
-  type ToolResultMessage,
-  type UserMessage,
-} from "@earendil-works/pi-ai";
-import { streamSimple } from "@earendil-works/pi-ai/compat";
+import type { Api, AssistantMessage, Model, ToolResultMessage, UserMessage } from "@earendil-works/pi-ai";
 import type { Settings } from "../config";
-import type { MemoryManager } from "../storage";
+import type { LlmService } from "../llm";
+import type { TranscriptStore } from "../storage";
 
 export interface CompactionInput {
   readonly messages: ReadonlyArray<AgentMessage>;
   readonly contextWindow: number;
   readonly model: Model<Api>;
-  readonly apiKey: string | undefined;
   readonly agentKey: string;
   readonly sessionId: string;
   readonly teamId: string;
@@ -39,6 +29,7 @@ export interface CompactionResult {
   readonly summaryMessage: CompactionSummaryMessage;
   readonly firstKeptIndex: number;
   readonly tokensBefore: number;
+  readonly summarizedPrefix: ReadonlyArray<AgentMessage>;
 }
 
 export interface Compactor {
@@ -46,33 +37,22 @@ export interface Compactor {
   fitToWindow(messages: ReadonlyArray<AgentMessage>, model: Model<Api>): ReadonlyArray<AgentMessage>;
 }
 
-type SummarizeFn = (input: SummarizeInput) => Promise<string>;
-
-interface SummarizeInput {
-  readonly systemPrompt: string;
-  readonly userPrompt: string;
-  readonly model: Model<Api>;
-  readonly apiKey: string | undefined;
-  readonly maxTokens: number;
-  readonly signal?: AbortSignal;
-}
-
 type CompactionOverrides = NonNullable<Settings["compaction"]>;
 
 interface CompactorDeps {
-  readonly memory: MemoryManager;
-  readonly summarize?: SummarizeFn;
+  readonly transcriptStore: TranscriptStore;
+  readonly llmService: LlmService;
   readonly getSettings?: () => CompactionOverrides | undefined;
 }
 
 export class CompactorImpl implements Compactor {
-  private readonly memory: MemoryManager;
-  private readonly summarize: SummarizeFn;
+  private readonly transcriptStore: TranscriptStore;
+  private readonly llmService: LlmService;
   private readonly getSettings: (() => CompactionOverrides | undefined) | undefined;
 
   constructor(deps: CompactorDeps) {
-    this.memory = deps.memory;
-    this.summarize = deps.summarize ?? summarizeConversation;
+    this.transcriptStore = deps.transcriptStore;
+    this.llmService = deps.llmService;
     this.getSettings = deps.getSettings;
   }
 
@@ -83,23 +63,22 @@ export class CompactorImpl implements Compactor {
     if (!shouldCompact(tokensBefore, input.contextWindow, settings)) return null;
     const preparation = prepareCompaction(input.messages, settings.keepRecentTokens);
     if (preparation === null) return null;
-    const storedCount = (await this.memory.restore(input.agentKey, input.sessionId, input.teamId)).length;
+    const storedCount = (await this.transcriptStore.restore(input.agentKey, input.sessionId, input.teamId)).length;
     if (storedCount !== input.messages.length) {
       throw new Error(`history out of sync with storage: ${storedCount} stored rows, ${input.messages.length} messages`);
     }
     const prefixBudget = summaryPrefixBudget(input.model, settings.reserveTokens);
     const summarizedPrefix = fitMessages(input.messages.slice(0, preparation.firstKeptIndex), prefixBudget);
-    const summaryText = await this.summarize({
-      systemPrompt: SUMMARIZATION_SYSTEM_PROMPT,
-      userPrompt: buildSummaryPrompt(summarizedPrefix, preparation.previousSummary),
+    const summaryText = await this.llmService.complete({
       model: input.model,
-      apiKey: input.apiKey,
+      systemPrompt: SUMMARIZATION_SYSTEM_PROMPT,
+      prompt: buildSummaryPrompt(summarizedPrefix, preparation.previousSummary),
       maxTokens: summaryMaxTokens(input.model, settings.reserveTokens),
       signal: input.signal,
     });
     const summaryMessage = createCompactionSummaryMessage(summaryText, tokensBefore, new Date().toISOString());
-    this.memory.compact(preparation.firstKeptIndex, summaryMessage, input.agentKey, input.sessionId, input.teamId);
-    return { summaryMessage, firstKeptIndex: preparation.firstKeptIndex, tokensBefore };
+    this.transcriptStore.compact(preparation.firstKeptIndex, summaryMessage, input.agentKey, input.sessionId, input.teamId);
+    return { summaryMessage, firstKeptIndex: preparation.firstKeptIndex, tokensBefore, summarizedPrefix };
   }
 
   fitToWindow(messages: ReadonlyArray<AgentMessage>, model: Model<Api>): ReadonlyArray<AgentMessage> {
@@ -173,30 +152,6 @@ function summaryPrefixBudget(model: Model<Api>, reserveTokens: number): number {
 function summaryMaxTokens(model: Model<Api>, reserveTokens: number): number {
   const cap = model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY;
   return Math.min(Math.floor(0.8 * reserveTokens), cap);
-}
-
-async function summarizeConversation(input: SummarizeInput): Promise<string> {
-  const response = await retryAssistantCall(async (): Promise<AssistantMessage> => {
-    const stream = streamSimple(
-      input.model,
-      {
-        systemPrompt: input.systemPrompt,
-        messages: [{ role: "user", content: [{ type: "text", text: input.userPrompt }], timestamp: Date.now() }],
-      },
-      {
-        maxTokens: input.maxTokens,
-        apiKey: input.apiKey,
-        signal: input.signal,
-        cacheRetention: "none",
-        sessionId: uuidv7(),
-      },
-    );
-    return stream.result();
-  }, undefined, input.signal);
-  if (response.stopReason === "error" || response.stopReason === "aborted") {
-    throw new Error(response.errorMessage ?? `summarization ${response.stopReason}`);
-  }
-  return contentText(response.content);
 }
 
 function fitMessages(messages: ReadonlyArray<AgentMessage>, budgetTokens: number): ReadonlyArray<AgentMessage> {

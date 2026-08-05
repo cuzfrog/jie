@@ -13,7 +13,9 @@ import { JieAgentBody } from "./jie-agent-body";
 import type { AgentBodyParams } from "./agent-body";
 import type { CompactionInput, CompactionResult, Compactor } from "./compaction";
 import { Events, type EventEnvelope, type EventManager, type EventType } from "../event";
-import type { ArtifactStore, MemoryManager } from "../storage";
+import type { SettingsStore } from "../config";
+import type { MemoryExtractor, MemoryStore } from "../memory";
+import type { ArtifactStore, TranscriptStore } from "../storage";
 import type { ExecutionContext, Tool, ToolRegistry, ToolResult } from "../tools";
 import type { Skill, SkillManager } from "../skills";
 import type { HookRunner } from "../hooks";
@@ -212,8 +214,8 @@ function makeFakeAgentFactory(): FakeAgentCapture {
   };
 }
 
-function makeFakeMemory(): {
-  memory: MemoryManager;
+function makeFakeTranscriptStore(): {
+  transcriptStore: TranscriptStore;
   persisted: AgentMessage[];
   restore: ReturnType<typeof vi.fn>;
 } {
@@ -222,7 +224,7 @@ function makeFakeMemory(): {
     persisted.push(message);
   });
   const restore = vi.fn(async () => persisted.slice());
-  const memory = vi.mocked<MemoryManager>({
+  const transcriptStore = vi.mocked<TranscriptStore>({
     persist,
     compact: vi.fn(),
     restore,
@@ -231,7 +233,7 @@ function makeFakeMemory(): {
     sessionName: vi.fn(() => null),
     renameSession: vi.fn(),
   });
-  return { memory, persisted, restore };
+  return { transcriptStore, persisted, restore };
 }
 
 interface MakeBodyOverrides {
@@ -255,6 +257,8 @@ interface Harness {
   toolRegistry: ReturnType<typeof vi.mocked<ToolRegistry>>;
   skillManager: ReturnType<typeof vi.mocked<SkillManager>>;
   hookRunner: ReturnType<typeof vi.mocked<HookRunner>>;
+  memoryStore: ReturnType<typeof vi.mocked<MemoryStore>>;
+  settingsStore: ReturnType<typeof vi.mocked<SettingsStore>>;
   persisted: AgentMessage[];
   restore: ReturnType<typeof vi.fn>;
   cap: FakeAgentCapture;
@@ -288,7 +292,7 @@ function makeFakeEventManager(): EventManager {
 
 function makeHarness(): Harness {
   const events: EventManager = makeFakeEventManager();
-  const { memory, persisted, restore } = makeFakeMemory();
+  const { transcriptStore, persisted, restore } = makeFakeTranscriptStore();
   const cap = makeFakeAgentFactory();
   const resolveModel = vi.fn<(provider: string, modelId: string) => Model<Api> | undefined>(() => undefined);
   const toolRegistry = vi.mocked<ToolRegistry>({
@@ -312,6 +316,15 @@ function makeHarness(): Harness {
     read: vi.fn(),
     list: vi.fn(),
   });
+  const memoryStore = vi.mocked<MemoryStore>({ add: vi.fn(), search: vi.fn(), top: vi.fn(async () => []) });
+  const settingsStore = vi.mocked<SettingsStore>({
+    load: vi.fn(() => ({})),
+    setDefaultProvider: vi.fn(),
+    setDefaultEffort: vi.fn(),
+    setDefaultTeam: vi.fn(),
+    setModelFilters: vi.fn(),
+  });
+  const memoryExtractor = vi.mocked<MemoryExtractor>({ extract: vi.fn(async () => {}) });
   const subscribeSubject = <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void): (() => void) =>
     events.subscribe(topic, (env) => cb(env));
   const makeBody: Harness["makeBody"] = (overrides = {}) => {
@@ -328,7 +341,7 @@ function makeHarness(): Harness {
     return new JieAgentBody(params, {
       eventManager: events,
       artifactStore,
-      memory,
+      transcriptStore,
       toolRegistry,
       skillManager,
       systemContextBlock: overrides.systemContextBlock ?? "",
@@ -338,6 +351,9 @@ function makeHarness(): Harness {
       resolveModel,
       createAgent: overrides.factory ?? cap.factory,
       compactor: overrides.compactor ?? noopCompactor,
+      memoryStore,
+      memoryExtractor,
+      settingsStore,
     });
   };
   const fireEvent = (event: PiAgentEvent): void => {
@@ -355,6 +371,8 @@ function makeHarness(): Harness {
     toolRegistry,
     skillManager,
     hookRunner,
+    memoryStore,
+    settingsStore,
     persisted,
     restore,
     cap,
@@ -971,13 +989,64 @@ describe("JieAgentBody — restore() snapshot phase", () => {
     body.stop();
   });
 
-  test("is idempotent — a second call returns the cached snapshot without re-querying memory", async () => {
+  test("is idempotent — a second call returns the cached snapshot without re-querying the transcript store", async () => {
     h.persisted.push({ role: "user", content: "m1" } as unknown as AgentMessage);
     const body = h.makeBody();
     const first = await body.restore();
     const second = await body.restore();
     expect(second).toBe(first);
     expect(h.restore).toHaveBeenCalledTimes(1);
+    body.stop();
+  });
+
+  test("a failing memory store load degrades to context + role prose without failing restore", async () => {
+    h.memoryStore.top.mockRejectedValue(new Error("db locked"));
+    const body = h.makeBody({ systemContextBlock: "CONTEXT" });
+    await body.restore();
+    expect(h.state.systemPrompt).toBe("CONTEXT\n\nyou are a general assistant");
+    body.stop();
+  });
+
+  test("loads the team memory block into the system prompt between context and role prose", async () => {
+    h.memoryStore.top.mockResolvedValue([
+      {
+        id: "a1",
+        teamId: "t1",
+        content: "keep the build green",
+        type: "instruction",
+        priority: 100,
+        scene: "",
+        sourceSessionId: "s9",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+    const body = h.makeBody({ systemContextBlock: "CONTEXT" });
+    await body.restore();
+    expect(h.state.systemPrompt).toBe(
+      "CONTEXT\n\n<memory team=\"t1\">\n- [instruction] keep the build green\n</memory>\n\nyou are a general assistant",
+    );
+    body.stop();
+  });
+
+  test("restore re-composes the prompt with the memory block even for a fresh session", async () => {
+    h.memoryStore.top.mockResolvedValue([
+      {
+        id: "a1",
+        teamId: "t1",
+        content: "sqlite over postgres",
+        type: "decision",
+        priority: 90,
+        scene: "store choice",
+        sourceSessionId: "s9",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+    const body = h.makeBody();
+    await body.restore();
+    expect(h.state.systemPrompt).toContain("<memory team=\"t1\">");
+    expect(h.state.systemPrompt).toContain("- [decision] sqlite over postgres (scene: store choice)");
     body.stop();
   });
 
@@ -1849,7 +1918,7 @@ describe("JieAgentBody — compaction", () => {
     const third = makeUserMessage("m3");
     h.state.messages = [makeUserMessage("m1"), second, third];
     const summary = createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z");
-    compact.mockResolvedValueOnce({ summaryMessage: summary, firstKeptIndex: 1, tokensBefore: 500 });
+    compact.mockResolvedValueOnce({ summaryMessage: summary, firstKeptIndex: 1, tokensBefore: 500, summarizedPrefix: [makeUserMessage("m1")] });
     h.fireEvent({ type: "agent_end", messages: [] });
     h.settleIdle();
     await flush();
@@ -1876,20 +1945,6 @@ describe("JieAgentBody — compaction", () => {
     await flush();
     expect(compact).not.toHaveBeenCalled();
     expect(h.prompt.mock.calls.length).toBe(1);
-    body.stop();
-  });
-
-  test("compaction resolves the api key from the model provider", async () => {
-    const { compactor, compact } = makeFakeCompactor();
-    const body = h.makeBody({
-      model: makeModel("anthropic", "claude-sonnet-4"),
-      compactor,
-      getApiKey: (provider) => `key-for-${provider}`,
-    });
-    h.fireEvent({ type: "agent_end", messages: [] });
-    h.settleIdle();
-    await flush();
-    expect(compact.mock.calls[0]![0]!.apiKey).toBe("key-for-anthropic");
     body.stop();
   });
 
@@ -1976,6 +2031,7 @@ describe("JieAgentBody — compaction", () => {
       summaryMessage: createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z"),
       firstKeptIndex: 1,
       tokensBefore: 500,
+      summarizedPrefix: [first],
     });
     await flush();
     expect(compacted).toHaveLength(0);

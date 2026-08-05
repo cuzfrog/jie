@@ -2,6 +2,7 @@ import type { Tool } from "./types";
 import { createBashTool } from "./bash";
 import { createEditTool } from "./edit";
 import { createFileMutationQueue } from "./file-mutation-queue";
+import { createMemorySearchTool } from "./memory-search";
 import { createNotifyTool } from "./notify";
 import { createReadArtifactTool } from "./read-artifact";
 import { createReadFileTool } from "./read-file";
@@ -11,7 +12,9 @@ import { createWebFetchTool } from "./web-fetch";
 import { createWebSearchProvider, createWebSearchTool } from "./web-search";
 import { createWriteArtifactTool } from "./write-artifact";
 import { createWriteFileTool } from "./write-file";
+import type { SettingsStore } from "../config";
 import type { EventManager } from "../event";
+import type { MemoryStore } from "../memory";
 import type { ArtifactStore } from "../storage";
 
 export interface ToolRegistry {
@@ -24,8 +27,14 @@ export class InMemoryToolRegistry implements ToolRegistry {
   private readonly tools = new Map<string, Tool>();
   private readonly globs = new Map<string, Bun.Glob>();
 
-  constructor(cwd: string, eventManager: EventManager, artifactStore: ArtifactStore) {
-    for (const builtin of builtins(cwd, eventManager, artifactStore)) {
+  constructor(
+    cwd: string,
+    eventManager: EventManager,
+    artifactStore: ArtifactStore,
+    memoryStore: MemoryStore,
+    settingsStore: SettingsStore,
+  ) {
+    for (const builtin of builtins(cwd, eventManager, artifactStore, memoryStore, settingsStore)) {
       this.register(builtin.name, builtin.tool);
     }
   }
@@ -57,7 +66,13 @@ interface BuiltinTool {
   tool: Tool;
 }
 
-function builtins(workspaceRoot: string, eventManager: EventManager, artifactStore: ArtifactStore): BuiltinTool[] {
+function builtins(
+  workspaceRoot: string,
+  eventManager: EventManager,
+  artifactStore: ArtifactStore,
+  memoryStore: MemoryStore,
+  settingsStore: SettingsStore,
+): BuiltinTool[] {
   const fileMutationQueue = createFileMutationQueue();
   const taskLifecycleGuard = createTaskLifecycleGuard(artifactStore);
   return [
@@ -68,6 +83,7 @@ function builtins(workspaceRoot: string, eventManager: EventManager, artifactSto
     { name: "read_artifact", tool: createReadArtifactTool({ artifactStore }) as Tool },
     { name: "write_artifact", tool: createWriteArtifactTool({ artifactStore }) as Tool },
     { name: "kanban_write", tool: createKanbanWriteTool() as Tool },
+    { name: "memory_search", tool: createMemorySearchTool({ memoryStore, settingsStore }) as Tool },
     { name: "notify", tool: createNotifyTool({ eventManager, taskLifecycleGuard }) as Tool },
     { name: "web_fetch", tool: createWebFetchTool() as Tool },
     { name: "web_search", tool: createWebSearchTool({ provider: createWebSearchProvider() }) as Tool },

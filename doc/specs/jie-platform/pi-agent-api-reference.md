@@ -194,7 +194,7 @@ interface CompactionSummaryMessage {
 }
 ```
 
-Created with `createCompactionSummaryMessage(summary, tokensBefore, timestamp)`. The harness's `convertToLlm` maps the role to a `UserMessage` whose text wraps the summary: `The conversation history before this point was compacted into the following summary:\n\n<summary>\n{summary}\n</summary>`. Jie passes this `convertToLlm` to its `Agent` (`06-agent-model.md` "Compaction") and writes the message through `memory.compact` (`08-memory.md` "Compact").
+Created with `createCompactionSummaryMessage(summary, tokensBefore, timestamp)`. The harness's `convertToLlm` maps the role to a `UserMessage` whose text wraps the summary: `The conversation history before this point was compacted into the following summary:\n\n<summary>\n{summary}\n</summary>`. Jie passes this `convertToLlm` to its `Agent` (`06-agent-model.md` "Compaction") and writes the message through `transcriptStore.compact` (`08-transcript.md` "Compact").
 
 ### Content Blocks
 
@@ -296,7 +296,7 @@ type AgentEvent =
 | `turn_end` | Assistant turn complete (response + any tool results) | Turn bookkeeping. pi-agent decides loop continuation based on `message.stopReason` and `ToolResult.terminate`. |
 | `message_start` | Any message added to transcript | — (internal) |
 | `message_update` | Token delta during assistant streaming | `agent.stream.chunk` (buffered) |
-| `message_end` | Message finalized | `memory.persist()` |
+| `message_end` | Message finalized | `transcriptStore.persist()` |
 | `tool_execution_start` | Tool about to execute | `agent.tool.call` (via `beforeToolCall` hook) |
 | `tool_execution_update` | Tool streaming partial result | — (deferred Day 2) |
 | `tool_execution_end` | Tool execution complete | `agent.tool.result` (via `afterToolCall` hook) |
@@ -384,3 +384,23 @@ type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 ```
 
 **Jie v1 defaults:** `steeringMode: "all"`, `followUpMode: "all"`, `toolExecution: "sequential"`.
+
+## One-shot calls (pi-ai)
+
+```typescript
+// @earendil-works/pi-ai/compat — pi's temporary legacy surface (deleted with pi's
+// ModelManager migration; createModels() is the successor)
+function streamSimple<TApi extends Api>(model: Model<TApi>, context: Context, options?: SimpleStreamOptions): AssistantMessageEventStream;
+function completeSimple<TApi extends Api>(model: Model<TApi>, context: Context, options?: SimpleStreamOptions): Promise<AssistantMessage>;
+
+// @earendil-works/pi-ai
+interface RetryPolicy { enabled: boolean; maxRetries: number; baseDelayMs: number; }
+function retryAssistantCall(
+  produce: () => Promise<AssistantMessage>,
+  policy: RetryPolicy | undefined,   // undefined/disabled → single attempt, response returned unchanged
+  signal: AbortSignal | undefined,   // aborts are terminal, never retried; normalized to an aborted AssistantMessage
+  callbacks?: RetryCallbacks,
+): Promise<AssistantMessage>;
+```
+
+`SimpleStreamOptions` extends `StreamOptions` — the fields jie uses: `apiKey`, `maxTokens`, `signal`, `cacheRetention` (`"none"` for standalone requests), `sessionId`. Jie's usage: the agent loop streams through `streamSimple` (`AgentOptions.streamFn`); the `LlmService` one-shot path wraps `completeSimple` in `retryAssistantCall` (`07-llm-service.md`).

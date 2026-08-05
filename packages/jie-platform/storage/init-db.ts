@@ -35,4 +35,29 @@ export function initializeSchema(storage: Storage): void {
       updated_at TEXT NOT NULL
     )
   `);
+
+  storage.exec(`
+    CREATE TABLE IF NOT EXISTS memory_atoms (
+      id                TEXT    PRIMARY KEY,
+      team_id           TEXT    NOT NULL,
+      content           TEXT    NOT NULL,
+      type              TEXT    NOT NULL,
+      priority          INTEGER NOT NULL DEFAULT 50,
+      scene             TEXT    NOT NULL DEFAULT '',
+      source_session_id TEXT    NOT NULL,
+      created_at        TEXT    NOT NULL,
+      updated_at        TEXT    NOT NULL
+    )
+  `);
+
+  storage.exec(`
+    CREATE INDEX IF NOT EXISTS idx_memory_atoms_team
+    ON memory_atoms (team_id, priority DESC, updated_at DESC)
+  `);
+
+  storage.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS memory_atoms_fts USING fts5(
+      content, atom_id UNINDEXED, tokenize = 'unicode61'
+    )
+  `);
 }

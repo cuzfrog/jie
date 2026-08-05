@@ -1,10 +1,10 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { SqliteStorage } from "./sqlite-storage";
 import type { Storage } from "./storage";
-import { SqliteMemoryManager } from "./memory-store";
+import { SqliteTranscriptStore } from "./transcript-store";
 
-function makeManager(): SqliteMemoryManager {
-  return new SqliteMemoryManager(new SqliteStorage(":memory:"));
+function makeTranscriptStore(): SqliteTranscriptStore {
+  return new SqliteTranscriptStore(new SqliteStorage(":memory:"));
 }
 
 function userMessage(text: string): AgentMessage {
@@ -52,9 +52,9 @@ function makeThrowingStorage(failOn: "exec", callIndex: number): {
   return { storage: wrapped, inner };
 }
 
-describe("SqliteMemoryManager", () => {
+describe("SqliteTranscriptStore", () => {
   test("persist assigns seq 1, 2, 3 to three messages on the same key", () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     m.persist(userMessage("a"), "agent-1", "s1", "t1");
     m.persist(userMessage("b"), "agent-1", "s1", "t1");
     m.persist(userMessage("c"), "agent-1", "s1", "t1");
@@ -65,7 +65,7 @@ describe("SqliteMemoryManager", () => {
   });
 
   test("persist scopes seq per (team_id, agent_key, session_id)", () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     m.persist(userMessage("a1"), "agent-1", "s1", "t1");
     m.persist(userMessage("a2"), "agent-1", "s1", "t1");
     m.persist(userMessage("b1"), "agent-1", "s1", "t2");
@@ -77,7 +77,7 @@ describe("SqliteMemoryManager", () => {
   });
 
   test("restore returns the summary first, then remaining rows in seq order, skipping compacted=1", async () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     m.persist(userMessage("a"), "agent-1", "s1", "t1");
     m.persist(userMessage("b"), "agent-1", "s1", "t1");
     m.persist(userMessage("c"), "agent-1", "s1", "t1");
@@ -90,7 +90,7 @@ describe("SqliteMemoryManager", () => {
   });
 
   test("compact flips compacted=1 on the oldest N non-compacted rows", () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     m.persist(userMessage("a"), "agent-1", "s1", "t1");
     m.persist(userMessage("b"), "agent-1", "s1", "t1");
     m.persist(userMessage("c"), "agent-1", "s1", "t1");
@@ -104,7 +104,7 @@ describe("SqliteMemoryManager", () => {
   });
 
   test("compact places the summary row between the compacted prefix and the retained tail", () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     m.persist(userMessage("a"), "agent-1", "s1", "t1");
     m.persist(userMessage("b"), "agent-1", "s1", "t1");
     m.persist(userMessage("c"), "agent-1", "s1", "t1");
@@ -118,7 +118,7 @@ describe("SqliteMemoryManager", () => {
   });
 
   test("a second compaction consumes the previous summary row", async () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     m.persist(userMessage("a"), "agent-1", "s1", "t1");
     m.persist(userMessage("b"), "agent-1", "s1", "t1");
     m.persist(userMessage("c"), "agent-1", "s1", "t1");
@@ -132,7 +132,7 @@ describe("SqliteMemoryManager", () => {
   });
 
   test("compact clamps when the count exceeds the non-compacted rows", async () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     m.persist(userMessage("a"), "agent-1", "s1", "t1");
     m.persist(userMessage("b"), "agent-1", "s1", "t1");
     m.compact(99, summaryMessage("sum"), "agent-1", "s1", "t1");
@@ -143,10 +143,10 @@ describe("SqliteMemoryManager", () => {
 
   test("compact throws and the transaction rolls back, leaving the rows untouched", async () => {
     const { storage, inner } = makeThrowingStorage("exec", 3);
-    const seeding = new SqliteMemoryManager(inner);
+    const seeding = new SqliteTranscriptStore(inner);
     seeding.persist(userMessage("a"), "agent-1", "s1", "t1");
     seeding.persist(userMessage("b"), "agent-1", "s1", "t1");
-    const throwing = new SqliteMemoryManager(storage);
+    const throwing = new SqliteTranscriptStore(storage);
 
     expect(() =>
       throwing.compact(
@@ -162,26 +162,26 @@ describe("SqliteMemoryManager", () => {
   });
 
   test("hasSession is false before any persist, true after", () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     expect(m.hasSession("t1", "sX")).toBe(false);
     m.persist(userMessage("a"), "agent-1", "sX", "t1");
     expect(m.hasSession("t1", "sX")).toBe(true);
   });
 
   test("hasSession is scoped to team_id", () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     m.persist(userMessage("a"), "agent-1", "sX", "t1");
     expect(m.hasSession("t2", "sX")).toBe(false);
   });
 
   test("restore returns empty array when no history exists", async () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     const restored = await m.restore("agent-1", "s-fresh", "t1");
     expect(restored).toEqual([]);
   });
 
   test("restore round-trips assistant messages", async () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     m.persist(assistantMessage("hello"), "agent-1", "s1", "t1");
     const restored = await m.restore("agent-1", "s1", "t1");
     const content = (restored[0] as { content: Array<{ type: string; text: string }> }).content;
@@ -189,14 +189,14 @@ describe("SqliteMemoryManager", () => {
   });
 });
 
-describe("SqliteMemoryManager.listSessions", () => {
+describe("SqliteTranscriptStore.listSessions", () => {
   test("returns empty array when the team has no sessions", () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     expect(m.listSessions("ghost-team")).toEqual([]);
   });
 
   test("lists one row per (team_id, session_id) with aggregate counts", () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     m.persist(userMessage("a"), "agent-1", "s1", "t1");
     m.persist(userMessage("b"), "agent-1", "s1", "t1");
     m.persist(userMessage("c"), "agent-1", "s2", "t1");
@@ -209,7 +209,7 @@ describe("SqliteMemoryManager.listSessions", () => {
   });
 
   test("is scoped to team_id", () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     m.persist(userMessage("a"), "agent-1", "s1", "t1");
     m.persist(userMessage("b"), "agent-1", "s2", "t2");
     expect(m.listSessions("t1").map((s) => s.sessionId)).toEqual(["s1"]);
@@ -217,7 +217,7 @@ describe("SqliteMemoryManager.listSessions", () => {
   });
 
   test("orders by last activity DESC", async () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     m.persist(userMessage("a"), "agent-1", "s-old", "t1");
     await new Promise((r) => setTimeout(r, 5));
     m.persist(userMessage("b"), "agent-1", "s-new", "t1");
@@ -226,7 +226,7 @@ describe("SqliteMemoryManager.listSessions", () => {
   });
 
   test("messageCount counts non-compacted rows only, including the summary row", () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     m.persist(userMessage("a"), "agent-1", "s1", "t1");
     m.persist(userMessage("b"), "agent-1", "s1", "t1");
     m.persist(userMessage("c"), "agent-1", "s1", "t1");
@@ -235,14 +235,14 @@ describe("SqliteMemoryManager.listSessions", () => {
   });
 
   test("surfaces a renamed session's name", () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     m.persist(userMessage("a"), "agent-1", "s1", "t1");
     m.renameSession("s1", "my session");
     expect(m.listSessions("t1")[0]?.name).toBe("my session");
   });
 
   test("leaves name undefined for sessions without metadata", () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     m.persist(userMessage("a"), "agent-1", "s1", "t1");
     m.persist(userMessage("b"), "agent-1", "s2", "t1");
     m.renameSession("s1", "named");
@@ -252,9 +252,9 @@ describe("SqliteMemoryManager.listSessions", () => {
   });
 });
 
-describe("SqliteMemoryManager.renameSession", () => {
+describe("SqliteTranscriptStore.renameSession", () => {
   test("upserts: the second rename replaces the first, keeping a single metadata row", () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     m.persist(userMessage("a"), "agent-1", "s1", "t1");
     m.renameSession("s1", "first name");
     m.renameSession("s1", "second name");
@@ -268,22 +268,22 @@ describe("SqliteMemoryManager.renameSession", () => {
   });
 });
 
-describe("SqliteMemoryManager.sessionName", () => {
+describe("SqliteTranscriptStore.sessionName", () => {
   test("returns null for a session without metadata", () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     m.persist(userMessage("a"), "agent-1", "s1", "t1");
     expect(m.sessionName("s1")).toBeNull();
   });
 
   test("returns the renamed session's name", () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     m.persist(userMessage("a"), "agent-1", "s1", "t1");
     m.renameSession("s1", "my session");
     expect(m.sessionName("s1")).toBe("my session");
   });
 
   test("returns null for an unknown session id", () => {
-    const m = makeManager();
+    const m = makeTranscriptStore();
     expect(m.sessionName("ghost")).toBeNull();
   });
 });

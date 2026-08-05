@@ -7,7 +7,8 @@ import {
 import type { Api, AssistantMessage, Model, ToolResultMessage, Usage } from "@earendil-works/pi-ai";
 import { CompactorImpl, type CompactionInput } from "./compaction";
 import type { Settings } from "../config";
-import type { MemoryManager } from "../storage";
+import type { LlmService } from "../llm";
+import type { TranscriptStore } from "../storage";
 
 const BIG = "x".repeat(100_000);
 const HUGE = "y".repeat(200_000);
@@ -15,17 +16,10 @@ const THRESHOLD_WINDOW = 30_000;
 
 type CompactionOverrides = NonNullable<Settings["compaction"]>;
 
-interface SummarizeCall {
-  readonly systemPrompt: string;
-  readonly userPrompt: string;
-  readonly model: Model<Api>;
-  readonly apiKey: string | undefined;
-  readonly maxTokens: number;
-  readonly signal?: AbortSignal;
-}
+const llmService = vi.mocked<LlmService>({ complete: vi.fn() });
 
-function makeMemory() {
-  return vi.mocked<MemoryManager>({
+function makeTranscriptStore() {
+  return vi.mocked<TranscriptStore>({
     persist: vi.fn(),
     compact: vi.fn(),
     restore: vi.fn(async () => []),
@@ -92,7 +86,6 @@ function makeInput(messages: ReadonlyArray<AgentMessage>, model?: Model<Api>): C
     messages,
     contextWindow: (model ?? makeModel(THRESHOLD_WINDOW, 8192)).contextWindow,
     model: model ?? makeModel(THRESHOLD_WINDOW, 8192),
-    apiKey: "key-1",
     agentKey: "worker-1",
     sessionId: "s1",
     teamId: "t1",
@@ -100,45 +93,48 @@ function makeInput(messages: ReadonlyArray<AgentMessage>, model?: Model<Api>): C
 }
 
 function makeCompactor(
-  memory: MemoryManager,
-  summarize: (input: SummarizeCall) => Promise<string>,
+  transcriptStore: TranscriptStore,
   getSettings?: () => CompactionOverrides | undefined,
 ): CompactorImpl {
-  return new CompactorImpl({ memory, summarize, getSettings });
+  return new CompactorImpl({ transcriptStore, llmService, getSettings });
 }
 
+beforeEach(() => {
+  llmService.complete.mockResolvedValue("the-summary");
+});
+
 describe("CompactorImpl.compact", () => {
-  test("returns null below the threshold without calling summarize or memory", async () => {
-    const memory = makeMemory();
-    const summarize = vi.fn(async (_input: SummarizeCall) => "summary");
-    const compactor = makeCompactor(memory, summarize);
+  test("returns null below the threshold without calling complete or transcriptStore", async () => {
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore);
     const result = await compactor.compact(makeInput([userMsg("hello"), assistantMsg("hi")]));
     expect(result).toBeNull();
-    expect(summarize).not.toHaveBeenCalled();
-    expect(memory.compact).not.toHaveBeenCalled();
+    expect(llmService.complete).not.toHaveBeenCalled();
+    expect(transcriptStore.compact).not.toHaveBeenCalled();
   });
 
   test("compacts when the estimate exceeds the threshold", async () => {
-    const memory = makeMemory();
-    const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
-    const compactor = makeCompactor(memory, summarize);
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore);
     const messages = [userMsg("please do the thing"), assistantMsg(BIG)];
-    memory.restore.mockResolvedValue([...messages]);
-    const result = await compactor.compact(makeInput(messages));
+    transcriptStore.restore.mockResolvedValue([...messages]);
+    const input = makeInput(messages);
+    const result = await compactor.compact(input);
     expect(result).not.toBeNull();
     expect(result?.firstKeptIndex).toBe(1);
     expect(result?.tokensBefore).toBeGreaterThan(THRESHOLD_WINDOW - 16384);
-    expect(summarize).toHaveBeenCalledTimes(1);
-    const call = summarize.mock.calls[0]![0];
+    expect(result?.summarizedPrefix).toEqual([userMsg("please do the thing")]);
+    expect(llmService.complete).toHaveBeenCalledTimes(1);
+    const call = llmService.complete.mock.calls[0]![0];
+    expect(call.model).toBe(input.model);
     expect(call.systemPrompt).toContain("context summarization assistant");
-    expect(call.userPrompt).toContain("<conversation>");
-    expect(call.userPrompt).toContain("please do the thing");
-    expect(call.userPrompt).not.toContain(BIG.slice(0, 100));
-    expect(call.userPrompt).toContain("structured context checkpoint summary");
-    expect(call.userPrompt).not.toContain("<previous-summary>");
-    expect(call.apiKey).toBe("key-1");
-    expect(memory.compact).toHaveBeenCalledTimes(1);
-    const [count, summary, agentKey, sessionId, teamId] = memory.compact.mock.calls[0]!;
+    expect(call.prompt).toContain("<conversation>");
+    expect(call.prompt).toContain("please do the thing");
+    expect(call.prompt).not.toContain(BIG.slice(0, 100));
+    expect(call.prompt).toContain("structured context checkpoint summary");
+    expect(call.prompt).not.toContain("<previous-summary>");
+    expect(transcriptStore.compact).toHaveBeenCalledTimes(1);
+    const [count, summary, agentKey, sessionId, teamId] = transcriptStore.compact.mock.calls[0]!;
     expect(count).toBe(1);
     expect(agentKey).toBe("worker-1");
     expect(sessionId).toBe("s1");
@@ -150,223 +146,204 @@ describe("CompactorImpl.compact", () => {
   });
 
   test("summarizes before persisting", async () => {
-    const memory = makeMemory();
-    const summarize = vi.fn(async (_input: SummarizeCall) => {
-      expect(memory.compact).not.toHaveBeenCalled();
+    const transcriptStore = makeTranscriptStore();
+    llmService.complete.mockImplementation(async () => {
+      expect(transcriptStore.compact).not.toHaveBeenCalled();
       return "the-summary";
     });
-    const compactor = makeCompactor(memory, summarize);
+    const compactor = makeCompactor(transcriptStore);
     const messages = [userMsg("please do the thing"), assistantMsg(BIG)];
-    memory.restore.mockResolvedValue([...messages]);
+    transcriptStore.restore.mockResolvedValue([...messages]);
     await compactor.compact(makeInput(messages));
-    expect(memory.compact).toHaveBeenCalledTimes(1);
+    expect(transcriptStore.compact).toHaveBeenCalledTimes(1);
   });
 
   test("never cuts at a toolResult message", async () => {
-    const memory = makeMemory();
-    const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
-    const compactor = makeCompactor(memory, summarize);
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore);
     const messages = [userMsg("please do the thing"), assistantMsg("calling tool"), toolResultMsg(BIG), userMsg("tail prompt")];
-    memory.restore.mockResolvedValue([...messages]);
+    transcriptStore.restore.mockResolvedValue([...messages]);
     const result = await compactor.compact(makeInput(messages));
     expect(result?.firstKeptIndex).toBe(3);
-    const call = summarize.mock.calls[0]![0];
-    expect(call.userPrompt).toContain("please do the thing");
-    expect(call.userPrompt).toContain("calling tool");
-    expect(call.userPrompt).toContain(BIG.slice(0, 100));
-    expect(call.userPrompt).not.toContain("tail prompt");
+    const call = llmService.complete.mock.calls[0]![0];
+    expect(call.prompt).toContain("please do the thing");
+    expect(call.prompt).toContain("calling tool");
+    expect(call.prompt).toContain(BIG.slice(0, 100));
+    expect(call.prompt).not.toContain("tail prompt");
   });
 
   test("returns null when the history is below keepRecentTokens", async () => {
-    const memory = makeMemory();
-    const summarize = vi.fn(async (_input: SummarizeCall) => "summary");
-    const compactor = makeCompactor(memory, summarize);
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore);
     const result = await compactor.compact(makeInput([userMsg("a".repeat(10_000)), assistantMsg("b".repeat(10_000))]));
     expect(result).toBeNull();
-    expect(summarize).not.toHaveBeenCalled();
-    expect(memory.compact).not.toHaveBeenCalled();
+    expect(llmService.complete).not.toHaveBeenCalled();
+    expect(transcriptStore.compact).not.toHaveBeenCalled();
   });
 
   test("returns null when the prefix would contain only the previous summary", async () => {
-    const memory = makeMemory();
-    const summarize = vi.fn(async (_input: SummarizeCall) => "summary");
-    const compactor = makeCompactor(memory, summarize);
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore);
     const result = await compactor.compact(makeInput([summaryMsg("old summary", 5000), userMsg(BIG)]));
     expect(result).toBeNull();
-    expect(summarize).not.toHaveBeenCalled();
-    expect(memory.compact).not.toHaveBeenCalled();
+    expect(llmService.complete).not.toHaveBeenCalled();
+    expect(transcriptStore.compact).not.toHaveBeenCalled();
   });
 
   test("returns null when a trailing toolResult alone exceeds keepRecentTokens", async () => {
-    const memory = makeMemory();
-    const summarize = vi.fn(async (_input: SummarizeCall) => "summary");
-    const compactor = makeCompactor(memory, summarize);
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore);
     const result = await compactor.compact(makeInput([userMsg("please do the thing"), assistantMsg("calling tool"), toolResultMsg(BIG)]));
     expect(result).toBeNull();
-    expect(summarize).not.toHaveBeenCalled();
+    expect(llmService.complete).not.toHaveBeenCalled();
   });
 
   test("feeds the previous summary into the update prompt and consumes its row", async () => {
-    const memory = makeMemory();
-    const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary-2");
-    const compactor = makeCompactor(memory, summarize);
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore);
     const messages = [summaryMsg("old summary", 1000), userMsg(BIG), assistantMsg(BIG)];
-    memory.restore.mockResolvedValue([...messages]);
+    transcriptStore.restore.mockResolvedValue([...messages]);
     const result = await compactor.compact(makeInput(messages));
     expect(result?.firstKeptIndex).toBe(2);
-    const call = summarize.mock.calls[0]![0];
-    expect(call.userPrompt).toContain("<previous-summary>");
-    expect(call.userPrompt).toContain("old summary");
-    expect(call.userPrompt).toContain("NEW conversation messages");
-    expect(call.userPrompt).toContain("<conversation>");
-    expect(memory.compact).toHaveBeenCalledTimes(1);
-    expect(memory.compact.mock.calls[0]![0]).toBe(2);
+    const call = llmService.complete.mock.calls[0]![0];
+    expect(call.prompt).toContain("<previous-summary>");
+    expect(call.prompt).toContain("old summary");
+    expect(call.prompt).toContain("NEW conversation messages");
+    expect(call.prompt).toContain("<conversation>");
+    expect(transcriptStore.compact).toHaveBeenCalledTimes(1);
+    expect(transcriptStore.compact.mock.calls[0]![0]).toBe(2);
   });
 
   test("ignores stale usage recorded before the last summary", async () => {
-    const memory = makeMemory();
-    const summarize = vi.fn(async (_input: SummarizeCall) => "summary");
-    const compactor = makeCompactor(memory, summarize);
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore);
     const staleUsage: Usage = { input: 1_900_000, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 1_900_000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
     const model = makeModel(200_000, 8192);
     const messages = [summaryMsg("old summary", 5000), userMsg(BIG), assistantMsg("ok", 1000, staleUsage)];
     const result = await compactor.compact(makeInput(messages, model));
     expect(result).toBeNull();
-    expect(summarize).not.toHaveBeenCalled();
+    expect(llmService.complete).not.toHaveBeenCalled();
   });
 
   test("uses fresh usage recorded after the last summary", async () => {
-    const memory = makeMemory();
-    const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
-    const compactor = makeCompactor(memory, summarize);
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore);
     const freshUsage: Usage = { input: 1_900_000, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 1_900_000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
     const model = makeModel(200_000, 8192);
     const messages = [summaryMsg("old summary", 1000), userMsg(BIG), assistantMsg(BIG, 6000, freshUsage)];
-    memory.restore.mockResolvedValue([...messages]);
+    transcriptStore.restore.mockResolvedValue([...messages]);
     const result = await compactor.compact(makeInput(messages, model));
     expect(result?.firstKeptIndex).toBe(2);
     expect(result?.tokensBefore).toBeGreaterThan(200_000 - 16384);
   });
 
   test("caps summary maxTokens at the model limit", async () => {
-    const memory = makeMemory();
-    const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
-    const compactor = makeCompactor(memory, summarize);
-    memory.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore);
+    transcriptStore.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
     await compactor.compact(makeInput([userMsg("please do the thing"), assistantMsg(BIG)], makeModel(THRESHOLD_WINDOW, 1024)));
-    expect(summarize.mock.calls[0]![0].maxTokens).toBe(1024);
+    expect(llmService.complete.mock.calls[0]![0].maxTokens).toBe(1024);
   });
 
   test("uses 0.8 of reserveTokens when the model allows more", async () => {
-    const memory = makeMemory();
-    const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
-    const compactor = makeCompactor(memory, summarize);
-    memory.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore);
+    transcriptStore.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
     await compactor.compact(makeInput([userMsg("please do the thing"), assistantMsg(BIG)], makeModel(THRESHOLD_WINDOW, 100_000)));
-    expect(summarize.mock.calls[0]![0].maxTokens).toBe(Math.floor(0.8 * 16384));
+    expect(llmService.complete.mock.calls[0]![0].maxTokens).toBe(Math.floor(0.8 * 16384));
   });
 
-  test("propagates the abort signal to summarize", async () => {
-    const memory = makeMemory();
-    const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
-    const compactor = makeCompactor(memory, summarize);
-    memory.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
+  test("propagates the abort signal to complete", async () => {
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore);
+    transcriptStore.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
     const controller = new AbortController();
     await compactor.compact({ ...makeInput([userMsg("please do the thing"), assistantMsg(BIG)]), signal: controller.signal });
-    expect(summarize.mock.calls[0]![0].signal).toBe(controller.signal);
+    expect(llmService.complete.mock.calls[0]![0].signal).toBe(controller.signal);
   });
 
-  test("rejects when summarize fails and does not persist", async () => {
-    const memory = makeMemory();
-    const summarize = vi.fn(async (_input: SummarizeCall): Promise<string> => {
-      throw new Error("summarization failed");
-    });
-    const compactor = makeCompactor(memory, summarize);
-    memory.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
+  test("rejects when complete fails and does not persist", async () => {
+    const transcriptStore = makeTranscriptStore();
+    llmService.complete.mockRejectedValue(new Error("summarization failed"));
+    const compactor = makeCompactor(transcriptStore);
+    transcriptStore.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
     await expect(compactor.compact(makeInput([userMsg("please do the thing"), assistantMsg(BIG)]))).rejects.toThrow("summarization failed");
-    expect(memory.compact).not.toHaveBeenCalled();
+    expect(transcriptStore.compact).not.toHaveBeenCalled();
   });
 
   test("rejects when the stored history diverges from the in-memory messages", async () => {
-    const memory = makeMemory();
-    const summarize = vi.fn(async (_input: SummarizeCall) => "summary");
-    const compactor = makeCompactor(memory, summarize);
-    memory.restore.mockResolvedValue([userMsg("only one stored row")]);
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore);
+    transcriptStore.restore.mockResolvedValue([userMsg("only one stored row")]);
     await expect(compactor.compact(makeInput([userMsg("please do the thing"), assistantMsg(BIG)]))).rejects.toThrow("out of sync");
-    expect(summarize).not.toHaveBeenCalled();
-    expect(memory.compact).not.toHaveBeenCalled();
+    expect(llmService.complete).not.toHaveBeenCalled();
+    expect(transcriptStore.compact).not.toHaveBeenCalled();
   });
 
   test("skips compaction when the overrides disable it", async () => {
-    const memory = makeMemory();
-    const summarize = vi.fn(async (_input: SummarizeCall) => "summary");
-    const compactor = makeCompactor(memory, summarize, () => ({ enabled: false }));
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore, () => ({ enabled: false }));
     const result = await compactor.compact(makeInput([userMsg("please do the thing"), assistantMsg(BIG)]));
     expect(result).toBeNull();
-    expect(summarize).not.toHaveBeenCalled();
-    expect(memory.restore).not.toHaveBeenCalled();
-    expect(memory.compact).not.toHaveBeenCalled();
+    expect(llmService.complete).not.toHaveBeenCalled();
+    expect(transcriptStore.restore).not.toHaveBeenCalled();
+    expect(transcriptStore.compact).not.toHaveBeenCalled();
   });
 
   test("applies the reserveTokens override while keepRecentTokens falls back to the default", async () => {
-    const memory = makeMemory();
-    const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
-    const compactor = makeCompactor(memory, summarize, () => ({ reserveTokens: 32768 }));
-    memory.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore, () => ({ reserveTokens: 32768 }));
+    transcriptStore.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
     const result = await compactor.compact(
       makeInput([userMsg("please do the thing"), assistantMsg(BIG)], makeModel(THRESHOLD_WINDOW, 100_000)),
     );
-    expect(summarize.mock.calls[0]![0].maxTokens).toBe(Math.floor(0.8 * 32768));
+    expect(llmService.complete.mock.calls[0]![0].maxTokens).toBe(Math.floor(0.8 * 32768));
     expect(result?.firstKeptIndex).toBe(1);
   });
 
   test("applies the keepRecentTokens override to the cut point", async () => {
-    const memory = makeMemory();
-    const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
-    const compactor = makeCompactor(memory, summarize, () => ({ keepRecentTokens: 1 }));
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore, () => ({ keepRecentTokens: 1 }));
     const messages = [userMsg("please do the thing"), assistantMsg(BIG), userMsg("tail prompt")];
-    memory.restore.mockResolvedValue([...messages]);
+    transcriptStore.restore.mockResolvedValue([...messages]);
     const result = await compactor.compact(makeInput(messages));
     expect(result?.firstKeptIndex).toBe(2);
-    const call = summarize.mock.calls[0]![0];
-    expect(call.userPrompt).toContain(BIG.slice(0, 100));
-    expect(call.userPrompt).not.toContain("tail prompt");
+    const call = llmService.complete.mock.calls[0]![0];
+    expect(call.prompt).toContain(BIG.slice(0, 100));
+    expect(call.prompt).not.toContain("tail prompt");
   });
 
   test("falls back to the defaults for absent overrides", async () => {
-    const memory = makeMemory();
-    const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
-    memory.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
+    const transcriptStore = makeTranscriptStore();
+    transcriptStore.restore.mockResolvedValue([userMsg("a"), assistantMsg("b")]);
     const input = makeInput([userMsg("please do the thing"), assistantMsg(BIG)], makeModel(THRESHOLD_WINDOW, 100_000));
-    await makeCompactor(memory, summarize, () => undefined).compact(input);
-    await makeCompactor(memory, summarize, () => ({})).compact(input);
-    expect(summarize.mock.calls[0]![0].maxTokens).toBe(Math.floor(0.8 * 16384));
-    expect(summarize.mock.calls[1]![0].maxTokens).toBe(Math.floor(0.8 * 16384));
+    await makeCompactor(transcriptStore, () => undefined).compact(input);
+    await makeCompactor(transcriptStore, () => ({})).compact(input);
+    expect(llmService.complete.mock.calls[0]![0].maxTokens).toBe(Math.floor(0.8 * 16384));
+    expect(llmService.complete.mock.calls[1]![0].maxTokens).toBe(Math.floor(0.8 * 16384));
   });
 
   test("reads the overrides at each compact call", async () => {
-    const memory = makeMemory();
-    const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
+    const transcriptStore = makeTranscriptStore();
     let overrides: CompactionOverrides | undefined = { enabled: false };
-    const compactor = makeCompactor(memory, summarize, () => overrides);
+    const compactor = makeCompactor(transcriptStore, () => overrides);
     const messages = [userMsg("please do the thing"), assistantMsg(BIG)];
-    memory.restore.mockResolvedValue([...messages]);
+    transcriptStore.restore.mockResolvedValue([...messages]);
     expect(await compactor.compact(makeInput(messages))).toBeNull();
     overrides = undefined;
     expect(await compactor.compact(makeInput(messages))).not.toBeNull();
-    expect(summarize).toHaveBeenCalledTimes(1);
+    expect(llmService.complete).toHaveBeenCalledTimes(1);
   });
 
   test("caps the summarized prefix so an oversized prefix message cannot overflow the summarization call", async () => {
-    const memory = makeMemory();
-    const summarize = vi.fn(async (_input: SummarizeCall) => "the-summary");
-    const compactor = makeCompactor(memory, summarize, () => ({ keepRecentTokens: 2 }));
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore, () => ({ keepRecentTokens: 2 }));
     const messages = [userMsg(HUGE, 0), assistantMsg("a", 1000), userMsg("b", 2000), assistantMsg("c", 3000)];
-    memory.restore.mockResolvedValue([...messages]);
+    transcriptStore.restore.mockResolvedValue([...messages]);
     const result = await compactor.compact(makeInput(messages));
     expect(result?.firstKeptIndex).toBe(2);
-    expect(summarize).toHaveBeenCalledTimes(1);
-    const prompt = summarize.mock.calls[0]![0]!.userPrompt;
+    expect(llmService.complete).toHaveBeenCalledTimes(1);
+    const prompt = llmService.complete.mock.calls[0]![0]!.prompt;
     expect(prompt).toContain("[content truncated to fit the context window]");
     expect(prompt).not.toContain(HUGE);
   });
@@ -380,13 +357,13 @@ describe("CompactorImpl.fitToWindow", () => {
   }
 
   test("returns the same array when the history fits the budget", () => {
-    const compactor = makeCompactor(makeMemory(), async () => "summary");
+    const compactor = makeCompactor(makeTranscriptStore());
     const messages = [userMsg("hello"), assistantMsg("hi")];
     expect(compactor.fitToWindow(messages, makeModel(THRESHOLD_WINDOW, 8192))).toBe(messages);
   });
 
   test("truncates the largest message until the total fits the budget", () => {
-    const compactor = makeCompactor(makeMemory(), async () => "summary");
+    const compactor = makeCompactor(makeTranscriptStore());
     const messages: AgentMessage[] = [userMsg(HUGE), assistantMsg("small tail")];
     const result = compactor.fitToWindow(messages, makeModel(THRESHOLD_WINDOW, 8192));
     expect(result).not.toBe(messages);
@@ -403,9 +380,9 @@ describe("CompactorImpl.fitToWindow", () => {
   });
 
   test("truncates text and thinking blocks but leaves toolCall blocks untouched", () => {
-    const compactor = makeCompactor(makeMemory(), async () => "summary");
+    const compactor = makeCompactor(makeTranscriptStore());
     const toolCall = { type: "toolCall", id: "call_1", name: "bash", arguments: { command: "ls" } } as const;
-    const heavyAssistant: AgentMessage = {
+    const heavyAssistant: AssistantMessage = {
       ...assistantMsg("small"),
       content: [{ type: "thinking", thinking: BIG }, { type: "text", text: BIG }, toolCall],
     };
@@ -427,7 +404,7 @@ describe("CompactorImpl.fitToWindow", () => {
   });
 
   test("truncates the summary field of a compactionSummary message", () => {
-    const compactor = makeCompactor(makeMemory(), async () => "summary");
+    const compactor = makeCompactor(makeTranscriptStore());
     const messages: AgentMessage[] = [summaryMsg(HUGE, 1000), userMsg("tail")];
     const result = compactor.fitToWindow(messages, makeModel(THRESHOLD_WINDOW, 8192));
     const summary = result[0];
@@ -437,7 +414,7 @@ describe("CompactorImpl.fitToWindow", () => {
   });
 
   test("truncates a custom message with string content", () => {
-    const compactor = makeCompactor(makeMemory(), async () => "summary");
+    const compactor = makeCompactor(makeTranscriptStore());
     const messages: AgentMessage[] = [customMsg(HUGE), userMsg("tail")];
     const result = compactor.fitToWindow(messages, makeModel(THRESHOLD_WINDOW, 8192));
     const custom = result[0];
@@ -450,7 +427,7 @@ describe("CompactorImpl.fitToWindow", () => {
   });
 
   test("passes through a message with nothing shrinkable", () => {
-    const compactor = makeCompactor(makeMemory(), async () => "summary");
+    const compactor = makeCompactor(makeTranscriptStore());
     const toolCall = { type: "toolCall", id: "call_1", name: "bash", arguments: { command: "ls" } } as const;
     const toolCallOnly: AgentMessage = { ...assistantMsg("small"), content: [toolCall] };
     const result = compactor.fitToWindow([toolCallOnly, userMsg(HUGE)], makeModel(THRESHOLD_WINDOW, 8192));
@@ -459,14 +436,14 @@ describe("CompactorImpl.fitToWindow", () => {
   });
 
   test("applies the reserveTokens override to the budget", () => {
-    const compactor = makeCompactor(makeMemory(), async () => "summary", () => ({ reserveTokens: 29000 }));
+    const compactor = makeCompactor(makeTranscriptStore(), () => ({ reserveTokens: 29000 }));
     const result = compactor.fitToWindow([userMsg(HUGE)], makeModel(THRESHOLD_WINDOW, 8192));
     expect(result).toHaveLength(1);
     expect(totalTokens(result)).toBeLessThanOrEqual(THRESHOLD_WINDOW - 29000);
   });
 
   test("falls back to the full window when reserveTokens reaches the window", () => {
-    const compactor = makeCompactor(makeMemory(), async () => "summary", () => ({ reserveTokens: 40000 }));
+    const compactor = makeCompactor(makeTranscriptStore(), () => ({ reserveTokens: 40000 }));
     const result = compactor.fitToWindow([userMsg(HUGE)], makeModel(THRESHOLD_WINDOW, 8192));
     expect(result).toHaveLength(1);
     expect(totalTokens(result)).toBeLessThanOrEqual(THRESHOLD_WINDOW);

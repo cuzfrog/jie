@@ -244,7 +244,7 @@ This flag is the `jie login --provider <id> --api-key <key>` flow inlined as a t
 
 ## `jie --resume <session_id>`
 
-Continue a previous session. The `session_id` is passed to every `AgentBody` at construction, overriding the default "mint a new `session_id`" behavior (`08-memory.md`). The body calls `memory.restore(agent_key, session_id, team_id)` and resumes from the prior `memory_turns` rows for its `(team_id, agent_key)` pair.
+Continue a previous session. The `session_id` is passed to every `AgentBody` at construction, overriding the default "mint a new `session_id`" behavior (`08-transcript.md`). The body calls `transcriptStore.restore(agent_key, session_id, team_id)` and resumes from the prior `memory_turns` rows for its `(team_id, agent_key)` pair.
 
 ```
 jie --resume <session_id>        # resume a specific session
@@ -254,7 +254,7 @@ jie --resume <session_id>        # resume a specific session
 
 The CLI does not run session-id SQL itself. It passes intent via `JiePlatformOptions` and the platform (`TeamManager`, via the `resumeSessionId` cradle value `bootPlatform` registers) does the work (per ADR 17):
 
-- **`--resume <session_id>`**: CLI sets `JiePlatformOptions.resumeSessionId = <id>`. The platform validates via `memory.hasSession(team_id, session_id)`. If `false` → exit 1: `unknown session_id: <value>`. If `true` → the platform records the value in its `Map<team_id, session_id>` and threads it to every body.
+- **`--resume <session_id>`**: CLI sets `JiePlatformOptions.resumeSessionId = <id>`. The platform validates via `transcriptStore.hasSession(team_id, session_id)`. If `false` → exit 1: `unknown session_id: <value>`. If `true` → the platform records the value in its `Map<team_id, session_id>` and threads it to every body.
 - **No flag**: the platform mints a fresh `session_id` and records it in the platform's `Map<team_id, session_id>`.
 
 The TUI has an in-session equivalent: `/resume <sessionId>` resumes one session of the loaded team through the `resumeSession` platform command (same `hasSession` validation; a failure surfaces as the error banner, not an exit). The `sessionId` is completed in-flow by the editor's autocomplete — `/resume ` lists the team's sessions with message count and age (`tui-layout.md`, "Selection via editor autocomplete"). Opening `jie` without `--resume` starts a new session. The platform keeps each team's bodies running once started, so team-to-team conversation history persists mid-process across the team's lifetime.

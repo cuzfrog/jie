@@ -77,7 +77,7 @@ Each `AgentBody` subscribes to exactly:
 
 The team author writes **unscoped** topic names in `.md` frontmatter and in `notify` calls (`task.recorded`, another agent's key for direct addressing); the platform applies the `custom.${teamId}.` prefix at body construction (subscriptions) and at publish time (`notify` → `Events.custom`). Self-receipts are filtered in the body's callback by matching the sender's `agentKey` against its own — the bus stays identity-agnostic.
 
-Multiple teams' bodies coexist on the same bus; `teamId` in senders and payloads disambiguates. `session_id` never appears on the bus — it is internal to the body and the memory subsystem (`08-memory.md`).
+Multiple teams' bodies coexist on the same bus; `teamId` in senders and payloads disambiguates. `session_id` never appears on the bus — it is internal to the body and the transcript store (`08-transcript.md`).
 
 ## Streaming
 

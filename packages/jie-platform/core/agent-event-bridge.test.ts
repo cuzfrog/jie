@@ -4,7 +4,7 @@ import { AgentEventBridgeImpl, type AgentEventBridge } from "./agent-event-bridg
 import type { PromptQueue } from "./prompt-queue";
 import type { AgentSender, EventEnvelope, EventManager, EventType } from "../event";
 import type { HookIdentity, HookRunner } from "../hooks";
-import type { MemoryManager } from "../storage";
+import type { TranscriptStore } from "../storage";
 
 const eventManager = vi.mocked<EventManager>({
   publish: vi.fn(),
@@ -30,7 +30,7 @@ const promptQueue = vi.mocked<PromptQueue>({
 
 const persisted: AgentMessage[] = [];
 
-const memory = vi.mocked<MemoryManager>({
+const transcriptStore = vi.mocked<TranscriptStore>({
   persist: vi.fn((message) => {
     persisted.push(message);
   }),
@@ -56,7 +56,7 @@ const hookIdentity: HookIdentity = { sessionId: "s1", cwd: "/work", teamId: "t1"
 const sender: AgentSender = { kind: "agent", teamId: "t1", agentKey: "general-1" };
 
 function makeBridge(): AgentEventBridge {
-  return new AgentEventBridgeImpl({ eventManager, memory, hookRunner, hookIdentity, sender, promptQueue, onRunEnd });
+  return new AgentEventBridgeImpl({ eventManager, transcriptStore, hookRunner, hookIdentity, sender, promptQueue, onRunEnd });
 }
 
 function makeAssistantMessage(overrides: Partial<AssistantMessage> = {}): AssistantMessage {
@@ -290,7 +290,7 @@ describe("AgentEventBridge — usage", () => {
 });
 
 describe("AgentEventBridge — persistence", () => {
-  test("message_end persists every message role via memory.persist", () => {
+  test("message_end persists every message role via transcriptStore.persist", () => {
     const bridge = makeBridge();
     const cases: AgentMessage[] = [
       makeAssistantMessage({ content: [{ type: "text", text: "x" }] }),
@@ -301,8 +301,8 @@ describe("AgentEventBridge — persistence", () => {
     for (const message of cases) {
       bridge.handleEvent({ type: "message_end", message });
       expect(persisted).toHaveLength(1);
-      expect(memory.persist).toHaveBeenCalledWith(message, "general-1", "s1", "t1");
-      memory.persist.mockClear();
+      expect(transcriptStore.persist).toHaveBeenCalledWith(message, "general-1", "s1", "t1");
+      transcriptStore.persist.mockClear();
       persisted.length = 0;
     }
   });

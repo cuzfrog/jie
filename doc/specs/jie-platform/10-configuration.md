@@ -6,7 +6,7 @@ Platform-level configuration surface: how Jie discovers and loads settings, cred
 
 | File | Scope | Sensitivity | Holds |
 |---|---|---|---|
-| `~/.jie/settings.json` | Global user settings | Plain JSON | `defaultProvider`, `defaultModel`, `defaultTeam`, `defaultEffort`, `modelFilters`, `compaction`, `hooks` (see "Hooks") |
+| `~/.jie/settings.json` | Global user settings | Plain JSON | `defaultProvider`, `defaultModel`, `defaultTeam`, `defaultEffort`, `modelFilters`, `language`, `compaction`, `memory`, `hooks` (see "Hooks") |
 | `.jie/settings.json` | Project override | Plain JSON | Same fields; deep-merge over global, except `hooks` which merge additively |
 | `~/.jie/auth.json` | Global credentials | mode `0600` | API keys, OAuth tokens (schema owned by pi-ai) |
 | `~/.jie/models.json` | Global provider definitions | Plain JSON | Custom providers: base URLs, APIs, keys, model catalogs |
@@ -39,7 +39,9 @@ Two locations, **project overrides global with deep-merge** (nested objects merg
 | `defaultModel` | string | Model id within the provider. |
 | `defaultTeam` | string | Last user-selected team. Charset `[A-Za-z0-9_-]{1,32}`. |
 | `defaultEffort` | string | Default reasoning effort: one of `off` \| `low` \| `medium` \| `high` \| `max`. Absent means `off`. Applied at team load and live to running agents inheriting it. |
+| `language` | string | Default language for platform-generated LLM prompts (memory extraction templates): `"en"` or `"zh"`. Absent means `"en"`. Closed vocabulary — an out-of-vocabulary value is a hard fail. Memory content itself always keeps the source conversation's language (`11-memory.md`). |
 | `compaction` | object | Overrides for automatic context compaction — `enabled` (boolean), `reserveTokens` / `keepRecentTokens` (positive integers). Each absent field falls back to pi's defaults; read at each compaction trigger (`06-agent-model.md`, "Compaction"). |
+| `memory` | object | Long-term memory overrides (`11-memory.md`) — `enabled` (boolean, default true), `model` (`provider/modelId` string; extraction model, falls back to the agent's model), `bootstrapMaxEntries` / `bootstrapMaxChars` (positive integers, defaults 12 / 2000). Read at each extraction / bootstrap. |
 
 **Unknown field policy.** Unrecognized top-level fields are tolerated (warned, ignored) so future versions can land new settings without breaking old files. Unrecognized *values* for recognized fields follow the same policy — e.g. an unknown `defaultProvider` is WARN+ignore (treated as absent; model resolution falls through and may surface `NO_MODEL_ERROR` at team load). Shape errors (e.g. `defaultProvider: 42`) are a hard fail — malformed input, not an unfamiliar value.
 
@@ -53,15 +55,22 @@ export interface Settings {
   readonly defaultTeam?: string;
   readonly defaultEffort?: EffortLevel;
   readonly modelFilters?: ReadonlyArray<string>;
+  readonly language?: "en" | "zh";
   readonly compaction?: {
     readonly enabled?: boolean;
     readonly reserveTokens?: number;
     readonly keepRecentTokens?: number;
   };
+  readonly memory?: {
+    readonly enabled?: boolean;
+    readonly model?: string;
+    readonly bootstrapMaxEntries?: number;
+    readonly bootstrapMaxChars?: number;
+  };
 }
 ```
 
-Each field may be absent (the user has not run `jie model` yet); the resolution chains below treat absent as "fall through to the next source". The platform never persists its own fields — the only writers are the `setDefaultProvider` / `setDefaultTeam` / `setDefaultEffort` / `setModelFilters` commands (CLI `jie model` / `jie team`, TUI `/model` / `/effort` / `/model-filter`). `setDefaultProvider` writes the `defaultProvider`/`defaultModel` pair to the project `settings.json` when it defines either of the two keys, else to the global file — the project file shadows the global one field-by-field, so a global write while the project defines either key would be partially or fully ineffective. `modelFilters` holds case-insensitive substring patterns that narrow the TUI's `/model` candidate list; it does not affect model resolution. `compaction` is likewise hand-edited — no command writes it; the compactor reads it at each trigger ("Compaction" in `06-agent-model.md`), so an edit applies at the next compaction without `/reload`.
+Each field may be absent (the user has not run `jie model` yet); the resolution chains below treat absent as "fall through to the next source". The platform never persists its own fields — the only writers are the `setDefaultProvider` / `setDefaultTeam` / `setDefaultEffort` / `setModelFilters` commands (CLI `jie model` / `jie team`, TUI `/model` / `/effort` / `/model-filter`). `setDefaultProvider` writes the `defaultProvider`/`defaultModel` pair to the project `settings.json` when it defines either of the two keys, else to the global file — the project file shadows the global one field-by-field, so a global write while the project defines either key would be partially or fully ineffective. `modelFilters` holds case-insensitive substring patterns that narrow the TUI's `/model` candidate list; it does not affect model resolution. `compaction`, `memory`, and `language` are likewise hand-edited — no command writes them; the compactor reads `compaction` at each trigger ("Compaction" in `06-agent-model.md`) and the memory module reads `memory`/`language` at each extraction/bootstrap (`11-memory.md`), so an edit applies at the next use without `/reload`.
 
 ## Team Selection
 
@@ -104,7 +113,7 @@ TUI `/effort <level>` executes `setDefaultEffort`, writing `defaultEffort` to th
 `/team <id>` executes the platform's `team` command (`TeamManager.load(teamId)`); the TUI is a passive observer of the resulting `system.team.loaded` event:
 
 1. **Already loaded in this process** (same session) → the command returns the existing `TeamInfo` with no body-lifecycle work — the team was alive; the TUI just wasn't watching.
-2. **Not loaded** → parse the blueprint (lookup paths above), resolve each soul's model ("Model Resolution"), construct and start the bodies, record the team's `session_id` in the platform's private `Map<team_id, session_id>`, and publish `system.team.loaded`. A team previously active in this process reuses its recorded `session_id`, so `restore()` returns its prior `memory_turns` rows (`08-memory.md`). A team new to this process gets a fresh ULID.
+2. **Not loaded** → parse the blueprint (lookup paths above), resolve each soul's model ("Model Resolution"), construct and start the bodies, record the team's `session_id` in the platform's private `Map<team_id, session_id>`, and publish `system.team.loaded`. A team previously active in this process reuses its recorded `session_id`, so `restore()` returns its prior `memory_turns` rows (`08-transcript.md`). A team new to this process gets a fresh ULID.
 3. **`/resume <session>`** → `listSessions` picker, then the `resumeSession` command: any existing bodies of that team are stopped, the session map entry is replaced, and bodies are rebuilt on the resumed session. `resumeSessionId` is validated by `hasSession`; an unknown id fails the command (`UNKNOWN_SESSION`).
 
 The TUI re-renders from `system.team.loaded` (agent roster, leader focused) and thereafter publishes prompts to the focused agent's `agentKey` via `handle.prompt` — there is no leader-specific prompt topic. **The previously-active team is not stopped**: its bodies keep their `memory_turns` rows, in-memory prompt queue, and LLM context, and continue processing queued prompts autonomously — the platform holds no active-team state (ADR 26); the TUI just stops displaying it.
@@ -231,14 +240,14 @@ Hard caps and charsets; not user-configurable. Each row points at the doc that a
 | Tool telemetry truncation | **4 KiB**, middle-truncated | `agent.tool.call` / `agent.tool.result` payloads (LLM conversation is untruncated) | `03-event-system.md` |
 | Tool default timeout | **120 s** (combined with pi-agent's signal via `AbortSignal.any`) | All tools unless overridden | `06-agent-model.md` |
 | `bash` timeout | **300 s** (SIGTERM then SIGKILL, whole process group) | `bash` | `06-agent-model.md` |
-| `session_id` | **26 chars** (ULID) | Per process × team | `08-memory.md`, ADR 17 |
+| `session_id` | **26 chars** (ULID) | Per process × team | `08-transcript.md`, ADR 17 |
 | `team_id` charset | `[A-Za-z0-9_-]{1,32}` | `defaultTeam`, `--team`, blueprint loader (hard fail `invalid team_id: <value>`; blocks path traversal) | this doc |
 | Role (filename stem) charset | `[A-Za-z0-9_-]{1,64}` | Blueprint loader (hard fail `invalid role: <stem>`); constrains `agent_key = {role}-{N}` | `06-agent-model.md` |
 | `notify` `topic` | non-empty, no `agent.` prefix, no `{team_id}.` prefix, no null / control chars | `notify` validation | `06-agent-model.md` |
 | `subscribe:` topics | no `agent.` prefix (platform topics are reserved); exact match only, no wildcards | Blueprint loader | `06-agent-model.md` |
 | Workspace root | `process.cwd()` (not configurable) | All file-tool path resolution | `09-deployment.md` |
 | `auth.json` mode | `0600` | `jie login` / `jie logout` / `--api-key` | this doc, `12-installation.md` |
-| `storage.db` mode | `0600` (holds `memory_turns`) | First-open creation | `09-deployment.md` |
+| `storage.db` mode | `0600` (holds transcripts, artifacts, memory atoms) | First-open creation | `09-deployment.md` |
 | `.jie/` directory mode | `0755` | First creation by the platform | `09-deployment.md` |
 
 ## Config Validation
@@ -251,6 +260,8 @@ The platform validates settings at startup. **Hard fail (exit 1):**
 | `defaultProvider` / `defaultModel` wrong JSON shape | `<field> must be a string` |
 | `defaultTeam` outside `[A-Za-z0-9_-]{1,32}` | `invalid defaultTeam: <value>` |
 | `compaction` not an object, `enabled` not a boolean, or `reserveTokens` / `keepRecentTokens` not a positive integer | `compaction must be an object` / `compaction.<field> must be a boolean` / `compaction.<field> must be a positive integer` |
+| `language` not `"en"` / `"zh"` | `invalid language: <value>` (closed vocabulary, like `defaultEffort`) |
+| `memory` not an object, `enabled` not a boolean, `model` not a string, or `bootstrapMaxEntries` / `bootstrapMaxChars` not a positive integer | `memory must be an object` / `memory.<field> must be a boolean` / `memory.model must be a string` / `memory.<field> must be a positive integer`. An unresolvable `memory.model` is **not** a startup failure — it falls back to the agent's model with a WARN at extraction time, mirroring the non-leader soul skip. |
 | `--team <id>` not installed | `TEAM_NOT_FOUND` — `team '<id>' not found` |
 | `models.json` malformed | `INVALID_CONFIG` with the file path and parser message |
 
@@ -362,4 +373,4 @@ Commands that mutate persistent files:
 
 Runtime flags (no persistence): `--team <id>` (one-shot load override for `jie` and `jie -p`), `--resume <sessionId>` (load a team on a prior session), `--in-memory` (SQLite `:memory:`; nothing persists), `-p "..."` (one-shot print mode).
 
-TUI slash commands run the same platform commands in-session — no restart: `/login`, `/logout <provider>|*`, `/model <provider>/<modelId>`, `/model-filter <add|remove|list> <pattern>` (settings `modelFilters`; narrows the `/model` popup; `list` prints the stored patterns; an `add` that would match no available model is rejected), `/effort [<level>]` ("Setting `defaultEffort`" above), `/reload` ("Reload (TUI)" above), `/team [<id>]` (hot-load; "Team Swap" above), `/resume` (session picker), `/rename <name>` (names the active session; `08-memory.md` "List and rename"). The `<provider>/<modelId>` slash convention is pi's; two separate flags are not accepted.
+TUI slash commands run the same platform commands in-session — no restart: `/login`, `/logout <provider>|*`, `/model <provider>/<modelId>`, `/model-filter <add|remove|list> <pattern>` (settings `modelFilters`; narrows the `/model` popup; `list` prints the stored patterns; an `add` that would match no available model is rejected), `/effort [<level>]` ("Setting `defaultEffort`" above), `/reload` ("Reload (TUI)" above), `/team [<id>]` (hot-load; "Team Swap" above), `/resume` (session picker), `/rename <name>` (names the active session; `08-transcript.md` "List and rename"). The `<provider>/<modelId>` slash convention is pi's; two separate flags are not accepted.
