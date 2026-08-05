@@ -220,4 +220,65 @@ describe("createTaskLifecycleGuard", () => {
     await guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "dm" });
     expect(artifactStore.write.mock.calls[0]![0]).toBe("T-1/status/0004");
   });
+
+  test("concurrent transitions on the same task serialize: the second waits for the first's write", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let firstWrite!: () => void;
+    const firstWriteReached = new Promise<void>((resolve) => { firstWrite = resolve; });
+    artifactStore.list
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([row("T-1/status/0001", "2026-01-01T00:00:01.000Z")]);
+    artifactStore.read.mockResolvedValue({
+      key: "T-1/status/0001",
+      content: statusContent("recorded", 1),
+      created_at: "2026-01-01T00:00:01.000Z",
+    });
+    artifactStore.write.mockImplementationOnce(async () => {
+      firstWrite();
+      await gate;
+      return { key: "T-1/status/0001", created_at: "2026-01-01T00:00:01.000Z" };
+    });
+    const guard = createTaskLifecycleGuard(artifactStore);
+    const first = guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "dm" });
+    await firstWriteReached;
+    const second = guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "dm" });
+    expect(artifactStore.list).toHaveBeenCalledTimes(1);
+    release();
+    await Promise.all([first, second]);
+    expect(artifactStore.list).toHaveBeenCalledTimes(2);
+    expect(artifactStore.write.mock.calls.map((call) => call[0])).toEqual(["T-1/status/0001", "T-1/status/0002"]);
+  });
+
+  test("a failed transition releases the lock for later transitions on the same task", async () => {
+    artifactStore.list.mockRejectedValueOnce(new Error("store down"));
+    const guard = createTaskLifecycleGuard(artifactStore);
+    await expect(
+      guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "dm" }),
+    ).rejects.toThrow("store down");
+    artifactStore.list.mockResolvedValue([]);
+    const outcome = await guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "dm" });
+    expect(outcome).toEqual({ phase: "recorded", iteration: 1 });
+    expect(artifactStore.write).toHaveBeenCalledTimes(1);
+  });
+
+  test("transitions on different tasks run concurrently", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let firstWrite!: () => void;
+    const firstWriteReached = new Promise<void>((resolve) => { firstWrite = resolve; });
+    artifactStore.write.mockImplementationOnce(async () => {
+      firstWrite();
+      await gate;
+      return { key: "T-1/status/0001", created_at: "2026-01-01T00:00:01.000Z" };
+    });
+    const guard = createTaskLifecycleGuard(artifactStore);
+    const first = guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "dm" });
+    await firstWriteReached;
+    const outcome = await guard.applyTransition({ lifecycle, taskId: "T-2", topic: "task.recorded", agentRole: "dm" });
+    expect(outcome).toEqual({ phase: "recorded", iteration: 1 });
+    expect(artifactStore.list).toHaveBeenCalledTimes(2);
+    release();
+    await first;
+  });
 });

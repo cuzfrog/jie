@@ -62,7 +62,7 @@ lifecycle:
 ```
 
 - **Transitions.** A row authorizes the role (exact match, or `any`) to move a task to `phase` when its current phase is in `from` — `any` means no status row yet or any non-permanent phase. Exact-role rows take precedence over `any` rows on the same topic; among candidates the first matching `from` wins. Duplicate `(topic, role, from)` rows, roles not present in the blueprint, and empty `topic`/`phase`/`from` values are parse errors (`invalid_lifecycle`), as is an empty write-gate pattern.
-- **Enforcement.** Lifecycle topics require `notify` to carry the `task_id` (rejected on other topics); the guard authorizes the caller's role and the task's current phase, writes the new status row, and only then publishes. A denied transition throws `illegal_transition` — nothing published, no row.
+- **Enforcement.** Lifecycle topics require `notify` to carry the `task_id` (rejected on other topics); the guard authorizes the caller's role and the task's current phase, writes the new status row, and only then publishes. A denied transition throws `illegal_transition` — nothing published, no row. Status-row writes are serialized per `task_id` (ADR 33), so concurrent transitions on one task cannot collide on a seq.
 - **Iteration.** `reset` sets it to 1, `increment` adds 1 to the current value (denied above `max_iterations`), absence preserves it; a task without a status row counts as iteration 1.
 - **Permanent phases** admit no outgoing transition.
 - **Write gates** are checked by `write_file` and `edit` against the workspace-relative path before any mutation; every matching gate must admit the caller's role (`any` in `roles` admits everyone), else `write_gate_denied`. `read_file` and `bash` are not gated.
