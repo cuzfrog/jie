@@ -21,6 +21,7 @@ export interface TaskLifecycleGuard {
 }
 
 export function createTaskLifecycleGuard(artifactStore: ArtifactStore): TaskLifecycleGuard {
+  const statusRows = createPerTaskQueue();
   return {
     async applyTransition(input: TaskTransitionInput): Promise<TaskTransitionOutcome> {
       const candidates = resolveRules(input.lifecycle.transitions, input.topic, input.agentRole);
@@ -29,27 +30,29 @@ export function createTaskLifecycleGuard(artifactStore: ArtifactStore): TaskLife
           detail: `no transition on topic '${input.topic}' allows role '${input.agentRole}'`,
         });
       }
-      const rows = await artifactStore.list(statusPrefix(input.taskId));
-      const state = await readCurrentState(artifactStore, rows);
-      const currentPhase = state === null ? null : state.phase;
-      if (currentPhase !== null && input.lifecycle.permanentPhases.includes(currentPhase)) {
-        throw new JiePlatformError("ILLEGAL_TRANSITION", {
-          detail: `task '${input.taskId}' is in permanent phase '${currentPhase}'`,
-        });
-      }
-      const rule = candidates.find((candidate) => fromMatches(candidate, currentPhase));
-      if (rule === undefined) {
-        const expected = candidates.flatMap((candidate) => fromPhasesAsList(candidate));
-        throw new JiePlatformError("ILLEGAL_TRANSITION", {
-          detail: currentPhase === null
-            ? `task '${input.taskId}' has no phase yet; topic '${input.topic}' requires one of: ${expected.join(", ")}`
-            : `task '${input.taskId}' is in phase '${currentPhase}', but topic '${input.topic}' requires one of: ${expected.join(", ")}`,
-        });
-      }
-      const iteration = nextIteration(rule, state, input.lifecycle.maxIterations, input.taskId);
-      const content = JSON.stringify({ phase: rule.toPhase, iteration, updated_at: new Date().toISOString() });
-      await artifactStore.write(statusSeqKey(input.taskId, rows.length + 1), content);
-      return { phase: rule.toPhase, iteration };
+      return statusRows.run(input.taskId, async () => {
+        const rows = await artifactStore.list(statusPrefix(input.taskId));
+        const state = await readCurrentState(artifactStore, rows);
+        const currentPhase = state === null ? null : state.phase;
+        if (currentPhase !== null && input.lifecycle.permanentPhases.includes(currentPhase)) {
+          throw new JiePlatformError("ILLEGAL_TRANSITION", {
+            detail: `task '${input.taskId}' is in permanent phase '${currentPhase}'`,
+          });
+        }
+        const rule = candidates.find((candidate) => fromMatches(candidate, currentPhase));
+        if (rule === undefined) {
+          const expected = candidates.flatMap((candidate) => fromPhasesAsList(candidate));
+          throw new JiePlatformError("ILLEGAL_TRANSITION", {
+            detail: currentPhase === null
+              ? `task '${input.taskId}' has no phase yet; topic '${input.topic}' requires one of: ${expected.join(", ")}`
+              : `task '${input.taskId}' is in phase '${currentPhase}', but topic '${input.topic}' requires one of: ${expected.join(", ")}`,
+          });
+        }
+        const iteration = nextIteration(rule, state, input.lifecycle.maxIterations, input.taskId);
+        const content = JSON.stringify({ phase: rule.toPhase, iteration, updated_at: new Date().toISOString() });
+        await artifactStore.write(statusSeqKey(input.taskId, rows.length + 1), content);
+        return { phase: rule.toPhase, iteration };
+      });
     },
   };
 }
@@ -150,4 +153,30 @@ function nextIteration(
     return next;
   }
   return current === 0 ? 1 : current;
+}
+
+interface PerTaskQueue {
+  run<T>(taskId: string, operation: () => Promise<T>): Promise<T>;
+}
+
+function createPerTaskQueue(): PerTaskQueue {
+  const queues = new Map<string, Promise<void>>();
+  return {
+    async run<T>(taskId: string, operation: () => Promise<T>): Promise<T> {
+      const currentQueue = queues.get(taskId) ?? Promise.resolve();
+      let releaseNext!: () => void;
+      const nextQueue = new Promise<void>((resolve) => {
+        releaseNext = resolve;
+      });
+      const chainedQueue = currentQueue.then(() => nextQueue);
+      queues.set(taskId, chainedQueue);
+      await currentQueue;
+      try {
+        return await operation();
+      } finally {
+        releaseNext();
+        if (queues.get(taskId) === chainedQueue) queues.delete(taskId);
+      }
+    },
+  };
 }
