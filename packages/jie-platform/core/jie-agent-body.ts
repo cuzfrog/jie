@@ -1,4 +1,4 @@
-import { Agent, convertToLlm, type AgentMessage, type AgentTool, type ThinkingLevel } from "@earendil-works/pi-agent-core";
+import { Agent, convertToLlm, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { ArtifactStore, MemoryManager } from "../storage";
@@ -11,11 +11,12 @@ import { Events, type AgentSender, type EventManager } from "../event";
 import type { AgentBody, AgentBodyParams } from "./agent-body";
 import type { Compactor } from "./compaction";
 import { CompactionRunnerImpl, type CompactionRunner } from "./compaction-runner";
+import { ModelControllerImpl, type ModelController } from "./model-controller";
 import { PromptQueueImpl, type PromptQueue } from "./prompt-queue";
 import { adaptToolToAgent } from "./tool-adapter";
 import { ToolCallObserverImpl } from "./tool-call-observer";
 import { JiePlatformError } from "../jie-platform-errors";
-import type { AgentInfo, EffortLevel, ModelInfo } from "../types";
+import type { AgentInfo } from "../types";
 
 const SKILL_INVOCATION_PREFIX = "/skill:";
 
@@ -44,15 +45,13 @@ export class JieAgentBody implements AgentBody {
   private readonly memory: MemoryManager;
   private readonly hookRunner: HookRunner;
   private readonly hookIdentity: HookIdentity;
-  private readonly resolveModel: (provider: string, modelId: string) => Model<Api> | undefined;
-  private readonly getApiKey: (provider: string) => Promise<string | undefined> | string | undefined;
   private readonly compactor: Compactor;
   private readonly agent: Agent;
   private readonly sender: AgentSender;
   private readonly promptQueue: PromptQueue;
   private readonly compactionRunner: CompactionRunner;
+  private readonly modelController: ModelController;
   private readonly resolvedSkills: ReadonlyArray<Skill>;
-  private modelInfo: ModelInfo | null;
   private readonly cleanups: Array<() => void> = [];
   private restored: ReadonlyArray<AgentMessage> | null = null;
   private started = false;
@@ -66,8 +65,6 @@ export class JieAgentBody implements AgentBody {
     this.eventManager = deps.eventManager;
     this.memory = deps.memory;
     this.hookRunner = deps.hookRunner;
-    this.resolveModel = deps.resolveModel;
-    this.getApiKey = deps.getApiKey;
     this.compactor = deps.compactor;
     this.hookIdentity = {
       sessionId: this.sessionId,
@@ -91,7 +88,7 @@ export class JieAgentBody implements AgentBody {
       compactor: deps.compactor,
       eventManager: deps.eventManager,
       sender: this.sender,
-      getApiKey: this.getApiKey,
+      getApiKey: deps.getApiKey,
       agentKey: this.agentKey,
       sessionId: this.sessionId,
       teamId: this.teamId,
@@ -146,15 +143,21 @@ export class JieAgentBody implements AgentBody {
       skills: this.resolvedSkills,
     });
     this.isLeader = params.isLeader;
-    this.agent.state.thinkingLevel = effortToThinkingLevel(params.effort);
-    this.modelInfo = resolveBodyModelInfo(params.model, this.agent.state.thinkingLevel);
-    if (params.model !== undefined) {
-      this.agent.state.model = params.model;
-      if (this.modelInfo !== null) {
-        this.eventManager.publish(Events.agentModelAssigned(
-          this.sender, this.modelInfo.provider, this.modelInfo.id, this.modelInfo.effort, this.modelInfo.contextWindow));
-      }
-    }
+    this.modelController = new ModelControllerImpl(params.model, params.effort, {
+      eventManager: deps.eventManager,
+      sender: this.sender,
+      soulPinsModel: params.soul.model !== "",
+      resolveModel: deps.resolveModel,
+      agentState: {
+        setModel: (model) => {
+          this.agent.state.model = model;
+        },
+        getThinkingLevel: () => this.agent.state.thinkingLevel,
+        setThinkingLevel: (level) => {
+          this.agent.state.thinkingLevel = level;
+        },
+      },
+    });
     this.agent.state.tools = adaptedTools;
     const unsubscribeAgent = this.agent.subscribe((event, _signal) => eventBridge.handleEvent(event));
     this.cleanups.push(unsubscribeAgent);
@@ -169,7 +172,7 @@ export class JieAgentBody implements AgentBody {
       tools: this.soul.tools,
       subscribe: this.soul.subscribe,
       skills: this.resolvedSkills.map((skill) => ({ name: skill.name, description: skill.description, argumentHint: skill.argumentHint })),
-      model: this.modelInfo,
+      model: this.modelController.modelInfo,
     };
   }
 
@@ -239,10 +242,10 @@ export class JieAgentBody implements AgentBody {
         this.promptQueue.requeue(env.payload.prompt);
       }),
       this.eventManager.subscribe("user.effort.update", (env) => {
-        this.applyEffort(env.payload.effort);
+        this.modelController.applyEffort(env.payload.effort);
       }),
       this.eventManager.subscribe("user.model.update", (env) => {
-        this.applyModelUpdate(env.payload.provider, env.payload.modelId);
+        this.modelController.applyModelUpdate(env.payload.provider, env.payload.modelId);
       }),
     );
     for (const topic of this.soul.subscribe) {
@@ -284,7 +287,7 @@ export class JieAgentBody implements AgentBody {
   }
 
   private ensureCompacted(): Promise<void> {
-    if (this.modelInfo === null) return Promise.resolve();
+    if (this.modelController.modelInfo === null) return Promise.resolve();
     return this.compactionRunner.ensure(this.agent.state.model);
   }
 
@@ -293,23 +296,6 @@ export class JieAgentBody implements AgentBody {
     this.agent.abort();
   }
 
-  private applyEffort(effort: EffortLevel): void {
-    this.agent.state.thinkingLevel = effortToThinkingLevel(effort);
-    if (this.modelInfo === null) return;
-    this.modelInfo = { ...this.modelInfo, effort };
-    this.eventManager.publish(Events.agentModelAssigned(
-      this.sender, this.modelInfo.provider, this.modelInfo.id, effort, this.modelInfo.contextWindow));
-  }
-
-  private applyModelUpdate(provider: string, modelId: string): void {
-    if (this.soul.model !== "") return;
-    const model = this.resolveModel(provider, modelId);
-    if (model === undefined) return;
-    this.agent.state.model = model;
-    const effort = this.modelInfo === null ? agentEffort(this.agent.state.thinkingLevel) : this.modelInfo.effort;
-    this.modelInfo = { provider: model.provider, id: model.id, effort, contextWindow: model.contextWindow };
-    this.eventManager.publish(Events.agentModelAssigned(this.sender, model.provider, model.id, effort, model.contextWindow));
-  }
 }
 
 function adaptAllTools(
@@ -342,19 +328,4 @@ function adaptAllTools(
 
 function defaultAgentFactory(agentOptions: ConstructorParameters<typeof Agent>[0]): Agent {
   return new Agent(agentOptions);
-}
-
-function agentEffort(thinkingLevel: ThinkingLevel): EffortLevel {
-  if (thinkingLevel === "low" || thinkingLevel === "medium" || thinkingLevel === "high") return thinkingLevel;
-  if (thinkingLevel === "xhigh") return "max";
-  return "off";
-}
-
-function effortToThinkingLevel(effort: EffortLevel): ThinkingLevel {
-  return effort === "max" ? "xhigh" : effort;
-}
-
-function resolveBodyModelInfo(model: Model<Api> | undefined, thinkingLevel: ThinkingLevel): ModelInfo | null {
-  if (model === undefined) return null;
-  return { provider: model.provider, id: model.id, effort: agentEffort(thinkingLevel), contextWindow: model.contextWindow };
 }

@@ -10,6 +10,8 @@ no-new-exports:
   - jie-agent-body.test.ts
   - jie-agent-body.ts
   - index.ts
+  - model-controller.test.ts
+  - model-controller.ts
   - module.ts
   - prompt-queue.test.ts
   - prompt-queue.ts

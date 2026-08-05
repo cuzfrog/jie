@@ -755,19 +755,6 @@ describe("JieAgentBody — lifecycle hooks", () => {
 });
 
 describe("JieAgentBody — agent.model.assigned publication", () => {
-  test("publishes with effort 'off' when the effort param is 'off'", () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    const received: EventEnvelope<"agent.model.assigned">[] = [];
-    h.subscribeSubject("agent.model.assigned", (env) => {
-      received.push(env);
-    });
-    h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), factory: cap.factory });
-    expect(received).toHaveLength(1);
-    expect(received[0]!.payload).toEqual({ provider: "anthropic", model: "claude-sonnet-4", effort: "off", contextWindow: 200000 });
-    expect(cap.fake.state.thinkingLevel).toBe("off");
-  });
-
   test("sets the agent thinkingLevel from the effort param and publishes the same effort", () => {
     const h = makeHarness();
     const cap = makeFakeAgentFactory();
@@ -779,29 +766,6 @@ describe("JieAgentBody — agent.model.assigned publication", () => {
     expect(cap.fake.state.thinkingLevel).toBe("high");
     expect(received).toHaveLength(1);
     expect(received[0]!.payload).toEqual({ provider: "anthropic", model: "claude-sonnet-4", effort: "high", contextWindow: 200000 });
-  });
-
-  test("maps effort 'max' to the 'xhigh' thinkingLevel while reporting 'max' effort", () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    const received: EventEnvelope<"agent.model.assigned">[] = [];
-    h.subscribeSubject("agent.model.assigned", (env) => {
-      received.push(env);
-    });
-    h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), effort: "max", factory: cap.factory });
-    expect(cap.fake.state.thinkingLevel).toBe("xhigh");
-    expect(received).toHaveLength(1);
-    expect(received[0]!.payload.effort).toBe("max");
-  });
-
-  test("does not publish when no model is given", () => {
-    const h = makeHarness();
-    const received: EventEnvelope<"agent.model.assigned">[] = [];
-    h.subscribeSubject("agent.model.assigned", (env) => {
-      received.push(env);
-    });
-    h.makeBody();
-    expect(received).toHaveLength(0);
   });
 });
 
