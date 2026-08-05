@@ -1,20 +1,23 @@
-import { Agent, convertToLlm, type AgentMessage, type AgentEvent as PiAgentEvent, type AgentTool, type AgentToolResult, type ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { Api, AssistantMessage, Model, StopReason, TextContent } from "@earendil-works/pi-ai";
+import { Agent, convertToLlm, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
+import type { Api, Model } from "@earendil-works/pi-ai";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { ExecutionContext, ToolRegistry } from "../tools";
 import type { Skill, SkillManager } from "../skills";
 import type { HookIdentity, HookRunner } from "../hooks";
+import { AgentEventBridgeImpl } from "./agent-event-bridge";
 import { composeSystemPrompt } from "./system-prompt";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { AgentBody, AgentBodyParams } from "./agent-body";
 import type { Compactor } from "./compaction";
-import { StreamPublisherImpl, type StreamPublisher } from "./streaming";
+import { CompactionRunnerImpl, type CompactionRunner } from "./compaction-runner";
+import { ModelControllerImpl, type ModelController } from "./model-controller";
+import { PromptQueueImpl, type PromptQueue } from "./prompt-queue";
 import { adaptToolToAgent } from "./tool-adapter";
+import { ToolCallObserverImpl } from "./tool-call-observer";
 import { JiePlatformError } from "../jie-platform-errors";
-import type { AgentInfo, EffortLevel, ModelInfo, UserIngressMessage } from "../types";
+import type { AgentInfo } from "../types";
 
-const DEQUEUED_PROMPT_CAP = 32;
 const SKILL_INVOCATION_PREFIX = "/skill:";
 
 interface AgentBodyDeps {
@@ -42,24 +45,14 @@ export class JieAgentBody implements AgentBody {
   private readonly memory: MemoryManager;
   private readonly hookRunner: HookRunner;
   private readonly hookIdentity: HookIdentity;
-  private readonly resolveModel: (provider: string, modelId: string) => Model<Api> | undefined;
-  private readonly getApiKey: (provider: string) => Promise<string | undefined> | string | undefined;
   private readonly compactor: Compactor;
   private readonly agent: Agent;
-  private readonly stream: StreamPublisher;
   private readonly sender: AgentSender;
-  private compactionPromise: Promise<void> | null = null;
-  private compactionController: AbortController | null = null;
-  private dispatching = false;
-  private readonly queue: QueuedPrompt[] = [];
-  private readonly dequeuedPrompts: QueuedPrompt[] = [];
+  private readonly promptQueue: PromptQueue;
+  private readonly compactionRunner: CompactionRunner;
+  private readonly modelController: ModelController;
   private readonly resolvedSkills: ReadonlyArray<Skill>;
-  private modelInfo: ModelInfo | null;
-  private pendingTurnPrompt: string | null = null;
-  private turnStartPending = false;
-  private readonly followUpLabels: Map<AgentMessage, string | null> = new Map();
-  private readonly unsubscribers: Array<() => void> = [];
-  private readonly externalCleanups: Array<() => void> = [];
+  private readonly cleanups: Array<() => void> = [];
   private restored: ReadonlyArray<AgentMessage> | null = null;
   private started = false;
   private stopped = false;
@@ -72,8 +65,6 @@ export class JieAgentBody implements AgentBody {
     this.eventManager = deps.eventManager;
     this.memory = deps.memory;
     this.hookRunner = deps.hookRunner;
-    this.resolveModel = deps.resolveModel;
-    this.getApiKey = deps.getApiKey;
     this.compactor = deps.compactor;
     this.hookIdentity = {
       sessionId: this.sessionId,
@@ -83,7 +74,40 @@ export class JieAgentBody implements AgentBody {
       role: params.soul.role,
     };
     this.sender = { kind: "agent", teamId: this.teamId, agentKey: this.agentKey };
-    this.stream = new StreamPublisherImpl(deps.eventManager, this.sender);
+    this.promptQueue = new PromptQueueImpl({
+      dispatcher: {
+        prompt: (message) => void this.agent.prompt(message),
+        followUp: (message) => this.agent.followUp(message),
+        isStreaming: () => this.agent.state.isStreaming,
+      },
+      eventManager: deps.eventManager,
+      sender: this.sender,
+      beforeDispatch: () => this.ensureCompacted(),
+    });
+    this.compactionRunner = new CompactionRunnerImpl({
+      compactor: deps.compactor,
+      eventManager: deps.eventManager,
+      sender: this.sender,
+      getApiKey: deps.getApiKey,
+      agentKey: this.agentKey,
+      sessionId: this.sessionId,
+      teamId: this.teamId,
+      conversation: {
+        getMessages: () => this.agent.state.messages,
+        setMessages: (messages) => {
+          this.agent.state.messages = [...messages];
+        },
+      },
+    });
+    const eventBridge = new AgentEventBridgeImpl({
+      eventManager: deps.eventManager,
+      memory: this.memory,
+      hookRunner: this.hookRunner,
+      hookIdentity: this.hookIdentity,
+      sender: this.sender,
+      promptQueue: this.promptQueue,
+      onRunEnd: () => void this.agent.waitForIdle().then(() => this.promptQueue.settle()),
+    });
     const executionContext: ExecutionContext = {
       sessionId: this.sessionId,
       teamId: this.teamId,
@@ -93,7 +117,12 @@ export class JieAgentBody implements AgentBody {
       lifecycle: params.lifecycle,
     };
     const adaptedTools = adaptAllTools(params.soul, deps.toolRegistry, executionContext);
-    const toolTimestamps = new Map<string, number>();
+    const toolCallObserver = new ToolCallObserverImpl({
+      eventManager: deps.eventManager,
+      hookRunner: this.hookRunner,
+      hookIdentity: this.hookIdentity,
+      sender: this.sender,
+    });
     const createAgent = deps.createAgent ?? defaultAgentFactory;
     this.agent = createAgent({
       sessionId: this.sessionId,
@@ -104,52 +133,8 @@ export class JieAgentBody implements AgentBody {
       steeringMode: "all",
       followUpMode: "all",
       toolExecution: "sequential",
-      beforeToolCall: async (context) => {
-        const toolCallId = context.toolCall.id;
-        toolTimestamps.set(toolCallId, Date.now());
-        this.eventManager.publish(Events.agentToolCall(
-          this.sender,
-          toolCallId,
-          context.toolCall.name,
-          JSON.stringify(context.args),
-        ));
-        const preOutcome = await this.hookRunner.preToolUse({
-          identity: this.hookIdentity,
-          toolName: context.toolCall.name,
-          toolInput: context.args,
-        });
-        if (preOutcome.block) return { block: true, reason: preOutcome.reason ?? undefined };
-        return undefined;
-      },
-      afterToolCall: async (context) => {
-        const toolCallId = context.toolCall.id;
-        const startedAt = toolTimestamps.get(toolCallId) ?? Date.now();
-        toolTimestamps.delete(toolCallId);
-        const error = extractToolError(context);
-        const output = error === null ? jieToolResultOf(context.result) : null;
-        this.eventManager.publish(Events.agentToolResult(
-          this.sender,
-          toolCallId,
-          context.toolCall.name,
-          output === null ? null : JSON.stringify(output),
-          Date.now() - startedAt,
-          error,
-          output?.details ?? null,
-        ));
-        const postOutcome = await this.hookRunner.postToolUse({
-          identity: this.hookIdentity,
-          toolName: context.toolCall.name,
-          toolInput: context.args,
-          toolResponse: output === null ? "" : JSON.stringify(output),
-        });
-        if (postOutcome.block) {
-          return { isError: true, content: [{ type: "text", text: postOutcome.reason ?? "blocked by PostToolUse hook" }] };
-        }
-        if (postOutcome.additionalContext !== null) {
-          return { content: [...context.result.content, { type: "text", text: postOutcome.additionalContext }] };
-        }
-        return undefined;
-      },
+      beforeToolCall: (context) => toolCallObserver.beforeToolCall(context),
+      afterToolCall: (context) => toolCallObserver.afterToolCall(context),
     });
     this.resolvedSkills = params.soul.skills.flatMap((spec) => deps.skillManager.resolve(spec));
     this.agent.state.systemPrompt = composeSystemPrompt({
@@ -158,18 +143,24 @@ export class JieAgentBody implements AgentBody {
       skills: this.resolvedSkills,
     });
     this.isLeader = params.isLeader;
-    this.agent.state.thinkingLevel = effortToThinkingLevel(params.effort);
-    this.modelInfo = resolveBodyModelInfo(params.model, this.agent.state.thinkingLevel);
-    if (params.model !== undefined) {
-      this.agent.state.model = params.model;
-      if (this.modelInfo !== null) {
-        this.eventManager.publish(Events.agentModelAssigned(
-          this.sender, this.modelInfo.provider, this.modelInfo.id, this.modelInfo.effort, this.modelInfo.contextWindow));
-      }
-    }
+    this.modelController = new ModelControllerImpl(params.model, params.effort, {
+      eventManager: deps.eventManager,
+      sender: this.sender,
+      soulPinsModel: params.soul.model !== "",
+      resolveModel: deps.resolveModel,
+      agentState: {
+        setModel: (model) => {
+          this.agent.state.model = model;
+        },
+        getThinkingLevel: () => this.agent.state.thinkingLevel,
+        setThinkingLevel: (level) => {
+          this.agent.state.thinkingLevel = level;
+        },
+      },
+    });
     this.agent.state.tools = adaptedTools;
-    const unsubscribeAgent = this.agent.subscribe((event, _signal) => this.handlePiAgentEvent(event));
-    this.externalCleanups.push(unsubscribeAgent);
+    const unsubscribeAgent = this.agent.subscribe((event, _signal) => eventBridge.handleEvent(event));
+    this.cleanups.push(unsubscribeAgent);
   }
 
   get identity(): AgentInfo {
@@ -181,7 +172,7 @@ export class JieAgentBody implements AgentBody {
       tools: this.soul.tools,
       subscribe: this.soul.subscribe,
       skills: this.resolvedSkills.map((skill) => ({ name: skill.name, description: skill.description, argumentHint: skill.argumentHint })),
-      model: this.modelInfo,
+      model: this.modelController.modelInfo,
     };
   }
 
@@ -218,102 +209,22 @@ export class JieAgentBody implements AgentBody {
       }
     }
 
-    while (!this.stopped && this.queue.length > 0) {
-      await this.dispatchNext();
+    while (!this.stopped && !this.promptQueue.isEmpty()) {
+      await this.promptQueue.dispatchNext();
       await this.agent.waitForIdle();
     }
   }
 
   stop(): void {
     this.stopped = true;
-    this.compactionController?.abort();
-    for (const off of this.unsubscribers) off();
-    for (const off of this.externalCleanups) off();
-    this.unsubscribers.length = 0;
-    this.externalCleanups.length = 0;
-  }
-
-  private handlePiAgentEvent(event: PiAgentEvent): void {
-    const agentSender = this.sender;
-    if (event.type !== "turn_start") this.flushTurnStart(event);
-    switch (event.type) {
-      case "turn_start":
-        this.turnStartPending = true;
-        return;
-      case "turn_end": {
-        const final = readFinalStopReason(event);
-        if (!final.isError && this.queue.length > 0) {
-          const next = this.queue.shift()!;
-          this.followUpLabels.set(next.message, next.userText);
-          this.agent.followUp(next.message);
-        }
-        this.publishQueueUpdate(agentSender);
-        return;
-      }
-      case "agent_end": {
-        const final = readFinalStopReason(event);
-        this.eventManager.publish(Events.agentIdle(agentSender, final.stopReason));
-        if (final.isError && final.errorMessage !== null) {
-          this.eventManager.publish(Events.systemError({ kind: "system" }, final.errorMessage));
-        }
-        void this.hookRunner.stop({ identity: this.hookIdentity });
-        this.pendingTurnPrompt = null;
-        this.publishQueueUpdate(agentSender);
-        void this.agent.waitForIdle().then(() => this.settleAfterRun());
-        return;
-      }
-      case "message_start":
-        if (event.message.role === "user") this.followUpLabels.delete(event.message);
-        this.stream.beginStream();
-        return;
-      case "message_update": {
-        const ame = event.assistantMessageEvent;
-        if (ame.type === "text_delta") {
-          this.stream.append("text", ame.delta);
-        } else if (ame.type === "thinking_delta") {
-          this.stream.append("thinking", ame.delta);
-        }
-        return;
-      }
-      case "message_end":
-        if (event.message.role === "assistant") {
-          this.stream.endStream();
-          if (event.message.usage !== undefined && event.message.usage.totalTokens > 0) {
-            this.eventManager.publish(Events.agentUsage(agentSender, {
-              input: event.message.usage.input,
-              output: event.message.usage.output,
-              cacheRead: event.message.usage.cacheRead,
-              cacheWrite: event.message.usage.cacheWrite,
-              totalTokens: event.message.usage.totalTokens,
-            }));
-          }
-        }
-        this.memory.persist(
-          persistableMessage(event.message),
-          this.agentKey,
-          this.sessionId,
-          this.teamId,
-        );
-        return;
-      default:
-        return;
-    }
-  }
-
-  private flushTurnStart(event: PiAgentEvent): void {
-    if (!this.turnStartPending) return;
-    this.turnStartPending = false;
-    let label = this.pendingTurnPrompt;
-    this.pendingTurnPrompt = null;
-    if (event.type === "message_start" && event.message.role === "user") {
-      const supplied = this.followUpLabels.get(event.message);
-      if (supplied !== undefined) label = supplied;
-    }
-    this.eventManager.publish(Events.agentTurnStart(this.sender, label));
+    this.compactionRunner.abort();
+    this.promptQueue.stop();
+    for (const off of this.cleanups) off();
+    this.cleanups.length = 0;
   }
 
   private registerSubscriptions(): void {
-    this.unsubscribers.push(
+    this.cleanups.push(
       this.eventManager.subscribe("user.prompt", (env) => {
         if (env.payload.teamId !== this.teamId || env.payload.agentKey !== this.agentKey) return;
         void this.ingestUserPrompt(env.payload);
@@ -324,21 +235,21 @@ export class JieAgentBody implements AgentBody {
       }),
       this.eventManager.subscribe("user.prompt.dequeue", (env) => {
         if (env.payload.teamId !== this.teamId || env.payload.agentKey !== this.agentKey) return;
-        this.dequeuePrompt(env.payload.prompt);
+        this.promptQueue.dequeue(env.payload.prompt);
       }),
       this.eventManager.subscribe("user.prompt.requeue", (env) => {
         if (env.payload.teamId !== this.teamId || env.payload.agentKey !== this.agentKey) return;
-        this.requeuePrompt(env.payload.prompt);
+        this.promptQueue.requeue(env.payload.prompt);
       }),
       this.eventManager.subscribe("user.effort.update", (env) => {
-        this.applyEffort(env.payload.effort);
+        this.modelController.applyEffort(env.payload.effort);
       }),
       this.eventManager.subscribe("user.model.update", (env) => {
-        this.applyModelUpdate(env.payload.provider, env.payload.modelId);
+        this.modelController.applyModelUpdate(env.payload.provider, env.payload.modelId);
       }),
     );
     for (const topic of this.soul.subscribe) {
-      this.unsubscribers.push(
+      this.cleanups.push(
         this.eventManager.subscribe(`custom.${this.teamId}.${topic}`, (env) => {
           this.ingestCustom(topic, env.sender, env.payload);
         }),
@@ -354,9 +265,8 @@ export class JieAgentBody implements AgentBody {
     }
     const expanded = this.expandSkillInvocation(payload.prompt) ?? payload.prompt;
     const prompt = outcome.additionalContext === null ? expanded : `${expanded}\n\n${outcome.additionalContext}`;
-    const consumed = this.dequeuedPrompts.findIndex((entry) => entry.userText === payload.prompt);
-    if (consumed !== -1) this.dequeuedPrompts.splice(consumed, 1);
-    this.dispatchIngress("user", null, prompt, payload.prompt);
+    this.promptQueue.consumeResubmitted(payload.prompt);
+    this.promptQueue.ingestUserPrompt(prompt, payload.prompt);
   }
 
   private expandSkillInvocation(text: string): string | null {
@@ -373,116 +283,12 @@ export class JieAgentBody implements AgentBody {
 
   private ingestCustom(topic: string, sender: AgentSender, payload: { message: string; truncated: boolean }): void {
     if (sender.agentKey === this.agentKey) return;
-    this.dispatchIngress(topic, sender.agentKey, payload.message, null);
-  }
-
-  private dispatchIngress(topic: string, source: string | null, prompt: string, userText: string | null): void {
-    const synthetic = source !== null
-      ? `[${source} on '${topic}']: ${prompt}`
-      : `[user]: ${prompt}`;
-    const message: UserIngressMessage = userText === null
-      ? { role: "user", content: synthetic, timestamp: Date.now() }
-      : { role: "user", content: synthetic, timestamp: Date.now(), displayText: userText };
-    this.queue.push({ message, userText });
-    this.publishQueueUpdate(this.sender);
-    void this.dispatchNext();
-  }
-
-  private async settleAfterRun(): Promise<void> {
-    await this.ensureCompacted();
-    this.dispatchHead();
-  }
-
-  private async dispatchNext(): Promise<void> {
-    if (this.dispatching || this.stopped || this.agent.state.isStreaming || this.queue.length === 0) return;
-    this.dispatching = true;
-    try {
-      await this.ensureCompacted();
-    } finally {
-      this.dispatching = false;
-    }
-    this.dispatchHead();
-  }
-
-  private dispatchHead(): void {
-    if (this.dispatching || this.stopped || this.agent.state.isStreaming || this.queue.length === 0) return;
-    const next = this.queue.shift()!;
-    this.pendingTurnPrompt = next.userText;
-    this.publishQueueUpdate(this.sender);
-    void this.agent.prompt(next.message);
+    this.promptQueue.ingestPeerNotification(topic, sender.agentKey, payload.message);
   }
 
   private ensureCompacted(): Promise<void> {
-    if (this.compactionPromise === null) {
-      this.compactionPromise = this.runCompaction().finally(() => {
-        this.compactionPromise = null;
-      });
-    }
-    return this.compactionPromise;
-  }
-
-  private async runCompaction(): Promise<void> {
-    if (this.modelInfo === null) return;
-    const model = this.agent.state.model;
-    const controller = new AbortController();
-    this.compactionController = controller;
-    try {
-      const result = await this.compactor.compact({
-        messages: this.agent.state.messages,
-        contextWindow: model.contextWindow,
-        model,
-        apiKey: await this.getApiKey(model.provider),
-        agentKey: this.agentKey,
-        sessionId: this.sessionId,
-        teamId: this.teamId,
-        signal: controller.signal,
-      });
-      if (result === null || this.stopped) return;
-      const summarizedPrefix = this.agent.state.messages.slice(0, result.firstKeptIndex);
-      this.agent.state.messages = [result.summaryMessage, ...this.agent.state.messages.slice(result.firstKeptIndex)];
-      const summarizedPrompts = summarizedPrefix.reduce((count, message) => message.role === "user" ? count + 1 : count, 0);
-      this.eventManager.publish(Events.agentCompacted(this.sender, result.summaryMessage.summary, result.tokensBefore, summarizedPrompts));
-    } catch (error) {
-      if (!controller.signal.aborted) {
-        const message = error instanceof Error ? error.message : String(error);
-        this.eventManager.publish(Events.systemError({ kind: "system" }, `compaction failed: ${message}`));
-      }
-    } finally {
-      if (this.compactionController === controller) this.compactionController = null;
-    }
-  }
-
-  private publishQueueUpdate(sender: AgentSender): void {
-    const prompts = this.queue.map((entry) => entry.userText !== null
-      ? { text: entry.userText, source: "user" as const }
-      : { text: userPromptText(entry.message), source: "peer" as const });
-    this.eventManager.publish(Events.agentPromptQueueUpdate(sender, prompts));
-  }
-
-  private dequeuePrompt(prompt: string): void {
-    for (let i = this.queue.length - 1; i >= 0; i--) {
-      if (this.queue[i]!.userText === prompt) {
-        const removed = this.queue.splice(i, 1)[0];
-        if (removed !== undefined) {
-          this.dequeuedPrompts.push(removed);
-          if (this.dequeuedPrompts.length > DEQUEUED_PROMPT_CAP) this.dequeuedPrompts.shift();
-        }
-        break;
-      }
-    }
-    this.publishQueueUpdate(this.sender);
-  }
-
-  private requeuePrompt(prompt: string): void {
-    for (let i = this.dequeuedPrompts.length - 1; i >= 0; i--) {
-      if (this.dequeuedPrompts[i]!.userText === prompt) {
-        const restored = this.dequeuedPrompts.splice(i, 1)[0];
-        if (restored !== undefined) this.queue.push(restored);
-        break;
-      }
-    }
-    this.publishQueueUpdate(this.sender);
-    void this.dispatchNext();
+    if (this.modelController.modelInfo === null) return Promise.resolve();
+    return this.compactionRunner.ensure(this.agent.state.model);
   }
 
   private interruptActiveRun(): void {
@@ -490,23 +296,6 @@ export class JieAgentBody implements AgentBody {
     this.agent.abort();
   }
 
-  private applyEffort(effort: EffortLevel): void {
-    this.agent.state.thinkingLevel = effortToThinkingLevel(effort);
-    if (this.modelInfo === null) return;
-    this.modelInfo = { ...this.modelInfo, effort };
-    this.eventManager.publish(Events.agentModelAssigned(
-      this.sender, this.modelInfo.provider, this.modelInfo.id, effort, this.modelInfo.contextWindow));
-  }
-
-  private applyModelUpdate(provider: string, modelId: string): void {
-    if (this.soul.model !== "") return;
-    const model = this.resolveModel(provider, modelId);
-    if (model === undefined) return;
-    this.agent.state.model = model;
-    const effort = this.modelInfo === null ? agentEffort(this.agent.state.thinkingLevel) : this.modelInfo.effort;
-    this.modelInfo = { provider: model.provider, id: model.id, effort, contextWindow: model.contextWindow };
-    this.eventManager.publish(Events.agentModelAssigned(this.sender, model.provider, model.id, effort, model.contextWindow));
-  }
 }
 
 function adaptAllTools(
@@ -539,92 +328,4 @@ function adaptAllTools(
 
 function defaultAgentFactory(agentOptions: ConstructorParameters<typeof Agent>[0]): Agent {
   return new Agent(agentOptions);
-}
-
-function extractToolError(context: {
-  isError: boolean;
-  result: AgentToolResult<unknown> | undefined;
-}): string | null {
-  if (!context.isError) return null;
-  if (context.result === undefined) return "tool error";
-  const text = context.result.content
-    .filter((c): c is TextContent => c.type === "text")
-    .map((c) => c.text)
-    .join("\n");
-  return text.length > 0 ? text : "tool error";
-}
-
-function agentEffort(thinkingLevel: ThinkingLevel): EffortLevel {
-  if (thinkingLevel === "low" || thinkingLevel === "medium" || thinkingLevel === "high") return thinkingLevel;
-  if (thinkingLevel === "xhigh") return "max";
-  return "off";
-}
-
-function effortToThinkingLevel(effort: EffortLevel): ThinkingLevel {
-  return effort === "max" ? "xhigh" : effort;
-}
-
-function resolveBodyModelInfo(model: Model<Api> | undefined, thinkingLevel: ThinkingLevel): ModelInfo | null {
-  if (model === undefined) return null;
-  return { provider: model.provider, id: model.id, effort: agentEffort(thinkingLevel), contextWindow: model.contextWindow };
-}
-
-interface JieToolResult {
-  content: string | Array<{ type: string; text?: string }>;
-  details?: unknown;
-  terminate?: boolean;
-}
-
-function jieToolResultOf(piResult: AgentToolResult<unknown>): JieToolResult {
-  const block = piResult.content;
-  const content =
-    block.length === 1 && block[0]?.type === "text"
-      ? block[0].text
-      : block;
-  return {
-    content,
-    details: piResult.details,
-    terminate: piResult.terminate ?? false,
-  };
-}
-
-function persistableMessage(message: AgentMessage): AgentMessage {
-  if (message.role !== "toolResult" || isDisplayDetails(message.details)) return message;
-  const { details: _stripped, ...persistable } = message;
-  return persistable;
-}
-
-function isDisplayDetails(details: unknown): boolean {
-  if (typeof details !== "object" || details === null || !("kind" in details)) return false;
-  return details.kind === "diff" || details.kind === "kanban";
-}
-
-interface QueuedPrompt {
-  readonly message: AgentMessage;
-  readonly userText: string | null;
-}
-
-function userPromptText(message: AgentMessage): string {
-  if (message.role !== "user") return "";
-  const content = message.content;
-  if (typeof content === "string") return content;
-  return content
-    .filter((part): part is { type: "text"; text: string } => part.type === "text")
-    .map((part) => part.text)
-    .join("");
-}
-
-function readFinalStopReason(event: Extract<PiAgentEvent, { type: "agent_end" }> | Extract<PiAgentEvent, { type: "turn_end" }>): { stopReason: StopReason; isError: boolean; errorMessage: string | null } {
-  const candidates: AgentMessage[] = event.type === "agent_end" ? event.messages : [event.message];
-  let lastAssistant: AssistantMessage | undefined;
-  for (let i = candidates.length - 1; i >= 0; i -= 1) {
-    const message = candidates[i];
-    if (message !== undefined && message.role === "assistant") {
-      lastAssistant = message;
-      break;
-    }
-  }
-  const stopReason: StopReason = lastAssistant?.stopReason ?? "stop";
-  const isError = stopReason === "error" || stopReason === "aborted";
-  return { stopReason, isError, errorMessage: lastAssistant?.errorMessage ?? null };
 }

@@ -7,7 +7,7 @@ import {
   type BeforeToolCallContext,
   type ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
-import type { Api, AssistantMessage, AssistantMessageEvent, Model, ToolResultMessage } from "@earendil-works/pi-ai";
+import type { Api, AssistantMessage, Model } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { JieAgentBody } from "./jie-agent-body";
 import type { AgentBodyParams } from "./agent-body";
@@ -126,19 +126,6 @@ function makeAssistantMessage(overrides: Partial<AssistantMessage> = {}): Assist
     timestamp: 0,
     ...overrides,
   };
-}
-
-function makeToolResultMessage(details?: object): ToolResultMessage {
-  const message: ToolResultMessage = {
-    role: "toolResult",
-    toolCallId: "call_x",
-    toolName: "bash",
-    content: [{ type: "text", text: "ok" }],
-    isError: false,
-    timestamp: 0,
-  };
-  if (details !== undefined) message.details = details;
-  return message;
 }
 
 function makeAgentContext(overrides: Partial<{ systemPrompt: string; messages: AgentMessage[] }> = {}): { systemPrompt: string; messages: AgentMessage[] } {
@@ -645,163 +632,30 @@ describe("JieAgentBody — agent construction wiring", () => {
     expect(unsubscribed).toBe(true);
   });
 
-  test("beforeToolCall publishes agent.tool.call with wire-shaped input (short input not truncated)", async () => {
+  test("beforeToolCall is wired to PreToolUse gating through the tool-call observer", async () => {
     const h = makeHarness();
     const cap = makeFakeAgentFactory();
+    h.hookRunner.preToolUse.mockResolvedValue({ block: true, reason: "denied" });
     h.makeBody({ factory: cap.factory });
     const hook = cap.lastOpts()?.beforeToolCall;
-    if (hook === undefined) throw new Error("beforeToolCall hook not provided");
-    const received: EventEnvelope<"agent.tool.call">[] = [];
-    h.subscribeSubject("agent.tool.call", (env) => {
-      received.push(env);
-    });
+    if (hook === undefined) throw new Error("beforeToolCall not provided");
     const ctx: BeforeToolCallContext = {
       assistantMessage: makeAssistantMessage(),
       toolCall: { type: "toolCall", id: "c1", name: "bash", arguments: { command: "ls" } },
       args: { command: "ls" },
       context: makeAgentContext(),
     };
-    await hook(ctx);
-    expect(received).toHaveLength(1);
-    const payload = received[0]!.payload;
-    expect(payload.tool_call_id).toBe("c1");
-    expect(payload.name).toBe("bash");
-    expect(typeof payload.input).toBe("string");
-    expect(payload.input_truncated).toBe(false);
+    expect(await hook(ctx)).toEqual({ block: true, reason: "denied" });
   });
 
-  test("beforeToolCall truncates long input with a marker", async () => {
+  test("afterToolCall is wired to PostToolUse gating through the tool-call observer", async () => {
     const h = makeHarness();
     const cap = makeFakeAgentFactory();
-    h.makeBody({ factory: cap.factory });
-    const hook = cap.lastOpts()?.beforeToolCall;
-    if (hook === undefined) throw new Error("beforeToolCall hook not provided");
-    const received: EventEnvelope<"agent.tool.call">[] = [];
-    h.subscribeSubject("agent.tool.call", (env) => {
-      received.push(env);
-    });
-    const ctx: BeforeToolCallContext = {
-      assistantMessage: makeAssistantMessage(),
-      toolCall: { type: "toolCall", id: "c1", name: "bash", arguments: { command: "x".repeat(8000) } },
-      args: { command: "x".repeat(8000) },
-      context: makeAgentContext(),
-    };
-    await hook(ctx);
-    const payload = received[0]!.payload;
-    expect(payload.input_truncated).toBe(true);
-    expect(payload.input).toContain("chars truncated");
-    expect(payload.input.length).toBeLessThan(8000);
-  });
-
-  test("afterToolCall publishes agent.tool.result with the Jie ToolResult shape", async () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
+    h.hookRunner.postToolUse.mockResolvedValue({ block: true, reason: "bad", additionalContext: null });
     h.makeBody({ factory: cap.factory });
     const hook = cap.lastOpts()?.afterToolCall;
-    if (hook === undefined) throw new Error("afterToolCall hook not provided");
-    const results: EventEnvelope<"agent.tool.result">[] = [];
-    h.subscribeSubject("agent.tool.result", (env) => {
-      results.push(env);
-    });
+    if (hook === undefined) throw new Error("afterToolCall not provided");
     const ctx: AfterToolCallContext = {
-      assistantMessage: makeAssistantMessage(),
-      toolCall: { type: "toolCall", id: "call_r", name: "noop", arguments: {} },
-      args: {},
-      context: makeAgentContext(),
-      result: {
-        content: [{ type: "text", text: "hello" }],
-        details: { foo: 1 },
-        terminate: false,
-      },
-      isError: false,
-    };
-    await hook(ctx);
-    expect(results).toHaveLength(1);
-    expect(JSON.parse(results[0]!.payload.output!)).toEqual({
-      content: "hello",
-      details: { foo: 1 },
-      terminate: false,
-    });
-  });
-
-  test("afterToolCall: multi-block content serializes as a JSON array", async () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    h.makeBody({ factory: cap.factory });
-    const hook = cap.lastOpts()?.afterToolCall;
-    if (hook === undefined) throw new Error("afterToolCall hook not provided");
-    const results: EventEnvelope<"agent.tool.result">[] = [];
-    h.subscribeSubject("agent.tool.result", (env) => {
-      results.push(env);
-    });
-    const ctx: AfterToolCallContext = {
-      assistantMessage: makeAssistantMessage(),
-      toolCall: { type: "toolCall", id: "call_m", name: "noop", arguments: {} },
-      args: {},
-      context: makeAgentContext(),
-      result: {
-        content: [
-          { type: "text", text: "a" },
-          { type: "image", data: "x", mimeType: "image/png" },
-        ],
-        details: { ok: true },
-        terminate: true,
-      },
-      isError: false,
-    };
-    await hook(ctx);
-    expect(JSON.parse(results[0]!.payload.output!)).toEqual({
-      content: [
-        { type: "text", text: "a" },
-        { type: "image", data: "x", mimeType: "image/png" },
-      ],
-      details: { ok: true },
-      terminate: true,
-    });
-  });
-
-  test("afterToolCall on error: output null, error carries the message", async () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    h.makeBody({ factory: cap.factory });
-    const hook = cap.lastOpts()?.afterToolCall;
-    if (hook === undefined) throw new Error("afterToolCall hook not provided");
-    const results: EventEnvelope<"agent.tool.result">[] = [];
-    h.subscribeSubject("agent.tool.result", (env) => {
-      results.push(env);
-    });
-    const ctx: AfterToolCallContext = {
-      assistantMessage: makeAssistantMessage(),
-      toolCall: { type: "toolCall", id: "call_e", name: "noop", arguments: {} },
-      args: {},
-      context: makeAgentContext(),
-      result: {
-        content: [{ type: "text", text: "boom" }],
-        details: {},
-        terminate: false,
-      },
-      isError: true,
-    };
-    await hook(ctx);
-    expect(results).toHaveLength(1);
-    const env = results[0]!;
-    expect(env.payload.output).toBeNull();
-    expect(env.payload.error).toBe("boom");
-  });
-});
-
-describe("JieAgentBody — hook gating", () => {
-  function beforeCtx(): BeforeToolCallContext {
-    return {
-      assistantMessage: makeAssistantMessage(),
-      toolCall: { type: "toolCall", id: "c1", name: "bash", arguments: { command: "ls" } },
-      args: { command: "ls" },
-      context: makeAgentContext(),
-    };
-  }
-
-  function afterCtx(): AfterToolCallContext {
-    return {
       assistantMessage: makeAssistantMessage(),
       toolCall: { type: "toolCall", id: "c1", name: "bash", arguments: { command: "ls" } },
       args: { command: "ls" },
@@ -809,52 +663,7 @@ describe("JieAgentBody — hook gating", () => {
       result: { content: [{ type: "text", text: "ok" }], details: {}, terminate: false },
       isError: false,
     };
-  }
-
-  test("beforeToolCall blocks the tool when the PreToolUse hook blocks", async () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    h.hookRunner.preToolUse.mockResolvedValue({ block: true, reason: "denied" });
-    h.makeBody({ factory: cap.factory });
-    const hook = cap.lastOpts()?.beforeToolCall;
-    if (hook === undefined) throw new Error("beforeToolCall hook not provided");
-    expect(await hook(beforeCtx())).toEqual({ block: true, reason: "denied" });
-  });
-
-  test("beforeToolCall allows the tool and forwards identity + tool fields to the hook", async () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    h.makeBody({ factory: cap.factory });
-    const hook = cap.lastOpts()?.beforeToolCall;
-    if (hook === undefined) throw new Error("beforeToolCall hook not provided");
-    expect(await hook(beforeCtx())).toBeUndefined();
-    expect(h.hookRunner.preToolUse).toHaveBeenCalledWith({
-      identity: { sessionId: "s1", cwd: "/work", teamId: "t1", agentKey: "general-1", role: "general" },
-      toolName: "bash",
-      toolInput: { command: "ls" },
-    });
-  });
-
-  test("afterToolCall marks the result an error when the PostToolUse hook blocks", async () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    h.hookRunner.postToolUse.mockResolvedValue({ block: true, reason: "bad", additionalContext: null });
-    h.makeBody({ factory: cap.factory });
-    const hook = cap.lastOpts()?.afterToolCall;
-    if (hook === undefined) throw new Error("afterToolCall hook not provided");
-    expect(await hook(afterCtx())).toEqual({ isError: true, content: [{ type: "text", text: "bad" }] });
-  });
-
-  test("afterToolCall appends additionalContext to the tool result content", async () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    h.hookRunner.postToolUse.mockResolvedValue({ block: false, reason: null, additionalContext: "note" });
-    h.makeBody({ factory: cap.factory });
-    const hook = cap.lastOpts()?.afterToolCall;
-    if (hook === undefined) throw new Error("afterToolCall hook not provided");
-    expect(await hook(afterCtx())).toEqual({
-      content: [{ type: "text", text: "ok" }, { type: "text", text: "note" }],
-    });
+    expect(await hook(ctx)).toEqual({ isError: true, content: [{ type: "text", text: "bad" }] });
   });
 });
 
@@ -946,19 +755,6 @@ describe("JieAgentBody — lifecycle hooks", () => {
 });
 
 describe("JieAgentBody — agent.model.assigned publication", () => {
-  test("publishes with effort 'off' when the effort param is 'off'", () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    const received: EventEnvelope<"agent.model.assigned">[] = [];
-    h.subscribeSubject("agent.model.assigned", (env) => {
-      received.push(env);
-    });
-    h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), factory: cap.factory });
-    expect(received).toHaveLength(1);
-    expect(received[0]!.payload).toEqual({ provider: "anthropic", model: "claude-sonnet-4", effort: "off", contextWindow: 200000 });
-    expect(cap.fake.state.thinkingLevel).toBe("off");
-  });
-
   test("sets the agent thinkingLevel from the effort param and publishes the same effort", () => {
     const h = makeHarness();
     const cap = makeFakeAgentFactory();
@@ -970,29 +766,6 @@ describe("JieAgentBody — agent.model.assigned publication", () => {
     expect(cap.fake.state.thinkingLevel).toBe("high");
     expect(received).toHaveLength(1);
     expect(received[0]!.payload).toEqual({ provider: "anthropic", model: "claude-sonnet-4", effort: "high", contextWindow: 200000 });
-  });
-
-  test("maps effort 'max' to the 'xhigh' thinkingLevel while reporting 'max' effort", () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    const received: EventEnvelope<"agent.model.assigned">[] = [];
-    h.subscribeSubject("agent.model.assigned", (env) => {
-      received.push(env);
-    });
-    h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), effort: "max", factory: cap.factory });
-    expect(cap.fake.state.thinkingLevel).toBe("xhigh");
-    expect(received).toHaveLength(1);
-    expect(received[0]!.payload.effort).toBe("max");
-  });
-
-  test("does not publish when no model is given", () => {
-    const h = makeHarness();
-    const received: EventEnvelope<"agent.model.assigned">[] = [];
-    h.subscribeSubject("agent.model.assigned", (env) => {
-      received.push(env);
-    });
-    h.makeBody();
-    expect(received).toHaveLength(0);
   });
 });
 
@@ -1266,64 +1039,6 @@ describe("JieAgentBody — messages()", () => {
   });
 });
 
-describe("JieAgentBody — prompt ingress format", () => {
-  let h: Harness;
-
-  beforeEach(() => {
-    h = makeHarness();
-  });
-
-  test("`agent.prompt` (no source) is formatted as `[user]: <prompt>`", async () => {
-    const body = h.makeBody();
-    await body.start();
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
-    await flush();
-    expect(h.prompt.mock.calls.length).toBeGreaterThan(0);
-    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
-    expect(synthetic.role).toBe("user");
-    const content = (synthetic as { content: unknown }).content;
-    expect(content).toBe("[user]: hello");
-    body.stop();
-  });
-
-  test("notify-sourced event is formatted as `[<agentKey> on '<topic>']: <prompt>`", async () => {
-    const body = h.makeBody({
-      soul: makeSoul({ subscribe: ["task.researched"] }),
-    });
-    await body.start();
-    h.events.publish(Events.custom({ kind: "agent", teamId: "t1", agentKey: "researcher-1" }, "t1.task.researched", "report"));
-    await flush();
-    const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
-    const content = (synthetic as { content: unknown }).content;
-    expect(content).toBe(
-      "[researcher-1 on 'task.researched']: report",
-    );
-    body.stop();
-  });
-
-  test("the dispatched user message carries the raw prompt as displayText", async () => {
-    const body = h.makeBody();
-    await body.start();
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
-    await flush();
-    const synthetic = h.prompt.mock.calls[0]![0] as UserIngressMessage;
-    expect(synthetic.displayText).toBe("hello");
-    body.stop();
-  });
-
-  test("a notify-sourced message carries no displayText", async () => {
-    const body = h.makeBody({
-      soul: makeSoul({ subscribe: ["task.researched"] }),
-    });
-    await body.start();
-    h.events.publish(Events.custom({ kind: "agent", teamId: "t1", agentKey: "researcher-1" }, "t1.task.researched", "report"));
-    await flush();
-    const synthetic = h.prompt.mock.calls[0]![0] as UserIngressMessage;
-    expect(synthetic.displayText).toBeUndefined();
-    body.stop();
-  });
-});
-
 describe("JieAgentBody — skill invocation expansion", () => {
   let h: Harness;
 
@@ -1504,65 +1219,6 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     h = makeHarness();
   });
 
-  test("turn_start defers agent.turn.start until the turn's next pi event", () => {
-    const turnStart: EventEnvelope<"agent.turn.start">[] = [];
-    h.subscribeSubject("agent.turn.start", (env) => {
-      turnStart.push(env);
-    });
-    h.makeBody();
-    h.fireEvent({ type: "turn_start" });
-    expect(turnStart).toHaveLength(0);
-    h.fireEvent({
-      type: "turn_end",
-      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
-      toolResults: [],
-    });
-    expect(turnStart).toHaveLength(1);
-    expect(turnStart[0]!.topic).toBe("agent.turn.start");
-    expect(turnStart[0]!.payload).toBeNull();
-  });
-
-  test("the deferred agent.turn.start precedes the turn's own stream events", () => {
-    const sequence: string[] = [];
-    h.subscribeSubject("agent.turn.start", () => sequence.push("turn.start"));
-    h.subscribeSubject("agent.stream.end", () => sequence.push("stream.end"));
-    h.makeBody();
-    h.fireEvent({ type: "turn_start" });
-    h.fireEvent({ type: "message_start", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-    h.fireEvent({ type: "message_end", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-    expect(sequence).toEqual(["turn.start", "stream.end"]);
-  });
-
-  test("agent_end publishes agent.idle with the final stopReason", () => {
-    const idle: EventEnvelope<"agent.idle">[] = [];
-    h.subscribeSubject("agent.idle", (env) => {
-      idle.push(env);
-    });
-    h.makeBody();
-    h.fireEvent({ type: "agent_end", messages: [] });
-    expect(idle).toHaveLength(1);
-    expect(idle[0]!.payload).toBe("stop");
-  });
-
-  test("3 turns alternate strictly: turn_start, idle, turn_start, idle, ...", () => {
-    const sequence: string[] = [];
-    h.subscribeSubject("agent.turn.start", () => sequence.push("turn_start"));
-    h.subscribeSubject("agent.idle", () => sequence.push("idle"));
-    h.makeBody();
-    for (let i = 0; i < 3; i++) {
-      h.fireEvent({ type: "turn_start" });
-      h.fireEvent({ type: "agent_end", messages: [] });
-    }
-    expect(sequence).toEqual([
-      "turn_start",
-      "idle",
-      "turn_start",
-      "idle",
-      "turn_start",
-      "idle",
-    ]);
-  });
-
   test("start() does not emit agent.turn.start or agent.idle", async () => {
     const idleEvents: unknown[] = [];
     const turnStartEvents: unknown[] = [];
@@ -1573,215 +1229,6 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     expect(idleEvents).toHaveLength(0);
     expect(turnStartEvents).toHaveLength(0);
     body.stop();
-  });
-
-  test("message_start resets stream state: stream ids increment across streams", () => {
-    const ends: EventEnvelope<"agent.stream.end">[] = [];
-    h.subscribeSubject("agent.stream.end", (env) => {
-      ends.push(env);
-    });
-    h.makeBody();
-    for (let i = 0; i < 2; i++) {
-      h.fireEvent({ type: "message_start", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-      h.fireEvent({ type: "message_end", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-    }
-    expect(ends.map((env) => env.payload.stream_id)).toEqual([1, 2]);
-  });
-
-  test("message_update text_delta buffers text and flushes it on message_end", () => {
-    const chunks: EventEnvelope<"agent.stream.chunk">[] = [];
-    h.subscribeSubject("agent.stream.chunk", (env) => {
-      chunks.push(env);
-    });
-    h.makeBody();
-    h.fireEvent({ type: "message_start", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-    h.fireEvent({
-      type: "message_update",
-      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
-      assistantMessageEvent: {
-        type: "text_delta",
-        contentIndex: 0,
-        delta: "hello",
-        partial: { role: "assistant", content: [] } as unknown as AssistantMessage,
-      },
-    });
-    expect(chunks).toHaveLength(0);
-    h.fireEvent({ type: "message_end", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-    expect(chunks).toHaveLength(1);
-    expect(chunks[0]!.payload).toMatchObject({ stream_id: 1, seq: 0, block_type: "text", text: "hello" });
-  });
-
-  test("message_update thinking_delta publishes a chunk with block_type 'thinking'", () => {
-    const chunks: EventEnvelope<"agent.stream.chunk">[] = [];
-    h.subscribeSubject("agent.stream.chunk", (env) => {
-      chunks.push(env);
-    });
-    h.makeBody();
-    h.fireEvent({ type: "message_start", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-    h.fireEvent({
-      type: "message_update",
-      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
-      assistantMessageEvent: {
-        type: "thinking_delta",
-        contentIndex: 0,
-        delta: "hmm",
-        partial: { role: "assistant", content: [] } as unknown as AssistantMessage,
-      },
-    });
-    h.fireEvent({ type: "message_end", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-    expect(chunks).toHaveLength(1);
-    expect(chunks[0]!.payload.block_type).toBe("thinking");
-  });
-
-  test("message_update text_delta flushes synchronously once the buffer reaches 64 chars", () => {
-    const chunks: EventEnvelope<"agent.stream.chunk">[] = [];
-    h.subscribeSubject("agent.stream.chunk", (env) => {
-      chunks.push(env);
-    });
-    h.makeBody();
-    h.fireEvent({ type: "message_start", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-    const deltaEvent: AssistantMessageEvent = {
-      type: "text_delta",
-      contentIndex: 0,
-      delta: "x".repeat(64),
-      partial: { role: "assistant", content: [] } as unknown as AssistantMessage,
-    };
-    h.fireEvent({
-      type: "message_update",
-      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
-      assistantMessageEvent: deltaEvent,
-    });
-    expect(chunks).toHaveLength(1);
-    expect(chunks[0]!.payload).toMatchObject({
-      stream_id: 1,
-      seq: 0,
-      block_type: "text",
-      text: "x".repeat(64),
-    });
-  });
-
-  test("message_end (assistant) publishes agent.stream.end", () => {
-    const ends: EventEnvelope<"agent.stream.end">[] = [];
-    h.subscribeSubject("agent.stream.end", (env) => {
-      ends.push(env);
-    });
-    h.makeBody();
-    h.fireEvent({ type: "message_start", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-    h.fireEvent({ type: "message_end", message: { role: "assistant", content: [] } as unknown as AssistantMessage });
-    expect(ends).toHaveLength(1);
-    expect(ends[0]!.payload).toMatchObject({ stream_id: 1, total_chunks: 0 });
-  });
-
-  test("message_end with a reported usage publishes agent.usage", () => {
-    const usages: EventEnvelope<"agent.usage">[] = [];
-    h.subscribeSubject("agent.usage", (env) => {
-      usages.push(env);
-    });
-    h.makeBody();
-    const usage = { input: 10, output: 5, cacheRead: 2, cacheWrite: 1, totalTokens: 18, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
-    h.fireEvent({ type: "message_start", message: makeAssistantMessage() });
-    h.fireEvent({ type: "message_end", message: makeAssistantMessage({ usage }) });
-    expect(usages).toHaveLength(1);
-    expect(usages[0]!.payload).toMatchObject({ input: 10, output: 5, cacheRead: 2, cacheWrite: 1, totalTokens: 18 });
-  });
-
-  test("message_end with an all-zero usage publishes no agent.usage", () => {
-    const usages: EventEnvelope<"agent.usage">[] = [];
-    h.subscribeSubject("agent.usage", (env) => {
-      usages.push(env);
-    });
-    h.makeBody();
-    h.fireEvent({ type: "message_start", message: makeAssistantMessage() });
-    h.fireEvent({ type: "message_end", message: makeAssistantMessage() });
-    expect(usages).toHaveLength(0);
-  });
-
-  test("message_end with non-assistant role publishes no agent.stream.end", () => {
-    const ends: EventEnvelope<"agent.stream.end">[] = [];
-    h.subscribeSubject("agent.stream.end", (env) => {
-      ends.push(env);
-    });
-    h.makeBody();
-    h.fireEvent({
-      type: "message_end",
-      message: { role: "user", content: "hi" } as unknown as AgentMessage,
-    });
-    expect(ends).toHaveLength(0);
-  });
-
-  test("message_end persists every message role via memory.persist", async () => {
-    const cases: Array<Record<string, unknown>> = [
-      { role: "assistant", content: [{ type: "text", text: "x" }] },
-      { role: "user", content: "hi" },
-      { role: "toolResult", toolCallId: "call_x", content: "ok", isError: false, timestamp: 0 },
-      { role: "custom", customType: "test", content: "x", display: false, timestamp: 0 },
-    ];
-    h.makeBody();
-    for (const message of cases) {
-      h.fireEvent({ type: "message_end", message: message as unknown as AgentMessage });
-      await Promise.resolve();
-      expect(h.persisted.length).toBe(1);
-      h.persisted.length = 0;
-    }
-  });
-
-  test("message_end persists the assistant message end-to-end (start + end)", async () => {
-    h.makeBody();
-    const msg = {
-      role: "assistant",
-      content: [{ type: "text", text: "hello" }],
-      timestamp: 0,
-    } as unknown as AssistantMessage;
-    h.fireEvent({ type: "message_start", message: msg });
-    h.fireEvent({ type: "message_end", message: msg });
-    await Promise.resolve();
-    expect(h.persisted).toHaveLength(1);
-  });
-
-  test("message_end strips toolResult details that no display consumer reads", async () => {
-    h.makeBody();
-    h.fireEvent({ type: "message_end", message: makeToolResultMessage({ kind: "bash", exitCode: 0 }) });
-    await Promise.resolve();
-    expect(h.persisted).toHaveLength(1);
-    expect(h.persisted[0]).not.toHaveProperty("details");
-    expect(h.persisted[0]).toMatchObject({ role: "toolResult", toolCallId: "call_x", toolName: "bash", isError: false });
-  });
-
-  test("message_end strips toolResult details without a kind discriminator", async () => {
-    h.makeBody();
-    h.fireEvent({ type: "message_end", message: makeToolResultMessage({ exitCode: 0 }) });
-    await Promise.resolve();
-    expect(h.persisted).toHaveLength(1);
-    expect(h.persisted[0]).not.toHaveProperty("details");
-  });
-
-  test("message_end keeps diff and kanban details for the display consumers", async () => {
-    h.makeBody();
-    const diffDetails = { kind: "diff", path: "a.txt", diff: "-x\n+y" };
-    const kanbanDetails = { kind: "kanban", cards: [{ content: "task", status: "in_progress" }] };
-    h.fireEvent({ type: "message_end", message: makeToolResultMessage(diffDetails) });
-    h.fireEvent({ type: "message_end", message: makeToolResultMessage(kanbanDetails) });
-    await Promise.resolve();
-    expect(h.persisted).toHaveLength(2);
-    expect(h.persisted[0]).toMatchObject({ details: diffDetails });
-    expect(h.persisted[1]).toMatchObject({ details: kanbanDetails });
-  });
-
-  test("message_end persists a toolResult without details unchanged", async () => {
-    h.makeBody();
-    h.fireEvent({ type: "message_end", message: makeToolResultMessage() });
-    await Promise.resolve();
-    expect(h.persisted).toHaveLength(1);
-    expect(h.persisted[0]).toMatchObject({ role: "toolResult", toolCallId: "call_x" });
-    expect(h.persisted[0]).not.toHaveProperty("details");
-  });
-
-  test("message_end stripping does not mutate the live message", async () => {
-    h.makeBody();
-    const message = makeToolResultMessage({ kind: "bash", exitCode: 0 });
-    h.fireEvent({ type: "message_end", message });
-    await Promise.resolve();
-    expect(message.details).toEqual({ kind: "bash", exitCode: 0 });
   });
 
   test("agent_end drains the queue only after the run settles: the entry goes to prompt (not followUp)", async () => {
@@ -1875,20 +1322,6 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     expect(h.prompt.mock.calls.length).toBe(0);
   });
 
-  test("turn_end does NOT publish agent.idle (fix #89: no spurious idle on sub-turns)", () => {
-    let idleCount = 0;
-    h.subscribeSubject("agent.idle", () => {
-      idleCount += 1;
-    });
-    h.makeBody();
-    h.fireEvent({
-      type: "turn_end",
-      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
-      toolResults: [],
-    });
-    expect(idleCount).toBe(0);
-  });
-
   test("turn_end drains the queue via followUp (no idle publish) (#89)", async () => {
     const body = h.makeBody();
     await body.start();
@@ -1949,27 +1382,6 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     expect(h.prompt.mock.calls.length).toBe(2);
     expect(h.prompt.mock.calls[1]![0]).toMatchObject({ content: "[user]: fresh" });
     body.stop();
-  });
-
-  test("agent_end publishes agent.idle exactly once per run (#89)", () => {
-    let idleCount = 0;
-    h.subscribeSubject("agent.idle", () => {
-      idleCount += 1;
-    });
-    h.makeBody();
-    h.fireEvent({
-      type: "turn_end",
-      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
-      toolResults: [],
-    });
-    h.fireEvent({
-      type: "turn_end",
-      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
-      toolResults: [],
-    });
-    expect(idleCount).toBe(0);
-    h.fireEvent({ type: "agent_end", messages: [] });
-    expect(idleCount).toBe(1);
   });
 });
 
@@ -2167,69 +1579,6 @@ describe("JieAgentBody — user.prompt.dequeue", () => {
     h = makeHarness();
   });
 
-  test("removes the last queue entry matching the raw user text and republishes the snapshot", async () => {
-    const body = h.makeBody();
-    await body.start();
-    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
-    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
-    h.state.isStreaming = true;
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "second"));
-    await flush();
-    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "second"));
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "first", source: "user" }]);
-    body.stop();
-  });
-
-  test("with duplicated texts, removes the tail-most match only", async () => {
-    const body = h.makeBody();
-    await body.start();
-    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
-    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
-    h.state.isStreaming = true;
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "same"));
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "same"));
-    await flush();
-    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "same"));
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "same", source: "user" }]);
-    body.stop();
-  });
-
-  test("removes the last user entry while peer notifications stay queued", async () => {
-    const body = h.makeBody({ soul: makeSoul({ subscribe: ["task.recorded"] }) });
-    await body.start();
-    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
-    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
-    h.state.isStreaming = true;
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
-    await flush();
-    h.events.publish(Events.custom({ kind: "agent", teamId: "t1", agentKey: "leader-1" }, "t1.task.recorded", "do X"));
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([
-      { text: "hello", source: "user" },
-      { text: "[leader-1 on 'task.recorded']: do X", source: "peer" },
-    ]);
-    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "hello"));
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([
-      { text: "[leader-1 on 'task.recorded']: do X", source: "peer" },
-    ]);
-    body.stop();
-  });
-
-  test("no match: nothing is removed and the snapshot is republished so a stale observer resyncs", async () => {
-    const body = h.makeBody();
-    await body.start();
-    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
-    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
-    h.state.isStreaming = true;
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
-    await flush();
-    const countBefore = queueUpdates.length;
-    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "already consumed"));
-    expect(queueUpdates.length).toBe(countBefore + 1);
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "first", source: "user" }]);
-    body.stop();
-  });
-
   test("dequeue addressed to another agent or team is ignored", async () => {
     const body = h.makeBody();
     await body.start();
@@ -2285,55 +1634,6 @@ describe("JieAgentBody — user.prompt.requeue", () => {
     body.stop();
   });
 
-  test("the restored entry keeps its constructed message when drained", async () => {
-    const body = h.makeBody();
-    await body.start();
-    h.state.isStreaming = true;
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
-    await flush();
-    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "hello"));
-    h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "hello"));
-    h.fireEvent({ type: "agent_end", messages: [] });
-    h.settleIdle();
-    await flush();
-    expect(h.prompt.mock.calls.length).toBe(1);
-    expect(h.prompt.mock.calls[0]![0]).toMatchObject({ role: "user", content: "[user]: hello" });
-    body.stop();
-  });
-
-  test("requeuing while idle drains the restored entry immediately", async () => {
-    const body = h.makeBody();
-    await body.start();
-    h.state.isStreaming = true;
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
-    await flush();
-    h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "first"));
-    h.fireEvent({ type: "agent_end", messages: [] });
-    h.settleIdle();
-    await flush();
-    expect(h.prompt.mock.calls.length).toBe(0);
-    h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "first"));
-    await flush();
-    expect(h.prompt.mock.calls.length).toBe(1);
-    expect(h.prompt.mock.calls[0]![0]).toMatchObject({ role: "user", content: "[user]: first" });
-    body.stop();
-  });
-
-  test("no matching dequeued entry: the queue is unchanged and the snapshot is republished", async () => {
-    const body = h.makeBody();
-    await body.start();
-    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
-    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
-    h.state.isStreaming = true;
-    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
-    await flush();
-    const countBefore = queueUpdates.length;
-    h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "never dequeued"));
-    expect(queueUpdates.length).toBe(countBefore + 1);
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "first", source: "user" }]);
-    body.stop();
-  });
-
   test("a resubmitted dequeued prompt is consumed and not restored a second time", async () => {
     const body = h.makeBody();
     await body.start();
@@ -2381,26 +1681,6 @@ describe("JieAgentBody — user.prompt.requeue", () => {
     expect(queueUpdates.length).toBe(countBefore);
   });
 
-  test("the parked pile is capped: dequeuing past the cap evicts the oldest parked prompts", async () => {
-    const body = h.makeBody();
-    await body.start();
-    h.state.isStreaming = true;
-    for (let i = 0; i < 33; i++) {
-      h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", `prompt-${i}`));
-    }
-    await flush();
-    for (let i = 0; i < 33; i++) {
-      h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", `prompt-${i}`));
-    }
-    await flush();
-    const queueUpdates: EventEnvelope<"agent.prompt.queue.update">[] = [];
-    h.subscribeSubject("agent.prompt.queue.update", (env) => queueUpdates.push(env));
-    h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "prompt-0"));
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([]);
-    h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "prompt-32"));
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "prompt-32", source: "user" }]);
-    body.stop();
-  });
 });
 
 describe("JieAgentBody — user.effort.update", () => {
@@ -2565,50 +1845,16 @@ describe("JieAgentBody — compaction", () => {
     const model = makeModel("anthropic", "claude-sonnet-4");
     const body = h.makeBody({ model, compactor });
     await body.start();
-    const first = makeUserMessage("m1");
     const second = makeAssistantMessage({ content: [{ type: "text", text: "m2" }] });
     const third = makeUserMessage("m3");
-    h.state.messages = [first, second, third];
+    h.state.messages = [makeUserMessage("m1"), second, third];
     const summary = createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z");
     compact.mockResolvedValueOnce({ summaryMessage: summary, firstKeptIndex: 1, tokensBefore: 500 });
     h.fireEvent({ type: "agent_end", messages: [] });
     h.settleIdle();
     await flush();
     expect(compact).toHaveBeenCalledTimes(1);
-    const input = compact.mock.calls[0]![0]!;
-    expect(input.messages).toEqual([first, second, third]);
-    expect(input.contextWindow).toBe(200000);
-    expect(input.model).toBe(model);
-    expect(input.agentKey).toBe("general-1");
-    expect(input.sessionId).toBe("s1");
-    expect(input.teamId).toBe("t1");
     expect(h.state.messages).toEqual([summary, second, third]);
-    body.stop();
-  });
-
-  test("a successful compaction publishes agent.compacted with the summary and prefix counts", async () => {
-    const { compactor, compact } = makeFakeCompactor();
-    const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), compactor });
-    await body.start();
-    h.state.messages = [
-      makeUserMessage("m1"),
-      makeAssistantMessage({ content: [{ type: "text", text: "m2" }] }),
-      makeUserMessage("m3"),
-      makeAssistantMessage({ content: [{ type: "text", text: "m4" }] }),
-    ];
-    const compacted: EventEnvelope<"agent.compacted">[] = [];
-    h.subscribeSubject("agent.compacted", (env) => compacted.push(env));
-    compact.mockResolvedValueOnce({
-      summaryMessage: createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z"),
-      firstKeptIndex: 3,
-      tokensBefore: 500,
-    });
-    h.fireEvent({ type: "agent_end", messages: [] });
-    h.settleIdle();
-    await flush();
-    expect(compacted).toHaveLength(1);
-    expect(compacted[0]!.sender).toEqual({ kind: "agent", teamId: "t1", agentKey: "general-1" });
-    expect(compacted[0]!.payload).toEqual({ summary: "the summary", tokens_before: 500, summarized_prompts: 2 });
     body.stop();
   });
 
@@ -2619,24 +1865,6 @@ describe("JieAgentBody — compaction", () => {
     h.settleIdle();
     await flush();
     expect(compact).toHaveBeenCalledTimes(1);
-    body.stop();
-  });
-
-  test("a null compaction result leaves state.messages untouched and publishes nothing", async () => {
-    const { compactor, compact } = makeFakeCompactor();
-    const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), compactor });
-    await body.start();
-    const first = makeUserMessage("m1");
-    const second = makeAssistantMessage({ content: [{ type: "text", text: "m2" }] });
-    h.state.messages = [first, second];
-    const compacted: EventEnvelope<"agent.compacted">[] = [];
-    h.subscribeSubject("agent.compacted", (env) => compacted.push(env));
-    h.fireEvent({ type: "agent_end", messages: [] });
-    h.settleIdle();
-    await flush();
-    expect(compact).toHaveBeenCalledTimes(1);
-    expect(h.state.messages).toEqual([first, second]);
-    expect(compacted).toHaveLength(0);
     body.stop();
   });
 
