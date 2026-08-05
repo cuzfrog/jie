@@ -24,6 +24,31 @@ describe("SettingsStoreImpl", () => {
     expect(store.load()).toEqual({});
   });
 
+  test("load() throws INVALID_CONFIG when a field has the wrong shape", () => {
+    mkdirSync(homeJieDir, { recursive: true });
+    writeFileSync(join(homeJieDir, "settings.json"), `${JSON.stringify({ compaction: { reserveTokens: "8192" } })}\n`);
+    const store = new SettingsStoreImpl(cwd, homeJieDir, null);
+    expect(() => store.load()).toThrow(
+      expect.objectContaining({ code: "INVALID_CONFIG", message: expect.stringMatching(/compaction\.reserveTokens must be a positive integer/) }),
+    );
+  });
+
+  test("load() throws INVALID_CONFIG when a settings file fails to parse", () => {
+    mkdirSync(homeJieDir, { recursive: true });
+    writeFileSync(join(homeJieDir, "settings.json"), "{ not json");
+    const store = new SettingsStoreImpl(cwd, homeJieDir, null);
+    expect(() => store.load()).toThrow(expect.objectContaining({ code: "INVALID_CONFIG", message: expect.stringContaining("settings.json") }));
+  });
+
+  test("setDefaultEffort throws INVALID_CONFIG on a corrupt settings file and leaves it untouched", () => {
+    mkdirSync(homeJieDir, { recursive: true });
+    const path = join(homeJieDir, "settings.json");
+    writeFileSync(path, "{ not json");
+    const store = new SettingsStoreImpl(cwd, homeJieDir, null);
+    expect(() => store.setDefaultEffort("high")).toThrow(expect.objectContaining({ code: "INVALID_CONFIG" }));
+    expect(readFileSync(path, "utf-8")).toBe("{ not json");
+  });
+
   test("setDefaultProvider writes to ~/.jie/settings.json", () => {
     const store = new SettingsStoreImpl(cwd, homeJieDir, null);
     store.setDefaultProvider("anthropic", "claude-sonnet-4");

@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { loadMergedSettings } from "./load-settings";
 import type { Settings } from "./types";
+import { JiePlatformError } from "../jie-platform-errors";
 import type { EffortLevel } from "../types";
 
 export interface SettingsStore {
@@ -26,11 +27,7 @@ export class SettingsStoreImpl implements SettingsStore {
   }
 
   load(): Settings {
-    try {
-      return loadMergedSettings(this.homeJieDir, this.projectJieDir);
-    } catch {
-      return {};
-    }
+    return loadMergedSettings(this.homeJieDir, this.projectJieDir);
   }
 
   setDefaultProvider(provider: string, modelId: string): void {
@@ -70,8 +67,9 @@ function readSettingsFile(path: string): Settings {
   try {
     const parsed: Settings = JSON.parse(text);
     return parsed;
-  } catch {
-    return {};
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new JiePlatformError("INVALID_CONFIG", { detail: `${path}: ${message}` });
   }
 }
 

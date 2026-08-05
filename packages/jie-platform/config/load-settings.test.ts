@@ -169,6 +169,14 @@ describe("loadMergedSettings", () => {
     });
   });
 
+  test("rejects an unparseable settings file with code INVALID_CONFIG naming the file", () => {
+    const home = track(freshDir("jie-home-"));
+    writeFileSync(join(home, "settings.json"), "{ not json", "utf-8");
+    expect(() => loadMergedSettings(home, null)).toThrow(
+      expect.objectContaining({ code: "INVALID_CONFIG", message: expect.stringMatching(/settings\.json/) }),
+    );
+  });
+
   test.each([
     {
       name: "defaultTeam with invalid characters",
