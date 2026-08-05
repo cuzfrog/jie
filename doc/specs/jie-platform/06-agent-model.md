@@ -212,7 +212,7 @@ write_artifact(input: { key: string; content: string })
 read_artifact(input: { key: string })
 ```
 
-`write_artifact` overwrites the entry at `key` and returns `Stored artifact at <key> (N chars)` with `details: { key, created_at }`; the store validates the key charset `[A-Za-z0-9_./-]{1,256}` (`invalid_artifact_key`) and the 5 MiB content cap (`artifact_too_large`). `read_artifact` returns the content verbatim on hit (`details: { key, content, created_at }`); a miss returns `Artifact not found: <key>` as a normal result, not a tool error. The store is NOT team-scoped by the platform: two teams using the same key collide, so team-specific keys must embed the team id (available from `ExecutionContext`). Artifact content never travels in event payloads — events carry keys only.
+`write_artifact` overwrites the entry at `key` and returns `Stored artifact at <key> (N chars)` with `details: { key, created_at }`; the store validates the key charset `[A-Za-z0-9_./-]{1,256}` (`invalid_artifact_key`) and the 5 MiB content cap (`artifact_too_large`). For a lifecycle-declaring team, keys matching `*/status/*` are rejected (`artifact_key_reserved`) — that namespace is reserved for the platform's lifecycle status rows ("notify and the Subscription Model", ADR 33); teams without a lifecycle are unaffected. `read_artifact` returns the content verbatim on hit (`details: { key, content, created_at }`); a miss returns `Artifact not found: <key>` as a normal result, not a tool error. The store is NOT team-scoped by the platform: two teams using the same key collide, so team-specific keys must embed the team id (available from `ExecutionContext`). Artifact content never travels in event payloads — events carry keys only.
 
 ### web_search
 
