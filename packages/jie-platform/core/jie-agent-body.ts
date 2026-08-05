@@ -1,5 +1,5 @@
-import { Agent, convertToLlm, type AgentMessage, type AgentEvent as PiAgentEvent, type AgentTool, type AgentToolResult, type ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { Api, AssistantMessage, Model, StopReason, TextContent } from "@earendil-works/pi-ai";
+import { Agent, convertToLlm, type AgentMessage, type AgentEvent as PiAgentEvent, type AgentTool, type ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { Api, AssistantMessage, Model, StopReason } from "@earendil-works/pi-ai";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { ArtifactStore, MemoryManager } from "../storage";
 import type { ExecutionContext, ToolRegistry } from "../tools";
@@ -12,6 +12,7 @@ import type { Compactor } from "./compaction";
 import { PromptQueueImpl, type PromptQueue } from "./prompt-queue";
 import { StreamPublisherImpl, type StreamPublisher } from "./streaming";
 import { adaptToolToAgent } from "./tool-adapter";
+import { ToolCallObserverImpl } from "./tool-call-observer";
 import { JiePlatformError } from "../jie-platform-errors";
 import type { AgentInfo, EffortLevel, ModelInfo } from "../types";
 
@@ -98,7 +99,12 @@ export class JieAgentBody implements AgentBody {
       lifecycle: params.lifecycle,
     };
     const adaptedTools = adaptAllTools(params.soul, deps.toolRegistry, executionContext);
-    const toolTimestamps = new Map<string, number>();
+    const toolCallObserver = new ToolCallObserverImpl({
+      eventManager: deps.eventManager,
+      hookRunner: this.hookRunner,
+      hookIdentity: this.hookIdentity,
+      sender: this.sender,
+    });
     const createAgent = deps.createAgent ?? defaultAgentFactory;
     this.agent = createAgent({
       sessionId: this.sessionId,
@@ -109,52 +115,8 @@ export class JieAgentBody implements AgentBody {
       steeringMode: "all",
       followUpMode: "all",
       toolExecution: "sequential",
-      beforeToolCall: async (context) => {
-        const toolCallId = context.toolCall.id;
-        toolTimestamps.set(toolCallId, Date.now());
-        this.eventManager.publish(Events.agentToolCall(
-          this.sender,
-          toolCallId,
-          context.toolCall.name,
-          JSON.stringify(context.args),
-        ));
-        const preOutcome = await this.hookRunner.preToolUse({
-          identity: this.hookIdentity,
-          toolName: context.toolCall.name,
-          toolInput: context.args,
-        });
-        if (preOutcome.block) return { block: true, reason: preOutcome.reason ?? undefined };
-        return undefined;
-      },
-      afterToolCall: async (context) => {
-        const toolCallId = context.toolCall.id;
-        const startedAt = toolTimestamps.get(toolCallId) ?? Date.now();
-        toolTimestamps.delete(toolCallId);
-        const error = extractToolError(context);
-        const output = error === null ? jieToolResultOf(context.result) : null;
-        this.eventManager.publish(Events.agentToolResult(
-          this.sender,
-          toolCallId,
-          context.toolCall.name,
-          output === null ? null : JSON.stringify(output),
-          Date.now() - startedAt,
-          error,
-          output?.details ?? null,
-        ));
-        const postOutcome = await this.hookRunner.postToolUse({
-          identity: this.hookIdentity,
-          toolName: context.toolCall.name,
-          toolInput: context.args,
-          toolResponse: output === null ? "" : JSON.stringify(output),
-        });
-        if (postOutcome.block) {
-          return { isError: true, content: [{ type: "text", text: postOutcome.reason ?? "blocked by PostToolUse hook" }] };
-        }
-        if (postOutcome.additionalContext !== null) {
-          return { content: [...context.result.content, { type: "text", text: postOutcome.additionalContext }] };
-        }
-        return undefined;
-      },
+      beforeToolCall: (context) => toolCallObserver.beforeToolCall(context),
+      afterToolCall: (context) => toolCallObserver.afterToolCall(context),
     });
     this.resolvedSkills = params.soul.skills.flatMap((spec) => deps.skillManager.resolve(spec));
     this.agent.state.systemPrompt = composeSystemPrompt({
@@ -465,19 +427,6 @@ function defaultAgentFactory(agentOptions: ConstructorParameters<typeof Agent>[0
   return new Agent(agentOptions);
 }
 
-function extractToolError(context: {
-  isError: boolean;
-  result: AgentToolResult<unknown> | undefined;
-}): string | null {
-  if (!context.isError) return null;
-  if (context.result === undefined) return "tool error";
-  const text = context.result.content
-    .filter((c): c is TextContent => c.type === "text")
-    .map((c) => c.text)
-    .join("\n");
-  return text.length > 0 ? text : "tool error";
-}
-
 function agentEffort(thinkingLevel: ThinkingLevel): EffortLevel {
   if (thinkingLevel === "low" || thinkingLevel === "medium" || thinkingLevel === "high") return thinkingLevel;
   if (thinkingLevel === "xhigh") return "max";
@@ -491,25 +440,6 @@ function effortToThinkingLevel(effort: EffortLevel): ThinkingLevel {
 function resolveBodyModelInfo(model: Model<Api> | undefined, thinkingLevel: ThinkingLevel): ModelInfo | null {
   if (model === undefined) return null;
   return { provider: model.provider, id: model.id, effort: agentEffort(thinkingLevel), contextWindow: model.contextWindow };
-}
-
-interface JieToolResult {
-  content: string | Array<{ type: string; text?: string }>;
-  details?: unknown;
-  terminate?: boolean;
-}
-
-function jieToolResultOf(piResult: AgentToolResult<unknown>): JieToolResult {
-  const block = piResult.content;
-  const content =
-    block.length === 1 && block[0]?.type === "text"
-      ? block[0].text
-      : block;
-  return {
-    content,
-    details: piResult.details,
-    terminate: piResult.terminate ?? false,
-  };
 }
 
 function persistableMessage(message: AgentMessage): AgentMessage {

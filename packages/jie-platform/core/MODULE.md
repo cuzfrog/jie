@@ -16,6 +16,8 @@ no-new-exports:
   - system-prompt.test.ts
   - system-prompt.ts
   - tool-adapter.ts
+  - tool-call-observer.test.ts
+  - tool-call-observer.ts
 ---
 
 ## Contracts

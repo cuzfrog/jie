@@ -645,163 +645,30 @@ describe("JieAgentBody — agent construction wiring", () => {
     expect(unsubscribed).toBe(true);
   });
 
-  test("beforeToolCall publishes agent.tool.call with wire-shaped input (short input not truncated)", async () => {
+  test("beforeToolCall is wired to PreToolUse gating through the tool-call observer", async () => {
     const h = makeHarness();
     const cap = makeFakeAgentFactory();
+    h.hookRunner.preToolUse.mockResolvedValue({ block: true, reason: "denied" });
     h.makeBody({ factory: cap.factory });
     const hook = cap.lastOpts()?.beforeToolCall;
-    if (hook === undefined) throw new Error("beforeToolCall hook not provided");
-    const received: EventEnvelope<"agent.tool.call">[] = [];
-    h.subscribeSubject("agent.tool.call", (env) => {
-      received.push(env);
-    });
+    if (hook === undefined) throw new Error("beforeToolCall not provided");
     const ctx: BeforeToolCallContext = {
       assistantMessage: makeAssistantMessage(),
       toolCall: { type: "toolCall", id: "c1", name: "bash", arguments: { command: "ls" } },
       args: { command: "ls" },
       context: makeAgentContext(),
     };
-    await hook(ctx);
-    expect(received).toHaveLength(1);
-    const payload = received[0]!.payload;
-    expect(payload.tool_call_id).toBe("c1");
-    expect(payload.name).toBe("bash");
-    expect(typeof payload.input).toBe("string");
-    expect(payload.input_truncated).toBe(false);
+    expect(await hook(ctx)).toEqual({ block: true, reason: "denied" });
   });
 
-  test("beforeToolCall truncates long input with a marker", async () => {
+  test("afterToolCall is wired to PostToolUse gating through the tool-call observer", async () => {
     const h = makeHarness();
     const cap = makeFakeAgentFactory();
-    h.makeBody({ factory: cap.factory });
-    const hook = cap.lastOpts()?.beforeToolCall;
-    if (hook === undefined) throw new Error("beforeToolCall hook not provided");
-    const received: EventEnvelope<"agent.tool.call">[] = [];
-    h.subscribeSubject("agent.tool.call", (env) => {
-      received.push(env);
-    });
-    const ctx: BeforeToolCallContext = {
-      assistantMessage: makeAssistantMessage(),
-      toolCall: { type: "toolCall", id: "c1", name: "bash", arguments: { command: "x".repeat(8000) } },
-      args: { command: "x".repeat(8000) },
-      context: makeAgentContext(),
-    };
-    await hook(ctx);
-    const payload = received[0]!.payload;
-    expect(payload.input_truncated).toBe(true);
-    expect(payload.input).toContain("chars truncated");
-    expect(payload.input.length).toBeLessThan(8000);
-  });
-
-  test("afterToolCall publishes agent.tool.result with the Jie ToolResult shape", async () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
+    h.hookRunner.postToolUse.mockResolvedValue({ block: true, reason: "bad", additionalContext: null });
     h.makeBody({ factory: cap.factory });
     const hook = cap.lastOpts()?.afterToolCall;
-    if (hook === undefined) throw new Error("afterToolCall hook not provided");
-    const results: EventEnvelope<"agent.tool.result">[] = [];
-    h.subscribeSubject("agent.tool.result", (env) => {
-      results.push(env);
-    });
+    if (hook === undefined) throw new Error("afterToolCall not provided");
     const ctx: AfterToolCallContext = {
-      assistantMessage: makeAssistantMessage(),
-      toolCall: { type: "toolCall", id: "call_r", name: "noop", arguments: {} },
-      args: {},
-      context: makeAgentContext(),
-      result: {
-        content: [{ type: "text", text: "hello" }],
-        details: { foo: 1 },
-        terminate: false,
-      },
-      isError: false,
-    };
-    await hook(ctx);
-    expect(results).toHaveLength(1);
-    expect(JSON.parse(results[0]!.payload.output!)).toEqual({
-      content: "hello",
-      details: { foo: 1 },
-      terminate: false,
-    });
-  });
-
-  test("afterToolCall: multi-block content serializes as a JSON array", async () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    h.makeBody({ factory: cap.factory });
-    const hook = cap.lastOpts()?.afterToolCall;
-    if (hook === undefined) throw new Error("afterToolCall hook not provided");
-    const results: EventEnvelope<"agent.tool.result">[] = [];
-    h.subscribeSubject("agent.tool.result", (env) => {
-      results.push(env);
-    });
-    const ctx: AfterToolCallContext = {
-      assistantMessage: makeAssistantMessage(),
-      toolCall: { type: "toolCall", id: "call_m", name: "noop", arguments: {} },
-      args: {},
-      context: makeAgentContext(),
-      result: {
-        content: [
-          { type: "text", text: "a" },
-          { type: "image", data: "x", mimeType: "image/png" },
-        ],
-        details: { ok: true },
-        terminate: true,
-      },
-      isError: false,
-    };
-    await hook(ctx);
-    expect(JSON.parse(results[0]!.payload.output!)).toEqual({
-      content: [
-        { type: "text", text: "a" },
-        { type: "image", data: "x", mimeType: "image/png" },
-      ],
-      details: { ok: true },
-      terminate: true,
-    });
-  });
-
-  test("afterToolCall on error: output null, error carries the message", async () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    h.makeBody({ factory: cap.factory });
-    const hook = cap.lastOpts()?.afterToolCall;
-    if (hook === undefined) throw new Error("afterToolCall hook not provided");
-    const results: EventEnvelope<"agent.tool.result">[] = [];
-    h.subscribeSubject("agent.tool.result", (env) => {
-      results.push(env);
-    });
-    const ctx: AfterToolCallContext = {
-      assistantMessage: makeAssistantMessage(),
-      toolCall: { type: "toolCall", id: "call_e", name: "noop", arguments: {} },
-      args: {},
-      context: makeAgentContext(),
-      result: {
-        content: [{ type: "text", text: "boom" }],
-        details: {},
-        terminate: false,
-      },
-      isError: true,
-    };
-    await hook(ctx);
-    expect(results).toHaveLength(1);
-    const env = results[0]!;
-    expect(env.payload.output).toBeNull();
-    expect(env.payload.error).toBe("boom");
-  });
-});
-
-describe("JieAgentBody — hook gating", () => {
-  function beforeCtx(): BeforeToolCallContext {
-    return {
-      assistantMessage: makeAssistantMessage(),
-      toolCall: { type: "toolCall", id: "c1", name: "bash", arguments: { command: "ls" } },
-      args: { command: "ls" },
-      context: makeAgentContext(),
-    };
-  }
-
-  function afterCtx(): AfterToolCallContext {
-    return {
       assistantMessage: makeAssistantMessage(),
       toolCall: { type: "toolCall", id: "c1", name: "bash", arguments: { command: "ls" } },
       args: { command: "ls" },
@@ -809,52 +676,7 @@ describe("JieAgentBody — hook gating", () => {
       result: { content: [{ type: "text", text: "ok" }], details: {}, terminate: false },
       isError: false,
     };
-  }
-
-  test("beforeToolCall blocks the tool when the PreToolUse hook blocks", async () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    h.hookRunner.preToolUse.mockResolvedValue({ block: true, reason: "denied" });
-    h.makeBody({ factory: cap.factory });
-    const hook = cap.lastOpts()?.beforeToolCall;
-    if (hook === undefined) throw new Error("beforeToolCall hook not provided");
-    expect(await hook(beforeCtx())).toEqual({ block: true, reason: "denied" });
-  });
-
-  test("beforeToolCall allows the tool and forwards identity + tool fields to the hook", async () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    h.makeBody({ factory: cap.factory });
-    const hook = cap.lastOpts()?.beforeToolCall;
-    if (hook === undefined) throw new Error("beforeToolCall hook not provided");
-    expect(await hook(beforeCtx())).toBeUndefined();
-    expect(h.hookRunner.preToolUse).toHaveBeenCalledWith({
-      identity: { sessionId: "s1", cwd: "/work", teamId: "t1", agentKey: "general-1", role: "general" },
-      toolName: "bash",
-      toolInput: { command: "ls" },
-    });
-  });
-
-  test("afterToolCall marks the result an error when the PostToolUse hook blocks", async () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    h.hookRunner.postToolUse.mockResolvedValue({ block: true, reason: "bad", additionalContext: null });
-    h.makeBody({ factory: cap.factory });
-    const hook = cap.lastOpts()?.afterToolCall;
-    if (hook === undefined) throw new Error("afterToolCall hook not provided");
-    expect(await hook(afterCtx())).toEqual({ isError: true, content: [{ type: "text", text: "bad" }] });
-  });
-
-  test("afterToolCall appends additionalContext to the tool result content", async () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    h.hookRunner.postToolUse.mockResolvedValue({ block: false, reason: null, additionalContext: "note" });
-    h.makeBody({ factory: cap.factory });
-    const hook = cap.lastOpts()?.afterToolCall;
-    if (hook === undefined) throw new Error("afterToolCall hook not provided");
-    expect(await hook(afterCtx())).toEqual({
-      content: [{ type: "text", text: "ok" }, { type: "text", text: "note" }],
-    });
+    expect(await hook(ctx)).toEqual({ isError: true, content: [{ type: "text", text: "bad" }] });
   });
 });
 
