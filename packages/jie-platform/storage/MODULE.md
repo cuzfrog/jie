@@ -4,8 +4,8 @@ no-new-exports:
   - artifact-store.ts
   - index.ts
   - init-db.ts
-  - memory-store.test.ts
-  - memory-store.ts
+  - transcript-store.test.ts
+  - transcript-store.ts
   - sqlite-storage.test.ts
   - sqlite-storage.ts
   - storage.ts

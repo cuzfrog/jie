@@ -1,15 +1,17 @@
-# Memory
+# Transcript Store
 
 ## Purpose
 
-Durable persistence for an agent's conversation history — a write-through adapter: every message produced by the pi-agent loop is persisted to SQLite immediately; on start, prior history is restored into the agent. `persist`/`compact` are internal to the agent — they are **not** published on the event bus. The restored snapshot is the one exception: it rides `system.team.loaded` as `TeamInfo.history` so the TUI can hydrate the conversation display on resume (see Restore-and-start).
+Durable persistence for an agent's conversation transcript — a write-through adapter: every message produced by the pi-agent loop is persisted to SQLite immediately; on start, prior history is restored into the agent. `persist`/`compact` are internal to the agent — they are **not** published on the event bus. The restored snapshot is the one exception: it rides `system.team.loaded` as `TeamInfo.history` so the TUI can hydrate the conversation display on resume (see Restore-and-start).
 
-Compaction triggering is owned by the platform: the body invokes its `Compactor` between runs, which decides whether to summarize and persists via `compact`, reusing `@earendil-works/pi-agent-core`'s compaction toolkit (`shouldCompact`, `estimateContextTokens`, `createCompactionSummaryMessage`); pi-agent's own `transformContext` compaction path is not used. The `MemoryManager` is storage only. `AgentMessage` types are defined in `pi-agent-api-reference.md`. Schema and session model: `04-storage.md` and ADR 17.
+Compaction triggering is owned by the platform: the body invokes its `Compactor` between runs, which decides whether to summarize and persists via `compact`, reusing `@earendil-works/pi-agent-core`'s compaction toolkit (`shouldCompact`, `estimateContextTokens`, `createCompactionSummaryMessage`); pi-agent's own `transformContext` compaction path is not used. The `TranscriptStore` is storage only. `AgentMessage` types are defined in `pi-agent-api-reference.md`. Schema and session model: `04-storage.md` and ADR 17.
 
-## MemoryManager
+The transcript replays one session; distilled knowledge that survives sessions is a separate domain — long-term memory (`11-memory.md`, ADR 34) extracts atoms from the same prefix compaction summarizes but never writes this store.
+
+## TranscriptStore
 
 ```typescript
-interface MemoryManager {
+interface TranscriptStore {
   persist(message: AgentMessage, agentKey: string, sessionId: string, teamId: string): void;
   compact(compactedCount: number, summary: AgentMessage, agentKey: string, sessionId: string, teamId: string): void;
   restore(agentKey: string, sessionId: string, teamId: string): Promise<AgentMessage[]>;
@@ -20,7 +22,7 @@ interface MemoryManager {
 }
 ```
 
-The manager holds no in-memory copy of the conversation — pi-agent's `state.messages` is the sole in-memory source of truth. `hasSession` is called by the platform's `TeamManager` (via the `resumeSessionId` cradle value) when validating `--resume <id>` at team load; the CLI never runs session-id SQL itself.
+The store holds no in-memory copy of the conversation — pi-agent's `state.messages` is the sole in-memory source of truth. `hasSession` is called by the platform's `TeamManager` (via the `resumeSessionId` cradle value) when validating `--resume <id>` at team load; the CLI never runs session-id SQL itself.
 
 ### Persist
 
@@ -72,7 +74,7 @@ Beyond conversation history, a leader may keep in-memory state: a FIFO prompt qu
 - **Subscription.** The body's `message_end` listener calls `persist` unconditionally — no role check, no summary special case (pi-agent emits no `message_end` for summaries: the body's `transformContext` only fits the window, and the summary row is written by `compact`).
 - **`agent_end` listener.** Publishes `agent.idle`, then once pi settles the run the body runs the compaction check (`06-agent-model.md` "Compaction") before draining the next queued prompt. The `turn.start` / `idle` alternation is the Event-Order Contract (`03-event-system.md`).
 - **Restore-and-start** (the body's two-phase lifecycle):
-  - `restore()`: `memory.restore(...)` → push a defensive copy into `agent.state.messages`; return the restored snapshot. Idempotent (the snapshot is cached).
+  - `restore()`: `transcriptStore.restore(...)` → push a defensive copy into `agent.state.messages`; return the restored snapshot. Idempotent (the snapshot is cached).
   - `start()`:
     1. Register bus subscriptions; callbacks enqueue incoming events onto the body's in-memory `queue`.
     2. Conditionally `continue()` — only when the restored array is non-empty and ends with `user` or `toolResult` (pi-agent's `continue()` contract); an empty array or an `assistant` tail means no in-flight turn.

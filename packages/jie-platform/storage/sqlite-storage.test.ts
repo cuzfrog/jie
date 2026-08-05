@@ -10,7 +10,10 @@ describe("SqliteStorage", () => {
     const tables = storage.query(
       "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
     );
-    expect(tables).toEqual([["artifacts"], ["memory_turns"], ["session_metadata"]]);
+    const names = tables.map((row) => row[0]);
+    for (const name of ["artifacts", "memory_turns", "session_metadata", "memory_atoms", "memory_atoms_fts"]) {
+      expect(names).toContain(name);
+    }
   });
 
   test("initializeSchema is callable separately and idempotent", () => {

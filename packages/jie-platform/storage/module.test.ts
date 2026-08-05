@@ -19,7 +19,10 @@ describe("registerStorageModule", () => {
   test("inMemory resolves a fresh isolated storage with the schema", () => {
     const a = bootedContainer("/unused", true);
     const tables = a.cradle.storage.query("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name");
-    expect(tables).toEqual([["artifacts"], ["memory_turns"], ["session_metadata"]]);
+    const names = tables.map((row) => row[0]);
+    for (const name of ["artifacts", "memory_turns", "session_metadata", "memory_atoms", "memory_atoms_fts"]) {
+      expect(names).toContain(name);
+    }
     a.cradle.storage.exec("INSERT INTO artifacts (key, content, created_at) VALUES (?, ?, ?)", ["ephemeral", "x", "2025-01-01"]);
     const b = bootedContainer("/unused", true);
     expect(b.cradle.storage.query("SELECT key FROM artifacts")).toEqual([]);
@@ -36,17 +39,17 @@ describe("registerStorageModule", () => {
     }
   });
 
-  test("artifactStore and memoryManager share the registered storage", async () => {
+  test("artifactStore and transcriptStore share the registered storage", async () => {
     const container = bootedContainer("/unused", true);
     await container.cradle.artifactStore.write("k1", "content-1");
     expect(await container.cradle.artifactStore.read("k1")).toMatchObject({ key: "k1", content: "content-1" });
-    expect(container.cradle.memoryManager.hasSession("t1", "s1")).toBe(false);
+    expect(container.cradle.transcriptStore.hasSession("t1", "s1")).toBe(false);
   });
 
   test("registers singletons", () => {
     const container = bootedContainer("/unused", true);
     expect(container.cradle.storage).toBe(container.resolve("storage"));
     expect(container.cradle.artifactStore).toBe(container.resolve("artifactStore"));
-    expect(container.cradle.memoryManager).toBe(container.resolve("memoryManager"));
+    expect(container.cradle.transcriptStore).toBe(container.resolve("transcriptStore"));
   });
 });

@@ -1,6 +1,6 @@
 # Storage & Artifacts
 
-`Storage` is the platform's persistence abstraction; `SqliteStorage` (bun:sqlite) is the only implementation. Two domain stores sit on top and share one `Storage` instance per process — one SQLite file (`~/.jie/storage.db`, or `:memory:` with the `inMemory` option), three tables: `artifacts`, `memory_turns`, and `session_metadata`. "Storage" is the umbrella (the layer); "artifact" is a work product an agent writes to the store.
+`Storage` is the platform's persistence abstraction; `SqliteStorage` (bun:sqlite) is the only implementation. Three domain stores sit on top and share one `Storage` instance per process — one SQLite file (`~/.jie/storage.db`, or `:memory:` with the `inMemory` option), five tables: `artifacts`, `memory_turns`, `session_metadata` (the transcript/artifact domains), and `memory_atoms` plus its FTS index (long-term memory). "Storage" is the umbrella (the layer); "artifact" is a work product an agent writes to the store.
 
 ## Storage Interface
 
@@ -49,9 +49,28 @@ CREATE TABLE IF NOT EXISTS session_metadata (
   name       TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS memory_atoms (
+  id                TEXT    PRIMARY KEY,
+  team_id           TEXT    NOT NULL,
+  content           TEXT    NOT NULL,
+  type              TEXT    NOT NULL,
+  priority          INTEGER NOT NULL DEFAULT 50,
+  scene             TEXT    NOT NULL DEFAULT '',
+  source_session_id TEXT    NOT NULL,
+  created_at        TEXT    NOT NULL,
+  updated_at        TEXT    NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_atoms_team
+  ON memory_atoms (team_id, priority DESC, updated_at DESC);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS memory_atoms_fts USING fts5(
+  content, atom_id UNINDEXED, tokenize = 'unicode61'
+);
 ```
 
-`memory_turns` shape and session model: ADR 17 and `08-memory.md`. `session_metadata` holds the optional human name a session was given (`/rename` → the `renameSession` command); it is keyed by `session_id` alone (ULIDs are globally unique) and LEFT-JOINed into `listSessions` (`08-memory.md`, "List and rename"). Future schema changes append versioned migrations advancing `PRAGMA user_version`; today there is one version.
+`memory_turns` shape and session model: ADR 17 and `08-transcript.md`. `session_metadata` holds the optional human name a session was given (`/rename` → the `renameSession` command); it is keyed by `session_id` alone (ULIDs are globally unique) and LEFT-JOINed into `listSessions` (`08-transcript.md`, "List and rename"). `memory_atoms` holds long-term memory atoms with their FTS5 index — team scoping, search semantics, and dedup in `11-memory.md` (the FTS table carries `atom_id` for joining and drops `team_id` from the index since scoping happens on the join). Future schema changes append versioned migrations advancing `PRAGMA user_version`; today there is one version.
 
 ## Artifact Store
 
@@ -76,4 +95,4 @@ Agents see the store through two built-in tools — `write_artifact(key, content
 
 ## Retention and Scope
 
-All rows are kept indefinitely — conversation compaction (`08-memory.md` "Compact") flags summarized turns `compacted=1` but never deletes them; no other GC or archival. `descriptor_patch` / `file_snapshot` artifacts are intentionally out of scope — file history is owned by git; agents do not snapshot files into a parallel store.
+All rows are kept indefinitely — conversation compaction (`08-transcript.md` "Compact") flags summarized turns `compacted=1` but never deletes them; no other GC or archival. `descriptor_patch` / `file_snapshot` artifacts are intentionally out of scope — file history is owned by git; agents do not snapshot files into a parallel store.

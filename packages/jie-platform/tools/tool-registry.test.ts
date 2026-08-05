@@ -1,5 +1,7 @@
 import { Type } from "typebox";
+import type { SettingsStore } from "../config";
 import type { EventManager } from "../event";
+import type { MemoryStore } from "../memory";
 import type { ArtifactStore } from "../storage";
 import { InMemoryToolRegistry, type ToolRegistry } from "./tool-registry";
 import type { Tool, ToolResult } from "./types";
@@ -15,6 +17,16 @@ const artifactStore = vi.mocked<ArtifactStore>({
   list: vi.fn(),
 });
 
+const memoryStore = vi.mocked<MemoryStore>({ add: vi.fn(), search: vi.fn(), top: vi.fn() });
+
+const settingsStore = vi.mocked<SettingsStore>({
+  load: vi.fn(),
+  setDefaultProvider: vi.fn(),
+  setDefaultEffort: vi.fn(),
+  setDefaultTeam: vi.fn(),
+  setModelFilters: vi.fn(),
+});
+
 function makeTool(name: string): Tool {
   return {
     name,
@@ -28,7 +40,7 @@ function makeTool(name: string): Tool {
 }
 
 function makeReg(): ToolRegistry {
-  return new InMemoryToolRegistry("/tmp", eventManager, artifactStore);
+  return new InMemoryToolRegistry("/tmp", eventManager, artifactStore, memoryStore, settingsStore);
 }
 
 describe("InMemoryToolRegistry", () => {
@@ -170,13 +182,14 @@ describe("InMemoryToolRegistry", () => {
 });
 
 describe("InMemoryToolRegistry — built-in installation", () => {
-  test("populated registry: list() contains all 10 built-ins", () => {
+  test("populated registry: list() contains all 11 built-ins", () => {
     const reg = makeReg();
     const names = reg.list().map((t) => t.name).sort();
     expect(names).toEqual([
       "bash",
       "edit",
       "kanban_write",
+      "memory_search",
       "notify",
       "read_artifact",
       "read_file",
@@ -189,7 +202,7 @@ describe("InMemoryToolRegistry — built-in installation", () => {
 
   test("populated registry: resolve() returns the matching installed tool for each built-in", () => {
     const reg = makeReg();
-    for (const name of ["bash", "read_file", "write_file", "edit", "notify", "web_search", "web_fetch", "read_artifact", "write_artifact", "kanban_write"]) {
+    for (const name of ["bash", "read_file", "write_file", "edit", "notify", "web_search", "web_fetch", "read_artifact", "write_artifact", "kanban_write", "memory_search"]) {
       const matches = reg.resolve(name);
       expect(matches).toHaveLength(1);
       expect(matches[0]!.name).toBe(name);

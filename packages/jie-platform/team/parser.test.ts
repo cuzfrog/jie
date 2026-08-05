@@ -17,10 +17,10 @@ describe("loadDefaultSoloTeam", () => {
     expect(bp.roles[0]?.role).toBe("general");
   });
 
-  test("the general soul has tools [bash, read_file, write_file, edit] and empty subscribe", () => {
+  test("the general soul has tools [bash, read_file, write_file, edit, memory_search] and empty subscribe", () => {
     const bp = loadDefaultSoloTeam();
     const soul = bp.roles[0]!;
-    expect(soul.tools).toEqual(["bash", "read_file", "write_file", "edit"]);
+    expect(soul.tools).toEqual(["bash", "read_file", "write_file", "edit", "memory_search"]);
     expect(soul.subscribe).toEqual([]);
   });
 

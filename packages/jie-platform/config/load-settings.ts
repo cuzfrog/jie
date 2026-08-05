@@ -89,6 +89,19 @@ function validateSettings(raw: RawSettings, source: string): Settings {
     result.modelFilters = raw.modelFilters;
   }
 
+  if ("language" in raw && raw.language !== undefined) {
+    if (raw.language !== "en" && raw.language !== "zh") {
+      throw new JiePlatformError("INVALID_CONFIG", {
+        detail: `${source}: invalid language: ${JSON.stringify(raw.language)}`,
+      });
+    }
+    result.language = raw.language;
+  }
+
+  if ("memory" in raw && raw.memory !== undefined) {
+    result.memory = validateMemory(raw.memory, source);
+  }
+
   if ("compaction" in raw && raw.compaction !== undefined) {
     result.compaction = validateCompaction(raw.compaction, source);
   }
@@ -117,6 +130,33 @@ function validateCompaction(value: unknown, source: string): Settings["compactio
   return result;
 }
 
+function validateMemory(value: unknown, source: string): Settings["memory"] {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new JiePlatformError("INVALID_CONFIG", { detail: `${source}: memory must be an object` });
+  }
+  const raw = value as Record<string, unknown>;
+  const result: { -readonly [K in keyof NonNullable<Settings["memory"]>]: NonNullable<Settings["memory"]>[K] } = {};
+  if ("enabled" in raw && raw.enabled !== undefined) {
+    if (typeof raw.enabled !== "boolean") {
+      throw new JiePlatformError("INVALID_CONFIG", { detail: `${source}: memory.enabled must be a boolean` });
+    }
+    result.enabled = raw.enabled;
+  }
+  if ("model" in raw && raw.model !== undefined) {
+    if (typeof raw.model !== "string") {
+      throw new JiePlatformError("INVALID_CONFIG", { detail: `${source}: memory.model must be a string` });
+    }
+    result.model = raw.model;
+  }
+  if ("bootstrapMaxEntries" in raw && raw.bootstrapMaxEntries !== undefined) {
+    result.bootstrapMaxEntries = validatePositiveInteger(raw.bootstrapMaxEntries, "memory.bootstrapMaxEntries", source);
+  }
+  if ("bootstrapMaxChars" in raw && raw.bootstrapMaxChars !== undefined) {
+    result.bootstrapMaxChars = validatePositiveInteger(raw.bootstrapMaxChars, "memory.bootstrapMaxChars", source);
+  }
+  return result;
+}
+
 function validatePositiveInteger(value: unknown, label: string, source: string): number {
   if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
     throw new JiePlatformError("INVALID_CONFIG", { detail: `${source}: ${label} must be a positive integer` });
@@ -124,12 +164,14 @@ function validatePositiveInteger(value: unknown, label: string, source: string):
   return value;
 }
 
-function deepMergeSettings(
-  base: Settings,
-  override: Settings,
-): Settings {
-  if (base.compaction === undefined || override.compaction === undefined) {
-    return { ...base, ...override };
-  }
-  return { ...base, ...override, compaction: { ...base.compaction, ...override.compaction } };
+function deepMergeSettings(base: Settings, override: Settings): Settings {
+  const compaction = mergeNested(base.compaction, override.compaction);
+  const memory = mergeNested(base.memory, override.memory);
+  return { ...base, ...override, compaction, memory };
+}
+
+function mergeNested<T extends object>(base: T | undefined, override: T | undefined): T | undefined {
+  if (base === undefined) return override;
+  if (override === undefined) return base;
+  return { ...base, ...override };
 }

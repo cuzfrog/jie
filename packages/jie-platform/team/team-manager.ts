@@ -3,7 +3,7 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import type { AgentBody, AgentBodyParams } from "../core";
 import { type EventManager, Events } from "../event";
 import { JiePlatformError } from "../jie-platform-errors";
-import type { MemoryManager, SessionSummary } from "../storage";
+import type { SessionSummary, TranscriptStore } from "../storage";
 import { type ModelRegistry, type SettingsStore } from "../config";
 import type { SkillManager } from "../skills";
 import { type AgentSoul, type TeamBlueprint, type TeamBlueprintLocation, BUILTIN_DEFAULT_SOLO_TEAM_ID } from "./types";
@@ -35,7 +35,7 @@ export class TeamManagerImpl implements TeamManager {
     private readonly eventManager: EventManager,
     private readonly settingsStore: SettingsStore,
     private readonly modelRegistry: ModelRegistry,
-    private readonly memoryManager: MemoryManager,
+    private readonly transcriptStore: TranscriptStore,
     private readonly skillManager: SkillManager,
     private readonly agentBodyFactory: (params: AgentBodyParams) => AgentBody,
     private readonly resumeSessionId: string | undefined = undefined,
@@ -99,7 +99,7 @@ export class TeamManagerImpl implements TeamManager {
   }
 
   listSessions(teamId: string): ReadonlyArray<SessionSummary> {
-    return this.memoryManager.listSessions(teamId);
+    return this.transcriptStore.listSessions(teamId);
   }
 
   renameSession(teamId: string, name: string): void {
@@ -111,7 +111,7 @@ export class TeamManagerImpl implements TeamManager {
     if (sessionId === undefined) {
       throw new JiePlatformError("NO_TEAM", { detail: `no session loaded for team '${teamId}'` });
     }
-    this.memoryManager.renameSession(sessionId, trimmed);
+    this.transcriptStore.renameSession(sessionId, trimmed);
   }
 
   stop(): void {
@@ -205,7 +205,7 @@ export class TeamManagerImpl implements TeamManager {
     const existing = this.sessionIds.get(teamId);
     if (existing !== undefined && overrideSessionId === undefined) return existing;
     if (overrideSessionId !== undefined) {
-      if (!this.memoryManager.hasSession(teamId, overrideSessionId)) {
+      if (!this.transcriptStore.hasSession(teamId, overrideSessionId)) {
         throw new JiePlatformError("UNKNOWN_SESSION", {
           detail: `unknown session_id: ${overrideSessionId}`,
         });
@@ -213,7 +213,7 @@ export class TeamManagerImpl implements TeamManager {
       return overrideSessionId;
     }
     if (this.resumeSessionId !== undefined) {
-      if (!this.memoryManager.hasSession(teamId, this.resumeSessionId)) {
+      if (!this.transcriptStore.hasSession(teamId, this.resumeSessionId)) {
         throw new JiePlatformError("UNKNOWN_SESSION", {
           detail: `unknown session_id: ${this.resumeSessionId}`,
         });
@@ -261,7 +261,7 @@ export class TeamManagerImpl implements TeamManager {
     }
     const history: AgentHistory[] = bodies.map((b) => ({ agentKey: b.identity.agentKey, messages: b.messages() }));
     const sessionId = this.sessionIds.get(id);
-    const sessionName = sessionId === undefined ? null : this.memoryManager.sessionName(sessionId);
+    const sessionName = sessionId === undefined ? null : this.transcriptStore.sessionName(sessionId);
     return { id, leaderKey: leader.agentKey, sessionName, agents: identities, history };
   }
 }

@@ -5,7 +5,9 @@ import type { ModelRegistry, SettingsStore } from "../config";
 import type { PlatformCradle } from "../container";
 import { Events, type EventEnvelope, type EventManager, type EventType } from "../event";
 import type { HookRunner } from "../hooks";
-import type { ArtifactStore, MemoryManager } from "../storage";
+import type { LlmService } from "../llm";
+import type { MemoryExtractor, MemoryStore } from "../memory";
+import type { ArtifactStore, TranscriptStore } from "../storage";
 import type { AgentSoul } from "../team";
 import type { SkillManager } from "../skills";
 import type { Tool, ToolRegistry } from "../tools";
@@ -23,7 +25,7 @@ const artifactStore = vi.mocked<ArtifactStore>({
   list: vi.fn(),
 });
 
-const memoryManager = vi.mocked<MemoryManager>({
+const transcriptStore = vi.mocked<TranscriptStore>({
   persist: vi.fn(),
   compact: vi.fn(),
   restore: vi.fn(),
@@ -77,12 +79,18 @@ const settingsStore = vi.mocked<SettingsStore>({
   setModelFilters: vi.fn(),
 });
 
+const llmService = vi.mocked<LlmService>({ complete: vi.fn(async () => "") });
+
+const memoryStore = vi.mocked<MemoryStore>({ add: vi.fn(), search: vi.fn(), top: vi.fn(async () => []) });
+
+const memoryExtractor = vi.mocked<MemoryExtractor>({ extract: vi.fn(async () => {}) });
+
 function bootedContainer(): AwilixContainer<PlatformCradle> {
   const container = createContainer<PlatformCradle>({ injectionMode: InjectionMode.CLASSIC });
   container.register({
     eventManager: asValue(eventManager),
     artifactStore: asValue(artifactStore),
-    memoryManager: asValue(memoryManager),
+    transcriptStore: asValue(transcriptStore),
     toolRegistry: asValue(toolRegistry),
     skillManager: asValue(skillManager),
     loadSystemContextBlock: asValue(() => ""),
@@ -90,6 +98,9 @@ function bootedContainer(): AwilixContainer<PlatformCradle> {
     cwd: asValue("/work"),
     modelRegistry: asValue(modelRegistry),
     settingsStore: asValue(settingsStore),
+    llmService: asValue(llmService),
+    memoryStore: asValue(memoryStore),
+    memoryExtractor: asValue(memoryExtractor),
   });
   registerCoreModule(container);
   return container;
@@ -191,7 +202,7 @@ describe("registerCoreModule", () => {
         subscribers.delete(eventType);
       };
     });
-    memoryManager.restore.mockResolvedValue([]);
+    transcriptStore.restore.mockResolvedValue([]);
     modelRegistry.resolve.mockReturnValue(makeModel("lm-studio", "qwen3.5-2b"));
     const container = bootedContainer();
     const body = container.cradle.agentBodyFactory(makeParams({

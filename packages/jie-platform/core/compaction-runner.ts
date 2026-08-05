@@ -1,6 +1,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { Events, type AgentSender, type EventManager } from "../event";
+import type { MemoryExtractor } from "../memory";
 import type { Compactor } from "./compaction";
 
 export interface CompactionRunner {
@@ -17,22 +18,23 @@ interface CompactionRunnerDeps {
   readonly compactor: Compactor;
   readonly eventManager: EventManager;
   readonly sender: AgentSender;
-  readonly getApiKey: (provider: string) => Promise<string | undefined> | string | undefined;
   readonly agentKey: string;
   readonly sessionId: string;
   readonly teamId: string;
   readonly conversation: CompactionConversation;
+  readonly memoryExtractor: MemoryExtractor;
 }
 
 export class CompactionRunnerImpl implements CompactionRunner {
   private readonly compactor: Compactor;
   private readonly eventManager: EventManager;
   private readonly sender: AgentSender;
-  private readonly getApiKey: (provider: string) => Promise<string | undefined> | string | undefined;
   private readonly agentKey: string;
   private readonly sessionId: string;
   private readonly teamId: string;
   private readonly conversation: CompactionConversation;
+  private readonly memoryExtractor: MemoryExtractor;
+  private readonly extractionController = new AbortController();
   private promise: Promise<void> | null = null;
   private controller: AbortController | null = null;
   private aborted = false;
@@ -41,11 +43,11 @@ export class CompactionRunnerImpl implements CompactionRunner {
     this.compactor = deps.compactor;
     this.eventManager = deps.eventManager;
     this.sender = deps.sender;
-    this.getApiKey = deps.getApiKey;
     this.agentKey = deps.agentKey;
     this.sessionId = deps.sessionId;
     this.teamId = deps.teamId;
     this.conversation = deps.conversation;
+    this.memoryExtractor = deps.memoryExtractor;
   }
 
   ensure(model: Model<Api>): Promise<void> {
@@ -60,6 +62,7 @@ export class CompactionRunnerImpl implements CompactionRunner {
   abort(): void {
     this.aborted = true;
     this.controller?.abort();
+    this.extractionController.abort();
   }
 
   private async run(model: Model<Api>): Promise<void> {
@@ -70,7 +73,6 @@ export class CompactionRunnerImpl implements CompactionRunner {
         messages: this.conversation.getMessages(),
         contextWindow: model.contextWindow,
         model,
-        apiKey: await this.getApiKey(model.provider),
         agentKey: this.agentKey,
         sessionId: this.sessionId,
         teamId: this.teamId,
@@ -82,6 +84,13 @@ export class CompactionRunnerImpl implements CompactionRunner {
       this.conversation.setMessages([result.summaryMessage, ...messages.slice(result.firstKeptIndex)]);
       const summarizedPrompts = summarizedPrefix.reduce((count, message) => message.role === "user" ? count + 1 : count, 0);
       this.eventManager.publish(Events.agentCompacted(this.sender, result.summaryMessage.summary, result.tokensBefore, summarizedPrompts));
+      void this.memoryExtractor.extract({
+        messages: result.summarizedPrefix,
+        teamId: this.teamId,
+        sessionId: this.sessionId,
+        model,
+        signal: this.extractionController.signal,
+      });
     } catch (error) {
       if (!controller.signal.aborted) {
         const message = error instanceof Error ? error.message : String(error);

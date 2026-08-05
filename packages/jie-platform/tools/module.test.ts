@@ -1,6 +1,8 @@
 import { asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import type { PlatformCradle } from "../container";
+import type { SettingsStore } from "../config";
 import type { EventManager } from "../event";
+import type { MemoryStore } from "../memory";
 import type { ArtifactStore } from "../storage";
 import { registerToolsModule } from "./module";
 
@@ -15,25 +17,38 @@ const artifactStore = vi.mocked<ArtifactStore>({
   list: vi.fn(),
 });
 
+const memoryStore = vi.mocked<MemoryStore>({ add: vi.fn(), search: vi.fn(), top: vi.fn() });
+
+const settingsStore = vi.mocked<SettingsStore>({
+  load: vi.fn(),
+  setDefaultProvider: vi.fn(),
+  setDefaultEffort: vi.fn(),
+  setDefaultTeam: vi.fn(),
+  setModelFilters: vi.fn(),
+});
+
 function bootedContainer(): AwilixContainer<PlatformCradle> {
   const container = createContainer<PlatformCradle>({ injectionMode: InjectionMode.CLASSIC });
   container.register({
     cwd: asValue("/tmp"),
     eventManager: asValue(eventManager),
     artifactStore: asValue(artifactStore),
+    memoryStore: asValue(memoryStore),
+    settingsStore: asValue(settingsStore),
   });
   registerToolsModule(container);
   return container;
 }
 
 describe("registerToolsModule", () => {
-  test("toolRegistry resolves with the 10 built-ins installed", () => {
+  test("toolRegistry resolves with the 11 built-ins installed", () => {
     const container = bootedContainer();
     const names = container.cradle.toolRegistry.list().map((t) => t.name).sort();
     expect(names).toEqual([
       "bash",
       "edit",
       "kanban_write",
+      "memory_search",
       "notify",
       "read_artifact",
       "read_file",
