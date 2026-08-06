@@ -15,6 +15,7 @@ export interface TuiView {
 const CTRL_T = "\x14";
 const CTRL_O = "\x0f";
 const CTRL_K = "\x0b";
+const CTRL_E = "\x05";
 const CONSUMED = { consume: true } as const;
 const INTERRUPTED_LABEL = "Interrupted";
 const TEAM_WORKING_LABEL = "Team working…";
@@ -131,7 +132,7 @@ function resolveKanbanKey(data: string, state: TuiState, popupOpen: boolean): Ac
   if (matchesKey(data, "down")) return Actions.moveKanbanCursor("down");
   if (matchesKey(data, "left")) return Actions.moveKanbanCursor("left");
   if (matchesKey(data, "right")) return Actions.moveKanbanCursor("right");
-  if (matchesKey(data, "enter") && state.kanbanCursor !== null) return Actions.commitKanbanEdit(state.kanbanCursor);
+  if (data === CTRL_E && state.kanbanCursor !== null) return Actions.commitKanbanEdit(state.kanbanCursor);
   return null;
 }
 

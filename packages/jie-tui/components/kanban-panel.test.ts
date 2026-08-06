@@ -99,6 +99,7 @@ describe("KanbanPanel", () => {
     stateStore.getState.mockReturnValue(boardState([{ id: "K1", content: "a", status: "pending" }]));
     const lines = new KanbanPanel(stateStore).render(80);
     expect(lines[lines.length - 1]).toContain("tab expand");
+    expect(lines[lines.length - 1]).toContain("ctrl+e edit");
   });
 
   test("expanded mode shows the focused card detail full width", () => {

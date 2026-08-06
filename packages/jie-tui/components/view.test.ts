@@ -190,12 +190,16 @@ describe("resolveKanbanKey", () => {
     expect(_resolveKanbanKey("\x1b[D", makeTuiState({ kanbanView: "panel", editorCursorAtStart: true }), false)).toEqual(Actions.moveKanbanCursor("left"));
   });
 
-  test("enter commits the edit at the cursor", () => {
-    expect(_resolveKanbanKey("\r", makeTuiState({ kanbanView: "panel", kanbanCursor: "K1" }), false)).toEqual(Actions.commitKanbanEdit("K1"));
+  test("ctrl+e commits the edit at the cursor", () => {
+    expect(_resolveKanbanKey("\x05", makeTuiState({ kanbanView: "panel", kanbanCursor: "K1" }), false)).toEqual(Actions.commitKanbanEdit("K1"));
   });
 
-  test("enter does nothing without a cursor", () => {
-    expect(_resolveKanbanKey("\r", makeTuiState({ kanbanView: "panel" }), false)).toBeNull();
+  test("ctrl+e does nothing without a cursor", () => {
+    expect(_resolveKanbanKey("\x05", makeTuiState({ kanbanView: "panel" }), false)).toBeNull();
+  });
+
+  test("enter falls through to the editor while the panel is shown", () => {
+    expect(_resolveKanbanKey("\r", makeTuiState({ kanbanView: "panel", kanbanCursor: "K1" }), false)).toBeNull();
   });
 
   test("null while the view is hidden or list", () => {
@@ -209,7 +213,7 @@ describe("resolveKanbanKey", () => {
     const state = makeTuiState({ kanbanView: "panel" });
     expect(_resolveKanbanKey("\t", state, true)).toBeNull();
     expect(_resolveKanbanKey("\x1b[A", state, true)).toBeNull();
-    expect(_resolveKanbanKey("\r", state, true)).toBeNull();
+    expect(_resolveKanbanKey("\x05", state, true)).toBeNull();
   });
 
   test("null while editing a card, so every key reaches the editor", () => {
@@ -217,7 +221,7 @@ describe("resolveKanbanKey", () => {
     expect(_resolveKanbanKey("\t", state, false)).toBeNull();
     expect(_resolveKanbanKey("\x1b", state, false)).toBeNull();
     expect(_resolveKanbanKey("\x1b[A", state, false)).toBeNull();
-    expect(_resolveKanbanKey("\r", state, false)).toBeNull();
+    expect(_resolveKanbanKey("\x05", state, false)).toBeNull();
   });
 
   test("null for any other key", () => {

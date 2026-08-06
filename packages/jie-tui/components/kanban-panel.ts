@@ -18,8 +18,8 @@ const KANBAN_COLUMNS: ReadonlyArray<{ readonly status: KanbanStatus; readonly ti
 ];
 
 const HINTS = {
-  collapsed: "↑↓←→ move · tab expand · enter edit · ctrl+k close",
-  expanded: "tab collapse · enter edit · ctrl+k close",
+  collapsed: "↑↓←→ move · tab expand · ctrl+e edit · ctrl+k close",
+  expanded: "tab collapse · ctrl+e edit · ctrl+k close",
   editing: "enter/ctrl+s save · esc cancel",
 } as const;
 
