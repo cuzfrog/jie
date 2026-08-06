@@ -1,6 +1,5 @@
 import type { StopReason } from "@earendil-works/pi-ai";
-import type { CommandResult, EffortLevel, ModelInfo, SkillInfo } from "@cuzfrog/jie-platform";
-import type { KanbanCard } from "../kanban";
+import type { CommandResult, EffortLevel, KanbanCard, KanbanStatus, ModelInfo, SkillInfo, ToolResultDetails } from "@cuzfrog/jie-platform";
 
 export type AgentStatus = "idle" | "busy";
 export { type EffortLevel };
@@ -18,7 +17,7 @@ export interface MessageCard {
   readonly outputTruncated?: boolean;
   readonly durationMs?: number;
   readonly error?: string | null;
-  readonly details?: unknown;
+  readonly details?: ToolResultDetails | null;
 }
 
 export interface MessageBlock {
@@ -133,6 +132,18 @@ function hasChatContent(state: TuiState): boolean {
   return false;
 }
 
+const KANBAN_VISIBLE_ROWS = 8;
+
+function kanbanVisibleCards(state: TuiState): ReadonlyArray<KanbanCard> {
+  const counts = new Map<KanbanStatus, number>();
+  return state.kanbanBoard.filter((card) => {
+    const count = counts.get(card.status) ?? 0;
+    if (count >= KANBAN_VISIBLE_ROWS) return false;
+    counts.set(card.status, count + 1);
+    return true;
+  });
+}
+
 export const TuiState = {
   getFocusedAgent,
   rosterOrder,
@@ -141,4 +152,5 @@ export const TuiState = {
   isInterrupted,
   shouldShowErrorBanner,
   hasChatContent,
+  kanbanVisibleCards,
 } as const;

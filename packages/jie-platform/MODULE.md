@@ -1,8 +1,8 @@
 ---
 no-new-exports:
-  # ungated for DI review: kanban tool-result DTOs (KanbanCard/KanbanStatus/KanbanDetailsPayload/
-  # isKanbanDetails) are cross-boundary DTOs consumed by jie-tui; they must leave through
-  # the package surface, not a cross-package deep import of types.ts.
+  # index.ts and types.ts are ungated: types.ts holds the cross-boundary DTOs (TeamInfo,
+  # KanbanCard, the ToolResultDetails union) that jie-tui consumes through the package
+  # surface, and index.ts is that surface. New exports there must stay cross-boundary DTOs.
   - container.test.ts
   - container.ts
   # - index.ts

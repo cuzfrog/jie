@@ -198,10 +198,14 @@ describe("kanban panel toggle", () => {
     expect(state.kanbanPanelVisible).toBe(true);
   });
 
-  test("toggle hides the shown kanban panel", () => {
+  test("toggle hides the shown kanban panel and clears edit and expand", () => {
     const opened = reduceUiAction(twoAgent(), Actions.toggleKanbanPanel());
-    const closed = reduceUiAction(opened, Actions.toggleKanbanPanel());
+    const editing = reduceUiAction(opened, Actions.commitKanbanEdit("K1"));
+    const expanded = reduceUiAction(editing, Actions.toggleKanbanExpand());
+    const closed = reduceUiAction(expanded, Actions.toggleKanbanPanel());
     expect(closed.kanbanPanelVisible).toBe(false);
+    expect(closed.kanbanEdit).toBeNull();
+    expect(closed.kanbanExpanded).toBe(false);
   });
 
   test("is a no-op when no agent is focused", () => {
@@ -218,12 +222,16 @@ describe("kanban panel toggle", () => {
     expect(kanban.focusedAgentId).toBe("my-team:manager-1");
   });
 
-  test("opening the team panel hides the kanban panel", () => {
+  test("opening the team panel hides the kanban panel and clears its edit and expand", () => {
     const opened = reduceUiAction(twoAgent(), Actions.toggleKanbanPanel());
-    const team = reduceUiAction(opened, Actions.toggleTeamPanel());
+    const editing = reduceUiAction(opened, Actions.commitKanbanEdit("K1"));
+    const expanded = reduceUiAction(editing, Actions.toggleKanbanExpand());
+    const team = reduceUiAction(expanded, Actions.toggleTeamPanel());
     expect(team.teamPanelVisible).toBe(true);
     expect(team.teamCursorAgentId).toBe("my-team:manager-1");
     expect(team.kanbanPanelVisible).toBe(false);
+    expect(team.kanbanEdit).toBeNull();
+    expect(team.kanbanExpanded).toBe(false);
   });
 
   test("clearTuiState keeps the kanban panel visible", () => {

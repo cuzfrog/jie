@@ -1,4 +1,4 @@
-import { Events, type AgentSender, type SystemSender, type UserSender } from "@cuzfrog/jie-platform";
+import { Events, type AgentSender, type SystemSender, type ToolResultDetails, type UserSender } from "@cuzfrog/jie-platform";
 import type { TuiState } from "./state";
 import { StateStoreImpl } from "./state-store";
 import { reduce } from "./event-reducer";
@@ -6,6 +6,8 @@ import { reduce as reduceAction } from "./reducer";
 import { Actions } from "./actions";
 
 const INITIAL_TUI_STATE = new StateStoreImpl().getState();
+
+const DIFF_DETAILS: ToolResultDetails = { kind: "diff", path: "a.txt", replacementsCount: 1, beforeBytes: 2, afterBytes: 2, diff: "@@ -1 +1 @@\n-a\n+A" };
 
 const SYSTEM_SENDER: SystemSender = { kind: "system" };
 const USER_SENDER: UserSender = { kind: "user" };
@@ -762,12 +764,11 @@ describe("reduceToolCall + reduceToolResult", () => {
 
   test("the result card carries the details payload from the event", () => {
     let state = promptedState();
-    const details = { kind: "diff", diff: "@@ -1 +1 @@\n-a\n+A" };
     state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "edit", "{}"));
-    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "edit", "ok", 5, null, details));
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "edit", "ok", 5, null, DIFF_DETAILS));
     const card = state.agents.get("my-team:general-1")?.currentTurn?.cards[0];
     if (card?.kind === "toolResult") {
-      expect(card.details).toBe(details);
+      expect(card.details).toBe(DIFF_DETAILS);
     }
   });
 
@@ -781,16 +782,35 @@ describe("reduceToolCall + reduceToolResult", () => {
     }
   });
 
-  test("a kanban_write tool result updates the board from details.kind === 'kanban'", () => {
-    const state = promptedState();
+  test("a kanban_write tool result updates the board and completes its tool card", () => {
+    let state = promptedState();
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "kanban_write", "{}"));
     const cards = [
       { id: "K1", content: "alpha", status: "completed" },
       { id: "K2", content: "beta", status: "in_progress" },
       { id: "K3", content: "gamma", status: "pending" },
     ] as const;
-    const state2 = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "kanban_write", "ok", 5, null, { kind: "kanban", cards }));
+    const state2 = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "kanban_write", "Updated kanban: 3 cards, 1 in progress", 5, null, { kind: "kanban", cards }));
     expect(state2.kanbanBoard).toEqual(cards);
     expect(state2.kanbanCursor).toBe("K1");
+    const card = state2.agents.get("my-team:general-1")?.currentTurn?.cards[0];
+    expect(card?.kind).toBe("toolResult");
+    if (card?.kind === "toolResult") {
+      expect(card.output).toBe("Updated kanban: 3 cards, 1 in progress");
+      expect(card.durationMs).toBe(5);
+      expect(card.details).toEqual({ kind: "kanban", cards });
+    }
+  });
+
+  test("a kanban_write tool result without a matching tool call still updates the board", () => {
+    const state = promptedState();
+    const cards = [
+      { id: "K1", content: "alpha", status: "completed" },
+      { id: "K2", content: "beta", status: "in_progress" },
+    ] as const;
+    const state2 = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "kanban_write", "ok", 5, null, { kind: "kanban", cards }));
+    expect(state2.kanbanBoard).toEqual(cards);
+    expect(state2.agents.get("my-team:general-1")?.currentTurn?.cards).toEqual([]);
   });
 
   test("an empty kanban board clears the board", () => {
@@ -802,7 +822,7 @@ describe("reduceToolCall + reduceToolResult", () => {
 
   test("a tool result with non-kanban details does not touch the board", () => {
     const state = promptedState();
-    const state2 = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", "out", 5, null, { kind: "diff", diff: "@@ -1 +1 @@\n-a\n+A" }));
+    const state2 = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", "out", 5, null, DIFF_DETAILS));
     expect(state2.kanbanBoard).toEqual([]);
   });
 

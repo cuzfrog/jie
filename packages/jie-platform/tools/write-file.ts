@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, statSync, writeFileSync, type Stats } from "no
 import { dirname } from "node:path";
 import { Type } from "typebox";
 import type { ExecutionContext, Tool, ToolResult } from "./types";
+import type { WriteFileResultDetails } from "../types";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
 import type { FileMutationQueue } from "./file-mutation-queue";
 import { checkWriteGates } from "./write-gate";
@@ -105,14 +106,6 @@ async function applyWrite(input: WriteFileInput, realPath: string): Promise<Tool
     content: `Successfully wrote ${bytesWritten} bytes to ${input.path}`,
     details,
   };
-}
-
-interface WriteFileResultDetails {
-  readonly kind: "diff";
-  readonly path: string;
-  readonly bytesWritten: number;
-  readonly createdAt: string;
-  readonly diff: string | null;
 }
 
 function readBeforeContent(realPath: string, stat: Stats | null): string | null {

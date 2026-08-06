@@ -320,15 +320,18 @@ describe("AgentEventBridge — persistence", () => {
     expect(persisted[0]).not.toHaveProperty("details");
   });
 
-  test("message_end keeps diff and kanban details for the display consumers", () => {
-    const bridge = makeBridge();
+  test("message_end keeps diff details for history rendering", () => {
     const diffDetails = { kind: "diff", path: "a.txt", diff: "-x\n+y" };
-    const kanbanDetails = { kind: "kanban", cards: [{ content: "task", status: "in_progress" }] };
-    bridge.handleEvent({ type: "message_end", message: makeToolResultMessage(diffDetails) });
-    bridge.handleEvent({ type: "message_end", message: makeToolResultMessage(kanbanDetails) });
-    expect(persisted).toHaveLength(2);
+    makeBridge().handleEvent({ type: "message_end", message: makeToolResultMessage(diffDetails) });
+    expect(persisted).toHaveLength(1);
     expect(persisted[0]).toMatchObject({ details: diffDetails });
-    expect(persisted[1]).toMatchObject({ details: kanbanDetails });
+  });
+
+  test("message_end strips kanban details; the board hydrates from the store instead", () => {
+    const kanbanDetails = { kind: "kanban", cards: [{ content: "task", status: "in_progress" }] };
+    makeBridge().handleEvent({ type: "message_end", message: makeToolResultMessage(kanbanDetails) });
+    expect(persisted).toHaveLength(1);
+    expect(persisted[0]).not.toHaveProperty("details");
   });
 
   test("message_end persists a toolResult without details unchanged", () => {

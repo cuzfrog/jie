@@ -2,6 +2,7 @@ import type { AfterToolCallContext, AfterToolCallResult, AgentToolResult, Before
 import type { TextContent } from "@earendil-works/pi-ai";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { HookIdentity, HookRunner } from "../hooks";
+import type { ToolResultDetails } from "../types";
 
 export interface ToolCallObserver {
   beforeToolCall(context: BeforeToolCallContext): Promise<BeforeToolCallResult | undefined>;
@@ -93,11 +94,11 @@ function extractToolError(context: {
 
 interface JieToolResult {
   content: string | Array<{ type: string; text?: string }>;
-  details?: unknown;
+  details?: ToolResultDetails | null;
   terminate?: boolean;
 }
 
-function jieToolResultOf(piResult: AgentToolResult<unknown>): JieToolResult {
+function jieToolResultOf(piResult: AgentToolResult<ToolResultDetails | null | undefined>): JieToolResult {
   const block = piResult.content;
   const content =
     block.length === 1 && block[0]?.type === "text"

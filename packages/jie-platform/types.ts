@@ -89,26 +89,74 @@ export interface KanbanCardWrite {
     readonly description?: string;
 }
 
-export interface KanbanDetailsPayload {
+export interface EditResultDetails {
+    readonly kind: "diff";
+    readonly path: string;
+    readonly replacementsCount: number;
+    readonly beforeBytes: number;
+    readonly afterBytes: number;
+    readonly diff: string | null;
+}
+
+export interface WriteFileResultDetails {
+    readonly kind: "diff";
+    readonly path: string;
+    readonly bytesWritten: number;
+    readonly createdAt: string;
+    readonly diff: string | null;
+}
+
+export interface KanbanDetails {
     readonly kind: "kanban";
     readonly cards: ReadonlyArray<KanbanCard>;
 }
 
-export function isKanbanDetails(value: unknown): value is KanbanDetailsPayload {
-    if (typeof value !== "object" || value === null) return false;
-    if (!("kind" in value) || value.kind !== "kanban") return false;
-    if (!("cards" in value) || !Array.isArray(value.cards)) return false;
-    return value.cards.every(isKanbanCard);
+export interface BashResultDetails {
+    readonly exitCode: number;
+    readonly truncated: { readonly stdout: boolean; readonly stderr: boolean };
 }
 
-function isKanbanCard(value: unknown): value is KanbanCard {
-    if (typeof value !== "object" || value === null) return false;
-    if (!("id" in value) || typeof value.id !== "string" || value.id === "") return false;
-    if (!("content" in value) || typeof value.content !== "string") return false;
-    if (!("status" in value)) return false;
-    const status = value.status;
-    if (status !== "pending" && status !== "in_progress" && status !== "completed") return false;
-    if ("active_form" in value && value.active_form !== undefined && typeof value.active_form !== "string") return false;
-    if ("description" in value && value.description !== undefined && typeof value.description !== "string") return false;
-    return true;
+export interface WebSearchResultDetails {
+    readonly results: ReadonlyArray<{ readonly title: string; readonly url: string; readonly snippet: string }>;
+    readonly query: string;
+    readonly maxResults: number;
 }
+
+export interface ReadFileResultDetails {
+    readonly truncated: { readonly content: boolean };
+}
+
+export interface ReadArtifactResultDetails {
+    readonly key: string;
+    readonly content: string;
+    readonly created_at: string;
+}
+
+export interface WriteArtifactResultDetails {
+    readonly key: string;
+    readonly created_at: string;
+}
+
+export interface NotifyResultDetails {
+    readonly topic: string;
+    readonly task_id?: string;
+    readonly phase?: string;
+    readonly iteration?: number;
+}
+
+export interface WebFetchResultDetails {
+    readonly status: number;
+    readonly truncated: boolean;
+}
+
+export type ToolResultDetails =
+    | EditResultDetails
+    | WriteFileResultDetails
+    | KanbanDetails
+    | BashResultDetails
+    | WebSearchResultDetails
+    | ReadFileResultDetails
+    | ReadArtifactResultDetails
+    | WriteArtifactResultDetails
+    | NotifyResultDetails
+    | WebFetchResultDetails;

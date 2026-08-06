@@ -3,6 +3,7 @@ import type { AssistantMessage, StopReason } from "@earendil-works/pi-ai";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { HookIdentity, HookRunner } from "../hooks";
 import type { TranscriptStore } from "../storage";
+import type { ToolResultDetails } from "../types";
 import type { PromptQueue } from "./prompt-queue";
 import { StreamPublisherImpl, type StreamPublisher } from "./streaming";
 
@@ -127,12 +128,11 @@ function readFinalStopReason(event: Extract<PiAgentEvent, { type: "agent_end" }>
 }
 
 function persistableMessage(message: AgentMessage): AgentMessage {
-  if (message.role !== "toolResult" || isDisplayDetails(message.details)) return message;
+  if (message.role !== "toolResult" || isDiffDetails(message.details)) return message;
   const { details: _stripped, ...persistable } = message;
   return persistable;
 }
 
-function isDisplayDetails(details: unknown): boolean {
-  if (typeof details !== "object" || details === null || !("kind" in details)) return false;
-  return details.kind === "diff" || details.kind === "kanban";
+function isDiffDetails(details: ToolResultDetails | null | undefined): boolean {
+  return details !== null && details !== undefined && "kind" in details && details.kind === "diff";
 }

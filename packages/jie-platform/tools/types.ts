@@ -1,6 +1,6 @@
 import type { TSchema } from "typebox";
 import type { ArtifactStore } from "../storage";
-import type { TaskLifecycle } from "../types";
+import type { TaskLifecycle, ToolResultDetails } from "../types";
 
 export interface ExecutionContext {
   readonly sessionId: string;
@@ -13,7 +13,7 @@ export interface ExecutionContext {
 
 export interface ToolResult {
   readonly content: string;
-  readonly details?: unknown;
+  readonly details?: ToolResultDetails | null;
   readonly terminate?: boolean;
 }
 

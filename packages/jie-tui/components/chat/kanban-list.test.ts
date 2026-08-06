@@ -1,7 +1,7 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
+import type { KanbanCard } from "@cuzfrog/jie-platform";
 import { type StateStore, type TuiState } from "../../state";
 import { makeTuiState } from "../../test";
-import type { KanbanCard } from "../../kanban";
 import { KanbanList } from "./kanban-list";
 import { strikethrough, style } from "../themes";
 

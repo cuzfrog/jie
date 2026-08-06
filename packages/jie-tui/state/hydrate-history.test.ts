@@ -1,4 +1,4 @@
-import type { AgentMessage, UserIngressMessage } from "@cuzfrog/jie-platform";
+import type { AgentMessage, ToolResultDetails, UserIngressMessage } from "@cuzfrog/jie-platform";
 import type { Usage } from "@earendil-works/pi-ai";
 import { hydrateHistory } from "./hydrate-history";
 
@@ -30,7 +30,7 @@ function assistantToolCall(id: string, name: string, args: Record<string, unknow
     api: "openai", provider: "openai", model: "m", usage: usage(), stopReason: "toolUse", timestamp: 0,
   };
 }
-function toolResult(toolCallId: string, toolName: string, text: string, isError = false, details?: unknown): AgentMessage {
+function toolResult(toolCallId: string, toolName: string, text: string, isError = false, details?: ToolResultDetails | null): AgentMessage {
   return { role: "toolResult", toolCallId, toolName, content: [{ type: "text", text }], isError, details, timestamp: 0 };
 }
 function compactionSummary(summary: string, tokensBefore: number): AgentMessage {
@@ -116,6 +116,14 @@ describe("hydrateHistory", () => {
       error: null,
       details: undefined,
     }]);
+  });
+
+  test("tool result details pass through to the card", () => {
+    const details: ToolResultDetails = { kind: "diff", path: "a.txt", replacementsCount: 1, beforeBytes: 2, afterBytes: 3, diff: "-x\n+y" };
+    const result = hydrateHistory([
+      user("run"), assistantToolCall("c1", "edit", {}), toolResult("c1", "edit", "ok", false, details),
+    ], 0);
+    expect(result.currentTurn?.cards[0]?.details).toEqual(details);
   });
 
   test("tool error sets error and nulls output", () => {

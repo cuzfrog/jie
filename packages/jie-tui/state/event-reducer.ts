@@ -2,8 +2,8 @@ import type { AnyEventEnvelope } from "@cuzfrog/jie-platform";
 import type { AgentId, AgentUiState, MessageCard, TuiState, MessageTurn } from "./state";
 import { teamLoadReducer } from "./team-load-reducer";
 import { estimateContextTokens } from "./context-tokens";
-import { isKanbanDetails } from "../kanban";
-import { reduceKanbanBoard } from "./kanban-reducer";
+import { Actions } from "./actions";
+import { kanbanReducer } from "./kanban-reducer";
 
 export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
   switch (event.type) {
@@ -196,13 +196,13 @@ function reduceToolResult(state: TuiState, event: AnyEventEnvelope): TuiState {
   if (event.type !== "agent.tool.result") return state;
   const { agentId, agent } = resolved;
   const { tool_call_id, name, output, output_truncated, duration_ms, error, details } = event.payload;
-  if (isKanbanDetails(details)) {
-    return reduceKanbanBoard(state, details.cards);
-  }
-  if (agent.currentTurn === null) return state;
+  const boardState = details !== null && "kind" in details && details.kind === "kanban"
+    ? kanbanReducer(state, Actions.setKanbanBoard(details.cards))
+    : state;
+  if (agent.currentTurn === null) return boardState;
   const cards = [...agent.currentTurn.cards];
   const index = cards.findIndex((card) => card.kind === "toolCall" && card.callId === tool_call_id);
-  if (index === -1) return state;
+  if (index === -1) return boardState;
   const prior = cards[index];
   cards[index] = {
     kind: "toolResult",
@@ -219,7 +219,7 @@ function reduceToolResult(state: TuiState, event: AnyEventEnvelope): TuiState {
   const nextTurn = { ...agent.currentTurn, cards };
   const contextTokensUsed = estimateContextTokens(agent.history, nextTurn);
   const next: AgentUiState = { ...agent, currentTurn: nextTurn, contextTokensUsed };
-  return withAgent(state, agentId, next);
+  return withAgent(boardState, agentId, next);
 }
 
 function resolveAgent(

@@ -1,6 +1,5 @@
-import type { AnyEventEnvelope, CommandResult, TeamInfo } from "@cuzfrog/jie-platform";
-import type { KanbanCard } from "../kanban";
-import type { KanbanDirection } from "./kanban-cursor";
+import type { AnyEventEnvelope, CommandResult, KanbanCard, TeamInfo } from "@cuzfrog/jie-platform";
+import type { KanbanDirection } from "./kanban-reducer";
 
 type InstalledTeams = CommandResult<"getTeamInfo">["installed"];
 

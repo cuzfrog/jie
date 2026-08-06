@@ -1,11 +1,10 @@
 import { truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
-import { type StateStore, type TuiState } from "../state";
-import type { KanbanCard, KanbanStatus } from "../kanban";
+import type { KanbanCard, KanbanStatus } from "@cuzfrog/jie-platform";
+import { TuiState, type StateStore } from "../state";
 import { bg, style, type ColorName } from "./themes";
 
 const PANEL_PADDING = 1;
 const COLUMN_GAP = "  ";
-const MAX_ROWS_PER_COLUMN = 8;
 const STATUS_LABELS: { readonly [K in KanbanStatus]: string } = {
   pending: "pending",
   in_progress: "in_progress",
@@ -36,8 +35,9 @@ export class KanbanPanel implements Component {
     if (state.teamId === null || !state.kanbanPanelVisible) return [];
     const w = Math.max(1, width);
     const inner = Math.max(1, w - 2 - PANEL_PADDING * 2);
-    const focused = state.kanbanCursor === null ? null : state.kanbanBoard.find((card) => card.id === state.kanbanCursor) ?? null;
-    const rows = state.kanbanExpanded ? renderCardDetail(focused, inner) : renderKanbanBoard(state, inner);
+    const visible = TuiState.kanbanVisibleCards(state);
+    const focused = state.kanbanCursor === null ? null : visible.find((card) => card.id === state.kanbanCursor) ?? null;
+    const rows = state.kanbanExpanded ? renderCardDetail(focused, inner) : renderKanbanBoard(state, visible, inner);
     const border = style("borderMuted");
     const horizontal = "─".repeat(Math.max(0, w - 2));
     const framed = rows.map((row) => truncateToWidth(`${border("│")} ${row} ${border("│")}`, w));
@@ -52,9 +52,13 @@ export class KanbanPanel implements Component {
   invalidate(): void {}
 }
 
-function renderKanbanBoard(state: TuiState, innerWidth: number): string[] {
+function renderKanbanBoard(state: TuiState, visible: ReadonlyArray<KanbanCard>, innerWidth: number): string[] {
   const columnWidth = Math.max(1, Math.floor((innerWidth - COLUMN_GAP.length * (KANBAN_COLUMNS.length - 1)) / KANBAN_COLUMNS.length));
-  const columns = KANBAN_COLUMNS.map((column) => renderColumn(column, state.kanbanBoard.filter((card) => card.status === column.status), state.kanbanCursor, columnWidth));
+  const columns = KANBAN_COLUMNS.map((column) => {
+    const cards = visible.filter((card) => card.status === column.status);
+    const total = state.kanbanBoard.filter((card) => card.status === column.status).length;
+    return renderColumn(column, cards, total, state.kanbanCursor, columnWidth);
+  });
   const height = Math.max(...columns.map((column) => column.length));
   const rows: string[] = [];
   for (let rowIndex = 0; rowIndex < height; rowIndex += 1) {
@@ -64,13 +68,13 @@ function renderKanbanBoard(state: TuiState, innerWidth: number): string[] {
   return rows;
 }
 
-function renderColumn(column: { readonly title: string; readonly cardColor: ColorName }, cards: ReadonlyArray<KanbanCard>, cursorId: string | null, columnWidth: number): string[] {
-  const header = style("dim")(truncateToWidth(`${column.title} (${cards.length})`, columnWidth));
-  const rows = cards.slice(0, MAX_ROWS_PER_COLUMN).map((card) => {
+function renderColumn(column: { readonly title: string; readonly cardColor: ColorName }, cards: ReadonlyArray<KanbanCard>, total: number, cursorId: string | null, columnWidth: number): string[] {
+  const header = style("dim")(truncateToWidth(`${column.title} (${total})`, columnWidth));
+  const rows = cards.map((card) => {
     const line = style(column.cardColor)(truncateToWidth(card.content, columnWidth));
     return withBackground(line, columnWidth, bg(card.id === cursorId ? "cursor" : "card"));
   });
-  const overflow = cards.length - MAX_ROWS_PER_COLUMN;
+  const overflow = total - cards.length;
   if (overflow > 0) rows.push(style("dim")(`+${overflow} more`));
   return [header, ...rows];
 }

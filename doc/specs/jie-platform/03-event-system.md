@@ -29,7 +29,7 @@ Identity travels in the envelope, not in the subject. `topic` equals `type` for 
 | `agent.turn.start` | agent | `string \| null` — the raw user text this turn consumes; null for peer-notification and startup-resumed turns |
 | `agent.idle` | agent | pi-ai `StopReason` (`"stop"` / `"length"` / `"error"` / `"aborted"`) |
 | `agent.tool.call` | agent | `{ tool_call_id, name, input, input_truncated }` |
-| `agent.tool.result` | agent | `{ tool_call_id, name, output: string \| null, output_truncated, duration_ms, error: string \| null, details }` |
+| `agent.tool.result` | agent | `{ tool_call_id, name, output: string \| null, output_truncated, duration_ms, error: string \| null, details: ToolResultDetails \| null }` — `details` is the closed tool-details union (`06-agent-model.md` "Tool") |
 | `agent.stream.chunk` | agent | `{ stream_id, seq, block_type: "text" \| "thinking", text }` |
 | `agent.stream.end` | agent | `{ stream_id, total_chunks, thinking_durations: number[] }` |
 | `agent.usage` | agent | `{ input, output, cacheRead, cacheWrite, totalTokens }` |

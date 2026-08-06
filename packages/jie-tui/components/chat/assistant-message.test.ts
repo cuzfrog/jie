@@ -1,4 +1,5 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
+import type { ToolResultDetails } from "@cuzfrog/jie-platform";
 import { type MessageCard, type MessageTurn, type StateStore } from "../../state";
 import { makeTuiState } from "../../test";
 import { AssistantMessage, _summarizeWork } from "./assistant-message";
@@ -15,6 +16,10 @@ function turn(partial: Partial<MessageTurn> = {}): MessageTurn {
 
 function card(partial: Partial<MessageCard> = {}): MessageCard {
   return { kind: "toolResult", callId: "c1", name: "bash", ...partial };
+}
+
+function diffDetails(diff: string | null): ToolResultDetails {
+  return { kind: "diff", path: "a.txt", replacementsCount: 1, beforeBytes: 2, afterBytes: 2, diff };
 }
 
 describe("AssistantMessage — text blocks", () => {
@@ -138,7 +143,7 @@ describe("AssistantMessage — work summary", () => {
   });
 
   test("diff cards stay individual and show their diff block", () => {
-    const message = new AssistantMessage(turn({ cards: [card({ details: { kind: "diff", diff: "+a" } })] }), stateStore);
+    const message = new AssistantMessage(turn({ cards: [card({ details: diffDetails("+a") })] }), stateStore);
     expect(message.render(80)).toEqual([
       "\x1b[32m✓\x1b[39m \x1b[37mbash\x1b[39m",
       "\x1b[32m+a\x1b[39m",
@@ -170,7 +175,7 @@ describe("AssistantMessage — work summary", () => {
   test("the summary follows the diff blocks", () => {
     const message = new AssistantMessage(turn({
       blocks: [{ kind: "text", text: "answer" }],
-      cards: [card({ details: { kind: "diff", diff: "@@ -1,1 +1,1 @@\n-a\n+b" } }), card({ durationMs: 500 })],
+      cards: [card({ details: diffDetails("@@ -1,1 +1,1 @@\n-a\n+b") }), card({ durationMs: 500 })],
     }), stateStore);
     expect(message.render(80).map((line) => line.trimEnd())).toEqual([
       "\x1b[36m● \x1b[39manswer",
@@ -226,7 +231,7 @@ describe("AssistantMessage — width contract", () => {
         name: "x".repeat(300),
         input: "x".repeat(300),
         output: "中文🎉".repeat(40),
-        details: { kind: "diff", diff: `+${"x".repeat(300)}` },
+        details: diffDetails(`+${"x".repeat(300)}`),
       })],
     }), stateStore);
     for (const width of [13, 40, 61, 80, 139]) {

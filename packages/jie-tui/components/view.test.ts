@@ -166,46 +166,57 @@ describe("resolveGlobalKey", () => {
 
 describe("resolveKanbanKey", () => {
   test("tab toggles the kanban expand while the panel is shown", () => {
-    expect(_resolveKanbanKey("\t", makeTuiState({ kanbanPanelVisible: true }))).toEqual(Actions.toggleKanbanExpand());
+    expect(_resolveKanbanKey("\t", makeTuiState({ kanbanPanelVisible: true }), false)).toEqual(Actions.toggleKanbanExpand());
   });
 
   test("esc collapses the expanded kanban panel", () => {
-    expect(_resolveKanbanKey("\x1b", makeTuiState({ kanbanPanelVisible: true, kanbanExpanded: true }))).toEqual(Actions.toggleKanbanExpand());
+    expect(_resolveKanbanKey("\x1b", makeTuiState({ kanbanPanelVisible: true, kanbanExpanded: true }), false)).toEqual(Actions.toggleKanbanExpand());
   });
 
   test("arrows move the kanban cursor", () => {
-    const state = makeTuiState({ kanbanPanelVisible: true });
-    expect(_resolveKanbanKey("\x1b[A", state)).toEqual(Actions.moveKanbanCursor("up"));
-    expect(_resolveKanbanKey("\x1b[B", state)).toEqual(Actions.moveKanbanCursor("down"));
-    expect(_resolveKanbanKey("\x1b[C", state)).toEqual(Actions.moveKanbanCursor("right"));
-    expect(_resolveKanbanKey("\x1b[D", state)).toEqual(Actions.moveKanbanCursor("left"));
+    const state = makeTuiState({ kanbanPanelVisible: true, editorCursorAtStart: false });
+    expect(_resolveKanbanKey("\x1b[A", state, false)).toEqual(Actions.moveKanbanCursor("up"));
+    expect(_resolveKanbanKey("\x1b[B", state, false)).toEqual(Actions.moveKanbanCursor("down"));
+    expect(_resolveKanbanKey("\x1b[C", state, false)).toEqual(Actions.moveKanbanCursor("right"));
+    expect(_resolveKanbanKey("\x1b[D", state, false)).toEqual(Actions.moveKanbanCursor("left"));
+  });
+
+  test("left at the buffer start yields to the team panel toggle", () => {
+    expect(_resolveKanbanKey("\x1b[D", makeTuiState({ kanbanPanelVisible: true, editorCursorAtStart: true }), false)).toBeNull();
   });
 
   test("enter commits the edit at the cursor", () => {
-    expect(_resolveKanbanKey("\r", makeTuiState({ kanbanPanelVisible: true, kanbanCursor: "K1" }))).toEqual(Actions.commitKanbanEdit("K1"));
+    expect(_resolveKanbanKey("\r", makeTuiState({ kanbanPanelVisible: true, kanbanCursor: "K1" }), false)).toEqual(Actions.commitKanbanEdit("K1"));
   });
 
   test("enter does nothing without a cursor", () => {
-    expect(_resolveKanbanKey("\r", makeTuiState({ kanbanPanelVisible: true }))).toBeNull();
+    expect(_resolveKanbanKey("\r", makeTuiState({ kanbanPanelVisible: true }), false)).toBeNull();
   });
 
   test("null while the panel is hidden", () => {
-    expect(_resolveKanbanKey("\t", makeTuiState())).toBeNull();
-    expect(_resolveKanbanKey("\x1b[A", makeTuiState())).toBeNull();
+    expect(_resolveKanbanKey("\t", makeTuiState(), false)).toBeNull();
+    expect(_resolveKanbanKey("\x1b[A", makeTuiState(), false)).toBeNull();
+  });
+
+  test("null while the autocomplete popup is open, so the popup keeps navigation", () => {
+    const state = makeTuiState({ kanbanPanelVisible: true });
+    expect(_resolveKanbanKey("\t", state, true)).toBeNull();
+    expect(_resolveKanbanKey("\x1b[A", state, true)).toBeNull();
+    expect(_resolveKanbanKey("\r", state, true)).toBeNull();
   });
 
   test("null while editing a card, so every key reaches the editor", () => {
     const state = makeTuiState({ kanbanPanelVisible: true, kanbanEdit: "K1" });
-    expect(_resolveKanbanKey("\t", state)).toBeNull();
-    expect(_resolveKanbanKey("\x1b", state)).toBeNull();
-    expect(_resolveKanbanKey("\x1b[A", state)).toBeNull();
-    expect(_resolveKanbanKey("\r", state)).toBeNull();
+    expect(_resolveKanbanKey("\t", state, false)).toBeNull();
+    expect(_resolveKanbanKey("\x1b", state, false)).toBeNull();
+    expect(_resolveKanbanKey("\x1b[A", state, false)).toBeNull();
+    expect(_resolveKanbanKey("\r", state, false)).toBeNull();
   });
 
   test("null for any other key", () => {
     const state = makeTuiState({ kanbanPanelVisible: true });
-    expect(_resolveKanbanKey("a", state)).toBeNull();
-    expect(_resolveKanbanKey("\x1b[1;5B", state)).toBeNull();
+    expect(_resolveKanbanKey("a", state, false)).toBeNull();
+    expect(_resolveKanbanKey("\x1b[1;5B", state, false)).toBeNull();
   });
 });
 

@@ -1,6 +1,7 @@
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { Type } from "typebox";
 import type { ExecutionContext, Tool, ToolResult } from "./types";
+import type { EditResultDetails } from "../types";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
 import type { FileMutationQueue } from "./file-mutation-queue";
 import { checkWriteGates } from "./write-gate";
@@ -41,15 +42,6 @@ interface EditInput {
   path: string;
   edits: ReadonlyArray<EditReplacement>;
   replace_all?: boolean;
-}
-
-export interface EditResultDetails {
-  readonly kind: "diff";
-  readonly path: string;
-  readonly replacementsCount: number;
-  readonly beforeBytes: number;
-  readonly afterBytes: number;
-  readonly diff: string | null;
 }
 
 export function createEditTool(dependencies: EditDeps): Tool<EditInput> {

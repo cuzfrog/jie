@@ -1,6 +1,6 @@
 import { truncateToWidth, type Component } from "@earendil-works/pi-tui";
+import type { KanbanCard, KanbanStatus } from "@cuzfrog/jie-platform";
 import { type StateStore } from "../../state";
-import type { KanbanCard, KanbanStatus } from "../../kanban";
 import { strikethrough, style, type ColorName } from "../themes";
 
 const MAX_VISIBLE_CARDS = 6;

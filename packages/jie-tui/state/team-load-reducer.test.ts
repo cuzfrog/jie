@@ -202,6 +202,26 @@ describe("teamLoadReducer", () => {
     expect(second.kanbanCursor).toBe("K1");
   });
 
+  test("team switch clears kanban edit and expand; a same-team reload preserves them", () => {
+    const agents = [{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }];
+    const first = teamLoadReducer(INITIAL_TUI_STATE, team(agents));
+    const engaged: TuiState = { ...first, kanbanEdit: "K1", kanbanExpanded: true };
+    const switched = teamLoadReducer(engaged, {
+      id: "my-team-2",
+      leaderKey: "worker-1",
+      sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
+      history: [],
+      agents: [{ teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
+    });
+    expect(switched.kanbanEdit).toBeNull();
+    expect(switched.kanbanExpanded).toBe(false);
+    const reloaded = teamLoadReducer(engaged, team(agents));
+    expect(reloaded.kanbanEdit).toBe("K1");
+    expect(reloaded.kanbanExpanded).toBe(true);
+  });
+
   test("team load clears the interrupted marker", () => {
     const first = teamLoadReducer(INITIAL_TUI_STATE, team([
       { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
