@@ -30,7 +30,7 @@ function atom(overrides: Partial<MemoryAtom> = {}): MemoryAtom {
 
 describe("memory_search", () => {
   test("searches the execution context's team pool with the default limit of 5", async () => {
-    memoryStore.search.mockResolvedValue([atom()]);
+    memoryStore.search.mockReturnValue([atom()]);
     const tool = createMemorySearchTool({ memoryStore, settingsStore });
     const result = await tool.execute({ query: "sqlite" }, makeEmptyContext());
     expect(memoryStore.search).toHaveBeenCalledWith("sqlite", "test-team", 5);
@@ -38,14 +38,14 @@ describe("memory_search", () => {
   });
 
   test("passes the provided limit through", async () => {
-    memoryStore.search.mockResolvedValue([]);
+    memoryStore.search.mockReturnValue([]);
     const tool = createMemorySearchTool({ memoryStore, settingsStore });
     await tool.execute({ query: "sqlite", limit: 20 }, makeEmptyContext());
     expect(memoryStore.search).toHaveBeenCalledWith("sqlite", "test-team", 20);
   });
 
   test("no matches returns 'no matching memories'", async () => {
-    memoryStore.search.mockResolvedValue([]);
+    memoryStore.search.mockReturnValue([]);
     const tool = createMemorySearchTool({ memoryStore, settingsStore });
     const result = await tool.execute({ query: "nothing" }, makeEmptyContext());
     expect(result.content).toBe("no matching memories");
@@ -59,7 +59,9 @@ describe("memory_search", () => {
   });
 
   test("a malformed FTS query degrades to 'no matching memories'", async () => {
-    memoryStore.search.mockRejectedValue(new Error("fts5: syntax error near \"?\""));
+    memoryStore.search.mockImplementation(() => {
+      throw new Error("fts5: syntax error near \"?\"");
+    });
     const tool = createMemorySearchTool({ memoryStore, settingsStore });
     const result = await tool.execute({ query: "what is the auth module?" }, makeEmptyContext());
     expect(result.content).toBe("no matching memories");

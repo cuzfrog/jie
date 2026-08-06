@@ -198,12 +198,12 @@ export class JieAgentBody implements AgentBody {
       this.agent.state.messages = [...messages];
     }
     this.restored = messages;
-    await this.loadMemoryBlock();
+    this.loadMemoryBlock();
     return messages;
   }
 
-  private async loadMemoryBlock(): Promise<void> {
-    const memoryBlock = await loadMemoryBootstrap(this.memoryStore, this.settingsStore, this.teamId);
+  private loadMemoryBlock(): void {
+    const memoryBlock = loadMemoryBootstrap(this.memoryStore, this.settingsStore, this.teamId);
     this.agent.state.systemPrompt = composeSystemPrompt({
       rolePrompt: this.soul.systemPrompt,
       contextBlock: this.systemContextBlock,

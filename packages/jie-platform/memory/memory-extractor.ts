@@ -111,21 +111,20 @@ function parseExtraction(text: string): ReadonlyArray<NewMemoryAtom> | null {
     const rawMemories = item["memories"];
     if (!Array.isArray(rawMemories)) continue;
     for (const entry of rawMemories) {
-      const atom = parseAtom(entry);
-      if (atom !== null) atoms.push({ ...atom, scene });
+      const atom = parseAtom(entry, scene);
+      if (atom !== null) atoms.push(atom);
     }
   }
   return atoms;
 }
 
-function parseAtom(entry: unknown): NewMemoryAtom | null {
+function parseAtom(entry: unknown, scene: string): NewMemoryAtom | null {
   if (!isRecord(entry)) return null;
   const content = entry["content"];
   if (typeof content !== "string" || content === "") return null;
   const type = entry["type"];
   if (!isMemoryAtomType(type)) return null;
-  const priority = parsePriority(entry["priority"]);
-  return { content, type, priority: type === "instruction" ? 100 : priority, scene: "" };
+  return { content, type, priority: parsePriority(entry["priority"]), scene };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -137,16 +136,12 @@ function isMemoryAtomType(value: unknown): value is MemoryAtomType {
 }
 
 function parsePriority(value: unknown): number {
-  if (typeof value === "number") return clampPriority(value);
+  if (typeof value === "number") return value;
   if (typeof value === "string") {
     const parsed = Number(value.trim());
-    if (Number.isFinite(parsed)) return clampPriority(parsed);
+    if (Number.isFinite(parsed)) return parsed;
   }
   return 50;
-}
-
-function clampPriority(value: number): number {
-  return Math.max(0, Math.min(100, Math.round(value)));
 }
 
 function stripCodeFences(text: string): string {

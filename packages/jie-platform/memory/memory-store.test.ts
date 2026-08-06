@@ -36,7 +36,7 @@ describe("SqliteMemoryStore", () => {
     expect(stored).toBe(1);
   });
 
-  test("add forces instruction to priority 100 and clamps the range", async () => {
+  test("add forces instruction to priority 100 and clamps the range", () => {
     const store = makeStore();
     store.add(
       [
@@ -48,7 +48,7 @@ describe("SqliteMemoryStore", () => {
       "team-a",
       "s1",
     );
-    const top = await store.top("team-a", 10);
+    const top = store.top("team-a", 10);
     const byContent = new Map(top.map((a) => [a.content, a.priority]));
     expect(byContent.get("the auth module is still used by mobile")).toBe(100);
     expect(byContent.get("low")).toBe(0);
@@ -63,30 +63,30 @@ describe("SqliteMemoryStore", () => {
     store.add([atom({ content: "c2", priority: 90 })], "team-a", "s1");
     await new Promise((r) => setTimeout(r, 3));
     store.add([atom({ content: "c3", priority: 50 })], "team-a", "s1");
-    const top = await store.top("team-a", 10);
+    const top = store.top("team-a", 10);
     expect(top.map((a) => a.content)).toEqual(["c2", "c3", "c1"]);
   });
 
-  test("top is scoped to the team and respects the limit", async () => {
+  test("top is scoped to the team and respects the limit", () => {
     const store = makeStore();
     store.add([atom({ content: "team-a only" })], "team-a", "s1");
     store.add([atom({ content: "team-b only" })], "team-b", "s1");
-    const top = await store.top("team-a", 1);
+    const top = store.top("team-a", 1);
     expect(top.map((a) => a.content)).toEqual(["team-a only"]);
   });
 
-  test("search matches content via FTS and is scoped to the team", async () => {
+  test("search matches content via FTS and is scoped to the team", () => {
     const store = makeStore();
     store.add([atom({ content: "sqlite is embedded and dependable" })], "team-a", "s1");
     store.add([atom({ content: "sqlite migrations are slow" })], "team-b", "s1");
-    const hits = await store.search("sqlite", "team-a", 10);
+    const hits = store.search("sqlite", "team-a", 10);
     expect(hits.map((a) => a.content)).toEqual(["sqlite is embedded and dependable"]);
   });
 
-  test("search returns no hits for a missing term", async () => {
+  test("search returns no hits for a missing term", () => {
     const store = makeStore();
     store.add([atom()], "team-a", "s1");
-    const hits = await store.search("postgres", "team-a", 10);
+    const hits = store.search("postgres", "team-a", 10);
     expect(hits).toEqual([]);
   });
 });

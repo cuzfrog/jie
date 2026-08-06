@@ -24,8 +24,8 @@ export interface MemoryAtom {
 
 export interface MemoryStore {
   add(atoms: ReadonlyArray<NewMemoryAtom>, teamId: string, sourceSessionId: string): number;
-  search(query: string, teamId: string, limit: number): Promise<ReadonlyArray<MemoryAtom>>;
-  top(teamId: string, limit: number): Promise<ReadonlyArray<MemoryAtom>>;
+  search(query: string, teamId: string, limit: number): ReadonlyArray<MemoryAtom>;
+  top(teamId: string, limit: number): ReadonlyArray<MemoryAtom>;
 }
 
 export class SqliteMemoryStore implements MemoryStore {
@@ -58,7 +58,7 @@ export class SqliteMemoryStore implements MemoryStore {
     });
   }
 
-  async search(query: string, teamId: string, limit: number): Promise<ReadonlyArray<MemoryAtom>> {
+  search(query: string, teamId: string, limit: number): ReadonlyArray<MemoryAtom> {
     const rows = this.storage.query(
       `SELECT a.id, a.team_id, a.content, a.type, a.priority, a.scene, a.source_session_id, a.created_at, a.updated_at
        FROM memory_atoms_fts
@@ -71,7 +71,7 @@ export class SqliteMemoryStore implements MemoryStore {
     return rows.map(mapAtom);
   }
 
-  async top(teamId: string, limit: number): Promise<ReadonlyArray<MemoryAtom>> {
+  top(teamId: string, limit: number): ReadonlyArray<MemoryAtom> {
     const rows = this.storage.query(
       `SELECT id, team_id, content, type, priority, scene, source_session_id, created_at, updated_at
        FROM memory_atoms
