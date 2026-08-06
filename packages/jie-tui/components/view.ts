@@ -53,8 +53,8 @@ export class TuiViewImpl implements TuiView {
       frames: NO_SPINNER_FRAMES,
     });
     tui.addChild(chatContainer);
-    tui.addChild(this.workingSlot);
     tui.addChild(kanbanList);
+    tui.addChild(this.workingSlot);
     tui.addChild(new WelcomeBanner(stateStore));
     tui.addChild(new StatusLine(stateStore));
     tui.addChild(new QueuedPrompts(stateStore));
