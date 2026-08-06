@@ -21,7 +21,7 @@ Everything else is pi-tui `Editor` behavior: cursor/word movement, undo, kill ri
 | --- | --- | --- |
 | `Ctrl+T` | Expand / collapse all thinking blocks (collapsed completed blocks fold into the work summary) | always |
 | `Ctrl+O` | Expand / collapse all tool cards (collapsed successful diff-less results fold into the work summary) | always |
-| `Ctrl+K` | Toggle the kanban panel, the focused agent's card board (`tui-kanban-panel.md`) | always; no-op before a team is loaded |
+| `Ctrl+K` | Toggle the kanban panel, the loaded team's card board (`tui-kanban-panel.md`) | always; no-op before a team is loaded |
 | `←` | Toggle the team panel: show it with the cursor on the focused agent, or hide it and clear the cursor (`tui-team-panel.md`) | only while the editor cursor sits at the buffer start (`state.editorCursorAtStart`) and no autocomplete popup is showing; a `←` anywhere else stays with the editor; no-op before a team is loaded |
 
 `←` at the buffer start is the team panel's only toggle; while the panel is shown, plain `↑`/`↓` move its cursor (cycling both ways) and the editor's history walk yields (`tui-team-panel.md`, Interaction). `Ctrl+K` toggles the kanban panel from anywhere; the two panels share the bottom slot — showing one hides the other, and they never render together (`tui-kanban-panel.md`). All other arrow chords — `Ctrl+↑`, `Ctrl+↓`, the `Ctrl+←`/`Ctrl+→` word jumps, and a `←` away from the buffer start — stay with the editor/terminal. While the autocomplete popup is open, plain arrows navigate the popup, not the panel. The thinking/tool toggles are all-or-nothing across the focused agent's history + current turn (`state.thinkingExpanded` / `state.toolCardsExpanded`); mid-stream toggle re-renders on the next tick. There are **no** `PgUp`/`PgDn`/`Home`/`End`/wheel bindings: finished output is terminal scrollback; scroll and copy are the terminal's native behavior.
@@ -54,6 +54,11 @@ Typed into the editor like a prompt; the command handler (`command-handler.ts`) 
 | `/resume` (no arg) | Usage error | `/resume <sessionId>` |
 | `/rename <name>` | Name the loaded team's active session (`execute({name:"renameSession"})`; persisted in `session_metadata`, survives restarts). Multi-word names are joined; no team loaded is an error banner. On success the name is recorded in `state.sessionName` — it labels the editor's top border (`tui-layout.md`, Borders) and becomes the `/resume` candidate's label | `session renamed to <name>` |
 | `/rename` (no arg) | Usage error | `/rename <name>` |
+| `/kanban` (no arg) | Toggle the kanban panel (same as `Ctrl+K`; `tui-kanban-panel.md`); no-op before a team is loaded | none |
+| `/kanban add [--title <title>] <description>` | Add a card to the loaded session's board (`execute({name:"kanbanAdd"})`; the platform persists it per session per team, visible across team members). A long description is auto-distilled to a short title by the LLM; the full description stays on the card and shows in the panel's expanded view. The returned board replaces `state.kanbanBoard` | `added kanban card K<n>` |
+| `/kanban remove <cardId>` | Remove a card from the board (`execute({name:"kanbanRemove"})`); the returned board replaces `state.kanbanBoard` | none (board refreshes) |
+| `/kanban complete <cardId>` | Mark a card completed (`execute({name:"kanbanComplete"})`); the returned board replaces `state.kanbanBoard` | none (board refreshes) |
+| `/kanban` (bad subcommand / missing arg) | Usage error | `/kanban add --title <title> <description>` / `/kanban <add|remove|complete>` |
 
 ## Autocomplete
 
