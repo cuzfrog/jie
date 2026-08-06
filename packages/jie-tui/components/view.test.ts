@@ -3,7 +3,7 @@ import { Container, TUI } from "@earendil-works/pi-tui";
 import { Actions } from "../state";
 import { StreamTerminalImpl } from "../stream-terminal";
 import { makeTuiState } from "../test";
-import { _FlushLoader, _resolveGlobalKey, _resolveTeamCursorDirection, _shouldCommitTeamCursor, _syncWorkingSlot } from "./view";
+import { _FlushLoader, _resolveGlobalKey, _resolveKanbanKey, _resolveTeamCursorDirection, _shouldCommitTeamCursor, _syncWorkingSlot } from "./view";
 
 describe("FlushLoader", () => {
   test("renders the spinner at the chat column, without the loader's left padding", () => {
@@ -161,6 +161,51 @@ describe("resolveGlobalKey", () => {
     const state = makeTuiState({ editorCursorAtStart: true });
     expect(_resolveGlobalKey("a", state, false)).toBeNull();
     expect(_resolveGlobalKey("\r", state, false)).toBeNull();
+  });
+});
+
+describe("resolveKanbanKey", () => {
+  test("tab toggles the kanban expand while the panel is shown", () => {
+    expect(_resolveKanbanKey("\t", makeTuiState({ kanbanPanelVisible: true }))).toEqual(Actions.toggleKanbanExpand());
+  });
+
+  test("esc collapses the expanded kanban panel", () => {
+    expect(_resolveKanbanKey("\x1b", makeTuiState({ kanbanPanelVisible: true, kanbanExpanded: true }))).toEqual(Actions.toggleKanbanExpand());
+  });
+
+  test("arrows move the kanban cursor", () => {
+    const state = makeTuiState({ kanbanPanelVisible: true });
+    expect(_resolveKanbanKey("\x1b[A", state)).toEqual(Actions.moveKanbanCursor("up"));
+    expect(_resolveKanbanKey("\x1b[B", state)).toEqual(Actions.moveKanbanCursor("down"));
+    expect(_resolveKanbanKey("\x1b[C", state)).toEqual(Actions.moveKanbanCursor("right"));
+    expect(_resolveKanbanKey("\x1b[D", state)).toEqual(Actions.moveKanbanCursor("left"));
+  });
+
+  test("enter commits the edit at the cursor", () => {
+    expect(_resolveKanbanKey("\r", makeTuiState({ kanbanPanelVisible: true, kanbanCursor: "K1" }))).toEqual(Actions.commitKanbanEdit("K1"));
+  });
+
+  test("enter does nothing without a cursor", () => {
+    expect(_resolveKanbanKey("\r", makeTuiState({ kanbanPanelVisible: true }))).toBeNull();
+  });
+
+  test("null while the panel is hidden", () => {
+    expect(_resolveKanbanKey("\t", makeTuiState())).toBeNull();
+    expect(_resolveKanbanKey("\x1b[A", makeTuiState())).toBeNull();
+  });
+
+  test("null while editing a card, so every key reaches the editor", () => {
+    const state = makeTuiState({ kanbanPanelVisible: true, kanbanEdit: "K1" });
+    expect(_resolveKanbanKey("\t", state)).toBeNull();
+    expect(_resolveKanbanKey("\x1b", state)).toBeNull();
+    expect(_resolveKanbanKey("\x1b[A", state)).toBeNull();
+    expect(_resolveKanbanKey("\r", state)).toBeNull();
+  });
+
+  test("null for any other key", () => {
+    const state = makeTuiState({ kanbanPanelVisible: true });
+    expect(_resolveKanbanKey("a", state)).toBeNull();
+    expect(_resolveKanbanKey("\x1b[1;5B", state)).toBeNull();
   });
 });
 

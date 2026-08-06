@@ -66,6 +66,11 @@ export class TuiViewImpl implements TuiView {
     this.unsubscribeKeys = tui.addInputListener((data) => {
       const state = this.stateStore.getState();
       const popupOpen = editor.isShowingAutocomplete();
+      const kanbanAction = resolveKanbanKey(data, state);
+      if (kanbanAction !== null) {
+        this.stateStore.dispatch(kanbanAction);
+        return CONSUMED;
+      }
       const action = resolveGlobalKey(data, state, popupOpen);
       if (action !== null) {
         this.stateStore.dispatch(action);
@@ -118,6 +123,18 @@ function resolveGlobalKey(data: string, state: TuiState, popupOpen: boolean): Ac
   return null;
 }
 
+function resolveKanbanKey(data: string, state: TuiState): Action | null {
+  if (!state.kanbanPanelVisible || state.kanbanEdit !== null) return null;
+  if (matchesKey(data, "esc") && state.kanbanExpanded) return Actions.toggleKanbanExpand();
+  if (matchesKey(data, "tab")) return Actions.toggleKanbanExpand();
+  if (matchesKey(data, "up")) return Actions.moveKanbanCursor("up");
+  if (matchesKey(data, "down")) return Actions.moveKanbanCursor("down");
+  if (matchesKey(data, "left")) return Actions.moveKanbanCursor("left");
+  if (matchesKey(data, "right")) return Actions.moveKanbanCursor("right");
+  if (matchesKey(data, "enter") && state.kanbanCursor !== null) return Actions.commitKanbanEdit(state.kanbanCursor);
+  return null;
+}
+
 function resolveTeamCursorDirection(data: string, state: TuiState, popupOpen: boolean): 1 | -1 | null {
   if (!state.teamPanelVisible || popupOpen) return null;
   if (matchesKey(data, "down")) return 1;
@@ -147,6 +164,7 @@ function syncWorkingSlot(slot: Container, working: Loader, teamWorking: Loader, 
 export {
   FlushLoader as _FlushLoader,
   resolveGlobalKey as _resolveGlobalKey,
+  resolveKanbanKey as _resolveKanbanKey,
   resolveTeamCursorDirection as _resolveTeamCursorDirection,
   shouldCommitTeamCursor as _shouldCommitTeamCursor,
   syncWorkingSlot as _syncWorkingSlot,

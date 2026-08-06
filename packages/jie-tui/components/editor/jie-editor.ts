@@ -17,15 +17,17 @@ import type { PromptHistoryStore } from "./prompt-history";
 const ESCAPE = "\x1b";
 const CTRL_C = "\x03";
 const CTRL_D = "\x04";
+const CTRL_S = "\x13";
 const FAKE_CURSOR = "\x1b[7m";
 const FAKE_CURSOR_END = "\x1b[0m";
 const SCROLL_INFO_PATTERN = /^\s*\((\d+)\/(\d+)\)\s*$/;
 const COMMAND_BOUNDARY_PATTERN = /^\/(\S+) $/;
 const LEAD_ANSI_PATTERN = /^(\x1b\[[0-9;]*m)*/;
-const SESSION_LABEL_TRAILING_DASHES = 2;
+const CHIP_TRAILING_DASHES = 2;
 const HISTORY_MAX_SIZE = 100;
 const CHIP_BACKGROUND_BORDER = "\x1b[44m";
 const CHIP_BACKGROUND_WARNING = "\x1b[43m";
+const CHIP_BACKGROUND_EDIT = "\x1b[45m";
 const CHIP_BACKGROUND_END = "\x1b[49m";
 
 const EDITOR_THEME: EditorTheme = {
@@ -51,6 +53,8 @@ export class JieEditor extends Editor {
   private lastSeenQueue: ReadonlyArray<{ readonly text: string; readonly source: "user" | "peer" }> | null = null;
   private pendingDequeues = 0;
   private programmaticChange = false;
+  private kanbanEditId: string | null = null;
+  private kanbanDraft: string | null = null;
 
   constructor(
     tui: TUI,
@@ -62,7 +66,7 @@ export class JieEditor extends Editor {
     super(tui, theme);
     this.stateStore = stateStore;
     this.promptHistoryStore = promptHistoryStore;
-    const tracking = new GhostTrackingProvider(autocompleteProvider);
+    const tracking = new GhostTrackingProvider(autocompleteProvider, () => this.stateStore.getState().kanbanEdit !== null);
     tracking.onSuggestions = (suggestions): void => {
       this.popupFilteredOut = suggestions.filteredOut ?? null;
       this.resetGhost(suggestions.items, suggestions.prefix);
@@ -81,13 +85,24 @@ export class JieEditor extends Editor {
     };
     this.onSubmit = (text: string): void => {
       if (text.trim() === "") return;
+      if (this.stateStore.getState().kanbanEdit !== null) {
+        this.saveKanbanEdit(text);
+        return;
+      }
       this.addToHistory(text);
       this.persistPrompt(text);
       this.stateStore.dispatch(Actions.submitEditorText(text));
     };
+    stateStore.subscribe(async (_action, afterState) => {
+      this.syncKanbanEdit(afterState.kanbanEdit);
+    });
   }
 
   handleInput(data: string): void {
+    if (this.stateStore.getState().kanbanEdit !== null) {
+      this.handleKanbanEditInput(data);
+      return;
+    }
     if (data === ESCAPE && !this.isShowingAutocomplete()) {
       this.interruptFocusedAgent();
       return;
@@ -111,8 +126,11 @@ export class JieEditor extends Editor {
 
   render(width: number): string[] {
     let lines = super.render(width);
-    const chipBackground = this.bashMode ? CHIP_BACKGROUND_WARNING : CHIP_BACKGROUND_BORDER;
-    lines = spliceSessionLabel(lines, this.stateStore.getState().sessionName, width, this.borderColor, chipBackground);
+    const state = this.stateStore.getState();
+    const editingId = state.kanbanEdit;
+    const chipLabel = editingId !== null ? `editing ${editingId}` : state.sessionName;
+    const chipBackground = editingId !== null ? CHIP_BACKGROUND_EDIT : (this.bashMode ? CHIP_BACKGROUND_WARNING : CHIP_BACKGROUND_BORDER);
+    lines = spliceTopBorderChip(lines, chipLabel, width, this.borderColor, chipBackground);
     if (this.isShowingAutocomplete() && this.popupFilteredOut !== null && this.ghost !== null) {
       lines = spliceFilteredInfo(lines, this.popupFilteredOut, this.ghost.index + 1, this.ghost.items.length);
     }
@@ -176,7 +194,7 @@ export class JieEditor extends Editor {
     const session = this.browse!;
     session.stack.push(value);
     session.index += 1;
-    this.applyBrowseText(value.text);
+    this.applyText(value.text);
     return true;
   }
 
@@ -232,11 +250,11 @@ export class JieEditor extends Editor {
     session.index -= 1;
     const value = session.stack[session.index]!;
     if (session.index === 0) this.browse = null;
-    this.applyBrowseText(value.text);
+    this.applyText(value.text);
     return true;
   }
 
-  private applyBrowseText(text: string): void {
+  private applyText(text: string): void {
     this.programmaticChange = true;
     this.setText(text);
     this.programmaticChange = false;
@@ -248,6 +266,48 @@ export class JieEditor extends Editor {
       return;
     }
     this.stateStore.dispatch(Actions.requestQuit());
+  }
+
+  private handleKanbanEditInput(data: string): void {
+    if (data === ESCAPE || data === CTRL_C) {
+      this.stateStore.dispatch(Actions.cancelKanbanEdit());
+      return;
+    }
+    if (data === CTRL_S) {
+      this.saveKanbanEdit(this.getText());
+      return;
+    }
+    super.handleInput(data);
+    this.syncCursorAtStart();
+  }
+
+  private saveKanbanEdit(text: string): void {
+    const cardId = this.stateStore.getState().kanbanEdit;
+    if (cardId === null) return;
+    this.stateStore.dispatch(Actions.saveKanbanEdit(cardId, text));
+  }
+
+  private syncKanbanEdit(afterStateKanbanEdit: string | null): void {
+    if (afterStateKanbanEdit === this.kanbanEditId) return;
+    if (afterStateKanbanEdit === null) {
+      this.endKanbanEdit();
+      this.kanbanEditId = null;
+      return;
+    }
+    this.kanbanEditId = afterStateKanbanEdit;
+    this.beginKanbanEdit(afterStateKanbanEdit);
+  }
+
+  private beginKanbanEdit(cardId: string): void {
+    if (this.kanbanDraft === null) this.kanbanDraft = this.getText();
+    const card = this.stateStore.getState().kanbanBoard.find((entry) => entry.id === cardId);
+    this.applyText(card?.content ?? "");
+  }
+
+  private endKanbanEdit(): void {
+    if (this.kanbanDraft === null) return;
+    this.applyText(this.kanbanDraft);
+    this.kanbanDraft = null;
   }
 
   private resetGhost(items: ReadonlyArray<AutocompleteItem>, prefix: string): void {
@@ -288,10 +348,12 @@ class GhostTrackingProvider implements AutocompleteProvider {
   readonly triggerCharacters: string[] | undefined;
   onSuggestions: ((suggestions: JieSuggestions) => void) | null = null;
   private readonly inner: JieAutocompleteProvider;
+  private readonly isEditing: () => boolean;
 
-  constructor(inner: JieAutocompleteProvider) {
+  constructor(inner: JieAutocompleteProvider, isEditing: () => boolean) {
     this.inner = inner;
     this.triggerCharacters = inner.triggerCharacters;
+    this.isEditing = isEditing;
   }
 
   getSuggestions(
@@ -300,6 +362,7 @@ class GhostTrackingProvider implements AutocompleteProvider {
     cursorCol: number,
     options: { signal: AbortSignal; force?: boolean },
   ): Promise<JieSuggestions | null> {
+    if (this.isEditing()) return Promise.resolve(null);
     return Promise.resolve(this.inner.getSuggestions(lines, cursorLine, cursorCol, options)).then((result) => {
       if (result !== null && this.onSuggestions !== null) this.onSuggestions(result);
       return result;
@@ -382,22 +445,22 @@ function injectGhost(line: string, ghost: string, ghostWidth: number): string {
   return `${before}${leadAnsi}${FAKE_CURSOR}${first}${FAKE_CURSOR_END}${leadAnsi}${rest}${tail.slice(fit - 1)}`;
 }
 
-function spliceSessionLabel(
+function spliceTopBorderChip(
   lines: string[],
-  name: string | null,
+  label: string | null,
   width: number,
   borderColor: (text: string) => string,
   chipBackground: string,
 ): string[] {
-  if (name === null || name === "" || lines.length === 0) return lines;
-  const maxNameWidth = width - SESSION_LABEL_TRAILING_DASHES - 3;
-  if (maxNameWidth < 1) return lines;
-  const shown = visibleWidth(name) > maxNameWidth ? truncateToWidth(name, maxNameWidth, "") : name;
-  const label = ` ${shown} `;
-  const start = width - SESSION_LABEL_TRAILING_DASHES - visibleWidth(label);
+  if (label === null || label === "" || lines.length === 0) return lines;
+  const maxLabelWidth = width - CHIP_TRAILING_DASHES - 3;
+  if (maxLabelWidth < 1) return lines;
+  const shown = visibleWidth(label) > maxLabelWidth ? truncateToWidth(label, maxLabelWidth, "") : label;
+  const chip = ` ${shown} `;
+  const start = width - CHIP_TRAILING_DASHES - visibleWidth(chip);
   const prefix = truncateToWidth(stripAnsi(lines[0]!), start, "");
   const next = [...lines];
-  next[0] = borderColor(prefix) + chipBackground + label + CHIP_BACKGROUND_END + borderColor("─".repeat(SESSION_LABEL_TRAILING_DASHES));
+  next[0] = borderColor(prefix) + chipBackground + chip + CHIP_BACKGROUND_END + borderColor("─".repeat(CHIP_TRAILING_DASHES));
   return next;
 }
 

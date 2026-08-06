@@ -94,7 +94,7 @@ export const Actions = {
 	toggleKanbanExpand: () => createAction(ActionTypes.TOGGLE_KANBAN_EXPAND),
 	commitKanbanEdit: (cardId: string) => createAction(ActionTypes.COMMIT_KANBAN_EDIT, { cardId }),
 	cancelKanbanEdit: () => createAction(ActionTypes.CANCEL_KANBAN_EDIT),
-	saveKanbanEdit: () => createAction(ActionTypes.SAVE_KANBAN_EDIT),
+	saveKanbanEdit: (cardId: string, content: string) => createAction(ActionTypes.SAVE_KANBAN_EDIT, { cardId, content }),
 } as const;
 
 export type Action = ReturnType<typeof Actions[keyof typeof Actions]>;
