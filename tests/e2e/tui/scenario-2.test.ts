@@ -87,7 +87,7 @@ describe("Scenario 2 — pass work in a team", () => {
     await waitForTeam(harness, "my-team");
     await waitForFocusedAgent(harness, "my-team:manager-1");
     await submitAndWaitForAgentIdle(harness, "Update your kanban board with one in-progress card", "my-team:manager-1");
-    expect(harness.stateStore.getState().kanbanBoard).toEqual([{ id: "K1", content: "write the report", status: "in_progress" }]);
+    expect(harness.stateStore.getState().kanbanBoard).toEqual([{ id: "#1", content: "write the report", status: "in_progress" }]);
     await sendCmd(harness.stdin, "\x0b");
     await waitForUi(harness, (state) => state.kanbanView === "list", "kanban list view");
     await sendCmd(harness.stdin, "\x0b");

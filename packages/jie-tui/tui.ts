@@ -11,7 +11,7 @@ const REQUEST_INTERRUPT = Actions.requestInterrupt("", "").type;
 const REQUEST_DEQUEUE = Actions.requestDequeue("", "", "").type;
 const REQUEST_REQUEUE = Actions.requestRequeue("", "", "").type;
 const REQUEST_QUIT = Actions.requestQuit().type;
-const SAVE_KANBAN_EDIT = Actions.saveKanbanEdit("", "").type;
+const SAVE_KANBAN_EDIT = Actions.saveKanbanEdit("", "", "content").type;
 const log = logger.getSubLogger({ name: "jie.tui" });
 
 export type TuiStdout = NodeJS.WritableStream & { readonly columns?: number; readonly rows?: number };
@@ -97,7 +97,7 @@ export class TuiImpl implements Tui {
         return;
       }
       if (action.type === SAVE_KANBAN_EDIT) {
-        void this.persistKanbanEdit(action.payload.cardId, action.payload.content);
+        void this.persistKanbanEdit(action.payload.cardId, action.payload.field, action.payload.text);
         return;
       }
     });
@@ -157,10 +157,10 @@ export class TuiImpl implements Tui {
     this.stop();
   }
 
-  private persistKanbanEdit(cardId: string, content: string): void {
+  private persistKanbanEdit(cardId: string, field: "content" | "description", text: string): void {
     const teamId = this.stateStore.getState().teamId;
     if (teamId === null) return;
-    void this.platform.execute({ name: "kanbanEdit", teamId, cardId, content })
+    void this.platform.execute({ name: "kanbanEdit", teamId, cardId, field, text })
       .then((result) => {
         this.stateStore.dispatch(Actions.setKanbanBoard(result.board));
       }, (error: unknown) => {

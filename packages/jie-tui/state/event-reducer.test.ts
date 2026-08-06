@@ -786,13 +786,13 @@ describe("reduceToolCall + reduceToolResult", () => {
     let state = promptedState();
     state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "kanban_write", "{}"));
     const cards = [
-      { id: "K1", content: "alpha", status: "completed" },
-      { id: "K2", content: "beta", status: "in_progress" },
-      { id: "K3", content: "gamma", status: "pending" },
+      { id: "#1", content: "alpha", status: "completed" },
+      { id: "#2", content: "beta", status: "in_progress" },
+      { id: "#3", content: "gamma", status: "pending" },
     ] as const;
     const state2 = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "kanban_write", "Updated kanban: 3 cards, 1 in progress", 5, null, { kind: "kanban", cards }));
     expect(state2.kanbanBoard).toEqual(cards);
-    expect(state2.kanbanCursor).toBe("K1");
+    expect(state2.kanbanCursor).toBe("#1");
     const card = state2.agents.get("my-team:general-1")?.currentTurn?.cards[0];
     expect(card?.kind).toBe("toolResult");
     if (card?.kind === "toolResult") {
@@ -805,8 +805,8 @@ describe("reduceToolCall + reduceToolResult", () => {
   test("a kanban_write tool result without a matching tool call still updates the board", () => {
     const state = promptedState();
     const cards = [
-      { id: "K1", content: "alpha", status: "completed" },
-      { id: "K2", content: "beta", status: "in_progress" },
+      { id: "#1", content: "alpha", status: "completed" },
+      { id: "#2", content: "beta", status: "in_progress" },
     ] as const;
     const state2 = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "kanban_write", "ok", 5, null, { kind: "kanban", cards }));
     expect(state2.kanbanBoard).toEqual(cards);
@@ -829,7 +829,7 @@ describe("reduceToolCall + reduceToolResult", () => {
   test("a kanban_write tool result for a foreign team is ignored", () => {
     const state = promptedState();
     const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
-    const state2 = reduce(state, Events.agentToolResult(foreign, "c1", "kanban_write", "ok", 5, null, { kind: "kanban", cards: [{ id: "K1", content: "x", status: "in_progress" }] }));
+    const state2 = reduce(state, Events.agentToolResult(foreign, "c1", "kanban_write", "ok", 5, null, { kind: "kanban", cards: [{ id: "#1", content: "x", status: "in_progress" }] }));
     expect(state2).toBe(state);
     expect(state2.kanbanBoard).toEqual([]);
   });

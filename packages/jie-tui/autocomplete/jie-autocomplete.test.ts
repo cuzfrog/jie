@@ -656,9 +656,9 @@ describe("createJieAutocompleteProvider — /logout arguments", () => {
 
 describe("createJieAutocompleteProvider — /kanban arguments", () => {
   const BOARD: ReadonlyArray<KanbanCard> = [
-    { id: "K1", content: "write spec", status: "pending" },
-    { id: "K2", content: "implement tool", status: "in_progress" },
-    { id: "K3", content: "rename todo", status: "completed" },
+    { id: "#1", content: "write spec", status: "pending" },
+    { id: "#2", content: "implement tool", status: "in_progress" },
+    { id: "#3", content: "rename todo", status: "completed" },
   ];
 
   test("drills down to subcommands from an unambiguous command prefix", async () => {
@@ -695,21 +695,21 @@ describe("createJieAutocompleteProvider — /kanban arguments", () => {
   test("suggests card ids after '/kanban remove '", async () => {
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), storeWithKanban(BOARD))
       .getSuggestions(["/kanban remove "], 0, 15, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["remove K1", "remove K2", "remove K3"]);
-    expect(suggestions!.items[0]!.label).toBe("K1");
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["remove #1", "remove #2", "remove #3"]);
+    expect(suggestions!.items[0]!.label).toBe("#1");
     expect(suggestions!.items[0]!.description).toBe("write spec");
   });
 
   test("suggests card ids after '/kanban complete '", async () => {
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), storeWithKanban(BOARD))
       .getSuggestions(["/kanban complete "], 0, 17, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["complete K1", "complete K2", "complete K3"]);
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["complete #1", "complete #2", "complete #3"]);
   });
 
   test("filters card ids by the typed prefix", async () => {
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), storeWithKanban(BOARD))
-      .getSuggestions(["/kanban remove K"], 0, 16, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["remove K1", "remove K2", "remove K3"]);
+      .getSuggestions(["/kanban remove #"], 0, 16, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["remove #1", "remove #2", "remove #3"]);
   });
 
   test("yields no suggestions when the subcommand is unknown", async () => {
@@ -733,8 +733,8 @@ describe("createJieAutocompleteProvider — /kanban arguments", () => {
 
   test("commits a card id without adding a trailing space", () => {
     const result = new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), storeWithKanban(BOARD))
-      .applyCompletion(["/kanban remove "], 0, 15, { value: "remove K1", label: "remove K1" }, "remove ");
-    expect(result.lines).toEqual(["/kanban remove K1"]);
+      .applyCompletion(["/kanban remove "], 0, 15, { value: "remove #1", label: "remove #1" }, "remove ");
+    expect(result.lines).toEqual(["/kanban remove #1"]);
     expect(result.cursorCol).toBe(17);
   });
 });

@@ -128,6 +128,12 @@ function resolveKanbanKey(data: string, state: TuiState, popupOpen: boolean): Ac
   if (state.kanbanView !== "panel" || state.kanbanEdit !== null || popupOpen) return null;
   if (matchesKey(data, "esc") && state.kanbanExpanded) return Actions.toggleKanbanExpand();
   if (matchesKey(data, "tab")) return Actions.toggleKanbanExpand();
+  if (state.kanbanExpanded) {
+    if (matchesKey(data, "up")) return Actions.moveKanbanEditField("up");
+    if (matchesKey(data, "down")) return Actions.moveKanbanEditField("down");
+    if (data === CTRL_E && state.kanbanCursor !== null) return Actions.commitKanbanEdit(state.kanbanCursor, state.kanbanEditField);
+    return null;
+  }
   if (matchesKey(data, "up")) return Actions.moveKanbanCursor("up");
   if (matchesKey(data, "down")) return Actions.moveKanbanCursor("down");
   if (matchesKey(data, "left")) return Actions.moveKanbanCursor("left");

@@ -191,7 +191,20 @@ describe("resolveKanbanKey", () => {
   });
 
   test("ctrl+e commits the edit at the cursor", () => {
-    expect(_resolveKanbanKey("\x05", makeTuiState({ kanbanView: "panel", kanbanCursor: "K1" }), false)).toEqual(Actions.commitKanbanEdit("K1"));
+    expect(_resolveKanbanKey("\x05", makeTuiState({ kanbanView: "panel", kanbanCursor: "#1" }), false)).toEqual(Actions.commitKanbanEdit("#1"));
+  });
+
+  test("arrows select title and description while expanded", () => {
+    const state = makeTuiState({ kanbanView: "panel", kanbanExpanded: true, kanbanEditField: "content" });
+    expect(_resolveKanbanKey("\x1b[B", state, false)).toEqual(Actions.moveKanbanEditField("down"));
+    expect(_resolveKanbanKey("\x1b[A", makeTuiState({ kanbanView: "panel", kanbanExpanded: true, kanbanEditField: "description" }), false)).toEqual(Actions.moveKanbanEditField("up"));
+    expect(_resolveKanbanKey("\x1b[C", state, false)).toBeNull();
+    expect(_resolveKanbanKey("\x1b[D", state, false)).toBeNull();
+  });
+
+  test("ctrl+e commits the selected field while expanded", () => {
+    const state = makeTuiState({ kanbanView: "panel", kanbanExpanded: true, kanbanCursor: "#1", kanbanEditField: "description" });
+    expect(_resolveKanbanKey("\x05", state, false)).toEqual(Actions.commitKanbanEdit("#1", "description"));
   });
 
   test("ctrl+e does nothing without a cursor", () => {
@@ -199,7 +212,7 @@ describe("resolveKanbanKey", () => {
   });
 
   test("enter falls through to the editor while the panel is shown", () => {
-    expect(_resolveKanbanKey("\r", makeTuiState({ kanbanView: "panel", kanbanCursor: "K1" }), false)).toBeNull();
+    expect(_resolveKanbanKey("\r", makeTuiState({ kanbanView: "panel", kanbanCursor: "#1" }), false)).toBeNull();
   });
 
   test("null while the view is hidden or list", () => {
@@ -217,7 +230,7 @@ describe("resolveKanbanKey", () => {
   });
 
   test("null while editing a card, so every key reaches the editor", () => {
-    const state = makeTuiState({ kanbanView: "panel", kanbanEdit: "K1" });
+    const state = makeTuiState({ kanbanView: "panel", kanbanEdit: "#1" });
     expect(_resolveKanbanKey("\t", state, false)).toBeNull();
     expect(_resolveKanbanKey("\x1b", state, false)).toBeNull();
     expect(_resolveKanbanKey("\x1b[A", state, false)).toBeNull();

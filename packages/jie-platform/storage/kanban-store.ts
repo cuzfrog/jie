@@ -8,6 +8,7 @@ export interface KanbanStore {
   remove(teamId: string, sessionId: string, cardId: string): boolean;
   complete(teamId: string, sessionId: string, cardId: string): boolean;
   editContent(teamId: string, sessionId: string, cardId: string, content: string): KanbanCard | null;
+  editDescription(teamId: string, sessionId: string, cardId: string, description: string | undefined): KanbanCard | null;
 }
 
 export class SqliteKanbanStore implements KanbanStore {
@@ -77,6 +78,20 @@ export class SqliteKanbanStore implements KanbanStore {
     return card;
   }
 
+  editDescription(teamId: string, sessionId: string, cardId: string, description: string | undefined): KanbanCard | null {
+    const existing = this.load(teamId, sessionId);
+    const index = existing.findIndex((card) => card.id === cardId);
+    if (index === -1) return null;
+    const card = { ...existing[index]! };
+    if (description === undefined || description.trim() === "") {
+      delete (card as { description?: string }).description;
+    } else {
+      card.description = description;
+    }
+    this.persist(teamId, sessionId, existing.map((c) => (c.id === cardId ? card : c)));
+    return card;
+  }
+
   private persist(teamId: string, sessionId: string, cards: ReadonlyArray<KanbanCard>): void {
     this.storage.transaction((s) => {
       s.exec(`DELETE FROM kanban_cards WHERE team_id = ? AND session_id = ?`, [teamId, sessionId]);
@@ -99,7 +114,7 @@ export class SqliteKanbanStore implements KanbanStore {
        ON CONFLICT(team_id, session_id) DO UPDATE SET next_id = excluded.next_id`,
       [teamId, sessionId, next + 1],
     );
-    return `K${next}`;
+    return `#${next}`;
   }
 }
 

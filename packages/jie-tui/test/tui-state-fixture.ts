@@ -26,6 +26,7 @@ export function makeTuiState(overrides: Partial<TuiState> = {}): TuiState {
     kanbanCursor: null,
     kanbanExpanded: false,
     kanbanEdit: null,
+    kanbanEditField: "content",
     pendingQuit: false,
     editorText: "",
     editorCursorAtStart: true,

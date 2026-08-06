@@ -1,4 +1,5 @@
 import type { AnyEventEnvelope, CommandResult, KanbanCard, TeamInfo } from "@cuzfrog/jie-platform";
+import type { KanbanEditField } from "./state";
 
 type InstalledTeams = CommandResult<"getTeamInfo">["installed"];
 
@@ -31,6 +32,7 @@ export const ActionTypes = {
   SHOW_HELP: "[ui] show help in the chat area",
   SET_KANBAN_BOARD: "[ui] set kanban board",
   MOVE_KANBAN_CURSOR: "[ui] move kanban cursor",
+  MOVE_KANBAN_EDIT_FIELD: "[ui] move kanban edit field",
   TOGGLE_KANBAN_EXPAND: "[ui] toggle kanban expanded",
   COMMIT_KANBAN_EDIT: "[ui] commit kanban card edit",
   CANCEL_KANBAN_EDIT: "[ui] cancel kanban card edit",
@@ -89,10 +91,11 @@ export const Actions = {
 	showHelp: () => showHelp,
 	setKanbanBoard: (board: ReadonlyArray<KanbanCard>) => createAction(ActionTypes.SET_KANBAN_BOARD, { board }),
 	moveKanbanCursor: (direction: "up" | "down" | "left" | "right") => createAction(ActionTypes.MOVE_KANBAN_CURSOR, { direction }),
+	moveKanbanEditField: (direction: "up" | "down") => createAction(ActionTypes.MOVE_KANBAN_EDIT_FIELD, { direction }),
 	toggleKanbanExpand: () => createAction(ActionTypes.TOGGLE_KANBAN_EXPAND),
-	commitKanbanEdit: (cardId: string) => createAction(ActionTypes.COMMIT_KANBAN_EDIT, { cardId }),
+	commitKanbanEdit: (cardId: string, field: KanbanEditField = "content") => createAction(ActionTypes.COMMIT_KANBAN_EDIT, { cardId, field }),
 	cancelKanbanEdit: () => createAction(ActionTypes.CANCEL_KANBAN_EDIT),
-	saveKanbanEdit: (cardId: string, content: string) => createAction(ActionTypes.SAVE_KANBAN_EDIT, { cardId, content }),
+	saveKanbanEdit: (cardId: string, text: string, field: KanbanEditField = "content") => createAction(ActionTypes.SAVE_KANBAN_EDIT, { cardId, field, text }),
 } as const;
 
 export type Action = ReturnType<typeof Actions[keyof typeof Actions]>;

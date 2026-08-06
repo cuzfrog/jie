@@ -61,6 +61,8 @@ export interface AgentUiState {
   readonly lastReportedTotalTokens: number | null;
 }
 
+export type KanbanEditField = "content" | "description";
+
 export interface TuiState {
   readonly cwd: string | null;
   readonly gitBranch: string | null;
@@ -86,6 +88,7 @@ export interface TuiState {
   readonly kanbanCursor: string | null;
   readonly kanbanExpanded: boolean;
   readonly kanbanEdit: string | null;
+  readonly kanbanEditField: KanbanEditField;
   readonly pendingQuit: boolean;
   readonly editorText: string;
   readonly editorCursorAtStart: boolean;

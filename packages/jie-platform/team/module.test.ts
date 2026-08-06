@@ -55,6 +55,7 @@ const kanbanStore = vi.mocked<KanbanStore>({
   remove: vi.fn(),
   complete: vi.fn(),
   editContent: vi.fn(),
+  editDescription: vi.fn(),
 });
 
 const agentBodyFactory = vi.fn<(params: AgentBodyParams) => AgentBody>();

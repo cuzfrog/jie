@@ -10,19 +10,19 @@ function card(id: string, status: KanbanCard["status"], content = id): KanbanCar
 describe("kanbanReducer — setKanbanBoard", () => {
   test("replaces the board and clamps the cursor onto it", () => {
     const state = makeTuiState({ kanbanCursor: "old" });
-    const next = kanbanReducer(state, Actions.setKanbanBoard([card("K1", "pending")]));
-    expect(next.kanbanBoard).toEqual([card("K1", "pending")]);
-    expect(next.kanbanCursor).toBe("K1");
+    const next = kanbanReducer(state, Actions.setKanbanBoard([card("#1", "pending")]));
+    expect(next.kanbanBoard).toEqual([card("#1", "pending")]);
+    expect(next.kanbanCursor).toBe("#1");
   });
 
   test("keeps the cursor when it is still on the board", () => {
-    const state = makeTuiState({ kanbanCursor: "K2" });
-    const next = kanbanReducer(state, Actions.setKanbanBoard([card("K1", "pending"), card("K2", "in_progress")]));
-    expect(next.kanbanCursor).toBe("K2");
+    const state = makeTuiState({ kanbanCursor: "#2" });
+    const next = kanbanReducer(state, Actions.setKanbanBoard([card("#1", "pending"), card("#2", "in_progress")]));
+    expect(next.kanbanCursor).toBe("#2");
   });
 
   test("an empty board clears the cursor", () => {
-    const state = makeTuiState({ kanbanCursor: "K1" });
+    const state = makeTuiState({ kanbanCursor: "#1" });
     expect(kanbanReducer(state, Actions.setKanbanBoard([])).kanbanCursor).toBeNull();
   });
 });
@@ -104,17 +104,17 @@ describe("kanbanReducer — view cycle", () => {
       kanbanView: "list",
       teamPanelVisible: true,
       teamCursorAgentId: "t:b-1",
-      kanbanBoard: [card("K1", "pending")],
+      kanbanBoard: [card("#1", "pending")],
     });
     const next = kanbanReducer(state, Actions.cycleKanbanView());
     expect(next.kanbanView).toBe("panel");
     expect(next.teamPanelVisible).toBe(false);
     expect(next.teamCursorAgentId).toBeNull();
-    expect(next.kanbanCursor).toBe("K1");
+    expect(next.kanbanCursor).toBe("#1");
   });
 
   test("cycles panel to hidden and clears the edit and the expanded mode", () => {
-    const state = makeTuiState({ focusedAgentId: "t:a-1", kanbanView: "panel", kanbanEdit: "K1", kanbanExpanded: true });
+    const state = makeTuiState({ focusedAgentId: "t:a-1", kanbanView: "panel", kanbanEdit: "#1", kanbanExpanded: true });
     const next = kanbanReducer(state, Actions.cycleKanbanView());
     expect(next.kanbanView).toBe("hidden");
     expect(next.kanbanEdit).toBeNull();
@@ -130,14 +130,27 @@ describe("kanbanReducer — expand and edit", () => {
     expect(kanbanReducer(expanded, Actions.toggleKanbanExpand()).kanbanExpanded).toBe(false);
   });
 
-  test("commitKanbanEdit sets the editing card", () => {
-    expect(kanbanReducer(makeTuiState(), Actions.commitKanbanEdit("K1")).kanbanEdit).toBe("K1");
+  test("commitKanbanEdit sets the editing card and the edit field", () => {
+    expect(kanbanReducer(makeTuiState(), Actions.commitKanbanEdit("#1")).kanbanEdit).toBe("#1");
+    expect(kanbanReducer(makeTuiState(), Actions.commitKanbanEdit("#1", "description")).kanbanEditField).toBe("description");
+  });
+
+  test("moveKanbanEditField toggles between content and description", () => {
+    const state = makeTuiState({ kanbanEditField: "content" });
+    const down = kanbanReducer(state, Actions.moveKanbanEditField("down"));
+    expect(down.kanbanEditField).toBe("description");
+    expect(kanbanReducer(down, Actions.moveKanbanEditField("up")).kanbanEditField).toBe("content");
+  });
+
+  test("toggleKanbanExpand resets the edit field to content", () => {
+    const state = makeTuiState({ kanbanEditField: "description" });
+    expect(kanbanReducer(state, Actions.toggleKanbanExpand()).kanbanEditField).toBe("content");
   });
 
   test("cancelKanbanEdit and saveKanbanEdit clear the editing card", () => {
-    const editing = makeTuiState({ kanbanEdit: "K1" });
+    const editing = makeTuiState({ kanbanEdit: "#1" });
     expect(kanbanReducer(editing, Actions.cancelKanbanEdit()).kanbanEdit).toBeNull();
-    expect(kanbanReducer(editing, Actions.saveKanbanEdit("K1", "new content")).kanbanEdit).toBeNull();
+    expect(kanbanReducer(editing, Actions.saveKanbanEdit("#1", "new content")).kanbanEdit).toBeNull();
   });
 });
 

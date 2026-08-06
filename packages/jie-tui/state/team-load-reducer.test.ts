@@ -167,8 +167,8 @@ describe("teamLoadReducer", () => {
     ]));
     const withBoard: TuiState = {
       ...first,
-      kanbanBoard: [{ id: "K1", content: "carry-over", status: "in_progress" }],
-      kanbanCursor: "K1",
+      kanbanBoard: [{ id: "#1", content: "carry-over", status: "in_progress" }],
+      kanbanCursor: "#1",
     };
     const switched = teamLoadReducer(withBoard, {
       id: "my-team-2",
@@ -189,23 +189,23 @@ describe("teamLoadReducer", () => {
     ]));
     const staleBoard: TuiState = {
       ...first,
-      kanbanBoard: [{ id: "K1", content: "stale", status: "pending" }],
-      kanbanCursor: "K1",
+      kanbanBoard: [{ id: "#1", content: "stale", status: "pending" }],
+      kanbanCursor: "#1",
     };
     const second = teamLoadReducer(staleBoard, {
       ...team([
         { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
       ]),
-      kanbanCards: [{ id: "K1", content: "still here", status: "pending" }],
+      kanbanCards: [{ id: "#1", content: "still here", status: "pending" }],
     });
-    expect(second.kanbanBoard).toEqual([{ id: "K1", content: "still here", status: "pending" }]);
-    expect(second.kanbanCursor).toBe("K1");
+    expect(second.kanbanBoard).toEqual([{ id: "#1", content: "still here", status: "pending" }]);
+    expect(second.kanbanCursor).toBe("#1");
   });
 
   test("team switch clears kanban edit and expand; a same-team reload preserves them", () => {
     const agents = [{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }];
     const first = teamLoadReducer(INITIAL_TUI_STATE, team(agents));
-    const engaged: TuiState = { ...first, kanbanEdit: "K1", kanbanExpanded: true };
+    const engaged: TuiState = { ...first, kanbanEdit: "#1", kanbanExpanded: true };
     const switched = teamLoadReducer(engaged, {
       id: "my-team-2",
       leaderKey: "worker-1",
@@ -218,7 +218,7 @@ describe("teamLoadReducer", () => {
     expect(switched.kanbanEdit).toBeNull();
     expect(switched.kanbanExpanded).toBe(false);
     const reloaded = teamLoadReducer(engaged, team(agents));
-    expect(reloaded.kanbanEdit).toBe("K1");
+    expect(reloaded.kanbanEdit).toBe("#1");
     expect(reloaded.kanbanExpanded).toBe(true);
   });
 

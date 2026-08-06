@@ -12,7 +12,7 @@ Contract:
 - no empty \`content\`.
 The returned \`details\` carries the board under \`kind: "kanban"\` so the TUI can render
 the board from the same payload. Cards already on the board keep their ids; new cards get
-platform-assigned ids (e.g. \`K1\`).`;
+platform-assigned ids (e.g. \`#1\`).`;
 
 interface KanbanWriteInput {
   cards: ReadonlyArray<KanbanCardWrite>;

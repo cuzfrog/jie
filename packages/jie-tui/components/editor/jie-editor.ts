@@ -282,9 +282,9 @@ export class JieEditor extends Editor {
   }
 
   private saveKanbanEdit(text: string): void {
-    const cardId = this.stateStore.getState().kanbanEdit;
-    if (cardId === null) return;
-    this.stateStore.dispatch(Actions.saveKanbanEdit(cardId, text));
+    const state = this.stateStore.getState();
+    if (state.kanbanEdit === null) return;
+    this.stateStore.dispatch(Actions.saveKanbanEdit(state.kanbanEdit, text, state.kanbanEditField));
   }
 
   private syncKanbanEdit(afterStateKanbanEdit: string | null): void {
@@ -300,8 +300,13 @@ export class JieEditor extends Editor {
 
   private beginKanbanEdit(cardId: string): void {
     if (this.kanbanDraft === null) this.kanbanDraft = this.getText();
-    const card = this.stateStore.getState().kanbanBoard.find((entry) => entry.id === cardId);
-    this.applyText(card?.content ?? "");
+    const state = this.stateStore.getState();
+    const card = state.kanbanBoard.find((entry) => entry.id === cardId);
+    if (card === undefined) {
+      this.applyText("");
+      return;
+    }
+    this.applyText(state.kanbanEditField === "description" ? (card.description ?? "") : card.content);
   }
 
   private endKanbanEdit(): void {

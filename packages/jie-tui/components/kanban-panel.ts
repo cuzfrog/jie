@@ -1,4 +1,4 @@
-import { truncateToWidth, type Component } from "@earendil-works/pi-tui";
+import { truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
 import type { KanbanCard, KanbanStatus } from "@cuzfrog/jie-platform";
 import { TuiState, type StateStore } from "../state";
 import { style, type ColorName } from "./themes";
@@ -19,9 +19,12 @@ const KANBAN_COLUMNS: ReadonlyArray<{ readonly status: KanbanStatus; readonly ti
 
 const HINTS = {
   collapsed: "↑↓←→ move · tab expand · ctrl+e edit · ctrl+k close",
-  expanded: "tab collapse · ctrl+e edit · ctrl+k close",
+  expanded: "↑↓ select field · tab collapse · ctrl+e edit · ctrl+k close",
   editing: "enter/ctrl+s save · esc cancel",
 } as const;
+
+const CHIP_BACKGROUND = "\x1b[100m";
+const CHIP_BACKGROUND_END = "\x1b[49m";
 
 export class KanbanPanel implements Component {
   private readonly stateStore: StateStore;
@@ -37,15 +40,16 @@ export class KanbanPanel implements Component {
     const inner = Math.max(1, w - 2 - PANEL_PADDING * 2);
     const visible = TuiState.kanbanVisibleCards(state);
     const focused = state.kanbanCursor === null ? null : visible.find((card) => card.id === state.kanbanCursor) ?? null;
-    const rows = state.kanbanExpanded ? renderCardDetail(focused, inner) : renderKanbanBoard(state, visible, inner);
     const border = style("borderMuted");
     const horizontal = "─".repeat(Math.max(0, w - 2));
+    const expandedTop = state.kanbanExpanded && focused !== null ? renderExpandedTopBorder(focused.id, w, border) : null;
+    const rows = state.kanbanExpanded ? renderCardDetail(focused, state.kanbanEditField, inner) : renderKanbanBoard(state, visible, inner);
     const framed = rows.map((row) => {
       const padded = fitToWidth(row, inner);
       return truncateToWidth(`${border("│")} ${padded} ${border("│")}`, w);
     });
     return [
-      truncateToWidth(border(`┌${horizontal}┐`), w),
+      expandedTop ?? truncateToWidth(border(`┌${horizontal}┐`), w),
       ...framed,
       truncateToWidth(border(`└${horizontal}┘`), w),
       renderHint(state, w),
@@ -82,12 +86,27 @@ function renderColumn(column: { readonly title: string; readonly cardColor: Colo
   return [header, ...rows];
 }
 
-function renderCardDetail(card: KanbanCard | null, innerWidth: number): string[] {
+function renderCardDetail(card: KanbanCard | null, field: "content" | "description", innerWidth: number): string[] {
   if (card === null) return [style("muted")("no task selected")];
-  const lines = [`${card.id} · ${card.content}`, `status: ${STATUS_LABELS[card.status]}`];
-  if (card.active_form !== undefined) lines.push(`active: ${card.active_form}`);
-  if (card.description !== undefined && card.description !== "") lines.push(`description: ${card.description}`);
-  return lines.map((line, index) => style(index === 0 ? "text" : "muted")(truncateToWidth(line, innerWidth)));
+  const title = renderCardDetailRow(field === "content", "text", card.content, innerWidth);
+  const description = renderCardDetailRow(field === "description", card.description ? "muted" : "dim", card.description ? `description: ${card.description}` : "description:", innerWidth);
+  const status = style("muted")(fitToWidth(`status: ${STATUS_LABELS[card.status]}`, innerWidth));
+  const rows = [title, description, status];
+  if (card.active_form !== undefined) rows.push(style("muted")(fitToWidth(`active: ${card.active_form}`, innerWidth)));
+  return rows;
+}
+
+function renderCardDetailRow(selected: boolean, color: ColorName, text: string, innerWidth: number): string {
+  const marker = selected ? style("accent")("▸") : " ";
+  const line = marker + style(color)(text);
+  return fitToWidth(line, innerWidth);
+}
+
+function renderExpandedTopBorder(cardId: string, width: number, border: (text: string) => string): string {
+  const chip = ` ${cardId} `;
+  const chipWidth = visibleWidth(chip);
+  const horizontal = "─".repeat(Math.max(0, width - 2 - chipWidth));
+  return `${border("┌")}${CHIP_BACKGROUND}${chip}${CHIP_BACKGROUND_END}${border(`${horizontal}┐`)}`;
 }
 
 function renderHint(state: TuiState, width: number): string {

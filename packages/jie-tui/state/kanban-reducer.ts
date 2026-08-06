@@ -1,8 +1,9 @@
 import type { KanbanCard, KanbanStatus } from "@cuzfrog/jie-platform";
 import { ActionTypes, type Action } from "./actions";
-import { TuiState } from "./state";
+import { TuiState, type KanbanEditField } from "./state";
 
 type KanbanDirection = Extract<Action, { type: typeof ActionTypes.MOVE_KANBAN_CURSOR }>["payload"]["direction"];
+type EditFieldDirection = Extract<Action, { type: typeof ActionTypes.MOVE_KANBAN_EDIT_FIELD }>["payload"]["direction"];
 
 const COLUMN_ORDER: ReadonlyArray<KanbanStatus> = ["pending", "in_progress", "completed"];
 
@@ -14,12 +15,14 @@ export function kanbanReducer(state: TuiState, action: Action): TuiState {
     }
     case ActionTypes.MOVE_KANBAN_CURSOR:
       return { ...state, kanbanCursor: moveCursor(TuiState.kanbanVisibleCards(state), state.kanbanCursor, action.payload.direction) };
+    case ActionTypes.MOVE_KANBAN_EDIT_FIELD:
+      return { ...state, kanbanEditField: moveEditField(state.kanbanEditField, action.payload.direction) };
     case ActionTypes.CYCLE_KANBAN_VIEW:
       return reduceViewCycle(state);
     case ActionTypes.TOGGLE_KANBAN_EXPAND:
-      return { ...state, kanbanExpanded: !state.kanbanExpanded };
+      return { ...state, kanbanExpanded: !state.kanbanExpanded, kanbanEditField: !state.kanbanExpanded ? "content" : state.kanbanEditField };
     case ActionTypes.COMMIT_KANBAN_EDIT:
-      return { ...state, kanbanEdit: action.payload.cardId };
+      return { ...state, kanbanEdit: action.payload.cardId, kanbanEditField: action.payload.field };
     case ActionTypes.CANCEL_KANBAN_EDIT:
     case ActionTypes.SAVE_KANBAN_EDIT:
       return { ...state, kanbanEdit: null };
@@ -66,6 +69,12 @@ function clampCursor(visible: ReadonlyArray<KanbanCard>, cursorId: string | null
 
 function columnOf(cards: ReadonlyArray<KanbanCard>, status: KanbanStatus): ReadonlyArray<KanbanCard> {
   return cards.filter((card) => card.status === status);
+}
+
+function moveEditField(field: KanbanEditField, direction: EditFieldDirection): KanbanEditField {
+  if (direction === "up" && field === "description") return "content";
+  if (direction === "down" && field === "content") return "description";
+  return field;
 }
 
 function adjacentColumn(cards: ReadonlyArray<KanbanCard>, status: KanbanStatus, step: 1 | -1): ReadonlyArray<KanbanCard> | null {

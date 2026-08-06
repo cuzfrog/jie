@@ -34,6 +34,7 @@ const kanbanStore = vi.mocked<KanbanStore>({
   remove: vi.fn(),
   complete: vi.fn(),
   editContent: vi.fn(),
+  editDescription: vi.fn(),
 });
 
 function makeTool(name: string): Tool {

@@ -204,7 +204,7 @@ describe("kanban view cycle", () => {
 
   test("leaving the panel clears edit and expand", () => {
     const panel = reduceUiAction(reduceUiAction(twoAgent(), Actions.cycleKanbanView()), Actions.cycleKanbanView());
-    const editing = reduceUiAction(panel, Actions.commitKanbanEdit("K1"));
+    const editing = reduceUiAction(panel, Actions.commitKanbanEdit("#1"));
     const expanded = reduceUiAction(editing, Actions.toggleKanbanExpand());
     const hidden = reduceUiAction(expanded, Actions.cycleKanbanView());
     expect(hidden.kanbanView).toBe("hidden");
@@ -230,7 +230,7 @@ describe("kanban view cycle", () => {
 
   test("opening the team panel hides the kanban panel and clears its edit and expand", () => {
     const panel = reduceUiAction(reduceUiAction(twoAgent(), Actions.cycleKanbanView()), Actions.cycleKanbanView());
-    const editing = reduceUiAction(panel, Actions.commitKanbanEdit("K1"));
+    const editing = reduceUiAction(panel, Actions.commitKanbanEdit("#1"));
     const expanded = reduceUiAction(editing, Actions.toggleKanbanExpand());
     const team = reduceUiAction(expanded, Actions.toggleTeamPanel());
     expect(team.teamPanelVisible).toBe(true);

@@ -63,6 +63,7 @@ const kanbanStore = vi.mocked<KanbanStore>({
   remove: vi.fn(),
   complete: vi.fn(),
   editContent: vi.fn(),
+  editDescription: vi.fn(),
 });
 
 const llmService = vi.mocked<LlmService>({ complete: vi.fn() });

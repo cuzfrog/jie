@@ -248,15 +248,15 @@ describe("bootTui — dequeue pipeline", () => {
 
 describe("bootTui — kanban edit pipeline", () => {
   test("SAVE_KANBAN_EDIT forwards to platform.execute and applies the returned board", async () => {
-    const board = [{ id: "K1", content: "edited content", status: "pending" as const }];
+    const board = [{ id: "#1", content: "edited content", status: "pending" as const }];
     let harness: TuiHarness | null = null;
     withTTY(true, () => {
       harness = bootHarness({ board });
     });
     harness!.platform.emit(TEAM_LOADED);
-    harness!.stateStore.dispatch(Actions.saveKanbanEdit("K1", "edited content"));
+    harness!.stateStore.dispatch(Actions.saveKanbanEdit("#1", "edited content", "content"));
     await waitFrames(0);
-    expect(harness!.platform.executeCalls.at(-1)).toEqual({ name: "kanbanEdit", teamId: "my-team", cardId: "K1", content: "edited content" });
+    expect(harness!.platform.executeCalls.at(-1)).toEqual({ name: "kanbanEdit", teamId: "my-team", cardId: "#1", field: "content", text: "edited content" });
     expect(harness!.stateStore.getState().kanbanBoard).toEqual(board);
     harness!.tui.stop();
   });

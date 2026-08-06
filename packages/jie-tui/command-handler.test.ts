@@ -742,7 +742,7 @@ describe("CommandHandlerImpl — /kanban", () => {
 
   test("/kanban add executes kanbanAdd and publishes the returned board", async () => {
     const { platform, execute } = makePlatform();
-    const board = [{ id: "K1", content: "write spec", status: "pending" as const }];
+    const board = [{ id: "#1", content: "write spec", status: "pending" as const }];
     execute.mockResolvedValueOnce({ board, card: board[0] });
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
     handler.handle("/kanban add write spec");
@@ -753,7 +753,7 @@ describe("CommandHandlerImpl — /kanban", () => {
 
   test("/kanban add --title <title> <description> carries the title", () => {
     const { platform, execute } = makePlatform();
-    execute.mockResolvedValueOnce({ board: [], card: { id: "K1", content: "t", status: "pending" } });
+    execute.mockResolvedValueOnce({ board: [], card: { id: "#1", content: "t", status: "pending" } });
     const { handler } = makeHandler(platform, stateWithTeam("my-team", true));
     handler.handle("/kanban add --title refactor write the report");
     expect(execute).toHaveBeenCalledWith({ name: "kanbanAdd", teamId: "my-team", title: "refactor", description: "write the report" });
@@ -779,8 +779,8 @@ describe("CommandHandlerImpl — /kanban", () => {
     const { platform, execute } = makePlatform();
     execute.mockResolvedValueOnce({ board: [] });
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
-    handler.handle("/kanban remove K1");
-    expect(execute).toHaveBeenCalledWith({ name: "kanbanRemove", teamId: "my-team", cardId: "K1" });
+    handler.handle("/kanban remove #1");
+    expect(execute).toHaveBeenCalledWith({ name: "kanbanRemove", teamId: "my-team", cardId: "#1" });
     await new Promise((r) => setImmediate(r));
     expect(dispatch).toHaveBeenCalledWith(Actions.setKanbanBoard([]));
   });
@@ -797,8 +797,8 @@ describe("CommandHandlerImpl — /kanban", () => {
     const { platform, execute } = makePlatform();
     execute.mockResolvedValueOnce({ board: [] });
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
-    handler.handle("/kanban complete K1");
-    expect(execute).toHaveBeenCalledWith({ name: "kanbanComplete", teamId: "my-team", cardId: "K1" });
+    handler.handle("/kanban complete #1");
+    expect(execute).toHaveBeenCalledWith({ name: "kanbanComplete", teamId: "my-team", cardId: "#1" });
     await new Promise((r) => setImmediate(r));
     expect(dispatch).toHaveBeenCalledWith(Actions.setKanbanBoard([]));
   });

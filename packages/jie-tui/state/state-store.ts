@@ -30,6 +30,7 @@ const INITIAL_TUI_STATE: TuiState = Object.freeze({
   kanbanCursor: null,
   kanbanExpanded: false,
   kanbanEdit: null,
+  kanbanEditField: "content",
   pendingQuit: false,
   editorText: "",
   editorCursorAtStart: true,

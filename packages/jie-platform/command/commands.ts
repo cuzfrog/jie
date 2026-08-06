@@ -39,7 +39,7 @@ interface CommandTypeMap {
   kanbanAdd: CommandDef<{ teamId: string; title?: string; description: string }, KanbanBoardResult & { card: KanbanCard }>;
   kanbanRemove: CommandDef<{ teamId: string; cardId: string }, KanbanBoardResult>;
   kanbanComplete: CommandDef<{ teamId: string; cardId: string }, KanbanBoardResult>;
-  kanbanEdit: CommandDef<{ teamId: string; cardId: string; content: string }, KanbanBoardResult>;
+  kanbanEdit: CommandDef<{ teamId: string; cardId: string; field: "content" | "description"; text: string }, KanbanBoardResult>;
 }
 
 interface KanbanBoardResult {

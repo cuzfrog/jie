@@ -23,43 +23,43 @@ describe("KanbanList", () => {
 
   test("renders the Todo: title above one glyphed row per card", () => {
     stateStore.getState.mockReturnValue(boardState([
-      { id: "K1", content: "later", status: "pending" },
-      { id: "K2", content: "now", status: "in_progress" },
-      { id: "K3", content: "done", status: "completed" },
+      { id: "#1", content: "later", status: "pending" },
+      { id: "#2", content: "now", status: "in_progress" },
+      { id: "#3", content: "done", status: "completed" },
     ]));
     const lines = new KanbanList(stateStore).render(80);
     expect(lines[0]).toBe(style("accent")("Todo:"));
     expect(lines).toHaveLength(4);
     expect(lines[1]).toContain("·");
-    expect(lines[1]).toContain("K1");
+    expect(lines[1]).toContain("#1");
     expect(lines[1]).toContain("later");
     expect(lines[2]).toContain("▶");
-    expect(lines[2]).toContain("K2");
+    expect(lines[2]).toContain("#2");
     expect(lines[2]).toContain("now");
     expect(lines[3]).toContain("✓");
-    expect(lines[3]).toContain("K3");
+    expect(lines[3]).toContain("#3");
     expect(lines[3]).toContain("done");
   });
 
   test("strikes through completed tasks", () => {
     stateStore.getState.mockReturnValue(boardState([
-      { id: "K1", content: "later", status: "pending" },
-      { id: "K3", content: "done", status: "completed" },
+      { id: "#1", content: "later", status: "pending" },
+      { id: "#3", content: "done", status: "completed" },
     ]));
     const lines = new KanbanList(stateStore).render(80);
     expect(lines[1]).not.toContain("\x1b[9m");
-    expect(lines[2]).toContain(strikethrough(style("muted")("K3 done")));
+    expect(lines[2]).toContain(strikethrough(style("muted")("#3 done")));
   });
 
   test("renders nothing outside the list view", () => {
-    stateStore.getState.mockReturnValue(boardState([{ id: "K1", content: "later", status: "pending" }], { kanbanView: "panel" }));
+    stateStore.getState.mockReturnValue(boardState([{ id: "#1", content: "later", status: "pending" }], { kanbanView: "panel" }));
     expect(new KanbanList(stateStore).render(80)).toEqual([]);
-    stateStore.getState.mockReturnValue(boardState([{ id: "K1", content: "later", status: "pending" }], { kanbanView: "hidden" }));
+    stateStore.getState.mockReturnValue(boardState([{ id: "#1", content: "later", status: "pending" }], { kanbanView: "hidden" }));
     expect(new KanbanList(stateStore).render(80)).toEqual([]);
   });
 
   test("shows at most six rows below the title", () => {
-    const cards = Array.from({ length: 9 }, (_v, i): KanbanCard => ({ id: `K${i + 1}`, content: `task-${i}`, status: "pending" }));
+    const cards = Array.from({ length: 9 }, (_v, i): KanbanCard => ({ id: `#${i + 1}`, content: `task-${i}`, status: "pending" }));
     stateStore.getState.mockReturnValue(boardState(cards));
     const lines = new KanbanList(stateStore).render(80);
     expect(lines).toHaveLength(1 + 6);
@@ -68,8 +68,8 @@ describe("KanbanList", () => {
 
   test("never renders a line wider than the given width (doRender guard)", () => {
     stateStore.getState.mockReturnValue(boardState([
-      { id: "K1", content: "x".repeat(300), status: "in_progress" },
-      { id: "K2", content: "中文🎉".repeat(40), status: "pending" },
+      { id: "#1", content: "x".repeat(300), status: "in_progress" },
+      { id: "#2", content: "中文🎉".repeat(40), status: "pending" },
     ]));
     const list = new KanbanList(stateStore);
     for (const width of [13, 40, 61, 80, 139]) {

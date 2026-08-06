@@ -23,32 +23,32 @@ describe("SqliteKanbanStore", () => {
     expect(store.load("t1", "s1")).toEqual([]);
   });
 
-  test("replace assigns sequential per-board ids starting at K1", () => {
+  test("replace assigns sequential per-board ids starting at #1", () => {
     const store = makeStore();
     const cards = store.replace("t1", "s1", [write("first"), write("second")]);
-    expect(ids(cards)).toEqual(["K1", "K2"]);
+    expect(ids(cards)).toEqual(["#1", "#2"]);
   });
 
   test("replace keeps ids and descriptions for cards whose content already exists", () => {
     const store = makeStore();
     store.replace("t1", "s1", [write("first"), write("second")]);
     const cards = store.replace("t1", "s1", [{ content: "second", status: "completed", description: "the second task" }, write("third")]);
-    expect(ids(cards)).toEqual(["K2", "K3"]);
-    expect(cards[0]).toMatchObject({ id: "K2", content: "second", status: "completed", description: "the second task" });
+    expect(ids(cards)).toEqual(["#2", "#3"]);
+    expect(cards[0]).toMatchObject({ id: "#2", content: "second", status: "completed", description: "the second task" });
   });
 
   test("replace drops cards that are no longer in the incoming board", () => {
     const store = makeStore();
     store.replace("t1", "s1", [write("first"), write("second")]);
     const cards = store.replace("t1", "s1", [write("second")]);
-    expect(ids(cards)).toEqual(["K2"]);
+    expect(ids(cards)).toEqual(["#2"]);
   });
 
   test("add appends a card with a fresh id and keeps the board order", () => {
     const store = makeStore();
     store.replace("t1", "s1", [write("first")]);
     const card = store.add("t1", "s1", "second", undefined);
-    expect(card?.id).toBe("K2");
+    expect(card?.id).toBe("#2");
     expect(store.load("t1", "s1")).toHaveLength(2);
   });
 
@@ -63,44 +63,66 @@ describe("SqliteKanbanStore", () => {
     const store = makeStore();
     store.replace("t1", "s1", [write("first")]);
     expect(store.add("t1", "s1", "first", undefined)).toBeNull();
-    expect(ids(store.load("t1", "s1"))).toEqual(["K1"]);
+    expect(ids(store.load("t1", "s1"))).toEqual(["#1"]);
   });
 
   test("remove deletes the card and reports false for an unknown id", () => {
     const store = makeStore();
     store.replace("t1", "s1", [write("first"), write("second")]);
-    expect(store.remove("t1", "s1", "K1")).toBe(true);
-    expect(ids(store.load("t1", "s1"))).toEqual(["K2"]);
-    expect(store.remove("t1", "s1", "K9")).toBe(false);
+    expect(store.remove("t1", "s1", "#1")).toBe(true);
+    expect(ids(store.load("t1", "s1"))).toEqual(["#2"]);
+    expect(store.remove("t1", "s1", "#9")).toBe(false);
   });
 
   test("complete marks the card as completed", () => {
     const store = makeStore();
     store.replace("t1", "s1", [write("first")]);
-    expect(store.complete("t1", "s1", "K1")).toBe(true);
-    expect(store.load("t1", "s1")[0]).toMatchObject({ id: "K1", status: "completed" });
-    expect(store.complete("t1", "s1", "K9")).toBe(false);
+    expect(store.complete("t1", "s1", "#1")).toBe(true);
+    expect(store.load("t1", "s1")[0]).toMatchObject({ id: "#1", status: "completed" });
+    expect(store.complete("t1", "s1", "#9")).toBe(false);
   });
 
   test("editContent updates the card text preserving status and id", () => {
     const store = makeStore();
     store.replace("t1", "s1", [write("first", "in_progress", "Working")]);
-    const card = store.editContent("t1", "s1", "K1", "first (revised)");
-    expect(card).toMatchObject({ id: "K1", content: "first (revised)", status: "in_progress", active_form: "Working" });
-    expect(store.editContent("t1", "s1", "K9", "nope")).toBeNull();
+    const card = store.editContent("t1", "s1", "#1", "first (revised)");
+    expect(card).toMatchObject({ id: "#1", content: "first (revised)", status: "in_progress", active_form: "Working" });
+    expect(store.editContent("t1", "s1", "#9", "nope")).toBeNull();
   });
 
   test("editContent returns null when the new content duplicates another card and leaves the board unchanged", () => {
     const store = makeStore();
     store.replace("t1", "s1", [write("first"), write("second")]);
-    expect(store.editContent("t1", "s1", "K1", "second")).toBeNull();
+    expect(store.editContent("t1", "s1", "#1", "second")).toBeNull();
     expect(store.load("t1", "s1").map((card) => card.content)).toEqual(["first", "second"]);
+  });
+
+  test("editDescription updates the card description", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [write("first")]);
+    const card = store.editDescription("t1", "s1", "#1", "cover storage");
+    expect(card).toMatchObject({ id: "#1", content: "first", description: "cover storage" });
+    expect(store.load("t1", "s1")[0]!.description).toBe("cover storage");
+  });
+
+  test("editDescription removes the description when given an empty string", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [{ content: "first", status: "pending", description: "cover storage" }]);
+    const card = store.editDescription("t1", "s1", "#1", "");
+    expect(card).toMatchObject({ id: "#1", content: "first" });
+    expect(store.load("t1", "s1")[0]!.description).toBeUndefined();
+  });
+
+  test("editDescription returns null for an unknown card", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [write("first")]);
+    expect(store.editDescription("t1", "s1", "#9", "nope")).toBeNull();
   });
 
   test("replace with internally-duplicate incoming content keeps the last write and does not crash", () => {
     const store = makeStore();
     const cards = store.replace("t1", "s1", [write("a", "pending"), write("a", "completed", "Working"), write("b")]);
-    expect(ids(cards)).toEqual(["K1", "K2"]);
+    expect(ids(cards)).toEqual(["#1", "#2"]);
     expect(cards[0]).toMatchObject({ content: "a", status: "completed", active_form: "Working" });
   });
 
@@ -108,17 +130,17 @@ describe("SqliteKanbanStore", () => {
     const store = makeStore();
     store.replace("t1", "s1", [write("a")]);
     store.replace("t1", "s2", [write("b")]);
-    expect(ids(store.load("t1", "s1"))).toEqual(["K1"]);
-    expect(ids(store.load("t1", "s2"))).toEqual(["K1"]);
+    expect(ids(store.load("t1", "s1"))).toEqual(["#1"]);
+    expect(ids(store.load("t1", "s2"))).toEqual(["#1"]);
     expect(ids(store.load("t2", "s1"))).toEqual([]);
   });
 
   test("the id counter never reuses ids after removals or replace", () => {
     const store = makeStore();
     store.replace("t1", "s1", [write("a"), write("b"), write("c")]);
-    store.remove("t1", "s1", "K2");
+    store.remove("t1", "s1", "#2");
     const cards = store.replace("t1", "s1", [write("d")]);
-    expect(ids(cards)).toEqual(["K4"]);
+    expect(ids(cards)).toEqual(["#4"]);
   });
 
   test("a board persisted for one session survives a fresh store instance (same file)", () => {
@@ -126,6 +148,6 @@ describe("SqliteKanbanStore", () => {
     const first = new SqliteKanbanStore(new SqliteStorage(dbFile));
     first.add("t1", "s1", "persisted", undefined);
     const second = new SqliteKanbanStore(new SqliteStorage(dbFile));
-    expect(second.load("t1", "s1")[0]).toMatchObject({ id: "K1", content: "persisted" });
+    expect(second.load("t1", "s1")[0]).toMatchObject({ id: "#1", content: "persisted" });
   });
 });

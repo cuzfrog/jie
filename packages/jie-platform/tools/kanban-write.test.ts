@@ -10,10 +10,11 @@ const kanbanStore = vi.mocked<KanbanStore>({
   remove: vi.fn(),
   complete: vi.fn(),
   editContent: vi.fn(),
+  editDescription: vi.fn(),
 });
 
 function withIds(cards: ReadonlyArray<KanbanCardWrite>): KanbanCard[] {
-  return cards.map((card, index) => ({ id: `K${index + 1}`, ...card }));
+  return cards.map((card, index) => ({ id: `#${index + 1}`, ...card }));
 }
 
 describe("kanban_write", () => {
@@ -119,6 +120,6 @@ describe("kanban_write", () => {
     const tool = createKanbanWriteTool({ kanbanStore });
     const result = await tool.execute({ cards }, makeEmptyContext());
     expect(result.details).toMatchObject({ kind: "kanban" });
-    expect(result.details).toEqual({ kind: "kanban", cards: [{ id: "K1", content: "x", status: "in_progress" }] });
+    expect(result.details).toEqual({ kind: "kanban", cards: [{ id: "#1", content: "x", status: "in_progress" }] });
   });
 });

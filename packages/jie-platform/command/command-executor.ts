@@ -223,15 +223,22 @@ export class CommandExecutorImpl implements CommandExecutor {
 
   private kanbanEdit(command: Command<"kanbanEdit">): CommandResult<"kanbanEdit"> {
     const sessionId = this.sessionIdFor(command.teamId);
-    if (command.content.trim() === "") {
+    if (command.field === "description") {
+      const description = command.text.trim() === "" ? undefined : command.text;
+      if (this.kanbanStore.editDescription(command.teamId, sessionId, command.cardId, description) === null) {
+        throw new JiePlatformError("KANBAN_CARD_NOT_FOUND", { detail: command.cardId });
+      }
+      return { board: this.kanbanStore.load(command.teamId, sessionId) };
+    }
+    if (command.text.trim() === "") {
       throw new JiePlatformError("KANBAN_TEXT_EMPTY");
     }
-    if (this.kanbanStore.editContent(command.teamId, sessionId, command.cardId, command.content) === null) {
+    if (this.kanbanStore.editContent(command.teamId, sessionId, command.cardId, command.text) === null) {
       const notFound = !this.kanbanStore.load(command.teamId, sessionId).some((card) => card.id === command.cardId);
       if (notFound) {
         throw new JiePlatformError("KANBAN_CARD_NOT_FOUND", { detail: command.cardId });
       }
-      throw new JiePlatformError("KANBAN_DUPLICATE_CONTENT", { detail: command.content });
+      throw new JiePlatformError("KANBAN_DUPLICATE_CONTENT", { detail: command.text });
     }
     return { board: this.kanbanStore.load(command.teamId, sessionId) };
   }

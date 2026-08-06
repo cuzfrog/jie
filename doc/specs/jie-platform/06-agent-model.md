@@ -205,7 +205,7 @@ interface KanbanCardWrite {
 }
 ```
 
-The input is the full desired board — the tool replaces the session's board contents in `KanbanStore` (`04-storage.md`), scoped to the execution context's `(teamId, sessionId)` — the board is team-shared, not per-agent, and persists per session. Cards whose `content` already exists keep their platform-assigned ids (`K1`, `K2`, …); genuinely new cards get the next id (the store merges by content, so rewrites do not churn ids). The tool enforces: no duplicate `content`, no empty `content` — violations throw `kanban_write_invalid`. Any number of cards may be `in_progress` (the board's WIP is not limited); an empty list clears the board. `content` summarizes the card count and the in-progress count; `details: { kind: "kanban", cards }` carries the full board so the TUI renders it from the same payload.
+The input is the full desired board — the tool replaces the session's board contents in `KanbanStore` (`04-storage.md`), scoped to the execution context's `(teamId, sessionId)` — the board is team-shared, not per-agent, and persists per session. Cards whose `content` already exists keep their platform-assigned ids (`#1`, `#2`, …); genuinely new cards get the next id (the store merges by content, so rewrites do not churn ids). The tool enforces: no duplicate `content`, no empty `content` — violations throw `kanban_write_invalid`. Any number of cards may be `in_progress` (the board's WIP is not limited); an empty list clears the board. `content` summarizes the card count and the in-progress count; `details: { kind: "kanban", cards }` carries the full board so the TUI renders it from the same payload.
 
 ### write_artifact and read_artifact
 
