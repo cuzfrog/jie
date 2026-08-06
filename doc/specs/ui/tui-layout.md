@@ -85,6 +85,7 @@ Team switch and session resume are selected through the editor's own autocomplet
 - **`/login `** — provider ids from `listProviders` (models.json providers first, then built-ins, deduped), each described by the env var name providing its key, or `configured` for a models.json provider.
 - **`/logout `** — `*` (all providers) first, then the provider ids from `listProviders`, described like the `/login ` rows.
 - **`/effort `** — the five effort levels (`off`/`low`/`medium`/`high`/`max`).
+- **`/kanban `** — the subcommands `add` (`[--title <title>] <description>`), `remove` (`<cardId>`), and `complete` (`<cardId>`); after `remove ` or `complete ` the current board's card ids are offered, with the card content as the description.
 
 **Unambiguous drill-down.** When the typed `/`-token fuzzy-matches exactly one command that has argument completions (e.g. `/resum`), the popup lists that command's argument rows directly — labeled `resume <id>`, `team <id>`, etc., with the same descriptions as the space-triggered list — without waiting for the space after the command name. Committing such a row types `/command <arg> ` (trailing space, ready to submit). Multiple matches (e.g. `/re` → `resume`/`rename`), commands without arguments, or an empty argument list fall back to the plain command-name candidates.
 
