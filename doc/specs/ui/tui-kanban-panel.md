@@ -16,7 +16,7 @@ The panel is the last section of the single inline column (`tui-layout.md`): it 
 
 ### Board (collapsed)
 
-The board split by status into three equal-width columns — **Pending**, **In Progress**, **Done** — separated by two spaces. The first row titles each column with its name and card count in `dim`; below it one row per card: a `▸` cursor in `accent` when the card matches `state.kanbanCursor` (a two-space indent otherwise), then the content truncated to the remaining column width and colored by status: pending `text`, in-progress `accent`, completed `muted`. Rows carry no background. A column with more than eight cards shows the first eight plus a `dim` `+N more` marker; a board without cards renders the three headers alone.
+The board split by status into three equal-width columns — **Pending**, **In Progress**, **Done** — separated by two spaces. The first row titles each column with its name and card count in `dim`; below it one row per card: a `▸` cursor in `accent` directly before the card content when the card matches `state.kanbanCursor` (a one-space indent otherwise), then the content truncated to the remaining column width and colored by status: pending `text`, in-progress `accent`, completed `muted`. Rows carry no background. A column with more than eight cards shows the first eight plus a `dim` `+N more` marker; a board without cards renders the three headers alone.
 
 ### Card detail (expanded)
 
