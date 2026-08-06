@@ -2,7 +2,7 @@ import type { KanbanCard, KanbanStatus } from "@cuzfrog/jie-platform";
 import { ActionTypes, type Action } from "./actions";
 import { TuiState } from "./state";
 
-export type KanbanDirection = "up" | "down" | "left" | "right";
+type KanbanDirection = Extract<Action, { type: typeof ActionTypes.MOVE_KANBAN_CURSOR }>["payload"]["direction"];
 
 const COLUMN_ORDER: ReadonlyArray<KanbanStatus> = ["pending", "in_progress", "completed"];
 

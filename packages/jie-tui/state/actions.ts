@@ -1,5 +1,4 @@
 import type { AnyEventEnvelope, CommandResult, KanbanCard, TeamInfo } from "@cuzfrog/jie-platform";
-import type { KanbanDirection } from "./kanban-reducer";
 
 type InstalledTeams = CommandResult<"getTeamInfo">["installed"];
 
@@ -89,7 +88,7 @@ export const Actions = {
 		createAction(ActionTypes.SET_ENVIRONMENT, { cwd, gitBranch, gitDirty, version }),
 	showHelp: () => showHelp,
 	setKanbanBoard: (board: ReadonlyArray<KanbanCard>) => createAction(ActionTypes.SET_KANBAN_BOARD, { board }),
-	moveKanbanCursor: (direction: KanbanDirection) => createAction(ActionTypes.MOVE_KANBAN_CURSOR, { direction }),
+	moveKanbanCursor: (direction: "up" | "down" | "left" | "right") => createAction(ActionTypes.MOVE_KANBAN_CURSOR, { direction }),
 	toggleKanbanExpand: () => createAction(ActionTypes.TOGGLE_KANBAN_EXPAND),
 	commitKanbanEdit: (cardId: string) => createAction(ActionTypes.COMMIT_KANBAN_EDIT, { cardId }),
 	cancelKanbanEdit: () => createAction(ActionTypes.CANCEL_KANBAN_EDIT),
