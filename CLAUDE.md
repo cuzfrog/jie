@@ -50,7 +50,7 @@
 
 ### Git
 - When involving git operations, refer to @doc/AGENTS_GIT.md.
-- Do not use the `gh` CLI directly. Use `./scripts/gh-bot.mjs` so your identity is `abao-bot`.
+- Use `./scripts/gh-bot.mjs` with your identity `abao-bot`. Do not use the `gh` CLI directly unless the user asks you to merge PRs.
 
 ### Coding Principles
 - Read files in full before making wide-ranging changes, before editing files you have not already fully inspected, and when the user asks you to investigate or audit something. Do not rely only on search snippets for broad changes. Given a change, do not first attempt to insert into current code base. First look at it from a higher perspective, discover refactor opportunities.
