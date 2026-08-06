@@ -21,6 +21,8 @@ function team(agents: ReadonlyArray<{
     id: "my-team",
     leaderKey: leader?.agentKey ?? "general-1",
     sessionName,
+    currentSessionId: null,
+    kanbanCards: [],
     history: [],
     agents: agents.map((a) => ({
       teamId: "my-team",
@@ -130,6 +132,8 @@ describe("teamLoadReducer", () => {
       id: "my-team-2",
       leaderKey: "worker-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [
         { teamId: "my-team-2", role: "manager", agentKey: "manager-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null },
@@ -157,38 +161,45 @@ describe("teamLoadReducer", () => {
     expect(second.agents.has("my-team:helper-1")).toBe(false);
   });
 
-  test("team switch resets every agent's cards to []", () => {
+  test("team switch replaces the board with the new team's kanbanCards", () => {
     const first = teamLoadReducer(INITIAL_TUI_STATE, team([
       { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
     ]));
-    const seededAgents = new Map(first.agents);
-    const withCardsAgent = seededAgents.get("my-team:general-1");
-    if (withCardsAgent === undefined) throw new Error("seed missing");
-    seededAgents.set("my-team:general-1", { ...withCardsAgent, cards: [{ content: "carry-over", status: "in_progress" }] });
-    const withCards: TuiState = { ...first, agents: seededAgents };
-    const switched = teamLoadReducer(withCards, {
+    const withBoard: TuiState = {
+      ...first,
+      kanbanBoard: [{ id: "K1", content: "carry-over", status: "in_progress" }],
+      kanbanCursor: "K1",
+    };
+    const switched = teamLoadReducer(withBoard, {
       id: "my-team-2",
       leaderKey: "worker-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [{ teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     });
-    expect(switched.agents.get("my-team-2:worker-1")?.cards).toEqual([]);
+    expect(switched.kanbanBoard).toEqual([]);
+    expect(switched.kanbanCursor).toBeNull();
   });
 
-  test("same-team reload preserves an agent's existing cards", () => {
+  test("team load replaces the board from TeamInfo.kanbanCards", () => {
     const first = teamLoadReducer(INITIAL_TUI_STATE, team([
       { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
     ]));
-    const firstAgent = first.agents.get("my-team:general-1");
-    if (firstAgent === undefined) throw new Error("seed missing");
-    const seededAgents = new Map(first.agents);
-    seededAgents.set("my-team:general-1", { ...firstAgent, cards: [{ content: "still here", status: "pending" }] });
-    const withCards: TuiState = { ...first, agents: seededAgents };
-    const second = teamLoadReducer(withCards, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
-    ]));
-    expect(second.agents.get("my-team:general-1")?.cards).toEqual([{ content: "still here", status: "pending" }]);
+    const staleBoard: TuiState = {
+      ...first,
+      kanbanBoard: [{ id: "K1", content: "stale", status: "pending" }],
+      kanbanCursor: "K1",
+    };
+    const second = teamLoadReducer(staleBoard, {
+      ...team([
+        { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
+      ]),
+      kanbanCards: [{ id: "K1", content: "still here", status: "pending" }],
+    });
+    expect(second.kanbanBoard).toEqual([{ id: "K1", content: "still here", status: "pending" }]);
+    expect(second.kanbanCursor).toBe("K1");
   });
 
   test("team load clears the interrupted marker", () => {
@@ -212,16 +223,6 @@ function assistantText(text: string): AgentMessage {
     content: [{ type: "text", text }],
     api: "openai", provider: "openai", model: "m", usage: usage(), stopReason: "stop", timestamp: 0,
   };
-}
-function assistantToolCall(id: string, name: string, args: Record<string, unknown>): AgentMessage {
-  return {
-    role: "assistant",
-    content: [{ type: "toolCall", id, name, arguments: args }],
-    api: "openai", provider: "openai", model: "m", usage: usage(), stopReason: "toolUse", timestamp: 0,
-  };
-}
-function toolResult(toolCallId: string, toolName: string, text: string, details?: unknown): AgentMessage {
-  return { role: "toolResult", toolCallId, toolName, content: [{ type: "text", text }], isError: false, details, timestamp: 0 };
 }
 function compactionSummary(summary: string, tokensBefore: number): AgentMessage {
   return { role: "compactionSummary", summary, tokensBefore, timestamp: 0 };
@@ -251,8 +252,7 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
     });
   });
 
-  test("earlier turns rotate into history and cards restore from the last kanban result", () => {
-    const cards = [{ content: "a", status: "completed" as const }];
+  test("earlier turns rotate into history on team load", () => {
     const info = team([{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }]);
     const state = teamLoadReducer(INITIAL_TUI_STATE, {
       ...info,
@@ -260,7 +260,7 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
         agentKey: "general-1",
         messages: [
           user("first"), assistantText("a1"),
-          user("second"), assistantToolCall("c1", "kanban", {}), toolResult("c1", "kanban", "ok", { kind: "kanban", cards }),
+          user("second"), assistantText("a2"),
         ],
       }],
     });
@@ -268,7 +268,6 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
     expect(agent?.history).toHaveLength(1);
     expect(agent?.history[0]?.userPrompt).toBe("first");
     expect(agent?.currentTurn?.userPrompt).toBe("second");
-    expect(agent?.cards).toEqual(cards);
   });
 
   test("empty messages preserve an existing slot (switchTeam identity must not clobber live state)", () => {
@@ -356,6 +355,8 @@ describe("teamLoadReducer — info entries", () => {
       id: "my-team-2",
       leaderKey: "worker-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [{ teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     });

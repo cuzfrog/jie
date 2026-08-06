@@ -453,6 +453,8 @@ describe("CommandHandlerImpl — /reload", () => {
     id: "default-solo",
     leaderKey: "general-1",
     sessionName: null,
+    currentSessionId: null,
+    kanbanCards: [],
     history: [],
     agents: [{ teamId: "default-solo", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
   };
@@ -523,6 +525,8 @@ describe("CommandHandlerImpl — /team", () => {
       id: "alpha",
       leaderKey: "general-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true }],
     }));
@@ -539,6 +543,8 @@ describe("CommandHandlerImpl — /team", () => {
       id: "alpha",
       leaderKey: "general-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     }));
@@ -552,6 +558,8 @@ describe("CommandHandlerImpl — /team", () => {
       id: "alpha",
       leaderKey: "general-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     }));
@@ -563,6 +571,8 @@ describe("CommandHandlerImpl — /team", () => {
       id: "alpha",
       leaderKey: "general-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     } as const;
@@ -615,6 +625,8 @@ describe("CommandHandlerImpl — /resume", () => {
       id: "default-solo",
       leaderKey: "general-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [{ teamId: "default-solo", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     };
@@ -631,6 +643,8 @@ describe("CommandHandlerImpl — /resume", () => {
       id: "default-solo",
       leaderKey: "general-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [{ teamId: "default-solo", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     };

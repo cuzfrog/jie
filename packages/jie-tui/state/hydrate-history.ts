@@ -1,6 +1,5 @@
 import type { AgentMessage, UserIngressMessage } from "@cuzfrog/jie-platform";
 import type { AssistantMessage, TextContent, ToolResultMessage } from "@earendil-works/pi-ai";
-import { isKanbanDetails, type KanbanCard } from "../kanban";
 import type { MessageCard, MessageTurn } from "./state";
 
 const USER_INGRESS_PREFIX = "[user]: ";
@@ -9,7 +8,6 @@ export interface HydratedHistory {
   readonly history: MessageTurn[];
   readonly currentTurn: MessageTurn | null;
   readonly compactionMarker: { readonly seq: number; readonly summary: string; readonly tokensBefore: number } | null;
-  readonly cards: ReadonlyArray<KanbanCard>;
   readonly nextSeq: number;
 }
 
@@ -41,18 +39,8 @@ export function hydrateHistory(messages: ReadonlyArray<AgentMessage>, startSeq: 
     }
   }
   if (current !== null) turns.push(current);
-  if (turns.length === 0) return { history: [], currentTurn: null, compactionMarker, cards: [], nextSeq };
-  return { history: turns.slice(0, turns.length - 1), currentTurn: turns[turns.length - 1]!, compactionMarker, cards: deriveCards(turns), nextSeq };
-}
-
-function deriveCards(turns: ReadonlyArray<MessageTurn>): ReadonlyArray<KanbanCard> {
-  let cards: ReadonlyArray<KanbanCard> = [];
-  for (const turn of turns) {
-    for (const card of turn.cards) {
-      if (card.kind === "toolResult" && isKanbanDetails(card.details)) cards = card.details.cards;
-    }
-  }
-  return cards;
+  if (turns.length === 0) return { history: [], currentTurn: null, compactionMarker, nextSeq };
+  return { history: turns.slice(0, turns.length - 1), currentTurn: turns[turns.length - 1]!, compactionMarker, nextSeq };
 }
 
 function userPromptText(message: UserIngressMessage): string {

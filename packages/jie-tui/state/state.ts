@@ -60,7 +60,6 @@ export interface AgentUiState {
   readonly lastStopReason: StopReason | null;
   readonly contextTokensUsed: number;
   readonly lastReportedTotalTokens: number | null;
-  readonly cards: ReadonlyArray<KanbanCard>;
 }
 
 export interface TuiState {
@@ -84,6 +83,10 @@ export interface TuiState {
   readonly toolCardsExpanded: boolean;
   readonly teamPanelVisible: boolean;
   readonly kanbanPanelVisible: boolean;
+  readonly kanbanBoard: ReadonlyArray<KanbanCard>;
+  readonly kanbanCursor: string | null;
+  readonly kanbanExpanded: boolean;
+  readonly kanbanEdit: string | null;
   readonly pendingQuit: boolean;
   readonly editorText: string;
   readonly editorCursorAtStart: boolean;

@@ -2,7 +2,7 @@ import { isKanbanDetails } from "./kanban";
 
 describe("isKanbanDetails", () => {
   test("accepts a well-formed kanban payload", () => {
-    expect(isKanbanDetails({ kind: "kanban", cards: [{ content: "x", status: "in_progress" }] })).toBe(true);
+    expect(isKanbanDetails({ kind: "kanban", cards: [{ id: "K1", content: "x", status: "in_progress" }] })).toBe(true);
   });
 
   test("accepts an empty cards array (clears the board)", () => {
@@ -10,7 +10,7 @@ describe("isKanbanDetails", () => {
   });
 
   test("accepts items with optional active_form", () => {
-    expect(isKanbanDetails({ kind: "kanban", cards: [{ content: "x", status: "pending", active_form: "doing x" }] })).toBe(true);
+    expect(isKanbanDetails({ kind: "kanban", cards: [{ id: "K1", content: "x", status: "pending", active_form: "doing x" }] })).toBe(true);
   });
 
   test("rejects when kind is not 'kanban'", () => {
@@ -29,11 +29,11 @@ describe("isKanbanDetails", () => {
   });
 
   test("rejects when an item has an unknown status", () => {
-    expect(isKanbanDetails({ kind: "kanban", cards: [{ content: "x", status: "blocked" }] })).toBe(false);
+    expect(isKanbanDetails({ kind: "kanban", cards: [{ id: "K1", content: "x", status: "blocked" }] })).toBe(false);
   });
 
   test("rejects when an item has non-string content", () => {
-    expect(isKanbanDetails({ kind: "kanban", cards: [{ content: 42, status: "in_progress" }] })).toBe(false);
+    expect(isKanbanDetails({ kind: "kanban", cards: [{ id: "K1", content: 42, status: "in_progress" }] })).toBe(false);
   });
 
   test("rejects when an item is not an object", () => {
@@ -41,13 +41,13 @@ describe("isKanbanDetails", () => {
   });
 
   test("rejects when active_form is not a string", () => {
-    expect(isKanbanDetails({ kind: "kanban", cards: [{ content: "x", status: "pending", active_form: 42 }] })).toBe(false);
+    expect(isKanbanDetails({ kind: "kanban", cards: [{ id: "K1", content: "x", status: "pending", active_form: 42 }] })).toBe(false);
   });
 
   test("rejects when any item in a multi-item list is malformed", () => {
     expect(isKanbanDetails({ kind: "kanban", cards: [
-      { content: "ok", status: "completed" },
-      { content: 99, status: "pending" },
+      { id: "K1", content: "ok", status: "completed" },
+      { id: "K2", content: 99, status: "pending" },
     ]})).toBe(false);
   });
 });

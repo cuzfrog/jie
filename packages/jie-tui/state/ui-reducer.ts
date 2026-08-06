@@ -1,6 +1,8 @@
 import { ActionTypes, type Action } from "./actions";
 import { teamLoadReducer } from "./team-load-reducer";
 import { TuiState } from "./state";
+import { clampKanbanCursor, moveKanbanCursor, type KanbanDirection } from "./kanban-cursor";
+import { reduceKanbanBoard } from "./kanban-reducer";
 
 export function reduceUiAction(state: TuiState, action: Action): TuiState {
   switch (action.type) {
@@ -75,6 +77,18 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
         infoEntries: [...state.infoEntries, { seq: state.nextEntrySeq, kind: "help" }],
         nextEntrySeq: state.nextEntrySeq + 1,
       };
+    case ActionTypes.SET_KANBAN_BOARD:
+      return reduceKanbanBoard(state, action.payload.board);
+    case ActionTypes.MOVE_KANBAN_CURSOR:
+      return reduceKanbanCursorMove(state, action.payload.direction);
+    case ActionTypes.TOGGLE_KANBAN_EXPAND:
+      return { ...state, kanbanExpanded: !state.kanbanExpanded };
+    case ActionTypes.COMMIT_KANBAN_EDIT:
+      return { ...state, kanbanEdit: action.payload.cardId };
+    case ActionTypes.CANCEL_KANBAN_EDIT:
+      return { ...state, kanbanEdit: null };
+    case ActionTypes.SAVE_KANBAN_EDIT:
+      return state;
     default:
       return state;
   }
@@ -90,8 +104,18 @@ function reduceTeamPanelToggle(state: TuiState): TuiState {
 
 function reduceKanbanPanelToggle(state: TuiState): TuiState {
   if (state.focusedAgentId === null) return state;
-  if (state.kanbanPanelVisible) return { ...state, kanbanPanelVisible: false };
-  return { ...state, kanbanPanelVisible: true, teamPanelVisible: false, teamCursorAgentId: null };
+  if (state.kanbanPanelVisible) return { ...state, kanbanPanelVisible: false, kanbanEdit: null };
+  return {
+    ...state,
+    kanbanPanelVisible: true,
+    teamPanelVisible: false,
+    teamCursorAgentId: null,
+    kanbanCursor: clampKanbanCursor(state.kanbanBoard, state.kanbanCursor),
+  };
+}
+
+function reduceKanbanCursorMove(state: TuiState, direction: KanbanDirection): TuiState {
+  return { ...state, kanbanCursor: moveKanbanCursor(state.kanbanBoard, state.kanbanCursor, direction) };
 }
 
 function reduceTeamCursor(state: TuiState, direction: 1 | -1): TuiState {

@@ -2,6 +2,7 @@ import type { AgentInfo, TeamInfo } from "@cuzfrog/jie-platform";
 import type { AgentId, AgentUiState, TuiState } from "./state";
 import { hydrateHistory } from "./hydrate-history";
 import { estimateContextTokens } from "./context-tokens";
+import { clampKanbanCursor } from "./kanban-cursor";
 
 export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
   const { id: teamId, agents } = teamInfo;
@@ -50,7 +51,6 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
       history: hydrated.history,
       currentTurn: hydrated.currentTurn,
       compactionMarker: hydrated.compactionMarker,
-      cards: hydrated.cards,
       contextTokensUsed: estimateContextTokens(hydrated.history, hydrated.currentTurn),
     });
   }
@@ -59,6 +59,7 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
   if (leaderId !== null && !newAgents.has(leaderId)) leaderId = null;
   let cursor = switching ? null : state.teamCursorAgentId;
   if (cursor !== null && !newAgents.has(cursor)) cursor = null;
+  const kanbanCursor = clampKanbanCursor(teamInfo.kanbanCards, state.kanbanCursor);
   return {
     ...state,
     teamId,
@@ -70,6 +71,9 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
     infoEntries: switching ? [] : state.infoEntries,
     nextEntrySeq,
     agents: newAgents,
+    kanbanBoard: teamInfo.kanbanCards,
+    kanbanCursor,
+    kanbanEdit: switching ? null : state.kanbanEdit,
   };
 }
 
@@ -92,6 +96,5 @@ function emptyAgent(agentId: AgentId, teamId: string, agent: AgentInfo): AgentUi
     compactionMarker: null,
     contextTokensUsed: 0,
     lastReportedTotalTokens: null,
-    cards: [],
   };
 }

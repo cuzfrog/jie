@@ -1,4 +1,6 @@
 import type { AnyEventEnvelope, CommandResult, TeamInfo } from "@cuzfrog/jie-platform";
+import type { KanbanCard } from "../kanban";
+import type { KanbanDirection } from "./kanban-cursor";
 
 type InstalledTeams = CommandResult<"getTeamInfo">["installed"];
 
@@ -29,6 +31,12 @@ export const ActionTypes = {
   REQUEST_REQUEUE: "[ui] request requeue abandoned dequeued prompt",
   SET_ENVIRONMENT: "[ui] set environment",
   SHOW_HELP: "[ui] show help in the chat area",
+  SET_KANBAN_BOARD: "[ui] set kanban board",
+  MOVE_KANBAN_CURSOR: "[ui] move kanban cursor",
+  TOGGLE_KANBAN_EXPAND: "[ui] toggle kanban expanded",
+  COMMIT_KANBAN_EDIT: "[ui] commit kanban card edit",
+  CANCEL_KANBAN_EDIT: "[ui] cancel kanban card edit",
+  SAVE_KANBAN_EDIT: "[ui] save kanban card edit",
 } as const;
 
 type ActionType = (typeof ActionTypes)[keyof typeof ActionTypes];
@@ -81,6 +89,12 @@ export const Actions = {
 	setEnvironment: (cwd: string, gitBranch: string, gitDirty: boolean, version: string) =>
 		createAction(ActionTypes.SET_ENVIRONMENT, { cwd, gitBranch, gitDirty, version }),
 	showHelp: () => showHelp,
+	setKanbanBoard: (board: ReadonlyArray<KanbanCard>) => createAction(ActionTypes.SET_KANBAN_BOARD, { board }),
+	moveKanbanCursor: (direction: KanbanDirection) => createAction(ActionTypes.MOVE_KANBAN_CURSOR, { direction }),
+	toggleKanbanExpand: () => createAction(ActionTypes.TOGGLE_KANBAN_EXPAND),
+	commitKanbanEdit: (cardId: string) => createAction(ActionTypes.COMMIT_KANBAN_EDIT, { cardId }),
+	cancelKanbanEdit: () => createAction(ActionTypes.CANCEL_KANBAN_EDIT),
+	saveKanbanEdit: () => createAction(ActionTypes.SAVE_KANBAN_EDIT),
 } as const;
 
 export type Action = ReturnType<typeof Actions[keyof typeof Actions]>;

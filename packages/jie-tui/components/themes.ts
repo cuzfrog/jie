@@ -42,6 +42,22 @@ export function style(name: ColorName): (text: string) => string {
   return (text: string): string => `\x1b[${code}m${text}\x1b[39m`;
 }
 
+export const BACKGROUND_CODES = {
+  card: 236,
+  cursor: 30,
+} as const;
+
+export type BackgroundName = keyof typeof BACKGROUND_CODES;
+
+export function bg(name: BackgroundName): (text: string) => string {
+  const code = BACKGROUND_CODES[name];
+  return (text: string): string => `\x1b[48;5;${code}m${text}\x1b[49m`;
+}
+
+export function strikethrough(text: string): string {
+  return `\x1b[9m${text}\x1b[29m`;
+}
+
 export function jieMarkdownTheme(): MarkdownTheme {
   return {
     heading: (text) => style("accent")(boldAttr(text)),

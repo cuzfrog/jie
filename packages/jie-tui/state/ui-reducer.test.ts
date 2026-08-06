@@ -25,6 +25,8 @@ function loadedTeam(roles: ReadonlyArray<{ role: string; agent_key: string; is_l
     id: "my-team",
     leaderKey,
     sessionName: null,
+    currentSessionId: null,
+    kanbanCards: [],
     history: [],
     agents,
   }));

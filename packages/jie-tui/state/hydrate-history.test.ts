@@ -45,7 +45,7 @@ function usage(): Usage {
 
 describe("hydrateHistory", () => {
   test("empty messages yields empty history and null current turn", () => {
-    expect(hydrateHistory([], 0)).toEqual({ history: [], currentTurn: null, compactionMarker: null, cards: [], nextSeq: 0 });
+    expect(hydrateHistory([], 0)).toEqual({ history: [], currentTurn: null, compactionMarker: null, nextSeq: 0 });
   });
 
   test("single completed turn becomes currentTurn with empty history", () => {
@@ -131,21 +131,6 @@ describe("hydrateHistory", () => {
     const result = hydrateHistory([user("pending")], 0);
     expect(result.history).toEqual([]);
     expect(result.currentTurn).toEqual({ userPrompt: "pending", cards: [], blocks: [], streamId: null, seq: 0 });
-    expect(result.cards).toEqual([]);
-  });
-
-  test("restores cards from the last kanban tool-result details", () => {
-    const cards = [
-      { content: "a", status: "completed" as const },
-      { content: "b", status: "in_progress" as const, active_form: "doing b" },
-    ];
-    const result = hydrateHistory([
-      user("plan"),
-      assistantToolCall("c1", "kanban", {}),
-      toolResult("c1", "kanban", "ok", false, { kind: "kanban", cards }),
-      assistantText("done"),
-    ], 0);
-    expect(result.cards).toEqual(cards);
   });
 
   test("a leading compaction summary becomes the marker consuming the first seq, turns number after it", () => {
@@ -166,7 +151,6 @@ describe("hydrateHistory", () => {
       history: [],
       currentTurn: null,
       compactionMarker: { seq: 3, summary: "the summary", tokensBefore: 500 },
-      cards: [],
       nextSeq: 4,
     });
   });

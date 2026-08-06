@@ -266,9 +266,9 @@ export class TeamManagerImpl implements TeamManager {
       });
     }
     const history: AgentHistory[] = bodies.map((b) => ({ agentKey: b.identity.agentKey, messages: b.messages() }));
-    const sessionId = this.sessionIds.get(id);
-    const sessionName = sessionId === undefined ? null : this.transcriptStore.sessionName(sessionId);
-    const kanbanCards = sessionId === undefined ? [] : this.kanbanStore.load(id, sessionId);
+    const sessionId = this.sessionIds.get(id) ?? null;
+    const sessionName = sessionId === null ? null : this.transcriptStore.sessionName(sessionId);
+    const kanbanCards = sessionId === null ? [] : this.kanbanStore.load(id, sessionId);
     return { id, leaderKey: leader.agentKey, sessionName, currentSessionId: sessionId, agents: identities, history, kanbanCards };
   }
 }

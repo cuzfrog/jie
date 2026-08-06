@@ -20,6 +20,8 @@ function loadedState(): TuiState {
     id: "my-team",
     leaderKey: "general-1",
     sessionName: null,
+    currentSessionId: null,
+    kanbanCards: [],
     history: [],
     agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
   }));
@@ -30,6 +32,8 @@ function twoAgentState(): TuiState {
     id: "my-team",
     leaderKey: "manager-1",
     sessionName: null,
+    currentSessionId: null,
+    kanbanCards: [],
     history: [],
     agents: [
       { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
@@ -54,6 +58,8 @@ describe("reduceTeamLoaded", () => {
       id: "my-team",
       leaderKey: "general-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     }));
@@ -68,6 +74,8 @@ describe("reduceTeamLoaded", () => {
       id: "my-team-1",
       leaderKey: "general-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [{ teamId: "my-team-1", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     }));
@@ -75,6 +83,8 @@ describe("reduceTeamLoaded", () => {
       id: "my-team-2",
       leaderKey: "general-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [{ teamId: "my-team-2", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     }));
@@ -90,6 +100,8 @@ describe("reduceTeamLoaded", () => {
       id: "my-team",
       leaderKey: "manager-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [
         { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
@@ -107,6 +119,8 @@ describe("Actions.switchTeam", () => {
       id: "my-team",
       leaderKey: "general-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [
         { teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
@@ -125,6 +139,8 @@ describe("Actions.switchTeam", () => {
       id: "team-a",
       leaderKey: "general-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [{ teamId: "team-a", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     }));
@@ -132,6 +148,8 @@ describe("Actions.switchTeam", () => {
       id: "team-b",
       leaderKey: "worker-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [
         { teamId: "team-b", role: "manager", agentKey: "manager-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null },
@@ -152,6 +170,8 @@ describe("Actions.switchTeam", () => {
       id: "default-solo",
       leaderKey: "general-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [{ teamId: "default-solo", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     };
@@ -761,38 +781,37 @@ describe("reduceToolCall + reduceToolResult", () => {
     }
   });
 
-  test("a kanban_write tool result updates the agent's cards from details.kind === 'kanban'", () => {
-    let state = promptedState();
-    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "kanban_write", "{}"));
+  test("a kanban_write tool result updates the board from details.kind === 'kanban'", () => {
+    const state = promptedState();
     const cards = [
-      { content: "alpha", status: "completed" },
-      { content: "beta", status: "in_progress" },
-      { content: "gamma", status: "pending" },
+      { id: "K1", content: "alpha", status: "completed" },
+      { id: "K2", content: "beta", status: "in_progress" },
+      { id: "K3", content: "gamma", status: "pending" },
     ] as const;
-    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "kanban_write", "ok", 5, null, { kind: "kanban", cards }));
-    expect(state.agents.get("my-team:general-1")?.cards).toEqual(cards);
+    const state2 = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "kanban_write", "ok", 5, null, { kind: "kanban", cards }));
+    expect(state2.kanbanBoard).toEqual(cards);
+    expect(state2.kanbanCursor).toBe("K1");
   });
 
-  test("an empty kanban board clears the agent's cards", () => {
-    let state = promptedState();
-    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "kanban_write", "{}"));
-    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "kanban_write", "ok", 5, null, { kind: "kanban", cards: [] }));
-    expect(state.agents.get("my-team:general-1")?.cards).toEqual([]);
+  test("an empty kanban board clears the board", () => {
+    const state = promptedState();
+    const state2 = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "kanban_write", "ok", 5, null, { kind: "kanban", cards: [] }));
+    expect(state2.kanbanBoard).toEqual([]);
+    expect(state2.kanbanCursor).toBeNull();
   });
 
-  test("a tool result with non-kanban details does not touch the agent's cards", () => {
-    let state = promptedState();
-    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
-    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", "out", 5, null, { kind: "diff", diff: "@@ -1 +1 @@\n-a\n+A" }));
-    expect(state.agents.get("my-team:general-1")?.cards).toEqual([]);
+  test("a tool result with non-kanban details does not touch the board", () => {
+    const state = promptedState();
+    const state2 = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", "out", 5, null, { kind: "diff", diff: "@@ -1 +1 @@\n-a\n+A" }));
+    expect(state2.kanbanBoard).toEqual([]);
   });
 
   test("a kanban_write tool result for a foreign team is ignored", () => {
     const state = promptedState();
     const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
-    const state2 = reduce(state, Events.agentToolResult(foreign, "c1", "kanban_write", "ok", 5, null, { kind: "kanban", cards: [{ content: "x", status: "in_progress" }] }));
+    const state2 = reduce(state, Events.agentToolResult(foreign, "c1", "kanban_write", "ok", 5, null, { kind: "kanban", cards: [{ id: "K1", content: "x", status: "in_progress" }] }));
     expect(state2).toBe(state);
-    expect(state2.agents.get("my-team:general-1")?.cards).toEqual([]);
+    expect(state2.kanbanBoard).toEqual([]);
   });
 });
 

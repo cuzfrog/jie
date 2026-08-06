@@ -9,6 +9,8 @@ function loadDemoTeam(stateStore: StateStore): void {
         id: "demo",
         leaderKey: "general-1",
         sessionName: null,
+        currentSessionId: null,
+        kanbanCards: [],
         history: [],
         agents: [
           { teamId: "demo", role: "helper", agentKey: "helper-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null },

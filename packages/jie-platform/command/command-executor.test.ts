@@ -334,6 +334,8 @@ describe("CommandExecutorImpl", () => {
         id: "alpha",
         leaderKey: "general-1",
         sessionName: null,
+        currentSessionId: null,
+        kanbanCards: [],
         history: [],
         agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
       };
@@ -347,8 +349,8 @@ describe("CommandExecutorImpl", () => {
   describe("reload", () => {
     test("delegates to teamManager.reload and returns the reloaded teams", async () => {
       const identities: TeamInfo[] = [
-        { id: "default-solo", leaderKey: "general-1", sessionName: null, agents: [], history: [] },
-        { id: "alpha", leaderKey: "general-1", sessionName: null, agents: [], history: [] },
+        { id: "default-solo", leaderKey: "general-1", sessionName: null, currentSessionId: null, agents: [], history: [], kanbanCards: [] },
+        { id: "alpha", leaderKey: "general-1", sessionName: null, currentSessionId: null, agents: [], history: [], kanbanCards: [] },
       ];
       teamManager.reload.mockResolvedValue(identities);
       const result = await executor.execute({ name: "reload" });
@@ -359,7 +361,7 @@ describe("CommandExecutorImpl", () => {
 
   describe("resumeSession", () => {
     test("delegates to teamManager.resumeSession with teamId and sessionId", async () => {
-      const identity: TeamInfo = { id: "alpha", leaderKey: "general-1", sessionName: null, agents: [], history: [] };
+      const identity: TeamInfo = { id: "alpha", leaderKey: "general-1", sessionName: null, currentSessionId: null, agents: [], history: [], kanbanCards: [] };
       teamManager.resumeSession.mockResolvedValue(identity);
       const result = await executor.execute({ name: "resumeSession", teamId: "alpha", sessionId: "s1" });
       expect(result).toBe(identity);
