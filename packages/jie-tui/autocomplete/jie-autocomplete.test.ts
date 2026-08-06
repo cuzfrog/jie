@@ -106,7 +106,7 @@ describe("createJieAutocompleteProvider — slash commands", () => {
   test("bare '/' lists every command with its argument hint and description", async () => {
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), makeStateStore())
       .getSuggestions(["/"], 0, 1, { signal: signal() });
-    expect(suggestions!.items).toHaveLength(12);
+    expect(suggestions!.items).toHaveLength(13);
     const team = suggestions!.items.find((item) => item.value === "team");
     expect(team!.description).toBe("<teamId> — switch the active team");
     const help = suggestions!.items.find((item) => item.value === "help");
@@ -132,7 +132,7 @@ describe("createJieAutocompleteProvider — skill invocations", () => {
   test("bare '/' appends the focused agent's skills after the commands", async () => {
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), storeWithSkills([skillInfo("say-hello")]))
       .getSuggestions(["/"], 0, 1, { signal: signal() });
-    expect(suggestions!.items).toHaveLength(13);
+    expect(suggestions!.items).toHaveLength(14);
     expect(suggestions!.items.at(-1)).toEqual({ value: "skill:say-hello", label: "skill:say-hello", description: "run say-hello" });
   });
 
@@ -162,7 +162,7 @@ describe("createJieAutocompleteProvider — skill invocations", () => {
   test("an agent without skills contributes no skill entries", async () => {
     const bare = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), storeWithSkills([]))
       .getSuggestions(["/"], 0, 1, { signal: signal() });
-    expect(bare!.items).toHaveLength(12);
+    expect(bare!.items).toHaveLength(13);
     const filtered = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), storeWithSkills([]))
       .getSuggestions(["/skill:"], 0, 7, { signal: signal() });
     expect(filtered).toBeNull();

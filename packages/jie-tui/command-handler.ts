@@ -22,7 +22,7 @@ interface AgentRoute {
   readonly agentKey: string;
 }
 
-type InterceptName = "model" | "model-filter" | "effort" | "reload" | "resume" | "rename" | Extract<CommandName, "login" | "logout" | "team">;
+type InterceptName = "model" | "model-filter" | "effort" | "reload" | "resume" | "rename" | "kanban" | Extract<CommandName, "login" | "logout" | "team">;
 
 type TuiCommandName = "help" | "clear" | "exit" | InterceptName;
 
@@ -139,6 +139,7 @@ export class CommandHandlerImpl implements CommandHandler {
       case "team": return this.interceptTeam(args);
       case "resume": return this.interceptResume(args);
       case "rename": return this.interceptRename(args);
+      case "kanban": return this.interceptKanban(args);
       default: return null;
     }
   }
@@ -305,6 +306,45 @@ export class CommandHandlerImpl implements CommandHandler {
       });
     return { kind: "reply", text: `resuming session '${sessionId}'` };
   }
+
+  private interceptKanban(args: ReadonlyArray<string>): InterceptResult {
+    const teamId = this.stateStore.getState().teamId;
+    if (teamId === null) return { kind: "error", text: "/kanban: no team loaded" };
+    const subcommand = args[0];
+    if (subcommand === undefined) {
+      this.stateStore.dispatch(Actions.toggleKanbanPanel());
+      return { kind: "silent" };
+    }
+    if (subcommand === "add") {
+      const parsed = parseKanbanAddArgs(args.slice(1));
+      if (parsed.kind === "error") return parsed;
+      void this.platform.execute({ name: "kanbanAdd", teamId, title: parsed.title, description: parsed.description })
+        .then((result) => {
+          this.stateStore.dispatch(Actions.setKanbanBoard(result.board));
+          this.stateStore.dispatch(Actions.setTransientMessage(`added kanban card ${result.card.id}`));
+        }, (error: unknown) => {
+          const reason = errorReason(error);
+          this.stateStore.dispatch(Actions.setErrorMessage(`/kanban add failed: ${reason}`));
+        });
+      return { kind: "silent" };
+    }
+    if (subcommand === "remove" || subcommand === "complete") {
+      const cardId = args[1];
+      if (cardId === undefined) return { kind: "error", text: `/kanban ${subcommand} <cardId>` };
+      const command = subcommand === "remove"
+        ? { name: "kanbanRemove", teamId, cardId } as const
+        : { name: "kanbanComplete", teamId, cardId } as const;
+      void this.platform.execute(command)
+        .then((result) => {
+          this.stateStore.dispatch(Actions.setKanbanBoard(result.board));
+        }, (error: unknown) => {
+          const reason = errorReason(error);
+          this.stateStore.dispatch(Actions.setErrorMessage(`/kanban ${subcommand} failed: ${reason}`));
+        });
+      return { kind: "silent" };
+    }
+    return { kind: "error", text: `/kanban: unknown subcommand '${subcommand}'` };
+  }
 }
 
 function runCommand(input: string): CommandOutcome {
@@ -339,7 +379,19 @@ const COMMANDS: ReadonlyMap<string, SlashCommand> = new Map<string, SlashCommand
 
 const LOCAL_COMMAND_NAMES = ["help", "clear", "exit"] as const satisfies ReadonlyArray<TuiCommandName>;
 
-const INTERCEPT_NAMES = ["login", "logout", "model", "model-filter", "effort", "reload", "team", "resume", "rename"] as const satisfies ReadonlyArray<InterceptName>;
+const INTERCEPT_NAMES = ["login", "logout", "model", "model-filter", "effort", "reload", "team", "resume", "rename", "kanban"] as const satisfies ReadonlyArray<InterceptName>;
+
+function parseKanbanAddArgs(args: ReadonlyArray<string>): { kind: "ok"; title?: string; description: string } | { kind: "error"; text: string } {
+  if (args[0] === "--title") {
+    if (args[1] === undefined) return { kind: "error", text: "/kanban add --title <title> <description>" };
+    const description = args.slice(2).join(" ");
+    if (description.trim() === "") return { kind: "error", text: "/kanban add --title <title> <description>" };
+    return { kind: "ok", title: args[1], description };
+  }
+  const description = args.join(" ");
+  if (description.trim() === "") return { kind: "error", text: "/kanban add <description>" };
+  return { kind: "ok", description };
+}
 
 const MODEL_FILTER_USAGE = "/model-filter <add|remove|list> <pattern>";
 
