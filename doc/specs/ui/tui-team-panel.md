@@ -22,12 +22,12 @@ One row per agent, leader pinned first, the rest in map insertion order — `Tui
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ agent           ctx       tools                                subscribe                                                 model │
-│ ▶dm-1 leader    25%/128k  notify read_artifact write_artifact  task.review_passed task.failed  (lm-studio) qwen3.5-4b | medium │
+│ ▸dm-1 leader    25%/128k  notify read_artifact write_artifact  task.review_passed task.failed  (lm-studio) qwen3.5-4b | medium │
 │  researcher-1   —         web_search web_fetch                 task.recorded                   (lm-studio) qwen3.5-4b | medium │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Per row: the identity column — cursor (`▶` in `accent` on the pointed agent — cursor, else focus — a space otherwise), agent key (`accent` when pointed or focused; the key already carries the role, so the role is not repeated), a `leader` label (`dim`) for the leader, status glyph, and a queue-depth tag `q<N>` (`muted`) when the queue is non-empty; then the context usage `N%/<window>k` colored by `contextPercentColor` (`footer/context-percent.ts`), the soul's `tools` (`muted`), its `subscribe` topics (`muted`), and the model segment `(provider) modelId | effort` — the same `formatModelSegment` the footer uses (`footer/model-segment.ts`). Empty columns render `—`. The row layout is `renderTeamTable` (`components/team-table.ts`).
+Per row: the identity column — cursor (`▸` in `accent` on the pointed agent — cursor, else focus — a space otherwise), agent key (`accent` when pointed or focused; the key already carries the role, so the role is not repeated), a `leader` label (`dim`) for the leader, status glyph, and a queue-depth tag `q<N>` (`muted`) when the queue is non-empty; then the context usage `N%/<window>k` colored by `contextPercentColor` (`footer/context-percent.ts`), the soul's `tools` (`muted`), its `subscribe` topics (`muted`), and the model segment `(provider) modelId | effort` — the same `formatModelSegment` the footer uses (`footer/model-segment.ts`). Empty columns render `—`. The row layout is `renderTeamTable` (`components/team-table.ts`).
 
 **Adaptive width.** The identity and model columns always render. When the natural row width exceeds the available width, the middle columns drop right to left — `subscribe`, then `tools`, then `ctx` (their titles drop with them) — and if identity plus model still overflow, the model segment truncates to fit.
 

@@ -8,7 +8,7 @@ const TODO_TITLE = "Todo:";
 
 const CARD_STYLES: { readonly [K in KanbanStatus]: { readonly glyph: string; readonly glyphColor: ColorName; readonly textColor: ColorName } } = {
   pending: { glyph: "·", glyphColor: "muted", textColor: "text" },
-  in_progress: { glyph: "▶", glyphColor: "accent", textColor: "text" },
+  in_progress: { glyph: "▸", glyphColor: "accent", textColor: "text" },
   completed: { glyph: "✓", glyphColor: "muted", textColor: "muted" },
 };
 

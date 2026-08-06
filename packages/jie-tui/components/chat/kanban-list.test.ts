@@ -33,7 +33,7 @@ describe("KanbanList", () => {
     expect(lines[1]).toContain("·");
     expect(lines[1]).toContain("#1");
     expect(lines[1]).toContain("later");
-    expect(lines[2]).toContain("▶");
+    expect(lines[2]).toContain("▸");
     expect(lines[2]).toContain("#2");
     expect(lines[2]).toContain("now");
     expect(lines[3]).toContain("✓");

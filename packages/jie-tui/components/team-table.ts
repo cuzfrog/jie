@@ -125,7 +125,7 @@ function layoutRow(cells: ReadonlyArray<string>, visible: number[], widths: numb
   return truncateToWidth(`${left}${COLUMN_GAP}${last}`, width);
 }
 
-const POINTER_GLYPH = "▶";
+const POINTER_GLYPH = "▸";
 const LEADER_LABEL = "leader";
 const COLUMN_GAP = "  ";
 const EMPTY_CELL = "—";
