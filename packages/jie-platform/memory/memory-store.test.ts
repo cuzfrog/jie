@@ -56,6 +56,12 @@ describe("SqliteMemoryStore", () => {
     expect(byContent.get("float")).toBe(81);
   });
 
+  test("add clamps a non-finite priority to zero", () => {
+    const store = makeStore();
+    store.add([atom({ content: "not a number", priority: Number.NaN })], "team-a", "s1");
+    expect(store.top("team-a", 10).map((a) => a.priority)).toEqual([0]);
+  });
+
   test("top orders by priority desc then updated_at desc", async () => {
     const store = makeStore();
     store.add([atom({ content: "c1", priority: 50 })], "team-a", "s1");

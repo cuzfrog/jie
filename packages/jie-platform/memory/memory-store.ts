@@ -93,6 +93,7 @@ function hasAtom(s: Storage, teamId: string, atom: NewMemoryAtom): boolean {
 }
 
 function clampPriority(priority: number): number {
+  if (Number.isNaN(priority)) return 0;
   return Math.max(0, Math.min(100, Math.round(priority)));
 }
 
