@@ -1,6 +1,6 @@
 import type { GitSnapshot } from "../services";
 import type { SessionSummary } from "../storage";
-import type { EffortLevel, ModelInfo, TeamInfo } from "../types";
+import type { EffortLevel, KanbanCard, ModelInfo, TeamInfo } from "../types";
 
 interface CommandDef<A, R = null> {
   args: A;
@@ -36,6 +36,14 @@ interface CommandTypeMap {
   getGitStatus: CommandDef<{}, GitSnapshot>;
   stop: CommandDef<{}, null>;
   listSessions: CommandDef<{ teamId: string }, ReadonlyArray<SessionSummary>>;
+  kanbanAdd: CommandDef<{ teamId: string; title?: string; description: string }, KanbanBoardResult & { card: KanbanCard }>;
+  kanbanRemove: CommandDef<{ teamId: string; cardId: string }, KanbanBoardResult>;
+  kanbanComplete: CommandDef<{ teamId: string; cardId: string }, KanbanBoardResult>;
+  kanbanEdit: CommandDef<{ teamId: string; cardId: string; content: string }, KanbanBoardResult>;
+}
+
+interface KanbanBoardResult {
+  board: ReadonlyArray<KanbanCard>;
 }
 
 export type CommandName = keyof CommandTypeMap;

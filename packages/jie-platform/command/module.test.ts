@@ -2,7 +2,9 @@ import { asValue, createContainer, InjectionMode, type AwilixContainer } from "a
 import type { AuthStore, ModelRegistry, SettingsStore } from "../config";
 import type { PlatformCradle } from "../container";
 import type { EventManager } from "../event";
+import type { LlmService } from "../llm";
 import type { GitService, GitSnapshot } from "../services";
+import type { KanbanStore } from "../storage";
 import type { TeamManager } from "../team";
 import { registerCommandModule } from "./module";
 
@@ -41,6 +43,7 @@ const teamManager = vi.mocked<TeamManager>({
   listSessions: vi.fn(),
   resumeSession: vi.fn(),
   renameSession: vi.fn(),
+  currentSessionId: vi.fn(),
   stop: vi.fn(),
 });
 
@@ -53,6 +56,17 @@ const eventManager = vi.mocked<EventManager>({
   subscribe: vi.fn(),
 });
 
+const kanbanStore = vi.mocked<KanbanStore>({
+  load: vi.fn(),
+  replace: vi.fn(),
+  add: vi.fn(),
+  remove: vi.fn(),
+  complete: vi.fn(),
+  editContent: vi.fn(),
+});
+
+const llmService = vi.mocked<LlmService>({ complete: vi.fn() });
+
 function bootedContainer(): AwilixContainer<PlatformCradle> {
   const container = createContainer<PlatformCradle>({ injectionMode: InjectionMode.CLASSIC });
   container.register({
@@ -62,6 +76,8 @@ function bootedContainer(): AwilixContainer<PlatformCradle> {
     teamManager: asValue(teamManager),
     gitService: asValue(gitService),
     eventManager: asValue(eventManager),
+    kanbanStore: asValue(kanbanStore),
+    llmService: asValue(llmService),
   });
   registerCommandModule(container);
   return container;

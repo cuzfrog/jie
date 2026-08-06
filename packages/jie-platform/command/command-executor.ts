@@ -1,7 +1,10 @@
+import type { Api, Model } from "@earendil-works/pi-ai";
 import type { AuthStore, ModelRegistry, SettingsStore } from "../config";
 import { Events, type EventManager } from "../event";
 import { JiePlatformError } from "../jie-platform-errors";
+import type { LlmService } from "../llm";
 import type { GitService } from "../services";
+import type { KanbanStore } from "../storage";
 import type { TeamManager } from "../team";
 import type { Command, CommandName, CommandResult } from "./commands";
 
@@ -21,6 +24,8 @@ export class CommandExecutorImpl implements CommandExecutor {
     private readonly teamManager: TeamManager,
     private readonly gitService: GitService,
     private readonly eventManager: EventManager,
+    private readonly kanbanStore: KanbanStore,
+    private readonly llmService: LlmService,
   ) {
     this.handlers = {
       login: this.login.bind(this),
@@ -43,6 +48,10 @@ export class CommandExecutorImpl implements CommandExecutor {
       getGitStatus: this.getGitStatus.bind(this),
       stop: this.stop.bind(this),
       listSessions: this.listSessions.bind(this),
+      kanbanAdd: this.kanbanAdd.bind(this),
+      kanbanRemove: this.kanbanRemove.bind(this),
+      kanbanComplete: this.kanbanComplete.bind(this),
+      kanbanEdit: this.kanbanEdit.bind(this),
     };
   }
 
@@ -180,5 +189,81 @@ export class CommandExecutorImpl implements CommandExecutor {
 
   private listSessions(command: Command<"listSessions">): CommandResult<"listSessions"> {
     return this.teamManager.listSessions(command.teamId);
+  }
+
+  private async kanbanAdd(command: Command<"kanbanAdd">): Promise<CommandResult<"kanbanAdd">> {
+    const sessionId = this.sessionIdFor(command.teamId);
+    const content = await this.distillTitle(command.title, command.description);
+    if (content.trim() === "") {
+      throw new JiePlatformError("KANBAN_TEXT_EMPTY");
+    }
+    const description = command.description === "" || command.description === content ? undefined : command.description;
+    const card = this.kanbanStore.add(command.teamId, sessionId, content, description);
+    return { board: this.kanbanStore.load(command.teamId, sessionId), card };
+  }
+
+  private kanbanRemove(command: Command<"kanbanRemove">): CommandResult<"kanbanRemove"> {
+    const sessionId = this.sessionIdFor(command.teamId);
+    if (!this.kanbanStore.remove(command.teamId, sessionId, command.cardId)) {
+      throw new JiePlatformError("KANBAN_CARD_NOT_FOUND", { detail: command.cardId });
+    }
+    return { board: this.kanbanStore.load(command.teamId, sessionId) };
+  }
+
+  private kanbanComplete(command: Command<"kanbanComplete">): CommandResult<"kanbanComplete"> {
+    const sessionId = this.sessionIdFor(command.teamId);
+    if (!this.kanbanStore.complete(command.teamId, sessionId, command.cardId)) {
+      throw new JiePlatformError("KANBAN_CARD_NOT_FOUND", { detail: command.cardId });
+    }
+    return { board: this.kanbanStore.load(command.teamId, sessionId) };
+  }
+
+  private kanbanEdit(command: Command<"kanbanEdit">): CommandResult<"kanbanEdit"> {
+    const sessionId = this.sessionIdFor(command.teamId);
+    if (command.content.trim() === "") {
+      throw new JiePlatformError("KANBAN_TEXT_EMPTY");
+    }
+    if (this.kanbanStore.editContent(command.teamId, sessionId, command.cardId, command.content) === null) {
+      throw new JiePlatformError("KANBAN_CARD_NOT_FOUND", { detail: command.cardId });
+    }
+    return { board: this.kanbanStore.load(command.teamId, sessionId) };
+  }
+
+  private sessionIdFor(teamId: string): string {
+    const sessionId = this.teamManager.currentSessionId(teamId);
+    if (sessionId === null) {
+      throw new JiePlatformError("NO_TEAM", { detail: `no session loaded for team '${teamId}'` });
+    }
+    return sessionId;
+  }
+
+  private async distillTitle(title: string | undefined, description: string): Promise<string> {
+    if (title !== undefined) return title;
+    if (description.length <= 60) return description;
+    const model = this.resolveLlmModel();
+    if (model === null) return description;
+    try {
+      const distilled = (
+        await this.llmService.complete({
+          model,
+          systemPrompt: "Distill a one-line task title from the user's longer task description. Reply with only the title itself, no quotes, no punctuation, no prefix.",
+          prompt: description,
+          maxTokens: 20,
+        })
+      ).trim();
+      return distilled === "" ? description : distilled;
+    } catch {
+      return description;
+    }
+  }
+
+  private resolveLlmModel(): Model<Api> | null {
+    const settings = this.settingsStore.load();
+    if (settings.defaultProvider === undefined || settings.defaultModel === undefined) return null;
+    try {
+      return this.modelRegistry.resolve(settings.defaultProvider, settings.defaultModel) ?? null;
+    } catch {
+      return null;
+    }
   }
 }
