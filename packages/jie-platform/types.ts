@@ -73,9 +73,18 @@ export interface TaskLifecycle {
 export type KanbanStatus = "pending" | "in_progress" | "completed";
 
 export interface KanbanCard {
+    readonly id: string;
     readonly content: string;
     readonly status: KanbanStatus;
     readonly active_form?: string;
+    readonly description?: string;
+}
+
+export interface KanbanCardWrite {
+    readonly content: string;
+    readonly status: KanbanStatus;
+    readonly active_form?: string;
+    readonly description?: string;
 }
 
 export interface KanbanDetailsPayload {
@@ -92,10 +101,12 @@ export function isKanbanDetails(value: unknown): value is KanbanDetailsPayload {
 
 function isKanbanCard(value: unknown): value is KanbanCard {
     if (typeof value !== "object" || value === null) return false;
+    if (!("id" in value) || typeof value.id !== "string" || value.id === "") return false;
     if (!("content" in value) || typeof value.content !== "string") return false;
     if (!("status" in value)) return false;
     const status = value.status;
     if (status !== "pending" && status !== "in_progress" && status !== "completed") return false;
     if ("active_form" in value && value.active_form !== undefined && typeof value.active_form !== "string") return false;
+    if ("description" in value && value.description !== undefined && typeof value.description !== "string") return false;
     return true;
 }

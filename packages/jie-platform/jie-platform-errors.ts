@@ -16,6 +16,8 @@ const JiePlatformErrorMessages = {
   OVERLAPPING_EDITS: "edits overlap each other in the file",
 
   KANBAN_WRITE_INVALID: "Kanban board violates the kanban_write contract",
+  KANBAN_CARD_NOT_FOUND: "Kanban card not found",
+  KANBAN_TEXT_EMPTY: "Kanban card text must not be empty",
 
   INVALID_ARTIFACT_KEY: "Invalid artifact key",
   ARTIFACT_TOO_LARGE: "Artifact content exceeds the maximum allowed size",
