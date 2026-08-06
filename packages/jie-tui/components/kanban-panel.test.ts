@@ -63,15 +63,15 @@ describe("KanbanPanel", () => {
     expect(row).toContain(style("muted")("rename todo"));
   });
 
-  test("gives every card a background and the cursor card a distinct one", () => {
+  test("marks the cursor card with a triangle, indents the others, and renders no backgrounds", () => {
     stateStore.getState.mockReturnValue(boardState([
       { id: "K1", content: "write spec", status: "pending" },
       { id: "K2", content: "implement tool", status: "in_progress" },
     ], { kanbanCursor: "K2" }));
     const row = new KanbanPanel(stateStore).render(120)[2];
-    expect(row).toContain(`\x1b[48;5;236m${style("text")("write spec")}`);
-    expect(row).toContain(`\x1b[48;5;30m${style("accent")("implement tool")}`);
-    expect(row).not.toContain(`\x1b[48;5;30m${style("text")("write spec")}`);
+    expect(row).toContain(`${style("accent")("▸")} ${style("accent")("implement tool")}`);
+    expect(stripAnsi(row)).toContain("  write spec");
+    expect(row).not.toContain("\x1b[48;5;");
   });
 
   test("caps each column at eight cards and reports the overflow", () => {
@@ -105,7 +105,9 @@ describe("KanbanPanel", () => {
     stateStore.getState.mockReturnValue(boardState([
       { id: "K1", content: "write spec", status: "in_progress", active_form: "drafting", description: "cover storage and events" },
     ], { kanbanExpanded: true, kanbanCursor: "K1" }));
-    const text = new KanbanPanel(stateStore).render(120).map(stripAnsi);
+    const lines = new KanbanPanel(stateStore).render(120);
+    expect(lines.join("")).not.toContain("\x1b[48;5;");
+    const text = lines.map(stripAnsi);
     expect(text.some((line) => line.includes("K1 · write spec"))).toBe(true);
     expect(text.some((line) => line.includes("status: in_progress"))).toBe(true);
     expect(text.some((line) => line.includes("active: drafting"))).toBe(true);

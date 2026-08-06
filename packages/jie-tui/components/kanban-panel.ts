@@ -1,7 +1,7 @@
 import { truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
 import type { KanbanCard, KanbanStatus } from "@cuzfrog/jie-platform";
 import { TuiState, type StateStore } from "../state";
-import { bg, style, type ColorName } from "./themes";
+import { style, type ColorName } from "./themes";
 
 const PANEL_PADDING = 1;
 const COLUMN_GAP = "  ";
@@ -71,8 +71,8 @@ function renderKanbanBoard(state: TuiState, visible: ReadonlyArray<KanbanCard>, 
 function renderColumn(column: { readonly title: string; readonly cardColor: ColorName }, cards: ReadonlyArray<KanbanCard>, total: number, cursorId: string | null, columnWidth: number): string[] {
   const header = style("dim")(truncateToWidth(`${column.title} (${total})`, columnWidth));
   const rows = cards.map((card) => {
-    const line = style(column.cardColor)(truncateToWidth(card.content, columnWidth));
-    return withBackground(line, columnWidth, bg(card.id === cursorId ? "cursor" : "card"));
+    const marker = card.id === cursorId ? `${style("accent")("▸")} ` : "  ";
+    return marker + style(column.cardColor)(truncateToWidth(card.content, Math.max(0, columnWidth - 2)));
   });
   const overflow = total - cards.length;
   if (overflow > 0) rows.push(style("dim")(`+${overflow} more`));
@@ -84,10 +84,7 @@ function renderCardDetail(card: KanbanCard | null, innerWidth: number): string[]
   const lines = [`${card.id} · ${card.content}`, `status: ${STATUS_LABELS[card.status]}`];
   if (card.active_form !== undefined) lines.push(`active: ${card.active_form}`);
   if (card.description !== undefined && card.description !== "") lines.push(`description: ${card.description}`);
-  return lines.map((line, index) => {
-    const text = style(index === 0 ? "text" : "muted")(truncateToWidth(line, innerWidth));
-    return withBackground(text, innerWidth, bg("card"));
-  });
+  return lines.map((line, index) => style(index === 0 ? "text" : "muted")(truncateToWidth(line, innerWidth)));
 }
 
 function renderHint(state: TuiState, width: number): string {
@@ -98,9 +95,4 @@ function renderHint(state: TuiState, width: number): string {
 function fitToWidth(text: string, width: number): string {
   const fitted = truncateToWidth(text, width);
   return fitted + " ".repeat(Math.max(0, width - visibleWidth(fitted)));
-}
-
-function withBackground(text: string, width: number, apply: (text: string) => string): string {
-  const padded = text + " ".repeat(Math.max(0, width - visibleWidth(text)));
-  return apply(padded);
 }

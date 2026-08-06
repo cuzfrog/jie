@@ -16,11 +16,11 @@ The panel is the last section of the single inline column (`tui-layout.md`): it 
 
 ### Board (collapsed)
 
-The board split by status into three equal-width columns — **Pending**, **In Progress**, **Done** — separated by two spaces. The first row titles each column with its name and card count in `dim`; below it one row per card, the content truncated to the column width and colored by status: pending `text`, in-progress `accent`, completed `muted`. Every card row is padded to the column width and given a card background (`bg("card")`); the cursor row — the card matching `state.kanbanCursor` — uses the stronger `bg("cursor")` background instead. A column with more than eight cards shows the first eight plus a `dim` `+N more` marker; a board without cards renders the three headers alone.
+The board split by status into three equal-width columns — **Pending**, **In Progress**, **Done** — separated by two spaces. The first row titles each column with its name and card count in `dim`; below it one row per card: a `▸` cursor in `accent` when the card matches `state.kanbanCursor` (a two-space indent otherwise), then the content truncated to the remaining column width and colored by status: pending `text`, in-progress `accent`, completed `muted`. Rows carry no background. A column with more than eight cards shows the first eight plus a `dim` `+N more` marker; a board without cards renders the three headers alone.
 
 ### Card detail (expanded)
 
-`Tab` expands the focused card to fill the whole panel: one card-wide block with the card background, the first line `K1 · <content>` in `text`, then `status: <status>`, `active: <active_form>` when present, and `description: <description>` when present, all in `muted`. A board with no cursor renders `no task selected`. `Esc` collapses back to the board.
+`Tab` expands the focused card to fill the whole panel: the first line `K1 · <content>` in `text`, then `status: <status>`, `active: <active_form>` when present, and `description: <description>` when present, all in `muted`, with no background. A board with no cursor renders `no task selected`. `Esc` collapses back to the board.
 
 ## Interaction
 
