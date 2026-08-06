@@ -76,6 +76,7 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
       };
     case ActionTypes.SET_KANBAN_BOARD:
     case ActionTypes.MOVE_KANBAN_CURSOR:
+    case ActionTypes.MOVE_KANBAN_EDIT_FIELD:
     case ActionTypes.CYCLE_KANBAN_VIEW:
     case ActionTypes.TOGGLE_KANBAN_EXPAND:
     case ActionTypes.COMMIT_KANBAN_EDIT:

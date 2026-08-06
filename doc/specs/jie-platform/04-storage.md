@@ -126,6 +126,7 @@ export interface KanbanStore {
   remove(teamId: string, sessionId: string, cardId: string): boolean;     // false = no such card
   complete(teamId: string, sessionId: string, cardId: string): boolean;  // false = no such card
   editContent(teamId: string, sessionId: string, cardId: string, content: string): KanbanCard | null;  // null = no such card, or content duplicates another card
+  editDescription(teamId: string, sessionId: string, cardId: string, description: string | undefined): KanbanCard | null;  // null = no such card; undefined clears the description
 }
 ```
 

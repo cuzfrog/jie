@@ -202,6 +202,14 @@ describe("kanban view cycle", () => {
     expect(hidden.kanbanView).toBe("hidden");
   });
 
+  test("moving the kanban edit field routes through the kanban reducer", () => {
+    const panel = reduceUiAction(reduceUiAction(twoAgent(), Actions.cycleKanbanView()), Actions.cycleKanbanView());
+    const expanded = reduceUiAction(panel, Actions.toggleKanbanExpand());
+    expect(expanded.kanbanEditField).toBe("content");
+    const moved = reduceUiAction(expanded, Actions.moveKanbanEditField("down"));
+    expect(moved.kanbanEditField).toBe("description");
+  });
+
   test("leaving the panel clears edit and expand", () => {
     const panel = reduceUiAction(reduceUiAction(twoAgent(), Actions.cycleKanbanView()), Actions.cycleKanbanView());
     const editing = reduceUiAction(panel, Actions.commitKanbanEdit("#1"));

@@ -78,7 +78,7 @@ function renderKanbanBoard(state: TuiState, visible: ReadonlyArray<KanbanCard>, 
 function renderColumn(column: { readonly title: string; readonly cardColor: ColorName }, cards: ReadonlyArray<KanbanCard>, total: number, cursorId: string | null, columnWidth: number): string[] {
   const header = style("dim")(truncateToWidth(`${column.title} (${total})`, columnWidth));
   const rows = cards.map((card) => {
-    const marker = card.id === cursorId ? style("accent")("▸") : " ";
+    const marker = card.id === cursorId ? style("accent")("▶") : " ";
     return marker + style(column.cardColor)(truncateToWidth(card.content, Math.max(0, columnWidth - 1)));
   });
   const overflow = total - cards.length;
@@ -97,7 +97,7 @@ function renderCardDetail(card: KanbanCard | null, field: "content" | "descripti
 }
 
 function renderCardDetailRow(selected: boolean, color: ColorName, text: string, innerWidth: number): string {
-  const marker = selected ? style("accent")("▸") : " ";
+  const marker = selected ? style("accent")("▶") : " ";
   const line = marker + style(color)(text);
   return fitToWidth(line, innerWidth);
 }

@@ -69,7 +69,7 @@ describe("KanbanPanel", () => {
       { id: "#2", content: "implement tool", status: "in_progress" },
     ], { kanbanCursor: "#2" }));
     const row = new KanbanPanel(stateStore).render(120)[2];
-    expect(row).toContain(`${style("accent")("▸")}${style("accent")("implement tool")}`);
+    expect(row).toContain(`${style("accent")("▶")}${style("accent")("implement tool")}`);
     expect(stripAnsi(row)).toContain(" write spec");
     expect(row).not.toContain("\x1b[48;5;");
   });
@@ -110,7 +110,7 @@ describe("KanbanPanel", () => {
     expect(lines.join("")).not.toContain("\x1b[48;5;");
     const text = lines.map(stripAnsi);
     expect(text[0]).toContain("┌ #1 ");
-    expect(text.some((line) => line.includes("▸write spec"))).toBe(true);
+    expect(text.some((line) => line.includes("▶write spec"))).toBe(true);
     expect(text.some((line) => line.includes("description: cover storage and events"))).toBe(true);
     expect(text.some((line) => line.includes("status: in_progress"))).toBe(true);
     expect(text.some((line) => line.includes("active: drafting"))).toBe(true);
@@ -132,7 +132,7 @@ describe("KanbanPanel", () => {
       { id: "#1", content: "write spec", status: "in_progress", description: "cover storage and events" },
     ], { kanbanExpanded: true, kanbanCursor: "#1", kanbanEditField: "content" }));
     const text = new KanbanPanel(stateStore).render(120).map(stripAnsi);
-    expect(text.some((line) => line.includes("▸write spec"))).toBe(true);
+    expect(text.some((line) => line.includes("▶write spec"))).toBe(true);
     expect(text.some((line) => line.includes(" description: cover storage and events"))).toBe(true);
   });
 
@@ -142,7 +142,7 @@ describe("KanbanPanel", () => {
     ], { kanbanExpanded: true, kanbanCursor: "#1", kanbanEditField: "description" }));
     const text = new KanbanPanel(stateStore).render(120).map(stripAnsi);
     expect(text.some((line) => line.includes(" write spec"))).toBe(true);
-    expect(text.some((line) => line.includes("▸description: cover storage and events"))).toBe(true);
+    expect(text.some((line) => line.includes("▶description: cover storage and events"))).toBe(true);
   });
 
   test("expanded mode renders a dim placeholder when the card has no description", () => {
@@ -154,7 +154,7 @@ describe("KanbanPanel", () => {
     const line = text.find((line) => line.includes("description:"));
     expect(line).toBeDefined();
     const inner = stripAnsi(line!).replace(/[│]/g, "").trim();
-    expect(inner).toBe("▸description:");
+    expect(inner).toBe("▶description:");
     expect(lines.some((line) => line.includes(style("dim")("description:")))).toBe(true);
   });
 

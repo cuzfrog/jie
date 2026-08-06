@@ -289,7 +289,7 @@ describe("JieEditor — kanban card edit", () => {
     editor.handleInput("draft");
     notifyKanbanState(editingState("#1"));
     editor.handleInput("\r");
-    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.saveKanbanEdit("#1", "write report"));
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.saveKanbanEdit("#1", "write report", "content"));
     notifyKanbanState(editingState(null));
     expect(editor.getText()).toBe("draft");
   });
@@ -362,6 +362,21 @@ describe("JieEditor — kanban card edit", () => {
     const dequeueType = Actions.requestDequeue("", "", "").type;
     const dequeues = stateStore.dispatch.mock.calls.map((call) => call[0]).filter((action) => action.type === dequeueType);
     expect(dequeues).toEqual([]);
+  });
+
+  test("pre-fills an empty string when the description field is missing", () => {
+    const boardWithoutDesc: ReadonlyArray<KanbanCard> = [{ id: "#1", content: "write report", status: "pending" }];
+    stateStore.getState.mockReturnValue(makeTuiState({ kanbanBoard: boardWithoutDesc, kanbanEdit: "#1", kanbanEditField: "description" }));
+    const { editor } = bootEditor();
+    notifyKanbanState(makeTuiState({ kanbanBoard: boardWithoutDesc, kanbanEdit: "#1", kanbanEditField: "description" }));
+    expect(editor.getText()).toBe("");
+  });
+
+  test("pre-fills an empty string when the edited card is not on the board", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ kanbanBoard: [], kanbanEdit: "#1", kanbanEditField: "content" }));
+    const { editor } = bootEditor();
+    notifyKanbanState(makeTuiState({ kanbanBoard: [], kanbanEdit: "#1", kanbanEditField: "content" }));
+    expect(editor.getText()).toBe("");
   });
 });
 
