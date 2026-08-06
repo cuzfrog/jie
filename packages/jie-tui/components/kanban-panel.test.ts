@@ -69,8 +69,8 @@ describe("KanbanPanel", () => {
       { id: "K2", content: "implement tool", status: "in_progress" },
     ], { kanbanCursor: "K2" }));
     const row = new KanbanPanel(stateStore).render(120)[2];
-    expect(row).toContain(`${style("accent")("▸")} ${style("accent")("implement tool")}`);
-    expect(stripAnsi(row)).toContain("  write spec");
+    expect(row).toContain(`${style("accent")("▸")}${style("accent")("implement tool")}`);
+    expect(stripAnsi(row)).toContain(" write spec");
     expect(row).not.toContain("\x1b[48;5;");
   });
 
@@ -114,6 +114,16 @@ describe("KanbanPanel", () => {
     expect(text.some((line) => line.includes("active: drafting"))).toBe(true);
     expect(text.some((line) => line.includes("description: cover storage and events"))).toBe(true);
     expect(text[text.length - 1]).toContain("tab collapse");
+  });
+
+  test("expanded mode pads every framed line to the full panel width", () => {
+    stateStore.getState.mockReturnValue(boardState([
+      { id: "K1", content: "write spec", status: "in_progress", active_form: "drafting", description: "cover storage and events" },
+    ], { kanbanExpanded: true, kanbanCursor: "K1" }));
+    const lines = new KanbanPanel(stateStore).render(120);
+    for (const line of lines.slice(0, lines.length - 1)) {
+      expect(visibleWidth(line)).toBe(120);
+    }
   });
 
   test("expanded mode with no cursor shows a placeholder", () => {

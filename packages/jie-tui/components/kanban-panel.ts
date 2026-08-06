@@ -1,4 +1,4 @@
-import { truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
+import { truncateToWidth, type Component } from "@earendil-works/pi-tui";
 import type { KanbanCard, KanbanStatus } from "@cuzfrog/jie-platform";
 import { TuiState, type StateStore } from "../state";
 import { style, type ColorName } from "./themes";
@@ -40,7 +40,10 @@ export class KanbanPanel implements Component {
     const rows = state.kanbanExpanded ? renderCardDetail(focused, inner) : renderKanbanBoard(state, visible, inner);
     const border = style("borderMuted");
     const horizontal = "─".repeat(Math.max(0, w - 2));
-    const framed = rows.map((row) => truncateToWidth(`${border("│")} ${row} ${border("│")}`, w));
+    const framed = rows.map((row) => {
+      const padded = fitToWidth(row, inner);
+      return truncateToWidth(`${border("│")} ${padded} ${border("│")}`, w);
+    });
     return [
       truncateToWidth(border(`┌${horizontal}┐`), w),
       ...framed,
@@ -71,8 +74,8 @@ function renderKanbanBoard(state: TuiState, visible: ReadonlyArray<KanbanCard>, 
 function renderColumn(column: { readonly title: string; readonly cardColor: ColorName }, cards: ReadonlyArray<KanbanCard>, total: number, cursorId: string | null, columnWidth: number): string[] {
   const header = style("dim")(truncateToWidth(`${column.title} (${total})`, columnWidth));
   const rows = cards.map((card) => {
-    const marker = card.id === cursorId ? `${style("accent")("▸")} ` : "  ";
-    return marker + style(column.cardColor)(truncateToWidth(card.content, Math.max(0, columnWidth - 2)));
+    const marker = card.id === cursorId ? style("accent")("▸") : " ";
+    return marker + style(column.cardColor)(truncateToWidth(card.content, Math.max(0, columnWidth - 1)));
   });
   const overflow = total - cards.length;
   if (overflow > 0) rows.push(style("dim")(`+${overflow} more`));
@@ -93,6 +96,5 @@ function renderHint(state: TuiState, width: number): string {
 }
 
 function fitToWidth(text: string, width: number): string {
-  const fitted = truncateToWidth(text, width);
-  return fitted + " ".repeat(Math.max(0, width - visibleWidth(fitted)));
+  return truncateToWidth(text, width, "", true);
 }
