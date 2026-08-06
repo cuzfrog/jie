@@ -308,13 +308,13 @@ export class CommandHandlerImpl implements CommandHandler {
   }
 
   private interceptKanban(args: ReadonlyArray<string>): InterceptResult {
-    const teamId = this.stateStore.getState().teamId;
-    if (teamId === null) return { kind: "error", text: "/kanban: no team loaded" };
     const subcommand = args[0];
     if (subcommand === undefined) {
-      this.stateStore.dispatch(Actions.toggleKanbanPanel());
+      this.stateStore.dispatch(Actions.cycleKanbanView());
       return { kind: "silent" };
     }
+    const teamId = this.stateStore.getState().teamId;
+    if (teamId === null) return { kind: "error", text: "/kanban: no team loaded" };
     if (subcommand === "add") {
       const parsed = parseKanbanAddArgs(args.slice(1));
       if (parsed.kind === "error") return parsed;

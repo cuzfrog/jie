@@ -76,7 +76,7 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
       };
     case ActionTypes.SET_KANBAN_BOARD:
     case ActionTypes.MOVE_KANBAN_CURSOR:
-    case ActionTypes.TOGGLE_KANBAN_PANEL:
+    case ActionTypes.CYCLE_KANBAN_VIEW:
     case ActionTypes.TOGGLE_KANBAN_EXPAND:
     case ActionTypes.COMMIT_KANBAN_EDIT:
     case ActionTypes.CANCEL_KANBAN_EDIT:
@@ -92,7 +92,8 @@ function reduceTeamPanelToggle(state: TuiState): TuiState {
   if (roster.length === 0) return state;
   if (state.teamPanelVisible) return { ...state, teamPanelVisible: false, teamCursorAgentId: null };
   const cursor = state.teamCursorAgentId ?? state.focusedAgentId ?? roster[0]!.agentId;
-  return { ...state, teamPanelVisible: true, teamCursorAgentId: cursor, kanbanPanelVisible: false, kanbanEdit: null, kanbanExpanded: false };
+  const withoutKanbanPanel: TuiState = state.kanbanView === "panel" ? { ...state, kanbanView: "hidden", kanbanEdit: null, kanbanExpanded: false } : state;
+  return { ...withoutKanbanPanel, teamPanelVisible: true, teamCursorAgentId: cursor };
 }
 
 function reduceTeamCursor(state: TuiState, direction: 1 | -1): TuiState {

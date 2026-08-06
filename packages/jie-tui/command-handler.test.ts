@@ -724,19 +724,20 @@ describe("CommandHandlerImpl — /rename", () => {
 });
 
 describe("CommandHandlerImpl — /kanban", () => {
-  test("/kanban toggles the kanban panel without touching the platform", () => {
+  test("/kanban cycles the kanban view without touching the platform", () => {
     const { platform, execute } = makePlatform();
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
     handler.handle("/kanban");
-    expect(dispatch).toHaveBeenCalledWith(Actions.toggleKanbanPanel());
+    expect(dispatch).toHaveBeenCalledWith(Actions.cycleKanbanView());
     expect(execute).not.toHaveBeenCalled();
   });
 
-  test("/kanban without a team reports the missing team", () => {
-    const { platform } = makePlatform();
+  test("/kanban without a team dispatches the cycle like ctrl+k, which no-ops in the reducer", () => {
+    const { platform, execute } = makePlatform();
     const { handler, dispatch } = makeHandler(platform);
     handler.handle("/kanban");
-    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("/kanban: no team loaded"));
+    expect(dispatch).toHaveBeenCalledWith(Actions.cycleKanbanView());
+    expect(execute).not.toHaveBeenCalled();
   });
 
   test("/kanban add executes kanbanAdd and publishes the returned board", async () => {

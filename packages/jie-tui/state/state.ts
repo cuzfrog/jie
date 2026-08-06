@@ -81,7 +81,7 @@ export interface TuiState {
   readonly thinkingExpanded: boolean;
   readonly toolCardsExpanded: boolean;
   readonly teamPanelVisible: boolean;
-  readonly kanbanPanelVisible: boolean;
+  readonly kanbanView: "hidden" | "list" | "panel";
   readonly kanbanBoard: ReadonlyArray<KanbanCard>;
   readonly kanbanCursor: string | null;
   readonly kanbanExpanded: boolean;

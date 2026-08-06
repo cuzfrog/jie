@@ -118,18 +118,18 @@ class FlushLoader extends Loader {
 function resolveGlobalKey(data: string, state: TuiState, popupOpen: boolean): Action | null {
   if (data === CTRL_T) return Actions.toggleThinking();
   if (data === CTRL_O) return Actions.toggleToolCards();
-  if (data === CTRL_K && state.kanbanEdit === null) return Actions.toggleKanbanPanel();
-  if (matchesKey(data, "left") && state.editorCursorAtStart && !popupOpen) return Actions.toggleTeamPanel();
+  if (data === CTRL_K && state.kanbanEdit === null) return Actions.cycleKanbanView();
+  if (matchesKey(data, "left") && state.editorCursorAtStart && state.kanbanView !== "panel" && !popupOpen) return Actions.toggleTeamPanel();
   return null;
 }
 
 function resolveKanbanKey(data: string, state: TuiState, popupOpen: boolean): Action | null {
-  if (!state.kanbanPanelVisible || state.kanbanEdit !== null || popupOpen) return null;
+  if (state.kanbanView !== "panel" || state.kanbanEdit !== null || popupOpen) return null;
   if (matchesKey(data, "esc") && state.kanbanExpanded) return Actions.toggleKanbanExpand();
   if (matchesKey(data, "tab")) return Actions.toggleKanbanExpand();
   if (matchesKey(data, "up")) return Actions.moveKanbanCursor("up");
   if (matchesKey(data, "down")) return Actions.moveKanbanCursor("down");
-  if (matchesKey(data, "left") && !state.editorCursorAtStart) return Actions.moveKanbanCursor("left");
+  if (matchesKey(data, "left")) return Actions.moveKanbanCursor("left");
   if (matchesKey(data, "right")) return Actions.moveKanbanCursor("right");
   if (matchesKey(data, "enter") && state.kanbanCursor !== null) return Actions.commitKanbanEdit(state.kanbanCursor);
   return null;

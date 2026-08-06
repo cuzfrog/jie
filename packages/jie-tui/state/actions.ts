@@ -11,7 +11,7 @@ export const ActionTypes = {
   TOGGLE_TOOL_CARDS: "[ui] toggle tool cards expanded",
   SWITCH_CYCLE_AGENT: "[ui] switch and cycle focused agent",
   TOGGLE_TEAM_PANEL: "[ui] toggle team panel visibility",
-  TOGGLE_KANBAN_PANEL: "[ui] toggle kanban panel visibility",
+  CYCLE_KANBAN_VIEW: "[ui] cycle kanban view",
   COMMIT_TEAM_CURSOR: "[ui] commit team cursor to focused agent",
   CLEAR_TUI_STATE: "[ui] clear tui state",
   SET_TRANSIENT_MESSAGE: "[ui] transient message",
@@ -47,7 +47,7 @@ interface ActionDef<T extends ActionType, P> {
 const toggleThinking = createAction(ActionTypes.TOGGLE_THINKING);
 const toggleToolCards = createAction(ActionTypes.TOGGLE_TOOL_CARDS);
 const toggleTeamPanel = createAction(ActionTypes.TOGGLE_TEAM_PANEL);
-const toggleKanbanPanel = createAction(ActionTypes.TOGGLE_KANBAN_PANEL);
+const cycleKanbanView = createAction(ActionTypes.CYCLE_KANBAN_VIEW);
 const commitTeamCursor = createAction(ActionTypes.COMMIT_TEAM_CURSOR);
 const clearTuiState = createAction(ActionTypes.CLEAR_TUI_STATE);
 const clearTransientMessage = createAction(ActionTypes.CLEAR_TRANSIENT_MESSAGE);
@@ -65,7 +65,7 @@ export const Actions = {
 	toggleToolCards: () => toggleToolCards,
 	switchCycleAgent: (direction: 1 | -1) => createAction(ActionTypes.SWITCH_CYCLE_AGENT, { direction }),
 	toggleTeamPanel: () => toggleTeamPanel,
-	toggleKanbanPanel: () => toggleKanbanPanel,
+	cycleKanbanView: () => cycleKanbanView,
 	commitTeamCursor: () => commitTeamCursor,
 	clearTuiState: () => clearTuiState,
 	setTransientMessage: (text: string) => createAction(ActionTypes.SET_TRANSIENT_MESSAGE, { text }),

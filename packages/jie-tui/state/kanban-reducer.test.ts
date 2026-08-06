@@ -84,30 +84,39 @@ describe("kanbanReducer — moveKanbanCursor", () => {
   });
 });
 
-describe("kanbanReducer — panel toggle", () => {
+describe("kanbanReducer — view cycle", () => {
   test("does nothing without a focused agent", () => {
     const state = makeTuiState();
-    expect(kanbanReducer(state, Actions.toggleKanbanPanel())).toBe(state);
+    expect(kanbanReducer(state, Actions.cycleKanbanView())).toBe(state);
   });
 
-  test("opens the panel, hides the team panel and clamps the cursor", () => {
+  test("cycles hidden to list without touching the team panel", () => {
+    const state = makeTuiState({ focusedAgentId: "t:a-1", teamPanelVisible: true, teamCursorAgentId: "t:b-1" });
+    const next = kanbanReducer(state, Actions.cycleKanbanView());
+    expect(next.kanbanView).toBe("list");
+    expect(next.teamPanelVisible).toBe(true);
+    expect(next.teamCursorAgentId).toBe("t:b-1");
+  });
+
+  test("cycles list to panel, hides the team panel and clamps the cursor", () => {
     const state = makeTuiState({
       focusedAgentId: "t:a-1",
+      kanbanView: "list",
       teamPanelVisible: true,
       teamCursorAgentId: "t:b-1",
       kanbanBoard: [card("K1", "pending")],
     });
-    const next = kanbanReducer(state, Actions.toggleKanbanPanel());
-    expect(next.kanbanPanelVisible).toBe(true);
+    const next = kanbanReducer(state, Actions.cycleKanbanView());
+    expect(next.kanbanView).toBe("panel");
     expect(next.teamPanelVisible).toBe(false);
     expect(next.teamCursorAgentId).toBeNull();
     expect(next.kanbanCursor).toBe("K1");
   });
 
-  test("closing the panel clears the edit and the expanded mode", () => {
-    const state = makeTuiState({ focusedAgentId: "t:a-1", kanbanPanelVisible: true, kanbanEdit: "K1", kanbanExpanded: true });
-    const next = kanbanReducer(state, Actions.toggleKanbanPanel());
-    expect(next.kanbanPanelVisible).toBe(false);
+  test("cycles panel to hidden and clears the edit and the expanded mode", () => {
+    const state = makeTuiState({ focusedAgentId: "t:a-1", kanbanView: "panel", kanbanEdit: "K1", kanbanExpanded: true });
+    const next = kanbanReducer(state, Actions.cycleKanbanView());
+    expect(next.kanbanView).toBe("hidden");
     expect(next.kanbanEdit).toBeNull();
     expect(next.kanbanExpanded).toBe(false);
   });

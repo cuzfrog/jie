@@ -32,7 +32,7 @@ export class KanbanPanel implements Component {
 
   render(width: number): string[] {
     const state = this.stateStore.getState();
-    if (state.teamId === null || !state.kanbanPanelVisible) return [];
+    if (state.teamId === null || state.kanbanView !== "panel") return [];
     const w = Math.max(1, width);
     const inner = Math.max(1, w - 2 - PANEL_PADDING * 2);
     const visible = TuiState.kanbanVisibleCards(state);

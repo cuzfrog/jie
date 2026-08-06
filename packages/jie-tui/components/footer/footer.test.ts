@@ -48,16 +48,21 @@ describe("Footer", () => {
   });
 
   test("renders only the identity line while the kanban panel is open", () => {
-    stateStore.getState.mockReturnValue(makeTuiState({ ...seededState(false), kanbanPanelVisible: true }));
+    stateStore.getState.mockReturnValue(makeTuiState({ ...seededState(false), kanbanView: "panel" }));
     const lines = new Footer(stateStore).render(80);
     expect(lines.length).toBe(1);
     expect(lines[0]).toContain("/repo (dev)");
   });
 
+  test("keeps both lines while the kanban list view is shown", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ ...seededState(false), kanbanView: "list" }));
+    expect(new Footer(stateStore).render(80).length).toBe(2);
+  });
+
   test("keeps both lines when a panel flag is set but no team is loaded", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ teamPanelVisible: true, cwd: "/repo" }));
     expect(new Footer(stateStore).render(80).length).toBe(2);
-    stateStore.getState.mockReturnValue(makeTuiState({ kanbanPanelVisible: true, cwd: "/repo" }));
+    stateStore.getState.mockReturnValue(makeTuiState({ kanbanView: "panel", cwd: "/repo" }));
     expect(new Footer(stateStore).render(80).length).toBe(2);
   });
 

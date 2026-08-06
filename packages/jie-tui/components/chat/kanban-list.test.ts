@@ -51,8 +51,10 @@ describe("KanbanList", () => {
     expect(lines[2]).toContain(strikethrough(style("muted")("K3 done")));
   });
 
-  test("renders nothing while the kanban panel is open", () => {
-    stateStore.getState.mockReturnValue(boardState([{ id: "K1", content: "later", status: "pending" }], { kanbanPanelVisible: true }));
+  test("renders nothing outside the list view", () => {
+    stateStore.getState.mockReturnValue(boardState([{ id: "K1", content: "later", status: "pending" }], { kanbanView: "panel" }));
+    expect(new KanbanList(stateStore).render(80)).toEqual([]);
+    stateStore.getState.mockReturnValue(boardState([{ id: "K1", content: "later", status: "pending" }], { kanbanView: "hidden" }));
     expect(new KanbanList(stateStore).render(80)).toEqual([]);
   });
 
@@ -82,6 +84,7 @@ function boardState(cards: ReadonlyArray<KanbanCard>, overrides: Partial<TuiStat
   return makeTuiState({
     teamId: "my-team",
     kanbanBoard: cards,
+    kanbanView: "list",
     ...overrides,
   });
 }

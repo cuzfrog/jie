@@ -358,7 +358,7 @@ function notifyKanbanState(afterState: TuiState): void {
   const calls = stateStore.subscribe.mock.calls;
   const callback = calls[calls.length - 1]?.[0];
   if (callback === undefined) throw new Error("editor subscription not captured");
-  void callback(Actions.toggleKanbanPanel(), afterState, afterState);
+  void callback(Actions.cycleKanbanView(), afterState, afterState);
 }
 
 describe("JieEditor — prompt history", () => {

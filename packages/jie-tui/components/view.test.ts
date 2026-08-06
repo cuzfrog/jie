@@ -119,18 +119,23 @@ describe("resolveGlobalKey", () => {
     expect(_resolveGlobalKey("\x0f", makeTuiState(), false)).toEqual(Actions.toggleToolCards());
   });
 
-  test("ctrl+k maps to toggleKanbanPanel", () => {
-    expect(_resolveGlobalKey("\x0b", makeTuiState(), false)).toEqual(Actions.toggleKanbanPanel());
+  test("ctrl+k maps to cycleKanbanView", () => {
+    expect(_resolveGlobalKey("\x0b", makeTuiState(), false)).toEqual(Actions.cycleKanbanView());
   });
 
   test("ctrl+t, ctrl+o and ctrl+k stay active while the autocomplete popup is open", () => {
     expect(_resolveGlobalKey("\x14", makeTuiState(), true)).toEqual(Actions.toggleThinking());
     expect(_resolveGlobalKey("\x0f", makeTuiState(), true)).toEqual(Actions.toggleToolCards());
-    expect(_resolveGlobalKey("\x0b", makeTuiState(), true)).toEqual(Actions.toggleKanbanPanel());
+    expect(_resolveGlobalKey("\x0b", makeTuiState(), true)).toEqual(Actions.cycleKanbanView());
   });
 
   test("left maps to toggling the team panel while the editor cursor sits at the buffer start", () => {
     expect(_resolveGlobalKey("\x1b[D", makeTuiState({ editorCursorAtStart: true }), false)).toEqual(Actions.toggleTeamPanel());
+  });
+
+  test("left stays with the kanban panel while the kanban panel view is shown", () => {
+    expect(_resolveGlobalKey("\x1b[D", makeTuiState({ editorCursorAtStart: true, kanbanView: "panel" }), false)).toBeNull();
+    expect(_resolveGlobalKey("\x1b[D", makeTuiState({ editorCursorAtStart: true, kanbanView: "list" }), false)).toEqual(Actions.toggleTeamPanel());
   });
 
   test("left is left to the editor once the cursor moves away from the buffer start", () => {
@@ -166,47 +171,49 @@ describe("resolveGlobalKey", () => {
 
 describe("resolveKanbanKey", () => {
   test("tab toggles the kanban expand while the panel is shown", () => {
-    expect(_resolveKanbanKey("\t", makeTuiState({ kanbanPanelVisible: true }), false)).toEqual(Actions.toggleKanbanExpand());
+    expect(_resolveKanbanKey("\t", makeTuiState({ kanbanView: "panel" }), false)).toEqual(Actions.toggleKanbanExpand());
   });
 
   test("esc collapses the expanded kanban panel", () => {
-    expect(_resolveKanbanKey("\x1b", makeTuiState({ kanbanPanelVisible: true, kanbanExpanded: true }), false)).toEqual(Actions.toggleKanbanExpand());
+    expect(_resolveKanbanKey("\x1b", makeTuiState({ kanbanView: "panel", kanbanExpanded: true }), false)).toEqual(Actions.toggleKanbanExpand());
   });
 
   test("arrows move the kanban cursor", () => {
-    const state = makeTuiState({ kanbanPanelVisible: true, editorCursorAtStart: false });
+    const state = makeTuiState({ kanbanView: "panel" });
     expect(_resolveKanbanKey("\x1b[A", state, false)).toEqual(Actions.moveKanbanCursor("up"));
     expect(_resolveKanbanKey("\x1b[B", state, false)).toEqual(Actions.moveKanbanCursor("down"));
     expect(_resolveKanbanKey("\x1b[C", state, false)).toEqual(Actions.moveKanbanCursor("right"));
     expect(_resolveKanbanKey("\x1b[D", state, false)).toEqual(Actions.moveKanbanCursor("left"));
   });
 
-  test("left at the buffer start yields to the team panel toggle", () => {
-    expect(_resolveKanbanKey("\x1b[D", makeTuiState({ kanbanPanelVisible: true, editorCursorAtStart: true }), false)).toBeNull();
+  test("left at the buffer start still moves the kanban cursor", () => {
+    expect(_resolveKanbanKey("\x1b[D", makeTuiState({ kanbanView: "panel", editorCursorAtStart: true }), false)).toEqual(Actions.moveKanbanCursor("left"));
   });
 
   test("enter commits the edit at the cursor", () => {
-    expect(_resolveKanbanKey("\r", makeTuiState({ kanbanPanelVisible: true, kanbanCursor: "K1" }), false)).toEqual(Actions.commitKanbanEdit("K1"));
+    expect(_resolveKanbanKey("\r", makeTuiState({ kanbanView: "panel", kanbanCursor: "K1" }), false)).toEqual(Actions.commitKanbanEdit("K1"));
   });
 
   test("enter does nothing without a cursor", () => {
-    expect(_resolveKanbanKey("\r", makeTuiState({ kanbanPanelVisible: true }), false)).toBeNull();
+    expect(_resolveKanbanKey("\r", makeTuiState({ kanbanView: "panel" }), false)).toBeNull();
   });
 
-  test("null while the panel is hidden", () => {
+  test("null while the view is hidden or list", () => {
     expect(_resolveKanbanKey("\t", makeTuiState(), false)).toBeNull();
     expect(_resolveKanbanKey("\x1b[A", makeTuiState(), false)).toBeNull();
+    expect(_resolveKanbanKey("\t", makeTuiState({ kanbanView: "list" }), false)).toBeNull();
+    expect(_resolveKanbanKey("\x1b[A", makeTuiState({ kanbanView: "list" }), false)).toBeNull();
   });
 
   test("null while the autocomplete popup is open, so the popup keeps navigation", () => {
-    const state = makeTuiState({ kanbanPanelVisible: true });
+    const state = makeTuiState({ kanbanView: "panel" });
     expect(_resolveKanbanKey("\t", state, true)).toBeNull();
     expect(_resolveKanbanKey("\x1b[A", state, true)).toBeNull();
     expect(_resolveKanbanKey("\r", state, true)).toBeNull();
   });
 
   test("null while editing a card, so every key reaches the editor", () => {
-    const state = makeTuiState({ kanbanPanelVisible: true, kanbanEdit: "K1" });
+    const state = makeTuiState({ kanbanView: "panel", kanbanEdit: "K1" });
     expect(_resolveKanbanKey("\t", state, false)).toBeNull();
     expect(_resolveKanbanKey("\x1b", state, false)).toBeNull();
     expect(_resolveKanbanKey("\x1b[A", state, false)).toBeNull();
@@ -214,7 +221,7 @@ describe("resolveKanbanKey", () => {
   });
 
   test("null for any other key", () => {
-    const state = makeTuiState({ kanbanPanelVisible: true });
+    const state = makeTuiState({ kanbanView: "panel" });
     expect(_resolveKanbanKey("a", state, false)).toBeNull();
     expect(_resolveKanbanKey("\x1b[1;5B", state, false)).toBeNull();
   });

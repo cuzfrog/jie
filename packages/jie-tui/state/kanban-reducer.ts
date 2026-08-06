@@ -14,8 +14,8 @@ export function kanbanReducer(state: TuiState, action: Action): TuiState {
     }
     case ActionTypes.MOVE_KANBAN_CURSOR:
       return { ...state, kanbanCursor: moveCursor(TuiState.kanbanVisibleCards(state), state.kanbanCursor, action.payload.direction) };
-    case ActionTypes.TOGGLE_KANBAN_PANEL:
-      return reducePanelToggle(state);
+    case ActionTypes.CYCLE_KANBAN_VIEW:
+      return reduceViewCycle(state);
     case ActionTypes.TOGGLE_KANBAN_EXPAND:
       return { ...state, kanbanExpanded: !state.kanbanExpanded };
     case ActionTypes.COMMIT_KANBAN_EDIT:
@@ -28,16 +28,19 @@ export function kanbanReducer(state: TuiState, action: Action): TuiState {
   }
 }
 
-function reducePanelToggle(state: TuiState): TuiState {
+function reduceViewCycle(state: TuiState): TuiState {
   if (state.focusedAgentId === null) return state;
-  if (state.kanbanPanelVisible) return { ...state, kanbanPanelVisible: false, kanbanEdit: null, kanbanExpanded: false };
-  return {
-    ...state,
-    kanbanPanelVisible: true,
-    teamPanelVisible: false,
-    teamCursorAgentId: null,
-    kanbanCursor: clampCursor(TuiState.kanbanVisibleCards(state), state.kanbanCursor),
-  };
+  if (state.kanbanView === "hidden") return { ...state, kanbanView: "list" };
+  if (state.kanbanView === "list") {
+    return {
+      ...state,
+      kanbanView: "panel",
+      teamPanelVisible: false,
+      teamCursorAgentId: null,
+      kanbanCursor: clampCursor(TuiState.kanbanVisibleCards(state), state.kanbanCursor),
+    };
+  }
+  return { ...state, kanbanView: "hidden", kanbanEdit: null, kanbanExpanded: false };
 }
 
 function moveCursor(cards: ReadonlyArray<KanbanCard>, currentId: string | null, direction: KanbanDirection): string | null {

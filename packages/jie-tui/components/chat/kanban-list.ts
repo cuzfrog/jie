@@ -21,7 +21,7 @@ export class KanbanList implements Component {
 
   render(width: number): string[] {
     const state = this.stateStore.getState();
-    if (state.teamId === null || state.kanbanPanelVisible) return [];
+    if (state.teamId === null || state.kanbanView !== "list") return [];
     const cards = state.kanbanBoard;
     if (cards.length === 0) return [];
     const w = Math.max(1, width);

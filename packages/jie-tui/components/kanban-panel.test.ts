@@ -16,8 +16,10 @@ describe("KanbanPanel", () => {
     expect(new KanbanPanel(stateStore).render(80)).toEqual([]);
   });
 
-  test("renders nothing while the panel is hidden", () => {
-    stateStore.getState.mockReturnValue(boardState([], { kanbanPanelVisible: false }));
+  test("renders nothing while the view is hidden or list", () => {
+    stateStore.getState.mockReturnValue(boardState([], { kanbanView: "hidden" }));
+    expect(new KanbanPanel(stateStore).render(80)).toEqual([]);
+    stateStore.getState.mockReturnValue(boardState([], { kanbanView: "list" }));
     expect(new KanbanPanel(stateStore).render(80)).toEqual([]);
   });
 
@@ -134,7 +136,7 @@ function boardState(cards: ReadonlyArray<KanbanCard>, overrides: Partial<TuiStat
   return makeTuiState({
     teamId: "my-team",
     kanbanBoard: cards,
-    kanbanPanelVisible: true,
+    kanbanView: "panel",
     ...overrides,
   });
 }
