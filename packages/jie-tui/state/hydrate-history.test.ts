@@ -114,7 +114,7 @@ describe("hydrateHistory", () => {
       outputTruncated: false,
       durationMs: undefined,
       error: null,
-      details: undefined,
+      details: null,
     }]);
   });
 
@@ -124,6 +124,22 @@ describe("hydrateHistory", () => {
       user("run"), assistantToolCall("c1", "edit", {}), toolResult("c1", "edit", "ok", false, details),
     ], 0);
     expect(result.currentTurn?.cards[0]?.details).toEqual(details);
+  });
+
+  test("non-diff details are dropped at the persisted-message seam", () => {
+    const kanban: ToolResultDetails = { kind: "kanban", cards: [] };
+    const result = hydrateHistory([
+      user("run"), assistantToolCall("c1", "kanban_write", {}), toolResult("c1", "kanban_write", "ok", false, kanban),
+    ], 0);
+    expect(result.currentTurn?.cards[0]?.details).toBeNull();
+  });
+
+  test("malformed details are dropped at the persisted-message seam", () => {
+    const message: AgentMessage = {
+      role: "toolResult", toolCallId: "c1", toolName: "bash", content: [{ type: "text", text: "ok" }], isError: false, details: "garbage", timestamp: 0,
+    };
+    const result = hydrateHistory([user("run"), assistantToolCall("c1", "bash", {}), message], 0);
+    expect(result.currentTurn?.cards[0]?.details).toBeNull();
   });
 
   test("tool error sets error and nulls output", () => {

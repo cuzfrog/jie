@@ -1,4 +1,4 @@
-import type { AgentMessage, UserIngressMessage } from "@cuzfrog/jie-platform";
+import { isDiffDetails, type AgentMessage, type UserIngressMessage } from "@cuzfrog/jie-platform";
 import type { AssistantMessage, TextContent, ToolResultMessage } from "@earendil-works/pi-ai";
 import type { MessageCard, MessageTurn } from "./state";
 
@@ -73,7 +73,7 @@ function appendToolResult(turn: MessageTurn, message: ToolResultMessage): void {
     output: message.isError ? null : text,
     outputTruncated: false,
     error: message.isError ? text : null,
-    details: message.details,
+    details: isDiffDetails(message.details) ? message.details : null,
   };
   if (index === -1) turn.cards.push(card);
   else turn.cards[index] = card;

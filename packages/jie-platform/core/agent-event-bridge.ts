@@ -3,7 +3,7 @@ import type { AssistantMessage, StopReason } from "@earendil-works/pi-ai";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { HookIdentity, HookRunner } from "../hooks";
 import type { TranscriptStore } from "../storage";
-import type { ToolResultDetails } from "../types";
+import { isDiffDetails } from "../types";
 import type { PromptQueue } from "./prompt-queue";
 import { StreamPublisherImpl, type StreamPublisher } from "./streaming";
 
@@ -131,8 +131,4 @@ function persistableMessage(message: AgentMessage): AgentMessage {
   if (message.role !== "toolResult" || isDiffDetails(message.details)) return message;
   const { details: _stripped, ...persistable } = message;
   return persistable;
-}
-
-function isDiffDetails(details: ToolResultDetails | null | undefined): boolean {
-  return details !== null && details !== undefined && "kind" in details && details.kind === "diff";
 }

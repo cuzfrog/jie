@@ -160,3 +160,8 @@ export type ToolResultDetails =
     | WriteArtifactResultDetails
     | NotifyResultDetails
     | WebFetchResultDetails;
+
+export function isDiffDetails(details: ToolResultDetails | null | undefined): details is EditResultDetails | WriteFileResultDetails {
+    return typeof details === "object" && details !== null && "kind" in details && details.kind === "diff"
+        && typeof details.path === "string" && (details.diff === null || typeof details.diff === "string");
+}
