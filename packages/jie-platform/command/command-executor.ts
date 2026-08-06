@@ -199,6 +199,9 @@ export class CommandExecutorImpl implements CommandExecutor {
     }
     const description = command.description === "" || command.description === content ? undefined : command.description;
     const card = this.kanbanStore.add(command.teamId, sessionId, content, description);
+    if (card === null) {
+      throw new JiePlatformError("KANBAN_DUPLICATE_CONTENT", { detail: content });
+    }
     return { board: this.kanbanStore.load(command.teamId, sessionId), card };
   }
 
@@ -224,7 +227,11 @@ export class CommandExecutorImpl implements CommandExecutor {
       throw new JiePlatformError("KANBAN_TEXT_EMPTY");
     }
     if (this.kanbanStore.editContent(command.teamId, sessionId, command.cardId, command.content) === null) {
-      throw new JiePlatformError("KANBAN_CARD_NOT_FOUND", { detail: command.cardId });
+      const notFound = !this.kanbanStore.load(command.teamId, sessionId).some((card) => card.id === command.cardId);
+      if (notFound) {
+        throw new JiePlatformError("KANBAN_CARD_NOT_FOUND", { detail: command.cardId });
+      }
+      throw new JiePlatformError("KANBAN_DUPLICATE_CONTENT", { detail: command.content });
     }
     return { board: this.kanbanStore.load(command.teamId, sessionId) };
   }
@@ -243,14 +250,14 @@ export class CommandExecutorImpl implements CommandExecutor {
     const model = this.resolveLlmModel();
     if (model === null) return description;
     try {
-      const distilled = (
+      const distilled = sanitizeTitle(
         await this.llmService.complete({
           model,
           systemPrompt: "Distill a one-line task title from the user's longer task description. Reply with only the title itself, no quotes, no punctuation, no prefix.",
           prompt: description,
           maxTokens: 20,
-        })
-      ).trim();
+        }),
+      );
       return distilled === "" ? description : distilled;
     } catch {
       return description;
@@ -266,4 +273,8 @@ export class CommandExecutorImpl implements CommandExecutor {
       return null;
     }
   }
+}
+
+function sanitizeTitle(raw: string): string {
+  return raw.replace(/\s+/g, " ").replace(/^[-*•]\s+/, "").trim();
 }

@@ -499,6 +499,21 @@ describe("CommandExecutorImpl", () => {
       expect(kanbanStore.add).not.toHaveBeenCalled();
     });
 
+    test("content already on the board -> KANBAN_DUPLICATE_CONTENT", async () => {
+      kanbanStore.add.mockReturnValue(null);
+      const pending = executor.execute({ name: "kanbanAdd", teamId: "alpha", description: "write tests" });
+      await expect(pending).rejects.toMatchObject({ code: "KANBAN_DUPLICATE_CONTENT" });
+    });
+
+    test("a multi-line bulleted LLM title is sanitized to a single line", async () => {
+      const long = "x".repeat(80);
+      modelRegistry.resolve.mockReturnValue(fakeModel("anthropic", "claude-sonnet-4-5", "claude"));
+      llmService.complete.mockResolvedValue("- fix the bug\n  then verify");
+      kanbanStore.add.mockReturnValue({ id: "K1", content: "fix the bug then verify", status: "pending" });
+      await executor.execute({ name: "kanbanAdd", teamId: "alpha", description: long });
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "fix the bug then verify", long);
+    });
+
     test("throws NO_TEAM when the team has no loaded session", async () => {
       teamManager.currentSessionId.mockReturnValueOnce(null);
       const pending = executor.execute({ name: "kanbanAdd", teamId: "ghost", description: "task" });
@@ -560,6 +575,13 @@ describe("CommandExecutorImpl", () => {
       kanbanStore.editContent.mockReturnValue(null);
       const pending = executor.execute({ name: "kanbanEdit", teamId: "alpha", cardId: "K9", content: "x" });
       await expect(pending).rejects.toMatchObject({ code: "KANBAN_CARD_NOT_FOUND" });
+    });
+
+    test("content duplicating another card -> KANBAN_DUPLICATE_CONTENT", async () => {
+      kanbanStore.editContent.mockReturnValue(null);
+      kanbanStore.load.mockReturnValueOnce([{ id: "K1", content: "first", status: "pending" }, { id: "K2", content: "second", status: "pending" }]);
+      const pending = executor.execute({ name: "kanbanEdit", teamId: "alpha", cardId: "K1", content: "second" });
+      await expect(pending).rejects.toMatchObject({ code: "KANBAN_DUPLICATE_CONTENT" });
     });
   });
 

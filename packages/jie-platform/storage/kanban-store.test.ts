@@ -48,15 +48,22 @@ describe("SqliteKanbanStore", () => {
     const store = makeStore();
     store.replace("t1", "s1", [write("first")]);
     const card = store.add("t1", "s1", "second", undefined);
-    expect(card.id).toBe("K2");
+    expect(card?.id).toBe("K2");
     expect(store.load("t1", "s1")).toHaveLength(2);
   });
 
   test("add stores the description when provided", () => {
     const store = makeStore();
     const card = store.add("t1", "s1", "build the feature", "the full description");
-    expect(card.description).toBe("the full description");
+    expect(card?.description).toBe("the full description");
     expect(store.load("t1", "s1")[0]).toMatchObject({ content: "build the feature", description: "the full description", status: "pending" });
+  });
+
+  test("add returns null when the content already exists and leaves the board unchanged", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [write("first")]);
+    expect(store.add("t1", "s1", "first", undefined)).toBeNull();
+    expect(ids(store.load("t1", "s1"))).toEqual(["K1"]);
   });
 
   test("remove deletes the card and reports false for an unknown id", () => {
@@ -81,6 +88,20 @@ describe("SqliteKanbanStore", () => {
     const card = store.editContent("t1", "s1", "K1", "first (revised)");
     expect(card).toMatchObject({ id: "K1", content: "first (revised)", status: "in_progress", active_form: "Working" });
     expect(store.editContent("t1", "s1", "K9", "nope")).toBeNull();
+  });
+
+  test("editContent returns null when the new content duplicates another card and leaves the board unchanged", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [write("first"), write("second")]);
+    expect(store.editContent("t1", "s1", "K1", "second")).toBeNull();
+    expect(store.load("t1", "s1").map((card) => card.content)).toEqual(["first", "second"]);
+  });
+
+  test("replace with internally-duplicate incoming content keeps the last write and does not crash", () => {
+    const store = makeStore();
+    const cards = store.replace("t1", "s1", [write("a", "pending"), write("a", "completed", "Working"), write("b")]);
+    expect(ids(cards)).toEqual(["K1", "K2"]);
+    expect(cards[0]).toMatchObject({ content: "a", status: "completed", active_form: "Working" });
   });
 
   test("the board and the id counter are scoped per (teamId, sessionId)", () => {

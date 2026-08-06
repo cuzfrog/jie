@@ -4,7 +4,7 @@ import type { Storage } from "./storage";
 export interface KanbanStore {
   load(teamId: string, sessionId: string): ReadonlyArray<KanbanCard>;
   replace(teamId: string, sessionId: string, incoming: ReadonlyArray<KanbanCardWrite>): ReadonlyArray<KanbanCard>;
-  add(teamId: string, sessionId: string, content: string, description: string | undefined): KanbanCard;
+  add(teamId: string, sessionId: string, content: string, description: string | undefined): KanbanCard | null;
   remove(teamId: string, sessionId: string, cardId: string): boolean;
   complete(teamId: string, sessionId: string, cardId: string): boolean;
   editContent(teamId: string, sessionId: string, cardId: string, content: string): KanbanCard | null;
@@ -39,14 +39,16 @@ export class SqliteKanbanStore implements KanbanStore {
     return merged;
   }
 
-  add(teamId: string, sessionId: string, content: string, description: string | undefined): KanbanCard {
+  add(teamId: string, sessionId: string, content: string, description: string | undefined): KanbanCard | null {
+    const existing = this.load(teamId, sessionId);
+    if (existing.some((card) => card.content === content)) return null;
     const card: KanbanCard = {
       id: this.nextCardId(teamId, sessionId),
       content,
       status: "pending",
       ...(description === undefined ? {} : { description }),
     };
-    this.persist(teamId, sessionId, [...this.load(teamId, sessionId), card]);
+    this.persist(teamId, sessionId, [...existing, card]);
     return card;
   }
 
@@ -69,6 +71,7 @@ export class SqliteKanbanStore implements KanbanStore {
     const existing = this.load(teamId, sessionId);
     const index = existing.findIndex((card) => card.id === cardId);
     if (index === -1) return null;
+    if (existing.some((card) => card.id !== cardId && card.content === content)) return null;
     const card = { ...existing[index]!, content };
     this.persist(teamId, sessionId, existing.map((c) => (c.id === cardId ? card : c)));
     return card;
@@ -106,7 +109,9 @@ function mergeIncoming(
   nextCardId: () => string,
 ): KanbanCard[] {
   const byContent = new Map(existing.map((card) => [card.content, card]));
-  return incoming.map((write) => {
+  const writes = new Map<string, KanbanCardWrite>();
+  for (const write of incoming) writes.set(write.content, write);
+  return [...writes.values()].map((write) => {
     const prior = byContent.get(write.content);
     if (prior === undefined) {
       return {

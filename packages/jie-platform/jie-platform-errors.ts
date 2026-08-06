@@ -18,6 +18,7 @@ const JiePlatformErrorMessages = {
   KANBAN_WRITE_INVALID: "Kanban board violates the kanban_write contract",
   KANBAN_CARD_NOT_FOUND: "Kanban card not found",
   KANBAN_TEXT_EMPTY: "Kanban card text must not be empty",
+  KANBAN_DUPLICATE_CONTENT: "A card with this content already exists on the board",
 
   INVALID_ARTIFACT_KEY: "Invalid artifact key",
   ARTIFACT_TOO_LARGE: "Artifact content exceeds the maximum allowed size",
