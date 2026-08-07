@@ -147,6 +147,33 @@ describe("SqliteKanbanStore", () => {
     expect(ids(store.load("t2", "s1"))).toEqual([]);
   });
 
+  test("setStatus to completed records a completedAt timestamp", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [write("first")]);
+    store.setStatus("t1", "s1", "#1", "completed");
+    const card = store.load("t1", "s1")[0];
+    expect(card?.status).toBe("completed");
+    expect(card?.completedAt).toBeTruthy();
+  });
+
+  test("completed cards older than 30 days are hidden from load", () => {
+    const storage = new SqliteStorage(":memory:");
+    const store = new SqliteKanbanStore(storage);
+    store.replace("t1", "s1", [{ content: "old", status: "completed" }]);
+    store.replace("t1", "s1", [{ content: "new", status: "completed" }]);
+    storage.exec("UPDATE kanban_cards SET completed_at = ? WHERE content = ?", ["2020-01-01T00:00:00.000Z", "old"]);
+    expect(store.load("t1", "s1")).toHaveLength(1);
+    expect(store.load("t1", "s1")[0]?.content).toBe("new");
+  });
+
+  test("replace retains completed cards within 30 days even when omitted", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [{ content: "keep", status: "completed" }]);
+    const board = store.replace("t1", "s1", [{ content: "new", status: "pending" }]);
+    expect(board.some((c) => c.content === "keep")).toBe(true);
+    expect(board.some((c) => c.content === "new")).toBe(true);
+  });
+
   test("the id counter never reuses ids after removals or replace", () => {
     const store = makeStore();
     store.replace("t1", "s1", [write("a"), write("b"), write("c")]);

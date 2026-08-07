@@ -82,6 +82,7 @@ export interface KanbanCard {
     readonly sessionId?: string;
     readonly active_form?: string;
     readonly description?: string;
+    readonly completedAt?: string;
 }
 
 export interface KanbanCardWrite {

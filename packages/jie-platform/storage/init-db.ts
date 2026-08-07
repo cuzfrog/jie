@@ -63,16 +63,17 @@ export function initializeSchema(storage: Storage): void {
 
   storage.exec(`
     CREATE TABLE IF NOT EXISTS kanban_cards (
-      team_id     TEXT    NOT NULL,
-      session_id  TEXT    NOT NULL DEFAULT '',
-      seq         INTEGER NOT NULL,
-      id          TEXT    NOT NULL,
-      content     TEXT    NOT NULL,
-      status      TEXT    NOT NULL,
-      scope       TEXT    NOT NULL,
-      active_form TEXT,
-      description TEXT,
-      updated_at  TEXT    NOT NULL,
+      team_id      TEXT    NOT NULL,
+      session_id   TEXT    NOT NULL DEFAULT '',
+      seq          INTEGER NOT NULL,
+      id           TEXT    NOT NULL,
+      content      TEXT    NOT NULL,
+      status       TEXT    NOT NULL,
+      scope        TEXT    NOT NULL,
+      active_form  TEXT,
+      description  TEXT,
+      completed_at TEXT,
+      updated_at   TEXT    NOT NULL,
       PRIMARY KEY (team_id, id)
     )
   `);
