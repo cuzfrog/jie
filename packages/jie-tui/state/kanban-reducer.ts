@@ -5,7 +5,7 @@ import { TuiState, type KanbanEditField } from "./state";
 type KanbanDirection = Extract<Action, { type: typeof ActionTypes.MOVE_KANBAN_CURSOR }>["payload"]["direction"];
 type EditFieldDirection = Extract<Action, { type: typeof ActionTypes.MOVE_KANBAN_EDIT_FIELD }>["payload"]["direction"];
 
-const COLUMN_ORDER: ReadonlyArray<KanbanStatus> = ["pending", "in_progress", "completed"];
+const COLUMN_ORDER: ReadonlyArray<KanbanStatus> = ["pending", "in_progress", "in_review", "completed"];
 
 export function kanbanReducer(state: TuiState, action: Action): TuiState {
   switch (action.type) {

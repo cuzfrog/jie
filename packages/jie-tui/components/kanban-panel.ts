@@ -8,12 +8,14 @@ const COLUMN_GAP = "  ";
 const STATUS_LABELS: { readonly [K in KanbanStatus]: string } = {
   pending: "pending",
   in_progress: "in_progress",
+  in_review: "in_review",
   completed: "completed",
 };
 
 const KANBAN_COLUMNS: ReadonlyArray<{ readonly status: KanbanStatus; readonly title: string; readonly cardColor: ColorName }> = [
   { status: "pending", title: "Pending", cardColor: "text" },
   { status: "in_progress", title: "In Progress", cardColor: "accent" },
+  { status: "in_review", title: "In Review", cardColor: "warning" },
   { status: "completed", title: "Done", cardColor: "muted" },
 ];
 

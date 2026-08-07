@@ -74,12 +74,14 @@ describe("SqliteKanbanStore", () => {
     expect(store.remove("t1", "s1", "#9")).toBe(false);
   });
 
-  test("complete marks the card as completed", () => {
+  test("setStatus transitions a card to any status", () => {
     const store = makeStore();
     store.replace("t1", "s1", [write("first")]);
-    expect(store.complete("t1", "s1", "#1")).toBe(true);
+    expect(store.setStatus("t1", "s1", "#1", "in_review")).toBe(true);
+    expect(store.load("t1", "s1")[0]).toMatchObject({ id: "#1", status: "in_review" });
+    expect(store.setStatus("t1", "s1", "#1", "completed")).toBe(true);
     expect(store.load("t1", "s1")[0]).toMatchObject({ id: "#1", status: "completed" });
-    expect(store.complete("t1", "s1", "#9")).toBe(false);
+    expect(store.setStatus("t1", "s1", "#9", "completed")).toBe(false);
   });
 
   test("editContent updates the card text preserving status and id", () => {

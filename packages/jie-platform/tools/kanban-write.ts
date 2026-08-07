@@ -6,7 +6,7 @@ import type { KanbanCard, KanbanCardWrite } from "../types";
 
 const KANBAN_WRITE_DESCRIPTION = `Update the live kanban board. \`cards\` is the full board (it replaces, not
 merges with, whatever the agent has now). Each card is \`{ content, status, active_form?, description? }\`;
-\`status\` is one of \`pending\`, \`in_progress\`, \`completed\` — the three board columns.
+\`status\` is one of \`pending\`, \`in_progress\`, \`in_review\`, \`completed\` — the four board columns.
 Contract:
 - no duplicate \`content\` strings;
 - no empty \`content\`.
@@ -32,6 +32,7 @@ export function createKanbanWriteTool(options: { kanbanStore: KanbanStore }): To
           status: Type.Union([
             Type.Literal("pending"),
             Type.Literal("in_progress"),
+            Type.Literal("in_review"),
             Type.Literal("completed"),
           ]),
           active_form: Type.Optional(Type.String()),

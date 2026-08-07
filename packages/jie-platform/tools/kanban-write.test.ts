@@ -8,7 +8,7 @@ const kanbanStore = vi.mocked<KanbanStore>({
   replace: vi.fn(),
   add: vi.fn(),
   remove: vi.fn(),
-  complete: vi.fn(),
+  setStatus: vi.fn(),
   editContent: vi.fn(),
   editDescription: vi.fn(),
 });
@@ -39,6 +39,18 @@ describe("kanban_write", () => {
     const result = await tool.execute({ cards }, makeEmptyContext());
     expect(result.content).toContain("Updated kanban");
     expect(result.content).toContain("1 card");
+  });
+
+  test("in_review status is accepted as a valid column", async () => {
+    const cards: KanbanCardWrite[] = [
+      { content: "first", status: "in_review" },
+      { content: "second", status: "pending" },
+    ];
+    kanbanStore.replace.mockReturnValue(withIds(cards));
+    const tool = createKanbanWriteTool({ kanbanStore });
+    const result = await tool.execute({ cards }, makeEmptyContext());
+    expect(result.details).toEqual({ kind: "kanban", cards: withIds(cards) });
+    expect(result.content).toContain("2 cards");
   });
 
   test("mix of pending and completed cards without an in_progress one is accepted", async () => {

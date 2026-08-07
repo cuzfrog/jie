@@ -4,9 +4,9 @@ The loaded team's kanban board — the cards the team maintains through `kanban_
 
 ## Data
 
-The board is one shared `state.kanbanBoard` for the loaded team — not per-agent — seeded from `teamInfo.kanbanCards` on team load and refreshed by the platform's kanban command results (`kanbanAdd`/`kanbanRemove`/`kanbanComplete`/`kanbanEdit` responses carry the full board back). The platform persists it per session per team (`storage/transcript-store.ts`, `kanban_write`), so the board is visible across team members and survives TUI restarts.
+The board is one shared `state.kanbanBoard` for the loaded team — not per-agent — seeded from `teamInfo.kanbanCards` on team load and refreshed by the platform's kanban command results (`kanbanAdd`/`kanbanRemove`/`kanbanSetStatus`/`kanbanEdit` responses carry the full board back). The platform persists it per session per team (`storage/transcript-store.ts`, `kanban_write`), so the board is visible across team members and survives TUI restarts.
 
-Every card carries a stable id (`#1`, `#2`, …) assigned per session by the platform, plus `content`, `status` (`pending` | `in_progress` | `completed`), and optional `active_form` and `description`. The `/kanban add` command distills a short title from a long description; the full description stays on the card and is shown in the expanded detail view.
+Every card carries a stable id (`#1`, `#2`, …) assigned per session by the platform, plus `content`, `status` (`pending` | `in_progress` | `in_review` | `completed`), and optional `active_form` and `description`. The `/kanban add` command distills a short title from a long description; the full description stays on the card and is shown in the expanded detail view.
 
 ## Layout
 
@@ -16,7 +16,7 @@ The panel is the last section of the single inline column (`tui-layout.md`): it 
 
 ### Board (collapsed)
 
-The board split by status into three equal-width columns — **Pending**, **In Progress**, **Done** — separated by two spaces. The first row titles each column with its name and card count in `dim`; below it one row per card: a `▸` cursor in `accent` directly before the card content when the card matches `state.kanbanCursor` (a one-space indent otherwise), then the content truncated to the remaining column width and colored by status: pending `text`, in-progress `accent`, completed `muted`. Rows carry no background. A column with more than eight cards shows the first eight plus a `dim` `+N more` marker; a board without cards renders the three headers alone.
+The board split by status into four equal-width columns — **Pending**, **In Progress**, **In Review**, **Done** — separated by two spaces. The first row titles each column with its name and card count in `dim`; below it one row per card: a `▸` cursor in `accent` directly before the card content when the card matches `state.kanbanCursor` (a one-space indent otherwise), then the content truncated to the remaining column width and colored by status: pending `text`, in-progress `accent`, in-review `warning`, completed `muted`. Rows carry no background. A column with more than eight cards shows the first eight plus a `dim` `+N more` marker; a board without cards renders the four headers alone.
 
 ### Card detail (expanded)
 

@@ -802,12 +802,22 @@ describe("CommandHandlerImpl — /kanban", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
-  test("/kanban complete executes kanbanComplete and publishes the board", async () => {
+  test("/kanban complete executes kanbanSetStatus completed and publishes the board", async () => {
     const { platform, execute } = makePlatform();
     execute.mockResolvedValueOnce({ board: [] });
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
     handler.handle("/kanban complete #1");
-    expect(execute).toHaveBeenCalledWith({ name: "kanbanComplete", teamId: "my-team", cardId: "#1" });
+    expect(execute).toHaveBeenCalledWith({ name: "kanbanSetStatus", teamId: "my-team", cardId: "#1", status: "completed" });
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setKanbanBoard([]));
+  });
+
+  test("/kanban review executes kanbanSetStatus in_review and publishes the board", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockResolvedValueOnce({ board: [] });
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban review #1");
+    expect(execute).toHaveBeenCalledWith({ name: "kanbanSetStatus", teamId: "my-team", cardId: "#1", status: "in_review" });
     await new Promise((r) => setImmediate(r));
     expect(dispatch).toHaveBeenCalledWith(Actions.setKanbanBoard([]));
   });

@@ -199,7 +199,7 @@ kanban_write(input: { cards: ReadonlyArray<KanbanCardWrite> })
 
 interface KanbanCardWrite {
   readonly content: string;
-  readonly status: "pending" | "in_progress" | "completed";
+  readonly status: "pending" | "in_progress" | "in_review" | "completed";
   readonly active_form?: string;
   readonly description?: string;
 }

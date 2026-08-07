@@ -261,7 +261,7 @@ export class CommandResolverImpl implements CommandResolver {
   private resolveKanban(state: TuiState, args: ReadonlyArray<string>): ResolvedCommand {
     const meta = COMMAND_METADATA.find((m) => m.name === "kanban")!;
     const parsed = CommandResolverImpl.parseArgs(args, meta);
-    if (parsed === null) return { kind: "error", text: "/kanban <add|remove|complete>" };
+    if (parsed === null) return { kind: "error", text: "/kanban <add|remove|complete|review>" };
     const subcommand = parsed.subcommand;
     if (subcommand === undefined) {
       return { kind: "ui", action: "cycleKanbanView" };
@@ -282,13 +282,17 @@ export class CommandResolverImpl implements CommandResolver {
       };
     }
 
-    if (subcommand === "remove" || subcommand === "complete") {
+    if (subcommand === "remove" || subcommand === "complete" || subcommand === "review") {
       const cardId = restArgs[0];
       if (cardId === undefined) return { kind: "error", text: `/kanban ${subcommand} <cardId>` };
-      const command = subcommand === "remove"
-        ? ({ name: "kanbanRemove", teamId, cardId } as const)
-        : ({ name: "kanbanComplete", teamId, cardId } as const);
-      return { kind: "platform", slashName: `kanban ${subcommand}`, command };
+      if (subcommand === "remove") {
+        return { kind: "platform", slashName: `kanban ${subcommand}`, command: { name: "kanbanRemove", teamId, cardId } };
+      }
+      return {
+        kind: "platform",
+        slashName: `kanban ${subcommand}`,
+        command: { name: "kanbanSetStatus", teamId, cardId, status: subcommand === "complete" ? "completed" : "in_review" },
+      };
     }
 
     return { kind: "error", text: `/kanban: unknown subcommand '${subcommand}'` };

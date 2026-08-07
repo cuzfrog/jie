@@ -262,6 +262,7 @@ const KANBAN_SUBCOMMANDS: ReadonlyArray<{ readonly name: string; readonly descri
   { name: "add", description: "[--title <title>] <description>" },
   { name: "remove", description: "<cardId>" },
   { name: "complete", description: "<cardId>" },
+  { name: "review", description: "<cardId>" },
 ];
 
 function kanbanItems(stateStore: StateStore, argumentText: string): AutocompleteItem[] | null {
@@ -273,8 +274,9 @@ function kanbanItems(stateStore: StateStore, argumentText: string): Autocomplete
   const subcommand = spaceIndex === -1 ? trimmed : trimmed.slice(0, spaceIndex);
   const rest = spaceIndex === -1 ? "" : trimmed.slice(spaceIndex + 1);
   if (subcommand.toLowerCase() === "add") return null;
-  if (subcommand.toLowerCase() === "remove" || subcommand.toLowerCase() === "complete") {
-    const cards = board.filter((card) => hasPrefix(card.id, rest));
+  if (subcommand.toLowerCase() === "remove" || subcommand.toLowerCase() === "complete" || subcommand.toLowerCase() === "review") {
+    const targetStatus = subcommand.toLowerCase() === "complete" ? "completed" : subcommand.toLowerCase() === "review" ? "in_review" : null;
+    const cards = board.filter((card) => hasPrefix(card.id, rest) && (targetStatus === null || card.status !== targetStatus));
     if (cards.length === 0) return null;
     return cards.map((card) => kanbanCardItem(card, subcommand));
   }

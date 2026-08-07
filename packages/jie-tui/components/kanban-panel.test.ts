@@ -28,6 +28,7 @@ describe("KanbanPanel", () => {
     const lines = new KanbanPanel(stateStore).render(120);
     expect(lines[1]).toContain(style("dim")("Pending (0)"));
     expect(lines[1]).toContain(style("dim")("In Progress (0)"));
+    expect(lines[1]).toContain(style("dim")("In Review (0)"));
     expect(lines[1]).toContain(style("dim")("Done (0)"));
   });
 

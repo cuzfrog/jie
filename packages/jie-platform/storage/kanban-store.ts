@@ -6,7 +6,7 @@ export interface KanbanStore {
   replace(teamId: string, sessionId: string, incoming: ReadonlyArray<KanbanCardWrite>): ReadonlyArray<KanbanCard>;
   add(teamId: string, sessionId: string, content: string, description: string | undefined): KanbanCard | null;
   remove(teamId: string, sessionId: string, cardId: string): boolean;
-  complete(teamId: string, sessionId: string, cardId: string): boolean;
+  setStatus(teamId: string, sessionId: string, cardId: string, status: KanbanStatus): boolean;
   editContent(teamId: string, sessionId: string, cardId: string, content: string): KanbanCard | null;
   editDescription(teamId: string, sessionId: string, cardId: string, description: string | undefined): KanbanCard | null;
 }
@@ -61,10 +61,10 @@ export class SqliteKanbanStore implements KanbanStore {
     return true;
   }
 
-  complete(teamId: string, sessionId: string, cardId: string): boolean {
+  setStatus(teamId: string, sessionId: string, cardId: string, status: KanbanStatus): boolean {
     const existing = this.load(teamId, sessionId);
     if (!existing.some((card) => card.id === cardId)) return false;
-    this.persist(teamId, sessionId, existing.map((card) => (card.id === cardId ? { ...card, status: "completed" as const } : card)));
+    this.persist(teamId, sessionId, existing.map((card) => (card.id === cardId ? { ...card, status } : card)));
     return true;
   }
 
