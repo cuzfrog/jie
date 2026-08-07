@@ -15,6 +15,8 @@ import {
 import expectations, { SUMMARY_TEXT } from "./scenario-14.llm.ts";
 
 const AGENT_ID = "my-team:general-1";
+const E2E_TINY_CONTEXT_WINDOW = 38_000;
+const COMPACTION_CONTEXT_BUDGET = 1_000;
 
 describe("Scenario 14 — compaction rewrites history with a summary", () => {
   let dir: string;
@@ -26,7 +28,7 @@ describe("Scenario 14 — compaction rewrites history with a summary", () => {
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "jie-tui-e2e-"));
     writeModelsJsonTo(dir);
-    writeSettingsJson(dir);
+    writeSettingsJson(dir, { compaction: { reserveTokens: E2E_TINY_CONTEXT_WINDOW - COMPACTION_CONTEXT_BUDGET } });
     seedTeam(dir, "my-team", "general", [
       { role: "general", systemPrompt: "You answer briefly.", model: "e2e/e2e-tiny" },
     ]);
