@@ -15,6 +15,8 @@ export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
     case "agent.idle": return reduceIdle(state, event);
     case "agent.usage": return reduceUsage(state, event);
     case "agent.compacted": return reduceCompacted(state, event);
+    case "agent.compaction.start": return reduceCompactionStart(state, event);
+    case "agent.compaction.end": return reduceCompactionEnd(state, event);
     case "agent.stream.chunk": return reduceStreamChunk(state, event);
     case "agent.stream.end": return reduceStreamEnd(state, event);
     case "agent.tool.call": return reduceToolCall(state, event);
@@ -124,10 +126,27 @@ function reduceCompacted(state: TuiState, event: AnyEventEnvelope): TuiState {
     history,
     currentTurn,
     compactionMarker: { seq: markerSeq, summary: event.payload.summary, tokensBefore: event.payload.tokens_before },
+    compactionInProgress: false,
     contextTokensUsed: estimateContextTokens(history, currentTurn),
     lastReportedTotalTokens: null,
   };
   return withAgent(state, agentId, next, { nextEntrySeq: markerSeq + 1 + survivors.length });
+}
+
+function reduceCompactionStart(state: TuiState, event: AnyEventEnvelope): TuiState {
+  const resolved = resolveAgent(state, event);
+  if (resolved === null) return state;
+  if (event.type !== "agent.compaction.start") return state;
+  const { agentId, agent } = resolved;
+  return withAgent(state, agentId, { ...agent, compactionInProgress: true });
+}
+
+function reduceCompactionEnd(state: TuiState, event: AnyEventEnvelope): TuiState {
+  const resolved = resolveAgent(state, event);
+  if (resolved === null) return state;
+  if (event.type !== "agent.compaction.end") return state;
+  const { agentId, agent } = resolved;
+  return withAgent(state, agentId, { ...agent, compactionInProgress: false });
 }
 
 function reduceStreamChunk(state: TuiState, event: AnyEventEnvelope): TuiState {

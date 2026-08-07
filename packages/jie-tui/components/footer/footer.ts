@@ -24,6 +24,7 @@ export class Footer implements Component {
     const stats: string[] = [style(contextSegmentColor(focused))(contextSegmentText(focused))];
     const queue = formatQueueIndicator(focused === null ? null : focused.queue);
     if (queue !== null) stats.push(style("warning")(queue));
+    if (focused !== null && focused.compactionInProgress) stats.push(style("warning")("Compacting..."));
     stats.push(footerHelpInfo(state));
     const modelInfo = focused === null ? null : focused.model;
     const model = modelInfo === null ? style("muted")("—") : formatModelSegment(modelInfo);

@@ -56,6 +56,7 @@ export interface AgentUiState {
   readonly history: MessageTurn[];
   readonly currentTurn: MessageTurn | null;
   readonly compactionMarker: { readonly seq: number; readonly summary: string; readonly tokensBefore: number } | null;
+  readonly compactionInProgress: boolean;
   readonly lastStopReason: StopReason | null;
   readonly contextTokensUsed: number;
   readonly lastReportedTotalTokens: number | null;

@@ -94,6 +94,7 @@ function emptyAgent(agentId: AgentId, teamId: string, agent: AgentInfo): AgentUi
     history: [],
     currentTurn: null,
     compactionMarker: null,
+    compactionInProgress: false,
     contextTokensUsed: 0,
     lastReportedTotalTokens: null,
   };
