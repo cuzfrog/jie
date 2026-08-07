@@ -12,7 +12,7 @@ packages/
     event/           # EventBus (InProcessEventBus), EventManager, Events factory (03-event-system.md)
     hooks/           # settings.json command hooks: parse, HookRunner, sh executor; gates tool calls + lifecycle (10-configuration.md "Hooks")
     llm/             # LlmService: one-shot model calls outside agent sessions (compaction, memory extraction) (07-llm-service.md)
-    memory/          # MemoryStore (memory_atoms + FTS5) + MemoryExtractor: team-scoped long-term memory (11-memory.md, ADR 34)
+    memory/          # MemoryManager facade over MemoryStore (memory_atoms + FTS5), MemoryDistiller, and MemoryBootstrap: team-scoped long-term memory (11-memory.md, ADR 34)
     services/        # GitService (branch / dirty status; consumed by the command surface and by jie-cli for the TUI footer)
     skills/          # Skill discovery (SKILL.md), SkillManager (glob resolution), prompt formatting (10-configuration.md "Skills")
     storage/         # Storage + SqliteStorage, schema bootstrap, ArtifactStore, TranscriptStore (04-storage.md, 08-transcript.md)

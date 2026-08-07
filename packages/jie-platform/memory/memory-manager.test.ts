@@ -1,0 +1,54 @@
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { Api, Model } from "@earendil-works/pi-ai";
+import { MemoryManagerImpl, type MemoryManager } from "./memory-manager";
+import type { MemoryBootstrap } from "./memory-bootstrap";
+import type { MemoryDistiller } from "./memory-distiller";
+import type { Memory, MemoryStore } from "./memory-store";
+
+const memoryStore = vi.mocked<MemoryStore>({ add: vi.fn(), search: vi.fn(), top: vi.fn() });
+const memoryDistiller = vi.mocked<MemoryDistiller>({ distill: vi.fn(async () => {}) });
+const memoryBootstrap = vi.mocked<MemoryBootstrap>({ render: vi.fn(() => "") });
+
+function makeManager(): MemoryManager {
+  return new MemoryManagerImpl(memoryStore, memoryDistiller, memoryBootstrap);
+}
+
+beforeEach(() => {
+  memoryStore.search.mockReturnValue([]);
+  memoryStore.top.mockReturnValue([]);
+  memoryBootstrap.render.mockReturnValue("");
+});
+
+describe("MemoryManagerImpl", () => {
+  test("search forwards to the store and returns its result", () => {
+    const results: Memory[] = [{
+      id: "a1",
+      teamId: "t1",
+      content: "sqlite over postgres",
+      type: "decision",
+      priority: 90,
+      scene: "store choice",
+      sourceSessionId: "s1",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    }];
+    memoryStore.search.mockReturnValue(results);
+    const manager = makeManager();
+    expect(manager.search("sqlite", "t1", 5)).toBe(results);
+    expect(memoryStore.search).toHaveBeenCalledWith("sqlite", "t1", 5);
+  });
+
+  test("bootstrap forwards to the bootstrap renderer and returns its result", () => {
+    memoryBootstrap.render.mockReturnValue("<memory team=\"t1\">\n- [instruction] keep the build green\n</memory>");
+    const manager = makeManager();
+    expect(manager.bootstrap("t1")).toBe("<memory team=\"t1\">\n- [instruction] keep the build green\n</memory>");
+    expect(memoryBootstrap.render).toHaveBeenCalledWith("t1");
+  });
+
+  test("distill forwards to the distiller and returns its promise", async () => {
+    const model = { id: "m" } as unknown as Model<Api>;
+    const input = { messages: [] as AgentMessage[], teamId: "t1", sessionId: "s1", model };
+    await makeManager().distill(input);
+    expect(memoryDistiller.distill).toHaveBeenCalledWith(input);
+  });
+});

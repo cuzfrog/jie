@@ -1,15 +1,12 @@
 ---
 no-new-exports:
-#  - index.ts        # public API updated: MemoryAtomInput, MemoryBootstrap
-  - memory-bootstrap.test.ts
-#  - memory-bootstrap.ts   # new MemoryBootstrap interface + impl
-  - memory-extractor.test.ts
-  - memory-extractor.ts
-  - memory-store.test.ts
-#  - memory-store.ts   # public type rename: NewMemoryAtom -> MemoryAtomInput
+  - memory-manager.ts
+  - memory-manager.test.ts
+  - index.ts
   - module.ts
 ---
 
 ## Notes
-- `SqliteMemoryStore`, `MemoryExtractorImpl`, and `MemoryBootstrapImpl` are the implementations behind the `MemoryStore`, `MemoryExtractor`, and `MemoryBootstrap` interfaces; they are registered on the cradle as `memoryStore`, `memoryExtractor`, and `memoryBootstrap` and are not re-exported from `index.ts`. The extraction prompts are adapted from TencentDB-Agent-Memory (MIT).
-- The public input DTO is `MemoryAtomInput`; `MemoryAtom` extends it with persisted fields. `NewMemoryAtom` was renamed to `MemoryAtomInput` as part of the input/persisted split.
+- `MemoryManager` is the only public abstraction of the module. `Memory`, `MemoryType`, and `RawMemory` are exported as cross-boundary DTOs; `DistillationInput` is the input shape for distillation.
+- `SqliteMemoryStore`, `MemoryDistillerImpl`, and `MemoryBootstrapImpl` are implementation details inside the module; they are not re-exported from `index.ts`.
+- `MemoryManagerImpl` delegates to `MemoryStore` (search/top), `MemoryDistiller` (distill), and `MemoryBootstrap` (render) via constructor injection. The module registration uses plain `asClass` for all four, relying on `CLASSIC` injection mode to resolve dependencies by constructor parameter name.

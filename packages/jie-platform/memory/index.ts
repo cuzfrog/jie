@@ -1,4 +1,3 @@
-export type { MemoryAtom, MemoryAtomInput, MemoryAtomType, MemoryStore } from "./memory-store";
-export type { ExtractionInput, MemoryExtractor } from "./memory-extractor";
-export type { MemoryBootstrap } from "./memory-bootstrap";
+export type { Memory, MemoryType, RawMemory } from "./memory-store";
+export type { DistillationInput, MemoryManager } from "./memory-manager";
 export { registerMemoryModule } from "./module";

@@ -16,7 +16,7 @@ import { JieAgentBody } from "./jie-agent-body";
 import type { AgentBodyParams } from "./agent-body";
 import type { CompactionInput, CompactionResult, Compactor } from "./compaction";
 import { Events, type EventEnvelope, type EventManager, type EventType } from "../event";
-import type { MemoryBootstrap, MemoryExtractor } from "../memory";
+import type { MemoryManager } from "../memory";
 import type { ArtifactStore, TranscriptStore } from "../storage";
 import type { ExecutionContext, Tool, ToolRegistry, ToolResult } from "../tools";
 import type { Skill, SkillManager } from "../skills";
@@ -260,7 +260,7 @@ interface Harness {
   toolRegistry: ReturnType<typeof vi.mocked<ToolRegistry>>;
   skillManager: ReturnType<typeof vi.mocked<SkillManager>>;
   hookRunner: ReturnType<typeof vi.mocked<HookRunner>>;
-  memoryBootstrap: ReturnType<typeof vi.mocked<MemoryBootstrap>>;
+  memoryManager: ReturnType<typeof vi.mocked<MemoryManager>>;
   persisted: AgentMessage[];
   restore: ReturnType<typeof vi.fn>;
   cap: FakeAgentCapture;
@@ -318,8 +318,7 @@ function makeHarness(): Harness {
     read: vi.fn(),
     list: vi.fn(),
   });
-  const memoryBootstrap = vi.mocked<MemoryBootstrap>({ render: vi.fn(() => "") });
-  const memoryExtractor = vi.mocked<MemoryExtractor>({ extract: vi.fn(async () => {}) });
+  const memoryManager = vi.mocked<MemoryManager>({ search: vi.fn(), bootstrap: vi.fn(() => ""), distill: vi.fn(async () => {}) });
   const subscribeSubject = <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void): (() => void) =>
     events.subscribe(topic, (env) => cb(env));
   const makeBody: Harness["makeBody"] = (overrides = {}) => {
@@ -346,8 +345,7 @@ function makeHarness(): Harness {
       resolveModel,
       createAgent: overrides.factory ?? cap.factory,
       compactor: overrides.compactor ?? noopCompactor,
-      memoryBootstrap,
-      memoryExtractor,
+      memoryManager,
       logDir: overrides.logDir ?? null,
     });
   };
@@ -366,7 +364,7 @@ function makeHarness(): Harness {
     toolRegistry,
     skillManager,
     hookRunner,
-    memoryBootstrap,
+    memoryManager,
     persisted,
     restore,
     cap,
@@ -994,7 +992,7 @@ describe("JieAgentBody — restore() snapshot phase", () => {
   });
 
   test("a failing memory store load degrades to context + role prose without failing restore", async () => {
-    h.memoryBootstrap.render.mockImplementation(() => {
+    h.memoryManager.bootstrap.mockImplementation(() => {
       throw new Error("db locked");
     });
     const body = h.makeBody({ systemContextBlock: "CONTEXT" });
@@ -1004,7 +1002,7 @@ describe("JieAgentBody — restore() snapshot phase", () => {
   });
 
   test("loads the team memory block into the system prompt between context and role prose", async () => {
-    h.memoryBootstrap.render.mockReturnValue(
+    h.memoryManager.bootstrap.mockReturnValue(
       "<memory team=\"t1\">\n- [instruction] keep the build green\n</memory>",
     );
     const body = h.makeBody({ systemContextBlock: "CONTEXT" });
@@ -1016,7 +1014,7 @@ describe("JieAgentBody — restore() snapshot phase", () => {
   });
 
   test("restore re-composes the prompt with the memory block even for a fresh session", async () => {
-    h.memoryBootstrap.render.mockReturnValue(
+    h.memoryManager.bootstrap.mockReturnValue(
       "<memory team=\"t1\">\n- [decision] sqlite over postgres (scene: store choice)\n</memory>",
     );
     const body = h.makeBody();
