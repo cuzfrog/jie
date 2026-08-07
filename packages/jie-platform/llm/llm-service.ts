@@ -16,18 +16,13 @@ export interface LlmService {
 
 type LlmCallFn = (input: LlmTaskInput, apiKey: string | undefined, signal: AbortSignal | undefined) => Promise<AssistantMessage>;
 
-interface LlmServiceDeps {
-  readonly modelRegistry: ModelRegistry;
-  readonly call?: LlmCallFn;
-}
-
 export class LlmServiceImpl implements LlmService {
   private readonly modelRegistry: ModelRegistry;
   private readonly call: LlmCallFn;
 
-  constructor(deps: LlmServiceDeps) {
-    this.modelRegistry = deps.modelRegistry;
-    this.call = deps.call ?? callCompleteSimple;
+  constructor(modelRegistry: ModelRegistry, call?: LlmCallFn) {
+    this.modelRegistry = modelRegistry;
+    this.call = call ?? callCompleteSimple;
   }
 
   async complete(input: LlmTaskInput): Promise<string> {
