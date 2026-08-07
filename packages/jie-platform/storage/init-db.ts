@@ -69,11 +69,12 @@ export function initializeSchema(storage: Storage): void {
       id           TEXT    NOT NULL,
       content      TEXT    NOT NULL,
       status       TEXT    NOT NULL,
-      scope        TEXT    NOT NULL,
-      active_form  TEXT,
-      description  TEXT,
-      completed_at TEXT,
-      updated_at   TEXT    NOT NULL,
+      scope         TEXT    NOT NULL,
+      active_form   TEXT,
+      description   TEXT,
+      completed_at  TEXT,
+      external_ref  TEXT,
+      updated_at    TEXT    NOT NULL,
       PRIMARY KEY (team_id, id)
     )
   `);

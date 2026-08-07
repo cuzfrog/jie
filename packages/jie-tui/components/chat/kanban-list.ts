@@ -39,7 +39,8 @@ function renderCard(card: KanbanCard, width: number): string {
   const entry = CARD_STYLES[card.status];
   const glyph = style(entry.glyphColor)(entry.glyph);
   const scopeBadge = card.scope === "session" ? "[E] " : "";
-  const label = `${card.id} ${scopeBadge}${card.content}`;
+  const refBadge = card.externalRef !== undefined ? `${card.externalRef} ` : "";
+  const label = `${refBadge}${card.id} ${scopeBadge}${card.content}`;
   const colored = style(entry.textColor)(label);
   const text = card.status === "completed" ? strikethrough(colored) : colored;
   return truncateToWidth(`${glyph} ${text}`, width);

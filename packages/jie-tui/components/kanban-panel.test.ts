@@ -64,6 +64,12 @@ describe("KanbanPanel", () => {
     expect(row).toContain(style("muted")("rename todo"));
   });
 
+  test("renders an external reference next to the card content", () => {
+    stateStore.getState.mockReturnValue(boardState([{ id: "#1", content: "issue", status: "pending", externalRef: "J#7" }]));
+    const row = new KanbanPanel(stateStore).render(120)[2];
+    expect(stripAnsi(row)).toContain("J#7");
+  });
+
   test("renders an E badge for session-scoped ephemeral cards", () => {
     stateStore.getState.mockReturnValue(boardState([{ id: "#1", content: "ephemeral", status: "pending", scope: "session" }]));
     const row = new KanbanPanel(stateStore).render(120)[2];

@@ -166,6 +166,13 @@ describe("SqliteKanbanStore", () => {
     expect(store.load("t1", "s1")[0]?.content).toBe("new");
   });
 
+  test("replace stores and round-trips an external reference", () => {
+    const store = makeStore();
+    const board = store.replace("t1", "s1", [{ content: "issue", status: "pending", externalRef: "G#42" }]);
+    expect(board[0]?.externalRef).toBe("G#42");
+    expect(store.load("t1", "s1")[0]?.externalRef).toBe("G#42");
+  });
+
   test("replace retains completed cards within 30 days even when omitted", () => {
     const store = makeStore();
     store.replace("t1", "s1", [{ content: "keep", status: "completed" }]);

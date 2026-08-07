@@ -201,6 +201,7 @@ interface KanbanCardWrite {
   readonly content: string;
   readonly status: "pending" | "in_progress" | "in_review" | "completed";
   readonly scope?: "team" | "session";
+  readonly externalRef?: string;
   readonly active_form?: string;
   readonly description?: string;
 }

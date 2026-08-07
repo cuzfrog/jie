@@ -51,6 +51,13 @@ describe("KanbanList", () => {
     expect(lines[2]).toContain(strikethrough(style("muted")("#3 done")));
   });
 
+  test("renders an external reference before the card id", () => {
+    stateStore.getState.mockReturnValue(boardState([{ id: "#1", content: "issue", status: "pending", externalRef: "G#42" }]));
+    const lines = new KanbanList(stateStore).render(80);
+    expect(lines[1]).toContain("G#42");
+    expect(lines[1]).toContain("#1");
+  });
+
   test("renders an [E] badge for session-scoped ephemeral cards", () => {
     stateStore.getState.mockReturnValue(boardState([{ id: "#1", content: "ephemeral", status: "pending", scope: "session" }]));
     const lines = new KanbanList(stateStore).render(80);

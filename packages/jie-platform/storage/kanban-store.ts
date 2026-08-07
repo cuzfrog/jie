@@ -99,7 +99,7 @@ export class SqliteKanbanStore implements KanbanStore {
 
   private loadAll(teamId: string, sessionId: string): KanbanCard[] {
     const rows = this.storage.query(
-      `SELECT session_id, id, content, status, scope, active_form, description, completed_at FROM kanban_cards
+      `SELECT session_id, id, content, status, scope, active_form, description, completed_at, external_ref FROM kanban_cards
        WHERE team_id = ? AND (session_id = ? OR session_id = ?)
        ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)`,
       [teamId, TEAM_SESSION, sessionId],
@@ -114,9 +114,9 @@ export class SqliteKanbanStore implements KanbanStore {
         const card = cards[seq]!;
         const cardSessionId = card.scope === "session" ? (card.sessionId ?? sessionId) : TEAM_SESSION;
         s.exec(
-          `INSERT INTO kanban_cards (team_id, session_id, seq, id, content, status, scope, active_form, description, completed_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [teamId, cardSessionId, seq, card.id, card.content, card.status, card.scope ?? "team", card.active_form ?? null, card.description ?? null, card.completedAt ?? null, new Date().toISOString()],
+          `INSERT INTO kanban_cards (team_id, session_id, seq, id, content, status, scope, active_form, description, completed_at, external_ref, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [teamId, cardSessionId, seq, card.id, card.content, card.status, card.scope ?? "team", card.active_form ?? null, card.description ?? null, card.completedAt ?? null, card.externalRef ?? null, new Date().toISOString()],
         );
       }
     });
@@ -154,6 +154,7 @@ function mergeIncoming(
         scope,
         ...(write.active_form === undefined ? {} : { active_form: write.active_form }),
         ...(write.description === undefined ? {} : { description: write.description }),
+        ...(write.externalRef === undefined ? {} : { externalRef: write.externalRef }),
       };
       if (scope === "session") {
         (card as { sessionId?: string }).sessionId = defaultSessionId;
@@ -163,6 +164,7 @@ function mergeIncoming(
     const card = { ...prior, status: write.status };
     if (write.active_form !== undefined) (card as { active_form?: string }).active_form = write.active_form;
     if (write.description !== undefined) (card as { description?: string }).description = write.description;
+    if (write.externalRef !== undefined) (card as { externalRef?: string }).externalRef = write.externalRef;
     return applyStatus(card, write.status);
   });
 }
@@ -192,7 +194,7 @@ function retentionCutoff(): string {
 }
 
 function cardFromRow(row: ReadonlyArray<unknown>): KanbanCard {
-  const [sessionId, id, content, status, scope, activeForm, description, completedAt] = row;
+  const [sessionId, id, content, status, scope, activeForm, description, completedAt, externalRef] = row;
   const scopeValue = (scope as string) === "session" ? "session" : "team";
   const card: KanbanCard = {
     id: id as string,
@@ -203,9 +205,9 @@ function cardFromRow(row: ReadonlyArray<unknown>): KanbanCard {
   if (scopeValue === "session") {
     (card as { sessionId?: string }).sessionId = sessionId as string;
   }
-  return { ...card, ...withOptional(activeForm, "active_form"), ...withOptional(description, "description"), ...withOptional(completedAt, "completedAt") };
+  return { ...card, ...withOptional(activeForm, "active_form"), ...withOptional(description, "description"), ...withOptional(completedAt, "completedAt"), ...withOptional(externalRef, "externalRef") };
 }
 
-function withOptional(value: unknown, key: "active_form" | "description" | "completedAt"): { [K in typeof key]?: string } {
+function withOptional(value: unknown, key: "active_form" | "description" | "completedAt" | "externalRef"): { [K in typeof key]?: string } {
   return value === null ? {} : { [key]: value as string };
 }

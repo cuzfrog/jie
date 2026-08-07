@@ -73,7 +73,9 @@ function renderColumn(column: { readonly title: string; readonly cardColor: Colo
     const marker = card.id === cursorId ? style("accent")("▸") : " ";
     const badge = card.scope === "session" ? style("warning")("E ") : "";
     const badgeWidth = card.scope === "session" ? 2 : 0;
-    return marker + badge + style(column.cardColor)(truncateToWidth(card.content, Math.max(0, columnWidth - 1 - badgeWidth)));
+    const ref = card.externalRef !== undefined ? style("accent")(`${card.externalRef} `) : "";
+    const refWidth = card.externalRef !== undefined ? visibleWidth(card.externalRef) + 1 : 0;
+    return marker + badge + ref + style(column.cardColor)(truncateToWidth(card.content, Math.max(0, columnWidth - 1 - badgeWidth - refWidth)));
   });
   const overflow = total - cards.length;
   if (overflow > 0) rows.push(style("dim")(`+${overflow} more`));
@@ -87,6 +89,7 @@ function renderCardDetail(card: KanbanCard | null, field: "content" | "descripti
   const status = style("muted")(fitToWidth(`status: ${STATUS_LABELS[card.status]}`, innerWidth));
   const scope = style("muted")(fitToWidth(`scope: ${card.scope ?? "team"}`, innerWidth));
   const rows = [title, description, status, scope];
+  if (card.externalRef !== undefined) rows.push(style("muted")(fitToWidth(`ref: ${card.externalRef}`, innerWidth)));
   if (card.active_form !== undefined) rows.push(style("muted")(fitToWidth(`active: ${card.active_form}`, innerWidth)));
   return rows;
 }

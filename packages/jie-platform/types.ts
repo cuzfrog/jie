@@ -83,6 +83,7 @@ export interface KanbanCard {
     readonly active_form?: string;
     readonly description?: string;
     readonly completedAt?: string;
+    readonly externalRef?: string;
 }
 
 export interface KanbanCardWrite {
@@ -91,6 +92,7 @@ export interface KanbanCardWrite {
     readonly scope?: "team" | "session";
     readonly active_form?: string;
     readonly description?: string;
+    readonly externalRef?: string;
 }
 
 
