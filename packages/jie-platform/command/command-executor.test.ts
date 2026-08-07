@@ -46,6 +46,7 @@ const teamManager = vi.mocked<TeamManager>({
   agents: vi.fn(),
   listSessions: vi.fn(),
   currentSessionId: vi.fn(),
+  compact: vi.fn(),
   stop: vi.fn(),
 });
 
@@ -625,6 +626,15 @@ describe("CommandExecutorImpl", () => {
     });
   });
 
+  describe("compact", () => {
+    test("calls teamManager.compact with the team and agent key and returns null", async () => {
+      teamManager.compact.mockResolvedValue(undefined);
+      const result = await executor.execute({ name: "compact", teamId: "alpha", agentKey: "general-1" });
+      expect(teamManager.compact).toHaveBeenCalledWith("alpha", "general-1");
+      expect(result).toBeNull();
+    });
+  });
+
   describe("dispatch", () => {
     test("executor.execute is the single entry point for every command name", async () => {
       teamManager.locate.mockReturnValue("user");
@@ -658,6 +668,7 @@ describe("CommandExecutorImpl", () => {
         { name: "getTeamInfo" },
         { name: "getGitStatus" },
         { name: "stop" },
+        { name: "compact", teamId: "alpha", agentKey: "general-1" },
         { name: "listSessions", teamId: "alpha" },
         { name: "kanbanAdd", teamId: "alpha", description: "task" },
         { name: "kanbanRemove", teamId: "alpha", cardId: "#1" },

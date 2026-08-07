@@ -885,6 +885,44 @@ describe("CommandHandlerImpl — /notification", () => {
   });
 });
 
+describe("CommandHandlerImpl — /compact", () => {
+  test("/compact dispatches the compact command for the focused agent", async () => {
+    const { platform, execute } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/compact");
+    await new Promise((r) => setImmediate(r));
+    expect(execute).toHaveBeenCalledWith({ name: "compact", teamId: "my-team", agentKey: "general-1" });
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("compacting")));
+  });
+
+  test("/compact with no team loaded sets an error", () => {
+    const { platform, execute } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/compact");
+    expect(execute).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/compact: no focused agent")));
+  });
+
+  test("/compact while the focused agent is busy sets an error", () => {
+    const { platform, execute } = makePlatform();
+    const busyAgent = makeAgentUiState("my-team:general-1", { isLeader: true, status: "busy" });
+    const state = makeTuiState({ teamId: "my-team", leaderAgentId: busyAgent.agentId, focusedAgentId: busyAgent.agentId, agents: new Map([[busyAgent.agentId, busyAgent]]) });
+    const { handler, dispatch } = makeHandler(platform, state);
+    handler.handle("/compact");
+    expect(execute).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("wait for the current response to finish before compacting"));
+  });
+
+  test("a failed /compact surfaces the platform error as a banner", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async () => { throw new Error("compactor offline"); });
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/compact");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/compact failed")));
+  });
+});
+
 describe("SLASH_COMMAND_NAMES", () => {
   test("is the union of the commands and intercepts registries, in registration order", () => {
     expect(SLASH_COMMAND_NAMES).toEqual([
@@ -897,6 +935,7 @@ describe("SLASH_COMMAND_NAMES", () => {
       "model",
       "model-filter",
       "effort",
+      "compact",
       "reload",
       "team",
       "resume",

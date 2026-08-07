@@ -21,6 +21,7 @@ export const COMMAND_METADATA: ReadonlyArray<CommandMeta> = [
   { name: "model", description: "set the default model", argumentHint: "<provider/modelId>", arguments: [{ name: "modelRef" }] },
   { name: "model-filter", description: "filter the /model list", argumentHint: "<add|remove|list> <pattern>", arguments: [{ name: "action" }, { name: "pattern", optional: true }] },
   { name: "effort", description: "set the thinking effort", argumentHint: "<level>", arguments: [{ name: "level", optional: true }] },
+  { name: "compact", description: "compact the conversation of the focused agent" },
   { name: "reload", description: "reload settings, manifests, and context files" },
   { name: "team", description: "switch the active team", argumentHint: "<teamId>", arguments: [{ name: "teamId" }] },
   { name: "resume", description: "resume a session of the loaded team", argumentHint: "<sessionId>", arguments: [{ name: "sessionId" }] },

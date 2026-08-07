@@ -93,6 +93,7 @@ function makeFakeBody(params: AgentBodyParams, restored: ReadonlyArray<AgentMess
     restore: async () => restored,
     messages: () => [...restored],
     start: async () => {},
+    compact: async () => {},
     stop: () => {},
   };
 }
@@ -239,6 +240,7 @@ describe("TeamManagerImpl — full surface", () => {
         restore: async () => [],
         messages: () => [],
         start: async () => { throw new Error("start failure"); },
+        compact: async () => {},
         stop: vi.fn(),
       }));
       const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
@@ -260,6 +262,7 @@ describe("TeamManagerImpl — full surface", () => {
         restore: async () => [],
         messages: () => [],
         start: async () => { started.push(params.agentKey); },
+        compact: async () => {},
         stop: () => {},
       }));
       const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
@@ -358,6 +361,7 @@ describe("TeamManagerImpl — full surface", () => {
         restore: async () => [...live],
         messages: () => [...live],
         start: async () => {},
+        compact: async () => {},
         stop: () => {},
       });
       const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
@@ -453,6 +457,7 @@ describe("TeamManagerImpl — full surface", () => {
           restore: async () => [],
           messages: () => [],
           start: async () => {},
+          compact: async () => {},
           stop: () => { stops.push(`gen${created}:${params.agentKey}`); },
         };
       });
@@ -484,6 +489,7 @@ describe("TeamManagerImpl — full surface", () => {
         restore: async () => [],
         messages: () => [],
         start: async () => {},
+        compact: async () => {},
         stop: () => { stops.push(params.agentKey); },
       }));
       const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
@@ -504,6 +510,7 @@ describe("TeamManagerImpl — full surface", () => {
           restore: async () => [],
           messages: () => [],
           start: async () => { if (created > 0) throw new Error("start failure"); },
+          compact: async () => {},
           stop: () => { stops.push(`gen${created}:${params.agentKey}`); },
         };
       });
@@ -524,6 +531,7 @@ describe("TeamManagerImpl — full surface", () => {
         restore: async () => [],
         messages: () => [],
         start: async () => {},
+        compact: async () => {},
         stop: () => { stops.push(params.agentKey); },
       }));
       const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
@@ -546,6 +554,7 @@ describe("TeamManagerImpl — full surface", () => {
           restore: async () => [],
           messages: () => [],
           start: async () => {},
+          compact: async () => {},
           stop: () => {},
         };
       });
@@ -723,6 +732,28 @@ describe("TeamManagerImpl — full surface", () => {
       const { manager } = makeManager(homeJieDir, null);
       expect(manager.listSessions("default-solo")).toBe(sessions);
       expect(transcriptStore.listSessions).toHaveBeenCalledWith("default-solo");
+    });
+  });
+
+  describe("compact", () => {
+    test("delegates to the matching body and waits for it", async () => {
+      const compact = vi.fn(async () => {});
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      agentBodyFactory.mockImplementation((params) => ({ ...makeFakeBody(params, []), compact }));
+      await manager.load("default-solo");
+      await manager.compact("default-solo", "general-1");
+      expect(compact).toHaveBeenCalledTimes(1);
+    });
+
+    test("throws AGENT_NOT_FOUND when the agent is not in the loaded team", async () => {
+      const { manager } = makeManager(homeJieDir, null);
+      await manager.load("default-solo");
+      await expect(manager.compact("default-solo", "ghost-1")).rejects.toMatchObject({ code: "AGENT_NOT_FOUND" });
+    });
+
+    test("throws NO_TEAM when no session is loaded for the team", async () => {
+      const { manager } = makeManager(homeJieDir, null);
+      await expect(manager.compact("default-solo", "general-1")).rejects.toMatchObject({ code: "NO_TEAM" });
     });
   });
 });

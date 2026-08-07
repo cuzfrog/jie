@@ -50,6 +50,7 @@ export class CommandExecutorImpl implements CommandExecutor {
       listSessions: this.listSessions.bind(this),
       getNotificationSoundEnabled: this.getNotificationSoundEnabled.bind(this),
       setNotificationSoundEnabled: this.setNotificationSoundEnabled.bind(this),
+      compact: this.compact.bind(this),
       kanbanAdd: this.kanbanAdd.bind(this),
       kanbanRemove: this.kanbanRemove.bind(this),
       kanbanComplete: this.kanbanComplete.bind(this),
@@ -186,6 +187,11 @@ export class CommandExecutorImpl implements CommandExecutor {
 
   private stop(): CommandResult<"stop"> {
     this.teamManager.stop();
+    return null;
+  }
+
+  private async compact(command: Command<"compact">): Promise<CommandResult<"compact">> {
+    await this.teamManager.compact(command.teamId, command.agentKey);
     return null;
   }
 

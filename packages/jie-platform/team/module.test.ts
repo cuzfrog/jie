@@ -113,6 +113,7 @@ function makeFakeBody(params: AgentBodyParams): AgentBody {
     restore: async () => [],
     messages: () => [],
     start: async () => {},
+    compact: async () => {},
     stop: () => {},
   };
 }

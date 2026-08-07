@@ -264,6 +264,11 @@ export class JieAgentBody implements AgentBody {
     this.loopLogger = null;
   }
 
+  async compact(): Promise<void> {
+    if (this.stopped) return;
+    await this.ensureCompacted();
+  }
+
   private registerSubscriptions(): void {
     this.cleanups.push(
       this.eventManager.subscribe("user.prompt", (env) => {

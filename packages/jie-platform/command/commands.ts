@@ -42,6 +42,7 @@ interface CommandTypeMap {
   kanbanRemove: CommandDef<{ teamId: string; cardId: string }, KanbanBoardResult>;
   kanbanComplete: CommandDef<{ teamId: string; cardId: string }, KanbanBoardResult>;
   kanbanEdit: CommandDef<{ teamId: string; cardId: string; field: "content" | "description"; text: string }, KanbanBoardResult>;
+  compact: CommandDef<{ teamId: string; agentKey: string }, null>;
 }
 
 interface KanbanBoardResult {

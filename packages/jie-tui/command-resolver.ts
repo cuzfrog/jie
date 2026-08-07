@@ -11,6 +11,8 @@ export type ResolvedCommand =
 
 export type UiAction = "clearState" | "showHelp" | "stop" | "cycleKanbanView";
 
+type AgentRoute = { readonly teamId: string; readonly agentKey: string };
+
 export interface CommandResolver {
   resolve(state: TuiState, name: string, args: ReadonlyArray<string>): ResolvedCommand | Promise<ResolvedCommand>;
 }
@@ -46,6 +48,8 @@ export class CommandResolverImpl implements CommandResolver {
         return this.resolveModelFilter(args);
       case "effort":
         return this.resolveEffort(args);
+      case "compact":
+        return this.resolveCompact(state);
       case "reload":
         return this.resolveReload(state);
       case "team":
@@ -182,6 +186,21 @@ export class CommandResolverImpl implements CommandResolver {
     }
   }
 
+  private resolveCompact(state: TuiState): ResolvedCommand {
+    const focused = TuiState.getFocusedAgent(state);
+    if (focused !== null && focused.status === "busy") {
+      return { kind: "error", text: "wait for the current response to finish before compacting" };
+    }
+    const route = this.resolveRoute(state);
+    if (route === null) return { kind: "error", text: "/compact: no focused agent" };
+    return {
+      kind: "platform",
+      slashName: "compact",
+      command: { name: "compact", teamId: route.teamId, agentKey: route.agentKey },
+      transient: "compacting conversation...",
+    };
+  }
+
   private resolveReload(state: TuiState): ResolvedCommand {
     if (TuiState.isBusy(state)) {
       return { kind: "error", text: "wait for the current response to finish before reloading" };
@@ -297,6 +316,16 @@ export class CommandResolverImpl implements CommandResolver {
   }
 
   private static readonly MODEL_FILTER_USAGE = "/model-filter <add|remove|list> <pattern>";
+
+  private resolveRoute(state: TuiState): AgentRoute | null {
+    const focused = TuiState.getFocusedAgent(state);
+    if (focused !== null) return { teamId: focused.teamId, agentKey: focused.agentKey };
+    if (state.leaderAgentId !== null) {
+      const leader = state.agents.get(state.leaderAgentId) ?? null;
+      if (leader !== null) return { teamId: leader.teamId, agentKey: leader.agentKey };
+    }
+    return null;
+  }
 
   private static formatError(slashName: string, error: unknown): string {
     const reason = error instanceof Error ? error.message : String(error);
