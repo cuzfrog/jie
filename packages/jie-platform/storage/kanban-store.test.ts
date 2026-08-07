@@ -128,12 +128,12 @@ describe("SqliteKanbanStore", () => {
     expect(cards[0]).toMatchObject({ content: "a", status: "completed", active_form: "Working" });
   });
 
-  test("the board and the id counter are scoped per (teamId, sessionId)", () => {
+  test("the board and id counter are scoped per team, not per session", () => {
     const store = makeStore();
     store.replace("t1", "s1", [write("a")]);
     store.replace("t1", "s2", [write("b")]);
-    expect(ids(store.load("t1", "s1"))).toEqual(["#1"]);
-    expect(ids(store.load("t1", "s2"))).toEqual(["#1"]);
+    expect(ids(store.load("t1", "s1"))).toEqual(["#2"]);
+    expect(ids(store.load("t1", "s2"))).toEqual(["#2"]);
     expect(ids(store.load("t2", "s1"))).toEqual([]);
   });
 

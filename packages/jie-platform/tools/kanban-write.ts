@@ -5,7 +5,7 @@ import type { KanbanStore } from "../storage";
 import type { KanbanCard, KanbanCardWrite } from "../types";
 
 const KANBAN_WRITE_DESCRIPTION = `Update the live kanban board. \`cards\` is the full board (it replaces, not
-merges with, whatever the agent has now). Each card is \`{ content, status, active_form?, description? }\`;
+merges with, whatever the team has now). Each card is \`{ content, status, active_form?, description? }\`;
 \`status\` is one of \`pending\`, \`in_progress\`, \`in_review\`, \`completed\` — the four board columns.
 Contract:
 - no duplicate \`content\` strings;

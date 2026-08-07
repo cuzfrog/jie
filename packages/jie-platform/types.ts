@@ -78,6 +78,8 @@ export interface KanbanCard {
     readonly id: string;
     readonly content: string;
     readonly status: KanbanStatus;
+    readonly scope?: "team" | "session";
+    readonly sessionId?: string;
     readonly active_form?: string;
     readonly description?: string;
 }
@@ -85,6 +87,7 @@ export interface KanbanCard {
 export interface KanbanCardWrite {
     readonly content: string;
     readonly status: KanbanStatus;
+    readonly scope?: "team" | "session";
     readonly active_form?: string;
     readonly description?: string;
 }

@@ -4,9 +4,9 @@ The loaded team's kanban board — the cards the team maintains through `kanban_
 
 ## Data
 
-The board is one shared `state.kanbanBoard` for the loaded team — not per-agent — seeded from `teamInfo.kanbanCards` on team load and refreshed by the platform's kanban command results (`kanbanAdd`/`kanbanRemove`/`kanbanSetStatus`/`kanbanEdit` responses carry the full board back). The platform persists it per session per team (`storage/transcript-store.ts`, `kanban_write`), so the board is visible across team members and survives TUI restarts.
+The board is one shared `state.kanbanBoard` for the loaded team — not per-agent — seeded from `teamInfo.kanbanCards` on team load and refreshed by the platform's kanban command results (`kanbanAdd`/`kanbanRemove`/`kanbanSetStatus`/`kanbanEdit` responses carry the full board back). The platform persists it per team (`storage/kanban-store.ts`, `kanban_write`), so the board crosses sessions, is visible across team members and survives TUI restarts.
 
-Every card carries a stable id (`#1`, `#2`, …) assigned per session by the platform, plus `content`, `status` (`pending` | `in_progress` | `in_review` | `completed`), and optional `active_form` and `description`. The `/kanban add` command distills a short title from a long description; the full description stays on the card and is shown in the expanded detail view.
+Every card carries a stable id (`#1`, `#2`, …) assigned per team by the platform, plus `content`, `status` (`pending` | `in_progress` | `in_review` | `completed`), `scope` (`team` | `session`), and optional `active_form`, `description`, and `sessionId` (when `scope` is `session`). The `/kanban add` command distills a short title from a long description; the full description stays on the card and is shown in the expanded detail view.
 
 ## Layout
 

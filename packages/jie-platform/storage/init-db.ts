@@ -64,24 +64,39 @@ export function initializeSchema(storage: Storage): void {
   storage.exec(`
     CREATE TABLE IF NOT EXISTS kanban_cards (
       team_id     TEXT    NOT NULL,
-      session_id  TEXT    NOT NULL,
+      session_id  TEXT    NOT NULL DEFAULT '',
       seq         INTEGER NOT NULL,
       id          TEXT    NOT NULL,
       content     TEXT    NOT NULL,
       status      TEXT    NOT NULL,
+      scope       TEXT    NOT NULL,
       active_form TEXT,
       description TEXT,
       updated_at  TEXT    NOT NULL,
-      PRIMARY KEY (team_id, session_id, id)
+      PRIMARY KEY (team_id, id)
     )
   `);
 
   storage.exec(`
     CREATE TABLE IF NOT EXISTS kanban_counters (
       team_id    TEXT    NOT NULL,
-      session_id TEXT    NOT NULL,
       next_id    INTEGER NOT NULL,
-      PRIMARY KEY (team_id, session_id)
+      PRIMARY KEY (team_id)
     )
   `);
+
+  migrateKanban(storage);
+}
+
+function migrateKanban(storage: Storage): void {
+  const info = storage.query("PRAGMA table_info(kanban_cards)") as ReadonlyArray<ReadonlyArray<unknown>>;
+  const hasScope = info.some((row) => row[1] === "scope");
+  if (hasScope) {
+    storage.exec("PRAGMA user_version = 1");
+    return;
+  }
+
+  storage.exec("DROP TABLE IF EXISTS kanban_cards");
+  storage.exec("DROP TABLE IF EXISTS kanban_counters");
+  storage.exec("PRAGMA user_version = 1");
 }
