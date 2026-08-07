@@ -53,7 +53,7 @@ function makeModel(provider: string, id: string): Model<Api> {
   return {
     id,
     name: id,
-    api: "anthropic-messages" as Api,
+    api: "anthropic-messages",
     provider,
     baseUrl: "",
     reasoning: false,
@@ -95,7 +95,12 @@ describe("CompactionRunner — applying the result", () => {
   test("a successful run rewrites the conversation to [summary, ...retainedTail]", async () => {
     const [, second, third] = messages;
     const summary = createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z");
-    compactor.compact.mockResolvedValueOnce({ summaryMessage: summary, firstKeptIndex: 1, tokensBefore: 500, summarizedPrefix: [messages[0]!] });
+    compactor.compact.mockResolvedValueOnce({
+      summaryMessage: summary,
+      firstKeptIndex: 1,
+      tokensBefore: 500,
+      summarizedPrefix: [messages[0]!],
+    });
     await makeRunner().ensure(model);
     expect(messages).toEqual([summary, second, third]);
   });

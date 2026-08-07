@@ -3,8 +3,15 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import { logger } from "@cuzfrog/jie-utils";
 import type { ModelRegistry, SettingsStore } from "../config";
 import type { LlmService } from "../llm";
-import type { DistillationInput } from "./memory-manager";
 import type { MemoryType, MemoryStore, RawMemory } from "./memory-store";
+
+export interface DistillationInput {
+  readonly messages: ReadonlyArray<AgentMessage>;
+  readonly teamId: string;
+  readonly sessionId: string;
+  readonly model: Model<Api>;
+  readonly signal?: AbortSignal;
+}
 
 const log = logger.getSubLogger({ name: "jie.platform.memory" });
 
@@ -114,7 +121,7 @@ function parseMemory(entry: unknown, scene: string): RawMemory | null {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isMemoryType(value: unknown): value is MemoryType {
@@ -138,7 +145,7 @@ function stripCodeFences(text: string): string {
   return fenced === null ? trimmed : fenced[1]!.trim();
 }
 
-const DISTILLATION_SYSTEM_PROMPT_EN = `You are a memory distillation specialist. Distill the conversation into long-term memory atoms grouped by scene.
+const DISTILLATION_SYSTEM_PROMPT_EN = `You are a memory distillation specialist. Distill the conversation into long-term memories grouped by scene.
 
 Output language: write scene names and memory content in the language the conversation is written in. The JSON structure and enum values stay in English.
 
@@ -146,13 +153,13 @@ Output language: write scene names and memory content in the language the conver
 Group the conversation into scenes. A scene is one activity or topic thread. Start a new scene when the topic, task, or goal changes. Name each scene with one concise line describing the activity.
 
 ### Task 2: Memory distillation
-Distill memory atoms from the conversation only. A memory must be a self-contained statement that stays true outside this conversation. Rules:
+Distill memories from the conversation only. A memory must be a self-contained statement that stays true outside this conversation. Rules:
 - Self-contained: no pronouns or references that need the conversation to be understood (no "this", "that", "as mentioned above").
 - Unconfirmed: phrase proposals, risks, and suggestions that were not confirmed as facts.
 - Not tracked elsewhere: skip task progress and work products that a kanban board or an artifact store already track.
 - Filter trivia: skip greetings, small talk, one-off tool requests, and repeated content.
 - Merge: combine closely related facts into one memory; do not fragment.
-- Standing rules: only extract an instruction when the user gave an explicit standing rule for the AI's behavior.
+- Standing rules: only distill an instruction when the user gave an explicit standing rule for the AI's behavior.
 
 ### Memory types (use exactly one per memory)
 - fact: established project or domain knowledge.
@@ -172,9 +179,9 @@ Return only a valid JSON array of scenes, and nothing else:
     ]
   }
 ]
-If nothing is worth extracting, still output the scene list with empty memories arrays. Do not wrap the JSON in markdown code fences and do not add any text outside the JSON.`;
+If nothing is worth distilling, still output the scene list with empty memories arrays. Do not wrap the JSON in markdown code fences and do not add any text outside the JSON.`;
 
-const DISTILLATION_SYSTEM_PROMPT_ZH = `你是一名记忆蒸馏专家。将对话蒸馏为按情境（scene）分组的长程记忆原子。
+const DISTILLATION_SYSTEM_PROMPT_ZH = `你是一名记忆蒸馏专家。将对话蒸馏为按情境（scene）分组的长程记忆。
 
 输出语言：情境名称与记忆内容使用与对话相同的语言书写；JSON 结构与枚举值保持英文。
 
@@ -182,13 +189,13 @@ const DISTILLATION_SYSTEM_PROMPT_ZH = `你是一名记忆蒸馏专家。将对�
 将对话按情境分组。一个情境指一个活动或话题线程；当话题、任务或目标变化时开启新情境。每个情境用一个简洁的句子命名其活动内容。
 
 ### 任务二：记忆蒸馏
-只从对话中蒸馏记忆原子。每个原子必须是一条脱离当前对话依然成立、自包含的陈述。规则：
+只从对话中蒸馏记忆。每个记忆必须是一条脱离当前对话依然成立、自包含的陈述。规则：
 - 自包含：不使用需要依赖对话上下文才能理解的代词或指代（如"这个"、"上面说的"）。
 - 未确认：未经确认的建议、风险、意见应表述为"正在讨论"或"待确认"，而不是事实。
 - 不在其他系统跟踪：跳过看板或工件存储已跟踪的任务进度与交付物。
 - 过滤琐碎：跳过寒暄、闲聊、一次性工具请求与重复内容。
 - 归纳合并：强相关的信息合并为一条记忆，不要碎片化。
-- 指令：只有当用户给 AI 提出明确的长期行为规则时才提取 instruction。
+- 指令：只有当用户给 AI 提出明确的长期行为规则时才蒸馏 instruction。
 
 ### 记忆类型（每条记忆只能选一个）
 - fact：已确立的项目或领域知识。
@@ -208,4 +215,4 @@ const DISTILLATION_SYSTEM_PROMPT_ZH = `你是一名记忆蒸馏专家。将对�
     ]
   }
 ]
-如果没有任何值得提取的内容，也要输出情境列表，memories 为空数组。不要把 JSON 放在 markdown 代码块中，也不要在 JSON 之外添加任何文字。`;
+如果没有任何值得蒸馏的内容，也要输出情境列表，memories 为空数组。不要把 JSON 放在 markdown 代码块中，也不要在 JSON 之外添加任何文字。`;

@@ -2,7 +2,7 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { MemoryManagerImpl, type MemoryManager } from "./memory-manager";
 import type { MemoryBootstrap } from "./memory-bootstrap";
-import type { MemoryDistiller } from "./memory-distiller";
+import type { MemoryDistiller, DistillationInput } from "./memory-distiller";
 import type { Memory, MemoryStore } from "./memory-store";
 
 const memoryStore = vi.mocked<MemoryStore>({ add: vi.fn(), search: vi.fn(), top: vi.fn() });
@@ -11,6 +11,21 @@ const memoryBootstrap = vi.mocked<MemoryBootstrap>({ render: vi.fn(() => "") });
 
 function makeManager(): MemoryManager {
   return new MemoryManagerImpl(memoryStore, memoryDistiller, memoryBootstrap);
+}
+
+function makeModel(id: string): Model<Api> {
+  return {
+    id,
+    name: id,
+    api: "openai-completions",
+    provider: "e2e",
+    baseUrl: "",
+    reasoning: false,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 8192,
+    maxTokens: 2048,
+  };
 }
 
 beforeEach(() => {
@@ -46,8 +61,9 @@ describe("MemoryManagerImpl", () => {
   });
 
   test("distill forwards to the distiller and returns its promise", async () => {
-    const model = { id: "m" } as unknown as Model<Api>;
-    const input = { messages: [] as AgentMessage[], teamId: "t1", sessionId: "s1", model };
+    const model = makeModel("m");
+    const messages: ReadonlyArray<AgentMessage> = [];
+    const input: DistillationInput = { messages, teamId: "t1", sessionId: "s1", model };
     await makeManager().distill(input);
     expect(memoryDistiller.distill).toHaveBeenCalledWith(input);
   });

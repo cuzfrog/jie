@@ -56,7 +56,7 @@ export function initializeSchema(storage: Storage): void {
   `);
 
   // Remove any duplicate (team, type, content) rows that may exist from older
-  // schema versions before we add the unique index below. One atom per team,
+  // schema versions before we add the unique index below. One memory per team,
   // type, and content is the intended invariant.
   storage.exec(`
     DELETE FROM memory_atoms
@@ -124,8 +124,8 @@ function createMemoryFtsTableIfNotExists(storage: Storage): void {
 
 function maybeRebuildMemoryFts(storage: Storage): void {
   const ftsCount = countRows(storage, "memory_atoms_fts");
-  const atomCount = countRows(storage, "memory_atoms");
-  if (ftsCount === 0 && atomCount > 0) {
+  const memoryCount = countRows(storage, "memory_atoms");
+  if (ftsCount === 0 && memoryCount > 0) {
     storage.exec("INSERT INTO memory_atoms_fts (content, atom_id) SELECT content, id FROM memory_atoms");
   }
 }

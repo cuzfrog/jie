@@ -46,7 +46,7 @@ interface MemoryManager {
 }
 ```
 
-All methods are synchronous except `distill` — SQLite access is in-process and blocking calls are microseconds; callers never await `search` or `bootstrap`. `MemoryManagerImpl` is a thin facade over three internal collaborators: `MemoryStore` (`search`/`top`), `MemoryBootstrap` (render), and `MemoryDistiller` (extract).
+All methods are synchronous except `distill` — SQLite access is in-process and blocking calls are microseconds; callers never await `search` or `bootstrap`. `MemoryManagerImpl` is a thin facade over three internal collaborators: `MemoryStore` (search), `MemoryBootstrap` (render), and `MemoryDistiller` (distill).
 
 The internal `MemoryStore` is SQLite on the shared `Storage` instance:
 

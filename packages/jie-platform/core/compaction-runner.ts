@@ -34,8 +34,8 @@ export class CompactionRunnerImpl implements CompactionRunner {
   private readonly teamId: string;
   private readonly conversation: CompactionConversation;
   private readonly memoryManager: MemoryManager;
-  private readonly extractionController = new AbortController();
-  private extractionPromise: Promise<void> | null = null;
+  private readonly distillationController = new AbortController();
+  private distillationPromise: Promise<void> | null = null;
   private promise: Promise<void> | null = null;
   private controller: AbortController | null = null;
   private aborted = false;
@@ -63,7 +63,7 @@ export class CompactionRunnerImpl implements CompactionRunner {
   abort(): void {
     this.aborted = true;
     this.controller?.abort();
-    this.extractionController.abort();
+    this.distillationController.abort();
   }
 
   private async run(model: Model<Api>, contextWindow?: number): Promise<void> {
@@ -86,15 +86,15 @@ export class CompactionRunnerImpl implements CompactionRunner {
       this.conversation.setMessages([result.summaryMessage, ...messages.slice(result.firstKeptIndex)]);
       const summarizedPrompts = summarizedMessages.reduce((count, message) => message.role === "user" ? count + 1 : count, 0);
       this.eventManager.publish(Events.agentCompacted(this.sender, result.summaryMessage.summary, result.tokensBefore, summarizedPrompts));
-      if (this.extractionPromise === null) {
-        this.extractionPromise = this.memoryManager.distill({
+      if (this.distillationPromise === null) {
+        this.distillationPromise = this.memoryManager.distill({
           messages: result.summarizedPrefix,
           teamId: this.teamId,
           sessionId: this.sessionId,
           model,
-          signal: this.extractionController.signal,
+          signal: this.distillationController.signal,
         }).finally(() => {
-          this.extractionPromise = null;
+          this.distillationPromise = null;
         });
       }
     } catch (error) {

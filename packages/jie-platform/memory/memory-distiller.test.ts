@@ -1,8 +1,7 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ModelRegistry, SettingsStore } from "../config";
 import type { LlmService } from "../llm";
-import type { DistillationInput } from "./memory-manager";
-import { MemoryDistillerImpl } from "./memory-distiller";
+import { MemoryDistillerImpl, type DistillationInput } from "./memory-distiller";
 import type { MemoryStore } from "./memory-store";
 
 const llmService = vi.mocked<LlmService>({ complete: vi.fn() });
@@ -30,7 +29,7 @@ function makeModel(id: string): Model<Api> {
   return {
     id,
     name: id,
-    api: "openai-completions" as Api,
+    api: "openai-completions",
     provider: "e2e",
     baseUrl: "",
     reasoning: false,
@@ -51,7 +50,9 @@ function makeService(): MemoryDistillerImpl {
 
 beforeEach(() => {
   settingsStore.load.mockReturnValue({});
-  llmService.complete.mockResolvedValue(JSON.stringify([{ scene: "auth migration", memories: [{ content: "auth stays on mobile", type: "fact", priority: 80 }] }]));
+  llmService.complete.mockResolvedValue(
+    JSON.stringify([{ scene: "auth migration", memories: [{ content: "auth stays on mobile", type: "fact", priority: 80 }] }]),
+  );
   memoryStore.add.mockReturnValue(1);
 });
 
@@ -171,7 +172,9 @@ describe("MemoryDistillerImpl.distill", () => {
   });
 
   test("accepts json wrapped in code fences", async () => {
-    llmService.complete.mockResolvedValue("```json\n" + JSON.stringify([{ scene: "s", memories: [{ content: "x", type: "fact", priority: 50 }] }]) + "\n```");
+    llmService.complete.mockResolvedValue(
+      "```json\n" + JSON.stringify([{ scene: "s", memories: [{ content: "x", type: "fact", priority: 50 }] }]) + "\n```",
+    );
     await makeService().distill(makeInput());
     expect(memoryStore.add).toHaveBeenCalledTimes(1);
   });

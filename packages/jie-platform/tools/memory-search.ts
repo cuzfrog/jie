@@ -1,7 +1,10 @@
 import { Type } from "typebox";
+import { logger } from "@cuzfrog/jie-utils";
 import type { SettingsStore } from "../config";
 import type { Memory, MemoryManager } from "../memory";
 import type { Tool, ToolResult } from "./types";
+
+const log = logger.getSubLogger({ name: "jie.platform.memory" });
 
 const MEMORY_SEARCH_DESCRIPTION = `Search the team's long-term memory — distilled memories from past sessions (facts, decisions,
 methods, and standing instructions). Use it to recall established knowledge before re-establishing it, and to
@@ -30,7 +33,8 @@ export function createMemorySearchTool(deps: { memoryManager: MemoryManager; set
       let memories: ReadonlyArray<Memory>;
       try {
         memories = deps.memoryManager.search(query, executionContext.teamId, input.limit ?? 5);
-      } catch {
+      } catch (error) {
+        log.warn(`memory search failed: ${error instanceof Error ? error.message : String(error)}`);
         return { content: "no matching memories" };
       }
       if (memories.length === 0) return { content: "no matching memories" };

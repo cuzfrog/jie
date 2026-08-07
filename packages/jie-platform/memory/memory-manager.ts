@@ -1,17 +1,6 @@
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { Api, Model } from "@earendil-works/pi-ai";
-import type { Memory } from "./memory-store";
+import type { Memory, MemoryStore } from "./memory-store";
 import type { MemoryBootstrap } from "./memory-bootstrap";
-import type { MemoryDistiller } from "./memory-distiller";
-import type { MemoryStore } from "./memory-store";
-
-export interface DistillationInput {
-  readonly messages: ReadonlyArray<AgentMessage>;
-  readonly teamId: string;
-  readonly sessionId: string;
-  readonly model: Model<Api>;
-  readonly signal?: AbortSignal;
-}
+import type { MemoryDistiller, DistillationInput } from "./memory-distiller";
 
 export interface MemoryManager {
   search(query: string, teamId: string, limit: number): ReadonlyArray<Memory>;
@@ -20,11 +9,15 @@ export interface MemoryManager {
 }
 
 export class MemoryManagerImpl implements MemoryManager {
-  constructor(
-    private readonly memoryStore: MemoryStore,
-    private readonly memoryDistiller: MemoryDistiller,
-    private readonly memoryBootstrap: MemoryBootstrap,
-  ) {}
+  private readonly memoryStore: MemoryStore;
+  private readonly memoryDistiller: MemoryDistiller;
+  private readonly memoryBootstrap: MemoryBootstrap;
+
+  constructor(memoryStore: MemoryStore, memoryDistiller: MemoryDistiller, memoryBootstrap: MemoryBootstrap) {
+    this.memoryStore = memoryStore;
+    this.memoryDistiller = memoryDistiller;
+    this.memoryBootstrap = memoryBootstrap;
+  }
 
   search(query: string, teamId: string, limit: number): ReadonlyArray<Memory> {
     return this.memoryStore.search(query, teamId, limit);
