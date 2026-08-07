@@ -1,5 +1,6 @@
 import { JiePlatformError, type JiePlatform, type SkillInfo } from "@cuzfrog/jie-platform";
 import { CommandHandlerImpl, SLASH_COMMAND_NAMES, type CommandHandler } from "./command-handler";
+import { CommandResolverImpl } from "./command-resolver";
 import { Actions, type StateStore, type TuiState } from "./state";
 import { makeAgentUiState, makeTuiState } from "./test";
 
@@ -47,7 +48,7 @@ function makeHandler(platform: JiePlatform, state: TuiState = makeTuiState()): H
     dispatch: vi.fn(),
     subscribe: vi.fn(() => () => undefined),
   });
-  return { handler: new CommandHandlerImpl(stateStore, platform), dispatch: stateStore.dispatch };
+  return { handler: new CommandHandlerImpl(stateStore, platform, new CommandResolverImpl(platform)), dispatch: stateStore.dispatch };
 }
 
 describe("CommandHandlerImpl", () => {
