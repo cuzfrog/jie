@@ -2,7 +2,7 @@ import { asValue, createContainer, InjectionMode, type AwilixContainer } from "a
 import type { PlatformCradle } from "../container";
 import type { SettingsStore } from "../config";
 import type { EventManager } from "../event";
-import type { MemoryStore } from "../memory";
+import type { MemoryManager } from "../memory";
 import type { ArtifactStore, KanbanStore } from "../storage";
 import { registerToolsModule } from "./module";
 
@@ -17,7 +17,7 @@ const artifactStore = vi.mocked<ArtifactStore>({
   list: vi.fn(),
 });
 
-const memoryStore = vi.mocked<MemoryStore>({ add: vi.fn(), search: vi.fn(), top: vi.fn() });
+const memoryManager = vi.mocked<MemoryManager>({ search: vi.fn(), bootstrap: vi.fn(() => ""), distill: vi.fn(async () => {}) });
 
 const settingsStore = vi.mocked<SettingsStore>({
   load: vi.fn(),
@@ -45,7 +45,7 @@ function bootedContainer(): AwilixContainer<PlatformCradle> {
     cwd: asValue("/tmp"),
     eventManager: asValue(eventManager),
     artifactStore: asValue(artifactStore),
-    memoryStore: asValue(memoryStore),
+    memoryManager: asValue(memoryManager),
     settingsStore: asValue(settingsStore),
     kanbanStore: asValue(kanbanStore),
   });

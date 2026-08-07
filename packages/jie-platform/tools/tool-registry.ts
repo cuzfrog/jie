@@ -14,7 +14,7 @@ import { createWriteArtifactTool } from "./write-artifact";
 import { createWriteFileTool } from "./write-file";
 import type { SettingsStore } from "../config";
 import type { EventManager } from "../event";
-import type { MemoryStore } from "../memory";
+import type { MemoryManager } from "../memory";
 import type { ArtifactStore, KanbanStore } from "../storage";
 
 export interface ToolRegistry {
@@ -31,11 +31,11 @@ export class InMemoryToolRegistry implements ToolRegistry {
     cwd: string,
     eventManager: EventManager,
     artifactStore: ArtifactStore,
-    memoryStore: MemoryStore,
+    memoryManager: MemoryManager,
     settingsStore: SettingsStore,
     kanbanStore: KanbanStore,
   ) {
-    for (const builtin of builtins(cwd, eventManager, artifactStore, memoryStore, settingsStore, kanbanStore)) {
+    for (const builtin of builtins(cwd, eventManager, artifactStore, memoryManager, settingsStore, kanbanStore)) {
       this.register(builtin.name, builtin.tool);
     }
   }
@@ -71,7 +71,7 @@ function builtins(
   workspaceRoot: string,
   eventManager: EventManager,
   artifactStore: ArtifactStore,
-  memoryStore: MemoryStore,
+  memoryManager: MemoryManager,
   settingsStore: SettingsStore,
   kanbanStore: KanbanStore,
 ): BuiltinTool[] {
@@ -85,7 +85,7 @@ function builtins(
     { name: "read_artifact", tool: createReadArtifactTool({ artifactStore }) as Tool },
     { name: "write_artifact", tool: createWriteArtifactTool({ artifactStore }) as Tool },
     { name: "kanban_write", tool: createKanbanWriteTool({ kanbanStore }) as Tool },
-    { name: "memory_search", tool: createMemorySearchTool({ memoryStore, settingsStore }) as Tool },
+    { name: "memory_search", tool: createMemorySearchTool({ memoryManager, settingsStore }) as Tool },
     { name: "notify", tool: createNotifyTool({ eventManager, taskLifecycleGuard }) as Tool },
     { name: "web_fetch", tool: createWebFetchTool() as Tool },
     { name: "web_search", tool: createWebSearchTool({ provider: createWebSearchProvider() }) as Tool },

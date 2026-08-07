@@ -1,7 +1,7 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ModelRegistry, SettingsStore } from "../config";
 import type { LlmService } from "../llm";
-import { MemoryExtractorImpl, type ExtractionInput } from "./memory-extractor";
+import { MemoryDistillerImpl, type DistillationInput } from "./memory-distiller";
 import type { MemoryStore } from "./memory-store";
 
 const llmService = vi.mocked<LlmService>({ complete: vi.fn() });
@@ -29,7 +29,7 @@ function makeModel(id: string): Model<Api> {
   return {
     id,
     name: id,
-    api: "openai-completions" as Api,
+    api: "openai-completions",
     provider: "e2e",
     baseUrl: "",
     reasoning: false,
@@ -40,23 +40,25 @@ function makeModel(id: string): Model<Api> {
   };
 }
 
-function makeInput(overrides: Partial<ExtractionInput> = {}): ExtractionInput {
+function makeInput(overrides: Partial<DistillationInput> = {}): DistillationInput {
   return { messages: [], teamId: "team-a", sessionId: "s1", model: agentModel, ...overrides };
 }
 
-function makeService(): MemoryExtractorImpl {
-  return new MemoryExtractorImpl(llmService, memoryStore, modelRegistry, settingsStore);
+function makeService(): MemoryDistillerImpl {
+  return new MemoryDistillerImpl(llmService, memoryStore, modelRegistry, settingsStore);
 }
 
 beforeEach(() => {
   settingsStore.load.mockReturnValue({});
-  llmService.complete.mockResolvedValue(JSON.stringify([{ scene: "auth migration", memories: [{ content: "auth stays on mobile", type: "fact", priority: 80 }] }]));
+  llmService.complete.mockResolvedValue(
+    JSON.stringify([{ scene: "auth migration", memories: [{ content: "auth stays on mobile", type: "fact", priority: 80 }] }]),
+  );
   memoryStore.add.mockReturnValue(1);
 });
 
-describe("MemoryExtractorImpl.extract", () => {
-  test("stores parsed atoms with the team, scene, and session", async () => {
-    await makeService().extract(makeInput());
+describe("MemoryDistillerImpl.distill", () => {
+  test("stores parsed memories with the team, scene, and session", async () => {
+    await makeService().distill(makeInput());
     expect(llmService.complete).toHaveBeenCalledTimes(1);
     expect(memoryStore.add).toHaveBeenCalledWith(
       [{ content: "auth stays on mobile", type: "fact", priority: 80, scene: "auth migration" }],
@@ -66,7 +68,7 @@ describe("MemoryExtractorImpl.extract", () => {
   });
 
   test("sends the agent model and conversation prompt by default", async () => {
-    await makeService().extract(makeInput());
+    await makeService().distill(makeInput());
     const input = llmService.complete.mock.calls[0]![0];
     expect(input.model).toBe(agentModel);
     expect(input.prompt).toContain("<conversation>");
@@ -76,7 +78,7 @@ describe("MemoryExtractorImpl.extract", () => {
     const memoryModel = makeModel("mem");
     settingsStore.load.mockReturnValue({ memory: { model: "e2e/mem" } });
     modelRegistry.resolve.mockReturnValue(memoryModel);
-    await makeService().extract(makeInput());
+    await makeService().distill(makeInput());
     expect(modelRegistry.resolve).toHaveBeenCalledWith("e2e", "mem");
     expect(llmService.complete.mock.calls[0]![0].model).toBe(memoryModel);
   });
@@ -84,25 +86,25 @@ describe("MemoryExtractorImpl.extract", () => {
   test("falls back to the agent model on an unresolvable memory model", async () => {
     settingsStore.load.mockReturnValue({ memory: { model: "e2e/mem" } });
     modelRegistry.resolve.mockReturnValue(undefined);
-    await makeService().extract(makeInput());
+    await makeService().distill(makeInput());
     expect(llmService.complete.mock.calls[0]![0].model).toBe(agentModel);
   });
 
   test("falls back to the agent model on an invalid memory.model format", async () => {
     settingsStore.load.mockReturnValue({ memory: { model: "no-provider" } });
-    await makeService().extract(makeInput());
+    await makeService().distill(makeInput());
     expect(llmService.complete.mock.calls[0]![0].model).toBe(agentModel);
   });
 
   test("uses the zh prompt template when language is zh", async () => {
     settingsStore.load.mockReturnValue({ language: "zh" });
-    await makeService().extract(makeInput());
-    expect(llmService.complete.mock.calls[0]![0].systemPrompt).toContain("记忆提取专家");
+    await makeService().distill(makeInput());
+    expect(llmService.complete.mock.calls[0]![0].systemPrompt).toContain("记忆蒸馏专家");
   });
 
-  test("skips extraction when memory is disabled", async () => {
+  test("skips distillation when memory is disabled", async () => {
     settingsStore.load.mockReturnValue({ memory: { enabled: false } });
-    await makeService().extract(makeInput());
+    await makeService().distill(makeInput());
     expect(llmService.complete).not.toHaveBeenCalled();
     expect(memoryStore.add).not.toHaveBeenCalled();
   });
@@ -120,12 +122,21 @@ describe("MemoryExtractorImpl.extract", () => {
         },
       ]),
     );
-    await makeService().extract(makeInput());
-    const atoms = memoryStore.add.mock.calls[0]![0];
-    expect(atoms).toEqual([
+    await makeService().distill(makeInput());
+    const memories = memoryStore.add.mock.calls[0]![0];
+    expect(memories).toEqual([
       { content: "b", type: "instruction", priority: 1, scene: "s" },
       { content: "c", type: "fact", priority: 150, scene: "s" },
     ]);
+  });
+
+  test("defaults a blank priority string to 50", async () => {
+    llmService.complete.mockResolvedValue(
+      JSON.stringify([{ scene: "s", memories: [{ content: "x", type: "fact", priority: "" }] }]),
+    );
+    await makeService().distill(makeInput());
+    const memories = memoryStore.add.mock.calls[0]![0];
+    expect(memories).toEqual([{ content: "x", type: "fact", priority: 50, scene: "s" }]);
   });
 
   test("accepts numeric-string priorities and defaults non-numbers", async () => {
@@ -140,9 +151,9 @@ describe("MemoryExtractorImpl.extract", () => {
         },
       ]),
     );
-    await makeService().extract(makeInput());
-    const atoms = memoryStore.add.mock.calls[0]![0];
-    expect(atoms).toEqual([
+    await makeService().distill(makeInput());
+    const memories = memoryStore.add.mock.calls[0]![0];
+    expect(memories).toEqual([
       { content: "a", type: "fact", priority: 80, scene: "s" },
       { content: "b", type: "fact", priority: 50, scene: "s" },
     ]);
@@ -150,25 +161,27 @@ describe("MemoryExtractorImpl.extract", () => {
 
   test("skips scenes without a scene name and stores nothing when the batch is empty", async () => {
     llmService.complete.mockResolvedValue(JSON.stringify([{ scene: "", memories: [{ content: "x", type: "fact", priority: 50 }] }]));
-    await makeService().extract(makeInput());
+    await makeService().distill(makeInput());
     expect(memoryStore.add).not.toHaveBeenCalled();
   });
 
   test("drops the whole batch on unparseable output", async () => {
     llmService.complete.mockResolvedValue("```json\nnot json\n```");
-    await makeService().extract(makeInput());
+    await makeService().distill(makeInput());
     expect(memoryStore.add).not.toHaveBeenCalled();
   });
 
   test("accepts json wrapped in code fences", async () => {
-    llmService.complete.mockResolvedValue("```json\n" + JSON.stringify([{ scene: "s", memories: [{ content: "x", type: "fact", priority: 50 }] }]) + "\n```");
-    await makeService().extract(makeInput());
+    llmService.complete.mockResolvedValue(
+      "```json\n" + JSON.stringify([{ scene: "s", memories: [{ content: "x", type: "fact", priority: 50 }] }]) + "\n```",
+    );
+    await makeService().distill(makeInput());
     expect(memoryStore.add).toHaveBeenCalledTimes(1);
   });
 
   test("warns and records nothing when the LLM call rejects", async () => {
     llmService.complete.mockRejectedValue(new Error("boom"));
-    await expect(makeService().extract(makeInput())).resolves.toBeUndefined();
+    await expect(makeService().distill(makeInput())).resolves.toBeUndefined();
     expect(memoryStore.add).not.toHaveBeenCalled();
   });
 });

@@ -3,7 +3,7 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import { CompactionRunnerImpl, type CompactionRunner } from "./compaction-runner";
 import type { CompactionResult, Compactor } from "./compaction";
 import type { AgentSender, EventEnvelope, EventManager, EventType } from "../event";
-import type { MemoryExtractor } from "../memory";
+import type { MemoryManager } from "../memory";
 
 async function flush(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -19,7 +19,7 @@ const compactor = vi.mocked<Compactor>({
   fitToWindow: vi.fn((messages) => messages),
 });
 
-const memoryExtractor = vi.mocked<MemoryExtractor>({ extract: vi.fn(async () => {}) });
+const memoryManager = vi.mocked<MemoryManager>({ search: vi.fn(), bootstrap: vi.fn(() => ""), distill: vi.fn(async () => {}) });
 
 const sender: AgentSender = { kind: "agent", teamId: "t1", agentKey: "general-1" };
 
@@ -41,7 +41,7 @@ function makeRunner(): CompactionRunner {
     sessionId: "s1",
     teamId: "t1",
     conversation,
-    memoryExtractor,
+    memoryManager,
   });
 }
 
@@ -53,7 +53,7 @@ function makeModel(provider: string, id: string): Model<Api> {
   return {
     id,
     name: id,
-    api: "anthropic-messages" as Api,
+    api: "anthropic-messages",
     provider,
     baseUrl: "",
     reasoning: false,
@@ -95,7 +95,12 @@ describe("CompactionRunner — applying the result", () => {
   test("a successful run rewrites the conversation to [summary, ...retainedTail]", async () => {
     const [, second, third] = messages;
     const summary = createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z");
-    compactor.compact.mockResolvedValueOnce({ summaryMessage: summary, firstKeptIndex: 1, tokensBefore: 500, summarizedPrefix: [messages[0]!] });
+    compactor.compact.mockResolvedValueOnce({
+      summaryMessage: summary,
+      firstKeptIndex: 1,
+      tokensBefore: 500,
+      summarizedPrefix: [messages[0]!],
+    });
     await makeRunner().ensure(model);
     expect(messages).toEqual([summary, second, third]);
   });
@@ -131,7 +136,7 @@ describe("CompactionRunner — applying the result", () => {
     expect(compacted[0]!.payload).toEqual({ summary: "the summary", tokens_before: 500, summarized_prompts: 3 });
   });
 
-  test("a successful run hands the summarized prefix to the extractor", async () => {
+  test("a successful run hands the summarized prefix to the distiller", async () => {
     messages = [makeUserMessage("m1"), makeUserMessage("m2"), makeUserMessage("m3")];
     compactor.compact.mockResolvedValueOnce({
       summaryMessage: createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z"),
@@ -140,17 +145,17 @@ describe("CompactionRunner — applying the result", () => {
       summarizedPrefix: messages.slice(0, 1),
     });
     await makeRunner().ensure(model);
-    expect(memoryExtractor.extract).toHaveBeenCalledTimes(1);
-    const input = memoryExtractor.extract.mock.calls[0]![0]!;
+    expect(memoryManager.distill).toHaveBeenCalledTimes(1);
+    const input = memoryManager.distill.mock.calls[0]![0]!;
     expect(input.messages).toEqual([makeUserMessage("m1")]);
     expect(input.teamId).toBe("t1");
     expect(input.sessionId).toBe("s1");
     expect(input.model).toBe(model);
   });
 
-  test("a null result never reaches the extractor", async () => {
+  test("a null result never reaches the distiller", async () => {
     await makeRunner().ensure(model);
-    expect(memoryExtractor.extract).not.toHaveBeenCalled();
+    expect(memoryManager.distill).not.toHaveBeenCalled();
   });
 
   test("a null result still publishes compaction start and end", async () => {
@@ -159,9 +164,9 @@ describe("CompactionRunner — applying the result", () => {
     expect(envelopes("agent.compaction.end")).toHaveLength(1);
   });
 
-  test("abort() aborts the extraction signal", async () => {
+  test("abort() aborts the distillation signal", async () => {
     let captured: AbortSignal | undefined;
-    memoryExtractor.extract.mockImplementationOnce(async (input) => {
+    memoryManager.distill.mockImplementationOnce(async (input) => {
       captured = input.signal;
     });
     compactor.compact.mockResolvedValueOnce({
@@ -172,7 +177,7 @@ describe("CompactionRunner — applying the result", () => {
     });
     const runner = makeRunner();
     await runner.ensure(model);
-    if (captured === undefined) throw new Error("extraction signal not captured");
+    if (captured === undefined) throw new Error("distillation signal not captured");
     expect(captured.aborted).toBe(false);
     runner.abort();
     expect(captured.aborted).toBe(true);
@@ -242,12 +247,12 @@ describe("CompactionRunner — dedupe and lifecycle", () => {
     await pending;
     expect(messages).toEqual(baseline);
     expect(envelopes("agent.compacted")).toHaveLength(0);
-    expect(memoryExtractor.extract).not.toHaveBeenCalled();
+    expect(memoryManager.distill).not.toHaveBeenCalled();
   });
 
-  test("extraction is single-flighted per body", async () => {
+  test("distillation is single-flighted per body", async () => {
     let release: (() => void) | undefined;
-    memoryExtractor.extract.mockImplementation(async () => {
+    memoryManager.distill.mockImplementation(async () => {
       await new Promise<void>((resolve) => {
         release = resolve;
       });
@@ -261,7 +266,7 @@ describe("CompactionRunner — dedupe and lifecycle", () => {
     const runner = makeRunner();
     await runner.ensure(model);
     await runner.ensure(model);
-    expect(memoryExtractor.extract).toHaveBeenCalledTimes(1);
+    expect(memoryManager.distill).toHaveBeenCalledTimes(1);
     release!();
     await flush();
   });

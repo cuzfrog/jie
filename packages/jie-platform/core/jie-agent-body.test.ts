@@ -16,8 +16,7 @@ import { JieAgentBody } from "./jie-agent-body";
 import type { AgentBodyParams } from "./agent-body";
 import type { CompactionInput, CompactionResult, Compactor } from "./compaction";
 import { Events, type EventEnvelope, type EventManager, type EventType } from "../event";
-import type { SettingsStore } from "../config";
-import type { MemoryExtractor, MemoryStore } from "../memory";
+import type { MemoryManager } from "../memory";
 import type { ArtifactStore, TranscriptStore } from "../storage";
 import type { ExecutionContext, Tool, ToolRegistry, ToolResult } from "../tools";
 import type { Skill, SkillManager } from "../skills";
@@ -261,8 +260,7 @@ interface Harness {
   toolRegistry: ReturnType<typeof vi.mocked<ToolRegistry>>;
   skillManager: ReturnType<typeof vi.mocked<SkillManager>>;
   hookRunner: ReturnType<typeof vi.mocked<HookRunner>>;
-  memoryStore: ReturnType<typeof vi.mocked<MemoryStore>>;
-  settingsStore: ReturnType<typeof vi.mocked<SettingsStore>>;
+  memoryManager: ReturnType<typeof vi.mocked<MemoryManager>>;
   persisted: AgentMessage[];
   restore: ReturnType<typeof vi.fn>;
   cap: FakeAgentCapture;
@@ -320,16 +318,7 @@ function makeHarness(): Harness {
     read: vi.fn(),
     list: vi.fn(),
   });
-  const memoryStore = vi.mocked<MemoryStore>({ add: vi.fn(), search: vi.fn(), top: vi.fn(() => []) });
-  const settingsStore = vi.mocked<SettingsStore>({
-    load: vi.fn(() => ({})),
-    setDefaultProvider: vi.fn(),
-    setDefaultEffort: vi.fn(),
-    setDefaultTeam: vi.fn(),
-    setModelFilters: vi.fn(),
-    setNotificationSoundEnabled: vi.fn(),
-  });
-  const memoryExtractor = vi.mocked<MemoryExtractor>({ extract: vi.fn(async () => {}) });
+  const memoryManager = vi.mocked<MemoryManager>({ search: vi.fn(), bootstrap: vi.fn(() => ""), distill: vi.fn(async () => {}) });
   const subscribeSubject = <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void): (() => void) =>
     events.subscribe(topic, (env) => cb(env));
   const makeBody: Harness["makeBody"] = (overrides = {}) => {
@@ -356,9 +345,7 @@ function makeHarness(): Harness {
       resolveModel,
       createAgent: overrides.factory ?? cap.factory,
       compactor: overrides.compactor ?? noopCompactor,
-      memoryStore,
-      memoryExtractor,
-      settingsStore,
+      memoryManager,
       logDir: overrides.logDir ?? null,
     });
   };
@@ -377,8 +364,7 @@ function makeHarness(): Harness {
     toolRegistry,
     skillManager,
     hookRunner,
-    memoryStore,
-    settingsStore,
+    memoryManager,
     persisted,
     restore,
     cap,
@@ -1006,7 +992,7 @@ describe("JieAgentBody — restore() snapshot phase", () => {
   });
 
   test("a failing memory store load degrades to context + role prose without failing restore", async () => {
-    h.memoryStore.top.mockImplementation(() => {
+    h.memoryManager.bootstrap.mockImplementation(() => {
       throw new Error("db locked");
     });
     const body = h.makeBody({ systemContextBlock: "CONTEXT" });
@@ -1016,19 +1002,9 @@ describe("JieAgentBody — restore() snapshot phase", () => {
   });
 
   test("loads the team memory block into the system prompt between context and role prose", async () => {
-    h.memoryStore.top.mockReturnValue([
-      {
-        id: "a1",
-        teamId: "t1",
-        content: "keep the build green",
-        type: "instruction",
-        priority: 100,
-        scene: "",
-        sourceSessionId: "s9",
-        createdAt: "2026-01-01T00:00:00.000Z",
-        updatedAt: "2026-01-01T00:00:00.000Z",
-      },
-    ]);
+    h.memoryManager.bootstrap.mockReturnValue(
+      "<memory team=\"t1\">\n- [instruction] keep the build green\n</memory>",
+    );
     const body = h.makeBody({ systemContextBlock: "CONTEXT" });
     await body.restore();
     expect(h.state.systemPrompt).toBe(
@@ -1038,19 +1014,9 @@ describe("JieAgentBody — restore() snapshot phase", () => {
   });
 
   test("restore re-composes the prompt with the memory block even for a fresh session", async () => {
-    h.memoryStore.top.mockReturnValue([
-      {
-        id: "a1",
-        teamId: "t1",
-        content: "sqlite over postgres",
-        type: "decision",
-        priority: 90,
-        scene: "store choice",
-        sourceSessionId: "s9",
-        createdAt: "2026-01-01T00:00:00.000Z",
-        updatedAt: "2026-01-01T00:00:00.000Z",
-      },
-    ]);
+    h.memoryManager.bootstrap.mockReturnValue(
+      "<memory team=\"t1\">\n- [decision] sqlite over postgres (scene: store choice)\n</memory>",
+    );
     const body = h.makeBody();
     await body.restore();
     expect(h.state.systemPrompt).toContain("<memory team=\"t1\">");

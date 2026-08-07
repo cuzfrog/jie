@@ -1,14 +1,12 @@
 ---
 no-new-exports:
+  - memory-manager.ts
+  - memory-manager.test.ts
   - index.ts
-  - memory-bootstrap.test.ts
-  - memory-bootstrap.ts
-  - memory-extractor.test.ts
-  - memory-extractor.ts
-  - memory-store.test.ts
-  - memory-store.ts
   - module.ts
 ---
 
 ## Notes
-- `SqliteMemoryStore` and `MemoryExtractorImpl` are the implementations behind the `MemoryStore` and `MemoryExtractor` interfaces; they are registered on the cradle as `memoryStore` and `memoryExtractor` and are not re-exported from `index.ts`. The extraction prompts are adapted from TencentDB-Agent-Memory (MIT).
+- `MemoryManager` is the only public abstraction of the module. `Memory`, `MemoryType`, and `RawMemory` are exported as cross-boundary DTOs; `DistillationInput` is the input shape for distillation and is re-exported from `index.ts`.
+- `SqliteMemoryStore`, `MemoryDistillerImpl`, and `MemoryBootstrapImpl` are implementation details inside the module; they are not re-exported from `index.ts`.
+- `MemoryManagerImpl` delegates to `MemoryStore` (search), `MemoryDistiller` (distill), and `MemoryBootstrap` (render) via constructor injection. The module registration uses plain `asClass` for all four, relying on `CLASSIC` injection mode to resolve dependencies by constructor parameter name.

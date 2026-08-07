@@ -33,4 +33,4 @@ The `Model` is data the caller supplies — the service owns no model selection 
 | Consumer | Model choice | Notes |
 |---|---|---|
 | `Compactor` (`08-transcript.md`) | the body's model | The compactor's private `summarizeConversation` and its `apiKey` threading are removed; `CompactionInput` loses the `apiKey` field. Compaction's system/user prompts stay (`compaction.ts`). |
-| `MemoryExtractor` (`11-memory.md`) | `settings.memory.model` when set, else the agent's model | Unresolvable `memory.model` → WARN + fall back to the agent's model. |
+| `MemoryDistiller` (`11-memory.md`) | `settings.memory.model` when set, else the agent's model | Unresolvable `memory.model` → WARN + fall back to the agent's model. |

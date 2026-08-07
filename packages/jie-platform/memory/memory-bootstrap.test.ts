@@ -1,6 +1,6 @@
 import type { SettingsStore } from "../config";
-import { formatMemoryBootstrap, loadMemoryBootstrap } from "./memory-bootstrap";
-import type { MemoryAtom, MemoryStore } from "./memory-store";
+import { MemoryBootstrapImpl, type MemoryBootstrap } from "./memory-bootstrap";
+import type { Memory, MemoryStore } from "./memory-store";
 
 const memoryStore = vi.mocked<MemoryStore>({ add: vi.fn(), search: vi.fn(), top: vi.fn() });
 const settingsStore = vi.mocked<SettingsStore>({
@@ -12,7 +12,7 @@ const settingsStore = vi.mocked<SettingsStore>({
   setNotificationSoundEnabled: vi.fn(),
 });
 
-function atom(overrides: Partial<MemoryAtom> = {}): MemoryAtom {
+function memory(overrides: Partial<Memory> = {}): Memory {
   return {
     id: "a1",
     teamId: "t1",
@@ -27,36 +27,40 @@ function atom(overrides: Partial<MemoryAtom> = {}): MemoryAtom {
   };
 }
 
+function makeBootstrap(): MemoryBootstrap {
+  return new MemoryBootstrapImpl(memoryStore, settingsStore);
+}
+
 beforeEach(() => {
   settingsStore.load.mockReturnValue({});
-  memoryStore.top.mockReturnValue([atom()]);
+  memoryStore.top.mockReturnValue([]);
 });
 
-describe("loadMemoryBootstrap", () => {
-  test("renders the top atoms into the memory block", () => {
+describe("MemoryBootstrapImpl", () => {
+  test("renders the top memories into the memory block", () => {
     memoryStore.top.mockReturnValue([
-      atom({ content: "stand on two feet" }),
-      atom({ content: "sqlite over postgres", type: "decision", priority: 90, scene: "store choice" }),
+      memory({ content: "stand on two feet" }),
+      memory({ content: "sqlite over postgres", type: "decision", priority: 90, scene: "store choice" }),
     ]);
-    const block = loadMemoryBootstrap(memoryStore, settingsStore, "t1");
+    const block = makeBootstrap().render("t1");
     expect(block).toBe(
       "<memory team=\"t1\">\n" +
-      "- [instruction] stand on two feet\n" +
-      "- [decision] sqlite over postgres (scene: store choice)\n" +
-      "</memory>",
+        "- [instruction] stand on two feet\n" +
+        "- [decision] sqlite over postgres (scene: store choice)\n" +
+        "</memory>",
     );
     expect(memoryStore.top).toHaveBeenCalledWith("t1", 12);
   });
 
   test("returns an empty block when memory is disabled", () => {
     settingsStore.load.mockReturnValue({ memory: { enabled: false } });
-    expect(loadMemoryBootstrap(memoryStore, settingsStore, "t1")).toBe("");
+    expect(makeBootstrap().render("t1")).toBe("");
     expect(memoryStore.top).not.toHaveBeenCalled();
   });
 
   test("applies the bootstrapMaxEntries and bootstrapMaxChars overrides", () => {
     settingsStore.load.mockReturnValue({ memory: { bootstrapMaxEntries: 3, bootstrapMaxChars: 100 } });
-    loadMemoryBootstrap(memoryStore, settingsStore, "t1");
+    makeBootstrap().render("t1");
     expect(memoryStore.top).toHaveBeenCalledWith("t1", 3);
   });
 
@@ -64,27 +68,29 @@ describe("loadMemoryBootstrap", () => {
     memoryStore.top.mockImplementation(() => {
       throw new Error("db locked");
     });
-    expect(loadMemoryBootstrap(memoryStore, settingsStore, "t1")).toBe("");
+    expect(makeBootstrap().render("t1")).toBe("");
   });
-});
 
-describe("formatMemoryBootstrap", () => {
   test("drops the lowest-value entries until the block fits maxChars", () => {
-    const atoms = [
-      atom({ content: "instruction atom that is quite long", type: "instruction" }),
-      atom({ content: "expansion", type: "fact", priority: 10 }),
-    ];
-    const block = formatMemoryBootstrap(atoms, "t1", 90);
-    expect(block).toContain("instruction atom");
+    settingsStore.load.mockReturnValue({ memory: { bootstrapMaxChars: 90 } });
+    memoryStore.top.mockReturnValue([
+      memory({ content: "instruction memory that is quite long", type: "instruction" }),
+      memory({ content: "expansion", type: "fact", priority: 10 }),
+    ]);
+    const block = makeBootstrap().render("t1");
+    expect(block).toContain("instruction memory");
     expect(block).not.toContain("expansion");
   });
 
-  test("omits the scene suffix for instruction atoms", () => {
-    const block = formatMemoryBootstrap([atom({ content: "pin it", type: "instruction", scene: "ci" })], "t1", 2000);
+  test("omits the scene suffix for instruction memories", () => {
+    memoryStore.top.mockReturnValue([memory({ content: "pin it", type: "instruction", scene: "ci" })]);
+    const block = makeBootstrap().render("t1");
     expect(block).not.toContain("scene:");
   });
 
-  test("returns an empty string when no atom fits", () => {
-    expect(formatMemoryBootstrap([atom({ content: "x".repeat(500) })], "t1", 10)).toBe("");
+  test("returns an empty string when no memory fits", () => {
+    memoryStore.top.mockReturnValue([memory({ content: "x".repeat(500) })]);
+    settingsStore.load.mockReturnValue({ memory: { bootstrapMaxChars: 10 } });
+    expect(makeBootstrap().render("t1")).toBe("");
   });
 });
