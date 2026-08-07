@@ -9,7 +9,7 @@ import { registerEventModule, type EventBus, type EventManager } from "./event";
 import { registerHooksModule, type HookRunner } from "./hooks";
 import type { JiePlatform, JiePlatformOptions } from "./jie-platform";
 import { registerLlmModule, type LlmService } from "./llm";
-import { registerMcpModule, type McpConnector, type McpManager, type SubprocessFactory } from "./mcp";
+import { registerMcpModule, type McpConnector, type McpManager } from "./mcp";
 import { registerMemoryModule, type MemoryManager } from "./memory";
 import { registerPlatformModule } from "./module";
 import { registerServicesModule, type GitService } from "./services";
@@ -46,7 +46,6 @@ export interface PlatformCradle {
   readonly agentBodyFactory: (params: AgentBodyParams) => AgentBody;
   readonly teamManager: TeamManager;
   readonly commandExecutor: CommandExecutor;
-  readonly subprocessFactory: SubprocessFactory;
   readonly mcpConnector: McpConnector;
   readonly mcpManager: McpManager;
   readonly platform: JiePlatform;

@@ -20,7 +20,6 @@ const SERVICE_KEYS = [
   "agentBodyFactory",
   "teamManager",
   "commandExecutor",
-  "subprocessFactory",
   "mcpConnector",
   "mcpManager",
   "platform",
