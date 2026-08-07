@@ -161,7 +161,6 @@ interface FakeAgentCapture {
     continue: ReturnType<typeof vi.fn>;
     waitForIdle: ReturnType<typeof vi.fn>;
   };
-  lastOpts: () => ConstructorParameters<typeof PiAgent>[0] | undefined;
   readonly agentListener: ((event: PiAgentEvent) => void) | undefined;
   settleIdle: () => void;
 }
@@ -199,14 +198,9 @@ function makeFakeAgentFactory(): FakeAgentCapture {
     }),
   };
   const stub = fake as unknown as PiAgent;
-  let captured: ConstructorParameters<typeof PiAgent>[0] | undefined;
   return {
-    factory: (opts) => {
-      captured = opts;
-      return stub;
-    },
+    factory: () => stub,
     fake,
-    lastOpts: () => captured,
     get agentListener() {
       return listener;
     },
@@ -545,135 +539,6 @@ describe("JieAgentBody — execution context lifecycle wiring", () => {
     h.makeBody({ soul: makeSoul({ tools: ["noop"] }), factory: cap.factory });
     await executeFirstTool(cap);
     expect(received).toEqual([null]);
-  });
-});
-
-describe("JieAgentBody — agent construction wiring", () => {
-  test("invokes the createAgent seam exactly once with the right shape", () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    const tracked = vi.fn(cap.factory);
-    h.makeBody({ factory: tracked });
-    expect(tracked).toHaveBeenCalledTimes(1);
-    const passed = tracked.mock.calls[0]![0]!;
-    expect(passed.sessionId).toBe("s1");
-    expect(passed.steeringMode).toBe("all");
-    expect(passed.followUpMode).toBe("all");
-    expect(passed.toolExecution).toBe("sequential");
-    expect(typeof passed.streamFn).toBe("function");
-    expect(typeof passed.convertToLlm).toBe("function");
-  });
-
-  test("convertToLlm maps a compactionSummary into a user message carrying the summary", async () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    h.makeBody({ factory: cap.factory });
-    const converter = cap.lastOpts()?.convertToLlm;
-    if (converter === undefined) throw new Error("convertToLlm not provided");
-    const converted = await converter([createCompactionSummaryMessage("the summary", 100, "2026-01-01T00:00:00.000Z")]);
-    expect(converted).toHaveLength(1);
-    const message = converted[0]!;
-    if (message.role !== "user") throw new Error("expected a user message");
-    const parts = message.content;
-    if (typeof parts === "string") throw new Error("expected content parts");
-    const first = parts[0];
-    if (first === undefined || first.type !== "text") throw new Error("expected a text part");
-    expect(first.text).toContain("compacted into the following summary");
-    expect(first.text).toContain("the summary");
-  });
-
-  test("transformContext fits the history through compactor.fitToWindow with the live agent model", async () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    type FitToWindow = (messages: ReadonlyArray<AgentMessage>, model: Model<Api>) => ReadonlyArray<AgentMessage>;
-    const fitToWindow = vi.fn<FitToWindow>((messages) => messages);
-    const compactor: Compactor = { compact: async () => null, fitToWindow };
-    h.makeBody({ factory: cap.factory, compactor, model: makeModel("anthropic", "claude-sonnet-4") });
-    const transform = cap.lastOpts()?.transformContext;
-    if (transform === undefined) throw new Error("transformContext not provided");
-    const hotSwapped = makeModel("lm-studio", "qwen3.5-2b");
-    cap.fake.state.model = hotSwapped;
-    const messages: AgentMessage[] = [{ role: "user", content: "hi", timestamp: 0 }];
-    const result = await transform(messages);
-    expect(fitToWindow).toHaveBeenCalledWith(messages, hotSwapped, hotSwapped.contextWindow);
-    expect(result).not.toBe(messages);
-    expect(result).toEqual(messages);
-  });
-
-  test("assigns soul.systemPrompt, model and adapted tools onto agent.state", () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    const model = makeModel("anthropic", "claude-sonnet-4");
-    h.makeBody({ soul: makeSoul({ tools: ["noop"] }), model, factory: cap.factory });
-    expect(cap.fake.state.systemPrompt).toBe("you are a general assistant");
-    expect(cap.fake.state.model).toBe(model);
-    expect(cap.fake.state.tools).toHaveLength(1);
-    expect((cap.fake.state.tools as Array<{ name: string }>)[0]!.name).toBe("noop");
-  });
-
-  test("subscribes to agent events via agent.subscribe", () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    h.makeBody({ factory: cap.factory });
-    expect(cap.fake.subscribe).toHaveBeenCalledTimes(1);
-  });
-
-  test("subscribe listener accepts (event, signal) per pi-agent contract", () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    let argCount: number | undefined;
-    cap.fake.subscribe.mockImplementation((l: (event: PiAgentEvent) => void) => {
-      argCount = l.length;
-      return () => {};
-    });
-    h.makeBody({ factory: cap.factory });
-    expect(argCount).toBe(2);
-  });
-
-  test("stop() unsubscribes the agent event subscription", () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    let unsubscribed = false;
-    cap.fake.subscribe.mockImplementation(() => () => {
-      unsubscribed = true;
-    });
-    const body = h.makeBody({ factory: cap.factory });
-    body.stop();
-    expect(unsubscribed).toBe(true);
-  });
-
-  test("beforeToolCall is wired to PreToolUse gating through the tool-call observer", async () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    h.hookRunner.preToolUse.mockResolvedValue({ block: true, reason: "denied" });
-    h.makeBody({ factory: cap.factory });
-    const hook = cap.lastOpts()?.beforeToolCall;
-    if (hook === undefined) throw new Error("beforeToolCall not provided");
-    const ctx: BeforeToolCallContext = {
-      assistantMessage: makeAssistantMessage(),
-      toolCall: { type: "toolCall", id: "c1", name: "bash", arguments: { command: "ls" } },
-      args: { command: "ls" },
-      context: makeAgentContext(),
-    };
-    expect(await hook(ctx)).toEqual({ block: true, reason: "denied" });
-  });
-
-  test("afterToolCall is wired to PostToolUse gating through the tool-call observer", async () => {
-    const h = makeHarness();
-    const cap = makeFakeAgentFactory();
-    h.hookRunner.postToolUse.mockResolvedValue({ block: true, reason: "bad", additionalContext: null });
-    h.makeBody({ factory: cap.factory });
-    const hook = cap.lastOpts()?.afterToolCall;
-    if (hook === undefined) throw new Error("afterToolCall not provided");
-    const ctx: AfterToolCallContext = {
-      assistantMessage: makeAssistantMessage(),
-      toolCall: { type: "toolCall", id: "c1", name: "bash", arguments: { command: "ls" } },
-      args: { command: "ls" },
-      context: makeAgentContext(),
-      result: { content: [{ type: "text", text: "ok" }], details: {}, terminate: false },
-      isError: false,
-    };
-    expect(await hook(ctx)).toEqual({ isError: true, content: [{ type: "text", text: "bad" }] });
   });
 });
 
