@@ -34,7 +34,7 @@ export interface CompactionResult {
 
 export interface Compactor {
   compact(input: CompactionInput): Promise<CompactionResult | null>;
-  fitToWindow(messages: ReadonlyArray<AgentMessage>, model: Model<Api>): ReadonlyArray<AgentMessage>;
+  fitToWindow(messages: ReadonlyArray<AgentMessage>, model: Model<Api>, contextWindow?: number): ReadonlyArray<AgentMessage>;
 }
 
 type CompactionOverrides = NonNullable<Settings["compaction"]>;
@@ -67,7 +67,7 @@ export class CompactorImpl implements Compactor {
     if (storedCount !== input.messages.length) {
       throw new Error(`history out of sync with storage: ${storedCount} stored rows, ${input.messages.length} messages`);
     }
-    const prefixBudget = summaryPrefixBudget(input.model, settings.reserveTokens);
+    const prefixBudget = summaryPrefixBudget(input.contextWindow, input.model, settings.reserveTokens);
     const summarizedPrefix = fitMessages(input.messages.slice(0, preparation.firstKeptIndex), prefixBudget);
     const summaryText = await this.llmService.complete({
       model: input.model,
@@ -81,9 +81,9 @@ export class CompactorImpl implements Compactor {
     return { summaryMessage, firstKeptIndex: preparation.firstKeptIndex, tokensBefore, summarizedPrefix };
   }
 
-  fitToWindow(messages: ReadonlyArray<AgentMessage>, model: Model<Api>): ReadonlyArray<AgentMessage> {
+  fitToWindow(messages: ReadonlyArray<AgentMessage>, model: Model<Api>, contextWindow: number = model.contextWindow): ReadonlyArray<AgentMessage> {
     const settings = resolveSettings(this.getSettings?.());
-    const budget = settings.reserveTokens < model.contextWindow ? model.contextWindow - settings.reserveTokens : model.contextWindow;
+    const budget = settings.reserveTokens < contextWindow ? contextWindow - settings.reserveTokens : contextWindow;
     return fitMessages(messages, budget);
   }
 }
@@ -145,8 +145,8 @@ function buildSummaryPrompt(summarized: ReadonlyArray<AgentMessage>, previousSum
   return prompt;
 }
 
-function summaryPrefixBudget(model: Model<Api>, reserveTokens: number): number {
-  return Math.max(model.contextWindow - summaryMaxTokens(model, reserveTokens) - SUMMARY_PROMPT_SLACK, 0);
+function summaryPrefixBudget(contextWindow: number, model: Model<Api>, reserveTokens: number): number {
+  return Math.max(contextWindow - summaryMaxTokens(model, reserveTokens) - SUMMARY_PROMPT_SLACK, 0);
 }
 
 function summaryMaxTokens(model: Model<Api>, reserveTokens: number): number {

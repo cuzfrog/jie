@@ -113,6 +113,17 @@ describe("CompactorImpl.compact", () => {
     expect(transcriptStore.compact).not.toHaveBeenCalled();
   });
 
+  test("compacts earlier when a smaller contextWindow is provided", async () => {
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore);
+    const messages = [userMsg("please do the thing"), assistantMsg(BIG)];
+    transcriptStore.restore.mockResolvedValue([...messages]);
+    const model = makeModel(THRESHOLD_WINDOW, 8192);
+    const result = await compactor.compact({ ...makeInput(messages, model), contextWindow: 20_000 });
+    expect(result).not.toBeNull();
+    expect(result!.tokensBefore).toBeGreaterThan(20_000 - 16384);
+  });
+
   test("compacts when the estimate exceeds the threshold", async () => {
     const transcriptStore = makeTranscriptStore();
     const compactor = makeCompactor(transcriptStore);
@@ -360,6 +371,13 @@ describe("CompactorImpl.fitToWindow", () => {
     const compactor = makeCompactor(makeTranscriptStore());
     const messages = [userMsg("hello"), assistantMsg("hi")];
     expect(compactor.fitToWindow(messages, makeModel(THRESHOLD_WINDOW, 8192))).toBe(messages);
+  });
+
+  test("honors a custom contextWindow smaller than the model window", () => {
+    const compactor = makeCompactor(makeTranscriptStore());
+    const messages: AgentMessage[] = [userMsg(HUGE), assistantMsg("small tail")];
+    const result = compactor.fitToWindow(messages, makeModel(THRESHOLD_WINDOW, 8192), 20_000);
+    expect(totalTokens(result)).toBeLessThanOrEqual(20_000 - 16384);
   });
 
   test("truncates the largest message until the total fits the budget", () => {
