@@ -6,6 +6,7 @@ node_modules/
 
 .env
 tmp/
+.devin/
 
 .jie/*.db
 .jie/*.db-shm
