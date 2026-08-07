@@ -1,23 +1,6 @@
-import { Database } from "bun:sqlite";
 import type { Storage } from "./storage";
+import { SqliteStorage } from "./sqlite-storage";
 import { initializeSchema } from "./init-db";
-
-function makeStorage(): Storage {
-  const db = new Database(":memory:");
-  return {
-    exec(sql: string, params?: unknown[]): void {
-      if (params === undefined) db.run(sql);
-      else db.run(sql, params);
-    },
-    query(sql: string, params?: unknown[]): ReadonlyArray<ReadonlyArray<unknown>> {
-      if (params === undefined) return db.query(sql).values();
-      return db.query(sql).values(...params);
-    },
-    transaction<T>(fn: (storage: Storage) => T): T {
-      return db.transaction(() => fn(this))();
-    },
-  };
-}
 
 function tableNames(storage: Storage): string[] {
   const rows = storage.query(`SELECT name FROM sqlite_master WHERE type = 'table'`);
@@ -36,7 +19,7 @@ function pragmaUserVersion(storage: Storage): number {
 
 describe("initializeSchema", () => {
   test("creates all expected tables", () => {
-    const storage = makeStorage();
+    const storage = new SqliteStorage(":memory:");
     initializeSchema(storage);
     const names = tableNames(storage);
     expect(names).toContain("artifacts");
@@ -49,7 +32,7 @@ describe("initializeSchema", () => {
   });
 
   test("creates expected indexes", () => {
-    const storage = makeStorage();
+    const storage = new SqliteStorage(":memory:");
     initializeSchema(storage);
     const names = indexNames(storage);
     expect(names).toContain("idx_memory_turns_team_session_created");
@@ -58,13 +41,13 @@ describe("initializeSchema", () => {
   });
 
   test("sets user_version to 1 after kanban migration", () => {
-    const storage = makeStorage();
+    const storage = new SqliteStorage(":memory:");
     initializeSchema(storage);
     expect(pragmaUserVersion(storage)).toBe(1);
   });
 
   test("is idempotent", () => {
-    const storage = makeStorage();
+    const storage = new SqliteStorage(":memory:");
     initializeSchema(storage);
     initializeSchema(storage);
     expect(tableNames(storage)).toContain("kanban_tasks");
@@ -72,7 +55,7 @@ describe("initializeSchema", () => {
   });
 
   test("migrates an old kanban_cards table to kanban_tasks", () => {
-    const storage = makeStorage();
+    const storage = new SqliteStorage(":memory:");
     storage.exec(`
       CREATE TABLE kanban_cards (
         team_id TEXT NOT NULL,

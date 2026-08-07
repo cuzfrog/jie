@@ -44,6 +44,7 @@ describe("createBunSubprocessFactory", () => {
     });
 
     expect(exited).toBe(true);
+    expect(exitCode).not.toBe(0);
   });
 
   test("can replace the data handler after the process starts", async () => {

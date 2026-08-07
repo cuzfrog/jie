@@ -6,8 +6,6 @@ import {
   type Agent as PiAgent,
   type AgentEvent as PiAgentEvent,
   type AgentMessage,
-  type AfterToolCallContext,
-  type BeforeToolCallContext,
   type ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
 import type { Api, AssistantMessage, Model } from "@earendil-works/pi-ai";
@@ -128,14 +126,6 @@ function makeAssistantMessage(overrides: Partial<AssistantMessage> = {}): Assist
     },
     stopReason: "stop",
     timestamp: 0,
-    ...overrides,
-  };
-}
-
-function makeAgentContext(overrides: Partial<{ systemPrompt: string; messages: AgentMessage[] }> = {}): { systemPrompt: string; messages: AgentMessage[] } {
-  return {
-    systemPrompt: "",
-    messages: [],
     ...overrides,
   };
 }
