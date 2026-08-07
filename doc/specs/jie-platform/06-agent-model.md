@@ -52,7 +52,7 @@ lifecycle:
   permanent_phases: [done]     # optional, default []
   transitions:                 # rows: (topic, role, from) -> phase, plus an iteration effect
     - topic: task.recorded
-      role: dm                 # or "any"
+      role: manager            # or "any"
       from: any                # "any", one phase, or a list of phases
       phase: recorded
       iteration: reset         # reset | increment | absent (preserve)

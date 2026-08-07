@@ -273,7 +273,7 @@ describe("loadTeamFromDir — typed error codes", () => {
 
 describe("parseTeamFromManifests — lifecycle", () => {
   const roleFiles: Record<string, string> = {
-    "dm.md": "---\ntools:\n  - notify\n---\ndm",
+    "manager.md": "---\ntools:\n  - notify\n---\nmanager",
     "researcher.md": "---\ntools:\n  - notify\n---\nresearcher",
     "architect.md": "---\ntools:\n  - notify\n---\narchitect",
     "planner.md": "---\ntools:\n  - notify\n---\nplanner",
@@ -283,7 +283,7 @@ describe("parseTeamFromManifests — lifecycle", () => {
 
   function parse(lifecycleYaml: string) {
     return parseTeamFromManifests(
-      { ...roleFiles, "TEAM.md": `---\nleader: dm\n${lifecycleYaml}---\nProse.` },
+      { ...roleFiles, "TEAM.md": `---\nleader: manager\n${lifecycleYaml}---\nProse.` },
       { teamId: "t" },
     );
   }
@@ -300,7 +300,7 @@ describe("parseTeamFromManifests — lifecycle", () => {
     - done
   transitions:
     - topic: task.recorded
-      role: dm
+      role: manager
       from: any
       phase: recorded
       iteration: reset
@@ -325,7 +325,7 @@ describe("parseTeamFromManifests — lifecycle", () => {
       maxIterations: 3,
       permanentPhases: ["done"],
       transitions: [
-        { topic: "task.recorded", role: "dm", fromPhases: "any", toPhase: "recorded", iteration: "reset" },
+        { topic: "task.recorded", role: "manager", fromPhases: "any", toPhase: "recorded", iteration: "reset" },
         { topic: "task.planned", role: "planner", fromPhases: ["designed", "review_failed"], toPhase: "planned", iteration: "increment" },
         { topic: "task.failed", role: "any", fromPhases: "any", toPhase: "failed", iteration: null },
       ],
@@ -338,7 +338,7 @@ describe("parseTeamFromManifests — lifecycle", () => {
       `lifecycle:
   transitions:
     - topic: task.recorded
-      role: dm
+      role: manager
       from: any
       phase: recorded
 `,
@@ -362,14 +362,14 @@ describe("parseTeamFromManifests — lifecycle", () => {
   });
 
   test("lifecycle must be a mapping", () => {
-    expect(() => parse("lifecycle: dm\n")).toThrow(expect.objectContaining({ code: "INVALID_FIELD_TYPE" }));
+    expect(() => parse("lifecycle: manager\n")).toThrow(expect.objectContaining({ code: "INVALID_FIELD_TYPE" }));
   });
 
   test("transition row requires topic, from, and phase", () => {
     expect(() =>
       parse(`lifecycle:
   transitions:
-    - role: dm
+    - role: manager
       from: any
       phase: recorded
 `),
@@ -404,7 +404,7 @@ describe("parseTeamFromManifests — lifecycle", () => {
       parse(`lifecycle:
   transitions:
     - topic: task.recorded
-      role: dm
+      role: manager
       from: []
       phase: recorded
 `),
@@ -416,7 +416,7 @@ describe("parseTeamFromManifests — lifecycle", () => {
       parse(`lifecycle:
   transitions:
     - topic: task.recorded
-      role: dm
+      role: manager
       from: any
       phase: recorded
       iteration: double
@@ -464,7 +464,7 @@ describe("parseTeamFromManifests — lifecycle", () => {
       parse(`lifecycle:
   transitions:
     - topic: ""
-      role: dm
+      role: manager
       from: any
       phase: recorded
 `),
@@ -476,7 +476,7 @@ describe("parseTeamFromManifests — lifecycle", () => {
       parse(`lifecycle:
   transitions:
     - topic: task.recorded
-      role: dm
+      role: manager
       from: any
       phase: ""
 `),
@@ -488,7 +488,7 @@ describe("parseTeamFromManifests — lifecycle", () => {
       parse(`lifecycle:
   transitions:
     - topic: task.recorded
-      role: dm
+      role: manager
       from: ""
       phase: recorded
 `),
@@ -497,7 +497,7 @@ describe("parseTeamFromManifests — lifecycle", () => {
       parse(`lifecycle:
   transitions:
     - topic: task.recorded
-      role: dm
+      role: manager
       from:
         - designed
         - ""
@@ -512,7 +512,7 @@ describe("parseTeamFromManifests — lifecycle", () => {
   write_gates:
     - pattern: ""
       roles:
-        - dm
+        - manager
 `),
     ).toThrow(expect.objectContaining({ code: "INVALID_LIFECYCLE" }));
   });
@@ -523,12 +523,12 @@ describe("loadTeamFromDir — shipped default-coders blueprint", () => {
 
   test("parses with the declared lifecycle", () => {
     const blueprint = loadTeamFromDir(defaultCodersDir);
-    expect(blueprint.leaderRole).toBe("dm");
+    expect(blueprint.leaderRole).toBe("manager");
     expect(blueprint.lifecycle).toEqual({
       maxIterations: 5,
       permanentPhases: ["done"],
       transitions: [
-        { topic: "task.recorded", role: "dm", fromPhases: "any", toPhase: "recorded", iteration: "reset" },
+        { topic: "task.recorded", role: "manager", fromPhases: "any", toPhase: "recorded", iteration: "reset" },
         { topic: "task.researched", role: "researcher", fromPhases: ["recorded"], toPhase: "researched", iteration: null },
         { topic: "task.designed", role: "architect", fromPhases: ["researched"], toPhase: "designed", iteration: null },
         { topic: "task.planned", role: "planner", fromPhases: ["designed"], toPhase: "planned", iteration: null },
@@ -536,7 +536,7 @@ describe("loadTeamFromDir — shipped default-coders blueprint", () => {
         { topic: "task.implemented", role: "implementer", fromPhases: ["planned"], toPhase: "implemented", iteration: null },
         { topic: "task.review_passed", role: "reviewer", fromPhases: ["implemented"], toPhase: "review_passed", iteration: null },
         { topic: "task.review_failed", role: "reviewer", fromPhases: ["implemented"], toPhase: "review_failed", iteration: null },
-        { topic: "task.done", role: "dm", fromPhases: ["review_passed"], toPhase: "done", iteration: null },
+        { topic: "task.done", role: "manager", fromPhases: ["review_passed"], toPhase: "done", iteration: null },
         { topic: "task.failed", role: "any", fromPhases: "any", toPhase: "failed", iteration: null },
       ],
       writeGates: [{ pattern: "**/CONTEXT.md", roles: ["architect"] }],
