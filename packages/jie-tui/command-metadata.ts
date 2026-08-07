@@ -1,12 +1,20 @@
+export interface ArgumentSpec {
+  readonly name: string;
+  readonly optional?: boolean;
+  readonly greedy?: boolean;
+}
+
 export interface CommandMeta {
   readonly name: string;
   readonly description: string;
   readonly argumentHint?: string;
+  readonly aliases?: ReadonlyArray<string>;
+  readonly arguments?: ReadonlyArray<ArgumentSpec>;
 }
 
 export const COMMAND_METADATA: ReadonlyArray<CommandMeta> = [
   { name: "help", description: "show this help" },
-  { name: "clear", description: "clear the conversation" },
+  { name: "clear", description: "clear the conversation", aliases: ["new"] },
   { name: "exit", description: "quit jie" },
   { name: "login", description: "store a provider API key", argumentHint: "<provider> <apiKey>" },
   { name: "logout", description: "remove one or all API keys", argumentHint: "<provider>|*" },
@@ -20,3 +28,11 @@ export const COMMAND_METADATA: ReadonlyArray<CommandMeta> = [
   { name: "kanban", description: "toggle the kanban panel", argumentHint: "<add|remove|complete>" },
   { name: "notification", description: "toggle notification settings", argumentHint: "sound enable|disable" },
 ];
+
+const ALIAS_TO_CANONICAL = new Map<string, string>(
+  COMMAND_METADATA.flatMap((meta) => (meta.aliases ?? []).map((alias) => [alias, meta.name])),
+);
+
+export function resolveCommandName(name: string): string {
+  return ALIAS_TO_CANONICAL.get(name) ?? name;
+}

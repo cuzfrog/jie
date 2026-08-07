@@ -1,4 +1,5 @@
-import { isEffortLevel, JiePlatformError, type CommandName, type JiePlatform } from "@cuzfrog/jie-platform";
+import { isEffortLevel, JiePlatformError, type JiePlatform } from "@cuzfrog/jie-platform";
+import { COMMAND_METADATA, resolveCommandName } from "./command-metadata";
 import { Actions, TuiState, type AgentUiState, type StateStore } from "./state";
 import { bashDirective, parseBashCommand } from "./bash";
 import { matchesModelFilter, type ModelRef } from "./model-filter";
@@ -21,19 +22,6 @@ interface AgentRoute {
   readonly teamId: string;
   readonly agentKey: string;
 }
-
-type InterceptName =
-  | "model"
-  | "model-filter"
-  | "effort"
-  | "reload"
-  | "resume"
-  | "rename"
-  | "kanban"
-  | "notification"
-  | Extract<CommandName, "login" | "logout" | "team">;
-
-type TuiCommandName = "help" | "clear" | "exit" | InterceptName;
 
 export interface CommandHandler {
   handle(text: string): void;
@@ -63,20 +51,21 @@ export class CommandHandlerImpl implements CommandHandler {
     const rawName = parts[0]!;
     const name = rawName.slice(1);
     const args = parts.slice(1);
+    const canonical = resolveCommandName(name);
 
-    const intercepted = this.runIntercepts(name, args);
+    if (canonical.startsWith("skill:")) {
+      this.routeSkillInvocation(canonical, trimmed);
+      return;
+    }
+
+    const intercepted = this.runIntercepts(canonical, args);
     if (intercepted !== null) {
       if (intercepted.kind === "reply") this.stateStore.dispatch(Actions.setTransientMessage(intercepted.text));
       else if (intercepted.kind === "error") this.stateStore.dispatch(Actions.setErrorMessage(intercepted.text));
       return;
     }
 
-    if (name.startsWith("skill:")) {
-      this.routeSkillInvocation(name, trimmed);
-      return;
-    }
-
-    const outcome = runCommand(trimmed);
+    const outcome = runSlashCommand(canonical, rawName, args);
     switch (outcome.kind) {
       case "clearState":
         this.stateStore.dispatch(Actions.clearTuiState());
@@ -376,13 +365,10 @@ export class CommandHandlerImpl implements CommandHandler {
   }
 }
 
-function runCommand(input: string): CommandOutcome {
-  const parts = input.split(/\s+/);
-  const rawName = parts[0]!;
-  const name = rawName.startsWith("/") ? rawName.slice(1) : rawName;
-  const slashCommand = COMMANDS.get(name);
+function runSlashCommand(canonical: string, rawName: string, args: ReadonlyArray<string>): CommandOutcome {
+  const slashCommand = COMMANDS.get(canonical);
   if (slashCommand === undefined) return { kind: "error", text: `unknown slash command: ${rawName}` };
-  return slashCommand.run(parts.slice(1));
+  return slashCommand.run(args);
 }
 
 const helpCommand: SlashCommand = {
@@ -406,10 +392,6 @@ const COMMANDS: ReadonlyMap<string, SlashCommand> = new Map<string, SlashCommand
   [exitCommand.name, exitCommand],
 ]);
 
-const LOCAL_COMMAND_NAMES = ["help", "clear", "exit"] as const satisfies ReadonlyArray<TuiCommandName>;
-
-const INTERCEPT_NAMES = ["login", "logout", "model", "model-filter", "effort", "reload", "team", "resume", "rename", "kanban", "notification"] as const satisfies ReadonlyArray<InterceptName>;
-
 function parseKanbanAddArgs(args: ReadonlyArray<string>): { kind: "ok"; title?: string; description: string } | { kind: "error"; text: string } {
   if (args[0] === "--title") {
     if (args[1] === undefined) return { kind: "error", text: "/kanban add --title <title> <description>" };
@@ -424,7 +406,7 @@ function parseKanbanAddArgs(args: ReadonlyArray<string>): { kind: "ok"; title?: 
 
 const MODEL_FILTER_USAGE = "/model-filter <add|remove|list> <pattern>";
 
-export const SLASH_COMMAND_NAMES: ReadonlyArray<TuiCommandName> = [...LOCAL_COMMAND_NAMES, ...INTERCEPT_NAMES];
+export const SLASH_COMMAND_NAMES: ReadonlyArray<string> = COMMAND_METADATA.flatMap((meta) => [meta.name, ...(meta.aliases ?? [])]);
 
 function parseModelArg(arg: string): { kind: "ok"; provider: string; modelId: string } | { kind: "error"; text: string } {
   const slash = arg.indexOf("/");

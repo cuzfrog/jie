@@ -69,7 +69,7 @@ function shortcutsSection(width: number): string[] {
 }
 
 function commandSection(width: number): string[] {
-  const cells = COMMAND_METADATA.map(commandCell);
+  const cells = COMMAND_METADATA.flatMap(commandCells);
   const half = Math.ceil(cells.length / 2);
   const left = cells.slice(0, half);
   const right = cells.slice(half);
@@ -89,9 +89,15 @@ function commandSection(width: number): string[] {
   return [style("text")(COMMANDS_HEADING), ...rows];
 }
 
-function commandCell(command: CommandMeta): CommandCell {
-  const argument = command.argumentHint === undefined ? "" : ` ${style("warning")(command.argumentHint)}`;
-  const text = `${style("accent")(`/${command.name}`)}${argument}${style("muted")(`  ${command.description}`)}`;
+function commandCells(command: CommandMeta): CommandCell[] {
+  const canonical = commandCell(command.name, command.description, command.argumentHint);
+  const aliases = (command.aliases ?? []).map((alias) => commandCell(alias, `alias of /${command.name}`, command.argumentHint));
+  return [canonical, ...aliases];
+}
+
+function commandCell(name: string, description: string, argumentHint: string | undefined): CommandCell {
+  const argument = argumentHint === undefined ? "" : ` ${style("warning")(argumentHint)}`;
+  const text = `${style("accent")(`/${name}`)}${argument}${style("muted")(`  ${description}`)}`;
   return { text, width: visibleWidth(text) };
 }
 

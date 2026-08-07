@@ -68,6 +68,14 @@ describe("CommandHandlerImpl", () => {
     expect(dispatch).toHaveBeenCalledWith(Actions.clearTuiState());
   });
 
+  test("handle('/new') dispatches clearTuiState as an alias of /clear", () => {
+    const { platform } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/new");
+    expect(dispatch).toHaveBeenCalledWith(Actions.clearBanners());
+    expect(dispatch).toHaveBeenCalledWith(Actions.clearTuiState());
+  });
+
   test("handle('/exit') dispatches requestQuit", () => {
     const { platform } = makePlatform();
     const { handler, dispatch } = makeHandler(platform);
@@ -881,6 +889,7 @@ describe("SLASH_COMMAND_NAMES", () => {
     expect(SLASH_COMMAND_NAMES).toEqual([
       "help",
       "clear",
+      "new",
       "exit",
       "login",
       "logout",

@@ -104,17 +104,37 @@ function slashCommands(
   stateStore: StateStore,
   reportModelFilteredOut: (count: number) => void,
 ): SlashCommand[] {
-  return COMMAND_METADATA.map((meta): SlashCommand => {
-    if (meta.name === "team") return { ...meta, getArgumentCompletions: (prefix) => teamItems(platform, prefix) };
-    if (meta.name === "resume") return { ...meta, getArgumentCompletions: (prefix) => sessionItems(platform, stateStore, prefix) };
-    if (meta.name === "model") return { ...meta, getArgumentCompletions: (prefix) => modelItems(platform, prefix, reportModelFilteredOut) };
-    if (meta.name === "model-filter") return { ...meta, getArgumentCompletions: (argumentText) => modelFilterItems(platform, argumentText) };
-    if (meta.name === "login") return { ...meta, getArgumentCompletions: (prefix) => providerItems(platform, prefix) };
-    if (meta.name === "logout") return { ...meta, getArgumentCompletions: (prefix) => logoutItems(platform, prefix) };
-    if (meta.name === "effort") return { ...meta, getArgumentCompletions: async (prefix) => effortItems(prefix) };
-    if (meta.name === "kanban") return { ...meta, getArgumentCompletions: (argumentText) => kanbanItems(stateStore, argumentText) };
-    return { ...meta };
-  });
+  const commands: SlashCommand[] = [];
+  for (const meta of COMMAND_METADATA) {
+    const canonical = slashCommandFor(platform, stateStore, reportModelFilteredOut, meta);
+    commands.push(canonical);
+    for (const alias of meta.aliases ?? []) {
+      commands.push({
+        name: alias,
+        description: `alias of /${canonical.name}`,
+        argumentHint: canonical.argumentHint,
+        getArgumentCompletions: canonical.getArgumentCompletions,
+      });
+    }
+  }
+  return commands;
+}
+
+function slashCommandFor(
+  platform: JiePlatform,
+  stateStore: StateStore,
+  reportModelFilteredOut: (count: number) => void,
+  meta: (typeof COMMAND_METADATA)[number],
+): SlashCommand {
+  if (meta.name === "team") return { ...meta, getArgumentCompletions: (prefix) => teamItems(platform, prefix) };
+  if (meta.name === "resume") return { ...meta, getArgumentCompletions: (prefix) => sessionItems(platform, stateStore, prefix) };
+  if (meta.name === "model") return { ...meta, getArgumentCompletions: (prefix) => modelItems(platform, prefix, reportModelFilteredOut) };
+  if (meta.name === "model-filter") return { ...meta, getArgumentCompletions: (argumentText) => modelFilterItems(platform, argumentText) };
+  if (meta.name === "login") return { ...meta, getArgumentCompletions: (prefix) => providerItems(platform, prefix) };
+  if (meta.name === "logout") return { ...meta, getArgumentCompletions: (prefix) => logoutItems(platform, prefix) };
+  if (meta.name === "effort") return { ...meta, getArgumentCompletions: async (prefix) => effortItems(prefix) };
+  if (meta.name === "kanban") return { ...meta, getArgumentCompletions: (argumentText) => kanbanItems(stateStore, argumentText) };
+  return { ...meta };
 }
 
 async function drillDownSuggestions(commands: SlashCommand[], textBeforeCursor: string): Promise<AutocompleteSuggestions | null> {

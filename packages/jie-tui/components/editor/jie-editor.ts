@@ -10,7 +10,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { Actions, TuiState, type StateStore } from "../../state";
 import { type JieAutocompleteProvider, type JieSuggestions } from "../../autocomplete";
-import { COMMAND_METADATA } from "../../command-metadata";
+import { COMMAND_METADATA, resolveCommandName } from "../../command-metadata";
 import { style } from "../themes";
 import type { PromptHistoryStore } from "./prompt-history";
 
@@ -422,7 +422,7 @@ function argumentHintOf(description: string | undefined): string {
 function commandBoundaryHint(text: string): string {
   const match = COMMAND_BOUNDARY_PATTERN.exec(text);
   if (match === null) return "";
-  const command = COMMAND_METADATA.find((entry) => entry.name === match[1]);
+  const command = COMMAND_METADATA.find((entry) => entry.name === resolveCommandName(match[1]));
   return command?.argumentHint ?? "";
 }
 
