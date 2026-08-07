@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { assertLlmReachable, seedTeam, writeModelsJsonTo, writeSettingsJson } from "../_fixture.ts";
+import { seedTeam, writeModelsJsonTo, writeSettingsJson } from "../_fixture.ts";
 import { loadMockExpectations } from "../../../packages/mock-llm-backend";
 import {
   startTui,
@@ -75,7 +75,6 @@ describe("Scenario 11 — resume hydrates the conversation", () => {
   let dir: string;
 
   beforeAll(async () => {
-    await assertLlmReachable();
     await loadMockExpectations(expectations);
   });
 

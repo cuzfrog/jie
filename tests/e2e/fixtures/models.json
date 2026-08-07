@@ -1,17 +1,17 @@
 {
   "providers": {
     "e2e": {
-      "baseUrl": "${JIE_E2E_BASE_URL}",
+      "baseUrl": "http://localhost:12346",
       "api": "openai-completions",
-      "apiKey": "${JIE_E2E_API_KEY}",
+      "apiKey": "dummy",
       "compat": {
         "supportsDeveloperRole": false,
         "supportsReasoningEffort": false
       },
       "models": [
         {
-          "id": "${JIE_E2E_MODEL}",
-          "name": "${JIE_E2E_MODEL}",
+          "id": "dummy",
+          "name": "dummy",
           "reasoning": false,
           "input": ["text"],
           "contextWindow": 128000,

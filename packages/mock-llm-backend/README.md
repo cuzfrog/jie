@@ -31,20 +31,18 @@ Long-running; reuse across many `bun test` runs. `Ctrl+C` to stop.
 Each test suite that exercises the stub imports a companion
 `*.llm.ts` (a default-exported `Expectation[]`) and calls
 `loadMockExpectations(expectations)` once in `beforeAll`. The helper
-is a no-op when `JIE_E2E_BASE_URL` is not the stub port, so the suite
-runs unchanged against a real backend.
+always talks to the default stub port.
 
 ```ts
 import { loadMockExpectations } from "../../../packages/mock-llm-backend";
 import expectations from "./v1-scenarios.llm.ts";
 
 beforeAll(async () => {
-  await assertLlmReachable();
   await loadMockExpectations(expectations);
 });
 ```
 
-Run the suite with the stub URL:
+Run the suite with the stub:
 
 ```sh
 bun run mock:start   # in one shell
@@ -93,7 +91,7 @@ error:
 import { loadMockExpectations } from "../../../packages/mock-llm-backend";
 import expectations from "./v1-scenarios.llm.ts";
 
-// In a test's beforeAll — no-op unless JIE_E2E_BASE_URL points at the stub.
+// In a test's beforeAll — registers expectations on the default stub port.
 await loadMockExpectations(expectations);
 ```
 

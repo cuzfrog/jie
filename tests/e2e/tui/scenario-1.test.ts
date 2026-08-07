@@ -1,4 +1,4 @@
-import { assertLlmReachable, seedTeam, FIXTURE } from "../_fixture.ts";
+import { seedTeam, FIXTURE } from "../_fixture.ts";
 import { loadMockExpectations } from "../../../packages/mock-llm-backend";
 import {
   startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, waitForTransient, waitForAgent,
@@ -10,7 +10,6 @@ describe("Scenario 1 — simple agent", () => {
   let harness: TuiHarness;
 
   beforeAll(async () => {
-    await assertLlmReachable();
     await loadMockExpectations(expectations);
   });
 

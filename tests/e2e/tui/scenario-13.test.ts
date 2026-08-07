@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadMockExpectations } from "../../../packages/mock-llm-backend";
-import { assertLlmReachable, seedSkill, seedTeam, writeModelsJsonTo, writeSettingsJson } from "../_fixture.ts";
+import { seedSkill, seedTeam, writeModelsJsonTo, writeSettingsJson } from "../_fixture.ts";
 import {
   sendLine,
   startTui,
@@ -21,7 +21,6 @@ describe("Scenario 13 — /skill:<name> invocation", () => {
   let dir: string;
 
   beforeAll(async () => {
-    await assertLlmReachable();
     await loadMockExpectations(expectations);
   });
 

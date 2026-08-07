@@ -117,33 +117,13 @@ describe("MockClient", () => {
 
 describe("loadMockExpectations", () => {
   const rules: ReadonlyArray<Expectation> = [{ match: {}, responseChunks: [] }];
-  let savedBaseUrl: string | undefined;
 
   beforeEach(() => {
-    savedBaseUrl = process.env["JIE_E2E_BASE_URL"];
     fetchMock.mockResolvedValue(jsonResponse(200, { ok: true }));
   });
 
-  afterEach(() => {
-    if (savedBaseUrl === undefined) delete process.env["JIE_E2E_BASE_URL"];
-    else process.env["JIE_E2E_BASE_URL"] = savedBaseUrl;
-  });
-
-  test("is a no-op when JIE_E2E_BASE_URL is unset", async () => {
-    delete process.env["JIE_E2E_BASE_URL"];
-    await loadMockExpectations(rules);
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  test("is a no-op when JIE_E2E_BASE_URL is not the stub port", async () => {
-    process.env["JIE_E2E_BASE_URL"] = "http://localhost:9999";
-    await loadMockExpectations(rules);
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  test("checks health then registers expectations on the stub port", async () => {
+  test("checks health then registers expectations on the default stub port", async () => {
     const stubUrl = `http://localhost:${DEFAULT_MOCK_PORT}`;
-    process.env["JIE_E2E_BASE_URL"] = stubUrl;
     await loadMockExpectations(rules);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0]).toEqual([`${stubUrl}/health`]);
@@ -158,7 +138,6 @@ describe("loadMockExpectations", () => {
   });
 
   test("throws a startup hint when the stub is unreachable", async () => {
-    process.env["JIE_E2E_BASE_URL"] = `http://localhost:${DEFAULT_MOCK_PORT}`;
     fetchMock.mockRejectedValue(new Error("ECONNREFUSED"));
     await expect(loadMockExpectations(rules)).rejects.toThrow("is not reachable");
   });

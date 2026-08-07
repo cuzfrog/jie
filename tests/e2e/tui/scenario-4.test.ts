@@ -1,12 +1,11 @@
 import { writeFileSync } from "node:fs";
 import { loadMockExpectations } from "../../../packages/mock-llm-backend";
-import { assertLlmReachable, seedTeam, writeModelsJsonTo, writeSettingsJson } from "../_fixture.ts";
+import { seedTeam, writeModelsJsonTo, writeSettingsJson } from "../_fixture.ts";
 import { startTui, stopTui, submitAndWaitForAgentIdle, waitForErrorBanner, waitForNoErrorBanner, waitForTeam, sendLine } from "./harness";
 import expectations from "./scenario-4.llm.ts";
 
 describe("Scenario 4 — first-time setup (TUI flow)", () => {
   beforeAll(async () => {
-    await assertLlmReachable();
     await loadMockExpectations(expectations);
   });
 

@@ -10,7 +10,6 @@ import { join } from "node:path";
 import { main } from "../../../packages/jie-cli";
 import { loadMockExpectations } from "../../../packages/mock-llm-backend";
 import {
-  assertLlmReachable,
   writeModelsJsonTo,
   writeSettingsJson,
 } from "../_fixture.ts";
@@ -37,14 +36,13 @@ function printArgv(p: PrintArgv): string[] {
   return argv;
 }
 
-describe("v1 user-scenarios — real LLM end-to-end", () => {
+describe("v1 user-scenarios — mock LLM end-to-end", () => {
   let workspace: string;
   let prevHome: string | undefined;
   let writeOut: ReturnType<typeof vi.spyOn<typeof process.stdout, "write">> | undefined;
   let writeErr: ReturnType<typeof vi.spyOn<typeof console, "error">> | undefined;
 
   beforeAll(async () => {
-    await assertLlmReachable();
     await loadMockExpectations(expectations);
   });
 
