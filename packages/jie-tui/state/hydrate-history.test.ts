@@ -151,6 +151,21 @@ describe("hydrateHistory", () => {
     expect(card?.output).toBeNull();
   });
 
+  test("long tool input and output are middle-truncated with the truncated flag", () => {
+    const longInput = "a".repeat(5000);
+    const longOutput = "b".repeat(5000);
+    const result = hydrateHistory([
+      user("run"), assistantToolCall("c1", "bash", { cmd: longInput }), toolResult("c1", "bash", longOutput),
+    ], 0);
+    const card = result.currentTurn?.cards[0];
+    expect(card?.inputTruncated).toBe(true);
+    expect(card?.outputTruncated).toBe(true);
+    expect(card?.input).toContain("...[");
+    expect(card?.output).toContain("...[");
+    expect(card?.input).not.toBe(longInput);
+    expect(card?.output).not.toBe(longOutput);
+  });
+
   test("trailing user message leaves an open currentTurn for continue()", () => {
     const result = hydrateHistory([user("pending")], 0);
     expect(result.history).toEqual([]);

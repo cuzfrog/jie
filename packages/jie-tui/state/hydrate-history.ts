@@ -3,6 +3,9 @@ import type { AssistantMessage, TextContent, ToolResultMessage } from "@earendil
 import type { MessageCard, MessageTurn } from "./state";
 
 const USER_INGRESS_PREFIX = "[user]: ";
+const TRUNCATION_BYTES = 4 * 1024;
+const TRUNCATION_MARKER = "...[%d chars truncated]...";
+const TRUNCATION_MARKER_LENGTH = 25;
 
 export interface HydratedHistory {
   readonly history: MessageTurn[];
@@ -55,7 +58,9 @@ function appendAssistant(turn: MessageTurn, message: AssistantMessage): void {
     if (part.type === "text") appendBlock(turn, "text", part.text);
     else if (part.type === "thinking") appendBlock(turn, "thinking", part.thinking);
     else if (part.type === "toolCall") {
-      turn.cards.push({ kind: "toolCall", callId: part.id, name: part.name, input: JSON.stringify(part.arguments), inputTruncated: false });
+      const input = JSON.stringify(part.arguments);
+      const { text, truncated } = truncateString(input);
+      turn.cards.push({ kind: "toolCall", callId: part.id, name: part.name, input: text, inputTruncated: truncated });
     }
   }
 }
@@ -64,14 +69,16 @@ function appendToolResult(turn: MessageTurn, message: ToolResultMessage): void {
   const text = message.content.filter(isTextContent).map((part) => part.text).join("");
   const index = turn.cards.findIndex((card) => card.kind === "toolCall" && card.callId === message.toolCallId);
   const prior = index === -1 ? undefined : turn.cards[index];
+  const output = message.isError ? null : text;
+  const { text: outputText, truncated: outputTruncated } = maybeTruncate(output);
   const card: MessageCard = {
     kind: "toolResult",
     callId: message.toolCallId,
     name: message.toolName,
     input: prior?.input,
     inputTruncated: prior?.inputTruncated,
-    output: message.isError ? null : text,
-    outputTruncated: false,
+    output: outputText,
+    outputTruncated,
     error: message.isError ? text : null,
     details: isDiffDetails(message.details) ? message.details : null,
   };
@@ -90,4 +97,17 @@ function appendBlock(turn: MessageTurn, kind: "text" | "thinking", text: string)
 
 function isTextContent(part: { readonly type: string }): part is TextContent {
   return part.type === "text";
+}
+
+function maybeTruncate(input: string | null | undefined): { text: string | null | undefined; truncated: boolean } {
+  if (input === null || input === undefined) return { text: input, truncated: false };
+  return truncateString(input);
+}
+
+function truncateString(input: string): { text: string; truncated: boolean } {
+  if (input.length <= TRUNCATION_BYTES) return { text: input, truncated: false };
+  const half = Math.floor((TRUNCATION_BYTES - TRUNCATION_MARKER_LENGTH) / 2);
+  const truncatedChars = input.length - half * 2;
+  const text = `${input.slice(0, half)}${TRUNCATION_MARKER.replace("%d", String(truncatedChars))}${input.slice(input.length - half)}`;
+  return { text, truncated: true };
 }
