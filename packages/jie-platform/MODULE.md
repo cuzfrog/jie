@@ -1,8 +1,8 @@
 ---
 no-new-exports:
   # index.ts and types.ts are ungated: types.ts holds the cross-boundary DTOs (TeamInfo,
-  # KanbanCard, the ToolResultDetails union) that jie-tui consumes through the package
-  # surface, and index.ts is that surface. New exports there must stay cross-boundary DTOs.
+  # KanbanCard) that jie-tui consumes through the package surface, and index.ts is that surface.
+  # The ToolResultDetails union lives in tools/types.ts and is re-exported from index.ts.
   - container.test.ts
   - container.ts
   # - index.ts

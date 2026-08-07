@@ -1,5 +1,6 @@
 import type { StopReason } from "@earendil-works/pi-ai";
-import type { TeamInfo, ToolResultDetails } from "../types";
+import type { TeamInfo } from "../types";
+import type { ToolResultDetails } from "../tools/types";
 
 type EventDef<S extends Sender, P = null> = { sender: S; payload: P };
 type EventDefinitions = {

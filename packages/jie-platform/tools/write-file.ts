@@ -1,8 +1,7 @@
 import { mkdirSync, readFileSync, statSync, writeFileSync, type Stats } from "node:fs";
 import { dirname } from "node:path";
 import { Type } from "typebox";
-import type { ExecutionContext, Tool, ToolResult } from "./types";
-import type { WriteFileResultDetails } from "../types";
+import type { ExecutionContext, Tool, ToolResult, WriteFileResultDetails } from "./types";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
 import type { FileMutationQueue } from "./file-mutation-queue";
 import { checkWriteGates } from "./write-gate";

@@ -1,8 +1,7 @@
 import { Value } from "typebox/value";
 import type { TSchema } from "typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import type { ExecutionContext, Tool } from "../tools";
-import type { ToolResultDetails } from "../types";
+import type { ExecutionContext, Tool, ToolResultDetails } from "../tools/types";
 
 export function adaptToolToAgent(
   tool: Tool,
