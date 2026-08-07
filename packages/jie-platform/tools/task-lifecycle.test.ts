@@ -12,18 +12,18 @@ const lifecycle: TaskLifecycle = {
   maxIterations: 2,
   permanentPhases: ["done"],
   transitions: [
-    { topic: "task.recorded", role: "dm", fromPhases: "any", toPhase: "recorded", iteration: "reset" },
+    { topic: "task.recorded", role: "manager", fromPhases: "any", toPhase: "recorded", iteration: "reset" },
     { topic: "task.designed", role: "architect", fromPhases: ["researched"], toPhase: "designed", iteration: null },
     { topic: "task.planned", role: "planner", fromPhases: ["designed"], toPhase: "planned", iteration: null },
     { topic: "task.planned", role: "planner", fromPhases: ["review_failed"], toPhase: "planned", iteration: "increment" },
-    { topic: "task.done", role: "dm", fromPhases: ["review_passed"], toPhase: "done", iteration: null },
+    { topic: "task.done", role: "manager", fromPhases: ["review_passed"], toPhase: "done", iteration: null },
     { topic: "task.failed", role: "any", fromPhases: "any", toPhase: "failed", iteration: null },
   ],
   writeGates: [],
 };
 
 function transition(overrides: Partial<TaskTransitionRule>): TaskTransitionRule {
-  return { topic: "task.x", role: "dm", fromPhases: "any", toPhase: "x", iteration: null, ...overrides };
+  return { topic: "task.x", role: "manager", fromPhases: "any", toPhase: "x", iteration: null, ...overrides };
 }
 
 function row(key: string, created_at: string): { key: string; created_at: string } {
@@ -48,7 +48,7 @@ describe("createTaskLifecycleGuard", () => {
 
   test("allows a matching transition, writes the first status row, and returns the new state", async () => {
     const guard = createTaskLifecycleGuard(artifactStore);
-    const outcome = await guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "dm" });
+    const outcome = await guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "manager" });
     expect(outcome).toEqual({ phase: "recorded", iteration: 1 });
     expect(artifactStore.write).toHaveBeenCalledTimes(1);
     const [key, content] = artifactStore.write.mock.calls[0]!;
@@ -112,7 +112,7 @@ describe("createTaskLifecycleGuard", () => {
   test("re-recording a task resets the iteration to 1", async () => {
     setCurrent("T-1/status/0001", "planned", 2);
     const guard = createTaskLifecycleGuard(artifactStore);
-    const outcome = await guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "dm" });
+    const outcome = await guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "manager" });
     expect(outcome).toEqual({ phase: "recorded", iteration: 1 });
   });
 
@@ -120,7 +120,7 @@ describe("createTaskLifecycleGuard", () => {
     setCurrent("T-1/status/0001", "done", 1);
     const guard = createTaskLifecycleGuard(artifactStore);
     await expect(
-      guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "dm" }),
+      guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "manager" }),
     ).rejects.toThrow("is in permanent phase 'done'");
     await expect(
       guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.failed", agentRole: "reviewer" }),
@@ -156,14 +156,14 @@ describe("createTaskLifecycleGuard", () => {
       maxIterations: 5,
       permanentPhases: [],
       transitions: [
-        transition({ topic: "task.x", role: "dm", toPhase: "specific" }),
+        transition({ topic: "task.x", role: "manager", toPhase: "specific" }),
         transition({ topic: "task.x", role: "any", toPhase: "generic" }),
       ],
       writeGates: [],
     };
     const guard = createTaskLifecycleGuard(artifactStore);
-    const dmOutcome = await guard.applyTransition({ lifecycle: custom, taskId: "T-1", topic: "task.x", agentRole: "dm" });
-    expect(dmOutcome.phase).toBe("specific");
+    const managerOutcome = await guard.applyTransition({ lifecycle: custom, taskId: "T-1", topic: "task.x", agentRole: "manager" });
+    expect(managerOutcome.phase).toBe("specific");
     const otherOutcome = await guard.applyTransition({ lifecycle: custom, taskId: "T-1", topic: "task.x", agentRole: "researcher" });
     expect(otherOutcome.phase).toBe("generic");
   });
@@ -173,14 +173,14 @@ describe("createTaskLifecycleGuard", () => {
       maxIterations: 5,
       permanentPhases: [],
       transitions: [
-        transition({ topic: "task.x", role: "dm", fromPhases: ["somewhere"], toPhase: "specific" }),
+        transition({ topic: "task.x", role: "manager", fromPhases: ["somewhere"], toPhase: "specific" }),
         transition({ topic: "task.x", role: "any", toPhase: "generic" }),
       ],
       writeGates: [],
     };
     const guard = createTaskLifecycleGuard(artifactStore);
     await expect(
-      guard.applyTransition({ lifecycle: custom, taskId: "T-1", topic: "task.x", agentRole: "dm" }),
+      guard.applyTransition({ lifecycle: custom, taskId: "T-1", topic: "task.x", agentRole: "manager" }),
     ).rejects.toMatchObject({ code: "ILLEGAL_TRANSITION" });
     expect(artifactStore.write).not.toHaveBeenCalled();
   });
@@ -189,7 +189,7 @@ describe("createTaskLifecycleGuard", () => {
     artifactStore.list.mockResolvedValue([row("T-1/status/0001", "2026-01-01T00:00:01.000Z")]);
     artifactStore.read.mockResolvedValue({ key: "T-1/status/0001", content: "not json", created_at: "2026-01-01T00:00:01.000Z" });
     const guard = createTaskLifecycleGuard(artifactStore);
-    const outcome = await guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "dm" });
+    const outcome = await guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "manager" });
     expect(outcome).toEqual({ phase: "recorded", iteration: 1 });
   });
 
@@ -201,7 +201,7 @@ describe("createTaskLifecycleGuard", () => {
       created_at: "2026-01-01T00:00:01.000Z",
     });
     const guard = createTaskLifecycleGuard(artifactStore);
-    const outcome = await guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "dm" });
+    const outcome = await guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "manager" });
     expect(outcome).toEqual({ phase: "recorded", iteration: 1 });
   });
 
@@ -217,7 +217,7 @@ describe("createTaskLifecycleGuard", () => {
       created_at: "2026-01-01T00:00:03.000Z",
     });
     const guard = createTaskLifecycleGuard(artifactStore);
-    await guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "dm" });
+    await guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "manager" });
     expect(artifactStore.write.mock.calls[0]![0]).toBe("T-1/status/0004");
   });
 
@@ -240,9 +240,9 @@ describe("createTaskLifecycleGuard", () => {
       return { key: "T-1/status/0001", created_at: "2026-01-01T00:00:01.000Z" };
     });
     const guard = createTaskLifecycleGuard(artifactStore);
-    const first = guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "dm" });
+    const first = guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "manager" });
     await firstWriteReached;
-    const second = guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "dm" });
+    const second = guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "manager" });
     expect(artifactStore.list).toHaveBeenCalledTimes(1);
     release();
     await Promise.all([first, second]);
@@ -254,10 +254,10 @@ describe("createTaskLifecycleGuard", () => {
     artifactStore.list.mockRejectedValueOnce(new Error("store down"));
     const guard = createTaskLifecycleGuard(artifactStore);
     await expect(
-      guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "dm" }),
+      guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "manager" }),
     ).rejects.toThrow("store down");
     artifactStore.list.mockResolvedValue([]);
-    const outcome = await guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "dm" });
+    const outcome = await guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "manager" });
     expect(outcome).toEqual({ phase: "recorded", iteration: 1 });
     expect(artifactStore.write).toHaveBeenCalledTimes(1);
   });
@@ -273,9 +273,9 @@ describe("createTaskLifecycleGuard", () => {
       return { key: "T-1/status/0001", created_at: "2026-01-01T00:00:01.000Z" };
     });
     const guard = createTaskLifecycleGuard(artifactStore);
-    const first = guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "dm" });
+    const first = guard.applyTransition({ lifecycle, taskId: "T-1", topic: "task.recorded", agentRole: "manager" });
     await firstWriteReached;
-    const outcome = await guard.applyTransition({ lifecycle, taskId: "T-2", topic: "task.recorded", agentRole: "dm" });
+    const outcome = await guard.applyTransition({ lifecycle, taskId: "T-2", topic: "task.recorded", agentRole: "manager" });
     expect(outcome).toEqual({ phase: "recorded", iteration: 1 });
     expect(artifactStore.list).toHaveBeenCalledTimes(2);
     release();

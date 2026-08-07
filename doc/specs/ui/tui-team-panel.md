@@ -22,7 +22,7 @@ One row per agent, leader pinned first, the rest in map insertion order — `Tui
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ agent           ctx       tools                                subscribe                                                 model │
-│ ▸dm-1 leader    25%/128k  notify read_artifact write_artifact  task.review_passed task.failed  (lm-studio) qwen3.5-4b | medium │
+│ ▸manager-1 leader    25%/128k  notify read_artifact write_artifact  task.review_passed task.failed  (lm-studio) qwen3.5-4b | medium │
 │  researcher-1   —         web_search web_fetch                 task.recorded                   (lm-studio) qwen3.5-4b | medium │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```

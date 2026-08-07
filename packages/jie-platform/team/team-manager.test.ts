@@ -163,15 +163,15 @@ describe("TeamManagerImpl — full surface", () => {
       mkdirSync(teamDir, { recursive: true });
       writeFileSync(
         join(teamDir, "TEAM.md"),
-        `---\nleader: dm\nlifecycle:\n  transitions:\n    - topic: task.recorded\n      role: dm\n      from: any\n      phase: recorded\n---\n`,
+        `---\nleader: manager\nlifecycle:\n  transitions:\n    - topic: task.recorded\n      role: manager\n      from: any\n      phase: recorded\n---\n`,
       );
-      writeFileSync(join(teamDir, "dm.md"), `---\ntools:\n  - bash\n---\ndm`);
+      writeFileSync(join(teamDir, "manager.md"), `---\ntools:\n  - bash\n---\nmanager`);
       const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
       await manager.load("dev");
       expect(agentBodyFactory.mock.calls[0]![0]!.lifecycle).toEqual({
         maxIterations: 5,
         permanentPhases: [],
-        transitions: [{ topic: "task.recorded", role: "dm", fromPhases: "any", toPhase: "recorded", iteration: null }],
+        transitions: [{ topic: "task.recorded", role: "manager", fromPhases: "any", toPhase: "recorded", iteration: null }],
         writeGates: [],
       });
     });

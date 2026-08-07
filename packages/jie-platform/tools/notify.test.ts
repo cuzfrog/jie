@@ -212,13 +212,13 @@ const lifecycle: TaskLifecycle = {
   maxIterations: 5,
   permanentPhases: [],
   transitions: [
-    { topic: "task.recorded", role: "dm", fromPhases: "any", toPhase: "recorded", iteration: "reset" },
+    { topic: "task.recorded", role: "manager", fromPhases: "any", toPhase: "recorded", iteration: "reset" },
   ],
   writeGates: [],
 };
 
 function makeLifecycleCtx(): ExecutionContext {
-  return { ...makeCtx(), agentRole: "dm", lifecycle };
+  return { ...makeCtx(), agentRole: "manager", lifecycle };
 }
 
 function makeLifecycleHarness(): { events: EventManager; received: Array<EventEnvelope<EventType>> } {
@@ -263,7 +263,7 @@ describe("notify — lifecycle enforcement", () => {
       lifecycle,
       taskId: "T-1",
       topic: "task.recorded",
-      agentRole: "dm",
+      agentRole: "manager",
     });
     expect(received).toHaveLength(1);
     expect(received[0]!.payload).toEqual({ message: "new task", truncated: false });

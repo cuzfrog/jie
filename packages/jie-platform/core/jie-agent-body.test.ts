@@ -535,7 +535,7 @@ describe("JieAgentBody — execution context lifecycle wiring", () => {
     const lifecycle: TaskLifecycle = {
       maxIterations: 2,
       permanentPhases: ["done"],
-      transitions: [{ topic: "task.recorded", role: "dm", fromPhases: "any", toPhase: "recorded", iteration: "reset" }],
+      transitions: [{ topic: "task.recorded", role: "manager", fromPhases: "any", toPhase: "recorded", iteration: "reset" }],
       writeGates: [],
     };
     const received: Array<TaskLifecycle | null> = [];
