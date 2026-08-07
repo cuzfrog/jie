@@ -56,7 +56,7 @@ function makeTeam(teamId: string, agentKeys: ReadonlyArray<string>, leaderKey: s
   };
 }
 
-const baseArgs = { kind: "print", instruction: "hi", team: undefined, timeout: 30, json: false, apiKey: undefined, resume: undefined, inMemory: false } as const;
+const baseArgs = { kind: "print", instruction: "hi", team: undefined, timeout: 30, json: false, apiKey: undefined, resume: undefined, inMemory: false, debug: false } as const;
 
 class ProcessExitError extends Error {
   constructor(readonly exitCode: number | undefined) {

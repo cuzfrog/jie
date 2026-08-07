@@ -1,4 +1,5 @@
 import { mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
 import { registerCommandModule, type CommandExecutor } from "./command";
 import { registerConfigModule, type AuthStore, type ModelRegistry, type SettingsStore } from "./config";
@@ -22,6 +23,8 @@ export interface PlatformCradle {
   readonly projectJieDir: string | null;
   readonly cwd: string;
   readonly inMemory: boolean;
+  readonly debug: boolean;
+  readonly logDir: string | null;
   readonly resumeSessionId?: string;
 
   readonly eventBus: EventBus;
@@ -52,12 +55,17 @@ export interface PlatformCradle {
 
 export async function bootPlatform(options: JiePlatformOptions): Promise<AwilixContainer<PlatformCradle>> {
   mkdirSync(options.homeJieDir, { recursive: true, mode: 0o755 });
+  const debug = options.debug === true;
+  const logDir = debug ? join(options.projectJieDir ?? options.homeJieDir, "logs") : null;
+  if (logDir !== null) mkdirSync(logDir, { recursive: true, mode: 0o755 });
   const container = createContainer<PlatformCradle>({ injectionMode: InjectionMode.CLASSIC });
   container.register({
     cwd: asValue(options.cwd),
     homeJieDir: asValue(options.homeJieDir),
     projectJieDir: asValue(options.projectJieDir),
     inMemory: asValue(options.inMemory === true),
+    debug: asValue(debug),
+    logDir: asValue(logDir),
   });
   if (options.resumeSessionId !== undefined) {
     container.register({ resumeSessionId: asValue(options.resumeSessionId) });

@@ -8,6 +8,7 @@ import type { ExecutionContext, ToolRegistry } from "../tools";
 import type { Skill, SkillManager } from "../skills";
 import type { HookIdentity, HookRunner } from "../hooks";
 import { AgentEventBridgeImpl } from "./agent-event-bridge";
+import { FileAgentLoopLogger, type AgentLoopLogger } from "./agent-loop-logger";
 import { composeSystemPrompt } from "./system-prompt";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { AgentBody, AgentBodyParams } from "./agent-body";
@@ -38,6 +39,7 @@ interface AgentBodyDeps {
   readonly memoryStore: MemoryStore;
   readonly memoryExtractor: MemoryExtractor;
   readonly settingsStore: SettingsStore;
+  readonly logDir: string | null;
 }
 
 export class JieAgentBody implements AgentBody {
@@ -64,6 +66,7 @@ export class JieAgentBody implements AgentBody {
   private restored: ReadonlyArray<AgentMessage> | null = null;
   private started = false;
   private stopped = false;
+  private loopLogger: AgentLoopLogger | null = null;
 
   constructor(params: AgentBodyParams, deps: AgentBodyDeps) {
     this.agentKey = params.agentKey;
@@ -172,7 +175,19 @@ export class JieAgentBody implements AgentBody {
       },
     });
     this.agent.state.tools = adaptedTools;
-    const unsubscribeAgent = this.agent.subscribe((event, _signal) => eventBridge.handleEvent(event));
+    if (deps.logDir !== null) {
+      this.loopLogger = new FileAgentLoopLogger({
+        logDir: deps.logDir,
+        agentKey: this.agentKey,
+        teamId: this.teamId,
+        sessionId: this.sessionId,
+      });
+    }
+    const logger = this.loopLogger;
+    const unsubscribeAgent = this.agent.subscribe((event, _signal) => {
+      logger?.log(event);
+      eventBridge.handleEvent(event);
+    });
     this.cleanups.push(unsubscribeAgent);
   }
 
@@ -245,6 +260,8 @@ export class JieAgentBody implements AgentBody {
     this.promptQueue.stop();
     for (const off of this.cleanups) off();
     this.cleanups.length = 0;
+    this.loopLogger?.close();
+    this.loopLogger = null;
   }
 
   private registerSubscriptions(): void {

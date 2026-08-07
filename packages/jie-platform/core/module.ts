@@ -28,6 +28,7 @@ export function registerCoreModule(container: AwilixContainer<PlatformCradle>): 
       llmService: LlmService,
       memoryStore: MemoryStore,
       memoryExtractor: MemoryExtractor,
+      logDir: string | null,
     ) => {
       const compactor = new CompactorImpl({
         transcriptStore,
@@ -50,6 +51,7 @@ export function registerCoreModule(container: AwilixContainer<PlatformCradle>): 
           memoryStore,
           memoryExtractor,
           settingsStore,
+          logDir,
         });
     }).singleton(),
   });
