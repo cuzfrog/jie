@@ -1,9 +1,10 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
-import { type Tui } from "./tui";
+import { _buildTerminalTitle, type Tui } from "./tui";
 import { bootTui } from "./container";
 import { Actions, type StateStore } from "./state";
+import { makeTuiState } from "./test";
 import { withTTY } from "../../tests/support";
 import { Events, type JiePlatform, type EventType, type AnyEventEnvelope, type EventEnvelope, type Command, type CommandResult } from "@cuzfrog/jie-platform";
 
@@ -381,5 +382,29 @@ describe("bootTui — global keys", () => {
     expect(harness!.stateStore.getState().teamPanelVisible).toBe(true);
     harness!.tui.stop();
     await started;
+  });
+});
+
+describe("_buildTerminalTitle", () => {
+  test("idle title uses a static dot and omits cwd when unknown", () => {
+    const title = _buildTerminalTitle(makeTuiState({ cwd: null, agents: new Map() }), 0);
+    expect(title).toBe("●jie");
+  });
+
+  test("idle title appends the workspace directory", () => {
+    const title = _buildTerminalTitle(makeTuiState({ cwd: "/home/cuz/workspace/jie", agents: new Map() }), 0);
+    expect(title).toBe("●jie - /home/cuz/workspace/jie");
+  });
+
+  test("busy title animates through the spinner frames", () => {
+    const state = makeTuiState({
+      cwd: "/tmp",
+      agents: new Map([["t1:a1", { status: "busy" } as unknown as import("./state").AgentUiState]]),
+    });
+    expect(_buildTerminalTitle(state, 0)).toBe("◐jie - /tmp");
+    expect(_buildTerminalTitle(state, 1)).toBe("◓jie - /tmp");
+    expect(_buildTerminalTitle(state, 2)).toBe("◑jie - /tmp");
+    expect(_buildTerminalTitle(state, 3)).toBe("◒jie - /tmp");
+    expect(_buildTerminalTitle(state, 4)).toBe("◐jie - /tmp");
   });
 });

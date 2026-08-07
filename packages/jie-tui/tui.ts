@@ -1,7 +1,7 @@
 import { ProcessTerminal, TUI, detectCapabilities, setCapabilities, type Terminal } from "@earendil-works/pi-tui";
 import { type AnyEventEnvelope, type JiePlatform } from "@cuzfrog/jie-platform";
 import { logger } from "@cuzfrog/jie-utils";
-import { Actions, type StateStore } from "./state";
+import { Actions, TuiState, type StateStore } from "./state";
 import type { CommandHandler } from "./command-handler";
 import type { TuiView } from "./components";
 import { createTransientAger } from "./transient-ager";
@@ -54,6 +54,8 @@ export class TuiImpl implements Tui {
   private ui: TUI | null = null;
   private view: TuiView | null = null;
   private resolveStart: (() => void) | null = null;
+  private titleDotFrame = 0;
+  private titleInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     platform: JiePlatform,
@@ -123,6 +125,8 @@ export class TuiImpl implements Tui {
         this.terminal = terminal;
         this.ui = ui;
         ui.start();
+        this.startTitleAnimation();
+        this.updateTitle();
       } catch (error) {
         this.resolveStart = null;
         throw error;
@@ -131,6 +135,10 @@ export class TuiImpl implements Tui {
   }
 
   stop(): void {
+    if (this.titleInterval !== null) {
+      clearInterval(this.titleInterval);
+      this.titleInterval = null;
+    }
     if (this.ui !== null) {
       try {
         this.ui.stop();
@@ -167,6 +175,19 @@ export class TuiImpl implements Tui {
         this.stateStore.dispatch(Actions.setErrorMessage(`kanban edit failed: ${error instanceof Error ? error.message : String(error)}`));
       });
   }
+
+  private startTitleAnimation(): void {
+    this.titleInterval = setInterval(() => {
+      this.titleDotFrame = (this.titleDotFrame + 1) % SPINNER.length;
+      this.updateTitle();
+    }, 800);
+  }
+
+  private updateTitle(): void {
+    if (this.terminal === null) return;
+    const title = buildTerminalTitle(this.stateStore.getState(), this.titleDotFrame);
+    this.terminal.setTitle(title);
+  }
 }
 
 function subscribeToBus(platform: JiePlatform, onEvent: (event: AnyEventEnvelope) => void): () => void {
@@ -191,3 +212,14 @@ function subscribeToBus(platform: JiePlatform, onEvent: (event: AnyEventEnvelope
     for (const unsub of unsubscribes) unsub();
   };
 }
+
+const IDLE_DOT = "●";
+const SPINNER = ["◐", "◓", "◑", "◒"] as const;
+
+function buildTerminalTitle(state: TuiState, dotFrame: number): string {
+  const dot = TuiState.isBusy(state) ? SPINNER[dotFrame % SPINNER.length] : IDLE_DOT;
+  const suffix = state.cwd === null ? "" : ` - ${state.cwd}`;
+  return `${dot}jie${suffix}`;
+}
+
+export { buildTerminalTitle as _buildTerminalTitle };
