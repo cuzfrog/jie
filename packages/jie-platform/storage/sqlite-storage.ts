@@ -17,18 +17,35 @@ export class SqliteStorage implements Storage {
       this.db.run(sql);
       return;
     }
-    this.db.run(sql, params as SQLQueryBindings[]);
+    this.db.run(sql, toSqlBindings(params));
   }
 
   query(sql: string, params?: unknown[]): unknown[][] {
     if (params === undefined) {
-      return this.db.query(sql).values() as unknown[][];
+      return this.db.query(sql).values();
     }
-    return this.db.query(sql).values(...(params as SQLQueryBindings[])) as unknown[][];
+    return this.db.query(sql).values(...toSqlBindings(params));
   }
 
   transaction<T>(body: (storage: Storage) => T): T {
     const transaction = this.db.transaction(() => body(this));
     return transaction();
   }
+}
+
+function toSqlBindings(values: unknown[]): SQLQueryBindings[] {
+  if (!values.every(isSqlBinding)) throw new Error("Unsupported SQL binding type");
+  return values;
+}
+
+function isSqlBinding(value: unknown): value is SQLQueryBindings {
+  return (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    typeof value === "bigint" ||
+    value instanceof Uint8Array ||
+    value instanceof Date
+  );
 }

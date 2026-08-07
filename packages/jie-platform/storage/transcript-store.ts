@@ -52,7 +52,7 @@ export class SqliteTranscriptStore implements TranscriptStore {
     sessionId: string,
     teamId: string,
   ): void {
-    const role = (message as { role: string }).role;
+    const role = message.role;
     const content = JSON.stringify(message);
     const createdAt = new Date().toISOString();
     const rows = this.storage.query(
@@ -60,7 +60,7 @@ export class SqliteTranscriptStore implements TranscriptStore {
        WHERE team_id = ? AND agent_key = ? AND session_id = ?`,
       [teamId, agentKey, sessionId],
     );
-    const seq = rows[0]![0] as number;
+    const seq = expectNumber(rows[0]![0]);
     this.storage.exec(
       `INSERT OR REPLACE INTO memory_turns
          (team_id, session_id, agent_key, seq, role, content, compacted, created_at)
@@ -102,12 +102,12 @@ export class SqliteTranscriptStore implements TranscriptStore {
          WHERE team_id = ? AND agent_key = ? AND session_id = ?`,
         [teamId, agentKey, sessionId],
       );
-      let nextSeq = (prefix[0]![0] as number) + 1;
+      let nextSeq = expectNumber(prefix[0]![0]) + 1;
       s.exec(
         `INSERT INTO memory_turns
            (team_id, session_id, agent_key, seq, role, content, compacted, created_at)
          VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
-        [teamId, sessionId, agentKey, nextSeq, (summary as { role: string }).role, JSON.stringify(summary), new Date().toISOString()],
+        [teamId, sessionId, agentKey, nextSeq, summary.role, JSON.stringify(summary), new Date().toISOString()],
       );
       for (const row of tail) {
         nextSeq += 1;
@@ -115,7 +115,7 @@ export class SqliteTranscriptStore implements TranscriptStore {
           `INSERT INTO memory_turns
              (team_id, session_id, agent_key, seq, role, content, compacted, created_at)
            VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
-          [teamId, sessionId, agentKey, nextSeq, row[1] as string, row[2] as string, row[3] as string],
+          [teamId, sessionId, agentKey, nextSeq, expectString(row[1]), expectString(row[2]), expectString(row[3])],
         );
       }
     });
@@ -133,7 +133,7 @@ export class SqliteTranscriptStore implements TranscriptStore {
        ORDER BY seq`,
       [teamId, agentKey, sessionId],
     );
-    return rows.map((row) => JSON.parse(row[5] as string) as AgentMessage);
+    return rows.map((row) => JSON.parse(expectString(row[5])) as AgentMessage);
   }
 
   hasSession(teamId: string, sessionId: string): boolean {
@@ -156,10 +156,10 @@ export class SqliteTranscriptStore implements TranscriptStore {
       [teamId],
     );
     return rows.map((row) => ({
-      sessionId: row[0] as string,
-      messageCount: row[1] as number,
-      lastActivity: row[2] as string,
-      name: (row[3] as string | null) ?? undefined,
+      sessionId: expectString(row[0]),
+      messageCount: expectNumber(row[1]),
+      lastActivity: expectString(row[2]),
+      name: expectOptionalString(row[3]),
     }));
   }
 
@@ -168,7 +168,8 @@ export class SqliteTranscriptStore implements TranscriptStore {
       `SELECT name FROM session_metadata WHERE session_id = ?`,
       [sessionId],
     );
-    return (rows[0]?.[0] as string | undefined) ?? null;
+    const name = expectOptionalString(rows[0]?.[0]);
+    return name ?? null;
   }
 
   renameSession(sessionId: string, name: string): void {
@@ -179,4 +180,20 @@ export class SqliteTranscriptStore implements TranscriptStore {
       [sessionId, name, updatedAt],
     );
   }
+}
+
+function expectString(value: unknown): string {
+  if (typeof value !== "string") throw new Error(`expected string, got ${typeof value}`);
+  return value;
+}
+
+function expectOptionalString(value: unknown): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  return expectString(value);
+}
+
+function expectNumber(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "bigint") return Number(value);
+  throw new Error(`expected number, got ${typeof value}`);
 }

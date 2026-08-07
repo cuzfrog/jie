@@ -48,11 +48,9 @@ export class SqliteKanbanStore implements KanbanStore {
       content,
       status: "pending",
       scope,
+      ...(scope === "session" ? { sessionId } : {}),
       ...(description === undefined ? {} : { description }),
     };
-    if (scope === "session") {
-      (card as { sessionId?: string }).sessionId = sessionId;
-    }
     this.persist(teamId, sessionId, [...existing, card]);
     return card;
   }
@@ -88,12 +86,12 @@ export class SqliteKanbanStore implements KanbanStore {
     const existing = this.loadAll(teamId, sessionId);
     const index = existing.findIndex((card) => card.id === cardId);
     if (index === -1) return null;
-    const card = { ...existing[index]! };
-    if (description === undefined || description.trim() === "") {
-      delete (card as { description?: string }).description;
-    } else {
-      card.description = description;
-    }
+    const original = existing[index]!;
+    const { description: _, ...base } = original;
+    const card: KanbanCard = {
+      ...base,
+      ...(description === undefined || description.trim() === "" ? {} : { description }),
+    };
     this.persist(teamId, sessionId, existing.map((c) => (c.id === cardId ? card : c)));
     return this.load(teamId, sessionId).find((c) => c.id === cardId) ?? card;
   }
@@ -103,13 +101,13 @@ export class SqliteKanbanStore implements KanbanStore {
     const index = source.findIndex((card) => card.id === cardId);
     if (index === -1) return null;
     const handoffCard = source[index]!;
+    const { sessionId: _, ...targetBase } = handoffCard;
     const target = this.loadAll(targetTeamId, TEAM_SESSION);
     if (target.some((card) => card.content === handoffCard.content)) return null;
     const targetCard: KanbanCard = {
-      ...handoffCard,
+      ...targetBase,
       id: this.nextCardId(targetTeamId),
       scope: "team",
-      sessionId: undefined,
     };
     this.persist(teamId, sessionId, source.filter((card) => card.id !== cardId));
     this.persist(targetTeamId, TEAM_SESSION, [...target, targetCard]);
@@ -143,7 +141,7 @@ export class SqliteKanbanStore implements KanbanStore {
 
   private nextCardId(teamId: string): string {
     const rows = this.storage.query(`SELECT next_id FROM kanban_counters WHERE team_id = ?`, [teamId]);
-    const next = (rows[0]?.[0] as number | undefined) ?? 1;
+    const next = rows.length === 0 ? 1 : expectNumber(rows[0]![0]);
     this.storage.exec(
       `INSERT INTO kanban_counters (team_id, next_id) VALUES (?, ?)
        ON CONFLICT(team_id) DO UPDATE SET next_id = excluded.next_id`,
@@ -171,33 +169,30 @@ function mergeIncoming(
         content: write.content,
         status: write.status,
         scope,
+        ...(scope === "session" ? { sessionId: defaultSessionId } : {}),
         ...(write.active_form === undefined ? {} : { active_form: write.active_form }),
         ...(write.description === undefined ? {} : { description: write.description }),
         ...(write.externalRef === undefined ? {} : { externalRef: write.externalRef }),
       };
-      if (scope === "session") {
-        (card as { sessionId?: string }).sessionId = defaultSessionId;
-      }
       return applyStatus(card, write.status);
     }
-    const card = { ...prior, status: write.status };
-    if (write.active_form !== undefined) (card as { active_form?: string }).active_form = write.active_form;
-    if (write.description !== undefined) (card as { description?: string }).description = write.description;
-    if (write.externalRef !== undefined) (card as { externalRef?: string }).externalRef = write.externalRef;
+    const card: KanbanCard = {
+      ...prior,
+      status: write.status,
+      ...(write.active_form === undefined ? {} : { active_form: write.active_form }),
+      ...(write.description === undefined ? {} : { description: write.description }),
+      ...(write.externalRef === undefined ? {} : { externalRef: write.externalRef }),
+    };
     return applyStatus(card, write.status);
   });
 }
 
 function applyStatus(card: KanbanCard, status: KanbanStatus): KanbanCard {
-  (card as { status: KanbanStatus }).status = status;
   if (status === "completed") {
-    if (card.completedAt === undefined) {
-      (card as { completedAt?: string }).completedAt = new Date().toISOString();
-    }
-  } else {
-    delete (card as { completedAt?: string }).completedAt;
+    return { ...card, status, completedAt: card.completedAt ?? new Date().toISOString() };
   }
-  return card;
+  const { completedAt, ...rest } = card;
+  return { ...rest, status };
 }
 
 function isVisible(card: KanbanCard): boolean {
@@ -214,19 +209,37 @@ function retentionCutoff(): string {
 
 function cardFromRow(row: ReadonlyArray<unknown>): KanbanCard {
   const [sessionId, id, content, status, scope, activeForm, description, completedAt, externalRef] = row;
-  const scopeValue = (scope as string) === "session" ? "session" : "team";
-  const card: KanbanCard = {
-    id: id as string,
-    content: content as string,
-    status: status as KanbanStatus,
+  const scopeValue = expectScope(scope);
+  return {
+    id: expectString(id),
+    content: expectString(content),
+    status: expectStatus(status),
     scope: scopeValue,
+    ...(scopeValue === "session" ? { sessionId: expectString(sessionId) } : {}),
+    ...(activeForm === null ? {} : { active_form: expectString(activeForm) }),
+    ...(description === null ? {} : { description: expectString(description) }),
+    ...(completedAt === null ? {} : { completedAt: expectString(completedAt) }),
+    ...(externalRef === null ? {} : { externalRef: expectString(externalRef) }),
   };
-  if (scopeValue === "session") {
-    (card as { sessionId?: string }).sessionId = sessionId as string;
-  }
-  return { ...card, ...withOptional(activeForm, "active_form"), ...withOptional(description, "description"), ...withOptional(completedAt, "completedAt"), ...withOptional(externalRef, "externalRef") };
 }
 
-function withOptional(value: unknown, key: "active_form" | "description" | "completedAt" | "externalRef"): { [K in typeof key]?: string } {
-  return value === null ? {} : { [key]: value as string };
+function expectString(value: unknown): string {
+  if (typeof value !== "string") throw new Error(`expected string, got ${typeof value}`);
+  return value;
+}
+
+function expectNumber(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "bigint") return Number(value);
+  throw new Error(`expected number, got ${typeof value}`);
+}
+
+function expectStatus(value: unknown): KanbanStatus {
+  if (value === "pending" || value === "in_progress" || value === "in_review" || value === "completed") return value;
+  throw new Error(`expected kanban status, got ${typeof value}`);
+}
+
+function expectScope(value: unknown): "team" | "session" {
+  if (value === "team" || value === "session") return value;
+  return "team";
 }
