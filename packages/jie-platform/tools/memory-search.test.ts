@@ -3,7 +3,7 @@ import type { Memory, MemoryManager } from "../memory";
 import { createMemorySearchTool } from "./memory-search";
 import { makeEmptyContext } from "./_test-context";
 
-const memoryManager = vi.mocked<MemoryManager>({ search: vi.fn(), bootstrap: vi.fn(() => ""), distill: vi.fn(async () => {}) });
+const memoryManager = vi.mocked<MemoryManager>({ add: vi.fn(), search: vi.fn(), bootstrap: vi.fn(() => ""), distill: vi.fn(async () => {}) });
 
 const settingsStore = vi.mocked<SettingsStore>({
   load: vi.fn(() => ({})),

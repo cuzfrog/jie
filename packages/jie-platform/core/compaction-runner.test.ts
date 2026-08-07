@@ -19,7 +19,7 @@ const compactor = vi.mocked<Compactor>({
   fitToWindow: vi.fn((messages) => messages),
 });
 
-const memoryManager = vi.mocked<MemoryManager>({ search: vi.fn(), bootstrap: vi.fn(() => ""), distill: vi.fn(async () => {}) });
+const memoryManager = vi.mocked<MemoryManager>({ add: vi.fn(), search: vi.fn(), bootstrap: vi.fn(() => ""), distill: vi.fn(async () => {}) });
 
 const sender: AgentSender = { kind: "agent", teamId: "t1", agentKey: "general-1" };
 

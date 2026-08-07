@@ -17,7 +17,7 @@ const artifactStore = vi.mocked<ArtifactStore>({
   list: vi.fn(),
 });
 
-const memoryManager = vi.mocked<MemoryManager>({ search: vi.fn(), bootstrap: vi.fn(() => ""), distill: vi.fn(async () => {}) });
+const memoryManager = vi.mocked<MemoryManager>({ add: vi.fn(), search: vi.fn(), bootstrap: vi.fn(() => ""), distill: vi.fn(async () => {}) });
 
 const settingsStore = vi.mocked<SettingsStore>({
   load: vi.fn(),
@@ -54,13 +54,14 @@ function bootedContainer(): AwilixContainer<PlatformCradle> {
 }
 
 describe("registerToolsModule", () => {
-  test("toolRegistry resolves with the 11 built-ins installed", () => {
+  test("toolRegistry resolves with the 12 built-ins installed", () => {
     const container = bootedContainer();
     const names = container.cradle.toolRegistry.list().map((t) => t.name).sort();
     expect(names).toEqual([
       "bash",
       "edit_file",
       "kanban_write",
+      "memory_add",
       "memory_search",
       "notify",
       "read_artifact",

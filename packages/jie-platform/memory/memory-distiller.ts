@@ -3,7 +3,8 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import { logger } from "@cuzfrog/jie-utils";
 import type { ModelRegistry, SettingsStore } from "../config";
 import type { LlmService } from "../llm";
-import type { MemoryType, MemoryStore, RawMemory } from "./memory-store";
+import type { MemoryType, RawMemory } from "./memory-store";
+import type { MemoryWriter } from "./memory-writer";
 
 export interface DistillationInput {
   readonly messages: ReadonlyArray<AgentMessage>;
@@ -21,13 +22,13 @@ export interface MemoryDistiller {
 
 export class MemoryDistillerImpl implements MemoryDistiller {
   private readonly llmService: LlmService;
-  private readonly memoryStore: MemoryStore;
+  private readonly memoryWriter: MemoryWriter;
   private readonly modelRegistry: ModelRegistry;
   private readonly settingsStore: SettingsStore;
 
-  constructor(llmService: LlmService, memoryStore: MemoryStore, modelRegistry: ModelRegistry, settingsStore: SettingsStore) {
+  constructor(llmService: LlmService, memoryWriter: MemoryWriter, modelRegistry: ModelRegistry, settingsStore: SettingsStore) {
     this.llmService = llmService;
-    this.memoryStore = memoryStore;
+    this.memoryWriter = memoryWriter;
     this.modelRegistry = modelRegistry;
     this.settingsStore = settingsStore;
   }
@@ -58,7 +59,7 @@ export class MemoryDistillerImpl implements MemoryDistiller {
       return;
     }
     if (memories.length === 0) return;
-    this.memoryStore.add(memories, input.teamId, input.sessionId);
+    this.memoryWriter.write(memories, input.teamId, input.sessionId);
   }
 }
 

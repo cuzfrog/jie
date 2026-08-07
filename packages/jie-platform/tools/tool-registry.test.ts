@@ -17,7 +17,7 @@ const artifactStore = vi.mocked<ArtifactStore>({
   list: vi.fn(),
 });
 
-const memoryManager = vi.mocked<MemoryManager>({ search: vi.fn(), bootstrap: vi.fn(() => ""), distill: vi.fn(async () => {}) });
+const memoryManager = vi.mocked<MemoryManager>({ add: vi.fn(), search: vi.fn(), bootstrap: vi.fn(() => ""), distill: vi.fn(async () => {}) });
 
 const settingsStore = vi.mocked<SettingsStore>({
   load: vi.fn(),
@@ -194,13 +194,14 @@ describe("InMemoryToolRegistry", () => {
 });
 
 describe("InMemoryToolRegistry — built-in installation", () => {
-  test("populated registry: list() contains all 11 built-ins", () => {
+  test("populated registry: list() contains all 12 built-ins", () => {
     const reg = makeReg();
     const names = reg.list().map((t) => t.name).sort();
     expect(names).toEqual([
       "bash",
       "edit_file",
       "kanban_write",
+      "memory_add",
       "memory_search",
       "notify",
       "read_artifact",
@@ -214,7 +215,7 @@ describe("InMemoryToolRegistry — built-in installation", () => {
 
   test("populated registry: resolve() returns the matching installed tool for each built-in", () => {
     const reg = makeReg();
-    for (const name of ["bash", "read_file", "write_file", "edit_file", "notify", "web_search", "web_fetch", "read_artifact", "write_artifact", "kanban_write", "memory_search"]) {
+    for (const name of ["bash", "read_file", "write_file", "edit_file", "notify", "web_search", "web_fetch", "read_artifact", "write_artifact", "kanban_write", "memory_add", "memory_search"]) {
       const matches = reg.resolve(name);
       expect(matches).toHaveLength(1);
       expect(matches[0]!.name).toBe(name);
