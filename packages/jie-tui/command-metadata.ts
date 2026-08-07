@@ -26,7 +26,7 @@ export const COMMAND_METADATA: ReadonlyArray<CommandMeta> = [
   { name: "team", description: "switch the active team", argumentHint: "<teamId>", arguments: [{ name: "teamId" }] },
   { name: "resume", description: "resume a session of the loaded team", argumentHint: "<sessionId>", arguments: [{ name: "sessionId" }] },
   { name: "rename", description: "name the active session", argumentHint: "<name>", arguments: [{ name: "name", greedy: true }] },
-  { name: "kanban", description: "toggle the kanban panel", argumentHint: "<add|remove|complete|review>", arguments: [{ name: "subcommand", optional: true }, { name: "rest", optional: true, greedy: true }] },
+  { name: "kanban", description: "toggle the kanban panel", argumentHint: "<add|remove|complete|review|handoff>", arguments: [{ name: "subcommand", optional: true }, { name: "rest", optional: true, greedy: true }] },
   { name: "notification", description: "toggle notification settings", argumentHint: "sound enable|disable", arguments: [{ name: "subcommand" }, { name: "value" }] },
 ];
 

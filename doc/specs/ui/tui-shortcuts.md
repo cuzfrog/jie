@@ -59,7 +59,8 @@ Typed into the editor like a prompt; the command handler (`command-handler.ts`) 
 | `/kanban remove <cardId>` | Remove a card from the board (`execute({name:"kanbanRemove"})`); the returned board replaces `state.kanbanBoard` | none (board refreshes) |
 | `/kanban complete <cardId>` | Mark a card completed (`execute({name:"kanbanSetStatus", status:"completed"})`); the returned board replaces `state.kanbanBoard` | none (board refreshes) |
 | `/kanban review <cardId>` | Mark a card in review (`execute({name:"kanbanSetStatus", status:"in_review"})`); the returned board replaces `state.kanbanBoard` | none (board refreshes) |
-| `/kanban` (bad subcommand / missing arg) | Usage error | `/kanban add --title <title> <description>` / `/kanban <add|remove|complete|review>` |
+| `/kanban handoff [<teamId>/]<cardId> <targetTeamId>` | Move a card to another team's board (`execute({name:"kanbanHandoff"})`). The source card may be addressed with a cross-team identity (`<teamId>/<cardId>`); the target team must be installed. The card is removed from the source board and recreated as a team-scoped card on the target board | `handed off kanban card #<n>` |
+| `/kanban` (bad subcommand / missing arg) | Usage error | `/kanban add --title <title> <description>` / `/kanban <add|remove|complete|review|handoff>` |
 
 ## Autocomplete
 

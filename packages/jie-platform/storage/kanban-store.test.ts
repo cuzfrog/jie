@@ -189,6 +189,26 @@ describe("SqliteKanbanStore", () => {
     expect(ids(cards)).toEqual(["#4"]);
   });
 
+  test("handoff moves a card to another team and removes it from the source", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [write("a")]);
+    store.replace("t2", "s2", []);
+    const card = store.handoff("t1", "s1", "#1", "t2");
+    expect(card?.content).toBe("a");
+    expect(card?.scope).toBe("team");
+    expect(store.load("t1", "s1")).toHaveLength(0);
+    expect(store.load("t2", "s2")).toHaveLength(1);
+  });
+
+  test("handoff returns null when the target team already has the same content", () => {
+    const storage = new SqliteStorage(":memory:");
+    const store = new SqliteKanbanStore(storage);
+    store.replace("t1", "s1", [write("a")]);
+    store.replace("t2", "", [write("a")]);
+    expect(store.handoff("t1", "s1", "#1", "t2")).toBeNull();
+    expect(store.load("t1", "s1")).toHaveLength(1);
+  });
+
   test("a board persisted for one session survives a fresh store instance (same file)", () => {
     const dbFile = join(mkdtempSync(join(tmpdir(), "jie-kanban-")), "storage.db");
     const first = new SqliteKanbanStore(new SqliteStorage(dbFile));

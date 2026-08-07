@@ -56,6 +56,7 @@ const kanbanStore = vi.mocked<KanbanStore>({
   setStatus: vi.fn(),
   editContent: vi.fn(),
   editDescription: vi.fn(),
+  handoff: vi.fn(),
 });
 
 const DEFAULT_SETTINGS: Settings = {

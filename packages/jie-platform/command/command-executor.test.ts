@@ -67,6 +67,7 @@ const kanbanStore = vi.mocked<KanbanStore>({
   setStatus: vi.fn(),
   editContent: vi.fn(),
   editDescription: vi.fn(),
+  handoff: vi.fn(),
 });
 
 const llmService = vi.mocked<LlmService>({ complete: vi.fn() });
@@ -635,6 +636,43 @@ describe("CommandExecutorImpl", () => {
     });
   });
 
+  describe("kanbanHandoff", () => {
+    test("moves a card to the target team and returns the source board", async () => {
+      teamManager.locate.mockReturnValueOnce("project");
+      const card: KanbanCard = { id: "#7", content: "hand me off", status: "pending" };
+      kanbanStore.handoff.mockReturnValue(card);
+      const board: KanbanCard[] = [];
+      kanbanStore.load.mockReturnValueOnce(board);
+      const result = await executor.execute({ name: "kanbanHandoff", teamId: "alpha", cardId: "#1", targetTeamId: "beta" });
+      expect(kanbanStore.handoff).toHaveBeenCalledWith("alpha", "session-1", "#1", "beta");
+      expect(teamManager.locate).toHaveBeenCalledWith("beta");
+      expect(result).toEqual({ board, card });
+    });
+
+    test("supports cross-team identity <teamId>/<cardId>", async () => {
+      teamManager.locate.mockReturnValueOnce("project");
+      const card: KanbanCard = { id: "#7", content: "hand me off", status: "pending" };
+      kanbanStore.handoff.mockReturnValue(card);
+      kanbanStore.load.mockReturnValueOnce([]);
+      const result = await executor.execute({ name: "kanbanHandoff", teamId: "alpha", cardId: "gamma/#3", targetTeamId: "beta" });
+      expect(kanbanStore.handoff).toHaveBeenCalledWith("gamma", "", "#3", "beta");
+      expect(result).toEqual({ board: [], card });
+    });
+
+    test("unknown target team -> TEAM_NOT_FOUND", async () => {
+      teamManager.locate.mockReturnValueOnce(null);
+      const pending = executor.execute({ name: "kanbanHandoff", teamId: "alpha", cardId: "#1", targetTeamId: "ghost" });
+      await expect(pending).rejects.toMatchObject({ code: "TEAM_NOT_FOUND" });
+    });
+
+    test("unknown cardId -> KANBAN_CARD_NOT_FOUND", async () => {
+      teamManager.locate.mockReturnValueOnce("project");
+      kanbanStore.handoff.mockReturnValue(null);
+      const pending = executor.execute({ name: "kanbanHandoff", teamId: "alpha", cardId: "#9", targetTeamId: "beta" });
+      await expect(pending).rejects.toMatchObject({ code: "KANBAN_CARD_NOT_FOUND" });
+    });
+  });
+
   describe("compact", () => {
     test("calls teamManager.compact with the team and agent key and returns null", async () => {
       teamManager.compact.mockResolvedValue(undefined);
@@ -657,6 +695,7 @@ describe("CommandExecutorImpl", () => {
       kanbanStore.remove.mockReturnValue(true);
       kanbanStore.setStatus.mockReturnValue(true);
       kanbanStore.editContent.mockReturnValue({ id: "#1", content: "task", status: "pending" });
+      kanbanStore.handoff.mockReturnValue({ id: "#7", content: "handed off", status: "pending" });
       const commands: Array<Parameters<typeof executor.execute>[0]> = [
         { name: "login", provider: "anthropic", apiKey: "sk-test" },
         { name: "logout", provider: "*" },
@@ -683,6 +722,7 @@ describe("CommandExecutorImpl", () => {
         { name: "kanbanRemove", teamId: "alpha", cardId: "#1" },
         { name: "kanbanSetStatus", teamId: "alpha", cardId: "#1", status: "completed" },
         { name: "kanbanEdit", teamId: "alpha", cardId: "#1", field: "content", text: "task" },
+        { name: "kanbanHandoff", teamId: "alpha", cardId: "#1", targetTeamId: "beta" },
       ];
       for (const command of commands) {
         await executor.execute(command);

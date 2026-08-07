@@ -830,6 +830,30 @@ describe("CommandHandlerImpl — /kanban", () => {
     expect(dispatch).toHaveBeenCalledWith(Actions.setKanbanBoard([]));
   });
 
+  test("/kanban handoff executes kanbanHandoff and publishes the source board", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockResolvedValueOnce({ board: [], card: { id: "#7", content: "handed off", status: "pending" } });
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban handoff #1 target-team");
+    expect(execute).toHaveBeenCalledWith({ name: "kanbanHandoff", teamId: "my-team", cardId: "#1", targetTeamId: "target-team" });
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setKanbanBoard([]));
+  });
+
+  test("/kanban handoff accepts a cross-team source reference", () => {
+    const { platform, execute } = makePlatform();
+    const { handler } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban handoff other-team/#5 target-team");
+    expect(execute).toHaveBeenCalledWith({ name: "kanbanHandoff", teamId: "my-team", cardId: "other-team/#5", targetTeamId: "target-team" });
+  });
+
+  test("/kanban handoff without a target team reports usage", () => {
+    const { platform } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban handoff #1");
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("/kanban handoff [<teamId>/]<cardId> <targetTeamId>"));
+  });
+
   test("an unknown /kanban subcommand reports an error", () => {
     const { platform } = makePlatform();
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));

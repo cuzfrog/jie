@@ -12,6 +12,7 @@ export interface KanbanStore {
   setStatus(teamId: string, sessionId: string, cardId: string, status: KanbanStatus): boolean;
   editContent(teamId: string, sessionId: string, cardId: string, content: string): KanbanCard | null;
   editDescription(teamId: string, sessionId: string, cardId: string, description: string | undefined): KanbanCard | null;
+  handoff(teamId: string, sessionId: string, cardId: string, targetTeamId: string): KanbanCard | null;
 }
 
 export class SqliteKanbanStore implements KanbanStore {
@@ -95,6 +96,24 @@ export class SqliteKanbanStore implements KanbanStore {
     }
     this.persist(teamId, sessionId, existing.map((c) => (c.id === cardId ? card : c)));
     return this.load(teamId, sessionId).find((c) => c.id === cardId) ?? card;
+  }
+
+  handoff(teamId: string, sessionId: string, cardId: string, targetTeamId: string): KanbanCard | null {
+    const source = this.loadAll(teamId, sessionId);
+    const index = source.findIndex((card) => card.id === cardId);
+    if (index === -1) return null;
+    const handoffCard = source[index]!;
+    const target = this.loadAll(targetTeamId, TEAM_SESSION);
+    if (target.some((card) => card.content === handoffCard.content)) return null;
+    const targetCard: KanbanCard = {
+      ...handoffCard,
+      id: this.nextCardId(targetTeamId),
+      scope: "team",
+      sessionId: undefined,
+    };
+    this.persist(teamId, sessionId, source.filter((card) => card.id !== cardId));
+    this.persist(targetTeamId, TEAM_SESSION, [...target, targetCard]);
+    return targetCard;
   }
 
   private loadAll(teamId: string, sessionId: string): KanbanCard[] {

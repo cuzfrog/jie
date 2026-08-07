@@ -55,6 +55,7 @@ export class CommandExecutorImpl implements CommandExecutor {
       kanbanRemove: this.kanbanRemove.bind(this),
       kanbanSetStatus: this.kanbanSetStatus.bind(this),
       kanbanEdit: this.kanbanEdit.bind(this),
+      kanbanHandoff: this.kanbanHandoff.bind(this),
     };
   }
 
@@ -259,6 +260,29 @@ export class CommandExecutorImpl implements CommandExecutor {
       throw new JiePlatformError("KANBAN_DUPLICATE_CONTENT", { detail: command.text });
     }
     return { board: this.kanbanStore.load(command.teamId, sessionId) };
+  }
+
+  private kanbanHandoff(command: Command<"kanbanHandoff">): CommandResult<"kanbanHandoff"> {
+    const sourceSessionId = this.sessionIdFor(command.teamId);
+    const { sourceTeamId, cardId } = this.resolveHandoffTarget(command);
+    const targetTeam = this.teamManager.locate(command.targetTeamId);
+    if (targetTeam === null) {
+      throw new JiePlatformError("TEAM_NOT_FOUND", { detail: `target team '${command.targetTeamId}' not found` });
+    }
+    const sessionId = sourceTeamId === command.teamId ? sourceSessionId : "";
+    const card = this.kanbanStore.handoff(sourceTeamId, sessionId, cardId, command.targetTeamId);
+    if (card === null) {
+      throw new JiePlatformError("KANBAN_CARD_NOT_FOUND", { detail: command.cardId });
+    }
+    return { board: this.kanbanStore.load(sourceTeamId, sessionId), card };
+  }
+
+  private resolveHandoffTarget(command: Command<"kanbanHandoff">): { sourceTeamId: string; cardId: string } {
+    if (command.cardId.includes("/")) {
+      const [sourceTeamId, cardId] = command.cardId.split("/", 2) as [string, string];
+      return { sourceTeamId, cardId };
+    }
+    return { sourceTeamId: command.teamId, cardId: command.cardId };
   }
 
   private sessionIdFor(teamId: string): string {

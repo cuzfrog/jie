@@ -261,7 +261,7 @@ export class CommandResolverImpl implements CommandResolver {
   private resolveKanban(state: TuiState, args: ReadonlyArray<string>): ResolvedCommand {
     const meta = COMMAND_METADATA.find((m) => m.name === "kanban")!;
     const parsed = CommandResolverImpl.parseArgs(args, meta);
-    if (parsed === null) return { kind: "error", text: "/kanban <add|remove|complete|review>" };
+    if (parsed === null) return { kind: "error", text: "/kanban <add|remove|complete|review|handoff>" };
     const subcommand = parsed.subcommand;
     if (subcommand === undefined) {
       return { kind: "ui", action: "cycleKanbanView" };
@@ -293,6 +293,15 @@ export class CommandResolverImpl implements CommandResolver {
         slashName: `kanban ${subcommand}`,
         command: { name: "kanbanSetStatus", teamId, cardId, status: subcommand === "complete" ? "completed" : "in_review" },
       };
+    }
+
+    if (subcommand === "handoff") {
+      const cardId = restArgs[0];
+      const targetTeamId = restArgs[1];
+      if (cardId === undefined || targetTeamId === undefined) {
+        return { kind: "error", text: "/kanban handoff [<teamId>/]<cardId> <targetTeamId>" };
+      }
+      return { kind: "platform", slashName: "kanban handoff", command: { name: "kanbanHandoff", teamId, cardId, targetTeamId } };
     }
 
     return { kind: "error", text: `/kanban: unknown subcommand '${subcommand}'` };

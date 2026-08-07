@@ -122,6 +122,12 @@ export class CommandHandlerImpl implements CommandHandler {
       case "kanbanSetStatus":
         this.stateStore.dispatch(Actions.setKanbanBoard((result as { readonly board: ReadonlyArray<KanbanCard> }).board));
         return;
+      case "kanbanHandoff": {
+        const kanbanResult = result as { readonly board: ReadonlyArray<KanbanCard>; readonly card: KanbanCard };
+        this.stateStore.dispatch(Actions.setKanbanBoard(kanbanResult.board));
+        this.stateStore.dispatch(Actions.setTransientMessage(`handed off kanban card ${kanbanResult.card.id}`));
+        return;
+      }
       default:
         return;
     }

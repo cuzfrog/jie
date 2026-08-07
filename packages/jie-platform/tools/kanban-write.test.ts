@@ -11,6 +11,7 @@ const kanbanStore = vi.mocked<KanbanStore>({
   setStatus: vi.fn(),
   editContent: vi.fn(),
   editDescription: vi.fn(),
+  handoff: vi.fn(),
 });
 
 function withIds(cards: ReadonlyArray<KanbanCardWrite>): KanbanCard[] {
