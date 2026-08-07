@@ -76,6 +76,24 @@ describe("SqliteKanbanStore", () => {
     expect(ids(store.load("t1", "s1"))).toEqual(["#1"]);
   });
 
+  test("add duplicate content does not advance the id counter", () => {
+    const storage = new SqliteStorage(":memory:");
+    const store = new SqliteKanbanStore(storage);
+    store.replace("t1", "s1", [write("first")]);
+    expect(store.add("t1", "s1", "first", undefined)).toBeNull();
+    const counter = storage.query("SELECT next_id FROM kanban_counters WHERE team_id = ?", ["t1"]);
+    expect(counter[0]?.[0]).toBe(2);
+  });
+
+  test("replace with only existing content does not advance the id counter", () => {
+    const storage = new SqliteStorage(":memory:");
+    const store = new SqliteKanbanStore(storage);
+    store.replace("t1", "s1", [write("first")]);
+    store.replace("t1", "s1", [write("first")]);
+    const counter = storage.query("SELECT next_id FROM kanban_counters WHERE team_id = ?", ["t1"]);
+    expect(counter[0]?.[0]).toBe(2);
+  });
+
   test("remove deletes the card and reports false for an unknown id", () => {
     const store = makeStore();
     store.replace("t1", "s1", [write("first"), write("second")]);

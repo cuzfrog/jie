@@ -4,6 +4,8 @@ import type { Storage } from "./storage";
 const TEAM_SESSION = "";
 const RETENTION_DAYS = 30;
 
+type KanbanCardDraft = Omit<KanbanCard, "id"> & { id?: string };
+
 export interface KanbanStore {
   load(teamId: string, sessionId: string): ReadonlyArray<KanbanCard>;
   replace(teamId: string, sessionId: string, incoming: ReadonlyArray<KanbanCardWrite>): ReadonlyArray<KanbanCard>;
@@ -28,7 +30,7 @@ export class SqliteKanbanStore implements KanbanStore {
 
   replace(teamId: string, sessionId: string, incoming: ReadonlyArray<KanbanCardWrite>): ReadonlyArray<KanbanCard> {
     const existing = this.loadAll(teamId, sessionId);
-    const merged = mergeIncoming(existing, incoming, (): string => this.nextCardId(teamId), sessionId);
+    const merged = mergeIncoming(existing, incoming, sessionId);
     const byContent = new Map(merged.map((card) => [card.content, card]));
     const cutoff = retentionCutoff();
     for (const card of existing) {
@@ -43,8 +45,7 @@ export class SqliteKanbanStore implements KanbanStore {
   add(teamId: string, sessionId: string, content: string, description: string | undefined, scope: "team" | "session" = "team"): KanbanCard | null {
     const existing = this.loadAll(teamId, sessionId);
     if (existing.some((card) => card.content === content)) return null;
-    const card: KanbanCard = {
-      id: this.nextCardId(teamId),
+    const card: KanbanCardDraft = {
       content,
       status: "pending",
       scope,
@@ -52,7 +53,7 @@ export class SqliteKanbanStore implements KanbanStore {
       ...(description === undefined ? {} : { description }),
     };
     this.persist(teamId, sessionId, [...existing, card]);
-    return card;
+    return this.load(teamId, sessionId).find((c) => c.content === content) ?? null;
   }
 
   remove(teamId: string, sessionId: string, cardId: string): boolean {
@@ -101,17 +102,16 @@ export class SqliteKanbanStore implements KanbanStore {
     const index = source.findIndex((card) => card.id === cardId);
     if (index === -1) return null;
     const handoffCard = source[index]!;
-    const { sessionId: _, ...targetBase } = handoffCard;
+    const { id: _, sessionId: __, ...targetBase } = handoffCard;
     const target = this.loadAll(targetTeamId, TEAM_SESSION);
     if (target.some((card) => card.content === handoffCard.content)) return null;
-    const targetCard: KanbanCard = {
+    const targetCard: KanbanCardDraft = {
       ...targetBase,
-      id: this.nextCardId(targetTeamId),
       scope: "team",
     };
     this.persist(teamId, sessionId, source.filter((card) => card.id !== cardId));
     this.persist(targetTeamId, TEAM_SESSION, [...target, targetCard]);
-    return targetCard;
+    return this.load(targetTeamId, TEAM_SESSION).find((c) => c.content === handoffCard.content) ?? null;
   }
 
   private loadAll(teamId: string, sessionId: string): KanbanCard[] {
@@ -124,39 +124,28 @@ export class SqliteKanbanStore implements KanbanStore {
     return rows.map((row) => cardFromRow(row));
   }
 
-  private persist(teamId: string, sessionId: string, cards: ReadonlyArray<KanbanCard>): void {
+  private persist(teamId: string, sessionId: string, cards: ReadonlyArray<KanbanCardDraft>): void {
     this.storage.transaction((s) => {
       s.exec(`DELETE FROM kanban_tasks WHERE team_id = ? AND (session_id = ? OR session_id = ?)`, [teamId, TEAM_SESSION, sessionId]);
       for (let seq = 0; seq < cards.length; seq += 1) {
         const card = cards[seq]!;
+        const id = card.id ?? nextCardId(s, teamId);
         const cardSessionId = card.scope === "session" ? (card.sessionId ?? sessionId) : TEAM_SESSION;
         s.exec(
           `INSERT INTO kanban_tasks (team_id, session_id, seq, id, content, status, scope, active_form, description, completed_at, external_ref, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [teamId, cardSessionId, seq, card.id, card.content, card.status, card.scope ?? "team", card.active_form ?? null, card.description ?? null, card.completedAt ?? null, card.externalRef ?? null, new Date().toISOString()],
+          [teamId, cardSessionId, seq, id, card.content, card.status, card.scope ?? "team", card.active_form ?? null, card.description ?? null, card.completedAt ?? null, card.externalRef ?? null, new Date().toISOString()],
         );
       }
     });
-  }
-
-  private nextCardId(teamId: string): string {
-    const rows = this.storage.query(`SELECT next_id FROM kanban_counters WHERE team_id = ?`, [teamId]);
-    const next = rows.length === 0 ? 1 : expectNumber(rows[0]![0]);
-    this.storage.exec(
-      `INSERT INTO kanban_counters (team_id, next_id) VALUES (?, ?)
-       ON CONFLICT(team_id) DO UPDATE SET next_id = excluded.next_id`,
-      [teamId, next + 1],
-    );
-    return `#${next}`;
   }
 }
 
 function mergeIncoming(
   existing: ReadonlyArray<KanbanCard>,
   incoming: ReadonlyArray<KanbanCardWrite>,
-  nextCardId: () => string,
   defaultSessionId: string,
-): KanbanCard[] {
+): KanbanCardDraft[] {
   const byContent = new Map(existing.map((card) => [card.content, card]));
   const writes = new Map<string, KanbanCardWrite>();
   for (const write of incoming) writes.set(write.content, write);
@@ -164,8 +153,7 @@ function mergeIncoming(
     const prior = byContent.get(write.content);
     if (prior === undefined) {
       const scope = write.scope ?? "team";
-      const card: KanbanCard = {
-        id: nextCardId(),
+      const card: KanbanCardDraft = {
         content: write.content,
         status: write.status,
         scope,
@@ -176,7 +164,7 @@ function mergeIncoming(
       };
       return applyStatus(card, write.status);
     }
-    const card: KanbanCard = {
+    const card: KanbanCardDraft = {
       ...prior,
       status: write.status,
       ...(write.active_form === undefined ? {} : { active_form: write.active_form }),
@@ -187,7 +175,7 @@ function mergeIncoming(
   });
 }
 
-function applyStatus(card: KanbanCard, status: KanbanStatus): KanbanCard {
+function applyStatus(card: KanbanCardDraft, status: KanbanStatus): KanbanCardDraft {
   if (status === "completed") {
     return { ...card, status, completedAt: card.completedAt ?? new Date().toISOString() };
   }
@@ -242,4 +230,15 @@ function expectStatus(value: unknown): KanbanStatus {
 function expectScope(value: unknown): "team" | "session" {
   if (value === "team" || value === "session") return value;
   return "team";
+}
+
+function nextCardId(s: Storage, teamId: string): string {
+  const rows = s.query(`SELECT next_id FROM kanban_counters WHERE team_id = ?`, [teamId]);
+  const next = rows.length === 0 ? 1 : expectNumber(rows[0]![0]);
+  s.exec(
+    `INSERT INTO kanban_counters (team_id, next_id) VALUES (?, ?)
+     ON CONFLICT(team_id) DO UPDATE SET next_id = excluded.next_id`,
+    [teamId, next + 1],
+  );
+  return `#${next}`;
 }
