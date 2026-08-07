@@ -4,7 +4,7 @@ tools:
   - bash
   - read_file
   - write_file
-  - edit
+  - edit_file
   - read_artifact
 subscribe:
   - task.planned

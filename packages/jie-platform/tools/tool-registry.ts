@@ -81,7 +81,7 @@ function builtins(
     { name: "bash", tool: createBashTool({ workspaceRoot }) as Tool },
     { name: "read_file", tool: createReadFileTool({ workspaceRoot }) as Tool },
     { name: "write_file", tool: createWriteFileTool({ workspaceRoot, fileMutationQueue }) as Tool },
-    { name: "edit", tool: createEditTool({ workspaceRoot, fileMutationQueue }) as Tool },
+    { name: "edit_file", tool: createEditTool({ workspaceRoot, fileMutationQueue }) as Tool },
     { name: "read_artifact", tool: createReadArtifactTool({ artifactStore }) as Tool },
     { name: "write_artifact", tool: createWriteArtifactTool({ artifactStore }) as Tool },
     { name: "kanban_write", tool: createKanbanWriteTool({ kanbanStore }) as Tool },

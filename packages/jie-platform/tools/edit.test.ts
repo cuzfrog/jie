@@ -8,7 +8,7 @@ import type { ExecutionContext } from "./types";
 
 const fileMutationQueue = createFileMutationQueue();
 
-describe("edit", () => {
+describe("edit_file", () => {
   let workspace: string;
 
   beforeEach(() => {

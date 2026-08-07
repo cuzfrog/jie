@@ -57,7 +57,7 @@ describe("registerToolsModule", () => {
     const names = container.cradle.toolRegistry.list().map((t) => t.name).sort();
     expect(names).toEqual([
       "bash",
-      "edit",
+      "edit_file",
       "kanban_write",
       "memory_search",
       "notify",
