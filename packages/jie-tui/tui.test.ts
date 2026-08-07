@@ -137,7 +137,7 @@ describe("bootTui — start resolves on pendingQuit", () => {
     withTTY(true, async () => {
       const { tui, stateStore } = bootHarness();
       const started = tui.start();
-      await new Promise((r) => setTimeout(r, 30));
+      await new Promise((r) => setTimeout(r, 10));
       stateStore.dispatch(Actions.requestQuit());
       expect(stateStore.getState().pendingQuit).toBe(true);
       await Promise.race([
@@ -152,7 +152,7 @@ describe("bootTui — start resolves on pendingQuit", () => {
     withTTY(true, async () => {
       const { tui } = bootHarness();
       const started = tui.start();
-      await new Promise((r) => setTimeout(r, 30));
+      await new Promise((r) => setTimeout(r, 10));
       tui.stop();
       await Promise.race([
         started,
@@ -205,7 +205,7 @@ const TWO_AGENT_TEAM = Events.teamLoaded({ kind: "system" }, {
 });
 
 function waitFrames(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms - 15)));
 }
 
 describe("bootTui — submit pipeline", () => {

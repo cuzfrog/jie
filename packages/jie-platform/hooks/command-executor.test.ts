@@ -34,7 +34,7 @@ describe("ShCommandExecutor", () => {
   });
 
   test("kills a long-running command and reports timedOut", async () => {
-    const result = await executor.execute(request("sleep 5", { timeoutMs: 150 }));
+    const result = await executor.execute(request("sleep 1", { timeoutMs: 50 }));
     expect(result.timedOut).toBe(true);
   });
 
@@ -42,9 +42,9 @@ describe("ShCommandExecutor", () => {
     const dir = mkdtempSync(join(tmpdir(), "jie-executor-kill-"));
     const marker = join(dir, "marker");
     try {
-      const result = await executor.execute(request(`(sleep 1; touch ${marker}) & wait`, { timeoutMs: 150, cwd: dir }));
+      const result = await executor.execute(request(`(sleep 0.1; touch ${marker}) & wait`, { timeoutMs: 50, cwd: dir }));
       expect(result.timedOut).toBe(true);
-      await new Promise((resolve) => setTimeout(resolve, 1300));
+      await new Promise((resolve) => setTimeout(resolve, 200));
       expect(existsSync(marker)).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });

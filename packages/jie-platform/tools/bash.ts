@@ -24,6 +24,7 @@ text I/O.`;
 
 export interface BashDeps {
   workspaceRoot: string;
+  killGraceMs?: number;
 }
 
 interface BashInput {
@@ -59,11 +60,12 @@ export function createBashTool(dependencies: BashDeps): Tool<BashInput> {
       let timedOut = false;
       let killing = false;
       let killTimer: ReturnType<typeof setTimeout> | undefined;
+      const killGraceMs = dependencies.killGraceMs ?? KILL_GRACE_MS;
       const killWithEscalation = () => {
         if (killing) return;
         killing = true;
         killProcessGroup(proc.pid, "SIGTERM");
-        killTimer = setTimeout(() => killProcessGroup(proc.pid, "SIGKILL"), KILL_GRACE_MS);
+        killTimer = setTimeout(() => killProcessGroup(proc.pid, "SIGKILL"), killGraceMs);
       };
       const timer = setTimeout(() => {
         timedOut = true;

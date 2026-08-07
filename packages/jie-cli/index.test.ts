@@ -274,7 +274,7 @@ describe("_run — print + apiKey", () => {
       kind: "print",
       instruction: "hello",
       team: "default-solo",
-      timeout: 1,
+      timeout: 0.05,
       json: false,
       inMemory: false,
       debug: false,
@@ -312,7 +312,7 @@ describe("_run — print + apiKey", () => {
     await captured.run({
       kind: "print",
       instruction: "hello",
-      timeout: 1,
+      timeout: 0.05,
       json: false,
       resume: "sess-1",
       inMemory: false,
@@ -327,7 +327,7 @@ describe("_run — print + apiKey", () => {
     const exit = await captured.run({
       kind: "print",
       instruction: "hello",
-      timeout: 1,
+      timeout: 0.05,
       json: false,
       apiKey: "sk-fail",
       inMemory: false,

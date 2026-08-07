@@ -263,12 +263,12 @@ describe("renderSseStream", () => {
   test("a chunk carrying delayMs switches rendering to a timed ReadableStream", async () => {
     const started = performance.now();
     const rendered = renderSseStream(
-      { match: {}, responseChunks: [text("slow"), { kind: "finish", reason: "stop", delayMs: 150 }] },
+      { match: {}, responseChunks: [text("slow"), { kind: "finish", reason: "stop", delayMs: 10 }] },
       req(),
     );
     if (!(rendered instanceof ReadableStream)) throw new Error("expected a timed stream when a chunk carries delayMs");
     const decoded = await readAll(rendered);
-    expect(performance.now() - started).toBeGreaterThanOrEqual(140);
+    expect(performance.now() - started).toBeGreaterThanOrEqual(8);
     expect(decoded).toContain('"content":"slow"');
     expect(decoded.endsWith("data: [DONE]\n\n")).toBe(true);
   });

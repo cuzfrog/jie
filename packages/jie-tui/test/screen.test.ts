@@ -109,7 +109,7 @@ async function press(harness: ScreenHarness, data: string): Promise<void> {
 }
 
 async function settle(harness: ScreenHarness): Promise<void> {
-  await sleep(60);
+  await sleep(10);
   await harness.vt.waitForRender();
 }
 

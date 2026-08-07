@@ -149,7 +149,7 @@ export class VirtualTerminal implements Terminal {
 
   async waitForRender(): Promise<void> {
     await new Promise<void>((resolve) => process.nextTick(resolve));
-    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    await new Promise<void>((resolve) => setTimeout(resolve, 5));
     await this.flush();
   }
 }
