@@ -32,6 +32,15 @@ describe("kanban_write", () => {
     expect(result.details).toEqual({ kind: "kanban", cards: withIds(cards) });
   });
 
+  test("accepts an optional session scope for ephemeral cards", async () => {
+    const cards: KanbanCardWrite[] = [{ content: "write tests", status: "in_progress", scope: "session" }];
+    kanbanStore.replace.mockReturnValue(withIds(cards));
+    const tool = createKanbanWriteTool({ kanbanStore });
+    const result = await tool.execute({ cards }, makeEmptyContext());
+    expect(kanbanStore.replace).toHaveBeenCalledWith("test-team", "test-session", cards);
+    expect(result.details).toEqual({ kind: "kanban", cards: withIds(cards) });
+  });
+
   test("single in_progress card is accepted as the canonical shape", async () => {
     const cards: KanbanCardWrite[] = [{ content: "write tests", status: "in_progress", active_form: "Writing tests" }];
     kanbanStore.replace.mockReturnValue(withIds(cards));

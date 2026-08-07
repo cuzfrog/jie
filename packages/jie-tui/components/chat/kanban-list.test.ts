@@ -51,6 +51,12 @@ describe("KanbanList", () => {
     expect(lines[2]).toContain(strikethrough(style("muted")("#3 done")));
   });
 
+  test("renders an [E] badge for session-scoped ephemeral cards", () => {
+    stateStore.getState.mockReturnValue(boardState([{ id: "#1", content: "ephemeral", status: "pending", scope: "session" }]));
+    const lines = new KanbanList(stateStore).render(80);
+    expect(lines[1]).toContain("[E]");
+  });
+
   test("renders nothing outside the list view", () => {
     stateStore.getState.mockReturnValue(boardState([{ id: "#1", content: "later", status: "pending" }], { kanbanView: "panel" }));
     expect(new KanbanList(stateStore).render(80)).toEqual([]);

@@ -6,7 +6,7 @@ const TEAM_SESSION = "";
 export interface KanbanStore {
   load(teamId: string, sessionId: string): ReadonlyArray<KanbanCard>;
   replace(teamId: string, sessionId: string, incoming: ReadonlyArray<KanbanCardWrite>): ReadonlyArray<KanbanCard>;
-  add(teamId: string, sessionId: string, content: string, description: string | undefined): KanbanCard | null;
+  add(teamId: string, sessionId: string, content: string, description: string | undefined, scope?: "team" | "session"): KanbanCard | null;
   remove(teamId: string, sessionId: string, cardId: string): boolean;
   setStatus(teamId: string, sessionId: string, cardId: string, status: KanbanStatus): boolean;
   editContent(teamId: string, sessionId: string, cardId: string, content: string): KanbanCard | null;
@@ -37,16 +37,19 @@ export class SqliteKanbanStore implements KanbanStore {
     return merged;
   }
 
-  add(teamId: string, sessionId: string, content: string, description: string | undefined): KanbanCard | null {
+  add(teamId: string, sessionId: string, content: string, description: string | undefined, scope: "team" | "session" = "team"): KanbanCard | null {
     const existing = this.load(teamId, sessionId);
     if (existing.some((card) => card.content === content)) return null;
     const card: KanbanCard = {
       id: this.nextCardId(teamId),
       content,
       status: "pending",
-      scope: "team",
+      scope,
       ...(description === undefined ? {} : { description }),
     };
+    if (scope === "session") {
+      (card as { sessionId?: string }).sessionId = sessionId;
+    }
     this.persist(teamId, sessionId, [...existing, card]);
     return card;
   }

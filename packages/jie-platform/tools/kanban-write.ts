@@ -35,6 +35,7 @@ export function createKanbanWriteTool(options: { kanbanStore: KanbanStore }): To
             Type.Literal("in_review"),
             Type.Literal("completed"),
           ]),
+          scope: Type.Optional(Type.Union([Type.Literal("team"), Type.Literal("session")])),
           active_form: Type.Optional(Type.String()),
           description: Type.Optional(Type.String()),
         }),

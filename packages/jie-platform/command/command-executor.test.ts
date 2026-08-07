@@ -476,7 +476,7 @@ describe("CommandExecutorImpl", () => {
     test("short description becomes the card title without an LLM call", async () => {
       kanbanStore.add.mockReturnValue({ id: "#1", content: "write tests", status: "pending" });
       const result = await executor.execute({ name: "kanbanAdd", teamId: "alpha", description: "write tests" });
-      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "write tests", undefined);
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "write tests", undefined, "team");
       expect(result).toEqual({ board: [], card: { id: "#1", content: "write tests", status: "pending" } });
       expect(llmService.complete).not.toHaveBeenCalled();
     });
@@ -484,7 +484,7 @@ describe("CommandExecutorImpl", () => {
     test("explicit title is used verbatim and the description is kept", async () => {
       kanbanStore.add.mockReturnValue({ id: "#1", content: "short title", status: "pending" });
       const result = await executor.execute({ name: "kanbanAdd", teamId: "alpha", title: "short title", description: "a very long description body" });
-      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "short title", "a very long description body");
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "short title", "a very long description body", "team");
       expect(result.card).toMatchObject({ id: "#1", content: "short title" });
       expect(llmService.complete).not.toHaveBeenCalled();
     });
@@ -496,7 +496,7 @@ describe("CommandExecutorImpl", () => {
       kanbanStore.add.mockReturnValue({ id: "#1", content: "distilled title", status: "pending" });
       const result = await executor.execute({ name: "kanbanAdd", teamId: "alpha", description: long });
       expect(llmService.complete).toHaveBeenCalledWith(expect.objectContaining({ maxTokens: 20, prompt: long }));
-      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "distilled title", long);
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "distilled title", long, "team");
       expect(result.card.content).toBe("distilled title");
     });
 
@@ -506,7 +506,7 @@ describe("CommandExecutorImpl", () => {
       llmService.complete.mockRejectedValue(new Error("llm down"));
       kanbanStore.add.mockReturnValue({ id: "#1", content: long, status: "pending" });
       const result = await executor.execute({ name: "kanbanAdd", teamId: "alpha", description: long });
-      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", long, undefined);
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", long, undefined, "team");
       expect(result.card.content).toBe(long);
     });
 
@@ -536,7 +536,7 @@ describe("CommandExecutorImpl", () => {
       llmService.complete.mockResolvedValue("- fix the bug\n  then verify");
       kanbanStore.add.mockReturnValue({ id: "#1", content: "fix the bug then verify", status: "pending" });
       await executor.execute({ name: "kanbanAdd", teamId: "alpha", description: long });
-      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "fix the bug then verify", long);
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "fix the bug then verify", long, "team");
     });
 
     test("throws NO_TEAM when the team has no loaded session", async () => {

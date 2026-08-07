@@ -52,6 +52,16 @@ describe("SqliteKanbanStore", () => {
     expect(store.load("t1", "s1")).toHaveLength(2);
   });
 
+  test("add with session scope creates an ephemeral card visible only in that session", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [write("first")]);
+    const card = store.add("t1", "s2", "ephemeral", undefined, "session");
+    expect(card?.scope).toBe("session");
+    expect(store.load("t1", "s2")).toHaveLength(2);
+    expect(store.load("t1", "s1")).toHaveLength(1);
+    expect(store.load("t1", "s3")).toHaveLength(1);
+  });
+
   test("add stores the description when provided", () => {
     const store = makeStore();
     const card = store.add("t1", "s1", "build the feature", "the full description");

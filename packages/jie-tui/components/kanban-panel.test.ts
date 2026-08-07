@@ -64,6 +64,12 @@ describe("KanbanPanel", () => {
     expect(row).toContain(style("muted")("rename todo"));
   });
 
+  test("renders an E badge for session-scoped ephemeral cards", () => {
+    stateStore.getState.mockReturnValue(boardState([{ id: "#1", content: "ephemeral", status: "pending", scope: "session" }]));
+    const row = new KanbanPanel(stateStore).render(120)[2];
+    expect(stripAnsi(row)).toContain("E ephemeral");
+  });
+
   test("marks the cursor card with a triangle, indents the others, and renders no backgrounds", () => {
     stateStore.getState.mockReturnValue(boardState([
       { id: "#1", content: "write spec", status: "pending" },

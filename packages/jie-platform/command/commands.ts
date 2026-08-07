@@ -38,7 +38,7 @@ interface CommandTypeMap {
   listSessions: CommandDef<{ teamId: string }, ReadonlyArray<SessionSummary>>;
   getNotificationSoundEnabled: CommandDef<{}, boolean>;
   setNotificationSoundEnabled: CommandDef<{ enabled: boolean }, null>;
-  kanbanAdd: CommandDef<{ teamId: string; title?: string; description: string }, KanbanBoardResult & { card: KanbanCard }>;
+  kanbanAdd: CommandDef<{ teamId: string; title?: string; description: string; scope?: "team" | "session" }, KanbanBoardResult & { card: KanbanCard }>;
   kanbanRemove: CommandDef<{ teamId: string; cardId: string }, KanbanBoardResult>;
   kanbanSetStatus: CommandDef<{ teamId: string; cardId: string; status: KanbanStatus }, KanbanBoardResult>;
   kanbanEdit: CommandDef<{ teamId: string; cardId: string; field: "content" | "description"; text: string }, KanbanBoardResult>;

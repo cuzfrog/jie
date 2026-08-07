@@ -278,7 +278,7 @@ export class CommandResolverImpl implements CommandResolver {
       return {
         kind: "platform",
         slashName: "kanban add",
-        command: { name: "kanbanAdd", teamId, title: parsedAdd.title, description: parsedAdd.description },
+        command: { name: "kanbanAdd", teamId, title: parsedAdd.title, description: parsedAdd.description, scope: parsedAdd.scope },
       };
     }
 
@@ -368,16 +368,25 @@ export class CommandResolverImpl implements CommandResolver {
     return { kind: "ok", provider, modelId };
   }
 
-  private static parseKanbanAddArgs(args: ReadonlyArray<string>): { kind: "ok"; title?: string; description: string } | { kind: "error"; text: string } {
-    if (args[0] === "--title") {
-      if (args[1] === undefined) return { kind: "error", text: "/kanban add --title <title> <description>" };
-      const description = args.slice(2).join(" ");
-      if (description.trim() === "") return { kind: "error", text: "/kanban add --title <title> <description>" };
-      return { kind: "ok", title: args[1], description };
+  private static parseKanbanAddArgs(args: ReadonlyArray<string>): { kind: "ok"; title?: string; description: string; scope?: "session" } | { kind: "error"; text: string } {
+    const flags = { title: undefined as string | undefined, ephemeral: false };
+    let index = 0;
+    while (index < args.length && args[index]!.startsWith("--")) {
+      const flag = args[index]!;
+      if (flag === "--title") {
+        if (args[index + 1] === undefined) return { kind: "error", text: "/kanban add [--ephemeral] --title <title> <description>" };
+        flags.title = args[index + 1]!;
+        index += 2;
+      } else if (flag === "--ephemeral") {
+        flags.ephemeral = true;
+        index += 1;
+      } else {
+        return { kind: "error", text: `/kanban add: unknown flag '${flag}'` };
+      }
     }
-    const description = args.join(" ");
-    if (description.trim() === "") return { kind: "error", text: "/kanban add <description>" };
-    return { kind: "ok", description };
+    const description = args.slice(index).join(" ");
+    if (description.trim() === "") return { kind: "error", text: "/kanban add [--ephemeral] [--title <title>] <description>" };
+    return { kind: "ok", title: flags.title, description, ...(flags.ephemeral ? { scope: "session" as const } : {}) };
   }
 
   private static appendPattern(filters: ReadonlyArray<string>, pattern: string): ReadonlyArray<string> {

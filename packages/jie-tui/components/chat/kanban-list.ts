@@ -38,7 +38,8 @@ export class KanbanList implements Component {
 function renderCard(card: KanbanCard, width: number): string {
   const entry = CARD_STYLES[card.status];
   const glyph = style(entry.glyphColor)(entry.glyph);
-  const label = `${card.id} ${card.content}`;
+  const scopeBadge = card.scope === "session" ? "[E] " : "";
+  const label = `${card.id} ${scopeBadge}${card.content}`;
   const colored = style(entry.textColor)(label);
   const text = card.status === "completed" ? strikethrough(colored) : colored;
   return truncateToWidth(`${glyph} ${text}`, width);
