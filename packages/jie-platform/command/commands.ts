@@ -36,6 +36,8 @@ interface CommandTypeMap {
   getGitStatus: CommandDef<{}, GitSnapshot>;
   stop: CommandDef<{}, null>;
   listSessions: CommandDef<{ teamId: string }, ReadonlyArray<SessionSummary>>;
+  getNotificationSoundEnabled: CommandDef<{}, boolean>;
+  setNotificationSoundEnabled: CommandDef<{ enabled: boolean }, null>;
   kanbanAdd: CommandDef<{ teamId: string; title?: string; description: string }, KanbanBoardResult & { card: KanbanCard }>;
   kanbanRemove: CommandDef<{ teamId: string; cardId: string }, KanbanBoardResult>;
   kanbanComplete: CommandDef<{ teamId: string; cardId: string }, KanbanBoardResult>;

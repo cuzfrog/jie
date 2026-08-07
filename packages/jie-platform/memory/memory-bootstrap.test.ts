@@ -9,6 +9,7 @@ const settingsStore = vi.mocked<SettingsStore>({
   setDefaultEffort: vi.fn(),
   setDefaultTeam: vi.fn(),
   setModelFilters: vi.fn(),
+  setNotificationSoundEnabled: vi.fn(),
 });
 
 function atom(overrides: Partial<MemoryAtom> = {}): MemoryAtom {

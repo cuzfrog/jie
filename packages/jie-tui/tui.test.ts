@@ -1,11 +1,14 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
-import { _buildTerminalTitle, type Tui } from "./tui";
+import { _buildTerminalTitle, type Tui, type TuiStdout } from "./tui";
 import { bootTui } from "./container";
 import { Actions, type StateStore } from "./state";
 import { makeTuiState } from "./test";
 import { withTTY } from "../../tests/support";
+import { StreamTerminalImpl } from "./stream-terminal";
+import { asValue } from "awilix";
+import { type Terminal } from "@earendil-works/pi-tui";
 import { Events, type JiePlatform, type EventType, type AnyEventEnvelope, type EventEnvelope, type Command, type CommandResult } from "@cuzfrog/jie-platform";
 
 class FakeStdin extends PassThrough {
@@ -21,6 +24,14 @@ class FakeStdin extends PassThrough {
 class FakeStdout extends PassThrough {
   columns = 80;
   rows = 30;
+}
+
+class RecordingStreamTerminal extends StreamTerminalImpl {
+  readonly writeCalls: string[] = [];
+  write(data: string): void {
+    this.writeCalls.push(data);
+    super.write(data);
+  }
 }
 
 interface PromptCall {
@@ -40,11 +51,11 @@ interface PlatformHarness {
   readonly promptCalls: ReadonlyArray<PromptCall>;
   readonly dequeueCalls: ReadonlyArray<QueueCall>;
   readonly requeueCalls: ReadonlyArray<QueueCall>;
-  readonly executeCalls: ReadonlyArray<unknown>;
+  readonly executeCalls: ReadonlyArray<Command>;
   emit(event: AnyEventEnvelope): void;
 }
 
-function makePlatformHarness(executeResult: CommandResult<"kanbanEdit"> = { board: [] }): PlatformHarness {
+function makePlatformHarness(executeResult: CommandResult<"kanbanEdit"> = { board: [] }, soundEnabled = true): PlatformHarness {
   const handlers = new Map<EventType, (env: AnyEventEnvelope) => void>();
   const recorded: PromptCall[] = [];
   const dequeues: QueueCall[] = [];
@@ -71,7 +82,9 @@ function makePlatformHarness(executeResult: CommandResult<"kanbanEdit"> = { boar
     },
     execute: (async (command: Command) => {
       executes.push(command);
-      return command.name === "kanbanEdit" ? executeResult : null;
+      if (command.name === "kanbanEdit") return executeResult;
+      if (command.name === "getNotificationSoundEnabled") return soundEnabled;
+      return null;
     }) as JiePlatform["execute"],
     teams: () => [],
     shutdown: () => Promise.resolve(),
@@ -94,19 +107,25 @@ interface TuiHarness {
   readonly stdin: FakeStdin;
   readonly stdout: FakeStdout;
   readonly platform: PlatformHarness;
+  readonly terminal?: RecordingStreamTerminal;
 }
 
-function bootHarness(executeResult?: CommandResult<"kanbanEdit">): TuiHarness {
+function bootHarness(executeResult?: CommandResult<"kanbanEdit">, recordWrites = false, soundEnabled = true): TuiHarness {
   const stdin = new FakeStdin();
   const stdout = new FakeStdout();
-  const platform = makePlatformHarness(executeResult);
+  const platform = makePlatformHarness(executeResult, soundEnabled);
   const container = bootTui({ cwd: process.cwd() }, {
     platform: platform.platform,
     homeJieDir: join(tmpdir(), "jie-tui-unit-home"),
     stdin,
     stdout,
   });
-  return { tui: container.cradle.tui, stateStore: container.cradle.stateStore, stdin, stdout, platform };
+  let terminal: RecordingStreamTerminal | undefined;
+  if (recordWrites) {
+    terminal = new RecordingStreamTerminal(stdin, stdout);
+    container.register({ terminalFactory: asValue((_: NodeJS.ReadableStream, __: TuiStdout): Terminal => terminal!) });
+  }
+  return { tui: container.cradle.tui, stateStore: container.cradle.stateStore, stdin, stdout, platform, terminal };
 }
 
 function makePlatform(): JiePlatform {
@@ -380,6 +399,74 @@ describe("bootTui — global keys", () => {
     harness!.stdin.write("\x1b[D");
     await waitFrames(20);
     expect(harness!.stateStore.getState().teamPanelVisible).toBe(true);
+    harness!.tui.stop();
+    await started;
+  });
+});
+
+describe("bootTui — notification sound", () => {
+  test("agent.idle for the focused agent with a terminal sound reason rings the terminal", async () => {
+    let harness: TuiHarness | null = null;
+    withTTY(true, () => {
+      harness = bootHarness(undefined, true);
+    });
+    const started = harness!.tui.start();
+    await waitFrames(30);
+    harness!.platform.emit(TEAM_LOADED);
+    await waitFrames(20);
+    harness!.platform.emit(Events.agentIdle({ kind: "agent", teamId: "my-team", agentKey: "general-1" }, "stop"));
+    await waitFrames(20);
+    expect(harness!.platform.executeCalls.some((command) => command.name === "getNotificationSoundEnabled")).toBe(true);
+    expect(harness!.terminal!.writeCalls.some((data) => data === "\x07")).toBe(true);
+    harness!.tui.stop();
+    await started;
+  });
+
+  test("agent.idle with sound disabled does not ring the terminal", async () => {
+    let harness: TuiHarness | null = null;
+    withTTY(true, () => {
+      harness = bootHarness(undefined, true, false);
+    });
+    const started = harness!.tui.start();
+    await waitFrames(30);
+    harness!.platform.emit(TEAM_LOADED);
+    await waitFrames(20);
+    harness!.platform.emit(Events.agentIdle({ kind: "agent", teamId: "my-team", agentKey: "general-1" }, "stop"));
+    await waitFrames(20);
+    expect(harness!.terminal!.writeCalls.some((data) => data === "\x07")).toBe(false);
+    harness!.tui.stop();
+    await started;
+  });
+
+  test("agent.idle for a non-focused agent does not ring the terminal", async () => {
+    let harness: TuiHarness | null = null;
+    withTTY(true, () => {
+      harness = bootHarness(undefined, true);
+    });
+    const started = harness!.tui.start();
+    await waitFrames(30);
+    harness!.platform.emit(TWO_AGENT_TEAM);
+    await waitFrames(20);
+    harness!.platform.emit(Events.agentIdle({ kind: "agent", teamId: "my-team", agentKey: "worker-1" }, "stop"));
+    await waitFrames(20);
+    expect(harness!.platform.executeCalls.some((command) => command.name === "getNotificationSoundEnabled")).toBe(false);
+    expect(harness!.terminal!.writeCalls.some((data) => data === "\x07")).toBe(false);
+    harness!.tui.stop();
+    await started;
+  });
+
+  test("agent.idle with a non-sound stop reason does not ring the terminal", async () => {
+    let harness: TuiHarness | null = null;
+    withTTY(true, () => {
+      harness = bootHarness(undefined, true);
+    });
+    const started = harness!.tui.start();
+    await waitFrames(30);
+    harness!.platform.emit(TEAM_LOADED);
+    await waitFrames(20);
+    harness!.platform.emit(Events.agentIdle({ kind: "agent", teamId: "my-team", agentKey: "general-1" }, "toolUse"));
+    await waitFrames(20);
+    expect(harness!.terminal!.writeCalls.some((data) => data === "\x07")).toBe(false);
     harness!.tui.stop();
     await started;
   });

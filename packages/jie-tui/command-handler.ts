@@ -22,7 +22,16 @@ interface AgentRoute {
   readonly agentKey: string;
 }
 
-type InterceptName = "model" | "model-filter" | "effort" | "reload" | "resume" | "rename" | "kanban" | Extract<CommandName, "login" | "logout" | "team">;
+type InterceptName =
+  | "model"
+  | "model-filter"
+  | "effort"
+  | "reload"
+  | "resume"
+  | "rename"
+  | "kanban"
+  | "notification"
+  | Extract<CommandName, "login" | "logout" | "team">;
 
 type TuiCommandName = "help" | "clear" | "exit" | InterceptName;
 
@@ -140,6 +149,7 @@ export class CommandHandlerImpl implements CommandHandler {
       case "resume": return this.interceptResume(args);
       case "rename": return this.interceptRename(args);
       case "kanban": return this.interceptKanban(args);
+      case "notification": return this.interceptNotification(args);
       default: return null;
     }
   }
@@ -345,6 +355,25 @@ export class CommandHandlerImpl implements CommandHandler {
     }
     return { kind: "error", text: `/kanban: unknown subcommand '${subcommand}'` };
   }
+
+  private interceptNotification(args: ReadonlyArray<string>): InterceptResult {
+    const subcommand = args[0];
+    if (subcommand !== "sound") {
+      return { kind: "error", text: "/notification sound enable|disable" };
+    }
+    const value = args[1];
+    if (value !== "enable" && value !== "disable") {
+      return { kind: "error", text: "/notification sound enable|disable" };
+    }
+    const enabled = value === "enable";
+    void this.platform.execute({ name: "setNotificationSoundEnabled", enabled })
+      .then(() => {
+        this.stateStore.dispatch(Actions.setTransientMessage(`sound notifications ${enabled ? "enabled" : "disabled"}`));
+      }, (error: unknown) => {
+        this.stateStore.dispatch(Actions.setErrorMessage(`/notification sound failed: ${errorReason(error)}`));
+      });
+    return { kind: "silent" };
+  }
 }
 
 function runCommand(input: string): CommandOutcome {
@@ -379,7 +408,7 @@ const COMMANDS: ReadonlyMap<string, SlashCommand> = new Map<string, SlashCommand
 
 const LOCAL_COMMAND_NAMES = ["help", "clear", "exit"] as const satisfies ReadonlyArray<TuiCommandName>;
 
-const INTERCEPT_NAMES = ["login", "logout", "model", "model-filter", "effort", "reload", "team", "resume", "rename", "kanban"] as const satisfies ReadonlyArray<InterceptName>;
+const INTERCEPT_NAMES = ["login", "logout", "model", "model-filter", "effort", "reload", "team", "resume", "rename", "kanban", "notification"] as const satisfies ReadonlyArray<InterceptName>;
 
 function parseKanbanAddArgs(args: ReadonlyArray<string>): { kind: "ok"; title?: string; description: string } | { kind: "error"; text: string } {
   if (args[0] === "--title") {

@@ -24,7 +24,7 @@ export class WelcomeBanner implements Component {
 
 export function welcomeLines(state: TuiStateType, width: number): string[] {
   const w = Math.max(1, width);
-  return joinSections([headerLines(state, w), helpHintSection()], w);
+  return joinSections([identityLines(state), helpHintSection()], w);
 }
 
 function helpHintSection(): string[] {
@@ -44,25 +44,10 @@ function joinSections(sections: ReadonlyArray<ReadonlyArray<string>>, width: num
   return sections.flatMap((section, index) => (index === 0 ? [...section] : ["", ...section])).map((line) => truncateToWidth(line, width));
 }
 
-function headerLines(state: TuiStateType, width: number): string[] {
-  const identity = identityLines(state);
-  const minWidth = MARK_WIDTH + MARK_GAP + visibleWidth(identity[0]);
-  if (width < minWidth) return identity;
-  const gap = " ".repeat(MARK_GAP);
-  const rows: string[] = [];
-  for (let i = 0; i < MARK_LINES.length; i++) {
-    const art = MARK_LINES[i]!;
-    const label = identity[i];
-    rows.push(label === undefined ? style("accent")(art) : `${style("accent")(art.padEnd(MARK_WIDTH))}${gap}${label}`);
-  }
-  return rows;
-}
-
 function identityLines(state: TuiStateType): string[] {
-  const version = state.version === "" ? "" : ` v${state.version}`;
+  const version = state.version === "" ? "" : ` · v${state.version}`;
   const lines = [
-    `${style("accent")(WORDMARK)}${style("muted")(`${version}  ${TAGLINE}`)}`,
-    `${style("warning")(MARK_GLYPH)}${style("muted")(MARK_GLOSS)}`,
+    `${style("accent")(MARK_GLYPH)}${style("muted")(` (jiè)${version}  ${TAGLINE}`)}`,
   ];
   const teams = teamsLine(state);
   if (teams !== null) lines.push(teams);
@@ -119,21 +104,8 @@ function maxWidth(cells: ReadonlyArray<CommandCell>): number {
   return cells.reduce((max, cell) => Math.max(max, cell.width), 0);
 }
 
-const WORDMARK = "jie";
-const TAGLINE = "multi-agent coding, right in your terminal";
 const MARK_GLYPH = "界";
-const MARK_GLOSS = " (jiè) · boundary; world";
-const MARK_LINES: ReadonlyArray<string> = [
-  "   █▀▀▀▀█▀▀▀▀█",
-  "   █▄▄▄▄█▄▄▄▄█",
-  "   █▀▀▀▀█▀▀▀▀█",
-  "   ▀▀▀▀▀█▀▀▀▀▀",
-  "      ▄██▀█▄",
-  "    ▄▀▄▀ █ ▀▄",
-  "  ▄▀ ▄▀  █   ▀▄",
-];
-const MARK_WIDTH = 15;
-const MARK_GAP = 4;
+const TAGLINE = "native multi-agent coding";
 const COLUMN_GAP = 4;
 const COMMANDS_HEADING = "Commands";
 const SHORTCUTS_HEADING = "Shortcuts";

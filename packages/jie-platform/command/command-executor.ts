@@ -48,6 +48,8 @@ export class CommandExecutorImpl implements CommandExecutor {
       getGitStatus: this.getGitStatus.bind(this),
       stop: this.stop.bind(this),
       listSessions: this.listSessions.bind(this),
+      getNotificationSoundEnabled: this.getNotificationSoundEnabled.bind(this),
+      setNotificationSoundEnabled: this.setNotificationSoundEnabled.bind(this),
       kanbanAdd: this.kanbanAdd.bind(this),
       kanbanRemove: this.kanbanRemove.bind(this),
       kanbanComplete: this.kanbanComplete.bind(this),
@@ -189,6 +191,15 @@ export class CommandExecutorImpl implements CommandExecutor {
 
   private listSessions(command: Command<"listSessions">): CommandResult<"listSessions"> {
     return this.teamManager.listSessions(command.teamId);
+  }
+
+  private getNotificationSoundEnabled(): CommandResult<"getNotificationSoundEnabled"> {
+    return this.settingsStore.load().notification?.soundEnabled ?? true;
+  }
+
+  private setNotificationSoundEnabled(command: Command<"setNotificationSoundEnabled">): CommandResult<"setNotificationSoundEnabled"> {
+    this.settingsStore.setNotificationSoundEnabled(command.enabled);
+    return null;
   }
 
   private async kanbanAdd(command: Command<"kanbanAdd">): Promise<CommandResult<"kanbanAdd">> {

@@ -106,6 +106,10 @@ function validateSettings(raw: RawSettings, source: string): Settings {
     result.compaction = validateCompaction(raw.compaction, source);
   }
 
+  if ("notification" in raw && raw.notification !== undefined) {
+    result.notification = validateNotification(raw.notification, source);
+  }
+
   return result;
 }
 
@@ -157,6 +161,21 @@ function validateMemory(value: unknown, source: string): Settings["memory"] {
   return result;
 }
 
+function validateNotification(value: unknown, source: string): Settings["notification"] {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new JiePlatformError("INVALID_CONFIG", { detail: `${source}: notification must be an object` });
+  }
+  const raw = value as Record<string, unknown>;
+  const result: { -readonly [K in keyof NonNullable<Settings["notification"]>]: NonNullable<Settings["notification"]>[K] } = {};
+  if ("soundEnabled" in raw && raw.soundEnabled !== undefined) {
+    if (typeof raw.soundEnabled !== "boolean") {
+      throw new JiePlatformError("INVALID_CONFIG", { detail: `${source}: notification.soundEnabled must be a boolean` });
+    }
+    result.soundEnabled = raw.soundEnabled;
+  }
+  return result;
+}
+
 function validatePositiveInteger(value: unknown, label: string, source: string): number {
   if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
     throw new JiePlatformError("INVALID_CONFIG", { detail: `${source}: ${label} must be a positive integer` });
@@ -167,7 +186,8 @@ function validatePositiveInteger(value: unknown, label: string, source: string):
 function deepMergeSettings(base: Settings, override: Settings): Settings {
   const compaction = mergeNested(base.compaction, override.compaction);
   const memory = mergeNested(base.memory, override.memory);
-  return { ...base, ...override, compaction, memory };
+  const notification = mergeNested(base.notification, override.notification);
+  return { ...base, ...override, compaction, memory, notification };
 }
 
 function mergeNested<T extends object>(base: T | undefined, override: T | undefined): T | undefined {

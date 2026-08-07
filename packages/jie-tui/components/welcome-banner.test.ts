@@ -13,12 +13,11 @@ describe("WelcomeBanner", () => {
     stateStore.getState.mockReturnValue(makeTuiState());
   });
 
-  test("renders the jie mark, the wordmark and the gloss while there is no conversation", () => {
+  test("renders the mark, the gloss and the tagline while there is no conversation", () => {
     const text = new WelcomeBanner(stateStore).render(80).map(stripAnsi).join("\n");
-    expect(text).toContain("█▀▀▀▀█▀▀▀▀█");
-    expect(text).toContain("jie");
-    expect(text).toContain("multi-agent");
     expect(text).toContain("界");
+    expect(text).toContain("(jiè)");
+    expect(text).toContain("native multi-agent coding");
   });
 
   test("renders the installed teams once the platform reported them, loaded team first", () => {
@@ -39,15 +38,17 @@ describe("WelcomeBanner", () => {
     expect(text).not.toContain("gpt-4o");
   });
 
-  test("shows the version next to the wordmark", () => {
+  test("shows the version next to the mark", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ version: "1.2.3" }));
     const text = new WelcomeBanner(stateStore).render(80).map(stripAnsi).join("\n");
-    expect(text).toContain("jie v1.2.3");
+    expect(text).toContain("v1.2.3");
+    expect(text).toContain("界 (jiè)");
   });
 
   test("shows no version suffix when the version is unknown", () => {
     const text = new WelcomeBanner(stateStore).render(80).map(stripAnsi).join("\n");
-    expect(text).not.toContain("jie v");
+    expect(text).not.toMatch(/v\d/);
+    expect(text).toContain("界 (jiè)");
   });
 
   test("shows a hint to call /help instead of the command and shortcut list", () => {
@@ -57,12 +58,10 @@ describe("WelcomeBanner", () => {
     expect(text).not.toContain("Shortcuts");
   });
 
-  test("hides the mark when the width cannot fit it beside the identity", () => {
-    const narrow = new WelcomeBanner(stateStore).render(65).map(stripAnsi).join("\n");
-    expect(narrow).not.toContain("█");
-    expect(narrow).toContain("jie");
-    const ample = new WelcomeBanner(stateStore).render(66).map(stripAnsi).join("\n");
-    expect(ample).toContain("█▀▀▀▀█▀▀▀▀█");
+  test("renders the identity without the ASCII art mark", () => {
+    const text = new WelcomeBanner(stateStore).render(80).map(stripAnsi).join("\n");
+    expect(text).not.toContain("█");
+    expect(text).toContain("界");
   });
 
   test("headings carry no rule line", () => {
@@ -72,7 +71,7 @@ describe("WelcomeBanner", () => {
 
   test("colors the mark in accent and the /help hint in accent and muted", () => {
     const lines = new WelcomeBanner(stateStore).render(80);
-    expect(lines.some((line) => line.startsWith("\x1b[36m") && stripAnsi(line).includes("█"))).toBe(true);
+    expect(lines.some((line) => line.startsWith("\x1b[36m") && stripAnsi(line).includes("界"))).toBe(true);
     expect(lines.some((line) => line.includes("\x1b[36m/help\x1b[39m"))).toBe(true);
   });
 

@@ -822,6 +822,60 @@ describe("CommandHandlerImpl — /kanban", () => {
   });
 });
 
+describe("CommandHandlerImpl — /notification", () => {
+  test("/notification sound enable dispatches setNotificationSoundEnabled and a transient message", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockResolvedValueOnce(null);
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/notification sound enable");
+    expect(execute).toHaveBeenCalledWith({ name: "setNotificationSoundEnabled", enabled: true });
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage("sound notifications enabled"));
+  });
+
+  test("/notification sound disable dispatches setNotificationSoundEnabled and a transient message", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockResolvedValueOnce(null);
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/notification sound disable");
+    expect(execute).toHaveBeenCalledWith({ name: "setNotificationSoundEnabled", enabled: false });
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage("sound notifications disabled"));
+  });
+
+  test("/notification with no subcommand reports usage", () => {
+    const { platform } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/notification");
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("/notification sound enable|disable"));
+  });
+
+  test("/notification sound without a value reports usage", () => {
+    const { platform } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/notification sound");
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("/notification sound enable|disable"));
+  });
+
+  test("/notification sound with an unknown value reports usage", () => {
+    const { platform } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/notification sound loud");
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("/notification sound enable|disable"));
+  });
+
+  test("a failed /notification sound surfaces the platform error as a banner", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async () => {
+      throw new Error("boom");
+    });
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/notification sound enable");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/notification sound failed")));
+  });
+});
+
 describe("SLASH_COMMAND_NAMES", () => {
   test("is the union of the commands and intercepts registries, in registration order", () => {
     expect(SLASH_COMMAND_NAMES).toEqual([
@@ -838,6 +892,7 @@ describe("SLASH_COMMAND_NAMES", () => {
       "resume",
       "rename",
       "kanban",
+      "notification",
     ]);
   });
 });

@@ -22,6 +22,7 @@ const settingsStore = vi.mocked<SettingsStore>({
   setDefaultEffort: vi.fn(),
   setDefaultTeam: vi.fn(),
   setModelFilters: vi.fn(),
+  setNotificationSoundEnabled: vi.fn(),
 });
 
 const modelRegistry = vi.mocked<ModelRegistry>({
@@ -429,6 +430,28 @@ describe("CommandExecutorImpl", () => {
       teamManager.listSessions.mockReturnValueOnce([]);
       const result = await executor.execute({ name: "listSessions", teamId: "ghost" });
       expect(result).toEqual([]);
+    });
+  });
+
+  describe("getNotificationSoundEnabled", () => {
+    test("returns true by default when notification.soundEnabled is absent", async () => {
+      settingsStore.load.mockReturnValueOnce({});
+      const result = await executor.execute({ name: "getNotificationSoundEnabled" });
+      expect(result).toBe(true);
+    });
+
+    test("returns the configured value", async () => {
+      settingsStore.load.mockReturnValueOnce({ notification: { soundEnabled: false } });
+      const result = await executor.execute({ name: "getNotificationSoundEnabled" });
+      expect(result).toBe(false);
+    });
+  });
+
+  describe("setNotificationSoundEnabled", () => {
+    test("persists the value via settingsStore.setNotificationSoundEnabled", async () => {
+      const result = await executor.execute({ name: "setNotificationSoundEnabled", enabled: false });
+      expect(result).toBeNull();
+      expect(settingsStore.setNotificationSoundEnabled).toHaveBeenCalledWith(false);
     });
   });
 

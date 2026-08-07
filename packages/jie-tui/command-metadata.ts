@@ -18,4 +18,5 @@ export const COMMAND_METADATA: ReadonlyArray<CommandMeta> = [
   { name: "resume", description: "resume a session of the loaded team", argumentHint: "<sessionId>" },
   { name: "rename", description: "name the active session", argumentHint: "<name>" },
   { name: "kanban", description: "toggle the kanban panel", argumentHint: "<add|remove|complete>" },
+  { name: "notification", description: "toggle notification settings", argumentHint: "sound enable|disable" },
 ];
