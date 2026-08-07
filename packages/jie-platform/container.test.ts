@@ -16,6 +16,7 @@ const SERVICE_KEYS = [
   "llmService",
   "memoryStore",
   "memoryExtractor",
+  "memoryBootstrap",
   "gitService",
   "toolRegistry",
   "agentBodyFactory",

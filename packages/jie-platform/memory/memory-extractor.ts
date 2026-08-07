@@ -3,7 +3,7 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import { logger } from "@cuzfrog/jie-utils";
 import type { ModelRegistry, SettingsStore } from "../config";
 import type { LlmService } from "../llm";
-import type { MemoryAtomType, MemoryStore, NewMemoryAtom } from "./memory-store";
+import type { MemoryAtomType, MemoryStore, MemoryAtomInput } from "./memory-store";
 
 const log = logger.getSubLogger({ name: "jie.platform.memory" });
 
@@ -87,7 +87,7 @@ function resolveMemoryModel(
   return resolved;
 }
 
-function parseExtraction(text: string): ReadonlyArray<NewMemoryAtom> | null {
+function parseExtraction(text: string): ReadonlyArray<MemoryAtomInput> | null {
   const cleaned = stripCodeFences(text);
   let parsed: unknown;
   try {
@@ -96,7 +96,7 @@ function parseExtraction(text: string): ReadonlyArray<NewMemoryAtom> | null {
     return null;
   }
   if (!Array.isArray(parsed)) return null;
-  const atoms: NewMemoryAtom[] = [];
+  const atoms: MemoryAtomInput[] = [];
   for (const item of parsed) {
     if (!isRecord(item)) continue;
     const scene = item["scene"];
@@ -111,7 +111,7 @@ function parseExtraction(text: string): ReadonlyArray<NewMemoryAtom> | null {
   return atoms;
 }
 
-function parseAtom(entry: unknown, scene: string): NewMemoryAtom | null {
+function parseAtom(entry: unknown, scene: string): MemoryAtomInput | null {
   if (!isRecord(entry)) return null;
   const content = entry["content"];
   if (typeof content !== "string" || content === "") return null;
@@ -131,7 +131,9 @@ function isMemoryAtomType(value: unknown): value is MemoryAtomType {
 function parsePriority(value: unknown): number {
   if (typeof value === "number") return value;
   if (typeof value === "string") {
-    const parsed = Number(value.trim());
+    const trimmed = value.trim();
+    if (trimmed === "") return 50;
+    const parsed = Number(trimmed);
     if (Number.isFinite(parsed)) return parsed;
   }
   return 50;

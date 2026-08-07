@@ -9,13 +9,16 @@ Team-scoped long-term memory: distilled **atoms** of what the team's sessions es
 ```typescript
 type MemoryAtomType = "fact" | "decision" | "method" | "instruction";
 
-interface MemoryAtom {
+interface MemoryAtomInput {
+  readonly content: string;
+  readonly type: MemoryAtomType;
+  readonly priority: number;
+  readonly scene: string;
+}
+
+interface MemoryAtom extends MemoryAtomInput {
   readonly id: string;                 // ULID
   readonly teamId: string;             // atoms belong to the team, not the agent (ADR 34)
-  readonly content: string;            // self-contained statement, source-conversation language
-  readonly type: MemoryAtomType;
-  readonly priority: number;           // 0–100; instruction is always 100
-  readonly scene: string;              // one-line activity context at extraction time
   readonly sourceSessionId: string;
   readonly createdAt: string;          // ISO 8601
   readonly updatedAt: string;
@@ -37,7 +40,7 @@ Task and artifact tracking are deliberately not memory types — kanban and the 
 
 ```typescript
 interface MemoryStore {
-  add(atoms: ReadonlyArray<NewMemoryAtom>, teamId: string, sourceSessionId: string): number;
+  add(atoms: ReadonlyArray<MemoryAtomInput>, teamId: string, sourceSessionId: string): number;
   search(query: string, teamId: string, limit: number): ReadonlyArray<MemoryAtom>;
   top(teamId: string, limit: number): ReadonlyArray<MemoryAtom>;
 }
@@ -45,9 +48,9 @@ interface MemoryStore {
 
 All methods are synchronous — SQLite access is in-process and blocking calls are microseconds; callers never await memory.
 
-- **Schema**: `memory_atoms` (`id` PK, `team_id`, `content`, `type`, `priority`, `scene`, `source_session_id`, `created_at`, `updated_at`; index `(team_id, priority DESC, updated_at DESC)`) plus an FTS5 virtual table over `content` (`unicode61` tokenizer, `atom_id` UNINDEXED; team scoping happens on the join, not in the index). Created by `initializeSchema` (`04-storage.md`).
-- **Search**: FTS5 `MATCH` ranked by `bm25()`, joined to `memory_atoms` and filtered by `team_id`. No vector component in v1.
-- **Dedup on add**: an atom whose `content` and `type` exactly match an existing atom of the same team is skipped; `add` returns the count actually stored. This replaces the borrowed design's LLM conflict pass — cheap, and sufficient while atom volume is small.
+- **Schema**: `memory_atoms` (`id` PK, `team_id`, `content`, `type`, `priority`, `scene`, `source_session_id`, `created_at`, `updated_at`; index `(team_id, priority DESC, updated_at DESC)`, unique index `(team_id, type, content)`) plus an FTS5 virtual table over `content` (`trigram` tokenizer, `atom_id` UNINDEXED; team scoping happens on the join, not in the index). Created by `initializeSchema` (`04-storage.md`).
+- **Search**: FTS5 `MATCH` ranked by `bm25()`, joined to `memory_atoms` and filtered by `team_id`. The store sanitizes the raw query into quoted, 3-or-more-character word phrases to avoid FTS5 syntax errors and to support CJK text. No vector component in v1.
+- **Dedup on add**: an atom whose `content` and `type` exactly match an existing atom of the same team is reinforced rather than duplicated; `add` updates the existing atom's `priority` to the higher of the old and new values, refreshes `updated_at`, and takes the latest `scene`. New atoms are inserted and `add` returns the count of newly stored atoms. This replaces the borrowed design's LLM conflict pass — cheap, and sufficient while atom volume is small.
 - **Priority invariant**: `add` is the single choke point — it clamps priority to 0–100 and forces `instruction` to 100. Producers (the extractor) pass parsed priorities through unmodified.
 
 ## Extraction
@@ -60,7 +63,7 @@ All methods are synchronous — SQLite access is in-process and blocking calls a
 
 ## Bootstrap
 
-In the body's restore phase (before `start`), the body loads the block and `composeSystemPrompt` places it between the context block and the role prose:
+In the body's restore phase (before `start`), the body asks `MemoryBootstrap` for the formatted block and `composeSystemPrompt` places it between the context block and the role prose:
 
 ```
 <memory team="<team_id>">

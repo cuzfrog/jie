@@ -6,7 +6,7 @@ import type { PlatformCradle } from "../container";
 import { Events, type EventEnvelope, type EventManager, type EventType } from "../event";
 import type { HookRunner } from "../hooks";
 import type { LlmService } from "../llm";
-import type { MemoryExtractor, MemoryStore } from "../memory";
+import type { MemoryBootstrap, MemoryExtractor } from "../memory";
 import type { ArtifactStore, TranscriptStore } from "../storage";
 import type { AgentSoul } from "../team";
 import type { SkillManager } from "../skills";
@@ -82,7 +82,7 @@ const settingsStore = vi.mocked<SettingsStore>({
 
 const llmService = vi.mocked<LlmService>({ complete: vi.fn(async () => "") });
 
-const memoryStore = vi.mocked<MemoryStore>({ add: vi.fn(), search: vi.fn(), top: vi.fn(() => []) });
+const memoryBootstrap = vi.mocked<MemoryBootstrap>({ render: vi.fn(() => "") });
 
 const memoryExtractor = vi.mocked<MemoryExtractor>({ extract: vi.fn(async () => {}) });
 
@@ -100,7 +100,7 @@ function bootedContainer(): AwilixContainer<PlatformCradle> {
     modelRegistry: asValue(modelRegistry),
     settingsStore: asValue(settingsStore),
     llmService: asValue(llmService),
-    memoryStore: asValue(memoryStore),
+    memoryBootstrap: asValue(memoryBootstrap),
     memoryExtractor: asValue(memoryExtractor),
     debug: asValue(false),
     logDir: asValue(null),

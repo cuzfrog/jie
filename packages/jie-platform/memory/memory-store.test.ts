@@ -1,11 +1,11 @@
 import { SqliteStorage } from "../storage";
-import { SqliteMemoryStore, type NewMemoryAtom } from "./memory-store";
+import { SqliteMemoryStore, type MemoryAtomInput } from "./memory-store";
 
 function makeStore(): SqliteMemoryStore {
   return new SqliteMemoryStore(new SqliteStorage(":memory:"));
 }
 
-function atom(overrides: Partial<NewMemoryAtom> = {}): NewMemoryAtom {
+function atom(overrides: Partial<MemoryAtomInput> = {}): MemoryAtomInput {
   return {
     content: "the auth module is still used by mobile",
     type: "fact",
@@ -15,6 +15,10 @@ function atom(overrides: Partial<NewMemoryAtom> = {}): NewMemoryAtom {
   };
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 describe("SqliteMemoryStore", () => {
   test("add stores atoms and returns the stored count", () => {
     const store = makeStore();
@@ -22,18 +26,34 @@ describe("SqliteMemoryStore", () => {
     expect(stored).toBe(2);
   });
 
-  test("add skips atoms with the same content and type within the same team", () => {
+  test("add reinforces an existing atom with the same content and type within the same team", async () => {
     const store = makeStore();
-    store.add([atom()], "team-a", "s1");
-    const stored = store.add([atom(), atom({ content: "sqlite is embedded" })], "team-a", "s2");
-    expect(stored).toBe(1);
+    expect(store.add([atom()], "team-a", "s1")).toBe(1);
+    await sleep(3);
+    expect(store.add([atom({ priority: 50 })], "team-a", "s2")).toBe(0);
+    const top = store.top("team-a", 10);
+    expect(top).toHaveLength(1);
+    expect(top[0]!.priority).toBe(80);
+    expect(top[0]!.sourceSessionId).toBe("s1");
+    expect(top[0]!.updatedAt > top[0]!.createdAt).toBe(true);
+  });
+
+  test("add takes the higher priority and latest scene when reinforcing", async () => {
+    const store = makeStore();
+    store.add([atom({ scene: "initial", priority: 50 })], "team-a", "s1");
+    await sleep(3);
+    store.add([atom({ scene: "latest", priority: 90 })], "team-a", "s2");
+    const top = store.top("team-a", 10);
+    expect(top[0]!.priority).toBe(90);
+    expect(top[0]!.scene).toBe("latest");
   });
 
   test("add keeps the same content in different teams", () => {
     const store = makeStore();
-    store.add([atom()], "team-a", "s1");
-    const stored = store.add([atom()], "team-b", "s1");
-    expect(stored).toBe(1);
+    expect(store.add([atom()], "team-a", "s1")).toBe(1);
+    expect(store.add([atom()], "team-b", "s1")).toBe(1);
+    expect(store.top("team-a", 10)).toHaveLength(1);
+    expect(store.top("team-b", 10)).toHaveLength(1);
   });
 
   test("add forces instruction to priority 100 and clamps the range", () => {
@@ -65,9 +85,9 @@ describe("SqliteMemoryStore", () => {
   test("top orders by priority desc then updated_at desc", async () => {
     const store = makeStore();
     store.add([atom({ content: "c1", priority: 50 })], "team-a", "s1");
-    await new Promise((r) => setTimeout(r, 3));
+    await sleep(3);
     store.add([atom({ content: "c2", priority: 90 })], "team-a", "s1");
-    await new Promise((r) => setTimeout(r, 3));
+    await sleep(3);
     store.add([atom({ content: "c3", priority: 50 })], "team-a", "s1");
     const top = store.top("team-a", 10);
     expect(top.map((a) => a.content)).toEqual(["c2", "c3", "c1"]);
@@ -94,5 +114,27 @@ describe("SqliteMemoryStore", () => {
     store.add([atom()], "team-a", "s1");
     const hits = store.search("postgres", "team-a", 10);
     expect(hits).toEqual([]);
+  });
+
+  test("search handles FTS special characters without throwing", () => {
+    const store = makeStore();
+    store.add([atom({ content: "sqlite is embedded and dependable" })], "team-a", "s1");
+    const hits = store.search('"sqlite (db)*"', "team-a", 10);
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits[0]!.content).toBe("sqlite is embedded and dependable");
+  });
+
+  test("search matches CJK content by substring", () => {
+    const store = makeStore();
+    store.add([atom({ content: "认证模块仍在移动端使用" })], "team-a", "s1");
+    const hits = store.search("认证模块", "team-a", 10);
+    expect(hits.map((a) => a.content)).toEqual(["认证模块仍在移动端使用"]);
+  });
+
+  test("search returns no hits for an empty or whitespace-only query", () => {
+    const store = makeStore();
+    store.add([atom()], "team-a", "s1");
+    expect(store.search("", "team-a", 10)).toEqual([]);
+    expect(store.search("   ", "team-a", 10)).toEqual([]);
   });
 });

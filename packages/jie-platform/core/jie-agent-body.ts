@@ -1,8 +1,7 @@
 import { Agent, convertToLlm, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
-import type { SettingsStore } from "../config";
-import { loadMemoryBootstrap, type MemoryExtractor, type MemoryStore } from "../memory";
+import type { MemoryBootstrap, MemoryExtractor } from "../memory";
 import type { ArtifactStore, TranscriptStore } from "../storage";
 import type { ExecutionContext, ToolRegistry } from "../tools";
 import type { Skill, SkillManager } from "../skills";
@@ -36,9 +35,8 @@ interface AgentBodyDeps {
   resolveModel(provider: string, modelId: string): Model<Api> | undefined;
   readonly createAgent?: (opts: ConstructorParameters<typeof Agent>[0]) => Agent;
   readonly compactor: Compactor;
-  readonly memoryStore: MemoryStore;
+  readonly memoryBootstrap: MemoryBootstrap;
   readonly memoryExtractor: MemoryExtractor;
-  readonly settingsStore: SettingsStore;
   readonly logDir: string | null;
 }
 
@@ -54,8 +52,7 @@ export class JieAgentBody implements AgentBody {
   private readonly hookIdentity: HookIdentity;
   private readonly compactor: Compactor;
   private readonly systemContextBlock: string;
-  private readonly memoryStore: MemoryStore;
-  private readonly settingsStore: SettingsStore;
+  private readonly memoryBootstrap: MemoryBootstrap;
   private readonly agent: Agent;
   private readonly sender: AgentSender;
   private readonly promptQueue: PromptQueue;
@@ -78,8 +75,7 @@ export class JieAgentBody implements AgentBody {
     this.hookRunner = deps.hookRunner;
     this.compactor = deps.compactor;
     this.systemContextBlock = deps.systemContextBlock;
-    this.memoryStore = deps.memoryStore;
-    this.settingsStore = deps.settingsStore;
+    this.memoryBootstrap = deps.memoryBootstrap;
     this.hookIdentity = {
       sessionId: this.sessionId,
       cwd: deps.cwd,
@@ -220,7 +216,12 @@ export class JieAgentBody implements AgentBody {
   }
 
   private loadMemoryBlock(): void {
-    const memoryBlock = loadMemoryBootstrap(this.memoryStore, this.settingsStore, this.teamId);
+    let memoryBlock: string;
+    try {
+      memoryBlock = this.memoryBootstrap.render(this.teamId);
+    } catch {
+      memoryBlock = "";
+    }
     this.agent.state.systemPrompt = composeSystemPrompt({
       rolePrompt: this.soul.systemPrompt,
       contextBlock: this.systemContextBlock,

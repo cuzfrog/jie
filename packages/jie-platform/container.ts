@@ -10,7 +10,7 @@ import { registerHooksModule, type HookRunner } from "./hooks";
 import type { JiePlatform, JiePlatformOptions } from "./jie-platform";
 import { registerLlmModule, type LlmService } from "./llm";
 import { registerMcpModule, type McpConnector, type McpManager, type SubprocessFactory } from "./mcp";
-import { registerMemoryModule, type MemoryExtractor, type MemoryStore } from "./memory";
+import { registerMemoryModule, type MemoryBootstrap, type MemoryExtractor, type MemoryStore } from "./memory";
 import { registerPlatformModule } from "./module";
 import { registerServicesModule, type GitService } from "./services";
 import { registerSkillsModule, type SkillManager } from "./skills";
@@ -39,6 +39,7 @@ export interface PlatformCradle {
   readonly llmService: LlmService;
   readonly memoryStore: MemoryStore;
   readonly memoryExtractor: MemoryExtractor;
+  readonly memoryBootstrap: MemoryBootstrap;
   readonly gitService: GitService;
   readonly toolRegistry: ToolRegistry;
   readonly skillManager: SkillManager;

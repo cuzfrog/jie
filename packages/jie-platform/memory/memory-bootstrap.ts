@@ -7,21 +7,35 @@ const log = logger.getSubLogger({ name: "jie.platform.memory" });
 const DEFAULT_BOOTSTRAP_MAX_ENTRIES = 12;
 const DEFAULT_BOOTSTRAP_MAX_CHARS = 2000;
 
-export function loadMemoryBootstrap(memoryStore: MemoryStore, settingsStore: SettingsStore, teamId: string): string {
-  try {
-    const settings = settingsStore.load();
-    if (settings.memory?.enabled === false) return "";
-    const maxEntries = settings.memory?.bootstrapMaxEntries ?? DEFAULT_BOOTSTRAP_MAX_ENTRIES;
-    const maxChars = settings.memory?.bootstrapMaxChars ?? DEFAULT_BOOTSTRAP_MAX_CHARS;
-    const atoms = memoryStore.top(teamId, maxEntries);
-    return formatMemoryBootstrap(atoms, teamId, maxChars);
-  } catch (error) {
-    log.warn(`memory bootstrap load failed: ${error instanceof Error ? error.message : String(error)}`);
-    return "";
+export interface MemoryBootstrap {
+  render(teamId: string): string;
+}
+
+export class MemoryBootstrapImpl implements MemoryBootstrap {
+  private readonly memoryStore: MemoryStore;
+  private readonly settingsStore: SettingsStore;
+
+  constructor(memoryStore: MemoryStore, settingsStore: SettingsStore) {
+    this.memoryStore = memoryStore;
+    this.settingsStore = settingsStore;
+  }
+
+  render(teamId: string): string {
+    try {
+      const settings = this.settingsStore.load();
+      if (settings.memory?.enabled === false) return "";
+      const maxEntries = settings.memory?.bootstrapMaxEntries ?? DEFAULT_BOOTSTRAP_MAX_ENTRIES;
+      const maxChars = settings.memory?.bootstrapMaxChars ?? DEFAULT_BOOTSTRAP_MAX_CHARS;
+      const atoms = this.memoryStore.top(teamId, maxEntries);
+      return formatMemoryBootstrap(atoms, teamId, maxChars);
+    } catch (error) {
+      log.warn(`memory bootstrap load failed: ${error instanceof Error ? error.message : String(error)}`);
+      return "";
+    }
   }
 }
 
-export function formatMemoryBootstrap(atoms: ReadonlyArray<MemoryAtom>, teamId: string, maxChars: number): string {
+function formatMemoryBootstrap(atoms: ReadonlyArray<MemoryAtom>, teamId: string, maxChars: number): string {
   const header = `<memory team="${teamId}">`;
   const footer = "</memory>";
   const lines: string[] = [];

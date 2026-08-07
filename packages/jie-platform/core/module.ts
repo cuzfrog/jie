@@ -3,7 +3,7 @@ import type { ModelRegistry, SettingsStore } from "../config";
 import type { EventManager } from "../event";
 import type { HookRunner } from "../hooks";
 import type { LlmService } from "../llm";
-import type { MemoryExtractor, MemoryStore } from "../memory";
+import type { MemoryBootstrap, MemoryExtractor } from "../memory";
 import type { SkillManager } from "../skills";
 import type { ArtifactStore, TranscriptStore } from "../storage";
 import type { ToolRegistry } from "../tools";
@@ -26,7 +26,7 @@ export function registerCoreModule(container: AwilixContainer<PlatformCradle>): 
       modelRegistry: ModelRegistry,
       settingsStore: SettingsStore,
       llmService: LlmService,
-      memoryStore: MemoryStore,
+      memoryBootstrap: MemoryBootstrap,
       memoryExtractor: MemoryExtractor,
       logDir: string | null,
     ) => {
@@ -48,9 +48,8 @@ export function registerCoreModule(container: AwilixContainer<PlatformCradle>): 
           getApiKey: (provider) => modelRegistry.getApiKey(provider),
           resolveModel: (provider, modelId) => modelRegistry.resolve(provider, modelId),
           compactor,
-          memoryStore,
+          memoryBootstrap,
           memoryExtractor,
-          settingsStore,
           logDir,
         });
     }).singleton(),
