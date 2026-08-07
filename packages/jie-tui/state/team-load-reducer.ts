@@ -68,7 +68,6 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
     focusedAgentId: focused,
     teamCursorAgentId: cursor,
     interruptedAgentId: null,
-    infoEntries: switching ? [] : state.infoEntries,
     nextEntrySeq,
     agents: newAgents,
     kanbanExpanded: switching ? false : state.kanbanExpanded,

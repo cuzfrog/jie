@@ -207,7 +207,7 @@ describe("screen rendering", () => {
     }
   });
 
-  test("/help reprints the welcome info into the chat area", async () => {
+  test("/help opens the help panel below the footer", async () => {
     const harness = await bootScreen();
     try {
       harness.emit(TEAM_LOADED);
@@ -215,7 +215,7 @@ describe("screen rendering", () => {
       await typeText(harness, "/help");
       await press(harness, "\r");
       await settle(harness);
-      expect(harness.stateStore.getState().infoEntries.length).toBe(1);
+      expect(harness.stateStore.getState().helpPanelVisible).toBe(true);
       const screen = harness.vt.getViewport().map(stripAnsi).join("\n");
       expect(screen).toContain("/resume");
       expect(screen).toContain("Commands");
@@ -293,15 +293,13 @@ describe("screen rendering", () => {
     const harness = await bootScreen();
     try {
       const initial = harness.vt.getViewport().map(stripAnsi).join("\n");
-      expect(initial).toContain("Commands");
-      expect(initial).toContain("/resume");
-      expect(initial).toContain("Shortcuts");
-      expect(initial).toContain("mention a file");
+      expect(initial).toContain("/help to show commands and shortcuts");
+      expect(initial).not.toContain("Commands");
+      expect(initial).not.toContain("Shortcuts");
       harness.emit(TEAM_LOADED);
       await harness.vt.waitForRender();
       const withTeam = harness.vt.getViewport().map(stripAnsi).join("\n");
-      expect(withTeam).toContain("Commands");
-      expect(withTeam).toContain("Shortcuts");
+      expect(withTeam).toContain("/help to show commands and shortcuts");
       harness.emit(Events.agentTurnStart(AGENT_SENDER, null));
       harness.emit(Events.agentStreamChunk(AGENT_SENDER, 1, 1, "text", "hello splash"));
       await settle(harness);

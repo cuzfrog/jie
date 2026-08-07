@@ -14,7 +14,6 @@ function bootContainer(): AwilixContainer<TuiCradle> {
   const chatMessages = vi.mocked<ChatMessages>({
     createUserMessage: vi.fn(),
     createAssistantMessage: vi.fn(),
-    createInfoMessage: vi.fn(),
     createCompactionMarker: vi.fn(),
   });
   container.register({

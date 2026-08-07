@@ -50,31 +50,11 @@ describe("WelcomeBanner", () => {
     expect(text).not.toContain("jie v");
   });
 
-  test("shows a Commands section with every command, argument hint and description", () => {
+  test("shows a hint to call /help instead of the command and shortcut list", () => {
     const text = new WelcomeBanner(stateStore).render(80).map(stripAnsi).join("\n");
-    expect(text).toContain("Commands");
-    const commands = [
-      "/help", "/clear", "/exit", "/team", "/resume", "/rename", "/model", "/model-filter", "/effort", "/login", "/logout",
-    ];
-    for (const command of commands) {
-      expect(text).toContain(command);
-    }
-    expect(text).toContain("<provider> <apiKey>");
-    expect(text).toContain("resume a session of the loaded team");
-  });
-
-  test("lays the commands out in one column at 80 columns", () => {
-    const lines = new WelcomeBanner(stateStore).render(80).map(stripAnsi);
-    expect(lines).toContain("  /login <provider> <apiKey>  store a provider API key");
-    expect(lines).toContain("  /resume <sessionId>  resume a session of the loaded team");
-  });
-
-  test("lays the commands out in two columns when the width allows", () => {
-    const lines = new WelcomeBanner(stateStore).render(130).map(stripAnsi);
-    const paired = lines.filter((line) => line.includes("/help") && line.includes("/effort"));
-    expect(paired.length).toBe(1);
-    expect(paired[0]).toContain("show this help");
-    expect(paired[0]).toContain("set the thinking effort");
+    expect(text).toContain("/help to show commands and shortcuts");
+    expect(text).not.toContain("Commands");
+    expect(text).not.toContain("Shortcuts");
   });
 
   test("hides the mark when the width cannot fit it beside the identity", () => {
@@ -85,22 +65,15 @@ describe("WelcomeBanner", () => {
     expect(ample).toContain("█▀▀▀▀█▀▀▀▀█");
   });
 
-  test("shows a Shortcuts section with the core keybindings", () => {
-    const text = new WelcomeBanner(stateStore).render(80).map(stripAnsi).join("\n");
-    expect(text).toContain("Shortcuts");
-    expect(text).toContain("mention a file");
-    expect(text).toContain("ctrl+d quit");
-  });
-
   test("headings carry no rule line", () => {
     const text = new WelcomeBanner(stateStore).render(80).map(stripAnsi).join("\n");
     expect(text).not.toContain("─");
   });
 
-  test("colors the mark in accent and the argument hints in warning", () => {
+  test("colors the mark in accent and the /help hint in accent and muted", () => {
     const lines = new WelcomeBanner(stateStore).render(80);
     expect(lines.some((line) => line.startsWith("\x1b[36m") && stripAnsi(line).includes("█"))).toBe(true);
-    expect(lines.some((line) => line.includes("\x1b[33m<provider> <apiKey>\x1b[39m"))).toBe(true);
+    expect(lines.some((line) => line.includes("\x1b[36m/help\x1b[39m"))).toBe(true);
   });
 
   test("helpLines renders Commands and Shortcuts without the mark or identity", () => {
@@ -115,11 +88,6 @@ describe("WelcomeBanner", () => {
 
   test("hides the banner once a turn is in progress", () => {
     stateStore.getState.mockReturnValue(stateWithTurn());
-    expect(new WelcomeBanner(stateStore).render(80)).toEqual([]);
-  });
-
-  test("hides the banner once the help info was reprinted into the chat", () => {
-    stateStore.getState.mockReturnValue(makeTuiState({ infoEntries: [{ seq: 0, kind: "help" }], nextEntrySeq: 1 }));
     expect(new WelcomeBanner(stateStore).render(80)).toEqual([]);
   });
 

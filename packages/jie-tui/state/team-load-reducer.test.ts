@@ -362,36 +362,3 @@ describe("teamLoadReducer — resume hydration from TeamInfo.history", () => {
   });
 });
 
-describe("teamLoadReducer — info entries", () => {
-  function withInfoEntry(state: TuiState): TuiState {
-    return { ...state, infoEntries: [{ seq: 0, kind: "help" }], nextEntrySeq: 3 };
-  }
-
-  test("team switch resets info entries and the seq counter", () => {
-    const first = withInfoEntry(teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
-    ])));
-    const switched = teamLoadReducer(first, {
-      id: "my-team-2",
-      leaderKey: "worker-1",
-      sessionName: null,
-      currentSessionId: null,
-      kanbanCards: [],
-      history: [],
-      agents: [{ teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
-    });
-    expect(switched.infoEntries).toEqual([]);
-    expect(switched.nextEntrySeq).toBe(0);
-  });
-
-  test("same-team reload preserves info entries", () => {
-    const first = withInfoEntry(teamLoadReducer(INITIAL_TUI_STATE, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
-    ])));
-    const second = teamLoadReducer(first, team([
-      { role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
-    ]));
-    expect(second.infoEntries).toEqual([{ seq: 0, kind: "help" }]);
-    expect(second.nextEntrySeq).toBe(3);
-  });
-});

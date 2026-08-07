@@ -34,11 +34,6 @@ export interface MessageTurn {
   readonly seq: number;
 }
 
-export interface InfoEntry {
-  readonly seq: number;
-  readonly kind: "help";
-}
-
 export type AgentId = `${string}:${string}`;
 
 export interface AgentUiState {
@@ -77,13 +72,13 @@ export interface TuiState {
   readonly focusedAgentId: AgentId | null;
   readonly teamCursorAgentId: AgentId | null;
   readonly interruptedAgentId: AgentId | null;
-  readonly infoEntries: ReadonlyArray<InfoEntry>;
   readonly nextEntrySeq: number;
   readonly transientMessage: string | null;
   readonly errorBanner: string | null;
   readonly thinkingExpanded: boolean;
   readonly toolCardsExpanded: boolean;
   readonly teamPanelVisible: boolean;
+  readonly helpPanelVisible: boolean;
   readonly kanbanView: "hidden" | "list" | "panel";
   readonly kanbanBoard: ReadonlyArray<KanbanCard>;
   readonly kanbanCursor: string | null;
@@ -129,7 +124,6 @@ function shouldShowErrorBanner(state: TuiState): boolean {
 }
 
 function hasChatContent(state: TuiState): boolean {
-  if (state.infoEntries.length > 0) return true;
   for (const agent of state.agents.values()) {
     if (agent.history.length > 0 || agent.currentTurn !== null) return true;
   }

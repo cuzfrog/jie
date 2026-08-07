@@ -71,9 +71,9 @@ The TUI's acceptance surface. Each scenario corresponds to one e2e test file —
 
 1. Type `/he` — the autocomplete popup lists matching slash commands.
 2. Press `Tab`: the buffer becomes `/help ` — completion inserts the token and does **not** submit (pi semantics).
-3. Press `Enter`: the command submits; the welcome info reprints into the chat area (splash with the mark, wordmark + tagline, team line, Commands and Shortcuts sections) and the splash disappears; no error banner.
+3. Press `Enter`: the command submits; the help panel opens below the footer (Commands and Shortcuts sections, without the splash's mark or team roster) while the welcome splash remains as a single `/help` hint; no error banner.
 
-**Observable outputs.** `state.editorText` transitions `"/he"` → `"/help "` → `""` (submit clears); `state.infoEntries` gains one `help` entry; `state.transientMessage` stays `null`.
+**Observable outputs.** `state.editorText` transitions `"/he"` → `"/help "` → `""` (submit clears); `state.helpPanelVisible` becomes `true`; `state.transientMessage` stays `null`.
 
 ## Scenario 9: @-mention autocomplete
 
@@ -107,13 +107,13 @@ Team and session selection ride the editor's autocomplete popup — drawn inside
 
 **Observable outputs.** After the interrupt, `state.agents.get(state.focusedAgentId).lastStopReason === "aborted"`; `state.interruptedAgentId` is the interrupted agent's id and returns to `null` once the next prompt is submitted; on quit, `tui.start()` resolves and the process exits 0.
 
-## Scenario 13: /help reprint
+## Scenario 13: /help panel
 
-1. Load a team — the welcome splash shows the mark beside the wordmark + tagline, the gloss, and the team line above the Commands section.
-2. Submit `/help` — the welcome content reprints into the chat area as an info entry: the splash (mark + identity lines + Commands section) followed by the Shortcuts section with the keybinding hints, in the same stream as conversation turns; the splash hides so nothing is duplicated.
-3. Continue the conversation — turns render after the reprint in submission order; the reprint stays in place until a team switch or `/clear`.
+1. Load a team — the welcome splash shows the mark beside the wordmark + tagline, the gloss, and the team line, then a single hint line pointing to `/help`.
+2. Submit `/help` — the help panel opens below the footer: a boxed panel with the Commands section followed by the Shortcuts section and keybinding hints; the panel omits the splash's mark, identity, and team roster. The welcome splash stays visible (showing the hint) while there is no chat content.
+3. Continue the conversation — new turns render above the panel; the panel stays open until another `/help`, a team switch, or `/clear`.
 
-**Observable outputs.** `state.infoEntries` holds one entry with `kind === "help"` and a `seq` ordered among the turns (entry sequence, `tui-state.md`); the chat area contains the command list (e.g. `/resume`) and the keybinding hints; `state.transientMessage` stays `null`.
+**Observable outputs.** `state.helpPanelVisible` is `true`; the help panel contains the command list (e.g. `/resume`) and the keybinding hints; `state.transientMessage` stays `null`.
 
 ## Out of scope
 

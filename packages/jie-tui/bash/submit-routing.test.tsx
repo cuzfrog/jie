@@ -168,8 +168,7 @@ describe("handleSubmitEditorText — ! bash mode routing", () => {
         expect(tp.prompts.length).toBe(0);
         const state = internals(tui).stateStore.getState();
         expect(state.errorBanner).toBeNull();
-        expect(state.infoEntries.length).toBe(1);
-        expect(state.infoEntries[0].kind).toBe("help");
+        expect(state.helpPanelVisible).toBe(true);
       } finally {
         tui.stop();
       }

@@ -54,6 +54,13 @@ describe("Footer", () => {
     expect(lines[0]).toContain("/repo (dev)");
   });
 
+  test("renders only the identity line while the help panel is open", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ ...seededState(false), helpPanelVisible: true }));
+    const lines = new Footer(stateStore).render(80);
+    expect(lines.length).toBe(1);
+    expect(lines[0]).toContain("/repo (dev)");
+  });
+
   test("keeps both lines while the kanban list view is shown", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ ...seededState(false), kanbanView: "list" }));
     expect(new Footer(stateStore).render(80).length).toBe(2);

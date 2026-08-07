@@ -3,7 +3,7 @@ import {
   startTui,
   stopTui,
   waitForEditorText,
-  waitForInfoEntry,
+  waitForHelpPanelVisible,
   waitForNoErrorBanner,
   waitForTeam,
   sendCmd,
@@ -35,6 +35,6 @@ describe("Scenario 8 — slash-command autocomplete", () => {
     await sendCmd(harness.stdin, "\r");
     await waitForEditorText(harness, "");
     await waitForNoErrorBanner(harness);
-    await waitForInfoEntry(harness);
+    await waitForHelpPanelVisible(harness);
   });
 });

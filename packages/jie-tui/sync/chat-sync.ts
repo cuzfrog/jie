@@ -1,5 +1,5 @@
 import { Container, type Component } from "@earendil-works/pi-tui";
-import { TuiState, type AgentId, type AgentUiState, type InfoEntry, type MessageTurn, type StateStore } from "../state";
+import { TuiState, type AgentId, type AgentUiState, type MessageTurn, type StateStore } from "../state";
 import type { AssistantMessageComponent, ChatMessages, UserMessageComponent } from "../components/chat";
 
 export interface ChatSync {
@@ -15,12 +15,10 @@ interface TurnPair {
 
 type ChatEntry =
   | { readonly kind: "turn"; readonly turn: MessageTurn }
-  | { readonly kind: "info"; readonly entry: InfoEntry }
   | { readonly kind: "compaction"; readonly marker: CompactionMarker };
 
 type SyncedEntry =
   | { readonly kind: "turn"; readonly seq: number; readonly pair: TurnPair }
-  | { readonly kind: "info"; readonly seq: number; readonly component: Component }
   | { readonly kind: "compaction"; readonly seq: number; readonly component: Component };
 
 export class ChatSyncImpl implements ChatSync {
@@ -53,7 +51,7 @@ export class ChatSyncImpl implements ChatSync {
       this.chatContainer.clear();
       this.synced.length = 0;
     }
-    const entries = mergeEntries(focused, state.infoEntries);
+    const entries = mergeEntries(focused);
     let firstMismatch = 0;
     while (
       firstMismatch < this.synced.length &&
@@ -82,9 +80,6 @@ export class ChatSyncImpl implements ChatSync {
   }
 
   private createEntry(entry: ChatEntry): SyncedEntry {
-    if (entry.kind === "info") {
-      return { kind: "info", seq: entry.entry.seq, component: this.chatMessages.createInfoMessage(entry.entry) };
-    }
     if (entry.kind === "compaction") {
       return { kind: "compaction", seq: entry.marker.seq, component: this.chatMessages.createCompactionMarker(entry.marker) };
     }
@@ -114,8 +109,8 @@ export class ChatSyncImpl implements ChatSync {
   }
 }
 
-function mergeEntries(agent: AgentUiState | null, infos: ReadonlyArray<InfoEntry>): ChatEntry[] {
-  const entries: ChatEntry[] = infos.map((entry): ChatEntry => ({ kind: "info", entry }));
+function mergeEntries(agent: AgentUiState | null): ChatEntry[] {
+  const entries: ChatEntry[] = [];
   if (agent !== null) {
     for (const turn of turnsOf(agent)) entries.push({ kind: "turn", turn });
     if (agent.compactionMarker !== null) entries.push({ kind: "compaction", marker: agent.compactionMarker });
@@ -125,14 +120,12 @@ function mergeEntries(agent: AgentUiState | null, infos: ReadonlyArray<InfoEntry
 
 function seqOf(entry: ChatEntry): number {
   if (entry.kind === "turn") return entry.turn.seq;
-  if (entry.kind === "info") return entry.entry.seq;
   return entry.marker.seq;
 }
 
 function sameEntry(synced: SyncedEntry, entry: ChatEntry): boolean {
   if (synced.kind !== entry.kind) return false;
   if (entry.kind === "turn") return synced.seq === entry.turn.seq;
-  if (entry.kind === "info") return synced.seq === entry.entry.seq;
   return synced.seq === entry.marker.seq;
 }
 

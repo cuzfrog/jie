@@ -1,6 +1,6 @@
 # TUI Keybinding Matrix
 
-The TUI is keyboard-driven. Editor keys are pi-tui `Editor` semantics verbatim plus jie extensions (`Esc` interrupt, `Ctrl+C` clear-or-quit, `Ctrl+D` quit, queue-aware `↑`/`↓`); global keys are handled by the TUI's input listener before they reach the editor. All bindings are implemented in `components/editor/jie-editor.ts` (editor keys) and `components/view.ts` (global keys). The core keys are also listed under the Shortcuts heading of the welcome splash and the `/help` reprint (`tui-layout.md`, "keybinding hints").
+The TUI is keyboard-driven. Editor keys are pi-tui `Editor` semantics verbatim plus jie extensions (`Esc` interrupt, `Ctrl+C` clear-or-quit, `Ctrl+D` quit, queue-aware `↑`/`↓`); global keys are handled by the TUI's input listener before they reach the editor. All bindings are implemented in `components/editor/jie-editor.ts` (editor keys) and `components/view.ts` (global keys). The core keys are also listed under the Shortcuts heading inside the help panel (`tui-layout.md`, "keybinding hints"); the welcome splash shows only a short hint to call `/help`.
 
 ## Editor
 
@@ -36,8 +36,8 @@ Typed into the editor like a prompt; the command handler (`command-handler.ts`) 
 
 | Command | Effect | Reply |
 | --- | --- | --- |
-| `/help` | Reprint the Commands and Shortcuts sections into the chat area as an info entry — no mark/identity header, no team roster (the panel shows it); the splash hides while the reprint is present (`tui-state.md`, entry sequence) | none |
-| `/clear` | Clear `agents`, `leaderAgentId`, `focusedAgentId`, `teamCursorAgentId`, info entries, and banners; reset the entry counter; memory rows on disk untouched | none |
+| `/help` | Toggle the help panel at the bottom of the screen; the panel shows the full Commands and Shortcuts sections without the splash's mark/identity header or team roster. The welcome splash is reduced to a single hint pointing to `/help` | none |
+| `/clear` | Clear `agents`, `leaderAgentId`, `focusedAgentId`, `teamCursorAgentId`, and banners; reset the entry counter; memory rows on disk untouched | none |
 | `/exit` | Quit the TUI (same as `Ctrl+D` on an empty editor); no busy-state branch | none |
 | `/login <provider> <apiKey>` | Write one API key entry to `~/.jie/auth.json` (mode `0600` on POSIX). The provider is completed in-flow by autocomplete | `logged in to <provider>` |
 | `/logout <provider>\|*` | Clear one provider's entry, or all (`*`), from `~/.jie/auth.json`. The argument is completed in-flow by autocomplete (`*` first, then provider ids) | `logged out of <provider>` (or `... of all providers`) |

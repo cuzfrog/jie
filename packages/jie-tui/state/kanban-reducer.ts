@@ -39,6 +39,7 @@ function reduceViewCycle(state: TuiState): TuiState {
       ...state,
       kanbanView: "panel",
       teamPanelVisible: false,
+      helpPanelVisible: false,
       teamCursorAgentId: null,
       kanbanCursor: clampCursor(TuiState.kanbanVisibleCards(state), state.kanbanCursor),
     };

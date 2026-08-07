@@ -24,7 +24,11 @@ export class WelcomeBanner implements Component {
 
 export function welcomeLines(state: TuiStateType, width: number): string[] {
   const w = Math.max(1, width);
-  return joinSections([headerLines(state, w), ...infoSections(w)], w);
+  return joinSections([headerLines(state, w), helpHintSection()], w);
+}
+
+function helpHintSection(): string[] {
+  return [`${style("accent")("/help")}${style("muted")(" to show commands and shortcuts")}`];
 }
 
 export function helpLines(width: number): string[] {
