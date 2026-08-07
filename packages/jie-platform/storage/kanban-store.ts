@@ -118,7 +118,7 @@ export class SqliteKanbanStore implements KanbanStore {
 
   private loadAll(teamId: string, sessionId: string): KanbanCard[] {
     const rows = this.storage.query(
-      `SELECT session_id, id, content, status, scope, active_form, description, completed_at, external_ref FROM kanban_cards
+      `SELECT session_id, id, content, status, scope, active_form, description, completed_at, external_ref FROM kanban_tasks
        WHERE team_id = ? AND (session_id = ? OR session_id = ?)
        ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)`,
       [teamId, TEAM_SESSION, sessionId],
@@ -128,12 +128,12 @@ export class SqliteKanbanStore implements KanbanStore {
 
   private persist(teamId: string, sessionId: string, cards: ReadonlyArray<KanbanCard>): void {
     this.storage.transaction((s) => {
-      s.exec(`DELETE FROM kanban_cards WHERE team_id = ? AND (session_id = ? OR session_id = ?)`, [teamId, TEAM_SESSION, sessionId]);
+      s.exec(`DELETE FROM kanban_tasks WHERE team_id = ? AND (session_id = ? OR session_id = ?)`, [teamId, TEAM_SESSION, sessionId]);
       for (let seq = 0; seq < cards.length; seq += 1) {
         const card = cards[seq]!;
         const cardSessionId = card.scope === "session" ? (card.sessionId ?? sessionId) : TEAM_SESSION;
         s.exec(
-          `INSERT INTO kanban_cards (team_id, session_id, seq, id, content, status, scope, active_form, description, completed_at, external_ref, updated_at)
+          `INSERT INTO kanban_tasks (team_id, session_id, seq, id, content, status, scope, active_form, description, completed_at, external_ref, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [teamId, cardSessionId, seq, card.id, card.content, card.status, card.scope ?? "team", card.active_form ?? null, card.description ?? null, card.completedAt ?? null, card.externalRef ?? null, new Date().toISOString()],
         );

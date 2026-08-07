@@ -75,7 +75,7 @@ export function initializeSchema(storage: Storage): void {
   maybeRebuildMemoryFts(storage);
 
   storage.exec(`
-    CREATE TABLE IF NOT EXISTS kanban_cards (
+    CREATE TABLE IF NOT EXISTS kanban_tasks (
       team_id      TEXT    NOT NULL,
       session_id   TEXT    NOT NULL DEFAULT '',
       seq          INTEGER NOT NULL,
@@ -140,14 +140,35 @@ function countRows(storage: Storage, tableName: string): number {
 }
 
 function migrateKanban(storage: Storage): void {
-  const info = storage.query("PRAGMA table_info(kanban_cards)");
-  const hasScope = info.some((row) => row[1] === "scope");
-  if (hasScope) {
+  const tasksInfo = storage.query("PRAGMA table_info(kanban_tasks)");
+
+  const cardsInfo = storage.query("PRAGMA table_info(kanban_cards)");
+  if (cardsInfo.length > 0) {
+    if (!cardsInfo.some((row) => row[1] === "scope")) {
+      storage.exec("ALTER TABLE kanban_cards ADD COLUMN scope TEXT NOT NULL DEFAULT 'team'");
+    }
+    if (tasksInfo.length > 0) {
+      storage.exec(`
+        INSERT OR IGNORE INTO kanban_tasks
+          (team_id, session_id, seq, id, content, status, scope, active_form, description, completed_at, external_ref, updated_at)
+        SELECT
+          team_id, session_id, seq, id, content, status, scope, active_form, description, completed_at, external_ref, updated_at
+        FROM kanban_cards
+      `);
+      storage.exec("DROP TABLE kanban_cards");
+    } else {
+      storage.exec("ALTER TABLE kanban_cards RENAME TO kanban_tasks");
+    }
+  }
+
+  const finalInfo = storage.query("PRAGMA table_info(kanban_tasks)");
+  if (finalInfo.some((row) => row[1] === "scope")) {
     storage.exec("PRAGMA user_version = 1");
     return;
   }
 
-  storage.exec("DROP TABLE IF EXISTS kanban_cards");
-  storage.exec("DROP TABLE IF EXISTS kanban_counters");
-  storage.exec("PRAGMA user_version = 1");
+  if (finalInfo.length > 0) {
+    storage.exec("ALTER TABLE kanban_tasks ADD COLUMN scope TEXT NOT NULL DEFAULT 'team'");
+    storage.exec("PRAGMA user_version = 1");
+  }
 }

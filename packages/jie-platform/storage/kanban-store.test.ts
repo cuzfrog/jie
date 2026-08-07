@@ -161,7 +161,7 @@ describe("SqliteKanbanStore", () => {
     const store = new SqliteKanbanStore(storage);
     store.replace("t1", "s1", [{ content: "old", status: "completed" }]);
     store.replace("t1", "s1", [{ content: "new", status: "completed" }]);
-    storage.exec("UPDATE kanban_cards SET completed_at = ? WHERE content = ?", ["2020-01-01T00:00:00.000Z", "old"]);
+    storage.exec("UPDATE kanban_tasks SET completed_at = ? WHERE content = ?", ["2020-01-01T00:00:00.000Z", "old"]);
     expect(store.load("t1", "s1")).toHaveLength(1);
     expect(store.load("t1", "s1")[0]?.content).toBe("new");
   });

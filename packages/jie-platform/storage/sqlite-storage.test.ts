@@ -11,7 +11,7 @@ describe("SqliteStorage", () => {
       "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
     );
     const names = tables.map((row) => row[0]);
-    for (const name of ["artifacts", "memory_turns", "session_metadata", "memory_atoms", "memory_atoms_fts"]) {
+    for (const name of ["artifacts", "memory_turns", "session_metadata", "memory_atoms", "memory_atoms_fts", "kanban_tasks", "kanban_counters"]) {
       expect(names).toContain(name);
     }
   });
@@ -20,6 +20,37 @@ describe("SqliteStorage", () => {
     const storage = new SqliteStorage(":memory:");
     expect(() => initializeSchema(storage)).not.toThrow();
     expect(() => initializeSchema(storage)).not.toThrow();
+  });
+
+  test("initializeSchema migrates legacy kanban_cards to kanban_tasks", () => {
+    const storage = new SqliteStorage(":memory:");
+    storage.exec("DROP TABLE IF EXISTS kanban_tasks");
+    storage.exec("DROP TABLE IF EXISTS kanban_counters");
+    storage.exec(`
+      CREATE TABLE kanban_cards (
+        team_id      TEXT    NOT NULL,
+        session_id   TEXT    NOT NULL DEFAULT '',
+        seq          INTEGER NOT NULL,
+        id           TEXT    NOT NULL,
+        content      TEXT    NOT NULL,
+        status       TEXT    NOT NULL,
+        active_form   TEXT,
+        description   TEXT,
+        completed_at  TEXT,
+        external_ref  TEXT,
+        updated_at    TEXT    NOT NULL,
+        PRIMARY KEY (team_id, id)
+      )
+    `);
+    storage.exec(
+      "INSERT INTO kanban_cards (team_id, session_id, seq, id, content, status, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      ["t1", "", 0, "#1", "legacy", "pending", "2025-01-01T00:00:00.000Z"],
+    );
+    initializeSchema(storage);
+    const tasks = storage.query("SELECT name FROM sqlite_master WHERE type='table' AND name='kanban_tasks'");
+    expect(tasks).toEqual([["kanban_tasks"]]);
+    const cards = storage.query("SELECT id, content FROM kanban_tasks");
+    expect(cards).toEqual([["#1", "legacy"]]);
   });
 
   test("re-opening the same path is idempotent and tables persist", () => {
