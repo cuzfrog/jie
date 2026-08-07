@@ -1,7 +1,6 @@
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { Type } from "typebox";
-import type { ExecutionContext, Tool, ToolResult } from "./types";
-import type { EditResultDetails } from "../types";
+import type { EditResultDetails, ExecutionContext, Tool, ToolResult } from "./types";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
 import type { FileMutationQueue } from "./file-mutation-queue";
 import { checkWriteGates } from "./write-gate";

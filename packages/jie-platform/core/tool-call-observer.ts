@@ -2,7 +2,7 @@ import type { AfterToolCallContext, AfterToolCallResult, AgentToolResult, Before
 import type { TextContent } from "@earendil-works/pi-ai";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { HookIdentity, HookRunner } from "../hooks";
-import type { ToolResultDetails } from "../types";
+import type { ToolResultDetails } from "../tools/types";
 
 export interface ToolCallObserver {
   beforeToolCall(context: BeforeToolCallContext): Promise<BeforeToolCallResult | undefined>;

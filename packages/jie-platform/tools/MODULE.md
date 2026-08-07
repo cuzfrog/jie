@@ -22,7 +22,6 @@ no-new-exports:
   - task-lifecycle.ts
   - tool-registry.test.ts
   - tool-registry.ts
-  - types.ts
   - unified-diff.test.ts
   - unified-diff.ts
   - web-fetch.test.ts
@@ -38,5 +37,6 @@ no-new-exports:
 ---
 
 # Notes
-- tools' types should not escape from this module. Tools should be registered without an external caller knowing them.
+- tools' implementation types should not escape from this module. Tools should be registered without an external caller knowing them.
+- `ToolResultDetails` and its individual detail types are package-wide DTOs and are re-exported from `packages/jie-platform/index.ts`.
 - `toolRegistry` instance is exported for jie-platform to register MCP and user custom tools.

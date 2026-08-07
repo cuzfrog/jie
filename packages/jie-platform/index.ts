@@ -7,9 +7,8 @@ export {
 } from "./jie-platform-errors";
 
 export type { TeamInfo, ModelInfo, AgentInfo, SkillInfo, AgentHistory, EffortLevel, UserIngressMessage } from "./types";
-export {
-    EFFORT_LEVELS, isEffortLevel, isDiffDetails, type KanbanCard, type KanbanStatus, type KanbanDetails, type ToolResultDetails,
-} from "./types";
+export { EFFORT_LEVELS, isEffortLevel, type KanbanCard, type KanbanStatus } from "./types";
+export { isDiffDetails, type KanbanDetails, type ToolResultDetails } from "./tools/types";
 export type { AgentMessage } from "@earendil-works/pi-agent-core";
 
 export type { Settings } from "./config";

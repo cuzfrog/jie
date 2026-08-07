@@ -1,7 +1,6 @@
 import { Type } from "typebox";
 import type { ArtifactStore } from "../storage";
-import type { ExecutionContext, Tool } from "../tools";
-import type { ToolResultDetails } from "../types";
+import type { ExecutionContext, Tool, ToolResultDetails } from "../tools/types";
 import { adaptToolToAgent } from "./tool-adapter";
 
 const diffDetails: ToolResultDetails = { kind: "diff", path: "a.txt", replacementsCount: 1, beforeBytes: 2, afterBytes: 2, diff: "-x\n+y" };
