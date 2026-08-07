@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { Settings } from "@cuzfrog/jie-platform";
 
 const FIXTURE_PATH = join(import.meta.dir, "fixtures", "models.json");
 
@@ -32,13 +33,17 @@ export function writeModelsJsonTo(dir: string): void {
   writeFileSync(join(dir, "models.json"), FIXTURE.raw);
 }
 
-export function writeSettingsJson(dir: string, settings: { defaultProvider?: string; defaultModel?: string; defaultTeam?: string } = {}): void {
+export function writeSettingsJson(
+  dir: string,
+  settings: { defaultProvider?: string; defaultModel?: string; defaultTeam?: string; compaction?: NonNullable<Settings["compaction"]> } = {},
+): void {
   mkdirSync(dir, { recursive: true });
-  const merged = {
+  const merged: Record<string, unknown> = {
     defaultProvider: settings.defaultProvider ?? FIXTURE.provider,
     defaultModel: settings.defaultModel ?? FIXTURE.modelId,
-    ...(settings.defaultTeam !== undefined ? { defaultTeam: settings.defaultTeam } : {}),
   };
+  if (settings.defaultTeam !== undefined) merged.defaultTeam = settings.defaultTeam;
+  if (settings.compaction !== undefined) merged.compaction = settings.compaction;
   writeFileSync(join(dir, "settings.json"), JSON.stringify(merged, null, 2));
 }
 

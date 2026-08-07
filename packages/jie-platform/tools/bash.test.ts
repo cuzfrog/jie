@@ -106,11 +106,11 @@ describe("bash", () => {
     const tool = createBashTool({ workspaceRoot: workspace });
     const ac = new AbortController();
     const resultPromise = tool.execute(
-      { command: "sleep 5" },
+      { command: "sleep 1" },
       makeEmptyContext(),
       ac.signal,
     );
-    setTimeout(() => ac.abort(), 50);
+    ac.abort();
     const result = await resultPromise;
     const exitMatch = /exit_code: (\d+)/.exec(result.content);
     expect(exitMatch).not.toBeNull();
@@ -122,19 +122,19 @@ describe("bash", () => {
     const marker = join(workspace, "marker");
     const tool = createBashTool({ workspaceRoot: workspace });
     const ac = new AbortController();
-    const resultPromise = tool.execute({ command: `(sleep 1; touch ${marker}) & wait` }, makeEmptyContext(), ac.signal);
-    setTimeout(() => ac.abort(), 100);
+    const resultPromise = tool.execute({ command: `(sleep 0.1; touch ${marker}) & wait` }, makeEmptyContext(), ac.signal);
+    ac.abort();
     await resultPromise;
-    await new Promise((resolve) => setTimeout(resolve, 1300));
+    await new Promise((resolve) => setTimeout(resolve, 200));
     expect(existsSync(marker)).toBe(false);
   });
 
   test("abort escalates to SIGKILL for a SIGTERM-resistant process", async () => {
-    const tool = createBashTool({ workspaceRoot: workspace });
+    const tool = createBashTool({ workspaceRoot: workspace, killGraceMs: 100 });
     const ac = new AbortController();
     const resultPromise = tool.execute({ command: "trap '' TERM; exec sleep 30" }, makeEmptyContext(), ac.signal);
     setTimeout(() => ac.abort(), 100);
     const result = await resultPromise;
     expect(result.content).toContain("exit_code: 137");
-  }, 10_000);
+  });
 });

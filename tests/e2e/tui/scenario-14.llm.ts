@@ -2,7 +2,7 @@ import type { Expectation } from "../../../packages/mock-llm-backend";
 
 export const SUMMARY_TEXT = "SUMMARY-OF-BIG-CONVERSATION";
 const CONTINUE_ACK = "COMPACTED-CONTINUATION-OK";
-const BIG_TEXT = "x".repeat(100_000);
+const BIG_TEXT = "x".repeat(4_500);
 
 const expectations: Expectation[] = [
   {

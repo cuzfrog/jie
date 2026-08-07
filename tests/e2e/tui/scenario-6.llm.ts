@@ -72,7 +72,7 @@ const expectations: Expectation[] = [
     match: { lastUserContains: "Math task 1" },
     responseChunks: [
       { kind: "text", delta: "Answer: result of task 1" },
-      { kind: "finish", reason: "stop", delayMs: 200 },
+      { kind: "finish", reason: "stop", delayMs: 50 },
     ],
   },
   {

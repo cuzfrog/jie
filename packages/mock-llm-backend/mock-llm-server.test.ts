@@ -117,7 +117,7 @@ describe("MockLlmServerImpl", () => {
   test("POST /v1/chat/completions streams a delayed expectation over at least the delay", async () => {
     const expectation: Expectation = {
       match: {},
-      responseChunks: [{ kind: "text", delta: "slow" }, { kind: "finish", reason: "stop", delayMs: 250 }],
+      responseChunks: [{ kind: "text", delta: "slow" }, { kind: "finish", reason: "stop", delayMs: 10 }],
     };
     store.selectAndRecord.mockReturnValue({ index: 0, expectation });
     const started = performance.now();
@@ -128,7 +128,7 @@ describe("MockLlmServerImpl", () => {
     });
     expect(res.status).toBe(200);
     const text = await res.text();
-    expect(performance.now() - started).toBeGreaterThanOrEqual(240);
+    expect(performance.now() - started).toBeGreaterThanOrEqual(8);
     expect(text).toContain("data: [DONE]");
   });
 });
