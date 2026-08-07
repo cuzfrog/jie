@@ -603,7 +603,7 @@ describe("JieAgentBody — agent construction wiring", () => {
     cap.fake.state.model = hotSwapped;
     const messages: AgentMessage[] = [{ role: "user", content: "hi", timestamp: 0 }];
     const result = await transform(messages);
-    expect(fitToWindow).toHaveBeenCalledWith(messages, hotSwapped);
+    expect(fitToWindow).toHaveBeenCalledWith(messages, hotSwapped, hotSwapped.contextWindow);
     expect(result).not.toBe(messages);
     expect(result).toEqual(messages);
   });

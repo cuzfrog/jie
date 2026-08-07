@@ -5,7 +5,7 @@ import type { MemoryExtractor } from "../memory";
 import type { Compactor } from "./compaction";
 
 export interface CompactionRunner {
-  ensure(model: Model<Api>): Promise<void>;
+  ensure(model: Model<Api>, contextWindow?: number): Promise<void>;
   abort(): void;
 }
 
@@ -51,9 +51,9 @@ export class CompactionRunnerImpl implements CompactionRunner {
     this.memoryExtractor = deps.memoryExtractor;
   }
 
-  ensure(model: Model<Api>): Promise<void> {
+  ensure(model: Model<Api>, contextWindow?: number): Promise<void> {
     if (this.promise === null) {
-      this.promise = this.run(model).finally(() => {
+      this.promise = this.run(model, contextWindow).finally(() => {
         this.promise = null;
       });
     }
@@ -66,13 +66,13 @@ export class CompactionRunnerImpl implements CompactionRunner {
     this.extractionController.abort();
   }
 
-  private async run(model: Model<Api>): Promise<void> {
+  private async run(model: Model<Api>, contextWindow?: number): Promise<void> {
     const controller = new AbortController();
     this.controller = controller;
     try {
       const result = await this.compactor.compact({
         messages: this.conversation.getMessages(),
-        contextWindow: model.contextWindow,
+        contextWindow: contextWindow ?? model.contextWindow,
         model,
         agentKey: this.agentKey,
         sessionId: this.sessionId,

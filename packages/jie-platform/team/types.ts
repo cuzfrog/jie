@@ -7,6 +7,7 @@ export interface AgentSoul {
   readonly tools: ReadonlyArray<string>;
   readonly subscribe: ReadonlyArray<string>;
   readonly skills: ReadonlyArray<string>;
+  readonly targetContextWindowSize?: number;
 }
 
 export interface TeamBlueprint {

@@ -12,6 +12,7 @@ export interface AgentBodyParams {
     readonly subscribe: ReadonlyArray<string>;
     readonly skills: ReadonlyArray<string>;
     readonly model: string;
+    readonly targetContextWindowSize?: number;
   };
   readonly isLeader: boolean;
   readonly sessionId: string;

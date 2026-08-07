@@ -155,6 +155,7 @@ interface RawFrontmatter {
   skills?: unknown;
   leader?: unknown;
   lifecycle?: unknown;
+  target_context_window_size?: unknown;
 }
 
 function splitFrontmatter(content: string): {
@@ -213,6 +214,19 @@ function asString(
   return value;
 }
 
+function asPositiveInteger(
+  value: unknown,
+  field: string,
+  file: string,
+): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+    throw new JiePlatformError("INVALID_FIELD_TYPE", {
+      detail: `${file}: field '${field}' must be a positive integer`,
+    });
+  }
+  return value;
+}
+
 function parseAgentFile(
   role: string,
   content: string,
@@ -253,6 +267,11 @@ function parseAgentFile(
 
   const skills = frontmatter.skills === undefined ? [] : asStringList(frontmatter.skills, "skills", file);
 
+  const targetContextWindowSize =
+    frontmatter.target_context_window_size === undefined
+      ? undefined
+      : asPositiveInteger(frontmatter.target_context_window_size, "target_context_window_size", file);
+
   return {
     role,
     model,
@@ -260,6 +279,7 @@ function parseAgentFile(
     tools,
     subscribe,
     skills,
+    targetContextWindowSize,
   };
 }
 

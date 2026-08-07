@@ -140,7 +140,9 @@ export class JieAgentBody implements AgentBody {
       getApiKey: deps.getApiKey,
       streamFn: streamSimple,
       convertToLlm,
-      transformContext: async (messages: AgentMessage[]) => [...this.compactor.fitToWindow(messages, this.agent.state.model)],
+      transformContext: async (messages: AgentMessage[]) => [
+        ...this.compactor.fitToWindow(messages, this.agent.state.model, resolveContextWindow(this.soul, this.agent.state.model)),
+      ],
       steeringMode: "all",
       followUpMode: "all",
       toolExecution: "sequential",
@@ -310,7 +312,8 @@ export class JieAgentBody implements AgentBody {
 
   private ensureCompacted(): Promise<void> {
     if (this.modelController.modelInfo === null) return Promise.resolve();
-    return this.compactionRunner.ensure(this.agent.state.model);
+    const contextWindow = resolveContextWindow(this.soul, this.agent.state.model);
+    return this.compactionRunner.ensure(this.agent.state.model, contextWindow);
   }
 
   private interruptActiveRun(): void {
@@ -350,4 +353,9 @@ function adaptAllTools(
 
 function defaultAgentFactory(agentOptions: ConstructorParameters<typeof Agent>[0]): Agent {
   return new Agent(agentOptions);
+}
+
+function resolveContextWindow(soul: AgentBodyParams["soul"], model: Model<Api>): number {
+  if (soul.targetContextWindowSize === undefined) return model.contextWindow;
+  return Math.min(soul.targetContextWindowSize, model.contextWindow);
 }
