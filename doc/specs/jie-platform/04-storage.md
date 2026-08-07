@@ -1,6 +1,6 @@
 # Storage & Artifacts
 
-`Storage` is the platform's persistence abstraction; `SqliteStorage` (bun:sqlite) is the only implementation. Four domain stores sit on top and share one `Storage` instance per process — one SQLite file (`~/.jie/storage.db`, or `:memory:` with the `inMemory` option), seven tables: `artifacts`, `memory_turns`, `session_metadata` (the transcript/artifact domains), `memory_atoms` plus its FTS index (long-term memory), and `kanban_cards` plus `kanban_counters` (the kanban domain). "Storage" is the umbrella (the layer); "artifact" is a work product an agent writes to the store.
+`Storage` is the platform's persistence abstraction; `SqliteStorage` (bun:sqlite) is the only implementation. Four domain stores sit on top and share one `Storage` instance per process — one SQLite file (`~/.jie/storage.db`, or `:memory:` with the `inMemory` option), seven tables: `artifacts`, `memory_turns`, `session_metadata` (the transcript/artifact domains), `memory_atoms` plus its FTS index (long-term memory), and `kanban_tasks` plus `kanban_counters` (the kanban domain). "Storage" is the umbrella (the layer); "artifact" is a work product an agent writes to the store.
 
 ## Storage Interface
 
@@ -69,17 +69,19 @@ CREATE VIRTUAL TABLE IF NOT EXISTS memory_atoms_fts USING fts5(
   content, atom_id UNINDEXED, tokenize = 'unicode61'
 );
 
-CREATE TABLE IF NOT EXISTS kanban_cards (
-  team_id     TEXT    NOT NULL,
-  session_id  TEXT    NOT NULL DEFAULT '',
-  seq         INTEGER NOT NULL,
-  id          TEXT    NOT NULL,
-  content     TEXT    NOT NULL,
-  status      TEXT    NOT NULL,
-  scope       TEXT    NOT NULL,
-  active_form TEXT,
-  description TEXT,
-  updated_at  TEXT    NOT NULL,
+CREATE TABLE IF NOT EXISTS kanban_tasks (
+  team_id      TEXT    NOT NULL,
+  session_id   TEXT    NOT NULL DEFAULT '',
+  seq          INTEGER NOT NULL,
+  id           TEXT    NOT NULL,
+  content      TEXT    NOT NULL,
+  status       TEXT    NOT NULL,
+  scope        TEXT    NOT NULL,
+  active_form  TEXT,
+  description  TEXT,
+  completed_at TEXT,
+  external_ref TEXT,
+  updated_at   TEXT    NOT NULL,
   PRIMARY KEY (team_id, id)
 );
 
@@ -90,7 +92,7 @@ CREATE TABLE IF NOT EXISTS kanban_counters (
 );
 ```
 
-`memory_turns` shape and session model: ADR 17 and `08-transcript.md`. `session_metadata` holds the optional human name a session was given (`/rename` → the `renameSession` command); it is keyed by `session_id` alone (ULIDs are globally unique) and LEFT-JOINed into `listSessions` (`08-transcript.md`, "List and rename"). `memory_atoms` holds long-term memory atoms with their FTS5 index — team scoping, search semantics, and dedup in `11-memory.md` (the FTS table carries `atom_id` for joining and drops `team_id` from the index since scoping happens on the join). `kanban_cards` holds the board per team; a card's `session_id` is `''` when `scope` is `team`, or the owning session when `scope` is `session`. `seq` preserves insertion order for `load`. `kanban_counters` tracks the next card id per team. `load(teamId, sessionId)` returns team-scoped cards plus session-scoped cards for the given `sessionId`. Future schema changes append versioned migrations advancing `PRAGMA user_version`; today there is one version.
+`memory_turns` shape and session model: ADR 17 and `08-transcript.md`. `session_metadata` holds the optional human name a session was given (`/rename` → the `renameSession` command); it is keyed by `session_id` alone (ULIDs are globally unique) and LEFT-JOINed into `listSessions` (`08-transcript.md`, "List and rename"). `memory_atoms` holds long-term memory atoms with their FTS5 index — team scoping, search semantics, and dedup in `11-memory.md` (the FTS table carries `atom_id` for joining and drops `team_id` from the index since scoping happens on the join). `kanban_tasks` holds the board per team; a card's `session_id` is `''` when `scope` is `team`, or the owning session when `scope` is `session`. `seq` preserves insertion order for `load`. `kanban_counters` tracks the next card id per team. `load(teamId, sessionId)` returns team-scoped cards plus session-scoped cards for the given `sessionId`. Future schema changes append versioned migrations advancing `PRAGMA user_version`; today there is one version.
 
 ## Artifact Store
 
@@ -134,7 +136,7 @@ export interface KanbanStore {
 - **`replace` merges by content**: an incoming `KanbanCardWrite` whose `content` matches an existing card keeps that card's id and its `active_form`/`description` (only overriding them when the write supplies a value); a new content gets a fresh id. This is the write path for `kanban_write`, whose input is the full desired board. Duplicate contents within one incoming list collapse to the last occurrence.
 - **No duplicate content** is a board invariant the store enforces on every mutation path — `add` returns `null` when the content already exists, `editContent` returns `null` when the new content duplicates another card, and `replace` collapses duplicate contents within one incoming list to the last occurrence. Agent-facing `kanban_write` surfaces the same rule as `kanban_write_invalid`; the commands surface it as `kanban_duplicate_content`. The invariant is load-bearing: `replace` treats `content` as the merge key, so a board with duplicate contents would orphan cards.
 - **`add`/`remove`/`setStatus`/`editContent`/`editDescription`** are the single-card mutations behind the platform's kanban commands (`kanbanAdd`, `kanbanRemove`, `kanbanSetStatus`, `kanbanEdit`); `remove`/`setStatus` report `false` when the id is unknown, `editContent` returns `null` when the card is missing or the new content duplicates another card, `editDescription` returns `null` when the card is missing and allows empty input to clear the description.
-- **`replace`/`persist`** rewrite the team's rows in one transaction, scoped to team and the current session: delete all `kanban_cards` with `team_id` and either `session_id = ''` or `session_id = <current>`, then re-insert the surviving cards with `seq` renumbered 0..n-1 and `session_id` set from each card's `scope`. `seq` is purely positional — the returned cards are always in board order regardless of how the mutation was expressed.
+- **`replace`/`persist`** rewrite the team's rows in one transaction, scoped to team and the current session: delete all `kanban_tasks` with `team_id` and either `session_id = ''` or `session_id = <current>`, then re-insert the surviving cards with `seq` renumbered 0..n-1 and `session_id` set from each card's `scope`. `seq` is purely positional — the returned cards are always in board order regardless of how the mutation was expressed.
 
 ## Retention and Scope
 
