@@ -22,6 +22,7 @@ export interface TeamManager {
   listSessions(teamId: string): ReadonlyArray<SessionSummary>;
   renameSession(teamId: string, name: string): void;
   currentSessionId(teamId: string): string | null;
+  compact(teamId: string, agentKey: string): Promise<void>;
   stop(): void;
 }
 
@@ -118,6 +119,18 @@ export class TeamManagerImpl implements TeamManager {
 
   currentSessionId(teamId: string): string | null {
     return this.sessionIds.get(teamId) ?? null;
+  }
+
+  async compact(teamId: string, agentKey: string): Promise<void> {
+    const sessionId = this.currentSessionId(teamId);
+    if (sessionId === null) {
+      throw new JiePlatformError("NO_TEAM", { detail: `no session loaded for team '${teamId}'` });
+    }
+    const body = this.loadedTeams.get(teamId)?.find((b) => b.identity.agentKey === agentKey);
+    if (body === undefined) {
+      throw new JiePlatformError("AGENT_NOT_FOUND", { detail: `agent '${agentKey}' is not loaded in team '${teamId}'` });
+    }
+    await body.compact();
   }
 
   stop(): void {

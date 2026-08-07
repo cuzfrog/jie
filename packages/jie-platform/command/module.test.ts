@@ -21,6 +21,7 @@ const settingsStore = vi.mocked<SettingsStore>({
   setDefaultEffort: vi.fn(),
   setDefaultTeam: vi.fn(),
   setModelFilters: vi.fn(),
+  setNotificationSoundEnabled: vi.fn(),
 });
 
 const modelRegistry = vi.mocked<ModelRegistry>({
@@ -44,6 +45,7 @@ const teamManager = vi.mocked<TeamManager>({
   resumeSession: vi.fn(),
   renameSession: vi.fn(),
   currentSessionId: vi.fn(),
+  compact: vi.fn(),
   stop: vi.fn(),
 });
 
@@ -61,9 +63,10 @@ const kanbanStore = vi.mocked<KanbanStore>({
   replace: vi.fn(),
   add: vi.fn(),
   remove: vi.fn(),
-  complete: vi.fn(),
+  setStatus: vi.fn(),
   editContent: vi.fn(),
   editDescription: vi.fn(),
+  handoff: vi.fn(),
 });
 
 const llmService = vi.mocked<LlmService>({ complete: vi.fn() });

@@ -5,8 +5,10 @@ import type { KanbanStore } from "../storage";
 import type { KanbanCard, KanbanCardWrite } from "../types";
 
 const KANBAN_WRITE_DESCRIPTION = `Update the live kanban board. \`cards\` is the full board (it replaces, not
-merges with, whatever the agent has now). Each card is \`{ content, status, active_form?, description? }\`;
-\`status\` is one of \`pending\`, \`in_progress\`, \`completed\` — the three board columns.
+merges with, whatever the team has now). Each card is \`{ content, status, scope?, externalRef?, active_form?, description? }\`;
+\`status\` is one of \`pending\`, \`in_progress\`, \`in_review\`, \`completed\` — the four board columns.
+\`scope\` is \`team\` or \`session\` (default \`team\`). \`externalRef\` is an optional external tracker
+reference in the form \`G#<n>\` (GitHub) or \`J#<n>\` (Jira).
 Contract:
 - no duplicate \`content\` strings;
 - no empty \`content\`.
@@ -32,8 +34,11 @@ export function createKanbanWriteTool(options: { kanbanStore: KanbanStore }): To
           status: Type.Union([
             Type.Literal("pending"),
             Type.Literal("in_progress"),
+            Type.Literal("in_review"),
             Type.Literal("completed"),
           ]),
+          scope: Type.Optional(Type.Union([Type.Literal("team"), Type.Literal("session")])),
+          externalRef: Type.Optional(Type.String()),
           active_form: Type.Optional(Type.String()),
           description: Type.Optional(Type.String()),
         }),

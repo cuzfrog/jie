@@ -1,5 +1,5 @@
 import { loadMockExpectations } from "../../../packages/mock-llm-backend";
-import { assertLlmReachable, seedTeam } from "../_fixture.ts";
+import { seedTeam } from "../_fixture.ts";
 import {
   startTui,
   stopTui,
@@ -17,7 +17,6 @@ describe("Scenario 12 — core keybindings", () => {
   let harness: TuiHarness;
 
   beforeAll(async () => {
-    await assertLlmReachable();
     await loadMockExpectations(expectations);
   });
 

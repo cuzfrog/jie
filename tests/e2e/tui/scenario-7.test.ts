@@ -1,4 +1,4 @@
-import { assertLlmReachable, seedTeam } from "../_fixture.ts";
+import { seedTeam } from "../_fixture.ts";
 import { loadMockExpectations } from "../../../packages/mock-llm-backend";
 import { startTui, stopTui, waitForTeam, sendLine, submitAndWaitForAgentIdle, type TuiHarness } from "./harness";
 import expectations from "./scenario-7.llm.ts";
@@ -7,7 +7,6 @@ describe("Scenario 7 — ! bash mode", () => {
   let harness: TuiHarness;
 
   beforeAll(async () => {
-    await assertLlmReachable();
     await loadMockExpectations(expectations);
   });
 

@@ -29,7 +29,7 @@ export const ActionTypes = {
   REQUEST_DEQUEUE: "[ui] request dequeue queued prompt",
   REQUEST_REQUEUE: "[ui] request requeue abandoned dequeued prompt",
   SET_ENVIRONMENT: "[ui] set environment",
-  SHOW_HELP: "[ui] show help in the chat area",
+  SHOW_HELP: "[ui] toggle help panel",
   SET_KANBAN_BOARD: "[ui] set kanban board",
   MOVE_KANBAN_CURSOR: "[ui] move kanban cursor",
   MOVE_KANBAN_EDIT_FIELD: "[ui] move kanban edit field",

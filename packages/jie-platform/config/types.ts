@@ -19,6 +19,9 @@ export interface Settings {
     readonly reserveTokens?: number;
     readonly keepRecentTokens?: number;
   };
+  readonly notification?: {
+    readonly soundEnabled?: boolean;
+  };
 }
 
 export type RawSettings = Record<string, unknown>;

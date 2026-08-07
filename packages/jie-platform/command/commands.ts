@@ -1,6 +1,6 @@
 import type { GitSnapshot } from "../services";
 import type { SessionSummary } from "../storage";
-import type { EffortLevel, KanbanCard, ModelInfo, TeamInfo } from "../types";
+import type { EffortLevel, KanbanCard, KanbanStatus, ModelInfo, TeamInfo } from "../types";
 
 interface CommandDef<A, R = null> {
   args: A;
@@ -36,10 +36,14 @@ interface CommandTypeMap {
   getGitStatus: CommandDef<{}, GitSnapshot>;
   stop: CommandDef<{}, null>;
   listSessions: CommandDef<{ teamId: string }, ReadonlyArray<SessionSummary>>;
-  kanbanAdd: CommandDef<{ teamId: string; title?: string; description: string }, KanbanBoardResult & { card: KanbanCard }>;
+  getNotificationSoundEnabled: CommandDef<{}, boolean>;
+  setNotificationSoundEnabled: CommandDef<{ enabled: boolean }, null>;
+  kanbanAdd: CommandDef<{ teamId: string; title?: string; description: string; scope?: "team" | "session" }, KanbanBoardResult & { card: KanbanCard }>;
   kanbanRemove: CommandDef<{ teamId: string; cardId: string }, KanbanBoardResult>;
-  kanbanComplete: CommandDef<{ teamId: string; cardId: string }, KanbanBoardResult>;
+  kanbanSetStatus: CommandDef<{ teamId: string; cardId: string; status: KanbanStatus }, KanbanBoardResult>;
   kanbanEdit: CommandDef<{ teamId: string; cardId: string; field: "content" | "description"; text: string }, KanbanBoardResult>;
+  kanbanHandoff: CommandDef<{ teamId: string; cardId: string; targetTeamId: string }, KanbanBoardResult & { card: KanbanCard }>;
+  compact: CommandDef<{ teamId: string; agentKey: string }, null>;
 }
 
 interface KanbanBoardResult {

@@ -52,6 +52,16 @@ describe("SqliteKanbanStore", () => {
     expect(store.load("t1", "s1")).toHaveLength(2);
   });
 
+  test("add with session scope creates an ephemeral card visible only in that session", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [write("first")]);
+    const card = store.add("t1", "s2", "ephemeral", undefined, "session");
+    expect(card?.scope).toBe("session");
+    expect(store.load("t1", "s2")).toHaveLength(2);
+    expect(store.load("t1", "s1")).toHaveLength(1);
+    expect(store.load("t1", "s3")).toHaveLength(1);
+  });
+
   test("add stores the description when provided", () => {
     const store = makeStore();
     const card = store.add("t1", "s1", "build the feature", "the full description");
@@ -74,12 +84,14 @@ describe("SqliteKanbanStore", () => {
     expect(store.remove("t1", "s1", "#9")).toBe(false);
   });
 
-  test("complete marks the card as completed", () => {
+  test("setStatus transitions a card to any status", () => {
     const store = makeStore();
     store.replace("t1", "s1", [write("first")]);
-    expect(store.complete("t1", "s1", "#1")).toBe(true);
+    expect(store.setStatus("t1", "s1", "#1", "in_review")).toBe(true);
+    expect(store.load("t1", "s1")[0]).toMatchObject({ id: "#1", status: "in_review" });
+    expect(store.setStatus("t1", "s1", "#1", "completed")).toBe(true);
     expect(store.load("t1", "s1")[0]).toMatchObject({ id: "#1", status: "completed" });
-    expect(store.complete("t1", "s1", "#9")).toBe(false);
+    expect(store.setStatus("t1", "s1", "#9", "completed")).toBe(false);
   });
 
   test("editContent updates the card text preserving status and id", () => {
@@ -126,13 +138,47 @@ describe("SqliteKanbanStore", () => {
     expect(cards[0]).toMatchObject({ content: "a", status: "completed", active_form: "Working" });
   });
 
-  test("the board and the id counter are scoped per (teamId, sessionId)", () => {
+  test("the board and id counter are scoped per team, not per session", () => {
     const store = makeStore();
     store.replace("t1", "s1", [write("a")]);
     store.replace("t1", "s2", [write("b")]);
-    expect(ids(store.load("t1", "s1"))).toEqual(["#1"]);
-    expect(ids(store.load("t1", "s2"))).toEqual(["#1"]);
+    expect(ids(store.load("t1", "s1"))).toEqual(["#2"]);
+    expect(ids(store.load("t1", "s2"))).toEqual(["#2"]);
     expect(ids(store.load("t2", "s1"))).toEqual([]);
+  });
+
+  test("setStatus to completed records a completedAt timestamp", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [write("first")]);
+    store.setStatus("t1", "s1", "#1", "completed");
+    const card = store.load("t1", "s1")[0];
+    expect(card?.status).toBe("completed");
+    expect(card?.completedAt).toBeTruthy();
+  });
+
+  test("completed cards older than 30 days are hidden from load", () => {
+    const storage = new SqliteStorage(":memory:");
+    const store = new SqliteKanbanStore(storage);
+    store.replace("t1", "s1", [{ content: "old", status: "completed" }]);
+    store.replace("t1", "s1", [{ content: "new", status: "completed" }]);
+    storage.exec("UPDATE kanban_cards SET completed_at = ? WHERE content = ?", ["2020-01-01T00:00:00.000Z", "old"]);
+    expect(store.load("t1", "s1")).toHaveLength(1);
+    expect(store.load("t1", "s1")[0]?.content).toBe("new");
+  });
+
+  test("replace stores and round-trips an external reference", () => {
+    const store = makeStore();
+    const board = store.replace("t1", "s1", [{ content: "issue", status: "pending", externalRef: "G#42" }]);
+    expect(board[0]?.externalRef).toBe("G#42");
+    expect(store.load("t1", "s1")[0]?.externalRef).toBe("G#42");
+  });
+
+  test("replace retains completed cards within 30 days even when omitted", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [{ content: "keep", status: "completed" }]);
+    const board = store.replace("t1", "s1", [{ content: "new", status: "pending" }]);
+    expect(board.some((c) => c.content === "keep")).toBe(true);
+    expect(board.some((c) => c.content === "new")).toBe(true);
   });
 
   test("the id counter never reuses ids after removals or replace", () => {
@@ -141,6 +187,26 @@ describe("SqliteKanbanStore", () => {
     store.remove("t1", "s1", "#2");
     const cards = store.replace("t1", "s1", [write("d")]);
     expect(ids(cards)).toEqual(["#4"]);
+  });
+
+  test("handoff moves a card to another team and removes it from the source", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [write("a")]);
+    store.replace("t2", "s2", []);
+    const card = store.handoff("t1", "s1", "#1", "t2");
+    expect(card?.content).toBe("a");
+    expect(card?.scope).toBe("team");
+    expect(store.load("t1", "s1")).toHaveLength(0);
+    expect(store.load("t2", "s2")).toHaveLength(1);
+  });
+
+  test("handoff returns null when the target team already has the same content", () => {
+    const storage = new SqliteStorage(":memory:");
+    const store = new SqliteKanbanStore(storage);
+    store.replace("t1", "s1", [write("a")]);
+    store.replace("t2", "", [write("a")]);
+    expect(store.handoff("t1", "s1", "#1", "t2")).toBeNull();
+    expect(store.load("t1", "s1")).toHaveLength(1);
   });
 
   test("a board persisted for one session survives a fresh store instance (same file)", () => {

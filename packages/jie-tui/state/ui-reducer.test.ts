@@ -381,24 +381,31 @@ describe("setSessionName", () => {
 });
 
 describe("showHelp", () => {
-  test("appends a help info entry at the next seq and advances the counter", () => {
+  test("toggles the help panel on", () => {
     const state = reduceUiAction(INITIAL_TUI_STATE, Actions.showHelp());
-    expect(state.infoEntries).toEqual([{ seq: 0, kind: "help" }]);
-    expect(state.nextEntrySeq).toBe(1);
+    expect(state.helpPanelVisible).toBe(true);
   });
 
-  test("a second help entry takes the following seq", () => {
+  test("a second showHelp toggles the panel off", () => {
     let state = reduceUiAction(INITIAL_TUI_STATE, Actions.showHelp());
     state = reduceUiAction(state, Actions.showHelp());
-    expect(state.infoEntries).toEqual([{ seq: 0, kind: "help" }, { seq: 1, kind: "help" }]);
-    expect(state.nextEntrySeq).toBe(2);
+    expect(state.helpPanelVisible).toBe(false);
   });
 
-  test("clearTuiState removes info entries and resets the counter", () => {
-    let state = reduceUiAction(INITIAL_TUI_STATE, Actions.showHelp());
-    state = reduceUiAction(state, Actions.clearTuiState());
-    expect(state.infoEntries).toEqual([]);
-    expect(state.nextEntrySeq).toBe(0);
+  test("showing the help panel hides an open team or kanban panel", () => {
+    const withTeam = loadedTeam([{ role: "general", agent_key: "general-1", is_leader: true }]);
+    const withPanels = { ...withTeam, teamPanelVisible: true, teamCursorAgentId: "my-team:general-1" as AgentId, kanbanView: "panel" as const };
+    const state = reduceUiAction(withPanels, Actions.showHelp());
+    expect(state.helpPanelVisible).toBe(true);
+    expect(state.teamPanelVisible).toBe(false);
+    expect(state.teamCursorAgentId).toBeNull();
+    expect(state.kanbanView).toBe("hidden");
+  });
+
+  test("clearTuiState hides the help panel", () => {
+    const opened = reduceUiAction(INITIAL_TUI_STATE, Actions.showHelp());
+    const cleared = reduceUiAction(opened, Actions.clearTuiState());
+    expect(cleared.helpPanelVisible).toBe(false);
   });
 });
 

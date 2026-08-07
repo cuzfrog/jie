@@ -4,9 +4,9 @@ The loaded team's kanban board — the cards the team maintains through `kanban_
 
 ## Data
 
-The board is one shared `state.kanbanBoard` for the loaded team — not per-agent — seeded from `teamInfo.kanbanCards` on team load and refreshed by the platform's kanban command results (`kanbanAdd`/`kanbanRemove`/`kanbanComplete`/`kanbanEdit` responses carry the full board back). The platform persists it per session per team (`storage/transcript-store.ts`, `kanban_write`), so the board is visible across team members and survives TUI restarts.
+The board is one shared `state.kanbanBoard` for the loaded team — not per-agent — seeded from `teamInfo.kanbanCards` on team load and refreshed by the platform's kanban command results (`kanbanAdd`/`kanbanRemove`/`kanbanSetStatus`/`kanbanEdit`/`kanbanHandoff` responses carry the full board back). The platform persists it per team (`storage/kanban-store.ts`, `kanban_write`), so the board crosses sessions, is visible across team members and survives TUI restarts. `kanbanHandoff` removes the card from the source team and recreates it as a team-scoped card on the target team.
 
-Every card carries a stable id (`#1`, `#2`, …) assigned per session by the platform, plus `content`, `status` (`pending` | `in_progress` | `completed`), and optional `active_form` and `description`. The `/kanban add` command distills a short title from a long description; the full description stays on the card and is shown in the expanded detail view.
+Every card carries a stable id (`#1`, `#2`, …) assigned per team by the platform, plus `content`, `status` (`pending` | `in_progress` | `in_review` | `completed`), `scope` (`team` | `session`), optional `active_form`, `description`, `sessionId` (when `scope` is `session`), and `externalRef` (e.g. `G#42` or `J#7`). The `/kanban add` command distills a short title from a long description; the full description stays on the card and is shown in the expanded detail view.
 
 ## Layout
 
@@ -16,11 +16,11 @@ The panel is the last section of the single inline column (`tui-layout.md`): it 
 
 ### Board (collapsed)
 
-The board split by status into three equal-width columns — **Pending**, **In Progress**, **Done** — separated by two spaces. The first row titles each column with its name and card count in `dim`; below it one row per card: a `▸` cursor in `accent` directly before the card content when the card matches `state.kanbanCursor` (a one-space indent otherwise), then the content truncated to the remaining column width and colored by status: pending `text`, in-progress `accent`, completed `muted`. Rows carry no background. A column with more than eight cards shows the first eight plus a `dim` `+N more` marker; a board without cards renders the three headers alone.
+The board split by status into four equal-width columns — **Pending**, **In Progress**, **In Review**, **Done** — separated by two spaces. The first row titles each column with its name and card count in `dim`; below it one row per card: a `▸` cursor in `accent` directly before the card content when the card matches `state.kanbanCursor` (a one-space indent otherwise), then the content truncated to the remaining column width and colored by status: pending `text`, in-progress `accent`, in-review `warning`, completed `muted`. Rows carry no background. A column with more than eight cards shows the first eight plus a `dim` `+N more` marker; a board without cards renders the four headers alone.
 
 ### Card detail (expanded)
 
-`Tab` expands the focused card to fill the whole panel. The top border shows the card id as a left-aligned chip on the upper frame, e.g. `┌ #1 ──…`. Inside the box, two selectable rows render in order: the card content in `text` with a leading `▸` cursor in `accent` when `state.kanbanEditField` is `content`, and the description in `muted` (or `dim` `description:` placeholder when absent) with a leading `▸` when `state.kanbanEditField` is `description`. Below them `status: <status>` in `muted`, and `active: <active_form>` in `muted` when present. Rows carry no background. A board with no cursor renders `no task selected`. `Esc` collapses back to the board.
+`Tab` expands the focused card to fill the whole panel. The top border shows the card id as a left-aligned chip on the upper frame, e.g. `┌ #1 ──…`. Inside the box, two selectable rows render in order: the card content in `text` with a leading `▸` cursor in `accent` when `state.kanbanEditField` is `content`, and the description in `muted` (or `dim` `description:` placeholder when absent) with a leading `▸` when `state.kanbanEditField` is `description`. Below them `status: <status>` in `muted`, `scope: <team|session>` in `muted`, `ref: <externalRef>` in `muted` when present, and `active: <active_form>` in `muted` when present. Rows carry no background. A board with no cursor renders `no task selected`. `Esc` collapses back to the board.
 
 ## Interaction
 

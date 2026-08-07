@@ -358,6 +358,23 @@ describe("CompactorImpl.compact", () => {
     expect(prompt).toContain("[content truncated to fit the context window]");
     expect(prompt).not.toContain(HUGE);
   });
+
+  test("summarizes an oversized earlier turn and keeps only the small assistant tail in a 60k window", async () => {
+    const transcriptStore = makeTranscriptStore();
+    const compactor = makeCompactor(transcriptStore);
+    const first = "a".repeat(16_000);
+    const huge = "x".repeat(204_000);
+    const tail = "ok";
+    const messages = [userMsg(first), userMsg(huge), assistantMsg(tail)];
+    transcriptStore.restore.mockResolvedValue([...messages]);
+    const model = makeModel(60_000, 8192);
+    const result = await compactor.compact(makeInput(messages, model));
+    expect(result).not.toBeNull();
+    expect(result!.firstKeptIndex).toBe(2);
+    const prompt = llmService.complete.mock.calls[0]![0]!.prompt;
+    expect(prompt).toContain("[content truncated to fit the context window]");
+    expect(prompt).not.toContain(tail);
+  });
 });
 
 describe("CompactorImpl.fitToWindow", () => {

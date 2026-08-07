@@ -11,6 +11,7 @@ export interface SettingsStore {
   setDefaultEffort(effort: EffortLevel): void;
   setDefaultTeam(teamId: string, scope: "project" | "global"): void;
   setModelFilters(filters: ReadonlyArray<string>): void;
+  setNotificationSoundEnabled(enabled: boolean): void;
 }
 
 export class SettingsStoreImpl implements SettingsStore {
@@ -52,6 +53,13 @@ export class SettingsStoreImpl implements SettingsStore {
 
   setModelFilters(filters: ReadonlyArray<string>): void {
     const next: Settings = { ...readSettingsFile(this.globalPath), modelFilters: filters };
+    writeSettingsFile(this.globalPath, next);
+  }
+
+  setNotificationSoundEnabled(enabled: boolean): void {
+    const base = readSettingsFile(this.globalPath);
+    const notification: NonNullable<Settings["notification"]> = { ...base.notification, soundEnabled: enabled };
+    const next: Settings = { ...base, notification };
     writeSettingsFile(this.globalPath, next);
   }
 }

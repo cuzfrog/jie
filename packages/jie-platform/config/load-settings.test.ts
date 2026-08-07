@@ -420,6 +420,30 @@ describe("loadMergedSettings", () => {
       value: { keepRecentTokens: -1 },
       match: /compaction\.keepRecentTokens must be a positive integer/,
     },
+    {
+      name: "non-object notification",
+      field: "notification",
+      value: "on",
+      match: /notification must be an object/,
+    },
+    {
+      name: "array notification",
+      field: "notification",
+      value: [],
+      match: /notification must be an object/,
+    },
+    {
+      name: "null notification",
+      field: "notification",
+      value: null,
+      match: /notification must be an object/,
+    },
+    {
+      name: "non-boolean notification.soundEnabled",
+      field: "notification",
+      value: { soundEnabled: "yes" },
+      match: /notification\.soundEnabled must be a boolean/,
+    },
   ])("rejects $name with code INVALID_CONFIG", ({ field, value, match }) => {
     const home = track(freshDir("jie-home-"));
     writeJson(join(home, "settings.json"), { [field]: value });

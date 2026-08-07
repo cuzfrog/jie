@@ -327,6 +327,7 @@ function makeHarness(): Harness {
     setDefaultEffort: vi.fn(),
     setDefaultTeam: vi.fn(),
     setModelFilters: vi.fn(),
+    setNotificationSoundEnabled: vi.fn(),
   });
   const memoryExtractor = vi.mocked<MemoryExtractor>({ extract: vi.fn(async () => {}) });
   const subscribeSubject = <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void): (() => void) =>

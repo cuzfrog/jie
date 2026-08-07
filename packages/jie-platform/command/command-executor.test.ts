@@ -22,6 +22,7 @@ const settingsStore = vi.mocked<SettingsStore>({
   setDefaultEffort: vi.fn(),
   setDefaultTeam: vi.fn(),
   setModelFilters: vi.fn(),
+  setNotificationSoundEnabled: vi.fn(),
 });
 
 const modelRegistry = vi.mocked<ModelRegistry>({
@@ -45,6 +46,7 @@ const teamManager = vi.mocked<TeamManager>({
   agents: vi.fn(),
   listSessions: vi.fn(),
   currentSessionId: vi.fn(),
+  compact: vi.fn(),
   stop: vi.fn(),
 });
 
@@ -62,9 +64,10 @@ const kanbanStore = vi.mocked<KanbanStore>({
   replace: vi.fn(),
   add: vi.fn(),
   remove: vi.fn(),
-  complete: vi.fn(),
+  setStatus: vi.fn(),
   editContent: vi.fn(),
   editDescription: vi.fn(),
+  handoff: vi.fn(),
 });
 
 const llmService = vi.mocked<LlmService>({ complete: vi.fn() });
@@ -432,6 +435,28 @@ describe("CommandExecutorImpl", () => {
     });
   });
 
+  describe("getNotificationSoundEnabled", () => {
+    test("returns true by default when notification.soundEnabled is absent", async () => {
+      settingsStore.load.mockReturnValueOnce({});
+      const result = await executor.execute({ name: "getNotificationSoundEnabled" });
+      expect(result).toBe(true);
+    });
+
+    test("returns the configured value", async () => {
+      settingsStore.load.mockReturnValueOnce({ notification: { soundEnabled: false } });
+      const result = await executor.execute({ name: "getNotificationSoundEnabled" });
+      expect(result).toBe(false);
+    });
+  });
+
+  describe("setNotificationSoundEnabled", () => {
+    test("persists the value via settingsStore.setNotificationSoundEnabled", async () => {
+      const result = await executor.execute({ name: "setNotificationSoundEnabled", enabled: false });
+      expect(result).toBeNull();
+      expect(settingsStore.setNotificationSoundEnabled).toHaveBeenCalledWith(false);
+    });
+  });
+
   describe("renameSession", () => {
     test("delegates teamId and session name to the team manager", async () => {
       const result = await executor.execute({ name: "renameSession", teamId: "alpha", sessionName: "my session" });
@@ -452,7 +477,7 @@ describe("CommandExecutorImpl", () => {
     test("short description becomes the card title without an LLM call", async () => {
       kanbanStore.add.mockReturnValue({ id: "#1", content: "write tests", status: "pending" });
       const result = await executor.execute({ name: "kanbanAdd", teamId: "alpha", description: "write tests" });
-      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "write tests", undefined);
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "write tests", undefined, "team");
       expect(result).toEqual({ board: [], card: { id: "#1", content: "write tests", status: "pending" } });
       expect(llmService.complete).not.toHaveBeenCalled();
     });
@@ -460,7 +485,7 @@ describe("CommandExecutorImpl", () => {
     test("explicit title is used verbatim and the description is kept", async () => {
       kanbanStore.add.mockReturnValue({ id: "#1", content: "short title", status: "pending" });
       const result = await executor.execute({ name: "kanbanAdd", teamId: "alpha", title: "short title", description: "a very long description body" });
-      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "short title", "a very long description body");
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "short title", "a very long description body", "team");
       expect(result.card).toMatchObject({ id: "#1", content: "short title" });
       expect(llmService.complete).not.toHaveBeenCalled();
     });
@@ -472,7 +497,7 @@ describe("CommandExecutorImpl", () => {
       kanbanStore.add.mockReturnValue({ id: "#1", content: "distilled title", status: "pending" });
       const result = await executor.execute({ name: "kanbanAdd", teamId: "alpha", description: long });
       expect(llmService.complete).toHaveBeenCalledWith(expect.objectContaining({ maxTokens: 20, prompt: long }));
-      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "distilled title", long);
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "distilled title", long, "team");
       expect(result.card.content).toBe("distilled title");
     });
 
@@ -482,7 +507,7 @@ describe("CommandExecutorImpl", () => {
       llmService.complete.mockRejectedValue(new Error("llm down"));
       kanbanStore.add.mockReturnValue({ id: "#1", content: long, status: "pending" });
       const result = await executor.execute({ name: "kanbanAdd", teamId: "alpha", description: long });
-      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", long, undefined);
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", long, undefined, "team");
       expect(result.card.content).toBe(long);
     });
 
@@ -512,7 +537,7 @@ describe("CommandExecutorImpl", () => {
       llmService.complete.mockResolvedValue("- fix the bug\n  then verify");
       kanbanStore.add.mockReturnValue({ id: "#1", content: "fix the bug then verify", status: "pending" });
       await executor.execute({ name: "kanbanAdd", teamId: "alpha", description: long });
-      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "fix the bug then verify", long);
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "fix the bug then verify", long, "team");
     });
 
     test("throws NO_TEAM when the team has no loaded session", async () => {
@@ -539,19 +564,28 @@ describe("CommandExecutorImpl", () => {
     });
   });
 
-  describe("kanbanComplete", () => {
-    test("completes the card and returns the updated board", async () => {
-      kanbanStore.complete.mockReturnValue(true);
+  describe("kanbanSetStatus", () => {
+    test("sets the card status and returns the updated board", async () => {
+      kanbanStore.setStatus.mockReturnValue(true);
+      const board: KanbanCard[] = [{ id: "#1", content: "first", status: "in_review" }];
+      kanbanStore.load.mockReturnValueOnce(board);
+      const result = await executor.execute({ name: "kanbanSetStatus", teamId: "alpha", cardId: "#1", status: "in_review" });
+      expect(kanbanStore.setStatus).toHaveBeenCalledWith("alpha", "session-1", "#1", "in_review");
+      expect(result).toEqual({ board });
+    });
+
+    test("sets completed as a valid status", async () => {
+      kanbanStore.setStatus.mockReturnValue(true);
       const board: KanbanCard[] = [{ id: "#1", content: "first", status: "completed" }];
       kanbanStore.load.mockReturnValueOnce(board);
-      const result = await executor.execute({ name: "kanbanComplete", teamId: "alpha", cardId: "#1" });
-      expect(kanbanStore.complete).toHaveBeenCalledWith("alpha", "session-1", "#1");
+      const result = await executor.execute({ name: "kanbanSetStatus", teamId: "alpha", cardId: "#1", status: "completed" });
+      expect(kanbanStore.setStatus).toHaveBeenCalledWith("alpha", "session-1", "#1", "completed");
       expect(result).toEqual({ board });
     });
 
     test("unknown cardId -> KANBAN_CARD_NOT_FOUND", async () => {
-      kanbanStore.complete.mockReturnValue(false);
-      const pending = executor.execute({ name: "kanbanComplete", teamId: "alpha", cardId: "#9" });
+      kanbanStore.setStatus.mockReturnValue(false);
+      const pending = executor.execute({ name: "kanbanSetStatus", teamId: "alpha", cardId: "#9", status: "completed" });
       await expect(pending).rejects.toMatchObject({ code: "KANBAN_CARD_NOT_FOUND" });
     });
   });
@@ -602,6 +636,52 @@ describe("CommandExecutorImpl", () => {
     });
   });
 
+  describe("kanbanHandoff", () => {
+    test("moves a card to the target team and returns the source board", async () => {
+      teamManager.locate.mockReturnValueOnce("project");
+      const card: KanbanCard = { id: "#7", content: "hand me off", status: "pending" };
+      kanbanStore.handoff.mockReturnValue(card);
+      const board: KanbanCard[] = [];
+      kanbanStore.load.mockReturnValueOnce(board);
+      const result = await executor.execute({ name: "kanbanHandoff", teamId: "alpha", cardId: "#1", targetTeamId: "beta" });
+      expect(kanbanStore.handoff).toHaveBeenCalledWith("alpha", "session-1", "#1", "beta");
+      expect(teamManager.locate).toHaveBeenCalledWith("beta");
+      expect(result).toEqual({ board, card });
+    });
+
+    test("supports cross-team identity <teamId>/<cardId>", async () => {
+      teamManager.locate.mockReturnValueOnce("project");
+      const card: KanbanCard = { id: "#7", content: "hand me off", status: "pending" };
+      kanbanStore.handoff.mockReturnValue(card);
+      kanbanStore.load.mockReturnValueOnce([]);
+      const result = await executor.execute({ name: "kanbanHandoff", teamId: "alpha", cardId: "gamma/#3", targetTeamId: "beta" });
+      expect(kanbanStore.handoff).toHaveBeenCalledWith("gamma", "", "#3", "beta");
+      expect(result).toEqual({ board: [], card });
+    });
+
+    test("unknown target team -> TEAM_NOT_FOUND", async () => {
+      teamManager.locate.mockReturnValueOnce(null);
+      const pending = executor.execute({ name: "kanbanHandoff", teamId: "alpha", cardId: "#1", targetTeamId: "ghost" });
+      await expect(pending).rejects.toMatchObject({ code: "TEAM_NOT_FOUND" });
+    });
+
+    test("unknown cardId -> KANBAN_CARD_NOT_FOUND", async () => {
+      teamManager.locate.mockReturnValueOnce("project");
+      kanbanStore.handoff.mockReturnValue(null);
+      const pending = executor.execute({ name: "kanbanHandoff", teamId: "alpha", cardId: "#9", targetTeamId: "beta" });
+      await expect(pending).rejects.toMatchObject({ code: "KANBAN_CARD_NOT_FOUND" });
+    });
+  });
+
+  describe("compact", () => {
+    test("calls teamManager.compact with the team and agent key and returns null", async () => {
+      teamManager.compact.mockResolvedValue(undefined);
+      const result = await executor.execute({ name: "compact", teamId: "alpha", agentKey: "general-1" });
+      expect(teamManager.compact).toHaveBeenCalledWith("alpha", "general-1");
+      expect(result).toBeNull();
+    });
+  });
+
   describe("dispatch", () => {
     test("executor.execute is the single entry point for every command name", async () => {
       teamManager.locate.mockReturnValue("user");
@@ -613,8 +693,9 @@ describe("CommandExecutorImpl", () => {
       modelRegistry.listProviders.mockReturnValue([]);
       kanbanStore.add.mockReturnValue({ id: "#1", content: "task", status: "pending" });
       kanbanStore.remove.mockReturnValue(true);
-      kanbanStore.complete.mockReturnValue(true);
+      kanbanStore.setStatus.mockReturnValue(true);
       kanbanStore.editContent.mockReturnValue({ id: "#1", content: "task", status: "pending" });
+      kanbanStore.handoff.mockReturnValue({ id: "#7", content: "handed off", status: "pending" });
       const commands: Array<Parameters<typeof executor.execute>[0]> = [
         { name: "login", provider: "anthropic", apiKey: "sk-test" },
         { name: "logout", provider: "*" },
@@ -635,11 +716,13 @@ describe("CommandExecutorImpl", () => {
         { name: "getTeamInfo" },
         { name: "getGitStatus" },
         { name: "stop" },
+        { name: "compact", teamId: "alpha", agentKey: "general-1" },
         { name: "listSessions", teamId: "alpha" },
         { name: "kanbanAdd", teamId: "alpha", description: "task" },
         { name: "kanbanRemove", teamId: "alpha", cardId: "#1" },
-        { name: "kanbanComplete", teamId: "alpha", cardId: "#1" },
+        { name: "kanbanSetStatus", teamId: "alpha", cardId: "#1", status: "completed" },
         { name: "kanbanEdit", teamId: "alpha", cardId: "#1", field: "content", text: "task" },
+        { name: "kanbanHandoff", teamId: "alpha", cardId: "#1", targetTeamId: "beta" },
       ];
       for (const command of commands) {
         await executor.execute(command);

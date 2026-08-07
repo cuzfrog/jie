@@ -67,6 +67,7 @@ const JiePlatformErrorMessages = {
   NO_DEFAULT_PROVIDER: "No default provider is set",
   NO_TEAM: "No team is defined",
   NO_LEADER: "Team has no leader",
+  AGENT_NOT_FOUND: "Agent not found",
 } as const;
 
 export type JiePlatformErrorCode = keyof typeof JiePlatformErrorMessages;

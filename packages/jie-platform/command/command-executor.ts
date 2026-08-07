@@ -48,10 +48,14 @@ export class CommandExecutorImpl implements CommandExecutor {
       getGitStatus: this.getGitStatus.bind(this),
       stop: this.stop.bind(this),
       listSessions: this.listSessions.bind(this),
+      getNotificationSoundEnabled: this.getNotificationSoundEnabled.bind(this),
+      setNotificationSoundEnabled: this.setNotificationSoundEnabled.bind(this),
+      compact: this.compact.bind(this),
       kanbanAdd: this.kanbanAdd.bind(this),
       kanbanRemove: this.kanbanRemove.bind(this),
-      kanbanComplete: this.kanbanComplete.bind(this),
+      kanbanSetStatus: this.kanbanSetStatus.bind(this),
       kanbanEdit: this.kanbanEdit.bind(this),
+      kanbanHandoff: this.kanbanHandoff.bind(this),
     };
   }
 
@@ -187,8 +191,22 @@ export class CommandExecutorImpl implements CommandExecutor {
     return null;
   }
 
+  private async compact(command: Command<"compact">): Promise<CommandResult<"compact">> {
+    await this.teamManager.compact(command.teamId, command.agentKey);
+    return null;
+  }
+
   private listSessions(command: Command<"listSessions">): CommandResult<"listSessions"> {
     return this.teamManager.listSessions(command.teamId);
+  }
+
+  private getNotificationSoundEnabled(): CommandResult<"getNotificationSoundEnabled"> {
+    return this.settingsStore.load().notification?.soundEnabled ?? true;
+  }
+
+  private setNotificationSoundEnabled(command: Command<"setNotificationSoundEnabled">): CommandResult<"setNotificationSoundEnabled"> {
+    this.settingsStore.setNotificationSoundEnabled(command.enabled);
+    return null;
   }
 
   private async kanbanAdd(command: Command<"kanbanAdd">): Promise<CommandResult<"kanbanAdd">> {
@@ -198,7 +216,8 @@ export class CommandExecutorImpl implements CommandExecutor {
       throw new JiePlatformError("KANBAN_TEXT_EMPTY");
     }
     const description = command.description === "" || command.description === content ? undefined : command.description;
-    const card = this.kanbanStore.add(command.teamId, sessionId, content, description);
+    const scope = command.scope ?? "team";
+    const card = this.kanbanStore.add(command.teamId, sessionId, content, description, scope);
     if (card === null) {
       throw new JiePlatformError("KANBAN_DUPLICATE_CONTENT", { detail: content });
     }
@@ -213,9 +232,9 @@ export class CommandExecutorImpl implements CommandExecutor {
     return { board: this.kanbanStore.load(command.teamId, sessionId) };
   }
 
-  private kanbanComplete(command: Command<"kanbanComplete">): CommandResult<"kanbanComplete"> {
+  private kanbanSetStatus(command: Command<"kanbanSetStatus">): CommandResult<"kanbanSetStatus"> {
     const sessionId = this.sessionIdFor(command.teamId);
-    if (!this.kanbanStore.complete(command.teamId, sessionId, command.cardId)) {
+    if (!this.kanbanStore.setStatus(command.teamId, sessionId, command.cardId, command.status)) {
       throw new JiePlatformError("KANBAN_CARD_NOT_FOUND", { detail: command.cardId });
     }
     return { board: this.kanbanStore.load(command.teamId, sessionId) };
@@ -241,6 +260,29 @@ export class CommandExecutorImpl implements CommandExecutor {
       throw new JiePlatformError("KANBAN_DUPLICATE_CONTENT", { detail: command.text });
     }
     return { board: this.kanbanStore.load(command.teamId, sessionId) };
+  }
+
+  private kanbanHandoff(command: Command<"kanbanHandoff">): CommandResult<"kanbanHandoff"> {
+    const sourceSessionId = this.sessionIdFor(command.teamId);
+    const { sourceTeamId, cardId } = this.resolveHandoffTarget(command);
+    const targetTeam = this.teamManager.locate(command.targetTeamId);
+    if (targetTeam === null) {
+      throw new JiePlatformError("TEAM_NOT_FOUND", { detail: `target team '${command.targetTeamId}' not found` });
+    }
+    const sessionId = sourceTeamId === command.teamId ? sourceSessionId : "";
+    const card = this.kanbanStore.handoff(sourceTeamId, sessionId, cardId, command.targetTeamId);
+    if (card === null) {
+      throw new JiePlatformError("KANBAN_CARD_NOT_FOUND", { detail: command.cardId });
+    }
+    return { board: this.kanbanStore.load(sourceTeamId, sessionId), card };
+  }
+
+  private resolveHandoffTarget(command: Command<"kanbanHandoff">): { sourceTeamId: string; cardId: string } {
+    if (command.cardId.includes("/")) {
+      const [sourceTeamId, cardId] = command.cardId.split("/", 2) as [string, string];
+      return { sourceTeamId, cardId };
+    }
+    return { sourceTeamId: command.teamId, cardId: command.cardId };
   }
 
   private sessionIdFor(teamId: string): string {

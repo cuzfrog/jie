@@ -22,6 +22,7 @@ const settingsStore = vi.mocked<SettingsStore>({
   setDefaultEffort: vi.fn(),
   setDefaultTeam: vi.fn(),
   setModelFilters: vi.fn(),
+  setNotificationSoundEnabled: vi.fn(),
 });
 
 const modelRegistry = vi.mocked<ModelRegistry>({
@@ -53,9 +54,10 @@ const kanbanStore = vi.mocked<KanbanStore>({
   replace: vi.fn(),
   add: vi.fn(),
   remove: vi.fn(),
-  complete: vi.fn(),
+  setStatus: vi.fn(),
   editContent: vi.fn(),
   editDescription: vi.fn(),
+  handoff: vi.fn(),
 });
 
 const agentBodyFactory = vi.fn<(params: AgentBodyParams) => AgentBody>();
@@ -112,6 +114,7 @@ function makeFakeBody(params: AgentBodyParams): AgentBody {
     restore: async () => [],
     messages: () => [],
     start: async () => {},
+    compact: async () => {},
     stop: () => {},
   };
 }

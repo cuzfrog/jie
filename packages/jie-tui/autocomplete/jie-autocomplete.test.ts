@@ -110,7 +110,7 @@ describe("createJieAutocompleteProvider — slash commands", () => {
   test("bare '/' lists every command with its argument hint and description", async () => {
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), makeStateStore())
       .getSuggestions(["/"], 0, 1, { signal: signal() });
-    expect(suggestions!.items).toHaveLength(13);
+    expect(suggestions!.items).toHaveLength(16);
     const team = suggestions!.items.find((item) => item.value === "team");
     expect(team!.description).toBe("<teamId> — switch the active team");
     const help = suggestions!.items.find((item) => item.value === "help");
@@ -136,7 +136,7 @@ describe("createJieAutocompleteProvider — skill invocations", () => {
   test("bare '/' appends the focused agent's skills after the commands", async () => {
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), storeWithSkills([skillInfo("say-hello")]))
       .getSuggestions(["/"], 0, 1, { signal: signal() });
-    expect(suggestions!.items).toHaveLength(14);
+    expect(suggestions!.items).toHaveLength(17);
     expect(suggestions!.items.at(-1)).toEqual({ value: "skill:say-hello", label: "skill:say-hello", description: "run say-hello" });
   });
 
@@ -166,7 +166,7 @@ describe("createJieAutocompleteProvider — skill invocations", () => {
   test("an agent without skills contributes no skill entries", async () => {
     const bare = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), storeWithSkills([]))
       .getSuggestions(["/"], 0, 1, { signal: signal() });
-    expect(bare!.items).toHaveLength(13);
+    expect(bare!.items).toHaveLength(16);
     const filtered = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), storeWithSkills([]))
       .getSuggestions(["/skill:"], 0, 7, { signal: signal() });
     expect(filtered).toBeNull();
@@ -665,7 +665,7 @@ describe("createJieAutocompleteProvider — /kanban arguments", () => {
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), storeWithKanban(BOARD))
       .getSuggestions(["/kanb"], 0, 5, { signal: signal() });
     expect(suggestions!.prefix).toBe("/kanb");
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["kanban add", "kanban remove", "kanban complete"]);
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["kanban add", "kanban remove", "kanban complete", "kanban review"]);
     expect(suggestions!.items[0]!.description).toBe("[--title <title>] <description>");
     expect(suggestions!.items[1]!.description).toBe("<cardId>");
   });
@@ -677,13 +677,14 @@ describe("createJieAutocompleteProvider — /kanban arguments", () => {
       { value: "add", label: "add", description: "[--title <title>] <description>" },
       { value: "remove", label: "remove", description: "<cardId>" },
       { value: "complete", label: "complete", description: "<cardId>" },
+      { value: "review", label: "review", description: "<cardId>" },
     ]);
   });
 
   test("filters subcommands by the typed prefix", async () => {
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), storeWithKanban(BOARD))
       .getSuggestions(["/kanban r"], 0, 9, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["remove"]);
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["remove", "review"]);
   });
 
   test("a fully typed add yields no suggestions so the user can type the description", async () => {
@@ -700,10 +701,16 @@ describe("createJieAutocompleteProvider — /kanban arguments", () => {
     expect(suggestions!.items[0]!.description).toBe("write spec");
   });
 
-  test("suggests card ids after '/kanban complete '", async () => {
+  test("suggests card ids after '/kanban complete ' excluding already-completed cards", async () => {
     const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), storeWithKanban(BOARD))
       .getSuggestions(["/kanban complete "], 0, 17, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["complete #1", "complete #2", "complete #3"]);
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["complete #1", "complete #2"]);
+  });
+
+  test("suggests card ids after '/kanban review '", async () => {
+    const suggestions = await new JieAutocompleteProviderImpl("/tmp", noScan, nullPlatform(), storeWithKanban(BOARD))
+      .getSuggestions(["/kanban review "], 0, 15, { signal: signal() });
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["review #1", "review #2", "review #3"]);
   });
 
   test("filters card ids by the typed prefix", async () => {

@@ -1,5 +1,5 @@
 import { type Component, type Container } from "@earendil-works/pi-tui";
-import { Actions, type AgentId, type AgentUiState, type InfoEntry, type MessageTurn, type StateStore, type TuiState } from "../state";
+import { Actions, type AgentId, type AgentUiState, type MessageTurn, type StateStore, type TuiState } from "../state";
 import { type AssistantMessageComponent, type ChatMessages, type UserMessageComponent } from "../components/chat";
 import { makeAgentUiState, makeTuiState } from "../test";
 import { ChatSyncImpl } from "./chat-sync";
@@ -9,10 +9,6 @@ const INERT_ACTION = Actions.setEnvironment("/tmp", "main", false, "");
 
 function makeTurn(userPrompt: string, text: string | null = null, seq = 0): MessageTurn {
   return { userPrompt, cards: [], blocks: text === null ? [] : [{ kind: "text", text }], streamId: null, seq };
-}
-
-function helpEntry(seq: number): InfoEntry {
-  return { seq, kind: "help" };
 }
 
 function teamState(agents: ReadonlyArray<AgentUiState>, focusedAgentId: AgentId | null): TuiState {
@@ -33,11 +29,9 @@ interface SyncHarness {
   readonly requestRender: ReturnType<typeof vi.fn>;
   readonly createUserMessage: ReturnType<typeof vi.fn>;
   readonly createAssistantMessage: ReturnType<typeof vi.fn>;
-  readonly createInfoMessage: ReturnType<typeof vi.fn>;
   readonly createCompactionMarker: ReturnType<typeof vi.fn>;
   readonly userMessages: ReadonlyArray<UserMessageComponent>;
   readonly assistantMessages: ReadonlyArray<AssistantMessageComponent>;
-  readonly infoMessages: ReadonlyArray<Component>;
   readonly compactionMarkers: ReadonlyArray<Component>;
 }
 
@@ -49,7 +43,6 @@ function bootSync(): SyncHarness {
   });
   const userMessages: UserMessageComponent[] = [];
   const assistantMessages: AssistantMessageComponent[] = [];
-  const infoMessages: Component[] = [];
   const compactionMarkers: Component[] = [];
   const chatMessages = vi.mocked<ChatMessages>({
     createUserMessage: vi.fn(() => {
@@ -60,11 +53,6 @@ function bootSync(): SyncHarness {
     createAssistantMessage: vi.fn(() => {
       const component: AssistantMessageComponent = { render: vi.fn(() => []), invalidate: vi.fn(), update: vi.fn() };
       assistantMessages.push(component);
-      return component;
-    }),
-    createInfoMessage: vi.fn(() => {
-      const component: Component = { render: vi.fn(() => []), invalidate: vi.fn() };
-      infoMessages.push(component);
       return component;
     }),
     createCompactionMarker: vi.fn(() => {
@@ -95,11 +83,9 @@ function bootSync(): SyncHarness {
     requestRender,
     createUserMessage: chatMessages.createUserMessage,
     createAssistantMessage: chatMessages.createAssistantMessage,
-    createInfoMessage: chatMessages.createInfoMessage,
     createCompactionMarker: chatMessages.createCompactionMarker,
     userMessages,
     assistantMessages,
-    infoMessages,
     compactionMarkers,
   };
 }
@@ -175,62 +161,6 @@ describe("ChatSyncImpl", () => {
     await notify(makeTuiState());
     expect(clear).toHaveBeenCalledTimes(2);
     expect(addChild).toHaveBeenCalledTimes(2);
-  });
-
-  test("a help info entry appends an info component after the turn pairs", async () => {
-    const { notify, addChild, createInfoMessage } = bootSync();
-    const agent = makeAgentUiState(AGENT_ID, { isLeader: true, currentTurn: makeTurn("q") });
-    const entry = helpEntry(1);
-    await notify({ ...teamState([agent], AGENT_ID), infoEntries: [entry] });
-    expect(addChild).toHaveBeenCalledTimes(3);
-    expect(createInfoMessage).toHaveBeenCalledWith(entry);
-  });
-
-  test("entries render in seq order: an info entry interleaves between turns", async () => {
-    const { notify, addChild, userMessages, assistantMessages, infoMessages } = bootSync();
-    const agent = makeAgentUiState(AGENT_ID, {
-      isLeader: true,
-      history: [makeTurn("q1", null, 0)],
-      currentTurn: makeTurn("q2", null, 2),
-    });
-    await notify({ ...teamState([agent], AGENT_ID), infoEntries: [helpEntry(1)] });
-    expect(addChild.mock.calls.map((call) => call[0])).toEqual([
-      userMessages[0], assistantMessages[0], infoMessages[0], userMessages[1], assistantMessages[1],
-    ]);
-  });
-
-  test("an unchanged info entry is not re-created on the next action", async () => {
-    const { notify, createInfoMessage } = bootSync();
-    const agent = makeAgentUiState(AGENT_ID, { isLeader: true, currentTurn: makeTurn("q") });
-    const withInfo = { ...teamState([agent], AGENT_ID), infoEntries: [helpEntry(1)] };
-    await notify(withInfo);
-    await notify(withInfo);
-    expect(createInfoMessage).toHaveBeenCalledTimes(1);
-  });
-
-  test("switching the focused agent re-adds the info entry alongside that agent's turns", async () => {
-    const { notify, addChild, clear, createInfoMessage } = bootSync();
-    const managerId: AgentId = "my-team:manager-1";
-    const workerId: AgentId = "my-team:worker-1";
-    const manager = makeAgentUiState(managerId, { isLeader: true, role: "manager", currentTurn: makeTurn("manager task") });
-    const worker = makeAgentUiState(workerId, { role: "worker" });
-    const withInfo = (focused: AgentId): TuiState =>
-      ({ ...teamState([manager, worker], focused), infoEntries: [helpEntry(1)] });
-    await notify(withInfo(managerId));
-    expect(addChild).toHaveBeenCalledTimes(3);
-    await notify(withInfo(workerId));
-    expect(clear).toHaveBeenCalledTimes(2);
-    expect(addChild).toHaveBeenCalledTimes(4);
-    expect(createInfoMessage).toHaveBeenCalledTimes(2);
-  });
-
-  test("removing the info entries removes their components", async () => {
-    const { notify, addChild, removeChild } = bootSync();
-    const agent = makeAgentUiState(AGENT_ID, { isLeader: true, currentTurn: makeTurn("q") });
-    await notify({ ...teamState([agent], AGENT_ID), infoEntries: [helpEntry(1)] });
-    expect(addChild).toHaveBeenCalledTimes(3);
-    await notify(teamState([agent], AGENT_ID));
-    expect(removeChild).toHaveBeenCalledTimes(1);
   });
 
   test("a compaction marker renders before the turns that follow it", async () => {

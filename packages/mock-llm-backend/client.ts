@@ -1,6 +1,8 @@
 import { type Expectation, type RecordedCall } from "./expectations.ts";
 import { DEFAULT_MOCK_PORT } from "./mock-llm-server.ts";
 
+const DEFAULT_STUB_URL = `http://localhost:${DEFAULT_MOCK_PORT}`;
+
 export class MockClientError extends Error {
   constructor(public readonly status: number, message: string) {
     super(message);
@@ -9,7 +11,7 @@ export class MockClientError extends Error {
 }
 
 export class MockClient {
-  constructor(private readonly baseUrl: string = `http://localhost:${DEFAULT_MOCK_PORT}`) {}
+  constructor(private readonly baseUrl: string = DEFAULT_STUB_URL) {}
 
   async health(): Promise<void> {
     let res: Response;
@@ -66,26 +68,16 @@ export class MockClient {
 }
 
 export async function loadMockExpectations(expectations: ReadonlyArray<Expectation>): Promise<void> {
-  const baseUrl = process.env["JIE_E2E_BASE_URL"] ?? "";
-  if (!isStubUrl(baseUrl)) return;
-  const client = new MockClient(baseUrl);
+  const client = new MockClient();
   try {
     await client.health();
   } catch (cause) {
     throw new Error(
-      `loadMockExpectations: stub at ${baseUrl} is not reachable. ` +
+      `loadMockExpectations: stub at ${DEFAULT_STUB_URL} is not reachable. ` +
         `Start it with \`bun run mock:start\`.\n${messageOf(cause)}`,
     );
   }
   await client.registerExpectations(expectations);
-}
-
-function isStubUrl(url: string): boolean {
-  try {
-    return new URL(url).port === String(DEFAULT_MOCK_PORT);
-  } catch {
-    return false;
-  }
 }
 
 function messageOf(cause: unknown): string {

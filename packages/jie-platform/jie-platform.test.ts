@@ -12,6 +12,7 @@ const settingsStore = vi.mocked<SettingsStore>({
   setDefaultEffort: vi.fn(),
   setDefaultTeam: vi.fn(),
   setModelFilters: vi.fn(),
+  setNotificationSoundEnabled: vi.fn(),
 });
 
 const eventManager = vi.mocked<EventManager>({
@@ -35,6 +36,7 @@ const teamManager = vi.mocked<TeamManager>({
   agents: vi.fn(),
   listSessions: vi.fn(),
   currentSessionId: vi.fn(),
+  compact: vi.fn(),
   stop: vi.fn(),
 });
 

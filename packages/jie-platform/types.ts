@@ -72,21 +72,27 @@ export interface TaskLifecycle {
     readonly writeGates: ReadonlyArray<WriteGateRule>;
 }
 
-export type KanbanStatus = "pending" | "in_progress" | "completed";
+export type KanbanStatus = "pending" | "in_progress" | "in_review" | "completed";
 
 export interface KanbanCard {
     readonly id: string;
     readonly content: string;
     readonly status: KanbanStatus;
+    readonly scope?: "team" | "session";
+    readonly sessionId?: string;
     readonly active_form?: string;
     readonly description?: string;
+    readonly completedAt?: string;
+    readonly externalRef?: string;
 }
 
 export interface KanbanCardWrite {
     readonly content: string;
     readonly status: KanbanStatus;
+    readonly scope?: "team" | "session";
     readonly active_form?: string;
     readonly description?: string;
+    readonly externalRef?: string;
 }
 
 

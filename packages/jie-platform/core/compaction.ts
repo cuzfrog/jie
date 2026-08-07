@@ -119,16 +119,9 @@ function prepareCompaction(messages: ReadonlyArray<AgentMessage>, keepRecentToke
     if (role === "user" || role === "assistant") cutPoints.push(i);
   }
   if (cutPoints.length === 0) return null;
-  let firstKeptIndex = cutPoints[0]!;
-  let accumulatedTokens = 0;
-  for (let i = messages.length - 1; i >= 0; i--) {
-    accumulatedTokens += estimateTokens(messages[i]!);
-    if (accumulatedTokens >= keepRecentTokens) {
-      const cutPoint = cutPoints.find((candidate) => candidate >= i);
-      if (cutPoint !== undefined) firstKeptIndex = cutPoint;
-      break;
-    }
-  }
+  const thresholdIndex = findCompactionThresholdIndex(messages, keepRecentTokens);
+  const firstKeptIndex = findFirstKeptIndex(messages, cutPoints, thresholdIndex, keepRecentTokens);
+  if (firstKeptIndex === null) return null;
   const summarized = messages.slice(0, firstKeptIndex);
   if (summarized.length === 0) return null;
   if (summarized.every((message) => message.role === "compactionSummary")) return null;
@@ -152,6 +145,42 @@ function summaryPrefixBudget(contextWindow: number, model: Model<Api>, reserveTo
 function summaryMaxTokens(model: Model<Api>, reserveTokens: number): number {
   const cap = model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY;
   return Math.min(Math.floor(0.8 * reserveTokens), cap);
+}
+
+function findCompactionThresholdIndex(messages: ReadonlyArray<AgentMessage>, keepRecentTokens: number): number {
+  let accumulatedTokens = 0;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    accumulatedTokens += estimateTokens(messages[i]!);
+    if (accumulatedTokens >= keepRecentTokens) return i;
+  }
+  return 0;
+}
+
+function findFirstKeptIndex(
+  messages: ReadonlyArray<AgentMessage>,
+  cutPoints: ReadonlyArray<number>,
+  thresholdIndex: number,
+  keepRecentTokens: number,
+): number | null {
+  const candidates = cutPoints.filter((candidate) => candidate >= thresholdIndex);
+  const suffixTokens = buildSuffixTokenSums(messages);
+  for (const candidate of candidates) {
+    if (candidate === 0) continue;
+    if (suffixTokens[candidate]! <= keepRecentTokens) return candidate;
+  }
+  for (let i = candidates.length - 1; i >= 0; i--) {
+    const candidate = candidates[i]!;
+    if (candidate > 0) return candidate;
+  }
+  return null;
+}
+
+function buildSuffixTokenSums(messages: ReadonlyArray<AgentMessage>): ReadonlyArray<number> {
+  const sums: number[] = new Array(messages.length + 1).fill(0);
+  for (let i = messages.length - 1; i >= 0; i--) {
+    sums[i] = sums[i + 1] + estimateTokens(messages[i]!);
+  }
+  return sums;
 }
 
 function fitMessages(messages: ReadonlyArray<AgentMessage>, budgetTokens: number): ReadonlyArray<AgentMessage> {

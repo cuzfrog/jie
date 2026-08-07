@@ -1,4 +1,5 @@
 import { ProcessTerminal, TUI, detectCapabilities, setCapabilities, type Terminal } from "@earendil-works/pi-tui";
+import type { StopReason } from "@earendil-works/pi-ai";
 import { type AnyEventEnvelope, type JiePlatform } from "@cuzfrog/jie-platform";
 import { logger } from "@cuzfrog/jie-utils";
 import { Actions, TuiState, type StateStore } from "./state";
@@ -75,6 +76,9 @@ export class TuiImpl implements Tui {
     this.stdout = stdout;
     this.unsubscribeBus = subscribeToBus(platform, (env) => {
       this.stateStore.dispatch(Actions.receiveEvent(env));
+      if (env.type === "agent.idle") {
+        void this.maybePlaySound(env);
+      }
     });
     this.unsubscribeTransientAger = createTransientAger(stateStore);
     this.unsubscribeActions = stateStore.subscribe(async (action) => {
@@ -188,6 +192,22 @@ export class TuiImpl implements Tui {
     const title = buildTerminalTitle(this.stateStore.getState(), this.titleDotFrame);
     this.terminal.setTitle(title);
   }
+
+  private async maybePlaySound(env: AnyEventEnvelope): Promise<void> {
+    if (this.terminal === null) return;
+    if (env.type !== "agent.idle" || env.sender.kind !== "agent") return;
+    const state = this.stateStore.getState();
+    const activeId = state.focusedAgentId ?? state.leaderAgentId;
+    if (activeId === null) return;
+    if (`${env.sender.teamId}:${env.sender.agentKey}` !== activeId) return;
+    if (!_shouldRingOnIdle(env.payload)) return;
+    try {
+      const enabled = await this.platform.execute({ name: "getNotificationSoundEnabled" });
+      if (enabled) this.terminal.write("\x07");
+    } catch (error: unknown) {
+      log.error(`failed to read notification sound setting: ${String(error)}`);
+    }
+  }
 }
 
 function subscribeToBus(platform: JiePlatform, onEvent: (event: AnyEventEnvelope) => void): () => void {
@@ -224,4 +244,9 @@ function buildTerminalTitle(state: TuiState, dotFrame: number): string {
   return `${dot}jie${suffix}`;
 }
 
+function _shouldRingOnIdle(reason: StopReason): boolean {
+  return reason === "stop" || reason === "error" || reason === "length";
+}
+
 export { buildTerminalTitle as _buildTerminalTitle };
+

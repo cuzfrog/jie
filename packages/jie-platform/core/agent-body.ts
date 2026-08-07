@@ -27,4 +27,5 @@ export interface AgentBody {
   messages(): ReadonlyArray<AgentMessage>;
   start(): Promise<void>;
   stop(): void;
+  compact(): Promise<void>;
 }

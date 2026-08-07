@@ -169,12 +169,6 @@ describe("TuiState.hasChatContent", () => {
     store.dispatch(Actions.receiveEvent(Events.agentTurnStart({ kind: "agent", teamId: "demo", agentKey: "general-1" }, null)));
     expect(TuiState.hasChatContent(store.getState())).toBe(true);
   });
-
-  test("returns true with only an info entry and no conversation", () => {
-    const store = new StateStoreImpl();
-    store.dispatch(Actions.showHelp());
-    expect(TuiState.hasChatContent(store.getState())).toBe(true);
-  });
 });
 
 describe("TuiState.kanbanVisibleCards", () => {

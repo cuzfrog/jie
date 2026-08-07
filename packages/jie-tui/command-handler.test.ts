@@ -1,5 +1,6 @@
 import { JiePlatformError, type JiePlatform, type SkillInfo } from "@cuzfrog/jie-platform";
 import { CommandHandlerImpl, SLASH_COMMAND_NAMES, type CommandHandler } from "./command-handler";
+import { CommandResolverImpl } from "./command-resolver";
 import { Actions, type StateStore, type TuiState } from "./state";
 import { makeAgentUiState, makeTuiState } from "./test";
 
@@ -47,7 +48,7 @@ function makeHandler(platform: JiePlatform, state: TuiState = makeTuiState()): H
     dispatch: vi.fn(),
     subscribe: vi.fn(() => () => undefined),
   });
-  return { handler: new CommandHandlerImpl(stateStore, platform), dispatch: stateStore.dispatch };
+  return { handler: new CommandHandlerImpl(stateStore, platform, new CommandResolverImpl(platform)), dispatch: stateStore.dispatch };
 }
 
 describe("CommandHandlerImpl", () => {
@@ -64,6 +65,14 @@ describe("CommandHandlerImpl", () => {
     const { platform } = makePlatform();
     const { handler, dispatch } = makeHandler(platform);
     handler.handle("/clear");
+    expect(dispatch).toHaveBeenCalledWith(Actions.clearBanners());
+    expect(dispatch).toHaveBeenCalledWith(Actions.clearTuiState());
+  });
+
+  test("handle('/new') dispatches clearTuiState as an alias of /clear", () => {
+    const { platform } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/new");
     expect(dispatch).toHaveBeenCalledWith(Actions.clearBanners());
     expect(dispatch).toHaveBeenCalledWith(Actions.clearTuiState());
   });
@@ -759,11 +768,19 @@ describe("CommandHandlerImpl — /kanban", () => {
     expect(execute).toHaveBeenCalledWith({ name: "kanbanAdd", teamId: "my-team", title: "refactor", description: "write the report" });
   });
 
+  test("/kanban add --ephemeral <description> creates a session-scoped card", () => {
+    const { platform, execute } = makePlatform();
+    execute.mockResolvedValueOnce({ board: [], card: { id: "#1", content: "t", status: "pending" } });
+    const { handler } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban add --ephemeral write the report");
+    expect(execute).toHaveBeenCalledWith({ name: "kanbanAdd", teamId: "my-team", description: "write the report", scope: "session" });
+  });
+
   test("/kanban add with no description reports usage", () => {
     const { platform, execute } = makePlatform();
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
     handler.handle("/kanban add");
-    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("/kanban add <description>"));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("/kanban add [--ephemeral] [--title <title>] <description>"));
     expect(execute).not.toHaveBeenCalled();
   });
 
@@ -793,14 +810,48 @@ describe("CommandHandlerImpl — /kanban", () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
-  test("/kanban complete executes kanbanComplete and publishes the board", async () => {
+  test("/kanban complete executes kanbanSetStatus completed and publishes the board", async () => {
     const { platform, execute } = makePlatform();
     execute.mockResolvedValueOnce({ board: [] });
     const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
     handler.handle("/kanban complete #1");
-    expect(execute).toHaveBeenCalledWith({ name: "kanbanComplete", teamId: "my-team", cardId: "#1" });
+    expect(execute).toHaveBeenCalledWith({ name: "kanbanSetStatus", teamId: "my-team", cardId: "#1", status: "completed" });
     await new Promise((r) => setImmediate(r));
     expect(dispatch).toHaveBeenCalledWith(Actions.setKanbanBoard([]));
+  });
+
+  test("/kanban review executes kanbanSetStatus in_review and publishes the board", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockResolvedValueOnce({ board: [] });
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban review #1");
+    expect(execute).toHaveBeenCalledWith({ name: "kanbanSetStatus", teamId: "my-team", cardId: "#1", status: "in_review" });
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setKanbanBoard([]));
+  });
+
+  test("/kanban handoff executes kanbanHandoff and publishes the source board", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockResolvedValueOnce({ board: [], card: { id: "#7", content: "handed off", status: "pending" } });
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban handoff #1 target-team");
+    expect(execute).toHaveBeenCalledWith({ name: "kanbanHandoff", teamId: "my-team", cardId: "#1", targetTeamId: "target-team" });
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setKanbanBoard([]));
+  });
+
+  test("/kanban handoff accepts a cross-team source reference", () => {
+    const { platform, execute } = makePlatform();
+    const { handler } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban handoff other-team/#5 target-team");
+    expect(execute).toHaveBeenCalledWith({ name: "kanbanHandoff", teamId: "my-team", cardId: "other-team/#5", targetTeamId: "target-team" });
+  });
+
+  test("/kanban handoff without a target team reports usage", () => {
+    const { platform } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban handoff #1");
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("/kanban handoff [<teamId>/]<cardId> <targetTeamId>"));
   });
 
   test("an unknown /kanban subcommand reports an error", () => {
@@ -822,22 +873,117 @@ describe("CommandHandlerImpl — /kanban", () => {
   });
 });
 
+describe("CommandHandlerImpl — /notification", () => {
+  test("/notification sound enable dispatches setNotificationSoundEnabled and a transient message", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockResolvedValueOnce(null);
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/notification sound enable");
+    expect(execute).toHaveBeenCalledWith({ name: "setNotificationSoundEnabled", enabled: true });
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage("sound notifications enabled"));
+  });
+
+  test("/notification sound disable dispatches setNotificationSoundEnabled and a transient message", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockResolvedValueOnce(null);
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/notification sound disable");
+    expect(execute).toHaveBeenCalledWith({ name: "setNotificationSoundEnabled", enabled: false });
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage("sound notifications disabled"));
+  });
+
+  test("/notification with no subcommand reports usage", () => {
+    const { platform } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/notification");
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("/notification sound enable|disable"));
+  });
+
+  test("/notification sound without a value reports usage", () => {
+    const { platform } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/notification sound");
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("/notification sound enable|disable"));
+  });
+
+  test("/notification sound with an unknown value reports usage", () => {
+    const { platform } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/notification sound loud");
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("/notification sound enable|disable"));
+  });
+
+  test("a failed /notification sound surfaces the platform error as a banner", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async () => {
+      throw new Error("boom");
+    });
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/notification sound enable");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/notification sound failed")));
+  });
+});
+
+describe("CommandHandlerImpl — /compact", () => {
+  test("/compact dispatches the compact command for the focused agent", async () => {
+    const { platform, execute } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/compact");
+    await new Promise((r) => setImmediate(r));
+    expect(execute).toHaveBeenCalledWith({ name: "compact", teamId: "my-team", agentKey: "general-1" });
+    expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("compacting")));
+  });
+
+  test("/compact with no team loaded sets an error", () => {
+    const { platform, execute } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/compact");
+    expect(execute).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/compact: no focused agent")));
+  });
+
+  test("/compact while the focused agent is busy sets an error", () => {
+    const { platform, execute } = makePlatform();
+    const busyAgent = makeAgentUiState("my-team:general-1", { isLeader: true, status: "busy" });
+    const state = makeTuiState({ teamId: "my-team", leaderAgentId: busyAgent.agentId, focusedAgentId: busyAgent.agentId, agents: new Map([[busyAgent.agentId, busyAgent]]) });
+    const { handler, dispatch } = makeHandler(platform, state);
+    handler.handle("/compact");
+    expect(execute).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("wait for the current response to finish before compacting"));
+  });
+
+  test("a failed /compact surfaces the platform error as a banner", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async () => { throw new Error("compactor offline"); });
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/compact");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/compact failed")));
+  });
+});
+
 describe("SLASH_COMMAND_NAMES", () => {
   test("is the union of the commands and intercepts registries, in registration order", () => {
     expect(SLASH_COMMAND_NAMES).toEqual([
       "help",
       "clear",
+      "new",
       "exit",
       "login",
       "logout",
       "model",
       "model-filter",
       "effort",
+      "compact",
       "reload",
       "team",
       "resume",
       "rename",
       "kanban",
+      "notification",
     ]);
   });
 });

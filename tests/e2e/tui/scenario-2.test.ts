@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadMockExpectations } from "../../../packages/mock-llm-backend";
-import { assertLlmReachable, seedTeam } from "../_fixture.ts";
+import { seedTeam } from "../_fixture.ts";
 import {
   startTui,
   stopTui,
@@ -18,7 +18,6 @@ describe("Scenario 2 — pass work in a team", () => {
   let harness: TuiHarness;
 
   beforeAll(async () => {
-    await assertLlmReachable();
     await loadMockExpectations(expectations);
   });
 
@@ -87,7 +86,7 @@ describe("Scenario 2 — pass work in a team", () => {
     await waitForTeam(harness, "my-team");
     await waitForFocusedAgent(harness, "my-team:manager-1");
     await submitAndWaitForAgentIdle(harness, "Update your kanban board with one in-progress card", "my-team:manager-1");
-    expect(harness.stateStore.getState().kanbanBoard).toEqual([{ id: "#1", content: "write the report", status: "in_progress" }]);
+    expect(harness.stateStore.getState().kanbanBoard).toEqual([{ id: "#1", content: "write the report", status: "in_progress", scope: "team" }]);
     await sendCmd(harness.stdin, "\x0b");
     await waitForUi(harness, (state) => state.kanbanView === "list", "kanban list view");
     await sendCmd(harness.stdin, "\x0b");

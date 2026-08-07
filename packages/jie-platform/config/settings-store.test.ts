@@ -159,6 +159,25 @@ describe("SettingsStoreImpl", () => {
     expect(JSON.parse(readFileSync(join(projectJieDir, "settings.json"), "utf-8"))).toEqual({ defaultTeam: "dev" });
   });
 
+  test("setNotificationSoundEnabled writes notification.soundEnabled to ~/.jie/settings.json", () => {
+    const store = new SettingsStoreImpl(cwd, homeJieDir, null);
+    store.setNotificationSoundEnabled(false);
+    expect(JSON.parse(readFileSync(join(homeJieDir, "settings.json"), "utf-8"))).toEqual({
+      notification: { soundEnabled: false },
+    });
+  });
+
+  test("setNotificationSoundEnabled preserves existing settings fields", () => {
+    const store = new SettingsStoreImpl(cwd, homeJieDir, null);
+    store.setDefaultProvider("anthropic", "claude-sonnet-4");
+    store.setNotificationSoundEnabled(false);
+    expect(JSON.parse(readFileSync(join(homeJieDir, "settings.json"), "utf-8"))).toEqual({
+      defaultProvider: "anthropic",
+      defaultModel: "claude-sonnet-4",
+      notification: { soundEnabled: false },
+    });
+  });
+
   test("setDefaultTeam with scope 'project' falls back to cwd/.jie when projectJieDir is null", () => {
     const store = new SettingsStoreImpl(cwd, homeJieDir, null);
     store.setDefaultTeam("dev", "project");

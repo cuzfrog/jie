@@ -104,17 +104,37 @@ function slashCommands(
   stateStore: StateStore,
   reportModelFilteredOut: (count: number) => void,
 ): SlashCommand[] {
-  return COMMAND_METADATA.map((meta): SlashCommand => {
-    if (meta.name === "team") return { ...meta, getArgumentCompletions: (prefix) => teamItems(platform, prefix) };
-    if (meta.name === "resume") return { ...meta, getArgumentCompletions: (prefix) => sessionItems(platform, stateStore, prefix) };
-    if (meta.name === "model") return { ...meta, getArgumentCompletions: (prefix) => modelItems(platform, prefix, reportModelFilteredOut) };
-    if (meta.name === "model-filter") return { ...meta, getArgumentCompletions: (argumentText) => modelFilterItems(platform, argumentText) };
-    if (meta.name === "login") return { ...meta, getArgumentCompletions: (prefix) => providerItems(platform, prefix) };
-    if (meta.name === "logout") return { ...meta, getArgumentCompletions: (prefix) => logoutItems(platform, prefix) };
-    if (meta.name === "effort") return { ...meta, getArgumentCompletions: async (prefix) => effortItems(prefix) };
-    if (meta.name === "kanban") return { ...meta, getArgumentCompletions: (argumentText) => kanbanItems(stateStore, argumentText) };
-    return { ...meta };
-  });
+  const commands: SlashCommand[] = [];
+  for (const meta of COMMAND_METADATA) {
+    const canonical = slashCommandFor(platform, stateStore, reportModelFilteredOut, meta);
+    commands.push(canonical);
+    for (const alias of meta.aliases ?? []) {
+      commands.push({
+        name: alias,
+        description: `alias of /${canonical.name}`,
+        argumentHint: canonical.argumentHint,
+        getArgumentCompletions: canonical.getArgumentCompletions,
+      });
+    }
+  }
+  return commands;
+}
+
+function slashCommandFor(
+  platform: JiePlatform,
+  stateStore: StateStore,
+  reportModelFilteredOut: (count: number) => void,
+  meta: (typeof COMMAND_METADATA)[number],
+): SlashCommand {
+  if (meta.name === "team") return { ...meta, getArgumentCompletions: (prefix) => teamItems(platform, prefix) };
+  if (meta.name === "resume") return { ...meta, getArgumentCompletions: (prefix) => sessionItems(platform, stateStore, prefix) };
+  if (meta.name === "model") return { ...meta, getArgumentCompletions: (prefix) => modelItems(platform, prefix, reportModelFilteredOut) };
+  if (meta.name === "model-filter") return { ...meta, getArgumentCompletions: (argumentText) => modelFilterItems(platform, argumentText) };
+  if (meta.name === "login") return { ...meta, getArgumentCompletions: (prefix) => providerItems(platform, prefix) };
+  if (meta.name === "logout") return { ...meta, getArgumentCompletions: (prefix) => logoutItems(platform, prefix) };
+  if (meta.name === "effort") return { ...meta, getArgumentCompletions: async (prefix) => effortItems(prefix) };
+  if (meta.name === "kanban") return { ...meta, getArgumentCompletions: (argumentText) => kanbanItems(stateStore, argumentText) };
+  return { ...meta };
 }
 
 async function drillDownSuggestions(commands: SlashCommand[], textBeforeCursor: string): Promise<AutocompleteSuggestions | null> {
@@ -242,6 +262,7 @@ const KANBAN_SUBCOMMANDS: ReadonlyArray<{ readonly name: string; readonly descri
   { name: "add", description: "[--title <title>] <description>" },
   { name: "remove", description: "<cardId>" },
   { name: "complete", description: "<cardId>" },
+  { name: "review", description: "<cardId>" },
 ];
 
 function kanbanItems(stateStore: StateStore, argumentText: string): AutocompleteItem[] | null {
@@ -253,8 +274,9 @@ function kanbanItems(stateStore: StateStore, argumentText: string): Autocomplete
   const subcommand = spaceIndex === -1 ? trimmed : trimmed.slice(0, spaceIndex);
   const rest = spaceIndex === -1 ? "" : trimmed.slice(spaceIndex + 1);
   if (subcommand.toLowerCase() === "add") return null;
-  if (subcommand.toLowerCase() === "remove" || subcommand.toLowerCase() === "complete") {
-    const cards = board.filter((card) => hasPrefix(card.id, rest));
+  if (subcommand.toLowerCase() === "remove" || subcommand.toLowerCase() === "complete" || subcommand.toLowerCase() === "review") {
+    const targetStatus = subcommand.toLowerCase() === "complete" ? "completed" : subcommand.toLowerCase() === "review" ? "in_review" : null;
+    const cards = board.filter((card) => hasPrefix(card.id, rest) && (targetStatus === null || card.status !== targetStatus));
     if (cards.length === 0) return null;
     return cards.map((card) => kanbanCardItem(card, subcommand));
   }

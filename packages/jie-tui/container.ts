@@ -12,6 +12,7 @@ import { registerSyncModule, type ChatSync } from "./sync";
 import { registerComponentsModule, type TuiView } from "./components";
 import { registerTuiModule } from "./module";
 import type { CommandHandler } from "./command-handler";
+import type { CommandResolver } from "./command-resolver";
 import type { CreateTUIOptions, Tui, TuiDeps, TuiStdout } from "./tui";
 
 const log = logger.getSubLogger({ name: "jie.tui.container" });
@@ -25,6 +26,7 @@ export interface TuiCradle {
   readonly stdout: TuiStdout | undefined;
   readonly stateStore: StateStore;
   readonly commandHandler: CommandHandler;
+  readonly commandResolver: CommandResolver;
   readonly autocompleteProvider: JieAutocompleteProvider;
   readonly chatMessages: ChatMessages;
   readonly kanbanList: Component;

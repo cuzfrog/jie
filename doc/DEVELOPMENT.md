@@ -4,8 +4,7 @@
 1. install `bun` 1.3.14
 
 ## Local LLM setup (optional)
-1. setup local inference endpoint at `http://192.168.1.6:12345` (OpenAI compatible, set temperature to 0); use model `qwen3.5-2b` (small and fast).
-2. run `. ./setenv` to populate environment variables for local development. It sets JIE_E2E_BASE_URL=http://localhost:12345 for real LLM backend
+For manual exploration with a real backend, configure `.jie/models.json` and run `jie -p "..."`.
 
 ## Run tests
 
@@ -13,11 +12,11 @@
 # Unit tests (no LLM required)
 bun test packages
 
-# End-to-end tests
-bun mock:start # to start the mock LLM backend
-bun test:e2e:mock # it sets JIE_E2E_BASE_URL=http://localhost:12346 for mock LLM backend
+# End-to-end tests (mock LLM backend only)
+bun mock:start # start the mock LLM backend
+bun test:e2e:mock
 ```
-- With mock LLM backend, test should be finished within 5s, do not increase timeout.
+- With mock LLM backend, test should be finished within 5s, do not increase timeout. If tests are slow, it's an issue, which should be fixed.
 
 ## Invoke jie CLI
 Setup:

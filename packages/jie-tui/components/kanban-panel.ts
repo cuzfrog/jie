@@ -1,19 +1,21 @@
 import { truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
 import type { KanbanCard, KanbanStatus } from "@cuzfrog/jie-platform";
 import { TuiState, type StateStore } from "../state";
+import { Box } from "./box";
 import { style, type ColorName } from "./themes";
 
-const PANEL_PADDING = 1;
 const COLUMN_GAP = "  ";
 const STATUS_LABELS: { readonly [K in KanbanStatus]: string } = {
   pending: "pending",
   in_progress: "in_progress",
+  in_review: "in_review",
   completed: "completed",
 };
 
 const KANBAN_COLUMNS: ReadonlyArray<{ readonly status: KanbanStatus; readonly title: string; readonly cardColor: ColorName }> = [
   { status: "pending", title: "Pending", cardColor: "text" },
   { status: "in_progress", title: "In Progress", cardColor: "accent" },
+  { status: "in_review", title: "In Review", cardColor: "warning" },
   { status: "completed", title: "Done", cardColor: "muted" },
 ];
 
@@ -37,23 +39,13 @@ export class KanbanPanel implements Component {
     const state = this.stateStore.getState();
     if (state.teamId === null || state.kanbanView !== "panel") return [];
     const w = Math.max(1, width);
-    const inner = Math.max(1, w - 2 - PANEL_PADDING * 2);
+    const inner = Math.max(1, w - 4);
     const visible = TuiState.kanbanVisibleCards(state);
     const focused = state.kanbanCursor === null ? null : visible.find((card) => card.id === state.kanbanCursor) ?? null;
     const border = style("borderMuted");
-    const horizontal = "─".repeat(Math.max(0, w - 2));
     const expandedTop = state.kanbanExpanded && focused !== null ? renderExpandedTopBorder(focused.id, w, border) : null;
     const rows = state.kanbanExpanded ? renderCardDetail(focused, state.kanbanEditField, inner) : renderKanbanBoard(state, visible, inner);
-    const framed = rows.map((row) => {
-      const padded = fitToWidth(row, inner);
-      return truncateToWidth(`${border("│")} ${padded} ${border("│")}`, w);
-    });
-    return [
-      expandedTop ?? truncateToWidth(border(`┌${horizontal}┐`), w),
-      ...framed,
-      truncateToWidth(border(`└${horizontal}┘`), w),
-      renderHint(state, w),
-    ];
+    return [...new Box(rows, { top: expandedTop ?? undefined }).render(w), renderHint(state, w)];
   }
 
   invalidate(): void {}
@@ -79,7 +71,11 @@ function renderColumn(column: { readonly title: string; readonly cardColor: Colo
   const header = style("dim")(truncateToWidth(`${column.title} (${total})`, columnWidth));
   const rows = cards.map((card) => {
     const marker = card.id === cursorId ? style("accent")("▸") : " ";
-    return marker + style(column.cardColor)(truncateToWidth(card.content, Math.max(0, columnWidth - 1)));
+    const badge = card.scope === "session" ? style("warning")("E ") : "";
+    const badgeWidth = card.scope === "session" ? 2 : 0;
+    const ref = card.externalRef !== undefined ? style("accent")(`${card.externalRef} `) : "";
+    const refWidth = card.externalRef !== undefined ? visibleWidth(card.externalRef) + 1 : 0;
+    return marker + badge + ref + style(column.cardColor)(truncateToWidth(card.content, Math.max(0, columnWidth - 1 - badgeWidth - refWidth)));
   });
   const overflow = total - cards.length;
   if (overflow > 0) rows.push(style("dim")(`+${overflow} more`));
@@ -91,7 +87,9 @@ function renderCardDetail(card: KanbanCard | null, field: "content" | "descripti
   const title = renderCardDetailRow(field === "content", "text", card.content, innerWidth);
   const description = renderCardDetailRow(field === "description", card.description ? "muted" : "dim", card.description ? `description: ${card.description}` : "description:", innerWidth);
   const status = style("muted")(fitToWidth(`status: ${STATUS_LABELS[card.status]}`, innerWidth));
-  const rows = [title, description, status];
+  const scope = style("muted")(fitToWidth(`scope: ${card.scope ?? "team"}`, innerWidth));
+  const rows = [title, description, status, scope];
+  if (card.externalRef !== undefined) rows.push(style("muted")(fitToWidth(`ref: ${card.externalRef}`, innerWidth)));
   if (card.active_form !== undefined) rows.push(style("muted")(fitToWidth(`active: ${card.active_form}`, innerWidth)));
   return rows;
 }
