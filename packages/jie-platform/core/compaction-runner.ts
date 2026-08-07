@@ -69,6 +69,7 @@ export class CompactionRunnerImpl implements CompactionRunner {
   private async run(model: Model<Api>, contextWindow?: number): Promise<void> {
     const controller = new AbortController();
     this.controller = controller;
+    this.eventManager.publish(Events.agentCompactionStart(this.sender));
     try {
       const result = await this.compactor.compact({
         messages: this.conversation.getMessages(),
@@ -102,6 +103,7 @@ export class CompactionRunnerImpl implements CompactionRunner {
         this.eventManager.publish(Events.systemError({ kind: "system" }, `compaction failed: ${message}`));
       }
     } finally {
+      this.eventManager.publish(Events.agentCompactionEnd(this.sender));
       if (this.controller === controller) this.controller = null;
     }
   }

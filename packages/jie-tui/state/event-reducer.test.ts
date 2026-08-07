@@ -563,6 +563,21 @@ describe("reduceCompacted", () => {
     expect(reduce(state, Events.agentCompacted(foreign, "s", 1, 0))).toBe(state);
   });
 
+  test("sets compactionInProgress true on agent.compaction.start and false on agent.compaction.end", () => {
+    const state = loadedState();
+    let next = reduce(state, Events.agentCompactionStart(AGENT_SENDER));
+    expect(next.agents.get("my-team:general-1")?.compactionInProgress).toBe(true);
+    next = reduce(next, Events.agentCompactionEnd(AGENT_SENDER));
+    expect(next.agents.get("my-team:general-1")?.compactionInProgress).toBe(false);
+  });
+
+  test("agent.compacted also clears compactionInProgress", () => {
+    let state = loadedState();
+    state = reduce(state, Events.agentCompactionStart(AGENT_SENDER));
+    state = reduce(state, Events.agentCompacted(AGENT_SENDER, "s", 1, 0));
+    expect(state.agents.get("my-team:general-1")?.compactionInProgress).toBe(false);
+  });
+
   test("a later compaction replaces the marker and keeps the entry counter monotonic", () => {
     let state = reduce(threeTurnState(), Events.agentCompacted(AGENT_SENDER, "first summary", 500, 1));
     state = reduce(state, Events.agentTurnStart(AGENT_SENDER, "four"));

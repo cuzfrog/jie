@@ -105,6 +105,19 @@ describe("Footer", () => {
     }
   });
 
+  test("line two shows a Compact­ing… indicator when the focused agent is compacting", () => {
+    const base = seededStateWithModel();
+    const agent = base.agents.get(LEADER_ID)!;
+    const model = agent.model ?? { provider: "anthropic", id: "claude-opus-4", effort: "high", contextWindow: null };
+    const state = makeTuiState({
+      ...base,
+      agents: new Map([[LEADER_ID, makeAgentUiState(LEADER_ID, { isLeader: true, model, compactionInProgress: true })]]),
+    });
+    stateStore.getState.mockReturnValue(state);
+    const lines = new Footer(stateStore).render(80);
+    expect(stripAnsi(lines[1])).toContain("Compacting...");
+  });
+
   test("never renders a line wider than the given width with over-long identity (doRender guard)", () => {
     stateStore.getState.mockReturnValue(seededStateWithLongIdentity());
     const footer = new Footer(stateStore);

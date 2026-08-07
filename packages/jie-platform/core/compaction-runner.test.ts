@@ -100,6 +100,22 @@ describe("CompactionRunner — applying the result", () => {
     expect(messages).toEqual([summary, second, third]);
   });
 
+  test("publishes agent.compaction.start and agent.compaction.end around a run", async () => {
+    compactor.compact.mockResolvedValueOnce({
+      summaryMessage: createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z"),
+      firstKeptIndex: 1,
+      tokensBefore: 500,
+      summarizedPrefix: [messages[0]!],
+    });
+    await makeRunner().ensure(model);
+    const starts = envelopes("agent.compaction.start");
+    const ends = envelopes("agent.compaction.end");
+    expect(starts).toHaveLength(1);
+    expect(ends).toHaveLength(1);
+    expect(starts[0]!.sender).toEqual(sender);
+    expect(ends[0]!.sender).toEqual(sender);
+  });
+
   test("a successful run publishes agent.compacted with the summary and prefix counts", async () => {
     messages = [makeUserMessage("m1"), makeUserMessage("m2"), makeUserMessage("m3"), makeUserMessage("m4")];
     compactor.compact.mockResolvedValueOnce({
@@ -135,6 +151,12 @@ describe("CompactionRunner — applying the result", () => {
   test("a null result never reaches the extractor", async () => {
     await makeRunner().ensure(model);
     expect(memoryExtractor.extract).not.toHaveBeenCalled();
+  });
+
+  test("a null result still publishes compaction start and end", async () => {
+    await makeRunner().ensure(model);
+    expect(envelopes("agent.compaction.start")).toHaveLength(1);
+    expect(envelopes("agent.compaction.end")).toHaveLength(1);
   });
 
   test("abort() aborts the extraction signal", async () => {
