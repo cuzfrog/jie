@@ -16,7 +16,7 @@ bun test packages
 bun mock:start # start the mock LLM backend
 bun test:e2e:mock
 ```
-- With mock LLM backend, test should be finished within 5s, do not increase timeout.
+- With mock LLM backend, test should be finished within 5s, do not increase timeout. If tests are slow, it's an issue, which should be fixed.
 
 ## Invoke jie CLI
 Setup:
