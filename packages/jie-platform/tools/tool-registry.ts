@@ -2,6 +2,7 @@ import type { Tool } from "./types";
 import { createBashTool } from "./bash";
 import { createEditTool } from "./edit";
 import { createFileMutationQueue } from "./file-mutation-queue";
+import { createMemoryAddTool } from "./memory-add";
 import { createMemorySearchTool } from "./memory-search";
 import { createNotifyTool } from "./notify";
 import { createReadArtifactTool } from "./read-artifact";
@@ -85,6 +86,7 @@ function builtins(
     { name: "read_artifact", tool: createReadArtifactTool({ artifactStore }) as Tool },
     { name: "write_artifact", tool: createWriteArtifactTool({ artifactStore }) as Tool },
     { name: "kanban_write", tool: createKanbanWriteTool({ kanbanStore }) as Tool },
+    { name: "memory_add", tool: createMemoryAddTool({ memoryManager, settingsStore }) as Tool },
     { name: "memory_search", tool: createMemorySearchTool({ memoryManager, settingsStore }) as Tool },
     { name: "notify", tool: createNotifyTool({ eventManager, taskLifecycleGuard }) as Tool },
     { name: "web_fetch", tool: createWebFetchTool() as Tool },

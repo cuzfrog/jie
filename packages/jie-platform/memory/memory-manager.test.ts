@@ -4,13 +4,15 @@ import { MemoryManagerImpl, type MemoryManager } from "./memory-manager";
 import type { MemoryBootstrap } from "./memory-bootstrap";
 import type { MemoryDistiller, DistillationInput } from "./memory-distiller";
 import type { Memory, MemoryStore } from "./memory-store";
+import type { MemoryWriter } from "./memory-writer";
 
 const memoryStore = vi.mocked<MemoryStore>({ add: vi.fn(), search: vi.fn(), top: vi.fn() });
+const memoryWriter = vi.mocked<MemoryWriter>({ write: vi.fn() });
 const memoryDistiller = vi.mocked<MemoryDistiller>({ distill: vi.fn(async () => {}) });
 const memoryBootstrap = vi.mocked<MemoryBootstrap>({ render: vi.fn(() => "") });
 
 function makeManager(): MemoryManager {
-  return new MemoryManagerImpl(memoryStore, memoryDistiller, memoryBootstrap);
+  return new MemoryManagerImpl(memoryWriter, memoryStore, memoryDistiller, memoryBootstrap);
 }
 
 function makeModel(id: string): Model<Api> {
@@ -32,9 +34,18 @@ beforeEach(() => {
   memoryStore.search.mockReturnValue([]);
   memoryStore.top.mockReturnValue([]);
   memoryBootstrap.render.mockReturnValue("");
+  memoryWriter.write.mockReturnValue(0);
 });
 
 describe("MemoryManagerImpl", () => {
+  test("add forwards to the writer and returns the stored count", () => {
+    const memories = [{ content: "use sqlite", type: "fact" as const, priority: 80, scene: "storage" }];
+    memoryWriter.write.mockReturnValue(1);
+    const manager = makeManager();
+    expect(manager.add(memories, "t1", "s1")).toBe(1);
+    expect(memoryWriter.write).toHaveBeenCalledWith(memories, "t1", "s1");
+  });
+
   test("search forwards to the store and returns its result", () => {
     const results: Memory[] = [{
       id: "a1",

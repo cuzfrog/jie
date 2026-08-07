@@ -82,7 +82,7 @@ const settingsStore = vi.mocked<SettingsStore>({
 
 const llmService = vi.mocked<LlmService>({ complete: vi.fn(async () => "") });
 
-const memoryManager = vi.mocked<MemoryManager>({ search: vi.fn(), bootstrap: vi.fn(() => ""), distill: vi.fn(async () => {}) });
+const memoryManager = vi.mocked<MemoryManager>({ add: vi.fn(), search: vi.fn(), bootstrap: vi.fn(() => ""), distill: vi.fn(async () => {}) });
 
 function bootedContainer(): AwilixContainer<PlatformCradle> {
   const container = createContainer<PlatformCradle>({ injectionMode: InjectionMode.CLASSIC });

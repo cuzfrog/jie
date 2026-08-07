@@ -2,10 +2,10 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ModelRegistry, SettingsStore } from "../config";
 import type { LlmService } from "../llm";
 import { MemoryDistillerImpl, type DistillationInput } from "./memory-distiller";
-import type { MemoryStore } from "./memory-store";
+import type { MemoryWriter } from "./memory-writer";
 
 const llmService = vi.mocked<LlmService>({ complete: vi.fn() });
-const memoryStore = vi.mocked<MemoryStore>({ add: vi.fn(), search: vi.fn(), top: vi.fn() });
+const memoryWriter = vi.mocked<MemoryWriter>({ write: vi.fn() });
 const modelRegistry = vi.mocked<ModelRegistry>({
   providers: vi.fn(),
   listProviders: vi.fn(),
@@ -45,7 +45,7 @@ function makeInput(overrides: Partial<DistillationInput> = {}): DistillationInpu
 }
 
 function makeService(): MemoryDistillerImpl {
-  return new MemoryDistillerImpl(llmService, memoryStore, modelRegistry, settingsStore);
+  return new MemoryDistillerImpl(llmService, memoryWriter, modelRegistry, settingsStore);
 }
 
 beforeEach(() => {
@@ -53,14 +53,14 @@ beforeEach(() => {
   llmService.complete.mockResolvedValue(
     JSON.stringify([{ scene: "auth migration", memories: [{ content: "auth stays on mobile", type: "fact", priority: 80 }] }]),
   );
-  memoryStore.add.mockReturnValue(1);
+  memoryWriter.write.mockReturnValue(1);
 });
 
 describe("MemoryDistillerImpl.distill", () => {
   test("stores parsed memories with the team, scene, and session", async () => {
     await makeService().distill(makeInput());
     expect(llmService.complete).toHaveBeenCalledTimes(1);
-    expect(memoryStore.add).toHaveBeenCalledWith(
+    expect(memoryWriter.write).toHaveBeenCalledWith(
       [{ content: "auth stays on mobile", type: "fact", priority: 80, scene: "auth migration" }],
       "team-a",
       "s1",
@@ -106,7 +106,7 @@ describe("MemoryDistillerImpl.distill", () => {
     settingsStore.load.mockReturnValue({ memory: { enabled: false } });
     await makeService().distill(makeInput());
     expect(llmService.complete).not.toHaveBeenCalled();
-    expect(memoryStore.add).not.toHaveBeenCalled();
+    expect(memoryWriter.write).not.toHaveBeenCalled();
   });
 
   test("drops invalid types and passes parsed priorities through unmodified", async () => {
@@ -123,7 +123,7 @@ describe("MemoryDistillerImpl.distill", () => {
       ]),
     );
     await makeService().distill(makeInput());
-    const memories = memoryStore.add.mock.calls[0]![0];
+    const memories = memoryWriter.write.mock.calls[0]![0];
     expect(memories).toEqual([
       { content: "b", type: "instruction", priority: 1, scene: "s" },
       { content: "c", type: "fact", priority: 150, scene: "s" },
@@ -135,7 +135,7 @@ describe("MemoryDistillerImpl.distill", () => {
       JSON.stringify([{ scene: "s", memories: [{ content: "x", type: "fact", priority: "" }] }]),
     );
     await makeService().distill(makeInput());
-    const memories = memoryStore.add.mock.calls[0]![0];
+    const memories = memoryWriter.write.mock.calls[0]![0];
     expect(memories).toEqual([{ content: "x", type: "fact", priority: 50, scene: "s" }]);
   });
 
@@ -152,7 +152,7 @@ describe("MemoryDistillerImpl.distill", () => {
       ]),
     );
     await makeService().distill(makeInput());
-    const memories = memoryStore.add.mock.calls[0]![0];
+    const memories = memoryWriter.write.mock.calls[0]![0];
     expect(memories).toEqual([
       { content: "a", type: "fact", priority: 80, scene: "s" },
       { content: "b", type: "fact", priority: 50, scene: "s" },
@@ -162,13 +162,13 @@ describe("MemoryDistillerImpl.distill", () => {
   test("skips scenes without a scene name and stores nothing when the batch is empty", async () => {
     llmService.complete.mockResolvedValue(JSON.stringify([{ scene: "", memories: [{ content: "x", type: "fact", priority: 50 }] }]));
     await makeService().distill(makeInput());
-    expect(memoryStore.add).not.toHaveBeenCalled();
+    expect(memoryWriter.write).not.toHaveBeenCalled();
   });
 
   test("drops the whole batch on unparseable output", async () => {
     llmService.complete.mockResolvedValue("```json\nnot json\n```");
     await makeService().distill(makeInput());
-    expect(memoryStore.add).not.toHaveBeenCalled();
+    expect(memoryWriter.write).not.toHaveBeenCalled();
   });
 
   test("accepts json wrapped in code fences", async () => {
@@ -176,12 +176,12 @@ describe("MemoryDistillerImpl.distill", () => {
       "```json\n" + JSON.stringify([{ scene: "s", memories: [{ content: "x", type: "fact", priority: 50 }] }]) + "\n```",
     );
     await makeService().distill(makeInput());
-    expect(memoryStore.add).toHaveBeenCalledTimes(1);
+    expect(memoryWriter.write).toHaveBeenCalledTimes(1);
   });
 
   test("warns and records nothing when the LLM call rejects", async () => {
     llmService.complete.mockRejectedValue(new Error("boom"));
     await expect(makeService().distill(makeInput())).resolves.toBeUndefined();
-    expect(memoryStore.add).not.toHaveBeenCalled();
+    expect(memoryWriter.write).not.toHaveBeenCalled();
   });
 });

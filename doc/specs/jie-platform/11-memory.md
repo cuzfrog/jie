@@ -36,17 +36,20 @@ Task and artifact tracking are deliberately not memory types — kanban and the 
 
 ## Manager
 
-`MemoryManager` is the module's only public service. It lives in `packages/jie-platform/memory/` and exposes three operations:
+`MemoryManager` is the module's only public service. It lives in `packages/jie-platform/memory/` and exposes four operations:
 
 ```typescript
 interface MemoryManager {
+  add(memories: ReadonlyArray<RawMemory>, teamId: string, sourceSessionId: string): number;
   search(query: string, teamId: string, limit: number): ReadonlyArray<Memory>;
   bootstrap(teamId: string): string;
   distill(input: DistillationInput): Promise<void>;
 }
 ```
 
-All methods are synchronous except `distill` — SQLite access is in-process and blocking calls are microseconds; callers never await `search` or `bootstrap`. `MemoryManagerImpl` is a thin facade over three internal collaborators: `MemoryStore` (search), `MemoryBootstrap` (render), and `MemoryDistiller` (distill).
+`add` is the explicit write path. It runs through the same validation and dedup/reinforcement pipeline as distillation, and returns the number of newly stored memories.
+
+All methods are synchronous except `distill` — SQLite access is in-process and blocking calls are microseconds; callers never await `search`, `add`, or `bootstrap`. `MemoryManagerImpl` is a thin facade over internal collaborators: `MemoryWriter` (write), `MemoryStore` (search), `MemoryBootstrap` (render), and `MemoryDistiller` (distill).
 
 The internal `MemoryStore` is SQLite on the shared `Storage` instance:
 
@@ -85,9 +88,22 @@ In the body's restore phase (before `start`), the body asks `MemoryManager.boots
 
 `top` selects instructions first, then priority desc, `updated_at` desc, up to `bootstrapMaxEntries`. The budget keeps whole entries only — lowest-value entries are dropped until the block fits `bootstrapMaxChars`; an entry is never mid-truncated. Load failure degrades to an empty block; a body never fails to start over memory. Fresh and resumed sessions load the same team pool.
 
-## Tool
+## Tools
 
-`memory_search` builtin — opt-in per role via `tools:` frontmatter (not `isUtility`); the built-in default-solo team includes it.
+`memory_add` and `memory_search` builtins — opt-in per role via `tools:` frontmatter (not `isUtility`); the built-in default-solo team includes both.
+
+`memory_add` parameters:
+
+| Parameter | Meaning |
+|---|---|
+| `content` | Self-contained memory text. |
+| `type` | `fact`, `decision`, `method`, or `instruction`. |
+| `priority` | Optional 0-100 (default 50); `instruction` is always stored at 100. |
+| `scene` | Optional one-line context (default `manual`). |
+
+`memory_add` is scoped by `ExecutionContext.teamId` and `ExecutionContext.sessionId`. It stores a new memory or reinforces an existing one with the same `content` and `type`, and returns a summary line.
+
+`memory_search` parameters:
 
 | Parameter | Meaning |
 |---|---|
@@ -108,4 +124,4 @@ Scoped by `ExecutionContext.teamId` (every role searches the team pool). Result 
 
 ## Extensions (not v1)
 
-Idle/turn-count trigger for sessions that never compact · an explicit `memory_add` tool · per-role visibility tags · L2 scenario blocks and L3 team doctrine · hybrid vector recall · a TencentDB hub adapter behind the same interfaces (must not leak hub concepts like L0–L3 into the platform).
+Idle/turn-count trigger for sessions that never compact · per-role visibility tags · L2 scenario blocks and L3 team doctrine · hybrid vector recall · a TencentDB hub adapter behind the same interfaces (must not leak hub concepts like L0–L3 into the platform).
