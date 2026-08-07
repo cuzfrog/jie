@@ -394,7 +394,7 @@ describe("showHelp", () => {
 
   test("showing the help panel hides an open team or kanban panel", () => {
     const withTeam = loadedTeam([{ role: "general", agent_key: "general-1", is_leader: true }]);
-    const withPanels = { ...withTeam, teamPanelVisible: true, teamCursorAgentId: "my-team:general-1", kanbanView: "panel" as const };
+    const withPanels = { ...withTeam, teamPanelVisible: true, teamCursorAgentId: "my-team:general-1" as AgentId, kanbanView: "panel" as const };
     const state = reduceUiAction(withPanels, Actions.showHelp());
     expect(state.helpPanelVisible).toBe(true);
     expect(state.teamPanelVisible).toBe(false);

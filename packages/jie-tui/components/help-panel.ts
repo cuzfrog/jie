@@ -1,5 +1,5 @@
 import { truncateToWidth, type Component } from "@earendil-works/pi-tui";
-import { TuiState, type StateStore } from "../state";
+import { type StateStore } from "../state";
 import { helpLines } from "./welcome-banner";
 import { style } from "./themes";
 

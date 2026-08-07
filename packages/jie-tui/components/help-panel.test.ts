@@ -1,5 +1,5 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { type StateStore, type TuiState } from "../state";
+import { type StateStore } from "../state";
 import { makeTuiState } from "../test";
 import { HelpPanel } from "./help-panel";
 import { style } from "./themes";
