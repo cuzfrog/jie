@@ -15,6 +15,7 @@ export interface TuiView {
 const CTRL_T = "\x14";
 const CTRL_O = "\x0f";
 const CTRL_K = "\x0b";
+const CTRL_E = "\x05";
 const CONSUMED = { consume: true } as const;
 const INTERRUPTED_LABEL = "Interrupted";
 const TEAM_WORKING_LABEL = "Team working…";
@@ -66,6 +67,11 @@ export class TuiViewImpl implements TuiView {
     this.unsubscribeKeys = tui.addInputListener((data) => {
       const state = this.stateStore.getState();
       const popupOpen = editor.isShowingAutocomplete();
+      const kanbanAction = resolveKanbanKey(data, state, popupOpen);
+      if (kanbanAction !== null) {
+        this.stateStore.dispatch(kanbanAction);
+        return CONSUMED;
+      }
       const action = resolveGlobalKey(data, state, popupOpen);
       if (action !== null) {
         this.stateStore.dispatch(action);
@@ -113,8 +119,26 @@ class FlushLoader extends Loader {
 function resolveGlobalKey(data: string, state: TuiState, popupOpen: boolean): Action | null {
   if (data === CTRL_T) return Actions.toggleThinking();
   if (data === CTRL_O) return Actions.toggleToolCards();
-  if (data === CTRL_K) return Actions.toggleKanbanPanel();
-  if (matchesKey(data, "left") && state.editorCursorAtStart && !popupOpen) return Actions.toggleTeamPanel();
+  if (data === CTRL_K && state.kanbanEdit === null) return Actions.cycleKanbanView();
+  if (matchesKey(data, "left") && state.editorCursorAtStart && state.kanbanView !== "panel" && !popupOpen) return Actions.toggleTeamPanel();
+  return null;
+}
+
+function resolveKanbanKey(data: string, state: TuiState, popupOpen: boolean): Action | null {
+  if (state.kanbanView !== "panel" || state.kanbanEdit !== null || popupOpen) return null;
+  if (matchesKey(data, "esc") && state.kanbanExpanded) return Actions.toggleKanbanExpand();
+  if (matchesKey(data, "tab")) return Actions.toggleKanbanExpand();
+  if (state.kanbanExpanded) {
+    if (matchesKey(data, "up")) return Actions.moveKanbanEditField("up");
+    if (matchesKey(data, "down")) return Actions.moveKanbanEditField("down");
+    if (data === CTRL_E && state.kanbanCursor !== null) return Actions.commitKanbanEdit(state.kanbanCursor, state.kanbanEditField);
+    return null;
+  }
+  if (matchesKey(data, "up")) return Actions.moveKanbanCursor("up");
+  if (matchesKey(data, "down")) return Actions.moveKanbanCursor("down");
+  if (matchesKey(data, "left")) return Actions.moveKanbanCursor("left");
+  if (matchesKey(data, "right")) return Actions.moveKanbanCursor("right");
+  if (data === CTRL_E && state.kanbanCursor !== null) return Actions.commitKanbanEdit(state.kanbanCursor);
   return null;
 }
 
@@ -147,6 +171,7 @@ function syncWorkingSlot(slot: Container, working: Loader, teamWorking: Loader, 
 export {
   FlushLoader as _FlushLoader,
   resolveGlobalKey as _resolveGlobalKey,
+  resolveKanbanKey as _resolveKanbanKey,
   resolveTeamCursorDirection as _resolveTeamCursorDirection,
   shouldCommitTeamCursor as _shouldCommitTeamCursor,
   syncWorkingSlot as _syncWorkingSlot,

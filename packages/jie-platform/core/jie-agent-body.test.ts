@@ -316,7 +316,7 @@ function makeHarness(): Harness {
     read: vi.fn(),
     list: vi.fn(),
   });
-  const memoryStore = vi.mocked<MemoryStore>({ add: vi.fn(), search: vi.fn(), top: vi.fn(async () => []) });
+  const memoryStore = vi.mocked<MemoryStore>({ add: vi.fn(), search: vi.fn(), top: vi.fn(() => []) });
   const settingsStore = vi.mocked<SettingsStore>({
     load: vi.fn(() => ({})),
     setDefaultProvider: vi.fn(),
@@ -1000,7 +1000,9 @@ describe("JieAgentBody — restore() snapshot phase", () => {
   });
 
   test("a failing memory store load degrades to context + role prose without failing restore", async () => {
-    h.memoryStore.top.mockRejectedValue(new Error("db locked"));
+    h.memoryStore.top.mockImplementation(() => {
+      throw new Error("db locked");
+    });
     const body = h.makeBody({ systemContextBlock: "CONTEXT" });
     await body.restore();
     expect(h.state.systemPrompt).toBe("CONTEXT\n\nyou are a general assistant");
@@ -1008,7 +1010,7 @@ describe("JieAgentBody — restore() snapshot phase", () => {
   });
 
   test("loads the team memory block into the system prompt between context and role prose", async () => {
-    h.memoryStore.top.mockResolvedValue([
+    h.memoryStore.top.mockReturnValue([
       {
         id: "a1",
         teamId: "t1",
@@ -1030,7 +1032,7 @@ describe("JieAgentBody — restore() snapshot phase", () => {
   });
 
   test("restore re-composes the prompt with the memory block even for a fresh session", async () => {
-    h.memoryStore.top.mockResolvedValue([
+    h.memoryStore.top.mockReturnValue([
       {
         id: "a1",
         teamId: "t1",

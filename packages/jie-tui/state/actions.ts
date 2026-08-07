@@ -1,4 +1,5 @@
-import type { AnyEventEnvelope, CommandResult, TeamInfo } from "@cuzfrog/jie-platform";
+import type { AnyEventEnvelope, CommandResult, KanbanCard, TeamInfo } from "@cuzfrog/jie-platform";
+import type { KanbanEditField } from "./state";
 
 type InstalledTeams = CommandResult<"getTeamInfo">["installed"];
 
@@ -11,7 +12,7 @@ export const ActionTypes = {
   TOGGLE_TOOL_CARDS: "[ui] toggle tool cards expanded",
   SWITCH_CYCLE_AGENT: "[ui] switch and cycle focused agent",
   TOGGLE_TEAM_PANEL: "[ui] toggle team panel visibility",
-  TOGGLE_KANBAN_PANEL: "[ui] toggle kanban panel visibility",
+  CYCLE_KANBAN_VIEW: "[ui] cycle kanban view",
   COMMIT_TEAM_CURSOR: "[ui] commit team cursor to focused agent",
   CLEAR_TUI_STATE: "[ui] clear tui state",
   SET_TRANSIENT_MESSAGE: "[ui] transient message",
@@ -29,6 +30,13 @@ export const ActionTypes = {
   REQUEST_REQUEUE: "[ui] request requeue abandoned dequeued prompt",
   SET_ENVIRONMENT: "[ui] set environment",
   SHOW_HELP: "[ui] show help in the chat area",
+  SET_KANBAN_BOARD: "[ui] set kanban board",
+  MOVE_KANBAN_CURSOR: "[ui] move kanban cursor",
+  MOVE_KANBAN_EDIT_FIELD: "[ui] move kanban edit field",
+  TOGGLE_KANBAN_EXPAND: "[ui] toggle kanban expanded",
+  COMMIT_KANBAN_EDIT: "[ui] commit kanban card edit",
+  CANCEL_KANBAN_EDIT: "[ui] cancel kanban card edit",
+  SAVE_KANBAN_EDIT: "[ui] save kanban card edit",
 } as const;
 
 type ActionType = (typeof ActionTypes)[keyof typeof ActionTypes];
@@ -41,7 +49,7 @@ interface ActionDef<T extends ActionType, P> {
 const toggleThinking = createAction(ActionTypes.TOGGLE_THINKING);
 const toggleToolCards = createAction(ActionTypes.TOGGLE_TOOL_CARDS);
 const toggleTeamPanel = createAction(ActionTypes.TOGGLE_TEAM_PANEL);
-const toggleKanbanPanel = createAction(ActionTypes.TOGGLE_KANBAN_PANEL);
+const cycleKanbanView = createAction(ActionTypes.CYCLE_KANBAN_VIEW);
 const commitTeamCursor = createAction(ActionTypes.COMMIT_TEAM_CURSOR);
 const clearTuiState = createAction(ActionTypes.CLEAR_TUI_STATE);
 const clearTransientMessage = createAction(ActionTypes.CLEAR_TRANSIENT_MESSAGE);
@@ -59,7 +67,7 @@ export const Actions = {
 	toggleToolCards: () => toggleToolCards,
 	switchCycleAgent: (direction: 1 | -1) => createAction(ActionTypes.SWITCH_CYCLE_AGENT, { direction }),
 	toggleTeamPanel: () => toggleTeamPanel,
-	toggleKanbanPanel: () => toggleKanbanPanel,
+	cycleKanbanView: () => cycleKanbanView,
 	commitTeamCursor: () => commitTeamCursor,
 	clearTuiState: () => clearTuiState,
 	setTransientMessage: (text: string) => createAction(ActionTypes.SET_TRANSIENT_MESSAGE, { text }),
@@ -81,6 +89,13 @@ export const Actions = {
 	setEnvironment: (cwd: string, gitBranch: string, gitDirty: boolean, version: string) =>
 		createAction(ActionTypes.SET_ENVIRONMENT, { cwd, gitBranch, gitDirty, version }),
 	showHelp: () => showHelp,
+	setKanbanBoard: (board: ReadonlyArray<KanbanCard>) => createAction(ActionTypes.SET_KANBAN_BOARD, { board }),
+	moveKanbanCursor: (direction: "up" | "down" | "left" | "right") => createAction(ActionTypes.MOVE_KANBAN_CURSOR, { direction }),
+	moveKanbanEditField: (direction: "up" | "down") => createAction(ActionTypes.MOVE_KANBAN_EDIT_FIELD, { direction }),
+	toggleKanbanExpand: () => createAction(ActionTypes.TOGGLE_KANBAN_EXPAND),
+	commitKanbanEdit: (cardId: string, field: KanbanEditField = "content") => createAction(ActionTypes.COMMIT_KANBAN_EDIT, { cardId, field }),
+	cancelKanbanEdit: () => createAction(ActionTypes.CANCEL_KANBAN_EDIT),
+	saveKanbanEdit: (cardId: string, text: string, field: KanbanEditField = "content") => createAction(ActionTypes.SAVE_KANBAN_EDIT, { cardId, field, text }),
 } as const;
 
 export type Action = ReturnType<typeof Actions[keyof typeof Actions]>;

@@ -52,8 +52,6 @@ export class ToolCard implements Component {
 }
 
 function extractDiff(details: MessageCard["details"]): string | null {
-  if (typeof details !== "object" || details === null) return null;
-  if (!("kind" in details) || details.kind !== "diff") return null;
-  if (!("diff" in details) || typeof details.diff !== "string" || details.diff === "") return null;
-  return details.diff;
+  if (details === null || details === undefined || !("kind" in details) || details.kind !== "diff") return null;
+  return details.diff === null || details.diff === "" ? null : details.diff;
 }

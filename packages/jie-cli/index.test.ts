@@ -88,6 +88,8 @@ function dispatch(command: Command<CommandName>): CommandResult<CommandName> | n
         id: teamId,
         leaderKey: "general-1",
         sessionName: null,
+        currentSessionId: null,
+        kanbanCards: [],
         history: [],
         agents: [{
           teamId,

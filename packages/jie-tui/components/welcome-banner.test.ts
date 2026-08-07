@@ -71,10 +71,10 @@ describe("WelcomeBanner", () => {
 
   test("lays the commands out in two columns when the width allows", () => {
     const lines = new WelcomeBanner(stateStore).render(130).map(stripAnsi);
-    const paired = lines.filter((line) => line.includes("/help") && line.includes("/model-filter"));
+    const paired = lines.filter((line) => line.includes("/help") && line.includes("/effort"));
     expect(paired.length).toBe(1);
     expect(paired[0]).toContain("show this help");
-    expect(paired[0]).toContain("filter the /model list");
+    expect(paired[0]).toContain("set the thinking effort");
   });
 
   test("hides the mark when the width cannot fit it beside the identity", () => {

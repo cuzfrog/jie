@@ -106,7 +106,7 @@ describe("MemoryExtractorImpl.extract", () => {
     expect(memoryStore.add).not.toHaveBeenCalled();
   });
 
-  test("drops invalid types, forces instruction to 100, and clamps priority", async () => {
+  test("drops invalid types and passes parsed priorities through unmodified", async () => {
     llmService.complete.mockResolvedValue(
       JSON.stringify([
         {
@@ -122,12 +122,12 @@ describe("MemoryExtractorImpl.extract", () => {
     await makeService().extract(makeInput());
     const atoms = memoryStore.add.mock.calls[0]![0];
     expect(atoms).toEqual([
-      { content: "b", type: "instruction", priority: 100, scene: "s" },
-      { content: "c", type: "fact", priority: 100, scene: "s" },
+      { content: "b", type: "instruction", priority: 1, scene: "s" },
+      { content: "c", type: "fact", priority: 150, scene: "s" },
     ]);
   });
 
-  test("accepts numeric-string priorities and clamps them", async () => {
+  test("accepts numeric-string priorities and defaults non-numbers", async () => {
     llmService.complete.mockResolvedValue(
       JSON.stringify([
         {

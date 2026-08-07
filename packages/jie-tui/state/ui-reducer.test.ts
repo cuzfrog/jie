@@ -25,6 +25,8 @@ function loadedTeam(roles: ReadonlyArray<{ role: string; agent_key: string; is_l
     id: "my-team",
     leaderKey,
     sessionName: null,
+    currentSessionId: null,
+    kanbanCards: [],
     history: [],
     agents,
   }));
@@ -179,7 +181,7 @@ describe("team strip cursor", () => {
   });
 });
 
-describe("kanban panel toggle", () => {
+describe("kanban view cycle", () => {
   function twoAgent(): TuiState {
     return loadedTeam([
       { role: "manager", agent_key: "manager-1", is_leader: true },
@@ -188,46 +190,75 @@ describe("kanban panel toggle", () => {
   }
 
   test("starts hidden in initial state", () => {
-    expect(INITIAL_TUI_STATE.kanbanPanelVisible).toBe(false);
+    expect(INITIAL_TUI_STATE.kanbanView).toBe("hidden");
   });
 
-  test("toggle shows the kanban panel", () => {
-    const state = reduceUiAction(twoAgent(), Actions.toggleKanbanPanel());
-    expect(state.kanbanPanelVisible).toBe(true);
+  test("cycles hidden to list, list to panel, and panel back to hidden", () => {
+    const list = reduceUiAction(twoAgent(), Actions.cycleKanbanView());
+    expect(list.kanbanView).toBe("list");
+    const panel = reduceUiAction(list, Actions.cycleKanbanView());
+    expect(panel.kanbanView).toBe("panel");
+    const hidden = reduceUiAction(panel, Actions.cycleKanbanView());
+    expect(hidden.kanbanView).toBe("hidden");
   });
 
-  test("toggle hides the shown kanban panel", () => {
-    const opened = reduceUiAction(twoAgent(), Actions.toggleKanbanPanel());
-    const closed = reduceUiAction(opened, Actions.toggleKanbanPanel());
-    expect(closed.kanbanPanelVisible).toBe(false);
+  test("moving the kanban edit field routes through the kanban reducer", () => {
+    const panel = reduceUiAction(reduceUiAction(twoAgent(), Actions.cycleKanbanView()), Actions.cycleKanbanView());
+    const expanded = reduceUiAction(panel, Actions.toggleKanbanExpand());
+    expect(expanded.kanbanEditField).toBe("content");
+    const moved = reduceUiAction(expanded, Actions.moveKanbanEditField("down"));
+    expect(moved.kanbanEditField).toBe("description");
+  });
+
+  test("leaving the panel clears edit and expand", () => {
+    const panel = reduceUiAction(reduceUiAction(twoAgent(), Actions.cycleKanbanView()), Actions.cycleKanbanView());
+    const editing = reduceUiAction(panel, Actions.commitKanbanEdit("#1"));
+    const expanded = reduceUiAction(editing, Actions.toggleKanbanExpand());
+    const hidden = reduceUiAction(expanded, Actions.cycleKanbanView());
+    expect(hidden.kanbanView).toBe("hidden");
+    expect(hidden.kanbanEdit).toBeNull();
+    expect(hidden.kanbanExpanded).toBe(false);
   });
 
   test("is a no-op when no agent is focused", () => {
-    expect(reduceUiAction(INITIAL_TUI_STATE, Actions.toggleKanbanPanel())).toBe(INITIAL_TUI_STATE);
+    expect(reduceUiAction(INITIAL_TUI_STATE, Actions.cycleKanbanView())).toBe(INITIAL_TUI_STATE);
   });
 
   test("opening the kanban panel hides the team panel and clears its cursor", () => {
     const opened = reduceUiAction(twoAgent(), Actions.toggleTeamPanel());
     const moved = reduceUiAction(opened, Actions.switchCycleAgent(1));
-    const kanban = reduceUiAction(moved, Actions.toggleKanbanPanel());
-    expect(kanban.kanbanPanelVisible).toBe(true);
-    expect(kanban.teamPanelVisible).toBe(false);
-    expect(kanban.teamCursorAgentId).toBeNull();
-    expect(kanban.focusedAgentId).toBe("my-team:manager-1");
+    const list = reduceUiAction(moved, Actions.cycleKanbanView());
+    expect(list.teamPanelVisible).toBe(true);
+    const panel = reduceUiAction(list, Actions.cycleKanbanView());
+    expect(panel.kanbanView).toBe("panel");
+    expect(panel.teamPanelVisible).toBe(false);
+    expect(panel.teamCursorAgentId).toBeNull();
+    expect(panel.focusedAgentId).toBe("my-team:manager-1");
   });
 
-  test("opening the team panel hides the kanban panel", () => {
-    const opened = reduceUiAction(twoAgent(), Actions.toggleKanbanPanel());
-    const team = reduceUiAction(opened, Actions.toggleTeamPanel());
+  test("opening the team panel hides the kanban panel and clears its edit and expand", () => {
+    const panel = reduceUiAction(reduceUiAction(twoAgent(), Actions.cycleKanbanView()), Actions.cycleKanbanView());
+    const editing = reduceUiAction(panel, Actions.commitKanbanEdit("#1"));
+    const expanded = reduceUiAction(editing, Actions.toggleKanbanExpand());
+    const team = reduceUiAction(expanded, Actions.toggleTeamPanel());
     expect(team.teamPanelVisible).toBe(true);
     expect(team.teamCursorAgentId).toBe("my-team:manager-1");
-    expect(team.kanbanPanelVisible).toBe(false);
+    expect(team.kanbanView).toBe("hidden");
+    expect(team.kanbanEdit).toBeNull();
+    expect(team.kanbanExpanded).toBe(false);
   });
 
-  test("clearTuiState keeps the kanban panel visible", () => {
-    const opened = reduceUiAction(twoAgent(), Actions.toggleKanbanPanel());
-    const cleared = reduceUiAction(opened, Actions.clearTuiState());
-    expect(cleared.kanbanPanelVisible).toBe(true);
+  test("opening the team panel keeps the kanban list view", () => {
+    const list = reduceUiAction(twoAgent(), Actions.cycleKanbanView());
+    const team = reduceUiAction(list, Actions.toggleTeamPanel());
+    expect(team.teamPanelVisible).toBe(true);
+    expect(team.kanbanView).toBe("list");
+  });
+
+  test("clearTuiState keeps the kanban view", () => {
+    const list = reduceUiAction(twoAgent(), Actions.cycleKanbanView());
+    const cleared = reduceUiAction(list, Actions.clearTuiState());
+    expect(cleared.kanbanView).toBe("list");
   });
 });
 

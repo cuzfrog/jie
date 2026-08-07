@@ -1,4 +1,5 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
+import type { ToolResultDetails } from "@cuzfrog/jie-platform";
 import { type MessageCard, type StateStore } from "../../state";
 import { makeTuiState } from "../../test";
 import { ToolCard } from "./tool-card";
@@ -8,6 +9,12 @@ const stateStore = vi.mocked<StateStore>({ getState: vi.fn(), dispatch: vi.fn(),
 function card(partial: Partial<MessageCard> = {}): MessageCard {
   return { kind: "toolResult", callId: "c1", name: "bash", ...partial };
 }
+
+function diffDetails(diff: string | null): ToolResultDetails {
+  return { kind: "diff", path: "a.txt", replacementsCount: 1, beforeBytes: 2, afterBytes: 2, diff };
+}
+
+const bashDetails: ToolResultDetails = { exitCode: 0, truncated: { stdout: false, stderr: false } };
 
 describe("ToolCard", () => {
   beforeEach(() => {
@@ -37,7 +44,7 @@ describe("ToolCard", () => {
   });
 
   test("collapsed: a diff detail renders the diff block directly under the header, without a diff: label", () => {
-    const view = new ToolCard(card({ details: { kind: "diff", diff: "@@ -1,1 +1,1 @@\n-a\n+b" } }), stateStore);
+    const view = new ToolCard(card({ details: diffDetails("@@ -1,1 +1,1 @@\n-a\n+b") }), stateStore);
     const lines = view.render(80);
     expect(lines).toEqual([
       "\x1b[32m✓\x1b[39m \x1b[37mbash\x1b[39m",
@@ -48,13 +55,13 @@ describe("ToolCard", () => {
   });
 
   test("collapsed: a null diff detail renders the header alone", () => {
-    const view = new ToolCard(card({ details: { kind: "diff", diff: null } }), stateStore);
+    const view = new ToolCard(card({ details: diffDetails(null) }), stateStore);
     expect(view.render(80)).toEqual(["\x1b[32m✓\x1b[39m \x1b[37mbash\x1b[39m"]);
   });
 
   test("expanded: a diff detail renders input, output and a numbered diff section", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ toolCardsExpanded: true }));
-    const view = new ToolCard(card({ input: "in", output: "ok", details: { kind: "diff", diff: "@@ -1,1 +1,1 @@\n-a\n+b" } }), stateStore);
+    const view = new ToolCard(card({ input: "in", output: "ok", details: diffDetails("@@ -1,1 +1,1 @@\n-a\n+b") }), stateStore);
     const lines = view.render(80);
     expect(lines[1]).toBe("\x1b[90minput:\x1b[39m");
     expect(lines[2]).toBe("\x1b[90min\x1b[39m");
@@ -67,7 +74,7 @@ describe("ToolCard", () => {
 
   test("non-diff details render no diff section", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ toolCardsExpanded: true }));
-    const view = new ToolCard(card({ output: "ok", details: { kind: "other" } }), stateStore);
+    const view = new ToolCard(card({ output: "ok", details: bashDetails }), stateStore);
     expect(view.render(80).some((line) => line.includes("diff:"))).toBe(false);
   });
 
@@ -86,7 +93,7 @@ describe("ToolCard", () => {
       input: "x".repeat(300),
       output: "中文🎉".repeat(40),
       error: "x".repeat(300),
-      details: { kind: "diff", diff: `+${"x".repeat(300)}\n-${"中文🎉".repeat(40)}` },
+      details: diffDetails(`+${"x".repeat(300)}\n-${"中文🎉".repeat(40)}`),
     }), stateStore);
     for (const width of [13, 40, 61, 80, 139]) {
       for (const line of view.render(width)) {

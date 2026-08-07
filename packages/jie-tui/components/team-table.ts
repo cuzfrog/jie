@@ -59,7 +59,7 @@ function identityCell(agent: AgentUiState, pointed: AgentId | null, focused: Age
   const key = isPointed || isFocused ? style("accent")(agent.agentKey) : agent.agentKey;
   const leader = agent.isLeader ? ` ${style("dim")(LEADER_LABEL)}` : "";
   const queue = agent.queue.length > 0 ? ` ${style("muted")(`q${agent.queue.length}`)}` : "";
-  return `${pointer} ${key}${leader}${statusGlyph(agent)}${queue}`;
+  return `${pointer}${key}${leader}${statusGlyph(agent)}${queue}`;
 }
 
 function statusGlyph(agent: AgentUiState): string {

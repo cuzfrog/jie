@@ -51,6 +51,8 @@ function makeTeamInfo(): TeamInfo {
     id: "team-1",
     leaderKey: "agent-1",
     sessionName: null,
+    currentSessionId: null,
+    kanbanCards: [],
     history: [],
     agents: [
       { teamId: "team-1", role: "general", agentKey: "agent-1", isLeader: true, model: null },

@@ -3,7 +3,7 @@ import type { PlatformCradle } from "../container";
 import type { SettingsStore } from "../config";
 import type { EventManager } from "../event";
 import type { MemoryStore } from "../memory";
-import type { ArtifactStore } from "../storage";
+import type { ArtifactStore, KanbanStore } from "../storage";
 import { registerToolsModule } from "./module";
 
 const eventManager = vi.mocked<EventManager>({
@@ -27,6 +27,16 @@ const settingsStore = vi.mocked<SettingsStore>({
   setModelFilters: vi.fn(),
 });
 
+const kanbanStore = vi.mocked<KanbanStore>({
+  load: vi.fn(),
+  replace: vi.fn(),
+  add: vi.fn(),
+  remove: vi.fn(),
+  complete: vi.fn(),
+  editContent: vi.fn(),
+  editDescription: vi.fn(),
+});
+
 function bootedContainer(): AwilixContainer<PlatformCradle> {
   const container = createContainer<PlatformCradle>({ injectionMode: InjectionMode.CLASSIC });
   container.register({
@@ -35,6 +45,7 @@ function bootedContainer(): AwilixContainer<PlatformCradle> {
     artifactStore: asValue(artifactStore),
     memoryStore: asValue(memoryStore),
     settingsStore: asValue(settingsStore),
+    kanbanStore: asValue(kanbanStore),
   });
   registerToolsModule(container);
   return container;

@@ -34,6 +34,7 @@ const teamManager = vi.mocked<TeamManager>({
   locate: vi.fn(),
   agents: vi.fn(),
   listSessions: vi.fn(),
+  currentSessionId: vi.fn(),
   stop: vi.fn(),
 });
 
@@ -151,8 +152,8 @@ describe("JiePlatformImpl", () => {
   describe("teams", () => {
     test("returns the teams loaded in the team manager", () => {
       const platform = createPlatform();
-      const alpha: TeamInfo = { id: "alpha", leaderKey: "alpha-1", sessionName: null, agents: [], history: [] };
-      const beta: TeamInfo = { id: "beta", leaderKey: "beta-1", sessionName: null, agents: [], history: [] };
+      const alpha: TeamInfo = { id: "alpha", leaderKey: "alpha-1", sessionName: null, currentSessionId: null, agents: [], history: [], kanbanCards: [] };
+      const beta: TeamInfo = { id: "beta", leaderKey: "beta-1", sessionName: null, currentSessionId: null, agents: [], history: [], kanbanCards: [] };
       teamManager.listLoaded.mockReturnValue(new Map([["alpha", alpha], ["beta", beta]]));
       expect(platform.teams()).toEqual([alpha, beta]);
       expect(teamManager.listLoaded).toHaveBeenCalledTimes(1);

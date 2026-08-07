@@ -35,8 +35,8 @@ describe("TeamPanel", () => {
     expect(lines[4]).toBe(style("borderMuted")(`└${"─".repeat(118)}┘`));
     for (const title of ["agent", "ctx", "tools", "subscribe", "model"]) expect(lines[1]).toContain(style("dim")(title));
     expect(lines.length).toBe(5);
-    expect(stripAnsi(lines[2]).startsWith("│ ▸ general-1 leader")).toBe(true);
-    expect(stripAnsi(lines[3]).startsWith("│   coder-1")).toBe(true);
+    expect(stripAnsi(lines[2]).startsWith("│ ▸general-1 leader")).toBe(true);
+    expect(stripAnsi(lines[3]).startsWith("│  coder-1")).toBe(true);
   });
 
   test("identifies the leader with a dim label instead of a mark, and drops the role from the identity", () => {
@@ -48,7 +48,7 @@ describe("TeamPanel", () => {
       expect(line).not.toContain("★");
       expect(line).not.toContain("·");
     }
-    expect(stripAnsi(text[3]).startsWith("│   coder-1")).toBe(true);
+    expect(stripAnsi(text[3]).startsWith("│  coder-1")).toBe(true);
   });
 
   test("points at the team cursor while keeping the focused agent key highlighted", () => {
@@ -63,15 +63,15 @@ describe("TeamPanel", () => {
   test("without a cursor the pointer follows the focused agent", () => {
     stateStore.getState.mockReturnValue(teamState({ focusedAgentId: WORKER_ID }));
     const text = new TeamPanel(stateStore).render(120).map(stripAnsi);
-    expect(text[2].startsWith("│   general-1 leader")).toBe(true);
-    expect(text[3].startsWith("│ ▸ coder-1")).toBe(true);
+    expect(text[2].startsWith("│  general-1 leader")).toBe(true);
+    expect(text[3].startsWith("│ ▸coder-1")).toBe(true);
   });
 
   test("shows no pointer when neither cursor nor focus is set", () => {
     stateStore.getState.mockReturnValue(teamState({ focusedAgentId: null }));
     const text = new TeamPanel(stateStore).render(120).map(stripAnsi);
-    expect(text[2].startsWith("│   general-1 leader")).toBe(true);
-    expect(text[3].startsWith("│   coder-1")).toBe(true);
+    expect(text[2].startsWith("│  general-1 leader")).toBe(true);
+    expect(text[3].startsWith("│  coder-1")).toBe(true);
   });
 
   test("shows context right after the key, then tools, subscriptions, and the full model segment", () => {
@@ -141,7 +141,7 @@ describe("TeamPanel", () => {
     }));
     const row = stripAnsi(new TeamPanel(stateStore).render(40)[2]);
     expect(visibleWidth(row)).toBeLessThanOrEqual(40);
-    expect(row.startsWith("│ ▸ general-1 leader")).toBe(true);
+    expect(row.startsWith("│ ▸general-1 leader")).toBe(true);
   });
 
   test("shows a spinner frame for a busy agent", () => {

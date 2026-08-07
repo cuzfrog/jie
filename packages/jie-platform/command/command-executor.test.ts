@@ -2,9 +2,11 @@ import { type Api, type Model } from "@earendil-works/pi-ai";
 import { type AuthStore, type ModelRegistry, type Settings, type SettingsStore } from "../config";
 import { type EventManager } from "../event";
 import { JiePlatformError } from "../jie-platform-errors";
+import { type LlmService } from "../llm";
 import { type GitService, type GitSnapshot } from "../services";
+import { type KanbanStore } from "../storage";
 import { type TeamManager } from "../team";
-import { type TeamInfo } from "../types";
+import { type KanbanCard, type TeamInfo } from "../types";
 import { CommandExecutorImpl } from "./command-executor";
 
 const authStore = vi.mocked<AuthStore>({
@@ -42,6 +44,7 @@ const teamManager = vi.mocked<TeamManager>({
   locate: vi.fn(),
   agents: vi.fn(),
   listSessions: vi.fn(),
+  currentSessionId: vi.fn(),
   stop: vi.fn(),
 });
 
@@ -53,6 +56,18 @@ const eventManager = vi.mocked<EventManager>({
   publish: vi.fn(),
   subscribe: vi.fn(),
 });
+
+const kanbanStore = vi.mocked<KanbanStore>({
+  load: vi.fn(),
+  replace: vi.fn(),
+  add: vi.fn(),
+  remove: vi.fn(),
+  complete: vi.fn(),
+  editContent: vi.fn(),
+  editDescription: vi.fn(),
+});
+
+const llmService = vi.mocked<LlmService>({ complete: vi.fn() });
 
 const DEFAULT_SETTINGS: Settings = {
   defaultProvider: "anthropic",
@@ -79,11 +94,13 @@ function fakeModel(provider: "anthropic" | "openai", id: string, name: string): 
 let executor: CommandExecutorImpl;
 
 beforeEach(() => {
-  executor = new CommandExecutorImpl(authStore, settingsStore, modelRegistry, teamManager, gitService, eventManager);
+  executor = new CommandExecutorImpl(authStore, settingsStore, modelRegistry, teamManager, gitService, eventManager, kanbanStore, llmService);
   settingsStore.load.mockReturnValue(DEFAULT_SETTINGS);
   authStore.load.mockReturnValue({});
   gitService.getSnapshot.mockReturnValue(EMPTY_GIT_SNAPSHOT);
   modelRegistry.providers.mockReturnValue(["anthropic", "my-local"]);
+  teamManager.currentSessionId.mockReturnValue("session-1");
+  kanbanStore.load.mockReturnValue([]);
 });
 
 describe("CommandExecutorImpl", () => {
@@ -318,6 +335,8 @@ describe("CommandExecutorImpl", () => {
         id: "alpha",
         leaderKey: "general-1",
         sessionName: null,
+        currentSessionId: null,
+        kanbanCards: [],
         history: [],
         agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
       };
@@ -331,8 +350,8 @@ describe("CommandExecutorImpl", () => {
   describe("reload", () => {
     test("delegates to teamManager.reload and returns the reloaded teams", async () => {
       const identities: TeamInfo[] = [
-        { id: "default-solo", leaderKey: "general-1", sessionName: null, agents: [], history: [] },
-        { id: "alpha", leaderKey: "general-1", sessionName: null, agents: [], history: [] },
+        { id: "default-solo", leaderKey: "general-1", sessionName: null, currentSessionId: null, agents: [], history: [], kanbanCards: [] },
+        { id: "alpha", leaderKey: "general-1", sessionName: null, currentSessionId: null, agents: [], history: [], kanbanCards: [] },
       ];
       teamManager.reload.mockResolvedValue(identities);
       const result = await executor.execute({ name: "reload" });
@@ -343,7 +362,7 @@ describe("CommandExecutorImpl", () => {
 
   describe("resumeSession", () => {
     test("delegates to teamManager.resumeSession with teamId and sessionId", async () => {
-      const identity: TeamInfo = { id: "alpha", leaderKey: "general-1", sessionName: null, agents: [], history: [] };
+      const identity: TeamInfo = { id: "alpha", leaderKey: "general-1", sessionName: null, currentSessionId: null, agents: [], history: [], kanbanCards: [] };
       teamManager.resumeSession.mockResolvedValue(identity);
       const result = await executor.execute({ name: "resumeSession", teamId: "alpha", sessionId: "s1" });
       expect(result).toBe(identity);
@@ -429,15 +448,173 @@ describe("CommandExecutorImpl", () => {
     });
   });
 
+  describe("kanbanAdd", () => {
+    test("short description becomes the card title without an LLM call", async () => {
+      kanbanStore.add.mockReturnValue({ id: "#1", content: "write tests", status: "pending" });
+      const result = await executor.execute({ name: "kanbanAdd", teamId: "alpha", description: "write tests" });
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "write tests", undefined);
+      expect(result).toEqual({ board: [], card: { id: "#1", content: "write tests", status: "pending" } });
+      expect(llmService.complete).not.toHaveBeenCalled();
+    });
+
+    test("explicit title is used verbatim and the description is kept", async () => {
+      kanbanStore.add.mockReturnValue({ id: "#1", content: "short title", status: "pending" });
+      const result = await executor.execute({ name: "kanbanAdd", teamId: "alpha", title: "short title", description: "a very long description body" });
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "short title", "a very long description body");
+      expect(result.card).toMatchObject({ id: "#1", content: "short title" });
+      expect(llmService.complete).not.toHaveBeenCalled();
+    });
+
+    test("long description is distilled to a title via the LLM", async () => {
+      const long = "x".repeat(80);
+      modelRegistry.resolve.mockReturnValue(fakeModel("anthropic", "claude-sonnet-4-5", "claude"));
+      llmService.complete.mockResolvedValue("distilled title");
+      kanbanStore.add.mockReturnValue({ id: "#1", content: "distilled title", status: "pending" });
+      const result = await executor.execute({ name: "kanbanAdd", teamId: "alpha", description: long });
+      expect(llmService.complete).toHaveBeenCalledWith(expect.objectContaining({ maxTokens: 20, prompt: long }));
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "distilled title", long);
+      expect(result.card.content).toBe("distilled title");
+    });
+
+    test("LLM failure falls back to the raw description as the title", async () => {
+      const long = "y".repeat(80);
+      modelRegistry.resolve.mockReturnValue(fakeModel("anthropic", "claude-sonnet-4-5", "claude"));
+      llmService.complete.mockRejectedValue(new Error("llm down"));
+      kanbanStore.add.mockReturnValue({ id: "#1", content: long, status: "pending" });
+      const result = await executor.execute({ name: "kanbanAdd", teamId: "alpha", description: long });
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", long, undefined);
+      expect(result.card.content).toBe(long);
+    });
+
+    test("no model configured skips distillation", async () => {
+      settingsStore.load.mockReturnValue({});
+      const long = "z".repeat(80);
+      kanbanStore.add.mockReturnValue({ id: "#1", content: long, status: "pending" });
+      await executor.execute({ name: "kanbanAdd", teamId: "alpha", description: long });
+      expect(llmService.complete).not.toHaveBeenCalled();
+    });
+
+    test("empty description -> KANBAN_TEXT_EMPTY", async () => {
+      const pending = executor.execute({ name: "kanbanAdd", teamId: "alpha", description: "" });
+      await expect(pending).rejects.toMatchObject({ code: "KANBAN_TEXT_EMPTY" });
+      expect(kanbanStore.add).not.toHaveBeenCalled();
+    });
+
+    test("content already on the board -> KANBAN_DUPLICATE_CONTENT", async () => {
+      kanbanStore.add.mockReturnValue(null);
+      const pending = executor.execute({ name: "kanbanAdd", teamId: "alpha", description: "write tests" });
+      await expect(pending).rejects.toMatchObject({ code: "KANBAN_DUPLICATE_CONTENT" });
+    });
+
+    test("a multi-line bulleted LLM title is sanitized to a single line", async () => {
+      const long = "x".repeat(80);
+      modelRegistry.resolve.mockReturnValue(fakeModel("anthropic", "claude-sonnet-4-5", "claude"));
+      llmService.complete.mockResolvedValue("- fix the bug\n  then verify");
+      kanbanStore.add.mockReturnValue({ id: "#1", content: "fix the bug then verify", status: "pending" });
+      await executor.execute({ name: "kanbanAdd", teamId: "alpha", description: long });
+      expect(kanbanStore.add).toHaveBeenCalledWith("alpha", "session-1", "fix the bug then verify", long);
+    });
+
+    test("throws NO_TEAM when the team has no loaded session", async () => {
+      teamManager.currentSessionId.mockReturnValueOnce(null);
+      const pending = executor.execute({ name: "kanbanAdd", teamId: "ghost", description: "task" });
+      await expect(pending).rejects.toMatchObject({ code: "NO_TEAM" });
+    });
+  });
+
+  describe("kanbanRemove", () => {
+    test("removes the card and returns the remaining board", async () => {
+      kanbanStore.remove.mockReturnValue(true);
+      const board: KanbanCard[] = [{ id: "#2", content: "second", status: "pending" }];
+      kanbanStore.load.mockReturnValueOnce(board);
+      const result = await executor.execute({ name: "kanbanRemove", teamId: "alpha", cardId: "#1" });
+      expect(kanbanStore.remove).toHaveBeenCalledWith("alpha", "session-1", "#1");
+      expect(result).toEqual({ board });
+    });
+
+    test("unknown cardId -> KANBAN_CARD_NOT_FOUND", async () => {
+      kanbanStore.remove.mockReturnValue(false);
+      const pending = executor.execute({ name: "kanbanRemove", teamId: "alpha", cardId: "#9" });
+      await expect(pending).rejects.toMatchObject({ code: "KANBAN_CARD_NOT_FOUND" });
+    });
+  });
+
+  describe("kanbanComplete", () => {
+    test("completes the card and returns the updated board", async () => {
+      kanbanStore.complete.mockReturnValue(true);
+      const board: KanbanCard[] = [{ id: "#1", content: "first", status: "completed" }];
+      kanbanStore.load.mockReturnValueOnce(board);
+      const result = await executor.execute({ name: "kanbanComplete", teamId: "alpha", cardId: "#1" });
+      expect(kanbanStore.complete).toHaveBeenCalledWith("alpha", "session-1", "#1");
+      expect(result).toEqual({ board });
+    });
+
+    test("unknown cardId -> KANBAN_CARD_NOT_FOUND", async () => {
+      kanbanStore.complete.mockReturnValue(false);
+      const pending = executor.execute({ name: "kanbanComplete", teamId: "alpha", cardId: "#9" });
+      await expect(pending).rejects.toMatchObject({ code: "KANBAN_CARD_NOT_FOUND" });
+    });
+  });
+
+  describe("kanbanEdit", () => {
+    test("edits the card content and returns the updated board", async () => {
+      kanbanStore.editContent.mockReturnValue({ id: "#1", content: "revised", status: "pending" });
+      const board: KanbanCard[] = [{ id: "#1", content: "revised", status: "pending" }];
+      kanbanStore.load.mockReturnValueOnce(board);
+      const result = await executor.execute({ name: "kanbanEdit", teamId: "alpha", cardId: "#1", field: "content", text: "revised" });
+      expect(kanbanStore.editContent).toHaveBeenCalledWith("alpha", "session-1", "#1", "revised");
+      expect(result).toEqual({ board });
+    });
+
+    test("edits the card description", async () => {
+      kanbanStore.editDescription.mockReturnValue({ id: "#1", content: "first", status: "pending", description: "cover Q3" });
+      const board: KanbanCard[] = [{ id: "#1", content: "first", status: "pending", description: "cover Q3" }];
+      kanbanStore.load.mockReturnValueOnce(board);
+      const result = await executor.execute({ name: "kanbanEdit", teamId: "alpha", cardId: "#1", field: "description", text: "cover Q3" });
+      expect(kanbanStore.editDescription).toHaveBeenCalledWith("alpha", "session-1", "#1", "cover Q3");
+      expect(result).toEqual({ board });
+    });
+
+    test("empty text on the content field -> KANBAN_TEXT_EMPTY", async () => {
+      const pending = executor.execute({ name: "kanbanEdit", teamId: "alpha", cardId: "#1", field: "content", text: "  " });
+      await expect(pending).rejects.toMatchObject({ code: "KANBAN_TEXT_EMPTY" });
+      expect(kanbanStore.editContent).not.toHaveBeenCalled();
+    });
+
+    test("empty text on the description field clears the description", async () => {
+      kanbanStore.editDescription.mockReturnValue({ id: "#1", content: "first", status: "pending" });
+      kanbanStore.load.mockReturnValueOnce([{ id: "#1", content: "first", status: "pending" }]);
+      await executor.execute({ name: "kanbanEdit", teamId: "alpha", cardId: "#1", field: "description", text: "  " });
+      expect(kanbanStore.editDescription).toHaveBeenCalledWith("alpha", "session-1", "#1", undefined);
+    });
+
+    test("unknown cardId -> KANBAN_CARD_NOT_FOUND", async () => {
+      kanbanStore.editContent.mockReturnValue(null);
+      const pending = executor.execute({ name: "kanbanEdit", teamId: "alpha", cardId: "#9", field: "content", text: "x" });
+      await expect(pending).rejects.toMatchObject({ code: "KANBAN_CARD_NOT_FOUND" });
+    });
+
+    test("content duplicating another card -> KANBAN_DUPLICATE_CONTENT", async () => {
+      kanbanStore.editContent.mockReturnValue(null);
+      kanbanStore.load.mockReturnValueOnce([{ id: "#1", content: "first", status: "pending" }, { id: "#2", content: "second", status: "pending" }]);
+      const pending = executor.execute({ name: "kanbanEdit", teamId: "alpha", cardId: "#1", field: "content", text: "second" });
+      await expect(pending).rejects.toMatchObject({ code: "KANBAN_DUPLICATE_CONTENT" });
+    });
+  });
+
   describe("dispatch", () => {
     test("executor.execute is the single entry point for every command name", async () => {
       teamManager.locate.mockReturnValue("user");
-      teamManager.load.mockResolvedValue({ id: "alpha", leaderKey: "general-1", sessionName: null, agents: [], history: [] });
-      teamManager.resumeSession.mockResolvedValue({ id: "alpha", leaderKey: "general-1", sessionName: null, agents: [], history: [] });
+      teamManager.load.mockResolvedValue({ id: "alpha", leaderKey: "general-1", sessionName: null, currentSessionId: "s1", agents: [], history: [], kanbanCards: [] });
+      teamManager.resumeSession.mockResolvedValue({ id: "alpha", leaderKey: "general-1", sessionName: null, currentSessionId: "s1", agents: [], history: [], kanbanCards: [] });
       teamManager.listInstalled.mockReturnValue([]);
       teamManager.listSessions.mockReturnValue([]);
       modelRegistry.listModels.mockReturnValue([]);
       modelRegistry.listProviders.mockReturnValue([]);
+      kanbanStore.add.mockReturnValue({ id: "#1", content: "task", status: "pending" });
+      kanbanStore.remove.mockReturnValue(true);
+      kanbanStore.complete.mockReturnValue(true);
+      kanbanStore.editContent.mockReturnValue({ id: "#1", content: "task", status: "pending" });
       const commands: Array<Parameters<typeof executor.execute>[0]> = [
         { name: "login", provider: "anthropic", apiKey: "sk-test" },
         { name: "logout", provider: "*" },
@@ -459,6 +636,10 @@ describe("CommandExecutorImpl", () => {
         { name: "getGitStatus" },
         { name: "stop" },
         { name: "listSessions", teamId: "alpha" },
+        { name: "kanbanAdd", teamId: "alpha", description: "task" },
+        { name: "kanbanRemove", teamId: "alpha", cardId: "#1" },
+        { name: "kanbanComplete", teamId: "alpha", cardId: "#1" },
+        { name: "kanbanEdit", teamId: "alpha", cardId: "#1", field: "content", text: "task" },
       ];
       for (const command of commands) {
         await executor.execute(command);

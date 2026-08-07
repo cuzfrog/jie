@@ -2,6 +2,8 @@ import type { AgentInfo, TeamInfo } from "@cuzfrog/jie-platform";
 import type { AgentId, AgentUiState, TuiState } from "./state";
 import { hydrateHistory } from "./hydrate-history";
 import { estimateContextTokens } from "./context-tokens";
+import { Actions } from "./actions";
+import { kanbanReducer } from "./kanban-reducer";
 
 export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
   const { id: teamId, agents } = teamInfo;
@@ -50,7 +52,6 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
       history: hydrated.history,
       currentTurn: hydrated.currentTurn,
       compactionMarker: hydrated.compactionMarker,
-      cards: hydrated.cards,
       contextTokensUsed: estimateContextTokens(hydrated.history, hydrated.currentTurn),
     });
   }
@@ -59,7 +60,7 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
   if (leaderId !== null && !newAgents.has(leaderId)) leaderId = null;
   let cursor = switching ? null : state.teamCursorAgentId;
   if (cursor !== null && !newAgents.has(cursor)) cursor = null;
-  return {
+  const loaded: TuiState = {
     ...state,
     teamId,
     sessionName: teamInfo.sessionName,
@@ -70,7 +71,10 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
     infoEntries: switching ? [] : state.infoEntries,
     nextEntrySeq,
     agents: newAgents,
+    kanbanExpanded: switching ? false : state.kanbanExpanded,
+    kanbanEdit: switching ? null : state.kanbanEdit,
   };
+  return kanbanReducer(loaded, Actions.setKanbanBoard(teamInfo.kanbanCards));
 }
 
 function emptyAgent(agentId: AgentId, teamId: string, agent: AgentInfo): AgentUiState {
@@ -92,6 +96,5 @@ function emptyAgent(agentId: AgentId, teamId: string, agent: AgentInfo): AgentUi
     compactionMarker: null,
     contextTokensUsed: 0,
     lastReportedTotalTokens: null,
-    cards: [],
   };
 }

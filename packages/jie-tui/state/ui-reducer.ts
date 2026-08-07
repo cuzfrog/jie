@@ -1,6 +1,7 @@
 import { ActionTypes, type Action } from "./actions";
 import { teamLoadReducer } from "./team-load-reducer";
 import { TuiState } from "./state";
+import { kanbanReducer } from "./kanban-reducer";
 
 export function reduceUiAction(state: TuiState, action: Action): TuiState {
   switch (action.type) {
@@ -18,8 +19,6 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
       return reduceTeamCursor(state, action.payload.direction);
     case ActionTypes.TOGGLE_TEAM_PANEL:
       return reduceTeamPanelToggle(state);
-    case ActionTypes.TOGGLE_KANBAN_PANEL:
-      return reduceKanbanPanelToggle(state);
     case ActionTypes.COMMIT_TEAM_CURSOR:
       return reduceTeamCursorCommit(state);
     case ActionTypes.CLEAR_TUI_STATE:
@@ -75,6 +74,15 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
         infoEntries: [...state.infoEntries, { seq: state.nextEntrySeq, kind: "help" }],
         nextEntrySeq: state.nextEntrySeq + 1,
       };
+    case ActionTypes.SET_KANBAN_BOARD:
+    case ActionTypes.MOVE_KANBAN_CURSOR:
+    case ActionTypes.MOVE_KANBAN_EDIT_FIELD:
+    case ActionTypes.CYCLE_KANBAN_VIEW:
+    case ActionTypes.TOGGLE_KANBAN_EXPAND:
+    case ActionTypes.COMMIT_KANBAN_EDIT:
+    case ActionTypes.CANCEL_KANBAN_EDIT:
+    case ActionTypes.SAVE_KANBAN_EDIT:
+      return kanbanReducer(state, action);
     default:
       return state;
   }
@@ -85,13 +93,8 @@ function reduceTeamPanelToggle(state: TuiState): TuiState {
   if (roster.length === 0) return state;
   if (state.teamPanelVisible) return { ...state, teamPanelVisible: false, teamCursorAgentId: null };
   const cursor = state.teamCursorAgentId ?? state.focusedAgentId ?? roster[0]!.agentId;
-  return { ...state, teamPanelVisible: true, teamCursorAgentId: cursor, kanbanPanelVisible: false };
-}
-
-function reduceKanbanPanelToggle(state: TuiState): TuiState {
-  if (state.focusedAgentId === null) return state;
-  if (state.kanbanPanelVisible) return { ...state, kanbanPanelVisible: false };
-  return { ...state, kanbanPanelVisible: true, teamPanelVisible: false, teamCursorAgentId: null };
+  const withoutKanbanPanel: TuiState = state.kanbanView === "panel" ? { ...state, kanbanView: "hidden", kanbanEdit: null, kanbanExpanded: false } : state;
+  return { ...withoutKanbanPanel, teamPanelVisible: true, teamCursorAgentId: cursor };
 }
 
 function reduceTeamCursor(state: TuiState, direction: 1 | -1): TuiState {

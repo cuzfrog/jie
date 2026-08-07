@@ -15,7 +15,7 @@ import { createWriteFileTool } from "./write-file";
 import type { SettingsStore } from "../config";
 import type { EventManager } from "../event";
 import type { MemoryStore } from "../memory";
-import type { ArtifactStore } from "../storage";
+import type { ArtifactStore, KanbanStore } from "../storage";
 
 export interface ToolRegistry {
   register(name: string, tool: Tool): void;
@@ -33,8 +33,9 @@ export class InMemoryToolRegistry implements ToolRegistry {
     artifactStore: ArtifactStore,
     memoryStore: MemoryStore,
     settingsStore: SettingsStore,
+    kanbanStore: KanbanStore,
   ) {
-    for (const builtin of builtins(cwd, eventManager, artifactStore, memoryStore, settingsStore)) {
+    for (const builtin of builtins(cwd, eventManager, artifactStore, memoryStore, settingsStore, kanbanStore)) {
       this.register(builtin.name, builtin.tool);
     }
   }
@@ -72,6 +73,7 @@ function builtins(
   artifactStore: ArtifactStore,
   memoryStore: MemoryStore,
   settingsStore: SettingsStore,
+  kanbanStore: KanbanStore,
 ): BuiltinTool[] {
   const fileMutationQueue = createFileMutationQueue();
   const taskLifecycleGuard = createTaskLifecycleGuard(artifactStore);
@@ -82,7 +84,7 @@ function builtins(
     { name: "edit", tool: createEditTool({ workspaceRoot, fileMutationQueue }) as Tool },
     { name: "read_artifact", tool: createReadArtifactTool({ artifactStore }) as Tool },
     { name: "write_artifact", tool: createWriteArtifactTool({ artifactStore }) as Tool },
-    { name: "kanban_write", tool: createKanbanWriteTool() as Tool },
+    { name: "kanban_write", tool: createKanbanWriteTool({ kanbanStore }) as Tool },
     { name: "memory_search", tool: createMemorySearchTool({ memoryStore, settingsStore }) as Tool },
     { name: "notify", tool: createNotifyTool({ eventManager, taskLifecycleGuard }) as Tool },
     { name: "web_fetch", tool: createWebFetchTool() as Tool },

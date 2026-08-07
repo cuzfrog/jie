@@ -7,7 +7,7 @@ import type { ModelRegistry, Settings, SettingsStore } from "../config";
 import type { AgentBody, AgentBodyParams } from "../core";
 import type { EventEnvelope, EventManager, EventType } from "../event";
 import type { SkillManager } from "../skills";
-import type { TranscriptStore } from "../storage";
+import type { KanbanStore, TranscriptStore } from "../storage";
 import { TeamManagerImpl } from "./team-manager";
 
 const eventManager = vi.mocked<EventManager>({
@@ -45,6 +45,16 @@ const transcriptStore = vi.mocked<TranscriptStore>({
   listSessions: vi.fn(() => []),
   sessionName: vi.fn(() => null),
   renameSession: vi.fn(),
+});
+
+const kanbanStore = vi.mocked<KanbanStore>({
+  load: vi.fn(() => []),
+  replace: vi.fn(),
+  add: vi.fn(),
+  remove: vi.fn(),
+  complete: vi.fn(),
+  editContent: vi.fn(),
+  editDescription: vi.fn(),
 });
 
 const DEFAULT_SETTINGS: Settings = {
@@ -88,7 +98,7 @@ function makeFakeBody(params: AgentBodyParams, restored: ReadonlyArray<AgentMess
 
 function makeManager(homeJieDir: string, projectJieDir: string | null, resumeSessionId?: string, restored: ReadonlyArray<AgentMessage> = []) {
   const agentBodyFactory = vi.fn((params: AgentBodyParams): AgentBody => makeFakeBody(params, restored));
-  const manager = new TeamManagerImpl(homeJieDir, projectJieDir, eventManager, settingsStore, modelRegistry, transcriptStore, skillManager, agentBodyFactory, resumeSessionId);
+  const manager = new TeamManagerImpl(homeJieDir, projectJieDir, eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, agentBodyFactory, resumeSessionId);
   return { manager, agentBodyFactory };
 }
 
@@ -230,7 +240,7 @@ describe("TeamManagerImpl — full surface", () => {
         start: async () => { throw new Error("start failure"); },
         stop: vi.fn(),
       }));
-      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, transcriptStore, skillManager, factory);
+      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       await expect(manager.load("default-solo")).rejects.toThrow("start failure");
       expect(teamLoadedEvents()).toHaveLength(0);
       expect(manager.listLoaded().size).toBe(0);
@@ -251,7 +261,7 @@ describe("TeamManagerImpl — full surface", () => {
         start: async () => { started.push(params.agentKey); },
         stop: () => {},
       }));
-      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, transcriptStore, skillManager, factory);
+      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       await expect(manager.load("dev")).rejects.toMatchObject({ code: "MODEL_UNRESOLVED" });
       expect(started).toEqual([]);
       expect(manager.listLoaded().size).toBe(0);
@@ -349,7 +359,7 @@ describe("TeamManagerImpl — full surface", () => {
         start: async () => {},
         stop: () => {},
       });
-      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, transcriptStore, skillManager, factory);
+      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       const first = await manager.load("default-solo");
       expect(first.history[0]?.messages).toEqual([]);
       live.push({ role: "user", content: "[user]: hello", timestamp: 1 }, assistantMessage("hi there", 2));
@@ -445,7 +455,7 @@ describe("TeamManagerImpl — full surface", () => {
           stop: () => { stops.push(`gen${created}:${params.agentKey}`); },
         };
       });
-      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, transcriptStore, skillManager, factory);
+      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       await manager.load("default-solo");
       generation = 1;
       await manager.reload();
@@ -475,7 +485,7 @@ describe("TeamManagerImpl — full surface", () => {
         start: async () => {},
         stop: () => { stops.push(params.agentKey); },
       }));
-      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, transcriptStore, skillManager, factory);
+      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       await manager.load("alpha");
       writeFileSync(join(userTeams, "alpha", "TEAM.md"), "leader: [unclosed");
       await expect(manager.reload()).rejects.toMatchObject({ code: "RELOAD_FAILED" });
@@ -496,7 +506,7 @@ describe("TeamManagerImpl — full surface", () => {
           stop: () => { stops.push(`gen${created}:${params.agentKey}`); },
         };
       });
-      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, transcriptStore, skillManager, factory);
+      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       await manager.load("default-solo");
       generation = 1;
       eventManager.publish.mockClear();
@@ -515,7 +525,7 @@ describe("TeamManagerImpl — full surface", () => {
         start: async () => {},
         stop: () => { stops.push(params.agentKey); },
       }));
-      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, transcriptStore, skillManager, factory);
+      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       await manager.load("default-solo");
       modelRegistry.resolve.mockReturnValue(undefined);
       await expect(manager.reload()).rejects.toMatchObject({ code: "RELOAD_FAILED" });
@@ -538,7 +548,7 @@ describe("TeamManagerImpl — full surface", () => {
           stop: () => {},
         };
       });
-      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, transcriptStore, skillManager, factory);
+      const manager = new TeamManagerImpl(homeJieDir, null, eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       await manager.load("alpha");
       await manager.load("beta");
       created.length = 0;

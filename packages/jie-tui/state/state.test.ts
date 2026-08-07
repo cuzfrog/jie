@@ -9,6 +9,8 @@ function loadDemoTeam(stateStore: StateStore): void {
         id: "demo",
         leaderKey: "general-1",
         sessionName: null,
+        currentSessionId: null,
+        kanbanCards: [],
         history: [],
         agents: [
           { teamId: "demo", role: "helper", agentKey: "helper-1", isLeader: false, tools: [], subscribe: [], skills: [], model: null },
@@ -172,6 +174,39 @@ describe("TuiState.hasChatContent", () => {
     const store = new StateStoreImpl();
     store.dispatch(Actions.showHelp());
     expect(TuiState.hasChatContent(store.getState())).toBe(true);
+  });
+});
+
+describe("TuiState.kanbanVisibleCards", () => {
+  test("returns the whole board when every column fits", () => {
+    const store = new StateStoreImpl();
+    store.dispatch(Actions.setKanbanBoard([
+      { id: "P1", content: "P1", status: "pending" },
+      { id: "I1", content: "I1", status: "in_progress" },
+      { id: "C1", content: "C1", status: "completed" },
+    ]));
+    expect(TuiState.kanbanVisibleCards(store.getState()).map((card) => card.id)).toEqual(["P1", "I1", "C1"]);
+  });
+
+  test("caps each status column at 8 rows, independently per status", () => {
+    const store = new StateStoreImpl();
+    const pending = Array.from({ length: 10 }, (_, index) => ({ id: `P${index + 1}`, content: `P${index + 1}`, status: "pending" as const }));
+    const inProgress = Array.from({ length: 9 }, (_, index) => ({ id: `I${index + 1}`, content: `I${index + 1}`, status: "in_progress" as const }));
+    store.dispatch(Actions.setKanbanBoard([...pending, ...inProgress]));
+    const visible = TuiState.kanbanVisibleCards(store.getState());
+    expect(visible.filter((card) => card.status === "pending")).toHaveLength(8);
+    expect(visible.filter((card) => card.status === "in_progress")).toHaveLength(8);
+    expect(visible.filter((card) => card.status === "pending").map((card) => card.id)).toEqual(["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8"]);
+  });
+
+  test("keeps the board order", () => {
+    const store = new StateStoreImpl();
+    store.dispatch(Actions.setKanbanBoard([
+      { id: "I1", content: "I1", status: "in_progress" },
+      { id: "P1", content: "P1", status: "pending" },
+      { id: "I2", content: "I2", status: "in_progress" },
+    ]));
+    expect(TuiState.kanbanVisibleCards(store.getState()).map((card) => card.id)).toEqual(["I1", "P1", "I2"]);
   });
 });
 

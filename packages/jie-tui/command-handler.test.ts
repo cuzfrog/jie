@@ -453,6 +453,8 @@ describe("CommandHandlerImpl — /reload", () => {
     id: "default-solo",
     leaderKey: "general-1",
     sessionName: null,
+    currentSessionId: null,
+    kanbanCards: [],
     history: [],
     agents: [{ teamId: "default-solo", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
   };
@@ -523,6 +525,8 @@ describe("CommandHandlerImpl — /team", () => {
       id: "alpha",
       leaderKey: "general-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true }],
     }));
@@ -539,6 +543,8 @@ describe("CommandHandlerImpl — /team", () => {
       id: "alpha",
       leaderKey: "general-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     }));
@@ -552,6 +558,8 @@ describe("CommandHandlerImpl — /team", () => {
       id: "alpha",
       leaderKey: "general-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     }));
@@ -563,6 +571,8 @@ describe("CommandHandlerImpl — /team", () => {
       id: "alpha",
       leaderKey: "general-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [{ teamId: "alpha", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     } as const;
@@ -615,6 +625,8 @@ describe("CommandHandlerImpl — /resume", () => {
       id: "default-solo",
       leaderKey: "general-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [{ teamId: "default-solo", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     };
@@ -631,6 +643,8 @@ describe("CommandHandlerImpl — /resume", () => {
       id: "default-solo",
       leaderKey: "general-1",
       sessionName: null,
+      currentSessionId: null,
+      kanbanCards: [],
       history: [],
       agents: [{ teamId: "default-solo", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     };
@@ -709,6 +723,105 @@ describe("CommandHandlerImpl — /rename", () => {
   });
 });
 
+describe("CommandHandlerImpl — /kanban", () => {
+  test("/kanban cycles the kanban view without touching the platform", () => {
+    const { platform, execute } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban");
+    expect(dispatch).toHaveBeenCalledWith(Actions.cycleKanbanView());
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  test("/kanban without a team dispatches the cycle like ctrl+k, which no-ops in the reducer", () => {
+    const { platform, execute } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/kanban");
+    expect(dispatch).toHaveBeenCalledWith(Actions.cycleKanbanView());
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  test("/kanban add executes kanbanAdd and publishes the returned board", async () => {
+    const { platform, execute } = makePlatform();
+    const board = [{ id: "#1", content: "write spec", status: "pending" as const }];
+    execute.mockResolvedValueOnce({ board, card: board[0] });
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban add write spec");
+    expect(execute).toHaveBeenCalledWith({ name: "kanbanAdd", teamId: "my-team", description: "write spec" });
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setKanbanBoard(board));
+  });
+
+  test("/kanban add --title <title> <description> carries the title", () => {
+    const { platform, execute } = makePlatform();
+    execute.mockResolvedValueOnce({ board: [], card: { id: "#1", content: "t", status: "pending" } });
+    const { handler } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban add --title refactor write the report");
+    expect(execute).toHaveBeenCalledWith({ name: "kanbanAdd", teamId: "my-team", title: "refactor", description: "write the report" });
+  });
+
+  test("/kanban add with no description reports usage", () => {
+    const { platform, execute } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban add");
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("/kanban add <description>"));
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  test("/kanban add --title with no title reports usage", () => {
+    const { platform, execute } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban add --title");
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("--title")));
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  test("/kanban remove executes kanbanRemove and publishes the board", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockResolvedValueOnce({ board: [] });
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban remove #1");
+    expect(execute).toHaveBeenCalledWith({ name: "kanbanRemove", teamId: "my-team", cardId: "#1" });
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setKanbanBoard([]));
+  });
+
+  test("/kanban remove without a card id reports usage", () => {
+    const { platform, execute } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban remove");
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("/kanban remove <cardId>"));
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  test("/kanban complete executes kanbanComplete and publishes the board", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockResolvedValueOnce({ board: [] });
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban complete #1");
+    expect(execute).toHaveBeenCalledWith({ name: "kanbanComplete", teamId: "my-team", cardId: "#1" });
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setKanbanBoard([]));
+  });
+
+  test("an unknown /kanban subcommand reports an error", () => {
+    const { platform } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban bogus");
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("unknown subcommand")));
+  });
+
+  test("a failed /kanban add surfaces the platform error as a banner", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async () => {
+      throw new Error("boom");
+    });
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    handler.handle("/kanban add write spec");
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/kanban add failed")));
+  });
+});
+
 describe("SLASH_COMMAND_NAMES", () => {
   test("is the union of the commands and intercepts registries, in registration order", () => {
     expect(SLASH_COMMAND_NAMES).toEqual([
@@ -724,6 +837,7 @@ describe("SLASH_COMMAND_NAMES", () => {
       "team",
       "resume",
       "rename",
+      "kanban",
     ]);
   });
 });

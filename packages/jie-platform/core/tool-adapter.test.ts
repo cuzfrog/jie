@@ -1,7 +1,10 @@
 import { Type } from "typebox";
 import type { ArtifactStore } from "../storage";
 import type { ExecutionContext, Tool } from "../tools";
+import type { ToolResultDetails } from "../types";
 import { adaptToolToAgent } from "./tool-adapter";
+
+const diffDetails: ToolResultDetails = { kind: "diff", path: "a.txt", replacementsCount: 1, beforeBytes: 2, afterBytes: 2, diff: "-x\n+y" };
 
 const artifactStore = vi.mocked<ArtifactStore>({
   write: vi.fn(),
@@ -60,12 +63,12 @@ describe("adaptToolToAgent.prepareArguments", () => {
 
 describe("adaptToolToAgent.execute", () => {
   test("maps the jie ToolResult onto the agent result shape", async () => {
-    const execute = vi.fn(async () => ({ content: "done", details: { kind: "diff" }, terminate: true }));
+    const execute = vi.fn(async () => ({ content: "done", details: diffDetails, terminate: true }));
     const adapted = adaptToolToAgent(makeTool({ execute }), executionContext);
     const result = await adapted.execute("call-1", { value: 1 });
     expect(result).toMatchObject({
       content: [{ type: "text", text: "done" }],
-      details: { kind: "diff" },
+      details: diffDetails,
       terminate: true,
     });
     expect(execute).toHaveBeenCalledWith({ value: 1 }, executionContext, expect.any(AbortSignal));

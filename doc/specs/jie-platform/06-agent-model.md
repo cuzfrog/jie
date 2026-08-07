@@ -111,10 +111,12 @@ interface Tool<TInput = unknown> {
 
 interface ToolResult {
   readonly content: string;        // text returned to the LLM conversation
-  readonly details?: unknown;      // structured payload for afterToolCall hooks / telemetry / TUI display; never shown to the LLM; dropped at persist unless kind is "diff" or "kanban"
+  readonly details?: ToolResultDetails | null;  // closed union, defined in types.ts; never shown to the LLM; dropped at persist unless kind is "diff"
   readonly terminate?: boolean;    // pi-agent hint: stop after this tool batch
 }
 ```
+
+`details` is the closed `ToolResultDetails` union (`types.ts`): one member per builtin producer (`edit`/`write_file` share the `kind: "diff"` discriminator, `kanban_write` the `kind: "kanban"` one; the rest are un discriminated per-tool shapes). Builtin tools are the only producers — MCP tools emit no details — so consumers narrow statically and no runtime guard exists.
 
 Except for the built-in `notify` (which receives its `EventManager` as a construction dependency), tools have no awareness of the event bus; custom team-defined tools cannot publish events. Business identifiers (work ids, …) are opaque to the platform and the receiving LLM extracts them from message text, with one exception: when a team declares a lifecycle, `notify` takes the `task_id` as a first-class input so the platform can authorize and record the transition ("notify" below, ADR 33).
 
@@ -193,16 +195,17 @@ Search-and-replace inside a workspace text file. Every entry of `edits` is match
 ### kanban_write
 
 ```typescript
-kanban_write(input: { cards: ReadonlyArray<KanbanCard> })
+kanban_write(input: { cards: ReadonlyArray<KanbanCardWrite> })
 
-interface KanbanCard {
+interface KanbanCardWrite {
   readonly content: string;
   readonly status: "pending" | "in_progress" | "completed";
   readonly active_form?: string;
+  readonly description?: string;
 }
 ```
 
-Replaces (does not merge with) the agent's live kanban board; `status` is the card's column. The tool enforces: no duplicate `content`, no empty `content` — violations throw `kanban_write_invalid`. Any number of cards may be `in_progress` (the board's WIP is not limited); an empty list clears the board. `content` summarizes the card count and the in-progress count; `details: { kind: "kanban", cards }` carries the full board so the TUI renders it from the same payload.
+The input is the full desired board — the tool replaces the session's board contents in `KanbanStore` (`04-storage.md`), scoped to the execution context's `(teamId, sessionId)` — the board is team-shared, not per-agent, and persists per session. Cards whose `content` already exists keep their platform-assigned ids (`#1`, `#2`, …); genuinely new cards get the next id (the store merges by content, so rewrites do not churn ids). The tool enforces: no duplicate `content`, no empty `content` — violations throw `kanban_write_invalid`. Any number of cards may be `in_progress` (the board's WIP is not limited); an empty list clears the board. `content` summarizes the card count and the in-progress count; `details: { kind: "kanban", cards }` carries the full board so the TUI renders it from the same payload.
 
 ### write_artifact and read_artifact
 
@@ -335,7 +338,7 @@ The body wires pi-agent's `AgentEvent` stream to the `AgentEventBridge`, which b
 |---|---|
 | `turn_start` | `agent.turn.start` — deferred to the turn's next pi event and published before that event; payload is the prompt this turn consumes (raw user text for a `user.prompt`, null otherwise), resolved from the `PromptQueue`'s pending dispatch for a `prompt()`-started turn or from a label keyed by the supplied message for a `followUp()`-fed turn, consumed once |
 | `message_start`, `message_update`, `message_end` (assistant) | streaming pipeline → `agent.stream.chunk` / `agent.stream.end`; assistant `message_end` also publishes `agent.usage` when the message carries usage |
-| `message_end` (every role) | `transcriptStore.persist(message, agentKey, sessionId, teamId)` — unconditional, no role check; a `toolResult` message is projected first: its `details` is dropped unless `kind` is `"diff"` or `"kanban"` (see Memory Integration) |
+| `message_end` (every role) | `transcriptStore.persist(message, agentKey, sessionId, teamId)` — unconditional, no role check; a `toolResult` message is projected first: its `details` is dropped unless `kind` is `"diff"` (see Memory Integration) |
 | `turn_end` | on a healthy turn (final `stopReason` not `error`/`aborted`), dequeue one queued message via `agent.followUp()` to continue this run; publish `agent.prompt.queue.update` |
 | `agent_end` | `agent.idle` with the final `stopReason`; also `system.error` when the run ended `error`/`aborted` with a message; fire the `Stop` hook; then defer until pi settles the run — the compaction check runs first ("Compaction" below), then the queue head starts a new run via `agent.prompt()` (an error/aborted `turn_end` feeds nothing, so its queued entries survive to this drain) |
 | `agent_start`, `tool_execution_*` | not bridged — tool telemetry comes from the `beforeToolCall`/`afterToolCall` hooks |
@@ -352,7 +355,7 @@ A prompt drives one pi-agent run: think → optionally call tools → think → 
 
 Three facts belong here; the full contract is canonical in `08-transcript.md`.
 
-- **Write-through persist.** Every pi-agent `message_end` → `transcriptStore.persist(...)` to SQLite, unconditionally (no role check, no buffering). Before persisting, the body projects a `toolResult` message to its persistable form: `details` is dropped unless `kind` is `"diff"` or `"kanban"` — those two are TUI display payloads (diff view, kanban panel) that hydration reads back; every other kind serves only hooks and live telemetry, which never read stored rows. The live message in pi-agent state is not mutated, so same-process history and `agent.tool.result` events keep the full payload.
+- **Write-through persist.** Every pi-agent `message_end` → `transcriptStore.persist(...)` to SQLite, unconditionally (no role check, no buffering). Before persisting, the body projects a `toolResult` message to its persistable form: `details` is dropped unless `kind` is `"diff"` — the diff payload is the only one hydration reads back (history rendering); the kanban board hydrates from `TeamInfo.kanbanCards`, so kanban details are live-only, and every other kind serves only hooks and live telemetry, which never read stored rows. The live message in pi-agent state is not mutated, so same-process history and `agent.tool.result` events keep the full payload.
 - **Session identity.** The `sessionId` is minted per process run × team by the platform (`TeamManager`) and passed to the body (ADR 17); all agents of one team in one process share it. `jie --resume <id>` validates via `transcriptStore.hasSession` and fails hard with `unknown_session` on a miss. `restore()` on `start()` returns the prior rows for `(teamId, agentKey, sessionId)`; a fresh session restores empty.
 - **Compaction.** Between runs the shared `Compactor` may rewrite the stored history to a summary plus a recent tail (`08-transcript.md` "Compact"); on success the body's `CompactionRunner` applies the same rewrite in memory — `agent.state.messages` becomes `[summaryMessage, ...messages.slice(firstKeptIndex)]`. Because the `Agent` was constructed with `convertToLlm`, the surviving `compactionSummary` message enters the next LLM request as a `user` message carrying the summary — whether it was just written or restored on `start()`.
 

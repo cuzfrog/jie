@@ -8,7 +8,7 @@ import type { PlatformCradle } from "../container";
 import type { AgentBody, AgentBodyParams } from "../core";
 import type { EventManager } from "../event";
 import type { SkillManager } from "../skills";
-import type { TranscriptStore } from "../storage";
+import type { KanbanStore, TranscriptStore } from "../storage";
 import { registerTeamModule } from "./module";
 
 const eventManager = vi.mocked<EventManager>({
@@ -48,6 +48,16 @@ const transcriptStore = vi.mocked<TranscriptStore>({
   renameSession: vi.fn(),
 });
 
+const kanbanStore = vi.mocked<KanbanStore>({
+  load: vi.fn(() => []),
+  replace: vi.fn(),
+  add: vi.fn(),
+  remove: vi.fn(),
+  complete: vi.fn(),
+  editContent: vi.fn(),
+  editDescription: vi.fn(),
+});
+
 const agentBodyFactory = vi.fn<(params: AgentBodyParams) => AgentBody>();
 
 const DEFAULT_SETTINGS: Settings = {
@@ -64,6 +74,7 @@ function bootedContainer(homeJieDir: string, projectJieDir: string | null): Awil
     settingsStore: asValue(settingsStore),
     modelRegistry: asValue(modelRegistry),
     transcriptStore: asValue(transcriptStore),
+    kanbanStore: asValue(kanbanStore),
     skillManager: asValue(skillManager),
     agentBodyFactory: asValue(agentBodyFactory),
   });

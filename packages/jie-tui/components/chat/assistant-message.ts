@@ -117,7 +117,7 @@ function isAggregatableCard(card: MessageCard): boolean {
 }
 
 function hasDiffDetail(details: MessageCard["details"]): boolean {
-  return typeof details === "object" && details !== null && "kind" in details && details.kind === "diff";
+  return details !== null && details !== undefined && "kind" in details && details.kind === "diff";
 }
 
 function summarizeWork(thinkingMs: number | null, cards: ReadonlyArray<MessageCard>): string | null {

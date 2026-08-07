@@ -60,4 +60,28 @@ export function initializeSchema(storage: Storage): void {
       content, atom_id UNINDEXED, tokenize = 'unicode61'
     )
   `);
+
+  storage.exec(`
+    CREATE TABLE IF NOT EXISTS kanban_cards (
+      team_id     TEXT    NOT NULL,
+      session_id  TEXT    NOT NULL,
+      seq         INTEGER NOT NULL,
+      id          TEXT    NOT NULL,
+      content     TEXT    NOT NULL,
+      status      TEXT    NOT NULL,
+      active_form TEXT,
+      description TEXT,
+      updated_at  TEXT    NOT NULL,
+      PRIMARY KEY (team_id, session_id, id)
+    )
+  `);
+
+  storage.exec(`
+    CREATE TABLE IF NOT EXISTS kanban_counters (
+      team_id    TEXT    NOT NULL,
+      session_id TEXT    NOT NULL,
+      next_id    INTEGER NOT NULL,
+      PRIMARY KEY (team_id, session_id)
+    )
+  `);
 }

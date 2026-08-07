@@ -28,24 +28,16 @@ function atom(overrides: Partial<MemoryAtom> = {}): MemoryAtom {
 
 beforeEach(() => {
   settingsStore.load.mockReturnValue({});
-  memoryStore.top.mockResolvedValue([atom()]);
+  memoryStore.top.mockReturnValue([atom()]);
 });
 
 describe("loadMemoryBootstrap", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  test("renders the top atoms into the memory block", async () => {
-    memoryStore.top.mockResolvedValue([
+  test("renders the top atoms into the memory block", () => {
+    memoryStore.top.mockReturnValue([
       atom({ content: "stand on two feet" }),
       atom({ content: "sqlite over postgres", type: "decision", priority: 90, scene: "store choice" }),
     ]);
-    const block = await loadMemoryBootstrap(memoryStore, settingsStore, "t1");
+    const block = loadMemoryBootstrap(memoryStore, settingsStore, "t1");
     expect(block).toBe(
       "<memory team=\"t1\">\n" +
       "- [instruction] stand on two feet\n" +
@@ -55,28 +47,23 @@ describe("loadMemoryBootstrap", () => {
     expect(memoryStore.top).toHaveBeenCalledWith("t1", 12);
   });
 
-  test("returns an empty block when memory is disabled", async () => {
+  test("returns an empty block when memory is disabled", () => {
     settingsStore.load.mockReturnValue({ memory: { enabled: false } });
-    expect(await loadMemoryBootstrap(memoryStore, settingsStore, "t1")).toBe("");
+    expect(loadMemoryBootstrap(memoryStore, settingsStore, "t1")).toBe("");
     expect(memoryStore.top).not.toHaveBeenCalled();
   });
 
-  test("applies the bootstrapMaxEntries and bootstrapMaxChars overrides", async () => {
+  test("applies the bootstrapMaxEntries and bootstrapMaxChars overrides", () => {
     settingsStore.load.mockReturnValue({ memory: { bootstrapMaxEntries: 3, bootstrapMaxChars: 100 } });
-    await loadMemoryBootstrap(memoryStore, settingsStore, "t1");
+    loadMemoryBootstrap(memoryStore, settingsStore, "t1");
     expect(memoryStore.top).toHaveBeenCalledWith("t1", 3);
   });
 
-  test("degrades to an empty block when the store load fails", async () => {
-    memoryStore.top.mockRejectedValue(new Error("db locked"));
-    expect(await loadMemoryBootstrap(memoryStore, settingsStore, "t1")).toBe("");
-  });
-
-  test("degrades to an empty block when the store load times out", async () => {
-    memoryStore.top.mockReturnValue(new Promise<ReadonlyArray<MemoryAtom>>(() => {}));
-    const promise = loadMemoryBootstrap(memoryStore, settingsStore, "t1");
-    vi.advanceTimersByTime(5000);
-    expect(await promise).toBe("");
+  test("degrades to an empty block when the store load fails", () => {
+    memoryStore.top.mockImplementation(() => {
+      throw new Error("db locked");
+    });
+    expect(loadMemoryBootstrap(memoryStore, settingsStore, "t1")).toBe("");
   });
 });
 

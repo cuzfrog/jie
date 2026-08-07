@@ -5,7 +5,7 @@ import { type Tui } from "./tui";
 import { bootTui } from "./container";
 import { Actions, type StateStore } from "./state";
 import { withTTY } from "../../tests/support";
-import { Events, type JiePlatform, type EventType, type AnyEventEnvelope, type EventEnvelope } from "@cuzfrog/jie-platform";
+import { Events, type JiePlatform, type EventType, type AnyEventEnvelope, type EventEnvelope, type Command, type CommandResult } from "@cuzfrog/jie-platform";
 
 class FakeStdin extends PassThrough {
   isTTY = true;
@@ -39,14 +39,16 @@ interface PlatformHarness {
   readonly promptCalls: ReadonlyArray<PromptCall>;
   readonly dequeueCalls: ReadonlyArray<QueueCall>;
   readonly requeueCalls: ReadonlyArray<QueueCall>;
+  readonly executeCalls: ReadonlyArray<unknown>;
   emit(event: AnyEventEnvelope): void;
 }
 
-function makePlatformHarness(): PlatformHarness {
+function makePlatformHarness(executeResult: CommandResult<"kanbanEdit"> = { board: [] }): PlatformHarness {
   const handlers = new Map<EventType, (env: AnyEventEnvelope) => void>();
   const recorded: PromptCall[] = [];
   const dequeues: QueueCall[] = [];
   const requeues: QueueCall[] = [];
+  const executes: Command[] = [];
   const platform: JiePlatform = {
     settings: { defaultTeam: undefined, defaultProvider: undefined, defaultModel: undefined },
     subscribe: <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void) => {
@@ -66,7 +68,10 @@ function makePlatformHarness(): PlatformHarness {
     requeuePrompt: (teamId, agentKey, prompt) => {
       requeues.push({ teamId, agentKey, prompt });
     },
-    execute: (async () => null) as JiePlatform["execute"],
+    execute: (async (command: Command) => {
+      executes.push(command);
+      return command.name === "kanbanEdit" ? executeResult : null;
+    }) as JiePlatform["execute"],
     teams: () => [],
     shutdown: () => Promise.resolve(),
   };
@@ -75,6 +80,7 @@ function makePlatformHarness(): PlatformHarness {
     promptCalls: recorded,
     dequeueCalls: dequeues,
     requeueCalls: requeues,
+    executeCalls: executes,
     emit: (event) => {
       handlers.get(event.type)?.(event);
     },
@@ -89,10 +95,10 @@ interface TuiHarness {
   readonly platform: PlatformHarness;
 }
 
-function bootHarness(): TuiHarness {
+function bootHarness(executeResult?: CommandResult<"kanbanEdit">): TuiHarness {
   const stdin = new FakeStdin();
   const stdout = new FakeStdout();
-  const platform = makePlatformHarness();
+  const platform = makePlatformHarness(executeResult);
   const container = bootTui({ cwd: process.cwd() }, {
     platform: platform.platform,
     homeJieDir: join(tmpdir(), "jie-tui-unit-home"),
@@ -159,6 +165,8 @@ const TEAM_LOADED = Events.teamLoaded({ kind: "system" }, {
   id: "my-team",
   leaderKey: "general-1",
   sessionName: null,
+  currentSessionId: null,
+  kanbanCards: [],
   history: [],
   agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
 });
@@ -167,6 +175,8 @@ const TWO_AGENT_TEAM = Events.teamLoaded({ kind: "system" }, {
   id: "my-team",
   leaderKey: "manager-1",
   sessionName: null,
+  currentSessionId: null,
+  kanbanCards: [],
   history: [],
   agents: [
     { teamId: "my-team", role: "manager", agentKey: "manager-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null },
@@ -232,6 +242,22 @@ describe("bootTui — dequeue pipeline", () => {
     });
     harness!.stateStore.dispatch(Actions.requestRequeue("my-team", "general-1", "abandoned text"));
     expect(harness!.platform.requeueCalls).toEqual([{ teamId: "my-team", agentKey: "general-1", prompt: "abandoned text" }]);
+    harness!.tui.stop();
+  });
+});
+
+describe("bootTui — kanban edit pipeline", () => {
+  test("SAVE_KANBAN_EDIT forwards to platform.execute and applies the returned board", async () => {
+    const board = [{ id: "#1", content: "edited content", status: "pending" as const }];
+    let harness: TuiHarness | null = null;
+    withTTY(true, () => {
+      harness = bootHarness({ board });
+    });
+    harness!.platform.emit(TEAM_LOADED);
+    harness!.stateStore.dispatch(Actions.saveKanbanEdit("#1", "edited content", "content"));
+    await waitFrames(0);
+    expect(harness!.platform.executeCalls.at(-1)).toEqual({ name: "kanbanEdit", teamId: "my-team", cardId: "#1", field: "content", text: "edited content" });
+    expect(harness!.stateStore.getState().kanbanBoard).toEqual(board);
     harness!.tui.stop();
   });
 });

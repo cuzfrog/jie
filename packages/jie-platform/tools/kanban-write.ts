@@ -1,22 +1,25 @@
 import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types";
 import { JiePlatformError } from "../jie-platform-errors";
-import type { KanbanCard } from "../types";
+import type { KanbanStore } from "../storage";
+import type { KanbanCard, KanbanCardWrite } from "../types";
 
 const KANBAN_WRITE_DESCRIPTION = `Update the live kanban board. \`cards\` is the full board (it replaces, not
-merges with, whatever the agent has now). Each card is \`{ content, status, active_form? }\`;
+merges with, whatever the agent has now). Each card is \`{ content, status, active_form?, description? }\`;
 \`status\` is one of \`pending\`, \`in_progress\`, \`completed\` — the three board columns.
 Contract:
 - no duplicate \`content\` strings;
 - no empty \`content\`.
-The returned \`details\` carries the same board under \`kind: "kanban"\` so the TUI can render
-the board from the same payload.`;
+The returned \`details\` carries the board under \`kind: "kanban"\` so the TUI can render
+the board from the same payload. Cards already on the board keep their ids; new cards get
+platform-assigned ids (e.g. \`#1\`).`;
 
 interface KanbanWriteInput {
-  cards: ReadonlyArray<KanbanCard>;
+  cards: ReadonlyArray<KanbanCardWrite>;
 }
 
-export function createKanbanWriteTool(): Tool<KanbanWriteInput> {
+export function createKanbanWriteTool(options: { kanbanStore: KanbanStore }): Tool<KanbanWriteInput> {
+  const { kanbanStore } = options;
   return {
     name: "kanban_write",
     description: KANBAN_WRITE_DESCRIPTION,
@@ -32,21 +35,23 @@ export function createKanbanWriteTool(): Tool<KanbanWriteInput> {
             Type.Literal("completed"),
           ]),
           active_form: Type.Optional(Type.String()),
+          description: Type.Optional(Type.String()),
         }),
       ),
     }),
-    async execute(input: KanbanWriteInput): Promise<ToolResult> {
+    async execute(input: KanbanWriteInput, context): Promise<ToolResult> {
       validate(input.cards);
-      const summary = buildSummary(input.cards);
+      const cards = kanbanStore.replace(context.teamId, context.sessionId, input.cards);
+      const summary = buildSummary(cards);
       return {
         content: summary,
-        details: { kind: "kanban", cards: input.cards },
+        details: { kind: "kanban", cards },
       };
     },
   };
 }
 
-function validate(cards: ReadonlyArray<KanbanCard>): void {
+function validate(cards: ReadonlyArray<KanbanCardWrite>): void {
   const seen = new Set<string>();
   for (const card of cards) {
     if (card.content.trim() === "") {

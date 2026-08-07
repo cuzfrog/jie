@@ -6,7 +6,7 @@ import {
   type AutocompleteSuggestions,
   type SlashCommand,
 } from "@earendil-works/pi-tui";
-import { EFFORT_LEVELS, type JiePlatform, type SkillInfo } from "@cuzfrog/jie-platform";
+import { EFFORT_LEVELS, type JiePlatform, type KanbanCard, type SkillInfo } from "@cuzfrog/jie-platform";
 import { COMMAND_METADATA } from "../command-metadata";
 import { matchesModelFilter } from "../model-filter";
 import { filterFiles, type ScannedFile } from "../file-mention";
@@ -112,6 +112,7 @@ function slashCommands(
     if (meta.name === "login") return { ...meta, getArgumentCompletions: (prefix) => providerItems(platform, prefix) };
     if (meta.name === "logout") return { ...meta, getArgumentCompletions: (prefix) => logoutItems(platform, prefix) };
     if (meta.name === "effort") return { ...meta, getArgumentCompletions: async (prefix) => effortItems(prefix) };
+    if (meta.name === "kanban") return { ...meta, getArgumentCompletions: (argumentText) => kanbanItems(stateStore, argumentText) };
     return { ...meta };
   });
 }
@@ -235,6 +236,39 @@ function effortItems(prefix: string): AutocompleteItem[] | null {
     .filter((level) => hasPrefix(level, prefix))
     .map((level): AutocompleteItem => ({ value: level, label: level }));
   return items.length === 0 ? null : items;
+}
+
+const KANBAN_SUBCOMMANDS: ReadonlyArray<{ readonly name: string; readonly description: string }> = [
+  { name: "add", description: "[--title <title>] <description>" },
+  { name: "remove", description: "<cardId>" },
+  { name: "complete", description: "<cardId>" },
+];
+
+function kanbanItems(stateStore: StateStore, argumentText: string): AutocompleteItem[] | null {
+  const state = stateStore.getState();
+  const board = state.kanbanBoard;
+  const trimmed = argumentText.trim();
+  if (trimmed === "") return KANBAN_SUBCOMMANDS.map(subcommandItem);
+  const spaceIndex = trimmed.indexOf(" ");
+  const subcommand = spaceIndex === -1 ? trimmed : trimmed.slice(0, spaceIndex);
+  const rest = spaceIndex === -1 ? "" : trimmed.slice(spaceIndex + 1);
+  if (subcommand.toLowerCase() === "add") return null;
+  if (subcommand.toLowerCase() === "remove" || subcommand.toLowerCase() === "complete") {
+    const cards = board.filter((card) => hasPrefix(card.id, rest));
+    if (cards.length === 0) return null;
+    return cards.map((card) => kanbanCardItem(card, subcommand));
+  }
+  const matches = KANBAN_SUBCOMMANDS.filter((item) => hasPrefix(item.name, subcommand));
+  if (matches.length === 0) return null;
+  return matches.map(subcommandItem);
+}
+
+function subcommandItem(item: { readonly name: string; readonly description: string }): AutocompleteItem {
+  return { value: item.name, label: item.name, description: item.description };
+}
+
+function kanbanCardItem(card: KanbanCard, subcommand: string): AutocompleteItem {
+  return { value: `${subcommand} ${card.id}`, label: card.id, description: card.content };
 }
 
 function targetAgentSkills(stateStore: StateStore): ReadonlyArray<SkillInfo> {

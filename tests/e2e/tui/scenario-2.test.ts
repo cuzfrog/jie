@@ -82,20 +82,23 @@ describe("Scenario 2 — pass work in a team", () => {
     expect(snapshotConversations(harness)).toEqual(before);
   });
 
-  test("kanban_write feeds the cards; ctrl+k toggles the kanban panel, excluding the team panel", async () => {
+  test("kanban_write feeds the cards; ctrl+k cycles list, panel, hidden, excluding the team panel", async () => {
     await sendLine(harness.stdin, "/team my-team");
     await waitForTeam(harness, "my-team");
     await waitForFocusedAgent(harness, "my-team:manager-1");
     await submitAndWaitForAgentIdle(harness, "Update your kanban board with one in-progress card", "my-team:manager-1");
-    expect(harness.stateStore.getState().agents.get("my-team:manager-1")?.cards).toEqual([{ content: "write the report", status: "in_progress" }]);
+    expect(harness.stateStore.getState().kanbanBoard).toEqual([{ id: "#1", content: "write the report", status: "in_progress" }]);
     await sendCmd(harness.stdin, "\x0b");
-    await waitForUi(harness, (state) => state.kanbanPanelVisible && !state.teamPanelVisible, "kanban panel visible, team panel hidden");
+    await waitForUi(harness, (state) => state.kanbanView === "list", "kanban list view");
+    await sendCmd(harness.stdin, "\x0b");
+    await waitForUi(harness, (state) => state.kanbanView === "panel" && !state.teamPanelVisible, "kanban panel visible, team panel hidden");
     await sendCmd(harness.stdin, "\x1b[D");
-    await waitForUi(harness, (state) => state.teamPanelVisible && !state.kanbanPanelVisible, "team panel visible, kanban panel hidden");
     await sendCmd(harness.stdin, "\x0b");
-    await waitForUi(harness, (state) => state.kanbanPanelVisible && !state.teamPanelVisible && state.teamCursorAgentId === null, "kanban panel visible, team cursor cleared");
-    await sendCmd(harness.stdin, "\x0b");
-    await waitForUi(harness, (state) => !state.kanbanPanelVisible, "kanban panel hidden");
+    await waitForUi(harness, (state) => state.kanbanView === "hidden" && !state.teamPanelVisible, "left ignored at the panel; ctrl+k hides it");
+    await sendCmd(harness.stdin, "\x1b[D");
+    await waitForUi(harness, (state) => state.teamPanelVisible && state.kanbanView === "hidden", "team panel visible once kanban is hidden");
+    await sendCmd(harness.stdin, "\x1b[D");
+    await waitForUi(harness, (state) => !state.teamPanelVisible, "team panel hidden");
   });
 
   test("ctrl+d on an empty editor quits cleanly", async () => {

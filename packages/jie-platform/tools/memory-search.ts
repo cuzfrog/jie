@@ -29,7 +29,7 @@ export function createMemorySearchTool(deps: { memoryStore: MemoryStore; setting
       if (query === "") return { content: "no matching memories" };
       let atoms: ReadonlyArray<MemoryAtom>;
       try {
-        atoms = await deps.memoryStore.search(query, executionContext.teamId, input.limit ?? 5);
+        atoms = deps.memoryStore.search(query, executionContext.teamId, input.limit ?? 5);
       } catch {
         return { content: "no matching memories" };
       }

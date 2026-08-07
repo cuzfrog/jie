@@ -20,7 +20,7 @@ export class Footer implements Component {
     const identity = style("accent")(`${state.cwd ?? ""} (${branch}${state.gitDirty ? "*" : ""})`);
     const teamAgent = style("muted")(`${state.teamId ?? "no-team"}:${focused === null ? "—" : focused.agentKey}`);
     const identityLine = rightAligned(identity, teamAgent, w);
-    if (state.teamId !== null && (state.teamPanelVisible || state.kanbanPanelVisible)) return [identityLine];
+    if (state.teamId !== null && (state.teamPanelVisible || state.kanbanView === "panel")) return [identityLine];
     const stats: string[] = [style(contextSegmentColor(focused))(contextSegmentText(focused))];
     const queue = formatQueueIndicator(focused === null ? null : focused.queue);
     if (queue !== null) stats.push(style("warning")(queue));

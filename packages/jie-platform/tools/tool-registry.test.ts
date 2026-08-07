@@ -2,7 +2,7 @@ import { Type } from "typebox";
 import type { SettingsStore } from "../config";
 import type { EventManager } from "../event";
 import type { MemoryStore } from "../memory";
-import type { ArtifactStore } from "../storage";
+import type { ArtifactStore, KanbanStore } from "../storage";
 import { InMemoryToolRegistry, type ToolRegistry } from "./tool-registry";
 import type { Tool, ToolResult } from "./types";
 
@@ -27,6 +27,16 @@ const settingsStore = vi.mocked<SettingsStore>({
   setModelFilters: vi.fn(),
 });
 
+const kanbanStore = vi.mocked<KanbanStore>({
+  load: vi.fn(),
+  replace: vi.fn(),
+  add: vi.fn(),
+  remove: vi.fn(),
+  complete: vi.fn(),
+  editContent: vi.fn(),
+  editDescription: vi.fn(),
+});
+
 function makeTool(name: string): Tool {
   return {
     name,
@@ -40,7 +50,7 @@ function makeTool(name: string): Tool {
 }
 
 function makeReg(): ToolRegistry {
-  return new InMemoryToolRegistry("/tmp", eventManager, artifactStore, memoryStore, settingsStore);
+  return new InMemoryToolRegistry("/tmp", eventManager, artifactStore, memoryStore, settingsStore, kanbanStore);
 }
 
 describe("InMemoryToolRegistry", () => {

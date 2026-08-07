@@ -1,4 +1,5 @@
 import { TUI, visibleWidth, type Editor, type Terminal } from "@earendil-works/pi-tui";
+import { type KanbanCard } from "@cuzfrog/jie-platform";
 import { type JieAutocompleteProvider, type JieSuggestions } from "../../autocomplete";
 import { Actions, TuiState, type AgentId, type StateStore } from "../../state";
 import { makeAgentUiState, makeTuiState } from "../../test";
@@ -258,6 +259,133 @@ describe("JieEditor — session name border label", () => {
     expect(stripAnsi(editor.render(5)[0]!)).toBe("─".repeat(5));
   });
 });
+
+describe("JieEditor — kanban card edit", () => {
+  const BOARD: ReadonlyArray<KanbanCard> = [{ id: "#1", content: "write report", status: "pending", description: "cover Q3" }];
+
+  function editingState(kanbanEdit: string | null, field: "content" | "description" = "content"): TuiState {
+    return makeTuiState({ kanbanBoard: BOARD, kanbanEdit, kanbanEditField: field });
+  }
+
+  test("committing an edit captures the draft and pre-fills the card content", () => {
+    stateStore.getState.mockReturnValue(editingState("#1"));
+    const { editor } = bootEditor();
+    editor.handleInput("draft");
+    notifyKanbanState(editingState("#1"));
+    expect(editor.getText()).toBe("write report");
+  });
+
+  test("typing during an edit extends the card content", () => {
+    stateStore.getState.mockReturnValue(editingState("#1"));
+    const { editor } = bootEditor();
+    notifyKanbanState(editingState("#1"));
+    editor.handleInput("!");
+    expect(editor.getText()).toBe("write report!");
+  });
+
+  test("enter saves the edit with the card id and content, then restores the draft", () => {
+    stateStore.getState.mockReturnValue(editingState("#1"));
+    const { editor } = bootEditor();
+    editor.handleInput("draft");
+    notifyKanbanState(editingState("#1"));
+    editor.handleInput("\r");
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.saveKanbanEdit("#1", "write report", "content"));
+    notifyKanbanState(editingState(null));
+    expect(editor.getText()).toBe("draft");
+  });
+
+  test("ctrl+s saves the edit without submitting a prompt", () => {
+    stateStore.getState.mockReturnValue(editingState("#1"));
+    const { editor } = bootEditor();
+    notifyKanbanState(editingState("#1"));
+    editor.handleInput("\x13");
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.saveKanbanEdit("#1", "write report", "content"));
+    expect(stateStore.dispatch).not.toHaveBeenCalledWith(Actions.submitEditorText("write report"));
+  });
+
+  test("committing an edit of the description pre-fills and saves the description", () => {
+    stateStore.getState.mockReturnValue(editingState("#1", "description"));
+    const { editor } = bootEditor();
+    editor.handleInput("draft");
+    notifyKanbanState(editingState("#1", "description"));
+    expect(editor.getText()).toBe("cover Q3");
+    editor.handleInput(" extended");
+    editor.handleInput("\r");
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.saveKanbanEdit("#1", "cover Q3 extended", "description"));
+  });
+
+  test("esc cancels the edit and restores the draft", () => {
+    stateStore.getState.mockReturnValue(editingState("#1"));
+    const { editor } = bootEditor();
+    editor.handleInput("draft");
+    notifyKanbanState(editingState("#1"));
+    editor.handleInput("\x1b");
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.cancelKanbanEdit());
+    notifyKanbanState(editingState(null));
+    expect(editor.getText()).toBe("draft");
+  });
+
+  test("ctrl+c cancels the edit instead of quitting", () => {
+    stateStore.getState.mockReturnValue(editingState("#1"));
+    const { editor } = bootEditor();
+    notifyKanbanState(editingState("#1"));
+    editor.handleInput("\x03");
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.cancelKanbanEdit());
+    expect(stateStore.dispatch).not.toHaveBeenCalledWith(Actions.requestQuit());
+  });
+
+  test("the top border shows an editing chip while the card is being edited", () => {
+    stateStore.getState.mockReturnValue(editingState("#1"));
+    const { editor } = bootEditor();
+    notifyKanbanState(editingState("#1"));
+    const raw = editor.render(80)[0]!;
+    expect(stripAnsi(raw).endsWith(" editing #1 ──")).toBe(true);
+    expect(raw).toContain("\x1b[45m editing #1 \x1b[49m");
+  });
+
+  test("autocomplete stays off while editing a card", async () => {
+    stateStore.getState.mockReturnValue(editingState("#1"));
+    const { editor } = bootEditor(fileGhostProvider());
+    notifyKanbanState(editingState("#1"));
+    editor.handleInput("@");
+    editor.handleInput("a");
+    await sleep(30);
+    expect(editor.isShowingAutocomplete()).toBe(false);
+  });
+
+  test("up arrow moves the editor cursor instead of browsing while editing", () => {
+    stateStore.getState.mockReturnValue(editingState("#1"));
+    const { editor } = bootEditor();
+    notifyKanbanState(editingState("#1"));
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("write report");
+    const dequeueType = Actions.requestDequeue("", "", "").type;
+    const dequeues = stateStore.dispatch.mock.calls.map((call) => call[0]).filter((action) => action.type === dequeueType);
+    expect(dequeues).toEqual([]);
+  });
+
+  test("pre-fills an empty string when the description field is missing", () => {
+    const boardWithoutDesc: ReadonlyArray<KanbanCard> = [{ id: "#1", content: "write report", status: "pending" }];
+    stateStore.getState.mockReturnValue(makeTuiState({ kanbanBoard: boardWithoutDesc, kanbanEdit: "#1", kanbanEditField: "description" }));
+    const { editor } = bootEditor();
+    notifyKanbanState(makeTuiState({ kanbanBoard: boardWithoutDesc, kanbanEdit: "#1", kanbanEditField: "description" }));
+    expect(editor.getText()).toBe("");
+  });
+
+  test("pre-fills an empty string when the edited card is not on the board", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ kanbanBoard: [], kanbanEdit: "#1", kanbanEditField: "content" }));
+    const { editor } = bootEditor();
+    notifyKanbanState(makeTuiState({ kanbanBoard: [], kanbanEdit: "#1", kanbanEditField: "content" }));
+    expect(editor.getText()).toBe("");
+  });
+});
+
+function notifyKanbanState(afterState: TuiState): void {
+  const calls = stateStore.subscribe.mock.calls;
+  const callback = calls[calls.length - 1]?.[0];
+  if (callback === undefined) throw new Error("editor subscription not captured");
+  void callback(Actions.cycleKanbanView(), afterState, afterState);
+}
 
 describe("JieEditor — prompt history", () => {
   test("up and down arrows walk submitted prompts and keep the store in sync", () => {

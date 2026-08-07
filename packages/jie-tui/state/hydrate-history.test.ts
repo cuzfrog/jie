@@ -1,4 +1,4 @@
-import type { AgentMessage, UserIngressMessage } from "@cuzfrog/jie-platform";
+import type { AgentMessage, ToolResultDetails, UserIngressMessage } from "@cuzfrog/jie-platform";
 import type { Usage } from "@earendil-works/pi-ai";
 import { hydrateHistory } from "./hydrate-history";
 
@@ -30,7 +30,7 @@ function assistantToolCall(id: string, name: string, args: Record<string, unknow
     api: "openai", provider: "openai", model: "m", usage: usage(), stopReason: "toolUse", timestamp: 0,
   };
 }
-function toolResult(toolCallId: string, toolName: string, text: string, isError = false, details?: unknown): AgentMessage {
+function toolResult(toolCallId: string, toolName: string, text: string, isError = false, details?: ToolResultDetails | null): AgentMessage {
   return { role: "toolResult", toolCallId, toolName, content: [{ type: "text", text }], isError, details, timestamp: 0 };
 }
 function compactionSummary(summary: string, tokensBefore: number): AgentMessage {
@@ -45,7 +45,7 @@ function usage(): Usage {
 
 describe("hydrateHistory", () => {
   test("empty messages yields empty history and null current turn", () => {
-    expect(hydrateHistory([], 0)).toEqual({ history: [], currentTurn: null, compactionMarker: null, cards: [], nextSeq: 0 });
+    expect(hydrateHistory([], 0)).toEqual({ history: [], currentTurn: null, compactionMarker: null, nextSeq: 0 });
   });
 
   test("single completed turn becomes currentTurn with empty history", () => {
@@ -114,8 +114,32 @@ describe("hydrateHistory", () => {
       outputTruncated: false,
       durationMs: undefined,
       error: null,
-      details: undefined,
+      details: null,
     }]);
+  });
+
+  test("tool result details pass through to the card", () => {
+    const details: ToolResultDetails = { kind: "diff", path: "a.txt", replacementsCount: 1, beforeBytes: 2, afterBytes: 3, diff: "-x\n+y" };
+    const result = hydrateHistory([
+      user("run"), assistantToolCall("c1", "edit", {}), toolResult("c1", "edit", "ok", false, details),
+    ], 0);
+    expect(result.currentTurn?.cards[0]?.details).toEqual(details);
+  });
+
+  test("non-diff details are dropped at the persisted-message seam", () => {
+    const kanban: ToolResultDetails = { kind: "kanban", cards: [] };
+    const result = hydrateHistory([
+      user("run"), assistantToolCall("c1", "kanban_write", {}), toolResult("c1", "kanban_write", "ok", false, kanban),
+    ], 0);
+    expect(result.currentTurn?.cards[0]?.details).toBeNull();
+  });
+
+  test("malformed details are dropped at the persisted-message seam", () => {
+    const message: AgentMessage = {
+      role: "toolResult", toolCallId: "c1", toolName: "bash", content: [{ type: "text", text: "ok" }], isError: false, details: "garbage", timestamp: 0,
+    };
+    const result = hydrateHistory([user("run"), assistantToolCall("c1", "bash", {}), message], 0);
+    expect(result.currentTurn?.cards[0]?.details).toBeNull();
   });
 
   test("tool error sets error and nulls output", () => {
@@ -131,21 +155,6 @@ describe("hydrateHistory", () => {
     const result = hydrateHistory([user("pending")], 0);
     expect(result.history).toEqual([]);
     expect(result.currentTurn).toEqual({ userPrompt: "pending", cards: [], blocks: [], streamId: null, seq: 0 });
-    expect(result.cards).toEqual([]);
-  });
-
-  test("restores cards from the last kanban tool-result details", () => {
-    const cards = [
-      { content: "a", status: "completed" as const },
-      { content: "b", status: "in_progress" as const, active_form: "doing b" },
-    ];
-    const result = hydrateHistory([
-      user("plan"),
-      assistantToolCall("c1", "kanban", {}),
-      toolResult("c1", "kanban", "ok", false, { kind: "kanban", cards }),
-      assistantText("done"),
-    ], 0);
-    expect(result.cards).toEqual(cards);
   });
 
   test("a leading compaction summary becomes the marker consuming the first seq, turns number after it", () => {
@@ -166,7 +175,6 @@ describe("hydrateHistory", () => {
       history: [],
       currentTurn: null,
       compactionMarker: { seq: 3, summary: "the summary", tokensBefore: 500 },
-      cards: [],
       nextSeq: 4,
     });
   });

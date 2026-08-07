@@ -81,7 +81,7 @@ const settingsStore = vi.mocked<SettingsStore>({
 
 const llmService = vi.mocked<LlmService>({ complete: vi.fn(async () => "") });
 
-const memoryStore = vi.mocked<MemoryStore>({ add: vi.fn(), search: vi.fn(), top: vi.fn(async () => []) });
+const memoryStore = vi.mocked<MemoryStore>({ add: vi.fn(), search: vi.fn(), top: vi.fn(() => []) });
 
 const memoryExtractor = vi.mocked<MemoryExtractor>({ extract: vi.fn(async () => {}) });
 

@@ -3,7 +3,7 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import type { AgentBody, AgentBodyParams } from "../core";
 import { type EventManager, Events } from "../event";
 import { JiePlatformError } from "../jie-platform-errors";
-import type { SessionSummary, TranscriptStore } from "../storage";
+import type { KanbanStore, SessionSummary, TranscriptStore } from "../storage";
 import { type ModelRegistry, type SettingsStore } from "../config";
 import type { SkillManager } from "../skills";
 import { type AgentSoul, type TeamBlueprint, type TeamBlueprintLocation, BUILTIN_DEFAULT_SOLO_TEAM_ID } from "./types";
@@ -21,6 +21,7 @@ export interface TeamManager {
   agents(teamId: string): ReadonlyArray<AgentInfo>;
   listSessions(teamId: string): ReadonlyArray<SessionSummary>;
   renameSession(teamId: string, name: string): void;
+  currentSessionId(teamId: string): string | null;
   stop(): void;
 }
 
@@ -36,6 +37,7 @@ export class TeamManagerImpl implements TeamManager {
     private readonly settingsStore: SettingsStore,
     private readonly modelRegistry: ModelRegistry,
     private readonly transcriptStore: TranscriptStore,
+    private readonly kanbanStore: KanbanStore,
     private readonly skillManager: SkillManager,
     private readonly agentBodyFactory: (params: AgentBodyParams) => AgentBody,
     private readonly resumeSessionId: string | undefined = undefined,
@@ -112,6 +114,10 @@ export class TeamManagerImpl implements TeamManager {
       throw new JiePlatformError("NO_TEAM", { detail: `no session loaded for team '${teamId}'` });
     }
     this.transcriptStore.renameSession(sessionId, trimmed);
+  }
+
+  currentSessionId(teamId: string): string | null {
+    return this.sessionIds.get(teamId) ?? null;
   }
 
   stop(): void {
@@ -260,8 +266,9 @@ export class TeamManagerImpl implements TeamManager {
       });
     }
     const history: AgentHistory[] = bodies.map((b) => ({ agentKey: b.identity.agentKey, messages: b.messages() }));
-    const sessionId = this.sessionIds.get(id);
-    const sessionName = sessionId === undefined ? null : this.transcriptStore.sessionName(sessionId);
-    return { id, leaderKey: leader.agentKey, sessionName, agents: identities, history };
+    const sessionId = this.sessionIds.get(id) ?? null;
+    const sessionName = sessionId === null ? null : this.transcriptStore.sessionName(sessionId);
+    const kanbanCards = sessionId === null ? [] : this.kanbanStore.load(id, sessionId);
+    return { id, leaderKey: leader.agentKey, sessionName, currentSessionId: sessionId, agents: identities, history, kanbanCards };
   }
 }
