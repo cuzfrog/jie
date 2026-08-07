@@ -1,5 +1,5 @@
 import { logger } from "@cuzfrog/jie-utils";
-import { type LoadSkillsOptions, loadSkills } from "./load-skills";
+import { loadSkills } from "./load-skills";
 import type { Skill, SkillManager } from "./types";
 
 const log = logger.getSubLogger({ name: "jie.platform.skills" });
@@ -7,13 +7,17 @@ const log = logger.getSubLogger({ name: "jie.platform.skills" });
 export class SkillManagerImpl implements SkillManager {
   private skills = new Map<string, Skill>();
   private readonly globs = new Map<string, Bun.Glob>();
+  private readonly homeSkillsDir: string;
+  private readonly projectSkillsDir: string | null;
 
-  constructor(private readonly options: LoadSkillsOptions) {
+  constructor(homeSkillsDir: string, projectSkillsDir: string | null) {
+    this.homeSkillsDir = homeSkillsDir;
+    this.projectSkillsDir = projectSkillsDir;
     this.reload();
   }
 
   reload(): void {
-    const result = loadSkills(this.options);
+    const result = loadSkills({ homeSkillsDir: this.homeSkillsDir, projectSkillsDir: this.projectSkillsDir });
     for (const diagnostic of result.diagnostics) {
       log.warn(`skill at ${diagnostic.path} skipped: ${diagnostic.message}`);
     }

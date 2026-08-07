@@ -19,24 +19,17 @@ export interface MemoryExtractor {
   extract(input: ExtractionInput): Promise<void>;
 }
 
-interface MemoryExtractorDeps {
-  readonly llmService: LlmService;
-  readonly memoryStore: MemoryStore;
-  readonly modelRegistry: ModelRegistry;
-  readonly settingsStore: SettingsStore;
-}
-
 export class MemoryExtractorImpl implements MemoryExtractor {
   private readonly llmService: LlmService;
   private readonly memoryStore: MemoryStore;
   private readonly modelRegistry: ModelRegistry;
   private readonly settingsStore: SettingsStore;
 
-  constructor(deps: MemoryExtractorDeps) {
-    this.llmService = deps.llmService;
-    this.memoryStore = deps.memoryStore;
-    this.modelRegistry = deps.modelRegistry;
-    this.settingsStore = deps.settingsStore;
+  constructor(llmService: LlmService, memoryStore: MemoryStore, modelRegistry: ModelRegistry, settingsStore: SettingsStore) {
+    this.llmService = llmService;
+    this.memoryStore = memoryStore;
+    this.modelRegistry = modelRegistry;
+    this.settingsStore = settingsStore;
   }
 
   async extract(input: ExtractionInput): Promise<void> {

@@ -44,7 +44,7 @@ function makeInput(overrides: Partial<ExtractionInput> = {}): ExtractionInput {
 }
 
 function makeService(): MemoryExtractorImpl {
-  return new MemoryExtractorImpl({ llmService, memoryStore, modelRegistry, settingsStore });
+  return new MemoryExtractorImpl(llmService, memoryStore, modelRegistry, settingsStore);
 }
 
 beforeEach(() => {

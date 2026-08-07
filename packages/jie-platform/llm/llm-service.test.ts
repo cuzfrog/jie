@@ -52,7 +52,7 @@ function makeInput(overrides: Partial<LlmTaskInput> = {}): LlmTaskInput {
 const call = vi.fn(async (_input: LlmTaskInput, _apiKey: string | undefined, _signal: AbortSignal | undefined): Promise<AssistantMessage> => makeResponse("ok"));
 
 function makeService(): LlmService {
-  return new LlmServiceImpl({ modelRegistry, call });
+  return new LlmServiceImpl(modelRegistry, call);
 }
 
 beforeEach(() => {
