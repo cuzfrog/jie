@@ -97,6 +97,9 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 
 (Write temporary files to `./tmp/` only if you want me to reivew, otherwise write to `/tmp/<space>/`)
 
+## Backwards compatibility
+Since we are still in dev phase, ignore backwards compatibility. Simply discard old imcompatible data.
+
 ## File Edit Checklist
 Pre-action:
 - Before adding utility functions/logic, check existing utils for reuse.
