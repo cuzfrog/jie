@@ -148,7 +148,7 @@ describe("_run — tui", () => {
   test("tui boot: loads team, calls bootTui({cwd},{platform}), awaits start, stops platform, returns 0", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    const exit = await captured.run({ kind: "tui", inMemory: false });
+    const exit = await captured.run({ kind: "tui", inMemory: false, debug: false });
     expect(exit).toBe(0);
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: undefined });
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "stop" });
@@ -162,7 +162,7 @@ describe("_run — tui", () => {
   test("tui boot: calls tui.stop() after start resolves (restores terminal state)", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    const exit = await captured.run({ kind: "tui", inMemory: false });
+    const exit = await captured.run({ kind: "tui", inMemory: false, debug: false });
     expect(exit).toBe(0);
     expect(captured.stopCalls.value).toBe(1);
   });
@@ -170,7 +170,7 @@ describe("_run — tui", () => {
   test("tui boot: passes args.team to execute({name:'team'})", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    const exit = await captured.run({ kind: "tui", team: "alpha", inMemory: false });
+    const exit = await captured.run({ kind: "tui", team: "alpha", inMemory: false, debug: false });
     expect(exit).toBe(0);
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: "alpha" });
   });
@@ -178,7 +178,7 @@ describe("_run — tui", () => {
   test("tui boot with resume: passes resumeSessionId in bootPlatform options", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    const exit = await captured.run({ kind: "tui", resume: "sess-1", inMemory: false });
+    const exit = await captured.run({ kind: "tui", resume: "sess-1", inMemory: false, debug: false });
     expect(exit).toBe(0);
     expect(captured.bootPlatform.mock.calls[0]?.[0]).toMatchObject({ resumeSessionId: "sess-1" });
   });
@@ -186,14 +186,14 @@ describe("_run — tui", () => {
   test("tui boot: subscribes to system.error before dispatching", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    await captured.run({ kind: "tui", inMemory: false });
+    await captured.run({ kind: "tui", inMemory: false, debug: false });
     expect(platform.subscribeCalls).toContain("system.error");
   });
 
   test("tui boot: TUI subscribes BEFORE execute({name:'team'}) so system.team.loaded reaches the TUI", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    await captured.run({ kind: "tui", inMemory: false });
+    await captured.run({ kind: "tui", inMemory: false, debug: false });
     const teamExecuteIndex = platform.trace.findIndex(
       (e) => e.kind === "execute" && e.commandName === "team",
     );
@@ -208,7 +208,7 @@ describe("_run — tui", () => {
   test("tui boot: passes git branch and dirty flag from the git snapshot to bootTui", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    const exit = await captured.run({ kind: "tui", inMemory: false });
+    const exit = await captured.run({ kind: "tui", inMemory: false, debug: false });
     expect(exit).toBe(0);
     expect(captured.tuiCalls[0]?.deps.gitBranch).toBe("test-branch");
     expect(captured.tuiCalls[0]?.deps.gitDirty).toBe(true);
@@ -225,7 +225,7 @@ describe("_run — tui", () => {
         bootTui: vi.fn(),
         console: consoleMock,
       });
-    expect(run({ kind: "tui", inMemory: false })).rejects.toThrow("boot blew up");
+    expect(run({ kind: "tui", inMemory: false, debug: false })).rejects.toThrow("boot blew up");
     expect(platform.execute).not.toHaveBeenCalledWith({ name: "stop" });
   });
 });
@@ -277,6 +277,7 @@ describe("_run — print + apiKey", () => {
       timeout: 1,
       json: false,
       inMemory: false,
+      debug: false,
     });
     expect(exit).toBe(3);
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: "default-solo" });
@@ -294,6 +295,7 @@ describe("_run — print + apiKey", () => {
       timeout: 0,
       json: false,
       inMemory: false,
+      debug: false,
     });
     while (!platform.subscribeCalls.includes("agent.idle")) await Bun.sleep(1);
     expect(platform.shutdown).not.toHaveBeenCalled();
@@ -314,6 +316,7 @@ describe("_run — print + apiKey", () => {
       json: false,
       resume: "sess-1",
       inMemory: false,
+      debug: false,
     });
     expect(captured.bootPlatform.mock.calls[0]?.[0]).toMatchObject({ resumeSessionId: "sess-1" });
   });
@@ -328,6 +331,7 @@ describe("_run — print + apiKey", () => {
       json: false,
       apiKey: "sk-fail",
       inMemory: false,
+      debug: false,
     });
     expect(exit).toBe(1);
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "setApiKey", apiKey: "sk-fail" });

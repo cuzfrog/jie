@@ -101,6 +101,8 @@ function bootedContainer(): AwilixContainer<PlatformCradle> {
     llmService: asValue(llmService),
     memoryStore: asValue(memoryStore),
     memoryExtractor: asValue(memoryExtractor),
+    debug: asValue(false),
+    logDir: asValue(null),
   });
   registerCoreModule(container);
   return container;

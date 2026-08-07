@@ -9,6 +9,7 @@ export interface ParsedArgsMap {
     readonly apiKey?: string;
     readonly resume?: string;
     readonly inMemory: boolean;
+    readonly debug: boolean;
   };
   readonly version: { readonly kind: "version" };
   readonly help: { readonly kind: "help" };
@@ -17,7 +18,7 @@ export interface ParsedArgsMap {
   readonly model: { readonly kind: "model"; readonly provider: string; readonly modelId: string };
   readonly team: { readonly kind: "team"; readonly teamId?: string };
   readonly apiKey: { readonly kind: "apiKey"; readonly apiKey: string };
-  readonly tui: { readonly kind: "tui"; readonly team?: string; readonly resume?: string; readonly inMemory: boolean };
+  readonly tui: { readonly kind: "tui"; readonly team?: string; readonly resume?: string; readonly inMemory: boolean; readonly debug: boolean };
   readonly error: { readonly kind: "error"; readonly message: string };
 }
 export type ParsedArgs = ParsedArgsMap[keyof ParsedArgsMap];
@@ -28,31 +29,51 @@ export function parseFlags(argv: string[]): ParsedArgs {
   const dupes = new Set<string>();
   const seen = new Map<string, string>();
 
+  let debug = false;
   const rest = argv.slice();
-  if (rest.length === 0) return { kind: "tui", inMemory: false };
-  const first = rest[0]!;
+  if (rest.length === 0) return { kind: "tui", inMemory: false, debug };
+  let first = rest[0]!;
+  while (first === "--debug") {
+    if (debug) dupes.add("--debug");
+    debug = true;
+    rest.shift();
+    if (rest.length === 0) {
+      const dupErr = errorIfDupes(dupes);
+      if (dupErr !== undefined) return dupErr;
+      return { kind: "tui", inMemory: false, debug };
+    }
+    first = rest[0]!;
+  }
+  const dupErr = errorIfDupes(dupes);
+  if (dupErr !== undefined) return dupErr;
 
   if (first === "--version") return { kind: "version" };
   if (first === "--help" || first === "-h") return { kind: "help" };
   if (first === "--in-memory") {
     const tail = rest.slice(1);
-    if (tail.length === 0) return { kind: "tui", inMemory: true };
+    if (tail.length === 0) return { kind: "tui", inMemory: true, debug };
     const head = tail[0]!;
     if (head === "-p" || head === "--print" || head === "--in-memory") {
       seen.set("--in-memory", "");
-      return parsePrint(tail, dupes, seen, head, true);
+      return parsePrint(tail, dupes, seen, head, true, debug);
     }
-    if (head === "--api-key" || head === "--resume" || head === "--team") {
+    if (head === "--api-key" || head === "--resume" || head === "--team" || head === "--debug") {
       if (tail.length < 2) {
         return { kind: "error", message: `missing argument for ${head}` };
       }
+      if (head === "--debug") {
+        if (debug) dupes.add("--debug");
+        debug = true;
+        seen.set("--in-memory", "");
+        return parsePrint(tail.slice(2), dupes, seen, tail[1]!, true, debug);
+      }
       seen.set("--in-memory", "");
-      return parsePrint(tail.slice(1), dupes, seen, head, true);
+      return parsePrint(tail.slice(1), dupes, seen, head, true, debug);
     }
     if (head.startsWith("-")) {
       return { kind: "error", message: `unknown flag: ${head}` };
     }
-    return { kind: "tui", team: head, inMemory: true };
+    return { kind: "tui", team: head, inMemory: true, debug };
   }
   if (first === "login") return parseLogin(rest.slice(1), dupes, seen);
   if (first === "logout") return parseLogout(rest.slice(1), dupes, seen);
@@ -64,18 +85,18 @@ export function parseFlags(argv: string[]): ParsedArgs {
     if (v === undefined) return { kind: "error", message: "missing argument for --api-key" };
     if (rest.length > 2) {
 
-      return parsePrint(rest.slice(1), dupes, seen, first);
+      return parsePrint(rest.slice(1), dupes, seen, first, false, debug);
     }
     return { kind: "apiKey", apiKey: v };
   }
   if (PRINT_FLAGS.has(first)) {
-    return parsePrint(rest.slice(1), dupes, seen, first);
+    return parsePrint(rest.slice(1), dupes, seen, first, false, debug);
   }
   if (first === "--resume") {
-    return parsePrint(rest.slice(1), dupes, seen, first);
+    return parsePrint(rest.slice(1), dupes, seen, first, false, debug);
   }
   if (first === "--team") {
-    return parsePrint(rest.slice(1), dupes, seen, first);
+    return parsePrint(rest.slice(1), dupes, seen, first, false, debug);
   }
   if (first.startsWith("-")) {
     return { kind: "error", message: `unknown flag: ${first}` };
@@ -158,6 +179,7 @@ function parsePrint(
   seen: Map<string, string>,
   firstFlag: string,
   inMemory = false,
+  debug = false,
 ): ParsedArgs {
   let team: string | undefined;
   let timeout: number | undefined;
@@ -250,6 +272,12 @@ function parsePrint(
       i += 1;
       continue;
     }
+    if (a === "--debug") {
+      if (seen.has("--debug")) dupes.add("--debug");
+      seen.set("--debug", "");
+      debug = true;
+      continue;
+    }
     if (a.startsWith("-")) {
       return { kind: "error", message: `unknown flag: ${a}` };
     }
@@ -265,7 +293,7 @@ function parsePrint(
     const printRequested = seen.has("-p") || seen.has("--print");
     const printOnlyFlags = apiKey !== undefined || timeout !== undefined || json;
     if (!printRequested && !printOnlyFlags && (team !== undefined || resume !== undefined)) {
-      return { kind: "tui", team, resume, inMemory };
+      return { kind: "tui", team, resume, inMemory, debug };
     }
     return { kind: "error", message: "missing instruction for -p/--print" };
   }
@@ -278,5 +306,6 @@ function parsePrint(
     apiKey,
     resume,
     inMemory,
+    debug,
   };
 }

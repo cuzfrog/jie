@@ -58,6 +58,7 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
       projectJieDir,
       inMemory: args.kind === "tui" || args.kind === "print" ? args.inMemory : false,
       resumeSessionId: args.kind === "tui" || args.kind === "print" ? args.resume : undefined,
+      debug: args.kind === "tui" || args.kind === "print" ? args.debug : false,
     },
     deps.bootPlatform,
     deps.console,
@@ -132,7 +133,7 @@ function printHelp(console: Console): void {
 
 Usage:
   jie -p "<instruction>" [--team <id>] [--timeout <s>] [--json]
-                 [--api-key <key>] [--resume <id>] [--in-memory]
+                 [--api-key <key>] [--resume <id>] [--in-memory] [--debug]
   jie --print "<instruction>" ...
 
   jie login --provider <id> --api-key <key>
@@ -143,7 +144,7 @@ Usage:
   jie --api-key <key>
   jie --resume <session_id>
 
-  jie [--team <id>] [--resume <id>] [--in-memory]    # interactive TUI
+  jie [--team <id>] [--resume <id>] [--in-memory] [--debug]    # interactive TUI
   jie --version
   jie --help
 `);

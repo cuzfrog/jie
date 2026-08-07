@@ -2,7 +2,7 @@ import { parseFlags } from "./cli-flags";
 
 describe("parseFlags — help / version", () => {
   test("no args -> tui (TUI not implemented in v1)", () => {
-    expect(parseFlags([])).toEqual({ kind: "tui", inMemory: false });
+    expect(parseFlags([])).toEqual({ kind: "tui", inMemory: false, debug: false });
   });
 
   test("--help -> help", () => {
@@ -92,6 +92,7 @@ describe("parseFlags — -p", () => {
       apiKey: undefined,
       resume: undefined,
       inMemory: false,
+      debug: false,
     });
   });
 
@@ -105,6 +106,7 @@ describe("parseFlags — -p", () => {
       apiKey: undefined,
       resume: undefined,
       inMemory: false,
+      debug: false,
     });
   });
 
@@ -118,6 +120,7 @@ describe("parseFlags — -p", () => {
       apiKey: undefined,
       resume: undefined,
       inMemory: false,
+      debug: false,
     });
   });
 
@@ -131,6 +134,7 @@ describe("parseFlags — -p", () => {
       apiKey: undefined,
       resume: undefined,
       inMemory: false,
+      debug: false,
     });
   });
 
@@ -162,6 +166,7 @@ describe("parseFlags — -p", () => {
       apiKey: "sk-x",
       resume: undefined,
       inMemory: false,
+      debug: false,
     });
   });
 
@@ -207,7 +212,7 @@ describe("parseFlags — -p", () => {
 
 describe("parseFlags — --in-memory", () => {
   test("--in-memory alone -> tui with inMemory true", () => {
-    expect(parseFlags(["--in-memory"])).toEqual({ kind: "tui", inMemory: true });
+    expect(parseFlags(["--in-memory"])).toEqual({ kind: "tui", inMemory: true, debug: false });
   });
 
   test("--in-memory followed by positional -> tui with team + inMemory true", () => {
@@ -215,6 +220,7 @@ describe("parseFlags — --in-memory", () => {
       kind: "tui",
       team: "alpha",
       inMemory: true,
+      debug: false,
     });
   });
 
@@ -223,6 +229,7 @@ describe("parseFlags — --in-memory", () => {
       kind: "tui",
       team: "alpha",
       inMemory: true,
+      debug: false,
     });
   });
 
@@ -236,6 +243,7 @@ describe("parseFlags — --in-memory", () => {
       apiKey: undefined,
       resume: undefined,
       inMemory: true,
+      debug: false,
     });
   });
 
@@ -249,6 +257,7 @@ describe("parseFlags — --in-memory", () => {
       apiKey: undefined,
       resume: undefined,
       inMemory: true,
+      debug: false,
     });
   });
 
@@ -262,6 +271,7 @@ describe("parseFlags — --in-memory", () => {
       apiKey: undefined,
       resume: undefined,
       inMemory: true,
+      debug: false,
     });
   });
 
@@ -275,6 +285,7 @@ describe("parseFlags — --in-memory", () => {
       apiKey: undefined,
       resume: undefined,
       inMemory: true,
+      debug: false,
     });
   });
 
@@ -288,6 +299,7 @@ describe("parseFlags — --in-memory", () => {
       apiKey: "k",
       resume: undefined,
       inMemory: true,
+      debug: false,
     });
   });
 
@@ -301,6 +313,7 @@ describe("parseFlags — --in-memory", () => {
       apiKey: undefined,
       resume: "abc",
       inMemory: true,
+      debug: false,
     });
   });
 
@@ -314,6 +327,7 @@ describe("parseFlags — --in-memory", () => {
       apiKey: undefined,
       resume: undefined,
       inMemory: true,
+      debug: false,
     });
   });
 
@@ -348,19 +362,19 @@ describe("parseFlags — --in-memory", () => {
 
 describe("parseFlags — standalone --team / --resume route to the TUI", () => {
   test("--team <id> alone -> tui for that team", () => {
-    expect(parseFlags(["--team", "alpha"])).toEqual({ kind: "tui", team: "alpha", inMemory: false });
+    expect(parseFlags(["--team", "alpha"])).toEqual({ kind: "tui", team: "alpha", inMemory: false, debug: false });
   });
 
   test("--resume <id> alone -> tui resuming the session", () => {
-    expect(parseFlags(["--resume", "sess-1"])).toEqual({ kind: "tui", resume: "sess-1", inMemory: false });
+    expect(parseFlags(["--resume", "sess-1"])).toEqual({ kind: "tui", resume: "sess-1", inMemory: false, debug: false });
   });
 
   test("--in-memory --resume <id> -> tui in-memory resuming the session", () => {
-    expect(parseFlags(["--in-memory", "--resume", "sess-1"])).toEqual({ kind: "tui", resume: "sess-1", inMemory: true });
+    expect(parseFlags(["--in-memory", "--resume", "sess-1"])).toEqual({ kind: "tui", resume: "sess-1", inMemory: true, debug: false });
   });
 
   test("--resume <id> --in-memory (flag after) -> tui in-memory resuming the session", () => {
-    expect(parseFlags(["--resume", "sess-1", "--in-memory"])).toEqual({ kind: "tui", resume: "sess-1", inMemory: true });
+    expect(parseFlags(["--resume", "sess-1", "--in-memory"])).toEqual({ kind: "tui", resume: "sess-1", inMemory: true, debug: false });
   });
 
   test("--team <id> --resume <sid> -> tui carrying both", () => {
@@ -369,6 +383,7 @@ describe("parseFlags — standalone --team / --resume route to the TUI", () => {
       team: "alpha",
       resume: "sess-1",
       inMemory: false,
+      debug: false,
     });
   });
 
@@ -406,6 +421,41 @@ describe("parseFlags — standalone --team / --resume route to the TUI", () => {
     expect(parseFlags(["--resume", "a", "--resume", "b"])).toEqual({
       kind: "error",
       message: "duplicate flag: --resume",
+    });
+  });
+});
+
+describe("parseFlags — --debug", () => {
+  test("--debug alone -> tui with debug true", () => {
+    expect(parseFlags(["--debug"])).toEqual({ kind: "tui", inMemory: false, debug: true });
+  });
+
+  test("--debug --in-memory -> tui with both flags", () => {
+    expect(parseFlags(["--debug", "--in-memory"])).toEqual({ kind: "tui", inMemory: true, debug: true });
+  });
+
+  test("--debug -p <instruction> -> print with debug true", () => {
+    expect(parseFlags(["--debug", "-p", "go"])).toEqual({
+      kind: "print",
+      instruction: "go",
+      team: undefined,
+      timeout: 300,
+      json: false,
+      apiKey: undefined,
+      resume: undefined,
+      inMemory: false,
+      debug: true,
+    });
+  });
+
+  test("-p <instruction> --debug -> print with debug true", () => {
+    expect(parseFlags(["-p", "go", "--debug"])).toMatchObject({ kind: "print", instruction: "go", debug: true });
+  });
+
+  test("duplicate --debug is rejected", () => {
+    expect(parseFlags(["--debug", "--debug", "-p", "go"])).toEqual({
+      kind: "error",
+      message: "duplicate flag: --debug",
     });
   });
 });

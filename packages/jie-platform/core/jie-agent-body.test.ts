@@ -1,3 +1,6 @@
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import {
   createCompactionSummaryMessage,
   type Agent as PiAgent,
@@ -249,6 +252,7 @@ interface MakeBodyOverrides {
   systemContextBlock?: string;
   compactor?: Compactor;
   getApiKey?: (provider: string) => string | undefined;
+  logDir?: string | null;
 }
 
 interface Harness {
@@ -354,6 +358,7 @@ function makeHarness(): Harness {
       memoryStore,
       memoryExtractor,
       settingsStore,
+      logDir: overrides.logDir ?? null,
     });
   };
   const fireEvent = (event: PiAgentEvent): void => {
@@ -2111,5 +2116,27 @@ describe("JieAgentBody — stop()", () => {
     await flush();
     expect(h.prompt.mock.calls.length).toBe(1);
     body.stop();
+  });
+});
+
+describe("JieAgentBody — debug logging", () => {
+  test("writes agent loop events to <logDir>/<agentKey>.log when logDir is provided", () => {
+    const h = makeHarness();
+    const logDir = mkdtempSync(join(tmpdir(), "jie-body-log-"));
+    try {
+      const body = h.makeBody({ logDir });
+      h.fireEvent({ type: "agent_start" });
+      h.fireEvent({ type: "message_start", message: { role: "user", content: [{ type: "text", text: "secret" }] } as unknown as AgentMessage });
+      body.stop();
+
+      const log = readFileSync(join(logDir, "general-1.log"), "utf8");
+      const lines = log.trim().split("\n");
+      expect(lines).toHaveLength(2);
+      expect(JSON.parse(lines[0]!).agentKey).toBe("general-1");
+      expect(JSON.parse(lines[1]!).event).toEqual({ type: "message_start", message: { role: "user" } });
+      expect(log).not.toContain("secret");
+    } finally {
+      rmSync(logDir, { recursive: true, force: true });
+    }
   });
 });

@@ -11,6 +11,7 @@ export interface JiePlatformOptions {
   readonly projectJieDir: string | null;
   readonly resumeSessionId?: string;
   readonly inMemory?: boolean;
+  readonly debug?: boolean;
 }
 
 export interface JiePlatform {
