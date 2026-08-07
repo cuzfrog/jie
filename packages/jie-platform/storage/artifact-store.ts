@@ -70,9 +70,9 @@ export class SqliteArtifactStore implements ArtifactStore {
     );
     if (rows.length === 0) return null;
     return {
-      key: rows[0]![0] as string,
-      content: rows[0]![1] as string,
-      created_at: rows[0]![2] as string,
+      key: expectString(rows[0]![0]),
+      content: expectString(rows[0]![1]),
+      created_at: expectString(rows[0]![2]),
     };
   }
 
@@ -83,8 +83,13 @@ export class SqliteArtifactStore implements ArtifactStore {
       [`${escaped}%`],
     );
     return rows.map((row) => ({
-      key: row[0] as string,
-      created_at: row[1] as string,
+      key: expectString(row[0]),
+      created_at: expectString(row[1]),
     }));
   }
+}
+
+function expectString(value: unknown): string {
+  if (typeof value !== "string") throw new Error(`expected string, got ${typeof value}`);
+  return value;
 }
