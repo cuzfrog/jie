@@ -45,7 +45,7 @@ interface EditInput {
 
 export function createEditTool(dependencies: EditDeps): Tool<EditInput> {
   return {
-    name: "edit",
+    name: "edit_file",
     description: EDIT_DESCRIPTION,
     label: "Edit File",
     parameters: Type.Object({

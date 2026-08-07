@@ -26,6 +26,45 @@ describe("ToolCard", () => {
     expect(view.render(80)).toEqual(["\x1b[32m✓\x1b[39m \x1b[37mbash  12ms\x1b[39m"]);
   });
 
+  test("shows the file path for write_file", () => {
+    const view = new ToolCard(card({
+      name: "write_file",
+      input: JSON.stringify({ path: "src/foo.ts", content: "x" }),
+      durationMs: 12,
+    }), stateStore);
+    const header = view.render(80)[0]!;
+    expect(header).toContain("write_file");
+    expect(header).toContain("src/foo.ts");
+  });
+
+  test("shows the artifact key for write_artifact", () => {
+    const view = new ToolCard(card({
+      name: "write_artifact",
+      input: JSON.stringify({ key: "task-1/review", content: "x" }),
+      durationMs: 5,
+    }), stateStore);
+    const header = view.render(80)[0]!;
+    expect(header).toContain("write_artifact");
+    expect(header).toContain("task-1/review");
+  });
+
+  test("shows the first line of a bash command", () => {
+    const view = new ToolCard(card({
+      name: "bash",
+      input: JSON.stringify({ command: "ls -la\necho done" }),
+    }), stateStore);
+    const header = view.render(80)[0]!;
+    expect(header).toContain("bash");
+    expect(header).toContain("ls -la");
+    expect(header).not.toContain("echo done");
+  });
+
+  test("shows the tool name alone when arguments cannot be parsed", () => {
+    const view = new ToolCard(card({ name: "bash", input: "not-json" }), stateStore);
+    const header = view.render(80)[0]!;
+    expect(header).toBe("\x1b[32m✓\x1b[39m \x1b[37mbash\x1b[39m");
+  });
+
   test("error cards use the error glyph and color", () => {
     const view = new ToolCard(card({ error: "boom" }), stateStore);
     expect(view.render(80)).toEqual(["\x1b[31m✗\x1b[39m \x1b[31mbash\x1b[39m"]);

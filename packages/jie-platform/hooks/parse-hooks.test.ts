@@ -47,10 +47,10 @@ describe("parseHooksConfig — config", () => {
 
   test("global and project groups merge additively, project after global", () => {
     const global = { PreToolUse: [{ matcher: "bash", hooks: [command("g")] }] };
-    const project = { PreToolUse: [{ matcher: "edit", hooks: [command("p")] }] };
+    const project = { PreToolUse: [{ matcher: "edit_file", hooks: [command("p")] }] };
     const matchers = parseConfig(source(global), source(project)).PreToolUse;
     expect(matchers.map((m) => m.hooks[0]!.command)).toEqual(["g", "p"]);
-    expect(matchers.map((m) => m.matcher)).toEqual(["bash", "edit"]);
+    expect(matchers.map((m) => m.matcher)).toEqual(["bash", "edit_file"]);
   });
 
   test("non-command handler types are skipped", () => {

@@ -23,10 +23,8 @@ export class ToolCard implements Component {
     const w = Math.max(1, width);
     const card = this.card;
     const isError = card.error !== undefined && card.error !== null && card.error !== "";
-    const glyph = isError ? style("error")("✗") : style("success")("✓");
-    const duration = card.durationMs !== undefined ? `  ${formatDuration(card.durationMs)}` : "";
-    const header = truncateToWidth(`${glyph} ${style(isError ? "error" : "toolTitle")(`${card.name}${duration}`)}`, w);
     const expanded = this.stateStore.getState().toolCardsExpanded;
+    const header = renderHeader(card, isError, w);
     const lines = [header];
     if (expanded && card.input !== undefined && card.input !== "") {
       lines.push(style("muted")("input:"));
@@ -54,4 +52,48 @@ export class ToolCard implements Component {
 function extractDiff(details: MessageCard["details"]): string | null {
   if (details === null || details === undefined || !("kind" in details) || details.kind !== "diff") return null;
   return details.diff === null || details.diff === "" ? null : details.diff;
+}
+
+const ARG_KEYS = new Map<string, string>([
+  ["bash", "command"],
+  ["read_file", "path"],
+  ["write_file", "path"],
+  ["edit_file", "path"],
+  ["read_artifact", "key"],
+  ["write_artifact", "key"],
+  ["web_search", "query"],
+  ["web_fetch", "url"],
+  ["memory_search", "query"],
+  ["kanban_write", "id"],
+  ["notify", "topic"],
+]);
+
+function renderHeader(card: MessageCard, isError: boolean, width: number): string {
+  const glyph = isError ? style("error")("✗") : style("success")("✓");
+  const titleStyle = isError ? "error" : "toolTitle";
+  const arg = formatToolArg(card.name, card.input, card.inputTruncated);
+  const argPart = arg === "" ? "" : style("muted")(`(${arg})`);
+  const duration = card.durationMs !== undefined ? `  ${formatDuration(card.durationMs)}` : "";
+  const title = argPart === "" ? style(titleStyle)(`${card.name}${duration}`) : style(titleStyle)(card.name) + argPart + style(titleStyle)(duration);
+  return truncateToWidth(`${glyph} ${title}`, width);
+}
+
+function formatToolArg(name: string, input: string | undefined, inputTruncated: boolean | undefined): string {
+  const key = ARG_KEYS.get(name);
+  if (key === undefined || input === undefined || input === "") return "";
+  try {
+    const parsed: unknown = JSON.parse(input);
+    if (!isRecord(parsed)) return "";
+    const value = parsed[key];
+    if (typeof value !== "string") return "";
+    const firstLine = value.split("\n")[0] ?? "";
+    if (firstLine === "") return "";
+    return inputTruncated === true ? `${firstLine}…` : firstLine;
+  } catch {
+    return "";
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

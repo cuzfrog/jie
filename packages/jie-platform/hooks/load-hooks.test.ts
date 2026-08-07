@@ -40,7 +40,7 @@ describe("loadHooksConfig", () => {
     const homeJieDir = makeTempDir("jie-hooks-g-");
     const projectJieDir = makeTempDir("jie-hooks-p-");
     writeSettings(homeJieDir, JSON.stringify({ hooks: { PreToolUse: [{ matcher: "bash", hooks: [{ type: "command", command: "g" }] }] } }));
-    writeSettings(projectJieDir, JSON.stringify({ hooks: { PreToolUse: [{ matcher: "edit", hooks: [{ type: "command", command: "p" }] }] } }));
+    writeSettings(projectJieDir, JSON.stringify({ hooks: { PreToolUse: [{ matcher: "edit_file", hooks: [{ type: "command", command: "p" }] }] } }));
     const result = loadHooksConfig({ homeJieDir, projectJieDir });
     expect(result.config.PreToolUse.map((m) => m.hooks[0]!.command)).toEqual(["g", "p"]);
   });

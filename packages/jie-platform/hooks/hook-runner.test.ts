@@ -32,7 +32,7 @@ function makeRunner(cfg: HooksConfig): { runner: HookRunnerImpl; executor: Retur
 describe("HookRunner — preToolUse", () => {
   test("a matcher that does not match the tool runs nothing and does not block", async () => {
     const { runner, executor } = makeRunner(config({ PreToolUse: [{ matcher: "bash", hooks: [cmd("x")] }] }));
-    const outcome = await runner.preToolUse({ identity: identity(), toolName: "edit", toolInput: {} });
+    const outcome = await runner.preToolUse({ identity: identity(), toolName: "edit_file", toolInput: {} });
     expect(executor.execute).not.toHaveBeenCalled();
     expect(outcome).toEqual({ block: false, reason: null });
   });
