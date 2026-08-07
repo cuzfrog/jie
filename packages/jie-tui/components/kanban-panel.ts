@@ -1,9 +1,9 @@
 import { truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
 import type { KanbanCard, KanbanStatus } from "@cuzfrog/jie-platform";
 import { TuiState, type StateStore } from "../state";
+import { Box } from "./box";
 import { style, type ColorName } from "./themes";
 
-const PANEL_PADDING = 1;
 const COLUMN_GAP = "  ";
 const STATUS_LABELS: { readonly [K in KanbanStatus]: string } = {
   pending: "pending",
@@ -37,23 +37,13 @@ export class KanbanPanel implements Component {
     const state = this.stateStore.getState();
     if (state.teamId === null || state.kanbanView !== "panel") return [];
     const w = Math.max(1, width);
-    const inner = Math.max(1, w - 2 - PANEL_PADDING * 2);
+    const inner = Math.max(1, w - 4);
     const visible = TuiState.kanbanVisibleCards(state);
     const focused = state.kanbanCursor === null ? null : visible.find((card) => card.id === state.kanbanCursor) ?? null;
     const border = style("borderMuted");
-    const horizontal = "─".repeat(Math.max(0, w - 2));
     const expandedTop = state.kanbanExpanded && focused !== null ? renderExpandedTopBorder(focused.id, w, border) : null;
     const rows = state.kanbanExpanded ? renderCardDetail(focused, state.kanbanEditField, inner) : renderKanbanBoard(state, visible, inner);
-    const framed = rows.map((row) => {
-      const padded = fitToWidth(row, inner);
-      return truncateToWidth(`${border("│")} ${padded} ${border("│")}`, w);
-    });
-    return [
-      expandedTop ?? truncateToWidth(border(`┌${horizontal}┐`), w),
-      ...framed,
-      truncateToWidth(border(`└${horizontal}┘`), w),
-      renderHint(state, w),
-    ];
+    return [...new Box(rows, { top: expandedTop ?? undefined }).render(w), renderHint(state, w)];
   }
 
   invalidate(): void {}
