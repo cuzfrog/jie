@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Subsumes ADR 3 (Declarative Blueprints).
+Accepted. Subsumes ADR 3 (Declarative Blueprints). The install-mechanism clauses (no install mechanism, no `jie team install` command, "Day 2 stays open") are superseded by ADR 35, which adds `@cuzfrog/jie-team-installer` and the `jie team add|list|remove` CLI. The core decision - the platform is agnostic of jie-team, and jie-team is a passive content package - is unchanged.
 
 ## Context
 

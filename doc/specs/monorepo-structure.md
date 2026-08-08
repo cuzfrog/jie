@@ -22,23 +22,25 @@ packages/
     container.ts       # Composition root: bootPlatform(options): AwilixContainer<PlatformCradle> (ADR 31)
     jie-platform.ts  # JiePlatform handle interface + implementation (registered in module.ts)
     jie-platform-errors.ts
-  jie-cli/        # CLI entry (jie binary): -p print mode, interactive TUI mode, login/logout/model/team commands
+  jie-cli/        # CLI entry (jie binary): -p print mode, interactive TUI mode, login/logout/model commands, team add/list/remove
   jie-tui/        # Terminal UI (pi-tui-based inline renderer): chat column, editor, footer, slash commands; bootTui(options, deps)
   jie-utils/      # Process-level infra shared by all packages: diagnostic logger (tslog), Console output abstraction
   mock-llm-backend/  # OpenAI-compatible mock LLM server for e2e tests (bun mock:start)
-  jie-team/       # Team-blueprint installer (installBlueprint/listBlueprints) + shipped `default-coders` blueprint (six-role delivery pipeline) (doc/specs/jie-team/)
+  jie-team/       # Shipped team blueprints (the `default-coders` six-role delivery pipeline) - pure content, no code (doc/specs/jie-team/)
+  jie-team-installer/  # Team install/remove: npm/git/file sources → `<id>/TEAM.md` dirs; CLI-side, never imported by platform or jie-team (doc/specs/jie-team-installer/, ADR 35)
   code-lens/      # Standalone MCP server (bin: code-lens): code-architecture facts from SCIP indexes (doc/specs/code-lens/)
 ```
 
 ## Dependencies
 
 ```
-jie-cli  → jie-platform, jie-tui, jie-utils   (composition root: calls bootPlatform/bootTui, hands the handle to the TUI / -p mode)
+jie-cli  → jie-platform, jie-tui, jie-utils, jie-team-installer   (composition root: calls bootPlatform/bootTui, hands the handle to the TUI / -p mode; team add/remove skip the platform boot and use the installer directly)
 jie-tui  → jie-platform, jie-utils, @earendil-works/pi-tui   (platform surface: JiePlatform handle + wire-format types only)
 jie-platform → jie-utils
 mock-llm-backend → jie-utils        (standalone test fixture)
 code-lens → jie-utils               (standalone MCP server; protobufjs for SCIP decoding — runs as a child process, never imported)
-jie-team                            (blueprint data + installer; no runtime dependencies)
+jie-team                            (blueprint data only - pure content, no code, no runtime dependencies)
+jie-team-installer                  (team install/remove - CLI-side; no runtime dependencies, Bun builtins only)
 ```
 
 **Agnosticism rule (ADR 11).** `jie-platform` has zero dependency on `jie-team` — no `import` in any form, including types. The platform reads team blueprints from filesystem paths (`.jie/teams/<id>/`, `~/.jie/teams/<id>/`) plus its built-in `default-solo` fallback; a team is data, not code.
@@ -52,7 +54,7 @@ jie-team                            (blueprint data + installer; no runtime depe
 
 ## Package Entry Points
 
-Every package exports `.` → `./index.ts`; the root `package.json` declares `"bin": { "jie": "packages/jie-cli/index.ts" }`.
+Every code package exports `.` → `./index.ts` (`jie-team` is the exception: pure content with no entry point, consumed by the installer scanning its files); the root `package.json` declares `"bin": { "jie": "packages/jie-cli/index.ts" }`.
 
 `jie-platform/index.ts` re-exports the public surface: `JiePlatform`, `bootPlatform`, `PlatformCradle`, `JiePlatformOptions`, the event protocol types (`EventEnvelope<T>`, `Sender`, `EventType`, topic constants), the command types, and `JiePlatformError` with its codes.
 
@@ -60,7 +62,7 @@ Every package exports `.` → `./index.ts`; the root `package.json` declares `"b
 
 `jie-utils/index.ts` exports `logger` (a tslog instance gated by `JIE_LOG_LEVEL`) and `Console` / `defaultConsole` — the output abstraction CLI commands write through and the logger's transport routes to stderr. It depends on no other jie package; diagnostic logging is orthogonal to app logic and is imported as a module-scope instance, not injected.
 
-`jie-team/index.ts` exports `installBlueprint` / `listBlueprints` — the installer that copies shipped blueprints (the `default-coders` six-role team) into `.jie/teams/`; the blueprint directories live at the package root (`<id>/TEAM.md` + `<role>.md`) and the platform discovers the installed copies from the filesystem (ADR 11 agnosticism).
+`jie-team` has no `index.ts` - it is pure content: the `default-coders` blueprint directories live at the package root (`<id>/TEAM.md` + `<role>.md`) with no code, no install hook, and no runtime surface (ADR 11). `jie-team-installer/index.ts` exports `createTeamInstaller` (and `parseTeamSource`) - the CLI-side installer that resolves an npm/git/file source, copies its `<id>/TEAM.md` directories into `.jie/teams/` (project) or `~/.jie/teams/` (user), and records provenance; the platform later discovers the installed copies from the filesystem (ADR 11 agnosticism, ADR 35).
 
 `code-lens/index.ts` is the minimal library surface (SCIP ingestion + `CodeIndex` model); the executable surface is the `code-lens` bin (`main.ts`), a stdio MCP server the platform spawns as a child process rather than imports.
 
