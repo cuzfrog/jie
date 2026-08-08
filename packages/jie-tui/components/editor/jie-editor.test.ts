@@ -1,4 +1,4 @@
-import { TUI, visibleWidth, type Editor, type Terminal } from "@earendil-works/pi-tui";
+import { TuiMainScreen, visibleWidth, type Editor, type Terminal } from "@earendil-works/pi-tui";
 import { type KanbanCard } from "@cuzfrog/jie-platform";
 import { type JieAutocompleteProvider, type JieSuggestions } from "../../autocomplete";
 import { Actions, TuiState, type AgentId, type StateStore } from "../../state";
@@ -50,7 +50,7 @@ interface EditorHarness {
 }
 
 function bootEditor(provider: JieAutocompleteProvider = autocompleteProvider): EditorHarness {
-  const ui = new TUI(new StubTerminal());
+  const ui = new TuiMainScreen(new StubTerminal());
   const editor = new JieEditor(ui, stateStore, provider, promptHistoryStore);
   const submitted: string[] = [];
   const submit = editor.onSubmit;
