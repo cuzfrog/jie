@@ -1,4 +1,4 @@
-import { ProcessTerminal, TUI, detectCapabilities, setCapabilities, type Terminal } from "@earendil-works/pi-tui";
+import { ProcessTerminal, TuiMainScreen, detectCapabilities, setCapabilities, type TUI, type Terminal } from "@earendil-works/pi-tui";
 import type { StopReason } from "@earendil-works/pi-ai";
 import { type AnyEventEnvelope, type JiePlatform } from "@cuzfrog/jie-platform";
 import { logger } from "@cuzfrog/jie-utils";
@@ -124,7 +124,7 @@ export class TuiImpl implements Tui {
         setCapabilities({ ...detectCapabilities(), hyperlinks: process.env.INK_OSC8 === "1" });
         const stdin = this.stdin ?? process.stdin;
         const terminal: Terminal = this.stdin === undefined ? new ProcessTerminal() : this.terminalFactory(stdin, stdout);
-        const ui = new TUI(terminal);
+        const ui = new TuiMainScreen(terminal);
         this.view = this.viewFactory(ui);
         this.terminal = terminal;
         this.ui = ui;

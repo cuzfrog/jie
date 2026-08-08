@@ -1,5 +1,5 @@
 import { PassThrough } from "node:stream";
-import { Container, TUI } from "@earendil-works/pi-tui";
+import { Container, TuiMainScreen } from "@earendil-works/pi-tui";
 import { Actions } from "../state";
 import { StreamTerminalImpl } from "../stream-terminal";
 import { makeTuiState } from "../test";
@@ -31,7 +31,7 @@ describe("FlushLoader", () => {
 
 function makeFlushLoader(message: string, frames: ReadonlyArray<string>): InstanceType<typeof _FlushLoader> {
   const stdout = Object.assign(new PassThrough(), { columns: 80, rows: 30 });
-  const ui = new TUI(new StreamTerminalImpl(new PassThrough(), stdout));
+  const ui = new TuiMainScreen(new StreamTerminalImpl(new PassThrough(), stdout));
   const identity = (text: string): string => text;
   return new _FlushLoader(ui, identity, identity, message, { frames: [...frames] });
 }
