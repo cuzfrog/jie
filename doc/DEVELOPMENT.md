@@ -3,6 +3,17 @@
 ## Prerequisite
 1. install `bun` 1.3.14
 
+## Install
+From source (no registry publish yet):
+
+```bash
+bun install
+bun link
+jie --version
+```
+
+The first interactive `jie` run offers to install the bundled `default-coders` team into `~/.jie/teams/`; pass `--no-install` to skip.
+
 ## Local LLM setup (optional)
 For manual exploration with a real backend, configure `.jie/models.json` and run `jie -p "..."`.
 
@@ -10,7 +21,7 @@ For manual exploration with a real backend, configure `.jie/models.json` and run
 
 ```bash
 # Unit tests (no LLM required)
-bun test packages
+bun test src
 
 # End-to-end tests (mock LLM backend only)
 bun mock:start # start the mock LLM backend
@@ -24,8 +35,6 @@ Setup:
 - `.jie/models.json`
 
 ```bash
-bun link
-jie --version
 jie -p "Tell me a joke."
 ```
 
