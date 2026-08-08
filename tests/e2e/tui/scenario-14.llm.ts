@@ -1,4 +1,4 @@
-import type { Expectation } from "../../../packages/mock-llm-backend";
+import type { Expectation } from "../../mock-llm-backend";
 
 export const SUMMARY_TEXT = "SUMMARY-OF-BIG-CONVERSATION";
 const CONTINUE_ACK = "COMPACTED-CONTINUATION-OK";

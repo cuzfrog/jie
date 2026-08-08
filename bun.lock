@@ -5,131 +5,25 @@
     "": {
       "name": "@cuzfrog/jie",
       "dependencies": {
-        "@cuzfrog/jie-platform": "workspace:*",
-        "@cuzfrog/jie-tui": "workspace:*",
-      },
-      "devDependencies": {
-        "@earendil-works/pi-agent-core": "catalog:",
-        "@earendil-works/pi-ai": "catalog:",
-        "@types/bun": "catalog:",
-        "@types/node": "catalog:",
-        "awilix": "catalog:",
-        "typebox": "catalog:",
-      },
-    },
-    "packages/code-lens": {
-      "name": "@cuzfrog/code-lens",
-      "dependencies": {
-        "@cuzfrog/jie-utils": "workspace:*",
-        "protobufjs": "catalog:",
-      },
-      "devDependencies": {
-        "@types/bun": "catalog:",
-        "@types/node": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
-    "packages/jie-cli": {
-      "name": "@cuzfrog/jie-cli",
-      "dependencies": {
-        "@cuzfrog/jie-platform": "workspace:*",
-        "@cuzfrog/jie-team-installer": "workspace:*",
-        "@cuzfrog/jie-tui": "workspace:*",
-        "@cuzfrog/jie-utils": "workspace:*",
-        "@earendil-works/pi-agent-core": "catalog:",
-        "@earendil-works/pi-ai": "catalog:",
-        "awilix": "catalog:",
-      },
-      "devDependencies": {
-        "@types/bun": "catalog:",
-        "@types/node": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
-    "packages/jie-platform": {
-      "name": "@cuzfrog/jie-platform",
-      "dependencies": {
-        "@cuzfrog/jie-utils": "workspace:*",
-        "@earendil-works/pi-agent-core": "catalog:",
-        "@earendil-works/pi-ai": "catalog:",
-        "awilix": "catalog:",
-        "node-html-parser": "catalog:",
-        "typebox": "catalog:",
-        "ulid": "catalog:",
-        "yaml": "catalog:",
-      },
-      "devDependencies": {
-        "@types/bun": "catalog:",
-        "@types/node": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
-    "packages/jie-team": {
-      "name": "@cuzfrog/jie-team",
-    },
-    "packages/jie-team-installer": {
-      "name": "@cuzfrog/jie-team-installer",
-      "devDependencies": {
-        "@types/bun": "catalog:",
-        "@types/node": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
-    "packages/jie-tui": {
-      "name": "@cuzfrog/jie-tui",
-      "dependencies": {
-        "@cuzfrog/jie-platform": "workspace:*",
-        "@cuzfrog/jie-utils": "workspace:*",
-        "@earendil-works/pi-tui": "catalog:",
-        "awilix": "catalog:",
+        "@earendil-works/pi-agent-core": "0.84.1",
+        "@earendil-works/pi-ai": "0.84.1",
+        "@earendil-works/pi-tui": "0.84.1",
+        "awilix": "13.0.5",
         "cli-highlight": "2.1.11",
+        "node-html-parser": "6.1.13",
+        "protobufjs": "8.7.1",
+        "tslog": "4.11.0",
+        "typebox": "1.3.7",
+        "ulid": "2.4.0",
+        "yaml": "2.9.0",
       },
       "devDependencies": {
-        "@types/bun": "catalog:",
-        "@types/node": "catalog:",
-        "@xterm/headless": "catalog:",
-        "typescript": "catalog:",
+        "@types/bun": "1.3.14",
+        "@types/node": "26.1.2",
+        "@xterm/headless": "5.5.0",
+        "typescript": "7.0.2",
       },
     },
-    "packages/jie-utils": {
-      "name": "@cuzfrog/jie-utils",
-      "dependencies": {
-        "tslog": "catalog:",
-      },
-      "devDependencies": {
-        "@types/bun": "catalog:",
-        "@types/node": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
-    "packages/mock-llm-backend": {
-      "name": "@cuzfrog/mock-llm-backend",
-      "dependencies": {
-        "@cuzfrog/jie-utils": "workspace:*",
-        "awilix": "catalog:",
-      },
-      "devDependencies": {
-        "@types/bun": "catalog:",
-        "@types/node": "catalog:",
-        "typescript": "catalog:",
-      },
-    },
-  },
-  "catalog": {
-    "@earendil-works/pi-agent-core": "0.84.1",
-    "@earendil-works/pi-ai": "0.84.1",
-    "@earendil-works/pi-tui": "0.84.1",
-    "@types/bun": "1.3.14",
-    "@types/node": "26.1.2",
-    "@xterm/headless": "5.5.0",
-    "awilix": "13.0.5",
-    "node-html-parser": "6.1.13",
-    "protobufjs": "8.7.1",
-    "tslog": "4.11.0",
-    "typebox": "1.3.7",
-    "typescript": "7.0.2",
-    "ulid": "2.4.0",
-    "yaml": "2.9.0",
   },
   "packages": {
     "@anthropic-ai/sdk": ["@anthropic-ai/sdk@0.91.1", "", { "dependencies": { "json-schema-to-ts": "^3.1.1" }, "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" }, "optionalPeers": ["zod"], "bin": { "anthropic-ai-sdk": "bin/cli" } }, "sha512-LAmu761tSN9r66ixvmciswUj/ZC+1Q4iAfpedTfSVLeswRwnY3n2Nb6Tsk+cLPP28aLOPWeMgIuTuCcMC6W/iw=="],
@@ -183,22 +77,6 @@
     "@aws/lambda-invoke-store": ["@aws/lambda-invoke-store@0.3.0", "", {}, "sha512-sl4Bm6yiMNYrZKkqqDFWN0UfnWhlS8ivKxrYl+6t0gCLrqr8y3B2IqZZbFRkfaVVp7C/baApyh71P+LeE1A2sQ=="],
 
     "@babel/runtime": ["@babel/runtime@7.29.7", "", {}, "sha512-Nq8OhGWiZIZGV6hLHoyAKLLcJihP/xFeBMGJoUrxTX2psI8dCifzLhZISFb+VWS3wFMRDmCGw5R+dOySCqPLhw=="],
-
-    "@cuzfrog/code-lens": ["@cuzfrog/code-lens@workspace:packages/code-lens"],
-
-    "@cuzfrog/jie-cli": ["@cuzfrog/jie-cli@workspace:packages/jie-cli"],
-
-    "@cuzfrog/jie-platform": ["@cuzfrog/jie-platform@workspace:packages/jie-platform"],
-
-    "@cuzfrog/jie-team": ["@cuzfrog/jie-team@workspace:packages/jie-team"],
-
-    "@cuzfrog/jie-team-installer": ["@cuzfrog/jie-team-installer@workspace:packages/jie-team-installer"],
-
-    "@cuzfrog/jie-tui": ["@cuzfrog/jie-tui@workspace:packages/jie-tui"],
-
-    "@cuzfrog/jie-utils": ["@cuzfrog/jie-utils@workspace:packages/jie-utils"],
-
-    "@cuzfrog/mock-llm-backend": ["@cuzfrog/mock-llm-backend@workspace:packages/mock-llm-backend"],
 
     "@earendil-works/pi-agent-core": ["@earendil-works/pi-agent-core@0.84.1", "", { "dependencies": { "@earendil-works/pi-ai": "^0.84.1", "@earendil-works/pi-telemetry": "^0.84.1", "diff": "8.0.4", "ignore": "7.0.5", "typebox": "1.3.7", "yaml": "2.9.0" } }, "sha512-evyzXYWCLQGmcaBYHlmSku02r8qoN4SGI60GZABo6iV+H+nqX+P9ud8fEZ4GmRq9mUSREvvfX+w9dA9ThF9C6w=="],
 

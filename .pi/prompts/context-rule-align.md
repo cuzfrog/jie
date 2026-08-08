@@ -16,5 +16,5 @@ argument-hint: <scope>
 5. fix issues one by one using skill /code-improve. Each fix should be a separate git commit.
 
 ## Dimensions
-1. modules and packages, e.g. directories under `packages/`. Respect user input scope.
+1. modules and packages, e.g. directories under `src/`. Respect user input scope.
 2. every bullet point (starting with a `-`) in `Code Conventions`, `Test`, `Single file layout`, `Coding Principles`, `Things to avoid` sections in CLAUDE.md

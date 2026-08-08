@@ -1,6 +1,6 @@
 {
   "module-gates": {
-    "sourceRoots": ["packages/"],
+    "sourceRoots": ["src/"],
     "moduleDescriptorReadonly": "off"
   }
 }

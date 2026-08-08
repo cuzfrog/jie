@@ -1,7 +1,7 @@
 import { join } from "node:path";
 
-const MAIN_PATH = join(import.meta.dir, "../../../packages/code-lens/main.ts");
-const FIXTURE_INDEX = join(import.meta.dir, "../../../packages/code-lens/fixtures/ts-project/index.scip");
+const MAIN_PATH = join(import.meta.dir, "../../../src/code-lens/main.ts");
+const FIXTURE_INDEX = join(import.meta.dir, "../../../src/code-lens/fixtures/ts-project/index.scip");
 const MISSING_INDEX = join(import.meta.dir, "does-not-exist.scip");
 const REQUEST_TIMEOUT_MS = 4000;
 

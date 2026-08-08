@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadMockExpectations } from "../../../packages/mock-llm-backend";
+import { loadMockExpectations } from "../../mock-llm-backend";
 import { seedSkill, seedTeam, writeModelsJsonTo, writeSettingsJson } from "../_fixture.ts";
 import {
   sendLine,

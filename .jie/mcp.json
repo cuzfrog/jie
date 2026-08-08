@@ -3,7 +3,7 @@
     "code-lens": {
       "transport": "stdio",
       "command": "bun",
-      "args": ["packages/code-lens/main.ts"]
+      "args": ["src/code-lens/main.ts"]
     }
   }
 }

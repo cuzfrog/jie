@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadMockExpectations } from "../../../packages/mock-llm-backend";
+import { loadMockExpectations } from "../../mock-llm-backend";
 import { seedTeam } from "../_fixture.ts";
 import {
   startTui,

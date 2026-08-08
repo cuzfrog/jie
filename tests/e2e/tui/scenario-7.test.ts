@@ -1,5 +1,5 @@
 import { seedTeam } from "../_fixture.ts";
-import { loadMockExpectations } from "../../../packages/mock-llm-backend";
+import { loadMockExpectations } from "../../mock-llm-backend";
 import { startTui, stopTui, waitForTeam, sendLine, submitAndWaitForAgentIdle, type TuiHarness } from "./harness";
 import expectations from "./scenario-7.llm.ts";
 
