@@ -3,9 +3,7 @@ import { Actions, TuiState, type Action, type StateStore } from "../state";
 import type { ChatSync } from "../sync";
 import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, WORKING_LABEL, style } from "./themes";
 import { QueuedPrompts, StatusLine, WelcomeBanner } from "./elements";
-import { TeamPanel } from "./team-panel";
-import { KanbanPanel } from "./kanban-panel";
-import { HelpPanel } from "./help-panel";
+import { HelpPanel, KanbanPanel, TeamPanel } from "./panels";
 
 export interface TuiView {
   stop(): void;

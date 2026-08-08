@@ -1,8 +1,8 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { type StateStore } from "../state";
-import { makeTuiState } from "../test";
+import { type StateStore } from "../../state";
+import { makeTuiState } from "../../test";
 import { HelpPanel } from "./help-panel";
-import { style } from "./themes";
+import { style } from "../themes";
 
 const stateStore = vi.mocked<StateStore>({ getState: vi.fn(), dispatch: vi.fn(), subscribe: vi.fn(() => () => undefined) });
 
@@ -19,12 +19,18 @@ describe("HelpPanel", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ helpPanelVisible: true }));
     const lines = new HelpPanel(stateStore).render(80);
     expect(lines[0]).toBe(style("borderMuted")(`┌${"─".repeat(78)}┐`));
-    expect(lines[lines.length - 1]).toBe(style("borderMuted")(`└${"─".repeat(78)}┘`));
+    expect(lines[lines.length - 2]).toBe(style("borderMuted")(`└${"─".repeat(78)}┘`));
     const text = lines.map(stripAnsi).join("\n");
     expect(text).toContain("Commands");
     expect(text).toContain("Shortcuts");
     expect(text).toContain("/resume");
-    expect(text).toContain("Type /help to close.");
+  });
+
+  test("renders the close hint below the box", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ helpPanelVisible: true }));
+    const lines = new HelpPanel(stateStore).render(80);
+    expect(lines[lines.length - 1]).toBe(style("dim")("Type /help to close."));
+    expect(stripAnsi(lines[lines.length - 2])).toBe(`└${"─".repeat(78)}┘`);
   });
 
   test("omits the mark, identity and team roster from the help content", () => {

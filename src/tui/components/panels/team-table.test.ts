@@ -1,5 +1,5 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { makeAgentUiState } from "../test";
+import { makeAgentUiState } from "../../test";
 import { renderTeamTable, type TeamTableColumn, type TeamTableOptions } from "./team-table";
 
 function agent(id: string, overrides: Parameters<typeof makeAgentUiState>[1] = {}) {
