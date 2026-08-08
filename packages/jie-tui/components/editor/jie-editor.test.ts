@@ -1,4 +1,4 @@
-import { TuiMainScreen, visibleWidth, type Editor, type Terminal, type TUI } from "@earendil-works/pi-tui";
+import { TuiMainScreen, visibleWidth, type Editor, type Terminal } from "@earendil-works/pi-tui";
 import { type KanbanCard } from "@cuzfrog/jie-platform";
 import { type JieAutocompleteProvider, type JieSuggestions } from "../../autocomplete";
 import { Actions, TuiState, type AgentId, type StateStore } from "../../state";
