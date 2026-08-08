@@ -1,6 +1,6 @@
 import { Markdown, truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
 import type { MessageBlock, MessageCard, MessageTurn, StateStore } from "../../state";
-import { ASSISTANT_PREFIX, jieMarkdownTheme, style } from "../themes";
+import { ASSISTANT_PREFIX, jieMarkdownTheme, style, THINKING_LABEL } from "../themes";
 import { formatDuration } from "./format-duration";
 import { ThinkingBlock } from "./thinking-block";
 import { ToolCard } from "./tool-card";
@@ -14,6 +14,8 @@ export class AssistantMessage implements Component {
   private readonly markdowns: Markdown[] = [];
   private readonly thinkings: ThinkingBlock[] = [];
   private readonly cards: ToolCard[] = [];
+  private liveBlockIndex: number | null = null;
+  private liveStartedAt: number = 0;
 
   constructor(turn: MessageTurn | null, stateStore: StateStore) {
     this.turn = turn;
@@ -35,15 +37,21 @@ export class AssistantMessage implements Component {
     let cardOrdinal = 0;
     let prefixed = false;
     let aggregatedThinkingMs: number | null = null;
-    for (const block of turn.blocks) {
+    let liveBlockIndex: number | null = null;
+    for (let i = 0; i < turn.blocks.length; i += 1) {
+      const block = turn.blocks[i]!;
       if (block.text === "") continue;
       if (block.kind === "thinking") {
-        if (!thinkingExpanded && block.durationMs !== undefined) {
-          aggregatedThinkingMs = (aggregatedThinkingMs ?? 0) + block.durationMs;
+        if (thinkingExpanded) {
+          lines.push(...this.thinkingAt(thinkingOrdinal, block).render(w));
+          thinkingOrdinal += 1;
           continue;
         }
-        lines.push(...this.thinkingAt(thinkingOrdinal, block).render(w));
-        thinkingOrdinal += 1;
+        if (block.durationMs !== undefined) {
+          aggregatedThinkingMs = (aggregatedThinkingMs ?? 0) + block.durationMs;
+        } else {
+          liveBlockIndex = i;
+        }
         continue;
       }
       const rendered = this.markdownAt(textOrdinal, block.text).render(prefixed ? w : Math.max(1, w - PREFIX_WIDTH));
@@ -65,7 +73,8 @@ export class AssistantMessage implements Component {
       lines.push(...this.cardAt(cardOrdinal, card).render(w));
       cardOrdinal += 1;
     }
-    const summary = summarizeWork(aggregatedThinkingMs, aggregatedCards);
+    const liveElapsedMs = this.liveElapsedFor(liveBlockIndex);
+    const summary = summarizeWork(aggregatedThinkingMs, aggregatedCards, liveElapsedMs);
     if (summary !== null) lines.push(truncateToWidth(style("thinkingText")(summary), w));
     return lines;
   }
@@ -74,6 +83,19 @@ export class AssistantMessage implements Component {
     for (const markdown of this.markdowns) markdown.invalidate();
     for (const thinking of this.thinkings) thinking.invalidate();
     for (const card of this.cards) card.invalidate();
+  }
+
+  private liveElapsedFor(liveBlockIndex: number | null): number | null {
+    if (liveBlockIndex === null) {
+      this.liveBlockIndex = null;
+      return null;
+    }
+    const now = Date.now();
+    if (this.liveBlockIndex !== liveBlockIndex) {
+      this.liveBlockIndex = liveBlockIndex;
+      this.liveStartedAt = now;
+    }
+    return now - this.liveStartedAt;
   }
 
   private markdownAt(ordinal: number, text: string): Markdown {
@@ -120,17 +142,17 @@ function hasDiffDetail(details: MessageCard["details"]): boolean {
   return details !== null && details !== undefined && "kind" in details && details.kind === "diff";
 }
 
-function summarizeWork(thinkingMs: number | null, cards: ReadonlyArray<MessageCard>): string | null {
-  if (thinkingMs === null && cards.length === 0) return null;
+function summarizeWork(thinkingMs: number | null, cards: ReadonlyArray<MessageCard>, liveElapsedMs: number | null): string | null {
+  if (thinkingMs === null && cards.length === 0 && liveElapsedMs === null) return null;
   const parts: string[] = [];
-  if (thinkingMs !== null) parts.push(`Thought for ${formatDuration(thinkingMs)}`);
+  if (liveElapsedMs !== null) {
+    parts.push(`${THINKING_LABEL} (${formatDuration((thinkingMs ?? 0) + liveElapsedMs)})`);
+  } else if (thinkingMs !== null) {
+    parts.push(`Thought for ${formatDuration(thinkingMs)}`);
+  }
   const usageCounts = new Map<string, number>();
   for (const card of cards) usageCounts.set(card.name, (usageCounts.get(card.name) ?? 0) + 1);
   for (const [name, count] of usageCounts) parts.push(`used ${name} ${count} ${count === 1 ? "time" : "times"}`);
-  if (cards.length > 0) {
-    const totalMs = (thinkingMs ?? 0) + cards.reduce((sum, card) => sum + (card.durationMs ?? 0), 0);
-    if (totalMs > 0) parts.push(`total ${formatDuration(totalMs)}`);
-  }
   return parts.join(", ");
 }
 

@@ -6,6 +6,7 @@ import { Actions, TuiState, type StateStore } from "./state";
 import type { CommandHandler } from "./command-handler";
 import type { TuiView } from "./components";
 import { createTransientAger } from "./transient-ager";
+import { createThinkingTicker } from "./thinking-ticker";
 
 const SUBMIT_EDITOR_TEXT = Actions.submitEditorText("").type;
 const REQUEST_INTERRUPT = Actions.requestInterrupt("", "").type;
@@ -51,6 +52,7 @@ export class TuiImpl implements Tui {
   private readonly unsubscribeBus: () => void;
   private readonly unsubscribeActions: () => void;
   private readonly unsubscribeTransientAger: () => void;
+  private readonly unsubscribeThinkingTicker: () => void;
   private terminal: Terminal | null = null;
   private ui: TUI | null = null;
   private view: TuiView | null = null;
@@ -81,6 +83,7 @@ export class TuiImpl implements Tui {
       }
     });
     this.unsubscribeTransientAger = createTransientAger(stateStore);
+    this.unsubscribeThinkingTicker = createThinkingTicker(stateStore, () => { this.ui?.requestRender(); });
     this.unsubscribeActions = stateStore.subscribe(async (action) => {
       if (action.type === SUBMIT_EDITOR_TEXT) {
         this.commandHandler.handle(action.payload.text);
@@ -159,6 +162,7 @@ export class TuiImpl implements Tui {
     this.unsubscribeBus();
     this.unsubscribeActions();
     this.unsubscribeTransientAger();
+    this.unsubscribeThinkingTicker();
     this.resolveStart?.();
   }
 
@@ -217,6 +221,7 @@ function subscribeToBus(platform: JiePlatform, onEvent: (event: AnyEventEnvelope
     platform.subscribe("agent.model.assigned", onEvent),
     platform.subscribe("agent.prompt.queue.update", onEvent),
     platform.subscribe("agent.turn.start", onEvent),
+    platform.subscribe("agent.turn.continue", onEvent),
     platform.subscribe("agent.idle", onEvent),
     platform.subscribe("agent.stream.chunk", onEvent),
     platform.subscribe("agent.stream.end", onEvent),

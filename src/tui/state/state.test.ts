@@ -171,6 +171,46 @@ describe("TuiState.hasChatContent", () => {
   });
 });
 
+describe("TuiState.anyAgentThinking", () => {
+  const sender = { kind: "agent", teamId: "demo", agentKey: "general-1" } as const;
+
+  test("returns false on the initial state", () => {
+    const store = new StateStoreImpl();
+    expect(TuiState.anyAgentThinking(store.getState())).toBe(false);
+  });
+
+  test("returns false when agents are idle", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    expect(TuiState.anyAgentThinking(store.getState())).toBe(false);
+  });
+
+  test("returns true while a thinking block is streaming without a duration", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart(sender, null)));
+    store.dispatch(Actions.receiveEvent(Events.agentStreamChunk(sender, 1, 0, "thinking", "pondering")));
+    expect(TuiState.anyAgentThinking(store.getState())).toBe(true);
+  });
+
+  test("returns false once the thinking block is stamped with a duration", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart(sender, null)));
+    store.dispatch(Actions.receiveEvent(Events.agentStreamChunk(sender, 1, 0, "thinking", "pondering")));
+    store.dispatch(Actions.receiveEvent(Events.agentStreamEnd(sender, 1, 1, [300])));
+    expect(TuiState.anyAgentThinking(store.getState())).toBe(false);
+  });
+
+  test("returns false for an empty thinking block", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart(sender, null)));
+    store.dispatch(Actions.receiveEvent(Events.agentStreamChunk(sender, 1, 0, "thinking", "")));
+    expect(TuiState.anyAgentThinking(store.getState())).toBe(false);
+  });
+});
+
 describe("TuiState.kanbanVisibleCards", () => {
   test("returns the whole board when every column fits", () => {
     const store = new StateStoreImpl();

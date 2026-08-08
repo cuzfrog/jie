@@ -26,7 +26,8 @@ Identity travels in the envelope, not in the subject. `topic` equals `type` for 
 
 | Topic | Sender | Payload |
 |---|---|---|
-| `agent.turn.start` | agent | `string \| null` — the raw user text this turn consumes; null for peer-notification and startup-resumed turns |
+| `agent.turn.start` | agent | `string \| null` — the raw user text this turn consumes; null for peer-notification and startup-resumed turns. Published only when the `turn_start` carries a new user message (new prompt, follow-up, or peer notification); a `turn_start` with no new user message publishes `agent.turn.continue` instead |
+| `agent.turn.continue` | agent | `null` - the run continues past a `turn_end` into the next `turn_start` with no new user message (tool-use loop, automatic continuation); the current conversation turn is not rotated |
 | `agent.idle` | agent | pi-ai `StopReason` (`"stop"` / `"length"` / `"error"` / `"aborted"`) |
 | `agent.tool.call` | agent | `{ tool_call_id, name, input, input_truncated }` |
 | `agent.tool.result` | agent | `{ tool_call_id, name, output: string \| null, output_truncated, duration_ms, error: string \| null, details: ToolResultDetails \| null }` — `details` is the closed tool-details union (`06-agent-model.md` "Tool") |
@@ -91,7 +92,7 @@ Every tool call emits `agent.tool.call` before execution and `agent.tool.result`
 
 ## Event-Order Contract
 
-**Body-side alternation.** Per body, `agent.turn.start` and `agent.idle` strictly alternate: exactly one `agent.turn.start` per pi-agent `turn_start`, exactly one `agent.idle` per `agent_end` (regardless of `stopReason`), start always before idle for the same turn. A body that has not started any turn has published nothing — observers treat it as **idle by default**; the "this agent exists" signal at boot is `system.team.loaded`, not a startup `agent.idle`. The publication of `agent.turn.start` is deferred from pi's `turn_start` (which carries no prompt identity) to the turn's next pi event, where the body resolves the payload; the deferred publication precedes all of the turn's own events on the bus, so the ordering above holds.
+**Body-side alternation.** Per body, `agent.turn.start` and `agent.idle` strictly alternate: exactly one of `agent.turn.start` or `agent.turn.continue` per pi-agent `turn_start`, exactly one `agent.idle` per `agent_end` (regardless of `stopReason`), start always before idle for the same turn. `agent.turn.start` carries a new user message (new prompt, follow-up, or peer notification); `agent.turn.continue` marks a continuation `turn_start` with no new user message (tool-use loop) - the run stays in the same conversation turn. A body that has not started any turn has published nothing — observers treat it as **idle by default**; the "this agent exists" signal at boot is `system.team.loaded`, not a startup `agent.idle`. The turn-start publication is deferred from pi's `turn_start` (which carries no prompt identity) to the turn's next pi event, where the body resolves whether a new user message is present: a `message_start(user)` publishes `agent.turn.start` (consuming the queue label), any other flushing event publishes `agent.turn.continue`. the deferred publication precedes all of the turn's own events on the bus, so the ordering above holds.
 
 **Bus-side in-order delivery.** `InProcessEventBus` dispatches synchronously in subscription order, so per-body event order is preserved end-to-end.
 

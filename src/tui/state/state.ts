@@ -130,6 +130,17 @@ function hasChatContent(state: TuiState): boolean {
   return false;
 }
 
+function anyAgentThinking(state: TuiState): boolean {
+  for (const agent of state.agents.values()) {
+    const turn = agent.currentTurn;
+    if (turn === null) continue;
+    for (const block of turn.blocks) {
+      if (block.kind === "thinking" && block.text !== "" && block.durationMs === undefined) return true;
+    }
+  }
+  return false;
+}
+
 const KANBAN_VISIBLE_ROWS = 8;
 
 function kanbanVisibleCards(state: TuiState): ReadonlyArray<KanbanCard> {
@@ -150,5 +161,6 @@ export const TuiState = {
   isInterrupted,
   shouldShowErrorBanner,
   hasChatContent,
+  anyAgentThinking,
   kanbanVisibleCards,
 } as const;

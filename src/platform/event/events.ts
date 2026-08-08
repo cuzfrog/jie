@@ -5,6 +5,7 @@ import type { ToolResultDetails } from "../tools/types";
 type EventDef<S extends Sender, P = null> = { sender: S; payload: P };
 type EventDefinitions = {
   "agent.turn.start": EventDef<AgentSender, string | null>;
+  "agent.turn.continue": EventDef<AgentSender, null>;
   "agent.idle": EventDef<AgentSender, StopReason>;
   "agent.tool.call": EventDef<AgentSender, {
     tool_call_id: string;
@@ -70,6 +71,8 @@ const EVENT_TEXT_TRUNCATION_MARKER = "...[%d chars truncated]...";
 export const Events = {
   agentTurnStart: (sender: AgentSender, prompt: string | null): EventEnvelope<"agent.turn.start"> =>
     createEvent("agent.turn.start", sender, prompt),
+  agentTurnContinue: (sender: AgentSender): EventEnvelope<"agent.turn.continue"> =>
+    createEvent("agent.turn.continue", sender),
   agentIdle: (sender: AgentSender, stopReason: StopReason): EventEnvelope<"agent.idle"> =>
     createEvent("agent.idle", sender, stopReason),
   agentToolCall,

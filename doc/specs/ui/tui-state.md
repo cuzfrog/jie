@@ -65,13 +65,17 @@ UI action carrying a `TeamInfo` payload (`id`, `leaderKey`, `sessionName`, `agen
 
 ### `agent.turn.start`
 
-The sole creator of conversation turns. The payload is `string | null` — the raw user text of the message this turn consumes (null for peer-notification turns and turns resumed at startup); null reduces to `userPrompt: ""`. The TUI does not subscribe to `user.prompt`: the prompt echoes into the chat at consumption time, attached to the turn that runs it, so a queued prompt appears exactly when its turn starts.
+The sole creator of new conversation turns; a tool-use continuation (no new user message) publishes `agent.turn.continue` instead, which keeps the current turn. The payload is `string | null` — the raw user text of the message this turn consumes (null for peer-notification turns and turns resumed at startup); null reduces to `userPrompt: ""`. The TUI does not subscribe to `user.prompt`: the prompt echoes into the chat at consumption time, attached to the turn that runs it, so a queued prompt appears exactly when its turn starts.
 
 Clear `state.errorBanner` on every `turn.start`. Any prior `errorBanner` (most prominently the no-model-selected error) is cleared because the user is now actively prompting. Also clear `state.interruptedAgentId` when this agent is the interrupted one — its own next turn supersedes the interrupted turn; another agent's `turn.start` leaves the marker.
 
 **Adoption.** When `currentTurn` is unpopulated (no blocks, no cards) and `userPrompt === ""`, the event adopts it: `userPrompt` is set from the payload and the turn keeps its `seq`. No turn is created and the counter does not advance.
 
 **Rotation.** Otherwise — `currentTurn` is populated, or already prompt-bearing — it is pushed to `history` (when present) and `freshTurn(prompt, seq)` opens: the new turn takes `seq = state.nextEntrySeq` and the counter advances (entry sequence). Rapid-fire prompts each rotate into their own turn, so no message is lost regardless of how the starts interleave with the chunks.
+
+### `agent.turn.continue`
+
+A continuation turn_start with no new user message (a tool-use loop within the same run). The reducer keeps `currentTurn` unchanged - no rotation, no adoption, no `seq` advance. It sets `agent.status = "busy"` and clears `state.errorBanner` and `state.interruptedAgentId` with the same semantics as `agent.turn.start`. Stream chunks, tool calls, and thinking blocks emitted by the continuation accumulate into the existing `currentTurn`, so consecutive "Thought for" segments from a multi-step run merge into one turn's blocks rather than opening a new turn per `turn_start`.
 
 ### `agent.idle`
 

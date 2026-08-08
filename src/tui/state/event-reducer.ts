@@ -12,6 +12,7 @@ export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
     case "agent.model.assigned": return reduceModelAssigned(state, event);
     case "agent.prompt.queue.update": return reduceQueueUpdate(state, event);
     case "agent.turn.start": return reduceTurnStart(state, event);
+    case "agent.turn.continue": return reduceTurnContinue(state, event);
     case "agent.idle": return reduceIdle(state, event);
     case "agent.usage": return reduceUsage(state, event);
     case "agent.compacted": return reduceCompacted(state, event);
@@ -89,6 +90,16 @@ function reduceTurnStart(state: TuiState, event: AnyEventEnvelope): TuiState {
   const contextTokensUsed = estimateContextTokens(history, currentTurn);
   const next: AgentUiState = { ...agent, status: "busy", history, currentTurn, contextTokensUsed };
   return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId, nextEntrySeq: seq + 1 });
+}
+
+function reduceTurnContinue(state: TuiState, event: AnyEventEnvelope): TuiState {
+  const resolved = resolveAgent(state, event);
+  if (resolved === null) return state;
+  if (event.type !== "agent.turn.continue") return state;
+  const { agentId, agent } = resolved;
+  const interruptedAgentId = state.interruptedAgentId === agentId ? null : state.interruptedAgentId;
+  const next: AgentUiState = { ...agent, status: "busy" };
+  return withAgent(state, agentId, next, { errorBanner: null, interruptedAgentId });
 }
 
 function reduceIdle(state: TuiState, event: AnyEventEnvelope): TuiState {
