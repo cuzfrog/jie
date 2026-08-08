@@ -378,13 +378,14 @@ describe("CommandExecutorImpl", () => {
       settingsStore.load.mockReturnValueOnce({ defaultProvider: "anthropic", defaultModel: "m", defaultTeam: "alpha" });
       teamManager.listInstalled.mockReturnValue(["default-solo", "alpha", "beta"]);
       teamManager.agentCount.mockImplementation((teamId: string) => (teamId === "alpha" ? 3 : 1));
+      teamManager.locate.mockImplementation((teamId: string) => (teamId === "default-solo" ? "builtin" : "user"));
       const result = await executor.execute({ name: "getTeamInfo" });
       expect(result).toEqual({
         defaultTeam: "alpha",
         installed: [
-          { id: "default-solo", agentCount: 1 },
-          { id: "alpha", agentCount: 3 },
-          { id: "beta", agentCount: 1 },
+          { id: "default-solo", agentCount: 1, location: "builtin" },
+          { id: "alpha", agentCount: 3, location: "user" },
+          { id: "beta", agentCount: 1, location: "user" },
         ],
       });
     });
@@ -393,8 +394,9 @@ describe("CommandExecutorImpl", () => {
       settingsStore.load.mockReturnValueOnce({ defaultProvider: "anthropic", defaultModel: "m" });
       teamManager.listInstalled.mockReturnValue(["default-solo"]);
       teamManager.agentCount.mockReturnValue(2);
+      teamManager.locate.mockReturnValue("builtin");
       const result = await executor.execute({ name: "getTeamInfo" });
-      expect(result).toEqual({ defaultTeam: null, installed: [{ id: "default-solo", agentCount: 2 }] });
+      expect(result).toEqual({ defaultTeam: null, installed: [{ id: "default-solo", agentCount: 2, location: "builtin" }] });
     });
   });
 

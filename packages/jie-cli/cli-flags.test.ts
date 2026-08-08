@@ -68,16 +68,74 @@ describe("parseFlags — model", () => {
 });
 
 describe("parseFlags — team", () => {
-  test("team dev", () => {
-    expect(parseFlags(["team", "dev"])).toEqual({ kind: "team", teamId: "dev" });
+  test("team dev -> set default team", () => {
+    expect(parseFlags(["team", "dev"])).toEqual({ kind: "team", action: "setDefault", teamId: "dev" });
   });
 
-  test("team (no arg)", () => {
-    expect(parseFlags(["team"])).toEqual({ kind: "team", teamId: undefined });
+  test("team (no arg) -> info", () => {
+    expect(parseFlags(["team"])).toEqual({ kind: "team", action: "info" });
   });
 
   test("team --unset -> unknown flag error", () => {
     expect(parseFlags(["team", "--unset"])).toEqual({ kind: "error", message: "unknown flag: --unset" });
+  });
+
+  test("team add <source> -> add to global scope", () => {
+    expect(parseFlags(["team", "add", "@cuzfrog/jie-team"])).toEqual({
+      kind: "team",
+      action: "add",
+      source: "@cuzfrog/jie-team",
+      project: false,
+      force: false,
+    });
+  });
+
+  test("team add <source> --project --force -> add to project scope, overwrite", () => {
+    expect(parseFlags(["team", "add", "./teams/dev", "--project", "--force"])).toEqual({
+      kind: "team",
+      action: "add",
+      source: "./teams/dev",
+      project: true,
+      force: true,
+    });
+  });
+
+  test("team add without source -> error", () => {
+    expect(parseFlags(["team", "add"])).toEqual({ kind: "error", message: "missing source for 'jie team add'" });
+  });
+
+  test("team add with unknown flag -> error", () => {
+    expect(parseFlags(["team", "add", "src", "--bogus"])).toEqual({ kind: "error", message: "unknown flag: --bogus" });
+  });
+
+  test("team list -> list", () => {
+    expect(parseFlags(["team", "list"])).toEqual({ kind: "team", action: "list" });
+  });
+
+  test("team list with extra arg -> error", () => {
+    expect(parseFlags(["team", "list", "x"])).toEqual({ kind: "error", message: "unexpected argument: x" });
+  });
+
+  test("team remove <id> -> remove from global scope", () => {
+    expect(parseFlags(["team", "remove", "dev"])).toEqual({
+      kind: "team",
+      action: "remove",
+      teamId: "dev",
+      project: false,
+    });
+  });
+
+  test("team remove <id> --project -> remove from project scope", () => {
+    expect(parseFlags(["team", "remove", "dev", "--project"])).toEqual({
+      kind: "team",
+      action: "remove",
+      teamId: "dev",
+      project: true,
+    });
+  });
+
+  test("team remove without id -> error", () => {
+    expect(parseFlags(["team", "remove"])).toEqual({ kind: "error", message: "missing team id for 'jie team remove'" });
   });
 });
 

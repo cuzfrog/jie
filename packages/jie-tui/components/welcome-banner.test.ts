@@ -113,8 +113,8 @@ function stateWithInstalledTeams(): TuiState {
   return makeTuiState({
     teamId: "solo",
     installedTeams: [
-      { id: "my-team", agentCount: 2 },
-      { id: "solo", agentCount: 1 },
+      { id: "my-team", agentCount: 2, location: "user" },
+      { id: "solo", agentCount: 1, location: "builtin" },
     ],
   });
 }

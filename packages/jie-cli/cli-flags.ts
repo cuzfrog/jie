@@ -16,7 +16,12 @@ export interface ParsedArgsMap {
   readonly login: { readonly kind: "login"; readonly provider?: string; readonly apiKey?: string };
   readonly logout: { readonly kind: "logout"; readonly provider?: string };
   readonly model: { readonly kind: "model"; readonly provider: string; readonly modelId: string };
-  readonly team: { readonly kind: "team"; readonly teamId?: string };
+  readonly team:
+    | { readonly kind: "team"; readonly action: "info" }
+    | { readonly kind: "team"; readonly action: "setDefault"; readonly teamId: string }
+    | { readonly kind: "team"; readonly action: "add"; readonly source: string; readonly project: boolean; readonly force: boolean }
+    | { readonly kind: "team"; readonly action: "list" }
+    | { readonly kind: "team"; readonly action: "remove"; readonly teamId: string; readonly project: boolean };
   readonly apiKey: { readonly kind: "apiKey"; readonly apiKey: string };
   readonly tui: { readonly kind: "tui"; readonly team?: string; readonly resume?: string; readonly inMemory: boolean; readonly debug: boolean };
   readonly error: { readonly kind: "error"; readonly message: string };
@@ -166,11 +171,57 @@ function parseModel(args: string[]): ParsedArgs {
 }
 
 function parseTeam(args: string[]): ParsedArgs {
-  if (args.length === 0) return { kind: "team" };
-  if (args[0]!.startsWith("-")) {
-    return { kind: "error", message: `unknown flag: ${args[0]}` };
+  if (args.length === 0) return { kind: "team", action: "info" };
+  const first = args[0]!;
+  if (first === "add") return parseTeamAdd(args.slice(1));
+  if (first === "list") return parseTeamList(args.slice(1));
+  if (first === "remove") return parseTeamRemove(args.slice(1));
+  if (first.startsWith("-")) return { kind: "error", message: `unknown flag: ${first}` };
+  return { kind: "team", action: "setDefault", teamId: first };
+}
+
+function parseTeamAdd(args: string[]): ParsedArgs {
+  let project = false;
+  let force = false;
+  let source: string | undefined;
+  for (let i = 0; i < args.length; i += 1) {
+    const a = args[i]!;
+    if (a === "--project") {
+      project = true;
+      continue;
+    }
+    if (a === "--force") {
+      force = true;
+      continue;
+    }
+    if (a.startsWith("-")) return { kind: "error", message: `unknown flag: ${a}` };
+    if (source !== undefined) return { kind: "error", message: `unexpected argument: ${a}` };
+    source = a;
   }
-  return { kind: "team", teamId: args[0] };
+  if (source === undefined) return { kind: "error", message: "missing source for 'jie team add'" };
+  return { kind: "team", action: "add", source, project, force };
+}
+
+function parseTeamList(args: string[]): ParsedArgs {
+  if (args.length > 0) return { kind: "error", message: `unexpected argument: ${args[0]}` };
+  return { kind: "team", action: "list" };
+}
+
+function parseTeamRemove(args: string[]): ParsedArgs {
+  let project = false;
+  let teamId: string | undefined;
+  for (let i = 0; i < args.length; i += 1) {
+    const a = args[i]!;
+    if (a === "--project") {
+      project = true;
+      continue;
+    }
+    if (a.startsWith("-")) return { kind: "error", message: `unknown flag: ${a}` };
+    if (teamId !== undefined) return { kind: "error", message: `unexpected argument: ${a}` };
+    teamId = a;
+  }
+  if (teamId === undefined) return { kind: "error", message: "missing team id for 'jie team remove'" };
+  return { kind: "team", action: "remove", teamId, project };
 }
 
 function parsePrint(

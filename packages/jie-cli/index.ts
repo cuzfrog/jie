@@ -13,6 +13,7 @@ import {
   runModel,
   runPrint,
   runTeam,
+  runTeamInstall,
 } from "./commands";
 import { VERSION } from "./version";
 
@@ -50,6 +51,9 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
     case "error":
       deps.console.error(args.message);
       return 1;
+  }
+  if (args.kind === "team" && (args.action === "add" || args.action === "remove")) {
+    return await runTeamInstall(args, homeJieDir, projectJieDir, deps.console);
   }
   const handle = await connectPlatform(
     {
@@ -89,7 +93,7 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
       case "model":
         return await runModel(args, handle, deps.console);
       case "team":
-        return await runTeam(args, handle, deps.console);
+        return await runTeam(args, handle, homeJieDir, projectJieDir, deps.console);
       case "print": {
         const team = await handle.execute({ name: "team", teamId: args.team });
         if (args.apiKey !== undefined) {
@@ -140,6 +144,9 @@ Usage:
   jie logout [<provider>]
   jie model <provider>/<modelId>
   jie team [<id>]
+  jie team add <source> [--project] [--force]
+  jie team list
+  jie team remove <id> [--project]
 
   jie --api-key <key>
   jie --resume <session_id>

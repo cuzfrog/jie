@@ -386,7 +386,7 @@ describe("_run — dispatch to command handlers", () => {
   test("team with id dispatches to runTeam which calls setDefaultTeam", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    const exit = await captured.run({ kind: "team", teamId: "default-solo" });
+    const exit = await captured.run({ kind: "team", action: "setDefault", teamId: "default-solo" });
     expect(exit).toBe(0);
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "setDefaultTeam", teamId: "default-solo" });
     expect(captured.consoleMock.print).toHaveBeenCalledWith("default team set to 'default-solo'");

@@ -33,6 +33,7 @@
       "name": "@cuzfrog/jie-cli",
       "dependencies": {
         "@cuzfrog/jie-platform": "workspace:*",
+        "@cuzfrog/jie-team-installer": "workspace:*",
         "@cuzfrog/jie-tui": "workspace:*",
         "@cuzfrog/jie-utils": "workspace:*",
         "@earendil-works/pi-agent-core": "catalog:",
@@ -65,6 +66,9 @@
     },
     "packages/jie-team": {
       "name": "@cuzfrog/jie-team",
+    },
+    "packages/jie-team-installer": {
+      "name": "@cuzfrog/jie-team-installer",
       "devDependencies": {
         "@types/bun": "catalog:",
         "@types/node": "catalog:",
@@ -187,6 +191,8 @@
     "@cuzfrog/jie-platform": ["@cuzfrog/jie-platform@workspace:packages/jie-platform"],
 
     "@cuzfrog/jie-team": ["@cuzfrog/jie-team@workspace:packages/jie-team"],
+
+    "@cuzfrog/jie-team-installer": ["@cuzfrog/jie-team-installer@workspace:packages/jie-team-installer"],
 
     "@cuzfrog/jie-tui": ["@cuzfrog/jie-tui@workspace:packages/jie-tui"],
 

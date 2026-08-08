@@ -1,6 +1,10 @@
 import { JiePlatformError, type Command, type CommandName, type CommandResult, type JiePlatform, type Settings, type TeamInfo } from "@cuzfrog/jie-platform";
 import { type Console } from "@cuzfrog/jie-utils";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { runModel, runTeam } from "./settings";
+import { runTeamInstall } from "./team-install";
 
 function makeConsoleMock(): Console {
   return {
@@ -29,6 +33,17 @@ function makePlatform(): { platform: JiePlatform; execute: ReturnType<typeof vi.
   };
   return { platform, execute: dispatch };
 }
+
+const tmpRoots: string[] = [];
+function freshDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  tmpRoots.push(dir);
+  return dir;
+}
+afterEach(() => {
+  for (const path of tmpRoots) rmSync(path, { recursive: true, force: true });
+  tmpRoots.length = 0;
+});
 
 describe("runModel", () => {
   test("dispatches setDefaultModel and prints success", async () => {
@@ -75,11 +90,13 @@ describe("runModel", () => {
 });
 
 describe("runTeam", () => {
-  test("dispatches setDefaultTeam when teamId is given", async () => {
+  const homeJieDir = join(tmpdir(), "jie-test-home");
+
+  test("dispatches setDefaultTeam when a team id is given", async () => {
     const { platform, execute } = makePlatform();
     execute.mockImplementationOnce(async () => null);
     const consoleMock = makeConsoleMock();
-    const code = await runTeam({ kind: "team", teamId: "dev" }, platform, consoleMock);
+    const code = await runTeam({ kind: "team", action: "setDefault", teamId: "dev" }, platform, homeJieDir, null, consoleMock);
     expect(code).toBe(0);
     expect(execute).toHaveBeenCalledWith({ name: "setDefaultTeam", teamId: "dev" });
     expect(consoleMock.print).toHaveBeenCalledWith("default team set to 'dev'");
@@ -91,25 +108,25 @@ describe("runTeam", () => {
       throw new JiePlatformError("TEAM_NOT_FOUND", { detail: "team 'ghost' not found" });
     });
     const consoleMock = makeConsoleMock();
-    const code = await runTeam({ kind: "team", teamId: "ghost" }, platform, consoleMock);
+    const code = await runTeam({ kind: "team", action: "setDefault", teamId: "ghost" }, platform, homeJieDir, null, consoleMock);
     expect(code).toBe(1);
     expect(consoleMock.error).toHaveBeenCalledWith(
       "team 'ghost' is not installed; checked .jie/teams/ghost/ and ~/.jie/teams/ghost/",
     );
   });
 
-  test("prints defaultTeam and installed list when no arg", async () => {
+  test("prints defaultTeam and installed list for info action", async () => {
     const { platform, execute } = makePlatform();
     execute.mockImplementationOnce(async () => ({
       defaultTeam: "dev",
       installed: [
-        { id: "default-solo", agentCount: 1 },
-        { id: "alpha", agentCount: 2 },
-        { id: "beta", agentCount: 3 },
+        { id: "default-solo", agentCount: 1, location: "builtin" },
+        { id: "alpha", agentCount: 2, location: "user" },
+        { id: "beta", agentCount: 3, location: "project" },
       ],
     }));
     const consoleMock = makeConsoleMock();
-    const code = await runTeam({ kind: "team" }, platform, consoleMock);
+    const code = await runTeam({ kind: "team", action: "info" }, platform, homeJieDir, null, consoleMock);
     expect(code).toBe(0);
     expect(consoleMock.print).toHaveBeenCalledWith("defaultTeam: dev");
     expect(consoleMock.print).toHaveBeenCalledWith("installed: default-solo, alpha, beta");
@@ -119,11 +136,94 @@ describe("runTeam", () => {
     const { platform, execute } = makePlatform();
     execute.mockImplementationOnce(async () => ({
       defaultTeam: null,
-      installed: [{ id: "default-solo", agentCount: 1 }],
+      installed: [{ id: "default-solo", agentCount: 1, location: "builtin" }],
     }));
     const consoleMock = makeConsoleMock();
-    const code = await runTeam({ kind: "team" }, platform, consoleMock);
+    const code = await runTeam({ kind: "team", action: "info" }, platform, homeJieDir, null, consoleMock);
     expect(code).toBe(0);
     expect(consoleMock.print).toHaveBeenCalledWith("defaultTeam: unset");
+  });
+
+  test("list prints each team with location, agent count, and provenance", async () => {
+    const source = freshDir("jie-list-src-");
+    const teamDir = join(source, "alpha");
+    mkdirSync(teamDir, { recursive: true });
+    writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n", "utf-8");
+    const homeJie = freshDir("jie-list-home-");
+    await runTeamInstall({ kind: "team", action: "add", source, project: false, force: false }, homeJie, null, makeConsoleMock());
+
+    const { platform, execute } = makePlatform();
+    execute.mockImplementationOnce(async () => ({
+      defaultTeam: "alpha",
+      installed: [
+        { id: "default-solo", agentCount: 1, location: "builtin" },
+        { id: "alpha", agentCount: 2, location: "user" },
+      ],
+    }));
+    const consoleMock = makeConsoleMock();
+    const code = await runTeam({ kind: "team", action: "list" }, platform, homeJie, null, consoleMock);
+    expect(code).toBe(0);
+    expect(consoleMock.print).toHaveBeenCalledWith("Teams:");
+    expect(consoleMock.print).toHaveBeenCalledWith(expect.stringMatching(/^\* alpha\s+\[user\]\s+2 agents\s+\(file: .*\)$/));
+    expect(consoleMock.print).toHaveBeenCalledWith(expect.stringMatching(/^  default-solo\s+\[builtin\]\s+1 agent$/));
+  });
+});
+
+describe("runTeamInstall", () => {
+  test("add installs a file source into the global teams dir and reports the location", async () => {
+    const source = freshDir("jie-add-src-");
+    const teamDir = join(source, "dev");
+    mkdirSync(teamDir, { recursive: true });
+    writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n", "utf-8");
+    const homeJie = freshDir("jie-home-");
+    const consoleMock = makeConsoleMock();
+
+    const code = await runTeamInstall(
+      { kind: "team", action: "add", source, project: false, force: false },
+      homeJie,
+      null,
+      consoleMock,
+    );
+
+    expect(code).toBe(0);
+    expect(consoleMock.print).toHaveBeenCalledWith("installed team: dev");
+    expect(consoleMock.print).toHaveBeenCalledWith(`location: ${join(homeJie, "teams")}`);
+  });
+
+  test("add --project errors when no project .jie directory is found", async () => {
+    const consoleMock = makeConsoleMock();
+    const code = await runTeamInstall(
+      { kind: "team", action: "add", source: "./dev", project: true, force: false },
+      freshDir("jie-home-"),
+      null,
+      consoleMock,
+    );
+    expect(code).toBe(1);
+    expect(consoleMock.error).toHaveBeenCalledWith("no project .jie directory found; run from within a project or omit --project");
+  });
+
+  test("remove deletes an installed team from the global teams dir", async () => {
+    const source = freshDir("jie-rm-src-");
+    const teamDir = join(source, "dev");
+    mkdirSync(teamDir, { recursive: true });
+    writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n", "utf-8");
+    const homeJie = freshDir("jie-home-");
+    await runTeamInstall(
+      { kind: "team", action: "add", source, project: false, force: false },
+      homeJie,
+      null,
+      makeConsoleMock(),
+    );
+    const consoleMock = makeConsoleMock();
+
+    const code = await runTeamInstall(
+      { kind: "team", action: "remove", teamId: "dev", project: false },
+      homeJie,
+      null,
+      consoleMock,
+    );
+
+    expect(code).toBe(0);
+    expect(consoleMock.print).toHaveBeenCalledWith(`removed team 'dev' from ${join(homeJie, "teams")}`);
   });
 });

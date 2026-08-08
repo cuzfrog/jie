@@ -1,6 +1,7 @@
 import type { GitSnapshot } from "../services";
 import type { SessionSummary } from "../storage";
 import type { EffortLevel, KanbanCard, KanbanStatus, ModelInfo, TeamInfo } from "../types";
+import type { TeamBlueprintLocation } from "../team/types";
 
 interface CommandDef<A, R = null> {
   args: A;
@@ -31,7 +32,7 @@ interface CommandTypeMap {
   renameSession: CommandDef<{ teamId: string; sessionName: string }, null>;
   getTeamInfo: CommandDef<{}, {
     defaultTeam: string | null;
-    installed: ReadonlyArray<{ readonly id: string; readonly agentCount: number }>;
+    installed: ReadonlyArray<{ readonly id: string; readonly agentCount: number; readonly location: TeamBlueprintLocation }>;
   }>;
   getGitStatus: CommandDef<{}, GitSnapshot>;
   stop: CommandDef<{}, null>;
