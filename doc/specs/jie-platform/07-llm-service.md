@@ -2,7 +2,7 @@
 
 ## Purpose
 
-One-shot model invocations outside any agent session. Compaction and memory extraction are the consumers; any future standalone task (summarization, translation, distillation) reuses the same path. The agent loop calls models through pi-agent; everything else calls through this service. One exported interface, module `packages/jie-platform/llm/`, cradle key `llmService`.
+One-shot model invocations outside any agent session. Compaction and memory extraction are the consumers; any future standalone task (summarization, translation, distillation) reuses the same path. The agent loop calls models through pi-agent; everything else calls through this service. One exported interface, module `src/platform/llm/`, cradle key `llmService`.
 
 ## Interface
 

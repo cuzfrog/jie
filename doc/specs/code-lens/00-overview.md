@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Code-Lens is a standalone MCP server in `packages/code-lens/` that gives agents code-architecture facts — layered structure with implementation bodies stripped, plus dependency and coupling data — without implementation detail. It covers TypeScript, Python, Java, Rust, and Go on one shared pipeline (ADR 32): it is a read-only consumer of SCIP indexes, never an indexer. Two concerns are deliberately kept out: coupling *verdicts* (it emits facts — cycles, visibility-annotated cross-file references — and the consuming agent judges what counts as bad coupling) and enforcement (no-new-exports gating belongs elsewhere, not here). Why standalone rather than in-process:
+Code-Lens is a standalone MCP server in `src/code-lens/` that gives agents code-architecture facts — layered structure with implementation bodies stripped, plus dependency and coupling data — without implementation detail. It covers TypeScript, Python, Java, Rust, and Go on one shared pipeline (ADR 32): it is a read-only consumer of SCIP indexes, never an indexer. Two concerns are deliberately kept out: coupling *verdicts* (it emits facts — cycles, visibility-annotated cross-file references — and the consuming agent judges what counts as bad coupling) and enforcement (no-new-exports gating belongs elsewhere, not here). Why standalone rather than in-process:
 
 - Reuse: one MCP server serves any MCP client, not just jie.
 - Tool visibility: a soul declares `mcp:code-lens:*` in `tools:` and the body registers the tools with full schemas; the LLM sees them as first-class tools, no indirection.
@@ -37,7 +37,7 @@ A hand-rolled newline-delimited JSON-RPC stdio server (`protocol.ts`/`server.ts`
 Within jie it is shipped as a built-in but configured like any other server in `.jie/mcp.json` (ADR 4), with no special-casing in the runtime:
 
 ```json
-{ "servers": { "code-lens": { "transport": "stdio", "command": "bun", "args": ["packages/code-lens/main.ts"] } } }
+{ "servers": { "code-lens": { "transport": "stdio", "command": "bun", "args": ["src/code-lens/main.ts"] } } }
 ```
 
 Index freshness is the user's responsibility: re-run the indexer to refresh, and `index_status` reports what is loaded so staleness is self-evident.

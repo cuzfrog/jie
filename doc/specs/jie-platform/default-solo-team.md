@@ -1,10 +1,10 @@
 # Default-Solo Team — Platform's Built-in Fallback
 
-The default-solo team is the simplest possible `team-blueprint`: one general-purpose leader agent with default tools. It ships as **two `.md` files** inside the platform package at `packages/jie-platform/team/default-solo/`, loaded at module-load time via `import ... with { type: "text" }` and parsed by the same parser as user teams (one code path, no special loader). It is the last-resort fallback guaranteeing the platform always has something to run when no user team is selected; a user copy at `~/.jie/teams/default-solo/` or `.jie/teams/default-solo/` overrides it.
+The default-solo team is the simplest possible `team-blueprint`: one general-purpose leader agent with default tools. It ships as **two `.md` files** inside the platform package at `src/platform/team/default-solo/`, loaded at module-load time via `import ... with { type: "text" }` and parsed by the same parser as user teams (one code path, no special loader). It is the last-resort fallback guaranteeing the platform always has something to run when no user team is selected; a user copy at `~/.jie/teams/default-solo/` or `.jie/teams/default-solo/` overrides it.
 
 ## Built-in (Shipped with the Platform)
 
-The platform's built-in default-solo team lives at `packages/jie-platform/team/default-solo/`:
+The platform's built-in default-solo team lives at `src/platform/team/default-solo/`:
 
 ```
 team/default-solo/
@@ -15,7 +15,7 @@ team/default-solo/
 These two files are the **last-resort fallback** in the team selection chain — used only when no user-installed team is selected (no `--team` flag, no `defaultTeam` in settings, and no user team manifests available at the standard paths). The parser's `loadDefaultSoloTeam()` reads them via `import` attributes (bun 1.3+) at module-load time:
 
 ```typescript
-// packages/jie-platform/team/parser.ts
+// src/platform/team/parser.ts
 import { BUILTIN_DEFAULT_SOLO_TEAM_ID, type TeamBlueprint } from "./types";
 import DEFAULT_SOLO_TEAM_MD from "./default-solo/TEAM.md" with { type: "text" };
 import DEFAULT_SOLO_GENERAL_MD from "./default-solo/general.md" with { type: "text" };

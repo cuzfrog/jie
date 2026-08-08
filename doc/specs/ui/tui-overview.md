@@ -1,6 +1,6 @@
 # TUI Overview
 
-The team's user-facing cockpit. Lives in `packages/jie-tui/`. Observes all agent activity; sends user prompts to agents. This parent doc captures the TUI's role, its boundaries, and its invariants. Children capture the rest:
+The team's user-facing cockpit. Lives in `src/tui/`. Observes all agent activity; sends user prompts to agents. This parent doc captures the TUI's role, its boundaries, and its invariants. Children capture the rest:
 
 - `tui-layout.md` — spatial design (single inline column, footer).
 - `tui-team-panel.md` — the toggleable bottom team panel (layout, interaction, content, state).
@@ -40,7 +40,7 @@ The TUI's sole write path is `platform.prompt(teamId, agentKey, text)`, which pu
 
 ## Tests
 
-Unit tests are colocated (`packages/jie-tui/**/*.test.ts`); screen-level render tests run the real pipeline through a headless terminal (`test/screen.test.ts`). E2e acceptance scenarios live in `tests/e2e/tui/scenario-*.test.ts` and run against the mock LLM backend (`doc/DEVELOPMENT.md`). See `tui-user-scenarios.md`.
+Unit tests are colocated (`src/tui/**/*.test.ts`); screen-level render tests run the real pipeline through a headless terminal (`test/screen.test.ts`). E2e acceptance scenarios live in `tests/e2e/tui/scenario-*.test.ts` and run against the mock LLM backend (`doc/DEVELOPMENT.md`). See `tui-user-scenarios.md`.
 
 ## Flag parity
 

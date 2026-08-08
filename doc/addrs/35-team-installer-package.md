@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Supersedes the install-mechanism clauses of ADR 11: ADR 11's "The team package has no install mechanism" (line 29), "There is no `jie team install` command" (line 47), and "Day 2 stays open" (line 49) are resolved here. ADR 11's core decision - the platform is agnostic of jie-team, and jie-team is a passive content package - is unchanged and reinforced.
+Accepted. Supersedes the install-mechanism clauses of ADR 11: ADR 11's "The team package has no install mechanism" (line 29), "There is no `jie team install` command" (line 47), and "Day 2 stays open" (line 49) are resolved here. ADR 11's core decision - the platform is agnostic of jie-team, and jie-team is a passive content package - is unchanged and reinforced. Per ADR 36 the separate `@cuzfrog/jie-team-installer` package is now the `src/team-installer/` module within the single `@cuzfrog/jie` package; the boundary intent (CLI-side, never imported by the platform or team-content) is preserved.
 
 ## Context
 

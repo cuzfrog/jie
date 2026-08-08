@@ -4,7 +4,7 @@ The `jie` binary is the single entry point for all user interaction. It runs as 
 
 ## Flag Parsing Rules
 
-The hand-rolled parser (`packages/jie-cli/cli-flags.ts`) applies these rules to the `jie` / `jie -p` flag set (`--team`, `--timeout`, `--json`, `--api-key`, `--resume`, `--in-memory`):
+The hand-rolled parser (`src/cli/cli-flags.ts`) applies these rules to the `jie` / `jie -p` flag set (`--team`, `--timeout`, `--json`, `--api-key`, `--resume`, `--in-memory`):
 
 - **Duplicate flag is an error.** If the same flag appears more than once on the command line (e.g. `jie -p "..." --team alpha --team beta`), the CLI exits 1 with `duplicate flag: --<flag>` and does not start. The "last one wins" shell convention is **not** used; the CLI surfaces the duplicate rather than silently picking one. The subcommand parsers (`login`, `logout`, `model`, `team`) do not dedupe; an unrecognized extra token is rejected with `unknown flag: <flag>`.
 - **Missing required argument is an error.** `--team`, `--timeout`, `--api-key`, and `--resume` each require an argument, else exit 1 with `missing argument for --<flag>`. `-p`/`--print` requires an instruction (`missing instruction for -p/--print`), and a second positional is rejected (`unexpected positional argument: <arg>`). Unknown flags/subcommands exit 1 with `unknown flag: <flag>` / `unknown subcommand: <name>`.
@@ -32,7 +32,7 @@ jie [--team <id>] [--resume <id>] [--in-memory]
    - If `--team <id>` is given → use `<id>`; hard fail if not installed.
    - Else read `defaultTeam` from merged settings → use it if installed; a stale value falls through (not an error).
    - Else pick the first installed user team alphabetically across `.jie/teams/*` and `~/.jie/teams/*` (excluding the built-in).
-   - Else use the platform's built-in default-solo team (`packages/jie-platform/team/default-solo/`, see `default-solo-team.md`). The platform always has a runnable team.
+   - Else use the platform's built-in default-solo team (`src/platform/team/default-solo/`, see `default-solo-team.md`). The platform always has a runnable team.
 4. Open storage: SQLite at `~/.jie/storage.db`, or an in-memory store when `--in-memory` is given. On failure → exit 1.
 5. `bootPlatform` composes the container; resolving `cradle.platform` yields the handle without eagerly loading a team. The fallback chain above (`--team` → `defaultTeam` → first user team → built-in default-solo) is `TeamManager.resolveTeamId`, applied at load time; see `10-configuration.md` "Team Selection".
 6. (MCP server connection — not implemented today (ADR 4); this step is a no-op.)
@@ -103,9 +103,9 @@ Prints `jie <version>` to stdout, exits 0. Does not load config.
 
 The CLI reads its version from the umbrella `@cuzfrog/jie` package's `package.json` at startup. Because the monorepo has zero build step (`monorepo-structure.md`), there is no compile-time injection — the value is fetched at runtime.
 
-**Resolution algorithm** (in `packages/jie-cli/version.ts`):
+**Resolution algorithm** (in `src/cli/version.ts`):
 
-1. Start at `import.meta.dirname` (the directory containing `packages/jie-cli/index.ts`).
+1. Start at `import.meta.dirname` (the directory containing `src/cli/index.ts`).
 2. Walk up the parent chain. At each level, try to read `package.json`.
 3. Return the first `package.json` whose `name` equals `"@cuzfrog/jie"` — that's the umbrella.
 4. Use `pkg.version` as `VERSION`.

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. All team-discovery logic lives in `jie-platform`; the CLI and TUI are responsible only for their own concerns (argv parsing, rendering, terminal output).
+Accepted. All team-discovery logic lives in `jie-platform`; the CLI and TUI are responsible only for their own concerns (argv parsing, rendering, terminal output). Per ADR 36 the packages consolidated into one; discovery logic now lives in `src/platform/team/`.
 
 ## Context
 

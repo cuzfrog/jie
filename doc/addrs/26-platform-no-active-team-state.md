@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. `JiePlatform` does not own an "active team" closure and exposes no `setActiveTeam` / `loadTeam` / `bodies()` surface. Team loading happens through the `team` command; selection is a consumer concern (CLI resolves the id from argv + settings; TUI keeps a `focused` reducer state). This supersedes the earlier sketch that put `loadTeam` / `bodies()` / `teamId` on the handle.
+Accepted. `JiePlatform` does not own an "active team" closure and exposes no `setActiveTeam` / `loadTeam` / `bodies()` surface. Team loading happens through the `team` command; selection is a consumer concern (CLI resolves the id from argv + settings; TUI keeps a `focused` reducer state). This supersedes the earlier sketch that put `loadTeam` / `bodies()` / `teamId` on the handle. Per ADR 36 the handle lives at `src/platform/jie-platform.ts`.
 
 ## Context
 

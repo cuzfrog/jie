@@ -48,7 +48,7 @@ Two locations, **project overrides global with deep-merge** (nested objects merg
 The read-side type (loaded by `SettingsStore`, surfaced on `handle.settings` per ADR 13):
 
 ```typescript
-// packages/jie-platform/config/types.ts
+// src/platform/config/types.ts
 export interface Settings {
   readonly defaultProvider?: string;
   readonly defaultModel?: string;
