@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Settings } from "@cuzfrog/jie-platform";
+import type { Settings } from "../../src/platform";
 
 const FIXTURE_PATH = join(import.meta.dir, "fixtures", "models.json");
 

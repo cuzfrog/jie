@@ -1,4 +1,4 @@
-import { loadMockExpectations } from "../../../packages/mock-llm-backend";
+import { loadMockExpectations } from "../../mock-llm-backend";
 import { seedTeam } from "../_fixture.ts";
 import { startTui, stopTui, submitAndWaitForAgentIdle, waitForTeam, sendLine, type TuiHarness } from "./harness";
 import expectations from "./scenario-3.llm.ts";

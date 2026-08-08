@@ -1,6 +1,6 @@
 # Jie Team — Overview
 
-**Status: the package ships a blueprint installer (`installBlueprint` / `listBlueprints`) and the `default-coders` blueprint — the six-role pipeline below, with constrained per-role tool sets, the notify/artifact conventions as manifest prose, and the lifecycle declaration (phase transitions, iteration cap, write gates) in `TEAM.md` frontmatter, enforced generically by the platform (ADR 33). Residual: `bash` writes are not gated. The two-role code-lens team (lead + architect on `structure.requested` / `structure.answered`, `mcp:code-lens:*`, ADR 32) lives untracked at `.jie/teams/dev` as a local test fixture.**
+**Status: passive content - the `default-coders` blueprint (the six-role pipeline below, with constrained per-role tool sets, the notify/artifact conventions as manifest prose, and the lifecycle declaration in `TEAM.md` frontmatter, enforced generically by the platform per ADR 33). No `index.ts`, no install hook, no runtime surface (ADR 11); shipped bundled at `src/team-content/default-coders/` inside `@cuzfrog/jie` (ADR 36), and first-run auto-install (D1) copies it to `~/.jie/teams/`. Third-party teams are installed by `src/team-installer`, which scans the source root for `<id>/TEAM.md` directories (ADR 35). Residual: `bash` writes are not gated. The two-role code-lens team (lead + architect on `structure.requested` / `structure.answered`, `mcp:code-lens:*`, ADR 32) lives untracked at `.jie/teams/dev` as a local test fixture.**
 
 ## Purpose
 

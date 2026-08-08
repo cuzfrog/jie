@@ -5,7 +5,7 @@
 ## Storage Interface
 
 ```typescript
-// packages/jie-platform/storage/storage.ts
+// src/platform/storage/storage.ts
 export interface Storage {
   exec(sql: string, params?: unknown[]): void;                              // write / DDL
   query(sql: string, params?: unknown[]): ReadonlyArray<ReadonlyArray<unknown>>;  // read; row typing happens at extraction
@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS kanban_counters (
 A work product produced or consumed by agents (a plan, a research note, a change summary). The agent supplies the full key; the platform does not generate artifact IDs.
 
 ```typescript
-// packages/jie-platform/storage/artifact-store.ts
+// src/platform/storage/artifact-store.ts
 export interface ArtifactStore {
   write(key: string, content: string): Promise<{ key: string; created_at: string }>;   // INSERT OR REPLACE
   read(key: string): Promise<{ key: string; content: string; created_at: string } | null>;  // null = missing (a normal result, not an error)
@@ -120,7 +120,7 @@ Agents see the store through two built-in tools — `write_artifact(key, content
 The kanban board — the shared task list a team maintains through `kanban_write` and the TUI's `/kanban` command (`06-agent-model.md`, `kanban_write`). The board is scoped per team and crosses sessions; each card has a `scope` of `team` or `session`. Team-scoped cards (`session_id = ''`) are visible in every session of the team; session-scoped cards are visible only in their owning session.
 
 ```typescript
-// packages/jie-platform/storage/kanban-store.ts
+// src/platform/storage/kanban-store.ts
 export interface KanbanStore {
   load(teamId: string, sessionId: string): ReadonlyArray<KanbanCard>;    // ORDER BY id
   replace(teamId: string, sessionId: string, incoming: ReadonlyArray<KanbanCardWrite>): ReadonlyArray<KanbanCard>;

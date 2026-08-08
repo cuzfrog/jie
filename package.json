@@ -1,40 +1,33 @@
 {
   "name": "@cuzfrog/jie",
   "version": "0.9.0",
-  "workspaces": ["packages/*"],
-  "catalog": {
-    "typescript": "7.0.2",
-    "@types/bun": "1.3.14",
-    "@types/node": "26.1.2",
-    "@earendil-works/pi-agent-core": "0.84.1",
-    "@earendil-works/pi-ai": "0.84.1",
-    "@earendil-works/pi-tui": "0.84.1",
-    "@xterm/headless": "5.5.0",
-    "typebox": "1.3.7",
-    "yaml": "2.9.0",
-    "ulid": "2.4.0",
-    "node-html-parser": "6.1.13",
-    "tslog": "4.11.0",
-    "awilix": "13.0.5",
-    "protobufjs": "8.7.1"
-  },
+  "type": "module",
   "bin": {
-    "jie": "packages/jie-cli/index.ts"
+    "jie": "src/cli/index.ts",
+    "code-lens": "src/code-lens/main.ts"
   },
+  "files": ["src"],
   "scripts": {
-    "mock:start": "bun run packages/mock-llm-backend/server.ts",
+    "mock:start": "bun run tests/mock-llm-backend/server.ts",
     "test:e2e:mock": "bun test --max-concurrency=1 tests/e2e"
   },
   "dependencies": {
-    "@cuzfrog/jie-platform": "workspace:*",
-    "@cuzfrog/jie-tui": "workspace:*"
+    "@earendil-works/pi-agent-core": "0.84.1",
+    "@earendil-works/pi-ai": "0.84.1",
+    "@earendil-works/pi-tui": "0.84.1",
+    "awilix": "13.0.5",
+    "cli-highlight": "2.1.11",
+    "node-html-parser": "6.1.13",
+    "protobufjs": "8.7.1",
+    "tslog": "4.11.0",
+    "typebox": "1.3.7",
+    "ulid": "2.4.0",
+    "yaml": "2.9.0"
   },
   "devDependencies": {
-    "@earendil-works/pi-agent-core": "catalog:",
-    "@earendil-works/pi-ai": "catalog:",
-    "@types/bun": "catalog:",
-    "@types/node": "catalog:",
-    "awilix": "catalog:",
-    "typebox": "catalog:"
+    "@types/bun": "1.3.14",
+    "@types/node": "26.1.2",
+    "@xterm/headless": "5.5.0",
+    "typescript": "7.0.2"
   }
 }

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. All packages compose their services through awilix containers (`InjectionMode.CLASSIC`), following the pattern of `/home/cuz/workspace/beep/src/container.ts`. This supersedes the "no class means no false promises … DI the platform does not need" rationale in ADR 13; the entry-function decision itself survives — `createJiePlatform` becomes `bootPlatform`, same role, container-shaped result.
+Accepted. All packages compose their services through awilix containers (`InjectionMode.CLASSIC`), following the pattern of `/home/cuz/workspace/beep/src/container.ts`. This supersedes the "no class means no false promises … DI the platform does not need" rationale in ADR 13; the entry-function decision itself survives — `createJiePlatform` becomes `bootPlatform`, same role, container-shaped result. Per ADR 36 the packages consolidated into one; awilix is now a single root-pinned dependency and the per-package `catalog:` references are historical.
 
 ## Decision
 

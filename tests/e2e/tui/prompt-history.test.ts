@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadMockExpectations } from "../../../packages/mock-llm-backend";
+import { loadMockExpectations } from "../../mock-llm-backend";
 import { seedTeam, writeModelsJsonTo, writeSettingsJson } from "../_fixture.ts";
 import { sendCmd, sendLine, startTui, stopTui, submitAndWaitForAgentIdle, waitForEditorText, waitForTeam, type TuiHarness } from "./harness";
 import expectations from "./prompt-history.llm.ts";

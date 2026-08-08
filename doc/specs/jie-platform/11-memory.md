@@ -36,7 +36,7 @@ Task and artifact tracking are deliberately not memory types — kanban and the 
 
 ## Manager
 
-`MemoryManager` is the module's only public service. It lives in `packages/jie-platform/memory/` and exposes four operations:
+`MemoryManager` is the module's only public service. It lives in `src/platform/memory/` and exposes four operations:
 
 ```typescript
 interface MemoryManager {

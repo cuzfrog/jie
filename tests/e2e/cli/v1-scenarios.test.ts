@@ -7,8 +7,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { main } from "../../../packages/jie-cli";
-import { loadMockExpectations } from "../../../packages/mock-llm-backend";
+import { main } from "../../../src/cli";
+import { loadMockExpectations } from "../../mock-llm-backend";
 import {
   writeModelsJsonTo,
   writeSettingsJson,

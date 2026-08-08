@@ -1,0 +1,42 @@
+---
+no-new-exports:
+  - bash.test.ts
+  - bash.ts
+  - edit.test.ts
+  - edit.ts
+  - file-mutation-queue.test.ts
+  - file-mutation-queue.ts
+  - index.ts
+  - notify.test.ts
+  - notify.ts
+  - path-utils.ts
+  - read-artifact.test.ts
+  - read-artifact.ts
+  - read-file.test.ts
+  - read-file.ts
+  - kanban-write.test.ts
+  - kanban-write.ts
+  - memory-search.test.ts
+  - memory-search.ts
+  - task-lifecycle.test.ts
+  - task-lifecycle.ts
+  - tool-registry.test.ts
+  - tool-registry.ts
+  - unified-diff.test.ts
+  - unified-diff.ts
+  - web-fetch.test.ts
+  - web-fetch.ts
+  - web-search.test.ts
+  - web-search.ts
+  - write-gate.test.ts
+  - write-gate.ts
+  - write-artifact.test.ts
+  - write-artifact.ts
+  - write-file.test.ts
+  - write-file.ts
+---
+
+# Notes
+- tools' implementation types should not escape from this module. Tools should be registered without an external caller knowing them.
+- `ToolResultDetails` and its individual detail types are package-wide DTOs and are re-exported from `src/platform/index.ts`.
+- `toolRegistry` instance is exported for jie-platform to register MCP and user custom tools.

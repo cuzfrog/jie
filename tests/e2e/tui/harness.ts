@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
-import { bootPlatform, type EffortLevel, type JiePlatform } from "@cuzfrog/jie-platform";
-import { bootTui, type CreateTUIOptions, type Tui, type TuiCradle } from "@cuzfrog/jie-tui";
+import { bootPlatform, type EffortLevel, type JiePlatform } from "../../../src/platform";
+import { bootTui, type CreateTUIOptions, type Tui, type TuiCradle } from "../../../src/tui";
 import { writeModelsJsonTo, writeSettingsJson } from "../_fixture.ts";
 
 type AgentId = `${string}:${string}`;

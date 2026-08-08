@@ -800,7 +800,7 @@ Extensions can replace the editor at runtime via `ctx.ui.setEditorComponent((tui
 
 ### 19.1 Reuse wholesale
 
-These are pure functions / data structures with no dependency on pi's TUI renderer; copy them verbatim into `packages/jie-tui/`:
+These are pure functions / data structures with no dependency on pi's TUI renderer; copy them verbatim into `src/tui/`:
 
 - `findWordBackward` / `findWordForward` (`packages/tui/src/word-navigation.ts`). Used by Ctrl+W, Alt+Left, Alt+Right.
 - `visibleWidth` (`packages/tui/src/utils.ts:216`). Used everywhere we need terminal column count.
@@ -830,7 +830,7 @@ Pi's Editor is ~2300 lines of imperative code. A full React port preserving all 
 
 ### 19.5 Delivery status
 
-Delivered (in `packages/jie-tui/components/editor/`):
+Delivered (in `src/tui/components/editor/`):
 
 - **Multi-line cursor positioning** per pi §3, §9 — `cursorLine`, `cursorCol`, vertical/horizontal movement with `cursorCol` clamping when the target line is shorter. (`useEditorState.moveCursorUp`/`moveCursorDown`.)
 - **Grapheme-aware insertion / deletion** per pi §7, §8 — `Intl.Segmenter({ granularity: "grapheme" })` walks `delete`-at-cursor and `backspace`-before-cursor by cluster unit, not by UTF-16 code unit. (`useEditorState.insert` / `backspace` / `forwardDelete`.)
