@@ -1,8 +1,7 @@
 import { truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
 import { TuiState, type AgentUiState, type StateStore } from "../../state";
 import { style } from "../themes";
-import { contextPercentColor, formatContextPercent } from "./context-percent";
-import { formatModelSegment } from "./model-segment";
+import { contextPercentColor, formatContextPercent, formatModelSegment } from "../elements";
 import { formatQueueIndicator } from "./queue-indicator";
 
 export class Footer implements Component {

@@ -1,7 +1,7 @@
 import { truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
 import type { KanbanCard, KanbanStatus } from "../../platform";
 import { TuiState, type StateStore } from "../state";
-import { Box } from "./box";
+import { Box } from "./elements";
 import { style, type ColorName } from "./themes";
 
 const COLUMN_GAP = "  ";

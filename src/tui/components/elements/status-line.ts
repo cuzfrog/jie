@@ -1,6 +1,6 @@
 import { truncateToWidth, type Component } from "@earendil-works/pi-tui";
-import type { StateStore } from "../state";
-import { style } from "./themes";
+import type { StateStore } from "../../state";
+import { style } from "../themes";
 
 export class StatusLine implements Component {
   private readonly stateStore: StateStore;

@@ -1,6 +1,6 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { type AgentId, type AgentUiState, type MessageTurn, type StateStore, type TuiState } from "../state";
-import { makeAgentUiState, makeTuiState } from "../test";
+import { type AgentId, type AgentUiState, type MessageTurn, type StateStore, type TuiState } from "../../state";
+import { makeAgentUiState, makeTuiState } from "../../test";
 import { WelcomeBanner, helpLines } from "./welcome-banner";
 
 const LEADER_ID: AgentId = "my-team:general-1";

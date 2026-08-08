@@ -1,9 +1,9 @@
 import { truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
-import type { CommandResult } from "../../platform";
-import { COMMAND_METADATA, type CommandMeta } from "../command-metadata";
-import { TuiState, type StateStore, type TuiState as TuiStateType } from "../state";
+import type { CommandResult } from "../../../platform";
+import { COMMAND_METADATA, type CommandMeta } from "../../command-metadata";
+import { TuiState, type StateStore, type TuiState as TuiStateType } from "../../state";
 import { hintLines } from "./key-hints";
-import { style } from "./themes";
+import { style } from "../themes";
 
 type InstalledTeams = CommandResult<"getTeamInfo">["installed"];
 
@@ -22,7 +22,7 @@ export class WelcomeBanner implements Component {
   invalidate(): void {}
 }
 
-export function welcomeLines(state: TuiStateType, width: number): string[] {
+function welcomeLines(state: TuiStateType, width: number): string[] {
   const w = Math.max(1, width);
   return joinSections([identityLines(state), helpHintSection()], w);
 }

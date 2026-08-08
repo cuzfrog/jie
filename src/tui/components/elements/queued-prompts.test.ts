@@ -1,6 +1,6 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { type StateStore } from "../state";
-import { makeAgentUiState, makeTuiState } from "../test";
+import { type StateStore } from "../../state";
+import { makeAgentUiState, makeTuiState } from "../../test";
 import { QueuedPrompts } from "./queued-prompts";
 
 const stateStore = vi.mocked<StateStore>({ getState: vi.fn(), dispatch: vi.fn(), subscribe: vi.fn(() => () => undefined) });

@@ -1,6 +1,6 @@
 import { type Component } from "@earendil-works/pi-tui";
 import { TuiState, type StateStore } from "../state";
-import { Box } from "./box";
+import { Box } from "./elements";
 import { renderTeamTable, type TeamTableColumn } from "./team-table";
 
 const PANEL_COLUMNS: ReadonlyArray<TeamTableColumn> = ["agent", "ctx", "tools", "subscribe", "model"];

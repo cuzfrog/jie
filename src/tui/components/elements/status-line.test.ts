@@ -1,6 +1,6 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { type StateStore } from "../state";
-import { makeTuiState } from "../test";
+import { type StateStore } from "../../state";
+import { makeTuiState } from "../../test";
 import { StatusLine } from "./status-line";
 
 const stateStore = vi.mocked<StateStore>({ getState: vi.fn(), dispatch: vi.fn(), subscribe: vi.fn(() => () => undefined) });

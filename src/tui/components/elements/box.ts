@@ -1,5 +1,5 @@
 import { truncateToWidth, type Component } from "@earendil-works/pi-tui";
-import { style } from "./themes";
+import { style } from "../themes";
 
 export interface BoxOptions {
   readonly top?: string;

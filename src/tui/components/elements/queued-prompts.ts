@@ -1,7 +1,7 @@
 import { truncateToWidth, type Component } from "@earendil-works/pi-tui";
-import { TuiState, type StateStore } from "../state";
-import { singleLine } from "./footer";
-import { style } from "./themes";
+import { TuiState, type StateStore } from "../../state";
+import { singleLine } from "./single-line";
+import { style } from "../themes";
 
 const QUEUED_PREFIX = "Queued: ";
 

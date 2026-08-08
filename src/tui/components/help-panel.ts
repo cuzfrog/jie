@@ -1,7 +1,6 @@
 import { type Component } from "@earendil-works/pi-tui";
 import { type StateStore } from "../state";
-import { Box } from "./box";
-import { helpLines } from "./welcome-banner";
+import { Box, helpLines } from "./elements";
 import { style } from "./themes";
 
 const HINT = "Type /help to close.";
