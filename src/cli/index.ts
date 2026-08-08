@@ -15,6 +15,7 @@ import {
   runTeam,
   runTeamInstall,
 } from "./commands";
+import { createFirstRunPorts, runFirstRunWelcome } from "./first-run";
 import { VERSION } from "./version";
 
 export async function main(argv: string[], cwd: string = process.cwd(), console: Console = defaultConsole): Promise<number> {
@@ -24,6 +25,7 @@ export async function main(argv: string[], cwd: string = process.cwd(), console:
     return await run(parsed, cwd, homeDir, {
       bootPlatform: async (options) => (await bootPlatform(options)).cradle.platform,
       bootTui: (options, deps) => bootTui(options, deps).cradle.tui,
+      runFirstRun: (homeJieDir, noInstall) => runFirstRunWelcome(createFirstRunPorts({ homeJieDir, console }), noInstall),
       console,
     });
   } catch (err) {
@@ -35,6 +37,7 @@ export async function main(argv: string[], cwd: string = process.cwd(), console:
 interface RunDeps {
   readonly bootPlatform: (options: JiePlatformOptions) => Promise<JiePlatform>;
   readonly bootTui: (options: CreateTUIOptions, deps: TuiDeps) => Tui;
+  readonly runFirstRun: (homeJieDir: string, noInstall: boolean) => Promise<void>;
   readonly console: Console;
 }
 
@@ -54,6 +57,9 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
   }
   if (args.kind === "team" && (args.action === "add" || args.action === "remove")) {
     return await runTeamInstall(args, homeJieDir, projectJieDir, deps.console);
+  }
+  if (args.kind === "tui") {
+    await deps.runFirstRun(homeJieDir, args.noInstall);
   }
   const handle = await connectPlatform(
     {
@@ -151,7 +157,7 @@ Usage:
   jie --api-key <key>
   jie --resume <session_id>
 
-  jie [--team <id>] [--resume <id>] [--in-memory] [--debug]    # interactive TUI
+  jie [--team <id>] [--resume <id>] [--in-memory] [--debug] [--no-install]    # interactive TUI
   jie --version
   jie --help
 `);

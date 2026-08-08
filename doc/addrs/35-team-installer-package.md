@@ -24,7 +24,7 @@ A new package, `@cuzfrog/jie-team-installer`, is the install-time authority for 
 
 **jie-team remains pure content.** The installer consumes jie-team by scanning its package root for `<id>/TEAM.md` directories after extracting a tarball or cloning - it never imports jie-team. jie-team has no `index.ts`, no `exports`, no install hook.
 
-**No auto-install hook.** There is no `postinstall` in any package. First-run auto-install of jie-team (D1) is a CLI trigger, not a package lifecycle hook, and is addressed separately.
+**No auto-install hook.** There is no `postinstall` in any package. First-run auto-install (D1) is a CLI trigger, not a package lifecycle hook: on the first interactive `jie` run, the CLI prompts to install the bundled `default-coders` blueprint into `~/.jie/teams/` via this installer, gated by a `~/.jie/.first-run-done` sentinel; `--no-install` opts out (and skips the sentinel). Implemented in `src/cli/first-run.ts` (see `doc/specs/ui/cli.md` "First-run auto-install").
 
 ## Rationale
 

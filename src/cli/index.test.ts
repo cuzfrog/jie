@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import {
   Events,
   type Command,
@@ -112,6 +113,7 @@ function dispatch(command: Command<CommandName>): CommandResult<CommandName> | n
 interface CapturedRun {
   fakePlatform: FakePlatform;
   bootPlatform: ReturnType<typeof vi.fn>;
+  runFirstRun: ReturnType<typeof vi.fn>;
   tuiCalls: { options: CreateTUIOptions; deps: TuiDeps }[];
   startCalls: { value: number };
   stopCalls: { value: number };
@@ -125,6 +127,7 @@ function captureRun(platform: FakePlatform): CapturedRun {
   const stopCalls = { value: 0 };
   const consoleMock = makeConsoleMock();
   const bootPlatform = vi.fn(async (_options: JiePlatformOptions): Promise<JiePlatform> => platform);
+  const runFirstRun = vi.fn(async (_homeJieDir: string, _noInstall: boolean): Promise<void> => {});
   const bootTui = vi.fn((options: CreateTUIOptions, deps: TuiDeps): Tui => {
     tuiCalls.push({ options, deps });
     deps.platform.subscribe("system.team.loaded", () => undefined);
@@ -140,15 +143,15 @@ function captureRun(platform: FakePlatform): CapturedRun {
     };
   });
   const run = (parsed: Parameters<typeof _run>[0]): Promise<number> =>
-    _run(parsed, process.cwd(), process.env.HOME ?? "/tmp", { bootPlatform, bootTui, console: consoleMock });
-  return { fakePlatform: platform, bootPlatform, tuiCalls, startCalls, stopCalls, consoleMock, run };
+    _run(parsed, process.cwd(), process.env.HOME ?? "/tmp", { bootPlatform, bootTui, runFirstRun, console: consoleMock });
+  return { fakePlatform: platform, bootPlatform, runFirstRun, tuiCalls, startCalls, stopCalls, consoleMock, run };
 }
 
 describe("_run — tui", () => {
   test("tui boot: loads team, calls bootTui({cwd},{platform}), awaits start, stops platform, returns 0", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    const exit = await captured.run({ kind: "tui", inMemory: false, debug: false });
+    const exit = await captured.run({ kind: "tui", inMemory: false, debug: false, noInstall: false });
     expect(exit).toBe(0);
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: undefined });
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "stop" });
@@ -162,7 +165,7 @@ describe("_run — tui", () => {
   test("tui boot: calls tui.stop() after start resolves (restores terminal state)", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    const exit = await captured.run({ kind: "tui", inMemory: false, debug: false });
+    const exit = await captured.run({ kind: "tui", inMemory: false, debug: false, noInstall: false });
     expect(exit).toBe(0);
     expect(captured.stopCalls.value).toBe(1);
   });
@@ -170,7 +173,7 @@ describe("_run — tui", () => {
   test("tui boot: passes args.team to execute({name:'team'})", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    const exit = await captured.run({ kind: "tui", team: "alpha", inMemory: false, debug: false });
+    const exit = await captured.run({ kind: "tui", team: "alpha", inMemory: false, debug: false, noInstall: false });
     expect(exit).toBe(0);
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: "alpha" });
   });
@@ -178,7 +181,7 @@ describe("_run — tui", () => {
   test("tui boot with resume: passes resumeSessionId in bootPlatform options", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    const exit = await captured.run({ kind: "tui", resume: "sess-1", inMemory: false, debug: false });
+    const exit = await captured.run({ kind: "tui", resume: "sess-1", inMemory: false, debug: false, noInstall: false });
     expect(exit).toBe(0);
     expect(captured.bootPlatform.mock.calls[0]?.[0]).toMatchObject({ resumeSessionId: "sess-1" });
   });
@@ -186,14 +189,14 @@ describe("_run — tui", () => {
   test("tui boot: subscribes to system.error before dispatching", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    await captured.run({ kind: "tui", inMemory: false, debug: false });
+    await captured.run({ kind: "tui", inMemory: false, debug: false, noInstall: false });
     expect(platform.subscribeCalls).toContain("system.error");
   });
 
   test("tui boot: TUI subscribes BEFORE execute({name:'team'}) so system.team.loaded reaches the TUI", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    await captured.run({ kind: "tui", inMemory: false, debug: false });
+    await captured.run({ kind: "tui", inMemory: false, debug: false, noInstall: false });
     const teamExecuteIndex = platform.trace.findIndex(
       (e) => e.kind === "execute" && e.commandName === "team",
     );
@@ -208,7 +211,7 @@ describe("_run — tui", () => {
   test("tui boot: passes git branch and dirty flag from the git snapshot to bootTui", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    const exit = await captured.run({ kind: "tui", inMemory: false, debug: false });
+    const exit = await captured.run({ kind: "tui", inMemory: false, debug: false, noInstall: false });
     expect(exit).toBe(0);
     expect(captured.tuiCalls[0]?.deps.gitBranch).toBe("test-branch");
     expect(captured.tuiCalls[0]?.deps.gitDirty).toBe(true);
@@ -223,10 +226,37 @@ describe("_run — tui", () => {
           throw new Error("boot blew up");
         },
         bootTui: vi.fn(),
+        runFirstRun: vi.fn(),
         console: consoleMock,
       });
-    expect(run({ kind: "tui", inMemory: false, debug: false })).rejects.toThrow("boot blew up");
+    expect(run({ kind: "tui", inMemory: false, debug: false, noInstall: false })).rejects.toThrow("boot blew up");
     expect(platform.execute).not.toHaveBeenCalledWith({ name: "stop" });
+  });
+
+  test("tui boot: triggers first-run welcome with homeJieDir and noInstall before platform boot", async () => {
+    const platform = makeFakePlatform();
+    const captured = captureRun(platform);
+    await captured.run({ kind: "tui", inMemory: false, debug: false, noInstall: true });
+    expect(captured.runFirstRun).toHaveBeenCalledTimes(1);
+    expect(captured.runFirstRun.mock.calls[0]?.[0]).toBe(join(process.env.HOME ?? "/tmp", ".jie"));
+    expect(captured.runFirstRun.mock.calls[0]?.[1]).toBe(true);
+    const firstRunIndex = captured.bootPlatform.mock.invocationCallOrder[0]!;
+    const runFirstRunIndex = captured.runFirstRun.mock.invocationCallOrder[0]!;
+    expect(runFirstRunIndex).toBeLessThan(firstRunIndex);
+  });
+
+  test("print mode: skips first-run welcome (non-interactive)", async () => {
+    const platform = makeFakePlatform();
+    const captured = captureRun(platform);
+    await captured.run({
+      kind: "print",
+      instruction: "hello",
+      timeout: 0.05,
+      json: false,
+      inMemory: false,
+      debug: false,
+    });
+    expect(captured.runFirstRun).not.toHaveBeenCalled();
   });
 });
 
@@ -235,7 +265,10 @@ describe("_run — error/help/version bypass boot", () => {
     const bootPlatform = vi.fn();
     const consoleMock = makeConsoleMock();
     const exit = await _run(
-      { kind: "error", message: "bad flag" }, process.cwd(), "/tmp", { bootPlatform, bootTui: vi.fn(), console: consoleMock },
+      { kind: "error", message: "bad flag" },
+      process.cwd(),
+      "/tmp",
+      { bootPlatform, bootTui: vi.fn(), runFirstRun: vi.fn(), console: consoleMock },
     );
     expect(exit).toBe(1);
     expect(bootPlatform).not.toHaveBeenCalled();
@@ -245,7 +278,12 @@ describe("_run — error/help/version bypass boot", () => {
   test("version kind -> prints version, exit 0, no platform boot", async () => {
     const bootPlatform = vi.fn();
     const consoleMock = makeConsoleMock();
-    const exit = await _run({ kind: "version" }, process.cwd(), "/tmp", { bootPlatform, bootTui: vi.fn(), console: consoleMock });
+    const exit = await _run(
+      { kind: "version" },
+      process.cwd(),
+      "/tmp",
+      { bootPlatform, bootTui: vi.fn(), runFirstRun: vi.fn(), console: consoleMock },
+    );
     expect(exit).toBe(0);
     expect(bootPlatform).not.toHaveBeenCalled();
     expect(consoleMock.print.mock.calls[0]?.[0]).toMatch(/^jie /);
@@ -254,7 +292,12 @@ describe("_run — error/help/version bypass boot", () => {
   test("help kind -> prints usage listing the main commands, exit 0, no platform boot", async () => {
     const bootPlatform = vi.fn();
     const consoleMock = makeConsoleMock();
-    const exit = await _run({ kind: "help" }, process.cwd(), "/tmp", { bootPlatform, bootTui: vi.fn(), console: consoleMock });
+    const exit = await _run(
+      { kind: "help" },
+      process.cwd(),
+      "/tmp",
+      { bootPlatform, bootTui: vi.fn(), runFirstRun: vi.fn(), console: consoleMock },
+    );
     expect(exit).toBe(0);
     expect(bootPlatform).not.toHaveBeenCalled();
     const text = consoleMock.print.mock.calls[0]?.[0] ?? "";

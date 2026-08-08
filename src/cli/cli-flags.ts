@@ -23,7 +23,14 @@ export interface ParsedArgsMap {
     | { readonly kind: "team"; readonly action: "list" }
     | { readonly kind: "team"; readonly action: "remove"; readonly teamId: string; readonly project: boolean };
   readonly apiKey: { readonly kind: "apiKey"; readonly apiKey: string };
-  readonly tui: { readonly kind: "tui"; readonly team?: string; readonly resume?: string; readonly inMemory: boolean; readonly debug: boolean };
+  readonly tui: {
+    readonly kind: "tui";
+    readonly team?: string;
+    readonly resume?: string;
+    readonly inMemory: boolean;
+    readonly debug: boolean;
+    readonly noInstall: boolean;
+  };
   readonly error: { readonly kind: "error"; readonly message: string };
 }
 export type ParsedArgs = ParsedArgsMap[keyof ParsedArgsMap];
@@ -35,17 +42,23 @@ export function parseFlags(argv: string[]): ParsedArgs {
   const seen = new Map<string, string>();
 
   let debug = false;
+  let noInstall = false;
   const rest = argv.slice();
-  if (rest.length === 0) return { kind: "tui", inMemory: false, debug };
+  if (rest.length === 0) return { kind: "tui", inMemory: false, debug, noInstall };
   let first = rest[0]!;
-  while (first === "--debug") {
-    if (debug) dupes.add("--debug");
-    debug = true;
+  while (first === "--debug" || first === "--no-install") {
+    if (first === "--debug") {
+      if (debug) dupes.add("--debug");
+      debug = true;
+    } else {
+      if (noInstall) dupes.add("--no-install");
+      noInstall = true;
+    }
     rest.shift();
     if (rest.length === 0) {
       const dupErr = errorIfDupes(dupes);
       if (dupErr !== undefined) return dupErr;
-      return { kind: "tui", inMemory: false, debug };
+      return { kind: "tui", inMemory: false, debug, noInstall };
     }
     first = rest[0]!;
   }
@@ -55,30 +68,42 @@ export function parseFlags(argv: string[]): ParsedArgs {
   if (first === "--version") return { kind: "version" };
   if (first === "--help" || first === "-h") return { kind: "help" };
   if (first === "--in-memory") {
+    seen.set("--in-memory", "");
     const tail = rest.slice(1);
-    if (tail.length === 0) return { kind: "tui", inMemory: true, debug };
-    const head = tail[0]!;
-    if (head === "-p" || head === "--print" || head === "--in-memory") {
-      seen.set("--in-memory", "");
-      return parsePrint(tail, dupes, seen, head, true, debug);
+    let j = 0;
+    while (j < tail.length && (tail[j] === "--debug" || tail[j] === "--no-install")) {
+      const f = tail[j]!;
+      if (f === "--debug") {
+        if (seen.has("--debug")) dupes.add("--debug");
+        seen.set("--debug", "");
+        debug = true;
+      } else {
+        if (seen.has("--no-install")) dupes.add("--no-install");
+        seen.set("--no-install", "");
+        noInstall = true;
+      }
+      j += 1;
     }
-    if (head === "--api-key" || head === "--resume" || head === "--team" || head === "--debug") {
-      if (tail.length < 2) {
+    const remaining = tail.slice(j);
+    if (remaining.length === 0) {
+      const dupErr = errorIfDupes(dupes);
+      if (dupErr !== undefined) return dupErr;
+      return { kind: "tui", inMemory: true, debug, noInstall };
+    }
+    const head = remaining[0]!;
+    if (head === "-p" || head === "--print" || head === "--in-memory") {
+      return parsePrint(remaining, dupes, seen, head, true, debug, noInstall);
+    }
+    if (head === "--api-key" || head === "--resume" || head === "--team") {
+      if (remaining.length < 2) {
         return { kind: "error", message: `missing argument for ${head}` };
       }
-      if (head === "--debug") {
-        if (debug) dupes.add("--debug");
-        debug = true;
-        seen.set("--in-memory", "");
-        return parsePrint(tail.slice(2), dupes, seen, tail[1]!, true, debug);
-      }
-      seen.set("--in-memory", "");
-      return parsePrint(tail.slice(1), dupes, seen, head, true, debug);
+      return parsePrint(remaining.slice(1), dupes, seen, head, true, debug, noInstall);
     }
     if (head.startsWith("-")) {
       return { kind: "error", message: `unknown flag: ${head}` };
     }
-    return { kind: "tui", team: head, inMemory: true, debug };
+    return { kind: "tui", team: head, inMemory: true, debug, noInstall };
   }
   if (first === "login") return parseLogin(rest.slice(1), dupes, seen);
   if (first === "logout") return parseLogout(rest.slice(1), dupes, seen);
@@ -90,18 +115,18 @@ export function parseFlags(argv: string[]): ParsedArgs {
     if (v === undefined) return { kind: "error", message: "missing argument for --api-key" };
     if (rest.length > 2) {
 
-      return parsePrint(rest.slice(1), dupes, seen, first, false, debug);
+      return parsePrint(rest.slice(1), dupes, seen, first, false, debug, noInstall);
     }
     return { kind: "apiKey", apiKey: v };
   }
   if (PRINT_FLAGS.has(first)) {
-    return parsePrint(rest.slice(1), dupes, seen, first, false, debug);
+    return parsePrint(rest.slice(1), dupes, seen, first, false, debug, noInstall);
   }
   if (first === "--resume") {
-    return parsePrint(rest.slice(1), dupes, seen, first, false, debug);
+    return parsePrint(rest.slice(1), dupes, seen, first, false, debug, noInstall);
   }
   if (first === "--team") {
-    return parsePrint(rest.slice(1), dupes, seen, first, false, debug);
+    return parsePrint(rest.slice(1), dupes, seen, first, false, debug, noInstall);
   }
   if (first.startsWith("-")) {
     return { kind: "error", message: `unknown flag: ${first}` };
@@ -231,6 +256,7 @@ function parsePrint(
   firstFlag: string,
   inMemory = false,
   debug = false,
+  noInstall = false,
 ): ParsedArgs {
   let team: string | undefined;
   let timeout: number | undefined;
@@ -329,6 +355,12 @@ function parsePrint(
       debug = true;
       continue;
     }
+    if (a === "--no-install") {
+      if (seen.has("--no-install")) dupes.add("--no-install");
+      seen.set("--no-install", "");
+      noInstall = true;
+      continue;
+    }
     if (a.startsWith("-")) {
       return { kind: "error", message: `unknown flag: ${a}` };
     }
@@ -344,7 +376,7 @@ function parsePrint(
     const printRequested = seen.has("-p") || seen.has("--print");
     const printOnlyFlags = apiKey !== undefined || timeout !== undefined || json;
     if (!printRequested && !printOnlyFlags && (team !== undefined || resume !== undefined)) {
-      return { kind: "tui", team, resume, inMemory, debug };
+      return { kind: "tui", team, resume, inMemory, debug, noInstall };
     }
     return { kind: "error", message: "missing instruction for -p/--print" };
   }

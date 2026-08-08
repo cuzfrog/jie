@@ -2,7 +2,7 @@ import { parseFlags } from "./cli-flags";
 
 describe("parseFlags — help / version", () => {
   test("no args -> tui (TUI not implemented in v1)", () => {
-    expect(parseFlags([])).toEqual({ kind: "tui", inMemory: false, debug: false });
+    expect(parseFlags([])).toEqual({ kind: "tui", inMemory: false, debug: false, noInstall: false });
   });
 
   test("--help -> help", () => {
@@ -270,7 +270,7 @@ describe("parseFlags — -p", () => {
 
 describe("parseFlags — --in-memory", () => {
   test("--in-memory alone -> tui with inMemory true", () => {
-    expect(parseFlags(["--in-memory"])).toEqual({ kind: "tui", inMemory: true, debug: false });
+    expect(parseFlags(["--in-memory"])).toEqual({ kind: "tui", inMemory: true, debug: false, noInstall: false });
   });
 
   test("--in-memory followed by positional -> tui with team + inMemory true", () => {
@@ -279,6 +279,7 @@ describe("parseFlags — --in-memory", () => {
       team: "alpha",
       inMemory: true,
       debug: false,
+      noInstall: false,
     });
   });
 
@@ -288,6 +289,7 @@ describe("parseFlags — --in-memory", () => {
       team: "alpha",
       inMemory: true,
       debug: false,
+      noInstall: false,
     });
   });
 
@@ -420,19 +422,31 @@ describe("parseFlags — --in-memory", () => {
 
 describe("parseFlags — standalone --team / --resume route to the TUI", () => {
   test("--team <id> alone -> tui for that team", () => {
-    expect(parseFlags(["--team", "alpha"])).toEqual({ kind: "tui", team: "alpha", inMemory: false, debug: false });
+    expect(parseFlags(["--team", "alpha"])).toEqual({ kind: "tui", team: "alpha", inMemory: false, debug: false, noInstall: false });
   });
 
   test("--resume <id> alone -> tui resuming the session", () => {
-    expect(parseFlags(["--resume", "sess-1"])).toEqual({ kind: "tui", resume: "sess-1", inMemory: false, debug: false });
+    expect(parseFlags(["--resume", "sess-1"])).toEqual({ kind: "tui", resume: "sess-1", inMemory: false, debug: false, noInstall: false });
   });
 
   test("--in-memory --resume <id> -> tui in-memory resuming the session", () => {
-    expect(parseFlags(["--in-memory", "--resume", "sess-1"])).toEqual({ kind: "tui", resume: "sess-1", inMemory: true, debug: false });
+    expect(parseFlags(["--in-memory", "--resume", "sess-1"])).toEqual({
+      kind: "tui",
+      resume: "sess-1",
+      inMemory: true,
+      debug: false,
+      noInstall: false,
+    });
   });
 
   test("--resume <id> --in-memory (flag after) -> tui in-memory resuming the session", () => {
-    expect(parseFlags(["--resume", "sess-1", "--in-memory"])).toEqual({ kind: "tui", resume: "sess-1", inMemory: true, debug: false });
+    expect(parseFlags(["--resume", "sess-1", "--in-memory"])).toEqual({
+      kind: "tui",
+      resume: "sess-1",
+      inMemory: true,
+      debug: false,
+      noInstall: false,
+    });
   });
 
   test("--team <id> --resume <sid> -> tui carrying both", () => {
@@ -442,6 +456,7 @@ describe("parseFlags — standalone --team / --resume route to the TUI", () => {
       resume: "sess-1",
       inMemory: false,
       debug: false,
+      noInstall: false,
     });
   });
 
@@ -485,11 +500,11 @@ describe("parseFlags — standalone --team / --resume route to the TUI", () => {
 
 describe("parseFlags — --debug", () => {
   test("--debug alone -> tui with debug true", () => {
-    expect(parseFlags(["--debug"])).toEqual({ kind: "tui", inMemory: false, debug: true });
+    expect(parseFlags(["--debug"])).toEqual({ kind: "tui", inMemory: false, debug: true, noInstall: false });
   });
 
   test("--debug --in-memory -> tui with both flags", () => {
-    expect(parseFlags(["--debug", "--in-memory"])).toEqual({ kind: "tui", inMemory: true, debug: true });
+    expect(parseFlags(["--debug", "--in-memory"])).toEqual({ kind: "tui", inMemory: true, debug: true, noInstall: false });
   });
 
   test("--debug -p <instruction> -> print with debug true", () => {
@@ -514,6 +529,70 @@ describe("parseFlags — --debug", () => {
     expect(parseFlags(["--debug", "--debug", "-p", "go"])).toEqual({
       kind: "error",
       message: "duplicate flag: --debug",
+    });
+  });
+});
+
+describe("parseFlags - --no-install", () => {
+  test("--no-install alone -> tui with noInstall true", () => {
+    expect(parseFlags(["--no-install"])).toEqual({ kind: "tui", inMemory: false, debug: false, noInstall: true });
+  });
+
+  test("--no-install --in-memory -> tui with both", () => {
+    expect(parseFlags(["--no-install", "--in-memory"])).toEqual({ kind: "tui", inMemory: true, debug: false, noInstall: true });
+  });
+
+  test("--in-memory --no-install -> tui with both (flag order after --in-memory)", () => {
+    expect(parseFlags(["--in-memory", "--no-install"])).toEqual({ kind: "tui", inMemory: true, debug: false, noInstall: true });
+  });
+
+  test("--in-memory --no-install -p <instruction> -> print carrying noInstall onward", () => {
+    expect(parseFlags(["--in-memory", "--no-install", "-p", "go"])).toMatchObject({ kind: "print", instruction: "go" });
+  });
+
+  test("--in-memory --no-install <team> -> tui with team and noInstall", () => {
+    expect(parseFlags(["--in-memory", "--no-install", "alpha"])).toEqual({
+      kind: "tui",
+      team: "alpha",
+      inMemory: true,
+      debug: false,
+      noInstall: true,
+    });
+  });
+
+  test("--in-memory --debug -> tui with both (debug after --in-memory, no phantom arg)", () => {
+    expect(parseFlags(["--in-memory", "--debug"])).toEqual({ kind: "tui", inMemory: true, debug: true, noInstall: false });
+  });
+
+  test("--in-memory --no-install --no-install -> duplicate rejected", () => {
+    expect(parseFlags(["--in-memory", "--no-install", "--no-install"])).toEqual({
+      kind: "error",
+      message: "duplicate flag: --no-install",
+    });
+  });
+
+  test("--no-install --debug -> tui with both leading flags", () => {
+    expect(parseFlags(["--no-install", "--debug"])).toEqual({ kind: "tui", inMemory: false, debug: true, noInstall: true });
+  });
+
+  test("--no-install -p <instruction> -> print (no-install is a no-op in print mode)", () => {
+    expect(parseFlags(["--no-install", "-p", "go"])).toMatchObject({ kind: "print", instruction: "go" });
+  });
+
+  test("--team <id> --no-install -> tui fallback carrying noInstall", () => {
+    expect(parseFlags(["--team", "alpha", "--no-install"])).toEqual({
+      kind: "tui",
+      team: "alpha",
+      inMemory: false,
+      debug: false,
+      noInstall: true,
+    });
+  });
+
+  test("duplicate --no-install is rejected", () => {
+    expect(parseFlags(["--no-install", "--no-install", "-p", "go"])).toEqual({
+      kind: "error",
+      message: "duplicate flag: --no-install",
     });
   });
 });

@@ -20,10 +20,12 @@ All commands resolve configuration by walking up from CWD to find `.jie/`, then 
 Launch the full team with interactive TUI.
 
 ```
-jie [--team <id>] [--resume <id>] [--in-memory]
+jie [--team <id>] [--resume <id>] [--in-memory] [--no-install]
 ```
 
 `--in-memory` runs the platform on an in-memory store instead of the SQLite `~/.jie/storage.db` (for scripts and e2e; nothing persists).
+
+`--no-install` skips the first-run team-install prompt (see "First-run auto-install" below) and does not write the sentinel, so a subsequent interactive run without the flag still prompts.
 
 **Behavior:**
 1. Walk up from CWD to find `.jie/`. Load `.jie/settings.json` if present; deep-merge with `~/.jie/settings.json`. If absent, the platform still proceeds — model resolution falls through at team load (`10-configuration.md` "Model Resolution").
@@ -41,6 +43,19 @@ jie [--team <id>] [--resume <id>] [--in-memory]
 9. Block until TUI exits or SIGINT. Graceful shutdown: `tui.stop()`, then `handle.execute({ name: "stop" })` halts all loaded teams.
 
 **Exit codes:** 0 (normal exit), 1 (config error, team not found, agent load failure, `--resume <id>` validation failure, fallback team missing).
+
+### First-run auto-install
+
+On the first interactive (`jie`) run, before the platform boots, the CLI offers to install the bundled `default-coders` team blueprint (shipped at `src/team-content/default-coders/` inside the package, per ADR 36) into `~/.jie/teams/`, so a new user gets a working multi-coder team without a separate setup step.
+
+- **Trigger:** `args.kind === "tui"` only. Print mode (`-p`) and all other subcommands skip it (non-interactive or irrelevant).
+- **Prompt:** `Install the default-coders team blueprint to ~/.jie/teams/? [Y/n]`. Reached only when stdin is a TTY. A non-TTY run (piped/CI) skips the whole welcome without writing the sentinel, so a later interactive run still prompts - no hang, no nag.
+- **Sentinel:** `~/.jie/.first-run-done` distinguishes "first run" from "user deleted the team". It is written only after an interactive prompt is decided - accepted, declined, or install failed - so the prompt never recurs on a TTY. A later `jie` run sees the sentinel and skips.
+- **`--no-install`:** opts out for this run and does not write the sentinel, so the next interactive run without the flag still prompts. This lets a user defer without a persistent "no".
+- **Install failure:** caught and reported (`Failed to install default-coders: <reason>. Install later with: jie team add <source>.`); the sentinel is still written so the failure does not recur every run.
+- **Implementation:** `src/cli/first-run.ts` (`runFirstRunWelcome` + `createFirstRunPorts`), wired into `RunDeps.runFirstRun` and called from `run()` before `connectPlatform`. The install reuses `src/team-installer` with the bundled content dir as the source.
+
+There is no `jie init` command. First-run is the only install-onboarding path; later installs use `jie team add <source>` (D4 `jie update` will refresh bundled teams).
 
 ---
 
