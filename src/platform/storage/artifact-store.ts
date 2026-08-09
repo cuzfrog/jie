@@ -1,3 +1,4 @@
+import { expectString } from "./row-decode";
 import type { Storage } from "./storage";
 import { JiePlatformError } from "../jie-platform-errors";
 
@@ -87,9 +88,4 @@ export class SqliteArtifactStore implements ArtifactStore {
       created_at: expectString(row[1]),
     }));
   }
-}
-
-function expectString(value: unknown): string {
-  if (typeof value !== "string") throw new Error(`expected string, got ${typeof value}`);
-  return value;
 }
