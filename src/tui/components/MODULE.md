@@ -6,8 +6,7 @@ no-new-exports:
 ---
 
 # Design principles
-- view renders based on state; state changes are upon inputs/events
-- view should be pure without side-effect
+- Pure view from state; no side effects.
 
 ## File layout
-- a component file exports one `Component` class plus the types it consumes; rendering helpers stay file-private
+One component class (plus consumed types) per file; rendering helpers file-private.

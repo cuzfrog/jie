@@ -9,5 +9,5 @@ no-new-exports:
 
 # Design notes
 
-- `main` is the composition root: it adapts the awilix `bootPlatform`/`bootTui` boots into narrow `(options) => JiePlatform` / `(options, deps) => Tui` deps for `run`, so CLI logic never depends on container cradle shapes.
-- `commands/` functions are edge-layer terminal wiring: they receive `(parsed, platform, console)` directly (exempt from "parameters are data") and never reach into platform internals.
+- `main` adapts `bootPlatform`/`bootTui` into narrow deps for `run`; CLI logic does not depend on container cradle shapes.
+- `commands/` are edge-layer wiring: receive `(parsed, platform, console)` directly, never reaching into platform internals.

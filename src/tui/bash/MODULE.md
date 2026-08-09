@@ -6,6 +6,4 @@ no-new-exports:
   - index.ts
 ---
 
-# Design principles
-- view renders based on state; state changes are upon inputs/events
-- view should be pure without side-effect
+- Pure view from state; no side effects.
