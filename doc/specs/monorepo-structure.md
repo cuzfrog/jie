@@ -27,8 +27,8 @@ src/
   cli/             # CLI entry (jie binary): -p print mode, interactive TUI mode, login/logout/model commands, team add/list/remove
   tui/             # Terminal UI (pi-tui-based inline renderer): chat column, editor, footer, slash commands; bootTui(options, deps)
   utils/           # Process-level infra shared by all modules: diagnostic logger (tslog), Console output abstraction
-  team-installer/  # Team install/remove: npm/git/file sources -> `<id>/TEAM.md` dirs; CLI-side, never imported by platform or team-content (ADR 35)
-  team-content/    # Shipped team blueprints (the `default-dev-team` six-role delivery pipeline) - pure content, no code (doc/specs/jie-team/)
+  teams-installer/  # Team install/remove: npm/git/file sources -> `<id>/TEAM.md` dirs; CLI-side, never imported by platform or teams (ADR 35)
+  teams/    # Shipped team blueprints (the `default-dev-team` six-role delivery pipeline) - pure content, no code (doc/specs/jie-team/)
   code-lens/       # Standalone MCP server (bin: code-lens): code-architecture facts from SCIP indexes (doc/specs/code-lens/)
 tests/
   mock-llm-backend/  # OpenAI-compatible mock LLM server for e2e tests (bun mock:start)
@@ -41,22 +41,22 @@ tests/
 The package boundary is gone; these are module-to-module imports (relative paths). DI carries the runtime boundaries (ADR 31): `bootPlatform` and `bootTui` are separate awilix containers, so the TUI reaches the platform only through the `JiePlatform` handle - never platform internals.
 
 ```
-cli          -> platform, tui, utils, team-installer   (composition root: calls bootPlatform/bootTui, hands the handle to the TUI / -p mode; team add/remove skip the platform boot and use the installer directly)
+cli          -> platform, tui, utils, teams-installer   (composition root: calls bootPlatform/bootTui, hands the handle to the TUI / -p mode; team add/remove skip the platform boot and use the installer directly)
 tui          -> platform, utils, @earendil-works/pi-tui (platform surface: JiePlatform handle + wire-format types only)
 platform     -> utils
-team-installer                                (team install/remove - CLI-side; no runtime dependencies, Bun builtins only)
-team-content                                  (blueprint data only - pure content, no code, no runtime dependencies)
+teams-installer                                (team install/remove - CLI-side; no runtime dependencies, Bun builtins only)
+teams                                  (blueprint data only - pure content, no code, no runtime dependencies)
 code-lens   -> utils                           (standalone MCP server; protobufjs for SCIP decoding - runs as a child process, never imported)
 ```
 
-**Agnosticism rule (ADR 11).** `platform` has zero dependency on `team-content` - no `import` in any form, including types. The platform reads team blueprints from filesystem paths (`.jie/teams/<id>/`, `~/.jie/teams/<id>/`) plus its built-in `default-solo` fallback; a team is data, not code. The bundled `default-dev-team` blueprint at `src/team-content/default-dev-team/` is reached only after first-run auto-install (D1) copies it to `~/.jie/teams/`.
+**Agnosticism rule (ADR 11).** `platform` has zero dependency on `teams` - no `import` in any form, including types. The platform reads team blueprints from filesystem paths (`.jie/teams/<id>/`, `~/.jie/teams/<id>/`) plus its built-in `default-solo` fallback; a team is data, not code. The bundled `default-dev-team` blueprint at `src/teams/default-dev-team/` is reached only after first-run auto-install (D1) copies it to `~/.jie/teams/`.
 
 ## Build System
 `bun` (>= 1.3.14) runs TypeScript natively; no build step. `package.json` at root: `"files": ["src"]`, `"bin": {"jie": "src/cli/index.ts", "code-lens": "src/code-lens/main.ts"}`.
 
 ## Module Entry Points
 
-Each code module exports `.` -> `./index.ts` (`team-content` is the exception: pure content with no entry point, consumed by the installer scanning its files).
+Each code module exports `.` -> `./index.ts` (`teams` is the exception: pure content with no entry point, consumed by the installer scanning its files).
 
 `src/platform/index.ts` re-exports the public surface: `JiePlatform`, `bootPlatform`, `PlatformCradle`, `JiePlatformOptions`, the event protocol types (`EventEnvelope<T>`, `Sender`, `EventType`, topic constants), the command types, and `JiePlatformError` with its codes.
 
@@ -64,7 +64,7 @@ Each code module exports `.` -> `./index.ts` (`team-content` is the exception: p
 
 `src/utils/index.ts` exports `logger` (a tslog instance gated by `JIE_LOG_LEVEL`) and `Console` / `defaultConsole` - the output abstraction CLI commands write through and the logger's transport routes to stderr. It depends on no other module; diagnostic logging is orthogonal to app logic and is imported as a module-scope instance, not injected.
 
-`src/team-content/` has no `index.ts` - it is pure content: the `default-dev-team` blueprint directories live at the module root (`<id>/TEAM.md` + `<role>.md`) with no code, no install hook, and no runtime surface (ADR 11). `src/team-installer/index.ts` exports `createTeamInstaller` (and `parseTeamSource`) - the CLI-side installer that resolves an npm/git/file source, copies its `<id>/TEAM.md` directories into `.jie/teams/` (project) or `~/.jie/teams/` (user), and records provenance; the platform later discovers the installed copies from the filesystem (ADR 11 agnosticism, ADR 35).
+`src/teams/` has no `index.ts` - it is pure content: the `default-dev-team` blueprint directories live at the module root (`<id>/TEAM.md` + `<role>.md`) with no code, no install hook, and no runtime surface (ADR 11). `src/teams-installer/index.ts` exports `createTeamInstaller` (and `parseTeamSource`) - the CLI-side installer that resolves an npm/git/file source, copies its `<id>/TEAM.md` directories into `.jie/teams/` (project) or `~/.jie/teams/` (user), and records provenance; the platform later discovers the installed copies from the filesystem (ADR 11 agnosticism, ADR 35).
 
 `src/code-lens/index.ts` is the minimal library surface (SCIP ingestion + `CodeIndex` model); the executable surface is the `code-lens` bin (`main.ts`), a stdio MCP server the platform spawns as a child process rather than imports.
 

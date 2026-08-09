@@ -289,7 +289,7 @@ describe("loadTeamFromDir — typed error codes", () => {
 });
 
 describe("loadTeamFromDir — shipped default-dev-team blueprint", () => {
-  const defaultCodersDir = join(import.meta.dir, "../../team-content/default-dev-team");
+  const defaultCodersDir = join(import.meta.dir, "../../teams/default-dev-team");
 
   test("parses the shipped default-dev-team with manager as leader and six roles", () => {
     const blueprint = loadTeamFromDir(defaultCodersDir);
