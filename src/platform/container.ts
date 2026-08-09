@@ -5,7 +5,7 @@ import { registerCommandModule, type CommandExecutor } from "./command";
 import { registerConfigModule, type AuthStore, type ModelRegistry, type SettingsStore } from "./config";
 import { registerContextModule } from "./context";
 import { registerCoreModule, type AgentBody, type AgentBodyParams } from "./core";
-import { registerEventModule, type EventBus, type EventManager } from "./event";
+import { registerEventModule, type EventManager } from "./event";
 import { registerHooksModule, type HookRunner } from "./hooks";
 import type { JiePlatform, JiePlatformOptions } from "./jie-platform";
 import { registerLlmModule, type LlmService } from "./llm";
@@ -27,7 +27,6 @@ export interface PlatformCradle {
   readonly logDir: string | null;
   readonly resumeSessionId?: string;
 
-  readonly eventBus: EventBus;
   readonly eventManager: EventManager;
   readonly storage: Storage;
   readonly artifactStore: ArtifactStore;

@@ -5,7 +5,6 @@ import { bootPlatform } from "./container";
 import { JiePlatformImpl } from "./jie-platform";
 
 const SERVICE_KEYS = [
-  "eventBus",
   "eventManager",
   "storage",
   "artifactStore",
