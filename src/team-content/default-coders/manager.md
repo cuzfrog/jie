@@ -2,7 +2,7 @@
 tools:
   - notify
   - read_artifact
-  - write_artifact
+  - write_kanban
 subscribe:
   - task.review_passed
   - task.failed
