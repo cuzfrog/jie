@@ -15,6 +15,7 @@ const eventManager = vi.mocked<EventManager>({
 });
 
 const compactor = vi.mocked<Compactor>({
+  needsCompaction: vi.fn(() => true),
   compact: vi.fn(async () => null),
   fitToWindow: vi.fn((messages) => messages),
 });
@@ -105,6 +106,20 @@ describe("CompactionRunner — applying the result", () => {
     expect(messages).toEqual([summary, second, third]);
   });
 
+  test("a successful run returns the compacted messages as the outcome", async () => {
+    const [, second, third] = messages;
+    const summary = createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z");
+    compactor.compact.mockResolvedValueOnce({
+      summaryMessage: summary,
+      firstKeptIndex: 1,
+      tokensBefore: 500,
+      summarizedPrefix: [messages[0]!],
+    });
+    const outcome = await makeRunner().ensure(model);
+    expect(outcome).not.toBeNull();
+    expect(outcome!.messages).toEqual([summary, second, third]);
+  });
+
   test("publishes agent.compaction.start and agent.compaction.end around a run", async () => {
     compactor.compact.mockResolvedValueOnce({
       summaryMessage: createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z"),
@@ -183,12 +198,25 @@ describe("CompactionRunner — applying the result", () => {
     expect(captured.aborted).toBe(true);
   });
 
-  test("a null result leaves the conversation untouched and publishes nothing", async () => {
+  test("a null result leaves the conversation untouched with no agent.compacted event", async () => {
     const baseline = [...messages];
     await makeRunner().ensure(model);
     expect(messages).toEqual(baseline);
     expect(envelopes("agent.compacted")).toHaveLength(0);
     expect(envelopes("system.error")).toHaveLength(0);
+  });
+
+  test("when compaction is not needed, ensure returns null without calling compact or publishing events", async () => {
+    compactor.needsCompaction.mockReturnValueOnce(false);
+    const baseline = [...messages];
+    const outcome = await makeRunner().ensure(model);
+    expect(outcome).toBeNull();
+    expect(compactor.compact).not.toHaveBeenCalled();
+    expect(messages).toEqual(baseline);
+    expect(envelopes("agent.compaction.start")).toHaveLength(0);
+    expect(envelopes("agent.compaction.end")).toHaveLength(0);
+    expect(envelopes("agent.compacted")).toHaveLength(0);
+    expect(memoryManager.distill).not.toHaveBeenCalled();
   });
 });
 

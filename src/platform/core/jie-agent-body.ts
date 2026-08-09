@@ -1,4 +1,4 @@
-import { Agent, convertToLlm, type AgentMessage, type AgentTool } from "@earendil-works/pi-agent-core";
+import { Agent, convertToLlm, type AgentLoopTurnUpdate, type AgentMessage, type AgentTool, type PrepareNextTurnContext } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { MemoryManager } from "../memory";
@@ -144,6 +144,7 @@ export class JieAgentBody implements AgentBody {
       steeringMode: "all",
       followUpMode: "all",
       toolExecution: "sequential",
+      prepareNextTurnWithContext: (context) => this.compactBetweenTurns(context),
       beforeToolCall: (context) => toolCallObserver.beforeToolCall(context),
       afterToolCall: (context) => toolCallObserver.afterToolCall(context),
     });
@@ -335,7 +336,15 @@ export class JieAgentBody implements AgentBody {
   private ensureCompacted(): Promise<void> {
     if (this.modelController.modelInfo === null) return Promise.resolve();
     const contextWindow = resolveContextWindow(this.soul, this.agent.state.model);
-    return this.compactionRunner.ensure(this.agent.state.model, contextWindow);
+    return this.compactionRunner.ensure(this.agent.state.model, contextWindow).then(() => undefined);
+  }
+
+  private async compactBetweenTurns(context: PrepareNextTurnContext): Promise<AgentLoopTurnUpdate | undefined> {
+    if (this.modelController.modelInfo === null) return undefined;
+    const contextWindow = resolveContextWindow(this.soul, this.agent.state.model);
+    const outcome = await this.compactionRunner.ensure(this.agent.state.model, contextWindow);
+    if (outcome === null) return undefined;
+    return { context: { ...context.context, messages: [...outcome.messages] } };
   }
 
   private interruptActiveRun(): void {

@@ -377,6 +377,47 @@ describe("CompactorImpl.compact", () => {
   });
 });
 
+describe("CompactorImpl.needsCompaction", () => {
+  test("returns false below the threshold", () => {
+    const compactor = makeCompactor(makeTranscriptStore());
+    expect(compactor.needsCompaction([userMsg("hello"), assistantMsg("hi")], THRESHOLD_WINDOW)).toBe(false);
+  });
+
+  test("returns true when the estimate exceeds the threshold", () => {
+    const compactor = makeCompactor(makeTranscriptStore());
+    const messages = [userMsg("please do the thing"), assistantMsg(BIG)];
+    expect(compactor.needsCompaction(messages, THRESHOLD_WINDOW)).toBe(true);
+  });
+
+  test("returns false when compaction is disabled", () => {
+    const compactor = makeCompactor(makeTranscriptStore(), () => ({ enabled: false }));
+    const messages = [userMsg("please do the thing"), assistantMsg(BIG)];
+    expect(compactor.needsCompaction(messages, THRESHOLD_WINDOW)).toBe(false);
+  });
+
+  test("honors a smaller contextWindow than the model default", () => {
+    const compactor = makeCompactor(makeTranscriptStore());
+    const messages = [userMsg("please do the thing"), assistantMsg(BIG)];
+    expect(compactor.needsCompaction(messages, 20_000)).toBe(true);
+  });
+
+  test("ignores stale usage recorded before the last summary", () => {
+    const compactor = makeCompactor(makeTranscriptStore());
+    const staleUsage: Usage = { input: 1_900_000, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 1_900_000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
+    const model = makeModel(200_000, 8192);
+    const messages = [summaryMsg("old summary", 5000), userMsg(BIG), assistantMsg("ok", 1000, staleUsage)];
+    expect(compactor.needsCompaction(messages, model.contextWindow)).toBe(false);
+  });
+
+  test("uses fresh usage recorded after the last summary", () => {
+    const compactor = makeCompactor(makeTranscriptStore());
+    const freshUsage: Usage = { input: 1_900_000, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 1_900_000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
+    const model = makeModel(200_000, 8192);
+    const messages = [summaryMsg("old summary", 1000), userMsg(BIG), assistantMsg(BIG, 6000, freshUsage)];
+    expect(compactor.needsCompaction(messages, model.contextWindow)).toBe(true);
+  });
+});
+
 describe("CompactorImpl.fitToWindow", () => {
   const MARKER = "[content truncated to fit the context window]";
 
