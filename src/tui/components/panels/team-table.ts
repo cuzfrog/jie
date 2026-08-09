@@ -1,7 +1,7 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import type { AgentId, AgentUiState } from "../state";
-import { contextPercentColor, formatContextPercent, formatModelSegment } from "./footer";
-import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, style } from "./themes";
+import type { AgentId, AgentUiState } from "../../state";
+import { contextPercentColor, formatContextPercent, formatModelSegment } from "../elements";
+import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, style } from "../themes";
 
 export type TeamTableColumn = "agent" | "ctx" | "tools" | "subscribe" | "model";
 

@@ -1,7 +1,7 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { type AgentId, type AgentUiState, type MessageTurn, type StateStore, type TuiState } from "../state";
-import { makeAgentUiState, makeTuiState } from "../test";
-import { WelcomeBanner, helpLines } from "./welcome-banner";
+import { type AgentId, type AgentUiState, type MessageTurn, type StateStore, type TuiState } from "../../state";
+import { makeAgentUiState, makeTuiState } from "../../test";
+import { WelcomeBanner } from "./welcome-banner";
 
 const LEADER_ID: AgentId = "my-team:general-1";
 const QA_ID: AgentId = "my-team:qa-1";
@@ -75,16 +75,6 @@ describe("WelcomeBanner", () => {
     expect(lines.some((line) => line.includes("\x1b[36m/help\x1b[39m"))).toBe(true);
   });
 
-  test("helpLines renders Commands and Shortcuts without the mark or identity", () => {
-    const text = helpLines(80).map(stripAnsi).join("\n");
-    expect(text).toContain("Commands");
-    expect(text).toContain("Shortcuts");
-    expect(text).not.toContain("█");
-    expect(text).not.toContain("(jiè)");
-    expect(text).not.toContain("Teams:");
-    expect(text).not.toContain("general-1");
-  });
-
   test("hides the banner once a turn is in progress", () => {
     stateStore.getState.mockReturnValue(stateWithTurn());
     expect(new WelcomeBanner(stateStore).render(80)).toEqual([]);
@@ -95,14 +85,6 @@ describe("WelcomeBanner", () => {
     const banner = new WelcomeBanner(stateStore);
     for (const width of [13, 40, 60, 80, 139]) {
       for (const line of banner.render(width)) {
-        expect(visibleWidth(line)).toBeLessThanOrEqual(width);
-      }
-    }
-  });
-
-  test("every full-help line fits the given width", () => {
-    for (const width of [13, 40, 60, 80, 139]) {
-      for (const line of helpLines(width)) {
         expect(visibleWidth(line)).toBeLessThanOrEqual(width);
       }
     }

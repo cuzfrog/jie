@@ -1,8 +1,8 @@
-import { truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
-import type { KanbanCard, KanbanStatus } from "../../platform";
-import { TuiState, type StateStore } from "../state";
-import { Box } from "./box";
-import { style, type ColorName } from "./themes";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import type { KanbanCard, KanbanStatus } from "../../../platform";
+import { TuiState, type StateStore } from "../../state";
+import { Panel } from "./panel";
+import { style, type ColorName } from "../themes";
 
 const COLUMN_GAP = "  ";
 const STATUS_LABELS: { readonly [K in KanbanStatus]: string } = {
@@ -20,7 +20,7 @@ const KANBAN_COLUMNS: ReadonlyArray<{ readonly status: KanbanStatus; readonly ti
 ];
 
 const HINTS = {
-  collapsed: "↑↓←→ move · tab expand · ctrl+e edit · ctrl+k close",
+  collapsed: "↑↓←-> move · tab expand · ctrl+e edit · ctrl+k close",
   expanded: "↑↓ select field · tab collapse · ctrl+e edit · ctrl+k close",
   editing: "enter/ctrl+s save · esc cancel",
 } as const;
@@ -28,27 +28,34 @@ const HINTS = {
 const CHIP_BACKGROUND = "\x1b[100m";
 const CHIP_BACKGROUND_END = "\x1b[49m";
 
-export class KanbanPanel implements Component {
-  private readonly stateStore: StateStore;
-
+export class KanbanPanel extends Panel {
   constructor(stateStore: StateStore) {
-    this.stateStore = stateStore;
+    super(stateStore);
   }
 
-  render(width: number): string[] {
-    const state = this.stateStore.getState();
-    if (state.teamId === null || state.kanbanView !== "panel") return [];
-    const w = Math.max(1, width);
-    const inner = Math.max(1, w - 4);
-    const visible = TuiState.kanbanVisibleCards(state);
-    const focused = state.kanbanCursor === null ? null : visible.find((card) => card.id === state.kanbanCursor) ?? null;
-    const border = style("borderMuted");
-    const expandedTop = state.kanbanExpanded && focused !== null ? renderExpandedTopBorder(focused.id, w, border) : null;
-    const rows = state.kanbanExpanded ? renderCardDetail(focused, state.kanbanEditField, inner) : renderKanbanBoard(state, visible, inner);
-    return [...new Box(rows, { top: expandedTop ?? undefined }).render(w), renderHint(state, w)];
+  protected isVisible(state: TuiState): boolean {
+    return state.teamId !== null && state.kanbanView === "panel";
   }
 
-  invalidate(): void {}
+  protected body(state: TuiState, inner: number): string[] {
+    if (state.kanbanExpanded) return renderCardDetail(focusedCard(state), state.kanbanEditField, inner);
+    return renderKanbanBoard(state, TuiState.kanbanVisibleCards(state), inner);
+  }
+
+  protected topBorder(state: TuiState, width: number): string | null {
+    if (!state.kanbanExpanded) return null;
+    const focused = focusedCard(state);
+    return focused === null ? null : renderExpandedTopBorder(focused.id, width, style("borderMuted"));
+  }
+
+  protected hint(state: TuiState, width: number): string | null {
+    return renderHint(state, width);
+  }
+}
+
+function focusedCard(state: TuiState): KanbanCard | null {
+  const visible = TuiState.kanbanVisibleCards(state);
+  return state.kanbanCursor === null ? null : visible.find((card) => card.id === state.kanbanCursor) ?? null;
 }
 
 function renderKanbanBoard(state: TuiState, visible: ReadonlyArray<KanbanCard>, innerWidth: number): string[] {

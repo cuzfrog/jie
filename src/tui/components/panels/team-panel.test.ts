@@ -1,8 +1,8 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { type AgentId, type AgentUiState, type StateStore, type TuiState } from "../state";
-import { makeAgentUiState, makeTuiState } from "../test";
+import { type AgentId, type AgentUiState, type StateStore, type TuiState } from "../../state";
+import { makeAgentUiState, makeTuiState } from "../../test";
 import { TeamPanel } from "./team-panel";
-import { SPINNER_FRAMES, style } from "./themes";
+import { SPINNER_FRAMES, style } from "../themes";
 
 const LEADER_ID: AgentId = "my-team:general-1";
 const WORKER_ID: AgentId = "my-team:coder-1";

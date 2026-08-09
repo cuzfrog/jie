@@ -1,4 +1,4 @@
-import { singleLine } from "./single-line";
+import { singleLine } from "../elements";
 
 export function formatQueueIndicator(queue: ReadonlyArray<{ readonly text: string }> | null | undefined): string | null {
   if (queue === undefined || queue === null || queue.length === 0) return null;

@@ -1,8 +1,8 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { type StateStore } from "../state";
-import { makeTuiState } from "../test";
-import { HelpPanel } from "./help-panel";
-import { style } from "./themes";
+import { type StateStore } from "../../state";
+import { makeTuiState } from "../../test";
+import { HelpPanel, _helpLines } from "./help-panel";
+import { style } from "../themes";
 
 const stateStore = vi.mocked<StateStore>({ getState: vi.fn(), dispatch: vi.fn(), subscribe: vi.fn(() => () => undefined) });
 
@@ -19,12 +19,18 @@ describe("HelpPanel", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ helpPanelVisible: true }));
     const lines = new HelpPanel(stateStore).render(80);
     expect(lines[0]).toBe(style("borderMuted")(`┌${"─".repeat(78)}┐`));
-    expect(lines[lines.length - 1]).toBe(style("borderMuted")(`└${"─".repeat(78)}┘`));
+    expect(lines[lines.length - 2]).toBe(style("borderMuted")(`└${"─".repeat(78)}┘`));
     const text = lines.map(stripAnsi).join("\n");
     expect(text).toContain("Commands");
     expect(text).toContain("Shortcuts");
     expect(text).toContain("/resume");
-    expect(text).toContain("Type /help to close.");
+  });
+
+  test("renders the close hint below the box", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ helpPanelVisible: true }));
+    const lines = new HelpPanel(stateStore).render(80);
+    expect(lines[lines.length - 1]).toBe(style("dim")("Type /help to close."));
+    expect(stripAnsi(lines[lines.length - 2])).toBe(`└${"─".repeat(78)}┘`);
   });
 
   test("omits the mark, identity and team roster from the help content", () => {
@@ -48,6 +54,26 @@ describe("HelpPanel", () => {
     const panel = new HelpPanel(stateStore);
     for (const width of [13, 40, 60, 80, 139]) {
       for (const line of panel.render(width)) {
+        expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+      }
+    }
+  });
+});
+
+describe("_helpLines", () => {
+  test("renders Commands and Shortcuts without the mark or identity", () => {
+    const text = _helpLines(80).map(stripAnsi).join("\n");
+    expect(text).toContain("Commands");
+    expect(text).toContain("Shortcuts");
+    expect(text).not.toContain("█");
+    expect(text).not.toContain("(jiè)");
+    expect(text).not.toContain("Teams:");
+    expect(text).not.toContain("general-1");
+  });
+
+  test("every line fits the given width", () => {
+    for (const width of [13, 40, 60, 80, 139]) {
+      for (const line of _helpLines(width)) {
         expect(visibleWidth(line)).toBeLessThanOrEqual(width);
       }
     }

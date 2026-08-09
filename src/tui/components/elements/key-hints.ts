@@ -1,5 +1,5 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import { style } from "./themes";
+import { style } from "../themes";
 
 export function hintLines(width: number): string[] {
   const separator = style("muted")(SEPARATOR);

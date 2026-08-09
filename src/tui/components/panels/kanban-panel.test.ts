@@ -1,9 +1,9 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
-import type { KanbanCard } from "../../platform";
-import { type StateStore, type TuiState } from "../state";
-import { makeTuiState } from "../test";
+import type { KanbanCard } from "../../../platform";
+import { type StateStore, type TuiState } from "../../state";
+import { makeTuiState } from "../../test";
 import { KanbanPanel } from "./kanban-panel";
-import { style } from "./themes";
+import { style } from "../themes";
 
 const stateStore = vi.mocked<StateStore>({ getState: vi.fn(), dispatch: vi.fn(), subscribe: vi.fn(() => () => undefined) });
 
