@@ -59,12 +59,16 @@ const ARG_KEYS = new Map<string, string>([
   ["read_file", "path"],
   ["write_file", "path"],
   ["edit_file", "path"],
+  ["ls", "path"],
+  ["find_file", "pattern"],
+  ["grep_file", "pattern"],
   ["read_artifact", "key"],
   ["write_artifact", "key"],
+  ["find_artifact", "pattern"],
   ["web_search", "query"],
   ["web_fetch", "url"],
   ["memory_search", "query"],
-  ["kanban_write", "id"],
+  ["write_kanban", "id"],
   ["notify", "topic"],
 ]);
 

@@ -1,13 +1,17 @@
 import type { Tool } from "./types";
 import { createBashTool } from "./bash";
-import { createEditTool } from "./edit";
+import { createEditTool } from "./edit_file";
 import { createFileMutationQueue } from "./file-mutation-queue";
+import { createFindArtifactTool } from "./find-artifact";
+import { createFindFileTool } from "./find-file";
+import { createGrepFileTool } from "./grep-file";
+import { createLsTool } from "./ls";
 import { createMemoryAddTool } from "./memory-add";
 import { createMemorySearchTool } from "./memory-search";
 import { createNotifyTool } from "./notify";
 import { createReadArtifactTool } from "./read-artifact";
 import { createReadFileTool } from "./read-file";
-import { createKanbanWriteTool } from "./kanban-write";
+import { createKanbanWriteTool } from "./write-kanban";
 import { createTaskLifecycleGuard } from "./task-lifecycle";
 import { createWebFetchTool } from "./web-fetch";
 import { createWebSearchProvider, createWebSearchTool } from "./web-search";
@@ -83,9 +87,13 @@ function builtins(
     { name: "read_file", tool: createReadFileTool({ workspaceRoot }) as Tool },
     { name: "write_file", tool: createWriteFileTool({ workspaceRoot, fileMutationQueue }) as Tool },
     { name: "edit_file", tool: createEditTool({ workspaceRoot, fileMutationQueue }) as Tool },
+    { name: "ls", tool: createLsTool({ workspaceRoot }) as Tool },
+    { name: "find_file", tool: createFindFileTool({ workspaceRoot }) as Tool },
+    { name: "grep_file", tool: createGrepFileTool({ workspaceRoot }) as Tool },
     { name: "read_artifact", tool: createReadArtifactTool({ artifactStore }) as Tool },
     { name: "write_artifact", tool: createWriteArtifactTool({ artifactStore }) as Tool },
-    { name: "kanban_write", tool: createKanbanWriteTool({ kanbanStore }) as Tool },
+    { name: "find_artifact", tool: createFindArtifactTool({ artifactStore }) as Tool },
+    { name: "write_kanban", tool: createKanbanWriteTool({ kanbanStore }) as Tool },
     { name: "memory_add", tool: createMemoryAddTool({ memoryManager, settingsStore }) as Tool },
     { name: "memory_search", tool: createMemorySearchTool({ memoryManager, settingsStore }) as Tool },
     { name: "notify", tool: createNotifyTool({ eventManager, taskLifecycleGuard }) as Tool },

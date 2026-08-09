@@ -21,19 +21,19 @@ const expectations: Expectation[] = [
     ],
   },
   {
-    match: { lastUserContains: "Update your kanban board", toolName: "kanban_write", maxAssistantMessages: 0 },
+    match: { lastUserContains: "Update your kanban board", toolName: "write_kanban", maxAssistantMessages: 0 },
     responseChunks: [
       {
         kind: "tool_call",
         id: "kanban_call",
-        name: "kanban_write",
+        name: "write_kanban",
         argumentsChunks: ['{"cards": [{"content": "write the report", "status": "in_progress"}]}'],
       },
       { kind: "finish", reason: "tool_calls" },
     ],
   },
   {
-    match: { lastUserContains: "Update your kanban board", toolName: "kanban_write", minAssistantMessages: 1 },
+    match: { lastUserContains: "Update your kanban board", toolName: "write_kanban", minAssistantMessages: 1 },
     responseChunks: [
       { kind: "text", delta: "board updated." },
       { kind: "finish", reason: "stop" },

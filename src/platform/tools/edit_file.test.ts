@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createEditTool } from "./edit";
+import { createEditTool } from "./edit_file";
 import { createFileMutationQueue, type FileMutationQueue } from "./file-mutation-queue";
 import { makeEmptyContext } from "./_test-context";
 import type { ExecutionContext } from "./types";

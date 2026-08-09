@@ -116,7 +116,7 @@ interface ToolResult {
 }
 ```
 
-`details` is the closed `ToolResultDetails` union (`types.ts`): one member per builtin producer (`edit`/`write_file` share the `kind: "diff"` discriminator, `kanban_write` the `kind: "kanban"` one; the rest are un discriminated per-tool shapes). Builtin tools are the only producers — MCP tools emit no details — so consumers narrow statically and no runtime guard exists.
+`details` is the closed `ToolResultDetails` union (`types.ts`): one member per builtin producer (`edit`/`write_file` share the `kind: "diff"` discriminator, `write_kanban` the `kind: "kanban"` one; the rest are un discriminated per-tool shapes). Builtin tools are the only producers — MCP tools emit no details — so consumers narrow statically and no runtime guard exists.
 
 Except for the built-in `notify` (which receives its `EventManager` as a construction dependency), tools have no awareness of the event bus; custom team-defined tools cannot publish events. Business identifiers (work ids, …) are opaque to the platform and the receiving LLM extracts them from message text, with one exception: when a team declares a lifecycle, `notify` takes the `task_id` as a first-class input so the platform can authorize and record the transition ("notify" below, ADR 33).
 
@@ -147,8 +147,10 @@ Registered at platform startup by the `InMemoryToolRegistry` constructor (a crad
 | `read_file` | bounded text-file reads |
 | `write_file` | text-file writes (overwrite) |
 | `edit` | search-and-replace inside a file, with diff preview |
+| `ls` / `find_file` / `grep_file` | workspace file discovery: list, glob-find, content grep |
 | `read_artifact` / `write_artifact` | key-value work-product store |
-| `kanban_write` | live kanban board (utility — implicitly assigned to every agent) |
+| `find_artifact` | list artifact keys by glob (keys only, no content) |
+| `write_kanban` | live kanban board (utility — implicitly assigned to every agent) |
 | `notify` | publish to the team event bus (see "notify and the Subscription Model") |
 | `web_search` / `web_fetch` | web access |
 | `memory_search` | team long-term memory FTS5 search (opt-in via `tools:`, `11-memory.md`) |
@@ -182,6 +184,16 @@ write_file(input: { path: string; content: string })
 
 The platform enforces workspace-root containment (`path_escape`) plus, when the team declares a lifecycle, its write gates (`write_gate_denied`); module-boundary enforcement beyond that is the team's concern (see "Boundary Enforcement"). `read_file`: `offset` is a 1-indexed line number clamped to ≥ 1, `limit` is a line count (values < 1 mean unbounded); default truncation is 2000 lines or 50 KiB whichever first, with a `[Truncated: showing X of Y lines (50 KiB limit)]` marker; non-UTF-8 bytes throw `unsupported_encoding`; other errors: `file_not_found`, `is_a_directory`, `permission_denied`, `i_o_error`. `write_file`: writes `content` verbatim, overwrites (idempotent, no append mode), auto-creates parent directories, caps content at 5 MiB (`file_too_large`); LLM-visible text is `Successfully wrote <N> bytes to <path>` — the summary alone, since the model just wrote the content and echoing a file-sized diff back wastes tokens (unlike `edit`, whose diff confirms a targeted change). `details: { kind: "diff", path, bytesWritten, createdAt, diff }`: `diff` is the shared unified-diff renderer's output against the previous content (all-added hunk for a new file, `""` when unchanged), `null` when the previous content is undecodable as UTF-8, exceeds 5 MiB, or either side exceeds 5000 lines — a TUI-only payload (`tui-layout.md`). Full rationale in ADR 9.
 
+### ls, find_file, and grep_file
+
+```typescript
+ls(input: { path?: string })
+find_file(input: { pattern: string; path?: string })
+grep_file(input: { pattern: string; path?: string; include?: string; ignoreCase?: boolean })
+```
+
+Read-only workspace file discovery, all workspace-contained (`path_escape`). `ls` lists one directory's children - directories suffixed `/`, symlinks `@`, files plain - sorted dirs-first, capped at 500 entries with a `[showing 500 of N entries]` footer; a non-directory `path` throws `not_a_directory`. `find_file` walks the subtree at `path` (default `.`) pruning `node_modules`/`.git`, returning posix-relative paths matching the `pattern` glob (`*` within one segment, `**` across), capped at 100 with a refine footer; a non-directory `path` throws `not_a_directory`. `grep_file` searches file contents for the JS `RegExp` `pattern` (`invalid_pattern` on a bad regex); when `path` is a directory it walks the same pruned tree and scans only files matching the `include` glob (default `**/*`), skipping files over 1 MiB or not decodable as UTF-8, with each match line truncated at 500 chars - when `path` is a file it scans just that file. Matches cap at 100 (refine footer) and the scan at 2000 files; `ignoreCase` sets the `i` flag. Shared errors: `file_not_found`, `permission_denied`, `i_o_error`. `details` carry `kind: "ls" | "find" | "grep"`, the matches, and `truncated`.
+
 ### edit
 
 ```typescript
@@ -192,10 +204,10 @@ Search-and-replace inside a workspace text file. Every entry of `edits` is match
 
 `write_file` and `edit` mutations are serialized per real path: concurrent calls targeting the same file — from one agent or several — never interleave their read-modify-write cycles; they run in call order. The queue key is the file's realpath (the resolved path when the file does not exist yet), so symlinked aliases of one file share one queue; operations on different files run concurrently. Both tools also run the team's lifecycle write gates before any mutation — against the workspace-relative path, so absolute-path and symlinked spellings of a gated file are denied alike (`write_gate_denied`; ADR 33).
 
-### kanban_write
+### write_kanban
 
 ```typescript
-kanban_write(input: { cards: ReadonlyArray<KanbanCardWrite> })
+write_kanban(input: { cards: ReadonlyArray<KanbanCardWrite> })
 
 interface KanbanCardWrite {
   readonly content: string;
@@ -219,6 +231,14 @@ read_artifact(input: { key: string })
 ```
 
 `write_artifact` overwrites the entry at `key` and returns `Stored artifact at <key> (N chars)` with `details: { key, created_at }`; the store validates the key charset `[A-Za-z0-9_./-]{1,256}` (`invalid_artifact_key`) and the 5 MiB content cap (`artifact_too_large`). For a lifecycle-declaring team, keys matching `*/status/*` are rejected (`artifact_key_reserved`) — that namespace is reserved for the platform's lifecycle status rows ("notify and the Subscription Model", ADR 33); teams without a lifecycle are unaffected. `read_artifact` returns the content verbatim on hit (`details: { key, content, created_at }`); a miss returns `Artifact not found: <key>` as a normal result, not a tool error. The store is NOT team-scoped by the platform: two teams using the same key collide, so team-specific keys must embed the team id (available from `ExecutionContext`). Artifact content never travels in event payloads — events carry keys only.
+
+### find_artifact
+
+```typescript
+find_artifact(input: { pattern?: string; limit?: number })
+```
+
+Lists artifact keys (and creation timestamps, newest first) whose key matches a glob `pattern` (default `**`, all) - keys only, never content; use `read_artifact` to read a key. `limit` defaults to 50 and is clamped into [1, 200]; a footer reports the total and truncation. The store is not team-scoped, so team-specific queries embed the team id in the pattern. `details: { kind: "artifact-list", matches, total, truncated }`.
 
 ### web_search
 
