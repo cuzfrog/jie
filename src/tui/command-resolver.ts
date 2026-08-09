@@ -3,6 +3,8 @@ import { TuiState } from "./state";
 import { COMMAND_METADATA, resolveCommandName, type CommandMeta } from "./command-metadata";
 import { matchesModelFilter, type ModelRef } from "./model-filter";
 
+const MODEL_FILTER_USAGE = "/model-filter <add|remove|list> <pattern>";
+
 export type ResolvedCommand =
   | { readonly kind: "ui"; readonly action: UiAction }
   | { readonly kind: "reply"; readonly text: string }
@@ -68,7 +70,7 @@ export class CommandResolverImpl implements CommandResolver {
   }
 
   private resolveLogin(meta: CommandMeta, args: ReadonlyArray<string>): ResolvedCommand {
-    const parsed = CommandResolverImpl.parseArgs(args, meta);
+    const parsed = parseArgs(args, meta);
     if (parsed === null) return { kind: "error", text: "/login <provider> <apiKey>" };
     const provider = parsed.provider;
     const apiKey = parsed.apiKey;
@@ -82,7 +84,7 @@ export class CommandResolverImpl implements CommandResolver {
   }
 
   private resolveLogout(meta: CommandMeta, args: ReadonlyArray<string>): ResolvedCommand {
-    const parsed = CommandResolverImpl.parseArgs(args, meta);
+    const parsed = parseArgs(args, meta);
     if (parsed === null) return { kind: "error", text: "/logout <provider>|*" };
     const provider = parsed.provider;
     if (provider === undefined) return { kind: "error", text: "/logout <provider>|*" };
@@ -95,11 +97,11 @@ export class CommandResolverImpl implements CommandResolver {
   }
 
   private resolveModel(meta: CommandMeta, args: ReadonlyArray<string>): ResolvedCommand {
-    const parsed = CommandResolverImpl.parseArgs(args, meta);
+    const parsed = parseArgs(args, meta);
     if (parsed === null) return { kind: "error", text: "/model <provider>/<modelId>" };
     const modelRef = parsed.modelRef;
     if (modelRef === undefined) return { kind: "error", text: "/model <provider>/<modelId>" };
-    const parsedModel = CommandResolverImpl.parseModelArg(modelRef);
+    const parsedModel = parseModelArg(modelRef);
     if (parsedModel.kind === "error") return { kind: "error", text: parsedModel.text };
     return {
       kind: "platform",
@@ -111,18 +113,18 @@ export class CommandResolverImpl implements CommandResolver {
 
   private resolveModelFilter(args: ReadonlyArray<string>): ResolvedCommand | Promise<ResolvedCommand> {
     const meta = COMMAND_METADATA.find((m) => m.name === "model-filter")!;
-    const parsed = CommandResolverImpl.parseArgs(args, meta);
-    if (parsed === null) return { kind: "error", text: CommandResolverImpl.MODEL_FILTER_USAGE };
+    const parsed = parseArgs(args, meta);
+    if (parsed === null) return { kind: "error", text: MODEL_FILTER_USAGE };
     const action = parsed.action;
-    if (action === undefined) return { kind: "error", text: CommandResolverImpl.MODEL_FILTER_USAGE };
+    if (action === undefined) return { kind: "error", text: MODEL_FILTER_USAGE };
     if (action === "list") {
-      return parsed.pattern === undefined ? this.queryModelFilterList() : { kind: "error", text: CommandResolverImpl.MODEL_FILTER_USAGE };
+      return parsed.pattern === undefined ? this.queryModelFilterList() : { kind: "error", text: MODEL_FILTER_USAGE };
     }
 
     const pattern = parsed.pattern;
     const adding = action === "add";
     if ((!adding && action !== "remove") || pattern === undefined || pattern === "") {
-      return { kind: "error", text: CommandResolverImpl.MODEL_FILTER_USAGE };
+      return { kind: "error", text: MODEL_FILTER_USAGE };
     }
     return this.queryModelFilterModify(adding, pattern);
   }
@@ -133,19 +135,19 @@ export class CommandResolverImpl implements CommandResolver {
       const text = filters.length === 0 ? "no model filters set" : `model filters: ${filters.join(" · ")}`;
       return { kind: "reply", text };
     } catch (error) {
-      return { kind: "error", text: CommandResolverImpl.formatError("model-filter", error) };
+      return { kind: "error", text: formatError("model-filter", error) };
     }
   }
 
   private async queryModelFilterModify(adding: boolean, pattern: string): Promise<ResolvedCommand> {
     try {
       const [filters, models] = await Promise.all([this.platform.execute({ name: "getModelFilters" }), this.platform.execute({ name: "listModels" })]);
-      const next = adding ? CommandResolverImpl.appendPattern(filters, pattern) : CommandResolverImpl.removePattern(filters, pattern);
+      const next = adding ? appendPattern(filters, pattern) : removePattern(filters, pattern);
       if (next === null) {
         return { kind: "error", text: `/model-filter: pattern '${pattern}' is not set` };
       }
       const available = models.filter((model) => model.available);
-      const rejection = adding ? CommandResolverImpl.filterAdditionRejection(pattern, filters, next, available) : null;
+      const rejection = adding ? filterAdditionRejection(pattern, filters, next, available) : null;
       if (rejection !== null) {
         return { kind: "error", text: rejection };
       }
@@ -156,13 +158,13 @@ export class CommandResolverImpl implements CommandResolver {
         transient: `model filter ${adding ? "added" : "removed"}: ${pattern}`,
       };
     } catch (error) {
-      return { kind: "error", text: CommandResolverImpl.formatError("model-filter", error) };
+      return { kind: "error", text: formatError("model-filter", error) };
     }
   }
 
   private resolveEffort(args: ReadonlyArray<string>): ResolvedCommand | Promise<ResolvedCommand> {
     const meta = COMMAND_METADATA.find((m) => m.name === "effort")!;
-    const parsed = CommandResolverImpl.parseArgs(args, meta);
+    const parsed = parseArgs(args, meta);
     if (parsed === null) return { kind: "error", text: "/effort: invalid arguments" };
     const argument = parsed.level;
     if (argument === undefined) return this.queryDefaultEffort();
@@ -182,7 +184,7 @@ export class CommandResolverImpl implements CommandResolver {
       const effort = await this.platform.execute({ name: "getDefaultEffort" });
       return { kind: "reply", text: `default effort: ${effort}` };
     } catch (error) {
-      return { kind: "error", text: CommandResolverImpl.formatError("effort", error) };
+      return { kind: "error", text: formatError("effort", error) };
     }
   }
 
@@ -214,7 +216,7 @@ export class CommandResolverImpl implements CommandResolver {
   }
 
   private resolveTeam(meta: CommandMeta, args: ReadonlyArray<string>): ResolvedCommand {
-    const parsed = CommandResolverImpl.parseArgs(args, meta);
+    const parsed = parseArgs(args, meta);
     if (parsed === null) return { kind: "error", text: "/team <teamId>" };
     const teamId = parsed.teamId;
     if (teamId === undefined) return { kind: "error", text: "/team <teamId>" };
@@ -228,7 +230,7 @@ export class CommandResolverImpl implements CommandResolver {
 
   private resolveResume(state: TuiState, args: ReadonlyArray<string>): ResolvedCommand {
     const meta = COMMAND_METADATA.find((m) => m.name === "resume")!;
-    const parsed = CommandResolverImpl.parseArgs(args, meta);
+    const parsed = parseArgs(args, meta);
     if (parsed === null) return { kind: "error", text: "/resume <sessionId>" };
     const sessionId = parsed.sessionId;
     if (sessionId === undefined) return { kind: "error", text: "/resume <sessionId>" };
@@ -244,7 +246,7 @@ export class CommandResolverImpl implements CommandResolver {
 
   private resolveRename(state: TuiState, args: ReadonlyArray<string>): ResolvedCommand {
     const meta = COMMAND_METADATA.find((m) => m.name === "rename")!;
-    const parsed = CommandResolverImpl.parseArgs(args, meta);
+    const parsed = parseArgs(args, meta);
     if (parsed === null) return { kind: "error", text: "/rename <name>" };
     const name = parsed.name;
     if (name === undefined || name === "") return { kind: "error", text: "/rename <name>" };
@@ -260,7 +262,7 @@ export class CommandResolverImpl implements CommandResolver {
 
   private resolveKanban(state: TuiState, args: ReadonlyArray<string>): ResolvedCommand {
     const meta = COMMAND_METADATA.find((m) => m.name === "kanban")!;
-    const parsed = CommandResolverImpl.parseArgs(args, meta);
+    const parsed = parseArgs(args, meta);
     if (parsed === null) return { kind: "error", text: "/kanban <add|remove|complete|review|handoff>" };
     const subcommand = parsed.subcommand;
     if (subcommand === undefined) {
@@ -273,7 +275,7 @@ export class CommandResolverImpl implements CommandResolver {
     const restArgs = rest.split(/\s+/).filter((s) => s !== "");
 
     if (subcommand === "add") {
-      const parsedAdd = CommandResolverImpl.parseKanbanAddArgs(restArgs);
+      const parsedAdd = parseKanbanAddArgs(restArgs);
       if (parsedAdd.kind === "error") return { kind: "error", text: parsedAdd.text };
       return {
         kind: "platform",
@@ -289,9 +291,7 @@ export class CommandResolverImpl implements CommandResolver {
         return { kind: "platform", slashName: `kanban ${subcommand}`, command: { name: "kanbanRemove", teamId, cardId } };
       }
       return {
-        kind: "platform",
-        slashName: `kanban ${subcommand}`,
-        command: { name: "kanbanSetStatus", teamId, cardId, status: subcommand === "complete" ? "completed" : "in_review" },
+        kind: "platform", slashName: `kanban ${subcommand}`, command: { name: "kanbanSetStatus", teamId, cardId, status: subcommand === "complete" ? "completed" : "in_review" },
       };
     }
 
@@ -309,7 +309,7 @@ export class CommandResolverImpl implements CommandResolver {
 
   private resolveNotification(args: ReadonlyArray<string>): ResolvedCommand {
     const meta = COMMAND_METADATA.find((m) => m.name === "notification")!;
-    const parsed = CommandResolverImpl.parseArgs(args, meta);
+    const parsed = parseArgs(args, meta);
     if (parsed === null) return { kind: "error", text: "/notification sound enable|disable" };
     const subcommand = parsed.subcommand;
     if (subcommand !== "sound") {
@@ -328,8 +328,6 @@ export class CommandResolverImpl implements CommandResolver {
     };
   }
 
-  private static readonly MODEL_FILTER_USAGE = "/model-filter <add|remove|list> <pattern>";
-
   private resolveRoute(state: TuiState): AgentRoute | null {
     const focused = TuiState.getFocusedAgent(state);
     if (focused !== null) return { teamId: focused.teamId, agentKey: focused.agentKey };
@@ -339,82 +337,82 @@ export class CommandResolverImpl implements CommandResolver {
     }
     return null;
   }
+}
 
-  private static formatError(slashName: string, error: unknown): string {
-    const reason = error instanceof Error ? error.message : String(error);
-    return `/${slashName} failed: ${reason}`;
+function formatError(slashName: string, error: unknown): string {
+  const reason = error instanceof Error ? error.message : String(error);
+  return `/${slashName} failed: ${reason}`;
+}
+
+function parseArgs(args: ReadonlyArray<string>, meta: CommandMeta): Record<string, string | undefined> | null {
+  if (meta.arguments === undefined || meta.arguments.length === 0) {
+    return args.length === 0 ? {} : null;
   }
 
-  private static parseArgs(args: ReadonlyArray<string>, meta: CommandMeta): Record<string, string | undefined> | null {
-    if (meta.arguments === undefined || meta.arguments.length === 0) {
-      return args.length === 0 ? {} : null;
+  const values: Record<string, string | undefined> = {};
+  let remaining = [...args];
+  for (let i = 0; i < meta.arguments.length; i++) {
+    const spec = meta.arguments[i]!;
+    if (remaining.length === 0) {
+      if (!spec.optional) return null;
+      values[spec.name] = undefined;
+      continue;
     }
-
-    const values: Record<string, string | undefined> = {};
-    let remaining = [...args];
-    for (let i = 0; i < meta.arguments.length; i++) {
-      const spec = meta.arguments[i]!;
-      if (remaining.length === 0) {
-        if (!spec.optional) return null;
-        values[spec.name] = undefined;
-        continue;
-      }
-      if (spec.greedy) {
-        values[spec.name] = remaining.join(" ");
-        remaining = [];
-      } else {
-        values[spec.name] = remaining.shift()!;
-      }
+    if (spec.greedy) {
+      values[spec.name] = remaining.join(" ");
+      remaining = [];
+    } else {
+      values[spec.name] = remaining.shift()!;
     }
-    return remaining.length === 0 ? values : null;
   }
+  return remaining.length === 0 ? values : null;
+}
 
-  private static parseModelArg(arg: string): { kind: "ok"; provider: string; modelId: string } | { kind: "error"; text: string } {
-    const slash = arg.indexOf("/");
-    if (slash === -1) return { kind: "error", text: `/model: invalid '${arg}' (expected <provider>/<modelId>)` };
-    const provider = arg.slice(0, slash);
-    const modelId = arg.slice(slash + 1);
-    return { kind: "ok", provider, modelId };
-  }
+function parseModelArg(arg: string): { kind: "ok"; provider: string; modelId: string } | { kind: "error"; text: string } {
+  const slash = arg.indexOf("/");
+  if (slash === -1) return { kind: "error", text: `/model: invalid '${arg}' (expected <provider>/<modelId>)` };
+  const provider = arg.slice(0, slash);
+  const modelId = arg.slice(slash + 1);
+  return { kind: "ok", provider, modelId };
+}
 
-  private static parseKanbanAddArgs(args: ReadonlyArray<string>): { kind: "ok"; title?: string; description: string; scope?: "session" } | { kind: "error"; text: string } {
-    const flags = { title: undefined as string | undefined, ephemeral: false };
-    let index = 0;
-    while (index < args.length && args[index]!.startsWith("--")) {
-      const flag = args[index]!;
-      if (flag === "--title") {
-        if (args[index + 1] === undefined) return { kind: "error", text: "/kanban add [--ephemeral] --title <title> <description>" };
-        flags.title = args[index + 1]!;
-        index += 2;
-      } else if (flag === "--ephemeral") {
-        flags.ephemeral = true;
-        index += 1;
-      } else {
-        return { kind: "error", text: `/kanban add: unknown flag '${flag}'` };
-      }
+function parseKanbanAddArgs(args: ReadonlyArray<string>): { kind: "ok"; title?: string; description: string; scope?: "session" } | { kind: "error"; text: string } {
+  const flags = { title: undefined as string | undefined, ephemeral: false };
+  let index = 0;
+  while (index < args.length && args[index]!.startsWith("--")) {
+    const flag = args[index]!;
+    if (flag === "--title") {
+      if (args[index + 1] === undefined) return { kind: "error", text: "/kanban add [--ephemeral] --title <title> <description>" };
+      flags.title = args[index + 1]!;
+      index += 2;
+    } else if (flag === "--ephemeral") {
+      flags.ephemeral = true;
+      index += 1;
+    } else {
+      return { kind: "error", text: `/kanban add: unknown flag '${flag}'` };
     }
-    const description = args.slice(index).join(" ");
-    if (description.trim() === "") return { kind: "error", text: "/kanban add [--ephemeral] [--title <title>] <description>" };
-    return { kind: "ok", title: flags.title, description, ...(flags.ephemeral ? { scope: "session" as const } : {}) };
   }
+  const description = args.slice(index).join(" ");
+  if (description.trim() === "") return { kind: "error", text: "/kanban add [--ephemeral] [--title <title>] <description>" };
+  return { kind: "ok", title: flags.title, description, ...(flags.ephemeral ? { scope: "session" as const } : {}) };
+}
 
-  private static appendPattern(filters: ReadonlyArray<string>, pattern: string): ReadonlyArray<string> {
-    return filters.includes(pattern) ? filters : [...filters, pattern];
-  }
+function appendPattern(filters: ReadonlyArray<string>, pattern: string): ReadonlyArray<string> {
+  return filters.includes(pattern) ? filters : [...filters, pattern];
+}
 
-  private static removePattern(filters: ReadonlyArray<string>, pattern: string): ReadonlyArray<string> | null {
-    if (!filters.includes(pattern)) return null;
-    return filters.filter((existing) => existing !== pattern);
-  }
+function removePattern(filters: ReadonlyArray<string>, pattern: string): ReadonlyArray<string> | null {
+  if (!filters.includes(pattern)) return null;
+  return filters.filter((existing) => existing !== pattern);
+}
 
-  private static filterAdditionRejection(
-    pattern: string,
-    existing: ReadonlyArray<string>,
-    combined: ReadonlyArray<string>,
-    available: ReadonlyArray<ModelRef>,
-  ): string | null {
-    if (available.length === 0 || available.some((model) => matchesModelFilter(model, combined))) return null;
-    const basis = existing.length === 0 ? "it matches none" : `combined with existing filters (${existing.join(", ")}) it matches none`;
-    return `/model-filter: pattern '${pattern}' rejected — ${basis} of the ${available.length} available models`;
-  }
+function filterAdditionRejection(
+  pattern: string,
+  existing: ReadonlyArray<string>,
+  combined: ReadonlyArray<string>,
+  available: ReadonlyArray<ModelRef>,
+): string | null {
+  if (available.length === 0 || available.some((model) => matchesModelFilter(model, combined))) return null;
+  const basis = existing.length === 0 ? "it matches none" : `combined with existing filters (${existing.join(", ")}) it matches none`;
+  return `/model-filter: pattern '${pattern}' rejected — ${basis} of the ${available.length} available models`;
 }
