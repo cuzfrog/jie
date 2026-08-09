@@ -57,13 +57,13 @@ export class JieEditor extends Editor {
   private kanbanDraft: string | null = null;
 
   constructor(
-    tui: TUI,
+    screen: TUI,
     stateStore: StateStore,
     autocompleteProvider: JieAutocompleteProvider,
     promptHistoryStore: PromptHistoryStore,
     theme: EditorTheme = EDITOR_THEME,
   ) {
-    super(tui, theme);
+    super(screen, theme);
     this.stateStore = stateStore;
     this.promptHistoryStore = promptHistoryStore;
     const tracking = new GhostTrackingProvider(autocompleteProvider, () => this.stateStore.getState().kanbanEdit !== null);

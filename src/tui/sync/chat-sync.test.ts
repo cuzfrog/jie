@@ -70,7 +70,8 @@ function bootSync(): SyncHarness {
     render: vi.fn(() => []),
   });
   const requestRender = vi.fn();
-  new ChatSyncImpl(stateStore, chatMessages, chatContainer, requestRender);
+  const chatSync = new ChatSyncImpl(stateStore, chatMessages, chatContainer, requestRender);
+  chatSync.start();
   const listener = stateStore.subscribe.mock.calls[0]![0];
   return {
     notify: (afterState: TuiState) => {

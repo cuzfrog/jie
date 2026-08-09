@@ -3,6 +3,7 @@ import { TuiState, type AgentId, type AgentUiState, type MessageTurn, type State
 import type { AssistantMessageComponent, ChatMessages, UserMessageComponent } from "../components/chat";
 
 export interface ChatSync {
+  start(): void;
   stop(): void;
 }
 
@@ -28,18 +29,22 @@ export class ChatSyncImpl implements ChatSync {
   private readonly requestRender: () => void;
   private syncedAgentId: AgentId | null = null;
   private readonly synced: SyncedEntry[] = [];
-  private readonly unsubscribe: () => void;
+  private unsubscribe: (() => void) | null = null;
 
   constructor(stateStore: StateStore, chatMessages: ChatMessages, chatContainer: Container, requestRender: () => void) {
     this.stateStore = stateStore;
     this.chatMessages = chatMessages;
     this.chatContainer = chatContainer;
     this.requestRender = requestRender;
-    this.unsubscribe = stateStore.subscribe(async (): Promise<void> => this.sync());
+  }
+
+  start(): void {
+    this.unsubscribe = this.stateStore.subscribe(async (): Promise<void> => this.sync());
   }
 
   stop(): void {
-    this.unsubscribe();
+    this.unsubscribe?.();
+    this.unsubscribe = null;
   }
 
   private async sync(): Promise<void> {

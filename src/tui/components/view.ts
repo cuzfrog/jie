@@ -6,6 +6,7 @@ import { QueuedPrompts, StatusLine, WelcomeBanner } from "./elements";
 import { HelpPanel, KanbanPanel, TeamPanel } from "./panels";
 
 export interface TuiView {
+  start(): void;
   stop(): void;
 }
 
@@ -20,49 +21,51 @@ const TEAM_SPINNER_INTERVAL_MS = 1000;
 const NO_SPINNER_FRAMES: string[] = [];
 
 export class TuiViewImpl implements TuiView {
+  private readonly screen: TUI;
   private readonly stateStore: StateStore;
+  private readonly chatSync: ChatSync;
   private readonly workingSlot: Container;
   private readonly workingIndicator: Loader;
   private readonly teamWorkingIndicator: Loader;
   private readonly interruptedIndicator: Loader;
-  private readonly chatSync: ChatSync;
-  private readonly unsubscribeActions: () => void;
   private readonly unsubscribeKeys: () => void;
+  private unsubscribeActions: (() => void) | null = null;
 
   constructor(
-    tui: TUI,
+    screen: TUI,
     stateStore: StateStore,
-    chatSyncFactory: (chatContainer: Container, requestRender: () => void) => ChatSync,
+    chatContainer: Container,
+    chatSync: ChatSync,
     kanbanList: Component,
     footer: Component,
-    jieEditorFactory: (tui: TUI) => Editor,
+    editor: Editor,
   ) {
+    this.screen = screen;
     this.stateStore = stateStore;
-    const chatContainer = new Container();
-    const editor = jieEditorFactory(tui);
+    this.chatSync = chatSync;
     this.workingSlot = new Container();
-    this.workingIndicator = new FlushLoader(tui, style("accent"), style("muted"), WORKING_LABEL, {
+    this.workingIndicator = new FlushLoader(screen, style("accent"), style("muted"), WORKING_LABEL, {
       frames: [...SPINNER_FRAMES], intervalMs: SPINNER_INTERVAL_MS,
     });
-    this.teamWorkingIndicator = new FlushLoader(tui, style("accent"), style("muted"), TEAM_WORKING_LABEL, {
+    this.teamWorkingIndicator = new FlushLoader(screen, style("accent"), style("muted"), TEAM_WORKING_LABEL, {
       frames: [...SPINNER_FRAMES], intervalMs: TEAM_SPINNER_INTERVAL_MS,
     });
-    this.interruptedIndicator = new FlushLoader(tui, style("muted"), style("muted"), INTERRUPTED_LABEL, {
+    this.interruptedIndicator = new FlushLoader(screen, style("muted"), style("muted"), INTERRUPTED_LABEL, {
       frames: NO_SPINNER_FRAMES,
     });
-    tui.addChild(chatContainer);
-    tui.addChild(kanbanList);
-    tui.addChild(this.workingSlot);
-    tui.addChild(new WelcomeBanner(stateStore));
-    tui.addChild(new StatusLine(stateStore));
-    tui.addChild(new QueuedPrompts(stateStore));
-    tui.addChild(editor);
-    tui.addChild(footer);
-    tui.addChild(new TeamPanel(stateStore));
-    tui.addChild(new KanbanPanel(stateStore));
-    tui.addChild(new HelpPanel(stateStore));
-    tui.setFocus(editor);
-    this.unsubscribeKeys = tui.addInputListener((data) => {
+    screen.addChild(chatContainer);
+    screen.addChild(kanbanList);
+    screen.addChild(this.workingSlot);
+    screen.addChild(new WelcomeBanner(stateStore));
+    screen.addChild(new StatusLine(stateStore));
+    screen.addChild(new QueuedPrompts(stateStore));
+    screen.addChild(editor);
+    screen.addChild(footer);
+    screen.addChild(new TeamPanel(stateStore));
+    screen.addChild(new KanbanPanel(stateStore));
+    screen.addChild(new HelpPanel(stateStore));
+    screen.setFocus(editor);
+    this.unsubscribeKeys = screen.addInputListener((data) => {
       const state = this.stateStore.getState();
       const popupOpen = editor.isShowingAutocomplete();
       const kanbanAction = resolveKanbanKey(data, state, popupOpen);
@@ -86,9 +89,12 @@ export class TuiViewImpl implements TuiView {
       }
       return undefined;
     });
-    this.chatSync = chatSyncFactory(chatContainer, () => tui.requestRender());
-    this.unsubscribeActions = stateStore.subscribe(async (): Promise<void> => {
-      if (this.syncWorkingIndicator()) tui.requestRender();
+  }
+
+  start(): void {
+    this.chatSync.start();
+    this.unsubscribeActions = this.stateStore.subscribe(async (): Promise<void> => {
+      if (this.syncWorkingIndicator()) this.screen.requestRender();
     });
   }
 
@@ -97,7 +103,8 @@ export class TuiViewImpl implements TuiView {
     this.teamWorkingIndicator.stop();
     this.chatSync.stop();
     this.unsubscribeKeys();
-    this.unsubscribeActions();
+    this.unsubscribeActions?.();
+    this.unsubscribeActions = null;
   }
 
   private syncWorkingIndicator(): boolean {

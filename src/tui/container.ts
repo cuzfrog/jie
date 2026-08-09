@@ -22,8 +22,9 @@ export interface TuiCradle {
   readonly homeJieDir: string;
   readonly platform: JiePlatform;
   readonly scan: (rootDir: string) => ReadonlyArray<ScannedFile>;
-  readonly stdin: NodeJS.ReadableStream | undefined;
-  readonly stdout: TuiStdout | undefined;
+  readonly stdin: NodeJS.ReadableStream;
+  readonly stdout: TuiStdout;
+  readonly useProcessTerminal: boolean;
   readonly stateStore: StateStore;
   readonly commandHandler: CommandHandler;
   readonly commandResolver: CommandResolver;
@@ -31,10 +32,13 @@ export interface TuiCradle {
   readonly chatMessages: ChatMessages;
   readonly kanbanList: Component;
   readonly footer: Component;
-  readonly jieEditorFactory: (tui: TUI) => Editor;
-  readonly chatSyncFactory: (chatContainer: Container, requestRender: () => void) => ChatSync;
-  readonly viewFactory: (tui: TUI) => TuiView;
-  readonly terminalFactory: (stdin: NodeJS.ReadableStream, stdout: TuiStdout) => Terminal;
+  readonly chatContainer: Container;
+  readonly requestRender: () => void;
+  readonly editor: Editor;
+  readonly chatSync: ChatSync;
+  readonly terminal: Terminal;
+  readonly screen: TUI;
+  readonly view: TuiView;
   readonly tui: Tui;
 }
 
@@ -50,9 +54,10 @@ export function bootTui(options: CreateTUIOptions, deps: TuiDeps): AwilixContain
     cwd: asValue(options.cwd),
     homeJieDir: asValue(deps.homeJieDir),
     platform: asValue(deps.platform),
+    useProcessTerminal: asValue(deps.stdin === undefined),
+    stdin: asValue(deps.stdin ?? process.stdin),
+    stdout: asValue(deps.stdout ?? process.stdout),
   });
-  if (deps.stdin !== undefined) container.register("stdin", asValue(deps.stdin));
-  if (deps.stdout !== undefined) container.register("stdout", asValue(deps.stdout));
   registerStateModule(container);
   registerAutocompleteModule(container);
   registerChatModule(container);

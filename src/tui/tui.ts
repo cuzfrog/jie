@@ -1,4 +1,4 @@
-import { ProcessTerminal, TuiMainScreen, detectCapabilities, setCapabilities, type TUI, type Terminal } from "@earendil-works/pi-tui";
+import { detectCapabilities, setCapabilities, type TUI, type Terminal } from "@earendil-works/pi-tui";
 import type { StopReason } from "@earendil-works/pi-ai";
 import { type AnyEventEnvelope, type JiePlatform } from "../platform";
 import { logger } from "../utils";
@@ -45,17 +45,14 @@ export class TuiImpl implements Tui {
   private readonly platform: JiePlatform;
   private readonly stateStore: StateStore;
   private readonly commandHandler: CommandHandler;
-  private readonly viewFactory: (tui: TUI) => TuiView;
-  private readonly terminalFactory: (stdin: NodeJS.ReadableStream, stdout: TuiStdout) => Terminal;
-  private readonly stdin: NodeJS.ReadableStream | undefined;
-  private readonly stdout: TuiStdout | undefined;
+  private readonly screen: TUI;
+  private readonly terminal: Terminal;
+  private readonly view: TuiView;
   private readonly unsubscribeBus: () => void;
   private readonly unsubscribeActions: () => void;
   private readonly unsubscribeTransientAger: () => void;
   private readonly unsubscribeThinkingTicker: () => void;
-  private terminal: Terminal | null = null;
-  private ui: TUI | null = null;
-  private view: TuiView | null = null;
+  private stopped = false;
   private resolveStart: (() => void) | null = null;
   private titleDotFrame = 0;
   private titleInterval: ReturnType<typeof setInterval> | null = null;
@@ -64,18 +61,16 @@ export class TuiImpl implements Tui {
     platform: JiePlatform,
     stateStore: StateStore,
     commandHandler: CommandHandler,
-    viewFactory: (tui: TUI) => TuiView,
-    terminalFactory: (stdin: NodeJS.ReadableStream, stdout: TuiStdout) => Terminal,
-    stdin: NodeJS.ReadableStream | undefined = undefined,
-    stdout: TuiStdout | undefined = undefined,
+    screen: TUI,
+    terminal: Terminal,
+    view: TuiView,
   ) {
     this.platform = platform;
     this.stateStore = stateStore;
     this.commandHandler = commandHandler;
-    this.viewFactory = viewFactory;
-    this.terminalFactory = terminalFactory;
-    this.stdin = stdin;
-    this.stdout = stdout;
+    this.screen = screen;
+    this.terminal = terminal;
+    this.view = view;
     this.unsubscribeBus = subscribeToBus(platform, (env) => {
       this.stateStore.dispatch(Actions.receiveEvent(env));
       if (env.type === "agent.idle") {
@@ -83,7 +78,7 @@ export class TuiImpl implements Tui {
       }
     });
     this.unsubscribeTransientAger = createTransientAger(stateStore);
-    this.unsubscribeThinkingTicker = createThinkingTicker(stateStore, () => { this.ui?.requestRender(); });
+    this.unsubscribeThinkingTicker = createThinkingTicker(stateStore, () => { this.screen.requestRender(); });
     this.unsubscribeActions = stateStore.subscribe(async (action) => {
       if (action.type === SUBMIT_EDITOR_TEXT) {
         this.commandHandler.handle(action.payload.text);
@@ -114,9 +109,8 @@ export class TuiImpl implements Tui {
 
   start(): Promise<void> {
     return new Promise<void>((resolve) => {
-      const stdout = this.stdout ?? process.stdout;
-      const cols = stdout.columns;
-      if (cols !== undefined && cols < MIN_COLS) {
+      const cols = this.terminal.columns;
+      if (cols < MIN_COLS) {
         throw new Error(`terminal too narrow for TUI; need at least ${MIN_COLS} columns, got ${cols}`);
       }
       this.resolveStart = (): void => {
@@ -125,13 +119,8 @@ export class TuiImpl implements Tui {
       };
       try {
         setCapabilities({ ...detectCapabilities(), hyperlinks: process.env.INK_OSC8 === "1" });
-        const stdin = this.stdin ?? process.stdin;
-        const terminal: Terminal = this.stdin === undefined ? new ProcessTerminal() : this.terminalFactory(stdin, stdout);
-        const ui = new TuiMainScreen(terminal);
-        this.view = this.viewFactory(ui);
-        this.terminal = terminal;
-        this.ui = ui;
-        ui.start();
+        this.view.start();
+        this.screen.start();
         this.startTitleAnimation();
         this.updateTitle();
       } catch (error) {
@@ -142,23 +131,18 @@ export class TuiImpl implements Tui {
   }
 
   stop(): void {
+    if (this.stopped) return;
+    this.stopped = true;
     if (this.titleInterval !== null) {
       clearInterval(this.titleInterval);
       this.titleInterval = null;
     }
-    if (this.ui !== null) {
-      try {
-        this.ui.stop();
-      } catch {
-        log.error("failed to stop tui");
-      }
-      this.ui = null;
-      this.terminal = null;
+    try {
+      this.screen.stop();
+    } catch {
+      log.error("failed to stop tui");
     }
-    if (this.view !== null) {
-      this.view.stop();
-      this.view = null;
-    }
+    this.view.stop();
     this.unsubscribeBus();
     this.unsubscribeActions();
     this.unsubscribeTransientAger();
@@ -167,9 +151,7 @@ export class TuiImpl implements Tui {
   }
 
   private async quit(): Promise<void> {
-    if (this.terminal !== null) {
-      await this.terminal.drainInput();
-    }
+    await this.terminal.drainInput();
     this.stop();
   }
 
@@ -192,13 +174,13 @@ export class TuiImpl implements Tui {
   }
 
   private updateTitle(): void {
-    if (this.terminal === null) return;
+    if (this.stopped) return;
     const title = buildTerminalTitle(this.stateStore.getState(), this.titleDotFrame);
     this.terminal.setTitle(title);
   }
 
   private async maybePlaySound(env: AnyEventEnvelope): Promise<void> {
-    if (this.terminal === null) return;
+    if (this.stopped) return;
     if (env.type !== "agent.idle" || env.sender.kind !== "agent") return;
     const state = this.stateStore.getState();
     const activeId = state.focusedAgentId ?? state.leaderAgentId;

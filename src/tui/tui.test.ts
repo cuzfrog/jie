@@ -1,14 +1,13 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
-import { _buildTerminalTitle, type Tui, type TuiStdout } from "./tui";
+import { _buildTerminalTitle, type Tui } from "./tui";
 import { bootTui } from "./container";
 import { Actions, type StateStore } from "./state";
 import { makeTuiState } from "./test";
 import { withTTY } from "../../tests/support";
 import { StreamTerminalImpl } from "./stream-terminal";
 import { asValue } from "awilix";
-import { type Terminal } from "@earendil-works/pi-tui";
 import { Events, type JiePlatform, type EventType, type AnyEventEnvelope, type EventEnvelope, type Command, type CommandResult } from "../platform";
 
 class FakeStdin extends PassThrough {
@@ -123,7 +122,7 @@ function bootHarness(executeResult?: CommandResult<"kanbanEdit">, recordWrites =
   let terminal: RecordingStreamTerminal | undefined;
   if (recordWrites) {
     terminal = new RecordingStreamTerminal(stdin, stdout);
-    container.register({ terminalFactory: asValue((_: NodeJS.ReadableStream, __: TuiStdout): Terminal => terminal!) });
+    container.register({ terminal: asValue(terminal) });
   }
   return { tui: container.cradle.tui, stateStore: container.cradle.stateStore, stdin, stdout, platform, terminal };
 }
