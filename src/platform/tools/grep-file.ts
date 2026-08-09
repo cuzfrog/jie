@@ -140,7 +140,7 @@ function scanFile(
   const lines = text.split("\n");
   for (let i = 0; i < lines.length; i++) {
     if (signal?.aborted) return;
-    const line = lines[i] as string;
+    const line = lines[i];
     if (regex.test(line)) {
       const content =
         line.length > LINE_TRUNC ? `${line.slice(0, LINE_TRUNC)}… [truncated]` : line;

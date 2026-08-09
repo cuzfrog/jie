@@ -279,7 +279,7 @@ export class CommandExecutorImpl implements CommandExecutor {
 
   private resolveHandoffTarget(command: Command<"kanbanHandoff">): { sourceTeamId: string; cardId: string } {
     if (command.cardId.includes("/")) {
-      const [sourceTeamId, cardId] = command.cardId.split("/", 2) as [string, string];
+      const [sourceTeamId, cardId] = command.cardId.split("/", 2);
       return { sourceTeamId, cardId };
     }
     return { sourceTeamId: command.teamId, cardId: command.cardId };

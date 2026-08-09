@@ -1,4 +1,3 @@
-import type { Tool } from "./types";
 import type { BuiltinTool } from "./tool-registry";
 import { createBashTool } from "./bash";
 import { createEditTool } from "./edit_file";
@@ -32,21 +31,21 @@ export function createBuiltinTools(
 ): BuiltinTool[] {
   const fileMutationQueue = createFileMutationQueue();
   return [
-    { name: "bash", tool: createBashTool({ workspaceRoot: cwd }) as Tool },
-    { name: "read_file", tool: createReadFileTool({ workspaceRoot: cwd }) as Tool },
-    { name: "write_file", tool: createWriteFileTool({ workspaceRoot: cwd, fileMutationQueue }) as Tool },
-    { name: "edit_file", tool: createEditTool({ workspaceRoot: cwd, fileMutationQueue }) as Tool },
-    { name: "ls", tool: createLsTool({ workspaceRoot: cwd }) as Tool },
-    { name: "find_file", tool: createFindFileTool({ workspaceRoot: cwd }) as Tool },
-    { name: "grep_file", tool: createGrepFileTool({ workspaceRoot: cwd }) as Tool },
-    { name: "read_artifact", tool: createReadArtifactTool({ artifactStore }) as Tool },
-    { name: "write_artifact", tool: createWriteArtifactTool({ artifactStore }) as Tool },
-    { name: "find_artifact", tool: createFindArtifactTool({ artifactStore }) as Tool },
-    { name: "write_kanban", tool: createKanbanWriteTool({ kanbanStore }) as Tool },
-    { name: "memory_add", tool: createMemoryAddTool({ memoryManager, settingsStore }) as Tool },
-    { name: "memory_search", tool: createMemorySearchTool({ memoryManager, settingsStore }) as Tool },
-    { name: "notify", tool: createNotifyTool({ eventManager }) as Tool },
-    { name: "web_fetch", tool: createWebFetchTool() as Tool },
-    { name: "web_search", tool: createWebSearchTool({ provider: createWebSearchProvider() }) as Tool },
+    { name: "bash", tool: createBashTool({ workspaceRoot: cwd }) },
+    { name: "read_file", tool: createReadFileTool({ workspaceRoot: cwd }) },
+    { name: "write_file", tool: createWriteFileTool({ workspaceRoot: cwd, fileMutationQueue }) },
+    { name: "edit_file", tool: createEditTool({ workspaceRoot: cwd, fileMutationQueue }) },
+    { name: "ls", tool: createLsTool({ workspaceRoot: cwd }) },
+    { name: "find_file", tool: createFindFileTool({ workspaceRoot: cwd }) },
+    { name: "grep_file", tool: createGrepFileTool({ workspaceRoot: cwd }) },
+    { name: "read_artifact", tool: createReadArtifactTool({ artifactStore }) },
+    { name: "write_artifact", tool: createWriteArtifactTool({ artifactStore }) },
+    { name: "find_artifact", tool: createFindArtifactTool({ artifactStore }) },
+    { name: "write_kanban", tool: createKanbanWriteTool({ kanbanStore }) },
+    { name: "memory_add", tool: createMemoryAddTool({ memoryManager, settingsStore }) },
+    { name: "memory_search", tool: createMemorySearchTool({ memoryManager, settingsStore }) },
+    { name: "notify", tool: createNotifyTool({ eventManager }) },
+    { name: "web_fetch", tool: createWebFetchTool() },
+    { name: "web_search", tool: createWebSearchTool({ provider: createWebSearchProvider() }) },
   ];
 }

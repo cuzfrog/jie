@@ -6,7 +6,7 @@ export const EFFORT_LEVELS = ["off", "low", "medium", "high", "max"] as const;
 export type EffortLevel = (typeof EFFORT_LEVELS)[number];
 
 export function isEffortLevel(value: unknown): value is EffortLevel {
-    return typeof value === "string" && (EFFORT_LEVELS as readonly string[]).includes(value);
+    return typeof value === "string" && EFFORT_LEVELS.some((level) => level === value);
 }
 
 export interface ModelInfo {

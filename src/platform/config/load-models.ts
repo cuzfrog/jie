@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { getBuiltinModels } from "@earendil-works/pi-ai/providers/all";
+import { getBuiltinModels, getBuiltinProviders, type BuiltinProvider } from "@earendil-works/pi-ai/providers/all";
 import type { Api, Model, OpenAICompletionsCompat, OpenAIResponsesCompat, AnthropicMessagesCompat } from "@earendil-works/pi-ai";
 import { JiePlatformError } from "../jie-platform-errors";
 
@@ -202,11 +202,9 @@ function resolveApi(providerId: string, declared: string | undefined): Api {
     return declared as Api;
   }
 
-  const builtinProbe = (getBuiltinModels as (p: string) => Array<{ api: Api }> | undefined)(
-    providerId as Parameters<typeof getBuiltinModels>[0],
-  );
-  if (builtinProbe !== undefined && builtinProbe.length > 0 && builtinProbe[0] !== undefined) {
-    return builtinProbe[0].api;
+  if (isBuiltinProvider(providerId)) {
+    const builtinModels = getBuiltinModels(providerId);
+    if (builtinModels.length > 0) return builtinModels[0].api;
   }
   throw new JiePlatformError("INVALID_CONFIG", {
     detail: `models.json: provider '${providerId}': api is required for new providers`,
@@ -259,3 +257,7 @@ function resolveValue(value: string, _path: string): string {
 }
 
 export { resolveValue as _resolveValue };
+
+export function isBuiltinProvider(value: string): value is BuiltinProvider {
+  return getBuiltinProviders().some((id) => id === value);
+}

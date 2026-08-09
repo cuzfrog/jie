@@ -86,8 +86,7 @@ export function createReadFileTool(dependencies: ReadFileDeps): Tool<ReadFileInp
 
       const offset =
         input.offset === undefined || input.offset < 1 ? 1 : input.offset;
-      const useLimit = input.limit !== undefined && input.limit >= 1;
-      const limit = useLimit ? input.limit : undefined;
+      const limit = input.limit !== undefined && input.limit >= 1 ? input.limit : undefined;
 
       const allLines = splitLinesPreservingNewline(text);
       const totalLines = allLines.length;
@@ -100,12 +99,11 @@ export function createReadFileTool(dependencies: ReadFileDeps): Tool<ReadFileInp
       }
 
       const startIndex = offset - 1;
-      const endIndex = useLimit
-        ? Math.min(startIndex + (limit as number), totalLines)
-        : totalLines;
+      const endIndex =
+        limit !== undefined ? Math.min(startIndex + limit, totalLines) : totalLines;
       let sliced = allLines.slice(startIndex, endIndex);
 
-      const lineCap = useLimit ? sliced.length : DEFAULT_LINE_CAP;
+      const lineCap = limit !== undefined ? sliced.length : DEFAULT_LINE_CAP;
       let contentLineCount = sliced.length;
       let truncated = false;
       if (sliced.length > lineCap) {

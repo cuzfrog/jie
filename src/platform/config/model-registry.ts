@@ -1,7 +1,7 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
-import { getBuiltinModel, getBuiltinModels, getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";
+import { getBuiltinModels, getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";
 import { findEnvKeys } from "@earendil-works/pi-ai/compat";
-import { loadModelsConfig, type ResolvedModelsConfig, type ResolvedProviderConfig } from "./load-models";
+import { isBuiltinProvider, loadModelsConfig, type ResolvedModelsConfig, type ResolvedProviderConfig } from "./load-models";
 import type { AuthStore } from "./auth-store";
 import { JiePlatformError } from "../jie-platform-errors";
 
@@ -47,13 +47,8 @@ export class PiModelRegistry implements ModelRegistry {
 
   resolve(provider: string, modelId: string): Model<Api> | undefined {
     const customProvider = this.custom.providers.get(provider);
-    const isBuiltin = (getBuiltinProviders() as string[]).includes(provider);
-
-    if (isBuiltin) {
-      const builtinModel = getBuiltinModel(
-        provider as Parameters<typeof getBuiltinModel>[0],
-        modelId as Parameters<typeof getBuiltinModel>[1],
-      );
+    if (isBuiltinProvider(provider)) {
+      const builtinModel = getBuiltinModels(provider).find((m) => m.id === modelId);
       if (builtinModel === undefined) return undefined;
       return applyProviderConfig(builtinModel as unknown as Model<Api>, customProvider);
     }
@@ -64,11 +59,13 @@ export class PiModelRegistry implements ModelRegistry {
 
   listModels(provider: string): Model<Api>[] {
     const customProvider = this.custom.providers.get(provider);
-    const isBuiltin = (getBuiltinProviders() as string[]).includes(provider);
-    if (customProvider !== undefined && !isBuiltin) {
-      return this.custom.models.filter((m) => m.provider === provider);
+    if (!isBuiltinProvider(provider)) {
+      if (customProvider !== undefined) {
+        return this.custom.models.filter((m) => m.provider === provider);
+      }
+      return [];
     }
-    const builtinModels = getBuiltinModels(provider as Parameters<typeof getBuiltinModels>[0]);
+    const builtinModels = getBuiltinModels(provider);
     if (customProvider === undefined) return builtinModels;
     return builtinModels.map((m) => applyProviderConfig(m, customProvider));
   }
