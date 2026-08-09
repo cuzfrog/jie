@@ -8,6 +8,8 @@ import type { ScannedFile } from "./file-mention";
 import { registerChatModule, type ChatMessages } from "./components/chat";
 import { registerFooterModule } from "./components/footer";
 import { registerEditorModule } from "./components/editor";
+import { registerElementsModule } from "./components/elements";
+import { registerPanelsModule } from "./components/panels";
 import { registerSyncModule, type ChatSync } from "./sync";
 import { registerComponentsModule, type TuiView } from "./components";
 import { registerTuiModule } from "./module";
@@ -32,6 +34,12 @@ export interface TuiCradle {
   readonly chatMessages: ChatMessages;
   readonly kanbanList: Component;
   readonly footer: Component;
+  readonly welcomeBanner: Component;
+  readonly statusLine: Component;
+  readonly queuedPrompts: Component;
+  readonly teamPanel: Component;
+  readonly kanbanPanel: Component;
+  readonly helpPanel: Component;
   readonly chatContainer: Container;
   readonly requestRender: () => void;
   readonly editor: Editor;
@@ -64,6 +72,8 @@ export function bootTui(options: CreateTUIOptions, deps: TuiDeps): AwilixContain
   registerFooterModule(container);
   registerEditorModule(container);
   registerSyncModule(container);
+  registerElementsModule(container);
+  registerPanelsModule(container);
   registerComponentsModule(container);
   registerTuiModule(container);
   container.cradle.stateStore.dispatch(

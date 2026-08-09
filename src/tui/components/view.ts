@@ -2,8 +2,6 @@ import { Container, Loader, matchesKey, type Component, type Editor, type TUI } 
 import { Actions, TuiState, type Action, type StateStore } from "../state";
 import type { ChatSync } from "../sync";
 import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, WORKING_LABEL, style } from "./themes";
-import { QueuedPrompts, StatusLine, WelcomeBanner } from "./elements";
-import { HelpPanel, KanbanPanel, TeamPanel } from "./panels";
 
 export interface TuiView {
   start(): void;
@@ -39,6 +37,12 @@ export class TuiViewImpl implements TuiView {
     kanbanList: Component,
     footer: Component,
     editor: Editor,
+    welcomeBanner: Component,
+    statusLine: Component,
+    queuedPrompts: Component,
+    teamPanel: Component,
+    kanbanPanel: Component,
+    helpPanel: Component,
   ) {
     this.screen = screen;
     this.stateStore = stateStore;
@@ -56,14 +60,14 @@ export class TuiViewImpl implements TuiView {
     screen.addChild(chatContainer);
     screen.addChild(kanbanList);
     screen.addChild(this.workingSlot);
-    screen.addChild(new WelcomeBanner(stateStore));
-    screen.addChild(new StatusLine(stateStore));
-    screen.addChild(new QueuedPrompts(stateStore));
+    screen.addChild(welcomeBanner);
+    screen.addChild(statusLine);
+    screen.addChild(queuedPrompts);
     screen.addChild(editor);
     screen.addChild(footer);
-    screen.addChild(new TeamPanel(stateStore));
-    screen.addChild(new KanbanPanel(stateStore));
-    screen.addChild(new HelpPanel(stateStore));
+    screen.addChild(teamPanel);
+    screen.addChild(kanbanPanel);
+    screen.addChild(helpPanel);
     screen.setFocus(editor);
     this.unsubscribeKeys = screen.addInputListener((data) => {
       const state = this.stateStore.getState();
