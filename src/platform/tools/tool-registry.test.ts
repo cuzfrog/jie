@@ -1,43 +1,6 @@
 import { Type } from "typebox";
-import type { SettingsStore } from "../config";
-import type { EventManager } from "../event";
-import type { MemoryManager } from "../memory";
-import type { ArtifactStore, KanbanStore } from "../storage";
 import { InMemoryToolRegistry, type ToolRegistry } from "./tool-registry";
 import type { Tool, ToolResult } from "./types";
-
-const eventManager = vi.mocked<EventManager>({
-  publish: vi.fn(),
-  subscribe: vi.fn(),
-});
-
-const artifactStore = vi.mocked<ArtifactStore>({
-  write: vi.fn(),
-  read: vi.fn(),
-  list: vi.fn(),
-});
-
-const memoryManager = vi.mocked<MemoryManager>({ add: vi.fn(), search: vi.fn(), bootstrap: vi.fn(() => ""), distill: vi.fn(async () => {}) });
-
-const settingsStore = vi.mocked<SettingsStore>({
-  load: vi.fn(),
-  setDefaultProvider: vi.fn(),
-  setDefaultEffort: vi.fn(),
-  setDefaultTeam: vi.fn(),
-  setModelFilters: vi.fn(),
-  setNotificationSoundEnabled: vi.fn(),
-});
-
-const kanbanStore = vi.mocked<KanbanStore>({
-  load: vi.fn(),
-  replace: vi.fn(),
-  add: vi.fn(),
-  remove: vi.fn(),
-  setStatus: vi.fn(),
-  editContent: vi.fn(),
-  editDescription: vi.fn(),
-  handoff: vi.fn(),
-});
 
 function makeTool(name: string): Tool {
   return {
@@ -52,7 +15,7 @@ function makeTool(name: string): Tool {
 }
 
 function makeReg(): ToolRegistry {
-  return new InMemoryToolRegistry("/tmp", eventManager, artifactStore, memoryManager, settingsStore, kanbanStore);
+  return new InMemoryToolRegistry([]);
 }
 
 describe("InMemoryToolRegistry", () => {
@@ -162,71 +125,27 @@ describe("InMemoryToolRegistry", () => {
     expect(reg.resolve("a")).toEqual([second]);
   });
 
-  test("list() returns all registered tools (built-ins + custom)", () => {
+  test("list() returns every registered tool", () => {
     const reg = makeReg();
     reg.register("a", makeTool("a"));
     reg.register("b", makeTool("b"));
     reg.register("c", makeTool("c"));
-    const names = reg.list().map((t) => t.name).sort();
-    expect(names).toContain("a");
-    expect(names).toContain("b");
-    expect(names).toContain("c");
-    expect(names).toContain("bash");
-    expect(names).toContain("read_file");
-    expect(names).toContain("write_file");
-    expect(names).toContain("edit_file");
-    expect(names).toContain("ls");
-    expect(names).toContain("find_file");
-    expect(names).toContain("grep_file");
-    expect(names).toContain("read_artifact");
-    expect(names).toContain("write_artifact");
-    expect(names).toContain("find_artifact");
-    expect(names).toContain("notify");
-    expect(names).toContain("web_fetch");
-    expect(names).toContain("web_search");
+    expect(reg.list().map((t) => t.name).sort()).toEqual(["a", "b", "c"]);
   });
 
-  test("resolve is anchored to the full name — '*bash' matches both 'bash' and 'my-bash'", () => {
+  test("resolve is anchored to the full name - '*bash' matches both 'bash' and 'my-bash'", () => {
     const reg = makeReg();
+    reg.register("bash", makeTool("bash"));
     reg.register("my-bash", makeTool("my-bash"));
-
-    expect(reg.resolve("*bash").map((t) => t.name).sort()).toEqual([
-      "bash",
-      "my-bash",
-    ]);
-  });
-});
-
-describe("InMemoryToolRegistry — built-in installation", () => {
-  test("populated registry: list() contains all 16 built-ins", () => {
-    const reg = makeReg();
-    const names = reg.list().map((t) => t.name).sort();
-    expect(names).toEqual([
-      "bash",
-      "edit_file",
-      "find_artifact",
-      "find_file",
-      "grep_file",
-      "ls",
-      "memory_add",
-      "memory_search",
-      "notify",
-      "read_artifact",
-      "read_file",
-      "web_fetch",
-      "web_search",
-      "write_artifact",
-      "write_file",
-      "write_kanban",
-    ]);
+    expect(reg.resolve("*bash").map((t) => t.name).sort()).toEqual(["bash", "my-bash"]);
   });
 
-  test("populated registry: resolve() returns the matching installed tool for each built-in", () => {
-    const reg = makeReg();
-    for (const name of ["bash", "read_file", "write_file", "edit_file", "ls", "find_file", "grep_file", "find_artifact", "notify", "web_search", "web_fetch", "read_artifact", "write_artifact", "write_kanban", "memory_add", "memory_search"]) {
-      const matches = reg.resolve(name);
-      expect(matches).toHaveLength(1);
-      expect(matches[0]!.name).toBe(name);
-    }
+  test("constructor seeds the registry from the provided builtin list", () => {
+    const reg = new InMemoryToolRegistry([
+      { name: "seeded-a", tool: makeTool("seeded-a") },
+      { name: "seeded-b", tool: makeTool("seeded-b") },
+    ]);
+    expect(reg.list().map((t) => t.name).sort()).toEqual(["seeded-a", "seeded-b"]);
+    expect(reg.resolve("seeded-*").map((t) => t.name).sort()).toEqual(["seeded-a", "seeded-b"]);
   });
 });

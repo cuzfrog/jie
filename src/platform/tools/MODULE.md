@@ -3,6 +3,8 @@ no-new-exports:
   - _test-context.ts
   - bash.test.ts
   - bash.ts
+  - builtins.test.ts
+  - builtins.ts
   - edit_file.test.ts
   - edit_file.ts
   - file-mutation-queue.test.ts
