@@ -2,38 +2,11 @@
 
 ## Status
 
-Accepted. The platform's entry point is `createJiePlatform` in `packages/jie-platform/jie-platform.ts`; there is no `Supervisor` class — "supervisor" was a spec placeholder for "the thing that owns lifecycle", now an explicit function plus a small handle object. The "no class, no DI" rationale below is superseded by ADR 31 (dependency injection via awilix): the entry function survives as `bootPlatform(options): AwilixContainer<PlatformCradle>`, same role, container-shaped result.
+Accepted. The platform's entry point is the boot function in the platform module; there is no `Supervisor` class — "supervisor" was a spec placeholder for "the thing that owns lifecycle", now an explicit function plus a small handle object. The "no class, no DI" rationale below is superseded by ADR 31 (dependency injection via awilix): the entry function survives as `bootPlatform(options): AwilixContainer<PlatformCradle>`, same role, container-shaped result.
 
 ## Decision
 
-```typescript
-export interface JiePlatformOptions {
-  readonly cwd: string;            // process.cwd()
-  readonly homeJieDir: string;     // e.g. ~/.jie/
-  readonly projectJieDir: string | null;  // e.g. <cwd>/.jie, or null
-  readonly resumeSessionId?: string;      // --resume <id>; validated via memory.hasSession (ADR 17)
-  readonly inMemory?: boolean;            // :memory: storage (tests, throwaway runs)
-}
-
-export interface JiePlatform {
-  readonly settings: Settings;            // merged snapshot; consumers use it to pick the team
-
-  prompt(teamId: string, agentKey: string, text: string): void;
-  interrupt(teamId: string, agentKey: string): void;
-
-  subscribe<T extends EventType>(topic: T, callback: (event: EventEnvelope<T>) => void): () => void;
-  execute<T extends CommandName>(command: Command<T>): Promise<CommandResult<T>>;
-  teams(): ReadonlyArray<TeamInfo>;       // visibleForTesting
-}
-
-export async function createJiePlatform(
-  options: JiePlatformOptions,
-  deps: JiePlatformDeps = buildJiePlatformDeps(options),
-): Promise<JiePlatform>;
-```
-
-`createJiePlatform` wires the runtime (event manager, settings/auth stores, storage, model and tool registries, memory manager, artifact store, team manager, command executor) and returns the handle. Callers normally pass only `options`; tests supply a `JiePlatformDeps` bundle with `:memory:` storage.
-
+The entry-point interface lives in `src/platform/jie-platform.ts`. It is a minimal handle (settings, prompt/interrupt, event subscription, command execution, test-only team list) returned by the boot function. Callers pass only options; tests inject dependency bundles.
 The handle is intentionally minimal:
 
 - **Lifecycle is commands, not handle methods.** `execute({ name: "team", teamId? })` loads the selected team through `TeamManager.load` (resolving the id when omitted) and returns its `TeamInfo`; `execute({ name: "stop" })` stops all loaded bodies. There is no `start()` / `stop()` on the handle.

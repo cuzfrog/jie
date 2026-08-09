@@ -37,10 +37,6 @@ Ordering emerges from subscriptions, not a state machine. Task progress is track
 
 ## Consequences
 
-- `notify` loses `task_id`; parameters are `{ topic, prompt }` only. Returns `Notification published on '<topic>'`, `details: { topic }`.
-- `write_file` / `edit_file` check per-role globs from `toolArgs` (when present) against the workspace-relative path; a bare spec means unrestricted (as before). `WRITE_PATH_DENIED` and `TOPIC_NOT_ALLOWED` error codes added; `illegal_transition`, `invalid_task_id`, `invalid_lifecycle`, `write_gate_denied`, and `artifact_key_reserved` removed. (`missing_required_field` remains - the parser still uses it for a missing `tools` field.) `INVALID_TOOL_SPEC` added for malformed `name(args)` specs.
-- `ExecutionContext` carries `toolArgs: ReadonlyMap<string, ReadonlyArray<string>>` (replaces `lifecycle: TaskLifecycle | null`).
-- `write_artifact` no longer reserves the `*/status/*` key namespace - it existed only for lifecycle status rows, now gone.
-- `TEAM.md` frontmatter is `leader:` only; no `lifecycle:` block. Role manifests express limits inline: `notify(task.recorded, task.done)`, `write_file(**/CONTEXT.md)`.
-- Tool specs stay raw strings on `AgentSoul.tools` (parsed at body construction, no TUI ripple). The parser stays tool-agnostic per OCP: `parseToolSpec` lives in the tools layer.
-- Residuals: `bash` bypasses write limits (ungated by design); a role with a bare `write_file` is unrestricted, so "only the architect authors `CONTEXT.md`" is prompt-enforced for roles that keep bare file tools (e.g. the implementer) rather than platform-enforced.
+- `notify` drops `task_id`; `write_file`/`edit_file` use per-role globs from parsed tool specs. Lifecycle-related error codes are removed; `WRITE_PATH_DENIED`, `TOPIC_NOT_ALLOWED`, and `INVALID_TOOL_SPEC` are added.
+- `TEAM.md` has no `lifecycle:` block; limits are expressed inline in role `tools:` specs.
+- `bash` remains ungated; unrestricted bare specs rely on prompt-level enforcement.

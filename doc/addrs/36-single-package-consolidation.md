@@ -14,29 +14,14 @@ The repo was a bun-workspaces monorepo of eight packages (`jie-platform`, `jie-c
 
 ## Decision
 
-Collapse the eight workspace packages into a single publishable package, `@cuzfrog/jie`, rooted at `src/`. The mock-only LLM server moves under `tests/`. Directory mapping:
-
-| Was | Now |
-|---|---|
-| `packages/jie-platform/` | `src/platform/` |
-| `packages/jie-cli/` | `src/cli/` |
-| `packages/jie-tui/` | `src/tui/` |
-| `packages/jie-utils/` | `src/utils/` |
-| `packages/jie-team-installer/` | `src/team-installer/` |
-| `packages/jie-team/` | `src/team-content/` |
-| `packages/code-lens/` | `src/code-lens/` |
-| `packages/mock-llm-backend/` | `tests/mock-llm-backend/` |
-
-`packages/jie-ink/` is not in the table: it was deleted by ADR 30 and any remaining references to it are historical.
-
-**What carries over unchanged.**
+Collapse the eight workspace packages into a single publishable package, `@cuzfrog/jie`, rooted at `src/`. The mock-only LLM server moves under `tests/`. **What carries over unchanged.**
 
 - The two awilix containers stay separate (ISP): `bootPlatform` and `bootTui` are not merged. The TUI still reaches the platform only through the `JiePlatform` handle (`asValue`), never platform internals.
 - The `MODULE.md` gate convention stays. Module visibility is enforced at the src-directory level exactly as it was at the package level; `no-new-exports` lists are unchanged in intent.
 - ADR 11 agnosticism stays: `src/platform/` has no import of `src/team-content/`, in any form. Team blueprints are still data read from filesystem paths. The bundled `default-team` blueprint lives at `src/team-content/default-team/`; first-run auto-install (D1, addressed separately) copies it to `~/.jie/teams/` so the platform reads it from the same filesystem locations as any installed team.
 - ADR 35's installer boundary stays: `src/team-installer/` is still CLI-side, never imported by `src/platform/` or `src/team-content/`. It is now a module within the package rather than a separate npm package, but the concern split is identical.
 
-**Publish shape.** One `package.json` at the repo root. `"files": ["src"]` whitelists the distributable; because the gitignored `.env` sits at repo root (outside `src/`), it is excluded from the tarball - bun's `pm pack` does not honor `.gitignore`, so the whitelist is load-bearing. `"bin"` exposes `jie` (`src/cli/index.ts`) and `code-lens` (`src/code-lens/main.ts`). No `workspaces`, no `catalog:`; every dependency is pinned once at the root. Versioning is whole-package: one version, one `bun publish`.
+**Publish shape.** One package (`@cuzfrog/jie`) rooted at `src/`; `"files": ["src"]` excludes root-level files like `.env`. No workspaces or catalog.
 
 ## Rationale
 

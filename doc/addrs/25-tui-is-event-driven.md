@@ -22,14 +22,7 @@ The TUI's permitted surface on `JiePlatform` is the handle itself — `subscribe
 
 ### 2. The platform publishes enough information for the TUI to render
 
-| TUI panel | Event(s) |
-|---|---|
-| Agents rail (roster) | `system.team.loaded` (payload carries the per-agent roster with `isLeader`) |
-| Busy/idle indicators | `agent.turn.start`, `agent.idle` (strict alternation — event-order contract in `03-event-system.md`) |
-| Live LLM output | `agent.stream.chunk`, `agent.stream.end` |
-| Tool telemetry | `agent.tool.call`, `agent.tool.result` |
-| Queue indicator | `agent.prompt.queue.update` |
-| Model indicator | `agent.model.assigned` |
+The TUI subscribes to the event bus and derives its view from agent and system events (`system.team.loaded`, `agent.*`, `agent.stream.*`, etc.).
 
 Gaps in this table are platform gaps, fixable in the platform — not TUI workarounds. The TUI never polls body state (e.g. the in-memory prompt queue); every indicator has an event source.
 

@@ -17,18 +17,13 @@ This left two architectural smells:
 
 ## Decision
 
-The package boundary is **content (jie-team) vs. runtime (jie-platform)**:
+The package/module boundary is content vs. runtime: the platform (runtime) is agnostic of team content; team content is a folder of `.md` files with no runtime code.
 
-| Package | Owns | Does not own |
-|---|---|---|
-| `@cuzfrog/jie-platform` | Agent loop, EventBus, ArtifactStore, Tool Registry, Memory Manager, **team-blueprint loader** (parses `.md` files, builds `AgentSoul[]`) | Any specific team's manifest content. Any knowledge that `@cuzfrog/jie-team` exists. Any TypeScript import from jie-team. |
-| `@cuzfrog/jie-team` | A directory of `.md` manifests: `TEAM.md` + one `.md` per role, for the dev team and default-solo team. | Runtime code. Agent logic. Install scripts. CLI commands. Any TypeScript import used at runtime. Any `postinstall` hook. The package is a passive artifact: a folder of files, optionally published so users can copy from it. |
-
-**The platform is generic.** It reads team manifests from filesystem paths (`.jie/teams/<id>/`, `~/.jie/teams/<id>/`). It has no `import` of `@cuzfrog/jie-team` in any form, including types. No platform code path assumes jie-team exists or has run.
+The platform reads team manifests from standard filesystem paths; it has no dependency on the team-content module.
 
 **The team package has no install mechanism.** `jie-team` is a manifest package. It does not declare a `postinstall` script. There is no `jie team install` CLI command. Distributing its manifests to a working `jie` install is the user's responsibility — typically by copying the files into `~/.jie/teams/<id>/` (global) or `<workspace>/.jie/teams/<id>/` (project-local) by hand. The package's value is *being a discoverable source of the manifests*, not a runtime side-effect.
 
-**The platform ships a built-in default-solo team as a last-resort fallback.** The built-in is two `.md` files at `packages/jie-platform/team/default-solo/`, loaded at module-load time via `import ... with { type: "text" }` and parsed by the same parser as user teams — one code path, no special loader. It is used only when no user team is selected. The platform is agnostic of `jie-team` as a package — no `import`, no `dependency`, no `postinstall` hook. The `jie-team` package may ship its own default-solo team `.md` files which, once copied to `~/.jie/teams/default-solo/` or `.jie/teams/default-solo/`, override the platform's built-in. The built-in is the v1 "always has something to run" guarantee.
+The built-in default-solo team is a pair of `.md` files loaded by the same parser as user teams; it provides the last-resort fallback when no user team is selected.
 
 ## Rationale
 
@@ -40,10 +35,6 @@ The package boundary is **content (jie-team) vs. runtime (jie-platform)**:
 
 ## Consequences
 
-- `packages/jie-platform/team/` is the home of the team-blueprint parser and the `default-solo/` `.md` files.
-- `packages/jie-team/` is a manifest package: a directory of `.md` files, with no `postinstall` script, no `scripts/install.ts`, and no published `index.ts` runtime surface. Its `package.json` declares the `files: ["teams/"]` distribution set and nothing else. It is not a `dependency` of `@cuzfrog/jie` — it is a sibling, published separately and consumed by humans, not by the platform.
-- The `monorepo-structure.md` dependency graph is updated: the `jie-cli → jie-team` line is removed entirely (no platform or CLI code depends on jie-team). The `jie-team → jie-platform` line stays and is dev-only (types).
-- `10-configuration.md` "Team Selection" describes the platform's resolution chain (`--team`, `defaultTeam`, first-available user team, built-in default-solo) and the stale-recovery rule. The platform never fails on "no teams available" — the built-in is the last-resort fallback.
-- There is no `jie team install` command; the CLI's team-related surface is `jie team [<id>]` (switch default) and `--team <id>` (one-shot).
-- `default-solo-team.md` describes the default-solo team as two `.md` files at a standard lookup path. The "Loader Location" section points at the filesystem paths, not at a package or install mechanism.
-- **Day 2 stays open.** Third-party team discovery (a registry, version pinning, signed manifests, a copy-friendly installer) is a Day 2 concern. v1 ships with one team package (jie-team) and standard-path resolution; users obtain and place manifests by hand.
+- Platform module owns parsing; team-content module is pure `.md` files.
+- No install mechanism exists; CLI surface is `jie team [id>]` and `--team <id>`.
+- Day 2 concerns remain open.

@@ -12,11 +12,7 @@ Accepted. All team-discovery logic lives in `jie-platform`; the CLI and TUI are 
 
 ### 1. Team discovery is a platform responsibility
 
-`jie-platform`'s `team/` module owns:
-
-- `locate(teamId): "project" | "global" | null` — "project wins over global" is platform-level (it matches the `models.json` / `settings.json` discovery order in `10-configuration.md`).
-- `listInstalled(): string[]` — always includes the built-in `default-solo`.
-- The constant `BUILTIN_DEFAULT_SOLO_TEAM_ID = "default-solo"`.
+The platform's team module owns discovery (`locate`, `listInstalled`, built-in constant). It matches the config/file discovery order.
 
 ### 2. The CLI and TUI are thin consumers
 
@@ -30,6 +26,5 @@ No discovery code in the CLI or TUI. Team operations surface as platform command
 
 ## Consequences
 
-- Team discovery lives in the platform's `team/` module (`TeamRegistry` / `TeamManager`); `BUILTIN_DEFAULT_SOLO_TEAM_ID` is in `team/types.ts`.
-- The CLI has no team-discovery code — its team subcommands go through the platform's commands, and the TUI consumes the same commands.
-- `SettingsStore` receives team location as an injected lookup (`locateTeam`), keeping config resolution on the same discovery source.
+- Discovery stays in the platform module; CLI and TUI consume it through platform commands.
+- Config resolution uses the same discovery source.

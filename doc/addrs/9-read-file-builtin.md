@@ -12,12 +12,7 @@ The original spec had no file built-ins — reading was expected from an MCP ser
 
 `read_file` and `write_file` are built-in platform tools in `packages/jie-platform/tools/`, mirroring pi's `read`/`write` tools. They enforce **workspace-root containment only** — resolved absolute path must stay inside the resolved workspace root, `path_escape` / `workdir_escape` tool errors on violation, consistently across `read_file`, `write_file`, and `bash` `workdir`. They do **not** enforce module boundaries, no-new-exports rules, or any team-defined constraint; that is the team's concern (see `06-agent-model.md` "Boundary Enforcement (Platform vs Team)").
 
-```typescript
-read_file(input: { path: string; offset?: number; limit?: number }): { content: string; truncated: { content: boolean } }
-write_file(input: { path: string; content: string }): { path: string; bytes_written: number; created_at: string }
-```
-
-Shared scope: UTF-8 text only; 120s default timeout. `read_file` truncates at 2000 lines or 50 KiB, whichever first; image MIME types are a tool error (`unsupported_media_type`). `write_file` overwrites (idempotent, no append mode) and auto-creates parent directories.
+Both enforce workspace-root containment only; full signatures and behavior are in the source tool definitions (`src/platform/tools/`).
 
 The default-solo team ships `[bash, read_file, write_file, notify]` and no artifact tools — the artifact store is for inter-agent coordination, and a single-agent team has no peers.
 

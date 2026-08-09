@@ -14,12 +14,12 @@ Rebase jie-tui on pi-tui and delete jie-ink wholesale:
 
 - **Inline differential rendering into the normal terminal buffer** — no alternate screen. Finished conversation output is the terminal's own scrollback; selection and copy are the terminal's native behavior. The app keeps no scrollback buffer and handles no mouse/wheel.
 - **The state store stays the single source of truth.** Bus envelopes still reduce through the pure reducer; a `store.subscribe` line runs a structural chat-sync (append/finalize/clear child components by `history.length` / `currentTurn` identity / `cards.length` / `blocks.length`) and coalesced `requestRender()`. Components pull their slice in `render(width)`.
-- **Editor controls are pi's verbatim plus three jie keys** (`Esc` interrupt busy focused agent, `Ctrl+C` clear-or-quit, `Ctrl+D` quit on empty buffer — single press). `Tab` completes autocomplete suggestions and does not submit; `Enter` submits. The only jie additions are the agent-cycle keys (`Shift/Ctrl+↑↓`), always active — the side rail is replaced by agent status in the footer's identity strip.
-- **Public API unchanged**: `createTui(options, deps) → Tui {state, start(), stop()}`; e2e asserts on `tui.state`, never frames, so the acceptance suite survived the swap (autocomplete scenarios rewritten to pi's Tab-completes-not-submits semantics).
+- Editor controls and layout are now handled by pi-tui; the public `createTui` API is unchanged.
+- Autocomplete semantics were rewritten to match pi-tui's Tab-completes-not-submits behavior.
 
 Accepted UX changes (user-approved): no alt-screen; terminal-native selection instead of in-frame drag; terminal scrollback instead of app-level wheel scroll/virtualization; footer agent status instead of the side rail; pi's editor as a strict superset of jie's minimal one.
 
-Two runtime hazards are guarded in code: pi-tui's `doRender` throws on any line wider than the terminal — every custom component truncates to the given width (pinned by fuzz tests); and the logger's sink is redirected to `stderr` at startup — pi-tui has no `patchConsole`, so a stray `stdout` write would shred the inline renderer.
+Runtime hazards (line-width truncation, stdout/stderr separation) are guarded in the source code.
 
 ## Consequences
 

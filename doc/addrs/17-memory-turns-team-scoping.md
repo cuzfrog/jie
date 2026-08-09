@@ -14,24 +14,7 @@ Separately, the session-id lifecycle was inconsistent: the spec disagreed on who
 
 ### 1. `team_id` is a first-class column in `memory_turns`
 
-```sql
-CREATE TABLE IF NOT EXISTS memory_turns (
-  team_id    TEXT    NOT NULL,
-  session_id TEXT    NOT NULL,
-  agent_key  TEXT    NOT NULL,
-  seq        INTEGER NOT NULL,
-  role       TEXT    NOT NULL,
-  content    TEXT    NOT NULL,
-  compacted  INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT    NOT NULL,
-  PRIMARY KEY (team_id, agent_key, session_id, seq)
-);
-
-CREATE INDEX IF NOT EXISTS idx_memory_turns_team_session_created
-  ON memory_turns (team_id, session_id, created_at);
-```
-
-`agent_key` and `seq` stay in the primary key because memory belongs to an individual agent: each agent has its own `seq` counter within a session; the leader's seq 1 and the worker's seq 1 are independent rows. Two teams sharing an `agent_key` live in disjoint row sets — no collision to warn about, and users may reuse role names freely across teams.
+`team_id` is added as a first-class column (with an index on `(team_id, session_id, created_at)`) so rows from different teams are disjoint; `agent_key` and `seq` remain in the primary key because each agent keeps its own sequence within a session.
 
 ### 2. `session_id` is per process × team; the platform mints, the body accepts
 

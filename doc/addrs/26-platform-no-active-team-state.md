@@ -48,7 +48,5 @@ The prompt entrypoint takes `teamId` as the first argument (so does `interrupt`)
 
 ## Consequences
 
-- `packages/jie-platform/jie-platform.ts` — the interface above, nothing more.
-- `packages/jie-platform/team/team-manager.ts` — `load(teamId?)` resolves, parses, and starts; `listLoaded()` backs the test-only `teams()`.
-- `packages/jie-cli/index.ts` — the print and TUI flows execute the `team` command with the requested id; no selection round-trip beyond that.
-- ADR 24 — the platform's team-discovery responsibility (installed / locate / list) is unchanged; command-driven loading is the consumer of that discovery.
+- Team loading is a platform command (`execute({ name: "team" })`); selection stays in CLI/TUI.
+- ADR 24's discovery responsibility is unchanged.

@@ -32,10 +32,6 @@ The transcript remains the raw layer; atoms are extracted from the same prefix c
 
 Their isolation triple is per-agent; jie inverts it. Extraction runs per agent stream, but atoms are stored team-scoped and every role recalls the same pool — scout's discovery is builder's context. Per-role visibility tagging is an extension; the schema omits it until needed.
 
-### 5. Taxonomy: `fact` / `decision` / `method` / `instruction`
-
-Their `work_task`/`work_artifact` types overlap jie's kanban and artifacts; memory must not duplicate work-product tracking. `instruction` (a standing rule, always highest priority) is retained from their design.
-
 ### 6. One-shot LLM calls become a shared platform service
 
 Compaction's private `summarizeConversation` (pi-ai `streamSimple` + `retryAssistantCall`) is generalized into an `LlmService` (`07-llm-service.md`): model in, text out, credentials resolved internally. Compaction and memory extraction are its first two consumers; future tasks (text summarization, translation) reuse it. The extraction model is configurable (`settings.memory.model`), defaulting to the agent's model, so a cheap model can serve extraction without touching the working model.
@@ -57,8 +53,7 @@ The new domain owns the word "memory". The transcript store's contract is unchan
 
 ## Consequences
 
-- New module `packages/jie-platform/memory/` (store + extractor), new module `packages/jie-platform/llm/` (`LlmService`); the compactor loses its private LLM call and its `apiKey` threading.
-- New tables `memory_atoms` + FTS index in `storage.db`; `initializeSchema` grows.
-- New builtin tool `memory_search`; new `memoryBlock` input to `composeSystemPrompt`, loaded in the body's restore phase.
-- New settings: `language`, `memory` (`10-configuration.md`).
-- A TencentDB hub adapter remains possible later behind the store/extractor interfaces for teams that want panels, ACLs, wiki/codegraph — the interfaces must not leak hub concepts (L0–L3) into the platform.
+- A native memory module extracts atoms into SQLite (FTS5 search) using the existing storage; no external service is needed.
+- The compactor's private LLM call is generalized into a shared `LlmService`.
+- `TranscriptStore` replaces `MemoryManager`; the contract is otherwise unchanged.
+- A TencentDB adapter remains possible behind the store/extractor interfaces.
