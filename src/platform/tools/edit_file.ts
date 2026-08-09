@@ -3,7 +3,6 @@ import { Type } from "typebox";
 import type { EditResultDetails, ExecutionContext, Tool, ToolResult } from "./types";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
 import type { FileMutationQueue } from "./file-mutation-queue";
-import { checkWriteGates } from "./write-gate";
 import { mapErrno, resolveWithinWorkspace } from "./path-utils";
 import { renderUnifiedDiff } from "./unified-diff";
 
@@ -15,8 +14,9 @@ matches. Any violation fails the whole call with NO_MATCH, AMBIGUOUS_MATCH, or O
 and leaves the file untouched. On success returns a one-line ack; the unified-diff preview lives
 only in \`details.diff\` for the UI — it is not part of the model-visible result. For edits larger
 than 5000 lines the diff is omitted and \`details.diff\` is null (use \`write_file\` for wholesale
-rewrites). Text only; UTF-8. Teams with a declared lifecycle may gate paths: a matching
-edit is rejected with WRITE_GATE_DENIED unless a gate admits your role.`;
+rewrites). Text only; UTF-8. A role may be restricted to a fixed set of editable paths via
+its manifest \`edit_file(glob-a, glob-b)\` tool spec; a path outside that set is rejected
+with WRITE_PATH_DENIED.`;
 
 interface EditDeps {
   workspaceRoot: string;
@@ -84,8 +84,11 @@ export function createEditTool(dependencies: EditDeps): Tool<EditInput> {
     },
     async execute(input: EditInput, executionContext: ExecutionContext): Promise<ToolResult> {
       const { realPath, relativePath } = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
-      if (executionContext.lifecycle !== null) {
-        checkWriteGates(relativePath, executionContext.agentRole, executionContext.lifecycle.writeGates);
+      const globs = executionContext.toolArgs.get("edit_file");
+      if (globs !== undefined && !globs.some((pattern) => new Bun.Glob(pattern).match(relativePath))) {
+        throw new JiePlatformError("WRITE_PATH_DENIED", {
+          detail: `path '${relativePath}' is not allowed for role '${executionContext.agentRole}'`,
+        });
       }
       return dependencies.fileMutationQueue.run(realPath, () => applyEdits(input, realPath));
     },

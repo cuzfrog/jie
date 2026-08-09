@@ -12,7 +12,7 @@ Platform-level configuration surface: how Jie discovers and loads settings, cred
 | `~/.jie/models.json` | Global provider definitions | Plain JSON | Custom providers: base URLs, APIs, keys, model catalogs |
 | `.jie/models.json` | Project provider overrides | Plain JSON | Same shape; a project entry replaces the global entry of the same provider name |
 | `~/.jie/mcp.json`, `.jie/mcp.json` | MCP server definitions | Plain JSON | Platform connects stdio servers at startup; project overrides per name (ADR 4) |
-| `.jie/teams/<id>/TEAM.md` | Team wiring | Plain text | `leader:` declaration and optional `lifecycle:` block in YAML frontmatter + prose (`06-agent-model.md` "Team Blueprint") |
+| `.jie/teams/<id>/TEAM.md` | Team wiring | Plain text | `leader:` declaration in YAML frontmatter + prose (`06-agent-model.md` "Team Blueprint") |
 | `.jie/teams/<id>/<role>.md` | Agent definition | Plain text | YAML frontmatter (`model?`, `tools`, `subscribe?`, `skills?`) + prose body (system prompt) |
 | `~/.jie/skills/<name>/SKILL.md` | Global skill | Plain text | YAML frontmatter (`name?`, `description`, `argument-hint?`) + prose body; see "Skills" |
 | `.jie/skills/<name>/SKILL.md` | Project skill | Plain text | Same shape; a project skill overrides a global skill of the same name |

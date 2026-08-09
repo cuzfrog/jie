@@ -211,74 +211,57 @@ describe("write_file", () => {
   });
 });
 
-describe("write_file — write gates", () => {
+describe("write_file - per-role path limits", () => {
   let workspace: string;
 
   beforeEach(() => {
-    workspace = mkdtempSync(join(tmpdir(), "jie-write-gate-"));
+    workspace = mkdtempSync(join(tmpdir(), "jie-write-limit-"));
   });
 
   afterEach(() => {
     rmSync(workspace, { recursive: true, force: true });
   });
 
-  function gatedContext(role: string): ExecutionContext {
+  function limitedContext(role: string, globs: ReadonlyArray<string>): ExecutionContext {
     return {
       ...makeEmptyContext(),
       agentRole: role,
-      lifecycle: {
-        maxIterations: 5,
-        permanentPhases: [],
-        transitions: [],
-        writeGates: [{ pattern: "**/CONTEXT.md", roles: ["architect"] }],
-      },
+      toolArgs: new Map([["write_file", globs]]),
     };
   }
 
-  test("denies a gated path for a role outside the gate and leaves no file", async () => {
+  test("denies a path outside the allowed globs and leaves no file", async () => {
     const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     await expect(
-      tool.execute({ path: "docs/CONTEXT.md", content: "x" }, gatedContext("implementer")),
-    ).rejects.toMatchObject({ code: "WRITE_GATE_DENIED" });
-    expect(existsSync(join(workspace, "docs/CONTEXT.md"))).toBe(false);
+      tool.execute({ path: "docs/notes.md", content: "x" }, limitedContext("architect", ["**/CONTEXT.md"])),
+    ).rejects.toMatchObject({ code: "WRITE_PATH_DENIED" });
+    expect(existsSync(join(workspace, "docs/notes.md"))).toBe(false);
   });
 
-  test("denies a gated path given as an absolute path too", async () => {
+  test("denies a path given as an absolute path too", async () => {
     const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     await expect(
-      tool.execute({ path: join(workspace, "docs", "CONTEXT.md"), content: "x" }, gatedContext("implementer")),
-    ).rejects.toMatchObject({ code: "WRITE_GATE_DENIED" });
+      tool.execute({ path: join(workspace, "docs", "CONTEXT.md"), content: "x" }, limitedContext("implementer", ["src/**"])),
+    ).rejects.toMatchObject({ code: "WRITE_PATH_DENIED" });
   });
 
-  test("allows a gated path for a listed role", async () => {
+  test("allows a path matching an allowed glob", async () => {
     const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
-    await tool.execute({ path: "docs/CONTEXT.md", content: "ctx" }, gatedContext("architect"));
+    await tool.execute({ path: "docs/CONTEXT.md", content: "ctx" }, limitedContext("architect", ["**/CONTEXT.md"]));
     expect(readFileSync(join(workspace, "docs/CONTEXT.md"), "utf-8")).toBe("ctx");
   });
 
-  test("teams without a lifecycle can write gate-shaped paths", async () => {
+  test("no toolArgs restriction allows any path", async () => {
     const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     await tool.execute({ path: "docs/CONTEXT.md", content: "free" }, makeEmptyContext());
     expect(readFileSync(join(workspace, "docs/CONTEXT.md"), "utf-8")).toBe("free");
   });
 
-  test("denies a new file under a gated directory reached through a directory symlink", async () => {
+  test("checks the resolved real path so a symlink cannot bypass the limit", async () => {
     mkdirSync(join(workspace, "docs"));
     symlinkSync(join(workspace, "docs"), join(workspace, "alias"));
-    const context: ExecutionContext = {
-      ...makeEmptyContext(),
-      agentRole: "implementer",
-      lifecycle: {
-        maxIterations: 5,
-        permanentPhases: [],
-        transitions: [],
-        writeGates: [{ pattern: "docs/**", roles: ["architect"] }],
-      },
-    };
     const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
-    await expect(
-      tool.execute({ path: "alias/notes.md", content: "x" }, context),
-    ).rejects.toMatchObject({ code: "WRITE_GATE_DENIED" });
-    expect(existsSync(join(workspace, "docs/notes.md"))).toBe(false);
+    await tool.execute({ path: "alias/CONTEXT.md", content: "via-symlink" }, limitedContext("architect", ["docs/*"]));
+    expect(readFileSync(join(workspace, "docs/CONTEXT.md"), "utf-8")).toBe("via-symlink");
   });
 });

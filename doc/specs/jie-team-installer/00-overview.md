@@ -14,7 +14,7 @@ A **team source** is anything that resolves to a local directory whose immediate
 |---|---|---|
 | **npm** | `some-team`, `@author/jie-team-cool`, `@author/jie-team-cool@0.9.0`, `some-team@next` | Fetch `https://registry.npmjs.org/<name>`, resolve the version (a dist-tag like `latest`/`next`, or an exact version - semver ranges are not supported in v1), download the tarball, extract it, and use its `package/` directory as the source root. |
 
-The bundled `default-coders` blueprint ships inside `@cuzfrog/jie` at `src/team-content/`; first-run auto-install (D1) copies it to `~/.jie/teams/`, so it is never an `add` target. `jie team add <npm-spec>` is for third-party team packages.
+The bundled `default-team` blueprint ships inside `@cuzfrog/jie` at `src/team-content/`; first-run auto-install (D1) copies it to `~/.jie/teams/`, so it is never an `add` target. `jie team add <npm-spec>` is for third-party team packages.
 | **git** | `github:owner/repo`, `github:owner/repo#v1.2.3`, `https://example.com/repo.git`, `https://example.com/repo#main`, `git@example.com:owner/repo.git` | `git clone --depth 1` (with `--branch <ref>` when a ref is given). The `github:` shorthand normalizes to `https://github.com/owner/repo.git`. The `#ref` suffix selects a branch or tag; a bare commit hash is not supported in v1 (depth-1 clone cannot reach an arbitrary sha). The clone root is the source root. |
 | **file** | `./teams/dev`, `../teams/dev`, `/abs/path`, `~/teams/dev` | A local directory, read in place. The directory itself is the source root. |
 

@@ -1,0 +1,5 @@
+---
+leader: manager
+---
+
+Default software-delivery team. Six roles form a serial pipeline on `task` work units: the Delivery Manager (`manager`, the leader and sole user contact) records a task; `researcher`, `architect`, `planner`, `implementer`, `reviewer` each subscribe to the previous role's topic, so the pipeline serializes itself - no role addresses another by identity, all coordination is `notify` on `task.*` topics. One task in flight per team; the task is tracked on the team's kanban board, and work products accumulate as artifacts under `{task_id}/research|design|plan|review`. Each role's `tools` list limits what it may do: `notify(<topics>)` restricts the topics a role may publish, and `write_file(<globs>)` / `edit_file(<globs>)` restrict the paths it may touch (a bare tool name means unrestricted). Ordering emerges from subscriptions, not a central state machine. See each role file for its contract and `doc/specs/jie-team/00-overview.md` for the full design.

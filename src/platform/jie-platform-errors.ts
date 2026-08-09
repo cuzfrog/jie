@@ -24,16 +24,15 @@ const JiePlatformErrorMessages = {
 
   INVALID_ARTIFACT_KEY: "Invalid artifact key",
   ARTIFACT_TOO_LARGE: "Artifact content exceeds the maximum allowed size",
-  ARTIFACT_KEY_RESERVED: "Artifact key is reserved by the platform",
 
   COMMAND_TIMED_OUT: "Command exceeded the time limit",
 
   NOTIFY_INVALID_TOPIC: "Invalid topic for notify",
   NOTIFY_PROMPT_TOO_LONG: "Notify prompt exceeds the maximum allowed size",
+  TOPIC_NOT_ALLOWED: "Notify topic is not allowed for this role",
 
-  INVALID_TASK_ID: "Invalid task_id",
-  ILLEGAL_TRANSITION: "Task lifecycle transition not allowed",
-  WRITE_GATE_DENIED: "Write blocked by a team write gate",
+  WRITE_PATH_DENIED: "Write path is not allowed for this role",
+  INVALID_TOOL_SPEC: "Invalid tool spec in manifest",
 
   UNSUPPORTED_SCHEME: "URL must use http or https",
   UNSUPPORTED_CONTENT_TYPE: "Response content-type is not supported",
@@ -53,7 +52,6 @@ const JiePlatformErrorMessages = {
   LEADER_MISMATCH: "TEAM.md leader does not match the only agent",
   LEADER_UNKNOWN: "TEAM.md leader references unknown role",
   TEAM_FILE_REQUIRED: "TEAM.md is required for multi-agent teams",
-  INVALID_LIFECYCLE: "Invalid lifecycle declaration in TEAM.md",
   SUBSCRIBE_REJECTS_PLATFORM_TOPIC: "subscribe cannot target a platform topic",
   TOOL_SPEC_UNRESOLVED: "Tool spec resolved no tools",
 
