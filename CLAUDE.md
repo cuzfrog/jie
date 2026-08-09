@@ -7,12 +7,11 @@
 - @doc/specs/monorepo-structure.md; read `00-overview.md` to understand the glossary.
 - @doc/DEVELOPMENT.md
 - `doc/addrs/` (ADRs) — consequential decisions.
-- `doc/specs/` (specs) — package-level blueprints.
+- `doc/specs/` (specs) — directions.
 
 ## Document rules
-- Keep your writing short and concise but accurate enough to avoid guessing room. Code itself is doc, avoid any doc if you can.
-- Do not keep intermediate, transient history in md files under `specs/`, they are the up-to-date blueprint for the project.
-- Do not record what you've done if the information is not helpful to make subsequent decisions.
+- Be concise. Code itself is doc, avoid doc if you can.
+- Do not keep intermediate, transient history.
 - No emojis in commits, issues, PR comments, or code
 - Do not use newline to break sentences, no newline in the same paragraph. Let IDE wrap text.
 
@@ -98,7 +97,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 
 (Write temporary files to `./tmp/` only if you want me to reivew, otherwise write to `/tmp/<space>/`)
 
-## Backwards compatibility
+## Data backwards compatibility
 Since we are still in dev phase, ignore backwards compatibility. Simply discard old imcompatible data.
 
 ## File Edit Checklist
