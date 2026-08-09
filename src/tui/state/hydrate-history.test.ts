@@ -129,7 +129,7 @@ describe("hydrateHistory", () => {
   test("non-diff details are dropped at the persisted-message seam", () => {
     const kanban: ToolResultDetails = { kind: "kanban", cards: [] };
     const result = hydrateHistory([
-      user("run"), assistantToolCall("c1", "kanban_write", {}), toolResult("c1", "kanban_write", "ok", false, kanban),
+      user("run"), assistantToolCall("c1", "write_kanban", {}), toolResult("c1", "write_kanban", "ok", false, kanban),
     ], 0);
     expect(result.currentTurn?.cards[0]?.details).toBeNull();
   });

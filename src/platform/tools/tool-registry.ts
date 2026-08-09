@@ -7,7 +7,7 @@ import { createMemorySearchTool } from "./memory-search";
 import { createNotifyTool } from "./notify";
 import { createReadArtifactTool } from "./read-artifact";
 import { createReadFileTool } from "./read-file";
-import { createKanbanWriteTool } from "./kanban-write";
+import { createKanbanWriteTool } from "./write-kanban";
 import { createTaskLifecycleGuard } from "./task-lifecycle";
 import { createWebFetchTool } from "./web-fetch";
 import { createWebSearchProvider, createWebSearchTool } from "./web-search";
@@ -85,7 +85,7 @@ function builtins(
     { name: "edit_file", tool: createEditTool({ workspaceRoot, fileMutationQueue }) as Tool },
     { name: "read_artifact", tool: createReadArtifactTool({ artifactStore }) as Tool },
     { name: "write_artifact", tool: createWriteArtifactTool({ artifactStore }) as Tool },
-    { name: "kanban_write", tool: createKanbanWriteTool({ kanbanStore }) as Tool },
+    { name: "write_kanban", tool: createKanbanWriteTool({ kanbanStore }) as Tool },
     { name: "memory_add", tool: createMemoryAddTool({ memoryManager, settingsStore }) as Tool },
     { name: "memory_search", tool: createMemorySearchTool({ memoryManager, settingsStore }) as Tool },
     { name: "notify", tool: createNotifyTool({ eventManager, taskLifecycleGuard }) as Tool },

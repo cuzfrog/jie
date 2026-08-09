@@ -81,7 +81,7 @@ describe("Scenario 2 — pass work in a team", () => {
     expect(snapshotConversations(harness)).toEqual(before);
   });
 
-  test("kanban_write feeds the cards; ctrl+k cycles list, panel, hidden, excluding the team panel", async () => {
+  test("write_kanban feeds the cards; ctrl+k cycles list, panel, hidden, excluding the team panel", async () => {
     await sendLine(harness.stdin, "/team my-team");
     await waitForTeam(harness, "my-team");
     await waitForFocusedAgent(harness, "my-team:manager-1");

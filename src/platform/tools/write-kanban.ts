@@ -23,7 +23,7 @@ interface KanbanWriteInput {
 export function createKanbanWriteTool(options: { kanbanStore: KanbanStore }): Tool<KanbanWriteInput> {
   const { kanbanStore } = options;
   return {
-    name: "kanban_write",
+    name: "write_kanban",
     description: KANBAN_WRITE_DESCRIPTION,
     label: "Update Kanban",
     isUtility: true,

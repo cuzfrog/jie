@@ -116,7 +116,7 @@ interface ToolResult {
 }
 ```
 
-`details` is the closed `ToolResultDetails` union (`types.ts`): one member per builtin producer (`edit`/`write_file` share the `kind: "diff"` discriminator, `kanban_write` the `kind: "kanban"` one; the rest are un discriminated per-tool shapes). Builtin tools are the only producers — MCP tools emit no details — so consumers narrow statically and no runtime guard exists.
+`details` is the closed `ToolResultDetails` union (`types.ts`): one member per builtin producer (`edit`/`write_file` share the `kind: "diff"` discriminator, `write_kanban` the `kind: "kanban"` one; the rest are un discriminated per-tool shapes). Builtin tools are the only producers — MCP tools emit no details — so consumers narrow statically and no runtime guard exists.
 
 Except for the built-in `notify` (which receives its `EventManager` as a construction dependency), tools have no awareness of the event bus; custom team-defined tools cannot publish events. Business identifiers (work ids, …) are opaque to the platform and the receiving LLM extracts them from message text, with one exception: when a team declares a lifecycle, `notify` takes the `task_id` as a first-class input so the platform can authorize and record the transition ("notify" below, ADR 33).
 
@@ -148,7 +148,7 @@ Registered at platform startup by the `InMemoryToolRegistry` constructor (a crad
 | `write_file` | text-file writes (overwrite) |
 | `edit` | search-and-replace inside a file, with diff preview |
 | `read_artifact` / `write_artifact` | key-value work-product store |
-| `kanban_write` | live kanban board (utility — implicitly assigned to every agent) |
+| `write_kanban` | live kanban board (utility — implicitly assigned to every agent) |
 | `notify` | publish to the team event bus (see "notify and the Subscription Model") |
 | `web_search` / `web_fetch` | web access |
 | `memory_search` | team long-term memory FTS5 search (opt-in via `tools:`, `11-memory.md`) |
@@ -192,10 +192,10 @@ Search-and-replace inside a workspace text file. Every entry of `edits` is match
 
 `write_file` and `edit` mutations are serialized per real path: concurrent calls targeting the same file — from one agent or several — never interleave their read-modify-write cycles; they run in call order. The queue key is the file's realpath (the resolved path when the file does not exist yet), so symlinked aliases of one file share one queue; operations on different files run concurrently. Both tools also run the team's lifecycle write gates before any mutation — against the workspace-relative path, so absolute-path and symlinked spellings of a gated file are denied alike (`write_gate_denied`; ADR 33).
 
-### kanban_write
+### write_kanban
 
 ```typescript
-kanban_write(input: { cards: ReadonlyArray<KanbanCardWrite> })
+write_kanban(input: { cards: ReadonlyArray<KanbanCardWrite> })
 
 interface KanbanCardWrite {
   readonly content: string;

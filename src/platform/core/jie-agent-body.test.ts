@@ -102,7 +102,7 @@ function makeNoopTool(): Tool {
 
 function makeUtilityTool(): Tool {
   return {
-    name: "kanban_write",
+    name: "write_kanban",
     description: "update kanban",
     label: "Kanban",
     isUtility: true,
@@ -463,7 +463,7 @@ describe("JieAgentBody — tool resolution", () => {
     h.toolRegistry.list.mockReturnValue([makeUtilityTool()]);
     h.makeBody({ soul: makeSoul({ tools: ["noop"] }), factory: cap.factory });
     const names = (cap.fake.state.tools as Array<{ name: string }>).map((t) => t.name);
-    expect(names).toEqual(["noop", "kanban_write"]);
+    expect(names).toEqual(["noop", "write_kanban"]);
   });
 
   test("a utility tool already matched by a soul spec is not added twice", () => {
@@ -472,9 +472,9 @@ describe("JieAgentBody — tool resolution", () => {
     const utility = makeUtilityTool();
     h.toolRegistry.resolve.mockReturnValue([utility]);
     h.toolRegistry.list.mockReturnValue([utility]);
-    h.makeBody({ soul: makeSoul({ tools: ["kanban_write"] }), factory: cap.factory });
+    h.makeBody({ soul: makeSoul({ tools: ["write_kanban"] }), factory: cap.factory });
     const names = (cap.fake.state.tools as Array<{ name: string }>).map((t) => t.name);
-    expect(names).toEqual(["kanban_write"]);
+    expect(names).toEqual(["write_kanban"]);
   });
 
   test("a non-utility tool in the registry is not implicitly assigned", () => {
@@ -483,9 +483,9 @@ describe("JieAgentBody — tool resolution", () => {
     const utility = makeUtilityTool();
     h.toolRegistry.resolve.mockReturnValue([utility]);
     h.toolRegistry.list.mockReturnValue([makeNoopTool(), utility]);
-    h.makeBody({ soul: makeSoul({ tools: ["kanban_write"] }), factory: cap.factory });
+    h.makeBody({ soul: makeSoul({ tools: ["write_kanban"] }), factory: cap.factory });
     const names = (cap.fake.state.tools as Array<{ name: string }>).map((t) => t.name);
-    expect(names).toEqual(["kanban_write"]);
+    expect(names).toEqual(["write_kanban"]);
   });
 
   test("an empty soul tool list still receives the utility tools", () => {
@@ -494,7 +494,7 @@ describe("JieAgentBody — tool resolution", () => {
     h.toolRegistry.list.mockReturnValue([makeUtilityTool()]);
     h.makeBody({ factory: cap.factory });
     const names = (cap.fake.state.tools as Array<{ name: string }>).map((t) => t.name);
-    expect(names).toEqual(["kanban_write"]);
+    expect(names).toEqual(["write_kanban"]);
   });
 });
 

@@ -1,6 +1,6 @@
 import type { KanbanCard, KanbanCardWrite } from "../types";
 import type { KanbanStore } from "../storage";
-import { createKanbanWriteTool } from "./kanban-write";
+import { createKanbanWriteTool } from "./write-kanban";
 import { makeEmptyContext } from "./_test-context";
 
 const kanbanStore = vi.mocked<KanbanStore>({
@@ -18,7 +18,7 @@ function withIds(cards: ReadonlyArray<KanbanCardWrite>): KanbanCard[] {
   return cards.map((card, index) => ({ id: `#${index + 1}`, ...card }));
 }
 
-describe("kanban_write", () => {
+describe("write_kanban", () => {
   test("is a utility tool, implicitly available to every agent", () => {
     const tool = createKanbanWriteTool({ kanbanStore });
     expect(tool.isUtility).toBe(true);

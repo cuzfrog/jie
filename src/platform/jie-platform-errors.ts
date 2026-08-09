@@ -15,7 +15,7 @@ const JiePlatformErrorMessages = {
   AMBIGUOUS_MATCH: "old_string matched more than one location in the file",
   OVERLAPPING_EDITS: "edits overlap each other in the file",
 
-  KANBAN_WRITE_INVALID: "Kanban board violates the kanban_write contract",
+  KANBAN_WRITE_INVALID: "Kanban board violates the write_kanban contract",
   KANBAN_CARD_NOT_FOUND: "Kanban card not found",
   KANBAN_TEXT_EMPTY: "Kanban card text must not be empty",
   KANBAN_DUPLICATE_CONTENT: "A card with this content already exists on the board",

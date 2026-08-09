@@ -60,7 +60,7 @@ describe("registerToolsModule", () => {
     expect(names).toEqual([
       "bash",
       "edit_file",
-      "kanban_write",
+      "write_kanban",
       "memory_add",
       "memory_search",
       "notify",
