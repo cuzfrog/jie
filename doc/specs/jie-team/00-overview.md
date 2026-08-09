@@ -10,7 +10,7 @@ jie-team is a team-blueprint framework on top of `jie-platform`, plus a built-in
 
 Six roles form a serial pipeline on `task` work units: Delivery Manager (DM, the leader) → Researcher → Architect → Planner → Implementer → Reviewer → DM. Each role subscribes to the topic the previous role publishes, so the pipeline structure itself serializes work; there is no central router and no agent knows another by identity.
 
-- DM — sole external entry point. Receives user prompts via the platform's `user.prompt` topic (addressed to its `agentKey`), gathers full task content via its MCP tools (GitHub, JIRA), writes the `task` artifact, and emits `task.recorded`; if it cannot produce the artifact it emits `task.rejected` instead. Enforces single-task-in-flight: extra prompts queue in its local FIFO until the active task terminates. On `task.review_passed` it finalizes externally and emits `task.done`; on `task.failed` it reports to the user with no follow-up event. Has no file-system tools.
+- DM — sole external entry point. Receives user prompts via the platform's `user.prompt` topic (addressed to its `agentKey`), records the task as a kanban card, and emits `task.recorded`. Enforces single-task-in-flight: extra prompts queue in its local FIFO until the active task terminates. On `task.review_passed` it finalizes externally and emits `task.done`; on `task.failed` it reports to the user with no follow-up event. Has no file-system tools.
 - Researcher — on `task.recorded`, gathers external context and project documentation; presents facts in the `research` artifact and does not decide. Has no access to source files or contracts. Mandatory for all tasks in v1.
 - Architect — on `task.researched`, the sole role that authors module contracts and inspects codebase structure beyond descriptors (via code-lens); updates `CONTEXT.md` files and emits `task.designed`.
 - Planner — decides how to implement given research and contracts. The platform resets `iteration` to 1 on `task.recorded`; the Planner's re-plan from `task.review_failed` is the only increment.
@@ -25,7 +25,7 @@ On `task.review_failed` the Reviewer kicks back to the Planner, and the Planner 
 
 A task has a durable `task_id` (e.g. `PROJ-123`, `gh-issue-42`, or a DM-minted `prompt-{hash8}`) and can span multiple iterations and sessions; artifacts accumulate under keys like `{task_id}/plan`. Task progression is recorded by the platform under sequenced status keys `{task_id}/status/{seq}`; the latest row (by `created_at`) is the canonical current state: phase, iteration, updated_at (`jie-platform/04-storage.md`). Every `notify` on a lifecycle topic must carry the `task_id`; the platform validates each transition before publishing and returns an `illegal_transition` tool error — nothing published, no status row — when the lifecycle table does not allow it.
 
-Phases: `recorded → researched → designed → planned → implemented → review_passed | review_failed → done | failed`. Only `done` is permanent and non-re-enterable; the DM may re-record a `task_id` in any other phase, starting a fresh session at `iteration = 1`. `task.rejected` is a pre-record failure signal with no status row and no `rejected` phase. Allowed transitions, gated per role:
+Phases: `recorded → researched → designed → planned → implemented → review_passed | review_failed → done | failed`. Only `done` is permanent and non-re-enterable; the DM may re-record a `task_id` in any other phase, starting a fresh session at `iteration = 1`. Allowed transitions, gated per role:
 
 | From phase | Role | To phase |
 |---|---|---|
@@ -39,7 +39,7 @@ Phases: `recorded → researched → designed → planned → implemented → re
 | review_passed | DM | done |
 | any non-done | any role | failed |
 
-Team artifact types: `task` (DM, sole writer), `research` (Researcher), `plan` (Planner), `review` (Reviewer).
+Team artifacts: `research` (Researcher), `design` (Architect), `plan` (Planner), `review` (Reviewer). The task itself is tracked on the team's kanban board, not as an artifact.
 
 ## Module descriptor and the sealed boundary
 
@@ -47,7 +47,7 @@ Each source directory may hold a `CONTEXT.md` owned by the Architect: YAML front
 
 ## Event topics
 
-From the blueprint's view, agents coordinate on unscoped topic names — `user.prompt` (platform-managed user ingress, addressed to the DM's `agentKey`) plus the domain topics `task.recorded`, `task.rejected`, `task.researched`, `task.designed`, `task.planned`, `task.implemented`, `task.review_passed`, `task.review_failed`, `task.done`, `task.failed`. Subscription graph:
+From the blueprint's view, agents coordinate on unscoped topic names — `user.prompt` (platform-managed user ingress, addressed to the DM's `agentKey`) plus the domain topics `task.recorded`, `task.researched`, `task.designed`, `task.planned`, `task.implemented`, `task.review_passed`, `task.review_failed`, `task.done`, `task.failed`. Subscription graph:
 
 ```
 DM:          user.prompt (platform-managed, filtered on agentKey), task.review_passed, task.failed
@@ -70,7 +70,7 @@ Platform terms (Agent, Soul, Body, EventBus, Topic, Tool, `notify`, Artifact, Le
 
 | Term | Definition |
 |---|---|
-| **Task** | A unit of work with a durable `task_id`. Can span multiple iterations and sessions; artifacts accumulate under it. |
+| **Task** | A unit of work with a durable `task_id`, tracked on the team's kanban board. Can span multiple iterations and sessions; work products accumulate as artifacts under its `task_id` namespace. |
 | **Iteration** | One pass through the Planner → Implementer → Reviewer loop within a task. Starts at 1; the Planner is the sole role that increments it. Bounded by `max_iterations` (default 5). |
 | **Module Descriptor** | A `CONTEXT.md` file in a source directory: YAML contract frontmatter + markdown prose. Owned by the Architect; governs only its immediate directory. |
 | **Module Contract** | The YAML frontmatter of a Module Descriptor: exported symbol names and opaque canonical signatures per file. |
