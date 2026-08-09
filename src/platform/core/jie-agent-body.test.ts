@@ -6,6 +6,7 @@ import {
   type Agent as PiAgent,
   type AgentEvent as PiAgentEvent,
   type AgentMessage,
+  type PrepareNextTurnContext,
   type ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
 import type { Api, AssistantMessage, Model } from "@earendil-works/pi-ai";
@@ -27,6 +28,9 @@ async function flush(): Promise<void> {
 }
 
 const noopCompactor: Compactor = {
+  needsCompaction() {
+    return false;
+  },
   async compact() {
     return null;
   },
@@ -152,11 +156,13 @@ interface FakeAgentCapture {
     waitForIdle: ReturnType<typeof vi.fn>;
   };
   readonly agentListener: ((event: PiAgentEvent) => void) | undefined;
+  readonly capturedOptions: ConstructorParameters<typeof PiAgent>[0] | undefined;
   settleIdle: () => void;
 }
 
 function makeFakeAgentFactory(): FakeAgentCapture {
   let listener: ((event: PiAgentEvent) => void) | undefined;
+  let capturedOptions: ConstructorParameters<typeof PiAgent>[0] | undefined;
   const state: FakeAgentState = {
     systemPrompt: "",
     model: null,
@@ -189,10 +195,16 @@ function makeFakeAgentFactory(): FakeAgentCapture {
   };
   const stub = fake as unknown as PiAgent;
   return {
-    factory: () => stub,
+    factory: (opts) => {
+      capturedOptions = opts;
+      return stub;
+    },
     fake,
     get agentListener() {
       return listener;
+    },
+    get capturedOptions() {
+      return capturedOptions;
     },
     settleIdle: () => {
       resolveIdle?.();
@@ -1741,10 +1753,11 @@ describe("JieAgentBody — compaction", () => {
     return { role: "user", content, timestamp: 0 };
   }
 
-  function makeFakeCompactor(): { compactor: Compactor; compact: ReturnType<typeof vi.fn<(input: CompactionInput) => Promise<CompactionResult | null>>> } {
+  function makeFakeCompactor(): { compactor: Compactor; compact: ReturnType<typeof vi.fn<(input: CompactionInput) => Promise<CompactionResult | null>>>; needsCompaction: ReturnType<typeof vi.fn<(messages: ReadonlyArray<AgentMessage>, contextWindow: number) => boolean>> } {
     const compact = vi.fn<(input: CompactionInput) => Promise<CompactionResult | null>>(async () => null);
-    const compactor: Compactor = { compact, fitToWindow: (messages) => messages };
-    return { compactor, compact };
+    const needsCompaction = vi.fn<(messages: ReadonlyArray<AgentMessage>, contextWindow: number) => boolean>(() => true);
+    const compactor: Compactor = { needsCompaction, compact, fitToWindow: (messages) => messages };
+    return { compactor, compact, needsCompaction };
   }
 
   test("agent_end settle compacts and rewrites state to [summary, ...retainedTail]", async () => {
@@ -1892,6 +1905,70 @@ describe("JieAgentBody — compaction", () => {
     expect(errors[0]!.payload.error).toContain("boom");
     expect(h.prompt.mock.calls.length).toBe(1);
     expect(h.state.messages).toEqual([first, second]);
+    body.stop();
+  });
+
+  test("prepareNextTurnWithContext compacts mid-run and returns the compacted context", async () => {
+    const { compactor, compact } = makeFakeCompactor();
+    const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), compactor });
+    await body.start();
+    const first = makeUserMessage("m1");
+    const second = makeAssistantMessage({ content: [{ type: "text", text: "m2" }] });
+    const third = makeUserMessage("m3");
+    h.state.messages = [first, second, third];
+    const summary = createCompactionSummaryMessage("the summary", 500, "2026-01-01T00:00:00.000Z");
+    compact.mockResolvedValueOnce({ summaryMessage: summary, firstKeptIndex: 1, tokensBefore: 500, summarizedPrefix: [first] });
+    const hook = h.cap.capturedOptions?.prepareNextTurnWithContext;
+    if (hook === undefined) throw new Error("prepareNextTurnWithContext not wired");
+    const turnContext: PrepareNextTurnContext = {
+      message: second,
+      toolResults: [],
+      context: { systemPrompt: "sys", messages: h.state.messages, tools: [] },
+      newMessages: [first, second, third],
+    };
+    const update = await hook(turnContext, new AbortController().signal);
+    expect(update).toEqual({ context: { systemPrompt: "sys", messages: [summary, second, third], tools: [] } });
+    expect(h.state.messages).toEqual([summary, second, third]);
+    body.stop();
+  });
+
+  test("prepareNextTurnWithContext returns undefined when compaction is not needed", async () => {
+    const { compactor, compact, needsCompaction } = makeFakeCompactor();
+    needsCompaction.mockReturnValue(false);
+    const body = h.makeBody({ model: makeModel("anthropic", "claude-sonnet-4"), compactor });
+    await body.start();
+    const first = makeUserMessage("m1");
+    const second = makeAssistantMessage({ content: [{ type: "text", text: "m2" }] });
+    h.state.messages = [first, second];
+    const hook = h.cap.capturedOptions?.prepareNextTurnWithContext;
+    if (hook === undefined) throw new Error("prepareNextTurnWithContext not wired");
+    const turnContext: PrepareNextTurnContext = {
+      message: second,
+      toolResults: [],
+      context: { systemPrompt: "sys", messages: h.state.messages, tools: [] },
+      newMessages: [first, second],
+    };
+    const update = await hook(turnContext, new AbortController().signal);
+    expect(update).toBeUndefined();
+    expect(compact).not.toHaveBeenCalled();
+    expect(h.state.messages).toEqual([first, second]);
+    body.stop();
+  });
+
+  test("prepareNextTurnWithContext returns undefined without a model", async () => {
+    const { compactor } = makeFakeCompactor();
+    const body = h.makeBody({ compactor });
+    await body.start();
+    const hook = h.cap.capturedOptions?.prepareNextTurnWithContext;
+    if (hook === undefined) throw new Error("prepareNextTurnWithContext not wired");
+    const turnContext: PrepareNextTurnContext = {
+      message: makeAssistantMessage({ content: [{ type: "text", text: "m" }] }),
+      toolResults: [],
+      context: { systemPrompt: "", messages: [], tools: [] },
+      newMessages: [],
+    };
+    const update = await hook(turnContext, new AbortController().signal);
+    expect(update).toBeUndefined();
     body.stop();
   });
 });

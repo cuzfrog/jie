@@ -36,7 +36,7 @@ Identity travels in the envelope, not in the subject. `topic` equals `type` for 
 | `agent.usage` | agent | `{ input, output, cacheRead, cacheWrite, totalTokens }` |
 | `agent.prompt.queue.update` | agent | `{ prompts: Array<{ text: string; source: "user" \| "peer" }> }` |
 | `agent.model.assigned` | agent | `{ provider, model, effort, contextWindow: number \| null }` |
-| `agent.compacted` | agent | `{ summary, tokens_before, summarized_prompts }` — published after a successful compaction rewrite: the summary text, the context tokens before the cut, and the count of `user`-role messages in the summarized prefix (`06-agent-model.md`, "Compaction") |
+| `agent.compacted` | agent | `{ summary, tokens_before, summarized_prompts }` — published after a successful compaction rewrite (mid-run between turns as well as between runs): the summary text, the context tokens before the cut, and the count of `user`-role messages in the summarized prefix (`06-agent-model.md`, "Compaction") |
 | `user.prompt` | user | `{ teamId, agentKey, prompt }` |
 | `user.prompt.dequeue` | user | `{ teamId, agentKey, prompt }` — cancel the most recently queued user prompt whose raw text equals `prompt` |
 | `user.prompt.requeue` | user | `{ teamId, agentKey, prompt }` — restore the most recently dequeued user prompt whose raw text equals `prompt` to the queue's tail |

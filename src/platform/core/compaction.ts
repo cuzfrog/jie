@@ -33,6 +33,7 @@ export interface CompactionResult {
 }
 
 export interface Compactor {
+  needsCompaction(messages: ReadonlyArray<AgentMessage>, contextWindow: number): boolean;
   compact(input: CompactionInput): Promise<CompactionResult | null>;
   fitToWindow(messages: ReadonlyArray<AgentMessage>, model: Model<Api>, contextWindow?: number): ReadonlyArray<AgentMessage>;
 }
@@ -54,6 +55,13 @@ export class CompactorImpl implements Compactor {
     this.transcriptStore = deps.transcriptStore;
     this.llmService = deps.llmService;
     this.getSettings = deps.getSettings;
+  }
+
+  needsCompaction(messages: ReadonlyArray<AgentMessage>, contextWindow: number): boolean {
+    const settings = resolveSettings(this.getSettings?.());
+    if (!settings.enabled) return false;
+    const tokens = contextTokensSince(messages, lastSummaryTimestamp(messages));
+    return shouldCompact(tokens, contextWindow, settings);
   }
 
   async compact(input: CompactionInput): Promise<CompactionResult | null> {

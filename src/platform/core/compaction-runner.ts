@@ -4,8 +4,12 @@ import { Events, type AgentSender, type EventManager } from "../event";
 import type { MemoryManager } from "../memory";
 import type { Compactor } from "./compaction";
 
+export interface CompactionOutcome {
+  readonly messages: ReadonlyArray<AgentMessage>;
+}
+
 export interface CompactionRunner {
-  ensure(model: Model<Api>, contextWindow?: number): Promise<void>;
+  ensure(model: Model<Api>, contextWindow?: number): Promise<CompactionOutcome | null>;
   abort(): void;
 }
 
@@ -36,7 +40,7 @@ export class CompactionRunnerImpl implements CompactionRunner {
   private readonly memoryManager: MemoryManager;
   private readonly distillationController = new AbortController();
   private distillationPromise: Promise<void> | null = null;
-  private promise: Promise<void> | null = null;
+  private promise: Promise<CompactionOutcome | null> | null = null;
   private controller: AbortController | null = null;
   private aborted = false;
 
@@ -51,7 +55,7 @@ export class CompactionRunnerImpl implements CompactionRunner {
     this.memoryManager = deps.memoryManager;
   }
 
-  ensure(model: Model<Api>, contextWindow?: number): Promise<void> {
+  ensure(model: Model<Api>, contextWindow?: number): Promise<CompactionOutcome | null> {
     if (this.promise === null) {
       this.promise = this.run(model, contextWindow).finally(() => {
         this.promise = null;
@@ -66,24 +70,28 @@ export class CompactionRunnerImpl implements CompactionRunner {
     this.distillationController.abort();
   }
 
-  private async run(model: Model<Api>, contextWindow?: number): Promise<void> {
+  private async run(model: Model<Api>, contextWindow?: number): Promise<CompactionOutcome | null> {
+    const window = contextWindow ?? model.contextWindow;
+    const messages = this.conversation.getMessages();
+    if (!this.compactor.needsCompaction(messages, window)) return null;
     const controller = new AbortController();
     this.controller = controller;
     this.eventManager.publish(Events.agentCompactionStart(this.sender));
     try {
       const result = await this.compactor.compact({
-        messages: this.conversation.getMessages(),
-        contextWindow: contextWindow ?? model.contextWindow,
+        messages,
+        contextWindow: window,
         model,
         agentKey: this.agentKey,
         sessionId: this.sessionId,
         teamId: this.teamId,
         signal: controller.signal,
       });
-      if (result === null || this.aborted) return;
-      const messages = this.conversation.getMessages();
-      const summarizedMessages = messages.slice(0, result.firstKeptIndex);
-      this.conversation.setMessages([result.summaryMessage, ...messages.slice(result.firstKeptIndex)]);
+      if (result === null || this.aborted) return null;
+      const currentMessages = this.conversation.getMessages();
+      const summarizedMessages = currentMessages.slice(0, result.firstKeptIndex);
+      const compacted = [result.summaryMessage, ...currentMessages.slice(result.firstKeptIndex)];
+      this.conversation.setMessages(compacted);
       const summarizedPrompts = summarizedMessages.reduce((count, message) => message.role === "user" ? count + 1 : count, 0);
       this.eventManager.publish(Events.agentCompacted(this.sender, result.summaryMessage.summary, result.tokensBefore, summarizedPrompts));
       if (this.distillationPromise === null) {
@@ -97,11 +105,13 @@ export class CompactionRunnerImpl implements CompactionRunner {
           this.distillationPromise = null;
         });
       }
+      return { messages: compacted };
     } catch (error) {
       if (!controller.signal.aborted) {
         const message = error instanceof Error ? error.message : String(error);
         this.eventManager.publish(Events.systemError({ kind: "system" }, `compaction failed: ${message}`));
       }
+      return null;
     } finally {
       this.eventManager.publish(Events.agentCompactionEnd(this.sender));
       if (this.controller === controller) this.controller = null;
