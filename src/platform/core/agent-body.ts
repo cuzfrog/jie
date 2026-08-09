@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
-import type { AgentInfo, EffortLevel, TaskLifecycle } from "../types";
+import type { AgentInfo, EffortLevel } from "../types";
 
 export interface AgentBodyParams {
   readonly agentKey: string;
@@ -18,7 +18,6 @@ export interface AgentBodyParams {
   readonly sessionId: string;
   readonly model: Model<Api> | undefined;
   readonly effort: EffortLevel;
-  readonly lifecycle: TaskLifecycle | null;
 }
 
 export interface AgentBody {

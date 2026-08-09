@@ -17,7 +17,7 @@ const executionContext: ExecutionContext = {
   agentKey: "agent-1",
   agentRole: "general",
   artifactStore,
-  lifecycle: null,
+  toolArgs: new Map(),
 };
 
 function makeTool(overrides: Partial<Tool<{ value: number }>>): Tool<{ value: number }> {

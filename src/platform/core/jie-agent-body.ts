@@ -3,7 +3,7 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { MemoryManager } from "../memory";
 import type { ArtifactStore, TranscriptStore } from "../storage";
-import type { ExecutionContext, ToolRegistry } from "../tools";
+import { type ExecutionContext, parseToolSpec, type ToolRegistry } from "../tools";
 import type { Skill, SkillManager } from "../skills";
 import type { HookIdentity, HookRunner } from "../hooks";
 import { AgentEventBridgeImpl } from "./agent-event-bridge";
@@ -117,13 +117,18 @@ export class JieAgentBody implements AgentBody {
       promptQueue: this.promptQueue,
       onRunEnd: () => void this.agent.waitForIdle().then(() => this.promptQueue.settle()),
     });
+    const toolArgs = new Map<string, ReadonlyArray<string>>();
+    for (const spec of params.soul.tools) {
+      const parsed = parseToolSpec(spec);
+      if (parsed.args.length > 0) toolArgs.set(parsed.name, parsed.args);
+    }
     const executionContext: ExecutionContext = {
       sessionId: this.sessionId,
       teamId: this.teamId,
       agentKey: this.agentKey,
       agentRole: params.soul.role,
       artifactStore: deps.artifactStore,
-      lifecycle: params.lifecycle,
+      toolArgs,
     };
     const adaptedTools = adaptAllTools(params.soul, deps.toolRegistry, executionContext);
     const toolCallObserver = new ToolCallObserverImpl({
@@ -362,7 +367,8 @@ function adaptAllTools(
   const out: AgentTool[] = [];
   const assigned = new Set<string>();
   for (const toolSpec of soul.tools) {
-    const tools = toolRegistry.resolve(toolSpec);
+    const parsed = parseToolSpec(toolSpec);
+    const tools = toolRegistry.resolve(parsed.name);
     if (tools.length === 0) {
       throw new JiePlatformError("TOOL_SPEC_UNRESOLVED", {
         detail: `agent '${soul.role}' (team '${executionContext.teamId}'): tool spec '${toolSpec}' resolved no tools`,

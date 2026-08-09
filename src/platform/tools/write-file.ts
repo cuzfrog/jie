@@ -4,7 +4,6 @@ import { Type } from "typebox";
 import type { ExecutionContext, Tool, ToolResult, WriteFileResultDetails } from "./types";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
 import type { FileMutationQueue } from "./file-mutation-queue";
-import { checkWriteGates } from "./write-gate";
 import { mapErrno, resolveWithinWorkspace } from "./path-utils";
 import { renderUnifiedDiff } from "./unified-diff";
 
@@ -14,9 +13,9 @@ const WRITE_FILE_DESCRIPTION = `Write \`content\` to \`path\` (relative to works
 Overwrites the file if it exists. Creates parent directories as needed. Text only;
 content is written verbatim as UTF-8 bytes. The platform enforces workspace containment
 (path_escape on violation) but does NOT check module boundaries — for that, the team
-blueprint's role system prompt / descriptor contract applies on top. Teams with a
-declared lifecycle may gate paths: a matching write is rejected with WRITE_GATE_DENIED
-unless a gate admits your role.`;
+blueprint's role system prompt / descriptor contract applies on top. A role may be
+restricted to a fixed set of writable paths via its manifest \`write_file(glob-a, glob-b)\`
+tool spec; a path outside that set is rejected with WRITE_PATH_DENIED.`;
 
 export interface WriteFileDeps {
   workspaceRoot: string;
@@ -51,8 +50,11 @@ export function createWriteFileTool(dependencies: WriteFileDeps): Tool<WriteFile
       }
 
       const { realPath, relativePath } = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
-      if (executionContext.lifecycle !== null) {
-        checkWriteGates(relativePath, executionContext.agentRole, executionContext.lifecycle.writeGates);
+      const globs = executionContext.toolArgs.get("write_file");
+      if (globs !== undefined && !globs.some((pattern) => new Bun.Glob(pattern).match(relativePath))) {
+        throw new JiePlatformError("WRITE_PATH_DENIED", {
+          detail: `path '${relativePath}' is not allowed for role '${executionContext.agentRole}'`,
+        });
       }
       return dependencies.fileMutationQueue.run(realPath, () => applyWrite(input, realPath));
     },

@@ -21,7 +21,7 @@ import type { ExecutionContext, Tool, ToolRegistry, ToolResult } from "../tools"
 import type { Skill, SkillManager } from "../skills";
 import type { HookRunner } from "../hooks";
 import type { AgentSoul } from "../team";
-import type { EffortLevel, TaskLifecycle, UserIngressMessage } from "../types";
+import type { EffortLevel, UserIngressMessage } from "../types";
 
 async function flush(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -242,7 +242,6 @@ interface MakeBodyOverrides {
   sessionId?: string;
   model?: Model<Api>;
   effort?: EffortLevel;
-  lifecycle?: TaskLifecycle | null;
   factory?: (opts: ConstructorParameters<typeof PiAgent>[0]) => PiAgent;
   systemContextBlock?: string;
   compactor?: Compactor;
@@ -326,7 +325,6 @@ function makeHarness(): Harness {
       sessionId: overrides.sessionId ?? "s1",
       model: overrides.model,
       effort: overrides.effort ?? "off",
-      lifecycle: overrides.lifecycle ?? null,
     };
     return new JieAgentBody(params, {
       eventManager: events,
@@ -498,15 +496,15 @@ describe("JieAgentBody — tool resolution", () => {
   });
 });
 
-describe("JieAgentBody — execution context lifecycle wiring", () => {
-  function makeCapturingTool(received: Array<ExecutionContext["lifecycle"]>): Tool {
+describe("JieAgentBody — execution context toolArgs wiring", () => {
+  function makeCapturingTool(received: Array<ExecutionContext["toolArgs"]>): Tool {
     return {
       name: "noop",
       description: "no-op",
       label: "Noop",
       parameters: Type.Object({}),
       async execute(_input, executionContext): Promise<ToolResult> {
-        received.push(executionContext.lifecycle);
+        received.push(executionContext.toolArgs);
         return { content: "ok" };
       },
     };
@@ -517,30 +515,25 @@ describe("JieAgentBody — execution context lifecycle wiring", () => {
     await adapted.execute("call-1", {});
   }
 
-  test("adapted tools receive the lifecycle declared on the body params", async () => {
+  test("adapted tools receive the toolArgs parsed from the soul's tool specs", async () => {
     const h = makeHarness();
     const cap = makeFakeAgentFactory();
-    const lifecycle: TaskLifecycle = {
-      maxIterations: 2,
-      permanentPhases: ["done"],
-      transitions: [{ topic: "task.recorded", role: "manager", fromPhases: "any", toPhase: "recorded", iteration: "reset" }],
-      writeGates: [],
-    };
-    const received: Array<TaskLifecycle | null> = [];
+    const received: Array<ReadonlyMap<string, ReadonlyArray<string>>> = [];
     h.toolRegistry.resolve.mockReturnValue([makeCapturingTool(received)]);
-    h.makeBody({ soul: makeSoul({ tools: ["noop"] }), factory: cap.factory, lifecycle });
+    h.makeBody({ soul: makeSoul({ tools: ["notify(task.recorded, task.done)", "noop"] }), factory: cap.factory });
     await executeFirstTool(cap);
-    expect(received).toEqual([lifecycle]);
+    expect(received[0]?.get("notify")).toEqual(["task.recorded", "task.done"]);
+    expect(received[0]?.get("noop")).toBeUndefined();
   });
 
-  test("adapted tools receive a null lifecycle when the team declares none", async () => {
+  test("adapted tools receive an empty toolArgs map when no tool specs carry args", async () => {
     const h = makeHarness();
     const cap = makeFakeAgentFactory();
-    const received: Array<TaskLifecycle | null> = [];
+    const received: Array<ReadonlyMap<string, ReadonlyArray<string>>> = [];
     h.toolRegistry.resolve.mockReturnValue([makeCapturingTool(received)]);
     h.makeBody({ soul: makeSoul({ tools: ["noop"] }), factory: cap.factory });
     await executeFirstTool(cap);
-    expect(received).toEqual([null]);
+    expect(received[0]?.size).toBe(0);
   });
 });
 

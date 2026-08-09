@@ -1,6 +1,6 @@
 import type { TSchema } from "typebox";
 import type { ArtifactStore } from "../storage";
-import type { KanbanCard, TaskLifecycle } from "../types";
+import type { KanbanCard } from "../types";
 
 export interface EditResultDetails {
     readonly kind: "diff";
@@ -76,9 +76,6 @@ export interface FindArtifactResultDetails {
 
 export interface NotifyResultDetails {
     readonly topic: string;
-    readonly task_id?: string;
-    readonly phase?: string;
-    readonly iteration?: number;
 }
 
 export interface WebFetchResultDetails {
@@ -113,7 +110,7 @@ export interface ExecutionContext {
   readonly agentKey: string;
   readonly agentRole: string;
   readonly artifactStore: ArtifactStore;
-  readonly lifecycle: TaskLifecycle | null;
+  readonly toolArgs: ReadonlyMap<string, ReadonlyArray<string>>;
 }
 
 export interface ToolResult {

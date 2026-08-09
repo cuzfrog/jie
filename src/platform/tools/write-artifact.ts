@@ -1,7 +1,6 @@
 import { Type } from "typebox";
-import type { ExecutionContext, Tool, ToolResult } from "./types";
+import type { Tool, ToolResult } from "./types";
 import type { ArtifactStore } from "../storage";
-import { JiePlatformError } from "../jie-platform-errors";
 
 const WRITE_ARTIFACT_DESCRIPTION = `write_artifact(key, content): Store \`content\` (a string) at \`key\` in the team's
 shared artifact store. Overwrites the existing entry if \`key\` is already
@@ -9,12 +8,10 @@ present. The agent builds the full key (e.g. \`{task_id}/plan\`,
 \`{task_id}/research\`); the platform does not generate ids. Key charset:
 \`[A-Za-z0-9_./-]{1,256}\` (\`invalid_artifact_key: <value>\` on violation).
 Content cap: 5 MiB / \`content.length\` chars (\`artifact_too_large: <bytes>\`
-on violation). When the team declares a lifecycle, keys matching \`*/status/*\`
-are reserved for the platform's lifecycle status rows and are rejected
-(\`artifact_key_reserved\`). Returns the canonical \`{ key, created_at }\` so the
-artifact can be referenced in subsequent event payloads. Use the artifact
-store for inter-agent work products (plans, research notes, code-change
-summaries) that outlive a single tool call.`;
+on violation). Returns the canonical \`{ key, created_at }\` so the artifact
+can be referenced in subsequent event payloads. Use the artifact store for
+inter-agent work products (plans, research notes, code-change summaries)
+that outlive a single tool call.`;
 
 export interface WriteArtifactDeps {
   artifactStore: ArtifactStore;
@@ -36,12 +33,7 @@ export function createWriteArtifactTool(
       key: Type.String(),
       content: Type.String(),
     }),
-    async execute(input: WriteArtifactInput, executionContext: ExecutionContext): Promise<ToolResult> {
-      if (executionContext.lifecycle !== null && isReservedStatusKey(input.key)) {
-        throw new JiePlatformError("ARTIFACT_KEY_RESERVED", {
-          detail: `key '${input.key}' matches the reserved '*/status/*' lifecycle status-row namespace`,
-        });
-      }
+    async execute(input: WriteArtifactInput): Promise<ToolResult> {
       const { key, created_at } = await dependencies.artifactStore.write(
         input.key,
         input.content,
@@ -52,8 +44,4 @@ export function createWriteArtifactTool(
       };
     },
   };
-}
-
-function isReservedStatusKey(key: string): boolean {
-  return key.includes("/status/");
 }

@@ -30,10 +30,10 @@ no-new-exports:
   - read-artifact.ts
   - read-file.test.ts
   - read-file.ts
-  - task-lifecycle.test.ts
-  - task-lifecycle.ts
   - tool-registry.test.ts
   - tool-registry.ts
+  - tool-spec.test.ts
+  - tool-spec.ts
   - types.ts
   - unified-diff.test.ts
   - unified-diff.ts
@@ -45,8 +45,6 @@ no-new-exports:
   - write-artifact.ts
   - write-file.test.ts
   - write-file.ts
-  - write-gate.test.ts
-  - write-gate.ts
   - write-kanban.test.ts
   - write-kanban.ts
 ---
