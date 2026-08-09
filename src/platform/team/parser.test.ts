@@ -288,10 +288,10 @@ describe("loadTeamFromDir — typed error codes", () => {
   });
 });
 
-describe("loadTeamFromDir — shipped default-team blueprint", () => {
-  const defaultCodersDir = join(import.meta.dir, "../../team-content/default-team");
+describe("loadTeamFromDir — shipped default-dev-team blueprint", () => {
+  const defaultCodersDir = join(import.meta.dir, "../../team-content/default-dev-team");
 
-  test("parses the shipped default-team with manager as leader and six roles", () => {
+  test("parses the shipped default-dev-team with manager as leader and six roles", () => {
     const blueprint = loadTeamFromDir(defaultCodersDir);
     expect(blueprint.leaderRole).toBe("manager");
     expect(blueprint.roles.map((r) => r.role).sort()).toEqual([

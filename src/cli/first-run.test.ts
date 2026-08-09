@@ -19,7 +19,7 @@ function makePorts(overrides: Partial<FirstRunPorts> = {}): FirstRunPorts {
     confirm: vi.fn(async () => true),
     isSentinelPresent: vi.fn(() => false),
     markSentinel: vi.fn(),
-    installBundledTeam: vi.fn(async () => ["default-team"]),
+    installBundledTeam: vi.fn(async () => ["default-dev-team"]),
     ensureBundledMcp: vi.fn(),
     ...overrides,
   };
@@ -79,7 +79,7 @@ describe("runFirstRunWelcome - decision logic", () => {
     expect(ports.confirm).toHaveBeenCalledTimes(1);
     expect(ports.installBundledTeam).toHaveBeenCalledTimes(1);
     expect(ports.markSentinel).toHaveBeenCalledTimes(1);
-    expect(ports.console.print).toHaveBeenCalledWith(expect.stringContaining("default-team"));
+    expect(ports.console.print).toHaveBeenCalledWith(expect.stringContaining("default-dev-team"));
   });
 
   test("confirm no -> ensures mcp, skips install, prints a hint, still marks sentinel (do not nag)", async () => {
@@ -103,7 +103,7 @@ describe("runFirstRunWelcome - decision logic", () => {
     const ports = makePorts();
     await runFirstRunWelcome(ports, false);
     const question = (ports.confirm as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] ?? "";
-    expect(question).toContain("default-team");
+    expect(question).toContain("default-dev-team");
   });
 });
 
@@ -118,7 +118,7 @@ describe("createFirstRunPorts - wiring", () => {
     rmSync(homeJieDir, { recursive: true, force: true });
   });
 
-  test("happy path installs the bundled default-team, writes the sentinel, and ensures mcp.json", async () => {
+  test("happy path installs the bundled default-dev-team, writes the sentinel, and ensures mcp.json", async () => {
     const consoleMock = makeConsoleMock();
     const ports = createFirstRunPorts({
       homeJieDir,
@@ -127,9 +127,9 @@ describe("createFirstRunPorts - wiring", () => {
       confirm: vi.fn(async () => true),
     });
     await runFirstRunWelcome(ports, false);
-    expect(existsSync(join(homeJieDir, "teams", "default-team", "TEAM.md"))).toBe(true);
+    expect(existsSync(join(homeJieDir, "teams", "default-dev-team", "TEAM.md"))).toBe(true);
     expect(existsSync(join(homeJieDir, ".first-run-done"))).toBe(true);
-    expect(consoleMock.print).toHaveBeenCalledWith(expect.stringContaining("default-team"));
+    expect(consoleMock.print).toHaveBeenCalledWith(expect.stringContaining("default-dev-team"));
     expect(readMcpConfig(homeJieDir).servers["code-lens"]).toEqual({
       transport: "stdio",
       command: "code-lens",
@@ -147,7 +147,7 @@ describe("createFirstRunPorts - wiring", () => {
     });
     ports.markSentinel();
     await runFirstRunWelcome(ports, false);
-    expect(existsSync(join(homeJieDir, "teams", "default-team"))).toBe(false);
+    expect(existsSync(join(homeJieDir, "teams", "default-dev-team"))).toBe(false);
     expect(readMcpConfig(homeJieDir).servers["code-lens"]).toEqual({
       transport: "stdio",
       command: "code-lens",

@@ -16,7 +16,7 @@ Collapse the eight workspace packages into a single publishable package, `@cuzfr
 
 - The two awilix containers stay separate (ISP): `bootPlatform` and `bootTui` are not merged. The TUI still reaches the platform only through the `JiePlatform` handle (`asValue`), never platform internals.
 - The `MODULE.md` gate convention stays. Module visibility is enforced at the src-directory level exactly as it was at the package level; `no-new-exports` lists are unchanged in intent.
-- ADR 11 agnosticism stays: `src/platform/` has no import of `src/team-content/`, in any form. Team blueprints are still data read from filesystem paths. The bundled `default-team` blueprint lives at `src/team-content/default-team/`; first-run auto-install (D1, addressed separately) copies it to `~/.jie/teams/` so the platform reads it from the same filesystem locations as any installed team.
+- ADR 11 agnosticism stays: `src/platform/` has no import of `src/team-content/`, in any form. Team blueprints are still data read from filesystem paths. The bundled `default-dev-team` blueprint lives at `src/team-content/default-dev-team/`; first-run auto-install (D1, addressed separately) copies it to `~/.jie/teams/` so the platform reads it from the same filesystem locations as any installed team.
 - ADR 35's installer boundary stays: `src/team-installer/` is still CLI-side, never imported by `src/platform/` or `src/team-content/`. It is now a module within the package rather than a separate npm package, but the concern split is identical.
 
 **Publish shape.** One package (`@cuzfrog/jie`) rooted at `src/`; `"files": ["src"]` excludes root-level files like `.env`. No workspaces or catalog.
@@ -28,7 +28,7 @@ Collapse the eight workspace packages into a single publishable package, `@cuzfr
 ## Consequences
 
 - `monorepo-structure.md` is rewritten for the single-package layout; it is the authoritative current map. ADRs that predate this decision keep their `packages/jie-*` paths as historical record; the table above is the reconciliation.
-- `@cuzfrog/jie-team` is no longer a separately published package. The `default-team` blueprint ships inside `@cuzfrog/jie`; third-party teams remain installable via `jie team add <npm-spec>` (the installer resolves any npm package with `<id>/TEAM.md` dirs at its root). D1 covers first-run seeding of the bundled blueprint.
+- `@cuzfrog/jie-team` is no longer a separately published package. The `default-dev-team` blueprint ships inside `@cuzfrog/jie`; third-party teams remain installable via `jie team add <npm-spec>` (the installer resolves any npm package with `<id>/TEAM.md` dirs at its root). D1 covers first-run seeding of the bundled blueprint.
 - Imports that were `from "@cuzfrog/jie-<x>"` are now relative paths (`from "../<x>"` or `"./<x>"`). No deep imports existed, so the rewrite was a 1:1 barrel-to-relative substitution - the internal dependency graph is unchanged.
 - `tsconfig.json` `include` covers `src/**/*.ts`, `tests/**/*.ts`, `scripts/**/*.ts`. Type-checking is one project, one `tsc --noEmit`.
-- Test path fixtures that hardcoded `packages/...` were updated; the only semantic fix beyond renames was `src/platform/team/parser.test.ts` pointing at `../../team-content/default-team`.
+- Test path fixtures that hardcoded `packages/...` were updated; the only semantic fix beyond renames was `src/platform/team/parser.test.ts` pointing at `../../team-content/default-dev-team`.

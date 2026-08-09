@@ -12,6 +12,7 @@
 ## Document rules
 - Be simple and consise. Code itself is doc, avoid doc if you can.
 - Do not keep intermediate, transient history.
+- Do not reference doc in the code. Anything under `src/` should be agnostic of `doc/`
 - No emojis in commits, issues, PR comments, or code
 - Do not use newline to break sentences, no newline in the same paragraph. Let IDE wrap text.
 
