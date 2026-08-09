@@ -50,20 +50,7 @@ The body's `session_id` is supplied by the platform (ADR 17): the platform's `Te
 
 ## Persistence
 
-```typescript
-interface TurnRecord {
-  team_id:    string;        // namespace (ADR 17)
-  session_id: string;        // per process × team; shared across all agents in the team
-  agent_key:  string;        // {role}-{N}; each agent has its own memory stream
-  seq:        number;        // monotonic within (team_id, agent_key, session_id)
-  role:       string;        // 'user' | 'assistant' | 'toolResult' | 'compactionSummary' — denormalized for queries
-  content:    string;        // JSON-serialized AgentMessage
-  compacted:  boolean;       // replaced by a summary
-  created_at: string;        // ISO 8601
-}
-```
-
-Rows live in `memory_turns`, keyed by `(team_id, agent_key, session_id, seq)` — schema in `04-storage.md`, sharing the one `Storage` instance with the artifact store. Storing the full serialized message preserves every field for `restore`, which loads messages back into `agent.state.messages` where pi-agent expects the typed shape. All rows are kept indefinitely (retention: `04-storage.md`).
+Rows live in `memory_turns`, keyed by `(team_id, agent_key, session_id, seq)` — schema in `04-storage.md`. `seq` is monotonic within the stream (`MAX(seq)+1` on persist, resequenced by `compact`); `role` is denormalized (`'user' | 'assistant' | 'toolResult' | 'compactionSummary'`) to avoid decoding JSON for queries. The full serialized `AgentMessage` is stored so `restore` loads it back into `agent.state.messages` exactly as pi-agent expects. All rows are kept indefinitely (retention: `04-storage.md`).
 
 ## Leader Working Memory
 

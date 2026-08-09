@@ -4,23 +4,10 @@ Jie's event system is the in-process pub/sub backbone. `AgentBody` bridges pi-ag
 
 ## Envelope and Topics
 
-Every event is a frozen `EventEnvelope` constructed through the `Events` factory — there is no other constructor:
+Each event is a frozen `EventEnvelope` (defined in `event/events.ts`, the only constructor) with fields:
 
-```typescript
-interface EventEnvelope<T extends EventType> {
-  readonly version: 1;
-  readonly type: T;            // the event type, e.g. "agent.tool.call"
-  readonly topic: string;      // the bus subject: the type string, or `custom.${clientTopic}`
-  readonly sender: Sender;
-  readonly timestamp: string;  // ISO 8601
-  readonly payload: ...;       // per-type, see below
-}
-
-type Sender =
-  | { readonly kind: "agent"; readonly teamId: string; readonly agentKey: string }
-  | { readonly kind: "user" }
-  | { readonly kind: "system" };
-```
+- `version: 1`, `type` (the event type), `topic` (the bus subject: the type string for platform events, or `custom.${teamId}.${topic}` for client topics), `sender`, `timestamp` (ISO 8601), `payload`.
+- `sender` is `{ kind: "agent", teamId, agentKey } | { kind: "user" } | { kind: "system" }`.
 
 Identity travels in the envelope, not in the subject. `topic` equals `type` for every platform event; only client-defined topics get a distinct subject (`custom.${clientTopic}`).
 
@@ -51,18 +38,7 @@ Identity travels in the envelope, not in the subject. `topic` equals `type` for 
 
 ## EventManager and the Events factory
 
-`EventBus` (`event/event-bus.ts`) is the internal transport primitive. External consumers use the type-safe `EventManager`:
-
-```typescript
-interface EventManager {
-  publish<T extends EventType>(event: EventEnvelope<T>): void;              // routes on event.topic
-  subscribe<T extends EventType>(topic: T, cb: (e: EventEnvelope<T>) => void): () => void;
-}
-```
-
-`EventManagerImpl` takes the `eventBus` cradle entry (an in-process bus by default, registered alongside it by `registerEventModule`); tests register a mock bus instead. `JiePlatform` wraps the manager: `handle.subscribe(topic, cb)` is the consumer surface (ADR 13) — the bus never reaches consumer code.
-
-Each known type has a flat-args factory method (`Events.agentTurnStart(sender, prompt)`, `Events.agentIdle(sender, stopReason)`, `Events.userPrompt(sender, teamId, agentKey, prompt)`, `Events.userPromptDequeue(sender, teamId, agentKey, prompt)`, `Events.userPromptRequeue(sender, teamId, agentKey, prompt)`, `Events.userEffortUpdate(sender, effort)`, `Events.userModelUpdate(sender, provider, modelId)`, `Events.teamLoaded(sender, teamInfo)`, …). `Events.custom(sender, clientTopic, message)` is the client-topic factory: the bus subject becomes `custom.${clientTopic}`.
+`EventBus` (`event/event-bus.ts`) is the internal transport primitive. External consumers use the type-safe `EventManager` (`event/event-manager.ts`); `EventManagerImpl` takes the `eventBus` cradle entry (an in-process bus by default, registered alongside it by `registerEventModule`); tests register a mock bus. `JiePlatform` wraps the manager — `handle.subscribe(topic, cb)` is the consumer surface (ADR 13) — the bus never reaches consumer code. The `Events` factory in `event/events.ts` is the only way to build typed envelopes: flat-args factories per type (`Events.agentTurnStart/Continue`, `Events.agentIdle`, `Events.agentToolCall/Result`, `Events.agentStreamChunk/End`, `Events.agentUsage`, `Events.agentPromptQueueUpdate`, `Events.agentModelAssigned`, `Events.agentCompacted`, `Events.agentCompactionStart/End`, `Events.userPrompt[Dequeue|Requeue]`, `Events.userEffortUpdate/ModelUpdate`, `Events.teamLoaded`, `Events.systemError`, `Events.agentInterrupt`, `Events.custom`). `Events.custom(sender, clientTopic, message)` is the client-topic factory: the bus subject becomes `custom.${clientTopic}`.
 
 ## Subscription model
 
@@ -114,4 +90,4 @@ The alternation contract is what makes the busy/idle rows reliable. Queue-pickup
 
 ## In-Process Implementation
 
-`InProcessEventBus` is a `Map<string, Set<callback>>`: publish invokes callbacks synchronously in subscription order; unsubscribe removes the callback. Error containment is per callback: a throwing subscriber is caught and logged via the platform logger (subject + error), dispatch continues to the remaining subscribers, and the publisher never sees the exception.
+`InProcessEventBus` is a `Map<string, Set<callback>>` (`event/event-bus.ts`): publish invokes callbacks synchronously in subscription order. Per-callback error containment — a throwing subscriber is caught and logged (subject + error), dispatch continues, the publisher never sees the exception.

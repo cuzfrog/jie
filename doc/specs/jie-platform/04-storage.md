@@ -10,7 +10,6 @@ export interface Storage {
   exec(sql: string, params?: unknown[]): void;                              // write / DDL
   query(sql: string, params?: unknown[]): ReadonlyArray<ReadonlyArray<unknown>>;  // read; row typing happens at extraction
   transaction<T>(fn: (storage: Storage) => T): T;                           // single transaction; fn sees its own writes
-  close(): void;                                                            // idempotent
 }
 ```
 
@@ -20,79 +19,19 @@ SQL is the contract — no typed `Table<TRow>` layer in between (joins, transact
 
 ## Schema Bootstrap
 
-One idempotent function, `initializeSchema(storage)`, called by `SqliteStorage`'s constructor — the single place that knows the whole schema (domain stores write SQL at call sites, they do not own migrations):
+One idempotent function, `initializeSchema(storage)`, in `src/platform/storage/init-db.ts` — the single place that owns the whole schema (domain stores write SQL at call sites, they do not own migrations). `SqliteStorage` runs it in its constructor. Seven tables:
 
-```sql
-CREATE TABLE IF NOT EXISTS artifacts (
-  key        TEXT PRIMARY KEY,
-  content    TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
+| Table | Purpose |
+|---|---|
+| `artifacts` | KV work products; `key PK, content, created_at` |
+| `memory_turns` | per-agent conversation transcript, keyed `(team_id, agent_key, session_id, seq)` with a `compacted` flag |
+| `session_metadata` | optional human names for sessions (`session_id PK, name, updated_at`) |
+| `memory_atoms` | long-term memory atoms with an FTS5 trigram index; dedup on `(team_id, type, content)` |
+| `memory_atoms_fts` | FTS5 virtual table over `content` (`atom_id` UNINDEXED; team scoping on the join, not the index) |
+| `kanban_tasks` | per-team board; `session_id = ''` for team-scoped, owning session for session-scoped; `seq` preserves board order for `load` |
+| `kanban_counters` | next card id per team |
 
-CREATE TABLE IF NOT EXISTS memory_turns (
-  team_id    TEXT    NOT NULL,
-  session_id TEXT    NOT NULL,
-  agent_key  TEXT    NOT NULL,
-  seq        INTEGER NOT NULL,
-  role       TEXT    NOT NULL,
-  content    TEXT    NOT NULL,
-  compacted  INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT    NOT NULL,
-  PRIMARY KEY (team_id, agent_key, session_id, seq)
-);
-
-CREATE INDEX IF NOT EXISTS idx_memory_turns_team_session_created
-  ON memory_turns (team_id, session_id, created_at);
-
-CREATE TABLE IF NOT EXISTS session_metadata (
-  session_id TEXT PRIMARY KEY,
-  name       TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS memory_atoms (
-  id                TEXT    PRIMARY KEY,
-  team_id           TEXT    NOT NULL,
-  content           TEXT    NOT NULL,
-  type              TEXT    NOT NULL,
-  priority          INTEGER NOT NULL DEFAULT 50,
-  scene             TEXT    NOT NULL DEFAULT '',
-  source_session_id TEXT    NOT NULL,
-  created_at        TEXT    NOT NULL,
-  updated_at        TEXT    NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_memory_atoms_team
-  ON memory_atoms (team_id, priority DESC, updated_at DESC);
-
-CREATE VIRTUAL TABLE IF NOT EXISTS memory_atoms_fts USING fts5(
-  content, atom_id UNINDEXED, tokenize = 'unicode61'
-);
-
-CREATE TABLE IF NOT EXISTS kanban_tasks (
-  team_id      TEXT    NOT NULL,
-  session_id   TEXT    NOT NULL DEFAULT '',
-  seq          INTEGER NOT NULL,
-  id           TEXT    NOT NULL,
-  content      TEXT    NOT NULL,
-  status       TEXT    NOT NULL,
-  scope        TEXT    NOT NULL,
-  active_form  TEXT,
-  description  TEXT,
-  completed_at TEXT,
-  external_ref TEXT,
-  updated_at   TEXT    NOT NULL,
-  PRIMARY KEY (team_id, id)
-);
-
-CREATE TABLE IF NOT EXISTS kanban_counters (
-  team_id    TEXT    NOT NULL,
-  next_id    INTEGER NOT NULL,
-  PRIMARY KEY (team_id)
-);
-```
-
-`memory_turns` shape and session model: ADR 17 and `08-transcript.md`. `session_metadata` holds the optional human name a session was given (`/rename` → the `renameSession` command); it is keyed by `session_id` alone (ULIDs are globally unique) and LEFT-JOINed into `listSessions` (`08-transcript.md`, "List and rename"). `memory_atoms` holds long-term memory atoms with their FTS5 index — team scoping, search semantics, and dedup in `11-memory.md` (the FTS table carries `atom_id` for joining and drops `team_id` from the index since scoping happens on the join). `kanban_tasks` holds the board per team; a card's `session_id` is `''` when `scope` is `team`, or the owning session when `scope` is `session`. `seq` preserves insertion order for `load`. `kanban_counters` tracks the next card id per team. `load(teamId, sessionId)` returns team-scoped cards plus session-scoped cards for the given `sessionId`. Future schema changes append versioned migrations advancing `PRAGMA user_version`; today there is one version.
+`memory_turns` session model: ADR 17 and `08-transcript.md`. `session_metadata` is keyed by `session_id` alone (ULIDs are globally unique) and LEFT-JOINed into `listSessions`. `memory_atoms` team scoping, search, and dedup: `11-memory.md`. `load(teamId, sessionId)` returns team-scoped cards plus session-scoped cards for the given session. Migrations advance `PRAGMA user_version`; the file also carries the legacy `kanban_cards -> kanban_tasks` rename.
 
 ## Artifact Store
 

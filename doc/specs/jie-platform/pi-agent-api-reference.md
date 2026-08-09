@@ -1,21 +1,17 @@
 # pi-agent API Reference
 
-The subset of `@earendil-works/pi-agent-core` used by `jie-platform`. Implementers should use this as the authoritative contract for the pi-agent side of the integration. See `specs/jie-platform/06-agent-model.md` "pi-agent Integration Contract" for how Jie bridges events, adapts tools, and manages memory.
-
----
+The subset of `@earendil-works/pi-agent-core` used by `jie-platform`. This is the dependency contract — the authoritative source for how Jie bridges events, adapts tools, and manages memory is `06-agent-model.md`. Follow pi conventions and reuse what it provides.
 
 ## Agent
 
-The `Agent` class is the LLM-driven agent loop. Jie wraps it via `AgentBody` — the body instantiates it, subscribes to events, and bridges them to Jie's EventBus.
+The `Agent` class is the LLM-driven agent loop. Jie wraps it via `AgentBody` (`core/agent-body.ts`): the body instantiates it, subscribes to events, and bridges them to Jie's EventBus.
 
 ```typescript
 class Agent {
   constructor(options?: AgentOptions);
 
-  // ── State (getter, returns AgentState snapshot) ──
   get state(): AgentState;
 
-  // ── Lifecycle ──
   subscribe(listener: (event: AgentEvent, signal: AbortSignal) => Promise<void> | void): () => void;
   prompt(message: AgentMessage | AgentMessage[]): Promise<void>;
   prompt(input: string, images?: ImageContent[]): Promise<void>;
@@ -23,7 +19,6 @@ class Agent {
   waitForIdle(): Promise<void>;
   reset(): void;
 
-  // ── Steering (message injection) ──
   steer(message: AgentMessage): void;
   followUp(message: AgentMessage): void;
   clearSteeringQueue(): void;
@@ -35,11 +30,9 @@ class Agent {
   set followUpMode(mode: QueueMode);
   get followUpMode(): QueueMode;
 
-  // ── Abort & signal ──
   get signal(): AbortSignal | undefined;
   abort(): void;
 
-  // ── Public settable properties (set at construction or afterward) ──
   convertToLlm: (messages: AgentMessage[]) => Message[] | Promise<Message[]>;
   transformContext?: (messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]>;
   streamFn: StreamFn;
@@ -48,7 +41,7 @@ class Agent {
   onResponse?: SimpleStreamOptions["onResponse"];
   beforeToolCall?: (context: BeforeToolCallContext, signal?: AbortSignal) => Promise<BeforeToolCallResult | undefined>;
   afterToolCall?: (context: AfterToolCallContext, signal?: AbortSignal) => Promise<AfterToolCallResult | undefined>;
-  prepareNextTurn?: (signal?: AbortSignal) => Promise<AgentLoopTurnUpdate | undefined> | AgentLoopTurnUpdate | undefined;
+  prepareNextTurnWithContext?: (context: PrepareNextTurnContext) => Promise<AgentLoopTurnUpdate | undefined> | AgentLoopTurnUpdate | undefined;
   sessionId?: string;
   thinkingBudgets?: ThinkingBudgets;
   transport: Transport;
@@ -57,18 +50,9 @@ class Agent {
 }
 ```
 
-**Usage notes:**
-- `prompt()` starts a new conversation turn. Blocks until the agent reaches idle.
-- `continue()` resumes from the current transcript. The last message must be a user or tool-result message.
-- `steer()` queues a message to inject after the current assistant turn finishes. Jie does not use `steer` in v1 (no grace turn).
-- `followUp()` queues a message to inject after the agent would otherwise stop.
-- `subscribe()` returns an unsubscribe function. Event listener receives an `AbortSignal` for the current run.
-
----
+`prompt()` starts a new conversation turn and blocks until the agent reaches idle. `continue()` resumes from the current transcript (last message must be a user or tool-result message). `steer()` injects a message after the current turn; `followUp()` queues one after the agent would otherwise stop. `subscribe()` returns an unsubscribe function; the listener receives an `AbortSignal` for the current run.
 
 ## AgentOptions
-
-Constructor options for `Agent`. `streamFn` is required; the rest are optional. Jie sets `initialState` for system prompt, model, tools via `agent.state` after construction.
 
 ```typescript
 interface AgentOptions {
@@ -81,7 +65,7 @@ interface AgentOptions {
   onResponse?: SimpleStreamOptions["onResponse"];
   beforeToolCall?: (context: BeforeToolCallContext, signal?: AbortSignal) => Promise<BeforeToolCallResult | undefined>;
   afterToolCall?: (context: AfterToolCallContext, signal?: AbortSignal) => Promise<AfterToolCallResult | undefined>;
-  prepareNextTurn?: (signal?: AbortSignal) => Promise<AgentLoopTurnUpdate | undefined> | AgentLoopTurnUpdate | undefined;
+  prepareNextTurnWithContext?: (context: PrepareNextTurnContext) => Promise<AgentLoopTurnUpdate | undefined> | AgentLoopTurnUpdate | undefined;
   steeringMode?: QueueMode;
   followUpMode?: QueueMode;
   sessionId?: string;
@@ -92,27 +76,21 @@ interface AgentOptions {
 }
 ```
 
-**Jie's usage:** Jie passes `streamFn: streamSimple` from `@earendil-works/pi-ai/compat` (the full-provider stream function, same as pi coding-agent), sets `steeringMode: "all"`, `toolExecution: "sequential"`, and wires `beforeToolCall`, `afterToolCall`, `transformContext`, `convertToLlm` to bridge events and manage memory. `prepareNextTurn` is **not wired** in v1 — prompt injection uses `agent.prompt()` from the body's in-memory queue after `agent_end` (see `06-agent-model.md` "Subscription Model").
-
----
+`streamFn` is required; the rest are optional. Jie sets `streamFn: streamSimple` (from `@earendil-works/pi-ai/compat`), `steeringMode: "all"`, `followUpMode: "all"`, `toolExecution: "sequential"`, and wires `beforeToolCall`/`afterToolCall`/`transformContext`/`convertToLlm`/`prepareNextTurnWithContext` per `06-agent-model.md`.
 
 ## AgentState
+
+Settable at construction or afterward; readonly runtime fields noted.
 
 ```typescript
 interface AgentState {
   systemPrompt: string;
   model: Model<any>;
   thinkingLevel: ThinkingLevel;
-
-  // Tools
   set tools(tools: AgentTool<any>[]);
   get tools(): AgentTool<any>[];
-
-  // Transcript
   set messages(messages: AgentMessage[]);
   get messages(): AgentMessage[];
-
-  // Runtime (readonly)
   readonly isStreaming: boolean;
   readonly streamingMessage?: AgentMessage;
   readonly pendingToolCalls: ReadonlySet<string>;
@@ -120,19 +98,13 @@ interface AgentState {
 }
 ```
 
-**Jie's usage:** After construction, Jie sets `agent.state.tools`, `agent.state.systemPrompt`, and `agent.state.model`. On memory restore, Jie pushes restored messages into `agent.state.messages`.
-
----
-
 ## AgentMessage
-
-The union of all message types in the agent's conversation transcript.
 
 ```typescript
 type AgentMessage = Message | CustomAgentMessages[keyof CustomAgentMessages];
 ```
 
-The `CustomAgentMessages` interface is extensible via TypeScript declaration merging; apps add their own message roles by extending it. pi-agent-core's harness submodule (re-exported from the package root) ships four extensions — `compactionSummary`, `branchSummary`, `bashExecution`, `custom` — of which jie uses `compactionSummary` (below); the others are unused.
+The `CustomAgentMessages` interface is extensible via declaration merging; pi-agent-core's harness ships four extensions — `compactionSummary`, `branchSummary`, `bashExecution`, `custom` — of which jie uses `compactionSummary` only.
 
 The base `Message` type (from `@earendil-works/pi-ai`):
 
@@ -140,22 +112,16 @@ The base `Message` type (from `@earendil-works/pi-ai`):
 type Message = UserMessage | AssistantMessage | ToolResultMessage;
 ```
 
-### UserMessage
-
 ```typescript
 interface UserMessage {
   role: "user";
   content: string | (TextContent | ImageContent)[];
   timestamp: number;               // Unix ms
 }
-```
 
-### AssistantMessage
-
-```typescript
 interface AssistantMessage {
   role: "assistant";
-  content: (TextContent | ThinkingContent | ToolCall)[];  // ordered arbitrarily
+  content: (TextContent | ThinkingContent | ToolCall)[];
   api: Api;
   provider: ProviderId;
   model: string;
@@ -167,11 +133,7 @@ interface AssistantMessage {
   errorMessage?: string;
   timestamp: number;
 }
-```
 
-### ToolResultMessage
-
-```typescript
 interface ToolResultMessage<TDetails = any> {
   role: "toolResult";
   toolCallId: string;
@@ -194,7 +156,7 @@ interface CompactionSummaryMessage {
 }
 ```
 
-Created with `createCompactionSummaryMessage(summary, tokensBefore, timestamp)`. The harness's `convertToLlm` maps the role to a `UserMessage` whose text wraps the summary: `The conversation history before this point was compacted into the following summary:\n\n<summary>\n{summary}\n</summary>`. Jie passes this `convertToLlm` to its `Agent` (`06-agent-model.md` "Compaction") and writes the message through `transcriptStore.compact` (`08-transcript.md` "Compact").
+Created with `createCompactionSummaryMessage(summary, tokensBefore, timestamp)`. The harness's `convertToLlm` maps the role to a `UserMessage` whose text wraps the summary — Jie passes this `convertToLlm` to its `Agent` (`06-agent-model.md` "Compaction") and writes the message through `transcriptStore.compact` (`08-transcript.md` "Compact").
 
 ### Content Blocks
 
@@ -227,52 +189,33 @@ interface ToolCall {
 }
 ```
 
----
-
 ## AgentTool
 
-The tool interface pi-agent expects. Jie tools are adapted to this shape at `AgentBody` construction. The `execute` function takes `toolCallId`, typed `params`, an optional `AbortSignal`, and an optional `onUpdate` callback for streaming partial results.
+The tool interface pi-agent expects. Jie tools are adapted to this shape at `AgentBody` construction (`06-agent-model.md` "Tool Adaptation").
 
 ```typescript
 interface AgentTool<TParameters extends TSchema = TSchema, TDetails = any> {
   name: string;
   description: string;
-  label: string;                                    // human-readable, for UI
-  parameters: TParameters;                          // TypeBox schema (from pi-ai's Tool)
-
-  /** Optional: shim raw LLM arguments before schema validation. */
+  label: string;
+  parameters: TParameters;
   prepareArguments?: (args: unknown) => Static<TParameters>;
-
-  execute: (
-    toolCallId: string,
-    params: Static<TParameters>,
-    signal?: AbortSignal,
-    onUpdate?: AgentToolUpdateCallback<TDetails>,
-  ) => Promise<AgentToolResult<TDetails>>;
-
-  /** Per-tool execution mode override. */
+  execute: (toolCallId: string, params: Static<TParameters>, signal?: AbortSignal, onUpdate?: AgentToolUpdateCallback<TDetails>) => Promise<AgentToolResult<TDetails>>;
   executionMode?: ToolExecutionMode;
 }
-```
 
-### AgentToolResult
-
-```typescript
 interface AgentToolResult<T> {
   content: (TextContent | ImageContent)[];
   details: T;
-  /** Hint: agent should stop after the current tool batch. */
   terminate?: boolean;
 }
 
 type AgentToolUpdateCallback<T = any> = (partialResult: AgentToolResult<T>) => void;
 ```
 
----
-
 ## AgentEvent
 
-All 10 events emitted via `agent.subscribe(listener)`. Jie bridges these to its EventBus.
+All 10 events emitted via `agent.subscribe(listener)`:
 
 ```typescript
 type AgentEvent =
@@ -288,119 +231,53 @@ type AgentEvent =
   | { type: "tool_execution_end"; toolCallId: string; toolName: string; result: any; isError: boolean };
 ```
 
-| Event | Emitted when | Jie bridges to |
-|---|---|---|
-| `agent_start` | Agent processing loop begins | — (internal) |
-| `agent_end` | Agent processing loop complete; all messages produced | Triggers `agent.idle` publish |
-| `turn_start` | New assistant turn begins | — (internal) |
-| `turn_end` | Assistant turn complete (response + any tool results) | Turn bookkeeping. pi-agent decides loop continuation based on `message.stopReason` and `ToolResult.terminate`. |
-| `message_start` | Any message added to transcript | — (internal) |
-| `message_update` | Token delta during assistant streaming | `agent.stream.chunk` (buffered) |
-| `message_end` | Message finalized | `transcriptStore.persist()` |
-| `tool_execution_start` | Tool about to execute | `agent.tool.call` (via `beforeToolCall` hook) |
-| `tool_execution_update` | Tool streaming partial result | — (deferred Day 2) |
-| `tool_execution_end` | Tool execution complete | `agent.tool.result` (via `afterToolCall` hook) |
-
----
+How Jie bridges each onto the EventBus is in `06-agent-model.md` "Event Bridging"; the tool telemetry path uses the `beforeToolCall`/`afterToolCall` hooks, not `tool_execution_*`.
 
 ## BeforeToolCall / AfterToolCall
 
-Hook functions wired at agent construction. Jie uses these for tool telemetry events.
+Hook functions wired at agent construction. Jie uses these for tool telemetry (`agent.tool.call` / `agent.tool.result`) and the command hooks (`06-agent-model.md` "Tool telemetry hooks", `10-configuration.md` "Hooks").
 
-> **Note on the hook context (pi-agent-core 0.83.0).** The hook context shape is `{ assistantMessage, toolCall, args, context }`; the tool id and tool name are read from `ctx.toolCall.id` and `ctx.toolCall.name`. The `BeforeToolCallResult` shape is `{ block?, reason? }`.
+> Note on the hook context (pi-agent-core 0.83.0). The hook context shape is `{ assistantMessage, toolCall, args, context }`; the tool id and tool name are read from `ctx.toolCall.id` and `ctx.toolCall.name`. The `BeforeToolCallResult` shape is `{ block?, reason? }`.
 
 ```typescript
 interface BeforeToolCallContext {
-  /** The assistant message that requested the tool call. */
   assistantMessage: AssistantMessage;
-  /** The raw tool call block from `assistantMessage.content`. */
   toolCall: AgentToolCall;
-  /** Validated tool arguments for the target tool schema. */
   args: unknown;
-  /** Current agent context at the time the tool call is prepared. */
   context: AgentContext;
 }
-
-interface BeforeToolCallResult {
-  /** Block execution: pi-agent emits a synthetic tool-result error instead. */
-  block?: boolean;
-  /** Reason text shown in the synthetic error tool result. */
-  reason?: string;
-}
+interface BeforeToolCallResult { block?: boolean; reason?: string }
 
 interface AfterToolCallContext {
-  /** The assistant message that requested the tool call. */
   assistantMessage: AssistantMessage;
-  /** The raw tool call block from `assistantMessage.content`. */
   toolCall: AgentToolCall;
-  /** Validated tool arguments for the target tool schema. */
   args: unknown;
-  /** The executed tool result before any `afterToolCall` overrides are applied. */
   result: AgentToolResult<any>;
-  /** Whether the executed tool result is currently treated as an error. */
   isError: boolean;
-  /** Current agent context at the time the tool call is finalized. */
   context: AgentContext;
 }
-
 interface AfterToolCallResult {
-  /** Field-by-field partial override of the tool result the LLM sees. */
   content?: (TextContent | ImageContent)[];
   details?: unknown;
   isError?: boolean;
-  /** Hint: stop after the current tool batch. */
   terminate?: boolean;
 }
 ```
 
----
-
 ## AgentLoopTurnUpdate
-
-Returned by `prepareNextTurn` to modify state before the next turn.
 
 ```typescript
 interface AgentLoopTurnUpdate {
-  context?: AgentContext;       // full context replacement
-  model?: Model<any>;           // model switch
+  context?: AgentContext;
+  model?: Model<any>;
   thinkingLevel?: ThinkingLevel;
 }
 ```
-
----
 
 ## Mode Types
 
 ```typescript
 type QueueMode = "all" | "one-at-a-time";
-// - "all": drain all queued messages at once
-// - "one-at-a-time": drain only the oldest queued message
-
 type ToolExecutionMode = "sequential" | "parallel";
-// - "sequential": execute tools one at a time
-// - "parallel": execute compatible tools concurrently
-
 type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 ```
-
-**Jie v1 defaults:** `steeringMode: "all"`, `followUpMode: "all"`, `toolExecution: "sequential"`.
-
-## One-shot calls (pi-ai)
-
-```typescript
-// @earendil-works/pi-ai/compat — pi's temporary legacy surface (deleted with pi's
-// ModelManager migration; createModels() is the successor)
-function streamSimple<TApi extends Api>(model: Model<TApi>, context: Context, options?: SimpleStreamOptions): AssistantMessageEventStream;
-function completeSimple<TApi extends Api>(model: Model<TApi>, context: Context, options?: SimpleStreamOptions): Promise<AssistantMessage>;
-
-// @earendil-works/pi-ai
-interface RetryPolicy { enabled: boolean; maxRetries: number; baseDelayMs: number; }
-function retryAssistantCall(
-  produce: () => Promise<AssistantMessage>,
-  policy: RetryPolicy | undefined,   // undefined/disabled → single attempt, response returned unchanged
-  signal: AbortSignal | undefined,   // aborts are terminal, never retried; normalized to an aborted AssistantMessage
-  callbacks?: RetryCallbacks,
-): Promise<AssistantMessage>;
-```
-
-`SimpleStreamOptions` extends `StreamOptions` — the fields jie uses: `apiKey`, `maxTokens`, `signal`, `cacheRetention` (`"none"` for standalone requests), `sessionId`. Jie's usage: the agent loop streams through `streamSimple` (`AgentOptions.streamFn`); the `LlmService` one-shot path wraps `completeSimple` in `retryAssistantCall` (`07-llm-service.md`).
