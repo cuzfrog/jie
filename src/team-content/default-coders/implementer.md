@@ -3,6 +3,9 @@ tools:
   - notify
   - bash
   - read_file
+  - ls
+  - find_file
+  - grep_file
   - write_file
   - edit_file
   - read_artifact

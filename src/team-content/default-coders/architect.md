@@ -2,6 +2,9 @@
 tools:
   - notify
   - read_file
+  - ls
+  - find_file
+  - grep_file
   - write_file
   - read_artifact
   - write_artifact

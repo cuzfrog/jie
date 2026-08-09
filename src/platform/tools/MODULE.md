@@ -1,39 +1,54 @@
 ---
 no-new-exports:
+  - _test-context.ts
   - bash.test.ts
   - bash.ts
-  - edit.test.ts
-  - edit.ts
+  - edit_file.test.ts
+  - edit_file.ts
   - file-mutation-queue.test.ts
   - file-mutation-queue.ts
+  - find-artifact.test.ts
+  - find-artifact.ts
+  - find-file.test.ts
+  - find-file.ts
+  - grep-file.test.ts
+  - grep-file.ts
   - index.ts
+  - ls.test.ts
+  - ls.ts
+  - memory-add.test.ts
+  - memory-add.ts
+  - memory-search.test.ts
+  - memory-search.ts
+  - module.test.ts
+  - module.ts
   - notify.test.ts
   - notify.ts
+  - path-utils.test.ts
   - path-utils.ts
   - read-artifact.test.ts
   - read-artifact.ts
   - read-file.test.ts
   - read-file.ts
-  - kanban-write.test.ts
-  - kanban-write.ts
-  - memory-search.test.ts
-  - memory-search.ts
   - task-lifecycle.test.ts
   - task-lifecycle.ts
   - tool-registry.test.ts
   - tool-registry.ts
+  - types.ts
   - unified-diff.test.ts
   - unified-diff.ts
   - web-fetch.test.ts
   - web-fetch.ts
   - web-search.test.ts
   - web-search.ts
-  - write-gate.test.ts
-  - write-gate.ts
   - write-artifact.test.ts
   - write-artifact.ts
   - write-file.test.ts
   - write-file.ts
+  - write-gate.test.ts
+  - write-gate.ts
+  - write-kanban.test.ts
+  - write-kanban.ts
 ---
 
 # Notes

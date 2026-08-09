@@ -1,6 +1,8 @@
-import { realpathSync } from "node:fs";
+import { readdirSync, realpathSync, type Dirent } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
+
+export const DEFAULT_IGNORE_DIRS = ["node_modules", ".git"] as const;
 
 export function resolveWithinWorkspace(
   path: string,
@@ -35,6 +37,34 @@ export function mapErrno(
     }
   }
   return errno instanceof Error ? errno : new Error(String(error));
+}
+
+export function* walkFiles(
+  root: string,
+  signal: AbortSignal | undefined,
+  ignoreDirs: ReadonlyArray<string> = DEFAULT_IGNORE_DIRS,
+): IterableIterator<string> {
+  const stack: string[] = [""];
+  while (stack.length > 0) {
+    if (signal?.aborted) return;
+    const dir = stack.pop() as string;
+    const absDir = dir === "" ? root : join(root, dir);
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(absDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (signal?.aborted) return;
+      if (entry.isDirectory()) {
+        if (ignoreDirs.includes(entry.name)) continue;
+        stack.push(dir === "" ? entry.name : `${dir}/${entry.name}`);
+      } else if (entry.isFile()) {
+        yield dir === "" ? entry.name : `${dir}/${entry.name}`;
+      }
+    }
+  }
 }
 
 function realpathOfDeepestExisting(abs: string): string {

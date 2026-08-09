@@ -175,8 +175,12 @@ describe("InMemoryToolRegistry", () => {
     expect(names).toContain("read_file");
     expect(names).toContain("write_file");
     expect(names).toContain("edit_file");
+    expect(names).toContain("ls");
+    expect(names).toContain("find_file");
+    expect(names).toContain("grep_file");
     expect(names).toContain("read_artifact");
     expect(names).toContain("write_artifact");
+    expect(names).toContain("find_artifact");
     expect(names).toContain("notify");
     expect(names).toContain("web_fetch");
     expect(names).toContain("web_search");
@@ -194,13 +198,16 @@ describe("InMemoryToolRegistry", () => {
 });
 
 describe("InMemoryToolRegistry — built-in installation", () => {
-  test("populated registry: list() contains all 12 built-ins", () => {
+  test("populated registry: list() contains all 16 built-ins", () => {
     const reg = makeReg();
     const names = reg.list().map((t) => t.name).sort();
     expect(names).toEqual([
       "bash",
       "edit_file",
-      "write_kanban",
+      "find_artifact",
+      "find_file",
+      "grep_file",
+      "ls",
       "memory_add",
       "memory_search",
       "notify",
@@ -210,12 +217,13 @@ describe("InMemoryToolRegistry — built-in installation", () => {
       "web_search",
       "write_artifact",
       "write_file",
+      "write_kanban",
     ]);
   });
 
   test("populated registry: resolve() returns the matching installed tool for each built-in", () => {
     const reg = makeReg();
-    for (const name of ["bash", "read_file", "write_file", "edit_file", "notify", "web_search", "web_fetch", "read_artifact", "write_artifact", "write_kanban", "memory_add", "memory_search"]) {
+    for (const name of ["bash", "read_file", "write_file", "edit_file", "ls", "find_file", "grep_file", "find_artifact", "notify", "web_search", "web_fetch", "read_artifact", "write_artifact", "write_kanban", "memory_add", "memory_search"]) {
       const matches = reg.resolve(name);
       expect(matches).toHaveLength(1);
       expect(matches[0]!.name).toBe(name);

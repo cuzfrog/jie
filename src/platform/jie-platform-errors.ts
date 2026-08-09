@@ -6,6 +6,7 @@ const JiePlatformErrorMessages = {
   PATH_ESCAPE: "Path escapes the workspace root",
   WORKDIR_ESCAPE: "Workdir escapes the workspace root",
   IS_A_DIRECTORY: "Path is a directory",
+  NOT_A_DIRECTORY: "Path is not a directory",
   FILE_TOO_LARGE: "File content exceeds the maximum allowed size",
   UNSUPPORTED_ENCODING: "File is not valid UTF-8",
   PERMISSION_DENIED: "Permission denied",
@@ -14,6 +15,7 @@ const JiePlatformErrorMessages = {
   NO_MATCH: "old_string was not found in the file",
   AMBIGUOUS_MATCH: "old_string matched more than one location in the file",
   OVERLAPPING_EDITS: "edits overlap each other in the file",
+  INVALID_PATTERN: "Invalid search pattern",
 
   KANBAN_WRITE_INVALID: "Kanban board violates the write_kanban contract",
   KANBAN_CARD_NOT_FOUND: "Kanban card not found",

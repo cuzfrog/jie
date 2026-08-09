@@ -50,6 +50,30 @@ export interface WriteArtifactResultDetails {
     readonly created_at: string;
 }
 
+export interface LsResultDetails {
+    readonly kind: "ls";
+    readonly truncated: boolean;
+}
+
+export interface FindFileResultDetails {
+    readonly kind: "find";
+    readonly matches: ReadonlyArray<string>;
+    readonly truncated: boolean;
+}
+
+export interface GrepFileResultDetails {
+    readonly kind: "grep";
+    readonly matches: ReadonlyArray<{ readonly path: string; readonly line: number; readonly content: string }>;
+    readonly truncated: boolean;
+}
+
+export interface FindArtifactResultDetails {
+    readonly kind: "artifact-list";
+    readonly matches: ReadonlyArray<{ readonly key: string; readonly created_at: string }>;
+    readonly total: number;
+    readonly truncated: boolean;
+}
+
 export interface NotifyResultDetails {
     readonly topic: string;
     readonly task_id?: string;
@@ -71,6 +95,10 @@ export type ToolResultDetails =
     | ReadFileResultDetails
     | ReadArtifactResultDetails
     | WriteArtifactResultDetails
+    | LsResultDetails
+    | FindFileResultDetails
+    | GrepFileResultDetails
+    | FindArtifactResultDetails
     | NotifyResultDetails
     | WebFetchResultDetails;
 
