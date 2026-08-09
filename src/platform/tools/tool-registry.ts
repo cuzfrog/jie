@@ -1,6 +1,6 @@
 import type { Tool } from "./types";
 import { createBashTool } from "./bash";
-import { createEditTool } from "./edit";
+import { createEditTool } from "./edit_file";
 import { createFileMutationQueue } from "./file-mutation-queue";
 import { createMemoryAddTool } from "./memory-add";
 import { createMemorySearchTool } from "./memory-search";
