@@ -10,7 +10,7 @@
 - `doc/specs/` (specs) — package-level blueprints.
 
 ## Document rules
-- Keep your writing short and concise but accurate enough to avoid guessing room.
+- Keep your writing short and concise but accurate enough to avoid guessing room. Code itself is doc, avoid any doc if you can.
 - Do not keep intermediate, transient history in md files under `specs/`, they are the up-to-date blueprint for the project.
 - Do not record what you've done if the information is not helpful to make subsequent decisions.
 - No emojis in commits, issues, PR comments, or code
@@ -85,7 +85,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 ## Things to avoid
 - do not `find` from the root dir, it's slow and unnecessary. Use `pwd` to figure out where you are.
 - do not write test-only production code, testability should be achieved by adhering to above coding principles.
-- no comments in the code, decisions should be captured in `doc/specs/` or `doc/addrs/`.
+- no comments in the code, only non-obvious important decisions should be captured in `doc/specs/` or `doc/addrs/` (do not record obvious, common pattern, or trivial things, code itself should explain not the doc).
 - do not skip tests, problems must be resolved.
 - do not ignore tech debt you encountered, record them as Github issues so later other agents can analyze and fix.
 - avoid worktrees, for parallel development on different branches, use `git` to clone the repo to `/tmp/<id>/beep/` and work there, then raise PR.
