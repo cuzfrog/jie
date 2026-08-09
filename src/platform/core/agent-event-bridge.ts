@@ -108,6 +108,10 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
     if (!this.turnStartPending) return;
     this.turnStartPending = false;
     const message = event.type === "message_start" && event.message.role === "user" ? event.message : null;
+    if (message === null) {
+      this.eventManager.publish(Events.agentTurnContinue(this.sender));
+      return;
+    }
     this.eventManager.publish(Events.agentTurnStart(this.sender, this.promptQueue.takeTurnStartLabel(message)));
   }
 }

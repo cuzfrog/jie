@@ -104,21 +104,19 @@ beforeEach(() => {
 });
 
 describe("AgentEventBridge — turn-start deferral", () => {
-  test("turn_start defers agent.turn.start until the turn's next pi event", () => {
+  test("turn_start defers agent.turn.start until the user message_start", () => {
     const bridge = makeBridge();
     bridge.handleEvent({ type: "turn_start" });
     expect(envelopes("agent.turn.start")).toHaveLength(0);
-    bridge.handleEvent({ type: "turn_end", message: makeAssistantMessage(), toolResults: [] });
-    const turnStart = envelopes("agent.turn.start");
-    expect(turnStart).toHaveLength(1);
-    expect(turnStart[0]!.payload).toBeNull();
+    bridge.handleEvent({ type: "message_start", message: { role: "user", content: "hi", timestamp: 0 } });
+    expect(envelopes("agent.turn.start")).toHaveLength(1);
   });
 
   test("the flush consumes the queue's turn-start label", () => {
     promptQueue.takeTurnStartLabel.mockReturnValue("hello");
     const bridge = makeBridge();
     bridge.handleEvent({ type: "turn_start" });
-    bridge.handleEvent({ type: "agent_end", messages: [] });
+    bridge.handleEvent({ type: "message_start", message: { role: "user", content: "hi", timestamp: 0 } });
     expect(envelopes("agent.turn.start")[0]!.payload).toBe("hello");
   });
 
@@ -130,27 +128,31 @@ describe("AgentEventBridge — turn-start deferral", () => {
     expect(promptQueue.takeTurnStartLabel).toHaveBeenCalledWith(userMessage);
   });
 
-  test("any other flushing event consumes the label with a null message", () => {
+  test("a non-user flushing event publishes agent.turn.continue without consuming the label", () => {
     const bridge = makeBridge();
     bridge.handleEvent({ type: "turn_start" });
-    bridge.handleEvent({ type: "turn_end", message: makeAssistantMessage(), toolResults: [] });
-    expect(promptQueue.takeTurnStartLabel).toHaveBeenCalledWith(null);
+    bridge.handleEvent({ type: "message_start", message: makeAssistantMessage() });
+    expect(envelopes("agent.turn.continue")).toHaveLength(1);
+    expect(envelopes("agent.turn.start")).toHaveLength(0);
+    expect(promptQueue.takeTurnStartLabel).not.toHaveBeenCalled();
   });
 
-  test("the deferred agent.turn.start precedes the turn's own stream events", () => {
+  test("the deferred turn event precedes the turn's own stream events", () => {
     const bridge = makeBridge();
     bridge.handleEvent({ type: "turn_start" });
     bridge.handleEvent({ type: "message_start", message: makeAssistantMessage() });
     bridge.handleEvent({ type: "message_end", message: makeAssistantMessage() });
     const sequence = eventManager.publish.mock.calls.map((call) => call[0].topic);
-    expect(sequence.filter((topic) => topic === "agent.turn.start" || topic === "agent.stream.end"))
-      .toEqual(["agent.turn.start", "agent.stream.end"]);
+    expect(sequence.filter((topic) => topic === "agent.turn.continue" || topic === "agent.stream.end"))
+      .toEqual(["agent.turn.continue", "agent.stream.end"]);
   });
 
   test("3 turns alternate strictly: turn_start, idle, turn_start, idle, ...", () => {
     const bridge = makeBridge();
+    const userMessage: AgentMessage = { role: "user", content: "hi", timestamp: 0 };
     for (let i = 0; i < 3; i++) {
       bridge.handleEvent({ type: "turn_start" });
+      bridge.handleEvent({ type: "message_start", message: userMessage });
       bridge.handleEvent({ type: "agent_end", messages: [] });
     }
     const sequence = eventManager.publish.mock.calls.map((call) => call[0].topic);

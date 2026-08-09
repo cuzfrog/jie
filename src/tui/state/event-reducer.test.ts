@@ -356,6 +356,39 @@ describe("reduceTurnStart", () => {
     expect(state.nextEntrySeq).toBe(2);
   });
 
+  test("a turn.continue keeps the current turn and the next stream stamps its own thinking", () => {
+    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "do work"));
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 1, 0, "thinking", "ponder"));
+    state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 1, 1, [300]));
+    state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));
+    state = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "bash", "out", 10, null));
+    state = reduce(state, Events.agentTurnContinue(AGENT_SENDER));
+    let agent = state.agents.get("my-team:general-1");
+    expect(agent?.history.length).toBe(0);
+    expect(agent?.currentTurn?.userPrompt).toBe("do work");
+    expect(agent?.currentTurn?.seq).toBe(0);
+    expect(state.nextEntrySeq).toBe(1);
+    expect(agent?.currentTurn?.blocks).toEqual([{ kind: "thinking", text: "ponder", durationMs: 300 }]);
+    expect(agent?.currentTurn?.cards.length).toBe(1);
+    state = reduce(state, Events.agentStreamChunk(STREAM_SENDER, 2, 0, "thinking", "more"));
+    state = reduce(state, Events.agentStreamEnd(STREAM_SENDER, 2, 1, [500]));
+    agent = state.agents.get("my-team:general-1");
+    expect(agent?.currentTurn?.blocks.length).toBe(2);
+    expect(agent?.currentTurn?.blocks[0]?.durationMs).toBe(300);
+    expect(agent?.currentTurn?.blocks[1]?.durationMs).toBe(500);
+  });
+
+  test("a turn.continue clears the error banner and the interrupted marker", () => {
+    let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, "do work"));
+    state = { ...state, errorBanner: "boom", interruptedAgentId: "my-team:general-1" };
+    state = reduce(state, Events.agentTurnContinue(AGENT_SENDER));
+    const agent = state.agents.get("my-team:general-1");
+    expect(state.errorBanner).toBeNull();
+    expect(state.interruptedAgentId).toBeNull();
+    expect(agent?.status).toBe("busy");
+    expect(agent?.currentTurn?.userPrompt).toBe("do work");
+  });
+
   test("records tool calls after a prompt-less turn.start", () => {
     let state = reduce(loadedState(), Events.agentTurnStart(AGENT_SENDER, null));
     state = reduce(state, Events.agentToolCall(TOOL_SENDER, "c1", "bash", "ls"));

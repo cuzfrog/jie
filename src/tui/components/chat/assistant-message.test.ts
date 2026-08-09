@@ -66,9 +66,9 @@ describe("AssistantMessage — text blocks", () => {
 });
 
 describe("AssistantMessage — thinking blocks", () => {
-  test("collapsed by default: a single dim label line", () => {
+  test("collapsed by default: a streaming block folds into a live summary line", () => {
     const message = new AssistantMessage(turn({ blocks: [{ kind: "thinking", text: "pondering" }] }), stateStore);
-    expect(message.render(80)).toEqual(["\x1b[90mThinking...\x1b[39m"]);
+    expect(message.render(80)).toEqual(["\x1b[90mThinking... (0ms)\x1b[39m"]);
   });
 
   test("expanded after ctrl+t: label plus dim text", () => {
@@ -107,29 +107,29 @@ describe("AssistantMessage — work summary", () => {
     expect(message.render(80)).toEqual(["\x1b[90mThought for 56.6s\x1b[39m"]);
   });
 
-  test("a streaming thinking block keeps its live line beside the summary", () => {
+  test("a streaming thinking block folds its live elapsed into the summary", () => {
     const message = new AssistantMessage(turn({
       blocks: [
         { kind: "thinking", text: "a", durationMs: 1000 },
         { kind: "thinking", text: "streaming" },
       ],
     }), stateStore);
-    expect(message.render(80)).toEqual(["\x1b[90mThinking...\x1b[39m", "\x1b[90mThought for 1s\x1b[39m"]);
+    expect(message.render(80)).toEqual(["\x1b[90mThinking... (1s)\x1b[39m"]);
   });
 
-  test("completed tool results fold into usage counts with a total", () => {
+  test("completed tool results fold into usage counts", () => {
     const message = new AssistantMessage(turn({
       cards: [card({ durationMs: 12 }), card({ durationMs: 8 }), card({ name: "read_file", durationMs: 3 })],
     }), stateStore);
-    expect(message.render(80)).toEqual(["\x1b[90mused bash 2 times, used read_file 1 time, total 23ms\x1b[39m"]);
+    expect(message.render(80)).toEqual(["\x1b[90mused bash 2 times, used read_file 1 time\x1b[39m"]);
   });
 
-  test("thinking and tool time combine into one summary", () => {
+  test("thinking and tool usage combine into one summary", () => {
     const message = new AssistantMessage(turn({
       blocks: [{ kind: "thinking", text: "deep", durationMs: 56600 }],
       cards: [card({ name: "read_file", durationMs: 400 })],
     }), stateStore);
-    expect(message.render(80)).toEqual(["\x1b[90mThought for 56.6s, used read_file 1 time, total 57s\x1b[39m"]);
+    expect(message.render(80)).toEqual(["\x1b[90mThought for 56.6s, used read_file 1 time\x1b[39m"]);
   });
 
   test("error cards stay individual", () => {
@@ -183,7 +183,7 @@ describe("AssistantMessage — work summary", () => {
       "\x1b[90m@@ -1,1 +1,1 @@\x1b[39m",
       "\x1b[90m1 \x1b[39m\x1b[31m- a\x1b[39m",
       "\x1b[90m1 \x1b[39m\x1b[32m+ b\x1b[39m",
-      "\x1b[90mused bash 1 time, total 500ms\x1b[39m",
+      "\x1b[90mused bash 1 time\x1b[39m",
     ]);
   });
 
@@ -195,27 +195,84 @@ describe("AssistantMessage — work summary", () => {
     expect(message.render(80).map((line) => line.trimEnd())).toEqual([
       "\x1b[36m● \x1b[39manswer",
       "\x1b[31m✗\x1b[39m \x1b[31mbash\x1b[39m",
-      "\x1b[90mThought for 1s, used bash 1 time, total 1.5s\x1b[39m",
+      "\x1b[90mThought for 1s, used bash 1 time\x1b[39m",
     ]);
   });
 });
 
 describe("summarizeWork", () => {
   test("returns null when nothing is aggregated", () => {
-    expect(_summarizeWork(null, [])).toBeNull();
+    expect(_summarizeWork(null, [], null)).toBeNull();
   });
 
-  test("omits the total when no duration is known", () => {
-    expect(_summarizeWork(null, [card()])).toBe("used bash 1 time");
+  test("renders only usage when no thinking time is known", () => {
+    expect(_summarizeWork(null, [card()], null)).toBe("used bash 1 time");
   });
 
   test("keeps the order of first completion", () => {
     const cards = [card({ name: "read_file" }), card(), card({ name: "read_file" })];
-    expect(_summarizeWork(null, cards)).toBe("used read_file 2 times, used bash 1 time");
+    expect(_summarizeWork(null, cards, null)).toBe("used read_file 2 times, used bash 1 time");
   });
 
-  test("adds thinking time to the total", () => {
-    expect(_summarizeWork(1000, [card({ durationMs: 500 })])).toBe("Thought for 1s, used bash 1 time, total 1.5s");
+  test("renders a completed thought line with usage", () => {
+    expect(_summarizeWork(1000, [card({ durationMs: 500 })], null)).toBe("Thought for 1s, used bash 1 time");
+  });
+
+  test("a live elapsed shows the thinking label with the running total", () => {
+    expect(_summarizeWork(1000, [], 500)).toBe("Thinking... (1.5s)");
+  });
+
+  test("a live elapsed from zero prior thinking still counts up", () => {
+    expect(_summarizeWork(null, [], 500)).toBe("Thinking... (500ms)");
+  });
+
+  test("a live elapsed combines with tool usage", () => {
+    expect(_summarizeWork(1000, [card()], 500)).toBe("Thinking... (1.5s), used bash 1 time");
+  });
+});
+
+describe("AssistantMessage - live thinking counter", () => {
+  beforeEach(() => {
+    stateStore.getState.mockReturnValue(makeTuiState());
+    vi.useFakeTimers({ now: 0 });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test("starts at zero and grows with elapsed time", () => {
+    const message = new AssistantMessage(turn({ blocks: [{ kind: "thinking", text: "pondering" }] }), stateStore);
+    expect(message.render(80)).toEqual(["\x1b[90mThinking... (0ms)\x1b[39m"]);
+    vi.advanceTimersByTime(1500);
+    expect(message.render(80)).toEqual(["\x1b[90mThinking... (1.5s)\x1b[39m"]);
+  });
+
+  test("accumulates with completed thinking", () => {
+    const message = new AssistantMessage(turn({
+      blocks: [
+        { kind: "thinking", text: "a", durationMs: 1000 },
+        { kind: "thinking", text: "streaming" },
+      ],
+    }), stateStore);
+    expect(message.render(80)).toEqual(["\x1b[90mThinking... (1s)\x1b[39m"]);
+    vi.advanceTimersByTime(500);
+    expect(message.render(80)).toEqual(["\x1b[90mThinking... (1.5s)\x1b[39m"]);
+  });
+
+  test("resets when a new in-progress block takes over", () => {
+    const message = new AssistantMessage(turn({ blocks: [{ kind: "thinking", text: "first" }] }), stateStore);
+    message.render(80);
+    vi.advanceTimersByTime(2000);
+    message.update(turn({
+      blocks: [
+        { kind: "thinking", text: "first", durationMs: 2000 },
+        { kind: "thinking", text: "second" },
+      ],
+    }));
+    expect(message.render(80)).toEqual(["\x1b[90mThinking... (2s)\x1b[39m"]);
+    vi.advanceTimersByTime(500);
+    expect(message.render(80)).toEqual(["\x1b[90mThinking... (2.5s)\x1b[39m"]);
   });
 });
 

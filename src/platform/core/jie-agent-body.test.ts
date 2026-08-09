@@ -1304,11 +1304,13 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     body.stop();
   });
 
-  test("the pending prompt is consumed once — a later turn_start carries null", async () => {
+  test("the pending prompt is consumed once — a later continuation carries no label", async () => {
     const body = h.makeBody();
     await body.start();
     const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    const turnContinue: EventEnvelope<"agent.turn.continue">[] = [];
     h.subscribeSubject("agent.turn.start", (env) => turnStart.push(env));
+    h.subscribeSubject("agent.turn.continue", (env) => turnContinue.push(env));
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
     await flush();
     h.fireEvent({ type: "turn_start" });
@@ -1326,7 +1328,8 @@ describe("JieAgentBody — turn.start prompt payload", () => {
       message: makeAssistantMessage(),
       toolResults: [],
     });
-    expect(turnStart.map((env) => env.payload)).toEqual(["hello", null]);
+    expect(turnStart.map((env) => env.payload)).toEqual(["hello"]);
+    expect(turnContinue).toHaveLength(1);
     body.stop();
   });
 
@@ -1395,7 +1398,9 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     const body = h.makeBody();
     await body.start();
     const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    const turnContinue: EventEnvelope<"agent.turn.continue">[] = [];
     h.subscribeSubject("agent.turn.start", (env) => turnStart.push(env));
+    h.subscribeSubject("agent.turn.continue", (env) => turnContinue.push(env));
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "lost run"));
     await flush();
     h.fireEvent({ type: "agent_end", messages: [] });
@@ -1405,7 +1410,8 @@ describe("JieAgentBody — turn.start prompt payload", () => {
       message: makeAssistantMessage(),
       toolResults: [],
     });
-    expect(turnStart[turnStart.length - 1]!.payload).toBeNull();
+    expect(turnStart).toHaveLength(0);
+    expect(turnContinue).toHaveLength(1);
     body.stop();
   });
 
@@ -1413,7 +1419,9 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     const body = h.makeBody();
     await body.start();
     const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    const turnContinue: EventEnvelope<"agent.turn.continue">[] = [];
     h.subscribeSubject("agent.turn.start", (env) => turnStart.push(env));
+    h.subscribeSubject("agent.turn.continue", (env) => turnContinue.push(env));
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
     await flush();
     const firstMessage = h.prompt.mock.calls[0]![0] as AgentMessage;
@@ -1432,7 +1440,8 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     h.fireEvent({ type: "turn_end", message: makeAssistantMessage({ stopReason: "toolUse" }), toolResults: [] });
     h.fireEvent({ type: "turn_start" });
     h.fireEvent({ type: "message_start", message: followUpMessage });
-    expect(turnStart.map((env) => env.payload)).toEqual(["first", null, "second"]);
+    expect(turnStart.map((env) => env.payload)).toEqual(["first", "second"]);
+    expect(turnContinue).toHaveLength(1);
     body.stop();
   });
 
