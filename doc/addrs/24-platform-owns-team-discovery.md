@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. All team-discovery logic lives in `jie-platform`; the CLI and TUI are responsible only for their own concerns (argv parsing, rendering, terminal output). Per ADR 36 the packages consolidated into one; discovery logic now lives in `src/platform/team/`.
+Accepted. All team-discovery logic lives in `jie-platform`; the CLI and TUI are responsible only for their own concerns (argv parsing, rendering, terminal output)..
 
 ## Context
 
@@ -10,13 +10,7 @@ Accepted. All team-discovery logic lives in `jie-platform`; the CLI and TUI are 
 
 ## Decision
 
-### 1. Team discovery is a platform responsibility
-
-The platform's team module owns discovery (`locate`, `listInstalled`, built-in constant). It matches the config/file discovery order.
-
-### 2. The CLI and TUI are thin consumers
-
-No discovery code in the CLI or TUI. Team operations surface as platform commands (`team`, `getTeamInfo`, `setDefaultTeam`); the CLI's only team-local concern is `cwd → projectPath` resolution and printing results.
+Discovery in platform; CLI/TUI thin consumers.
 
 ## Rationale
 

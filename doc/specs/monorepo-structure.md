@@ -6,7 +6,7 @@ One publishable package, `@cuzfrog/jie`, rooted at the repo root. Source lives u
 
 ```
 src/
-  platform/         # Platform runtime - composition root: container.ts (bootPlatform, ADR 31)
+  platform/         # Platform runtime - composition root: container.ts
     command/           # Platform commands (team, resumeSession, setDefaultModel, login, ...) + executor
     config/            # Settings, auth, models.json loading, model registry (10-configuration.md)
     context/           # Auto-loaded context files (AGENTS.md/CLAUDE.md ancestor walk) -> loadSystemContextBlock (10-configuration.md "Context Files")
@@ -14,14 +14,14 @@ src/
     event/             # EventBus (InProcessEventBus), EventManager, Events factory (03-event-system.md)
     hooks/             # settings.json command hooks: parse, HookRunner, sh executor; gates tool calls + lifecycle (10-configuration.md "Hooks")
     llm/               # LlmService: one-shot model calls outside agent sessions (compaction, memory extraction) (07-llm-service.md)
-    memory/            # MemoryManager facade over MemoryStore (memory_atoms + FTS5), MemoryDistiller, and MemoryBootstrap: team-scoped long-term memory (11-memory.md, ADR 34)
+    memory/            # MemoryManager facade over MemoryStore (memory_atoms + FTS5), MemoryDistiller, and MemoryBootstrap: team-scoped long-term memory
     services/          # GitService (branch / dirty status; consumed by the command surface and by the CLI for the TUI footer)
     skills/            # Skill discovery (SKILL.md), SkillManager (glob resolution), prompt formatting (10-configuration.md "Skills")
     storage/           # Storage + SqliteStorage, schema bootstrap, ArtifactStore, TranscriptStore (04-storage.md, 08-transcript.md)
     team/              # Blueprint parser, team registry (discovery, ADR 24), TeamManager, built-in default-solo/ team
     tools/             # Built-in tools: notify, bash, read_file, write_file, edit, write_kanban,
                        web_search, web_fetch, write_artifact, read_artifact, memory_search + ToolRegistry
-    container.ts       # Composition root: bootPlatform(options): AwilixContainer<PlatformCradle> (ADR 31)
+    container.ts       # Composition root: bootPlatform(options): AwilixContainer<PlatformCradle>
     jie-platform.ts    # JiePlatform handle interface + implementation (registered in module.ts)
     jie-platform-errors.ts
   cli/             # CLI entry (jie binary): -p print mode, interactive TUI mode, login/logout/model commands, team add/list/remove
@@ -52,12 +52,7 @@ code-lens   -> utils                           (standalone MCP server; protobufj
 **Agnosticism rule (ADR 11).** `platform` has zero dependency on `team-content` - no `import` in any form, including types. The platform reads team blueprints from filesystem paths (`.jie/teams/<id>/`, `~/.jie/teams/<id>/`) plus its built-in `default-solo` fallback; a team is data, not code. The bundled `default-team` blueprint at `src/team-content/default-team/` is reached only after first-run auto-install (D1) copies it to `~/.jie/teams/`.
 
 ## Build System
-
-**Zero build step.** The runtime is `bun` (>= 1.3.14), which executes TypeScript natively - no compilation, bundling, or transpilation. Source `.ts` files are the distributable.
-
-- **Single package.** One `package.json` at the repo root declares the package `@cuzfrog/jie`. No workspaces, no catalog; every dependency is pinned once at the root. `bun install` never silently changes behavior - upgrades are explicit decisions (the platform's spec is precise about API shapes - e.g. a pi-agent minor bump has changed `BeforeToolCallContext` in the past).
-- **Publish surface.** `"files": ["src"]` whitelists the distributable. This is load-bearing for security: the gitignored root `.env` sits outside `src/`, and bun's `pm pack` does not honor `.gitignore`, so the whitelist - not the ignore file - keeps `.env` out of the tarball.
-- **Binaries.** `"bin": { "jie": "src/cli/index.ts", "code-lens": "src/code-lens/main.ts" }`.
+`bun` (>= 1.3.14) runs TypeScript natively; no build step. `package.json` at root: `"files": ["src"]`, `"bin": {"jie": "src/cli/index.ts", "code-lens": "src/code-lens/main.ts"}`.
 
 ## Module Entry Points
 
@@ -74,29 +69,7 @@ Each code module exports `.` -> `./index.ts` (`team-content` is the exception: p
 `src/code-lens/index.ts` is the minimal library surface (SCIP ingestion + `CodeIndex` model); the executable surface is the `code-lens` bin (`main.ts`), a stdio MCP server the platform spawns as a child process rather than imports.
 
 ## Runtime Dependencies
-
-Small and fixed, pinned once at the package root:
-
-| Dependency | Role |
-|---|---|
-| `@earendil-works/pi-agent-core` | Agent loop: streaming, tool execution, turn management |
-| `@earendil-works/pi-ai` | Provider/model definitions, `Model` objects, auth storage backend |
-| `@earendil-works/pi-tui` | Inline terminal renderer (TUI) |
-| `typebox` | Tool JSON schemas |
-| `yaml` | Team-blueprint frontmatter parsing |
-| `ulid` | `session_id` (26 chars - shorter than UUID v4, human-scannable in logs and DB rows) |
-| `node-html-parser` | HTML -> text for the `web_fetch` tool (bun has no built-in HTML parser) |
-| `protobufjs` | SCIP protobuf decoding in code-lens (vendored generated bindings) |
-| `tslog` | Structured logger in utils, gated by `JIE_LOG_LEVEL`; silent when unset |
-| `awilix` | DI container - per-boot composition (ADR 31): one container per `bootPlatform`/`bootTui` call, CLASSIC constructor injection |
-| `cli-highlight` | Syntax highlighting for the print / CLI output path |
-
-**Bun built-ins** (no dep): `bun:sqlite` (`SqliteStorage`), `Bun.Glob` (`ToolRegistry` spec resolution), `fetch` (`web_search` / `web_fetch`), `Bun.spawn()` (`bash` tool; MCP stdio subprocesses), `Bun.argv` (hand-rolled CLI parser), `import ... with { type: "text" }` (built-in default-solo team).
-
-**Still no MCP SDK.** The MCP client (stdio transport) is a hand-rolled JSON-RPC implementation in `src/platform/mcp/` (ADR 4), and code-lens's server side is equally hand-rolled; `@modelcontextprotocol/sdk` is not a dependency. **No CLI / utility libraries** (`commander`, `lodash`, `chalk`, ...): the CLI surface is small enough that hand-rolled parsing and merging stay smaller than the deps. (`awilix` is the DI composition mechanism, not a utility library - ADR 31.)
+Pinned at root (`package.json`): `pi-agent-core`, `pi-ai`, `pi-tui`, `typebox`, `yaml`, `ulid`, `node-html-parser`, `protobufjs`, `tslog`, `awilix`, `cli-highlight`. No MCP SDK; no CLI utility libs (`commander`, etc.). Bun built-ins (`sqlite`, `Glob`, `fetch`, `spawn`) used where possible.
 
 ## Testing
-
-- **Framework**: `bun test` - zero extra dependencies, vitest-compatible API (test utilities are on the global namespace; see `doc/HOW_TO_MOCK.md`).
-- **Unit**: co-located `*.test.ts` next to source, aligned one-test-file-per-source-file.
-- **E2E**: `tests/e2e/` at repo root, run against the mock LLM backend (`bun mock:start` + `bun test:e2e:mock`) or a real local endpoint (`bun test:e2e:local`). See `doc/DEVELOPMENT.md`.
+`bun test`. Unit: co-located `*.test.ts`. E2E: `tests/e2e/` (mock `bun mock:start` or real endpoint). See `doc/DEVELOPMENT.md`.

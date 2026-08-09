@@ -6,35 +6,18 @@ Accepted. The TUI is a passive observer of the event bus. It does not read bodie
 
 ## Context
 
-The natural design for a TUI is to expose the runtime objects (`AgentBody[]`, `AgentSoul`, etc.) and let the TUI pull state when it needs to render. The pull model has well-known problems in an event-driven system:
-
-- **State coherence.** A render that reads `body.soul` and `body.state.isStreaming` races a bus event that mutates one of them mid-read.
-- **Inconsistent state sources.** Some state is in the body, some on the bus, some in the team blueprint; the TUI fans out reads across all of them.
-- **The bus becomes decorative.** The TUI subscribes, but the bodies' state is the source of truth.
-
-The push model is the natural fit: the TUI subscribes, the bodies publish, and the TUI's view is a derived state built from the event stream.
+Pull model has coherence/drift problems; push model fits.
 
 ## Decision
 
-### 1. The TUI derives agent state from the event stream
+TUI permitted surface: handle (`subscribe`, `prompt`/`interrupt`, `execute`). Derives state from events only.
 
-The TUI's permitted surface on `JiePlatform` is the handle itself — `subscribe` for events, `prompt` / `interrupt` for input, `execute` for slash-command operations, `settings` for defaults (canonical shape in ADR 13/26). It reads no `body.model`, no `body.soul.system_prompt`, no `body.soul.tools`, no `AuthStore` / `SettingsStore` / `TeamRegistry` / `GitService` reference. Per-agent roster and busy/idle state come from `system.team.loaded` and the `agent.turn.start` / `agent.idle` alternation; the active team's id is the TUI's own reducer state, not a platform field.
+Every TUI indicator has an event source; gaps are platform gaps.
 
-### 2. The platform publishes enough information for the TUI to render
-
-The TUI subscribes to the event bus and derives its view from agent and system events (`system.team.loaded`, `agent.*`, `agent.stream.*`, etc.).
-
-Gaps in this table are platform gaps, fixable in the platform — not TUI workarounds. The TUI never polls body state (e.g. the in-memory prompt queue); every indicator has an event source.
-
-### 3. State is derived, not read
-
-The TUI maintains a derived state, updated on each event; the render reads the derived state. The renderer is single-threaded (no locking against live bodies) and the derived state is trivially testable (feed it events; no `AgentBody` mock). The exact shape is the TUI's concern (`doc/specs/ui/tui-state.md`); the platform's only contract is: every piece of state the TUI displays has a corresponding event.
+State derived from events; renderer reads derived state.
 
 ## Rationale
-
-- **Consistency with the platform.** Agents do not know about each other; they communicate through events. The TUI is "another agent" from the platform's perspective: a passive observer.
-- **Replaceability.** A CLI dashboard, web UI, or test fixture reads the same events. The TUI is one consumer among many; test fixtures can replay a recorded event stream without instantiating bodies.
-- **Coherent state.** The renderer reads its own derived state, not the live runtime — no "the body is in the middle of a turn" surprises.
+TUI is a passive observer like any agent; replaceable by replaying event stream.
 
 ## Consequences
 

@@ -4,13 +4,13 @@
 - Be positve. All difficulties will be address together with me.
 
 ## Documents
-- @doc/specs/monorepo-structure.md; read `00-overview.md` to understand the glossary.
+- @doc/specs/monorepo-structure.md; read `doc/specs/jie-platform/00-overview.md` to understand the glossary.
 - @doc/DEVELOPMENT.md
 - `doc/addrs/` (ADRs) — consequential decisions.
 - `doc/specs/` (specs) — directions.
 
 ## Document rules
-- Be concise. Code itself is doc, avoid doc if you can.
+- Be simple and consise. Code itself is doc, avoid doc if you can.
 - Do not keep intermediate, transient history.
 - No emojis in commits, issues, PR comments, or code
 - Do not use newline to break sentences, no newline in the same paragraph. Let IDE wrap text.

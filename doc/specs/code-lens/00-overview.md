@@ -11,7 +11,7 @@ Code-Lens is a standalone MCP server in `src/code-lens/` that gives agents code-
 
 ## Ingestion
 
-One SCIP protobuf index per workspace, read lazily on first tool call and cached for the process. The SCIP schema is the language-agnostic substrate: every language-specific concern is delegated to the existing SCIP indexers (scip-typescript, scip-python, scip-java, scip for Rust, scip-go), so code-lens has a single ingestion path, one model (`CodeIndex`: files with symbols and references, a symbol table keyed by SCIP symbol id), and one query layer for all languages. The protobuf bindings in `scip/` are generated from `scip.proto` and vendored — regenerated with `protobufjs-cli`, never hand-edited.
+One SCIP protobuf index per workspace. The SCIP schema is the language-agnostic substrate: every language-specific concern is delegated to the existing SCIP indexers (scip-typescript, scip-python, scip-java, scip for Rust, scip-go), so code-lens has a single ingestion path, one shared model, and one query layer for all languages. The protobuf bindings in `scip/` are generated from `scip.proto` and vendored — never hand-edited.
 
 Provider activation is the user's act: code-lens never runs an indexer. When no index is found, the server still handshakes and registers its tools, but every tool call returns an `isError` result explaining that code-lens is unavailable and listing the per-language indexer setup steps. This keeps unavailability a tool-level fact rather than a failed MCP connection, so agents can surface "not available" and the platform's tool-resolution startup checks still pass.
 

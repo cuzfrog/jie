@@ -27,24 +27,14 @@ interface JiePlatform {
 
 There is no `teamId` getter, no `loadTeam` method, no `bodies()` accessor, no `setActiveTeam` command. `teams()` exposes the loaded teams for tests only; consumers do not browse it.
 
-### 2. Teams load through the `team` command
+Load via `execute({ name: "team" })`. `stop` halts everything.
 
-`execute({ name: "team", teamId? })` delegates to `TeamManager.load`: it resolves the id (`teamId ?? settings.defaultTeam ?? "default-solo"`), parses the manifest, resolves session and models, starts bodies, and publishes `system.team.loaded` with the roster. Loaded teams stay loaded (their bodies keep running); `execute({ name: "stop" })` halts everything. The platform tracks loaded teams internally — but never "which one is active".
+Selection stays in CLI (`args.team`) / TUI (`focused` reducer).
 
-### 3. CLI / TUI pick the team from their own context
-
-The CLI passes `args.team` (possibly undefined) to the `team` command and gets back the loaded `TeamInfo`; the print flow addresses the team's leader. The TUI's `/team <id>` calls `setDefaultTeam` (persisting via `settingsStore.write`); the change takes effect on the **next** process run, and the TUI's `focused` state names which team's stream the user is looking at — the TUI's reducer governs that, not the platform.
-
-### 4. `prompt(teamId, agentKey, text)` makes selection explicit
-
-The prompt entrypoint takes `teamId` as the first argument (so does `interrupt`). The platform does not need to "know which team is active" to forward the prompt — the caller says so. Multiple teams' bodies coexist on the same event bus, disambiguated by `teamId` in payloads and senders; switching the TUI's view does not stop or restart anything.
+Prompt/interrupt take explicit `teamId`; event bus disambiguates.
 
 ## Rationale
-
-- **Selection belongs to the consumer.** The CLI knows the user's argv (`--team <id>`); the TUI knows the focused agent. A platform-side active team would be a third source of truth all consumers have to reconcile.
-- **Loading is cheap, so a command suffices.** Parsing a `TEAM.md` + a handful of role files is millisecond-scale; there is no "too expensive until needed" pressure that would justify handle-level lifecycle methods.
-- **The handle stays minimal.** Five members, nothing more; new operations land as commands, not handle methods (ADR 13).
-- **Restart-to-switch is acceptable.** Single-process-per-conversation in v1; the TUI's local `focused` state is sufficient for view switches.
+Selection belongs to consumer; handle stays minimal.
 
 ## Consequences
 
