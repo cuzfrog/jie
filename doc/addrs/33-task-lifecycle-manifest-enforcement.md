@@ -6,11 +6,11 @@ Accepted. Extends ADR 11 (platform agnostic of jie-team) and ADR 9 (file tools e
 
 ## Context
 
-Multi-agent teams like `default-coders` run a serial pipeline over `task` work units: phases (`recorded → researched → designed → planned → implemented → review_passed/review_failed → done/failed`), an iteration loop with a cap, and a rule that only the architect authors module contracts (`CONTEXT.md`). Before this decision all of that was prose in the manifests: the system prompts instructed the conventions, and nothing checked them. A model that skipped a phase, miscounted the iteration, or edited a contract file had no guardrail — the failure surfaced much later as a corrupted work product, if at all.
+Multi-agent teams like `default-team` run a serial pipeline over `task` work units: phases (`recorded → researched → designed → planned → implemented → review_passed/review_failed → done/failed`), an iteration loop with a cap, and a rule that only the architect authors module contracts (`CONTEXT.md`). Before this decision all of that was prose in the manifests: the system prompts instructed the conventions, and nothing checked them. A model that skipped a phase, miscounted the iteration, or edited a contract file had no guardrail — the failure surfaced much later as a corrupted work product, if at all.
 
 The enforcement had to satisfy the architecture's two standing constraints:
 
-1. **The platform is generic** (ADR 11). It must not know `default-coders`, its phases, or its topics. Whatever a team declares, the platform enforces generically — or not at all.
+1. **The platform is generic** (ADR 11). It must not know `default-team`, its phases, or its topics. Whatever a team declares, the platform enforces generically — or not at all.
 2. **Business identifiers were kept out of the platform** ("the platform treats tool inputs as opaque"). Enforcement needs a task key, so this principle needed a deliberate, narrow exception.
 
 ## Decision
@@ -20,7 +20,7 @@ The lifecycle is **declared in `TEAM.md` frontmatter and enforced by the platfor
 - **`lifecycle.transitions`** — rows `{topic, role, from, phase, iteration?}` mapping a `notify` topic to the phase it moves the task to. `role: any` and `from: any` (no phase yet, or any non-permanent phase) are the wildcards; `permanent_phases` admit no outgoing transition; `iteration` is `reset`, `increment` (capped at `max_iterations`, default 5), or absent (preserve).
 - **Enforcement rides on `notify`.** On a lifecycle topic, `task_id` is a required input; the guard authorizes the caller's role and the task's current phase, writes the new status row, and only then publishes. A denied transition throws `illegal_transition` — nothing reaches the bus. This is the one deliberate exception to "business identifiers are opaque": `task_id` becomes a first-class platform input exactly when a lifecycle is declared, and stays rejected everywhere else. The guard serializes status-row writes per `task_id` (an in-process per-task queue, `04-storage.md` "Lifecycle status rows"), so concurrent transitions on one task cannot race on the same seq: the second re-reads the first's row and re-authorizes against it — the platform is single-process.
 - **Task state is artifact rows** under `{task_id}/status/{seq}` — content `{"phase","iteration","updated_at"}`; the newest row by `created_at` is canonical. No new table, no new store: the lifecycle reuses the artifact store's sequenced-key pattern (`04-storage.md`), and state survives restarts for free.
-- **`lifecycle.write_gates`** — glob patterns with the roles allowed to write them, checked by `write_file` and `edit` against the workspace-relative path before any mutation. Every matching gate must admit the caller (`write_gate_denied` otherwise). This replaces the previously deferred "module-descriptor write gate": `default-coders` declares `**/CONTEXT.md` architect-only with a one-line manifest entry, no platform knowledge of descriptors.
+- **`lifecycle.write_gates`** — glob patterns with the roles allowed to write them, checked by `write_file` and `edit` against the workspace-relative path before any mutation. Every matching gate must admit the caller (`write_gate_denied` otherwise). This replaces the previously deferred "module-descriptor write gate": `default-team` declares `**/CONTEXT.md` architect-only with a one-line manifest entry, no platform knowledge of descriptors.
 
 ## Rationale
 
@@ -33,6 +33,6 @@ The lifecycle is **declared in `TEAM.md` frontmatter and enforced by the platfor
 
 - `notify` gains the optional `task_id` input; the platform errors gain `invalid_task_id`, `illegal_transition`, `write_gate_denied`, and `invalid_lifecycle`.
 - `ExecutionContext` carries the parsed `TaskLifecycle | null`; teams without a lifecycle (including the built-in default-solo and all ad-hoc teams) are entirely unaffected — every check is skipped when the declaration is absent.
-- The `default-coders` manifest declares its full lifecycle: the ten `task.*` rows, `max_iterations: 5`, `done` as the only permanent phase, and the `**/CONTEXT.md` architect gate.
+- The `default-team` manifest declares its full lifecycle: the ten `task.*` rows, `max_iterations: 5`, `done` as the only permanent phase, and the `**/CONTEXT.md` architect gate.
 - The spec updates live in `jie-team/00-overview.md` (task model, descriptor gate) and `jie-platform/06-agent-model.md` (lifecycle schema, notify, Boundary Enforcement).
 - Known residuals: `bash` bypasses write gates; an invalid glob in a write-gate pattern matches nothing and silently disables that gate (patterns cannot be validated at parse time); per-task `max_iterations` overrides are deferred. (The `write_artifact` status-row spoofing residual was closed for lifecycle-declaring teams by the `artifact_key_reserved` guard; the concurrent-transition seq race was closed by per-task serialization inside the guard.)

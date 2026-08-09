@@ -535,8 +535,8 @@ describe("parseTeamFromManifests — lifecycle", () => {
   });
 });
 
-describe("loadTeamFromDir — shipped default-coders blueprint", () => {
-  const defaultCodersDir = join(import.meta.dir, "../../team-content/default-coders");
+describe("loadTeamFromDir — shipped default-team blueprint", () => {
+  const defaultCodersDir = join(import.meta.dir, "../../team-content/default-team");
 
   test("parses with the declared lifecycle", () => {
     const blueprint = loadTeamFromDir(defaultCodersDir);

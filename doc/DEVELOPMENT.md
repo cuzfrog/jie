@@ -12,7 +12,7 @@ bun link
 jie --version
 ```
 
-The first interactive `jie` run offers to install the bundled `default-coders` team into `~/.jie/teams/`; pass `--no-install` to skip.
+The first interactive `jie` run offers to install the bundled `default-team` team into `~/.jie/teams/`; pass `--no-install` to skip.
 
 ## Local LLM setup (optional)
 For manual exploration with a real backend, configure `.jie/models.json` and run `jie -p "..."`.

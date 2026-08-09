@@ -46,14 +46,14 @@ jie [--team <id>] [--resume <id>] [--in-memory] [--no-install]
 
 ### First-run auto-install
 
-On the first interactive (`jie`) run, before the platform boots, the CLI offers to install the bundled `default-coders` team blueprint (shipped at `src/team-content/default-coders/` inside the package, per ADR 36) into `~/.jie/teams/`, so a new user gets a working multi-coder team without a separate setup step.
+On the first interactive (`jie`) run, before the platform boots, the CLI offers to install the bundled `default-team` team blueprint (shipped at `src/team-content/default-team/` inside the package, per ADR 36) into `~/.jie/teams/`, so a new user gets a working multi-coder team without a separate setup step.
 
 - **Trigger:** `args.kind === "tui"` only. Print mode (`-p`) and all other subcommands skip it (non-interactive or irrelevant).
-- **Prompt:** `Install the default-coders team blueprint to ~/.jie/teams/? [Y/n]`. Reached only when stdin is a TTY. A non-TTY run (piped/CI) skips the whole welcome without writing the sentinel, so a later interactive run still prompts - no hang, no nag.
+- **Prompt:** `Install the default-team team blueprint to ~/.jie/teams/? [Y/n]`. Reached only when stdin is a TTY. A non-TTY run (piped/CI) skips the whole welcome without writing the sentinel, so a later interactive run still prompts - no hang, no nag.
 - **Sentinel:** `~/.jie/.first-run-done` distinguishes "first run" from "user deleted the team". It is written only after an interactive prompt is decided - accepted, declined, or install failed - so the prompt never recurs on a TTY. A later `jie` run sees the sentinel and skips.
 - **`--no-install`:** opts out for this run and does not write the sentinel, so the next interactive run without the flag still prompts. This lets a user defer without a persistent "no".
-- **Install failure:** caught and reported (`Failed to install default-coders: <reason>. Install later with: jie team add <source>.`); the sentinel is still written so the failure does not recur every run.
-- **Bundled MCP ensure:** on every non-`--no-install` TUI boot, before the sentinel check, the CLI also ensures `~/.jie/mcp.json` contains the bundled `code-lens` stdio server (`command: "code-lens"`), merging non-clobberingly with any existing servers and leaving a malformed file untouched. This runs every boot (not just first-run) so existing users pick it up; it lets the `default-coders` architect's `mcp:code-lens:*` tool spec resolve instead of throwing `TOOL_SPEC_UNRESOLVED`.
+- **Install failure:** caught and reported (`Failed to install default-team: <reason>. Install later with: jie team add <source>.`); the sentinel is still written so the failure does not recur every run.
+- **Bundled MCP ensure:** on every non-`--no-install` TUI boot, before the sentinel check, the CLI also ensures `~/.jie/mcp.json` contains the bundled `code-lens` stdio server (`command: "code-lens"`), merging non-clobberingly with any existing servers and leaving a malformed file untouched. This runs every boot (not just first-run) so existing users pick it up; it lets the `default-team` architect's `mcp:code-lens:*` tool spec resolve instead of throwing `TOOL_SPEC_UNRESOLVED`.
 - **Implementation:** `src/cli/first-run.ts` (`runFirstRunWelcome` + `createFirstRunPorts`), wired into `RunDeps.runFirstRun` and called from `run()` before `connectPlatform`. The team install reuses `src/team-installer` with the bundled content dir as the source; the MCP ensure is the `ensureBundledMcp` port (pure merge in `mergeCodeLensEntry`).
 
 There is no `jie init` command. First-run is the only install-onboarding path; later installs use `jie team add <source>` (D4 `jie update` will refresh bundled teams).

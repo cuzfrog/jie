@@ -83,7 +83,7 @@ For project-level model overrides (e.g. a team pinned to a specific model id), c
 
 ### Installing a User Team
 
-User-installed teams are plain files — no platform-managed install step (it stays agnostic of how files arrive, per ADR 35). The CLI layers install tooling on top: first-run auto-install of the bundled `default-coders` blueprint, and `jie team add <source>` for third-party teams (see `ui/cli.md` "First-run auto-install" and `jie-team-installer/00-overview.md`). Either way the platform looks the team up by name at the standard paths. See `10-configuration.md` "Team Selection" for the resolution rules.
+User-installed teams are plain files — no platform-managed install step (it stays agnostic of how files arrive, per ADR 35). The CLI layers install tooling on top: first-run auto-install of the bundled `default-team` blueprint, and `jie team add <source>` for third-party teams (see `ui/cli.md` "First-run auto-install" and `jie-team-installer/00-overview.md`). Either way the platform looks the team up by name at the standard paths. See `10-configuration.md` "Team Selection" for the resolution rules.
 
 The platform's **built-in default-solo team** is always available as a last-resort fallback and requires no installation. To override the built-in's defaults (system prompt, tools, default model), place `TEAM.md` and `general.md` (the default-solo-team shape) at one of:
 
