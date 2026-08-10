@@ -93,6 +93,51 @@ describe("KanbanList", () => {
   });
 });
 
+describe("KanbanList.update", () => {
+  test("reports dirty when the board changes", () => {
+    stateStore.getState.mockReturnValue(boardState([{ id: "#1", content: "a", status: "pending" }]));
+    const list = new KanbanList(stateStore);
+    list.update();
+    stateStore.getState.mockReturnValue(boardState([{ id: "#2", content: "b", status: "pending" }]));
+    expect(list.update()).toBe(true);
+  });
+
+  test("reports dirty when the view changes", () => {
+    const board: ReadonlyArray<KanbanCard> = [{ id: "#1", content: "a", status: "pending" }];
+    stateStore.getState.mockReturnValue(boardState(board, { kanbanView: "list" }));
+    const list = new KanbanList(stateStore);
+    list.update();
+    stateStore.getState.mockReturnValue(boardState(board, { kanbanView: "hidden" }));
+    expect(list.update()).toBe(true);
+  });
+
+  test("reports dirty when the team changes", () => {
+    const board: ReadonlyArray<KanbanCard> = [{ id: "#1", content: "a", status: "pending" }];
+    stateStore.getState.mockReturnValue(boardState(board, { teamId: "my-team" }));
+    const list = new KanbanList(stateStore);
+    list.update();
+    stateStore.getState.mockReturnValue(boardState(board, { teamId: "other" }));
+    expect(list.update()).toBe(true);
+  });
+
+  test("reports clean when the watched slice is unchanged", () => {
+    const state = boardState([{ id: "#1", content: "a", status: "pending" }]);
+    stateStore.getState.mockReturnValue(state);
+    const list = new KanbanList(stateStore);
+    expect(list.update()).toBe(true);
+    expect(list.update()).toBe(false);
+  });
+
+  test("reports clean when only an unwatched field changes", () => {
+    const board: ReadonlyArray<KanbanCard> = [{ id: "#1", content: "a", status: "pending" }];
+    stateStore.getState.mockReturnValue(boardState(board));
+    const list = new KanbanList(stateStore);
+    list.update();
+    stateStore.getState.mockReturnValue(boardState(board, { focusedAgentId: "my-team:general-1" }));
+    expect(list.update()).toBe(false);
+  });
+});
+
 function boardState(cards: ReadonlyArray<KanbanCard>, overrides: Partial<TuiState> = {}): TuiState {
   return makeTuiState({
     teamId: "my-team",

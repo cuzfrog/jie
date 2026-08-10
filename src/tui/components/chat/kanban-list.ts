@@ -1,6 +1,7 @@
-import { truncateToWidth, type Component } from "@earendil-works/pi-tui";
+import { truncateToWidth } from "@earendil-works/pi-tui";
 import type { KanbanCard, KanbanStatus } from "../../../platform";
 import { type StateStore } from "../../state";
+import { type TuiComponent } from "../..";
 import { strikethrough, style, type ColorName } from "../themes";
 
 const MAX_VISIBLE_CARDS = 6;
@@ -13,11 +14,27 @@ const CARD_STYLES: { readonly [K in KanbanStatus]: { readonly glyph: string; rea
   completed: { glyph: "✓", glyphColor: "muted", textColor: "muted" },
 };
 
-export class KanbanList implements Component {
+export class KanbanList implements TuiComponent {
   private readonly stateStore: StateStore;
+  private teamId: string | null = null;
+  private kanbanView: "hidden" | "list" | "panel" = "hidden";
+  private kanbanBoard: ReadonlyArray<KanbanCard> = [];
 
   constructor(stateStore: StateStore) {
     this.stateStore = stateStore;
+  }
+
+  update(): boolean {
+    const state = this.stateStore.getState();
+    if (
+      state.teamId === this.teamId &&
+      state.kanbanView === this.kanbanView &&
+      state.kanbanBoard === this.kanbanBoard
+    ) return false;
+    this.teamId = state.teamId;
+    this.kanbanView = state.kanbanView;
+    this.kanbanBoard = state.kanbanBoard;
+    return true;
   }
 
   render(width: number): string[] {

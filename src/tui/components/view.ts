@@ -1,4 +1,4 @@
-import { Container, matchesKey, type Component, type Editor, type TUI } from "@earendil-works/pi-tui";
+import { Container, matchesKey, type Editor, type TUI } from "@earendil-works/pi-tui";
 import { Actions, type TuiState, type Action, type StateStore } from "../state";
 import type { ChatSync } from "../sync";
 import type { TuiRoot, TuiComponent } from "..";
@@ -26,6 +26,8 @@ export class TuiViewImpl implements TuiView {
   private readonly teamPanel: TuiComponent;
   private readonly kanbanPanel: TuiComponent;
   private readonly helpPanel: TuiComponent;
+  private readonly kanbanList: TuiComponent;
+  private readonly footer: TuiComponent;
   private readonly unsubscribeKeys: () => void;
 
   constructor(
@@ -33,8 +35,8 @@ export class TuiViewImpl implements TuiView {
     stateStore: StateStore,
     chatContainer: Container,
     chatSync: ChatSync,
-    kanbanList: Component,
-    footer: Component,
+    kanbanList: TuiComponent,
+    footer: TuiComponent,
     editor: Editor & TuiComponent,
     welcomeBanner: TuiComponent,
     statusLine: TuiComponent,
@@ -54,14 +56,16 @@ export class TuiViewImpl implements TuiView {
     this.teamPanel = teamPanel;
     this.kanbanPanel = kanbanPanel;
     this.helpPanel = helpPanel;
+    this.kanbanList = kanbanList;
+    this.footer = footer;
     screen.addChild(chatContainer);
-    screen.addChild(kanbanList);
+    screen.addChild(this.kanbanList);
     screen.addChild(workingSpinner);
     screen.addChild(this.welcomeBanner);
     screen.addChild(this.statusLine);
     screen.addChild(this.queuedPrompts);
     screen.addChild(this.editor);
-    screen.addChild(footer);
+    screen.addChild(this.footer);
     screen.addChild(this.teamPanel);
     screen.addChild(this.kanbanPanel);
     screen.addChild(this.helpPanel);
@@ -101,6 +105,8 @@ export class TuiViewImpl implements TuiView {
     dirty = this.teamPanel.update() || dirty;
     dirty = this.kanbanPanel.update() || dirty;
     dirty = this.helpPanel.update() || dirty;
+    dirty = this.kanbanList.update() || dirty;
+    dirty = this.footer.update() || dirty;
     return dirty;
   }
 

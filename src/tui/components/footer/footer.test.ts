@@ -136,6 +136,60 @@ describe("Footer", () => {
   });
 });
 
+describe("Footer.update", () => {
+  test("reports dirty when the focused agent changes", () => {
+    stateStore.getState.mockReturnValue(seededState(false));
+    const footer = new Footer(stateStore);
+    footer.update();
+    stateStore.getState.mockReturnValue(seededState(false));
+    expect(footer.update()).toBe(true);
+  });
+
+  test("reports dirty when the git branch changes", () => {
+    const base = seededState(false);
+    stateStore.getState.mockReturnValue(base);
+    const footer = new Footer(stateStore);
+    footer.update();
+    stateStore.getState.mockReturnValue(makeTuiState({ ...base, gitBranch: "main" }));
+    expect(footer.update()).toBe(true);
+  });
+
+  test("reports dirty when the team panel visibility changes", () => {
+    const base = seededState(false);
+    stateStore.getState.mockReturnValue(base);
+    const footer = new Footer(stateStore);
+    footer.update();
+    stateStore.getState.mockReturnValue(makeTuiState({ ...base, teamPanelVisible: true }));
+    expect(footer.update()).toBe(true);
+  });
+
+  test("reports dirty when the editor cursor leaves the start", () => {
+    const base = seededState(false);
+    stateStore.getState.mockReturnValue(base);
+    const footer = new Footer(stateStore);
+    footer.update();
+    stateStore.getState.mockReturnValue(makeTuiState({ ...base, editorCursorAtStart: false }));
+    expect(footer.update()).toBe(true);
+  });
+
+  test("reports clean when the watched slice is unchanged", () => {
+    const state = seededState(false);
+    stateStore.getState.mockReturnValue(state);
+    const footer = new Footer(stateStore);
+    expect(footer.update()).toBe(true);
+    expect(footer.update()).toBe(false);
+  });
+
+  test("reports clean when only an unwatched field changes", () => {
+    const base = seededState(false);
+    stateStore.getState.mockReturnValue(base);
+    const footer = new Footer(stateStore);
+    footer.update();
+    stateStore.getState.mockReturnValue(makeTuiState({ ...base, transientMessage: "hi" }));
+    expect(footer.update()).toBe(false);
+  });
+});
+
 function seededState(dirty: boolean): TuiState {
   return makeTuiState({
     cwd: "/repo",
