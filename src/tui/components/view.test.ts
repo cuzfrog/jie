@@ -1,6 +1,10 @@
+import { type Editor, type TUI } from "@earendil-works/pi-tui";
 import { Actions } from "../state";
+import { type StateStore, type TuiState } from "../state";
 import { makeTuiState } from "../test";
-import { _resolveGlobalKey, _resolveTeamCursorDirection, _shouldCommitTeamCursor } from "./view";
+import type { TuiComponent } from "..";
+import type { ChatSync } from "../sync";
+import { TuiViewImpl, _resolveFocusTarget, _resolveGlobalKey, _resolveTeamCursorDirection, _shouldCommitTeamCursor } from "./view";
 
 describe("resolveGlobalKey", () => {
   test("ctrl+t maps to toggleThinking", () => {
@@ -107,5 +111,121 @@ describe("shouldCommitTeamCursor", () => {
   test("false when the strip is hidden", () => {
     const state = makeTuiState({ teamPanelVisible: false, focusedAgentId: "t:a-1", teamCursorAgentId: "t:b-1" });
     expect(_shouldCommitTeamCursor(state)).toBe(false);
+  });
+});
+
+describe("resolveFocusTarget", () => {
+  test("kanban when the panel is shown and not editing", () => {
+    expect(_resolveFocusTarget(makeTuiState({ kanbanView: "panel" }))).toBe("kanban");
+  });
+
+  test("editor when the panel is hidden", () => {
+    expect(_resolveFocusTarget(makeTuiState({ kanbanView: "hidden" }))).toBe("editor");
+  });
+
+  test("editor when the panel is a list", () => {
+    expect(_resolveFocusTarget(makeTuiState({ kanbanView: "list" }))).toBe("editor");
+  });
+
+  test("editor while editing a kanban card", () => {
+    expect(_resolveFocusTarget(makeTuiState({ kanbanView: "panel", kanbanEdit: "#1" }))).toBe("editor");
+  });
+});
+
+describe("TuiViewImpl", () => {
+  function stubComponent(): TuiComponent {
+    return { render: () => [], update: () => false, invalidate: () => undefined } as unknown as TuiComponent;
+  }
+
+  function stubEditor(popupOpen = false) {
+    return { ...stubComponent(), isShowingAutocomplete: vi.fn(() => popupOpen), getText: () => "" };
+  }
+
+  function stubChatSync(): ChatSync {
+    return stubComponent() as unknown as ChatSync;
+  }
+
+  function stubScreen() {
+    return { addChild: vi.fn(), setFocus: vi.fn(), getFocusedComponent: vi.fn() };
+  }
+
+  function makeStateStore(state: TuiState) {
+    return vi.mocked<StateStore>({ getState: vi.fn(() => state), dispatch: vi.fn(), subscribe: vi.fn(() => () => undefined) });
+  }
+
+  function bootView(state: TuiState, popupOpen = false) {
+    const screen = stubScreen();
+    const stateStore = makeStateStore(state);
+    const editor = stubEditor(popupOpen);
+    const kanbanPanel = stubComponent();
+    const view = new TuiViewImpl(
+      screen as unknown as TUI,
+      stateStore,
+      stubChatSync(),
+      stubComponent(),
+      stubComponent(),
+      editor as unknown as Editor & TuiComponent,
+      stubComponent(),
+      stubComponent(),
+      stubComponent(),
+      stubComponent(),
+      kanbanPanel,
+      stubComponent(),
+      stubComponent(),
+    );
+    return { screen, stateStore, editor, kanbanPanel, view };
+  }
+
+  test("constructor focuses the editor", () => {
+    const { screen } = bootView(makeTuiState());
+    expect(screen.setFocus).toHaveBeenCalledTimes(1);
+  });
+
+  test("update focuses the kanban panel when it should receive keys", () => {
+    const { screen, view, kanbanPanel } = bootView(makeTuiState({ kanbanView: "panel" }));
+    view.update();
+    expect(screen.setFocus).toHaveBeenLastCalledWith(kanbanPanel);
+  });
+
+  test("update returns focus to the editor when editing a kanban card", () => {
+    const { screen, view, editor, stateStore, kanbanPanel } = bootView(makeTuiState({ kanbanView: "panel" }));
+    view.update();
+    expect(screen.setFocus).toHaveBeenLastCalledWith(kanbanPanel);
+    stateStore.getState.mockReturnValue(makeTuiState({ kanbanView: "panel", kanbanEdit: "#1" }));
+    view.update();
+    expect(screen.setFocus).toHaveBeenLastCalledWith(editor);
+  });
+
+  test("update does not call setFocus when the target is unchanged", () => {
+    const { screen, view } = bootView(makeTuiState({ kanbanView: "panel" }));
+    view.update();
+    const count = screen.setFocus.mock.calls.length;
+    view.update();
+    expect(screen.setFocus).toHaveBeenCalledTimes(count);
+  });
+
+  test("handleInput consumes global keys regardless of focus", () => {
+    const { view, stateStore } = bootView(makeTuiState({ kanbanView: "panel" }));
+    view.update();
+    expect(view.handleInput("\x14")).toEqual({ consume: true });
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.toggleThinking());
+  });
+
+  test("handleInput handles team cursor only when the editor is focused", () => {
+    const { view, stateStore } = bootView(makeTuiState({ teamPanelVisible: true, focusedAgentId: "t:a-1", teamCursorAgentId: "t:b-1" }));
+    expect(view.handleInput("\r")).toEqual({ consume: true });
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.commitTeamCursor());
+    stateStore.dispatch.mockClear();
+    const focused = bootView(makeTuiState({ kanbanView: "panel", teamPanelVisible: true, focusedAgentId: "t:a-1", teamCursorAgentId: "t:b-1" }));
+    focused.view.update();
+    expect(focused.view.handleInput("\r")).toBeUndefined();
+    expect(focused.stateStore.dispatch).not.toHaveBeenCalledWith(Actions.commitTeamCursor());
+  });
+
+  test("handleInput leaves panel keys for the focused kanban panel", () => {
+    const { view, stateStore } = bootView(makeTuiState({ kanbanView: "panel" }));
+    view.update();
+    expect(view.handleInput("\x1b[A")).toBeUndefined();
+    expect(stateStore.dispatch).not.toHaveBeenCalledWith(Actions.moveKanbanCursor("up"));
   });
 });

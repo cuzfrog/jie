@@ -1,4 +1,4 @@
-import { matchesKey, type Editor, type TUI, type TuiInputListenerResult } from "@earendil-works/pi-tui";
+import { matchesKey, type Component, type Editor, type TUI, type TuiInputListenerResult } from "@earendil-works/pi-tui";
 import { Actions, type TuiState, type Action, type StateStore } from "../state";
 import type { ChatSync } from "../sync";
 import type { TuiRoot, TuiComponent } from "..";
@@ -13,6 +13,7 @@ const CTRL_K = "\x0b";
 const CONSUMED = { consume: true } as const;
 
 export class TuiViewImpl implements TuiView {
+  private readonly screen: TUI;
   private readonly stateStore: StateStore;
   private readonly chatSync: ChatSync;
   private readonly workingSpinner: TuiComponent;
@@ -25,6 +26,7 @@ export class TuiViewImpl implements TuiView {
   private readonly helpPanel: TuiComponent;
   private readonly kanbanList: TuiComponent;
   private readonly footer: TuiComponent;
+  private focusedComponent: Component;
 
   constructor(
     screen: TUI,
@@ -41,6 +43,7 @@ export class TuiViewImpl implements TuiView {
     helpPanel: TuiComponent,
     workingSpinner: TuiComponent,
   ) {
+    this.screen = screen;
     this.stateStore = stateStore;
     this.chatSync = chatSync;
     this.workingSpinner = workingSpinner;
@@ -53,6 +56,7 @@ export class TuiViewImpl implements TuiView {
     this.helpPanel = helpPanel;
     this.kanbanList = kanbanList;
     this.footer = footer;
+    this.focusedComponent = this.editor;
     screen.addChild(this.chatSync);
     screen.addChild(this.kanbanList);
     screen.addChild(workingSpinner);
@@ -79,32 +83,37 @@ export class TuiViewImpl implements TuiView {
     dirty = this.kanbanList.update() || dirty;
     dirty = this.footer.update() || dirty;
     dirty = this.chatSync.update() || dirty;
+    this.reconcileFocus(this.stateStore.getState());
     return dirty;
   }
 
   handleInput(data: string): TuiInputListenerResult {
     const state = this.stateStore.getState();
     const popupOpen = this.editor.isShowingAutocomplete();
-    const kanbanAction = this.kanbanPanel.resolveKey?.(data, state, popupOpen) ?? null;
-    if (kanbanAction !== null) {
-      this.stateStore.dispatch(kanbanAction);
-      return CONSUMED;
-    }
     const action = resolveGlobalKey(data, state, popupOpen);
     if (action !== null) {
       this.stateStore.dispatch(action);
       return CONSUMED;
     }
-    if (matchesKey(data, "enter") && shouldCommitTeamCursor(state)) {
-      this.stateStore.dispatch(Actions.commitTeamCursor());
-      return CONSUMED;
-    }
-    const direction = resolveTeamCursorDirection(data, state, popupOpen);
-    if (direction !== null) {
-      this.stateStore.dispatch(Actions.switchCycleAgent(direction));
-      return CONSUMED;
+    if (this.focusedComponent === this.editor) {
+      if (matchesKey(data, "enter") && shouldCommitTeamCursor(state)) {
+        this.stateStore.dispatch(Actions.commitTeamCursor());
+        return CONSUMED;
+      }
+      const direction = resolveTeamCursorDirection(data, state, popupOpen);
+      if (direction !== null) {
+        this.stateStore.dispatch(Actions.switchCycleAgent(direction));
+        return CONSUMED;
+      }
     }
     return undefined;
+  }
+
+  private reconcileFocus(state: TuiState): void {
+    const target = resolveFocusTarget(state) === "kanban" ? this.kanbanPanel : this.editor;
+    if (target === this.focusedComponent) return;
+    this.focusedComponent = target;
+    this.screen.setFocus(target);
   }
 }
 
@@ -127,8 +136,13 @@ function shouldCommitTeamCursor(state: TuiState): boolean {
   return state.teamPanelVisible && state.teamCursorAgentId !== null && state.teamCursorAgentId !== state.focusedAgentId;
 }
 
+function resolveFocusTarget(state: TuiState): "kanban" | "editor" {
+  return state.kanbanView === "panel" && state.kanbanEdit === null ? "kanban" : "editor";
+}
+
 export {
   resolveGlobalKey as _resolveGlobalKey,
   resolveTeamCursorDirection as _resolveTeamCursorDirection,
   shouldCommitTeamCursor as _shouldCommitTeamCursor,
+  resolveFocusTarget as _resolveFocusTarget,
 };

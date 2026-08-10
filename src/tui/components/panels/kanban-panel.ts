@@ -30,6 +30,11 @@ const CTRL_E = "\x05";
 const CHIP_BACKGROUND = "\x1b[100m";
 const CHIP_BACKGROUND_END = "\x1b[49m";
 
+interface KeyFallback {
+  handleInput(data: string): void;
+  isShowingAutocomplete(): boolean;
+}
+
 export class KanbanPanel extends Panel implements TuiComponent {
   private teamId: string | null = null;
   private kanbanView: "hidden" | "list" | "panel" = "hidden";
@@ -38,9 +43,11 @@ export class KanbanPanel extends Panel implements TuiComponent {
   private kanbanCursor: string | null = null;
   private kanbanEditField: "content" | "description" = "content";
   private kanbanEdit: string | null = null;
+  private readonly editor: KeyFallback;
 
-  constructor(stateStore: StateStore) {
+  constructor(stateStore: StateStore, editor: KeyFallback) {
     super(stateStore);
+    this.editor = editor;
   }
 
   update(): boolean {
@@ -64,22 +71,16 @@ export class KanbanPanel extends Panel implements TuiComponent {
     return true;
   }
 
-  resolveKey(data: string, state: TuiState, popupOpen: boolean): Action | null {
-    if (state.kanbanView !== "panel" || state.kanbanEdit !== null || popupOpen) return null;
-    if (matchesKey(data, "esc") && state.kanbanExpanded) return Actions.toggleKanbanExpand();
-    if (matchesKey(data, "tab")) return Actions.toggleKanbanExpand();
-    if (state.kanbanExpanded) {
-      if (matchesKey(data, "up")) return Actions.moveKanbanEditField("up");
-      if (matchesKey(data, "down")) return Actions.moveKanbanEditField("down");
-      if (data === CTRL_E && state.kanbanCursor !== null) return Actions.commitKanbanEdit(state.kanbanCursor, state.kanbanEditField);
-      return null;
+  handleInput(data: string): void {
+    const state = this.stateStore.getState();
+    if (state.kanbanView === "panel" && state.kanbanEdit === null && !this.editor.isShowingAutocomplete()) {
+      const action = resolveKanbanKey(data, state);
+      if (action !== null) {
+        this.stateStore.dispatch(action);
+        return;
+      }
     }
-    if (matchesKey(data, "up")) return Actions.moveKanbanCursor("up");
-    if (matchesKey(data, "down")) return Actions.moveKanbanCursor("down");
-    if (matchesKey(data, "left")) return Actions.moveKanbanCursor("left");
-    if (matchesKey(data, "right")) return Actions.moveKanbanCursor("right");
-    if (data === CTRL_E && state.kanbanCursor !== null) return Actions.commitKanbanEdit(state.kanbanCursor);
-    return null;
+    this.editor.handleInput(data);
   }
 
   protected override isVisible(state: TuiState): boolean {
@@ -170,4 +171,21 @@ function renderHint(state: TuiState, width: number): string {
 
 function fitToWidth(text: string, width: number): string {
   return truncateToWidth(text, width, "", true);
+}
+
+function resolveKanbanKey(data: string, state: TuiState): Action | null {
+  if (matchesKey(data, "esc") && state.kanbanExpanded) return Actions.toggleKanbanExpand();
+  if (matchesKey(data, "tab")) return Actions.toggleKanbanExpand();
+  if (state.kanbanExpanded) {
+    if (matchesKey(data, "up")) return Actions.moveKanbanEditField("up");
+    if (matchesKey(data, "down")) return Actions.moveKanbanEditField("down");
+    if (data === CTRL_E && state.kanbanCursor !== null) return Actions.commitKanbanEdit(state.kanbanCursor, state.kanbanEditField);
+    return null;
+  }
+  if (matchesKey(data, "up")) return Actions.moveKanbanCursor("up");
+  if (matchesKey(data, "down")) return Actions.moveKanbanCursor("down");
+  if (matchesKey(data, "left")) return Actions.moveKanbanCursor("left");
+  if (matchesKey(data, "right")) return Actions.moveKanbanCursor("right");
+  if (data === CTRL_E && state.kanbanCursor !== null) return Actions.commitKanbanEdit(state.kanbanCursor);
+  return null;
 }

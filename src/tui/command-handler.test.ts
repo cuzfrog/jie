@@ -40,15 +40,24 @@ function stateWithTeam(teamId: string, agentFocused: boolean): TuiState {
 interface HandlerHandle {
   readonly handler: CommandHandler;
   readonly dispatch: ReturnType<typeof vi.fn>;
+  readonly publish: (action: ReturnType<typeof Actions[keyof typeof Actions]>) => Promise<void>;
 }
 
 function makeHandler(platform: JiePlatform, state: TuiState = makeTuiState()): HandlerHandle {
+  let listener: ((action: ReturnType<typeof Actions[keyof typeof Actions]>) => Promise<void>) | null = null;
   const stateStore = vi.mocked<StateStore>({
     getState: vi.fn(() => state),
     dispatch: vi.fn(),
-    subscribe: vi.fn(() => () => undefined),
+    subscribe: vi.fn((callback) => {
+      listener = callback;
+      return () => undefined;
+    }),
   });
-  return { handler: new CommandHandlerImpl(stateStore, platform, new CommandResolverImpl(platform)), dispatch: stateStore.dispatch };
+  return {
+    handler: new CommandHandlerImpl(stateStore, platform, new CommandResolverImpl(platform)),
+    dispatch: stateStore.dispatch,
+    publish: (action) => listener!(action),
+  };
 }
 
 describe("CommandHandlerImpl", () => {
@@ -996,5 +1005,41 @@ describe("SLASH_COMMAND_NAMES", () => {
       "kanban",
       "notification",
     ]);
+  });
+});
+
+describe("CommandHandlerImpl — saveKanbanEdit", () => {
+  test("executes kanbanEdit and dispatches the returned board", async () => {
+    const { platform, execute } = makePlatform();
+    const board = [{ id: "#1", content: "edited", status: "pending" as const }];
+    execute.mockResolvedValueOnce({ board });
+    const { publish, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    await publish(Actions.saveKanbanEdit("#1", "edited", "content"));
+    expect(execute).toHaveBeenCalledWith({ name: "kanbanEdit", teamId: "my-team", cardId: "#1", field: "content", text: "edited" });
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setKanbanBoard(board));
+  });
+
+  test("does not call the platform when no team is loaded", async () => {
+    const { platform, execute } = makePlatform();
+    const { publish } = makeHandler(platform);
+    await publish(Actions.saveKanbanEdit("#1", "edited", "content"));
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  test("surfaces platform errors as an error banner", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockRejectedValueOnce(new Error("duplicate"));
+    const { publish, dispatch } = makeHandler(platform, stateWithTeam("my-team", true));
+    await publish(Actions.saveKanbanEdit("#1", "edited", "content"));
+    await new Promise((r) => setImmediate(r));
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage("kanban edit failed: duplicate"));
+  });
+
+  test("ignores non-matching actions", async () => {
+    const { platform, execute } = makePlatform();
+    const { publish } = makeHandler(platform, stateWithTeam("my-team", true));
+    await publish(Actions.cycleKanbanView());
+    expect(execute).not.toHaveBeenCalled();
   });
 });
