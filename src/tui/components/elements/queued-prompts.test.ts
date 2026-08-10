@@ -68,3 +68,39 @@ describe("QueuedPrompts", () => {
     }
   });
 });
+
+describe("QueuedPrompts.update", () => {
+  test("reports dirty when the focused queue changes", () => {
+    stateStore.getState.mockReturnValue(stateWithQueue([userEntry("first")]));
+    const component = new QueuedPrompts(stateStore);
+    component.update();
+    stateStore.getState.mockReturnValue(stateWithQueue([userEntry("first"), userEntry("second")]));
+    expect(component.update()).toBe(true);
+  });
+
+  test("reports dirty when the focused agent changes", () => {
+    stateStore.getState.mockReturnValue(stateWithQueue([userEntry("first")]));
+    const component = new QueuedPrompts(stateStore);
+    component.update();
+    stateStore.getState.mockReturnValue(makeTuiState());
+    expect(component.update()).toBe(true);
+  });
+
+  test("reports clean when the watched slice is unchanged", () => {
+    const state = stateWithQueue([userEntry("first")]);
+    stateStore.getState.mockReturnValue(state);
+    const component = new QueuedPrompts(stateStore);
+    expect(component.update()).toBe(true);
+    expect(component.update()).toBe(false);
+  });
+
+  test("reports clean when only an unwatched field changes", () => {
+    const agent = makeAgentUiState("my-team:general-1", { queue: [userEntry("hi")] });
+    const agents = new Map([[agent.agentId, agent]]);
+    stateStore.getState.mockReturnValue(makeTuiState({ agents, focusedAgentId: agent.agentId }));
+    const component = new QueuedPrompts(stateStore);
+    component.update();
+    stateStore.getState.mockReturnValue(makeTuiState({ agents, focusedAgentId: agent.agentId, kanbanView: "list" }));
+    expect(component.update()).toBe(false);
+  });
+});

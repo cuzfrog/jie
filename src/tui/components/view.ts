@@ -20,6 +20,9 @@ export class TuiViewImpl implements TuiView {
   private readonly chatSync: ChatSync;
   private readonly workingSpinner: WorkingSpinner;
   private readonly editor: Editor & TuiComponent;
+  private readonly welcomeBanner: TuiComponent;
+  private readonly statusLine: TuiComponent;
+  private readonly queuedPrompts: TuiComponent;
   private readonly unsubscribeKeys: () => void;
 
   constructor(
@@ -30,9 +33,9 @@ export class TuiViewImpl implements TuiView {
     kanbanList: Component,
     footer: Component,
     editor: Editor & TuiComponent,
-    welcomeBanner: Component,
-    statusLine: Component,
-    queuedPrompts: Component,
+    welcomeBanner: TuiComponent,
+    statusLine: TuiComponent,
+    queuedPrompts: TuiComponent,
     teamPanel: Component,
     kanbanPanel: Component,
     helpPanel: Component,
@@ -42,12 +45,15 @@ export class TuiViewImpl implements TuiView {
     this.chatSync = chatSync;
     this.workingSpinner = workingSpinner;
     this.editor = editor;
+    this.welcomeBanner = welcomeBanner;
+    this.statusLine = statusLine;
+    this.queuedPrompts = queuedPrompts;
     screen.addChild(chatContainer);
     screen.addChild(kanbanList);
     screen.addChild(workingSpinner);
-    screen.addChild(welcomeBanner);
-    screen.addChild(statusLine);
-    screen.addChild(queuedPrompts);
+    screen.addChild(this.welcomeBanner);
+    screen.addChild(this.statusLine);
+    screen.addChild(this.queuedPrompts);
     screen.addChild(this.editor);
     screen.addChild(footer);
     screen.addChild(teamPanel);
@@ -83,6 +89,9 @@ export class TuiViewImpl implements TuiView {
   update(): boolean {
     let dirty = this.workingSpinner.update();
     dirty = this.editor.update() || dirty;
+    dirty = this.welcomeBanner.update() || dirty;
+    dirty = this.statusLine.update() || dirty;
+    dirty = this.queuedPrompts.update() || dirty;
     return dirty;
   }
 

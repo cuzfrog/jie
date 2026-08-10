@@ -1,15 +1,24 @@
-import { truncateToWidth, type Component } from "@earendil-works/pi-tui";
-import { TuiState, type StateStore } from "../../state";
+import { truncateToWidth } from "@earendil-works/pi-tui";
+import { TuiState, type StateStore, type AgentUiState } from "../../state";
+import { type TuiComponent } from "../..";
 import { singleLine } from "./single-line";
 import { style } from "../themes";
 
 const QUEUED_PREFIX = "Queued: ";
 
-export class QueuedPrompts implements Component {
+export class QueuedPrompts implements TuiComponent {
   private readonly stateStore: StateStore;
+  private focused: AgentUiState | null = null;
 
   constructor(stateStore: StateStore) {
     this.stateStore = stateStore;
+  }
+
+  update(): boolean {
+    const focused = TuiState.getFocusedAgent(this.stateStore.getState());
+    if (focused === this.focused) return false;
+    this.focused = focused;
+    return true;
   }
 
   render(width: number): string[] {

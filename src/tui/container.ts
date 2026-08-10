@@ -36,9 +36,9 @@ export interface TuiCradle {
   readonly chatMessages: ChatMessages;
   readonly kanbanList: Component;
   readonly footer: Component;
-  readonly welcomeBanner: Component;
-  readonly statusLine: Component;
-  readonly queuedPrompts: Component;
+  readonly welcomeBanner: TuiComponent;
+  readonly statusLine: TuiComponent;
+  readonly queuedPrompts: TuiComponent;
   readonly teamPanel: Component;
   readonly kanbanPanel: Component;
   readonly helpPanel: Component;

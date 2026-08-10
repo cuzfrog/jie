@@ -1,15 +1,30 @@
-import { truncateToWidth, type Component } from "@earendil-works/pi-tui";
+import { truncateToWidth } from "@earendil-works/pi-tui";
 import type { CommandResult } from "../../../platform";
-import { TuiState, type StateStore, type TuiState as TuiStateType } from "../../state";
+import { TuiState, type StateStore, type TuiState as TuiStateType, type AgentId, type AgentUiState } from "../../state";
+import { type TuiComponent } from "../..";
 import { style } from "../themes";
 
 type InstalledTeams = CommandResult<"getTeamInfo">["installed"];
 
-export class WelcomeBanner implements Component {
+export class WelcomeBanner implements TuiComponent {
   private readonly stateStore: StateStore;
+  private agents: ReadonlyMap<AgentId, AgentUiState> | null = null;
+  private version = "";
+  private installedTeams: InstalledTeams | null = null;
+  private teamId: string | null = null;
 
   constructor(stateStore: StateStore) {
     this.stateStore = stateStore;
+  }
+
+  update(): boolean {
+    const state = this.stateStore.getState();
+    if (state.agents === this.agents && state.version === this.version && state.installedTeams === this.installedTeams && state.teamId === this.teamId) return false;
+    this.agents = state.agents;
+    this.version = state.version;
+    this.installedTeams = state.installedTeams;
+    this.teamId = state.teamId;
+    return true;
   }
 
   render(width: number): string[] {

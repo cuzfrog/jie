@@ -91,6 +91,61 @@ describe("WelcomeBanner", () => {
   });
 });
 
+describe("WelcomeBanner.update", () => {
+  test("reports dirty when chat content appears", () => {
+    stateStore.getState.mockReturnValue(makeTuiState());
+    const banner = new WelcomeBanner(stateStore);
+    banner.update();
+    stateStore.getState.mockReturnValue(stateWithTurn());
+    expect(banner.update()).toBe(true);
+  });
+
+  test("reports dirty when version changes", () => {
+    const agents = new Map();
+    stateStore.getState.mockReturnValue(makeTuiState({ agents, version: "1.0.0" }));
+    const banner = new WelcomeBanner(stateStore);
+    banner.update();
+    stateStore.getState.mockReturnValue(makeTuiState({ agents, version: "2.0.0" }));
+    expect(banner.update()).toBe(true);
+  });
+
+  test("reports dirty when installed teams change", () => {
+    const agents = new Map();
+    const teams = [{ id: "solo", agentCount: 1, location: "builtin" as const }];
+    stateStore.getState.mockReturnValue(makeTuiState({ agents }));
+    const banner = new WelcomeBanner(stateStore);
+    banner.update();
+    stateStore.getState.mockReturnValue(makeTuiState({ agents, installedTeams: teams }));
+    expect(banner.update()).toBe(true);
+  });
+
+  test("reports dirty when teamId changes", () => {
+    const agents = new Map();
+    stateStore.getState.mockReturnValue(makeTuiState({ agents, teamId: "solo" }));
+    const banner = new WelcomeBanner(stateStore);
+    banner.update();
+    stateStore.getState.mockReturnValue(makeTuiState({ agents, teamId: "my-team" }));
+    expect(banner.update()).toBe(true);
+  });
+
+  test("reports clean when the watched slice is unchanged", () => {
+    const state = stateWithInstalledTeams();
+    stateStore.getState.mockReturnValue(state);
+    const banner = new WelcomeBanner(stateStore);
+    expect(banner.update()).toBe(true);
+    expect(banner.update()).toBe(false);
+  });
+
+  test("reports clean when only an unwatched field changes", () => {
+    const agents = new Map();
+    stateStore.getState.mockReturnValue(makeTuiState({ agents }));
+    const banner = new WelcomeBanner(stateStore);
+    banner.update();
+    stateStore.getState.mockReturnValue(makeTuiState({ agents, kanbanView: "list" }));
+    expect(banner.update()).toBe(false);
+  });
+});
+
 function stateWithInstalledTeams(): TuiState {
   return makeTuiState({
     teamId: "solo",
