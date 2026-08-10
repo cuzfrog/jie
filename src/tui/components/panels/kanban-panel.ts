@@ -82,22 +82,22 @@ export class KanbanPanel extends Panel implements TuiComponent {
     return null;
   }
 
-  protected isVisible(state: TuiState): boolean {
+  protected override isVisible(state: TuiState): boolean {
     return state.teamId !== null && state.kanbanView === "panel";
   }
 
-  protected body(state: TuiState, inner: number): string[] {
+  protected override body(state: TuiState, inner: number): string[] {
     if (state.kanbanExpanded) return renderCardDetail(focusedCard(state), state.kanbanEditField, inner);
     return renderKanbanBoard(state, TuiState.kanbanVisibleCards(state), inner);
   }
 
-  protected topBorder(state: TuiState, width: number): string | null {
+  protected override topBorder(state: TuiState, width: number): string | null {
     if (!state.kanbanExpanded) return null;
     const focused = focusedCard(state);
     return focused === null ? null : renderExpandedTopBorder(focused.id, width, style("borderMuted"));
   }
 
-  protected hint(state: TuiState, width: number): string | null {
+  protected override hint(state: TuiState, width: number): string | null {
     return renderHint(state, width);
   }
 }

@@ -95,7 +95,7 @@ export class JieEditor extends Editor {
     };
   }
 
-  handleInput(data: string): void {
+  override handleInput(data: string): void {
     if (this.stateStore.getState().kanbanEdit !== null) {
       this.handleKanbanEditInput(data);
       return;
@@ -121,7 +121,7 @@ export class JieEditor extends Editor {
     this.syncCursorAtStart();
   }
 
-  render(width: number): string[] {
+  override render(width: number): string[] {
     let lines = super.render(width);
     const state = this.stateStore.getState();
     const editingId = state.kanbanEdit;
@@ -146,7 +146,7 @@ export class JieEditor extends Editor {
     return this.syncKanbanEdit(this.stateStore.getState().kanbanEdit);
   }
 
-  addToHistory(text: string): void {
+  override addToHistory(text: string): void {
     super.addToHistory(text);
     const trimmed = text.trim();
     if (trimmed === "" || this.historyMirror[0] === trimmed) return;

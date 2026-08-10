@@ -34,7 +34,7 @@ class HeadlessStdin extends PassThrough {
   ref(): this { return this; }
   unref(): this { return this; }
   setRawMode(): this { return this; }
-  setEncoding(): this { return this; }
+  override setEncoding(): this { return this; }
 }
 
 class HeadlessStdout extends PassThrough {

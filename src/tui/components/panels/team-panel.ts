@@ -37,11 +37,11 @@ export class TeamPanel extends Panel implements TuiComponent {
     return true;
   }
 
-  protected isVisible(state: TuiState): boolean {
+  protected override isVisible(state: TuiState): boolean {
     return state.teamId !== null && state.teamPanelVisible;
   }
 
-  protected body(state: TuiState, inner: number): string[] {
+  protected override body(state: TuiState, inner: number): string[] {
     const roster = TuiState.rosterOrder(state);
     if (roster.length === 0) return [];
     return renderTeamTable(roster, PANEL_COLUMNS, inner, {

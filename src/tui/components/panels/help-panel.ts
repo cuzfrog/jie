@@ -25,15 +25,15 @@ export class HelpPanel extends Panel implements TuiComponent {
     return true;
   }
 
-  protected isVisible(state: TuiState): boolean {
+  protected override isVisible(state: TuiState): boolean {
     return state.helpPanelVisible;
   }
 
-  protected body(_state: TuiState, inner: number): string[] {
+  protected override body(_state: TuiState, inner: number): string[] {
     return helpLines(inner);
   }
 
-  protected hint(_state: TuiState, width: number): string | null {
+  protected override hint(_state: TuiState, width: number): string | null {
     return truncateToWidth(style("dim")(HINT), width);
   }
 }

@@ -15,9 +15,9 @@ class FakeStdin extends PassThrough {
   ref(): this { return this; }
   unref(): this { return this; }
   setRawMode(): this { return this; }
-  setEncoding(): this { return this; }
-  resume(): this { super.resume(); return this; }
-  pause(): this { super.pause(); return this; }
+  override setEncoding(): this { return this; }
+  override resume(): this { super.resume(); return this; }
+  override pause(): this { super.pause(); return this; }
 }
 
 class FakeStdout extends PassThrough {
@@ -27,7 +27,7 @@ class FakeStdout extends PassThrough {
 
 class RecordingStreamTerminal extends StreamTerminalImpl {
   readonly writeCalls: string[] = [];
-  write(data: string): void {
+  override write(data: string): void {
     this.writeCalls.push(data);
     super.write(data);
   }
