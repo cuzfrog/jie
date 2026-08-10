@@ -123,7 +123,6 @@ export class TuiImpl implements Tui {
       };
       try {
         setCapabilities({ ...detectCapabilities(), hyperlinks: process.env.INK_OSC8 === "1" });
-        this.view.start();
         this.renderer.start();
         this.screen.start();
         this.startTitleAnimation();

@@ -1,5 +1,5 @@
 import { asValue, createContainer, InjectionMode, type AwilixContainer } from "awilix";
-import type { Container, Editor, Terminal, TUI } from "@earendil-works/pi-tui";
+import type { Editor, Terminal, TUI } from "@earendil-works/pi-tui";
 import type { JiePlatform } from "../platform";
 import { logger } from "../utils";
 import { Actions, registerStateModule, type StateStore } from "./state";
@@ -42,8 +42,6 @@ export interface TuiCradle {
   readonly teamPanel: TuiComponent;
   readonly kanbanPanel: TuiComponent;
   readonly helpPanel: TuiComponent;
-  readonly chatContainer: Container;
-  readonly requestRender: () => void;
   readonly editor: Editor & TuiComponent;
   readonly chatSync: ChatSync;
   readonly terminal: Terminal;

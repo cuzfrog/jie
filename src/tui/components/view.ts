@@ -1,11 +1,10 @@
-import { Container, matchesKey, type Editor, type TUI } from "@earendil-works/pi-tui";
+import { matchesKey, type Editor, type TUI } from "@earendil-works/pi-tui";
 import { Actions, type TuiState, type Action, type StateStore } from "../state";
 import type { ChatSync } from "../sync";
 import type { TuiRoot, TuiComponent } from "..";
 import type { WorkingSpinner } from "./working-spinner";
 
 export interface TuiView extends TuiRoot {
-  start(): void;
   stop(): void;
 }
 
@@ -33,7 +32,6 @@ export class TuiViewImpl implements TuiView {
   constructor(
     screen: TUI,
     stateStore: StateStore,
-    chatContainer: Container,
     chatSync: ChatSync,
     kanbanList: TuiComponent,
     footer: TuiComponent,
@@ -58,7 +56,7 @@ export class TuiViewImpl implements TuiView {
     this.helpPanel = helpPanel;
     this.kanbanList = kanbanList;
     this.footer = footer;
-    screen.addChild(chatContainer);
+    screen.addChild(this.chatSync);
     screen.addChild(this.kanbanList);
     screen.addChild(workingSpinner);
     screen.addChild(this.welcomeBanner);
@@ -107,16 +105,12 @@ export class TuiViewImpl implements TuiView {
     dirty = this.helpPanel.update() || dirty;
     dirty = this.kanbanList.update() || dirty;
     dirty = this.footer.update() || dirty;
+    dirty = this.chatSync.update() || dirty;
     return dirty;
-  }
-
-  start(): void {
-    this.chatSync.start();
   }
 
   stop(): void {
     this.workingSpinner.stop();
-    this.chatSync.stop();
     this.unsubscribeKeys();
   }
 }

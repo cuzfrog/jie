@@ -1,11 +1,9 @@
 import { Container, type Component } from "@earendil-works/pi-tui";
 import { TuiState, type AgentId, type AgentUiState, type MessageTurn, type StateStore } from "../state";
 import type { AssistantMessageComponent, ChatMessages, UserMessageComponent } from "../components/chat";
+import type { TuiComponent } from "..";
 
-export interface ChatSync {
-  start(): void;
-  stop(): void;
-}
+export interface ChatSync extends TuiComponent {}
 
 type CompactionMarker = NonNullable<AgentUiState["compactionMarker"]>;
 
@@ -26,33 +24,60 @@ export class ChatSyncImpl implements ChatSync {
   private readonly stateStore: StateStore;
   private readonly chatMessages: ChatMessages;
   private readonly chatContainer: Container;
-  private readonly requestRender: () => void;
-  private syncedAgentId: AgentId | null = null;
+  private focusedAgentId: AgentId | null = null;
+  private history: MessageTurn[] | null = null;
+  private currentTurn: MessageTurn | null = null;
+  private compactionMarker: AgentUiState["compactionMarker"] = null;
+  private thinkingExpanded = false;
+  private toolCardsExpanded = false;
   private readonly synced: SyncedEntry[] = [];
-  private unsubscribe: (() => void) | null = null;
 
-  constructor(stateStore: StateStore, chatMessages: ChatMessages, chatContainer: Container, requestRender: () => void) {
+  constructor(stateStore: StateStore, chatMessages: ChatMessages) {
     this.stateStore = stateStore;
     this.chatMessages = chatMessages;
-    this.chatContainer = chatContainer;
-    this.requestRender = requestRender;
+    this.chatContainer = new Container();
   }
 
-  start(): void {
-    this.unsubscribe = this.stateStore.subscribe(async (): Promise<void> => this.sync());
-  }
-
-  stop(): void {
-    this.unsubscribe?.();
-    this.unsubscribe = null;
-  }
-
-  private async sync(): Promise<void> {
+  update(): boolean {
     const state = this.stateStore.getState();
     const focused = TuiState.getFocusedAgent(state);
     const agentId = focused === null ? null : focused.agentId;
-    if (agentId !== this.syncedAgentId) {
-      this.syncedAgentId = agentId;
+    const history = focused?.history ?? null;
+    const currentTurn = focused?.currentTurn ?? null;
+    const compactionMarker = focused?.compactionMarker ?? null;
+    const dirty =
+      agentId !== this.focusedAgentId ||
+      history !== this.history ||
+      currentTurn !== this.currentTurn ||
+      compactionMarker !== this.compactionMarker ||
+      state.thinkingExpanded !== this.thinkingExpanded ||
+      state.toolCardsExpanded !== this.toolCardsExpanded;
+    if (!dirty) return false;
+    const entriesDirty =
+      agentId !== this.focusedAgentId ||
+      history !== this.history ||
+      currentTurn !== this.currentTurn ||
+      compactionMarker !== this.compactionMarker;
+    if (entriesDirty) this.sync(agentId, focused);
+    this.focusedAgentId = agentId;
+    this.history = history;
+    this.currentTurn = currentTurn;
+    this.compactionMarker = compactionMarker;
+    this.thinkingExpanded = state.thinkingExpanded;
+    this.toolCardsExpanded = state.toolCardsExpanded;
+    return true;
+  }
+
+  render(width: number): string[] {
+    return this.chatContainer.render(width);
+  }
+
+  invalidate(): void {
+    this.chatContainer.invalidate();
+  }
+
+  private sync(agentId: AgentId | null, focused: AgentUiState | null): void {
+    if (agentId !== this.focusedAgentId) {
       this.chatContainer.clear();
       this.synced.length = 0;
     }
@@ -81,7 +106,6 @@ export class ChatSyncImpl implements ChatSync {
         existing.pair.assistant.update(entry.turn);
       }
     }
-    this.requestRender();
   }
 
   private createEntry(entry: ChatEntry): SyncedEntry {

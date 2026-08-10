@@ -15,6 +15,7 @@ export function registerTuiModule(container: AwilixContainer<TuiCradle>): void {
       useProcessTerminal ? new ProcessTerminal() : new StreamTerminalImpl(stdin, stdout),
     ).singleton(),
     screen: asFunction((terminal: Terminal): TUI => new TuiMainScreen(terminal)).singleton(),
+    requestRender: asFunction((screen: TUI): (() => void) => (): void => screen.requestRender()).singleton(),
     renderer: asClass(TuiRendererImpl).singleton(),
     tui: asClass(TuiImpl).singleton(),
   });
