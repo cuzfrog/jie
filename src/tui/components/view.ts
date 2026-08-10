@@ -1,7 +1,7 @@
 import { Container, matchesKey, type Component, type Editor, type TUI } from "@earendil-works/pi-tui";
 import { Actions, type TuiState, type Action, type StateStore } from "../state";
 import type { ChatSync } from "../sync";
-import type { TuiRoot } from "..";
+import type { TuiRoot, TuiComponent } from "..";
 import type { WorkingSpinner } from "./working-spinner";
 
 export interface TuiView extends TuiRoot {
@@ -19,6 +19,7 @@ export class TuiViewImpl implements TuiView {
   private readonly stateStore: StateStore;
   private readonly chatSync: ChatSync;
   private readonly workingSpinner: WorkingSpinner;
+  private readonly editor: Editor & TuiComponent;
   private readonly unsubscribeKeys: () => void;
 
   constructor(
@@ -28,7 +29,7 @@ export class TuiViewImpl implements TuiView {
     chatSync: ChatSync,
     kanbanList: Component,
     footer: Component,
-    editor: Editor,
+    editor: Editor & TuiComponent,
     welcomeBanner: Component,
     statusLine: Component,
     queuedPrompts: Component,
@@ -40,21 +41,22 @@ export class TuiViewImpl implements TuiView {
     this.stateStore = stateStore;
     this.chatSync = chatSync;
     this.workingSpinner = workingSpinner;
+    this.editor = editor;
     screen.addChild(chatContainer);
     screen.addChild(kanbanList);
     screen.addChild(workingSpinner);
     screen.addChild(welcomeBanner);
     screen.addChild(statusLine);
     screen.addChild(queuedPrompts);
-    screen.addChild(editor);
+    screen.addChild(this.editor);
     screen.addChild(footer);
     screen.addChild(teamPanel);
     screen.addChild(kanbanPanel);
     screen.addChild(helpPanel);
-    screen.setFocus(editor);
+    screen.setFocus(this.editor);
     this.unsubscribeKeys = screen.addInputListener((data) => {
       const state = this.stateStore.getState();
-      const popupOpen = editor.isShowingAutocomplete();
+      const popupOpen = this.editor.isShowingAutocomplete();
       const kanbanAction = resolveKanbanKey(data, state, popupOpen);
       if (kanbanAction !== null) {
         this.stateStore.dispatch(kanbanAction);
@@ -79,7 +81,9 @@ export class TuiViewImpl implements TuiView {
   }
 
   update(): boolean {
-    return this.workingSpinner.update();
+    let dirty = this.workingSpinner.update();
+    dirty = this.editor.update() || dirty;
+    return dirty;
   }
 
   start(): void {

@@ -17,6 +17,7 @@ import type { CommandHandler } from "./command-handler";
 import type { CommandResolver } from "./command-resolver";
 import type { CreateTUIOptions, Tui, TuiDeps, TuiStdout } from "./tui";
 import type { TuiRenderer } from "./renderer";
+import type { TuiComponent } from "./tui-component";
 
 const log = logger.getSubLogger({ name: "jie.tui.container" });
 
@@ -43,7 +44,7 @@ export interface TuiCradle {
   readonly helpPanel: Component;
   readonly chatContainer: Container;
   readonly requestRender: () => void;
-  readonly editor: Editor;
+  readonly editor: Editor & TuiComponent;
   readonly chatSync: ChatSync;
   readonly terminal: Terminal;
   readonly screen: TUI;

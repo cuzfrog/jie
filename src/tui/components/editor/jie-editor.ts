@@ -93,9 +93,6 @@ export class JieEditor extends Editor {
       this.persistPrompt(text);
       this.stateStore.dispatch(Actions.submitEditorText(text));
     };
-    stateStore.subscribe(async (_action, afterState) => {
-      this.syncKanbanEdit(afterState.kanbanEdit);
-    });
   }
 
   handleInput(data: string): void {
@@ -143,6 +140,10 @@ export class JieEditor extends Editor {
     const next = [...lines];
     next[cursorLineIndex] = injected;
     return next;
+  }
+
+  update(): boolean {
+    return this.syncKanbanEdit(this.stateStore.getState().kanbanEdit);
   }
 
   addToHistory(text: string): void {
@@ -287,15 +288,16 @@ export class JieEditor extends Editor {
     this.stateStore.dispatch(Actions.saveKanbanEdit(state.kanbanEdit, text, state.kanbanEditField));
   }
 
-  private syncKanbanEdit(afterStateKanbanEdit: string | null): void {
-    if (afterStateKanbanEdit === this.kanbanEditId) return;
+  private syncKanbanEdit(afterStateKanbanEdit: string | null): boolean {
+    if (afterStateKanbanEdit === this.kanbanEditId) return false;
     if (afterStateKanbanEdit === null) {
       this.endKanbanEdit();
       this.kanbanEditId = null;
-      return;
+      return true;
     }
     this.kanbanEditId = afterStateKanbanEdit;
     this.beginKanbanEdit(afterStateKanbanEdit);
+    return true;
   }
 
   private beginKanbanEdit(cardId: string): void {
