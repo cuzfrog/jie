@@ -7,6 +7,7 @@ import type { CommandHandler } from "./command-handler";
 import type { TuiView } from "./components";
 import { createTransientAger } from "./transient-ager";
 import { createThinkingTicker } from "./thinking-ticker";
+import type { TuiRenderer } from "./renderer";
 
 const SUBMIT_EDITOR_TEXT = Actions.submitEditorText("").type;
 const REQUEST_INTERRUPT = Actions.requestInterrupt("", "").type;
@@ -48,6 +49,7 @@ export class TuiImpl implements Tui {
   private readonly screen: TUI;
   private readonly terminal: Terminal;
   private readonly view: TuiView;
+  private readonly renderer: TuiRenderer;
   private readonly unsubscribeBus: () => void;
   private readonly unsubscribeActions: () => void;
   private readonly unsubscribeTransientAger: () => void;
@@ -64,6 +66,7 @@ export class TuiImpl implements Tui {
     screen: TUI,
     terminal: Terminal,
     view: TuiView,
+    renderer: TuiRenderer,
   ) {
     this.platform = platform;
     this.stateStore = stateStore;
@@ -71,6 +74,7 @@ export class TuiImpl implements Tui {
     this.screen = screen;
     this.terminal = terminal;
     this.view = view;
+    this.renderer = renderer;
     this.unsubscribeBus = subscribeToBus(platform, (env) => {
       this.stateStore.dispatch(Actions.receiveEvent(env));
       if (env.type === "agent.idle") {
@@ -120,6 +124,7 @@ export class TuiImpl implements Tui {
       try {
         setCapabilities({ ...detectCapabilities(), hyperlinks: process.env.INK_OSC8 === "1" });
         this.view.start();
+        this.renderer.start();
         this.screen.start();
         this.startTitleAnimation();
         this.updateTitle();
@@ -142,6 +147,7 @@ export class TuiImpl implements Tui {
     } catch {
       log.error("failed to stop tui");
     }
+    this.renderer.stop();
     this.view.stop();
     this.unsubscribeBus();
     this.unsubscribeActions();

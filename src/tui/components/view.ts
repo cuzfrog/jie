@@ -1,9 +1,10 @@
 import { Container, matchesKey, type Component, type Editor, type TUI } from "@earendil-works/pi-tui";
 import { Actions, type TuiState, type Action, type StateStore } from "../state";
 import type { ChatSync } from "../sync";
+import type { TuiRoot } from "..";
 import type { WorkingSpinner } from "./working-spinner";
 
-export interface TuiView {
+export interface TuiView extends TuiRoot {
   start(): void;
   stop(): void;
 }
@@ -77,9 +78,12 @@ export class TuiViewImpl implements TuiView {
     });
   }
 
+  update(): boolean {
+    return this.workingSpinner.update();
+  }
+
   start(): void {
     this.chatSync.start();
-    this.workingSpinner.start();
   }
 
   stop(): void {

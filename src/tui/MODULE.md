@@ -1,7 +1,6 @@
 ---
 no-new-exports:
   - index.test.ts
-  - index.ts
   - tui.ts
   - command-handler.test.ts
   - command-handler.ts

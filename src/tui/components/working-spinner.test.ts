@@ -1,7 +1,9 @@
 import { PassThrough } from "node:stream";
 import { Container, TuiMainScreen } from "@earendil-works/pi-tui";
+import { type AgentId, type StateStore } from "../state";
+import { makeAgentUiState, makeTuiState } from "../test";
 import { StreamTerminalImpl } from "../stream-terminal";
-import { _FlushLoader, _syncWorkingSlot } from "./working-spinner";
+import { WorkingSpinnerImpl, _FlushLoader, _syncWorkingSlot } from "./working-spinner";
 
 describe("FlushLoader", () => {
   test("renders the spinner at the chat column, without the loader's left padding", () => {
@@ -100,6 +102,64 @@ describe("syncWorkingSlot", () => {
     expect(slot.children).toEqual([working]);
   });
 });
+
+const stateStore = vi.mocked<StateStore>({
+  getState: vi.fn(),
+  dispatch: vi.fn(),
+  subscribe: vi.fn(() => () => undefined),
+});
+
+describe("WorkingSpinnerImpl.update", () => {
+  const AGENT_ID: AgentId = "team:agent-1";
+  let spinner: WorkingSpinnerImpl;
+
+  beforeEach(() => {
+    spinner = makeSpinner(stateStore);
+  });
+
+  afterEach(() => {
+    spinner.stop();
+  });
+
+  test("reports dirty when the focused agent becomes busy", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({
+      focusedAgentId: AGENT_ID,
+      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
+    }));
+    expect(spinner.update()).toBe(true);
+  });
+
+  test("reports dirty when the spinner clears after working", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({
+      focusedAgentId: AGENT_ID,
+      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
+    }));
+    spinner.update();
+    stateStore.getState.mockReturnValue(makeTuiState({}));
+    expect(spinner.update()).toBe(true);
+  });
+
+  test("reports clean when the working kind is unchanged", () => {
+    const busy = makeTuiState({
+      focusedAgentId: AGENT_ID,
+      agents: new Map([[AGENT_ID, makeAgentUiState(AGENT_ID, { status: "busy" })]]),
+    });
+    stateStore.getState.mockReturnValue(busy);
+    spinner.update();
+    expect(spinner.update()).toBe(false);
+  });
+
+  test("reports dirty when interrupted with no active work", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ interruptedAgentId: AGENT_ID }));
+    expect(spinner.update()).toBe(true);
+  });
+});
+
+function makeSpinner(stateStore: StateStore): WorkingSpinnerImpl {
+  const stdout = Object.assign(new PassThrough(), { columns: 80, rows: 30 });
+  const screen = new TuiMainScreen(new StreamTerminalImpl(new PassThrough(), stdout));
+  return new WorkingSpinnerImpl(screen, stateStore);
+}
 
 function makeFlushLoader(message: string, frames: ReadonlyArray<string>): InstanceType<typeof _FlushLoader> {
   const stdout = Object.assign(new PassThrough(), { columns: 80, rows: 30 });

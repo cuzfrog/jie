@@ -1,9 +1,9 @@
-import { Container, Loader, type Component, type TUI } from "@earendil-works/pi-tui";
+import { Container, Loader, type TUI } from "@earendil-works/pi-tui";
 import { TuiState, type StateStore } from "../state";
+import { type TuiComponent } from "..";
 import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, WORKING_LABEL, style } from "./themes";
 
-export interface WorkingSpinner extends Component {
-  start(): void;
+export interface WorkingSpinner extends TuiComponent {
   stop(): void;
 }
 
@@ -13,16 +13,13 @@ const INTERRUPTED_LABEL = "Interrupted";
 const NO_SPINNER_FRAMES: string[] = [];
 
 export class WorkingSpinnerImpl implements WorkingSpinner {
-  private readonly screen: TUI;
   private readonly stateStore: StateStore;
   private readonly slot: Container;
   private readonly workingIndicator: Loader;
   private readonly teamWorkingIndicator: Loader;
   private readonly interruptedIndicator: Loader;
-  private unsubscribe: (() => void) | null = null;
 
   constructor(screen: TUI, stateStore: StateStore) {
-    this.screen = screen;
     this.stateStore = stateStore;
     this.slot = new Container();
     this.workingIndicator = new FlushLoader(screen, style("accent"), style("muted"), WORKING_LABEL, {
@@ -44,17 +41,13 @@ export class WorkingSpinnerImpl implements WorkingSpinner {
     this.slot.invalidate();
   }
 
-  start(): void {
-    this.unsubscribe = this.stateStore.subscribe(async (): Promise<void> => {
-      if (this.sync()) this.screen.requestRender();
-    });
+  update(): boolean {
+    return this.sync();
   }
 
   stop(): void {
     this.workingIndicator.stop();
     this.teamWorkingIndicator.stop();
-    this.unsubscribe?.();
-    this.unsubscribe = null;
   }
 
   private sync(): boolean {

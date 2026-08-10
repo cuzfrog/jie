@@ -5,6 +5,7 @@ import { CommandHandlerImpl } from "./command-handler";
 import { CommandResolverImpl } from "./command-resolver";
 import { StreamTerminalImpl } from "./stream-terminal";
 import { TuiImpl, type TuiStdout } from "./tui";
+import { TuiRendererImpl } from "./renderer";
 
 export function registerTuiModule(container: AwilixContainer<TuiCradle>): void {
   container.register({
@@ -14,6 +15,7 @@ export function registerTuiModule(container: AwilixContainer<TuiCradle>): void {
       useProcessTerminal ? new ProcessTerminal() : new StreamTerminalImpl(stdin, stdout),
     ).singleton(),
     screen: asFunction((terminal: Terminal): TUI => new TuiMainScreen(terminal)).singleton(),
+    renderer: asClass(TuiRendererImpl).singleton(),
     tui: asClass(TuiImpl).singleton(),
   });
 }
