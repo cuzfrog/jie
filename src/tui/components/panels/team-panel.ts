@@ -20,7 +20,14 @@ export class TeamPanel extends Panel implements TuiComponent {
 
   update(): boolean {
     const state = this.stateStore.getState();
-    if (state.teamId === this.teamId && state.teamPanelVisible === this.teamPanelVisible && state.agents === this.agents && state.leaderAgentId === this.leaderAgentId && state.teamCursorAgentId === this.teamCursorAgentId && state.focusedAgentId === this.focusedAgentId) return false;
+    if (
+      state.teamId === this.teamId &&
+      state.teamPanelVisible === this.teamPanelVisible &&
+      state.agents === this.agents &&
+      state.leaderAgentId === this.leaderAgentId &&
+      state.teamCursorAgentId === this.teamCursorAgentId &&
+      state.focusedAgentId === this.focusedAgentId
+    ) return false;
     this.teamId = state.teamId;
     this.teamPanelVisible = state.teamPanelVisible;
     this.agents = state.agents;

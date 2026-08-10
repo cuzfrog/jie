@@ -44,7 +44,15 @@ export class KanbanPanel extends Panel implements TuiComponent {
 
   update(): boolean {
     const state = this.stateStore.getState();
-    if (state.teamId === this.teamId && state.kanbanView === this.kanbanView && state.kanbanExpanded === this.kanbanExpanded && state.kanbanBoard === this.kanbanBoard && state.kanbanCursor === this.kanbanCursor && state.kanbanEditField === this.kanbanEditField && state.kanbanEdit === this.kanbanEdit) return false;
+    if (
+      state.teamId === this.teamId &&
+      state.kanbanView === this.kanbanView &&
+      state.kanbanExpanded === this.kanbanExpanded &&
+      state.kanbanBoard === this.kanbanBoard &&
+      state.kanbanCursor === this.kanbanCursor &&
+      state.kanbanEditField === this.kanbanEditField &&
+      state.kanbanEdit === this.kanbanEdit
+    ) return false;
     this.teamId = state.teamId;
     this.kanbanView = state.kanbanView;
     this.kanbanExpanded = state.kanbanExpanded;

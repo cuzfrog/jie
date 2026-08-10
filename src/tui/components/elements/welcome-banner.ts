@@ -19,7 +19,12 @@ export class WelcomeBanner implements TuiComponent {
 
   update(): boolean {
     const state = this.stateStore.getState();
-    if (state.agents === this.agents && state.version === this.version && state.installedTeams === this.installedTeams && state.teamId === this.teamId) return false;
+    if (
+      state.agents === this.agents &&
+      state.version === this.version &&
+      state.installedTeams === this.installedTeams &&
+      state.teamId === this.teamId
+    ) return false;
     this.agents = state.agents;
     this.version = state.version;
     this.installedTeams = state.installedTeams;
