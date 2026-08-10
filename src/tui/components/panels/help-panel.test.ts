@@ -60,6 +60,39 @@ describe("HelpPanel", () => {
   });
 });
 
+describe("HelpPanel.update", () => {
+  test("reports dirty when the panel becomes visible", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ helpPanelVisible: false }));
+    const panel = new HelpPanel(stateStore);
+    panel.update();
+    stateStore.getState.mockReturnValue(makeTuiState({ helpPanelVisible: true }));
+    expect(panel.update()).toBe(true);
+  });
+
+  test("reports dirty when the panel becomes hidden", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ helpPanelVisible: true }));
+    const panel = new HelpPanel(stateStore);
+    panel.update();
+    stateStore.getState.mockReturnValue(makeTuiState({ helpPanelVisible: false }));
+    expect(panel.update()).toBe(true);
+  });
+
+  test("reports clean when the visibility is unchanged", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ helpPanelVisible: true }));
+    const panel = new HelpPanel(stateStore);
+    expect(panel.update()).toBe(true);
+    expect(panel.update()).toBe(false);
+  });
+
+  test("reports clean when only an unwatched field changes", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ helpPanelVisible: true }));
+    const panel = new HelpPanel(stateStore);
+    panel.update();
+    stateStore.getState.mockReturnValue(makeTuiState({ helpPanelVisible: true, kanbanView: "list" }));
+    expect(panel.update()).toBe(false);
+  });
+});
+
 describe("_helpLines", () => {
   test("renders Commands and Shortcuts without the mark or identity", () => {
     const text = _helpLines(80).map(stripAnsi).join("\n");

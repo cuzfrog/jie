@@ -1,6 +1,7 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { COMMAND_METADATA, type CommandMeta } from "../../command-metadata";
 import { type StateStore, type TuiState } from "../../state";
+import { type TuiComponent } from "../..";
 import { hintLines } from "../elements";
 import { Panel } from "./panel";
 import { style } from "../themes";
@@ -10,9 +11,18 @@ const COMMANDS_HEADING = "Commands";
 const SHORTCUTS_HEADING = "Shortcuts";
 const COLUMN_GAP = 4;
 
-export class HelpPanel extends Panel {
+export class HelpPanel extends Panel implements TuiComponent {
+  private helpPanelVisible = false;
+
   constructor(stateStore: StateStore) {
     super(stateStore);
+  }
+
+  update(): boolean {
+    const visible = this.stateStore.getState().helpPanelVisible;
+    if (visible === this.helpPanelVisible) return false;
+    this.helpPanelVisible = visible;
+    return true;
   }
 
   protected isVisible(state: TuiState): boolean {

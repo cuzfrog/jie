@@ -190,6 +190,60 @@ describe("KanbanPanel", () => {
   });
 });
 
+describe("KanbanPanel.update", () => {
+  test("reports dirty when kanbanView changes", () => {
+    const board: ReadonlyArray<KanbanCard> = [{ id: "#1", content: "a", status: "pending" }];
+    stateStore.getState.mockReturnValue(boardState(board, { kanbanView: "hidden" }));
+    const panel = new KanbanPanel(stateStore);
+    panel.update();
+    stateStore.getState.mockReturnValue(boardState(board, { kanbanView: "panel" }));
+    expect(panel.update()).toBe(true);
+  });
+
+  test("reports dirty when the board changes", () => {
+    stateStore.getState.mockReturnValue(boardState([{ id: "#1", content: "a", status: "pending" }]));
+    const panel = new KanbanPanel(stateStore);
+    panel.update();
+    stateStore.getState.mockReturnValue(boardState([{ id: "#2", content: "b", status: "pending" }]));
+    expect(panel.update()).toBe(true);
+  });
+
+  test("reports dirty when the cursor moves", () => {
+    const board: ReadonlyArray<KanbanCard> = [{ id: "#1", content: "a", status: "pending" }];
+    stateStore.getState.mockReturnValue(boardState(board, { kanbanCursor: null }));
+    const panel = new KanbanPanel(stateStore);
+    panel.update();
+    stateStore.getState.mockReturnValue(boardState(board, { kanbanCursor: "#1" }));
+    expect(panel.update()).toBe(true);
+  });
+
+  test("reports dirty when kanbanEdit changes", () => {
+    const board: ReadonlyArray<KanbanCard> = [{ id: "#1", content: "a", status: "pending" }];
+    stateStore.getState.mockReturnValue(boardState(board, { kanbanEdit: null }));
+    const panel = new KanbanPanel(stateStore);
+    panel.update();
+    stateStore.getState.mockReturnValue(boardState(board, { kanbanEdit: "#1" }));
+    expect(panel.update()).toBe(true);
+  });
+
+  test("reports clean when the watched slice is unchanged", () => {
+    const state = boardState([{ id: "#1", content: "a", status: "pending" }], { kanbanCursor: "#1" });
+    stateStore.getState.mockReturnValue(state);
+    const panel = new KanbanPanel(stateStore);
+    expect(panel.update()).toBe(true);
+    expect(panel.update()).toBe(false);
+  });
+
+  test("reports clean when only an unwatched field changes", () => {
+    const board: ReadonlyArray<KanbanCard> = [{ id: "#1", content: "a", status: "pending" }];
+    stateStore.getState.mockReturnValue(boardState(board));
+    const panel = new KanbanPanel(stateStore);
+    panel.update();
+    stateStore.getState.mockReturnValue(boardState(board, { focusedAgentId: "my-team:general-1" }));
+    expect(panel.update()).toBe(false);
+  });
+});
+
 function boardState(cards: ReadonlyArray<KanbanCard>, overrides: Partial<TuiState> = {}): TuiState {
   return makeTuiState({
     teamId: "my-team",

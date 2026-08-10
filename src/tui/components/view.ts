@@ -23,6 +23,9 @@ export class TuiViewImpl implements TuiView {
   private readonly welcomeBanner: TuiComponent;
   private readonly statusLine: TuiComponent;
   private readonly queuedPrompts: TuiComponent;
+  private readonly teamPanel: TuiComponent;
+  private readonly kanbanPanel: TuiComponent;
+  private readonly helpPanel: TuiComponent;
   private readonly unsubscribeKeys: () => void;
 
   constructor(
@@ -36,9 +39,9 @@ export class TuiViewImpl implements TuiView {
     welcomeBanner: TuiComponent,
     statusLine: TuiComponent,
     queuedPrompts: TuiComponent,
-    teamPanel: Component,
-    kanbanPanel: Component,
-    helpPanel: Component,
+    teamPanel: TuiComponent,
+    kanbanPanel: TuiComponent,
+    helpPanel: TuiComponent,
     workingSpinner: WorkingSpinner,
   ) {
     this.stateStore = stateStore;
@@ -48,6 +51,9 @@ export class TuiViewImpl implements TuiView {
     this.welcomeBanner = welcomeBanner;
     this.statusLine = statusLine;
     this.queuedPrompts = queuedPrompts;
+    this.teamPanel = teamPanel;
+    this.kanbanPanel = kanbanPanel;
+    this.helpPanel = helpPanel;
     screen.addChild(chatContainer);
     screen.addChild(kanbanList);
     screen.addChild(workingSpinner);
@@ -56,9 +62,9 @@ export class TuiViewImpl implements TuiView {
     screen.addChild(this.queuedPrompts);
     screen.addChild(this.editor);
     screen.addChild(footer);
-    screen.addChild(teamPanel);
-    screen.addChild(kanbanPanel);
-    screen.addChild(helpPanel);
+    screen.addChild(this.teamPanel);
+    screen.addChild(this.kanbanPanel);
+    screen.addChild(this.helpPanel);
     screen.setFocus(this.editor);
     this.unsubscribeKeys = screen.addInputListener((data) => {
       const state = this.stateStore.getState();
@@ -92,6 +98,9 @@ export class TuiViewImpl implements TuiView {
     dirty = this.welcomeBanner.update() || dirty;
     dirty = this.statusLine.update() || dirty;
     dirty = this.queuedPrompts.update() || dirty;
+    dirty = this.teamPanel.update() || dirty;
+    dirty = this.kanbanPanel.update() || dirty;
+    dirty = this.helpPanel.update() || dirty;
     return dirty;
   }
 

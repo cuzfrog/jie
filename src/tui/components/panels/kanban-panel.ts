@@ -1,6 +1,7 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { KanbanCard, KanbanStatus } from "../../../platform";
 import { TuiState, type StateStore } from "../../state";
+import { type TuiComponent } from "../..";
 import { Panel } from "./panel";
 import { style, type ColorName } from "../themes";
 
@@ -28,9 +29,30 @@ const HINTS = {
 const CHIP_BACKGROUND = "\x1b[100m";
 const CHIP_BACKGROUND_END = "\x1b[49m";
 
-export class KanbanPanel extends Panel {
+export class KanbanPanel extends Panel implements TuiComponent {
+  private teamId: string | null = null;
+  private kanbanView: "hidden" | "list" | "panel" = "hidden";
+  private kanbanExpanded = false;
+  private kanbanBoard: ReadonlyArray<KanbanCard> = [];
+  private kanbanCursor: string | null = null;
+  private kanbanEditField: "content" | "description" = "content";
+  private kanbanEdit: string | null = null;
+
   constructor(stateStore: StateStore) {
     super(stateStore);
+  }
+
+  update(): boolean {
+    const state = this.stateStore.getState();
+    if (state.teamId === this.teamId && state.kanbanView === this.kanbanView && state.kanbanExpanded === this.kanbanExpanded && state.kanbanBoard === this.kanbanBoard && state.kanbanCursor === this.kanbanCursor && state.kanbanEditField === this.kanbanEditField && state.kanbanEdit === this.kanbanEdit) return false;
+    this.teamId = state.teamId;
+    this.kanbanView = state.kanbanView;
+    this.kanbanExpanded = state.kanbanExpanded;
+    this.kanbanBoard = state.kanbanBoard;
+    this.kanbanCursor = state.kanbanCursor;
+    this.kanbanEditField = state.kanbanEditField;
+    this.kanbanEdit = state.kanbanEdit;
+    return true;
   }
 
   protected isVisible(state: TuiState): boolean {

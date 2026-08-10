@@ -39,9 +39,9 @@ export interface TuiCradle {
   readonly welcomeBanner: TuiComponent;
   readonly statusLine: TuiComponent;
   readonly queuedPrompts: TuiComponent;
-  readonly teamPanel: Component;
-  readonly kanbanPanel: Component;
-  readonly helpPanel: Component;
+  readonly teamPanel: TuiComponent;
+  readonly kanbanPanel: TuiComponent;
+  readonly helpPanel: TuiComponent;
   readonly chatContainer: Container;
   readonly requestRender: () => void;
   readonly editor: Editor & TuiComponent;
