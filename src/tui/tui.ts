@@ -7,6 +7,8 @@ import type { CommandHandler } from "./command-handler";
 import type { TuiView } from "./components";
 import type { TuiRenderer } from "./renderer";
 
+const RENDER_TICK_MS = 80;
+const TRANSIENT_TTL_MS = 5000;
 const SUBMIT_EDITOR_TEXT = Actions.submitEditorText("").type;
 const REQUEST_INTERRUPT = Actions.requestInterrupt("", "").type;
 const REQUEST_DEQUEUE = Actions.requestDequeue("", "", "").type;
@@ -50,10 +52,16 @@ export class TuiImpl implements Tui {
   private readonly renderer: TuiRenderer;
   private readonly unsubscribeBus: () => void;
   private readonly unsubscribeActions: () => void;
+  private readonly renderTickMs: number;
+  private readonly transientTtlMs: number;
   private stopped = false;
   private resolveStart: (() => void) | null = null;
   private titleDotFrame = 0;
   private titleInterval: ReturnType<typeof setInterval> | null = null;
+  private renderInterval: ReturnType<typeof setInterval> | null = null;
+  private unsubscribeKeys: (() => void) | null = null;
+  private transientMessage: string | null = null;
+  private transientSetAt: number | null = null;
 
   constructor(
     platform: JiePlatform,
@@ -63,6 +71,8 @@ export class TuiImpl implements Tui {
     terminal: Terminal,
     view: TuiView,
     renderer: TuiRenderer,
+    renderTickMs: number = RENDER_TICK_MS,
+    transientTtlMs: number = TRANSIENT_TTL_MS,
   ) {
     this.platform = platform;
     this.stateStore = stateStore;
@@ -71,6 +81,8 @@ export class TuiImpl implements Tui {
     this.terminal = terminal;
     this.view = view;
     this.renderer = renderer;
+    this.renderTickMs = renderTickMs;
+    this.transientTtlMs = transientTtlMs;
     this.unsubscribeBus = subscribeToBus(platform, (env) => {
       this.stateStore.dispatch(Actions.receiveEvent(env));
       if (env.type === "agent.idle") {
@@ -119,6 +131,8 @@ export class TuiImpl implements Tui {
         setCapabilities({ ...detectCapabilities(), hyperlinks: process.env.INK_OSC8 === "1" });
         this.renderer.start();
         this.screen.start();
+        this.unsubscribeKeys = this.screen.addInputListener((data) => this.view.handleInput(data));
+        this.renderInterval = setInterval(() => this.tick(), this.renderTickMs);
         this.startTitleAnimation();
         this.updateTitle();
       } catch (error) {
@@ -135,16 +149,35 @@ export class TuiImpl implements Tui {
       clearInterval(this.titleInterval);
       this.titleInterval = null;
     }
+    if (this.renderInterval !== null) {
+      clearInterval(this.renderInterval);
+      this.renderInterval = null;
+    }
+    this.unsubscribeKeys?.();
+    this.unsubscribeKeys = null;
+    this.unsubscribeBus();
+    this.unsubscribeActions();
     try {
       this.screen.stop();
     } catch {
       log.error("failed to stop tui");
     }
     this.renderer.stop();
-    this.view.stop();
-    this.unsubscribeBus();
-    this.unsubscribeActions();
     this.resolveStart?.();
+  }
+
+  private tick(): void {
+    if (this.stopped) return;
+    const state = this.stateStore.getState();
+    if (state.transientMessage !== this.transientMessage) {
+      this.transientMessage = state.transientMessage;
+      this.transientSetAt = state.transientMessage === null ? null : Date.now();
+    }
+    if (this.transientSetAt !== null && Date.now() - this.transientSetAt >= this.transientTtlMs) {
+      this.transientSetAt = null;
+      this.stateStore.dispatch(Actions.clearTransientMessage());
+    }
+    if (TuiState.isBusy(state) || TuiState.anyAgentThinking(state)) this.screen.requestRender();
   }
 
   private async quit(): Promise<void> {

@@ -471,6 +471,40 @@ describe("bootTui — notification sound", () => {
   });
 });
 
+function bootTransientHarness(ttlMs: number, tickMs: number): TuiHarness {
+  const stdin = new FakeStdin();
+  const stdout = new FakeStdout();
+  const platform = makePlatformHarness();
+  const container = bootTui({ cwd: process.cwd() }, {
+    platform: platform.platform,
+    homeJieDir: join(tmpdir(), "jie-tui-unit-home"),
+    stdin,
+    stdout,
+  });
+  container.register({
+    transientTtlMs: asValue(ttlMs),
+    renderTickMs: asValue(tickMs),
+  });
+  return { tui: container.cradle.tui, stateStore: container.cradle.stateStore, stdin, stdout, platform };
+}
+
+describe("bootTui — transient message", () => {
+  test("expires the transient message after the configured TTL", async () => {
+    let harness: TuiHarness | null = null;
+    withTTY(true, () => {
+      harness = bootTransientHarness(50, 20);
+    });
+    const started = harness!.tui.start();
+    await waitFrames(30);
+    harness!.stateStore.dispatch(Actions.setTransientMessage("hello"));
+    expect(harness!.stateStore.getState().transientMessage).toBe("hello");
+    await waitFrames(100);
+    expect(harness!.stateStore.getState().transientMessage).toBeNull();
+    harness!.tui.stop();
+    await started;
+  });
+});
+
 describe("_buildTerminalTitle", () => {
   test("idle title uses a static dot and omits cwd when unknown", () => {
     const title = _buildTerminalTitle(makeTuiState({ cwd: null, agents: new Map() }), 0);

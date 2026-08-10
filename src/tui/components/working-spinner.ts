@@ -1,82 +1,46 @@
-import { Container, Loader, type TUI } from "@earendil-works/pi-tui";
 import { TuiState, type StateStore } from "../state";
 import { type TuiComponent } from "..";
 import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, WORKING_LABEL, style } from "./themes";
 
-export interface WorkingSpinner extends TuiComponent {
-  stop(): void;
-}
-
 const TEAM_WORKING_LABEL = "Team working…";
 const TEAM_SPINNER_INTERVAL_MS = 1000;
 const INTERRUPTED_LABEL = "Interrupted";
-const NO_SPINNER_FRAMES: string[] = [];
 
-export class WorkingSpinnerImpl implements WorkingSpinner {
+type WorkingMode = ReturnType<typeof TuiState.workingKind> | "interrupted";
+
+export class WorkingSpinnerImpl implements TuiComponent {
   private readonly stateStore: StateStore;
-  private readonly slot: Container;
-  private readonly workingIndicator: Loader;
-  private readonly teamWorkingIndicator: Loader;
-  private readonly interruptedIndicator: Loader;
+  private mode: WorkingMode = "none";
 
-  constructor(screen: TUI, stateStore: StateStore) {
-    this.stateStore = stateStore;
-    this.slot = new Container();
-    this.workingIndicator = new FlushLoader(screen, style("accent"), style("muted"), WORKING_LABEL, {
-      frames: [...SPINNER_FRAMES], intervalMs: SPINNER_INTERVAL_MS,
-    });
-    this.teamWorkingIndicator = new FlushLoader(screen, style("accent"), style("muted"), TEAM_WORKING_LABEL, {
-      frames: [...SPINNER_FRAMES], intervalMs: TEAM_SPINNER_INTERVAL_MS,
-    });
-    this.interruptedIndicator = new FlushLoader(screen, style("muted"), style("muted"), INTERRUPTED_LABEL, {
-      frames: NO_SPINNER_FRAMES,
-    });
-  }
-
-  render(width: number): string[] {
-    return this.slot.render(width);
-  }
-
-  invalidate(): void {
-    this.slot.invalidate();
-  }
+  constructor(stateStore: StateStore) { this.stateStore = stateStore; }
 
   update(): boolean {
-    return this.sync();
+    const mode = workingMode(this.stateStore.getState());
+    if (mode === this.mode) return false;
+    this.mode = mode;
+    return true;
   }
 
-  stop(): void {
-    this.workingIndicator.stop();
-    this.teamWorkingIndicator.stop();
+  render(_width: number): string[] {
+    const mode = workingMode(this.stateStore.getState());
+    if (mode === "none") return [];
+    if (mode === "interrupted") return ["", style("muted")(INTERRUPTED_LABEL)];
+    const label = mode === "team" ? TEAM_WORKING_LABEL : WORKING_LABEL;
+    const intervalMs = mode === "team" ? TEAM_SPINNER_INTERVAL_MS : SPINNER_INTERVAL_MS;
+    return ["", `${style("accent")(spinnerFrame(Date.now(), intervalMs))} ${style("muted")(label)}`];
   }
 
-  private sync(): boolean {
-    const state = this.stateStore.getState();
-    const kind = TuiState.workingKind(state);
-    const mode = kind === "none" && TuiState.isInterrupted(state) ? "interrupted" : kind;
-    return syncWorkingSlot(this.slot, this.workingIndicator, this.teamWorkingIndicator, this.interruptedIndicator, mode);
-  }
+  invalidate(): void {}
 }
 
-type WorkingSlotMode = ReturnType<typeof TuiState.workingKind> | "interrupted";
-
-class FlushLoader extends Loader {
-  render(width: number): string[] {
-    return super.render(width).map((line) => (line.startsWith(" ") ? line.slice(1) : line));
-  }
+function workingMode(state: TuiState): WorkingMode {
+  const kind = TuiState.workingKind(state);
+  if (kind === "none" && TuiState.isInterrupted(state)) return "interrupted";
+  return kind;
 }
 
-function syncWorkingSlot(slot: Container, working: Loader, teamWorking: Loader, interrupted: Loader, mode: WorkingSlotMode): boolean {
-  const target = mode === "focused" ? working : mode === "team" ? teamWorking : mode === "interrupted" ? interrupted : null;
-  const current = slot.children[0] ?? null;
-  if (current === target) return false;
-  if (current === working) working.stop();
-  if (current === teamWorking) teamWorking.stop();
-  slot.clear();
-  if (target === null) return true;
-  slot.addChild(target);
-  if (mode === "focused" || mode === "team") target.start();
-  return true;
+function spinnerFrame(now: number, intervalMs: number): string {
+  return SPINNER_FRAMES[Math.floor(now / intervalMs) % SPINNER_FRAMES.length] ?? SPINNER_FRAMES[0];
 }
 
-export { FlushLoader as _FlushLoader, syncWorkingSlot as _syncWorkingSlot };
+export { spinnerFrame as _spinnerFrame };
