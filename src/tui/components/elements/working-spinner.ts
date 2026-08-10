@@ -1,6 +1,6 @@
-import { TuiState, type StateStore } from "../state";
-import { type TuiComponent } from "..";
-import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, WORKING_LABEL, style } from "./themes";
+import { TuiState, type StateStore } from "../../state";
+import { type TuiComponent } from "../..";
+import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, WORKING_LABEL, style } from "../themes";
 
 const TEAM_WORKING_LABEL = "Team working…";
 const TEAM_SPINNER_INTERVAL_MS = 1000;

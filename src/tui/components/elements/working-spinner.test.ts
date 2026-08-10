@@ -1,6 +1,6 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { type StateStore } from "../state";
-import { makeAgentUiState, makeTuiState } from "../test";
+import { type StateStore } from "../../state";
+import { makeAgentUiState, makeTuiState } from "../../test";
 import { WorkingSpinnerImpl, _spinnerFrame } from "./working-spinner";
 
 const AGENT_ID = "demo:general-1";
