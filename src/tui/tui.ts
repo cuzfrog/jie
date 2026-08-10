@@ -5,8 +5,6 @@ import { logger } from "../utils";
 import { Actions, TuiState, type StateStore } from "./state";
 import type { CommandHandler } from "./command-handler";
 import type { TuiView } from "./components";
-import { createTransientAger } from "./transient-ager";
-import { createThinkingTicker } from "./thinking-ticker";
 import type { TuiRenderer } from "./renderer";
 
 const SUBMIT_EDITOR_TEXT = Actions.submitEditorText("").type;
@@ -52,8 +50,6 @@ export class TuiImpl implements Tui {
   private readonly renderer: TuiRenderer;
   private readonly unsubscribeBus: () => void;
   private readonly unsubscribeActions: () => void;
-  private readonly unsubscribeTransientAger: () => void;
-  private readonly unsubscribeThinkingTicker: () => void;
   private stopped = false;
   private resolveStart: (() => void) | null = null;
   private titleDotFrame = 0;
@@ -81,8 +77,6 @@ export class TuiImpl implements Tui {
         void this.maybePlaySound(env);
       }
     });
-    this.unsubscribeTransientAger = createTransientAger(stateStore);
-    this.unsubscribeThinkingTicker = createThinkingTicker(stateStore, () => { this.screen.requestRender(); });
     this.unsubscribeActions = stateStore.subscribe(async (action) => {
       if (action.type === SUBMIT_EDITOR_TEXT) {
         this.commandHandler.handle(action.payload.text);
@@ -150,8 +144,6 @@ export class TuiImpl implements Tui {
     this.view.stop();
     this.unsubscribeBus();
     this.unsubscribeActions();
-    this.unsubscribeTransientAger();
-    this.unsubscribeThinkingTicker();
     this.resolveStart?.();
   }
 

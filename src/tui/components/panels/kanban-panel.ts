@@ -1,6 +1,6 @@
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { Actions, type Action, TuiState, type StateStore } from "../../state";
 import type { KanbanCard, KanbanStatus } from "../../../platform";
-import { TuiState, type StateStore } from "../../state";
 import { type TuiComponent } from "../..";
 import { Panel } from "./panel";
 import { style, type ColorName } from "../themes";
@@ -25,6 +25,7 @@ const HINTS = {
   expanded: "↑↓ select field · tab collapse · ctrl+e edit · ctrl+k close",
   editing: "enter/ctrl+s save · esc cancel",
 } as const;
+const CTRL_E = "\x05";
 
 const CHIP_BACKGROUND = "\x1b[100m";
 const CHIP_BACKGROUND_END = "\x1b[49m";
@@ -61,6 +62,24 @@ export class KanbanPanel extends Panel implements TuiComponent {
     this.kanbanEditField = state.kanbanEditField;
     this.kanbanEdit = state.kanbanEdit;
     return true;
+  }
+
+  resolveKey(data: string, state: TuiState, popupOpen: boolean): Action | null {
+    if (state.kanbanView !== "panel" || state.kanbanEdit !== null || popupOpen) return null;
+    if (matchesKey(data, "esc") && state.kanbanExpanded) return Actions.toggleKanbanExpand();
+    if (matchesKey(data, "tab")) return Actions.toggleKanbanExpand();
+    if (state.kanbanExpanded) {
+      if (matchesKey(data, "up")) return Actions.moveKanbanEditField("up");
+      if (matchesKey(data, "down")) return Actions.moveKanbanEditField("down");
+      if (data === CTRL_E && state.kanbanCursor !== null) return Actions.commitKanbanEdit(state.kanbanCursor, state.kanbanEditField);
+      return null;
+    }
+    if (matchesKey(data, "up")) return Actions.moveKanbanCursor("up");
+    if (matchesKey(data, "down")) return Actions.moveKanbanCursor("down");
+    if (matchesKey(data, "left")) return Actions.moveKanbanCursor("left");
+    if (matchesKey(data, "right")) return Actions.moveKanbanCursor("right");
+    if (data === CTRL_E && state.kanbanCursor !== null) return Actions.commitKanbanEdit(state.kanbanCursor);
+    return null;
   }
 
   protected isVisible(state: TuiState): boolean {

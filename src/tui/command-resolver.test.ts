@@ -316,9 +316,7 @@ describe("CommandResolverImpl", () => {
   test("/model-filter add validates against available models", async () => {
     const resolver = new CommandResolverImpl(makeFakePlatform(async (command) => {
       if (command.name === "getModelFilters") return [];
-      if (command.name === "listModels") {
-        return [{ provider: "anthropic", id: "claude-sonnet-4-5", available: true }];
-      }
+      if (command.name === "validateModelFilter") return null;
       return null;
     }));
     const result = await resolver.resolve(makeTuiState(), "model-filter", ["add", "claude"]);
@@ -333,8 +331,8 @@ describe("CommandResolverImpl", () => {
   test("/model-filter add rejects patterns that exclude all available models", async () => {
     const resolver = new CommandResolverImpl(makeFakePlatform(async (command) => {
       if (command.name === "getModelFilters") return [];
-      if (command.name === "listModels") {
-        return [{ provider: "anthropic", id: "claude-sonnet-4-5", available: true }];
+      if (command.name === "validateModelFilter") {
+        return "/model-filter: pattern 'qwen' rejected — it matches none of the 1 available models";
       }
       return null;
     }));

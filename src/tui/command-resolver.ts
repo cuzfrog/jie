@@ -1,7 +1,6 @@
 import { isEffortLevel, type Command, type JiePlatform } from "../platform";
 import { TuiState } from "./state";
 import { COMMAND_METADATA, resolveCommandName, type CommandMeta } from "./command-metadata";
-import { matchesModelFilter, type ModelRef } from "./model-filter";
 
 const MODEL_FILTER_USAGE = "/model-filter <add|remove|list> <pattern>";
 
@@ -141,15 +140,14 @@ export class CommandResolverImpl implements CommandResolver {
 
   private async queryModelFilterModify(adding: boolean, pattern: string): Promise<ResolvedCommand> {
     try {
-      const [filters, models] = await Promise.all([this.platform.execute({ name: "getModelFilters" }), this.platform.execute({ name: "listModels" })]);
+      const filters = await this.platform.execute({ name: "getModelFilters" });
       const next = adding ? appendPattern(filters, pattern) : removePattern(filters, pattern);
       if (next === null) {
         return { kind: "error", text: `/model-filter: pattern '${pattern}' is not set` };
       }
-      const available = models.filter((model) => model.available);
-      const rejection = adding ? filterAdditionRejection(pattern, filters, next, available) : null;
-      if (rejection !== null) {
-        return { kind: "error", text: rejection };
+      if (adding) {
+        const rejection = await this.platform.execute({ name: "validateModelFilter", pattern, existingFilters: filters });
+        if (rejection !== null) return { kind: "error", text: rejection };
       }
       return {
         kind: "platform",
@@ -406,13 +404,4 @@ function removePattern(filters: ReadonlyArray<string>, pattern: string): Readonl
   return filters.filter((existing) => existing !== pattern);
 }
 
-function filterAdditionRejection(
-  pattern: string,
-  existing: ReadonlyArray<string>,
-  combined: ReadonlyArray<string>,
-  available: ReadonlyArray<ModelRef>,
-): string | null {
-  if (available.length === 0 || available.some((model) => matchesModelFilter(model, combined))) return null;
-  const basis = existing.length === 0 ? "it matches none" : `combined with existing filters (${existing.join(", ")}) it matches none`;
-  return `/model-filter: pattern '${pattern}' rejected — ${basis} of the ${available.length} available models`;
-}
+

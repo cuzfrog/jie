@@ -1,6 +1,6 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
 import type { KanbanCard } from "../../../platform";
-import { type StateStore, type TuiState } from "../../state";
+import { Actions, type StateStore, type TuiState } from "../../state";
 import { makeTuiState } from "../../test";
 import { KanbanPanel } from "./kanban-panel";
 import { style } from "../themes";
@@ -241,6 +241,85 @@ describe("KanbanPanel.update", () => {
     panel.update();
     stateStore.getState.mockReturnValue(boardState(board, { focusedAgentId: "my-team:general-1" }));
     expect(panel.update()).toBe(false);
+  });
+});
+
+describe("KanbanPanel.resolveKey", () => {
+  function resolve(data: string, state: TuiState, popupOpen: boolean) {
+    return new KanbanPanel(stateStore).resolveKey(data, state, popupOpen);
+  }
+
+  test("tab toggles the kanban expand while the panel is shown", () => {
+    expect(resolve("\t", makeTuiState({ kanbanView: "panel" }), false)).toEqual(Actions.toggleKanbanExpand());
+  });
+
+  test("esc collapses the expanded kanban panel", () => {
+    expect(resolve("\x1b", makeTuiState({ kanbanView: "panel", kanbanExpanded: true }), false)).toEqual(Actions.toggleKanbanExpand());
+  });
+
+  test("arrows move the kanban cursor", () => {
+    const state = makeTuiState({ kanbanView: "panel" });
+    expect(resolve("\x1b[A", state, false)).toEqual(Actions.moveKanbanCursor("up"));
+    expect(resolve("\x1b[B", state, false)).toEqual(Actions.moveKanbanCursor("down"));
+    expect(resolve("\x1b[C", state, false)).toEqual(Actions.moveKanbanCursor("right"));
+    expect(resolve("\x1b[D", state, false)).toEqual(Actions.moveKanbanCursor("left"));
+  });
+
+  test("left at the buffer start still moves the kanban cursor", () => {
+    expect(resolve("\x1b[D", makeTuiState({ kanbanView: "panel", editorCursorAtStart: true }), false)).toEqual(Actions.moveKanbanCursor("left"));
+  });
+
+  test("ctrl+e commits the edit at the cursor", () => {
+    expect(resolve("\x05", makeTuiState({ kanbanView: "panel", kanbanCursor: "#1" }), false)).toEqual(Actions.commitKanbanEdit("#1"));
+  });
+
+  test("arrows select title and description while expanded", () => {
+    const state = makeTuiState({ kanbanView: "panel", kanbanExpanded: true, kanbanEditField: "content" });
+    expect(resolve("\x1b[B", state, false)).toEqual(Actions.moveKanbanEditField("down"));
+    expect(resolve("\x1b[A", makeTuiState({ kanbanView: "panel", kanbanExpanded: true, kanbanEditField: "description" }), false)).toEqual(Actions.moveKanbanEditField("up"));
+    expect(resolve("\x1b[C", state, false)).toBeNull();
+    expect(resolve("\x1b[D", state, false)).toBeNull();
+  });
+
+  test("ctrl+e commits the selected field while expanded", () => {
+    const state = makeTuiState({ kanbanView: "panel", kanbanExpanded: true, kanbanCursor: "#1", kanbanEditField: "description" });
+    expect(resolve("\x05", state, false)).toEqual(Actions.commitKanbanEdit("#1", "description"));
+  });
+
+  test("ctrl+e does nothing without a cursor", () => {
+    expect(resolve("\x05", makeTuiState({ kanbanView: "panel" }), false)).toBeNull();
+  });
+
+  test("enter falls through to the editor while the panel is shown", () => {
+    expect(resolve("\r", makeTuiState({ kanbanView: "panel", kanbanCursor: "#1" }), false)).toBeNull();
+  });
+
+  test("null while the view is hidden or list", () => {
+    expect(resolve("\t", makeTuiState(), false)).toBeNull();
+    expect(resolve("\x1b[A", makeTuiState(), false)).toBeNull();
+    expect(resolve("\t", makeTuiState({ kanbanView: "list" }), false)).toBeNull();
+    expect(resolve("\x1b[A", makeTuiState({ kanbanView: "list" }), false)).toBeNull();
+  });
+
+  test("null while the autocomplete popup is open, so the popup keeps navigation", () => {
+    const state = makeTuiState({ kanbanView: "panel" });
+    expect(resolve("\t", state, true)).toBeNull();
+    expect(resolve("\x1b[A", state, true)).toBeNull();
+    expect(resolve("\x05", state, true)).toBeNull();
+  });
+
+  test("null while editing a card, so every key reaches the editor", () => {
+    const state = makeTuiState({ kanbanView: "panel", kanbanEdit: "#1" });
+    expect(resolve("\t", state, false)).toBeNull();
+    expect(resolve("\x1b", state, false)).toBeNull();
+    expect(resolve("\x1b[A", state, false)).toBeNull();
+    expect(resolve("\x05", state, false)).toBeNull();
+  });
+
+  test("null for any other key", () => {
+    const state = makeTuiState({ kanbanView: "panel" });
+    expect(resolve("a", state, false)).toBeNull();
+    expect(resolve("\x1b[1;5B", state, false)).toBeNull();
   });
 });
 

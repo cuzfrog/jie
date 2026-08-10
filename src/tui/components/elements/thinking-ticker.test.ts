@@ -1,6 +1,6 @@
-import { Actions, type StateStore, type TuiState } from "./state";
-import { makeAgentUiState, makeTuiState } from "./test";
-import { createThinkingTicker } from "./thinking-ticker";
+import { Actions, type StateStore, type TuiState } from "../../state";
+import { makeAgentUiState, makeTuiState } from "../../test";
+import { ThinkingTickerImpl } from "./thinking-ticker";
 
 type Listener = Parameters<StateStore["subscribe"]>[0];
 
@@ -40,7 +40,7 @@ function createMockStateStore(): { readonly store: StateStore; readonly notify: 
   return { store, notify };
 }
 
-describe("createThinkingTicker", () => {
+describe("ThinkingTicker", () => {
   beforeEach(() => {
     vi.useFakeTimers({ now: 0 });
   });
@@ -52,57 +52,69 @@ describe("createThinkingTicker", () => {
   test("does not tick while no agent is thinking", () => {
     const { store } = createMockStateStore();
     const requestRender = vi.fn();
-    const stop = createThinkingTicker(store, requestRender, 100);
+    const ticker = new ThinkingTickerImpl(store, requestRender, 100);
+    ticker.update();
     vi.advanceTimersByTime(500);
     expect(requestRender).not.toHaveBeenCalled();
-    stop();
+    ticker.stop();
   });
 
   test("ticks periodically once an agent starts thinking", () => {
     const { store, notify } = createMockStateStore();
     const requestRender = vi.fn();
-    const stop = createThinkingTicker(store, requestRender, 100);
+    const ticker = new ThinkingTickerImpl(store, requestRender, 100);
+    ticker.update();
     notify(thinkingState());
+    ticker.update();
     vi.advanceTimersByTime(350);
     expect(requestRender).toHaveBeenCalledTimes(3);
-    stop();
+    ticker.stop();
   });
 
   test("stops ticking once the thinking block is stamped with a duration", () => {
     const { store, notify } = createMockStateStore();
     const requestRender = vi.fn();
-    const stop = createThinkingTicker(store, requestRender, 100);
+    const ticker = new ThinkingTickerImpl(store, requestRender, 100);
+    ticker.update();
     notify(thinkingState());
+    ticker.update();
     vi.advanceTimersByTime(150);
     expect(requestRender).toHaveBeenCalledTimes(1);
     notify(stampedState());
+    ticker.update();
     vi.advanceTimersByTime(1000);
     expect(requestRender).toHaveBeenCalledTimes(1);
-    stop();
+    ticker.stop();
   });
 
   test("restarts ticking when thinking resumes after stopping", () => {
     const { store, notify } = createMockStateStore();
     const requestRender = vi.fn();
-    const stop = createThinkingTicker(store, requestRender, 100);
+    const ticker = new ThinkingTickerImpl(store, requestRender, 100);
+    ticker.update();
     notify(thinkingState());
+    ticker.update();
     notify(stampedState());
+    ticker.update();
     vi.advanceTimersByTime(1000);
     expect(requestRender).not.toHaveBeenCalled();
     notify(thinkingState());
+    ticker.update();
     vi.advanceTimersByTime(250);
     expect(requestRender).toHaveBeenCalledTimes(2);
-    stop();
+    ticker.stop();
   });
 
-  test("unsubscribe clears the timer", () => {
+  test("stop clears the timer", () => {
     const { store, notify } = createMockStateStore();
     const requestRender = vi.fn();
-    const stop = createThinkingTicker(store, requestRender, 100);
+    const ticker = new ThinkingTickerImpl(store, requestRender, 100);
+    ticker.update();
     notify(thinkingState());
+    ticker.update();
     vi.advanceTimersByTime(150);
     const callsBefore = requestRender.mock.calls.length;
-    stop();
+    ticker.stop();
     vi.advanceTimersByTime(1000);
     expect(requestRender.mock.calls.length).toBe(callsBefore);
   });

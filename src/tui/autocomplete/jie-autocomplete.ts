@@ -8,7 +8,6 @@ import {
 } from "@earendil-works/pi-tui";
 import { EFFORT_LEVELS, type JiePlatform, type KanbanCard, type SkillInfo } from "../../platform";
 import { COMMAND_METADATA } from "../command-metadata";
-import { matchesModelFilter } from "../model-filter";
 import { filterFiles, type ScannedFile } from "../file-mention";
 import type { StateStore } from "../state";
 
@@ -192,12 +191,9 @@ async function modelItems(
   prefix: string,
   reportFilteredOut: (count: number) => void,
 ): Promise<AutocompleteItem[] | null> {
-  const models = await platform.execute({ name: "listModels" });
-  const filters = await platform.execute({ name: "getModelFilters" });
-  const available = models.filter((model) => model.available);
-  const matched = filters.length === 0 ? available : available.filter((model) => matchesModelFilter(model, filters));
-  if (filters.length > 0) reportFilteredOut(available.length - matched.length);
-  const items = matched.map((model): AutocompleteItem => {
+  const filtered = await platform.execute({ name: "listFilteredModels" });
+  if (filtered.filteredOut > 0) reportFilteredOut(filtered.filteredOut);
+  const items = filtered.models.map((model): AutocompleteItem => {
     const value = `${model.provider}/${model.id}`;
     return { value, label: value, description: model.name };
   });

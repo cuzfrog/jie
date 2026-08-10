@@ -4,6 +4,8 @@ import type { ChatSync } from "../sync";
 import type { TuiRoot, TuiComponent } from "..";
 import type { WorkingSpinner } from "./working-spinner";
 
+type StoppableComponent = TuiComponent & { stop(): void };
+
 export interface TuiView extends TuiRoot {
   stop(): void;
 }
@@ -11,7 +13,6 @@ export interface TuiView extends TuiRoot {
 const CTRL_T = "\x14";
 const CTRL_O = "\x0f";
 const CTRL_K = "\x0b";
-const CTRL_E = "\x05";
 const CONSUMED = { consume: true } as const;
 
 export class TuiViewImpl implements TuiView {
@@ -27,6 +28,8 @@ export class TuiViewImpl implements TuiView {
   private readonly helpPanel: TuiComponent;
   private readonly kanbanList: TuiComponent;
   private readonly footer: TuiComponent;
+  private readonly transientAger: StoppableComponent;
+  private readonly thinkingTicker: StoppableComponent;
   private readonly unsubscribeKeys: () => void;
 
   constructor(
@@ -43,6 +46,8 @@ export class TuiViewImpl implements TuiView {
     kanbanPanel: TuiComponent,
     helpPanel: TuiComponent,
     workingSpinner: WorkingSpinner,
+    transientAger: StoppableComponent,
+    thinkingTicker: StoppableComponent,
   ) {
     this.stateStore = stateStore;
     this.chatSync = chatSync;
@@ -56,6 +61,8 @@ export class TuiViewImpl implements TuiView {
     this.helpPanel = helpPanel;
     this.kanbanList = kanbanList;
     this.footer = footer;
+    this.transientAger = transientAger;
+    this.thinkingTicker = thinkingTicker;
     screen.addChild(this.chatSync);
     screen.addChild(this.kanbanList);
     screen.addChild(workingSpinner);
@@ -71,7 +78,7 @@ export class TuiViewImpl implements TuiView {
     this.unsubscribeKeys = screen.addInputListener((data) => {
       const state = this.stateStore.getState();
       const popupOpen = this.editor.isShowingAutocomplete();
-      const kanbanAction = resolveKanbanKey(data, state, popupOpen);
+      const kanbanAction = this.kanbanPanel.resolveKey?.(data, state, popupOpen) ?? null;
       if (kanbanAction !== null) {
         this.stateStore.dispatch(kanbanAction);
         return CONSUMED;
@@ -106,11 +113,15 @@ export class TuiViewImpl implements TuiView {
     dirty = this.kanbanList.update() || dirty;
     dirty = this.footer.update() || dirty;
     dirty = this.chatSync.update() || dirty;
+    dirty = this.transientAger.update() || dirty;
+    dirty = this.thinkingTicker.update() || dirty;
     return dirty;
   }
 
   stop(): void {
     this.workingSpinner.stop();
+    this.transientAger.stop();
+    this.thinkingTicker.stop();
     this.unsubscribeKeys();
   }
 }
@@ -120,24 +131,6 @@ function resolveGlobalKey(data: string, state: TuiState, popupOpen: boolean): Ac
   if (data === CTRL_O) return Actions.toggleToolCards();
   if (data === CTRL_K && state.kanbanEdit === null) return Actions.cycleKanbanView();
   if (matchesKey(data, "left") && state.editorCursorAtStart && state.kanbanView !== "panel" && !popupOpen) return Actions.toggleTeamPanel();
-  return null;
-}
-
-function resolveKanbanKey(data: string, state: TuiState, popupOpen: boolean): Action | null {
-  if (state.kanbanView !== "panel" || state.kanbanEdit !== null || popupOpen) return null;
-  if (matchesKey(data, "esc") && state.kanbanExpanded) return Actions.toggleKanbanExpand();
-  if (matchesKey(data, "tab")) return Actions.toggleKanbanExpand();
-  if (state.kanbanExpanded) {
-    if (matchesKey(data, "up")) return Actions.moveKanbanEditField("up");
-    if (matchesKey(data, "down")) return Actions.moveKanbanEditField("down");
-    if (data === CTRL_E && state.kanbanCursor !== null) return Actions.commitKanbanEdit(state.kanbanCursor, state.kanbanEditField);
-    return null;
-  }
-  if (matchesKey(data, "up")) return Actions.moveKanbanCursor("up");
-  if (matchesKey(data, "down")) return Actions.moveKanbanCursor("down");
-  if (matchesKey(data, "left")) return Actions.moveKanbanCursor("left");
-  if (matchesKey(data, "right")) return Actions.moveKanbanCursor("right");
-  if (data === CTRL_E && state.kanbanCursor !== null) return Actions.commitKanbanEdit(state.kanbanCursor);
   return null;
 }
 
@@ -154,7 +147,6 @@ function shouldCommitTeamCursor(state: TuiState): boolean {
 
 export {
   resolveGlobalKey as _resolveGlobalKey,
-  resolveKanbanKey as _resolveKanbanKey,
   resolveTeamCursorDirection as _resolveTeamCursorDirection,
   shouldCommitTeamCursor as _shouldCommitTeamCursor,
 };

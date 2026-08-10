@@ -1,5 +1,5 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 
 export interface PromptHistoryStore {
   load(): ReadonlyArray<string>;
@@ -7,23 +7,29 @@ export interface PromptHistoryStore {
 }
 
 const MAX_STORED_ENTRIES = 500;
+const PROMPT_HISTORY_FILE = "prompt-history.jsonl";
 
-export function createPromptHistoryStore(filePath: string): PromptHistoryStore {
-  return {
-    load(): ReadonlyArray<string> {
-      const raw = readFileOrEmpty(filePath);
-      if (raw === "") return [];
-      const prompts = raw.split("\n").map(parsePromptLine).filter((prompt): prompt is string => prompt !== null);
-      if (prompts.length <= MAX_STORED_ENTRIES) return prompts;
-      const kept = prompts.slice(prompts.length - MAX_STORED_ENTRIES);
-      writeFileSync(filePath, toLines(kept));
-      return kept;
-    },
-    append(prompt: string): void {
-      mkdirSync(dirname(filePath), { recursive: true });
-      appendFileSync(filePath, `${JSON.stringify({ prompt })}\n`);
-    },
-  };
+export class PromptHistoryStoreImpl implements PromptHistoryStore {
+  private readonly filePath: string;
+
+  constructor(homeJieDir: string) {
+    this.filePath = join(homeJieDir, PROMPT_HISTORY_FILE);
+  }
+
+  load(): ReadonlyArray<string> {
+    const raw = readFileOrEmpty(this.filePath);
+    if (raw === "") return [];
+    const prompts = raw.split("\n").map(parsePromptLine).filter((prompt): prompt is string => prompt !== null);
+    if (prompts.length <= MAX_STORED_ENTRIES) return prompts;
+    const kept = prompts.slice(prompts.length - MAX_STORED_ENTRIES);
+    writeFileSync(this.filePath, toLines(kept));
+    return kept;
+  }
+
+  append(prompt: string): void {
+    mkdirSync(dirname(this.filePath), { recursive: true });
+    appendFileSync(this.filePath, `${JSON.stringify({ prompt })}\n`);
+  }
 }
 
 function toLines(prompts: ReadonlyArray<string>): string {

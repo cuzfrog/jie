@@ -198,8 +198,8 @@ describe("createJieAutocompleteProvider — unambiguous-command drill-down", () 
           { sessionId: "beta-2", messageCount: 12, lastActivity: "2026-07-21T00:00:00.000Z" },
         ];
       }
-      if (cmd.name === "listModels") {
-        return [{ provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", available: true }];
+      if (cmd.name === "listFilteredModels") {
+        return { models: [{ provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", available: true }], filteredOut: 0 };
       }
       if (cmd.name === "getModelFilters") return [];
       return null;
@@ -404,8 +404,12 @@ describe("createJieAutocompleteProvider — /model arguments", () => {
     filters: ReadonlyArray<string> = [],
   ): JiePlatform {
     return makePlatform(vi.fn(async (cmd: { name: string }) => {
-      if (cmd.name === "listModels") return models;
-      if (cmd.name === "getModelFilters") return filters;
+      if (cmd.name === "listFilteredModels") {
+        const available = models.filter((model) => model.available);
+        const target = (model: { provider: string; id: string }) => `${model.provider}/${model.id}`.toLowerCase();
+        const matched = filters.length === 0 ? available : available.filter((model) => filters.some((filter) => target(model).includes(filter.toLowerCase())));
+        return { models: matched, filteredOut: available.length - matched.length };
+      }
       return null;
     }));
   }

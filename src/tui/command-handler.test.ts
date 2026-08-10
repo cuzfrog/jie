@@ -278,9 +278,21 @@ describe("CommandHandlerImpl — /model-filter", () => {
   type ModelRow = { readonly provider: string; readonly id: string; readonly name: string; readonly available: boolean };
 
   function mockFilterBackend(execute: ReturnType<typeof vi.fn>, filters: ReadonlyArray<string>, models: ReadonlyArray<ModelRow>): void {
-    execute.mockImplementation(async (cmd: { name: string }) => {
+    execute.mockImplementation(async (cmd: { name: string; pattern?: string; existingFilters?: ReadonlyArray<string> }) => {
       if (cmd.name === "getModelFilters") return filters;
-      if (cmd.name === "listModels") return models;
+      if (cmd.name === "setModelFilters") return null;
+      if (cmd.name === "validateModelFilter") {
+        const pattern = cmd.pattern ?? "";
+        const existing = cmd.existingFilters ?? [];
+        if (existing.includes(pattern)) return null;
+        const combined = [...existing, pattern];
+        const available = models.filter((model) => model.available);
+        if (available.length === 0) return null;
+        const target = (model: { provider: string; id: string }) => `${model.provider}/${model.id}`.toLowerCase();
+        if (available.some((model) => combined.some((filter) => target(model).includes(filter.toLowerCase())))) return null;
+        const basis = existing.length === 0 ? "it matches none" : `combined with existing filters (${existing.join(", ")}) it matches none`;
+        return `/model-filter: pattern '${pattern}' rejected — ${basis} of the ${available.length} available models`;
+      }
       return null;
     });
   }
@@ -343,7 +355,6 @@ describe("CommandHandlerImpl — /model-filter", () => {
     handler.handle("/model-filter add qwen");
     await new Promise((r) => setImmediate(r));
     expect(execute).toHaveBeenCalledWith({ name: "getModelFilters" });
-    expect(execute).toHaveBeenCalledWith({ name: "listModels" });
     expect(execute).toHaveBeenCalledWith({ name: "setModelFilters", filters: ["gpt", "qwen"] });
     expect(dispatch).toHaveBeenCalledWith(Actions.setTransientMessage(expect.stringContaining("model filter added: qwen")));
   });
