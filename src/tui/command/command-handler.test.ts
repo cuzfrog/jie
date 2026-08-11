@@ -1,5 +1,6 @@
 import { JiePlatformError, type JiePlatform, type SkillInfo } from "../../platform";
-import { CommandHandlerImpl, SLASH_COMMAND_NAMES, type CommandHandler } from "./command-handler";
+import { SLASH_COMMAND_NAMES, SLASH_COMMANDS } from "./command-registry";
+import { CommandHandlerImpl, type CommandHandler } from "./command-handler";
 import { CommandResolverImpl } from "./command-resolver";
 import { Actions, type StateStore, type TuiState } from "../state";
 import { makeAgentUiState, makeTuiState } from "../test";
@@ -49,7 +50,7 @@ function makeHandler(platform: JiePlatform, state: TuiState = makeTuiState()): H
     subscribe: vi.fn(() => () => undefined),
   });
   return {
-    handler: new CommandHandlerImpl(stateStore, platform, new CommandResolverImpl(platform)),
+    handler: new CommandHandlerImpl(stateStore, platform, new CommandResolverImpl(platform, SLASH_COMMANDS)),
     dispatch: stateStore.dispatch,
   };
 }

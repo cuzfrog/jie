@@ -1,4 +1,5 @@
 export { registerCommandModule } from "./module";
 export { type CommandHandler } from "./command-handler";
-export { type CommandResolver, type ResolvedCommand, type UiAction } from "./command-resolver";
-export { COMMAND_METADATA, resolveCommandName, type CommandMeta, type ArgumentSpec } from "./command-metadata";
+export { type CommandResolver } from "./command-resolver";
+export { COMMAND_METADATA, resolveCommandName, SLASH_COMMANDS, SLASH_COMMAND_NAMES } from "./command-registry";
+export { type ArgumentSpec, type CommandMeta, type ResolvedCommand, type SlashCommandDefinition, type UiAction } from "./slash-command";

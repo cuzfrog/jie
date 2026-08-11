@@ -1,19 +1,11 @@
-import {
-  CombinedAutocompleteProvider,
-  fuzzyFilter,
-  type AutocompleteItem,
-  type AutocompleteProvider,
-  type AutocompleteSuggestions,
-  type SlashCommand,
-} from "@earendil-works/pi-tui";
-import { EFFORT_LEVELS, type JiePlatform, type KanbanCard, type SkillInfo } from "../../platform";
-import { COMMAND_METADATA } from "../command";
+import { CombinedAutocompleteProvider, fuzzyFilter, type AutocompleteItem, type AutocompleteProvider, type AutocompleteSuggestions, type SlashCommand } from "@earendil-works/pi-tui";
+import type { JiePlatform, SkillInfo } from "../../platform";
+import type { SlashCommandDefinition } from "../command";
 import { filterFiles, type ScannedFile } from "../file-mention";
 import type { StateStore } from "../state";
 
 const MAX_SUGGESTIONS = 20;
 const AT_PREFIX_PATTERN = /(?:^|[\s"])@([\w./-]*)$/;
-const MODEL_FILTER_ACTIONS = ["add", "remove", "list"] as const;
 
 export interface JieSuggestions extends AutocompleteSuggestions {
   readonly filteredOut?: number;
@@ -37,11 +29,17 @@ export class JieAutocompleteProviderImpl implements JieAutocompleteProvider {
   private readonly combined: CombinedAutocompleteProvider;
   private modelFilteredOutCount: number | null = null;
 
-  constructor(cwd: string, scan: (rootDir: string) => ReadonlyArray<ScannedFile>, platform: JiePlatform, stateStore: StateStore) {
+  constructor(
+    cwd: string,
+    scan: (rootDir: string) => ReadonlyArray<ScannedFile>,
+    platform: JiePlatform,
+    stateStore: StateStore,
+    slashCommands: ReadonlyArray<SlashCommandDefinition>,
+  ) {
     this.cwd = cwd;
     this.scan = scan;
     this.stateStore = stateStore;
-    this.commands = slashCommands(platform, stateStore, (count) => {
+    this.commands = buildSlashCommands(slashCommands, platform, stateStore, (count) => {
       this.modelFilteredOutCount = count;
     });
     this.combined = new CombinedAutocompleteProvider(this.commands, cwd, null);
@@ -98,16 +96,17 @@ export class JieAutocompleteProviderImpl implements JieAutocompleteProvider {
   }
 }
 
-function slashCommands(
+function buildSlashCommands(
+  definitions: ReadonlyArray<SlashCommandDefinition>,
   platform: JiePlatform,
   stateStore: StateStore,
-  reportModelFilteredOut: (count: number) => void,
+  reportFilteredOut: (count: number) => void,
 ): SlashCommand[] {
   const commands: SlashCommand[] = [];
-  for (const meta of COMMAND_METADATA) {
-    const canonical = slashCommandFor(platform, stateStore, reportModelFilteredOut, meta);
+  for (const definition of definitions) {
+    const canonical = toSlashCommand(definition, platform, stateStore, reportFilteredOut);
     commands.push(canonical);
-    for (const alias of meta.aliases ?? []) {
+    for (const alias of definition.meta.aliases ?? []) {
       commands.push({
         name: alias,
         description: `alias of /${canonical.name}`,
@@ -119,21 +118,29 @@ function slashCommands(
   return commands;
 }
 
-function slashCommandFor(
+function toSlashCommand(
+  definition: SlashCommandDefinition,
   platform: JiePlatform,
   stateStore: StateStore,
-  reportModelFilteredOut: (count: number) => void,
-  meta: (typeof COMMAND_METADATA)[number],
+  reportFilteredOut: (count: number) => void,
 ): SlashCommand {
-  if (meta.name === "team") return { ...meta, getArgumentCompletions: (prefix) => teamItems(platform, prefix) };
-  if (meta.name === "resume") return { ...meta, getArgumentCompletions: (prefix) => sessionItems(platform, stateStore, prefix) };
-  if (meta.name === "model") return { ...meta, getArgumentCompletions: (prefix) => modelItems(platform, prefix, reportModelFilteredOut) };
-  if (meta.name === "model-filter") return { ...meta, getArgumentCompletions: (argumentText) => modelFilterItems(platform, argumentText) };
-  if (meta.name === "login") return { ...meta, getArgumentCompletions: (prefix) => providerItems(platform, prefix) };
-  if (meta.name === "logout") return { ...meta, getArgumentCompletions: (prefix) => logoutItems(platform, prefix) };
-  if (meta.name === "effort") return { ...meta, getArgumentCompletions: async (prefix) => effortItems(prefix) };
-  if (meta.name === "kanban") return { ...meta, getArgumentCompletions: (argumentText) => kanbanItems(stateStore, argumentText) };
-  return { ...meta };
+  return {
+    name: definition.meta.name,
+    description: definition.meta.description,
+    argumentHint: definition.meta.argumentHint,
+    getArgumentCompletions: async (argumentText: string): Promise<AutocompleteItem[] | null> => {
+      const completion = await Promise.resolve(definition.complete(argumentText, { state: stateStore.getState(), platform }));
+      if (completion === null) return null;
+      if (completion.filteredOut !== undefined && completion.filteredOut > 0) {
+        reportFilteredOut(completion.filteredOut);
+      }
+      return completion.items.map((item): AutocompleteItem => ({
+        value: item.value,
+        label: item.label,
+        description: item.description,
+      }));
+    },
+  };
 }
 
 async function drillDownSuggestions(commands: SlashCommand[], textBeforeCursor: string): Promise<AutocompleteSuggestions | null> {
@@ -156,137 +163,9 @@ async function drillDownSuggestions(commands: SlashCommand[], textBeforeCursor: 
   };
 }
 
-async function teamItems(platform: JiePlatform, prefix: string): Promise<AutocompleteItem[] | null> {
-  const info = await platform.execute({ name: "getTeamInfo" });
-  if (isAlreadyComplete(info.installed.map((team) => team.id), prefix)) return null;
-  const items = info.installed
-    .filter((team) => hasPrefix(team.id, prefix))
-    .slice(0, MAX_SUGGESTIONS)
-    .map((team): AutocompleteItem => ({
-      value: team.id,
-      label: team.id,
-      description: team.id === info.defaultTeam ? "(default)" : team.agentCount === 1 ? "1 agent" : `${team.agentCount} agents`,
-    }));
-  return items.length === 0 ? null : items;
-}
-
-async function sessionItems(platform: JiePlatform, stateStore: StateStore, prefix: string): Promise<AutocompleteItem[] | null> {
-  const teamId = stateStore.getState().teamId;
-  if (teamId === null) return null;
-  const sessions = await platform.execute({ name: "listSessions", teamId });
-  if (isAlreadyComplete(sessions.map((session) => session.sessionId), prefix)) return null;
-  const items = sessions
-    .filter((session) => hasPrefix(session.sessionId, prefix) || (session.name !== undefined && hasPrefix(session.name, prefix)))
-    .slice(0, MAX_SUGGESTIONS)
-    .map((session): AutocompleteItem => ({
-      value: session.sessionId,
-      label: session.name ?? session.sessionId,
-      description: `${session.messageCount} msg · ${relativeAge(session.lastActivity)}`,
-    }));
-  return items.length === 0 ? null : items;
-}
-
-async function modelItems(
-  platform: JiePlatform,
-  prefix: string,
-  reportFilteredOut: (count: number) => void,
-): Promise<AutocompleteItem[] | null> {
-  const filtered = await platform.execute({ name: "listFilteredModels" });
-  if (filtered.filteredOut > 0) reportFilteredOut(filtered.filteredOut);
-  const items = filtered.models.map((model): AutocompleteItem => {
-    const value = `${model.provider}/${model.id}`;
-    return { value, label: value, description: model.name };
-  });
-  if (isAlreadyComplete(items.map((item) => item.value), prefix)) return null;
-  const matches = items.filter((item) => hasPrefix(item.label, prefix)).slice(0, MAX_SUGGESTIONS);
-  return matches.length === 0 ? null : matches;
-}
-
-async function logoutItems(platform: JiePlatform, prefix: string): Promise<AutocompleteItem[] | null> {
-  const providers = await platform.execute({ name: "listProviders" });
-  const items: AutocompleteItem[] = [
-    { value: "*", label: "*", description: "all providers" },
-    ...providers.map((provider): AutocompleteItem => ({ value: provider.id, label: provider.id, description: provider.description })),
-  ];
-  if (isAlreadyComplete(items.map((item) => item.value), prefix)) return null;
-  const matches = items.filter((item) => hasPrefix(item.label, prefix)).slice(0, MAX_SUGGESTIONS);
-  return matches.length === 0 ? null : matches;
-}
-
-async function modelFilterItems(platform: JiePlatform, argumentText: string): Promise<AutocompleteItem[] | null> {
-  const spaceIndex = argumentText.indexOf(" ");
-  if (spaceIndex === -1) {
-    if (argumentText.toLowerCase() === "remove") return removePatternItems(platform, "");
-    if (isAlreadyComplete(MODEL_FILTER_ACTIONS, argumentText)) return null;
-    const items = MODEL_FILTER_ACTIONS.filter((action) => hasPrefix(action, argumentText))
-      .map((action): AutocompleteItem => ({ value: action, label: action }));
-    return items.length === 0 ? null : items;
-  }
-  const action = argumentText.slice(0, spaceIndex);
-  if (action !== "remove") return null;
-  return removePatternItems(platform, argumentText.slice(spaceIndex + 1));
-}
-
-async function removePatternItems(platform: JiePlatform, pattern: string): Promise<AutocompleteItem[] | null> {
-  const filters = await platform.execute({ name: "getModelFilters" });
-  if (isAlreadyComplete(filters, pattern)) return null;
-  const items = filters
-    .filter((filter) => hasPrefix(filter, pattern))
-    .slice(0, MAX_SUGGESTIONS)
-    .map((filter): AutocompleteItem => ({ value: `remove ${filter}`, label: filter }));
-  return items.length === 0 ? null : items;
-}
-
-async function providerItems(platform: JiePlatform, prefix: string): Promise<AutocompleteItem[] | null> {
-  const providers = await platform.execute({ name: "listProviders" });
-  const items = providers.map((provider): AutocompleteItem =>
-    ({ value: provider.id, label: provider.id, description: provider.description }));
-  if (isAlreadyComplete(items.map((item) => item.value), prefix)) return null;
-  const matches = items.filter((item) => hasPrefix(item.label, prefix)).slice(0, MAX_SUGGESTIONS);
-  return matches.length === 0 ? null : matches;
-}
-
-function effortItems(prefix: string): AutocompleteItem[] | null {
-  if (isAlreadyComplete(EFFORT_LEVELS, prefix)) return null;
-  const items = EFFORT_LEVELS
-    .filter((level) => hasPrefix(level, prefix))
-    .map((level): AutocompleteItem => ({ value: level, label: level }));
-  return items.length === 0 ? null : items;
-}
-
-const KANBAN_SUBCOMMANDS: ReadonlyArray<{ readonly name: string; readonly description: string }> = [
-  { name: "add", description: "[--title <title>] <description>" },
-  { name: "remove", description: "<cardId>" },
-  { name: "complete", description: "<cardId>" },
-  { name: "review", description: "<cardId>" },
-];
-
-function kanbanItems(stateStore: StateStore, argumentText: string): AutocompleteItem[] | null {
-  const state = stateStore.getState();
-  const board = state.kanban.board;
-  const trimmed = argumentText.trim();
-  if (trimmed === "") return KANBAN_SUBCOMMANDS.map(subcommandItem);
-  const spaceIndex = trimmed.indexOf(" ");
-  const subcommand = spaceIndex === -1 ? trimmed : trimmed.slice(0, spaceIndex);
-  const rest = spaceIndex === -1 ? "" : trimmed.slice(spaceIndex + 1);
-  if (subcommand.toLowerCase() === "add") return null;
-  if (subcommand.toLowerCase() === "remove" || subcommand.toLowerCase() === "complete" || subcommand.toLowerCase() === "review") {
-    const targetStatus = subcommand.toLowerCase() === "complete" ? "completed" : subcommand.toLowerCase() === "review" ? "in_review" : null;
-    const cards = board.filter((card) => hasPrefix(card.id, rest) && (targetStatus === null || card.status !== targetStatus));
-    if (cards.length === 0) return null;
-    return cards.map((card) => kanbanCardItem(card, subcommand));
-  }
-  const matches = KANBAN_SUBCOMMANDS.filter((item) => hasPrefix(item.name, subcommand));
-  if (matches.length === 0) return null;
-  return matches.map(subcommandItem);
-}
-
-function subcommandItem(item: { readonly name: string; readonly description: string }): AutocompleteItem {
-  return { value: item.name, label: item.name, description: item.description };
-}
-
-function kanbanCardItem(card: KanbanCard, subcommand: string): AutocompleteItem {
-  return { value: `${subcommand} ${card.id}`, label: card.id, description: card.content };
+function fileItems(query: string, scan: (rootDir: string) => ReadonlyArray<ScannedFile>, basePath: string): AutocompleteItem[] {
+  const entries = filterFiles(query, scan(basePath).map((file) => ({ path: file.relPath })));
+  return entries.slice(0, MAX_SUGGESTIONS).map((entry): AutocompleteItem => ({ value: `@${entry.path}`, label: entry.path }));
 }
 
 function targetAgentSkills(stateStore: StateStore): ReadonlyArray<SkillInfo> {
@@ -309,30 +188,6 @@ function atQuery(textBeforeCursor: string): string | null {
   return match === null ? null : (match[1] ?? "");
 }
 
-function fileItems(query: string, scan: (rootDir: string) => ReadonlyArray<ScannedFile>, basePath: string): AutocompleteItem[] {
-  const entries = filterFiles(query, scan(basePath).map((file) => ({ path: file.relPath })));
-  return entries.slice(0, MAX_SUGGESTIONS).map((entry): AutocompleteItem => ({ value: `@${entry.path}`, label: entry.path }));
-}
-
-function hasPrefix(value: string, prefix: string): boolean {
-  return value.toLowerCase().startsWith(prefix.toLowerCase());
-}
-
 function isAlreadyComplete(candidates: ReadonlyArray<string>, prefix: string): boolean {
   return prefix !== "" && candidates.some((candidate) => candidate.toLowerCase() === prefix.toLowerCase());
-}
-
-function relativeAge(iso: string): string {
-  const ms = Date.now() - Date.parse(iso);
-  if (Number.isNaN(ms)) return iso;
-  const minutes = Math.floor(ms / 60_000);
-  if (minutes < 1) return "now";
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d`;
-  const months = Math.floor(days / 30);
-  if (months < 12) return `${months}mo`;
-  return `${Math.floor(months / 12)}y`;
 }

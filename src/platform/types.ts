@@ -15,6 +15,14 @@ export function isEffortLevel(value: unknown): value is EffortLevel {
     return typeof value === "string" && EFFORT_LEVELS.some((level) => level === value);
 }
 
+export function parseModelRef(value: string): { readonly provider: string; readonly modelId: string } | null {
+    const slash = value.indexOf("/");
+    if (slash === -1) return null;
+    const provider = value.slice(0, slash);
+    const modelId = value.slice(slash + 1);
+    return provider === "" || modelId === "" ? null : { provider, modelId };
+}
+
 export interface ModelInfo {
     readonly provider: string;
     readonly id: string;

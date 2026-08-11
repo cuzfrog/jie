@@ -1,8 +1,9 @@
 import { JiePlatformError, type Command, type CommandName, type CommandResult, type JiePlatform, type KanbanCard, type TeamInfo } from "../../platform";
-import { COMMAND_METADATA, resolveCommandName } from "./command-metadata";
+import { resolveCommandName } from "./command-registry";
 import { Actions, TuiState, type AgentUiState, type StateStore } from "../state";
 import { bashDirective, parseBashCommand } from "../bash";
-import type { CommandResolver, ResolvedCommand, UiAction } from "./command-resolver";
+import type { CommandResolver } from "./command-resolver";
+import type { ResolvedCommand, UiAction } from "./slash-command";
 
 type AgentRoute = {
   readonly teamId: string;
@@ -187,8 +188,6 @@ export class CommandHandlerImpl implements CommandHandler {
     this.platform.prompt(agent.teamId, agent.agentKey, trimmed);
   }
 }
-
-export const SLASH_COMMAND_NAMES: ReadonlyArray<string> = COMMAND_METADATA.flatMap((meta) => [meta.name, ...(meta.aliases ?? [])]);
 
 function errorReason(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
