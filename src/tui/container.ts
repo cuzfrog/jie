@@ -15,7 +15,6 @@ import { registerTuiModule } from "./module";
 import { registerCommandModule, type CommandHandler, type CommandResolver } from "./command";
 import { registerRenderModule, type TerminalTitle, type TuiRenderer } from "./render";
 import type { CreateTUIOptions, Tui, TuiDeps, TuiStdout } from "./tui";
-import type { ShutdownSignal } from "./shutdown";
 import type { TuiComponent } from "./types";
 
 const log = logger.getSubLogger({ name: "jie.tui.container" });
@@ -49,7 +48,6 @@ export interface TuiCradle {
   readonly renderer: TuiRenderer;
   readonly terminalTitle: TerminalTitle;
   readonly effectHandler: EffectHandler;
-  readonly shutdownSignal: ShutdownSignal;
   readonly quitTui: () => Promise<void>;
   readonly tui: Tui;
 }
@@ -88,6 +86,7 @@ export function bootTui(options: CreateTUIOptions, deps: TuiDeps): AwilixContain
     .execute({ name: "getTeamInfo" })
     .then((info) => container.cradle.stateStore.dispatch(Actions.setInstalledTeams(info.installed)))
     .catch((error) => log.warn(`failed to load installed teams: ${String(error)}`));
+  void container.cradle.effectHandler;
   return container;
 }
 

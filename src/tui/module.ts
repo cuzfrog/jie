@@ -1,21 +1,19 @@
 import { asClass, asFunction, type AwilixContainer } from "awilix";
 import { type Terminal } from "@earendil-works/pi-tui";
 import type { TuiCradle } from "./container";
-import { ShutdownSignalImpl, type ShutdownSignal } from "./shutdown";
-import { TuiImpl } from "./tui";
+import { TuiImpl, type Tui } from "./tui";
 
 export function registerTuiModule(container: AwilixContainer<TuiCradle>): void {
   container.register({
-    shutdownSignal: asClass(ShutdownSignalImpl)
-      .singleton()
-      .disposer((signal) => signal.request()),
     quitTui: asFunction(
-      (terminal: Terminal, shutdownSignal: ShutdownSignal): (() => Promise<void>) =>
+      (terminal: Terminal, tui: Tui): (() => Promise<void>) =>
         async (): Promise<void> => {
           await terminal.drainInput();
-          shutdownSignal.request();
+          tui.requestShutdown();
         },
     ).singleton(),
-    tui: asClass(TuiImpl).singleton(),
+    tui: asClass(TuiImpl)
+      .singleton()
+      .disposer((tui) => tui.requestShutdown()),
   });
 }

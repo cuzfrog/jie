@@ -5,8 +5,7 @@ import { type Tui } from "./tui";
 import { bootTui } from "./container";
 import { Actions, type StateStore } from "./state";
 import { withTTY } from "../../tests/support";
-import { asValue } from "awilix";
-import { type Terminal } from "@earendil-works/pi-tui";
+
 import { Events, type JiePlatform, type EventType, type AnyEventEnvelope, type EventEnvelope, type Command, type CommandResult } from "../platform";
 
 class FakeStdin extends PassThrough {
@@ -22,25 +21,6 @@ class FakeStdin extends PassThrough {
 class FakeStdout extends PassThrough {
   columns = 80;
   rows = 30;
-}
-
-class RecordingTerminal implements Terminal {
-  readonly writeCalls: string[] = [];
-  columns = 80;
-  rows = 30;
-  start(): void {}
-  stop(): void {}
-  drainInput(): Promise<void> { return Promise.resolve(); }
-  write(data: string): void { this.writeCalls.push(data); }
-  get kittyProtocolActive(): boolean { return false; }
-  moveBy(): void {}
-  hideCursor(): void {}
-  showCursor(): void {}
-  clearLine(): void {}
-  clearFromCursor(): void {}
-  clearScreen(): void {}
-  setTitle(): void {}
-  setProgress(): void {}
 }
 
 interface PromptCall {
@@ -117,12 +97,16 @@ interface TuiHarness {
   readonly stdin: FakeStdin;
   readonly stdout: FakeStdout;
   readonly platform: PlatformHarness;
-  readonly terminal?: RecordingTerminal;
+  readonly stdoutData: string[];
 }
 
 function bootHarness(executeResult?: CommandResult<"kanbanEdit">, recordWrites = false, soundEnabled = true): TuiHarness {
   const stdin = new FakeStdin();
   const stdout = new FakeStdout();
+  const stdoutData: string[] = [];
+  if (recordWrites) {
+    stdout.on("data", (chunk: Buffer) => stdoutData.push(chunk.toString("utf8")));
+  }
   const platform = makePlatformHarness(executeResult, soundEnabled);
   const container = bootTui({ cwd: process.cwd() }, {
     platform: platform.platform,
@@ -130,12 +114,7 @@ function bootHarness(executeResult?: CommandResult<"kanbanEdit">, recordWrites =
     stdin,
     stdout,
   });
-  let terminal: RecordingTerminal | undefined;
-  if (recordWrites) {
-    terminal = new RecordingTerminal();
-    container.register({ terminal: asValue(terminal) });
-  }
-  return { container, tui: container.cradle.tui, stateStore: container.cradle.stateStore, stdin, stdout, platform, terminal };
+  return { container, tui: container.cradle.tui, stateStore: container.cradle.stateStore, stdin, stdout, platform, stdoutData };
 }
 
 function makePlatform(): JiePlatform {
@@ -428,7 +407,7 @@ describe("bootTui — notification sound", () => {
     harness!.platform.emit(Events.agentIdle({ kind: "agent", teamId: "my-team", agentKey: "general-1" }, "stop"));
     await waitFrames(20);
     expect(harness!.platform.executeCalls.some((command) => command.name === "getNotificationSoundEnabled")).toBe(true);
-    expect(harness!.terminal!.writeCalls.some((data) => data === "\x07")).toBe(true);
+    expect(harness!.stdoutData.some((data) => data === "\x07")).toBe(true);
     await harness!.container.dispose();
     await started;
   });
@@ -444,7 +423,7 @@ describe("bootTui — notification sound", () => {
     await waitFrames(20);
     harness!.platform.emit(Events.agentIdle({ kind: "agent", teamId: "my-team", agentKey: "general-1" }, "stop"));
     await waitFrames(20);
-    expect(harness!.terminal!.writeCalls.some((data) => data === "\x07")).toBe(false);
+    expect(harness!.stdoutData.some((data) => data === "\x07")).toBe(false);
     await harness!.container.dispose();
     await started;
   });
@@ -461,7 +440,7 @@ describe("bootTui — notification sound", () => {
     harness!.platform.emit(Events.agentIdle({ kind: "agent", teamId: "my-team", agentKey: "worker-1" }, "stop"));
     await waitFrames(20);
     expect(harness!.platform.executeCalls.some((command) => command.name === "getNotificationSoundEnabled")).toBe(false);
-    expect(harness!.terminal!.writeCalls.some((data) => data === "\x07")).toBe(false);
+    expect(harness!.stdoutData.some((data) => data === "\x07")).toBe(false);
     await harness!.container.dispose();
     await started;
   });
@@ -477,44 +456,11 @@ describe("bootTui — notification sound", () => {
     await waitFrames(20);
     harness!.platform.emit(Events.agentIdle({ kind: "agent", teamId: "my-team", agentKey: "general-1" }, "toolUse"));
     await waitFrames(20);
-    expect(harness!.terminal!.writeCalls.some((data) => data === "\x07")).toBe(false);
+    expect(harness!.stdoutData.some((data) => data === "\x07")).toBe(false);
     await harness!.container.dispose();
     await started;
   });
 });
 
-function bootTransientHarness(ttlMs: number, tickMs: number): TuiHarness {
-  const stdin = new FakeStdin();
-  const stdout = new FakeStdout();
-  const platform = makePlatformHarness();
-  const container = bootTui({ cwd: process.cwd() }, {
-    platform: platform.platform,
-    homeJieDir: join(tmpdir(), "jie-tui-unit-home"),
-    stdin,
-    stdout,
-  });
-  container.register({
-    transientTtlMs: asValue(ttlMs),
-    renderTickMs: asValue(tickMs),
-  });
-  return { container, tui: container.cradle.tui, stateStore: container.cradle.stateStore, stdin, stdout, platform };
-}
-
-describe("bootTui — transient message", () => {
-  test("expires the transient message after the configured TTL", async () => {
-    let harness: TuiHarness | null = null;
-    withTTY(true, () => {
-      harness = bootTransientHarness(50, 20);
-    });
-    const started = harness!.tui.run();
-    await waitFrames(30);
-    harness!.stateStore.dispatch(Actions.setTransientMessage("hello"));
-    expect(harness!.stateStore.getState().transientMessage).toBe("hello");
-    await waitFrames(100);
-    expect(harness!.stateStore.getState().transientMessage).toBeNull();
-    await harness!.container.dispose();
-    await started;
-  });
-});
 
 

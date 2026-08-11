@@ -139,6 +139,7 @@ function captureRun(platform: FakePlatform): CapturedRun {
             runCalls.value += 1;
             return Promise.resolve();
           },
+          requestShutdown: () => undefined,
         },
       },
       dispose: async () => {

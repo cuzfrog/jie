@@ -78,7 +78,7 @@ describe("handleSubmitEditorText — ! bash mode routing", () => {
       const tp = makePlatform();
       const container = bootTui({ cwd: process.cwd() }, { platform: tp.platform, homeJieDir: join(tmpdir(), "jie-tui-bash-home") });
       const { stateStore } = container.cradle;
-      void container.cradle.tui;
+
       try {
         emitTeamLoaded(tp, makeTeamInfo());
         stateStore.dispatch(Actions.submitEditorText("!ls -la"));
@@ -99,7 +99,7 @@ describe("handleSubmitEditorText — ! bash mode routing", () => {
       const tp = makePlatform();
       const container = bootTui({ cwd: process.cwd() }, { platform: tp.platform, homeJieDir: join(tmpdir(), "jie-tui-bash-home") });
       const { stateStore } = container.cradle;
-      void container.cradle.tui;
+
       try {
         emitTeamLoaded(tp, makeTeamInfo());
         stateStore.dispatch(Actions.submitEditorText("!!cat secret"));
@@ -118,7 +118,7 @@ describe("handleSubmitEditorText — ! bash mode routing", () => {
       const tp = makePlatform();
       const container = bootTui({ cwd: process.cwd() }, { platform: tp.platform, homeJieDir: join(tmpdir(), "jie-tui-bash-home") });
       const { stateStore } = container.cradle;
-      void container.cradle.tui;
+
       try {
         emitTeamLoaded(tp, makeTeamInfo());
         stateStore.dispatch(Actions.submitEditorText("hello world"));
@@ -135,7 +135,7 @@ describe("handleSubmitEditorText — ! bash mode routing", () => {
       const tp = makePlatform();
       const container = bootTui({ cwd: process.cwd() }, { platform: tp.platform, homeJieDir: join(tmpdir(), "jie-tui-bash-home") });
       const { stateStore } = container.cradle;
-      void container.cradle.tui;
+
       try {
         emitTeamLoaded(tp, makeTeamInfo());
         stateStore.dispatch(Actions.submitEditorText("!"));
@@ -152,7 +152,7 @@ describe("handleSubmitEditorText — ! bash mode routing", () => {
       const tp = makePlatform();
       const container = bootTui({ cwd: process.cwd() }, { platform: tp.platform, homeJieDir: join(tmpdir(), "jie-tui-bash-home") });
       const { stateStore } = container.cradle;
-      void container.cradle.tui;
+
       try {
         stateStore.dispatch(Actions.submitEditorText("!ls"));
         expect(tp.prompts.length).toBe(0);
@@ -168,7 +168,7 @@ describe("handleSubmitEditorText — ! bash mode routing", () => {
       const tp = makePlatform();
       const container = bootTui({ cwd: process.cwd() }, { platform: tp.platform, homeJieDir: join(tmpdir(), "jie-tui-bash-home") });
       const { stateStore } = container.cradle;
-      void container.cradle.tui;
+
       try {
         emitTeamLoaded(tp, makeTeamInfo());
         stateStore.dispatch(Actions.submitEditorText("/help"));
