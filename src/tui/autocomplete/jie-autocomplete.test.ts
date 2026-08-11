@@ -4,7 +4,11 @@ import { SLASH_COMMANDS } from "../command/definitions";
 import { type ScannedFile } from "../file-mention";
 import { type StateStore, type TuiState } from "../state";
 import { makeAgentUiState, makeTuiState } from "../test";
+import { FileMentionSource } from "./file-mention-source";
 import { JieAutocompleteProviderImpl } from "./jie-autocomplete";
+import { PathCompletionSource } from "./path-completion-source";
+import { SkillSource } from "./skill-source";
+import { SlashCommandSource } from "./slash-command-source";
 
 const CWD = "/proj";
 
@@ -95,7 +99,12 @@ function makeCommandResolver(platform: JiePlatform): CommandResolver {
 }
 
 function makeProvider(cwd: string, scan: (rootDir: string) => ReadonlyArray<ScannedFile>, platform: JiePlatform, stateStore: StateStore): JieAutocompleteProviderImpl {
-  return new JieAutocompleteProviderImpl(cwd, scan, stateStore, commandCatalog, makeCommandResolver(platform));
+  return new JieAutocompleteProviderImpl(cwd, [
+    new FileMentionSource(cwd, scan),
+    new SlashCommandSource(commandCatalog, makeCommandResolver(platform), stateStore),
+    new SkillSource(stateStore),
+    new PathCompletionSource(cwd),
+  ]);
 }
 
 describe("createJieAutocompleteProvider — @-mentions", () => {

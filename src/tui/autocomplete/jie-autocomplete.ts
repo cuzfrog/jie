@@ -1,15 +1,5 @@
-import { CombinedAutocompleteProvider, fuzzyFilter, type AutocompleteItem, type AutocompleteProvider, type AutocompleteSuggestions, type SlashCommand } from "@earendil-works/pi-tui";
-import type { SkillInfo } from "../../platform";
-import type { CommandCatalog, CommandMeta, CommandResolver } from "../command";
-import { filterFiles, type ScannedFile } from "../file-mention";
-import type { StateStore } from "../state";
-
-const MAX_SUGGESTIONS = 20;
-const AT_PREFIX_PATTERN = /(?:^|[\s"])@([\w./-]*)$/;
-
-export interface JieSuggestions extends AutocompleteSuggestions {
-  readonly filteredOut?: number;
-}
+import { CombinedAutocompleteProvider, type AutocompleteItem, type AutocompleteProvider } from "@earendil-works/pi-tui";
+import type { CompletionSource, JieSuggestions } from "./completion-source";
 
 export interface JieAutocompleteProvider extends AutocompleteProvider {
   getSuggestions(
@@ -21,28 +11,15 @@ export interface JieAutocompleteProvider extends AutocompleteProvider {
 }
 
 export class JieAutocompleteProviderImpl implements JieAutocompleteProvider {
-  readonly triggerCharacters = ["@", "/"];
-  private readonly cwd: string;
-  private readonly scan: (rootDir: string) => ReadonlyArray<ScannedFile>;
-  private readonly stateStore: StateStore;
-  private readonly commands: SlashCommand[];
-  private readonly combined: CombinedAutocompleteProvider;
-  private modelFilteredOutCount: number | null = null;
+  readonly triggerCharacters: string[];
+  private readonly applier: CombinedAutocompleteProvider;
 
   constructor(
-    cwd: string,
-    scan: (rootDir: string) => ReadonlyArray<ScannedFile>,
-    stateStore: StateStore,
-    commandRegistry: CommandCatalog,
-    commandResolver: CommandResolver,
+    private readonly cwd: string,
+    private readonly completionSources: ReadonlyArray<CompletionSource>,
   ) {
-    this.cwd = cwd;
-    this.scan = scan;
-    this.stateStore = stateStore;
-    this.commands = buildSlashCommands(commandRegistry, commandResolver, stateStore, (count) => {
-      this.modelFilteredOutCount = count;
-    });
-    this.combined = new CombinedAutocompleteProvider(this.commands, cwd, null);
+    this.triggerCharacters = [...new Set(completionSources.flatMap((source) => [...source.triggerCharacters]))];
+    this.applier = new CombinedAutocompleteProvider([], this.cwd, null);
   }
 
   async getSuggestions(
@@ -51,21 +28,23 @@ export class JieAutocompleteProviderImpl implements JieAutocompleteProvider {
     cursorCol: number,
     options: { signal: AbortSignal; force?: boolean },
   ): Promise<JieSuggestions | null> {
-    this.modelFilteredOutCount = null;
-    const textBeforeCursor = (lines[cursorLine] ?? "").slice(0, cursorCol);
-    const query = atQuery(textBeforeCursor);
-    if (query === null) {
-      const drillDown = await drillDownSuggestions(this.commands, textBeforeCursor);
-      if (drillDown !== null) return withFilteredOut(drillDown, this.modelFilteredOutCount);
-      const combined = await this.combined.getSuggestions(lines, cursorLine, cursorCol, options);
-      const skills = this.skillSuggestions(textBeforeCursor);
-      if (skills === null) return withFilteredOut(combined, this.modelFilteredOutCount);
-      if (combined === null) return withFilteredOut(skills, this.modelFilteredOutCount);
-      return withFilteredOut({ items: [...combined.items, ...skills.items], prefix: combined.prefix }, this.modelFilteredOutCount);
+    const results: JieSuggestions[] = [];
+    for (const source of this.completionSources) {
+      const result = await source.getSuggestions(lines, cursorLine, cursorCol, options);
+      if (result === null) continue;
+      if (source.exclusive) return result;
+      results.push(result);
     }
-    const items = fileItems(query, this.scan, this.cwd);
-    if (items.length === 0) return null;
-    return { items, prefix: `@${query}` };
+    if (results.length === 0) return null;
+
+    const items = results.flatMap((result) => result.items);
+    const prefix = results[0]!.prefix;
+    const filteredOut = results.reduce((sum, result) => sum + (result.filteredOut ?? 0), 0);
+    return {
+      items,
+      prefix,
+      ...(filteredOut > 0 ? { filteredOut } : undefined),
+    };
   }
 
   applyCompletion(
@@ -75,119 +54,6 @@ export class JieAutocompleteProviderImpl implements JieAutocompleteProvider {
     item: AutocompleteItem,
     prefix: string,
   ): { lines: string[]; cursorLine: number; cursorCol: number } {
-    return this.combined.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
+    return this.applier.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
   }
-
-  private skillSuggestions(textBeforeCursor: string): AutocompleteSuggestions | null {
-    if (!textBeforeCursor.startsWith("/") || /\s/.test(textBeforeCursor)) return null;
-    const query = textBeforeCursor.slice(1);
-    const skills = targetAgentSkills(this.stateStore);
-    if (skills.length === 0 || isAlreadyComplete(skills.map((skill) => `skill:${skill.name}`), query)) return null;
-    const matches = fuzzyFilter([...skills], query, (skill) => `skill:${skill.name}`).slice(0, MAX_SUGGESTIONS);
-    if (matches.length === 0) return null;
-    return {
-      items: matches.map((skill): AutocompleteItem => ({
-        value: `skill:${skill.name}`,
-        label: `skill:${skill.name}`,
-        description: skill.argumentHint !== null ? `${skill.argumentHint} — ${skill.description}` : skill.description,
-      })),
-      prefix: textBeforeCursor,
-    };
-  }
-}
-
-function buildSlashCommands(
-  commandRegistry: CommandCatalog,
-  commandResolver: CommandResolver,
-  stateStore: StateStore,
-  reportFilteredOut: (count: number) => void,
-): SlashCommand[] {
-  const commands: SlashCommand[] = [];
-  for (const meta of commandRegistry.metadata) {
-    const canonical = toSlashCommand(meta, commandResolver, stateStore, reportFilteredOut);
-    commands.push(canonical);
-    for (const alias of meta.aliases ?? []) {
-      commands.push({
-        name: alias,
-        description: `alias of /${meta.name}`,
-        argumentHint: meta.argumentHint,
-        getArgumentCompletions: canonical.getArgumentCompletions,
-      });
-    }
-  }
-  return commands;
-}
-
-function toSlashCommand(
-  meta: CommandMeta,
-  commandResolver: CommandResolver,
-  stateStore: StateStore,
-  reportFilteredOut: (count: number) => void,
-): SlashCommand {
-  return {
-    name: meta.name,
-    description: meta.description,
-    argumentHint: meta.argumentHint,
-    getArgumentCompletions: async (argumentText: string): Promise<AutocompleteItem[] | null> => {
-      const completion = await Promise.resolve(commandResolver.complete(stateStore.getState(), meta.name, argumentText));
-      if (completion === null) return null;
-      if (completion.filteredOut !== undefined && completion.filteredOut > 0) {
-        reportFilteredOut(completion.filteredOut);
-      }
-      return completion.items.map((item): AutocompleteItem => ({
-        value: item.value,
-        label: item.label,
-        description: item.description,
-      }));
-    },
-  };
-}
-
-async function drillDownSuggestions(commands: SlashCommand[], textBeforeCursor: string): Promise<AutocompleteSuggestions | null> {
-  if (!textBeforeCursor.startsWith("/") || textBeforeCursor.includes(" ")) return null;
-  const query = textBeforeCursor.slice(1);
-  if (query === "") return null;
-  const matches = fuzzyFilter(commands, query, (command) => command.name);
-  if (matches.length !== 1) return null;
-  const command = matches[0];
-  if (command.getArgumentCompletions === undefined) return null;
-  const argumentItems = await command.getArgumentCompletions("");
-  if (argumentItems === null || argumentItems.length === 0) return null;
-  return {
-    items: argumentItems.map((item): AutocompleteItem => ({
-      value: `${command.name} ${item.value}`,
-      label: `${command.name} ${item.label}`,
-      description: item.description,
-    })),
-    prefix: textBeforeCursor,
-  };
-}
-
-function fileItems(query: string, scan: (rootDir: string) => ReadonlyArray<ScannedFile>, basePath: string): AutocompleteItem[] {
-  const entries = filterFiles(query, scan(basePath).map((file) => ({ path: file.relPath })));
-  return entries.slice(0, MAX_SUGGESTIONS).map((entry): AutocompleteItem => ({ value: `@${entry.path}`, label: entry.path }));
-}
-
-function targetAgentSkills(stateStore: StateStore): ReadonlyArray<SkillInfo> {
-  const state = stateStore.getState();
-  for (const agentId of [state.focusedAgentId, state.leaderAgentId]) {
-    if (agentId === null) continue;
-    const agent = state.agents.get(agentId);
-    if (agent !== undefined) return agent.skills;
-  }
-  return [];
-}
-
-function withFilteredOut(suggestions: AutocompleteSuggestions | null, filteredOut: number | null): JieSuggestions | null {
-  if (suggestions === null) return null;
-  return filteredOut === null || filteredOut === 0 ? suggestions : { ...suggestions, filteredOut };
-}
-
-function atQuery(textBeforeCursor: string): string | null {
-  const match = AT_PREFIX_PATTERN.exec(textBeforeCursor);
-  return match === null ? null : (match[1] ?? "");
-}
-
-function isAlreadyComplete(candidates: ReadonlyArray<string>, prefix: string): boolean {
-  return prefix !== "" && candidates.some((candidate) => candidate.toLowerCase() === prefix.toLowerCase());
 }
