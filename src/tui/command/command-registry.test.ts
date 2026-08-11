@@ -1,4 +1,5 @@
-import { COMMAND_METADATA, resolveCommandName, SLASH_COMMANDS, SLASH_COMMAND_NAMES } from "./command-registry";
+import { COMMAND_METADATA, resolveCommandName } from "./command-registry";
+import { SLASH_COMMANDS } from "./definitions";
 
 describe("slash command registry invariants", () => {
   test("SLASH_COMMANDS is the single authoritative list", () => {
@@ -30,12 +31,5 @@ describe("slash command registry invariants", () => {
     expect(resolveCommandName("new")).toBe("clear");
     expect(resolveCommandName("clear")).toBe("clear");
     expect(resolveCommandName("nope")).toBe("nope");
-  });
-
-  test("SLASH_COMMAND_NAMES contains canonical names and aliases in registration order", () => {
-    const first = SLASH_COMMAND_NAMES[0];
-    expect(first).toBe(SLASH_COMMANDS[0].meta.name);
-    const expectedNames = SLASH_COMMANDS.flatMap((command) => [command.meta.name, ...(command.meta.aliases ?? [])]);
-    expect(SLASH_COMMAND_NAMES).toEqual(expectedNames);
   });
 });

@@ -1,6 +1,7 @@
 import type { JiePlatform } from "../../platform";
-import { SLASH_COMMANDS } from "./command-registry";
-import { CommandResolverImpl, type ResolvedCommand } from "./command-resolver";
+import { SLASH_COMMANDS } from "./definitions";
+import type { ResolvedCommand } from "./slash-command";
+import { CommandResolverImpl } from "./command-resolver";
 import { makeTuiState } from "../test";
 import { makeAgentUiState } from "../test";
 

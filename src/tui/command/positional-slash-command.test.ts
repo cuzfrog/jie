@@ -1,4 +1,3 @@
-import type { TuiState } from "../state";
 import { makeTuiState } from "../test";
 import { PositionalSlashCommand } from "./positional-slash-command";
 import { type ResolvedCommand, type SlashCompletion, type SlashContext } from "./slash-command";

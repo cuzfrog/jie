@@ -1,5 +1,5 @@
 import { JiePlatformError, type JiePlatform, type SkillInfo } from "../../platform";
-import { SLASH_COMMAND_NAMES, SLASH_COMMANDS } from "./command-registry";
+import { SLASH_COMMANDS } from "./definitions";
 import { CommandHandlerImpl, type CommandHandler } from "./command-handler";
 import { CommandResolverImpl } from "./command-resolver";
 import { Actions, type StateStore, type TuiState } from "../state";
@@ -977,29 +977,6 @@ describe("CommandHandlerImpl — /compact", () => {
     handler.handle("/compact");
     await new Promise((r) => setImmediate(r));
     expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/compact failed")));
-  });
-});
-
-describe("SLASH_COMMAND_NAMES", () => {
-  test("is the union of the commands and intercepts registries, in registration order", () => {
-    expect(SLASH_COMMAND_NAMES).toEqual([
-      "help",
-      "clear",
-      "new",
-      "exit",
-      "login",
-      "logout",
-      "model",
-      "model-filter",
-      "effort",
-      "compact",
-      "reload",
-      "team",
-      "resume",
-      "rename",
-      "kanban",
-      "notification",
-    ]);
   });
 });
 

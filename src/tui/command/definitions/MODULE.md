@@ -1,0 +1,37 @@
+---
+no-new-exports:
+  # - index.ts
+  - _test-fixture.ts
+  - clear-command.ts
+  - clear-command.test.ts
+  - compact-command.ts
+  - compact-command.test.ts
+  - effort-command.ts
+  - effort-command.test.ts
+  - exit-command.ts
+  - exit-command.test.ts
+  - help-command.ts
+  - help-command.test.ts
+  - kanban-command.ts
+  - kanban-command.test.ts
+  - login-command.ts
+  - login-command.test.ts
+  - logout-command.ts
+  - logout-command.test.ts
+  - model-command.ts
+  - model-command.test.ts
+  - model-filter-command.ts
+  - model-filter-command.test.ts
+  - notification-command.ts
+  - notification-command.test.ts
+  - reload-command.ts
+  - reload-command.test.ts
+  - rename-command.ts
+  - rename-command.test.ts
+  - resume-command.ts
+  - resume-command.test.ts
+  - team-command.ts
+  - team-command.test.ts
+---
+
+Concrete slash-command definitions. The public surface is `index.ts`, which exports the authoritative `SLASH_COMMANDS` list. Each definition file exports exactly one command class; `_test-fixture.ts` exports test-only scaffolding. Co-located `*.test.ts` files should not add exports.

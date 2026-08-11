@@ -3,8 +3,6 @@ import { TuiState } from "../state";
 import { resolveCommandName } from "./command-registry";
 import type { ResolvedCommand, SlashCommandDefinition, SlashContext } from "./slash-command";
 
-export type { ResolvedCommand } from "./slash-command";
-
 export interface CommandResolver {
   resolve(state: TuiState, name: string, args: ReadonlyArray<string>): ResolvedCommand | Promise<ResolvedCommand>;
 }
