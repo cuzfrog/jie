@@ -143,9 +143,11 @@ export class JieAgentBody implements AgentBody {
       getApiKey: deps.getApiKey,
       streamFn: streamSimple,
       convertToLlm,
-      transformContext: async (messages: AgentMessage[]) => [
-        ...this.compactor.fitToWindow(messages, this.agent.state.model, resolveContextWindow(this.soul, this.agent.state.model)),
-      ],
+      transformContext: async (messages: AgentMessage[]) => {
+        const stripped = stripThinkingDurations(messages);
+        const contextWindow = resolveContextWindow(this.soul, this.agent.state.model);
+        return [...this.compactor.fitToWindow(stripped, this.agent.state.model, contextWindow)];
+      },
       steeringMode: "all",
       followUpMode: "all",
       toolExecution: "sequential",
@@ -357,6 +359,21 @@ export class JieAgentBody implements AgentBody {
     this.agent.abort();
   }
 
+}
+
+function stripThinkingDurations(messages: AgentMessage[]): AgentMessage[] {
+  return messages.map((message) => {
+    if (message.role !== "assistant") return message;
+    let changed = false;
+    const content = message.content.map((part) => {
+      if (part.type !== "thinking" || part.thinkingDurationMs === undefined) return part;
+      changed = true;
+      const { thinkingDurationMs: _ignored, ...stripped } = part;
+      return stripped;
+    });
+    if (!changed) return message;
+    return { ...message, content };
+  });
 }
 
 function adaptAllTools(

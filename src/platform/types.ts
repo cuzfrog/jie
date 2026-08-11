@@ -1,6 +1,12 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { UserMessage } from "@earendil-works/pi-ai";
 
+declare module "@earendil-works/pi-ai" {
+    interface ThinkingContent {
+        readonly thinkingDurationMs?: number;
+    }
+}
+
 export const EFFORT_LEVELS = ["off", "low", "medium", "high", "max"] as const;
 
 export type EffortLevel = (typeof EFFORT_LEVELS)[number];

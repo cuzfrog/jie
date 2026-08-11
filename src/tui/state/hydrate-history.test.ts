@@ -16,10 +16,10 @@ function assistantText(text: string): AgentMessage {
     api: "openai", provider: "openai", model: "m", usage: usage(), stopReason: "stop", timestamp: 0,
   };
 }
-function assistantThinkingThenText(thinking: string, text: string): AgentMessage {
+function assistantThinkingThenText(thinking: string, text: string, thinkingDurationMs?: number): AgentMessage {
   return {
     role: "assistant",
-    content: [{ type: "thinking", thinking }, { type: "text", text }],
+    content: [{ type: "thinking", thinking, thinkingDurationMs }, { type: "text", text }],
     api: "openai", provider: "openai", model: "m", usage: usage(), stopReason: "stop", timestamp: 0,
   };
 }
@@ -93,9 +93,34 @@ describe("hydrateHistory", () => {
   });
 
   test("thinking and text become ordered blocks", () => {
+    const result = hydrateHistory([user("q"), assistantThinkingThenText("hm", "ans", 250)], 0);
+    expect(result.currentTurn?.blocks).toEqual([
+      { kind: "thinking", text: "hm", durationMs: 250 },
+      { kind: "text", text: "ans" },
+    ]);
+  });
+
+  test("thinking without a duration defaults to 0ms", () => {
     const result = hydrateHistory([user("q"), assistantThinkingThenText("hm", "ans")], 0);
     expect(result.currentTurn?.blocks).toEqual([
-      { kind: "thinking", text: "hm" },
+      { kind: "thinking", text: "hm", durationMs: 0 },
+      { kind: "text", text: "ans" },
+    ]);
+  });
+
+  test("adjacent thinking parts merge and sum their durations", () => {
+    const message: AgentMessage = {
+      role: "assistant",
+      content: [
+        { type: "thinking", thinking: "a", thinkingDurationMs: 100 },
+        { type: "thinking", thinking: "b", thinkingDurationMs: 200 },
+        { type: "text", text: "ans" },
+      ],
+      api: "openai", provider: "openai", model: "m", usage: usage(), stopReason: "stop", timestamp: 0,
+    };
+    const result = hydrateHistory([user("q"), message], 0);
+    expect(result.currentTurn?.blocks).toEqual([
+      { kind: "thinking", text: "ab", durationMs: 300 },
       { kind: "text", text: "ans" },
     ]);
   });

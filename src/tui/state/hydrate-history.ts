@@ -56,7 +56,7 @@ function userPromptText(message: UserIngressMessage): string {
 function appendAssistant(turn: MessageTurn, message: AssistantMessage): void {
   for (const part of message.content) {
     if (part.type === "text") appendBlock(turn, "text", part.text);
-    else if (part.type === "thinking") appendBlock(turn, "thinking", part.thinking);
+    else if (part.type === "thinking") appendBlock(turn, "thinking", part.thinking, part.thinkingDurationMs ?? 0);
     else if (part.type === "toolCall") {
       const input = JSON.stringify(part.arguments);
       const { text, truncated } = truncateString(input);
@@ -86,13 +86,17 @@ function appendToolResult(turn: MessageTurn, message: ToolResultMessage): void {
   else turn.cards[index] = card;
 }
 
-function appendBlock(turn: MessageTurn, kind: "text" | "thinking", text: string): void {
+function appendBlock(turn: MessageTurn, kind: "text" | "thinking", text: string, durationMs = 0): void {
   const last = turn.blocks[turn.blocks.length - 1];
   if (last !== undefined && last.kind === kind) {
-    turn.blocks[turn.blocks.length - 1] = { ...last, text: last.text + text };
+    if (kind === "thinking") {
+      turn.blocks[turn.blocks.length - 1] = { ...last, text: last.text + text, durationMs: (last.durationMs ?? 0) + durationMs };
+    } else {
+      turn.blocks[turn.blocks.length - 1] = { ...last, text: last.text + text };
+    }
     return;
   }
-  turn.blocks.push({ kind, text });
+  turn.blocks.push({ kind, text, ...(kind === "thinking" ? { durationMs } : {}) });
 }
 
 function isTextContent(part: { readonly type: string }): part is TextContent {
