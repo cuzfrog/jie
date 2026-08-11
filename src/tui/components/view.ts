@@ -5,6 +5,7 @@ import type { TuiRoot, TuiComponent } from "..";
 
 export interface TuiView extends TuiRoot {
   handleInput(data: string): TuiInputListenerResult;
+  dispose(): void;
 }
 
 const CTRL_T = "\x14";
@@ -27,6 +28,7 @@ export class TuiViewImpl implements TuiView {
   private readonly kanbanList: TuiComponent;
   private readonly footer: TuiComponent;
   private focusedComponent: Component;
+  private readonly unsubscribeInput: () => void;
 
   constructor(
     screen: TUI,
@@ -69,6 +71,7 @@ export class TuiViewImpl implements TuiView {
     screen.addChild(this.kanbanPanel);
     screen.addChild(this.helpPanel);
     screen.setFocus(this.editor);
+    this.unsubscribeInput = screen.addInputListener((data) => this.handleInput(data));
   }
 
   update(): boolean {
@@ -107,6 +110,10 @@ export class TuiViewImpl implements TuiView {
       }
     }
     return undefined;
+  }
+
+  dispose(): void {
+    this.unsubscribeInput();
   }
 
   private reconcileFocus(state: TuiState): void {

@@ -10,7 +10,7 @@ import type { StateStore } from "./state-store";
 const log = logger.getSubLogger({ name: "jie.tui.effect-handler" });
 
 export interface EffectHandler {
-  stop(): void;
+  dispose(): void;
 }
 
 export class EffectHandlerImpl implements EffectHandler {
@@ -62,7 +62,7 @@ export class EffectHandlerImpl implements EffectHandler {
     });
   }
 
-  stop(): void {
+  dispose(): void {
     this.unsubscribeBus();
     this.unsubscribeActions();
   }

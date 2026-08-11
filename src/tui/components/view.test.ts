@@ -151,7 +151,7 @@ describe("TuiViewImpl", () => {
   }
 
   function stubScreen() {
-    return { addChild: vi.fn(), setFocus: vi.fn(), getFocusedComponent: vi.fn() };
+    return { addChild: vi.fn(), setFocus: vi.fn(), getFocusedComponent: vi.fn(), addInputListener: vi.fn(() => vi.fn()) };
   }
 
   function makeStateStore(state: TuiState) {

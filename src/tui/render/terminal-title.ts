@@ -6,8 +6,8 @@ const IDLE_DOT = "●";
 const SPINNER = ["◐", "◓", "◑", "◒"] as const;
 
 export interface TerminalTitle {
-  start(): void;
-  stop(): void;
+  initialize(): void;
+  dispose(): void;
 }
 
 export class TerminalTitleImpl implements TerminalTitle {
@@ -23,7 +23,7 @@ export class TerminalTitleImpl implements TerminalTitle {
     this.titleFrameMs = titleFrameMs;
   }
 
-  start(): void {
+  initialize(): void {
     this.update();
     this.interval = setInterval(() => {
       this.titleDotFrame = (this.titleDotFrame + 1) % SPINNER.length;
@@ -31,7 +31,7 @@ export class TerminalTitleImpl implements TerminalTitle {
     }, this.titleFrameMs);
   }
 
-  stop(): void {
+  dispose(): void {
     if (this.interval === null) return;
     clearInterval(this.interval);
     this.interval = null;

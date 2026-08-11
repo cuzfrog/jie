@@ -2,7 +2,7 @@ import { asValue, createContainer, InjectionMode, type AwilixContainer } from "a
 import type { Editor, Terminal, TUI } from "@earendil-works/pi-tui";
 import type { JiePlatform } from "../platform";
 import { logger } from "../utils";
-import { Actions, registerStateModule, type StateStore } from "./state";
+import { Actions, registerStateModule, type EffectHandler, type StateStore } from "./state";
 import { registerAutocompleteModule, type JieAutocompleteProvider } from "./autocomplete";
 import type { ScannedFile } from "./file-mention";
 import { registerChatModule, type ChatMessages, type ChatSync } from "./components/chat";
@@ -14,8 +14,8 @@ import { registerComponentsModule, type TuiView } from "./components";
 import { registerTuiModule } from "./module";
 import { registerCommandModule, type CommandHandler, type CommandResolver } from "./command";
 import { registerRenderModule, type TerminalTitle, type TuiRenderer } from "./render";
-import type { EffectHandler } from "./state";
 import type { CreateTUIOptions, Tui, TuiDeps, TuiStdout } from "./tui";
+import type { ShutdownSignal } from "./shutdown";
 import type { TuiComponent } from "./types";
 
 const log = logger.getSubLogger({ name: "jie.tui.container" });
@@ -49,6 +49,7 @@ export interface TuiCradle {
   readonly renderer: TuiRenderer;
   readonly terminalTitle: TerminalTitle;
   readonly effectHandler: EffectHandler;
+  readonly shutdownSignal: ShutdownSignal;
   readonly quitTui: () => Promise<void>;
   readonly tui: Tui;
 }

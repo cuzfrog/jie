@@ -6,6 +6,8 @@ import { StateStoreImpl } from "./state-store";
 export function registerStateModule(container: AwilixContainer<TuiCradle>): void {
   container.register({
     stateStore: asClass(StateStoreImpl).singleton(),
-    effectHandler: asClass(EffectHandlerImpl).singleton(),
+    effectHandler: asClass(EffectHandlerImpl)
+      .singleton()
+      .disposer((handler) => handler.dispose()),
   });
 }

@@ -6,8 +6,8 @@ const RENDER_TICK_MS = 80;
 const TRANSIENT_TTL_MS = 5000;
 
 export interface TuiRenderer {
-  start(): void;
-  stop(): void;
+  initialize(): void;
+  dispose(): void;
 }
 
 export class TuiRendererImpl implements TuiRenderer {
@@ -19,6 +19,7 @@ export class TuiRendererImpl implements TuiRenderer {
   private readonly transientTtlMs: number;
   private unsubscribe: (() => void) | null = null;
   private renderInterval: ReturnType<typeof setInterval> | null = null;
+  private initialized = false;
 
   constructor(
     stateStore: StateStore,
@@ -36,22 +37,24 @@ export class TuiRendererImpl implements TuiRenderer {
     this.transientTtlMs = transientTtlMs;
   }
 
-  start(): void {
+  initialize(): void {
+    if (this.initialized) return;
+    this.initialized = true;
     this.unsubscribe = this.stateStore.subscribe(async (): Promise<void> => {
       if (this.view.update()) this.requestRender();
     });
     this.renderInterval = setInterval(() => this.tick(), this.renderTickMs);
-    this.terminalTitle.start();
+    this.terminalTitle.initialize();
   }
 
-  stop(): void {
+  dispose(): void {
     this.unsubscribe?.();
     this.unsubscribe = null;
     if (this.renderInterval !== null) {
       clearInterval(this.renderInterval);
       this.renderInterval = null;
     }
-    this.terminalTitle.stop();
+    this.terminalTitle.dispose();
   }
 
   private tick(): void {

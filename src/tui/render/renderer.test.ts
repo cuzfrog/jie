@@ -15,8 +15,8 @@ const stateStore = vi.mocked<StateStore>({
 const requestRender = vi.fn();
 const root = vi.mocked<TuiRoot>({ update: vi.fn() });
 const terminalTitle = vi.mocked<TerminalTitle>({
-  start: vi.fn(),
-  stop: vi.fn(),
+  initialize: vi.fn(),
+  dispose: vi.fn(),
 });
 
 function notify(): Promise<void> {
@@ -29,41 +29,41 @@ function newRenderer(renderTickMs?: number, transientTtlMs?: number): TuiRendere
 }
 
 describe("TuiRendererImpl", () => {
-  test("start subscribes to the state store and starts the terminal title", () => {
+  test("initialize subscribes to the state store and starts the terminal title", () => {
     const renderer = newRenderer();
-    renderer.start();
+    renderer.initialize();
     expect(stateStore.subscribe).toHaveBeenCalledTimes(1);
-    expect(terminalTitle.start).toHaveBeenCalledTimes(1);
-    renderer.stop();
+    expect(terminalTitle.initialize).toHaveBeenCalledTimes(1);
+    renderer.dispose();
   });
 
   test("requests a render when the root is dirty after a state change", async () => {
     const renderer = newRenderer();
-    renderer.start();
+    renderer.initialize();
     root.update.mockReturnValue(true);
     await notify();
     expect(requestRender).toHaveBeenCalledTimes(1);
-    renderer.stop();
+    renderer.dispose();
   });
 
   test("skips rendering when the root is not dirty", async () => {
     const renderer = newRenderer();
-    renderer.start();
+    renderer.initialize();
     root.update.mockReturnValue(false);
     await notify();
     expect(requestRender).not.toHaveBeenCalled();
-    renderer.stop();
+    renderer.dispose();
   });
 
-  test("stop unsubscribes and stops the terminal title", () => {
+  test("dispose unsubscribes and stops the terminal title", () => {
     const renderer = newRenderer();
-    renderer.start();
-    renderer.stop();
+    renderer.initialize();
+    renderer.dispose();
     expect(unsubscribe).toHaveBeenCalledTimes(1);
-    expect(terminalTitle.stop).toHaveBeenCalledTimes(1);
+    expect(terminalTitle.dispose).toHaveBeenCalledTimes(1);
   });
 
-  test("does not render before start", () => {
+  test("does not render before initialize", () => {
     newRenderer();
     root.update.mockReturnValue(true);
     expect(requestRender).not.toHaveBeenCalled();
@@ -73,11 +73,11 @@ describe("TuiRendererImpl", () => {
     const now = 1000;
     vi.useFakeTimers({ now });
     const renderer = newRenderer(10, 50);
-    renderer.start();
+    renderer.initialize();
     stateStore.getState.mockReturnValue(makeTuiState({ transientMessage: "hello", transientSetAt: now }));
     vi.advanceTimersByTime(60);
     expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.clearTransientMessage());
-    renderer.stop();
+    renderer.dispose();
     vi.useRealTimers();
   });
 
@@ -85,18 +85,18 @@ describe("TuiRendererImpl", () => {
     const now = 1000;
     vi.useFakeTimers({ now });
     const renderer = newRenderer(10, 50);
-    renderer.start();
+    renderer.initialize();
     stateStore.getState.mockReturnValue(makeTuiState({ transientMessage: "hello", transientSetAt: now }));
     vi.advanceTimersByTime(20);
     expect(stateStore.dispatch).not.toHaveBeenCalledWith(Actions.clearTransientMessage());
-    renderer.stop();
+    renderer.dispose();
     vi.useRealTimers();
   });
 
   test("tick requests a render while an agent is busy or thinking", () => {
     vi.useFakeTimers();
     const renderer = newRenderer(10);
-    renderer.start();
+    renderer.initialize();
     stateStore.getState.mockReturnValue(makeTuiState({
       agents: new Map([["t:a", makeAgentUiState("t:a", { isLeader: true, status: "busy" })]]),
       focusedAgentId: "t:a",
@@ -104,7 +104,7 @@ describe("TuiRendererImpl", () => {
     }));
     vi.advanceTimersByTime(10);
     expect(requestRender).toHaveBeenCalled();
-    renderer.stop();
+    renderer.dispose();
     vi.useRealTimers();
   });
 });

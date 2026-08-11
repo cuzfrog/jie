@@ -10,7 +10,7 @@ import {
   type JiePlatformOptions,
   type TeamInfo,
 } from "../platform";
-import type { CreateTUIOptions, Tui, TuiDeps } from "../tui";
+import type { CreateTUIOptions, TuiDeps } from "../tui";
 import type { Console } from "../utils";
 import { _run } from ".";
 
@@ -115,40 +115,44 @@ interface CapturedRun {
   bootPlatform: ReturnType<typeof vi.fn>;
   runFirstRun: ReturnType<typeof vi.fn>;
   tuiCalls: { options: CreateTUIOptions; deps: TuiDeps }[];
-  startCalls: { value: number };
-  stopCalls: { value: number };
+  runCalls: { value: number };
+  disposeCalls: { value: number };
   consoleMock: Console;
   run: (parsed: Parameters<typeof _run>[0]) => Promise<number>;
 }
 
 function captureRun(platform: FakePlatform): CapturedRun {
   const tuiCalls: { options: CreateTUIOptions; deps: TuiDeps }[] = [];
-  const startCalls = { value: 0 };
-  const stopCalls = { value: 0 };
+  const runCalls = { value: 0 };
+  const disposeCalls = { value: 0 };
   const consoleMock = makeConsoleMock();
   const bootPlatform = vi.fn(async (_options: JiePlatformOptions): Promise<JiePlatform> => platform);
   const runFirstRun = vi.fn(async (_homeJieDir: string, _noInstall: boolean): Promise<void> => {});
-  const bootTui = vi.fn((options: CreateTUIOptions, deps: TuiDeps): Tui => {
+  const bootTui = vi.fn((options: CreateTUIOptions, deps: TuiDeps) => {
     tuiCalls.push({ options, deps });
     deps.platform.subscribe("system.team.loaded", () => undefined);
     deps.platform.subscribe("system.error", () => undefined);
     return {
-      start: () => {
-        startCalls.value += 1;
-        return Promise.resolve();
+      cradle: {
+        tui: {
+          run: () => {
+            runCalls.value += 1;
+            return Promise.resolve();
+          },
+        },
       },
-      stop: () => {
-        stopCalls.value += 1;
+      dispose: async () => {
+        disposeCalls.value += 1;
       },
     };
   });
   const run = (parsed: Parameters<typeof _run>[0]): Promise<number> =>
     _run(parsed, process.cwd(), process.env.HOME ?? "/tmp", { bootPlatform, bootTui, runFirstRun, console: consoleMock });
-  return { fakePlatform: platform, bootPlatform, runFirstRun, tuiCalls, startCalls, stopCalls, consoleMock, run };
+  return { fakePlatform: platform, bootPlatform, runFirstRun, tuiCalls, runCalls, disposeCalls, consoleMock, run };
 }
 
 describe("_run — tui", () => {
-  test("tui boot: loads team, calls bootTui({cwd},{platform}), awaits start, stops platform, returns 0", async () => {
+  test("tui boot: loads team, calls bootTui({cwd},{platform}), awaits run, stops platform, returns 0", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
     const exit = await captured.run({ kind: "tui", inMemory: false, debug: false, noInstall: false });
@@ -158,16 +162,16 @@ describe("_run — tui", () => {
     expect(captured.tuiCalls).toHaveLength(1);
     expect(captured.tuiCalls[0]?.options.cwd).toBe(process.cwd());
     expect(captured.tuiCalls[0]?.deps.platform).toBe(platform);
-    expect(captured.startCalls.value).toBe(1);
+    expect(captured.runCalls.value).toBe(1);
     expect(captured.fakePlatform.shutdown).toHaveBeenCalledTimes(1);
   });
 
-  test("tui boot: calls tui.stop() after start resolves (restores terminal state)", async () => {
+  test("tui boot: disposes container after run resolves (restores terminal state)", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
     const exit = await captured.run({ kind: "tui", inMemory: false, debug: false, noInstall: false });
     expect(exit).toBe(0);
-    expect(captured.stopCalls.value).toBe(1);
+    expect(captured.disposeCalls.value).toBe(1);
   });
 
   test("tui boot: passes args.team to execute({name:'team'})", async () => {

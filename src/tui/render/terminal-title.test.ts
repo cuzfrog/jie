@@ -59,31 +59,31 @@ describe("TerminalTitleImpl", () => {
     vi.useRealTimers();
   });
 
-  test("start writes the title immediately", () => {
+  test("initialize writes the title immediately", () => {
     const terminal = new StubTerminal();
     const title = new TerminalTitleImpl(terminal, stateStore, 100);
-    title.start();
+    title.initialize();
     expect(terminal.setTitle).toHaveBeenCalledTimes(1);
-    title.stop();
+    title.dispose();
   });
 
   test("advances the spinner frame on each interval tick", () => {
     const terminal = new StubTerminal();
     const title = new TerminalTitleImpl(terminal, stateStore, 100);
-    title.start();
+    title.initialize();
     expect(terminal.setTitle).toHaveBeenCalledTimes(1);
     vi.advanceTimersByTime(100);
     expect(terminal.setTitle).toHaveBeenCalledTimes(2);
     vi.advanceTimersByTime(100);
     expect(terminal.setTitle).toHaveBeenCalledTimes(3);
-    title.stop();
+    title.dispose();
   });
 
-  test("stop cancels the interval", () => {
+  test("dispose cancels the interval", () => {
     const terminal = new StubTerminal();
     const title = new TerminalTitleImpl(terminal, stateStore, 100);
-    title.start();
-    title.stop();
+    title.initialize();
+    title.dispose();
     vi.advanceTimersByTime(200);
     expect(terminal.setTitle).toHaveBeenCalledTimes(1);
   });
