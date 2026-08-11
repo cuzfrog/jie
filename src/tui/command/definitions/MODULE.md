@@ -1,7 +1,6 @@
 ---
 no-new-exports:
-  # - index.ts
-  - _test-fixture.ts
+  - index.ts
   - clear-command.ts
   - clear-command.test.ts
   - compact-command.ts
@@ -34,4 +33,4 @@ no-new-exports:
   - team-command.test.ts
 ---
 
-Concrete slash-command definitions. The public surface is `index.ts`, which exports the authoritative `SLASH_COMMANDS` list. Each definition file exports exactly one command class; `_test-fixture.ts` exports test-only scaffolding. Co-located `*.test.ts` files should not add exports.
+Concrete slash-command definitions. The public surface is `index.ts`, which exports the authoritative `SLASH_COMMANDS` list. Each definition file exports exactly one command class. Co-located `*.test.ts` files should not add exports; test fixtures come from `src/tui/test`.
