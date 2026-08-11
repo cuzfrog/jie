@@ -1,6 +1,6 @@
 ---
 no-new-exports:
-  - index.test.ts
+  - index.ts
   - tui.ts
 ---
 

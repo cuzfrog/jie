@@ -1,6 +1,6 @@
 import { Actions, type StateStore, type TuiState } from "../state";
 import { makeAgentUiState, makeTuiState } from "../test";
-import type { TuiRoot } from "../tui-component";
+import type { TuiRoot } from "../types";
 import type { TerminalTitle } from "./terminal-title";
 import { TuiRendererImpl } from "./renderer";
 

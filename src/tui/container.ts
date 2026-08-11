@@ -16,7 +16,7 @@ import { registerCommandModule, type CommandHandler, type CommandResolver } from
 import { registerRenderModule, type TerminalTitle, type TuiRenderer } from "./render";
 import type { EffectHandler } from "./state";
 import type { CreateTUIOptions, Tui, TuiDeps, TuiStdout } from "./tui";
-import type { TuiComponent } from "./tui-component";
+import type { TuiComponent } from "./types";
 
 const log = logger.getSubLogger({ name: "jie.tui.container" });
 

@@ -1,5 +1,5 @@
 import { Actions, TuiState, type StateStore } from "../state";
-import type { TuiRoot } from "../tui-component";
+import type { TuiRoot } from "../types";
 import type { TerminalTitle } from "./terminal-title";
 
 const RENDER_TICK_MS = 80;
