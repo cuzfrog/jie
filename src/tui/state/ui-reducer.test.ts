@@ -299,15 +299,31 @@ describe("commit team cursor", () => {
 });
 
 describe("transient", () => {
-  test("sets transientMessage text", () => {
+  test("sets transientMessage text and stamps the current time", () => {
+    const now = 12345;
+    const spy = vi.spyOn(Date, "now").mockReturnValue(now);
     const state = reduceUiAction(INITIAL_TUI_STATE, Actions.setTransientMessage("logged in to nvidia"));
     expect(state.transientMessage).toBe("logged in to nvidia");
+    expect(state.transientSetAt).toBe(now);
+    spy.mockRestore();
   });
 
-  test("clearTransientMessage nulls transientMessage", () => {
+  test("clearTransientMessage nulls transientMessage and transientSetAt", () => {
     const state0 = reduceUiAction(INITIAL_TUI_STATE, Actions.setTransientMessage("x"));
     const state1 = reduceUiAction(state0, Actions.clearTransientMessage());
     expect(state1.transientMessage).toBeNull();
+    expect(state1.transientSetAt).toBeNull();
+  });
+
+  test("re-setting the message refreshes the timestamp", () => {
+    const first = 1000;
+    const second = 2000;
+    const spy = vi.spyOn(Date, "now").mockReturnValue(first);
+    const state0 = reduceUiAction(INITIAL_TUI_STATE, Actions.setTransientMessage("x"));
+    spy.mockReturnValue(second);
+    const state1 = reduceUiAction(state0, Actions.setTransientMessage("y"));
+    expect(state1.transientSetAt).toBe(second);
+    spy.mockRestore();
   });
 });
 
@@ -345,6 +361,7 @@ describe("clear", () => {
     expect(cleared.leaderAgentId).toBeNull();
     expect(cleared.focusedAgentId).toBeNull();
     expect(cleared.transientMessage).toBeNull();
+    expect(cleared.transientSetAt).toBeNull();
     expect(cleared.errorBanner).toBeNull();
   });
 });

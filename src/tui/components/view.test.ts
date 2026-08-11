@@ -3,7 +3,7 @@ import { Actions } from "../state";
 import { type StateStore, type TuiState } from "../state";
 import { makeTuiState } from "../test";
 import type { TuiComponent } from "..";
-import type { ChatSync } from "../sync";
+import type { ChatSync } from "./chat";
 import { TuiViewImpl, _resolveFocusTarget, _resolveGlobalKey, _resolveTeamCursorDirection, _shouldCommitTeamCursor } from "./view";
 
 describe("resolveGlobalKey", () => {
@@ -15,14 +15,19 @@ describe("resolveGlobalKey", () => {
     expect(_resolveGlobalKey("\x0f", makeTuiState(), false)).toEqual(Actions.toggleToolCards());
   });
 
-  test("ctrl+k maps to cycleKanbanView", () => {
-    expect(_resolveGlobalKey("\x0b", makeTuiState(), false)).toEqual(Actions.cycleKanbanView());
+  test("ctrl+k maps to cycleKanbanView when the board has cards", () => {
+    expect(_resolveGlobalKey("\x0b", makeTuiState({ kanbanBoard: [{ id: "1", content: "x", status: "pending" }] }), false)).toEqual(Actions.cycleKanbanView());
+  });
+
+  test("ctrl+k is ignored when the kanban board is empty", () => {
+    expect(_resolveGlobalKey("\x0b", makeTuiState(), false)).toBeNull();
   });
 
   test("ctrl+t, ctrl+o and ctrl+k stay active while the autocomplete popup is open", () => {
-    expect(_resolveGlobalKey("\x14", makeTuiState(), true)).toEqual(Actions.toggleThinking());
-    expect(_resolveGlobalKey("\x0f", makeTuiState(), true)).toEqual(Actions.toggleToolCards());
-    expect(_resolveGlobalKey("\x0b", makeTuiState(), true)).toEqual(Actions.cycleKanbanView());
+    const withCards = makeTuiState({ kanbanBoard: [{ id: "1", content: "x", status: "pending" }] });
+    expect(_resolveGlobalKey("\x14", withCards, true)).toEqual(Actions.toggleThinking());
+    expect(_resolveGlobalKey("\x0f", withCards, true)).toEqual(Actions.toggleToolCards());
+    expect(_resolveGlobalKey("\x0b", withCards, true)).toEqual(Actions.cycleKanbanView());
   });
 
   test("left maps to toggling the team panel while the editor cursor sits at the buffer start", () => {

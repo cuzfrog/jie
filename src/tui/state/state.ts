@@ -83,6 +83,7 @@ export interface TuiState {
   readonly interruptedAgentId: AgentId | null;
   readonly nextEntrySeq: number;
   readonly transientMessage: string | null;
+  readonly transientSetAt: number | null;
   readonly errorBanner: string | null;
   readonly thinkingExpanded: boolean;
   readonly toolCardsExpanded: boolean;

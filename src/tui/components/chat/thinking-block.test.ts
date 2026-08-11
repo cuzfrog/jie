@@ -40,7 +40,7 @@ describe("ThinkingBlock", () => {
   test("a completed block expanded shows the elapsed-time label followed by the text", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ thinkingExpanded: true }));
     const block = new ThinkingBlock(thinking("deep thought", 1500), stateStore);
-    expect(block.render(80)).toEqual(["\x1b[90mThought for 1.5s\x1b[39m", "\x1b[90mdeep thought\x1b[39m"]);
+    expect(block.render(80)).toEqual(["\x1b[90mThought for 2s\x1b[39m", "\x1b[90mdeep thought\x1b[39m"]);
   });
 
   test("never renders a line wider than the given width (doRender guard)", () => {

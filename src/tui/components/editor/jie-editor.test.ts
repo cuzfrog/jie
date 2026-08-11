@@ -1,7 +1,7 @@
 import { TuiMainScreen, visibleWidth, type Editor, type Terminal } from "@earendil-works/pi-tui";
 import { type KanbanCard } from "../../../platform";
 import { type JieAutocompleteProvider, type JieSuggestions } from "../../autocomplete";
-import { Actions, TuiState, type AgentId, type StateStore } from "../../state";
+import { Actions, ActionTypes, TuiState, type AgentId, type StateStore } from "../../state";
 import { makeAgentUiState, makeTuiState } from "../../test";
 import { style } from "../themes";
 import { JieEditor } from "./jie-editor";
@@ -359,7 +359,7 @@ describe("JieEditor — kanban card edit", () => {
     applyKanbanState(editor, editingState("#1"));
     editor.handleInput("\x1b[A");
     expect(editor.getText()).toBe("write report");
-    const dequeueType = Actions.requestDequeue("", "", "").type;
+    const dequeueType = ActionTypes.REQUEST_DEQUEUE;
     const dequeues = stateStore.dispatch.mock.calls.map((call) => call[0]).filter((action) => action.type === dequeueType);
     expect(dequeues).toEqual([]);
   });
@@ -510,14 +510,14 @@ function wireQueueRoundTrip(initial: TuiState): void {
     const focused = TuiState.getFocusedAgent(current);
     if (focused === null) return;
     let queue = [...focused.queue];
-    if (action.type === Actions.requestDequeue("", "", "").type) {
+    if (action.type === ActionTypes.REQUEST_DEQUEUE) {
       for (let i = queue.length - 1; i >= 0; i--) {
         if (queue[i]!.source === "user" && queue[i]!.text === action.payload.prompt) {
           queue.splice(i, 1);
           break;
         }
       }
-    } else if (action.type === Actions.requestRequeue("", "", "").type) {
+    } else if (action.type === ActionTypes.REQUEST_REQUEUE) {
       queue = [...queue, { text: action.payload.prompt, source: "user" as const }];
     } else {
       return;
@@ -558,7 +558,7 @@ describe("JieEditor — queue browse", () => {
     editor.handleInput("\x1b[A");
     editor.handleInput("\x1b[A");
     expect(editor.getText()).toBe("first");
-    const dequeueType = Actions.requestDequeue("", "", "").type;
+    const dequeueType = ActionTypes.REQUEST_DEQUEUE;
     const dequeues = stateStore.dispatch.mock.calls.map((call) => call[0]).filter((action) => action.type === dequeueType);
     expect(dequeues).toEqual([
       Actions.requestDequeue("my-team", "general-1", "second"),
@@ -596,7 +596,7 @@ describe("JieEditor — queue browse", () => {
     expect(editor.getText()).toBe("queued");
     editor.handleInput("\x1b[B");
     expect(editor.getText()).toBe("");
-    expect(dispatchedActions(Actions.requestRequeue("", "", "").type)).toEqual([
+    expect(dispatchedActions(ActionTypes.REQUEST_REQUEUE)).toEqual([
       Actions.requestRequeue("my-team", "general-1", "queued"),
     ]);
   });
@@ -618,7 +618,7 @@ describe("JieEditor — queue browse", () => {
     editor.handleInput("\x1b[B");
     editor.handleInput("\x1b[B");
     expect(editor.getText()).toBe("");
-    expect(dispatchedActions(Actions.requestRequeue("", "", "").type)).toEqual([
+    expect(dispatchedActions(ActionTypes.REQUEST_REQUEUE)).toEqual([
       Actions.requestRequeue("my-team", "general-1", "first"),
       Actions.requestRequeue("my-team", "general-1", "second"),
     ]);
@@ -629,7 +629,7 @@ describe("JieEditor — queue browse", () => {
     wireQueueRoundTrip(stateWithQueue([userEntry("queued")]));
     editor.handleInput("\x1b[A");
     editor.handleInput("\r");
-    expect(dispatchedActions(Actions.requestRequeue("", "", "").type)).toEqual([]);
+    expect(dispatchedActions(ActionTypes.REQUEST_REQUEUE)).toEqual([]);
   });
 
   test("editing a dequeued prompt adopts it without requeue", () => {
@@ -639,7 +639,7 @@ describe("JieEditor — queue browse", () => {
     editor.handleInput("x");
     editor.handleInput("\x1b[B");
     expect(editor.getText()).toBe("queuedx");
-    expect(dispatchedActions(Actions.requestRequeue("", "", "").type)).toEqual([]);
+    expect(dispatchedActions(ActionTypes.REQUEST_REQUEUE)).toEqual([]);
   });
 
   test("ctrl+c discards a dequeued prompt without requeue", () => {
@@ -648,7 +648,7 @@ describe("JieEditor — queue browse", () => {
     editor.handleInput("\x1b[A");
     editor.handleInput("\x03");
     expect(editor.getText()).toBe("");
-    expect(dispatchedActions(Actions.requestRequeue("", "", "").type)).toEqual([]);
+    expect(dispatchedActions(ActionTypes.REQUEST_REQUEUE)).toEqual([]);
   });
 
   test("up with content and an empty queue saves the draft to history before walking it", () => {

@@ -1,10 +1,8 @@
-import { JiePlatformError, type Command, type CommandName, type CommandResult, type JiePlatform, type KanbanCard, type TeamInfo } from "../platform";
+import { JiePlatformError, type Command, type CommandName, type CommandResult, type JiePlatform, type KanbanCard, type TeamInfo } from "../../platform";
 import { COMMAND_METADATA, resolveCommandName } from "./command-metadata";
-import { Actions, TuiState, type AgentUiState, type StateStore } from "./state";
-import { bashDirective, parseBashCommand } from "./bash";
+import { Actions, TuiState, type AgentUiState, type StateStore } from "../state";
+import { bashDirective, parseBashCommand } from "../bash";
 import type { CommandResolver, ResolvedCommand, UiAction } from "./command-resolver";
-
-const SAVE_KANBAN_EDIT = Actions.saveKanbanEdit("", "", "content").type;
 
 type AgentRoute = {
   readonly teamId: string;
@@ -24,10 +22,6 @@ export class CommandHandlerImpl implements CommandHandler {
     this.stateStore = stateStore;
     this.platform = platform;
     this.commandResolver = commandResolver;
-    stateStore.subscribe(async (action) => {
-      if (action.type !== SAVE_KANBAN_EDIT) return;
-      this.persistKanbanEdit(action.payload.cardId, action.payload.field, action.payload.text);
-    });
   }
 
   handle(text: string): void {
@@ -100,17 +94,6 @@ export class CommandHandlerImpl implements CommandHandler {
         this.stateStore.dispatch(Actions.cycleKanbanView());
         return;
     }
-  }
-
-  private persistKanbanEdit(cardId: string, field: "content" | "description", text: string): void {
-    const teamId = this.stateStore.getState().teamId;
-    if (teamId === null) return;
-    void this.platform.execute({ name: "kanbanEdit", teamId, cardId, field, text })
-      .then((result) => {
-        this.stateStore.dispatch(Actions.setKanbanBoard(result.board));
-      }, (error: unknown) => {
-        this.stateStore.dispatch(Actions.setErrorMessage(`kanban edit failed: ${error instanceof Error ? error.message : String(error)}`));
-      });
   }
 
   private handleCommandResult(command: Command, result: CommandResult<CommandName>): void {

@@ -1,7 +1,7 @@
 import { type Component } from "@earendil-works/pi-tui";
-import { type AgentId, type AgentUiState, type MessageTurn, type StateStore, type TuiState } from "../state";
-import { type AssistantMessageComponent, type ChatMessages, type UserMessageComponent } from "../components/chat";
-import { makeAgentUiState, makeTuiState } from "../test";
+import { type AgentId, type AgentUiState, type MessageTurn, type StateStore, type TuiState } from "../../state";
+import { type AssistantMessageComponent, type ChatMessages, type UserMessageComponent } from ".";
+import { makeAgentUiState, makeTuiState } from "../../test";
 import { ChatSyncImpl, type ChatSync } from "./chat-sync";
 
 type CompactionMarker = NonNullable<AgentUiState["compactionMarker"]>;

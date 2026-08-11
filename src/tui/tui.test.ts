@@ -1,13 +1,12 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
-import { _buildTerminalTitle, type Tui } from "./tui";
+import { type Tui } from "./tui";
 import { bootTui } from "./container";
 import { Actions, type StateStore } from "./state";
-import { makeTuiState } from "./test";
 import { withTTY } from "../../tests/support";
-import { StreamTerminalImpl } from "./stream-terminal";
 import { asValue } from "awilix";
+import { type Terminal } from "@earendil-works/pi-tui";
 import { Events, type JiePlatform, type EventType, type AnyEventEnvelope, type EventEnvelope, type Command, type CommandResult } from "../platform";
 
 class FakeStdin extends PassThrough {
@@ -25,12 +24,23 @@ class FakeStdout extends PassThrough {
   rows = 30;
 }
 
-class RecordingStreamTerminal extends StreamTerminalImpl {
+class RecordingTerminal implements Terminal {
   readonly writeCalls: string[] = [];
-  override write(data: string): void {
-    this.writeCalls.push(data);
-    super.write(data);
-  }
+  columns = 80;
+  rows = 30;
+  start(): void {}
+  stop(): void {}
+  drainInput(): Promise<void> { return Promise.resolve(); }
+  write(data: string): void { this.writeCalls.push(data); }
+  get kittyProtocolActive(): boolean { return false; }
+  moveBy(): void {}
+  hideCursor(): void {}
+  showCursor(): void {}
+  clearLine(): void {}
+  clearFromCursor(): void {}
+  clearScreen(): void {}
+  setTitle(): void {}
+  setProgress(): void {}
 }
 
 interface PromptCall {
@@ -106,7 +116,7 @@ interface TuiHarness {
   readonly stdin: FakeStdin;
   readonly stdout: FakeStdout;
   readonly platform: PlatformHarness;
-  readonly terminal?: RecordingStreamTerminal;
+  readonly terminal?: RecordingTerminal;
 }
 
 function bootHarness(executeResult?: CommandResult<"kanbanEdit">, recordWrites = false, soundEnabled = true): TuiHarness {
@@ -119,9 +129,9 @@ function bootHarness(executeResult?: CommandResult<"kanbanEdit">, recordWrites =
     stdin,
     stdout,
   });
-  let terminal: RecordingStreamTerminal | undefined;
+  let terminal: RecordingTerminal | undefined;
   if (recordWrites) {
-    terminal = new RecordingStreamTerminal(stdin, stdout);
+    terminal = new RecordingTerminal();
     container.register({ terminal: asValue(terminal) });
   }
   return { tui: container.cradle.tui, stateStore: container.cradle.stateStore, stdin, stdout, platform, terminal };
@@ -505,26 +515,4 @@ describe("bootTui — transient message", () => {
   });
 });
 
-describe("_buildTerminalTitle", () => {
-  test("idle title uses a static dot and omits cwd when unknown", () => {
-    const title = _buildTerminalTitle(makeTuiState({ cwd: null, agents: new Map() }), 0);
-    expect(title).toBe("●jie");
-  });
 
-  test("idle title appends the workspace directory", () => {
-    const title = _buildTerminalTitle(makeTuiState({ cwd: "/home/cuz/workspace/jie", agents: new Map() }), 0);
-    expect(title).toBe("●jie - /home/cuz/workspace/jie");
-  });
-
-  test("busy title animates through the spinner frames", () => {
-    const state = makeTuiState({
-      cwd: "/tmp",
-      agents: new Map([["t1:a1", { status: "busy" } as unknown as import("./state").AgentUiState]]),
-    });
-    expect(_buildTerminalTitle(state, 0)).toBe("◐jie - /tmp");
-    expect(_buildTerminalTitle(state, 1)).toBe("◓jie - /tmp");
-    expect(_buildTerminalTitle(state, 2)).toBe("◑jie - /tmp");
-    expect(_buildTerminalTitle(state, 3)).toBe("◒jie - /tmp");
-    expect(_buildTerminalTitle(state, 4)).toBe("◐jie - /tmp");
-  });
-});

@@ -1,5 +1,5 @@
 import { Events } from "../../platform";
-import { Actions } from "./";
+import { Actions, ActionTypes } from "./";
 import { StateStoreImpl } from "./state-store";
 
 describe("StateStore", () => {
@@ -15,7 +15,7 @@ describe("StateStore", () => {
       agents: [{ teamId: "my-team", role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     })));
     store.subscribe((action) => {
-      if (action.type === Actions.submitEditorText("").type) {
+      if (action.type === ActionTypes.SUBMIT_EDITOR_TEXT) {
         store.dispatch(
           Actions.receiveEvent(Events.agentTurnStart({ kind: "agent", teamId: "my-team", agentKey: "general-1" }, "hello")),
         );
@@ -38,7 +38,7 @@ describe("StateStore", () => {
   test("nested dispatch in subscriber does not overwrite outer state", () => {
     const store = new StateStoreImpl();
     store.subscribe((action) => {
-      if (action.type === Actions.submitEditorText("").type) {
+      if (action.type === ActionTypes.SUBMIT_EDITOR_TEXT) {
         store.dispatch(Actions.setEditorText("inner"));
         return Promise.resolve();
       }
@@ -60,8 +60,8 @@ describe("StateStore", () => {
       return Promise.resolve();
     });
     store.dispatch(Actions.setEditorText("x"));
-    expect(calls).toContain(`a:${Actions.setEditorText("").type}`);
-    expect(calls).toContain(`b:${Actions.setEditorText("").type}`);
+    expect(calls).toContain(`a:${ActionTypes.SET_EDITOR_TEXT}`);
+    expect(calls).toContain(`b:${ActionTypes.SET_EDITOR_TEXT}`);
   });
 
   test("unsubscribe stops further notifications", () => {
@@ -82,7 +82,7 @@ describe("StateStore", () => {
     const store = new StateStoreImpl();
     let observed: string | undefined;
     store.subscribe((action) => {
-      if (action.type === Actions.setEditorText("").type) {
+      if (action.type === ActionTypes.SET_EDITOR_TEXT) {
         observed = store.getState().editorText;
       }
       return Promise.resolve();

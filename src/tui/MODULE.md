@@ -2,8 +2,6 @@
 no-new-exports:
   - index.test.ts
   - tui.ts
-  - command-handler.test.ts
-  - command-handler.ts
 ---
 
 # Design principles

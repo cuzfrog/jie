@@ -32,19 +32,20 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
         interruptedAgentId: null,
         nextEntrySeq: 0,
         transientMessage: null,
+        transientSetAt: null,
         errorBanner: null,
         helpPanelVisible: false,
       };
     case ActionTypes.SET_TRANSIENT_MESSAGE:
-      return { ...state, transientMessage: action.payload.text };
+      return { ...state, transientMessage: action.payload.text, transientSetAt: Date.now() };
     case ActionTypes.CLEAR_TRANSIENT_MESSAGE:
-      return { ...state, transientMessage: null };
+      return { ...state, transientMessage: null, transientSetAt: null };
     case ActionTypes.SET_ERROR_MESSAGE:
       return { ...state, errorBanner: action.payload.text };
     case ActionTypes.CLEAR_ERROR_MESSAGE:
       return { ...state, errorBanner: null };
     case ActionTypes.CLEAR_BANNERS:
-      return { ...state, transientMessage: null, errorBanner: null };
+      return { ...state, transientMessage: null, transientSetAt: null, errorBanner: null };
     case ActionTypes.REQUEST_QUIT:
       if (state.pendingQuit) return state;
       return { ...state, pendingQuit: true };

@@ -1,6 +1,6 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { bootTui, type Tui } from "../";
+import { bootTui } from "../";
 import { Actions } from "../state";
 import { withTTY } from "../../../tests/support";
 import {
@@ -66,12 +66,7 @@ function emitTeamLoaded(platform: TestPlatform, info: TeamInfo): void {
   handler(Events.teamLoaded({ kind: "system" }, info));
 }
 
-interface TuiInternal {
-  readonly stateStore: { dispatch: (a: unknown) => void; getState: () => { focusedAgentId: string | null; errorBanner: string | null } };
-}
-function internals(tui: Tui): TuiInternal {
-  return tui as unknown as TuiInternal;
-}
+
 
 describe("handleSubmitEditorText — ! bash mode routing", () => {
   beforeEach(() => {
@@ -81,10 +76,10 @@ describe("handleSubmitEditorText — ! bash mode routing", () => {
   test("!cmd dispatches a bash directive to the focused agent via platform.prompt", () => {
     withTTY(true, () => {
       const tp = makePlatform();
-      const tui: Tui = bootTui({ cwd: process.cwd() }, { platform: tp.platform, homeJieDir: join(tmpdir(), "jie-tui-bash-home") }).cradle.tui;
+      const { tui, stateStore } = bootTui({ cwd: process.cwd() }, { platform: tp.platform, homeJieDir: join(tmpdir(), "jie-tui-bash-home") }).cradle;
       try {
         emitTeamLoaded(tp, makeTeamInfo());
-        internals(tui).stateStore.dispatch(Actions.submitEditorText("!ls -la"));
+        stateStore.dispatch(Actions.submitEditorText("!ls -la"));
         expect(tp.prompts.length).toBe(1);
         const call = tp.prompts[0]!;
         expect(call.teamId).toBe("team-1");
@@ -100,10 +95,10 @@ describe("handleSubmitEditorText — ! bash mode routing", () => {
   test("!!cmd dispatches a directive that asks the agent to exclude the output from context", () => {
     withTTY(true, () => {
       const tp = makePlatform();
-      const tui: Tui = bootTui({ cwd: process.cwd() }, { platform: tp.platform, homeJieDir: join(tmpdir(), "jie-tui-bash-home") }).cradle.tui;
+      const { tui, stateStore } = bootTui({ cwd: process.cwd() }, { platform: tp.platform, homeJieDir: join(tmpdir(), "jie-tui-bash-home") }).cradle;
       try {
         emitTeamLoaded(tp, makeTeamInfo());
-        internals(tui).stateStore.dispatch(Actions.submitEditorText("!!cat secret"));
+        stateStore.dispatch(Actions.submitEditorText("!!cat secret"));
         expect(tp.prompts.length).toBe(1);
         const text = tp.prompts[0]!.text.toLowerCase();
         expect(text).toContain("cat secret");
@@ -117,10 +112,10 @@ describe("handleSubmitEditorText — ! bash mode routing", () => {
   test("plain text (without !) is forwarded verbatim, not wrapped in a bash directive", () => {
     withTTY(true, () => {
       const tp = makePlatform();
-      const tui: Tui = bootTui({ cwd: process.cwd() }, { platform: tp.platform, homeJieDir: join(tmpdir(), "jie-tui-bash-home") }).cradle.tui;
+      const { tui, stateStore } = bootTui({ cwd: process.cwd() }, { platform: tp.platform, homeJieDir: join(tmpdir(), "jie-tui-bash-home") }).cradle;
       try {
         emitTeamLoaded(tp, makeTeamInfo());
-        internals(tui).stateStore.dispatch(Actions.submitEditorText("hello world"));
+        stateStore.dispatch(Actions.submitEditorText("hello world"));
         expect(tp.prompts.length).toBe(1);
         expect(tp.prompts[0]!.text).toBe("hello world");
       } finally {
@@ -132,12 +127,12 @@ describe("handleSubmitEditorText — ! bash mode routing", () => {
   test("bare ! does not call platform.prompt and surfaces a missing-command error banner", () => {
     withTTY(true, () => {
       const tp = makePlatform();
-      const tui: Tui = bootTui({ cwd: process.cwd() }, { platform: tp.platform, homeJieDir: join(tmpdir(), "jie-tui-bash-home") }).cradle.tui;
+      const { tui, stateStore } = bootTui({ cwd: process.cwd() }, { platform: tp.platform, homeJieDir: join(tmpdir(), "jie-tui-bash-home") }).cradle;
       try {
         emitTeamLoaded(tp, makeTeamInfo());
-        internals(tui).stateStore.dispatch(Actions.submitEditorText("!"));
+        stateStore.dispatch(Actions.submitEditorText("!"));
         expect(tp.prompts.length).toBe(0);
-        expect(internals(tui).stateStore.getState().errorBanner).toMatch(/bash mode requires a command/);
+        expect(stateStore.getState().errorBanner).toMatch(/bash mode requires a command/);
       } finally {
         tui.stop();
       }
@@ -147,11 +142,11 @@ describe("handleSubmitEditorText — ! bash mode routing", () => {
   test("!cmd with no team loaded surfaces an error banner and does not call platform.prompt", () => {
     withTTY(true, () => {
       const tp = makePlatform();
-      const tui: Tui = bootTui({ cwd: process.cwd() }, { platform: tp.platform, homeJieDir: join(tmpdir(), "jie-tui-bash-home") }).cradle.tui;
+      const { tui, stateStore } = bootTui({ cwd: process.cwd() }, { platform: tp.platform, homeJieDir: join(tmpdir(), "jie-tui-bash-home") }).cradle;
       try {
-        internals(tui).stateStore.dispatch(Actions.submitEditorText("!ls"));
+        stateStore.dispatch(Actions.submitEditorText("!ls"));
         expect(tp.prompts.length).toBe(0);
-        expect(internals(tui).stateStore.getState().errorBanner).toMatch(/no team loaded/i);
+        expect(stateStore.getState().errorBanner).toMatch(/no team loaded/i);
       } finally {
         tui.stop();
       }
@@ -161,12 +156,12 @@ describe("handleSubmitEditorText — ! bash mode routing", () => {
   test("/help still routes to the slash command handler instead of bash mode", () => {
     withTTY(true, () => {
       const tp = makePlatform();
-      const tui: Tui = bootTui({ cwd: process.cwd() }, { platform: tp.platform, homeJieDir: join(tmpdir(), "jie-tui-bash-home") }).cradle.tui;
+      const { tui, stateStore } = bootTui({ cwd: process.cwd() }, { platform: tp.platform, homeJieDir: join(tmpdir(), "jie-tui-bash-home") }).cradle;
       try {
         emitTeamLoaded(tp, makeTeamInfo());
-        internals(tui).stateStore.dispatch(Actions.submitEditorText("/help"));
+        stateStore.dispatch(Actions.submitEditorText("/help"));
         expect(tp.prompts.length).toBe(0);
-        const state = internals(tui).stateStore.getState();
+        const state = stateStore.getState();
         expect(state.errorBanner).toBeNull();
         expect(state.helpPanelVisible).toBe(true);
       } finally {

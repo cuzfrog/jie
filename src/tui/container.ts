@@ -5,18 +5,17 @@ import { logger } from "../utils";
 import { Actions, registerStateModule, type StateStore } from "./state";
 import { registerAutocompleteModule, type JieAutocompleteProvider } from "./autocomplete";
 import type { ScannedFile } from "./file-mention";
-import { registerChatModule, type ChatMessages } from "./components/chat";
+import { registerChatModule, type ChatMessages, type ChatSync } from "./components/chat";
 import { registerFooterModule } from "./components/footer";
 import { registerEditorModule } from "./components/editor";
 import { registerElementsModule } from "./components/elements";
 import { registerPanelsModule } from "./components/panels";
-import { registerSyncModule, type ChatSync } from "./sync";
 import { registerComponentsModule, type TuiView } from "./components";
 import { registerTuiModule } from "./module";
-import type { CommandHandler } from "./command-handler";
-import type { CommandResolver } from "./command-resolver";
+import { registerCommandModule, type CommandHandler, type CommandResolver } from "./command";
+import { registerRenderModule, type TerminalTitle, type TuiRenderer } from "./render";
+import type { EffectHandler } from "./state";
 import type { CreateTUIOptions, Tui, TuiDeps, TuiStdout } from "./tui";
-import type { TuiRenderer } from "./renderer";
 import type { TuiComponent } from "./tui-component";
 
 const log = logger.getSubLogger({ name: "jie.tui.container" });
@@ -48,6 +47,9 @@ export interface TuiCradle {
   readonly screen: TUI;
   readonly view: TuiView;
   readonly renderer: TuiRenderer;
+  readonly terminalTitle: TerminalTitle;
+  readonly effectHandler: EffectHandler;
+  readonly quitTui: () => Promise<void>;
   readonly tui: Tui;
 }
 
@@ -72,10 +74,11 @@ export function bootTui(options: CreateTUIOptions, deps: TuiDeps): AwilixContain
   registerChatModule(container);
   registerFooterModule(container);
   registerEditorModule(container);
-  registerSyncModule(container);
   registerElementsModule(container);
   registerPanelsModule(container);
   registerComponentsModule(container);
+  registerCommandModule(container);
+  registerRenderModule(container);
   registerTuiModule(container);
   container.cradle.stateStore.dispatch(
     Actions.setEnvironment(options.cwd, deps.gitBranch ?? "", deps.gitDirty ?? false, deps.version ?? ""),

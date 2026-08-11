@@ -10,7 +10,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { Actions, TuiState, type StateStore } from "../../state";
 import { type JieAutocompleteProvider, type JieSuggestions } from "../../autocomplete";
-import { COMMAND_METADATA, resolveCommandName } from "../../command-metadata";
+import { COMMAND_METADATA, resolveCommandName } from "../../command";
 import { style } from "../themes";
 import type { PromptHistoryStore } from "./prompt-history";
 

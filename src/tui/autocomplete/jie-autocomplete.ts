@@ -7,7 +7,7 @@ import {
   type SlashCommand,
 } from "@earendil-works/pi-tui";
 import { EFFORT_LEVELS, type JiePlatform, type KanbanCard, type SkillInfo } from "../../platform";
-import { COMMAND_METADATA } from "../command-metadata";
+import { COMMAND_METADATA } from "../command";
 import { filterFiles, type ScannedFile } from "../file-mention";
 import type { StateStore } from "../state";
 

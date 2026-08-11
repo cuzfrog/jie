@@ -20,6 +20,7 @@ const INITIAL_TUI_STATE: TuiState = Object.freeze({
   interruptedAgentId: null,
   nextEntrySeq: 0,
   transientMessage: null,
+  transientSetAt: null,
   errorBanner: null,
   thinkingExpanded: false,
   toolCardsExpanded: false,

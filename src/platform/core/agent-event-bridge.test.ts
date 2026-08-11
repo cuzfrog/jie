@@ -355,7 +355,7 @@ describe("AgentEventBridge — persistence", () => {
       persisted.length = 0;
       const bridge = makeBridge();
       bridge.handleEvent({ type: "message_start", message: makeAssistantMessage({ content: [] }) });
-      bridge.handleEvent({ type: "message_update", assistantMessageEvent: { type: "thinking_delta", delta: "hmm" } });
+      bridge.handleEvent({ type: "message_update", message: makeAssistantMessage(), assistantMessageEvent: { type: "thinking_delta", contentIndex: 0, delta: "hmm", partial: makeAssistantMessage() } });
       vi.advanceTimersByTime(250);
       bridge.handleEvent({ type: "message_end", message: makeAssistantMessage({ content: [{ type: "thinking", thinking: "hmm" }] }) });
       expect(persisted).toHaveLength(1);

@@ -1,7 +1,7 @@
 import { Container, type Component } from "@earendil-works/pi-tui";
-import { TuiState, type AgentId, type AgentUiState, type MessageTurn, type StateStore } from "../state";
-import type { AssistantMessageComponent, ChatMessages, UserMessageComponent } from "../components/chat";
-import type { TuiComponent } from "..";
+import { TuiState, type AgentId, type AgentUiState, type MessageTurn, type StateStore } from "../../state";
+import type { AssistantMessageComponent, ChatMessages, UserMessageComponent } from "./chat-messages";
+import type { TuiComponent } from "../..";
 
 export interface ChatSync extends TuiComponent {}
 

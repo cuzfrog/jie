@@ -1,5 +1,5 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import { COMMAND_METADATA, type CommandMeta } from "../../command-metadata";
+import { COMMAND_METADATA, type CommandMeta } from "../../command";
 import { type StateStore, type TuiState } from "../../state";
 import { type TuiComponent } from "../..";
 import { hintLines } from "../elements";

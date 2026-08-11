@@ -1,7 +1,7 @@
-import type { JiePlatform } from "../platform";
+import type { JiePlatform } from "../../platform";
 import { CommandResolverImpl, type ResolvedCommand } from "./command-resolver";
-import { makeTuiState } from "./test";
-import { makeAgentUiState } from "./test";
+import { makeTuiState } from "../test";
+import { makeAgentUiState } from "../test";
 
 function makeFakePlatform(execute: JiePlatform["execute"] = async () => null): JiePlatform {
   return {

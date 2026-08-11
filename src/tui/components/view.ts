@@ -1,6 +1,6 @@
 import { matchesKey, type Component, type Editor, type TUI, type TuiInputListenerResult } from "@earendil-works/pi-tui";
 import { Actions, type TuiState, type Action, type StateStore } from "../state";
-import type { ChatSync } from "../sync";
+import type { ChatSync } from "./chat";
 import type { TuiRoot, TuiComponent } from "..";
 
 export interface TuiView extends TuiRoot {
@@ -120,7 +120,7 @@ export class TuiViewImpl implements TuiView {
 function resolveGlobalKey(data: string, state: TuiState, popupOpen: boolean): Action | null {
   if (data === CTRL_T) return Actions.toggleThinking();
   if (data === CTRL_O) return Actions.toggleToolCards();
-  if (data === CTRL_K && state.kanban.edit === null) return Actions.cycleKanbanView();
+  if (data === CTRL_K && state.kanban.edit === null && state.kanban.board.length > 0) return Actions.cycleKanbanView();
   if (matchesKey(data, "left") && state.editorCursorAtStart && state.kanban.view !== "panel" && !popupOpen) return Actions.toggleTeamPanel();
   return null;
 }

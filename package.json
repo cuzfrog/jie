@@ -1,6 +1,6 @@
 {
   "name": "@cuzfrog/jie",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "type": "module",
   "bin": {
     "jie": "src/cli/index.ts",

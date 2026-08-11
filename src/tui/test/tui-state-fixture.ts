@@ -53,6 +53,7 @@ export function makeTuiState(
     interruptedAgentId: null,
     nextEntrySeq: 0,
     transientMessage: null,
+    transientSetAt: null,
     errorBanner: null,
     thinkingExpanded: false,
     toolCardsExpanded: false,

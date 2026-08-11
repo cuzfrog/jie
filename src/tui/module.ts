@@ -1,22 +1,14 @@
-import { asClass, asFunction, type AwilixContainer } from "awilix";
-import { ProcessTerminal, TuiMainScreen, type Terminal, type TUI } from "@earendil-works/pi-tui";
+import { asClass, asValue, type AwilixContainer } from "awilix";
 import type { TuiCradle } from "./container";
-import { CommandHandlerImpl } from "./command-handler";
-import { CommandResolverImpl } from "./command-resolver";
-import { StreamTerminalImpl } from "./stream-terminal";
-import { TuiImpl, type TuiStdout } from "./tui";
-import { TuiRendererImpl } from "./renderer";
+import { TuiImpl } from "./tui";
 
 export function registerTuiModule(container: AwilixContainer<TuiCradle>): void {
+  async function quitTui(): Promise<void> {
+    await container.cradle.terminal.drainInput();
+    container.cradle.tui.stop();
+  }
   container.register({
-    commandResolver: asClass(CommandResolverImpl).singleton(),
-    commandHandler: asClass(CommandHandlerImpl).singleton(),
-    terminal: asFunction((useProcessTerminal: boolean, stdin: NodeJS.ReadableStream, stdout: TuiStdout): Terminal =>
-      useProcessTerminal ? new ProcessTerminal() : new StreamTerminalImpl(stdin, stdout),
-    ).singleton(),
-    screen: asFunction((terminal: Terminal): TUI => new TuiMainScreen(terminal)).singleton(),
-    requestRender: asFunction((screen: TUI): (() => void) => (): void => screen.requestRender()).singleton(),
-    renderer: asClass(TuiRendererImpl).singleton(),
+    quitTui: asValue(quitTui),
     tui: asClass(TuiImpl).singleton(),
   });
 }

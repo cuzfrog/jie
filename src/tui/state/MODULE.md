@@ -1,6 +1,5 @@
 ---
 no-new-exports:
-  - index.ts
   - state.test.ts
   - state.ts
   - state-store.test.ts
@@ -11,6 +10,8 @@ no-new-exports:
   - ui-reducer.ts
   - event-reducer.test.ts
   - event-reducer.ts
+  - effect-handler.ts
+  - effect-handler.test.ts
   - actions.ts # follow existing type's shape, do not overhaul the file.
 ---
 

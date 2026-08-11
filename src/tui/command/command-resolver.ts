@@ -1,5 +1,5 @@
-import { isEffortLevel, type Command, type JiePlatform } from "../platform";
-import { TuiState } from "./state";
+import { isEffortLevel, type Command, type JiePlatform } from "../../platform";
+import { TuiState } from "../state";
 import { COMMAND_METADATA, resolveCommandName, type CommandMeta } from "./command-metadata";
 
 const MODEL_FILTER_USAGE = "/model-filter <add|remove|list> <pattern>";
