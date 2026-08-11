@@ -1,7 +1,6 @@
 import { EFFORT_LEVELS, isEffortLevel } from "../../../platform";
-import { EnumArgument } from "../arguments/enum-argument";
 import { PositionalSlashCommand } from "../positional-slash-command";
-import type { ResolvedCommand, SlashCompletionItem, SlashContext } from "../slash-command";
+import { completeItems, type ResolvedCommand, type SlashCompletion, type SlashContext, type SlashCompletionItem } from "../slash-command";
 
 const META = { name: "effort", description: "set the thinking effort", argumentHint: "<level>", arguments: [{ name: "level", optional: true }] } as const;
 
@@ -9,7 +8,7 @@ const EFFORT_ITEMS: ReadonlyArray<SlashCompletionItem> = EFFORT_LEVELS.map((leve
 
 export class EffortCommand extends PositionalSlashCommand {
   constructor() {
-    super(META, [new EnumArgument({ name: "level", optional: true }, EFFORT_ITEMS)]);
+    super(META);
   }
 
   protected override executeParsed(context: SlashContext, parsed: Record<string, string | undefined>): ResolvedCommand | Promise<ResolvedCommand> {
@@ -17,6 +16,10 @@ export class EffortCommand extends PositionalSlashCommand {
     if (level === undefined) return this.queryDefaultEffort(context);
     if (!isEffortLevel(level)) return { kind: "error", text: `/effort: invalid '${level}' (expected off | low | medium | high | max)` };
     return { kind: "platform", slashName: "effort", command: { name: "setDefaultEffort", effort: level }, transient: `effort set to ${level}` };
+  }
+
+  protected override completeArgument(argumentText: string, _context: SlashContext): SlashCompletion | null {
+    return completeItems(EFFORT_ITEMS, argumentText.trim());
   }
 
   private async queryDefaultEffort(context: SlashContext): Promise<ResolvedCommand> {

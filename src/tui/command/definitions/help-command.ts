@@ -5,7 +5,7 @@ const META = { name: "help", description: "show this help" } as const;
 
 export class HelpCommand extends PositionalSlashCommand {
   constructor() {
-    super(META, []);
+    super(META);
   }
 
   protected override executeParsed(_context: SlashContext, _parsed: Record<string, string | undefined>): ResolvedCommand {

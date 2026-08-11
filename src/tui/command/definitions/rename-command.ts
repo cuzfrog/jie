@@ -1,4 +1,3 @@
-import { StringArgument } from "../arguments/string-argument";
 import { PositionalSlashCommand } from "../positional-slash-command";
 import type { ResolvedCommand, SlashContext } from "../slash-command";
 
@@ -6,7 +5,7 @@ const META = { name: "rename", description: "name the active session", argumentH
 
 export class RenameCommand extends PositionalSlashCommand {
   constructor() {
-    super(META, [new StringArgument("name", { greedy: true })]);
+    super(META);
   }
 
   protected override executeParsed(context: SlashContext, parsed: Record<string, string | undefined>): ResolvedCommand {

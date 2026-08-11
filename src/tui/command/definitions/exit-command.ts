@@ -5,7 +5,7 @@ const META = { name: "exit", description: "quit jie" } as const;
 
 export class ExitCommand extends PositionalSlashCommand {
   constructor() {
-    super(META, []);
+    super(META);
   }
 
   protected override executeParsed(_context: SlashContext, _parsed: Record<string, string | undefined>): ResolvedCommand {

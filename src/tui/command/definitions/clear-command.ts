@@ -5,7 +5,7 @@ const META = { name: "clear", description: "clear the conversation", aliases: ["
 
 export class ClearCommand extends PositionalSlashCommand {
   constructor() {
-    super(META, []);
+    super(META);
   }
 
   protected override executeParsed(_context: SlashContext, _parsed: Record<string, string | undefined>): ResolvedCommand {

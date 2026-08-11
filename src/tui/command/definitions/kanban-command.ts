@@ -1,8 +1,5 @@
-import { EnumArgument } from "../arguments/enum-argument";
-import { KanbanCardArgument } from "../arguments/kanban-card-argument";
-import { StringArgument } from "../arguments/string-argument";
 import { PositionalSlashCommand } from "../positional-slash-command";
-import type { ResolvedCommand, SlashCompletion, SlashContext } from "../slash-command";
+import { completeItems, hasPrefix, type ResolvedCommand, type SlashCompletion, type SlashContext, type SlashCompletionItem } from "../slash-command";
 
 const META = { name: "kanban", description: "toggle the kanban panel", argumentHint: "<add|remove|complete|review|handoff>", arguments: [{ name: "subcommand", optional: true }, { name: "rest", optional: true, greedy: true }] } as const;
 
@@ -15,12 +12,8 @@ const SUBCOMMAND_ITEMS = [
 ] as const;
 
 export class KanbanCommand extends PositionalSlashCommand {
-  private readonly subcommandArgument: EnumArgument;
-
   constructor() {
-    const subcommandArgument = new EnumArgument({ name: "subcommand", optional: true }, SUBCOMMAND_ITEMS);
-    super(META, [subcommandArgument, new StringArgument("rest", { optional: true, greedy: true })]);
-    this.subcommandArgument = subcommandArgument;
+    super(META);
   }
 
   protected override executeParsed(context: SlashContext, parsed: Record<string, string | undefined>): ResolvedCommand {
@@ -54,7 +47,7 @@ export class KanbanCommand extends PositionalSlashCommand {
       if (subcommand === "remove" || subcommand === "complete" || subcommand === "review") {
         return this.completeCards(subcommand, "", context);
       }
-      return this.subcommandArgument.complete(trimmed, context);
+      return completeItems(SUBCOMMAND_ITEMS, trimmed);
     }
     const subcommand = trimmed.slice(0, spaceIndex).toLowerCase();
     const rest = trimmed.slice(spaceIndex + 1).trim();
@@ -64,8 +57,10 @@ export class KanbanCommand extends PositionalSlashCommand {
   }
 
   private completeCards(subcommand: "remove" | "complete" | "review", rest: string, context: SlashContext): SlashCompletion | null {
-    const argument = new KanbanCardArgument(subcommand);
-    const completion = argument.complete(rest, context);
+    const targetStatus = subcommand === "complete" ? "completed" : subcommand === "review" ? "in_review" : null;
+    const cards = context.state.kanban.board.filter((card) => hasPrefix(card.id, rest) && (targetStatus === null || card.status !== targetStatus));
+    const items: ReadonlyArray<SlashCompletionItem> = cards.slice(0, 20).map((card) => ({ value: card.id, label: card.id, description: card.content }));
+    const completion = completeItems(items, rest);
     if (completion === null) return null;
     return { items: completion.items.map((item) => ({ ...item, value: `${subcommand} ${item.value}` })) };
   }

@@ -1,8 +1,5 @@
-import { EnumArgument } from "../arguments/enum-argument";
-import { ModelFilterPatternArgument } from "../arguments/model-filter-pattern-argument";
-import { StringArgument } from "../arguments/string-argument";
 import { PositionalSlashCommand } from "../positional-slash-command";
-import type { ResolvedCommand, SlashCompletion, SlashContext } from "../slash-command";
+import { completeItems, type ResolvedCommand, type SlashCompletion, type SlashContext } from "../slash-command";
 
 const META = { name: "model-filter", description: "filter the /model list", argumentHint: "<add|remove|list> <pattern>", arguments: [{ name: "action" }, { name: "pattern", optional: true }] } as const;
 const MODEL_FILTER_USAGE = "/model-filter <add|remove|list> <pattern>";
@@ -14,15 +11,8 @@ const ACTION_ITEMS = [
 ] as const;
 
 export class ModelFilterCommand extends PositionalSlashCommand {
-  private readonly actionArgument: EnumArgument;
-  private readonly patternArgument: ModelFilterPatternArgument;
-
   constructor() {
-    const actionArgument = new EnumArgument({ name: "action" }, ACTION_ITEMS);
-    const patternArgument = new ModelFilterPatternArgument();
-    super(META, [actionArgument, new StringArgument("pattern", { optional: true })]);
-    this.actionArgument = actionArgument;
-    this.patternArgument = patternArgument;
+    super(META);
   }
 
   protected override executeParsed(context: SlashContext, parsed: Record<string, string | undefined>): ResolvedCommand | Promise<ResolvedCommand> {
@@ -37,14 +27,14 @@ export class ModelFilterCommand extends PositionalSlashCommand {
     return action === "add" ? this.addModelFilter(context, pattern) : this.removeModelFilter(context, pattern);
   }
 
-  override complete(argumentText: string, context: SlashContext): SlashCompletion | Promise<SlashCompletion | null> | null {
+  override async complete(argumentText: string, context: SlashContext): Promise<SlashCompletion | null> {
     const trimmed = argumentText.trim();
     const spaceIndex = trimmed.indexOf(" ");
     if (spaceIndex === -1) {
       const action = trimmed.toLowerCase();
       if (action === "remove") return this.completePatterns("", context);
       if (action === "add" || action === "list") return null;
-      return this.actionArgument.complete(trimmed, context);
+      return completeItems(ACTION_ITEMS, trimmed);
     }
     const action = trimmed.slice(0, spaceIndex).toLowerCase();
     const rest = trimmed.slice(spaceIndex + 1).trim();
@@ -52,11 +42,12 @@ export class ModelFilterCommand extends PositionalSlashCommand {
     return this.completePatterns(rest, context);
   }
 
-  private completePatterns(rest: string, context: SlashContext): SlashCompletion | Promise<SlashCompletion | null> | null {
-    return this.patternArgument.complete(rest, context).then((completion) => {
-      if (completion === null) return null;
-      return { items: completion.items.map((item) => ({ ...item, value: `remove ${item.value}` })) };
-    });
+  private async completePatterns(rest: string, context: SlashContext): Promise<SlashCompletion | null> {
+    const filters = await context.platform.execute({ name: "getModelFilters" });
+    const items = filters.map((filter) => ({ value: filter, label: filter }));
+    const completion = completeItems(items, rest);
+    if (completion === null) return null;
+    return { items: completion.items.map((item) => ({ ...item, value: `remove ${item.value}` })) };
   }
 
   private async queryModelFilterList(context: SlashContext): Promise<ResolvedCommand> {

@@ -6,7 +6,7 @@ const META = { name: "reload", description: "reload settings, manifests, and con
 
 export class ReloadCommand extends PositionalSlashCommand {
   constructor() {
-    super(META, []);
+    super(META);
   }
 
   protected override executeParsed(context: SlashContext, _parsed: Record<string, string | undefined>): ResolvedCommand {

@@ -1,17 +1,11 @@
-import { ProviderArgument } from "../arguments/provider-argument";
-import { StringArgument } from "../arguments/string-argument";
 import { PositionalSlashCommand } from "../positional-slash-command";
-import type { ResolvedCommand, SlashCompletion, SlashContext } from "../slash-command";
+import { completeItems, type ResolvedCommand, type SlashCompletion, type SlashContext } from "../slash-command";
 
 const META = { name: "login", description: "store a provider API key", argumentHint: "<provider> <apiKey>", arguments: [{ name: "provider" }, { name: "apiKey" }] } as const;
 
 export class LoginCommand extends PositionalSlashCommand {
-  private readonly providerArgument: ProviderArgument;
-
   constructor() {
-    const providerArgument = new ProviderArgument();
-    super(META, [providerArgument, new StringArgument("apiKey")]);
-    this.providerArgument = providerArgument;
+    super(META);
   }
 
   protected override executeParsed(_context: SlashContext, parsed: Record<string, string | undefined>): ResolvedCommand {
@@ -21,9 +15,13 @@ export class LoginCommand extends PositionalSlashCommand {
     return { kind: "platform", slashName: "login", command: { name: "login", provider, apiKey }, transient: `logged in to ${provider}` };
   }
 
-  override complete(argumentText: string, context: SlashContext): SlashCompletion | Promise<SlashCompletion | null> | null {
+  override async complete(argumentText: string, context: SlashContext): Promise<SlashCompletion | null> {
     const spaceIndex = argumentText.indexOf(" ");
-    if (spaceIndex === -1) return this.providerArgument.complete(argumentText, context);
+    if (spaceIndex === -1) {
+      const providers = await context.platform.execute({ name: "listProviders" });
+      const items = providers.map((provider) => ({ value: provider.id, label: provider.id, description: provider.description }));
+      return completeItems(items, argumentText);
+    }
     const rest = argumentText.slice(spaceIndex + 1);
     if (rest.trim() === "" || rest.includes(" ")) return null;
     return null;

@@ -8,4 +8,4 @@ no-new-exports:
 
 - Parses slash commands and routes them to platform calls, UI state changes, or inline replies.
 - Exposes a registry of slash-command definitions and derived metadata for help, autocomplete, and the editor.
-- Definitions live in `definitions/`; shared argument helpers live in `arguments/`.
+- Definitions live in `definitions/`.

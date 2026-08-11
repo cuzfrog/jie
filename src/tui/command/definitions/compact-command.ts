@@ -6,7 +6,7 @@ const META = { name: "compact", description: "compact the conversation of the fo
 
 export class CompactCommand extends PositionalSlashCommand {
   constructor() {
-    super(META, []);
+    super(META);
   }
 
   protected override executeParsed(context: SlashContext, _parsed: Record<string, string | undefined>): ResolvedCommand {

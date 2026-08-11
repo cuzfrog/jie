@@ -39,11 +39,6 @@ export interface SlashCompletion {
   readonly filteredOut?: number;
 }
 
-export interface SlashArgument {
-  readonly spec: ArgumentSpec;
-  complete(prefix: string, context: SlashContext): SlashCompletion | Promise<SlashCompletion | null> | null;
-}
-
 export interface SlashCommandDefinition {
   readonly meta: CommandMeta;
   resolve(context: SlashContext, args: ReadonlyArray<string>): ResolvedCommand | Promise<ResolvedCommand>;
@@ -58,4 +53,15 @@ export function hasPrefix(value: string, prefix: string): boolean {
 
 export function isAlreadyComplete(candidates: ReadonlyArray<string>, prefix: string): boolean {
   return prefix !== "" && candidates.some((candidate) => candidate.toLowerCase() === prefix.toLowerCase());
+}
+
+export function completeItems(
+  items: ReadonlyArray<SlashCompletionItem>,
+  prefix: string,
+  match?: (item: SlashCompletionItem, prefix: string) => boolean,
+): SlashCompletion | null {
+  if (isAlreadyComplete(items.map((item) => item.value), prefix)) return null;
+  const matcher = match ?? ((item) => hasPrefix(item.value, prefix));
+  const matches = items.filter((item) => matcher(item, prefix)).slice(0, MAX_SUGGESTIONS);
+  return matches.length === 0 ? null : { items: matches };
 }
