@@ -37,12 +37,7 @@ interface KeyFallback {
 
 export class KanbanPanel extends Panel implements TuiComponent {
   private teamId: string | null = null;
-  private kanbanView: "hidden" | "list" | "panel" = "hidden";
-  private kanbanExpanded = false;
-  private kanbanBoard: ReadonlyArray<KanbanCard> = [];
-  private kanbanCursor: string | null = null;
-  private kanbanEditField: "content" | "description" = "content";
-  private kanbanEdit: string | null = null;
+  private kanban: TuiState["kanban"] | null = null;
   private readonly editor: KeyFallback;
 
   constructor(stateStore: StateStore, editor: KeyFallback) {
@@ -52,28 +47,15 @@ export class KanbanPanel extends Panel implements TuiComponent {
 
   update(): boolean {
     const state = this.stateStore.getState();
-    if (
-      state.teamId === this.teamId &&
-      state.kanbanView === this.kanbanView &&
-      state.kanbanExpanded === this.kanbanExpanded &&
-      state.kanbanBoard === this.kanbanBoard &&
-      state.kanbanCursor === this.kanbanCursor &&
-      state.kanbanEditField === this.kanbanEditField &&
-      state.kanbanEdit === this.kanbanEdit
-    ) return false;
+    if (state.teamId === this.teamId && state.kanban === this.kanban) return false;
     this.teamId = state.teamId;
-    this.kanbanView = state.kanbanView;
-    this.kanbanExpanded = state.kanbanExpanded;
-    this.kanbanBoard = state.kanbanBoard;
-    this.kanbanCursor = state.kanbanCursor;
-    this.kanbanEditField = state.kanbanEditField;
-    this.kanbanEdit = state.kanbanEdit;
+    this.kanban = state.kanban;
     return true;
   }
 
   handleInput(data: string): void {
     const state = this.stateStore.getState();
-    if (state.kanbanView === "panel" && state.kanbanEdit === null && !this.editor.isShowingAutocomplete()) {
+    if (state.kanban.view === "panel" && state.kanban.edit === null && !this.editor.isShowingAutocomplete()) {
       const action = resolveKanbanKey(data, state);
       if (action !== null) {
         this.stateStore.dispatch(action);
@@ -84,16 +66,16 @@ export class KanbanPanel extends Panel implements TuiComponent {
   }
 
   protected override isVisible(state: TuiState): boolean {
-    return state.teamId !== null && state.kanbanView === "panel";
+    return state.teamId !== null && state.kanban.view === "panel";
   }
 
   protected override body(state: TuiState, inner: number): string[] {
-    if (state.kanbanExpanded) return renderCardDetail(focusedCard(state), state.kanbanEditField, inner);
+    if (state.kanban.expanded) return renderCardDetail(focusedCard(state), state.kanban.editField, inner);
     return renderKanbanBoard(state, TuiState.kanbanVisibleCards(state), inner);
   }
 
   protected override topBorder(state: TuiState, width: number): string | null {
-    if (!state.kanbanExpanded) return null;
+    if (!state.kanban.expanded) return null;
     const focused = focusedCard(state);
     return focused === null ? null : renderExpandedTopBorder(focused.id, width, style("borderMuted"));
   }
@@ -105,15 +87,15 @@ export class KanbanPanel extends Panel implements TuiComponent {
 
 function focusedCard(state: TuiState): KanbanCard | null {
   const visible = TuiState.kanbanVisibleCards(state);
-  return state.kanbanCursor === null ? null : visible.find((card) => card.id === state.kanbanCursor) ?? null;
+  return state.kanban.cursor === null ? null : visible.find((card) => card.id === state.kanban.cursor) ?? null;
 }
 
 function renderKanbanBoard(state: TuiState, visible: ReadonlyArray<KanbanCard>, innerWidth: number): string[] {
   const columnWidth = Math.max(1, Math.floor((innerWidth - COLUMN_GAP.length * (KANBAN_COLUMNS.length - 1)) / KANBAN_COLUMNS.length));
   const columns = KANBAN_COLUMNS.map((column) => {
     const cards = visible.filter((card) => card.status === column.status);
-    const total = state.kanbanBoard.filter((card) => card.status === column.status).length;
-    return renderColumn(column, cards, total, state.kanbanCursor, columnWidth);
+    const total = state.kanban.board.filter((card) => card.status === column.status).length;
+    return renderColumn(column, cards, total, state.kanban.cursor, columnWidth);
   });
   const height = Math.max(...columns.map((column) => column.length));
   const rows: string[] = [];
@@ -165,7 +147,7 @@ function renderExpandedTopBorder(cardId: string, width: number, border: (text: s
 }
 
 function renderHint(state: TuiState, width: number): string {
-  const text = state.kanbanEdit !== null ? HINTS.editing : state.kanbanExpanded ? HINTS.expanded : HINTS.collapsed;
+  const text = state.kanban.edit !== null ? HINTS.editing : state.kanban.expanded ? HINTS.expanded : HINTS.collapsed;
   return truncateToWidth(style("dim")(text), width);
 }
 
@@ -174,18 +156,18 @@ function fitToWidth(text: string, width: number): string {
 }
 
 function resolveKanbanKey(data: string, state: TuiState): Action | null {
-  if (matchesKey(data, "esc") && state.kanbanExpanded) return Actions.toggleKanbanExpand();
+  if (matchesKey(data, "esc") && state.kanban.expanded) return Actions.toggleKanbanExpand();
   if (matchesKey(data, "tab")) return Actions.toggleKanbanExpand();
-  if (state.kanbanExpanded) {
+  if (state.kanban.expanded) {
     if (matchesKey(data, "up")) return Actions.moveKanbanEditField("up");
     if (matchesKey(data, "down")) return Actions.moveKanbanEditField("down");
-    if (data === CTRL_E && state.kanbanCursor !== null) return Actions.commitKanbanEdit(state.kanbanCursor, state.kanbanEditField);
+    if (data === CTRL_E && state.kanban.cursor !== null) return Actions.commitKanbanEdit(state.kanban.cursor, state.kanban.editField);
     return null;
   }
   if (matchesKey(data, "up")) return Actions.moveKanbanCursor("up");
   if (matchesKey(data, "down")) return Actions.moveKanbanCursor("down");
   if (matchesKey(data, "left")) return Actions.moveKanbanCursor("left");
   if (matchesKey(data, "right")) return Actions.moveKanbanCursor("right");
-  if (data === CTRL_E && state.kanbanCursor !== null) return Actions.commitKanbanEdit(state.kanbanCursor);
+  if (data === CTRL_E && state.kanban.cursor !== null) return Actions.commitKanbanEdit(state.kanban.cursor);
   return null;
 }

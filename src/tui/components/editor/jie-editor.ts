@@ -66,7 +66,7 @@ export class JieEditor extends Editor {
     super(screen, theme);
     this.stateStore = stateStore;
     this.promptHistoryStore = promptHistoryStore;
-    const tracking = new GhostTrackingProvider(autocompleteProvider, () => this.stateStore.getState().kanbanEdit !== null);
+    const tracking = new GhostTrackingProvider(autocompleteProvider, () => this.stateStore.getState().kanban.edit !== null);
     tracking.onSuggestions = (suggestions): void => {
       this.popupFilteredOut = suggestions.filteredOut ?? null;
       this.resetGhost(suggestions.items, suggestions.prefix);
@@ -85,7 +85,7 @@ export class JieEditor extends Editor {
     };
     this.onSubmit = (text: string): void => {
       if (text.trim() === "") return;
-      if (this.stateStore.getState().kanbanEdit !== null) {
+      if (this.stateStore.getState().kanban.edit !== null) {
         this.saveKanbanEdit(text);
         return;
       }
@@ -96,7 +96,7 @@ export class JieEditor extends Editor {
   }
 
   override handleInput(data: string): void {
-    if (this.stateStore.getState().kanbanEdit !== null) {
+    if (this.stateStore.getState().kanban.edit !== null) {
       this.handleKanbanEditInput(data);
       return;
     }
@@ -124,7 +124,7 @@ export class JieEditor extends Editor {
   override render(width: number): string[] {
     let lines = super.render(width);
     const state = this.stateStore.getState();
-    const editingId = state.kanbanEdit;
+    const editingId = state.kanban.edit;
     const chipLabel = editingId !== null ? `editing ${editingId}` : state.sessionName;
     const chipBackground = editingId !== null ? CHIP_BACKGROUND_EDIT : (this.bashMode ? CHIP_BACKGROUND_WARNING : CHIP_BACKGROUND_BORDER);
     lines = spliceTopBorderChip(lines, chipLabel, width, this.borderColor, chipBackground);
@@ -143,7 +143,7 @@ export class JieEditor extends Editor {
   }
 
   update(): boolean {
-    return this.syncKanbanEdit(this.stateStore.getState().kanbanEdit);
+    return this.syncKanbanEdit(this.stateStore.getState().kanban.edit);
   }
 
   override addToHistory(text: string): void {
@@ -284,8 +284,8 @@ export class JieEditor extends Editor {
 
   private saveKanbanEdit(text: string): void {
     const state = this.stateStore.getState();
-    if (state.kanbanEdit === null) return;
-    this.stateStore.dispatch(Actions.saveKanbanEdit(state.kanbanEdit, text, state.kanbanEditField));
+    if (state.kanban.edit === null) return;
+    this.stateStore.dispatch(Actions.saveKanbanEdit(state.kanban.edit, text, state.kanban.editField));
   }
 
   private syncKanbanEdit(afterStateKanbanEdit: string | null): boolean {
@@ -303,12 +303,12 @@ export class JieEditor extends Editor {
   private beginKanbanEdit(cardId: string): void {
     if (this.kanbanDraft === null) this.kanbanDraft = this.getText();
     const state = this.stateStore.getState();
-    const card = state.kanbanBoard.find((entry) => entry.id === cardId);
+    const card = state.kanban.board.find((entry) => entry.id === cardId);
     if (card === undefined) {
       this.applyText("");
       return;
     }
-    this.applyText(state.kanbanEditField === "description" ? (card.description ?? "") : card.content);
+    this.applyText(state.kanban.editField === "description" ? (card.description ?? "") : card.content);
   }
 
   private endKanbanEdit(): void {

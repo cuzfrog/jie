@@ -240,10 +240,11 @@ describe("KanbanPanel.update", () => {
 
   test("reports clean when only an unwatched field changes", () => {
     const board: ReadonlyArray<KanbanCard> = [{ id: "#1", content: "a", status: "pending" }];
-    stateStore.getState.mockReturnValue(boardState(board));
+    const base = boardState(board);
+    stateStore.getState.mockReturnValue(base);
     const panel = new KanbanPanel(stateStore, makeEditorFallback());
     panel.update();
-    stateStore.getState.mockReturnValue(boardState(board, { focusedAgentId: "my-team:general-1" }));
+    stateStore.getState.mockReturnValue({ ...base, focusedAgentId: "my-team:general-1" });
     expect(panel.update()).toBe(false);
   });
 });
@@ -363,7 +364,7 @@ describe("KanbanPanel.handleInput", () => {
   });
 });
 
-function boardState(cards: ReadonlyArray<KanbanCard>, overrides: Partial<TuiState> = {}): TuiState {
+function boardState(cards: ReadonlyArray<KanbanCard>, overrides: Parameters<typeof makeTuiState>[0] = {}): TuiState {
   return makeTuiState({
     teamId: "my-team",
     kanbanBoard: cards,

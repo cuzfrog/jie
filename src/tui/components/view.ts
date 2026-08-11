@@ -120,8 +120,8 @@ export class TuiViewImpl implements TuiView {
 function resolveGlobalKey(data: string, state: TuiState, popupOpen: boolean): Action | null {
   if (data === CTRL_T) return Actions.toggleThinking();
   if (data === CTRL_O) return Actions.toggleToolCards();
-  if (data === CTRL_K && state.kanbanEdit === null) return Actions.cycleKanbanView();
-  if (matchesKey(data, "left") && state.editorCursorAtStart && state.kanbanView !== "panel" && !popupOpen) return Actions.toggleTeamPanel();
+  if (data === CTRL_K && state.kanban.edit === null) return Actions.cycleKanbanView();
+  if (matchesKey(data, "left") && state.editorCursorAtStart && state.kanban.view !== "panel" && !popupOpen) return Actions.toggleTeamPanel();
   return null;
 }
 
@@ -137,7 +137,7 @@ function shouldCommitTeamCursor(state: TuiState): boolean {
 }
 
 function resolveFocusTarget(state: TuiState): "kanban" | "editor" {
-  return state.kanbanView === "panel" && state.kanbanEdit === null ? "kanban" : "editor";
+  return state.kanban.view === "panel" && state.kanban.edit === null ? "kanban" : "editor";
 }
 
 export {

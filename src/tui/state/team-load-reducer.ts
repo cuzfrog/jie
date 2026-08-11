@@ -70,8 +70,11 @@ export function teamLoadReducer(state: TuiState, teamInfo: TeamInfo): TuiState {
     interruptedAgentId: null,
     nextEntrySeq,
     agents: newAgents,
-    kanbanExpanded: switching ? false : state.kanbanExpanded,
-    kanbanEdit: switching ? null : state.kanbanEdit,
+    kanban: {
+      ...state.kanban,
+      expanded: switching ? false : state.kanban.expanded,
+      edit: switching ? null : state.kanban.edit,
+    },
   };
   return kanbanReducer(loaded, Actions.setKanbanBoard(teamInfo.kanbanCards));
 }

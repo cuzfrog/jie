@@ -276,7 +276,7 @@ describe("bootTui — kanban edit pipeline", () => {
     harness!.stateStore.dispatch(Actions.saveKanbanEdit("#1", "edited content", "content"));
     await waitFrames(0);
     expect(harness!.platform.executeCalls.at(-1)).toEqual({ name: "kanbanEdit", teamId: "my-team", cardId: "#1", field: "content", text: "edited content" });
-    expect(harness!.stateStore.getState().kanbanBoard).toEqual(board);
+    expect(harness!.stateStore.getState().kanban.board).toEqual(board);
     harness!.tui.stop();
   });
 });

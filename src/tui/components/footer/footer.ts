@@ -14,7 +14,7 @@ export class Footer implements TuiComponent {
   private teamId: string | null = null;
   private helpPanelVisible = false;
   private teamPanelVisible = false;
-  private kanbanView: "hidden" | "list" | "panel" = "hidden";
+  private kanbanView: TuiState["kanban"]["view"] = "hidden";
   private editorCursorAtStart = false;
 
   constructor(stateStore: StateStore) {
@@ -32,7 +32,7 @@ export class Footer implements TuiComponent {
       state.teamId === this.teamId &&
       state.helpPanelVisible === this.helpPanelVisible &&
       state.teamPanelVisible === this.teamPanelVisible &&
-      state.kanbanView === this.kanbanView &&
+      state.kanban.view === this.kanbanView &&
       state.editorCursorAtStart === this.editorCursorAtStart
     ) return false;
     this.focused = focused;
@@ -42,7 +42,7 @@ export class Footer implements TuiComponent {
     this.teamId = state.teamId;
     this.helpPanelVisible = state.helpPanelVisible;
     this.teamPanelVisible = state.teamPanelVisible;
-    this.kanbanView = state.kanbanView;
+    this.kanbanView = state.kanban.view;
     this.editorCursorAtStart = state.editorCursorAtStart;
     return true;
   }
@@ -55,7 +55,7 @@ export class Footer implements TuiComponent {
     const identity = style("accent")(`${state.cwd ?? ""} (${branch}${state.gitDirty ? "*" : ""})`);
     const teamAgent = style("muted")(`${state.teamId ?? "no-team"}:${focused === null ? "—" : focused.agentKey}`);
     const identityLine = rightAligned(identity, teamAgent, w);
-    if (state.helpPanelVisible || (state.teamId !== null && (state.teamPanelVisible || state.kanbanView === "panel"))) return [identityLine];
+    if (state.helpPanelVisible || (state.teamId !== null && (state.teamPanelVisible || state.kanban.view === "panel"))) return [identityLine];
     const stats: string[] = [style(contextSegmentColor(focused))(contextSegmentText(focused))];
     const queue = formatQueueIndicator(focused === null ? null : focused.queue);
     if (queue !== null) stats.push(style("warning")(queue));

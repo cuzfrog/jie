@@ -17,8 +17,7 @@ const CARD_STYLES: { readonly [K in KanbanStatus]: { readonly glyph: string; rea
 export class KanbanList implements TuiComponent {
   private readonly stateStore: StateStore;
   private teamId: string | null = null;
-  private kanbanView: "hidden" | "list" | "panel" = "hidden";
-  private kanbanBoard: ReadonlyArray<KanbanCard> = [];
+  private kanban: ReturnType<StateStore["getState"]>["kanban"] | null = null;
 
   constructor(stateStore: StateStore) {
     this.stateStore = stateStore;
@@ -26,21 +25,16 @@ export class KanbanList implements TuiComponent {
 
   update(): boolean {
     const state = this.stateStore.getState();
-    if (
-      state.teamId === this.teamId &&
-      state.kanbanView === this.kanbanView &&
-      state.kanbanBoard === this.kanbanBoard
-    ) return false;
+    if (state.teamId === this.teamId && state.kanban === this.kanban) return false;
     this.teamId = state.teamId;
-    this.kanbanView = state.kanbanView;
-    this.kanbanBoard = state.kanbanBoard;
+    this.kanban = state.kanban;
     return true;
   }
 
   render(width: number): string[] {
     const state = this.stateStore.getState();
-    if (state.teamId === null || state.kanbanView !== "list") return [];
-    const cards = state.kanbanBoard;
+    if (state.teamId === null || state.kanban.view !== "list") return [];
+    const cards = state.kanban.board;
     if (cards.length === 0) return [];
     const w = Math.max(1, width);
     return [

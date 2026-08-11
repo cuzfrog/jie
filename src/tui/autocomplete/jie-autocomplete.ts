@@ -263,7 +263,7 @@ const KANBAN_SUBCOMMANDS: ReadonlyArray<{ readonly name: string; readonly descri
 
 function kanbanItems(stateStore: StateStore, argumentText: string): AutocompleteItem[] | null {
   const state = stateStore.getState();
-  const board = state.kanbanBoard;
+  const board = state.kanban.board;
   const trimmed = argumentText.trim();
   if (trimmed === "") return KANBAN_SUBCOMMANDS.map(subcommandItem);
   const spaceIndex = trimmed.indexOf(" ");

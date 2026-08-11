@@ -59,6 +59,15 @@ export interface AgentUiState {
 
 export type KanbanEditField = "content" | "description";
 
+interface KanbanState {
+  readonly view: "hidden" | "list" | "panel";
+  readonly board: ReadonlyArray<KanbanCard>;
+  readonly cursor: string | null;
+  readonly expanded: boolean;
+  readonly edit: string | null;
+  readonly editField: KanbanEditField;
+}
+
 export interface TuiState {
   readonly cwd: string | null;
   readonly gitBranch: string | null;
@@ -79,12 +88,7 @@ export interface TuiState {
   readonly toolCardsExpanded: boolean;
   readonly teamPanelVisible: boolean;
   readonly helpPanelVisible: boolean;
-  readonly kanbanView: "hidden" | "list" | "panel";
-  readonly kanbanBoard: ReadonlyArray<KanbanCard>;
-  readonly kanbanCursor: string | null;
-  readonly kanbanExpanded: boolean;
-  readonly kanbanEdit: string | null;
-  readonly kanbanEditField: KanbanEditField;
+  readonly kanban: KanbanState;
   readonly pendingQuit: boolean;
   readonly editorText: string;
   readonly editorCursorAtStart: boolean;
@@ -145,7 +149,7 @@ const KANBAN_VISIBLE_ROWS = 8;
 
 function kanbanVisibleCards(state: TuiState): ReadonlyArray<KanbanCard> {
   const counts = new Map<KanbanStatus, number>();
-  return state.kanbanBoard.filter((card) => {
+  return state.kanban.board.filter((card) => {
     const count = counts.get(card.status) ?? 0;
     if (count >= KANBAN_VISIBLE_ROWS) return false;
     counts.set(card.status, count + 1);

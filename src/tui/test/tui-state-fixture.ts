@@ -1,6 +1,43 @@
 import type { TuiState } from "../state";
 
-export function makeTuiState(overrides: Partial<TuiState> = {}): TuiState {
+type KanbanState = TuiState["kanban"];
+
+const DEFAULT_KANBAN: KanbanState = Object.freeze({
+  view: "hidden",
+  board: [],
+  cursor: null,
+  expanded: false,
+  edit: null,
+  editField: "content",
+} as const);
+
+type FlatKanbanOverrides = {
+  readonly kanbanView?: KanbanState["view"];
+  readonly kanbanBoard?: KanbanState["board"];
+  readonly kanbanCursor?: KanbanState["cursor"];
+  readonly kanbanExpanded?: KanbanState["expanded"];
+  readonly kanbanEdit?: KanbanState["edit"];
+  readonly kanbanEditField?: KanbanState["editField"];
+};
+
+export function makeTuiState(
+  overrides: Partial<Omit<TuiState, "kanban">> & FlatKanbanOverrides & { readonly kanban?: Partial<KanbanState> } = {},
+): TuiState {
+  const {
+    kanban: kanbanOverride,
+    kanbanView,
+    kanbanBoard,
+    kanbanCursor,
+    kanbanExpanded,
+    kanbanEdit,
+    kanbanEditField,
+    ...topLevel
+  } = overrides;
+  const kanban: KanbanState = {
+    ...DEFAULT_KANBAN,
+    ...kanbanOverride,
+    ...pickKanban({ kanbanView, kanbanBoard, kanbanCursor, kanbanExpanded, kanbanEdit, kanbanEditField }),
+  };
   return {
     cwd: null,
     gitBranch: null,
@@ -21,15 +58,23 @@ export function makeTuiState(overrides: Partial<TuiState> = {}): TuiState {
     toolCardsExpanded: false,
     teamPanelVisible: false,
     helpPanelVisible: false,
-    kanbanView: "hidden",
-    kanbanBoard: [],
-    kanbanCursor: null,
-    kanbanExpanded: false,
-    kanbanEdit: null,
-    kanbanEditField: "content",
+    kanban,
     pendingQuit: false,
     editorText: "",
     editorCursorAtStart: true,
-    ...overrides,
+    ...topLevel,
   };
+}
+
+type MutableKanban = { -readonly [K in keyof KanbanState]?: KanbanState[K] };
+
+function pickKanban(overrides: FlatKanbanOverrides): MutableKanban {
+  const partial: MutableKanban = {};
+  if (overrides.kanbanView !== undefined) partial.view = overrides.kanbanView;
+  if (overrides.kanbanBoard !== undefined) partial.board = overrides.kanbanBoard;
+  if (overrides.kanbanCursor !== undefined) partial.cursor = overrides.kanbanCursor;
+  if (overrides.kanbanExpanded !== undefined) partial.expanded = overrides.kanbanExpanded;
+  if (overrides.kanbanEdit !== undefined) partial.edit = overrides.kanbanEdit;
+  if (overrides.kanbanEditField !== undefined) partial.editField = overrides.kanbanEditField;
+  return partial;
 }
