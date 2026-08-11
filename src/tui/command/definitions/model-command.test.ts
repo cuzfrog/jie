@@ -1,6 +1,5 @@
-import { makeTuiState } from "../../test";
+import { makePlatform, makeTuiState } from "../../test";
 import { ModelCommand } from "./model-command";
-import { makePlatform } from "./_test-fixture";
 
 describe("ModelCommand", () => {
   const command = new ModelCommand();
@@ -12,17 +11,20 @@ describe("ModelCommand", () => {
   });
 
   test("resolve requires a model reference", () => {
-    const context = { state: makeTuiState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState(), platform };
     expect(command.resolve(context, [])).toEqual({ kind: "error", text: "/model <provider>/<modelId>" });
   });
 
   test("resolve rejects an invalid model reference", () => {
-    const context = { state: makeTuiState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState(), platform };
     expect(command.resolve(context, ["claude"])).toEqual({ kind: "error", text: "/model: invalid 'claude' (expected <provider>/<modelId>)" });
   });
 
   test("resolve builds the setDefaultModel command", () => {
-    const context = { state: makeTuiState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState(), platform };
     expect(command.resolve(context, ["anthropic/claude-sonnet-4-5"])).toEqual({
       kind: "platform",
       slashName: "model",
@@ -32,18 +34,17 @@ describe("ModelCommand", () => {
   });
 
   test("complete returns filtered models", async () => {
-    const context = {
-      state: makeTuiState(),
-      platform: makePlatform(async (cmd) => {
-        if (cmd.name === "listFilteredModels") {
-          return {
-            models: [{ provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", available: true }],
-            filteredOut: 0,
-          };
-        }
-        return null;
-      }),
-    };
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async (cmd: { readonly name: string }) => {
+      if (cmd.name === "listFilteredModels") {
+        return {
+          models: [{ provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", available: true }],
+          filteredOut: 0,
+        };
+      }
+      return null;
+    });
+    const context = { state: makeTuiState(), platform };
     const result = await command.complete("", context);
     expect(result).toEqual({
       items: [{ value: "anthropic/claude-sonnet-4-5", label: "anthropic/claude-sonnet-4-5", description: "Claude Sonnet 4.5" }],
@@ -51,18 +52,17 @@ describe("ModelCommand", () => {
   });
 
   test("complete reports the filtered-out count", async () => {
-    const context = {
-      state: makeTuiState(),
-      platform: makePlatform(async (cmd) => {
-        if (cmd.name === "listFilteredModels") {
-          return {
-            models: [{ provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", available: true }],
-            filteredOut: 3,
-          };
-        }
-        return null;
-      }),
-    };
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async (cmd: { readonly name: string }) => {
+      if (cmd.name === "listFilteredModels") {
+        return {
+          models: [{ provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", available: true }],
+          filteredOut: 3,
+        };
+      }
+      return null;
+    });
+    const context = { state: makeTuiState(), platform };
     const result = await command.complete("", context);
     expect(result).toEqual({
       items: [{ value: "anthropic/claude-sonnet-4-5", label: "anthropic/claude-sonnet-4-5", description: "Claude Sonnet 4.5" }],
@@ -71,18 +71,17 @@ describe("ModelCommand", () => {
   });
 
   test("complete suppresses an exact match", async () => {
-    const context = {
-      state: makeTuiState(),
-      platform: makePlatform(async (cmd) => {
-        if (cmd.name === "listFilteredModels") {
-          return {
-            models: [{ provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", available: true }],
-            filteredOut: 0,
-          };
-        }
-        return null;
-      }),
-    };
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async (cmd: { readonly name: string }) => {
+      if (cmd.name === "listFilteredModels") {
+        return {
+          models: [{ provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", available: true }],
+          filteredOut: 0,
+        };
+      }
+      return null;
+    });
+    const context = { state: makeTuiState(), platform };
     expect(await command.complete("anthropic/claude-sonnet-4-5", context)).toBe(null);
   });
 });

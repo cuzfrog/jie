@@ -1,6 +1,5 @@
-import { makeTuiState } from "../../test";
+import { makePlatform, makeTuiState } from "../../test";
 import { TeamCommand } from "./team-command";
-import { makePlatform } from "./_test-fixture";
 
 describe("TeamCommand", () => {
   const command = new TeamCommand();
@@ -12,12 +11,14 @@ describe("TeamCommand", () => {
   });
 
   test("resolve requires a team id", () => {
-    const context = { state: makeTuiState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState(), platform };
     expect(command.resolve(context, [])).toEqual({ kind: "error", text: "/team <teamId>" });
   });
 
   test("resolve builds the team command", () => {
-    const context = { state: makeTuiState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState(), platform };
     expect(command.resolve(context, ["alpha"])).toEqual({
       kind: "platform",
       slashName: "team",
@@ -27,21 +28,20 @@ describe("TeamCommand", () => {
   });
 
   test("complete returns installed teams with the default marker", async () => {
-    const context = {
-      state: makeTuiState(),
-      platform: makePlatform(async (cmd) => {
-        if (cmd.name === "getTeamInfo") {
-          return {
-            defaultTeam: "alpha",
-            installed: [
-              { id: "alpha", agentCount: 1, location: "user" as const },
-              { id: "beta", agentCount: 3, location: "user" as const },
-            ],
-          };
-        }
-        return null;
-      }),
-    };
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async (cmd: { readonly name: string }) => {
+      if (cmd.name === "getTeamInfo") {
+        return {
+          defaultTeam: "alpha",
+          installed: [
+            { id: "alpha", agentCount: 1, location: "user" as const },
+            { id: "beta", agentCount: 3, location: "user" as const },
+          ],
+        };
+      }
+      return null;
+    });
+    const context = { state: makeTuiState(), platform };
     const result = await command.complete("", context);
     expect(result).toEqual({
       items: [
@@ -52,18 +52,17 @@ describe("TeamCommand", () => {
   });
 
   test("complete marks a single-agent team with a singular label", async () => {
-    const context = {
-      state: makeTuiState(),
-      platform: makePlatform(async (cmd) => {
-        if (cmd.name === "getTeamInfo") {
-          return {
-            defaultTeam: null,
-            installed: [{ id: "alpha", agentCount: 1, location: "user" as const }],
-          };
-        }
-        return null;
-      }),
-    };
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async (cmd: { readonly name: string }) => {
+      if (cmd.name === "getTeamInfo") {
+        return {
+          defaultTeam: null,
+          installed: [{ id: "alpha", agentCount: 1, location: "user" as const }],
+        };
+      }
+      return null;
+    });
+    const context = { state: makeTuiState(), platform };
     const result = await command.complete("", context);
     expect(result).toEqual({
       items: [{ value: "alpha", label: "alpha", description: "1 agent" }],

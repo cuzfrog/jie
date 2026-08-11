@@ -1,6 +1,5 @@
-import { makeTuiState } from "../../test";
+import { makePlatform, makeTuiState, teamState } from "../../test";
 import { RenameCommand } from "./rename-command";
-import { makePlatform, teamState } from "./_test-fixture";
 
 describe("RenameCommand", () => {
   const command = new RenameCommand();
@@ -12,17 +11,20 @@ describe("RenameCommand", () => {
   });
 
   test("resolve requires a loaded team", () => {
-    const context = { state: makeTuiState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState(), platform };
     expect(command.resolve(context, ["new name"])).toEqual({ kind: "error", text: "/rename: no team loaded" });
   });
 
   test("resolve requires a name", () => {
-    const context = { state: teamState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
     expect(command.resolve(context, [])).toEqual({ kind: "error", text: "/rename <name>" });
   });
 
   test("resolve joins multi-word names and builds the rename command", () => {
-    const context = { state: teamState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
     expect(command.resolve(context, ["my", "session", "name"])).toEqual({
       kind: "platform",
       slashName: "rename",
@@ -32,7 +34,8 @@ describe("RenameCommand", () => {
   });
 
   test("complete returns null", async () => {
-    const context = { state: makeTuiState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState(), platform };
     expect(await command.complete("", context)).toBe(null);
   });
 });

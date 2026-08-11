@@ -1,6 +1,5 @@
 ---
 no-new-exports:
-  - index.ts
   - clear-command.ts
   - clear-command.test.ts
   - compact-command.ts

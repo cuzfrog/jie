@@ -1,7 +1,6 @@
 import type { KanbanCard } from "../../../platform";
-import { makeTuiState } from "../../test";
+import { makePlatform, makeTuiState, teamState } from "../../test";
 import { KanbanCommand } from "./kanban-command";
-import { makePlatform, teamState } from "./_test-fixture";
 
 const SAMPLE_BOARD: ReadonlyArray<KanbanCard> = [
   { id: "#1", content: "first task", status: "in_review" },
@@ -19,12 +18,14 @@ describe("KanbanCommand", () => {
   });
 
   test("resolve with no subcommand cycles the kanban view", () => {
-    const context = { state: teamState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
     expect(command.resolve(context, [])).toEqual({ kind: "ui", action: "cycleKanbanView" });
   });
 
   test("resolve add parses flags and builds the kanbanAdd command", () => {
-    const context = { state: teamState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
     expect(command.resolve(context, ["add", "--title", "title", "do the thing"])).toEqual({
       kind: "platform",
       slashName: "kanban add",
@@ -33,7 +34,8 @@ describe("KanbanCommand", () => {
   });
 
   test("resolve add with --ephemeral sets the session scope", () => {
-    const context = { state: teamState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
     expect(command.resolve(context, ["add", "--ephemeral", "task"])).toEqual({
       kind: "platform",
       slashName: "kanban add",
@@ -42,17 +44,20 @@ describe("KanbanCommand", () => {
   });
 
   test("resolve add without a description reports usage", () => {
-    const context = { state: teamState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
     expect(command.resolve(context, ["add"])).toEqual({ kind: "error", text: "/kanban add [--ephemeral] [--title <title>] <description>" });
   });
 
   test("resolve remove requires a card id", () => {
-    const context = { state: teamState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
     expect(command.resolve(context, ["remove"])).toEqual({ kind: "error", text: "/kanban remove <cardId>" });
   });
 
   test("resolve remove builds the kanbanRemove command", () => {
-    const context = { state: teamState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
     expect(command.resolve(context, ["remove", "#1"])).toEqual({
       kind: "platform",
       slashName: "kanban remove",
@@ -61,7 +66,8 @@ describe("KanbanCommand", () => {
   });
 
   test("resolve complete builds the kanbanSetStatus completed command", () => {
-    const context = { state: teamState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
     expect(command.resolve(context, ["complete", "#1"])).toEqual({
       kind: "platform",
       slashName: "kanban complete",
@@ -70,7 +76,8 @@ describe("KanbanCommand", () => {
   });
 
   test("resolve review builds the kanbanSetStatus in_review command", () => {
-    const context = { state: teamState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
     expect(command.resolve(context, ["review", "#1"])).toEqual({
       kind: "platform",
       slashName: "kanban review",
@@ -79,7 +86,8 @@ describe("KanbanCommand", () => {
   });
 
   test("resolve handoff requires a card id and a target team", () => {
-    const context = { state: teamState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
     expect(command.resolve(context, ["handoff", "#1"])).toEqual({
       kind: "error",
       text: "/kanban handoff [<teamId>/]<cardId> <targetTeamId>",
@@ -87,7 +95,8 @@ describe("KanbanCommand", () => {
   });
 
   test("resolve handoff builds the kanbanHandoff command", () => {
-    const context = { state: teamState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
     expect(command.resolve(context, ["handoff", "#1", "other-team"])).toEqual({
       kind: "platform",
       slashName: "kanban handoff",
@@ -96,17 +105,20 @@ describe("KanbanCommand", () => {
   });
 
   test("resolve reports an unknown subcommand", () => {
-    const context = { state: teamState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
     expect(command.resolve(context, ["unknown"])).toEqual({ kind: "error", text: "/kanban: unknown subcommand 'unknown'" });
   });
 
   test("resolve add requires a loaded team", () => {
-    const context = { state: makeTuiState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState(), platform };
     expect(command.resolve(context, ["add", "task"])).toEqual({ kind: "error", text: "/kanban: no team loaded" });
   });
 
   test("complete returns subcommands", async () => {
-    const context = { state: makeTuiState({ kanbanBoard: SAMPLE_BOARD }), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState({ kanbanBoard: SAMPLE_BOARD }), platform };
     const result = await command.complete("", context);
     expect(result).toEqual({
       items: [
@@ -120,7 +132,8 @@ describe("KanbanCommand", () => {
   });
 
   test("complete filters subcommands by prefix", async () => {
-    const context = { state: makeTuiState({ kanbanBoard: SAMPLE_BOARD }), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState({ kanbanBoard: SAMPLE_BOARD }), platform };
     const result = await command.complete("c", context);
     expect(result).toEqual({
       items: [{ value: "complete", label: "complete", description: "<cardId>" }],
@@ -128,7 +141,8 @@ describe("KanbanCommand", () => {
   });
 
   test("complete remove returns all non-matching card ids", async () => {
-    const context = { state: makeTuiState({ kanbanBoard: SAMPLE_BOARD }), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState({ kanbanBoard: SAMPLE_BOARD }), platform };
     const result = await command.complete("remove ", context);
     expect(result).toEqual({
       items: [
@@ -140,7 +154,8 @@ describe("KanbanCommand", () => {
   });
 
   test("complete complete filters out already-completed cards", async () => {
-    const context = { state: makeTuiState({ kanbanBoard: SAMPLE_BOARD }), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState({ kanbanBoard: SAMPLE_BOARD }), platform };
     const result = await command.complete("complete ", context);
     expect(result).toEqual({
       items: [
@@ -151,7 +166,8 @@ describe("KanbanCommand", () => {
   });
 
   test("complete review filters out already-in-review cards", async () => {
-    const context = { state: makeTuiState({ kanbanBoard: SAMPLE_BOARD }), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState({ kanbanBoard: SAMPLE_BOARD }), platform };
     const result = await command.complete("review ", context);
     expect(result).toEqual({
       items: [
@@ -162,7 +178,8 @@ describe("KanbanCommand", () => {
   });
 
   test("complete add returns null", async () => {
-    const context = { state: makeTuiState({ kanbanBoard: SAMPLE_BOARD }), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState({ kanbanBoard: SAMPLE_BOARD }), platform };
     expect(await command.complete("add ", context)).toBe(null);
   });
 });

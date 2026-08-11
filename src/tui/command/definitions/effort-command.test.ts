@@ -1,7 +1,6 @@
 import { EFFORT_LEVELS } from "../../../platform";
-import { makeTuiState } from "../../test";
+import { makePlatform, makeTuiState } from "../../test";
 import { EffortCommand } from "./effort-command";
-import { makePlatform } from "./_test-fixture";
 
 describe("EffortCommand", () => {
   const command = new EffortCommand();
@@ -13,21 +12,25 @@ describe("EffortCommand", () => {
   });
 
   test("resolve queries the current default effort when no level is given", async () => {
-    const context = {
-      state: makeTuiState(),
-      platform: makePlatform(async (cmd) => (cmd.name === "getDefaultEffort" ? "low" : null)),
-    };
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async (cmd: { readonly name: string }) => {
+      if (cmd.name === "getDefaultEffort") return "low";
+      return null;
+    });
+    const context = { state: makeTuiState(), platform };
     const result = await command.resolve(context, []);
     expect(result).toEqual({ kind: "reply", text: "default effort: low" });
   });
 
   test("resolve rejects an invalid effort level", () => {
-    const context = { state: makeTuiState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState(), platform };
     expect(command.resolve(context, ["extreme"])).toEqual({ kind: "error", text: "/effort: invalid 'extreme' (expected off | low | medium | high | max)" });
   });
 
   test("resolve sets the default effort level", () => {
-    const context = { state: makeTuiState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState(), platform };
     expect(command.resolve(context, ["medium"])).toEqual({
       kind: "platform",
       slashName: "effort",
@@ -37,14 +40,16 @@ describe("EffortCommand", () => {
   });
 
   test("complete returns effort levels", async () => {
-    const context = { state: makeTuiState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState(), platform };
     const result = await command.complete("", context);
     expect(result).not.toBe(null);
     expect(result!.items.map((item) => item.value)).toEqual([...EFFORT_LEVELS]);
   });
 
   test("complete suppresses an exact match", async () => {
-    const context = { state: makeTuiState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState(), platform };
     expect(await command.complete("medium", context)).toBe(null);
   });
 });

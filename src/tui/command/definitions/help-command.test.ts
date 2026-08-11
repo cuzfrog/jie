@@ -1,6 +1,5 @@
-import { makeTuiState } from "../../test";
+import { makePlatform, makeTuiState } from "../../test";
 import { HelpCommand } from "./help-command";
-import { makePlatform } from "./_test-fixture";
 
 describe("HelpCommand", () => {
   const command = new HelpCommand();
@@ -11,17 +10,20 @@ describe("HelpCommand", () => {
   });
 
   test("resolve shows the help panel", () => {
-    const context = { state: makeTuiState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState(), platform };
     expect(command.resolve(context, [])).toEqual({ kind: "ui", action: "showHelp" });
   });
 
   test("resolve rejects extra arguments", () => {
-    const context = { state: makeTuiState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState(), platform };
     expect(command.resolve(context, ["extra"])).toEqual({ kind: "error", text: "/help" });
   });
 
   test("complete returns null", async () => {
-    const context = { state: makeTuiState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState(), platform };
     expect(await command.complete("", context)).toBe(null);
   });
 });

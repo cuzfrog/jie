@@ -1,6 +1,5 @@
-import { makeTuiState } from "../../test";
+import { makePlatform, makeTuiState, teamState } from "../../test";
 import { ReloadCommand } from "./reload-command";
-import { makePlatform, teamState } from "./_test-fixture";
 
 describe("ReloadCommand", () => {
   const command = new ReloadCommand();
@@ -11,12 +10,14 @@ describe("ReloadCommand", () => {
   });
 
   test("resolve rejects while any agent is busy", () => {
-    const context = { state: teamState("t1", "busy"), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: teamState("t1", "busy"), platform };
     expect(command.resolve(context, [])).toEqual({ kind: "error", text: "wait for the current response to finish before reloading" });
   });
 
   test("resolve builds the reload command", () => {
-    const context = { state: teamState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
     expect(command.resolve(context, [])).toEqual({
       kind: "platform",
       slashName: "reload",
@@ -26,12 +27,14 @@ describe("ReloadCommand", () => {
   });
 
   test("resolve rejects extra arguments", () => {
-    const context = { state: makeTuiState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState(), platform };
     expect(command.resolve(context, ["extra"])).toEqual({ kind: "error", text: "/reload" });
   });
 
   test("complete returns null", async () => {
-    const context = { state: makeTuiState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState(), platform };
     expect(await command.complete("", context)).toBe(null);
   });
 });

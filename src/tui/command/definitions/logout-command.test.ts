@@ -1,6 +1,5 @@
-import { makeTuiState } from "../../test";
+import { makePlatform, makeTuiState } from "../../test";
 import { LogoutCommand } from "./logout-command";
-import { makePlatform } from "./_test-fixture";
 
 describe("LogoutCommand", () => {
   const command = new LogoutCommand();
@@ -12,12 +11,14 @@ describe("LogoutCommand", () => {
   });
 
   test("resolve requires a provider", () => {
-    const context = { state: makeTuiState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState(), platform };
     expect(command.resolve(context, [])).toEqual({ kind: "error", text: "/logout <provider>|*" });
   });
 
   test("resolve logs out of a single provider", () => {
-    const context = { state: makeTuiState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState(), platform };
     expect(command.resolve(context, ["anthropic"])).toEqual({
       kind: "platform",
       slashName: "logout",
@@ -27,7 +28,8 @@ describe("LogoutCommand", () => {
   });
 
   test("resolve logs out of all providers", () => {
-    const context = { state: makeTuiState(), platform: makePlatform() };
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState(), platform };
     expect(command.resolve(context, ["*"])).toEqual({
       kind: "platform",
       slashName: "logout",
@@ -37,12 +39,12 @@ describe("LogoutCommand", () => {
   });
 
   test("complete returns providers and the wildcard", async () => {
-    const context = {
-      state: makeTuiState(),
-      platform: makePlatform(async (cmd) =>
-        cmd.name === "listProviders" ? [{ id: "anthropic", description: "Anthropic" }] : null,
-      ),
-    };
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async (cmd: { readonly name: string }) => {
+      if (cmd.name === "listProviders") return [{ id: "anthropic", description: "Anthropic" }];
+      return null;
+    });
+    const context = { state: makeTuiState(), platform };
     const result = await command.complete("", context);
     expect(result).toEqual({
       items: [

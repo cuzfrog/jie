@@ -1,4 +1,5 @@
 import type { TuiState } from "../state";
+import { makeAgentUiState } from "./agent-fixture";
 
 type KanbanState = TuiState["kanban"];
 
@@ -78,4 +79,14 @@ function pickKanban(overrides: FlatKanbanOverrides): MutableKanban {
   if (overrides.kanbanEdit !== undefined) partial.edit = overrides.kanbanEdit;
   if (overrides.kanbanEditField !== undefined) partial.editField = overrides.kanbanEditField;
   return partial;
+}
+
+export function teamState(teamId = "t1", status: "idle" | "busy" = "idle"): TuiState {
+  const agent = makeAgentUiState(`${teamId}:general-1`, { isLeader: true, status });
+  return makeTuiState({
+    teamId,
+    leaderAgentId: agent.agentId,
+    focusedAgentId: agent.agentId,
+    agents: new Map([[agent.agentId, agent]]),
+  });
 }
