@@ -1,12 +1,12 @@
-import { asClass, asValue, type AwilixContainer } from "awilix";
+import { asClass, type AwilixContainer } from "awilix";
 import type { TuiCradle } from "../container";
 import { CommandHandlerImpl } from "./command-handler";
+import { CommandRegistryImpl } from "./command-registry";
 import { CommandResolverImpl } from "./command-resolver";
-import { SLASH_COMMANDS } from "./definitions";
 
 export function registerCommandModule(container: AwilixContainer<TuiCradle>): void {
   container.register({
-    slashCommands: asValue(SLASH_COMMANDS),
+    commandRegistry: asClass(CommandRegistryImpl).singleton(),
     commandResolver: asClass(CommandResolverImpl).singleton(),
     commandHandler: asClass(CommandHandlerImpl).singleton(),
   });

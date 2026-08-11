@@ -1,5 +1,5 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import { COMMAND_METADATA, type CommandMeta } from "../../command";
+import type { CommandMeta, CommandRegistry } from "../../command";
 import { type StateStore, type TuiState } from "../../state";
 import { type TuiComponent } from "../..";
 import { hintLines } from "../elements";
@@ -13,9 +13,11 @@ const COLUMN_GAP = 4;
 
 export class HelpPanel extends Panel implements TuiComponent {
   private helpPanelVisible = false;
+  private readonly commandRegistry: CommandRegistry;
 
-  constructor(stateStore: StateStore) {
+  constructor(stateStore: StateStore, commandRegistry: CommandRegistry) {
     super(stateStore);
+    this.commandRegistry = commandRegistry;
   }
 
   update(): boolean {
@@ -30,7 +32,7 @@ export class HelpPanel extends Panel implements TuiComponent {
   }
 
   protected override body(_state: TuiState, inner: number): string[] {
-    return helpLines(inner);
+    return helpLines(inner, this.commandRegistry.metadata);
   }
 
   protected override hint(_state: TuiState, width: number): string | null {
@@ -38,17 +40,17 @@ export class HelpPanel extends Panel implements TuiComponent {
   }
 }
 
-function helpLines(width: number): string[] {
+function helpLines(width: number, metadata: ReadonlyArray<CommandMeta>): string[] {
   const w = Math.max(1, width);
-  return joinSections([commandSection(w), shortcutsSection(w)], w);
+  return joinSections([commandSection(w, metadata), shortcutsSection(w)], w);
 }
 
 function joinSections(sections: ReadonlyArray<ReadonlyArray<string>>, width: number): string[] {
   return sections.flatMap((section, index) => (index === 0 ? [...section] : ["", ...section])).map((line) => truncateToWidth(line, width));
 }
 
-function commandSection(width: number): string[] {
-  const cells = COMMAND_METADATA.flatMap(commandCells);
+function commandSection(width: number, metadata: ReadonlyArray<CommandMeta>): string[] {
+  const cells = metadata.flatMap(commandCells);
   const half = Math.ceil(cells.length / 2);
   const left = cells.slice(0, half);
   const right = cells.slice(half);

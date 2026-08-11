@@ -1,5 +1,6 @@
 import { type JiePlatform, type KanbanCard, type SkillInfo } from "../../platform";
-import { SLASH_COMMANDS } from "../command";
+import type { CommandRegistry } from "../command";
+import { SLASH_COMMANDS } from "../command/definitions";
 import { type ScannedFile } from "../file-mention";
 import { type StateStore, type TuiState } from "../state";
 import { makeAgentUiState, makeTuiState } from "../test";
@@ -58,8 +59,14 @@ function storeWithKanban(cards: ReadonlyArray<KanbanCard> = []): StateStore {
   return makeStateStore(makeTuiState({ teamId: "my-team", kanbanBoard: cards }));
 }
 
+const commandRegistry = vi.mocked<CommandRegistry>({
+  commands: SLASH_COMMANDS,
+  metadata: SLASH_COMMANDS.map((command) => command.meta),
+  resolveCommandName: vi.fn((name) => name),
+});
+
 function makeProvider(cwd: string, scan: (rootDir: string) => ReadonlyArray<ScannedFile>, platform: JiePlatform, stateStore: StateStore): JieAutocompleteProviderImpl {
-  return new JieAutocompleteProviderImpl(cwd, scan, platform, stateStore, SLASH_COMMANDS);
+  return new JieAutocompleteProviderImpl(cwd, scan, platform, stateStore, commandRegistry);
 }
 
 describe("createJieAutocompleteProvider — @-mentions", () => {

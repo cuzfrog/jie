@@ -1,12 +1,13 @@
 import type { JiePlatform } from "../../platform";
-import { SLASH_COMMANDS } from "./definitions";
 import type { ResolvedCommand } from "./slash-command";
+import { CommandRegistryImpl } from "./command-registry";
 import { CommandResolverImpl } from "./command-resolver";
-import { makeTuiState } from "../test";
-import { makeAgentUiState } from "../test";
+import { makeAgentUiState, makeTuiState } from "../test";
+
+const commandRegistry = new CommandRegistryImpl();
 
 function makeResolver(platform: JiePlatform): CommandResolverImpl {
-  return new CommandResolverImpl(platform, SLASH_COMMANDS);
+  return new CommandResolverImpl(platform, commandRegistry);
 }
 
 function makeFakePlatform(execute: JiePlatform["execute"] = async () => null): JiePlatform {

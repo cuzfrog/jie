@@ -1,12 +1,27 @@
-import type { CommandMeta } from "./slash-command";
 import { SLASH_COMMANDS } from "./definitions";
+import type { CommandMeta, SlashCommandDefinition } from "./slash-command";
 
-export const COMMAND_METADATA: ReadonlyArray<CommandMeta> = SLASH_COMMANDS.map((command) => command.meta);
+export interface CommandRegistry {
+  readonly commands: ReadonlyArray<SlashCommandDefinition>;
+  readonly metadata: ReadonlyArray<CommandMeta>;
+  resolveCommandName(name: string): string;
+}
 
-const ALIAS_TO_CANONICAL = new Map<string, string>(
-  SLASH_COMMANDS.flatMap((command) => (command.meta.aliases ?? []).map((alias) => [alias, command.meta.name])),
-);
+export class CommandRegistryImpl implements CommandRegistry {
+  readonly commands = SLASH_COMMANDS;
+  readonly metadata: ReadonlyArray<CommandMeta>;
+  private readonly aliasToCanonical = new Map<string, string>();
 
-export function resolveCommandName(name: string): string {
-  return ALIAS_TO_CANONICAL.get(name) ?? name;
+  constructor() {
+    this.metadata = this.commands.map((command) => command.meta);
+    for (const command of this.commands) {
+      for (const alias of command.meta.aliases ?? []) {
+        this.aliasToCanonical.set(alias, command.meta.name);
+      }
+    }
+  }
+
+  resolveCommandName(name: string): string {
+    return this.aliasToCanonical.get(name) ?? name;
+  }
 }

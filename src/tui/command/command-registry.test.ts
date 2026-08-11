@@ -1,16 +1,17 @@
-import { COMMAND_METADATA, resolveCommandName } from "./command-registry";
-import { SLASH_COMMANDS } from "./definitions";
+import { CommandRegistryImpl } from "./command-registry";
 
 describe("slash command registry invariants", () => {
-  test("SLASH_COMMANDS is the single authoritative list", () => {
-    expect(SLASH_COMMANDS.length).toBeGreaterThan(0);
-    expect(COMMAND_METADATA.length).toBe(SLASH_COMMANDS.length);
-    expect(SLASH_COMMANDS.every((command, index) => command.meta === COMMAND_METADATA[index])).toBe(true);
+  const registry = new CommandRegistryImpl();
+
+  test("commands is the single authoritative list", () => {
+    expect(registry.commands.length).toBeGreaterThan(0);
+    expect(registry.metadata.length).toBe(registry.commands.length);
+    expect(registry.commands.every((command, index) => command.meta === registry.metadata[index])).toBe(true);
   });
 
   test("every command has a unique canonical name", () => {
     const names = new Set<string>();
-    for (const command of SLASH_COMMANDS) {
+    for (const command of registry.commands) {
       expect(names.has(command.meta.name)).toBe(false);
       names.add(command.meta.name);
     }
@@ -18,7 +19,7 @@ describe("slash command registry invariants", () => {
 
   test("aliases point to distinct canonical commands", () => {
     const seenAliases = new Set<string>();
-    for (const command of SLASH_COMMANDS) {
+    for (const command of registry.commands) {
       for (const alias of command.meta.aliases ?? []) {
         expect(seenAliases.has(alias)).toBe(false);
         expect(alias).not.toBe(command.meta.name);
@@ -28,8 +29,8 @@ describe("slash command registry invariants", () => {
   });
 
   test("resolveCommandName maps aliases to canonical names and leaves unknown names intact", () => {
-    expect(resolveCommandName("new")).toBe("clear");
-    expect(resolveCommandName("clear")).toBe("clear");
-    expect(resolveCommandName("nope")).toBe("nope");
+    expect(registry.resolveCommandName("new")).toBe("clear");
+    expect(registry.resolveCommandName("clear")).toBe("clear");
+    expect(registry.resolveCommandName("nope")).toBe("nope");
   });
 });

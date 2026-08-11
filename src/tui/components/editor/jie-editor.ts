@@ -10,7 +10,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { Actions, TuiState, type StateStore } from "../../state";
 import { type JieAutocompleteProvider, type JieSuggestions } from "../../autocomplete";
-import { COMMAND_METADATA, resolveCommandName } from "../../command";
+import type { CommandRegistry } from "../../command";
 import { style } from "../themes";
 import type { PromptHistoryStore } from "./prompt-history";
 
@@ -55,17 +55,20 @@ export class JieEditor extends Editor {
   private programmaticChange = false;
   private kanbanEditId: string | null = null;
   private kanbanDraft: string | null = null;
+  private readonly commandRegistry: CommandRegistry;
 
   constructor(
     screen: TUI,
     stateStore: StateStore,
     autocompleteProvider: JieAutocompleteProvider,
     promptHistoryStore: PromptHistoryStore,
+    commandRegistry: CommandRegistry,
     theme: EditorTheme = EDITOR_THEME,
   ) {
     super(screen, theme);
     this.stateStore = stateStore;
     this.promptHistoryStore = promptHistoryStore;
+    this.commandRegistry = commandRegistry;
     const tracking = new GhostTrackingProvider(autocompleteProvider, () => this.stateStore.getState().kanban.edit !== null);
     tracking.onSuggestions = (suggestions): void => {
       this.popupFilteredOut = suggestions.filteredOut ?? null;
@@ -329,7 +332,7 @@ export class JieEditor extends Editor {
 
   private resolveGhostSuffix(): string {
     if (this.ghost !== null && this.isShowingAutocomplete()) return ghostSuffix(this.ghost.prefix, this.ghost.items[this.ghost.index]);
-    return commandBoundaryHint(this.getText());
+    return commandBoundaryHint(this.getText(), this.commandRegistry);
   }
 }
 
@@ -421,10 +424,10 @@ function argumentHintOf(description: string | undefined): string {
   return head.startsWith("<") || head.startsWith("[") ? head : "";
 }
 
-function commandBoundaryHint(text: string): string {
+function commandBoundaryHint(text: string, registry: CommandRegistry): string {
   const match = COMMAND_BOUNDARY_PATTERN.exec(text);
   if (match === null) return "";
-  const command = COMMAND_METADATA.find((entry) => entry.name === resolveCommandName(match[1]));
+  const command = registry.metadata.find((entry) => entry.name === registry.resolveCommandName(match[1]));
   return command?.argumentHint ?? "";
 }
 

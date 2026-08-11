@@ -1,6 +1,6 @@
 import { CombinedAutocompleteProvider, fuzzyFilter, type AutocompleteItem, type AutocompleteProvider, type AutocompleteSuggestions, type SlashCommand } from "@earendil-works/pi-tui";
 import type { JiePlatform, SkillInfo } from "../../platform";
-import type { SlashCommandDefinition } from "../command";
+import type { CommandRegistry, SlashCommandDefinition } from "../command";
 import { filterFiles, type ScannedFile } from "../file-mention";
 import type { StateStore } from "../state";
 
@@ -34,12 +34,12 @@ export class JieAutocompleteProviderImpl implements JieAutocompleteProvider {
     scan: (rootDir: string) => ReadonlyArray<ScannedFile>,
     platform: JiePlatform,
     stateStore: StateStore,
-    slashCommands: ReadonlyArray<SlashCommandDefinition>,
+    commandRegistry: CommandRegistry,
   ) {
     this.cwd = cwd;
     this.scan = scan;
     this.stateStore = stateStore;
-    this.commands = buildSlashCommands(slashCommands, platform, stateStore, (count) => {
+    this.commands = buildSlashCommands(commandRegistry.commands, platform, stateStore, (count) => {
       this.modelFilteredOutCount = count;
     });
     this.combined = new CombinedAutocompleteProvider(this.commands, cwd, null);

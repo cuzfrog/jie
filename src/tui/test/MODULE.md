@@ -1,6 +1,12 @@
 ---
-no-new-exports: []
+no-new-exports:
+  - index.ts
+  - agent-fixture.ts
+  - headless-tui.ts
+  - platform-fixture.ts
+  - tui-state-fixture.ts
+  - virtual-terminal.ts
 ---
 
 # test
-Headless screen-level harness: xterm.js headless consumes rendered escape sequences; asserts on actual screen text. Booted against mock LLM backend.
+Reusable test fixtures for TUI unit tests. The public surface is `index.ts`, which exports fixture builders. Internal fixtures may be imported directly by co-located tests.

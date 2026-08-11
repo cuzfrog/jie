@@ -1,7 +1,7 @@
 import type { JiePlatform } from "../../platform";
 import { TuiState } from "../state";
-import { resolveCommandName } from "./command-registry";
-import type { ResolvedCommand, SlashCommandDefinition, SlashContext } from "./slash-command";
+import type { CommandRegistry } from "./command-registry";
+import type { ResolvedCommand, SlashContext } from "./slash-command";
 
 export interface CommandResolver {
   resolve(state: TuiState, name: string, args: ReadonlyArray<string>): ResolvedCommand | Promise<ResolvedCommand>;
@@ -9,16 +9,16 @@ export interface CommandResolver {
 
 export class CommandResolverImpl implements CommandResolver {
   private readonly platform: JiePlatform;
-  private readonly slashCommands: ReadonlyArray<SlashCommandDefinition>;
+  private readonly commandRegistry: CommandRegistry;
 
-  constructor(platform: JiePlatform, slashCommands: ReadonlyArray<SlashCommandDefinition>) {
+  constructor(platform: JiePlatform, commandRegistry: CommandRegistry) {
     this.platform = platform;
-    this.slashCommands = slashCommands;
+    this.commandRegistry = commandRegistry;
   }
 
   resolve(state: TuiState, name: string, args: ReadonlyArray<string>): ResolvedCommand | Promise<ResolvedCommand> {
-    const canonical = resolveCommandName(name);
-    const command = this.slashCommands.find((candidate) => candidate.meta.name === canonical);
+    const canonical = this.commandRegistry.resolveCommandName(name);
+    const command = this.commandRegistry.commands.find((candidate) => candidate.meta.name === canonical);
     if (command === undefined) {
       return { kind: "error", text: `unknown slash command: /${name}` };
     }

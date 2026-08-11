@@ -1,6 +1,16 @@
 ---
 no-new-exports:
   - index.ts
+  - module.ts
+  - help-panel.ts
+  - help-panel.test.ts
+  - kanban-panel.ts
+  - kanban-panel.test.ts
+  - panel.ts
+  - team-panel.ts
+  - team-panel.test.ts
+  - team-table.ts
+  - team-table.test.ts
 ---
 
 # Design principles
