@@ -1,5 +1,5 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import type { CommandMeta, CommandRegistry } from "../../command";
+import type { CommandCatalog, CommandMeta } from "../../command";
 import { type StateStore, type TuiState } from "../../state";
 import { type TuiComponent } from "../..";
 import { hintLines } from "../elements";
@@ -13,11 +13,11 @@ const COLUMN_GAP = 4;
 
 export class HelpPanel extends Panel implements TuiComponent {
   private helpPanelVisible = false;
-  private readonly commandRegistry: CommandRegistry;
+  private readonly commandCatalog: CommandCatalog;
 
-  constructor(stateStore: StateStore, commandRegistry: CommandRegistry) {
+  constructor(stateStore: StateStore, commandRegistry: CommandCatalog) {
     super(stateStore);
-    this.commandRegistry = commandRegistry;
+    this.commandCatalog = commandRegistry;
   }
 
   update(): boolean {
@@ -32,7 +32,7 @@ export class HelpPanel extends Panel implements TuiComponent {
   }
 
   protected override body(_state: TuiState, inner: number): string[] {
-    return helpLines(inner, this.commandRegistry.metadata);
+    return helpLines(inner, this.commandCatalog.metadata);
   }
 
   protected override hint(_state: TuiState, width: number): string | null {

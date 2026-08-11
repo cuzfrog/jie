@@ -1,6 +1,6 @@
 import { CombinedAutocompleteProvider, fuzzyFilter, type AutocompleteItem, type AutocompleteProvider, type AutocompleteSuggestions, type SlashCommand } from "@earendil-works/pi-tui";
-import type { JiePlatform, SkillInfo } from "../../platform";
-import type { CommandRegistry, SlashCommandDefinition } from "../command";
+import type { SkillInfo } from "../../platform";
+import type { CommandCatalog, CommandMeta, CommandResolver } from "../command";
 import { filterFiles, type ScannedFile } from "../file-mention";
 import type { StateStore } from "../state";
 
@@ -32,14 +32,14 @@ export class JieAutocompleteProviderImpl implements JieAutocompleteProvider {
   constructor(
     cwd: string,
     scan: (rootDir: string) => ReadonlyArray<ScannedFile>,
-    platform: JiePlatform,
     stateStore: StateStore,
-    commandRegistry: CommandRegistry,
+    commandRegistry: CommandCatalog,
+    commandResolver: CommandResolver,
   ) {
     this.cwd = cwd;
     this.scan = scan;
     this.stateStore = stateStore;
-    this.commands = buildSlashCommands(commandRegistry.commands, platform, stateStore, (count) => {
+    this.commands = buildSlashCommands(commandRegistry, commandResolver, stateStore, (count) => {
       this.modelFilteredOutCount = count;
     });
     this.combined = new CombinedAutocompleteProvider(this.commands, cwd, null);
@@ -97,20 +97,20 @@ export class JieAutocompleteProviderImpl implements JieAutocompleteProvider {
 }
 
 function buildSlashCommands(
-  definitions: ReadonlyArray<SlashCommandDefinition>,
-  platform: JiePlatform,
+  commandRegistry: CommandCatalog,
+  commandResolver: CommandResolver,
   stateStore: StateStore,
   reportFilteredOut: (count: number) => void,
 ): SlashCommand[] {
   const commands: SlashCommand[] = [];
-  for (const definition of definitions) {
-    const canonical = toSlashCommand(definition, platform, stateStore, reportFilteredOut);
+  for (const meta of commandRegistry.metadata) {
+    const canonical = toSlashCommand(meta, commandResolver, stateStore, reportFilteredOut);
     commands.push(canonical);
-    for (const alias of definition.meta.aliases ?? []) {
+    for (const alias of meta.aliases ?? []) {
       commands.push({
         name: alias,
-        description: `alias of /${canonical.name}`,
-        argumentHint: canonical.argumentHint,
+        description: `alias of /${meta.name}`,
+        argumentHint: meta.argumentHint,
         getArgumentCompletions: canonical.getArgumentCompletions,
       });
     }
@@ -119,17 +119,17 @@ function buildSlashCommands(
 }
 
 function toSlashCommand(
-  definition: SlashCommandDefinition,
-  platform: JiePlatform,
+  meta: CommandMeta,
+  commandResolver: CommandResolver,
   stateStore: StateStore,
   reportFilteredOut: (count: number) => void,
 ): SlashCommand {
   return {
-    name: definition.meta.name,
-    description: definition.meta.description,
-    argumentHint: definition.meta.argumentHint,
+    name: meta.name,
+    description: meta.description,
+    argumentHint: meta.argumentHint,
     getArgumentCompletions: async (argumentText: string): Promise<AutocompleteItem[] | null> => {
-      const completion = await Promise.resolve(definition.complete(argumentText, { state: stateStore.getState(), platform }));
+      const completion = await Promise.resolve(commandResolver.complete(stateStore.getState(), meta.name, argumentText));
       if (completion === null) return null;
       if (completion.filteredOut !== undefined && completion.filteredOut > 0) {
         reportFilteredOut(completion.filteredOut);

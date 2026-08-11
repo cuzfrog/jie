@@ -390,4 +390,39 @@ describe("CommandResolverImpl", () => {
     const result = await resolver.resolve(makeTuiState(), "effort", []);
     expect(result).toEqual({ kind: "reply", text: "default effort: low" });
   });
+
+  test("complete returns effort levels for a known command", async () => {
+    const resolver = makeResolver(makeFakePlatform());
+    const result = await resolver.complete(makeTuiState(), "effort", "");
+    expect(result).not.toBeNull();
+    expect(result!.items.map((item) => item.value)).toEqual(["off", "low", "medium", "high", "max"]);
+  });
+
+  test("complete resolves aliases", async () => {
+    const resolver = makeResolver(makeFakePlatform());
+    const result = await resolver.complete(makeTuiState(), "new", "");
+    expect(result).toBeNull();
+  });
+
+  test("complete returns null for an unknown command", async () => {
+    const resolver = makeResolver(makeFakePlatform());
+    const result = await resolver.complete(makeTuiState(), "nope", "");
+    expect(result).toBeNull();
+  });
+
+  test("complete returns team rows using the platform", async () => {
+    const installed = [
+      { id: "alpha", agentCount: 2, location: "builtin" },
+      { id: "beta", agentCount: 1, location: "builtin" },
+    ] as const;
+    const resolver = makeResolver(makeFakePlatform(async (command) => {
+      if (command.name === "getTeamInfo") {
+        return { defaultTeam: "alpha", installed };
+      }
+      return null;
+    }));
+    const result = await resolver.complete(makeTuiState(), "team", "");
+    expect(result).not.toBeNull();
+    expect(result!.items.map((item) => item.value)).toEqual(["alpha", "beta"]);
+  });
 });

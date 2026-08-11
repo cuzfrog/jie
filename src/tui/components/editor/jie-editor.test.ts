@@ -1,7 +1,7 @@
 import { TuiMainScreen, visibleWidth, type Editor, type Terminal } from "@earendil-works/pi-tui";
 import { type KanbanCard } from "../../../platform";
 import { type JieAutocompleteProvider, type JieSuggestions } from "../../autocomplete";
-import type { CommandRegistry } from "../../command";
+import type { CommandCatalog } from "../../command";
 import { SLASH_COMMANDS } from "../../command/definitions";
 import { Actions, ActionTypes, TuiState, type AgentId, type StateStore } from "../../state";
 import { makeAgentUiState, makeTuiState } from "../../test";
@@ -41,17 +41,19 @@ const promptHistoryStore = vi.mocked<PromptHistoryStore>({
   append: vi.fn(),
 });
 
-function makeCommandRegistry(): CommandRegistry {
+function makeCommandCatalog(): CommandCatalog {
   const aliasToCanonical = new Map<string, string>();
   for (const command of SLASH_COMMANDS) {
     for (const alias of command.meta.aliases ?? []) {
       aliasToCanonical.set(alias, command.meta.name);
     }
   }
-  return vi.mocked<CommandRegistry>({
-    commands: SLASH_COMMANDS,
+  return vi.mocked<CommandCatalog>({
     metadata: SLASH_COMMANDS.map((command) => command.meta),
-    resolveCommandName: vi.fn((name) => aliasToCanonical.get(name) ?? name),
+    commandMeta: vi.fn((name) => {
+      const canonical = aliasToCanonical.get(name) ?? name;
+      return SLASH_COMMANDS.find((command) => command.meta.name === canonical)?.meta ?? null;
+    }),
   });
 }
 
@@ -67,7 +69,7 @@ interface EditorHarness {
 
 function bootEditor(provider: JieAutocompleteProvider = autocompleteProvider): EditorHarness {
   const ui = new TuiMainScreen(new StubTerminal());
-  const editor = new JieEditor(ui, stateStore, provider, promptHistoryStore, makeCommandRegistry());
+  const editor = new JieEditor(ui, stateStore, provider, promptHistoryStore, makeCommandCatalog());
   const submitted: string[] = [];
   const submit = editor.onSubmit;
   editor.onSubmit = (text: string): void => {

@@ -1,5 +1,5 @@
 import { type JiePlatform, type KanbanCard, type SkillInfo } from "../../platform";
-import type { CommandRegistry } from "../command";
+import type { CommandCatalog, CommandResolver } from "../command";
 import { SLASH_COMMANDS } from "../command/definitions";
 import { type ScannedFile } from "../file-mention";
 import { type StateStore, type TuiState } from "../state";
@@ -59,14 +59,43 @@ function storeWithKanban(cards: ReadonlyArray<KanbanCard> = []): StateStore {
   return makeStateStore(makeTuiState({ teamId: "my-team", kanbanBoard: cards }));
 }
 
-const commandRegistry = vi.mocked<CommandRegistry>({
-  commands: SLASH_COMMANDS,
+const commandCatalog = vi.mocked<CommandCatalog>({
   metadata: SLASH_COMMANDS.map((command) => command.meta),
-  resolveCommandName: vi.fn((name) => name),
+  commandMeta: vi.fn((name) => {
+    const aliasToCanonical = new Map<string, string>();
+    for (const command of SLASH_COMMANDS) {
+      for (const alias of command.meta.aliases ?? []) {
+        aliasToCanonical.set(alias, command.meta.name);
+      }
+    }
+    const canonical = aliasToCanonical.get(name) ?? name;
+    return SLASH_COMMANDS.find((command) => command.meta.name === canonical)?.meta ?? null;
+  }),
 });
 
+function makeCommandResolver(platform: JiePlatform): CommandResolver {
+  const aliasToCanonical = new Map<string, string>();
+  const commandsByName = new Map<string, (typeof SLASH_COMMANDS)[number]>();
+  for (const command of SLASH_COMMANDS) {
+    commandsByName.set(command.meta.name, command);
+    for (const alias of command.meta.aliases ?? []) {
+      aliasToCanonical.set(alias, command.meta.name);
+    }
+  }
+
+  return {
+    resolve: vi.fn(),
+    complete: vi.fn((_state, name, argumentText) => {
+      const canonical = aliasToCanonical.get(name) ?? name;
+      const command = commandsByName.get(canonical);
+      if (command === undefined) return null;
+      return command.complete(argumentText, { state: _state, platform });
+    }),
+  } as CommandResolver;
+}
+
 function makeProvider(cwd: string, scan: (rootDir: string) => ReadonlyArray<ScannedFile>, platform: JiePlatform, stateStore: StateStore): JieAutocompleteProviderImpl {
-  return new JieAutocompleteProviderImpl(cwd, scan, platform, stateStore, commandRegistry);
+  return new JieAutocompleteProviderImpl(cwd, scan, stateStore, commandCatalog, makeCommandResolver(platform));
 }
 
 describe("createJieAutocompleteProvider — @-mentions", () => {

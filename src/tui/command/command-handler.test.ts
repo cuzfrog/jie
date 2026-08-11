@@ -1,7 +1,7 @@
 import { JiePlatformError, type JiePlatform, type SkillInfo } from "../../platform";
 import { CommandHandlerImpl, type CommandHandler } from "./command-handler";
-import { CommandRegistryImpl } from "./command-registry";
 import { CommandResolverImpl } from "./command-resolver";
+import { CommandRegistryImpl } from "./command-registry";
 import { Actions, type StateStore, type TuiState } from "../state";
 import { makeAgentUiState, makeTuiState } from "../test";
 
@@ -52,7 +52,7 @@ function makeHandler(platform: JiePlatform, state: TuiState = makeTuiState()): H
   const commandRegistry = new CommandRegistryImpl();
   const commandResolver = new CommandResolverImpl(platform, commandRegistry);
   return {
-    handler: new CommandHandlerImpl(stateStore, platform, commandResolver, commandRegistry),
+    handler: new CommandHandlerImpl(stateStore, platform, commandResolver),
     dispatch: stateStore.dispatch,
   };
 }

@@ -1,10 +1,11 @@
 import type { JiePlatform } from "../../platform";
 import { TuiState } from "../state";
 import type { CommandRegistry } from "./command-registry";
-import type { ResolvedCommand, SlashContext } from "./slash-command";
+import type { ResolvedCommand, SlashCompletion, SlashContext } from "./slash-command";
 
 export interface CommandResolver {
   resolve(state: TuiState, name: string, args: ReadonlyArray<string>): ResolvedCommand | Promise<ResolvedCommand>;
+  complete(state: TuiState, name: string, argumentText: string): SlashCompletion | null | Promise<SlashCompletion | null>;
 }
 
 export class CommandResolverImpl implements CommandResolver {
@@ -17,12 +18,20 @@ export class CommandResolverImpl implements CommandResolver {
   }
 
   resolve(state: TuiState, name: string, args: ReadonlyArray<string>): ResolvedCommand | Promise<ResolvedCommand> {
-    const canonical = this.commandRegistry.resolveCommandName(name);
-    const command = this.commandRegistry.commands.find((candidate) => candidate.meta.name === canonical);
-    if (command === undefined) {
+    const command = this.commandRegistry.findCommand(name);
+    if (command === null) {
       return { kind: "error", text: `unknown slash command: /${name}` };
     }
     const context: SlashContext = { state, platform: this.platform };
     return command.resolve(context, args);
+  }
+
+  complete(state: TuiState, name: string, argumentText: string): SlashCompletion | null | Promise<SlashCompletion | null> {
+    const command = this.commandRegistry.findCommand(name);
+    if (command === null) {
+      return null;
+    }
+    const context: SlashContext = { state, platform: this.platform };
+    return command.complete(argumentText, context);
   }
 }

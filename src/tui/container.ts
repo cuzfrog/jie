@@ -12,7 +12,7 @@ import { registerElementsModule } from "./components/elements";
 import { registerPanelsModule } from "./components/panels";
 import { registerComponentsModule, type TuiView } from "./components";
 import { registerTuiModule } from "./module";
-import { registerCommandModule, type CommandHandler, type CommandResolver, type CommandRegistry } from "./command";
+import { registerCommandModule, type CommandHandler, type CommandResolver, type CommandCatalog } from "./command";
 import { registerRenderModule, type TerminalTitle, type TuiRenderer } from "./render";
 import type { CreateTUIOptions, Tui, TuiDeps, TuiStdout } from "./tui";
 import type { TuiComponent } from "./types";
@@ -28,7 +28,7 @@ export interface TuiCradle {
   readonly stdout: TuiStdout;
   readonly useProcessTerminal: boolean;
   readonly stateStore: StateStore;
-  readonly commandRegistry: CommandRegistry;
+  readonly commandRegistry: CommandCatalog;
   readonly commandHandler: CommandHandler;
   readonly commandResolver: CommandResolver;
   readonly autocompleteProvider: JieAutocompleteProvider;

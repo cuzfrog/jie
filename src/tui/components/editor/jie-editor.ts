@@ -10,7 +10,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { Actions, TuiState, type StateStore } from "../../state";
 import { type JieAutocompleteProvider, type JieSuggestions } from "../../autocomplete";
-import type { CommandRegistry } from "../../command";
+import type { CommandCatalog } from "../../command";
 import { style } from "../themes";
 import type { PromptHistoryStore } from "./prompt-history";
 
@@ -55,20 +55,20 @@ export class JieEditor extends Editor {
   private programmaticChange = false;
   private kanbanEditId: string | null = null;
   private kanbanDraft: string | null = null;
-  private readonly commandRegistry: CommandRegistry;
+  private readonly commandCatalog: CommandCatalog;
 
   constructor(
     screen: TUI,
     stateStore: StateStore,
     autocompleteProvider: JieAutocompleteProvider,
     promptHistoryStore: PromptHistoryStore,
-    commandRegistry: CommandRegistry,
+    commandRegistry: CommandCatalog,
     theme: EditorTheme = EDITOR_THEME,
   ) {
     super(screen, theme);
     this.stateStore = stateStore;
     this.promptHistoryStore = promptHistoryStore;
-    this.commandRegistry = commandRegistry;
+    this.commandCatalog = commandRegistry;
     const tracking = new GhostTrackingProvider(autocompleteProvider, () => this.stateStore.getState().kanban.edit !== null);
     tracking.onSuggestions = (suggestions): void => {
       this.popupFilteredOut = suggestions.filteredOut ?? null;
@@ -332,7 +332,7 @@ export class JieEditor extends Editor {
 
   private resolveGhostSuffix(): string {
     if (this.ghost !== null && this.isShowingAutocomplete()) return ghostSuffix(this.ghost.prefix, this.ghost.items[this.ghost.index]);
-    return commandBoundaryHint(this.getText(), this.commandRegistry);
+    return commandBoundaryHint(this.getText(), this.commandCatalog);
   }
 }
 
@@ -424,11 +424,10 @@ function argumentHintOf(description: string | undefined): string {
   return head.startsWith("<") || head.startsWith("[") ? head : "";
 }
 
-function commandBoundaryHint(text: string, registry: CommandRegistry): string {
+function commandBoundaryHint(text: string, catalog: CommandCatalog): string {
   const match = COMMAND_BOUNDARY_PATTERN.exec(text);
   if (match === null) return "";
-  const command = registry.metadata.find((entry) => entry.name === registry.resolveCommandName(match[1]));
-  return command?.argumentHint ?? "";
+  return catalog.commandMeta(match[1])?.argumentHint ?? "";
 }
 
 function injectGhost(line: string, ghost: string, ghostWidth: number): string {

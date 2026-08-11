@@ -1,5 +1,4 @@
 import { JiePlatformError, type Command, type CommandName, type CommandResult, type JiePlatform, type KanbanCard, type TeamInfo } from "../../platform";
-import type { CommandRegistry } from "./command-registry";
 import { Actions, TuiState, type AgentUiState, type StateStore } from "../state";
 import { bashDirective, parseBashCommand } from "../bash";
 import type { CommandResolver } from "./command-resolver";
@@ -18,13 +17,11 @@ export class CommandHandlerImpl implements CommandHandler {
   private readonly stateStore: StateStore;
   private readonly platform: JiePlatform;
   private readonly commandResolver: CommandResolver;
-  private readonly commandRegistry: CommandRegistry;
 
-  constructor(stateStore: StateStore, platform: JiePlatform, commandResolver: CommandResolver, commandRegistry: CommandRegistry) {
+  constructor(stateStore: StateStore, platform: JiePlatform, commandResolver: CommandResolver) {
     this.stateStore = stateStore;
     this.platform = platform;
     this.commandResolver = commandResolver;
-    this.commandRegistry = commandRegistry;
   }
 
   handle(text: string): void {
@@ -42,10 +39,9 @@ export class CommandHandlerImpl implements CommandHandler {
     const rawName = parts[0]!;
     const name = rawName.slice(1);
     const args = parts.slice(1);
-    const canonical = this.commandRegistry.resolveCommandName(name);
 
-    if (canonical.startsWith("skill:")) {
-      this.routeSkillInvocation(canonical, trimmed);
+    if (name.startsWith("skill:")) {
+      this.routeSkillInvocation(name, trimmed);
       return;
     }
 
