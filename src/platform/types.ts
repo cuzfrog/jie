@@ -76,6 +76,16 @@ export interface TeamInfo {
 
 export type KanbanStatus = "pending" | "in_progress" | "in_review" | "completed";
 
+export interface KanbanTodo {
+    readonly text: string;
+    readonly done: boolean;
+}
+
+export interface KanbanTodoWrite {
+    readonly text: string;
+    readonly done?: boolean;
+}
+
 export interface KanbanCard {
     readonly id: string;
     readonly content: string;
@@ -86,6 +96,7 @@ export interface KanbanCard {
     readonly description?: string;
     readonly completedAt?: string;
     readonly externalRef?: string;
+    readonly todos?: ReadonlyArray<KanbanTodo>;
 }
 
 export interface KanbanCardWrite {
@@ -95,6 +106,15 @@ export interface KanbanCardWrite {
     readonly active_form?: string;
     readonly description?: string;
     readonly externalRef?: string;
+    readonly todos?: ReadonlyArray<KanbanTodoWrite>;
+}
+
+export interface KanbanCardPatch {
+    readonly status?: KanbanStatus;
+    readonly active_form?: string;
+    readonly description?: string;
+    readonly externalRef?: string;
+    readonly todos?: ReadonlyArray<KanbanTodoWrite>;
 }
 
 

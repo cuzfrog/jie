@@ -38,6 +38,7 @@ const kanbanStore = vi.mocked<KanbanStore>({
   editContent: vi.fn(),
   editDescription: vi.fn(),
   handoff: vi.fn(),
+  update: vi.fn(),
 });
 
 function bootedContainer(): AwilixContainer<PlatformCradle> {
@@ -55,7 +56,7 @@ function bootedContainer(): AwilixContainer<PlatformCradle> {
 }
 
 describe("registerToolsModule", () => {
-  test("toolRegistry resolves with the 16 built-ins installed", () => {
+  test("toolRegistry resolves with the 17 built-ins installed", () => {
     const container = bootedContainer();
     const names = container.cradle.toolRegistry.list().map((t) => t.name).sort();
     expect(names).toEqual([
@@ -70,6 +71,7 @@ describe("registerToolsModule", () => {
       "notify",
       "read_artifact",
       "read_file",
+      "update_kanban",
       "web_fetch",
       "web_search",
       "write_artifact",

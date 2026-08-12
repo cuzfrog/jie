@@ -61,6 +61,7 @@ export class CommandExecutorImpl implements CommandExecutor {
       kanbanSetStatus: this.kanbanSetStatus.bind(this),
       kanbanEdit: this.kanbanEdit.bind(this),
       kanbanHandoff: this.kanbanHandoff.bind(this),
+      kanbanToggleTodo: this.kanbanToggleTodo.bind(this),
     };
   }
 
@@ -318,6 +319,21 @@ export class CommandExecutorImpl implements CommandExecutor {
       throw new JiePlatformError("KANBAN_CARD_NOT_FOUND", { detail: command.cardId });
     }
     return { board: this.kanbanStore.load(sourceTeamId, sessionId), card };
+  }
+
+  private kanbanToggleTodo(command: Command<"kanbanToggleTodo">): CommandResult<"kanbanToggleTodo"> {
+    const sessionId = this.sessionIdFor(command.teamId);
+    const board = this.kanbanStore.load(command.teamId, sessionId);
+    const card = board.find((c) => c.id === command.cardId);
+    if (card === undefined) {
+      throw new JiePlatformError("KANBAN_CARD_NOT_FOUND", { detail: command.cardId });
+    }
+    if (card.todos === undefined || !card.todos.some((todo) => todo.text === command.todo)) {
+      throw new JiePlatformError("KANBAN_TODO_NOT_FOUND", { detail: command.todo });
+    }
+    const todos = card.todos.map((todo) => (todo.text === command.todo ? { ...todo, done: !todo.done } : todo));
+    this.kanbanStore.update(command.teamId, sessionId, card.content, { todos });
+    return { board: this.kanbanStore.load(command.teamId, sessionId) };
   }
 
   private resolveHandoffTarget(command: Command<"kanbanHandoff">): { sourceTeamId: string; cardId: string } {

@@ -52,7 +52,7 @@ function makePlatform(board: CommandResult<"kanbanEdit"> = { board: [] }, soundE
   const executeCalls: Command[] = [];
   const execute = vi.fn(async (command: Command): Promise<unknown> => {
     executeCalls.push(command);
-    if (command.name === "kanbanEdit") return board;
+    if (command.name === "kanbanEdit" || command.name === "kanbanToggleTodo") return board;
     if (command.name === "getNotificationSoundEnabled") return soundEnabled;
     return null;
   });
@@ -206,6 +206,43 @@ describe("EffectHandlerImpl — saveKanbanEdit", () => {
     state.dispatch(Actions.cycleKanbanView());
     await runAsync();
     expect(platform.executeCalls).toEqual([]);
+  });
+});
+
+describe("EffectHandlerImpl — toggleKanbanTodo", () => {
+  test("executes kanbanToggleTodo and dispatches the returned board", async () => {
+    const board = [{ id: "#1", content: "task", status: "pending" as const }];
+    const state = new StateStoreImpl();
+    const platform = makePlatform({ board });
+    const team = makeTeamInfo("my-team", "general-1");
+    state.dispatch(Actions.switchTeam(team));
+    makeEffectHarness(platform, state);
+    state.dispatch(Actions.toggleKanbanTodo("#1", "one"));
+    await runAsync();
+    expect(platform.executeCalls.at(-1)).toEqual({ name: "kanbanToggleTodo", teamId: "my-team", cardId: "#1", todo: "one" });
+    expect(state.getState().kanban.board).toEqual(board);
+  });
+
+  test("does not call the platform when no team is loaded", async () => {
+    const state = new StateStoreImpl();
+    const platform = makePlatform({ board: [] });
+    makeEffectHarness(platform, state);
+    state.dispatch(Actions.toggleKanbanTodo("#1", "one"));
+    await runAsync();
+    expect(platform.executeCalls).toEqual([]);
+  });
+
+  test("surfaces platform errors as an error banner", async () => {
+    const state = new StateStoreImpl();
+    const platform = makePlatform();
+    const team = makeTeamInfo("my-team", "general-1");
+    state.dispatch(Actions.switchTeam(team));
+    const { execute } = platform;
+    execute.mockRejectedValueOnce(new Error("not found"));
+    makeEffectHarness(platform, state);
+    state.dispatch(Actions.toggleKanbanTodo("#1", "one"));
+    await runAsync();
+    expect(state.getState().errorBanner).toBe("kanban toggle failed: not found");
   });
 });
 

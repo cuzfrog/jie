@@ -12,10 +12,20 @@ const kanbanStore = vi.mocked<KanbanStore>({
   editContent: vi.fn(),
   editDescription: vi.fn(),
   handoff: vi.fn(),
+  update: vi.fn(),
 });
 
 function withIds(cards: ReadonlyArray<KanbanCardWrite>): KanbanCard[] {
-  return cards.map((card, index) => ({ id: `#${index + 1}`, ...card }));
+  return cards.map((card, index) => ({
+    id: `#${index + 1}`,
+    content: card.content,
+    status: card.status,
+    ...(card.scope === undefined ? {} : { scope: card.scope }),
+    ...(card.active_form === undefined ? {} : { active_form: card.active_form }),
+    ...(card.description === undefined ? {} : { description: card.description }),
+    ...(card.externalRef === undefined ? {} : { externalRef: card.externalRef }),
+    ...(card.todos === undefined ? {} : { todos: card.todos.map((todo) => ({ text: todo.text, done: todo.done ?? false })) }),
+  }));
 }
 
 describe("write_kanban", () => {
@@ -134,6 +144,22 @@ describe("write_kanban", () => {
     ).rejects.toMatchObject({ code: "KANBAN_WRITE_INVALID" });
   });
 
+  test("empty todo text -> kanban_write_invalid", async () => {
+    const tool = createKanbanWriteTool({ kanbanStore });
+    await expect(
+      tool.execute({ cards: [{ content: "x", status: "in_progress", todos: [{ text: "" }] }] }, makeEmptyContext()),
+    ).rejects.toMatchObject({ code: "KANBAN_WRITE_INVALID" });
+    expect(kanbanStore.replace).not.toHaveBeenCalled();
+  });
+
+  test("duplicate todo text within a card -> kanban_write_invalid", async () => {
+    const tool = createKanbanWriteTool({ kanbanStore });
+    await expect(
+      tool.execute({ cards: [{ content: "x", status: "in_progress", todos: [{ text: "one" }, { text: "one" }] }] }, makeEmptyContext()),
+    ).rejects.toMatchObject({ code: "KANBAN_WRITE_INVALID" });
+    expect(kanbanStore.replace).not.toHaveBeenCalled();
+  });
+
   test("LLM-facing content reports the card count and the in-progress count", async () => {
     const cards: KanbanCardWrite[] = [
       { content: "implement diff view", status: "in_progress" },
@@ -152,5 +178,30 @@ describe("write_kanban", () => {
     const result = await tool.execute({ cards }, makeEmptyContext());
     expect(result.details).toMatchObject({ kind: "kanban" });
     expect(result.details).toEqual({ kind: "kanban", cards: [{ id: "#1", content: "x", status: "in_progress" }] });
+  });
+
+  test("todos are accepted in card writes", async () => {
+    const cards: KanbanCardWrite[] = [{ content: "x", status: "in_progress", todos: [{ text: "one" }] }];
+    kanbanStore.replace.mockReturnValue(withIds(cards));
+    const tool = createKanbanWriteTool({ kanbanStore });
+    const result = await tool.execute({ cards }, makeEmptyContext());
+    expect(kanbanStore.replace).toHaveBeenCalledWith("test-team", "test-session", cards);
+    expect(result.details).toEqual({
+      kind: "kanban",
+      cards: [{ id: "#1", content: "x", status: "in_progress", todos: [{ text: "one", done: false }] }],
+    });
+  });
+
+  test("summary hints when a card has all todos done but is not completed", async () => {
+    const cards: KanbanCard[] = [
+      { id: "#1", content: "x", status: "in_progress", todos: [{ text: "one", done: true }] },
+      { id: "#2", content: "y", status: "pending" },
+    ];
+    kanbanStore.replace.mockReturnValue(cards);
+    const tool = createKanbanWriteTool({ kanbanStore });
+    const result = await tool.execute({ cards }, makeEmptyContext());
+    expect(result.content).toBe(
+      `Updated kanban: 2 cards, 1 in progress; note: "x" has all todos done but is in_progress`,
+    );
   });
 });

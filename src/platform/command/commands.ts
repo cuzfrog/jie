@@ -55,6 +55,7 @@ interface CommandTypeMap {
   kanbanSetStatus: CommandDef<{ teamId: string; cardId: string; status: KanbanStatus }, KanbanBoardResult>;
   kanbanEdit: CommandDef<{ teamId: string; cardId: string; field: "content" | "description"; text: string }, KanbanBoardResult>;
   kanbanHandoff: CommandDef<{ teamId: string; cardId: string; targetTeamId: string }, KanbanBoardResult & { card: KanbanCard }>;
+  kanbanToggleTodo: CommandDef<{ teamId: string; cardId: string; todo: string }, KanbanBoardResult>;
   compact: CommandDef<{ teamId: string; agentKey: string }, null>;
 }
 

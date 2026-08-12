@@ -69,6 +69,7 @@ const kanbanStore = vi.mocked<KanbanStore>({
   editContent: vi.fn(),
   editDescription: vi.fn(),
   handoff: vi.fn(),
+  update: vi.fn(),
 });
 
 const llmService = vi.mocked<LlmService>({ complete: vi.fn() });
@@ -783,6 +784,64 @@ describe("CommandExecutorImpl", () => {
     });
   });
 
+  describe("kanbanToggleTodo", () => {
+    test("toggles the matching todo and returns the updated board", async () => {
+      const initial: KanbanCard = {
+        id: "#1",
+        content: "task",
+        status: "in_progress",
+        todos: [
+          { text: "one", done: false },
+          { text: "two", done: false },
+        ],
+      };
+      const updated: KanbanCard = {
+        id: "#1",
+        content: "task",
+        status: "in_progress",
+        todos: [
+          { text: "one", done: true },
+          { text: "two", done: false },
+        ],
+      };
+      kanbanStore.load
+        .mockReturnValueOnce([initial])
+        .mockReturnValueOnce([updated]);
+      kanbanStore.update.mockReturnValue(updated);
+      const result = await executor.execute({ name: "kanbanToggleTodo", teamId: "alpha", cardId: "#1", todo: "one" });
+      expect(kanbanStore.update).toHaveBeenCalledWith("alpha", "session-1", "task", {
+        todos: [
+          { text: "one", done: true },
+          { text: "two", done: false },
+        ],
+      });
+      expect(result).toEqual({ board: [updated] });
+    });
+
+    test("unknown cardId -> KANBAN_CARD_NOT_FOUND", async () => {
+      kanbanStore.load.mockReturnValue([]);
+      await expect(
+        executor.execute({ name: "kanbanToggleTodo", teamId: "alpha", cardId: "#9", todo: "one" }),
+      ).rejects.toMatchObject({ code: "KANBAN_CARD_NOT_FOUND" });
+    });
+
+    test("unknown todo text -> KANBAN_TODO_NOT_FOUND", async () => {
+      kanbanStore.load.mockReturnValue([
+        { id: "#1", content: "task", status: "in_progress", todos: [{ text: "one", done: false }] },
+      ]);
+      await expect(
+        executor.execute({ name: "kanbanToggleTodo", teamId: "alpha", cardId: "#1", todo: "two" }),
+      ).rejects.toMatchObject({ code: "KANBAN_TODO_NOT_FOUND" });
+    });
+
+    test("card with no todos -> KANBAN_TODO_NOT_FOUND", async () => {
+      kanbanStore.load.mockReturnValue([{ id: "#1", content: "task", status: "in_progress" }]);
+      await expect(
+        executor.execute({ name: "kanbanToggleTodo", teamId: "alpha", cardId: "#1", todo: "one" }),
+      ).rejects.toMatchObject({ code: "KANBAN_TODO_NOT_FOUND" });
+    });
+  });
+
   describe("compact", () => {
     test("calls teamManager.compact with the team and agent key and returns null", async () => {
       teamManager.compact.mockResolvedValue(undefined);
@@ -806,6 +865,8 @@ describe("CommandExecutorImpl", () => {
       kanbanStore.setStatus.mockReturnValue(true);
       kanbanStore.editContent.mockReturnValue({ id: "#1", content: "task", status: "pending" });
       kanbanStore.handoff.mockReturnValue({ id: "#7", content: "handed off", status: "pending" });
+      kanbanStore.update.mockReturnValue({ id: "#1", content: "task", status: "pending", todos: [{ text: "one", done: true }] });
+      kanbanStore.load.mockReturnValue([{ id: "#1", content: "task", status: "pending", todos: [{ text: "one", done: false }] }]);
       const commands: Array<Parameters<typeof executor.execute>[0]> = [
         { name: "login", provider: "anthropic", apiKey: "sk-test" },
         { name: "logout", provider: "*" },
@@ -833,6 +894,7 @@ describe("CommandExecutorImpl", () => {
         { name: "kanbanSetStatus", teamId: "alpha", cardId: "#1", status: "completed" },
         { name: "kanbanEdit", teamId: "alpha", cardId: "#1", field: "content", text: "task" },
         { name: "kanbanHandoff", teamId: "alpha", cardId: "#1", targetTeamId: "beta" },
+        { name: "kanbanToggleTodo", teamId: "alpha", cardId: "#1", todo: "one" },
       ];
       for (const command of commands) {
         await executor.execute(command);

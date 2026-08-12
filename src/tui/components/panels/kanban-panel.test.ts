@@ -3,7 +3,7 @@ import type { KanbanCard } from "../../../platform";
 import { Actions, type Action, type StateStore, type TuiState } from "../../state";
 import { makeTuiState } from "../../test";
 import { KanbanPanel } from "./kanban-panel";
-import { style } from "../themes";
+import { style, strikethrough } from "../themes";
 
 const stateStore = vi.mocked<StateStore>({ getState: vi.fn(), dispatch: vi.fn(), subscribe: vi.fn(() => () => undefined) });
 
@@ -162,6 +162,36 @@ describe("KanbanPanel", () => {
     expect(text.some((line) => line.includes("▸description: cover storage and events"))).toBe(true);
   });
 
+  test("board view shows a progress chip on cards with todos", () => {
+    stateStore.getState.mockReturnValue(boardState([
+      { id: "#1", content: "task", status: "in_progress", todos: [{ text: "one", done: true }, { text: "two", done: false }] },
+    ], { kanbanCursor: "#1" }));
+    const text = new KanbanPanel(stateStore, makeEditorFallback()).render(120).map(stripAnsi);
+    expect(text.some((line) => line.includes("(1/2)"))).toBe(true);
+  });
+
+  test("expanded mode shows todo rows below the description", () => {
+    stateStore.getState.mockReturnValue(boardState([
+      { id: "#1", content: "task", status: "in_progress", todos: [{ text: "one", done: false }, { text: "two", done: true }] },
+    ], { kanbanExpanded: true, kanbanCursor: "#1" }));
+    const text = new KanbanPanel(stateStore, makeEditorFallback()).render(120).map(stripAnsi);
+    expect(text.some((line) => line.includes("todos:"))).toBe(true);
+    expect(text.some((line) => line.includes("[ ] one"))).toBe(true);
+    expect(text.some((line) => line.includes("[x] two"))).toBe(true);
+  });
+
+  test("expanded mode marks the selected todo and dims done todos", () => {
+    stateStore.getState.mockReturnValue(boardState([
+      { id: "#1", content: "task", status: "in_progress", todos: [{ text: "one", done: false }, { text: "two", done: true }] },
+    ], { kanbanExpanded: true, kanbanCursor: "#1", kanbanEditField: { todoIndex: 0 } }));
+    const lines = new KanbanPanel(stateStore, makeEditorFallback()).render(120);
+    const text = lines.map(stripAnsi);
+    expect(text.some((line) => line.includes("▸[ ] one"))).toBe(true);
+    const done = text.find((line) => line.includes("[x] two"));
+    expect(done).toBeDefined();
+    expect(lines[text.indexOf(done!)!]).toContain(strikethrough(style("muted")("[x] two")));
+  });
+
   test("expanded mode renders a dim placeholder when the card has no description", () => {
     stateStore.getState.mockReturnValue(boardState([
       { id: "#1", content: "write spec", status: "in_progress" },
@@ -303,6 +333,38 @@ describe("KanbanPanel.handleInput", () => {
     expect(editor.handleInput).toHaveBeenCalledWith("\x1b[C");
     editor = handle("\x1b[D", state);
     expect(editor.handleInput).toHaveBeenCalledWith("\x1b[D");
+  });
+
+  test("down arrow moves from content to the first todo when the card has todos", () => {
+    const state = boardState([
+      { id: "#1", content: "task", status: "in_progress", todos: [{ text: "one", done: false }] },
+    ], { kanbanView: "panel", kanbanExpanded: true, kanbanCursor: "#1", kanbanEditField: "content" });
+    assertDispatch("\x1b[B", state, Actions.moveKanbanEditField("down"));
+  });
+
+  test("space toggles the selected todo", () => {
+    const state = boardState([
+      { id: "#1", content: "task", status: "in_progress", todos: [{ text: "one", done: false }] },
+    ], { kanbanView: "panel", kanbanExpanded: true, kanbanCursor: "#1", kanbanEditField: { todoIndex: 0 } });
+    assertDispatch(" ", state, Actions.toggleKanbanTodo("#1", "one"));
+  });
+
+  test("space without a selected todo forwards to the editor", () => {
+    const state = boardState([
+      { id: "#1", content: "task", status: "in_progress", todos: [{ text: "one", done: false }] },
+    ], { kanbanView: "panel", kanbanExpanded: true, kanbanCursor: "#1", kanbanEditField: "content" });
+    const editor = handle(" ", state);
+    expect(stateStore.dispatch).not.toHaveBeenCalled();
+    expect(editor.handleInput).toHaveBeenCalledWith(" ");
+  });
+
+  test("ctrl+e on a todo does not commit edit", () => {
+    const state = boardState([
+      { id: "#1", content: "task", status: "in_progress", todos: [{ text: "one", done: false }] },
+    ], { kanbanView: "panel", kanbanExpanded: true, kanbanCursor: "#1", kanbanEditField: { todoIndex: 0 } });
+    const editor = handle("\x05", state);
+    expect(stateStore.dispatch).not.toHaveBeenCalled();
+    expect(editor.handleInput).toHaveBeenCalledWith("\x05");
   });
 
   test("ctrl+e commits the selected field while expanded", () => {

@@ -68,7 +68,7 @@ const ARG_KEYS = new Map<string, string>([
   ["web_search", "query"],
   ["web_fetch", "url"],
   ["memory_search", "query"],
-  ["write_kanban", "id"],
+  ["update_kanban", "content"],
   ["notify", "topic"],
 ]);
 

@@ -19,6 +19,7 @@ const JiePlatformErrorMessages = {
 
   KANBAN_WRITE_INVALID: "Kanban board violates the write_kanban contract",
   KANBAN_CARD_NOT_FOUND: "Kanban card not found",
+  KANBAN_TODO_NOT_FOUND: "Kanban todo not found",
   KANBAN_TEXT_EMPTY: "Kanban card text must not be empty",
   KANBAN_DUPLICATE_CONTENT: "A card with this content already exists on the board",
 

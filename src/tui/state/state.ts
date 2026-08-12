@@ -57,7 +57,7 @@ export interface AgentUiState {
   readonly lastReportedTotalTokens: number | null;
 }
 
-export type KanbanEditField = "content" | "description";
+export type KanbanEditField = "content" | "description" | { readonly todoIndex: number };
 
 interface KanbanState {
   readonly view: "hidden" | "list" | "panel";
