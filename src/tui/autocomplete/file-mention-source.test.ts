@@ -1,6 +1,11 @@
 import { FileMentionSource } from "./file-mention-source";
-import { CWD, signal } from "./_test-fixtures";
 import type { ScannedFile } from "./list-files";
+
+const CWD = "/proj";
+
+function signal(): AbortSignal {
+  return new AbortController().signal;
+}
 
 function files(...paths: string[]): (_rootDir: string, _options?: { onlyIgnored?: boolean }) => ReadonlyArray<ScannedFile> {
   return (_rootDir, _options) => paths.map((relPath) => ({ absPath: `${CWD}/${relPath}`, relPath }));

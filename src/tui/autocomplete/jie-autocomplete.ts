@@ -1,4 +1,4 @@
-import { CombinedAutocompleteProvider, type AutocompleteItem, type AutocompleteProvider } from "@earendil-works/pi-tui";
+import { type AutocompleteItem, type AutocompleteProvider } from "@earendil-works/pi-tui";
 import type { CompletionSource, JieSuggestions } from "./completion-source";
 
 export interface JieAutocompleteProvider extends AutocompleteProvider {
@@ -12,14 +12,12 @@ export interface JieAutocompleteProvider extends AutocompleteProvider {
 
 export class JieAutocompleteProviderImpl implements JieAutocompleteProvider {
   readonly triggerCharacters: string[];
-  private readonly applier: CombinedAutocompleteProvider;
 
   constructor(
-    private readonly cwd: string,
     private readonly completionSources: ReadonlyArray<CompletionSource>,
+    private readonly applier: AutocompleteProvider,
   ) {
     this.triggerCharacters = [...new Set(completionSources.flatMap((source) => [...source.triggerCharacters]))];
-    this.applier = new CombinedAutocompleteProvider([], this.cwd, null);
   }
 
   async getSuggestions(
