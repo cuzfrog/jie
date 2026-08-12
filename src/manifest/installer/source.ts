@@ -1,11 +1,11 @@
-export type TeamSource =
+export type ManifestSource =
   | { readonly kind: "npm"; readonly spec: string }
   | { readonly kind: "git"; readonly url: string; readonly ref: string | undefined }
   | { readonly kind: "file"; readonly path: string };
 
-export function parseTeamSource(spec: string): TeamSource {
+export function parseManifestSource(spec: string): ManifestSource {
   const trimmed = spec.trim();
-  if (trimmed === "") throw new Error("empty team source");
+  if (trimmed === "") throw new Error("empty manifest source");
   if (isFilePath(trimmed)) return { kind: "file", path: trimmed };
   if (isGitSpec(trimmed)) return toGitSource(trimmed);
   return { kind: "npm", spec: trimmed };
@@ -38,7 +38,7 @@ function isGitSpec(spec: string): boolean {
   );
 }
 
-function toGitSource(spec: string): TeamSource {
+function toGitSource(spec: string): ManifestSource {
   const [location, ref] = splitRef(spec);
   return { kind: "git", url: normalizeGitUrl(location), ref };
 }

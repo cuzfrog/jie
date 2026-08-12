@@ -19,7 +19,7 @@ function makePorts(overrides: Partial<FirstRunPorts> = {}): FirstRunPorts {
     confirm: vi.fn(async () => true),
     isSentinelPresent: vi.fn(() => false),
     markSentinel: vi.fn(),
-    installBundledTeam: vi.fn(async () => ["default-dev-team"]),
+    installBundledManifests: vi.fn(async () => ({ teams: ["default-dev-team"], agents: ["explorer", "steward"] })),
     ensureBundledMcp: vi.fn(),
     ...overrides,
   };
@@ -50,7 +50,7 @@ describe("runFirstRunWelcome - decision logic", () => {
     await runFirstRunWelcome(ports, true);
     expect(ports.ensureBundledMcp).not.toHaveBeenCalled();
     expect(ports.confirm).not.toHaveBeenCalled();
-    expect(ports.installBundledTeam).not.toHaveBeenCalled();
+    expect(ports.installBundledManifests).not.toHaveBeenCalled();
     expect(ports.markSentinel).not.toHaveBeenCalled();
   });
 
@@ -59,7 +59,7 @@ describe("runFirstRunWelcome - decision logic", () => {
     await runFirstRunWelcome(ports, false);
     expect(ports.ensureBundledMcp).toHaveBeenCalledTimes(1);
     expect(ports.confirm).not.toHaveBeenCalled();
-    expect(ports.installBundledTeam).not.toHaveBeenCalled();
+    expect(ports.installBundledManifests).not.toHaveBeenCalled();
     expect(ports.markSentinel).not.toHaveBeenCalled();
   });
 
@@ -68,16 +68,16 @@ describe("runFirstRunWelcome - decision logic", () => {
     await runFirstRunWelcome(ports, false);
     expect(ports.ensureBundledMcp).toHaveBeenCalledTimes(1);
     expect(ports.confirm).not.toHaveBeenCalled();
-    expect(ports.installBundledTeam).not.toHaveBeenCalled();
+    expect(ports.installBundledManifests).not.toHaveBeenCalled();
     expect(ports.markSentinel).not.toHaveBeenCalled();
   });
 
-  test("confirm yes -> ensures mcp, installs the bundled team, prints success, marks sentinel", async () => {
+  test("confirm yes -> ensures mcp, installs the bundled manifests, prints success, marks sentinel", async () => {
     const ports = makePorts({ confirm: vi.fn(async () => true) });
     await runFirstRunWelcome(ports, false);
     expect(ports.ensureBundledMcp).toHaveBeenCalledTimes(1);
     expect(ports.confirm).toHaveBeenCalledTimes(1);
-    expect(ports.installBundledTeam).toHaveBeenCalledTimes(1);
+    expect(ports.installBundledManifests).toHaveBeenCalledTimes(1);
     expect(ports.markSentinel).toHaveBeenCalledTimes(1);
     expect(ports.console.print).toHaveBeenCalledWith(expect.stringContaining("default-dev-team"));
   });
@@ -86,24 +86,25 @@ describe("runFirstRunWelcome - decision logic", () => {
     const ports = makePorts({ confirm: vi.fn(async () => false) });
     await runFirstRunWelcome(ports, false);
     expect(ports.ensureBundledMcp).toHaveBeenCalledTimes(1);
-    expect(ports.installBundledTeam).not.toHaveBeenCalled();
+    expect(ports.installBundledManifests).not.toHaveBeenCalled();
     expect(ports.markSentinel).toHaveBeenCalledTimes(1);
     expect(ports.console.print).toHaveBeenCalledWith(expect.stringContaining("jie team add"));
   });
 
   test("install failure -> prints error, still marks sentinel (give up, do not retry every run)", async () => {
-    const ports = makePorts({ installBundledTeam: vi.fn(async () => { throw new Error("disk full"); }) });
+    const ports = makePorts({ installBundledManifests: vi.fn(async () => { throw new Error("disk full"); }) });
     await runFirstRunWelcome(ports, false);
     expect(ports.ensureBundledMcp).toHaveBeenCalledTimes(1);
     expect(ports.console.error).toHaveBeenCalledWith(expect.stringContaining("disk full"));
     expect(ports.markSentinel).toHaveBeenCalledTimes(1);
   });
 
-  test("confirm is asked with a question mentioning the team and the destination", async () => {
+  test("confirm is asked with a question mentioning the team and shared agents", async () => {
     const ports = makePorts();
     await runFirstRunWelcome(ports, false);
     const question = (ports.confirm as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] ?? "";
     expect(question).toContain("default-dev-team");
+    expect(question).toContain("shared agents");
   });
 });
 
@@ -118,7 +119,7 @@ describe("createFirstRunPorts - wiring", () => {
     rmSync(homeJieDir, { recursive: true, force: true });
   });
 
-  test("happy path installs the bundled default-dev-team, writes the sentinel, and ensures mcp.json", async () => {
+  test("happy path installs the bundled team and shared agents, writes the sentinel, and ensures mcp.json", async () => {
     const consoleMock = makeConsoleMock();
     const ports = createFirstRunPorts({
       homeJieDir,
@@ -128,6 +129,8 @@ describe("createFirstRunPorts - wiring", () => {
     });
     await runFirstRunWelcome(ports, false);
     expect(existsSync(join(homeJieDir, "teams", "default-dev-team", "TEAM.md"))).toBe(true);
+    expect(existsSync(join(homeJieDir, "agents", "explorer.md"))).toBe(true);
+    expect(existsSync(join(homeJieDir, "agents", "steward.md"))).toBe(true);
     expect(existsSync(join(homeJieDir, ".first-run-done"))).toBe(true);
     expect(consoleMock.print).toHaveBeenCalledWith(expect.stringContaining("default-dev-team"));
     expect(readMcpConfig(homeJieDir).servers["code-lens"]).toEqual({

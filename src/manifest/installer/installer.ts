@@ -1,14 +1,15 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { parseNpmSpec, parseTeamSource, type TeamSource } from "./source";
+import { basename, dirname, join } from "node:path";
+import { parseNpmSpec, parseManifestSource, type ManifestSource } from "./source";
 
 const TEAM_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
+const AGENT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const RESERVED_TEAM_IDS = new Set(["add", "list", "remove", "default-solo"]);
 const NPM_REGISTRY = "https://registry.npmjs.org";
 
-export interface TeamProvenance {
-  readonly source: TeamSource;
+export interface ManifestProvenance {
+  readonly source: ManifestSource;
   readonly spec: string;
   readonly installedAt: string;
 }
@@ -30,49 +31,74 @@ export interface InstallerDeps {
   readonly extractTar: (tarball: Uint8Array, destDir: string) => Promise<void>;
 }
 
-export interface TeamInstaller {
-  install(spec: string, teamsDir: string, options?: InstallOptions): Promise<readonly string[]>;
-  remove(teamId: string, teamsDir: string): void;
-  readProvenance(teamId: string, teamsDir: string): TeamProvenance | null;
+export interface InstallResult {
+  readonly teams: ReadonlyArray<string>;
+  readonly agents: ReadonlyArray<string>;
 }
 
-export function createTeamInstaller(deps: InstallerDeps = defaultInstallerDeps): TeamInstaller {
+interface TeamSourceEntry {
+  readonly id: string;
+  readonly sourceDir: string;
+}
+
+export interface ManifestInstaller {
+  install(spec: string, jieDir: string, options?: InstallOptions): Promise<InstallResult>;
+  remove(teamId: string, jieDir: string): void;
+  readProvenance(teamId: string, jieDir: string): ManifestProvenance | null;
+}
+
+export function createManifestInstaller(deps: InstallerDeps = defaultInstallerDeps): ManifestInstaller {
   return {
-    async install(spec, teamsDir, options = {}) {
-      const source = parseTeamSource(spec);
+    async install(spec, jieDir, options = {}) {
+      const source = parseManifestSource(spec);
       const workDir = mkdtempSync(join(tmpdir(), "jie-install-"));
       try {
-        const resolvedDir = await resolveTeamSource(source, deps, workDir);
-        const ids = listTeamManifests(resolvedDir);
-        if (ids.length === 0) {
-          throw new Error(`no team manifests found in '${spec}' (expected one or more <id>/TEAM.md directories)`);
+        const resolvedDir = await resolveManifestSource(source, deps, workDir);
+        const teamEntries = listTeamManifests(resolvedDir);
+        const agentIds = listAgentManifests(resolvedDir);
+        if (teamEntries.length === 0 && agentIds.length === 0) {
+          throw new Error(`no team or agent manifests found in '${spec}' (expected one or more <id>/TEAM.md directories or agents/<id>.md files)`);
         }
-        const installed: string[] = [];
-        for (const id of ids) {
-          validateTeamId(id);
-          const destDir = join(teamsDir, id);
+        const teams: string[] = [];
+        for (const entry of teamEntries) {
+          validateTeamId(entry.id);
+          const destDir = join(jieDir, "teams", entry.id);
           if (existsSync(destDir) && !options.force) {
-            throw new Error(`team '${id}' already installed at ${destDir} (use --force to overwrite)`);
+            throw new Error(`team '${entry.id}' already installed at ${destDir} (use --force to overwrite)`);
           }
           rmSync(destDir, { recursive: true, force: true });
-          copyManifest(join(resolvedDir, id), destDir);
-          writeProvenance(destDir, source, spec, new Date().toISOString());
-          installed.push(id);
+          copyTeamManifest(entry.sourceDir, destDir);
+          writeTeamProvenance(destDir, source, spec, new Date().toISOString());
+          teams.push(entry.id);
         }
-        return installed;
+        const agents: string[] = [];
+        for (const id of agentIds) {
+          validateAgentId(id);
+          const agentsDir = join(jieDir, "agents");
+          const destFile = join(agentsDir, `${id}.md`);
+          if (existsSync(destFile) && !options.force) {
+            throw new Error(`agent '${id}' already installed at ${destFile} (use --force to overwrite)`);
+          }
+          mkdirSync(agentsDir, { recursive: true });
+          rmSync(destFile, { force: true });
+          copyAgentManifest(join(resolvedDir, "agents", `${id}.md`), destFile);
+          writeAgentProvenance(destFile, source, spec, new Date().toISOString());
+          agents.push(id);
+        }
+        return { teams, agents };
       } finally {
         rmSync(workDir, { recursive: true, force: true });
       }
     },
-    remove(teamId, teamsDir) {
+    remove(teamId, jieDir) {
       validateTeamId(teamId);
-      const destDir = join(teamsDir, teamId);
+      const destDir = join(jieDir, "teams", teamId);
       if (!existsSync(destDir)) throw new Error(`team '${teamId}' is not installed`);
       rmSync(destDir, { recursive: true, force: true });
     },
-    readProvenance(teamId, teamsDir) {
+    readProvenance(teamId, jieDir) {
       validateTeamId(teamId);
-      return readProvenanceFile(teamId, teamsDir);
+      return readProvenanceFile(teamId, jieDir);
     },
   };
 }
@@ -92,7 +118,7 @@ export const defaultInstallerDeps: InstallerDeps = {
   extractTar: (tarball, destDir) => extractTarToDir(tarball, destDir),
 };
 
-async function resolveTeamSource(source: TeamSource, deps: InstallerDeps, workDir: string): Promise<string> {
+async function resolveManifestSource(source: ManifestSource, deps: InstallerDeps, workDir: string): Promise<string> {
   switch (source.kind) {
     case "npm": return resolveNpm(source, deps, workDir);
     case "git": return resolveGit(source, deps, workDir);
@@ -158,24 +184,75 @@ function asString(value: unknown): string {
   return value;
 }
 
-function listTeamManifests(dir: string): string[] {
+function listTeamManifests(dir: string): TeamSourceEntry[] {
+  const fromTeamsDir = listTeamManifestsFromTeamsDir(dir);
+  const fromRoot = listTeamManifestsFromRoot(dir);
+  const byId = new Map<string, TeamSourceEntry>();
+  for (const entry of fromTeamsDir) byId.set(entry.id, entry);
+  for (const entry of fromRoot) if (!byId.has(entry.id)) byId.set(entry.id, entry);
+  return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
+}
+
+function listTeamManifestsFromTeamsDir(dir: string): TeamSourceEntry[] {
+  const teamsDir = join(dir, "teams");
+  let entries: string[];
+  try {
+    entries = readdirSync(teamsDir);
+  } catch {
+    return [];
+  }
+  const ids: TeamSourceEntry[] = [];
+  for (const entry of entries.sort()) {
+    if (entry.startsWith(".")) continue;
+    const sourceDir = join(teamsDir, entry);
+    if (!statSync(sourceDir).isDirectory()) continue;
+    if (!existsSync(join(sourceDir, "TEAM.md"))) continue;
+    ids.push({ id: entry, sourceDir });
+  }
+  return ids;
+}
+
+function listTeamManifestsFromRoot(dir: string): TeamSourceEntry[] {
   let entries: string[];
   try {
     entries = readdirSync(dir);
   } catch {
     return [];
   }
-  const ids: string[] = [];
+  const ids: TeamSourceEntry[] = [];
   for (const entry of entries.sort()) {
     if (entry.startsWith(".")) continue;
-    if (!statSync(join(dir, entry)).isDirectory()) continue;
-    if (!existsSync(join(dir, entry, "TEAM.md"))) continue;
-    ids.push(entry);
+    if (entry === "teams" || entry === "agents") continue;
+    const sourceDir = join(dir, entry);
+    if (!statSync(sourceDir).isDirectory()) continue;
+    if (!existsSync(join(sourceDir, "TEAM.md"))) continue;
+    ids.push({ id: entry, sourceDir });
   }
   return ids;
 }
 
-function copyManifest(srcDir: string, destDir: string): void {
+function listAgentManifests(dir: string): string[] {
+  const agentsDir = join(dir, "agents");
+  let entries: string[];
+  try {
+    entries = readdirSync(agentsDir);
+  } catch {
+    return [];
+  }
+  const ids: string[] = [];
+  for (const entry of entries.sort()) {
+    if (entry.startsWith(".")) continue;
+    if (!entry.endsWith(".md")) continue;
+    const srcPath = join(agentsDir, entry);
+    if (!statSync(srcPath).isFile()) continue;
+    const stem = entry.slice(0, -3);
+    if (!AGENT_ID_PATTERN.test(stem)) throw new Error(`invalid agent id: ${stem}`);
+    ids.push(stem);
+  }
+  return ids;
+}
+
+function copyTeamManifest(srcDir: string, destDir: string): void {
   mkdirSync(destDir, { recursive: true });
   for (const entry of readdirSync(srcDir).sort()) {
     if (!entry.endsWith(".md")) continue;
@@ -185,27 +262,37 @@ function copyManifest(srcDir: string, destDir: string): void {
   }
 }
 
-function writeProvenance(destDir: string, source: TeamSource, spec: string, installedAt: string): void {
-  const provenance: TeamProvenance = { source, spec, installedAt };
+function copyAgentManifest(srcPath: string, destPath: string): void {
+  writeFileSync(destPath, readFileSync(srcPath, "utf-8"), "utf-8");
+}
+
+function writeTeamProvenance(destDir: string, source: ManifestSource, spec: string, installedAt: string): void {
+  const provenance: ManifestProvenance = { source, spec, installedAt };
   writeFileSync(join(destDir, ".source.json"), JSON.stringify(provenance, null, 2), "utf-8");
 }
 
-function readProvenanceFile(teamId: string, teamsDir: string): TeamProvenance | null {
-  const path = join(teamsDir, teamId, ".source.json");
-  if (!existsSync(path)) return null;
-  return toTeamProvenance(JSON.parse(readFileSync(path, "utf-8")));
+function writeAgentProvenance(destFile: string, source: ManifestSource, spec: string, installedAt: string): void {
+  const provenance: ManifestProvenance = { source, spec, installedAt };
+  const provenancePath = join(dirname(destFile), `${basename(destFile, ".md")}.source.json`);
+  writeFileSync(provenancePath, JSON.stringify(provenance, null, 2), "utf-8");
 }
 
-function toTeamProvenance(raw: unknown): TeamProvenance | null {
+function readProvenanceFile(teamId: string, jieDir: string): ManifestProvenance | null {
+  const path = join(jieDir, "teams", teamId, ".source.json");
+  if (!existsSync(path)) return null;
+  return toManifestProvenance(JSON.parse(readFileSync(path, "utf-8")));
+}
+
+function toManifestProvenance(raw: unknown): ManifestProvenance | null {
   if (typeof raw !== "object" || raw === null) return null;
   const record = raw as Record<string, unknown>;
-  const source = toTeamSource(record.source);
+  const source = toManifestSource(record.source);
   if (source === null) return null;
   if (typeof record.spec !== "string" || typeof record.installedAt !== "string") return null;
   return { source, spec: record.spec, installedAt: record.installedAt };
 }
 
-function toTeamSource(raw: unknown): TeamSource | null {
+function toManifestSource(raw: unknown): ManifestSource | null {
   if (typeof raw !== "object" || raw === null) return null;
   const record = raw as Record<string, unknown>;
   switch (record.kind) {
@@ -222,6 +309,10 @@ function toTeamSource(raw: unknown): TeamSource | null {
 function validateTeamId(id: string): void {
   if (!TEAM_ID_PATTERN.test(id)) throw new Error(`invalid team id: ${id}`);
   if (RESERVED_TEAM_IDS.has(id)) throw new Error(`reserved team id: ${id}`);
+}
+
+function validateAgentId(id: string): void {
+  if (!AGENT_ID_PATTERN.test(id)) throw new Error(`invalid agent id: ${id}`);
 }
 
 function runGitSync(args: readonly string[], cwd: string): GitResult {
