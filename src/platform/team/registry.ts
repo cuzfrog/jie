@@ -80,9 +80,22 @@ export class TeamRegistryImpl implements TeamRegistry {
 
   private parseFromDir(dir: string): TeamBlueprint {
     const blueprint = loadTeamFromDir(dir);
-    if (blueprint.roles.length === 0) return loadDefaultSoloTeam();
+    if (blueprint.roles.length === 0 && blueprint.additionalAgentRefs.length === 0) {
+      return loadDefaultSoloTeam();
+    }
     if (blueprint.additionalAgentRefs.length === 0) return blueprint;
-    const sharedSouls = blueprint.additionalAgentRefs.map((ref) => this.agentRegistry.resolve(ref));
+    const sharedSouls = blueprint.additionalAgentRefs.map((ref) => {
+      try {
+        return this.agentRegistry.resolve(ref);
+      } catch (error) {
+        if (error instanceof JiePlatformError && error.code === "AGENT_NOT_FOUND") {
+          throw new JiePlatformError("AGENT_NOT_FOUND", {
+            detail: `team '${blueprint.id}' references missing shared agent '${ref}'`,
+          });
+        }
+        throw error;
+      }
+    });
     const merged = [...blueprint.roles, ...sharedSouls].sort((a, b) => a.role.localeCompare(b.role));
     return { ...blueprint, roles: merged };
   }

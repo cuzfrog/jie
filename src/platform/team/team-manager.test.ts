@@ -129,6 +129,12 @@ function writeTeam(rootDir: string, id: string, leader: string, extras: Readonly
   }
 }
 
+function writeAgent(jieDir: string, id: string, content: string): void {
+  const agentsDir = join(jieDir, "agents");
+  mkdirSync(agentsDir, { recursive: true });
+  writeFileSync(join(agentsDir, `${id}.md`), content, "utf-8");
+}
+
 function assistantMessage(text: string, timestamp: number): AgentMessage {
   return {
     role: "assistant",
@@ -636,6 +642,17 @@ describe("TeamManagerImpl — full surface", () => {
     test("agentCount is one for the builtin default-solo team", () => {
       const { manager } = makeManager(homeJieDir, null);
       expect(manager.agentCount("default-solo")).toBe(1);
+    });
+
+    test("agentCount includes shared agents from additional-agents", () => {
+      const userTeams = join(homeJieDir, "teams");
+      const teamDir = join(userTeams, "alpha");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: general\nadditional-agents:\n  - explorer\n---\n");
+      writeFileSync(join(teamDir, "general.md"), "---\ntools:\n  - bash\n---\n");
+      writeAgent(homeJieDir, "explorer", "---\ntools:\n  - bash\n---\n");
+      const { manager } = makeManager(homeJieDir, null);
+      expect(manager.agentCount("alpha")).toBe(2);
     });
   });
 

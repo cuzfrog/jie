@@ -1,7 +1,10 @@
 ---
 no-new-exports:
+  - index.ts
   - installer.test.ts
+  - installer.ts
   - source.test.ts
+  - source.ts
 ---
 
 ## installer

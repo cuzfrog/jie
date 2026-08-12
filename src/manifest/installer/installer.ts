@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { parseNpmSpec, parseManifestSource, type ManifestSource } from "./source";
 
@@ -25,7 +25,7 @@ export interface GitResult {
 }
 
 export interface InstallerDeps {
-  readonly fetchJson: (url: string) => Promise<unknown>;
+  readonly fetchJson: (url: string) => Promise<Record<string, unknown>>;
   readonly fetchBinary: (url: string) => Promise<Uint8Array>;
   readonly runGit: (args: readonly string[], cwd: string) => GitResult;
   readonly extractTar: (tarball: Uint8Array, destDir: string) => Promise<void>;
@@ -107,7 +107,7 @@ export const defaultInstallerDeps: InstallerDeps = {
   fetchJson: async (url) => {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`fetch ${url} failed: ${response.status}`);
-    return response.json();
+    return assertRecord(await response.json());
   },
   fetchBinary: async (url) => {
     const response = await fetch(url);
@@ -129,12 +129,12 @@ async function resolveManifestSource(source: ManifestSource, deps: InstallerDeps
 async function resolveNpm(source: { readonly spec: string }, deps: InstallerDeps, workDir: string): Promise<string> {
   const { name, versionRange } = parseNpmSpec(source.spec);
   const url = `${NPM_REGISTRY}/${registryPath(name)}`;
-  const manifest = asRecord(await deps.fetchJson(url));
+  const manifest = await deps.fetchJson(url);
   const version = resolveNpmVersion(manifest, name, versionRange);
-  const versions = asRecord(manifest.versions);
-  const entry = asRecord(versions[version]);
-  const dist = asRecord(entry.dist);
-  const tarballUrl = asString(dist.tarball);
+  const versions = assertRecord(manifest.versions);
+  const entry = assertRecord(versions[version]);
+  const dist = assertRecord(entry.dist);
+  const tarballUrl = assertString(dist.tarball);
   const tarball = await deps.fetchBinary(tarballUrl);
   const extractDir = join(workDir, "npm-extract");
   await deps.extractTar(tarball, extractDir);
@@ -154,17 +154,20 @@ function resolveGit(source: { readonly url: string; readonly ref: string | undef
 }
 
 function resolveFile(source: { readonly path: string }): string {
-  if (!existsSync(source.path)) throw new Error(`file source not found: ${source.path}`);
-  if (!statSync(source.path).isDirectory()) throw new Error(`file source is not a directory: ${source.path}`);
-  return source.path;
+  const resolved = source.path.startsWith("~/")
+    ? source.path.replace(/^~/, process.env.HOME ?? homedir())
+    : source.path;
+  if (!existsSync(resolved)) throw new Error(`file source not found: ${resolved}`);
+  if (!statSync(resolved).isDirectory()) throw new Error(`file source is not a directory: ${resolved}`);
+  return resolved;
 }
 
 function resolveNpmVersion(manifest: Record<string, unknown>, name: string, versionRange: string): string {
   if (manifest["dist-tags"] !== undefined) {
-    const tag = asRecord(manifest["dist-tags"])[versionRange];
+    const tag = assertRecord(manifest["dist-tags"])[versionRange];
     if (typeof tag === "string") return tag;
   }
-  if (manifest.versions !== undefined && asRecord(manifest.versions)[versionRange] !== undefined) {
+  if (manifest.versions !== undefined && assertRecord(manifest.versions)[versionRange] !== undefined) {
     return versionRange;
   }
   throw new Error(`npm version '${versionRange}' for ${name} not found (expected a dist-tag or exact version)`);
@@ -174,12 +177,16 @@ function registryPath(name: string): string {
   return name.includes("/") ? name.replace("/", "%2F") : name;
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  if (typeof value !== "object" || value === null) throw new Error("expected object in npm manifest");
-  return value as Record<string, unknown>;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function asString(value: unknown): string {
+function assertRecord(value: unknown): Record<string, unknown> {
+  if (!isRecord(value)) throw new Error("expected object in npm manifest");
+  return value;
+}
+
+function assertString(value: unknown): string {
   if (typeof value !== "string") throw new Error("expected string in npm manifest");
   return value;
 }
@@ -284,24 +291,22 @@ function readProvenanceFile(teamId: string, jieDir: string): ManifestProvenance 
 }
 
 function toManifestProvenance(raw: unknown): ManifestProvenance | null {
-  if (typeof raw !== "object" || raw === null) return null;
-  const record = raw as Record<string, unknown>;
-  const source = toManifestSource(record.source);
+  if (!isRecord(raw)) return null;
+  const source = toManifestSource(raw.source);
   if (source === null) return null;
-  if (typeof record.spec !== "string" || typeof record.installedAt !== "string") return null;
-  return { source, spec: record.spec, installedAt: record.installedAt };
+  if (typeof raw.spec !== "string" || typeof raw.installedAt !== "string") return null;
+  return { source, spec: raw.spec, installedAt: raw.installedAt };
 }
 
 function toManifestSource(raw: unknown): ManifestSource | null {
-  if (typeof raw !== "object" || raw === null) return null;
-  const record = raw as Record<string, unknown>;
-  switch (record.kind) {
-    case "npm": return typeof record.spec === "string" ? { kind: "npm", spec: record.spec } : null;
+  if (!isRecord(raw)) return null;
+  switch (raw.kind) {
+    case "npm": return typeof raw.spec === "string" ? { kind: "npm", spec: raw.spec } : null;
     case "git":
-      return typeof record.url === "string"
-        ? { kind: "git", url: record.url, ref: typeof record.ref === "string" ? record.ref : undefined }
+      return typeof raw.url === "string"
+        ? { kind: "git", url: raw.url, ref: typeof raw.ref === "string" ? raw.ref : undefined }
         : null;
-    case "file": return typeof record.path === "string" ? { kind: "file", path: record.path } : null;
+    case "file": return typeof raw.path === "string" ? { kind: "file", path: raw.path } : null;
     default: return null;
   }
 }

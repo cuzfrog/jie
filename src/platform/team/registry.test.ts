@@ -222,7 +222,25 @@ describe("TeamRegistryImpl", () => {
         "utf-8",
       );
       const r = createRegistry(homeJieDir, projectJieDir);
-      expect(() => r.parseTeamManifest("dev")).toThrow(expect.objectContaining({ code: "AGENT_NOT_FOUND" }));
+      expect(() => r.parseTeamManifest("dev")).toThrow(
+        expect.objectContaining({
+          code: "AGENT_NOT_FOUND",
+          detail: expect.stringContaining("team 'dev' references missing shared agent 'ghost'"),
+        }),
+      );
+    });
+
+    test("resolves shared agents even when there are no local roles", () => {
+      const userTeams = join(homeJieDir, "teams");
+      const devDir = join(userTeams, "dev");
+      mkdirSync(devDir, { recursive: true });
+      writeFileSync(join(devDir, "TEAM.md"), "---\nadditional-agents:\n  - explorer\n---\n", "utf-8");
+      writeAgent(homeJieDir, "explorer", "---\ntools:\n  - bash\n---\n");
+      const r = createRegistry(homeJieDir, projectJieDir);
+      const team = r.parseTeamManifest("dev");
+      expect(team.additionalAgentRefs).toEqual(["explorer"]);
+      expect(team.roles.map((role) => role.role)).toEqual(["explorer"]);
+      expect(team.leaderRole).toBeNull();
     });
   });
 });

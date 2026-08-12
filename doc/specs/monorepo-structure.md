@@ -30,7 +30,7 @@ src/
   manifest/         # Runtime-agnostic manifest content and the CLI-side installer
     teams/             # Shipped team blueprints (the `default-dev-team` six-role delivery pipeline) - pure content, no code (doc/specs/jie-team/)
     agents/            # Shared single-agent manifests (`<id>.md`) that any team may reference via `additional-agents:`
-    installer/         # Manifest install/remove: npm/git/file sources -> `teams/<id>/` and `agents/<id>.md`; CLI-side, never imported by platform or manifest content (ADR 35, ADR 38)
+    installer/         # Manifest install/remove: npm/git/file sources -> `teams/<id>/` and `agents/<id>.md`; CLI-side, never imported by platform or manifest content (ADR 35, ADR 40)
   code-lens/       # Standalone MCP server (bin: code-lens): code-architecture facts from SCIP indexes (doc/specs/code-lens/)
 tests/
   mock-llm-backend/  # OpenAI-compatible mock LLM server for e2e tests (bun mock:start)
@@ -51,7 +51,7 @@ manifest/teams + manifest/agents             (blueprint data only - pure content
 code-lens   -> utils                           (standalone MCP server; protobufjs for SCIP decoding - runs as a child process, never imported)
 ```
 
-**Agnosticism rule (ADR 11, amended by ADR 38).** `platform` has zero dependency on `manifest` - no `import` in any form, including types. The platform reads team and shared-agent blueprints from filesystem paths (`.jie/teams/<id>/`, `~/.jie/teams/<id>/`, `.jie/agents/<id>.md`, `~/.jie/agents/<id>.md`) plus its built-in `default-solo` fallback; a team is data, not code. The bundled `default-dev-team` blueprint at `src/manifest/teams/default-dev-team/` and the bundled `explorer`/`steward` shared agents at `src/manifest/agents/` are reached only after first-run auto-install (D1) copies them to `~/.jie/`.
+**Agnosticism rule (ADR 11, amended by ADR 40).** `platform` has zero dependency on `manifest` - no `import` in any form, including types. The platform reads team and shared-agent blueprints from filesystem paths (`.jie/teams/<id>/`, `~/.jie/teams/<id>/`, `.jie/agents/<id>.md`, `~/.jie/agents/<id>.md`) plus its built-in `default-solo` fallback; a team is data, not code. The bundled `default-dev-team` blueprint at `src/manifest/teams/default-dev-team/` and the bundled `explorer`/`steward` shared agents at `src/manifest/agents/` are reached only after first-run auto-install (D1) copies them to `~/.jie/`.
 
 ## Build System
 `bun` (>= 1.3.14) runs TypeScript natively; no build step. `package.json` at root: `"files": ["src"]`, `"bin": {"jie": "src/cli/index.ts", "code-lens": "src/code-lens/main.ts"}`.
@@ -66,7 +66,7 @@ Each code module exports `.` -> `./index.ts` (`manifest/teams` and `manifest/age
 
 `src/utils/index.ts` exports `logger` (a tslog instance gated by `JIE_LOG_LEVEL`) and `Console` / `defaultConsole` - the output abstraction CLI commands write through and the logger's transport routes to stderr. It depends on no other module; diagnostic logging is orthogonal to app logic and is imported as a module-scope instance, not injected.
 
-`src/manifest/` has no top-level `index.ts` - it is pure content plus the installer submodule. `src/manifest/teams/` holds team blueprint directories (`<id>/TEAM.md` + `<role>.md`), `src/manifest/agents/` holds shared single-agent manifests (`<id>.md`), and `src/manifest/installer/index.ts` exports `createManifestInstaller` - the CLI-side installer that resolves an npm/git/file source, copies its `teams/<id>/` directories and `agents/<id>.md` files into `.jie/` (project) or `~/.jie/` (user), and records provenance; the platform later discovers the installed copies from the filesystem (ADR 11 agnosticism, ADR 35, ADR 38).
+`src/manifest/` has no top-level `index.ts` - it is pure content plus the installer submodule. `src/manifest/teams/` holds team blueprint directories (`<id>/TEAM.md` + `<role>.md`), `src/manifest/agents/` holds shared single-agent manifests (`<id>.md`), and `src/manifest/installer/index.ts` exports `createManifestInstaller` - the CLI-side installer that resolves an npm/git/file source, copies its `teams/<id>/` directories and `agents/<id>.md` files into `.jie/` (project) or `~/.jie/` (user), and records provenance; the platform later discovers the installed copies from the filesystem (ADR 11 agnosticism, ADR 35, ADR 40).
 
 `src/code-lens/index.ts` is the minimal library surface (SCIP ingestion + `CodeIndex` model); the executable surface is the `code-lens` bin (`main.ts`), a stdio MCP server the platform spawns as a child process rather than imports.
 

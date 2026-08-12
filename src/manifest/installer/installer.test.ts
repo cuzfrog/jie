@@ -59,6 +59,28 @@ describe("createManifestInstaller", () => {
       expect(deps.runGit).not.toHaveBeenCalled();
     });
 
+    test("expands a leading ~ in a file source to the user's home", async () => {
+      const fakeHome = freshDir("jie-fake-home-");
+      const previousHome = process.env.HOME;
+      process.env.HOME = fakeHome;
+      const source = join(fakeHome, "manifest");
+      writeTeam(source, "dev", { "TEAM.md": "---\nleader: lead\n---\n" });
+      writeAgent(source, "explorer", "---\ntools:\n  - bash\n---\n");
+      const jieDir = freshDir("jie-home-");
+
+      try {
+        const result = await createManifestInstaller(deps).install("~/manifest", jieDir);
+
+        expect(result.teams).toEqual(["dev"]);
+        expect(result.agents).toEqual(["explorer"]);
+        expect(existsSync(join(jieDir, "teams", "dev", "TEAM.md"))).toBe(true);
+        expect(existsSync(join(jieDir, "agents", "explorer.md"))).toBe(true);
+      } finally {
+        if (previousHome === undefined) delete process.env.HOME;
+        else process.env.HOME = previousHome;
+      }
+    });
+
     test("legacy root-level team source still installs", async () => {
       const source = freshDir("jie-src-");
       writeTeam(source, "legacy", { "TEAM.md": "---\nleader: lead\n---\n" });
