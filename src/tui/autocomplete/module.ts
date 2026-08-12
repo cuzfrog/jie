@@ -1,6 +1,6 @@
 import { asFunction, asValue, type AwilixContainer } from "awilix";
 import type { CommandCatalog, CommandResolver } from "../command";
-import { scanFiles, type ScannedFile } from "../file-mention";
+import { scanFiles, type ScannedFile } from "./list-files";
 import type { StateStore } from "../state";
 import type { TuiCradle } from "../container";
 import { FileMentionSource } from "./file-mention-source";

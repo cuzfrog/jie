@@ -1,7 +1,7 @@
 import type { JiePlatform, KanbanCard } from "../../platform";
 import type { CommandCatalog, CommandMeta, CommandResolver } from "../command";
 import { SLASH_COMMANDS } from "../command/definitions";
-import type { ScannedFile } from "../file-mention";
+import { type ScannedFile } from "./list-files";
 import type { StateStore, TuiState } from "../state";
 import { makeTuiState } from "../test";
 import { FileMentionSource } from "./file-mention-source";

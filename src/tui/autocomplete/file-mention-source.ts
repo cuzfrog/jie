@@ -1,5 +1,5 @@
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
-import { filterFiles, type ScannedFile } from "../file-mention";
+import { type ScannedFile } from "./list-files";
 import type { CompletionSource, JieSuggestions } from "./completion-source";
 
 const MAX_SUGGESTIONS = 20;
@@ -39,6 +39,20 @@ function fileItems(
   scan: (rootDir: string) => ReadonlyArray<ScannedFile>,
   basePath: string,
 ): AutocompleteItem[] {
-  const entries = filterFiles(query, scan(basePath).map((file) => ({ path: file.relPath })));
-  return entries.slice(0, MAX_SUGGESTIONS).map((entry) => ({ value: `@${entry.path}`, label: entry.path }));
+  const lowerQuery = query.trim().toLowerCase();
+  const exact: AutocompleteItem[] = [];
+  const prefix: AutocompleteItem[] = [];
+  const contains: AutocompleteItem[] = [];
+  for (const file of scan(basePath)) {
+    const item = { value: `@${file.relPath}`, label: file.relPath };
+    if (lowerQuery === "") {
+      contains.push(item);
+      continue;
+    }
+    const lower = file.relPath.toLowerCase();
+    if (lower === lowerQuery) exact.push(item);
+    else if (lower.startsWith(lowerQuery)) prefix.push(item);
+    else if (lower.includes(lowerQuery)) contains.push(item);
+  }
+  return [...exact, ...prefix, ...contains].slice(0, MAX_SUGGESTIONS);
 }

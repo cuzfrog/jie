@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { scanFiles } from "./list-files";
 
 function setup(): string {
-  const dir = mkdtempSync(join(tmpdir(), "file-mention-"));
+  const dir = mkdtempSync(join(tmpdir(), "autocomplete-"));
   mkdirSync(join(dir, "src"));
   mkdirSync(join(dir, "src", "utils"));
   mkdirSync(join(dir, ".git"));
