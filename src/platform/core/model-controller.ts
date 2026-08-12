@@ -19,6 +19,7 @@ interface ModelControllerDeps {
   readonly eventManager: EventManager;
   readonly sender: AgentSender;
   readonly soulPinsModel: boolean;
+  readonly soulPinsEffort: boolean;
   readonly resolveModel: (provider: string, modelId: string) => Model<Api> | undefined;
   readonly agentState: AgentModelState;
 }
@@ -29,12 +30,14 @@ export class ModelControllerImpl implements ModelController {
   private readonly soulPinsModel: boolean;
   private readonly resolveModel: (provider: string, modelId: string) => Model<Api> | undefined;
   private readonly agentState: AgentModelState;
+  private readonly soulPinsEffort: boolean;
   private currentModelInfo: ModelInfo | null;
 
   constructor(initialModel: Model<Api> | undefined, effort: EffortLevel, deps: ModelControllerDeps) {
     this.eventManager = deps.eventManager;
     this.sender = deps.sender;
     this.soulPinsModel = deps.soulPinsModel;
+    this.soulPinsEffort = deps.soulPinsEffort;
     this.resolveModel = deps.resolveModel;
     this.agentState = deps.agentState;
     this.agentState.setThinkingLevel(effortToThinkingLevel(effort));
@@ -50,6 +53,7 @@ export class ModelControllerImpl implements ModelController {
   }
 
   applyEffort(effort: EffortLevel): void {
+    if (this.soulPinsEffort) return;
     this.agentState.setThinkingLevel(effortToThinkingLevel(effort));
     if (this.currentModelInfo === null) return;
     this.currentModelInfo = { ...this.currentModelInfo, effort };

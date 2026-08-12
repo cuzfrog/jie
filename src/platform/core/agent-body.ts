@@ -13,6 +13,7 @@ export interface AgentBodyParams {
     readonly skills: ReadonlyArray<string>;
     readonly replicas: number;
     readonly model: string;
+    readonly effort?: EffortLevel;
     readonly targetContextWindowSize?: number;
   };
   readonly isLeader: boolean;

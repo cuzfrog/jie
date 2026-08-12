@@ -1655,6 +1655,18 @@ describe("JieAgentBody — user.effort.update", () => {
     second.stop();
   });
 
+  test("ignores the update when the soul pins effort", async () => {
+    const body = h.makeBody({ soul: makeSoul({ model: "", effort: "low" }), effort: "low", model: makeModel("anthropic", "claude-sonnet-4") });
+    await body.start();
+    const received: EventEnvelope<"agent.model.assigned">[] = [];
+    h.subscribeSubject("agent.model.assigned", (env) => received.push(env));
+    h.events.publish(Events.userEffortUpdate({ kind: "user" }, "high"));
+    expect(h.state.thinkingLevel).toBe("low");
+    expect(received).toHaveLength(0);
+    expect(body.identity.model).toEqual({ provider: "anthropic", id: "claude-sonnet-4", effort: "low", contextWindow: 200000 });
+    body.stop();
+  });
+
   test("stop() unsubscribes from user.effort.update", async () => {
     const body = h.makeBody();
     await body.start();

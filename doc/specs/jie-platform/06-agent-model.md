@@ -7,7 +7,8 @@ Three concepts make up the agent model: `AgentSoul` — the immutable behavioral
 ```typescript
 interface AgentSoul {
   readonly role: string;                       // role identifier — the agent's .md filename stem
-  readonly model: string;                      // '<provider>/<model_id>', resolved via pi-ai's getModel
+  readonly model: string;                      // '<provider>/<model_id>' or alias, resolved via pi-ai's getModel
+  readonly effort?: EffortLevel;               // 'off' | 'low' | 'medium' | 'high' | 'max', parsed from optional model(<effort>) suffix
   readonly systemPrompt: string;               // prose body of the agent's .md file, verbatim
   readonly tools: ReadonlyArray<string>;       // tool spec strings (`name` or `name(args)`; ADR 37), resolved through the ToolRegistry
   readonly subscribe: ReadonlyArray<string>;   // un-scoped domain topics; body listens on custom.{teamId}.{topic}
@@ -56,7 +57,7 @@ A spec is `name` (unrestricted) or `name(args...)` (restricted). The platform pa
 
 | Field | Required | Meaning |
 |---|---|---|
-| `model` | no | `<provider>/<model_id>`; when absent, inherited from the user's global default (`10-configuration.md` "Model Resolution"). Always a resolved string by soul-construction time. |
+| `model` | no | `<provider>/<model_id>`, alias, or `<ref|alias>(<effort>)` (e.g. `large(low)`); when absent, inherited from the user's global default (`10-configuration.md` "Model Resolution"). The effort suffix is parsed at load and pins the agent's effort; it is not part of the resolved model reference. |
 | `tools` | yes | Tool spec strings (`name` or `name(args)`, ADR 37) resolved through the `ToolRegistry` at body construction; a spec's args are parsed into `toolArgs` for capability limits. Utility tools are assigned implicitly regardless of the specs. |
 | `replica` | no | Positive integer (default 1, max 8). Number of agent bodies to instantiate for this role, each with a stable `agentKey` of `{role}-{N}`. |
 | `subscribe` | no | Un-scoped domain topic names. Entries starting with `agent.` are rejected at parse time (`subscribe_rejects_platform_topic: <topic>`) and the team fails to start — platform events (`agent.*`) are observer-only, never agent-consumed; the platform manages isolation so team authors never see platform subjects. |
@@ -187,7 +188,7 @@ User prompt ingress is the single `user.prompt` topic with payload `{ teamId, ag
 
 **Dequeue invariant.** `user.prompt.dequeue` removes the tail-most `"user"` entry whose raw text matches, republishes the snapshot always (even on a miss, to resync observers), and parks the entry in a 32-entry side-pile keyed by raw text (oldest evicted); only user entries are removable, and matching by text is idempotent and race-free. **Requeue** pops the matching side-pile entry back to the tail without re-running hooks/skills, republishes, and drains (an idle body starts it immediately); a fresh `user.prompt` whose text matches a parked entry discards the parked one (resubmission supersedes).
 
-**Effort/model hot-swap.** `user.effort.update` sets `thinkingLevel` (`max`→`xhigh`, else passthrough) and republishes `agent.model.assigned` when a model is assigned; unconditional since the soul can't pin effort. `user.model.update` hot-swaps the model only for bodies whose soul does *not* pin a model (mirrors load-time precedence); an unresolvable reference is a silent no-op. Both carry `contextWindow` on every publish so observers track the live model.
+**Effort/model hot-swap.** `user.effort.update` sets `thinkingLevel` (`max`→`xhigh`, else passthrough) and republishes `agent.model.assigned` when a model is assigned; pinned souls ignore the broadcast, mirroring `user.model.update` behavior. `user.model.update` hot-swaps the model only for bodies whose soul does *not* pin a model (mirrors load-time precedence); an unresolvable reference is a silent no-op. Both carry `contextWindow` on every publish so observers track the live model.
 
 **Hook + skill.** `user.prompt` runs `UserPromptSubmit` before dispatch (block → `system.error`; `additionalContext` appended); peer notifications skip it. Because the hook may block, ingress is async. A `/skill:<name>` prefix is expanded against the body's resolved skills before dispatch (`Skill.expandInvocation`, `$ARGUMENTS`/`$n` interpolation when the skill has args, else appended after the block); unknown names pass through unchanged. The raw prompt (not the expansion) rides the `agent.turn.start` payload and is what the hook sees; skills re-resolve on `/reload`.
 
