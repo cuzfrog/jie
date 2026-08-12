@@ -9,6 +9,7 @@
   "files": ["src"],
   "scripts": {
     "mock:start": "bun run tests/mock-llm-backend/server.ts",
+    "merge-pr": "bun run scripts/merge-pr.ts",
     "test:e2e:mock": "bun test --max-concurrency=1 tests/e2e"
   },
   "dependencies": {
