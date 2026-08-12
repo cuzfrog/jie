@@ -79,6 +79,7 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
     case ActionTypes.COMMIT_KANBAN_EDIT:
     case ActionTypes.CANCEL_KANBAN_EDIT:
     case ActionTypes.SAVE_KANBAN_EDIT:
+    case ActionTypes.TOGGLE_KANBAN_TODO:
       return kanbanReducer(state, action);
     default:
       return state;

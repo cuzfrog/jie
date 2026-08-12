@@ -1,7 +1,8 @@
+import type { KanbanCard } from "../../../platform";
 import { PositionalSlashCommand } from "../positional-slash-command";
 import { completeItems, hasPrefix, type ResolvedCommand, type SlashCompletion, type SlashContext, type SlashCompletionItem } from "../slash-command";
 
-const META = { name: "kanban", description: "toggle the kanban panel", argumentHint: "<add|remove|complete|review|handoff>", arguments: [{ name: "subcommand", optional: true }, { name: "rest", optional: true, greedy: true }] } as const;
+const META = { name: "kanban", description: "toggle the kanban panel", argumentHint: "<add|remove|complete|review|handoff|toggle>", arguments: [{ name: "subcommand", optional: true }, { name: "rest", optional: true, greedy: true }] } as const;
 
 const SUBCOMMAND_ITEMS = [
   { value: "add", label: "add", description: "[--title <title>] <description>" },
@@ -9,6 +10,7 @@ const SUBCOMMAND_ITEMS = [
   { value: "complete", label: "complete", description: "<cardId>" },
   { value: "review", label: "review", description: "<cardId>" },
   { value: "handoff", label: "handoff", description: "[<teamId>/]<cardId> <targetTeamId>" },
+  { value: "toggle", label: "toggle", description: "<cardId> <todo text>" },
 ] as const;
 
 export class KanbanCommand extends PositionalSlashCommand {
@@ -33,6 +35,8 @@ export class KanbanCommand extends PositionalSlashCommand {
         return this.resolveKanbanSetStatus(teamId, rest, "in_review");
       case "handoff":
         return this.resolveKanbanHandoff(teamId, rest);
+      case "toggle":
+        return this.resolveKanbanToggle(teamId, rest);
       default:
         return { kind: "error", text: `/kanban: unknown subcommand '${subcommand}'` };
     }
@@ -44,7 +48,7 @@ export class KanbanCommand extends PositionalSlashCommand {
     if (spaceIndex === -1) {
       const subcommand = trimmed.toLowerCase();
       if (subcommand === "add" || subcommand === "handoff") return null;
-      if (subcommand === "remove" || subcommand === "complete" || subcommand === "review") {
+      if (subcommand === "remove" || subcommand === "complete" || subcommand === "review" || subcommand === "toggle") {
         return this.completeCards(subcommand, "", context);
       }
       return completeItems(SUBCOMMAND_ITEMS, trimmed);
@@ -52,13 +56,14 @@ export class KanbanCommand extends PositionalSlashCommand {
     const subcommand = trimmed.slice(0, spaceIndex).toLowerCase();
     const rest = trimmed.slice(spaceIndex + 1).trim();
     if (subcommand === "add" || subcommand === "handoff") return null;
-    if (subcommand !== "remove" && subcommand !== "complete" && subcommand !== "review") return null;
+    if (subcommand !== "remove" && subcommand !== "complete" && subcommand !== "review" && subcommand !== "toggle") return null;
     return this.completeCards(subcommand, rest, context);
   }
 
-  private completeCards(subcommand: "remove" | "complete" | "review", rest: string, context: SlashContext): SlashCompletion | null {
+  private completeCards(subcommand: "remove" | "complete" | "review" | "toggle", rest: string, context: SlashContext): SlashCompletion | null {
     const targetStatus = subcommand === "complete" ? "completed" : subcommand === "review" ? "in_review" : null;
-    const cards = context.state.kanban.board.filter((card) => hasPrefix(card.id, rest) && (targetStatus === null || card.status !== targetStatus));
+    const hasTodos = subcommand === "toggle" ? (card: KanbanCard) => card.todos !== undefined && card.todos.length > 0 : () => true;
+    const cards = context.state.kanban.board.filter((card) => hasPrefix(card.id, rest) && (targetStatus === null || card.status !== targetStatus) && hasTodos(card));
     const items: ReadonlyArray<SlashCompletionItem> = cards.slice(0, 20).map((card) => ({ value: card.id, label: card.id, description: card.content }));
     const completion = completeItems(items, rest);
     if (completion === null) return null;
@@ -92,6 +97,20 @@ export class KanbanCommand extends PositionalSlashCommand {
       return { kind: "error", text: "/kanban handoff [<teamId>/]<cardId> <targetTeamId>" };
     }
     return { kind: "platform", slashName: "kanban handoff", command: { name: "kanbanHandoff", teamId, cardId, targetTeamId } };
+  }
+
+  private resolveKanbanToggle(teamId: string, rest: string): ResolvedCommand {
+    const trimmed = rest.trim();
+    const spaceIndex = trimmed.indexOf(" ");
+    if (spaceIndex === -1) {
+      return { kind: "error", text: "/kanban toggle <cardId> <todo text>" };
+    }
+    const cardId = trimmed.slice(0, spaceIndex);
+    const todo = trimmed.slice(spaceIndex + 1).trim();
+    if (cardId === "" || todo === "") {
+      return { kind: "error", text: "/kanban toggle <cardId> <todo text>" };
+    }
+    return { kind: "platform", slashName: "kanban toggle", command: { name: "kanbanToggleTodo", teamId, cardId, todo } };
   }
 }
 

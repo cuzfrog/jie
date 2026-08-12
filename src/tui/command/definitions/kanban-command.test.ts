@@ -14,7 +14,7 @@ describe("KanbanCommand", () => {
   test("meta", () => {
     expect(command.meta.name).toBe("kanban");
     expect(command.meta.description).toBe("toggle the kanban panel");
-    expect(command.meta.argumentHint).toBe("<add|remove|complete|review|handoff>");
+    expect(command.meta.argumentHint).toBe("<add|remove|complete|review|handoff|toggle>");
   });
 
   test("resolve with no subcommand cycles the kanban view", () => {
@@ -110,6 +110,54 @@ describe("KanbanCommand", () => {
     expect(command.resolve(context, ["unknown"])).toEqual({ kind: "error", text: "/kanban: unknown subcommand 'unknown'" });
   });
 
+  test("resolve toggle requires a card id and todo text", () => {
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
+    expect(command.resolve(context, ["toggle", "#1"])).toEqual({
+      kind: "error",
+      text: "/kanban toggle <cardId> <todo text>",
+    });
+  });
+
+  test("resolve toggle builds the kanbanToggleTodo command with greedy todo text", () => {
+    const { platform } = makePlatform();
+    const context = { state: teamState(), platform };
+    expect(command.resolve(context, ["toggle", "#1", "do", "the", "thing"])).toEqual({
+      kind: "platform",
+      slashName: "kanban toggle",
+      command: { name: "kanbanToggleTodo", teamId: "t1", cardId: "#1", todo: "do the thing" },
+    });
+  });
+
+  test("complete toggle returns only cards with todos", async () => {
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState({ kanbanBoard: [
+      { id: "#1", content: "with todos", status: "in_progress", todos: [{ text: "one", done: false }] },
+      { id: "#2", content: "no todos", status: "in_progress" },
+    ] }), platform };
+    const result = await command.complete("toggle ", context);
+    expect(result).toEqual({
+      items: [{ value: "toggle #1", label: "#1", description: "with todos" }],
+    });
+  });
+
+  test("complete toggle returns all matching card ids with todos", async () => {
+    const { platform } = makePlatform();
+    const context = { state: makeTuiState({ kanbanBoard: [
+      { id: "#1", content: "first task", status: "in_review", todos: [{ text: "one", done: false }] },
+      { id: "#2", content: "second task", status: "completed", todos: [{ text: "one", done: false }] },
+      { id: "#3", content: "third task", status: "pending", todos: [{ text: "one", done: false }] },
+    ] }), platform };
+    const result = await command.complete("toggle ", context);
+    expect(result).toEqual({
+      items: [
+        { value: "toggle #1", label: "#1", description: "first task" },
+        { value: "toggle #2", label: "#2", description: "second task" },
+        { value: "toggle #3", label: "#3", description: "third task" },
+      ],
+    });
+  });
+
   test("resolve add requires a loaded team", () => {
     const { platform } = makePlatform();
     const context = { state: makeTuiState(), platform };
@@ -127,6 +175,7 @@ describe("KanbanCommand", () => {
         { value: "complete", label: "complete", description: "<cardId>" },
         { value: "review", label: "review", description: "<cardId>" },
         { value: "handoff", label: "handoff", description: "[<teamId>/]<cardId> <targetTeamId>" },
+        { value: "toggle", label: "toggle", description: "<cardId> <todo text>" },
       ],
     });
   });

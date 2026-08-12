@@ -142,6 +142,52 @@ describe("kanbanReducer — expand and edit", () => {
     expect(kanbanReducer(down, Actions.moveKanbanEditField("up")).kanban.editField).toBe("content");
   });
 
+  test("moveKanbanEditField with no cursor stays on content and description", () => {
+    const state = makeTuiState({ kanbanEditField: "content" });
+    expect(kanbanReducer(state, Actions.moveKanbanEditField("down")).kanban.editField).toBe("description");
+  });
+
+  test("moveKanbanEditField with no todos stays between content and description", () => {
+    const state = makeTuiState({
+      kanbanBoard: [{ id: "#1", content: "task", status: "in_progress" }],
+      kanbanCursor: "#1",
+      kanbanEditField: "content",
+    });
+    const down = kanbanReducer(state, Actions.moveKanbanEditField("down"));
+    expect(down.kanban.editField).toBe("description");
+    const up = kanbanReducer(down, Actions.moveKanbanEditField("up"));
+    expect(up.kanban.editField).toBe("content");
+  });
+
+  test("moveKanbanEditField with empty todos stays between content and description", () => {
+    const state = makeTuiState({
+      kanbanBoard: [{ id: "#1", content: "task", status: "in_progress", todos: [] }],
+      kanbanCursor: "#1",
+      kanbanEditField: "content",
+    });
+    const down = kanbanReducer(state, Actions.moveKanbanEditField("down"));
+    expect(down.kanban.editField).toBe("description");
+  });
+
+  test("moveKanbanEditField walks through todos on the focused card", () => {
+    const state = makeTuiState({
+      kanbanBoard: [{ id: "#1", content: "task", status: "in_progress", todos: [{ text: "one", done: false }, { text: "two", done: false }] }],
+      kanbanCursor: "#1",
+      kanbanEditField: "content",
+    });
+    const first = kanbanReducer(state, Actions.moveKanbanEditField("down"));
+    expect(first.kanban.editField).toEqual({ todoIndex: 0 });
+    const second = kanbanReducer(first, Actions.moveKanbanEditField("down"));
+    expect(second.kanban.editField).toEqual({ todoIndex: 1 });
+    const back = kanbanReducer(second, Actions.moveKanbanEditField("up"));
+    expect(back.kanban.editField).toEqual({ todoIndex: 0 });
+  });
+
+  test("toggleKanbanTodo is a no-op in the reducer", () => {
+    const state = makeTuiState();
+    expect(kanbanReducer(state, Actions.toggleKanbanTodo("#1", "one"))).toBe(state);
+  });
+
   test("toggleKanbanExpand resets the edit field to content", () => {
     const state = makeTuiState({ kanbanEditField: "description" });
     expect(kanbanReducer(state, Actions.toggleKanbanExpand()).kanban.editField).toBe("content");

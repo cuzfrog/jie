@@ -37,6 +37,7 @@ export const ActionTypes = {
   COMMIT_KANBAN_EDIT: "[ui] commit kanban card edit",
   CANCEL_KANBAN_EDIT: "[ui] cancel kanban card edit",
   SAVE_KANBAN_EDIT: "[ui] save kanban card edit",
+  TOGGLE_KANBAN_TODO: "[ui] toggle kanban todo",
 } as const;
 
 type ActionType = (typeof ActionTypes)[keyof typeof ActionTypes];
@@ -96,6 +97,7 @@ export const Actions = {
 	commitKanbanEdit: (cardId: string, field: KanbanEditField = "content") => createAction(ActionTypes.COMMIT_KANBAN_EDIT, { cardId, field }),
 	cancelKanbanEdit: () => createAction(ActionTypes.CANCEL_KANBAN_EDIT),
 	saveKanbanEdit: (cardId: string, text: string, field: KanbanEditField = "content") => createAction(ActionTypes.SAVE_KANBAN_EDIT, { cardId, field, text }),
+	toggleKanbanTodo: (cardId: string, todo: string) => createAction(ActionTypes.TOGGLE_KANBAN_TODO, { cardId, todo }),
 } as const;
 
 export type Action = ReturnType<typeof Actions[keyof typeof Actions]>;

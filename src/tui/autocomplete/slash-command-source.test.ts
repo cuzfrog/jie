@@ -565,7 +565,7 @@ describe("SlashCommandSource — /kanban arguments", () => {
     const suggestions = await slashSource(makePlatform().platform, storeWithKanban(BOARD))
       .getSuggestions(["/kanb"], 0, 5, { signal: signal() });
     expect(suggestions!.prefix).toBe("/kanb");
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["kanban add", "kanban remove", "kanban complete", "kanban review", "kanban handoff"]);
+    expect(suggestions!.items.map((item) => item.value)).toEqual(["kanban add", "kanban remove", "kanban complete", "kanban review", "kanban handoff", "kanban toggle"]);
     expect(suggestions!.items[0]!.description).toBe("[--title <title>] <description>");
     expect(suggestions!.items[1]!.description).toBe("<cardId>");
   });
@@ -579,6 +579,7 @@ describe("SlashCommandSource — /kanban arguments", () => {
       { value: "complete", label: "complete", description: "<cardId>" },
       { value: "review", label: "review", description: "<cardId>" },
       { value: "handoff", label: "handoff", description: "[<teamId>/]<cardId> <targetTeamId>" },
+      { value: "toggle", label: "toggle", description: "<cardId> <todo text>" },
     ]);
   });
 

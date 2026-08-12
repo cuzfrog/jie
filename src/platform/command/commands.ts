@@ -1,7 +1,7 @@
 import type { GitSnapshot } from "../services";
 import type { SessionSummary } from "../storage";
 import type { EffortLevel, KanbanCard, KanbanStatus, ModelInfo, TeamInfo } from "../types";
-import type { TeamBlueprintLocation } from "../team/types";
+import type { TeamBlueprintLocation } from "../team";
 
 interface CommandDef<A, R = null> {
   args: A;
@@ -53,6 +53,7 @@ interface CommandTypeMap {
   kanbanSetStatus: CommandDef<{ teamId: string; cardId: string; status: KanbanStatus }, KanbanBoardResult>;
   kanbanEdit: CommandDef<{ teamId: string; cardId: string; field: "content" | "description"; text: string }, KanbanBoardResult>;
   kanbanHandoff: CommandDef<{ teamId: string; cardId: string; targetTeamId: string }, KanbanBoardResult & { card: KanbanCard }>;
+  kanbanToggleTodo: CommandDef<{ teamId: string; cardId: string; todo: string }, KanbanBoardResult>;
   compact: CommandDef<{ teamId: string; agentKey: string }, null>;
 }
 

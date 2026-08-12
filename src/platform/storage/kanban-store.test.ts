@@ -2,6 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { KanbanCard, KanbanCardWrite } from "../types";
+import { JiePlatformError } from "../jie-platform-errors";
 import { SqliteKanbanStore } from "./kanban-store";
 import { SqliteStorage } from "./sqlite-storage";
 
@@ -233,5 +234,120 @@ describe("SqliteKanbanStore", () => {
     first.add("t1", "s1", "persisted", undefined);
     const second = new SqliteKanbanStore(new SqliteStorage(dbFile));
     expect(second.load("t1", "s1")[0]).toMatchObject({ id: "#1", content: "persisted" });
+  });
+
+  test("replace stores and round-trips todos", () => {
+    const store = makeStore();
+    const cards = store.replace("t1", "s1", [
+      { content: "first", status: "pending", todos: [{ text: "one", done: true }, { text: "two", done: false }] },
+    ]);
+    expect(cards[0]?.todos).toEqual([
+      { text: "one", done: true },
+      { text: "two", done: false },
+    ]);
+    expect(store.load("t1", "s1")[0]?.todos).toEqual([
+      { text: "one", done: true },
+      { text: "two", done: false },
+    ]);
+  });
+
+  test("replace with empty todo text throws KANBAN_WRITE_INVALID", () => {
+    const store = makeStore();
+    expect(() => store.replace("t1", "s1", [{ content: "first", status: "pending", todos: [{ text: "", done: false }] }])).toThrow(JiePlatformError);
+  });
+
+  test("replace with duplicate todo text throws KANBAN_WRITE_INVALID", () => {
+    const store = makeStore();
+    expect(() =>
+      store.replace("t1", "s1", [{ content: "first", status: "pending", todos: [{ text: "one", done: false }, { text: "one", done: true }] }]),
+    ).toThrow(JiePlatformError);
+  });
+
+  test("replace with todos omitted preserves existing todos", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [{ content: "first", status: "pending", todos: [{ text: "one", done: true }] }]);
+    const cards = store.replace("t1", "s1", [{ content: "first", status: "in_progress" }]);
+    expect(cards[0]?.todos).toEqual([{ text: "one", done: true }]);
+  });
+
+  test("replace with todos [] clears existing todos", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [{ content: "first", status: "pending", todos: [{ text: "one", done: true }] }]);
+    const cards = store.replace("t1", "s1", [{ content: "first", status: "pending", todos: [] }]);
+    expect(cards[0]?.todos).toBeUndefined();
+    expect(store.load("t1", "s1")[0]?.todos).toBeUndefined();
+  });
+
+  test("replace merges todos by text and inherits done when omitted", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [{ content: "first", status: "pending", todos: [{ text: "one", done: true }, { text: "two", done: false }] }]);
+    const cards = store.replace("t1", "s1", [
+      { content: "first", status: "in_progress", todos: [{ text: "one" }, { text: "two", done: true }, { text: "three" }] },
+    ]);
+    expect(cards[0]?.todos).toEqual([
+      { text: "one", done: true },
+      { text: "two", done: true },
+      { text: "three", done: false },
+    ]);
+  });
+
+  test("update patches status and preserves todos", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [{ content: "first", status: "pending", todos: [{ text: "one", done: false }] }]);
+    const card = store.update("t1", "s1", "first", { status: "in_progress" });
+    expect(card).toMatchObject({ content: "first", status: "in_progress" });
+    expect(card?.todos).toEqual([{ text: "one", done: false }]);
+  });
+
+  test("update patches todos and inherits done when omitted", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [{ content: "first", status: "pending", todos: [{ text: "one", done: true }] }]);
+    const card = store.update("t1", "s1", "first", { todos: [{ text: "one" }, { text: "two" }] });
+    expect(card?.todos).toEqual([
+      { text: "one", done: true },
+      { text: "two", done: false },
+    ]);
+  });
+
+  test("update clears description and active_form with empty strings", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [
+      { content: "first", status: "pending", description: "desc", active_form: "form", externalRef: "ref" },
+    ]);
+    const card = store.update("t1", "s1", "first", { description: "", active_form: "", externalRef: "" });
+    expect(card?.description).toBeUndefined();
+    expect(card?.active_form).toBeUndefined();
+    expect(card?.externalRef).toBeUndefined();
+  });
+
+  test("update throws KANBAN_WRITE_INVALID for invalid todos", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [{ content: "first", status: "pending" }]);
+    expect(() => store.update("t1", "s1", "first", { todos: [{ text: "" }] })).toThrow(JiePlatformError);
+    expect(() => store.update("t1", "s1", "first", { todos: [{ text: "one" }, { text: "one" }] })).toThrow(JiePlatformError);
+  });
+
+  test("update returns null for unknown content", () => {
+    const store = makeStore();
+    expect(store.update("t1", "s1", "missing", { status: "in_progress" })).toBeNull();
+  });
+
+  test("editContent, editDescription, and setStatus preserve todos", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [{ content: "first", status: "pending", todos: [{ text: "one", done: false }] }]);
+    store.editDescription("t1", "s1", "#1", "desc");
+    store.editContent("t1", "s1", "#1", "renamed");
+    store.setStatus("t1", "s1", "#1", "in_progress");
+    const card = store.load("t1", "s1")[0];
+    expect(card?.content).toBe("renamed");
+    expect(card?.todos).toEqual([{ text: "one", done: false }]);
+  });
+
+  test("handoff preserves todos", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [{ content: "first", status: "pending", todos: [{ text: "one", done: true }] }]);
+    store.handoff("t1", "s1", "#1", "t2");
+    const card = store.load("t2", "")[0];
+    expect(card?.todos).toEqual([{ text: "one", done: true }]);
   });
 });
