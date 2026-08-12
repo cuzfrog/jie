@@ -87,6 +87,13 @@ describe("JieAutocompleteProviderImpl", () => {
     expect(result.cursorCol).toBe(13);
   });
 
+  test("applyCompletion preserves an @@-mention token and adds a trailing space", () => {
+    const result = makeJieAutocompleteProvider(CWD, scanFixture, nullPlatform(), makeStateStore())
+      .applyCompletion(["@@mai"], 0, 5, { value: "@@src/main.ts", label: "src/main.ts" }, "@@mai");
+    expect(result.lines).toEqual(["@@src/main.ts "]);
+    expect(result.cursorCol).toBe(14);
+  });
+
   test("applyCompletion appends a slash command and a trailing space", () => {
     const result = makeJieAutocompleteProvider("/tmp", noScan, nullPlatform(), makeStateStore())
       .applyCompletion(["/he"], 0, 3, { value: "help", label: "help" }, "/he");

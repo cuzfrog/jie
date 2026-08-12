@@ -18,11 +18,11 @@ export const SCANNED_FILES: ReadonlyArray<ScannedFile> = [
   { absPath: "/proj/src/helper.ts", relPath: "src/helper.ts" },
 ];
 
-export function scanFixture(): ReadonlyArray<ScannedFile> {
+export function scanFixture(_rootDir: string, _options?: { onlyIgnored?: boolean }): ReadonlyArray<ScannedFile> {
   return SCANNED_FILES;
 }
 
-export function noScan(): ReadonlyArray<ScannedFile> {
+export function noScan(_rootDir: string, _options?: { onlyIgnored?: boolean }): ReadonlyArray<ScannedFile> {
   return [];
 }
 

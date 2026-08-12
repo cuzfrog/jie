@@ -17,4 +17,4 @@ no-new-exports:
   - jie-autocomplete.test.ts
 ---
 
-- Adapts pi's CombinedAutocompleteProvider; `@`-mentions use gitignore-aware scanner.
+- Adapts pi's CombinedAutocompleteProvider; `@` mentions a tracked file and `@@` mentions an ignored file; both use a gitignore-aware scanner.
