@@ -3,7 +3,7 @@ import type { Editor, Terminal, TUI } from "@earendil-works/pi-tui";
 import type { JiePlatform } from "../platform";
 import { logger } from "../utils";
 import { Actions, registerStateModule, type EffectHandler, type StateStore } from "./state";
-import { registerAutocompleteModule, type JieAutocompleteProvider, type ScannedFile } from "./autocomplete";
+import { registerAutocompleteModule, type JieAutocompleteProvider } from "./autocomplete";
 import { registerChatModule, type ChatMessages, type ChatSync } from "./components/chat";
 import { registerFooterModule } from "./components/footer";
 import { registerEditorModule } from "./components/editor";
@@ -22,7 +22,6 @@ export interface TuiCradle {
   readonly cwd: string;
   readonly homeJieDir: string;
   readonly platform: JiePlatform;
-  readonly scan: (rootDir: string) => ReadonlyArray<ScannedFile>;
   readonly stdin: NodeJS.ReadableStream;
   readonly stdout: TuiStdout;
   readonly useProcessTerminal: boolean;

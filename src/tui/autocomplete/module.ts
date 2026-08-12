@@ -1,6 +1,6 @@
-import { asFunction, asValue, type AwilixContainer } from "awilix";
+import { asFunction, type AwilixContainer } from "awilix";
 import type { CommandCatalog, CommandResolver } from "../command";
-import { scanFiles, type ScannedFile } from "./list-files";
+import { scanFiles } from "./list-files";
 import type { StateStore } from "../state";
 import type { TuiCradle } from "../container";
 import { FileMentionSource } from "./file-mention-source";
@@ -12,13 +12,12 @@ import { SlashCommandSource } from "./slash-command-source";
 
 function createAutocompleteProvider(
   cwd: string,
-  scan: (rootDir: string) => ReadonlyArray<ScannedFile>,
   commandRegistry: CommandCatalog,
   commandResolver: CommandResolver,
   stateStore: StateStore,
 ): JieAutocompleteProvider {
   return new JieAutocompleteProviderImpl(cwd, [
-    new FileMentionSource(cwd, scan),
+    new FileMentionSource(cwd, scanFiles),
     new SlashCommandSource(commandRegistry, commandResolver, stateStore),
     new SkillSource(stateStore),
     new PathCompletionSource(cwd),
@@ -27,7 +26,6 @@ function createAutocompleteProvider(
 
 export function registerAutocompleteModule(container: AwilixContainer<TuiCradle>): void {
   container.register({
-    scan: asValue(scanFiles),
     autocompleteProvider: asFunction(createAutocompleteProvider).singleton(),
   });
 }

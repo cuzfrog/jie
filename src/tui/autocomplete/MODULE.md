@@ -1,5 +1,6 @@
 ---
 no-new-exports:
+  - index.ts
   - module.ts
   - completion-source.ts
   - file-mention-source.ts
@@ -17,4 +18,3 @@ no-new-exports:
 ---
 
 - Adapts pi's CombinedAutocompleteProvider; `@`-mentions use gitignore-aware scanner.
-- `ScannedFile` is re-exported from `index.ts` so the DI cradle can type the `scan` dependency without importing from an internal file.
