@@ -79,7 +79,7 @@ export class TeamManagerImpl implements TeamManager {
   }
 
   agentCount(teamId: string): number {
-    return this.teamRegistry.parseTeamManifest(teamId).roles.length;
+    return this.teamRegistry.parseTeamManifest(teamId).roles.reduce((sum, soul) => sum + soul.replicas, 0);
   }
 
   listLoaded(): ReadonlyMap<string, TeamInfo> {
@@ -171,16 +171,18 @@ export class TeamManagerImpl implements TeamManager {
         }
         throw error;
       }
-      const body = this.agentBodyFactory({
-        agentKey: `${soul.role}-1`,
-        teamId,
-        soul,
-        isLeader: soul.role === blueprint.leaderRole,
-        sessionId,
-        model: resolvedModel,
-        effort,
-      });
-      bodies.push(body);
+      for (let replicaIndex = 1; replicaIndex <= soul.replicas; replicaIndex += 1) {
+        const body = this.agentBodyFactory({
+          agentKey: `${soul.role}-${replicaIndex}`,
+          teamId,
+          soul,
+          isLeader: soul.role === blueprint.leaderRole,
+          sessionId,
+          model: resolvedModel,
+          effort,
+        });
+        bodies.push(body);
+      }
     }
     if (!bodies.some((body) => body.identity.isLeader)) {
       throw new JiePlatformError("NO_LEADER", { detail: `team '${teamId}' has no agent marked as leader` });

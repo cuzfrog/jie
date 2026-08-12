@@ -55,7 +55,9 @@ const JiePlatformErrorMessages = {
   LEADER_REQUIRED: "TEAM.md leader is required",
   LEADER_MISMATCH: "TEAM.md leader does not match the only agent",
   LEADER_UNKNOWN: "TEAM.md leader references unknown role",
+  LEADER_REPLICA_FORBIDDEN: "TEAM.md leader role must have replica: 1",
   TEAM_FILE_REQUIRED: "TEAM.md is required for multi-agent teams",
+  REPLICA_LIMIT_EXCEEDED: "Agent replica count exceeds the maximum allowed",
   SUBSCRIBE_REJECTS_PLATFORM_TOPIC: "subscribe cannot target a platform topic",
   TOOL_SPEC_UNRESOLVED: "Tool spec resolved no tools",
 

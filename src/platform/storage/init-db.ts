@@ -87,6 +87,7 @@ export function initializeSchema(storage: Storage): void {
       description   TEXT,
       completed_at  TEXT,
       external_ref  TEXT,
+      assignee     TEXT,
       todos         TEXT,
       updated_at    TEXT    NOT NULL,
       PRIMARY KEY (team_id, id)
@@ -165,6 +166,9 @@ function migrateKanban(storage: Storage): void {
   const finalInfo = storage.query("PRAGMA table_info(kanban_tasks)");
   if (finalInfo.length > 0 && !finalInfo.some((row) => row[1] === "todos")) {
     storage.exec("ALTER TABLE kanban_tasks ADD COLUMN todos TEXT");
+  }
+  if (finalInfo.length > 0 && !finalInfo.some((row) => row[1] === "assignee")) {
+    storage.exec("ALTER TABLE kanban_tasks ADD COLUMN assignee TEXT");
   }
   if (finalInfo.some((row) => row[1] === "scope")) {
     storage.exec("PRAGMA user_version = 1");

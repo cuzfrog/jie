@@ -96,6 +96,7 @@ export interface KanbanCard {
     readonly description?: string;
     readonly completedAt?: string;
     readonly externalRef?: string;
+    readonly assignee?: string;
     readonly todos?: ReadonlyArray<KanbanTodo>;
 }
 
@@ -106,6 +107,7 @@ export interface KanbanCardWrite {
     readonly active_form?: string;
     readonly description?: string;
     readonly externalRef?: string;
+    readonly assignee?: string;
     readonly todos?: ReadonlyArray<KanbanTodoWrite>;
 }
 
@@ -114,6 +116,7 @@ export interface KanbanCardPatch {
     readonly active_form?: string;
     readonly description?: string;
     readonly externalRef?: string;
+    readonly assignee?: string;
     readonly todos?: ReadonlyArray<KanbanTodoWrite>;
 }
 

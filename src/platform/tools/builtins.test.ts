@@ -26,6 +26,7 @@ const kanbanStore = vi.mocked<KanbanStore>({
   editDescription: vi.fn(),
   handoff: vi.fn(),
   update: vi.fn(),
+  claim: vi.fn(),
 });
 
 function makeBuiltins() {
@@ -33,10 +34,11 @@ function makeBuiltins() {
 }
 
 describe("createBuiltinTools", () => {
-  test("returns all 17 built-ins with stable registration names", () => {
+  test("returns all 18 built-ins with stable registration names", () => {
     const names = makeBuiltins().map((b) => b.name).sort();
     expect(names).toEqual([
       "bash",
+      "claim_kanban",
       "edit_file",
       "find_artifact",
       "find_file",

@@ -9,6 +9,7 @@ import DEFAULT_SOLO_GENERAL_MD from "./default-solo/general.md" with { type: "te
 
 const TEAM_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
 const ROLE_STEM_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+const MAX_REPLICAS = 8;
 
 const FRONTMATTER_DELIMITER = "---";
 
@@ -126,6 +127,15 @@ export function parseTeamFromManifests(
     }
   }
 
+  if (leaderRole !== null) {
+    const leaderSoul = roles.find((soul) => soul.role === leaderRole);
+    if (leaderSoul !== undefined && leaderSoul.replicas !== 1) {
+      throw new JiePlatformError("LEADER_REPLICA_FORBIDDEN", {
+        detail: `leader role '${leaderRole}' has replica: ${leaderSoul.replicas}; leader must have replica: 1`,
+      });
+    }
+  }
+
   return { id: teamId, roles, leaderRole, additionalAgentRefs };
 }
 
@@ -159,6 +169,7 @@ interface RawFrontmatter {
   tools?: unknown;
   subscribe?: unknown;
   skills?: unknown;
+  replica?: unknown;
   leader?: unknown;
   "additional-agents"?: unknown;
   target_context_window_size?: unknown;
@@ -295,6 +306,13 @@ export function parseAgentManifest(
 
   const skills = frontmatter.skills === undefined ? [] : asStringList(frontmatter.skills, "skills", file);
 
+  const replicas = frontmatter.replica === undefined ? 1 : asPositiveInteger(frontmatter.replica, "replica", file);
+  if (replicas > MAX_REPLICAS) {
+    throw new JiePlatformError("REPLICA_LIMIT_EXCEEDED", {
+      detail: `replica count ${replicas} exceeds maximum ${MAX_REPLICAS} in ${file}`,
+    });
+  }
+
   const targetContextWindowSize =
     frontmatter.target_context_window_size === undefined
       ? undefined
@@ -307,6 +325,7 @@ export function parseAgentManifest(
     tools,
     subscribe,
     skills,
+    replicas,
     targetContextWindowSize,
   };
 }
