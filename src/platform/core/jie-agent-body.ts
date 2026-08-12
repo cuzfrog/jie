@@ -166,6 +166,7 @@ export class JieAgentBody implements AgentBody {
       eventManager: deps.eventManager,
       sender: this.sender,
       soulPinsModel: params.soul.model !== "",
+      soulPinsEffort: params.soul.effort !== undefined,
       resolveModel: deps.resolveModel,
       agentState: {
         setModel: (model) => {

@@ -26,8 +26,8 @@ const agentState = {
 
 const resolveModel = vi.fn((_provider: string, _modelId: string): Model<Api> | undefined => undefined);
 
-function makeController(initialModel: Model<Api> | undefined, effort: EffortLevel, soulPinsModel = false): ModelController {
-  return new ModelControllerImpl(initialModel, effort, { eventManager, sender, soulPinsModel, resolveModel, agentState });
+function makeController(initialModel: Model<Api> | undefined, effort: EffortLevel, soulPinsModel = false, soulPinsEffort = false): ModelController {
+  return new ModelControllerImpl(initialModel, effort, { eventManager, sender, soulPinsModel, soulPinsEffort, resolveModel, agentState });
 }
 
 function makeModel(provider: string, id: string): Model<Api> {
@@ -111,6 +111,14 @@ describe("ModelController — applyEffort", () => {
     controller.applyEffort("low");
     expect(thinkingLevel).toBe("low");
     expect(envelopes("agent.model.assigned")).toHaveLength(0);
+  });
+
+  test("ignores the update when the soul pins effort", () => {
+    const controller = makeController(makeModel("anthropic", "claude-sonnet-4"), "off", false, true);
+    controller.applyEffort("high");
+    expect(thinkingLevel).toBe("off");
+    expect(envelopes("agent.model.assigned")).toHaveLength(1);
+    expect(controller.modelInfo).toEqual({ provider: "anthropic", id: "claude-sonnet-4", effort: "off", contextWindow: 200000 });
   });
 });
 

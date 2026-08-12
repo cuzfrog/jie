@@ -159,18 +159,19 @@ export class TeamManagerImpl implements TeamManager {
 
   private async constructTeam(teamId: string, sessionId: string): Promise<AgentBody[]> {
     const blueprint: TeamBlueprint = this.teamRegistry.parseTeamManifest(teamId);
-    const effort = this.settingsStore.load().defaultEffort ?? "off";
+    const settings = this.settingsStore.load();
     const bodies: AgentBody[] = [];
     for (const soul of blueprint.roles) {
       let resolvedModel: Model<Api>;
       try {
-        resolvedModel = this.resolveSoulModel(soul);
+        resolvedModel = this.resolveSoulModel(soul, settings);
       } catch (error) {
         if (error instanceof JiePlatformError && error.code === "MODEL_UNRESOLVED" && soul.role !== blueprint.leaderRole) {
           continue;
         }
         throw error;
       }
+      const effort = soul.effort ?? settings.defaultEffort ?? "off";
       for (let replicaIndex = 1; replicaIndex <= soul.replicas; replicaIndex += 1) {
         const body = this.agentBodyFactory({
           agentKey: `${soul.role}-${replicaIndex}`,
@@ -240,8 +241,7 @@ export class TeamManagerImpl implements TeamManager {
     return ulid();
   }
 
-  private resolveSoulModel(soul: AgentSoul): Model<Api> {
-    const settings = this.settingsStore.load();
+  private resolveSoulModel(soul: AgentSoul, settings: Settings): Model<Api> {
     const modelRef = this.resolveModelRef(soul, settings);
     const parsed = parseModelRef(modelRef);
     if (parsed === null) {

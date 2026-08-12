@@ -13,7 +13,7 @@ Platform-level configuration surface: how Jie discovers and loads settings, cred
 | `.jie/models.json` | Project provider overrides | Plain JSON | Same shape; a project entry replaces the global entry of the same provider name |
 | `~/.jie/mcp.json`, `.jie/mcp.json` | MCP server definitions | Plain JSON | Platform connects stdio servers at startup; project overrides per name (ADR 4) |
 | `.jie/teams/<id>/TEAM.md` | Team wiring | Plain text | `leader:` declaration in YAML frontmatter + prose (`06-agent-model.md` "Team Blueprint") |
-| `.jie/teams/<id>/<role>.md` | Agent definition | Plain text | YAML frontmatter (`model?`, `tools`, `subscribe?`, `skills?`) + prose body (system prompt) |
+| `.jie/teams/<id>/<role>.md` | Agent definition | Plain text | YAML frontmatter (`model?` with optional `(effort)` suffix, `tools`, `subscribe?`, `skills?`) + prose body (system prompt) |
 | `~/.jie/agents/<id>.md` | Shared agent (global) | Plain text | Same shape as a role `.md`; a team may list it under `additional-agents:` |
 | `.jie/agents/<id>.md` | Shared agent (project) | Plain text | Same shape; overrides a global shared agent of the same id |
 | `~/.jie/skills/<name>/SKILL.md` | Global skill | Plain text | YAML frontmatter (`name?`, `description`, `argument-hint?`) + prose body; see "Skills" |
@@ -126,7 +126,7 @@ TUI `/team <id>` does **not** persist; it hot-loads the team in the running sess
 
 ### Setting `defaultEffort`
 
-TUI `/effort <level>` executes `setDefaultEffort`, writing `defaultEffort` to the **global** `settings.json` (effort has no scope rule, unlike `setDefaultProvider` — see "`settings.json`" above). `/effort` with no argument executes `getDefaultEffort` and shows the current default (`off` when absent). The value applies at team load — `TeamManager.load` reads the merged setting and threads it into `AgentBodyParams.effort` — and immediately to every live agent inheriting the default: the command publishes `user.effort.update` after the write, and each body applies it (`06-agent-model.md`, "Effort update"). `JieAgentBody` maps effort onto the pi-agent `thinkingLevel` (`max` → `xhigh`, other levels pass through; pi's own `off` level means no extended thinking) and reports it through `agent.model.assigned` and `ModelInfo.effort`. Out-of-vocabulary values in the file hard-fail `INVALID_CONFIG` (closed vocabulary, like the `defaultTeam` charset).
+TUI `/effort <level>` executes `setDefaultEffort`, writing `defaultEffort` to the **global** `settings.json` (effort has no scope rule, unlike `setDefaultProvider` — see "`settings.json`" above). `/effort` with no argument executes `getDefaultEffort` and shows the current default (`off` when absent). The value applies at team load — `TeamManager.load` reads the merged setting and threads it into `AgentBodyParams.effort` for souls without an effort pin — and immediately to every live body whose soul does not pin effort: the command publishes `user.effort.update` after the write, and each body applies it (`06-agent-model.md`, "Effort update"). `JieAgentBody` maps effort onto the pi-agent `thinkingLevel` (`max` → `xhigh`, other levels pass through; pi's own `off` level means no extended thinking) and reports it through `agent.model.assigned` and `ModelInfo.effort`. Out-of-vocabulary values in the file hard-fail `INVALID_CONFIG` (closed vocabulary, like the `defaultTeam` charset).
 
 ### Team Swap (TUI)
 

@@ -470,3 +470,73 @@ describe("replica parsing", () => {
     expect(() => loadTeamFromDir(dir)).toThrow(expect.objectContaining({ code: "LEADER_REPLICA_FORBIDDEN" }));
   });
 });
+
+describe("model effort parsing", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "jie-team-model-effort-"));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("model: <ref>(<effort>) splits into model and effort", () => {
+    writeFileSync(join(dir, "general.md"), "---\nmodel: openai/gpt-4o(low)\ntools:\n  - bash\n---\nbody");
+    const bp = loadTeamFromDir(dir);
+    expect(bp.roles[0]?.model).toBe("openai/gpt-4o");
+    expect(bp.roles[0]?.effort).toBe("low");
+  });
+
+  test("model: <alias>(<effort>) splits into alias and effort", () => {
+    writeFileSync(join(dir, "general.md"), "---\nmodel: large(high)\ntools:\n  - bash\n---\nbody");
+    const bp = loadTeamFromDir(dir);
+    expect(bp.roles[0]?.model).toBe("large");
+    expect(bp.roles[0]?.effort).toBe("high");
+  });
+
+  test("model without effort leaves effort undefined", () => {
+    writeFileSync(join(dir, "general.md"), "---\nmodel: large\ntools:\n  - bash\n---\nbody");
+    const bp = loadTeamFromDir(dir);
+    expect(bp.roles[0]?.model).toBe("large");
+    expect(bp.roles[0]?.effort).toBeUndefined();
+  });
+
+  test("model: (low) is rejected because base is empty", () => {
+    writeFileSync(join(dir, "general.md"), "---\nmodel: (low)\ntools:\n  - bash\n---\nbody");
+    expect(() => loadTeamFromDir(dir)).toThrow(expect.objectContaining({ code: "INVALID_MODEL_STRING" }));
+  });
+
+  test("empty effort suffix is rejected", () => {
+    writeFileSync(join(dir, "general.md"), "---\nmodel: large()\ntools:\n  - bash\n---\nbody");
+    expect(() => loadTeamFromDir(dir)).toThrow(expect.objectContaining({ code: "INVALID_MODEL_STRING" }));
+  });
+
+  test("invalid effort is rejected", () => {
+    writeFileSync(join(dir, "general.md"), "---\nmodel: large(extreme)\ntools:\n  - bash\n---\nbody");
+    expect(() => loadTeamFromDir(dir)).toThrow(expect.objectContaining({ code: "INVALID_MODEL_STRING" }));
+  });
+
+  test("cased effort is rejected", () => {
+    writeFileSync(join(dir, "general.md"), "---\nmodel: large(LOW)\ntools:\n  - bash\n---\nbody");
+    expect(() => loadTeamFromDir(dir)).toThrow(expect.objectContaining({ code: "INVALID_MODEL_STRING" }));
+  });
+
+  test("nested parens in base are rejected", () => {
+    writeFileSync(join(dir, "general.md"), "---\nmodel: large(low)(high)\ntools:\n  - bash\n---\nbody");
+    expect(() => loadTeamFromDir(dir)).toThrow(expect.objectContaining({ code: "INVALID_MODEL_STRING" }));
+  });
+
+  test("unbalanced parens are rejected", () => {
+    writeFileSync(join(dir, "general.md"), "---\nmodel: large(low\ntools:\n  - bash\n---\nbody");
+    expect(() => loadTeamFromDir(dir)).toThrow(expect.objectContaining({ code: "INVALID_MODEL_STRING" }));
+  });
+
+  test("whitespace around the suffix is tolerated", () => {
+    writeFileSync(join(dir, "general.md"), "---\nmodel: large (low)\ntools:\n  - bash\n---\nbody");
+    const bp = loadTeamFromDir(dir);
+    expect(bp.roles[0]?.model).toBe("large");
+    expect(bp.roles[0]?.effort).toBe("low");
+  });
+});

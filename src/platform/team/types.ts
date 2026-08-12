@@ -1,6 +1,9 @@
+import type { EffortLevel } from "../types";
+
 export interface AgentSoul {
   readonly role: string;
   readonly model: string;
+  readonly effort?: EffortLevel;
   readonly systemPrompt: string;
   readonly tools: ReadonlyArray<string>;
   readonly subscribe: ReadonlyArray<string>;
