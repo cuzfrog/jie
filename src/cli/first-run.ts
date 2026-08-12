@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import * as readline from "node:readline/promises";
 import { join } from "node:path";
-import { createTeamInstaller } from "../teams-installer";
+import { createManifestInstaller, type InstallResult } from "../manifest/installer";
 import type { Console } from "../utils";
 
 export interface FirstRunPorts {
@@ -10,13 +10,13 @@ export interface FirstRunPorts {
   readonly confirm: (question: string) => Promise<boolean>;
   readonly isSentinelPresent: () => boolean;
   readonly markSentinel: () => void;
-  readonly installBundledTeam: () => Promise<readonly string[]>;
+  readonly installBundledManifests: () => Promise<InstallResult>;
   readonly ensureBundledMcp: () => void;
 }
 
 const SENTINEL_FILENAME = ".first-run-done";
 const DEFAULT_CODERS_ID = "default-dev-team";
-const BUNDLED_TEAM_CONTENT_DIR = join(import.meta.dir, "../teams");
+const BUNDLED_MANIFEST_DIR = join(import.meta.dir, "../manifest");
 const MCP_CONFIG_FILE = "mcp.json";
 const CODE_LENS_SERVER_NAME = "code-lens";
 const CODE_LENS_SERVER = { transport: "stdio", command: "code-lens", args: [] } as const;
@@ -26,11 +26,14 @@ export async function runFirstRunWelcome(ports: FirstRunPorts, noInstall: boolea
   ports.ensureBundledMcp();
   if (ports.isSentinelPresent()) return;
   if (!ports.isInteractive()) return;
-  const yes = await ports.confirm(`Install the ${DEFAULT_CODERS_ID} team blueprint to ~/.jie/teams/? [Y/n]`);
+  const yes = await ports.confirm(`Install the ${DEFAULT_CODERS_ID} blueprint and shared agents to ~/.jie/? [Y/n]`);
   if (yes) {
     try {
-      const ids = await ports.installBundledTeam();
-      ports.console.print(`Installed team blueprint(s): ${ids.join(", ")}.`);
+      const result = await ports.installBundledManifests();
+      const teamPart = result.teams.length > 0 ? `team blueprint(s): ${result.teams.join(", ")}` : "";
+      const agentPart = result.agents.length > 0 ? `shared agent(s): ${result.agents.join(", ")}` : "";
+      const summary = [teamPart, agentPart].filter(Boolean).join("; ");
+      ports.console.print(`Installed ${summary}.`);
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       ports.console.error(
@@ -54,7 +57,6 @@ export function createFirstRunPorts({
   readonly confirm?: (question: string) => Promise<boolean>;
   readonly isInteractive?: () => boolean;
 }): FirstRunPorts {
-  const userTeamsDir = join(homeJieDir, "teams");
   const sentinelPath = join(homeJieDir, SENTINEL_FILENAME);
   return {
     console,
@@ -65,7 +67,7 @@ export function createFirstRunPorts({
       mkdirSync(homeJieDir, { recursive: true, mode: 0o755 });
       writeFileSync(sentinelPath, "");
     },
-    installBundledTeam: () => createTeamInstaller().install(BUNDLED_TEAM_CONTENT_DIR, userTeamsDir),
+    installBundledManifests: () => createManifestInstaller().install(BUNDLED_MANIFEST_DIR, homeJieDir),
     ensureBundledMcp: () => ensureBundledMcpConfig(homeJieDir),
   };
 }

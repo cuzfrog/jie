@@ -15,7 +15,7 @@ import { registerPlatformModule } from "./module";
 import { registerServicesModule, type GitService } from "./services";
 import { registerSkillsModule, type SkillManager } from "./skills";
 import { registerStorageModule, type ArtifactStore, type KanbanStore, type Storage, type TranscriptStore } from "./storage";
-import { registerTeamModule, type TeamManager } from "./team";
+import { registerTeamModule, type AgentRegistry, type TeamManager } from "./team";
 import { registerToolsModule, type ToolRegistry } from "./tools";
 
 export interface PlatformCradle {
@@ -43,6 +43,7 @@ export interface PlatformCradle {
   readonly loadSystemContextBlock: () => string;
   readonly hookRunner: HookRunner;
   readonly agentBodyFactory: (params: AgentBodyParams) => AgentBody;
+  readonly agentRegistry: AgentRegistry;
   readonly teamManager: TeamManager;
   readonly commandExecutor: CommandExecutor;
   readonly mcpConnector: McpConnector;

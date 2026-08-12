@@ -16,6 +16,10 @@ export function isValidTeamId(id: string): boolean {
   return TEAM_ID_PATTERN.test(id);
 }
 
+export function isValidAgentId(id: string): boolean {
+  return ROLE_STEM_PATTERN.test(id);
+}
+
 export interface ParseTeamOptions {
   readonly teamId: string;
   readonly sourceDir?: string;
@@ -58,17 +62,20 @@ export function parseTeamFromManifests(
   const roles: AgentSoul[] = [];
   for (const [name, content] of agentFiles) {
     const stem = name.slice(0, -3);
-    const soul = parseAgentFile(stem, content, name);
+    const soul = parseAgentManifest(stem, content, name);
     roles.push(soul);
   }
   roles.sort((a, b) => a.role.localeCompare(b.role));
 
   let leaderRole: string | null = null;
   const roleStems = new Set(roles.map((r) => r.role));
+  let additionalAgentRefs: string[] = [];
 
   if (teamFile !== undefined) {
     const teamContent = teamFile[1];
-    const leader = parseTeamFile(teamContent, "TEAM.md");
+    const teamFrontmatter = parseTeamFile(teamContent, "TEAM.md");
+    additionalAgentRefs = validateAdditionalAgentRefs(teamFrontmatter.additionalAgentRefs, roleStems, sourceDir || teamId);
+    const leader = teamFrontmatter.leader;
     if (leader === null) {
       if (agentFiles.length >= 2) {
         throw new JiePlatformError("LEADER_REQUIRED", {
@@ -87,6 +94,11 @@ export function parseTeamFromManifests(
       if (agentFiles.length === 1) {
         const only = roles[0]!.role;
         if (leader !== only) {
+          if (additionalAgentRefs.includes(leader)) {
+            throw new JiePlatformError("LEADER_UNKNOWN", {
+              detail: `TEAM.md 'leader' field references shared agent '${leader}'; shared agents cannot be team leaders (in ${sourceDir || teamId})`,
+            });
+          }
           throw new JiePlatformError("LEADER_MISMATCH", {
             detail: `TEAM.md 'leader' field '${leader}' does not match the single agent role '${only}' in ${sourceDir || teamId}`,
           });
@@ -114,7 +126,7 @@ export function parseTeamFromManifests(
     }
   }
 
-  return { id: teamId, roles, leaderRole };
+  return { id: teamId, roles, leaderRole, additionalAgentRefs };
 }
 
 export function loadTeamFromDir(dirPath: string): TeamBlueprint {
@@ -148,7 +160,13 @@ interface RawFrontmatter {
   subscribe?: unknown;
   skills?: unknown;
   leader?: unknown;
+  "additional-agents"?: unknown;
   target_context_window_size?: unknown;
+}
+
+interface TeamFrontmatter {
+  leader: string | null;
+  additionalAgentRefs: string[];
 }
 
 function splitFrontmatter(content: string): {
@@ -220,7 +238,24 @@ function asPositiveInteger(
   return value;
 }
 
-function parseAgentFile(
+function validateAdditionalAgentRefs(refs: string[], roleStems: Set<string>, source: string): string[] {
+  const seen = new Set<string>();
+  for (const ref of refs) {
+    if (!ROLE_STEM_PATTERN.test(ref)) {
+      throw new JiePlatformError("INVALID_AGENT_REF", { detail: `invalid additional-agent ref: '${ref}' in ${source}` });
+    }
+    if (seen.has(ref)) {
+      throw new JiePlatformError("DUPLICATE_AGENT_REF", { detail: `duplicate additional-agent ref '${ref}' in ${source}` });
+    }
+    if (roleStems.has(ref)) {
+      throw new JiePlatformError("DUPLICATE_ROLE", { detail: `additional-agent ref '${ref}' collides with a local role in ${source}` });
+    }
+    seen.add(ref);
+  }
+  return refs;
+}
+
+export function parseAgentManifest(
   role: string,
   content: string,
   file: string,
@@ -276,7 +311,7 @@ function parseAgentFile(
   };
 }
 
-function parseTeamFile(content: string, file: string): string | null {
+function parseTeamFile(content: string, file: string): TeamFrontmatter {
   const { frontmatter } = splitFrontmatter(content);
   if (frontmatter === null) {
     throw new JiePlatformError("INVALID_FRONTMATTER", {
@@ -284,8 +319,7 @@ function parseTeamFile(content: string, file: string): string | null {
     });
   }
   const leader = frontmatter.leader;
-  if (leader === undefined || leader === null || leader === "") {
-    return null;
-  }
-  return asString(leader, "leader", file);
+  const leaderRole = leader === undefined || leader === null || leader === "" ? null : asString(leader, "leader", file);
+  const additionalAgentRefs = frontmatter["additional-agents"] === undefined ? [] : asStringList(frontmatter["additional-agents"], "additional-agents", file);
+  return { leader: leaderRole, additionalAgentRefs };
 }

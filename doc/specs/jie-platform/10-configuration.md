@@ -14,6 +14,8 @@ Platform-level configuration surface: how Jie discovers and loads settings, cred
 | `~/.jie/mcp.json`, `.jie/mcp.json` | MCP server definitions | Plain JSON | Platform connects stdio servers at startup; project overrides per name (ADR 4) |
 | `.jie/teams/<id>/TEAM.md` | Team wiring | Plain text | `leader:` declaration in YAML frontmatter + prose (`06-agent-model.md` "Team Blueprint") |
 | `.jie/teams/<id>/<role>.md` | Agent definition | Plain text | YAML frontmatter (`model?`, `tools`, `subscribe?`, `skills?`) + prose body (system prompt) |
+| `~/.jie/agents/<id>.md` | Shared agent (global) | Plain text | Same shape as a role `.md`; a team may list it under `additional-agents:` |
+| `.jie/agents/<id>.md` | Shared agent (project) | Plain text | Same shape; overrides a global shared agent of the same id |
 | `~/.jie/skills/<name>/SKILL.md` | Global skill | Plain text | YAML frontmatter (`name?`, `description`, `argument-hint?`) + prose body; see "Skills" |
 | `.jie/skills/<name>/SKILL.md` | Project skill | Plain text | Same shape; a project skill overrides a global skill of the same name |
 | `~/.jie/AGENTS.md`, `~/.jie/CLAUDE.md` | Global context | Plain text | Auto-loaded instructions; see "Context Files" |
@@ -95,6 +97,24 @@ A team id resolves to a manifest at one of (project wins, per ADR 24's `locate`)
 |2 | Global | `~/.jie/teams/<id>/TEAM.md` |
 
 The platform has no installed/uninstalled state beyond these paths.
+
+### Shared Agents
+
+A team blueprint may reference shared single-agent manifests via the `additional-agents:` list in `TEAM.md` frontmatter. Each entry is a stem matching `[A-Za-z0-9_-]{1,64}`; at load time the platform resolves it to an `AgentSoul` and merges it into the team's role list. The agent's identity is the filename stem; no `id` or `role` frontmatter field is recognized.
+
+| Order | Source | Lookup |
+|---|---|---|
+| 1 | Project-local | `.jie/agents/<id>.md` (under the `.jie/` found by walking up from CWD) |
+| 2 | Global | `~/.jie/agents/<id>.md` |
+
+`TEAM.md` parsing rules:
+- `additional-agents:` is a list of strings; absent, non-list, non-string, or invalid stems fail the team load (`INVALID_FIELD_TYPE` or `INVALID_AGENT_REF`).
+- A ref may not duplicate another ref in the same list (`DUPLICATE_AGENT_REF`).
+- A ref may not collide with a local role filename stem (`DUPLICATE_ROLE`); a team that wants a customized copy should place the file under a different stem in its own directory.
+- `leader:` must name a **local** role; a shared-agent ref cannot be the team leader (`LEADER_UNKNOWN`).
+- An unresolved shared-agent ref fails at team load with `AGENT_NOT_FOUND`, naming the team and the missing ref.
+
+Merged shared agents are ordinary roles: they receive the same model-resolution chain, the same `agentKey` pattern (`<role>-1`), and the same non-leader `MODEL_UNRESOLVED` skip as local non-leader roles.
 
 ### Setting `defaultTeam`
 

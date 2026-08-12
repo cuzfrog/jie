@@ -12,6 +12,7 @@ export interface TeamBlueprint {
   readonly id: string;
   readonly roles: ReadonlyArray<AgentSoul>;
   readonly leaderRole: string | null;
+  readonly additionalAgentRefs: ReadonlyArray<string>;
 }
 export type TeamBlueprintLocation = "builtin" | "project" | "user" | null;
 

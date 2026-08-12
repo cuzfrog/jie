@@ -8,6 +8,7 @@ import type { AgentBody, AgentBodyParams } from "../core";
 import type { EventEnvelope, EventManager, EventType } from "../event";
 import type { SkillManager } from "../skills";
 import type { KanbanStore, TranscriptStore } from "../storage";
+import { AgentRegistryImpl } from "./agent-registry";
 import { TeamManagerImpl } from "./team-manager";
 import { TeamRegistryImpl } from "./registry";
 
@@ -104,7 +105,8 @@ function makeFakeBody(params: AgentBodyParams, restored: ReadonlyArray<AgentMess
 
 function makeManager(homeJieDir: string, projectJieDir: string | null, resumeSessionId?: string, restored: ReadonlyArray<AgentMessage> = []) {
   const agentBodyFactory = vi.fn((params: AgentBodyParams): AgentBody => makeFakeBody(params, restored));
-  const teamRegistry = new TeamRegistryImpl(homeJieDir, projectJieDir);
+  const agentRegistry = new AgentRegistryImpl(homeJieDir, projectJieDir);
+  const teamRegistry = new TeamRegistryImpl(homeJieDir, projectJieDir, agentRegistry);
   const manager = new TeamManagerImpl(teamRegistry, eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, agentBodyFactory, resumeSessionId);
   return { manager, agentBodyFactory };
 }
@@ -125,6 +127,12 @@ function writeTeam(rootDir: string, id: string, leader: string, extras: Readonly
   for (const role of extras) {
     writeFileSync(join(teamDir, `${role}.md`), `---\ntools:\n  - bash\n---\n${role}`);
   }
+}
+
+function writeAgent(jieDir: string, id: string, content: string): void {
+  const agentsDir = join(jieDir, "agents");
+  mkdirSync(agentsDir, { recursive: true });
+  writeFileSync(join(agentsDir, `${id}.md`), content, "utf-8");
 }
 
 function assistantMessage(text: string, timestamp: number): AgentMessage {
@@ -236,7 +244,7 @@ describe("TeamManagerImpl — full surface", () => {
         compact: async () => {},
         stop: vi.fn(),
       }));
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       await expect(manager.load("default-solo")).rejects.toThrow("start failure");
       expect(teamLoadedEvents()).toHaveLength(0);
       expect(manager.listLoaded().size).toBe(0);
@@ -258,7 +266,7 @@ describe("TeamManagerImpl — full surface", () => {
         compact: async () => {},
         stop: () => {},
       }));
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       await expect(manager.load("dev")).rejects.toMatchObject({ code: "MODEL_UNRESOLVED" });
       expect(started).toEqual([]);
       expect(manager.listLoaded().size).toBe(0);
@@ -378,7 +386,7 @@ describe("TeamManagerImpl — full surface", () => {
         compact: async () => {},
         stop: () => {},
       });
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       const first = await manager.load("default-solo");
       expect(first.history[0]?.messages).toEqual([]);
       live.push({ role: "user", content: "[user]: hello", timestamp: 1 }, assistantMessage("hi there", 2));
@@ -475,7 +483,7 @@ describe("TeamManagerImpl — full surface", () => {
           stop: () => { stops.push(`gen${created}:${params.agentKey}`); },
         };
       });
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       await manager.load("default-solo");
       generation = 1;
       await manager.reload();
@@ -506,7 +514,7 @@ describe("TeamManagerImpl — full surface", () => {
         compact: async () => {},
         stop: () => { stops.push(params.agentKey); },
       }));
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       await manager.load("alpha");
       writeFileSync(join(userTeams, "alpha", "TEAM.md"), "leader: [unclosed");
       await expect(manager.reload()).rejects.toMatchObject({ code: "RELOAD_FAILED" });
@@ -528,7 +536,7 @@ describe("TeamManagerImpl — full surface", () => {
           stop: () => { stops.push(`gen${created}:${params.agentKey}`); },
         };
       });
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       await manager.load("default-solo");
       generation = 1;
       eventManager.publish.mockClear();
@@ -548,7 +556,7 @@ describe("TeamManagerImpl — full surface", () => {
         compact: async () => {},
         stop: () => { stops.push(params.agentKey); },
       }));
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       await manager.load("default-solo");
       modelRegistry.resolve.mockReturnValue(undefined);
       await expect(manager.reload()).rejects.toMatchObject({ code: "RELOAD_FAILED" });
@@ -572,7 +580,7 @@ describe("TeamManagerImpl — full surface", () => {
           stop: () => {},
         };
       });
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       await manager.load("alpha");
       await manager.load("beta");
       created.length = 0;
@@ -634,6 +642,17 @@ describe("TeamManagerImpl — full surface", () => {
     test("agentCount is one for the builtin default-solo team", () => {
       const { manager } = makeManager(homeJieDir, null);
       expect(manager.agentCount("default-solo")).toBe(1);
+    });
+
+    test("agentCount includes shared agents from additional-agents", () => {
+      const userTeams = join(homeJieDir, "teams");
+      const teamDir = join(userTeams, "alpha");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: general\nadditional-agents:\n  - explorer\n---\n");
+      writeFileSync(join(teamDir, "general.md"), "---\ntools:\n  - bash\n---\n");
+      writeAgent(homeJieDir, "explorer", "---\ntools:\n  - bash\n---\n");
+      const { manager } = makeManager(homeJieDir, null);
+      expect(manager.agentCount("alpha")).toBe(2);
     });
   });
 

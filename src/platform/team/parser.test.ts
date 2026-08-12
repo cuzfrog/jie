@@ -5,6 +5,7 @@ import {
   isValidTeamId,
   loadDefaultSoloTeam,
   loadTeamFromDir,
+  parseAgentManifest,
   parseTeamFromManifests,
 } from "./parser";
 import type { JiePlatformErrorCode } from "../jie-platform-errors";
@@ -304,7 +305,7 @@ describe("loadTeamFromDir — typed error codes", () => {
 });
 
 describe("loadTeamFromDir — shipped default-dev-team blueprint", () => {
-  const defaultCodersDir = join(import.meta.dir, "../../teams/default-dev-team");
+  const defaultCodersDir = join(import.meta.dir, "../../manifest/teams/default-dev-team");
 
   test("parses the shipped default-dev-team with manager as leader and six roles", () => {
     const blueprint = loadTeamFromDir(defaultCodersDir);
@@ -323,5 +324,100 @@ describe("loadTeamFromDir — shipped default-dev-team blueprint", () => {
     const blueprint = loadTeamFromDir(defaultCodersDir);
     const manager = blueprint.roles.find((r) => r.role === "manager");
     expect(manager?.tools.some((spec) => spec.startsWith("notify("))).toBe(true);
+  });
+
+  test("default-dev-team carries no additional-agent refs", () => {
+    const blueprint = loadTeamFromDir(defaultCodersDir);
+    expect(blueprint.additionalAgentRefs).toEqual([]);
+  });
+});
+
+describe("parseAgentManifest", () => {
+  test("parses a shared-agent markdown into an AgentSoul", () => {
+    const content = "---\ntools:\n  - bash\n  - read_file(**)\n---\nYou explore.";
+    const soul = parseAgentManifest("explorer", content, "explorer.md");
+    expect(soul.role).toBe("explorer");
+    expect(soul.tools).toEqual(["bash", "read_file(**)"]);
+    expect(soul.systemPrompt).toBe("You explore.");
+    expect(soul.model).toBe("");
+    expect(soul.subscribe).toEqual([]);
+    expect(soul.skills).toEqual([]);
+    expect(soul.targetContextWindowSize).toBeUndefined();
+  });
+
+  test("rejects a shared agent with missing frontmatter", () => {
+    expect(() => parseAgentManifest("steward", "no frontmatter", "steward.md")).toThrow(
+      expect.objectContaining({ code: "INVALID_FRONTMATTER" }),
+    );
+  });
+});
+
+describe("parseTeamFromManifests — additional-agents", () => {
+  test("parses additional-agents into additionalAgentRefs", () => {
+    const blueprint = parseTeamFromManifests(
+      {
+        "TEAM.md": "---\nleader: manager\nadditional-agents:\n  - explorer\n  - steward\n---\n",
+        "manager.md": "---\ntools:\n  - bash\n---\n",
+      },
+      { teamId: "dev" },
+    );
+    expect(blueprint.leaderRole).toBe("manager");
+    expect(blueprint.additionalAgentRefs).toEqual(["explorer", "steward"]);
+  });
+
+  test("rejects non-list additional-agents", () => {
+    expect(() => parseTeamFromManifests(
+      { "TEAM.md": "---\nadditional-agents: explorer\n---\n", "manager.md": "---\ntools:\n  - bash\n---\n" },
+      { teamId: "dev" },
+    )).toThrow(expect.objectContaining({ code: "INVALID_FIELD_TYPE" }));
+  });
+
+  test("rejects an invalid ref name", () => {
+    expect(() => parseTeamFromManifests(
+      { "TEAM.md": "---\nadditional-agents:\n  - bad id\n---\n", "manager.md": "---\ntools:\n  - bash\n---\n" },
+      { teamId: "dev" },
+    )).toThrow(expect.objectContaining({ code: "INVALID_AGENT_REF" }));
+  });
+
+  test("rejects a ref that collides with a local role", () => {
+    expect(() => parseTeamFromManifests(
+      {
+        "TEAM.md": "---\nleader: manager\nadditional-agents:\n  - manager\n---\n",
+        "manager.md": "---\ntools:\n  - bash\n---\n",
+      },
+      { teamId: "dev" },
+    )).toThrow(expect.objectContaining({ code: "DUPLICATE_ROLE" }));
+  });
+
+  test("rejects a duplicate ref within the list", () => {
+    expect(() => parseTeamFromManifests(
+      {
+        "TEAM.md": "---\nleader: manager\nadditional-agents:\n  - explorer\n  - explorer\n---\n",
+        "manager.md": "---\ntools:\n  - bash\n---\n",
+      },
+      { teamId: "dev" },
+    )).toThrow(expect.objectContaining({ code: "DUPLICATE_AGENT_REF" }));
+  });
+
+  test("rejects a leader that names a shared agent ref", () => {
+    expect(() => parseTeamFromManifests(
+      {
+        "TEAM.md": "---\nleader: explorer\nadditional-agents:\n  - explorer\n---\n",
+        "manager.md": "---\ntools:\n  - bash\n---\n",
+      },
+      { teamId: "dev" },
+    )).toThrow(expect.objectContaining({ code: "LEADER_UNKNOWN" }));
+  });
+
+  test("single local role plus additional-agents auto-leads", () => {
+    const blueprint = parseTeamFromManifests(
+      {
+        "TEAM.md": "---\nadditional-agents:\n  - explorer\n---\n",
+        "manager.md": "---\ntools:\n  - bash\n---\n",
+      },
+      { teamId: "dev" },
+    );
+    expect(blueprint.leaderRole).toBe("manager");
+    expect(blueprint.additionalAgentRefs).toEqual(["explorer"]);
   });
 });

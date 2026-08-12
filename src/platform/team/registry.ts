@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { isValidTeamId, loadDefaultSoloTeam, loadTeamFromDir } from "./parser";
 import { JiePlatformError } from "../jie-platform-errors";
 import { BUILTIN_DEFAULT_SOLO_TEAM_ID, type TeamBlueprint, type TeamBlueprintLocation } from "./types";
+import type { AgentRegistry } from "./agent-registry";
 
 export interface TeamRegistry {
   parseTeamManifest(teamId?: string): TeamBlueprint;
@@ -16,6 +17,7 @@ export class TeamRegistryImpl implements TeamRegistry {
   constructor(
     homeJieDir: string,
     private readonly projectJieDir: string | null,
+    private readonly agentRegistry: AgentRegistry,
   ) {
     this.userTeamsDir = join(homeJieDir, "teams");
   }
@@ -78,6 +80,23 @@ export class TeamRegistryImpl implements TeamRegistry {
 
   private parseFromDir(dir: string): TeamBlueprint {
     const blueprint = loadTeamFromDir(dir);
-    return blueprint.roles.length === 0 ? loadDefaultSoloTeam() : blueprint;
+    if (blueprint.roles.length === 0 && blueprint.additionalAgentRefs.length === 0) {
+      return loadDefaultSoloTeam();
+    }
+    if (blueprint.additionalAgentRefs.length === 0) return blueprint;
+    const sharedSouls = blueprint.additionalAgentRefs.map((ref) => {
+      try {
+        return this.agentRegistry.resolve(ref);
+      } catch (error) {
+        if (error instanceof JiePlatformError && error.code === "AGENT_NOT_FOUND") {
+          throw new JiePlatformError("AGENT_NOT_FOUND", {
+            detail: `team '${blueprint.id}' references missing shared agent '${ref}'`,
+          });
+        }
+        throw error;
+      }
+    });
+    const merged = [...blueprint.roles, ...sharedSouls].sort((a, b) => a.role.localeCompare(b.role));
+    return { ...blueprint, roles: merged };
   }
 }

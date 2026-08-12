@@ -1,6 +1,5 @@
-import { join } from "node:path";
 import { JiePlatformError, type JiePlatform, type TeamBlueprintLocation } from "../../platform";
-import { createTeamInstaller, type TeamProvenance } from "../../teams-installer";
+import { createManifestInstaller, type ManifestProvenance } from "../../manifest/installer";
 import { type Console } from "../../utils";
 import type { ParsedArgsMap } from "../cli-flags";
 
@@ -71,7 +70,7 @@ async function runTeamList(
   console: Console,
 ): Promise<number> {
   const info = await platform.execute({ name: "getTeamInfo" });
-  const installer = createTeamInstaller();
+  const installer = createManifestInstaller();
   const width = info.installed.length === 0 ? 0 : Math.max(...info.installed.map((team) => team.id.length));
   console.print("Teams:");
   for (const team of info.installed) {
@@ -85,31 +84,31 @@ async function runTeamList(
 }
 
 function readProvenanceForLocation(
-  installer: ReturnType<typeof createTeamInstaller>,
+  installer: ReturnType<typeof createManifestInstaller>,
   teamId: string,
   location: TeamBlueprintLocation,
   homeJieDir: string,
   projectJieDir: string | null,
-): TeamProvenance | null {
-  const teamsDir = teamsDirForLocation(location, homeJieDir, projectJieDir);
-  return teamsDir === null ? null : installer.readProvenance(teamId, teamsDir);
+): ManifestProvenance | null {
+  const jieDir = jieDirForLocation(location, homeJieDir, projectJieDir);
+  return jieDir === null ? null : installer.readProvenance(teamId, jieDir);
 }
 
-function teamsDirForLocation(
+function jieDirForLocation(
   location: TeamBlueprintLocation,
   homeJieDir: string,
   projectJieDir: string | null,
 ): string | null {
   switch (location) {
     case "project":
-      return projectJieDir === null ? null : join(projectJieDir, "teams");
+      return projectJieDir;
     case "user":
-      return join(homeJieDir, "teams");
+      return homeJieDir;
     default:
       return null;
   }
 }
 
-function formatProvenance(provenance: TeamProvenance): string {
+function formatProvenance(provenance: ManifestProvenance): string {
   return `(${provenance.source.kind}: ${provenance.spec})`;
 }

@@ -187,7 +187,7 @@ describe("runTeamInstall", () => {
 
     expect(code).toBe(0);
     expect(consoleMock.print).toHaveBeenCalledWith("installed team: dev");
-    expect(consoleMock.print).toHaveBeenCalledWith(`location: ${join(homeJie, "teams")}`);
+    expect(consoleMock.print).toHaveBeenCalledWith(`location: ${homeJie}`);
   });
 
   test("add --project errors when no project .jie directory is found", async () => {
@@ -224,6 +224,6 @@ describe("runTeamInstall", () => {
     );
 
     expect(code).toBe(0);
-    expect(consoleMock.print).toHaveBeenCalledWith(`removed team 'dev' from ${join(homeJie, "teams")}`);
+    expect(consoleMock.print).toHaveBeenCalledWith(`removed team 'dev' from ${homeJie}`);
   });
 });

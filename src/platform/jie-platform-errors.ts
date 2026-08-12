@@ -45,6 +45,8 @@ const JiePlatformErrorMessages = {
   TEAM_NOT_FOUND: "Team not found",
   INVALID_ROLE: "Invalid role",
   DUPLICATE_ROLE: "Duplicate role in team",
+  INVALID_AGENT_REF: "Invalid additional-agent reference",
+  DUPLICATE_AGENT_REF: "Duplicate additional-agent reference",
   INVALID_FRONTMATTER: "Invalid YAML frontmatter",
   INVALID_FIELD_TYPE: "Field type mismatch",
   MISSING_REQUIRED_FIELD: "Required field missing",

@@ -1,15 +1,15 @@
-import { parseNpmSpec, parseTeamSource } from "./source";
+import { parseNpmSpec, parseManifestSource } from "./source";
 
-describe("parseTeamSource", () => {
+describe("parseManifestSource", () => {
   test("file: relative, absolute, and home paths", () => {
-    expect(parseTeamSource("./teams/dev")).toEqual({ kind: "file", path: "./teams/dev" });
-    expect(parseTeamSource("../teams/dev")).toEqual({ kind: "file", path: "../teams/dev" });
-    expect(parseTeamSource("/abs/team")).toEqual({ kind: "file", path: "/abs/team" });
-    expect(parseTeamSource("~/teams/dev")).toEqual({ kind: "file", path: "~/teams/dev" });
+    expect(parseManifestSource("./teams/dev")).toEqual({ kind: "file", path: "./teams/dev" });
+    expect(parseManifestSource("../teams/dev")).toEqual({ kind: "file", path: "../teams/dev" });
+    expect(parseManifestSource("/abs/team")).toEqual({ kind: "file", path: "/abs/team" });
+    expect(parseManifestSource("~/teams/dev")).toEqual({ kind: "file", path: "~/teams/dev" });
   });
 
   test("git: github shorthand is normalized to an https url", () => {
-    expect(parseTeamSource("github:owner/repo")).toEqual({
+    expect(parseManifestSource("github:owner/repo")).toEqual({
       kind: "git",
       url: "https://github.com/owner/repo.git",
       ref: undefined,
@@ -17,7 +17,7 @@ describe("parseTeamSource", () => {
   });
 
   test("git: github shorthand with a ref", () => {
-    expect(parseTeamSource("github:owner/repo#v1.2.3")).toEqual({
+    expect(parseManifestSource("github:owner/repo#v1.2.3")).toEqual({
       kind: "git",
       url: "https://github.com/owner/repo.git",
       ref: "v1.2.3",
@@ -25,12 +25,12 @@ describe("parseTeamSource", () => {
   });
 
   test("git: https url keeps its location, splits a trailing ref", () => {
-    expect(parseTeamSource("https://example.com/repo.git")).toEqual({
+    expect(parseManifestSource("https://example.com/repo.git")).toEqual({
       kind: "git",
       url: "https://example.com/repo.git",
       ref: undefined,
     });
-    expect(parseTeamSource("https://example.com/repo#main")).toEqual({
+    expect(parseManifestSource("https://example.com/repo#main")).toEqual({
       kind: "git",
       url: "https://example.com/repo",
       ref: "main",
@@ -38,18 +38,18 @@ describe("parseTeamSource", () => {
   });
 
   test("npm: scoped and unscoped packages, with optional version", () => {
-    expect(parseTeamSource("@cuzfrog/jie-team")).toEqual({ kind: "npm", spec: "@cuzfrog/jie-team" });
-    expect(parseTeamSource("@cuzfrog/jie-team@0.9.0")).toEqual({ kind: "npm", spec: "@cuzfrog/jie-team@0.9.0" });
-    expect(parseTeamSource("some-team")).toEqual({ kind: "npm", spec: "some-team" });
+    expect(parseManifestSource("@cuzfrog/jie-team")).toEqual({ kind: "npm", spec: "@cuzfrog/jie-team" });
+    expect(parseManifestSource("@cuzfrog/jie-team@0.9.0")).toEqual({ kind: "npm", spec: "@cuzfrog/jie-team@0.9.0" });
+    expect(parseManifestSource("some-team")).toEqual({ kind: "npm", spec: "some-team" });
   });
 
   test("trims surrounding whitespace", () => {
-    expect(parseTeamSource("  @cuzfrog/jie-team  ")).toEqual({ kind: "npm", spec: "@cuzfrog/jie-team" });
+    expect(parseManifestSource("  @cuzfrog/jie-team  ")).toEqual({ kind: "npm", spec: "@cuzfrog/jie-team" });
   });
 
   test("rejects an empty spec", () => {
-    expect(() => parseTeamSource("")).toThrow("empty team source");
-    expect(() => parseTeamSource("   ")).toThrow("empty team source");
+    expect(() => parseManifestSource("")).toThrow("empty manifest source");
+    expect(() => parseManifestSource("   ")).toThrow("empty manifest source");
   });
 });
 
