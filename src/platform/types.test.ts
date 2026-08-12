@@ -1,4 +1,4 @@
-import { EFFORT_LEVELS, isEffortLevel, parseModelRef } from "./types";
+import { EFFORT_LEVELS, isEffortLevel, isModelAlias, MODEL_ALIASES, parseModelRef } from "./types";
 
 describe("isEffortLevel", () => {
   test("accepts valid effort levels", () => {
@@ -30,5 +30,22 @@ describe("parseModelRef", () => {
 
   test("rejects an empty modelId", () => {
     expect(parseModelRef("anthropic/")).toBeNull();
+  });
+});
+
+describe("isModelAlias", () => {
+  test("accepts the three alias names", () => {
+    for (const alias of MODEL_ALIASES) {
+      expect(isModelAlias(alias)).toBe(true);
+    }
+  });
+
+  test("rejects other strings and non-strings", () => {
+    expect(isModelAlias("huge")).toBe(false);
+    expect(isModelAlias("large")).toBe(true);
+    expect(isModelAlias("anthropic/claude-sonnet-4")).toBe(false);
+    expect(isModelAlias(null)).toBe(false);
+    expect(isModelAlias(undefined)).toBe(false);
+    expect(isModelAlias(1)).toBe(false);
   });
 });

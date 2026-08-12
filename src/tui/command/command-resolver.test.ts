@@ -119,6 +119,30 @@ describe("CommandResolverImpl", () => {
     expect(result.kind).toBe("error");
   });
 
+  test("/model-alias with no args queries the platform", async () => {
+    const resolver = makeResolver(makeFakePlatform(async (command) => {
+      if (command.name === "getModelAliases") return [{ alias: "large", modelRef: "anthropic/claude-sonnet-4-5" }];
+      if (command.name === "getDefaultModel") return { provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null };
+      return null;
+    }));
+    const result = await resolver.resolve(makeTuiState(), "model-alias", []);
+    expect(result).toEqual({
+      kind: "reply",
+      text: "model aliases: large=anthropic/claude-sonnet-4-5; default: anthropic/claude-sonnet-4-5",
+    });
+  });
+
+  test("/model-alias builds the setModelAlias command", () => {
+    const resolver = makeResolver(makeFakePlatform());
+    const result = resolver.resolve(makeTuiState(), "model-alias", ["large", "anthropic/claude-sonnet-4-5"]);
+    expect(result).toEqual({
+      kind: "platform",
+      slashName: "model-alias",
+      command: { name: "setModelAlias", alias: "large", provider: "anthropic", id: "claude-sonnet-4-5" },
+      transient: "model alias 'large' set to anthropic/claude-sonnet-4-5",
+    });
+  });
+
   test("/team requires a team id", () => {
     const resolver = makeResolver(makeFakePlatform());
     expect(resolver.resolve(makeTuiState(), "team", [])).toEqual({ kind: "error", text: "/team <teamId>" });

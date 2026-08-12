@@ -23,6 +23,7 @@ const settingsStore = vi.mocked<SettingsStore>({
   setDefaultTeam: vi.fn(),
   setModelFilters: vi.fn(),
   setNotificationSoundEnabled: vi.fn(),
+  setModelAlias: vi.fn(),
 });
 
 const modelRegistry = vi.mocked<ModelRegistry>({
@@ -283,6 +284,27 @@ describe("TeamManagerImpl — full surface", () => {
       await expect(manager.load("default-solo")).rejects.toMatchObject({ code: "NO_MODEL_ERROR" });
       expect(agentBodyFactory).not.toHaveBeenCalled();
       expect(manager.listLoaded().size).toBe(0);
+    });
+
+    test("resolves a configured model alias", async () => {
+      settingsStore.load.mockReturnValue({ modelAliases: { large: "openai/gpt-4o" } });
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: large\ntools:\n  - bash\n---\nlead");
+      const { manager } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(modelRegistry.resolve).toHaveBeenCalledWith("openai", "gpt-4o");
+    });
+
+    test("falls back to the default model when an alias is not configured", async () => {
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: large\ntools:\n  - bash\n---\nlead");
+      const { manager } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(modelRegistry.resolve).toHaveBeenCalledWith("anthropic", "claude-sonnet-4-5");
     });
 
     test("skips a non-leader role whose pinned model does not resolve and loads the leader", async () => {

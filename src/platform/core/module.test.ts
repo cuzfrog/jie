@@ -78,6 +78,7 @@ const settingsStore = vi.mocked<SettingsStore>({
   setDefaultTeam: vi.fn(),
   setModelFilters: vi.fn(),
   setNotificationSoundEnabled: vi.fn(),
+  setModelAlias: vi.fn(),
 });
 
 const llmService = vi.mocked<LlmService>({ complete: vi.fn(async () => "") });

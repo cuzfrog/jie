@@ -1,7 +1,7 @@
 import type { GitSnapshot } from "../services";
 import type { SessionSummary } from "../storage";
-import type { EffortLevel, KanbanCard, KanbanStatus, ModelInfo, TeamInfo } from "../types";
-import type { TeamBlueprintLocation } from "../team/types";
+import type { EffortLevel, KanbanCard, KanbanStatus, ModelAlias, ModelInfo, TeamInfo } from "../types";
+import type { TeamBlueprintLocation } from "../team";
 
 interface CommandDef<A, R = null> {
   args: A;
@@ -25,7 +25,9 @@ interface CommandTypeMap {
   logout: CommandDef<{ provider: string }, null>;
   setApiKey: CommandDef<{ apiKey: string }, null>;
   setDefaultModel: CommandDef<{ provider: string; id: string }, null>;
+  setModelAlias: CommandDef<{ alias: ModelAlias; provider: string; id: string }, null>;
   getDefaultModel: CommandDef<{}, ModelInfo | null>;
+  getModelAliases: CommandDef<{}, ReadonlyArray<{ readonly alias: ModelAlias; readonly modelRef: string }>>;
   setDefaultEffort: CommandDef<{ effort: EffortLevel }, null>;
   getDefaultEffort: CommandDef<{}, EffortLevel>;
   listModels: CommandDef<{}, ReadonlyArray<ModelListRow>>;

@@ -6,6 +6,7 @@ import { HelpCommand } from "./help-command";
 import { KanbanCommand } from "./kanban-command";
 import { LoginCommand } from "./login-command";
 import { LogoutCommand } from "./logout-command";
+import { ModelAliasCommand } from "./model-alias-command";
 import { ModelCommand } from "./model-command";
 import { ModelFilterCommand } from "./model-filter-command";
 import { NotificationCommand } from "./notification-command";
@@ -21,6 +22,7 @@ export const SLASH_COMMANDS: ReadonlyArray<SlashCommandDefinition> = [
   new ExitCommand(),
   new LoginCommand(),
   new LogoutCommand(),
+  new ModelAliasCommand(),
   new ModelCommand(),
   new ModelFilterCommand(),
   new EffortCommand(),

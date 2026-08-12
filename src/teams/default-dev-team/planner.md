@@ -1,4 +1,5 @@
 ---
+model: large
 tools:
   - notify(task.planned, task.failed)
   - read_file

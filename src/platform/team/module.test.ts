@@ -23,6 +23,7 @@ const settingsStore = vi.mocked<SettingsStore>({
   setDefaultTeam: vi.fn(),
   setModelFilters: vi.fn(),
   setNotificationSoundEnabled: vi.fn(),
+  setModelAlias: vi.fn(),
 });
 
 const modelRegistry = vi.mocked<ModelRegistry>({

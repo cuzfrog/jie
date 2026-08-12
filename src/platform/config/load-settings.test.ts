@@ -231,6 +231,22 @@ describe("loadMergedSettings", () => {
     });
   });
 
+  test("accepts valid modelAliases", () => {
+    const home = track(freshDir("jie-home-"));
+    writeJson(join(home, "settings.json"), { modelAliases: { large: "anthropic/claude-sonnet-4", medium: "openai/gpt-4o" } });
+    const result = loadMergedSettings(home, null);
+    expect(result.modelAliases).toEqual({ large: "anthropic/claude-sonnet-4", medium: "openai/gpt-4o" });
+  });
+
+  test("project modelAliases override individual global aliases", () => {
+    const home = track(freshDir("jie-home-"));
+    const project = track(freshDir("jie-project-"));
+    writeJson(join(home, "settings.json"), { modelAliases: { large: "anthropic/claude-sonnet-4", small: "openai/gpt-4o-mini" } });
+    writeJson(join(project, "settings.json"), { modelAliases: { large: "openai/gpt-4o" } });
+    const result = loadMergedSettings(home, project);
+    expect(result.modelAliases).toEqual({ large: "openai/gpt-4o", small: "openai/gpt-4o-mini" });
+  });
+
   test("rejects an unparseable settings file with code INVALID_CONFIG naming the file", () => {
     const home = track(freshDir("jie-home-"));
     writeFileSync(join(home, "settings.json"), "{ not json", "utf-8");
@@ -371,6 +387,36 @@ describe("loadMergedSettings", () => {
       field: "modelFilters",
       value: [42],
       match: /modelFilters must be an array of non-empty strings/,
+    },
+    {
+      name: "non-object modelAliases",
+      field: "modelAliases",
+      value: "large",
+      match: /modelAliases must be an object/,
+    },
+    {
+      name: "array modelAliases",
+      field: "modelAliases",
+      value: [],
+      match: /modelAliases must be an object/,
+    },
+    {
+      name: "unknown model alias key",
+      field: "modelAliases",
+      value: { huge: "anthropic/claude-sonnet-4" },
+      match: /unknown model alias 'huge'/,
+    },
+    {
+      name: "modelAliases value missing a slash",
+      field: "modelAliases",
+      value: { large: "claude" },
+      match: /modelAliases\.large must be a <provider>\/<modelId> string/,
+    },
+    {
+      name: "non-string modelAliases value",
+      field: "modelAliases",
+      value: { large: 42 },
+      match: /modelAliases\.large must be a <provider>\/<modelId> string/,
     },
     {
       name: "non-object compaction",

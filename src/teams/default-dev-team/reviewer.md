@@ -1,4 +1,5 @@
 ---
+model: medium
 tools:
   - notify(task.review_passed, task.review_failed)
   - bash

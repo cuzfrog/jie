@@ -1,4 +1,5 @@
 ---
+model: medium
 tools:
   - notify(task.researched)
   - read_artifact

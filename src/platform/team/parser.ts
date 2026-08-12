@@ -3,6 +3,7 @@ import { basename, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { BUILTIN_DEFAULT_SOLO_TEAM_ID, type AgentSoul, type TeamBlueprint } from "./types";
 import { JiePlatformError } from "../jie-platform-errors";
+import { isModelAlias, MODEL_ALIASES, parseModelRef } from "../types";
 import DEFAULT_SOLO_TEAM_MD from "./default-solo/TEAM.md" with { type: "text" };
 import DEFAULT_SOLO_GENERAL_MD from "./default-solo/general.md" with { type: "text" };
 
@@ -253,8 +254,8 @@ function parseAgentFile(
 
   const model = frontmatter.model === undefined ? "" : asString(frontmatter.model, "model", file);
 
-  if (model !== "" && !model.includes("/")) {
-    throw new JiePlatformError("INVALID_MODEL_STRING", { detail: `invalid model string: ${model}` });
+  if (model !== "" && parseModelRef(model) === null && !isModelAlias(model)) {
+    throw new JiePlatformError("INVALID_MODEL_STRING", { detail: `invalid model string: ${model} (expected <provider>/<modelId> or one of: ${MODEL_ALIASES.join(", ")})` });
   }
 
   const skills = frontmatter.skills === undefined ? [] : asStringList(frontmatter.skills, "skills", file);

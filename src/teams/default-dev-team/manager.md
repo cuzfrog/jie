@@ -1,4 +1,5 @@
 ---
+model: small
 tools:
   - notify(task.recorded, task.done)
   - read_artifact

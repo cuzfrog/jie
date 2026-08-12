@@ -122,6 +122,15 @@ describe("loadTeamFromDir", () => {
     expect(bp.roles[0]?.model).toBe("anthropic/claude-sonnet-4");
   });
 
+  test("agent with a valid model alias is parsed", () => {
+    writeFileSync(
+      join(dir, "general.md"),
+      `---\nmodel: large\ntools:\n  - bash\n---\nbody`,
+    );
+    const bp = loadTeamFromDir(dir);
+    expect(bp.roles[0]?.model).toBe("large");
+  });
+
   test("system_prompt is the verbatim prose body after the closing frontmatter", () => {
     writeFileSync(
       join(dir, "general.md"),
@@ -241,6 +250,12 @@ describe("loadTeamFromDir — typed error codes", () => {
     {
       name: "invalid_model_string (no slash)",
       setup: () => setupFiles({ "general.md": "---\ntools:\n  - bash\nmodel: no-slash\n---\n" }),
+      act: () => loadTeamFromDir(dir),
+      code: "INVALID_MODEL_STRING",
+    },
+    {
+      name: "invalid_model_alias",
+      setup: () => setupFiles({ "general.md": "---\ntools:\n  - bash\nmodel: huge\n---\n" }),
       act: () => loadTeamFromDir(dir),
       code: "INVALID_MODEL_STRING",
     },

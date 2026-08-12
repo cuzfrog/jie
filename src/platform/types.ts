@@ -15,6 +15,14 @@ export function isEffortLevel(value: unknown): value is EffortLevel {
     return typeof value === "string" && EFFORT_LEVELS.some((level) => level === value);
 }
 
+export const MODEL_ALIASES = ["large", "medium", "small"] as const;
+
+export type ModelAlias = (typeof MODEL_ALIASES)[number];
+
+export function isModelAlias(value: unknown): value is ModelAlias {
+    return typeof value === "string" && MODEL_ALIASES.some((alias) => alias === value);
+}
+
 export function parseModelRef(value: string): { readonly provider: string; readonly modelId: string } | null {
     const slash = value.indexOf("/");
     if (slash === -1) return null;

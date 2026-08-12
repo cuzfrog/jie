@@ -1,4 +1,5 @@
 ---
+model: large
 tools:
   - notify(task.designed)
   - read_file(**/MODULE.md)

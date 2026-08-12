@@ -1,4 +1,5 @@
 ---
+model: large
 tools:
   - notify(task.implemented, task.failed)
   - bash
