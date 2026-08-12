@@ -2,7 +2,6 @@
 tools:
   - notify(task.recorded, task.done)
   - read_artifact
-  - write_kanban
 subscribe:
   - task.review_passed
   - task.failed
