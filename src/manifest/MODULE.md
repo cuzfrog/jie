@@ -1,6 +1,2 @@
----
-no-new-exports: []
----
-
 ## manifest
 Runtime-agnostic manifest content for Jie. `teams/` holds team blueprint directories (`<id>/TEAM.md` + `<role>.md`); `agents/` holds shared single-agent manifests (`<id>.md`) that any team may reference via `additional-agents:`; `installer/` is the CLI-side manifest installer that copies both into `.jie/` or `~/.jie/`. The platform reads installed copies from `.jie/teams/` and `.jie/agents/` and never imports this module directly.

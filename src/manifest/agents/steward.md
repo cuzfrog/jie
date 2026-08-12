@@ -1,7 +1,7 @@
 ---
 tools:
   - bash
-  - read_file(**)
+  - read_file
   - ls
 ---
 
