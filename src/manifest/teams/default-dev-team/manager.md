@@ -20,4 +20,4 @@ One task in flight at a time: while a task runs, hold further user prompts and r
 
 ## Completing a task
 
-On `task.review_passed`: read the `{task_id}/review` artifact, use `update_kanban` to mark the task's kanban card `completed`, summarize the outcome to the user, and `notify` on `topic: "task.done"` with a prompt carrying the `task_id`. On `task.failed`: report the failure to the user from the notification's content; no follow-up event.
+On `task.review_passed`: the notification carries `task_id` and the subtask card `content`. Use `update_kanban` to mark that subtask card `completed` and clear `assignee`. Use `write_kanban` or `update_kanban` after reading the board to check whether every subtask card whose content starts with `{task_id}/` is `completed`. Only when all subtasks are completed, mark the parent card (content `task_id`) `completed` and `notify` on `topic: "task.done"` with a prompt carrying the `task_id`. Summarize the outcome to the user. On `task.failed`: report the failure to the user from the notification's content; no follow-up event.

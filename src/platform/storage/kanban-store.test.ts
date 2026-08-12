@@ -350,4 +350,49 @@ describe("SqliteKanbanStore", () => {
     const card = store.load("t2", "")[0];
     expect(card?.todos).toEqual([{ text: "one", done: true }]);
   });
+
+  test("replace and update store and clear assignee", () => {
+    const store = makeStore();
+    const cards = store.replace("t1", "s1", [{ content: "first", status: "pending", assignee: "agent-1" }]);
+    expect(cards[0]?.assignee).toBe("agent-1");
+    const updated = store.update("t1", "s1", "first", { assignee: "" });
+    expect(updated?.assignee).toBeUndefined();
+    expect(store.load("t1", "s1")[0]?.assignee).toBeUndefined();
+  });
+
+  test("claim assigns an unassigned pending card to the agent and moves it to in_progress", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [{ content: "first", status: "pending" }]);
+    const card = store.claim("t1", "s1", "first", "agent-1");
+    expect(card?.assignee).toBe("agent-1");
+    expect(card?.status).toBe("in_progress");
+    expect(store.load("t1", "s1")[0]?.assignee).toBe("agent-1");
+  });
+
+  test("claim fails when the card is assigned to another agent", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [{ content: "first", status: "pending", assignee: "agent-1" }]);
+    expect(store.claim("t1", "s1", "first", "agent-2")).toBeNull();
+    expect(store.load("t1", "s1")[0]?.assignee).toBe("agent-1");
+  });
+
+  test("claim is idempotent for the same agent", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [{ content: "first", status: "pending", assignee: "agent-1" }]);
+    const card = store.claim("t1", "s1", "first", "agent-1");
+    expect(card?.assignee).toBe("agent-1");
+    expect(card?.status).toBe("in_progress");
+  });
+
+  test("claim with expectedStatus rejects a mismatched card", () => {
+    const store = makeStore();
+    store.replace("t1", "s1", [{ content: "first", status: "in_review" }]);
+    expect(store.claim("t1", "s1", "first", "agent-1", "pending")).toBeNull();
+    expect(store.claim("t1", "s1", "first", "agent-1", "in_review")?.assignee).toBe("agent-1");
+  });
+
+  test("claim on a non-existent card returns null", () => {
+    const store = makeStore();
+    expect(store.claim("t1", "s1", "missing", "agent-1")).toBeNull();
+  });
 });

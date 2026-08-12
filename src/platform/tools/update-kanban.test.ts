@@ -1,3 +1,4 @@
+import type { KanbanCard } from "../types";
 import type { KanbanStore } from "../storage";
 import { createKanbanUpdateTool } from "./update-kanban";
 import { makeEmptyContext } from "./_test-context";
@@ -12,6 +13,7 @@ const kanbanStore = vi.mocked<KanbanStore>({
   editDescription: vi.fn(),
   handoff: vi.fn(),
   update: vi.fn(),
+  claim: vi.fn(),
 });
 
 describe("update_kanban", () => {
@@ -70,5 +72,12 @@ describe("update_kanban", () => {
       code: "KANBAN_WRITE_INVALID",
     });
     expect(kanbanStore.update).not.toHaveBeenCalled();
+  });
+
+  test("passes assignee through to the store patch", async () => {
+    const tool = createKanbanUpdateTool({ kanbanStore });
+    kanbanStore.update.mockReturnValue({ id: "#1", content: "build feature", status: "pending" } as KanbanCard);
+    await tool.execute({ content: "build feature", assignee: "implementer-1" }, makeEmptyContext());
+    expect(kanbanStore.update).toHaveBeenCalledWith("test-team", "test-session", "build feature", { assignee: "implementer-1" });
   });
 });

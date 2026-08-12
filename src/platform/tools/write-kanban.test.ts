@@ -13,6 +13,7 @@ const kanbanStore = vi.mocked<KanbanStore>({
   editDescription: vi.fn(),
   handoff: vi.fn(),
   update: vi.fn(),
+  claim: vi.fn(),
 });
 
 function withIds(cards: ReadonlyArray<KanbanCardWrite>): KanbanCard[] {
@@ -45,6 +46,15 @@ describe("write_kanban", () => {
 
   test("accepts an optional external reference", async () => {
     const cards: KanbanCardWrite[] = [{ content: "write tests", status: "in_progress", externalRef: "G#42" }];
+    kanbanStore.replace.mockReturnValue(withIds(cards));
+    const tool = createKanbanWriteTool({ kanbanStore });
+    const result = await tool.execute({ cards }, makeEmptyContext());
+    expect(kanbanStore.replace).toHaveBeenCalledWith("test-team", "test-session", cards);
+    expect(result.details).toEqual({ kind: "kanban", cards: withIds(cards) });
+  });
+
+  test("accepts an optional assignee", async () => {
+    const cards: KanbanCardWrite[] = [{ content: "write tests", status: "in_progress", assignee: "implementer-1" }];
     kanbanStore.replace.mockReturnValue(withIds(cards));
     const tool = createKanbanWriteTool({ kanbanStore });
     const result = await tool.execute({ cards }, makeEmptyContext());

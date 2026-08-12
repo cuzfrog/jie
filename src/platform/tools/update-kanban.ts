@@ -6,8 +6,8 @@ import type { KanbanCardPatch } from "../types";
 
 const KANBAN_UPDATE_DESCRIPTION = `Patch one existing kanban card. Prefer this for any change to a single card;
 do not resend the whole board. The card is identified by its \`content\` string.
-Mutable fields: \`status\`, \`todos\`, \`description\`, \`active_form\`, \`externalRef\`.
-Omitted fields keep their existing values. Empty string \`""\` clears \`description\`, \`active_form\`, or \`externalRef\`.
+Mutable fields: \`status\`, \`todos\`, \`description\`, \`active_form\`, \`externalRef\`, \`assignee\`.
+Omitted fields keep their existing values. Empty string \`""\` clears \`description\`, \`active_form\`, \`externalRef\`, or \`assignee\`.
 \`todos\` is \`[{ text, done? }]\` — providing it replaces the checklist, matching \`text\` inherits prior \`done\`, and \`[]\` clears it.
 To create or remove cards, or to rename the content, use \`write_kanban\` instead.`;
 
@@ -18,6 +18,7 @@ interface KanbanUpdateInput {
   description?: string;
   active_form?: string;
   externalRef?: string;
+  assignee?: string;
 }
 
 export function createKanbanUpdateTool(options: { kanbanStore: KanbanStore }): Tool<KanbanUpdateInput> {
@@ -43,6 +44,7 @@ export function createKanbanUpdateTool(options: { kanbanStore: KanbanStore }): T
       description: Type.Optional(Type.String()),
       active_form: Type.Optional(Type.String()),
       externalRef: Type.Optional(Type.String()),
+      assignee: Type.Optional(Type.String()),
     }),
     async execute(input: KanbanUpdateInput, context): Promise<ToolResult> {
       if (input.content.trim() === "") {
@@ -55,6 +57,7 @@ export function createKanbanUpdateTool(options: { kanbanStore: KanbanStore }): T
         ...(input.description === undefined ? {} : { description: input.description }),
         ...(input.active_form === undefined ? {} : { active_form: input.active_form }),
         ...(input.externalRef === undefined ? {} : { externalRef: input.externalRef }),
+        ...(input.assignee === undefined ? {} : { assignee: input.assignee }),
       };
       const card = kanbanStore.update(context.teamId, context.sessionId, input.content, patch);
       if (card === null) {

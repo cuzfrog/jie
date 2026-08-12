@@ -115,6 +115,7 @@ function makeSoul(overrides: Partial<AgentSoul> = {}): AgentSoul {
     tools: [],
     subscribe: [],
     skills: [],
+    replicas: 1,
     ...overrides,
   };
 }

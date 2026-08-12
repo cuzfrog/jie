@@ -61,6 +61,7 @@ const kanbanStore = vi.mocked<KanbanStore>({
   editDescription: vi.fn(),
   handoff: vi.fn(),
   update: vi.fn(),
+  claim: vi.fn(),
 });
 
 const DEFAULT_SETTINGS: Settings = {
@@ -787,6 +788,46 @@ describe("TeamManagerImpl — full surface", () => {
     test("throws NO_TEAM when no session is loaded for the team", async () => {
       const { manager } = makeManager(homeJieDir, null);
       await expect(manager.compact("default-solo", "general-1")).rejects.toMatchObject({ code: "NO_TEAM" });
+    });
+  });
+
+  describe("replicas", () => {
+    test("expands a role with replica: 2 into two bodies", async () => {
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), `---\nleader: leader\n---\n`);
+      writeFileSync(join(teamDir, "leader.md"), `---\ntools:\n  - bash\n---\nleader`);
+      writeFileSync(join(teamDir, "worker.md"), `---\ntools:\n  - bash\nreplica: 2\n---\nworker`);
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      const team = await manager.load("dev");
+      expect(team.agents).toHaveLength(3);
+      expect(agentBodyFactory).toHaveBeenCalledTimes(3);
+      const keys = agentBodyFactory.mock.calls.map((call) => call[0]!.agentKey).sort();
+      expect(keys).toEqual(["leader-1", "worker-1", "worker-2"]);
+    });
+
+    test("agentCount sums replicas", () => {
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), `---\nleader: leader\n---\n`);
+      writeFileSync(join(teamDir, "leader.md"), `---\ntools:\n  - bash\n---\nleader`);
+      writeFileSync(join(teamDir, "worker.md"), `---\ntools:\n  - bash\nreplica: 3\n---\nworker`);
+      const { manager } = makeManager(homeJieDir, null);
+      expect(manager.agentCount("dev")).toBe(4);
+    });
+
+    test("replicated role shares one soul", async () => {
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), `---\nleader: leader\n---\n`);
+      writeFileSync(join(teamDir, "leader.md"), `---\ntools:\n  - bash\n---\nleader`);
+      writeFileSync(join(teamDir, "worker.md"), `---\ntools:\n  - bash\nreplica: 2\n---\nworker`);
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      const workerCalls = agentBodyFactory.mock.calls.filter((call) => call[0]!.soul.role === "worker");
+      expect(workerCalls).toHaveLength(2);
+      expect(workerCalls[0]![0]!.soul.replicas).toBe(2);
+      expect(workerCalls[1]![0]!.soul.replicas).toBe(2);
     });
   });
 });

@@ -18,6 +18,7 @@ export interface KanbanStore {
   editDescription(teamId: string, sessionId: string, cardId: string, description: string | undefined): KanbanCard | null;
   handoff(teamId: string, sessionId: string, cardId: string, targetTeamId: string): KanbanCard | null;
   update(teamId: string, sessionId: string, content: string, patch: KanbanCardPatch): KanbanCard | null;
+  claim(teamId: string, sessionId: string, content: string, agentKey: string, expectedStatus?: KanbanStatus): KanbanCard | null;
 }
 
 export class SqliteKanbanStore implements KanbanStore {
@@ -126,9 +127,25 @@ export class SqliteKanbanStore implements KanbanStore {
     return this.load(teamId, sessionId).find((c) => c.content === content) ?? card;
   }
 
+  claim(teamId: string, sessionId: string, content: string, agentKey: string, expectedStatus?: KanbanStatus): KanbanCard | null {
+    const existing = this.loadAll(teamId, sessionId);
+    const index = existing.findIndex((card) => card.content === content);
+    if (index === -1) return null;
+    const card = existing[index]!;
+    if (expectedStatus !== undefined && card.status !== expectedStatus) return null;
+    if (card.assignee !== undefined && card.assignee !== "" && card.assignee !== agentKey) return null;
+    const next: KanbanCard = {
+      ...card,
+      assignee: agentKey,
+      ...(card.status === "pending" ? { status: "in_progress" } : {}),
+    };
+    this.persist(teamId, sessionId, existing.map((c, i) => (i === index ? next : c)));
+    return this.load(teamId, sessionId).find((c) => c.content === content) ?? next;
+  }
+
   private loadAll(teamId: string, sessionId: string): KanbanCard[] {
     const rows = this.storage.query(
-      `SELECT session_id, id, content, status, scope, active_form, description, completed_at, external_ref, todos FROM kanban_tasks
+      `SELECT session_id, id, content, status, scope, active_form, description, completed_at, external_ref, assignee, todos FROM kanban_tasks
        WHERE team_id = ? AND (session_id = ? OR session_id = ?)
        ORDER BY CAST(SUBSTR(id, 2) AS INTEGER)`,
       [teamId, TEAM_SESSION, sessionId],
@@ -144,12 +161,13 @@ export class SqliteKanbanStore implements KanbanStore {
         const id = card.id ?? nextCardId(s, teamId);
         const cardSessionId = card.scope === "session" ? (card.sessionId ?? sessionId) : TEAM_SESSION;
         s.exec(
-          `INSERT INTO kanban_tasks (team_id, session_id, seq, id, content, status, scope, active_form, description, completed_at, external_ref, todos, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO kanban_tasks (team_id, session_id, seq, id, content, status, scope, active_form, description, completed_at, external_ref, assignee, todos, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             teamId, cardSessionId, seq, id, card.content, card.status,
             card.scope ?? "team", card.active_form ?? null, card.description ?? null,
-            card.completedAt ?? null, card.externalRef ?? null, todosJson(card.todos),
+            card.completedAt ?? null, card.externalRef ?? null, card.assignee ?? null,
+            todosJson(card.todos),
             new Date().toISOString(),
           ],
         );
@@ -179,6 +197,7 @@ function mergeIncoming(
         ...(write.active_form === undefined ? {} : { active_form: write.active_form }),
         ...(write.description === undefined ? {} : { description: write.description }),
         ...(write.externalRef === undefined ? {} : { externalRef: write.externalRef }),
+        ...(write.assignee === undefined || write.assignee.trim() === "" ? {} : { assignee: write.assignee }),
         ...(todos === undefined ? {} : { todos }),
       };
       return applyStatus(card, write.status);
@@ -190,6 +209,7 @@ function mergeIncoming(
       ...(write.active_form === undefined ? {} : { active_form: write.active_form }),
       ...(write.description === undefined ? {} : { description: write.description }),
       ...(write.externalRef === undefined ? {} : { externalRef: write.externalRef }),
+      ...(write.assignee === undefined ? {} : write.assignee.trim() === "" ? { assignee: undefined } : { assignee: write.assignee }),
       ...(todos === undefined ? {} : { todos }),
     };
     return applyStatus(card, write.status);
@@ -217,6 +237,10 @@ function applyPatch(card: KanbanCard, patch: KanbanCardPatch): KanbanCard {
   if (patch.externalRef !== undefined) {
     const { externalRef: _, ...base } = next;
     next = patch.externalRef.trim() === "" ? { ...base } : { ...base, externalRef: patch.externalRef };
+  }
+  if (patch.assignee !== undefined) {
+    const { assignee: _, ...base } = next;
+    next = patch.assignee.trim() === "" ? { ...base } : { ...base, assignee: patch.assignee };
   }
   if (patch.todos !== undefined) {
     const { todos: _, ...base } = next;
@@ -274,7 +298,7 @@ function retentionCutoff(): string {
 }
 
 function cardFromRow(row: ReadonlyArray<SqlBinding>): KanbanCard {
-  const [sessionId, id, content, status, scope, activeForm, description, completedAt, externalRef, todos] = row;
+  const [sessionId, id, content, status, scope, activeForm, description, completedAt, externalRef, assignee, todos] = row;
   const scopeValue = expectScope(scope);
   return {
     id: expectString(id),
@@ -286,6 +310,7 @@ function cardFromRow(row: ReadonlyArray<SqlBinding>): KanbanCard {
     ...(description === null ? {} : { description: expectString(description) }),
     ...(completedAt === null ? {} : { completedAt: expectString(completedAt) }),
     ...(externalRef === null ? {} : { externalRef: expectString(externalRef) }),
+    ...(assignee === null || assignee === "" ? {} : { assignee: expectString(assignee) }),
     ...(todos === null ? {} : { todos: expectTodos(todos) }),
   };
 }

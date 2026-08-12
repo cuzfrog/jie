@@ -421,3 +421,52 @@ describe("parseTeamFromManifests — additional-agents", () => {
     expect(blueprint.additionalAgentRefs).toEqual(["explorer"]);
   });
 });
+
+describe("replica parsing", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "jie-team-replica-"));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("replica defaults to 1 when omitted", () => {
+    writeFileSync(join(dir, "general.md"), "---\ntools:\n  - bash\n---\nbody");
+    const bp = loadTeamFromDir(dir);
+    expect(bp.roles[0]?.replicas).toBe(1);
+  });
+
+  test("replica: 3 is parsed", () => {
+    writeFileSync(join(dir, "TEAM.md"), "---\nleader: lead\n---\n");
+    writeFileSync(join(dir, "lead.md"), "---\ntools:\n  - bash\n---\nlead");
+    writeFileSync(join(dir, "worker.md"), "---\ntools:\n  - bash\nreplica: 3\n---\nworker");
+    const bp = loadTeamFromDir(dir);
+    const worker = bp.roles.find((s) => s.role === "worker");
+    expect(worker?.replicas).toBe(3);
+  });
+
+  test("replica: 0 is rejected", () => {
+    writeFileSync(join(dir, "general.md"), "---\ntools:\n  - bash\nreplica: 0\n---\nbody");
+    expect(() => loadTeamFromDir(dir)).toThrow(expect.objectContaining({ code: "INVALID_FIELD_TYPE" }));
+  });
+
+  test("replica: 9 is rejected", () => {
+    writeFileSync(join(dir, "general.md"), "---\ntools:\n  - bash\nreplica: 9\n---\nbody");
+    expect(() => loadTeamFromDir(dir)).toThrow(expect.objectContaining({ code: "REPLICA_LIMIT_EXCEEDED" }));
+  });
+
+  test("replica: two is rejected as invalid type", () => {
+    writeFileSync(join(dir, "general.md"), "---\ntools:\n  - bash\nreplica: two\n---\nbody");
+    expect(() => loadTeamFromDir(dir)).toThrow(expect.objectContaining({ code: "INVALID_FIELD_TYPE" }));
+  });
+
+  test("leader with replica: 2 is rejected", () => {
+    writeFileSync(join(dir, "TEAM.md"), "---\nleader: leader\n---\n");
+    writeFileSync(join(dir, "leader.md"), "---\ntools:\n  - bash\nreplica: 2\n---\nleader");
+    writeFileSync(join(dir, "worker.md"), "---\ntools:\n  - bash\n---\nworker");
+    expect(() => loadTeamFromDir(dir)).toThrow(expect.objectContaining({ code: "LEADER_REPLICA_FORBIDDEN" }));
+  });
+});

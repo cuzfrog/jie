@@ -69,6 +69,7 @@ const kanbanStore = vi.mocked<KanbanStore>({
   editDescription: vi.fn(),
   handoff: vi.fn(),
   update: vi.fn(),
+  claim: vi.fn(),
 });
 
 const llmService = vi.mocked<LlmService>({ complete: vi.fn() });
