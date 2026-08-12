@@ -71,12 +71,53 @@ describe("KanbanList", () => {
     expect(new KanbanList(stateStore).render(80)).toEqual([]);
   });
 
-  test("shows at most six rows below the title", () => {
+  test("caps cards at six and reports the parent overflow", () => {
     const cards = Array.from({ length: 9 }, (_v, i): KanbanCard => ({ id: `#${i + 1}`, content: `task-${i}`, status: "pending" }));
     stateStore.getState.mockReturnValue(boardState(cards));
     const lines = new KanbanList(stateStore).render(80);
-    expect(lines).toHaveLength(1 + 6);
+    expect(lines).toHaveLength(1 + 6 + 1);
     expect(lines[0]).toBe(style("accent")("Todo:"));
+    expect(lines[lines.length - 1]).toContain("+3 more");
+  });
+
+  test("indents todos as a tree under their parent", () => {
+    stateStore.getState.mockReturnValue(boardState([
+      { id: "#1", content: "task", status: "in_progress", todos: [{ text: "one", done: false }, { text: "two", done: true }] },
+    ]));
+    const text = new KanbanList(stateStore).render(80).map(stripAnsi);
+    expect(text[1]).toContain("▸ #1 task");
+    expect(text[2]).toContain("[ ] one");
+    expect(text[3]).toContain("[x] two");
+    expect(text[2]?.startsWith("  ")).toBe(true);
+    expect(text[3]?.startsWith("  ")).toBe(true);
+  });
+
+  test("shows progress on parent cards with todos", () => {
+    stateStore.getState.mockReturnValue(boardState([
+      { id: "#1", content: "task", status: "in_progress", todos: [{ text: "one", done: true }, { text: "two", done: false }] },
+    ]));
+    const text = new KanbanList(stateStore).render(80).map(stripAnsi);
+    expect(text[1]).toContain("(1/2)");
+  });
+
+  test("dims and strikes done todos", () => {
+    stateStore.getState.mockReturnValue(boardState([
+      { id: "#1", content: "task", status: "in_progress", todos: [{ text: "one", done: true }] },
+    ]));
+    const lines = new KanbanList(stateStore).render(80);
+    const done = lines.find((line) => stripAnsi(line).includes("[x] one"));
+    expect(done).toBeDefined();
+    expect(done!).toContain(strikethrough(style("dim")("[x] one")));
+  });
+
+  test("caps visible todos per card and reports overflow", () => {
+    const cards: KanbanCard[] = [
+      { id: "#1", content: "task", status: "in_progress", todos: Array.from({ length: 7 }, (_, i) => ({ text: `todo-${i}`, done: false })) },
+    ];
+    stateStore.getState.mockReturnValue(boardState(cards));
+    const text = new KanbanList(stateStore).render(80).map(stripAnsi);
+    expect(text.filter((line) => line.includes("[ ]"))).toHaveLength(5);
+    expect(text[text.length - 1]).toContain("+2 more");
   });
 
   test("never renders a line wider than the given width (doRender guard)", () => {
@@ -138,6 +179,10 @@ describe("KanbanList.update", () => {
     expect(list.update()).toBe(false);
   });
 });
+
+function stripAnsi(text: string): string {
+  return text.replace(/\x1b\[[0-9;]*m/g, "");
+}
 
 function boardState(cards: ReadonlyArray<KanbanCard>, overrides: Parameters<typeof makeTuiState>[0] = {}): TuiState {
   return makeTuiState({

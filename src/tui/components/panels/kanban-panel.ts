@@ -1,9 +1,9 @@
 import { matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import { Actions, type Action, TuiState, type StateStore } from "../../state";
+import { Actions, type Action, TuiState, type StateStore, type KanbanEditField } from "../../state";
 import type { KanbanCard, KanbanStatus } from "../../../platform";
 import { type TuiComponent } from "../..";
 import { Panel } from "./panel";
-import { style, type ColorName } from "../themes";
+import { style, strikethrough, type ColorName } from "../themes";
 
 const COLUMN_GAP = "  ";
 const STATUS_LABELS: { readonly [K in KanbanStatus]: string } = {
@@ -22,7 +22,7 @@ const KANBAN_COLUMNS: ReadonlyArray<{ readonly status: KanbanStatus; readonly ti
 
 const HINTS = {
   collapsed: "↑↓←-> move · tab expand · ctrl+e edit · ctrl+k close",
-  expanded: "↑↓ select field · tab collapse · ctrl+e edit · ctrl+k close",
+  expanded: "↑↓ select field · space toggle · tab collapse · ctrl+e edit · ctrl+k close",
   editing: "enter/ctrl+s save · esc cancel",
 } as const;
 const CTRL_E = "\x05";
@@ -114,23 +114,53 @@ function renderColumn(column: { readonly title: string; readonly cardColor: Colo
     const badgeWidth = card.scope === "session" ? 2 : 0;
     const ref = card.externalRef !== undefined ? style("accent")(`${card.externalRef} `) : "";
     const refWidth = card.externalRef !== undefined ? visibleWidth(card.externalRef) + 1 : 0;
-    return marker + badge + ref + style(column.cardColor)(truncateToWidth(card.content, Math.max(0, columnWidth - 1 - badgeWidth - refWidth)));
+    const progress = card.todos ? ` (${countDone(card.todos)}/${card.todos.length})` : "";
+    const progressWidth = visibleWidth(progress);
+    const contentWidth = Math.max(0, columnWidth - 1 - badgeWidth - refWidth - progressWidth);
+    return marker + badge + ref + style(column.cardColor)(truncateToWidth(card.content, contentWidth)) + style("dim")(progress);
   });
   const overflow = total - cards.length;
   if (overflow > 0) rows.push(style("dim")(`+${overflow} more`));
   return [header, ...rows];
 }
 
-function renderCardDetail(card: KanbanCard | null, field: "content" | "description", innerWidth: number): string[] {
+function countDone(todos: ReadonlyArray<{ readonly done: boolean }>): number {
+  return todos.reduce((sum, todo) => (todo.done ? sum + 1 : sum), 0);
+}
+
+function renderCardDetail(card: KanbanCard | null, editField: KanbanEditField, innerWidth: number): string[] {
   if (card === null) return [style("muted")("no task selected")];
-  const title = renderCardDetailRow(field === "content", "text", card.content, innerWidth);
-  const description = renderCardDetailRow(field === "description", card.description ? "muted" : "dim", card.description ? `description: ${card.description}` : "description:", innerWidth);
+  const title = renderCardDetailRow(editField === "content", "text", card.content, innerWidth);
+  const description = renderCardDetailRow(
+    editField === "description",
+    card.description ? "muted" : "dim",
+    card.description ? `description: ${card.description}` : "description:",
+    innerWidth,
+  );
   const status = style("muted")(fitToWidth(`status: ${STATUS_LABELS[card.status]}`, innerWidth));
   const scope = style("muted")(fitToWidth(`scope: ${card.scope ?? "team"}`, innerWidth));
   const rows = [title, description, status, scope];
   if (card.externalRef !== undefined) rows.push(style("muted")(fitToWidth(`ref: ${card.externalRef}`, innerWidth)));
   if (card.active_form !== undefined) rows.push(style("muted")(fitToWidth(`active: ${card.active_form}`, innerWidth)));
+  if (card.todos !== undefined && card.todos.length > 0) {
+    rows.push(style("dim")(fitToWidth("todos:", innerWidth)));
+    for (let index = 0; index < card.todos.length; index += 1) {
+      const selected = isTodoField(editField) && editField.todoIndex === index;
+      rows.push(renderTodo(card.todos[index]!, selected, innerWidth));
+    }
+  }
   return rows;
+}
+
+function renderTodo(todo: { readonly text: string; readonly done: boolean }, selected: boolean, innerWidth: number): string {
+  const marker = selected ? style("accent")("▸") : " ";
+  const label = `[${todo.done ? "x" : " "}] ${todo.text}`;
+  const text = todo.done ? strikethrough(style("muted")(label)) : style("text")(label);
+  return fitToWidth(marker + text, innerWidth);
+}
+
+function isTodoField(field: KanbanEditField): field is { todoIndex: number } {
+  return typeof field === "object";
 }
 
 function renderCardDetailRow(selected: boolean, color: ColorName, text: string, innerWidth: number): string {
@@ -161,7 +191,10 @@ function resolveKanbanKey(data: string, state: TuiState): Action | null {
   if (state.kanban.expanded) {
     if (matchesKey(data, "up")) return Actions.moveKanbanEditField("up");
     if (matchesKey(data, "down")) return Actions.moveKanbanEditField("down");
-    if (data === CTRL_E && state.kanban.cursor !== null) return Actions.commitKanbanEdit(state.kanban.cursor, state.kanban.editField);
+    if (matchesKey(data, "space")) return resolveKanbanToggle(state);
+    if (data === CTRL_E && state.kanban.cursor !== null && typeof state.kanban.editField === "string") {
+      return Actions.commitKanbanEdit(state.kanban.cursor, state.kanban.editField);
+    }
     return null;
   }
   if (matchesKey(data, "up")) return Actions.moveKanbanCursor("up");
@@ -170,4 +203,14 @@ function resolveKanbanKey(data: string, state: TuiState): Action | null {
   if (matchesKey(data, "right")) return Actions.moveKanbanCursor("right");
   if (data === CTRL_E && state.kanban.cursor !== null) return Actions.commitKanbanEdit(state.kanban.cursor);
   return null;
+}
+
+function resolveKanbanToggle(state: TuiState): Action | null {
+  const field = state.kanban.editField;
+  if (!isTodoField(field)) return null;
+  const card = focusedCard(state);
+  if (card === null || card.todos === undefined) return null;
+  const todo = card.todos[field.todoIndex];
+  if (todo === undefined) return null;
+  return Actions.toggleKanbanTodo(card.id, todo.text);
 }

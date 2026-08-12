@@ -39,6 +39,8 @@ no-new-exports:
   - types.ts
   - unified-diff.test.ts
   - unified-diff.ts
+  - update-kanban.test.ts
+  - update-kanban.ts
   - web-fetch.test.ts
   - web-fetch.ts
   - web-search.test.ts

@@ -56,6 +56,9 @@ export class EffectHandlerImpl implements EffectHandler {
         case ActionTypes.SAVE_KANBAN_EDIT:
           this.persistKanbanEdit(afterState.teamId, action.payload.cardId, action.payload.field, action.payload.text);
           return;
+        case ActionTypes.TOGGLE_KANBAN_TODO:
+          this.toggleKanbanTodo(afterState.teamId, action.payload.cardId, action.payload.todo);
+          return;
         default:
           return;
       }
@@ -67,8 +70,18 @@ export class EffectHandlerImpl implements EffectHandler {
     this.unsubscribeActions();
   }
 
-  private persistKanbanEdit(teamId: string | null, cardId: string, field: KanbanEditField, text: string): void {
+  private toggleKanbanTodo(teamId: string | null, cardId: string, todo: string): void {
     if (teamId === null) return;
+    void this.platform.execute({ name: "kanbanToggleTodo", teamId, cardId, todo })
+      .then((result) => {
+        this.stateStore.dispatch(Actions.setKanbanBoard(result.board));
+      }, (error: unknown) => {
+        this.stateStore.dispatch(Actions.setErrorMessage(`kanban toggle failed: ${error instanceof Error ? error.message : String(error)}`));
+      });
+  }
+
+  private persistKanbanEdit(teamId: string | null, cardId: string, field: KanbanEditField, text: string): void {
+    if (teamId === null || typeof field !== "string") return;
     void this.platform.execute({ name: "kanbanEdit", teamId, cardId, field, text })
       .then((result) => {
         this.stateStore.dispatch(Actions.setKanbanBoard(result.board));

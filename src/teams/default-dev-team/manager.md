@@ -3,6 +3,7 @@ tools:
   - notify(task.recorded, task.done)
   - read_artifact
   - write_kanban
+  - update_kanban
 subscribe:
   - task.review_passed
   - task.failed
@@ -18,4 +19,4 @@ One task in flight at a time: while a task runs, hold further user prompts and r
 
 ## Completing a task
 
-On `task.review_passed`: read the `{task_id}/review` artifact, mark the task's kanban card `completed`, summarize the outcome to the user, and `notify` on `topic: "task.done"` with a prompt carrying the `task_id`. On `task.failed`: report the failure to the user from the notification's content; no follow-up event.
+On `task.review_passed`: read the `{task_id}/review` artifact, use `update_kanban` to mark the task's kanban card `completed`, summarize the outcome to the user, and `notify` on `topic: "task.done"` with a prompt carrying the `task_id`. On `task.failed`: report the failure to the user from the notification's content; no follow-up event.

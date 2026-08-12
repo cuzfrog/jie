@@ -17,7 +17,7 @@ export function kanbanReducer(state: TuiState, action: Action): TuiState {
     case ActionTypes.MOVE_KANBAN_CURSOR:
       return updateKanban(state, { cursor: moveCursor(TuiState.kanbanVisibleCards(state), state.kanban.cursor, action.payload.direction) });
     case ActionTypes.MOVE_KANBAN_EDIT_FIELD:
-      return updateKanban(state, { editField: moveEditField(state.kanban.editField, action.payload.direction) });
+      return updateKanban(state, { editField: moveEditField(state, action.payload.direction) });
     case ActionTypes.CYCLE_KANBAN_VIEW:
       return reduceViewCycle(state);
     case ActionTypes.TOGGLE_KANBAN_EXPAND:
@@ -75,10 +75,26 @@ function columnOf(cards: ReadonlyArray<KanbanCard>, status: KanbanStatus): Reado
   return cards.filter((card) => card.status === status);
 }
 
-function moveEditField(field: KanbanEditField, direction: EditFieldDirection): KanbanEditField {
-  if (direction === "up" && field === "description") return "content";
-  if (direction === "down" && field === "content") return "description";
-  return field;
+function moveEditField(state: TuiState, direction: EditFieldDirection): KanbanEditField {
+  const field = state.kanban.editField;
+  const card = state.kanban.cursor === null ? null : state.kanban.board.find((c) => c.id === state.kanban.cursor) ?? null;
+  const todoCount = card?.todos?.length ?? 0;
+  if (direction === "up") {
+    if (field === "content") return "content";
+    if (field === "description") return "content";
+    if (isTodoField(field) && field.todoIndex === 0) return "description";
+    if (isTodoField(field)) return { todoIndex: field.todoIndex - 1 };
+    return "content";
+  }
+  if (field === "content") return todoCount > 0 ? { todoIndex: 0 } : "description";
+  if (field === "description") return todoCount > 0 ? { todoIndex: 0 } : "description";
+  if (isTodoField(field) && field.todoIndex + 1 >= todoCount) return { todoIndex: Math.max(0, todoCount - 1) };
+  if (isTodoField(field)) return { todoIndex: field.todoIndex + 1 };
+  return "content";
+}
+
+function isTodoField(field: KanbanEditField): field is { readonly todoIndex: number } {
+  return typeof field === "object";
 }
 
 function adjacentColumn(cards: ReadonlyArray<KanbanCard>, status: KanbanStatus, step: 1 | -1): ReadonlyArray<KanbanCard> | null {

@@ -11,6 +11,7 @@ import { createMemorySearchTool } from "./memory-search";
 import { createNotifyTool } from "./notify";
 import { createReadArtifactTool } from "./read-artifact";
 import { createReadFileTool } from "./read-file";
+import { createKanbanUpdateTool } from "./update-kanban";
 import { createKanbanWriteTool } from "./write-kanban";
 import { createWebFetchTool } from "./web-fetch";
 import { createWebSearchProvider, createWebSearchTool } from "./web-search";
@@ -42,6 +43,7 @@ export function createBuiltinTools(
     { name: "write_artifact", tool: createWriteArtifactTool({ artifactStore }) },
     { name: "find_artifact", tool: createFindArtifactTool({ artifactStore }) },
     { name: "write_kanban", tool: createKanbanWriteTool({ kanbanStore }) },
+    { name: "update_kanban", tool: createKanbanUpdateTool({ kanbanStore }) },
     { name: "memory_add", tool: createMemoryAddTool({ memoryManager, settingsStore }) },
     { name: "memory_search", tool: createMemorySearchTool({ memoryManager, settingsStore }) },
     { name: "notify", tool: createNotifyTool({ eventManager }) },

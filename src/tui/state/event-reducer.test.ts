@@ -861,6 +861,17 @@ describe("reduceToolCall + reduceToolResult", () => {
     expect(state2.agents.get("my-team:general-1")?.currentTurn?.cards).toEqual([]);
   });
 
+  test("an update_kanban tool result updates the board the same way", () => {
+    const state = promptedState();
+    const cards = [
+      { id: "#1", content: "alpha", status: "completed" },
+      { id: "#2", content: "beta", status: "in_progress" },
+    ] as const;
+    const state2 = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "update_kanban", "ok", 5, null, { kind: "kanban", cards }));
+    expect(state2.kanban.board).toEqual(cards);
+    expect(state2.kanban.cursor).toBe("#1");
+  });
+
   test("an empty kanban board clears the board", () => {
     const state = promptedState();
     const state2 = reduce(state, Events.agentToolResult(TOOL_SENDER, "c1", "write_kanban", "ok", 5, null, { kind: "kanban", cards: [] }));
