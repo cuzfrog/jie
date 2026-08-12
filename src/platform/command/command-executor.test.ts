@@ -23,6 +23,7 @@ const settingsStore = vi.mocked<SettingsStore>({
   setDefaultTeam: vi.fn(),
   setModelFilters: vi.fn(),
   setNotificationSoundEnabled: vi.fn(),
+  setModelAlias: vi.fn(),
 });
 
 const modelRegistry = vi.mocked<ModelRegistry>({
@@ -204,6 +205,46 @@ describe("CommandExecutorImpl", () => {
       settingsStore.load.mockReturnValueOnce({ defaultProvider: "anthropic" });
       const result = await executor.execute({ name: "getDefaultModel" });
       expect(result).toBeNull();
+    });
+  });
+
+  describe("setModelAlias", () => {
+    test("persists a resolvable alias", async () => {
+      modelRegistry.resolve.mockReturnValueOnce(fakeModel("anthropic", "claude-sonnet-4-5", "Claude"));
+      const result = await executor.execute({ name: "setModelAlias", alias: "large", provider: "anthropic", id: "claude-sonnet-4-5" });
+      expect(result).toBeNull();
+      expect(settingsStore.setModelAlias).toHaveBeenCalledWith("large", "anthropic/claude-sonnet-4-5");
+    });
+
+    test("throws UNKNOWN_PROVIDER for an unregistered provider", async () => {
+      const pending = executor.execute({ name: "setModelAlias", alias: "large", provider: "no-such-provider", id: "x" });
+      await expect(pending).rejects.toThrow(JiePlatformError);
+      await expect(pending).rejects.toMatchObject({ code: "UNKNOWN_PROVIDER" });
+      expect(settingsStore.setModelAlias).not.toHaveBeenCalled();
+    });
+
+    test("throws MODEL_UNRESOLVED for a provider/model that the registry cannot resolve", async () => {
+      const pending = executor.execute({ name: "setModelAlias", alias: "large", provider: "anthropic", id: "no-such-model" });
+      await expect(pending).rejects.toThrow(JiePlatformError);
+      await expect(pending).rejects.toMatchObject({ code: "MODEL_UNRESOLVED" });
+      expect(settingsStore.setModelAlias).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("getModelAliases", () => {
+    test("returns configured aliases", async () => {
+      settingsStore.load.mockReturnValueOnce({ modelAliases: { large: "anthropic/claude-sonnet-4-5", small: "openai/gpt-4o-mini" } });
+      const result = await executor.execute({ name: "getModelAliases" });
+      expect(result).toEqual([
+        { alias: "large", modelRef: "anthropic/claude-sonnet-4-5" },
+        { alias: "small", modelRef: "openai/gpt-4o-mini" },
+      ]);
+    });
+
+    test("returns an empty array when no aliases are configured", async () => {
+      settingsStore.load.mockReturnValueOnce({});
+      const result = await executor.execute({ name: "getModelAliases" });
+      expect(result).toEqual([]);
     });
   });
 

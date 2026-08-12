@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
 import { Type } from "typebox";
-import type { Tool, ToolResult } from "./types";
+import type { ExecutionContext, Tool, ToolResult } from "./types";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
 import { mapErrno, resolveWithinWorkspace } from "./path-utils";
 
@@ -11,7 +11,9 @@ const TRUNCATION_MARKER = "[Truncated: showing %S of %L lines (50 KiB limit)]";
 const READ_FILE_DESCRIPTION = `Read the contents of a file at \`path\` (relative to workspace root, or absolute
 within workspace). For text files, output is truncated to 2000 lines or 50 KiB
 (whichever is hit first). Use offset/limit for large files. When you need the
-full file, continue with offset until complete.`;
+full file, continue with offset until complete. A role may be restricted to a
+fixed set of readable paths via its manifest \`read_file(glob-a, glob-b)\` tool
+spec; a path outside that set is rejected with READ_PATH_DENIED.`;
 
 export interface ReadFileDeps {
   workspaceRoot: string;
@@ -56,8 +58,17 @@ export function createReadFileTool(dependencies: ReadFileDeps): Tool<ReadFileInp
       offset: Type.Optional(Type.Number()),
       limit: Type.Optional(Type.Number()),
     }),
-    async execute(input: ReadFileInput): Promise<ToolResult> {
-      const { realPath } = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
+    async execute(
+      input: ReadFileInput,
+      executionContext: ExecutionContext,
+    ): Promise<ToolResult> {
+      const { realPath, relativePath } = resolveWithinWorkspace(input.path, dependencies.workspaceRoot);
+      const globs = executionContext.toolArgs.get("read_file");
+      if (globs !== undefined && !globs.some((pattern) => new Bun.Glob(pattern).match(relativePath))) {
+        throw new JiePlatformError("READ_PATH_DENIED", {
+          detail: `path '${relativePath}' is not allowed for role '${executionContext.agentRole}'`,
+        });
+      }
 
       let stat;
       try {

@@ -10,6 +10,7 @@ const settingsStore = vi.mocked<SettingsStore>({
   setDefaultTeam: vi.fn(),
   setModelFilters: vi.fn(),
   setNotificationSoundEnabled: vi.fn(),
+  setModelAlias: vi.fn(),
 });
 
 function memory(overrides: Partial<Memory> = {}): Memory {

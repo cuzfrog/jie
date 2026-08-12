@@ -137,6 +137,40 @@ describe("CommandHandlerImpl — prompt routing", () => {
   });
 });
 
+describe("CommandHandlerImpl — bash routing", () => {
+  test("!cmd dispatches a bash directive to the focused agent", () => {
+    const { platform, prompt } = makePlatform();
+    const { handler } = makeHandler(platform, stateWithTeam("alpha", true));
+    handler.handle("!ls -la");
+    expect(prompt).toHaveBeenCalledWith("alpha", "general-1", expect.stringContaining("ls -la"));
+    expect(prompt).toHaveBeenCalledWith("alpha", "general-1", expect.stringContaining("bash tool"));
+  });
+
+  test("!!cmd dispatches an exclude-from-context directive to the focused agent", () => {
+    const { platform, prompt } = makePlatform();
+    const { handler } = makeHandler(platform, stateWithTeam("alpha", true));
+    handler.handle("!!cat secret");
+    expect(prompt).toHaveBeenCalledWith("alpha", "general-1", expect.stringContaining("cat secret"));
+    expect(prompt).toHaveBeenCalledWith("alpha", "general-1", expect.stringContaining("do NOT include"));
+  });
+
+  test("! with no command surfaces a missing-command error and does not call prompt", () => {
+    const { platform, prompt } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform, stateWithTeam("alpha", true));
+    handler.handle("!");
+    expect(prompt).not.toHaveBeenCalled();
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("bash mode requires a command")));
+  });
+
+  test("bash command falls back to the leader when no agent is focused", () => {
+    const { platform, prompt } = makePlatform();
+    const { handler } = makeHandler(platform, stateWithTeam("alpha", false));
+    handler.handle("!pwd");
+    expect(prompt).toHaveBeenCalledWith("alpha", "general-1", expect.stringContaining("pwd"));
+    expect(prompt).toHaveBeenCalledWith("alpha", "general-1", expect.stringContaining("bash tool"));
+  });
+});
+
 describe("CommandHandlerImpl — skill invocation", () => {
   const sayHello: SkillInfo = { name: "say-hello", description: "greets", argumentHint: null };
 

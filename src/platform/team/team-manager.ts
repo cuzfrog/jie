@@ -4,10 +4,11 @@ import type { AgentBody, AgentBodyParams } from "../core";
 import { type EventManager, Events } from "../event";
 import { JiePlatformError } from "../jie-platform-errors";
 import type { KanbanStore, SessionSummary, TranscriptStore } from "../storage";
-import { type ModelRegistry, type SettingsStore } from "../config";
+import { type ModelRegistry, type Settings, type SettingsStore } from "../config";
 import type { SkillManager } from "../skills";
 import { type AgentSoul, type TeamBlueprint, type TeamBlueprintLocation, BUILTIN_DEFAULT_SOLO_TEAM_ID } from "./types";
 import { type TeamRegistry } from "./registry";
+import { isModelAlias, parseModelRef } from "../types";
 import type { AgentHistory, AgentInfo, TeamInfo } from "../types";
 
 export interface TeamManager {
@@ -239,26 +240,41 @@ export class TeamManagerImpl implements TeamManager {
 
   private resolveSoulModel(soul: AgentSoul): Model<Api> {
     const settings = this.settingsStore.load();
-    const hasSettingsModel = settings.defaultProvider !== undefined && settings.defaultModel !== undefined;
-    if (soul.model === "" && !hasSettingsModel) {
-      throw new JiePlatformError("NO_MODEL_ERROR");
+    const modelRef = this.resolveModelRef(soul, settings);
+    const parsed = parseModelRef(modelRef);
+    if (parsed === null) {
+      throw new JiePlatformError("NO_MODEL_ERROR", { detail: `no model configured for role '${soul.role}'` });
     }
-    const modelStr = soul.model !== "" ? soul.model : `${settings.defaultProvider}/${settings.defaultModel}`;
-    const slash = modelStr.indexOf("/");
     let model: Model<Api> | undefined;
-    if (slash !== -1) {
-      try {
-        model = this.modelRegistry.resolve(modelStr.slice(0, slash), modelStr.slice(slash + 1));
-      } catch {
-        model = undefined;
-      }
+    try {
+      model = this.modelRegistry.resolve(parsed.provider, parsed.modelId);
+    } catch {
+      model = undefined;
     }
     if (model === undefined) {
       throw new JiePlatformError("MODEL_UNRESOLVED", {
-        detail: `model '${modelStr}' for role '${soul.role}' is not available; check the provider and model id`,
+        detail: `model '${modelRef}' for role '${soul.role}' is not available; check the provider and model id`,
       });
     }
     return model;
+  }
+
+  private resolveModelRef(soul: AgentSoul, settings: Settings): string {
+    if (soul.model === "") {
+      if (settings.defaultProvider !== undefined && settings.defaultModel !== undefined) {
+        return `${settings.defaultProvider}/${settings.defaultModel}`;
+      }
+      return "";
+    }
+    if (isModelAlias(soul.model)) {
+      const aliased = settings.modelAliases?.[soul.model];
+      if (aliased !== undefined) return aliased;
+      if (settings.defaultProvider !== undefined && settings.defaultModel !== undefined) {
+        return `${settings.defaultProvider}/${settings.defaultModel}`;
+      }
+      return "";
+    }
+    return soul.model;
   }
 
   private publishTeamLoaded(teamId: string, bodies: AgentBody[]): void {

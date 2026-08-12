@@ -1,11 +1,12 @@
 import type { OAuthCredentials } from "@earendil-works/pi-ai";
-import type { EffortLevel } from "../types";
+import type { EffortLevel, ModelAlias } from "../types";
 
 export interface Settings {
   readonly defaultProvider?: string;
   readonly defaultModel?: string;
   readonly defaultTeam?: string;
   readonly defaultEffort?: EffortLevel;
+  readonly modelAliases?: Partial<Record<ModelAlias, string>>;
   readonly modelFilters?: ReadonlyArray<string>;
   readonly language?: "en" | "zh";
   readonly memory?: {

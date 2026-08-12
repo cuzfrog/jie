@@ -1,6 +1,7 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { AuthStore, ModelRegistry, SettingsStore } from "../config";
 import { Events, type EventManager } from "../event";
+import { MODEL_ALIASES, type ModelAlias } from "../types";
 import { JiePlatformError } from "../jie-platform-errors";
 import type { LlmService } from "../llm";
 import type { GitService } from "../services";
@@ -32,7 +33,9 @@ export class CommandExecutorImpl implements CommandExecutor {
       logout: this.logout.bind(this),
       setApiKey: this.setApiKey.bind(this),
       setDefaultModel: this.setDefaultModel.bind(this),
+      setModelAlias: this.setModelAlias.bind(this),
       getDefaultModel: this.getDefaultModel.bind(this),
+      getModelAliases: this.getModelAliases.bind(this),
       setDefaultEffort: this.setDefaultEffort.bind(this),
       getDefaultEffort: this.getDefaultEffort.bind(this),
       listModels: this.listModels.bind(this),
@@ -101,6 +104,17 @@ export class CommandExecutorImpl implements CommandExecutor {
     return null;
   }
 
+  private setModelAlias(command: Command<"setModelAlias">): CommandResult<"setModelAlias"> {
+    if (!this.modelRegistry.providers().includes(command.provider)) {
+      throw new JiePlatformError("UNKNOWN_PROVIDER", { detail: command.provider });
+    }
+    if (this.modelRegistry.resolve(command.provider, command.id) === undefined) {
+      throw new JiePlatformError("MODEL_UNRESOLVED", { detail: `${command.provider}/${command.id}` });
+    }
+    this.settingsStore.setModelAlias(command.alias, `${command.provider}/${command.id}`);
+    return null;
+  }
+
   private getDefaultModel(): CommandResult<"getDefaultModel"> {
     const settings = this.settingsStore.load();
     if (settings.defaultProvider === undefined || settings.defaultModel === undefined) return null;
@@ -110,6 +124,11 @@ export class CommandExecutorImpl implements CommandExecutor {
       effort: settings.defaultEffort ?? "off",
       contextWindow: null,
     };
+  }
+
+  private getModelAliases(): CommandResult<"getModelAliases"> {
+    const aliases = this.settingsStore.load().modelAliases ?? {};
+    return (MODEL_ALIASES as ReadonlyArray<ModelAlias>).map((alias) => ({ alias, modelRef: aliases[alias] ?? "" })).filter((row) => row.modelRef !== "");
   }
 
   private setDefaultEffort(command: Command<"setDefaultEffort">): CommandResult<"setDefaultEffort"> {

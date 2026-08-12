@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Settings, RawSettings } from "./types";
-import { isEffortLevel } from "../types";
+import { isEffortLevel, MODEL_ALIASES, parseModelRef, type ModelAlias } from "../types";
 import { JiePlatformError } from "../jie-platform-errors";
 
 const TEAM_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
@@ -110,6 +110,10 @@ function validateSettings(raw: RawSettings, source: string): Settings {
     result.notification = validateNotification(raw.notification, source);
   }
 
+  if ("modelAliases" in raw && raw.modelAliases !== undefined) {
+    result.modelAliases = validateModelAliases(raw.modelAliases, source);
+  }
+
   return result;
 }
 
@@ -183,11 +187,31 @@ function validatePositiveInteger(value: unknown, label: string, source: string):
   return value;
 }
 
+function validateModelAliases(value: unknown, source: string): NonNullable<Settings["modelAliases"]> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new JiePlatformError("INVALID_CONFIG", { detail: `${source}: modelAliases must be an object` });
+  }
+  const raw = value as Record<string, unknown>;
+  const result: Partial<Record<ModelAlias, string>> = {};
+  for (const key of Object.keys(raw)) {
+    if (!MODEL_ALIASES.includes(key as ModelAlias)) {
+      throw new JiePlatformError("INVALID_CONFIG", { detail: `${source}: unknown model alias '${key}'` });
+    }
+    const modelRef = raw[key];
+    if (typeof modelRef !== "string" || parseModelRef(modelRef) === null) {
+      throw new JiePlatformError("INVALID_CONFIG", { detail: `${source}: modelAliases.${key} must be a <provider>/<modelId> string` });
+    }
+    result[key as ModelAlias] = modelRef;
+  }
+  return result;
+}
+
 function deepMergeSettings(base: Settings, override: Settings): Settings {
   const compaction = mergeNested(base.compaction, override.compaction);
   const memory = mergeNested(base.memory, override.memory);
   const notification = mergeNested(base.notification, override.notification);
-  return { ...base, ...override, compaction, memory, notification };
+  const modelAliases = mergeNested(base.modelAliases, override.modelAliases);
+  return { ...base, ...override, compaction, memory, notification, modelAliases };
 }
 
 function mergeNested<T extends object>(base: T | undefined, override: T | undefined): T | undefined {

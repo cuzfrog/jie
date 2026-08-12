@@ -33,6 +33,7 @@ const JiePlatformErrorMessages = {
   TOPIC_NOT_ALLOWED: "Notify topic is not allowed for this role",
 
   WRITE_PATH_DENIED: "Write path is not allowed for this role",
+  READ_PATH_DENIED: "Read path is not allowed for this role",
   INVALID_TOOL_SPEC: "Invalid tool spec in manifest",
 
   UNSUPPORTED_SCHEME: "URL must use http or https",

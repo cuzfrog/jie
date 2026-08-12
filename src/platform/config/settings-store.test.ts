@@ -207,6 +207,40 @@ describe("SettingsStoreImpl", () => {
     });
   });
 
+  test("setModelAlias writes to ~/.jie/settings.json", () => {
+    const store = new SettingsStoreImpl(cwd, homeJieDir, null);
+    store.setModelAlias("large", "anthropic/claude-sonnet-4");
+    expect(JSON.parse(readFileSync(join(homeJieDir, "settings.json"), "utf-8"))).toEqual({
+      modelAliases: { large: "anthropic/claude-sonnet-4" },
+    });
+  });
+
+  test("setModelAlias preserves existing aliases and other settings", () => {
+    const store = new SettingsStoreImpl(cwd, homeJieDir, null);
+    store.setModelAlias("small", "openai/gpt-4o-mini");
+    store.setModelAlias("large", "anthropic/claude-sonnet-4");
+    expect(JSON.parse(readFileSync(join(homeJieDir, "settings.json"), "utf-8"))).toEqual({
+      modelAliases: { small: "openai/gpt-4o-mini", large: "anthropic/claude-sonnet-4" },
+    });
+  });
+
+  test("setModelAlias writes to the project settings when they define a model", () => {
+    const projectJieDir = join(cwd, ".jie");
+    mkdirSync(projectJieDir, { recursive: true });
+    writeFileSync(
+      join(projectJieDir, "settings.json"),
+      `${JSON.stringify({ defaultProvider: "openai", defaultModel: "gpt-4o" })}\n`,
+    );
+    const store = new SettingsStoreImpl(cwd, homeJieDir, projectJieDir);
+    store.setModelAlias("large", "anthropic/claude-sonnet-4");
+    expect(JSON.parse(readFileSync(join(projectJieDir, "settings.json"), "utf-8"))).toEqual({
+      defaultProvider: "openai",
+      defaultModel: "gpt-4o",
+      modelAliases: { large: "anthropic/claude-sonnet-4" },
+    });
+    expect(existsSync(join(homeJieDir, "settings.json"))).toBe(false);
+  });
+
   test("setDefaultTeam with scope 'project' writes to the projectJieDir, not cwd", () => {
     const projectRoot = mkdtempSync(join(tmpdir(), "jie-cli-proj-"));
     const projectJieDir = join(projectRoot, ".jie");

@@ -3,13 +3,14 @@ import { dirname, join } from "node:path";
 import { loadMergedSettings } from "./load-settings";
 import type { Settings } from "./types";
 import { JiePlatformError } from "../jie-platform-errors";
-import type { EffortLevel } from "../types";
+import type { EffortLevel, ModelAlias } from "../types";
 
 export interface SettingsStore {
   load(): Settings;
   setDefaultProvider(provider: string, modelId: string): void;
   setDefaultEffort(effort: EffortLevel): void;
   setDefaultTeam(teamId: string, scope: "project" | "global"): void;
+  setModelAlias(alias: ModelAlias, modelRef: string): void;
   setModelFilters(filters: ReadonlyArray<string>): void;
   setNotificationSoundEnabled(enabled: boolean): void;
 }
@@ -48,6 +49,15 @@ export class SettingsStoreImpl implements SettingsStore {
   setDefaultTeam(teamId: string, scope: "project" | "global"): void {
     const path = scope === "project" ? this.projectPath : this.globalPath;
     const next: Settings = { ...readSettingsFile(path), defaultTeam: teamId };
+    writeSettingsFile(path, next);
+  }
+
+  setModelAlias(alias: ModelAlias, modelRef: string): void {
+    const projectSettings = readSettingsFile(this.projectPath);
+    const usesProjectScope = projectSettings.defaultProvider !== undefined || projectSettings.defaultModel !== undefined;
+    const path = usesProjectScope ? this.projectPath : this.globalPath;
+    const base = usesProjectScope ? projectSettings : readSettingsFile(this.globalPath);
+    const next: Settings = { ...base, modelAliases: { ...base.modelAliases, [alias]: modelRef } };
     writeSettingsFile(path, next);
   }
 
