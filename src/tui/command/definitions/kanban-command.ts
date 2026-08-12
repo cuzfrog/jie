@@ -60,11 +60,21 @@ export class KanbanCommand extends PositionalSlashCommand {
     return this.completeCards(subcommand, rest, context);
   }
 
-  private completeCards(subcommand: "remove" | "complete" | "review" | "toggle", rest: string, context: SlashContext): SlashCompletion | null {
+  private completeCards(
+    subcommand: "remove" | "complete" | "review" | "toggle",
+    rest: string,
+    context: SlashContext,
+  ): SlashCompletion | null {
     const targetStatus = subcommand === "complete" ? "completed" : subcommand === "review" ? "in_review" : null;
     const hasTodos = subcommand === "toggle" ? (card: KanbanCard) => card.todos !== undefined && card.todos.length > 0 : () => true;
-    const cards = context.state.kanban.board.filter((card) => hasPrefix(card.id, rest) && (targetStatus === null || card.status !== targetStatus) && hasTodos(card));
-    const items: ReadonlyArray<SlashCompletionItem> = cards.slice(0, 20).map((card) => ({ value: card.id, label: card.id, description: card.content }));
+    const cards = context.state.kanban.board.filter((card) =>
+      hasPrefix(card.id, rest) && (targetStatus === null || card.status !== targetStatus) && hasTodos(card),
+    );
+    const items: ReadonlyArray<SlashCompletionItem> = cards.slice(0, 20).map((card) => ({
+      value: card.id,
+      label: card.id,
+      description: card.content,
+    }));
     const completion = completeItems(items, rest);
     if (completion === null) return null;
     return { items: completion.items.map((item) => ({ ...item, value: `${subcommand} ${item.value}` })) };
