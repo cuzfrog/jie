@@ -638,18 +638,18 @@ describe("edit - per-role path limits", () => {
   }
 
   test("denies editing a path outside the allowed globs and leaves the file untouched", async () => {
-    writeFileSync(join(workspace, "CONTEXT.md"), "old\n");
+    writeFileSync(join(workspace, "MODULE.md"), "old\n");
     const tool = createEditTool({ workspaceRoot: workspace, fileMutationQueue });
     await expect(
-      tool.execute({ path: "CONTEXT.md", edits: [{ old_string: "old", new_string: "new" }] }, limitedContext("implementer", ["src/**"])),
+      tool.execute({ path: "MODULE.md", edits: [{ old_string: "old", new_string: "new" }] }, limitedContext("implementer", ["src/**"])),
     ).rejects.toMatchObject({ code: "WRITE_PATH_DENIED" });
-    expect(readFileSync(join(workspace, "CONTEXT.md"), "utf-8")).toBe("old\n");
+    expect(readFileSync(join(workspace, "MODULE.md"), "utf-8")).toBe("old\n");
   });
 
   test("allows editing a path matching an allowed glob", async () => {
-    writeFileSync(join(workspace, "CONTEXT.md"), "old\n");
+    writeFileSync(join(workspace, "MODULE.md"), "old\n");
     const tool = createEditTool({ workspaceRoot: workspace, fileMutationQueue });
-    await tool.execute({ path: "CONTEXT.md", edits: [{ old_string: "old", new_string: "new" }] }, limitedContext("architect", ["**/CONTEXT.md"]));
-    expect(readFileSync(join(workspace, "CONTEXT.md"), "utf-8")).toBe("new\n");
+    await tool.execute({ path: "MODULE.md", edits: [{ old_string: "old", new_string: "new" }] }, limitedContext("architect", ["**/MODULE.md"]));
+    expect(readFileSync(join(workspace, "MODULE.md"), "utf-8")).toBe("new\n");
   });
 });

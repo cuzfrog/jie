@@ -1,7 +1,25 @@
 import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { join, sep } from "node:path";
 
-const SKIP_DIRS = new Set([".git", "node_modules", "dist", "build", ".next", "out", "coverage", ".cache"]);
+const SKIP_DIRS = new Set([
+  ".git",
+  "node_modules",
+  "dist",
+  "build",
+  ".next",
+  "out",
+  "coverage",
+  ".cache",
+  "__pycache__",
+  ".mypy_cache",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".tox",
+  ".venv",
+  "venv",
+  ".hypothesis",
+  ".eggs",
+]);
 const MAX_DEPTH = 6;
 const MAX_FILES = 500;
 const MAX_FILE_BYTES = 1_048_576;
@@ -13,12 +31,13 @@ export interface ScannedFile {
   readonly relPath: string;
 }
 
-export function scanFiles(rootDir: string): ReadonlyArray<ScannedFile> {
+export function scanFiles(rootDir: string, options?: { onlyIgnored?: boolean }): ReadonlyArray<ScannedFile> {
   if (!existsSync(rootDir)) return [];
+  const onlyIgnored = options?.onlyIgnored ?? false;
   const rootIgnores = readGitignore(rootDir, ".");
   const out: ScannedFile[] = [];
-  const stack: Array<{ readonly dir: string; readonly relDir: string; readonly depth: number; readonly ignores: IgnoreSet }> = [
-    { dir: rootDir, relDir: ".", depth: 0, ignores: rootIgnores },
+  const stack: Array<{ readonly dir: string; readonly relDir: string; readonly depth: number; readonly ignores: IgnoreSet; readonly parentIgnored: boolean }> = [
+    { dir: rootDir, relDir: ".", depth: 0, ignores: rootIgnores, parentIgnored: false },
   ];
   while (stack.length > 0 && out.length < MAX_FILES) {
     const next = stack.pop();
@@ -26,7 +45,7 @@ export function scanFiles(rootDir: string): ReadonlyArray<ScannedFile> {
     const entries = safeReaddir(next.dir);
     for (const entry of entries) {
       if (out.length >= MAX_FILES) break;
-      if (entry.startsWith(".")) continue;
+      if (entry.startsWith(".") && !onlyIgnored) continue;
       const abs = join(next.dir, entry);
       const relEntry = next.relDir === "." ? entry : `${next.relDir}/${entry}`;
       let stat;
@@ -39,14 +58,17 @@ export function scanFiles(rootDir: string): ReadonlyArray<ScannedFile> {
       if (stat.isDirectory()) {
         if (SKIP_DIRS.has(entry)) continue;
         if (next.depth >= MAX_DEPTH) continue;
-        if (isIgnored(relEntry, next.ignores, next.relDir, true)) continue;
+        const dirIgnored = isIgnored(relEntry, next.ignores, next.relDir, true, next.parentIgnored);
+        if (!onlyIgnored && dirIgnored) continue;
+        const childParentIgnored = onlyIgnored ? dirIgnored : false;
         const childIgnores = composeIgnores(next.ignores, readGitignore(abs, relEntry));
-        stack.push({ dir: abs, relDir: relEntry, depth: next.depth + 1, ignores: childIgnores });
+        stack.push({ dir: abs, relDir: relEntry, depth: next.depth + 1, ignores: childIgnores, parentIgnored: childParentIgnored });
         continue;
       }
       if (!stat.isFile()) continue;
       if (stat.size > MAX_FILE_BYTES) continue;
-      if (isIgnored(relEntry, next.ignores, next.relDir, false)) continue;
+      const fileIgnored = isIgnored(relEntry, next.ignores, next.relDir, false, next.parentIgnored);
+      if (onlyIgnored ? !fileIgnored : fileIgnored) continue;
       out.push({ absPath: abs, relPath: toRel(rootDir, abs) });
     }
   }
@@ -206,8 +228,8 @@ function escapeClassBody(body: string): string {
   return out;
 }
 
-function isIgnored(relPath: string, ignores: IgnoreSet, frameRelDir: string, isDir: boolean): boolean {
-  let ignored = false;
+function isIgnored(relPath: string, ignores: IgnoreSet, frameRelDir: string, isDir: boolean, parentIgnored: boolean = false): boolean {
+  let ignored = parentIgnored;
   for (const p of ignores.patterns) {
     if (!isInScope(p.fromRelDir, frameRelDir)) continue;
     if (p.dirOnly && !isDir) continue;

@@ -30,11 +30,12 @@ const HINTS: ReadonlyArray<readonly [string, string]> = [
   ["enter", "send"],
   ["tab", "complete"],
   ["@", "mention a file"],
+  ["@@", "mention an ignored file"],
   ["/", "commands"],
   ["ctrl+t", "thinking"],
   ["ctrl+o", "tool output"],
   ["ctrl+k", "kanban"],
-  ["←", "team panel (cursor at start)"],
+  ["←", "team panel"],
   ["esc", "interrupt"],
   ["ctrl+d", "quit"],
 ];

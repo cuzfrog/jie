@@ -1,16 +1,58 @@
 import type { JiePlatform, KanbanCard } from "../../platform";
-import type { StateStore } from "../state";
+import type { CommandCatalog, CommandMeta, CommandResolver } from "../command";
+import { SLASH_COMMANDS } from "../command/definitions";
+import type { StateStore, TuiState } from "../state";
+import { makePlatform, makeTuiState } from "../test";
 import { SlashCommandSource } from "./slash-command-source";
-import {
-  commandCatalog,
-  makeCommandResolver,
-  makePlatform,
-  makeStateStore,
-  nullPlatform,
-  signal,
-  storeWithKanban,
-  storeWithTeam,
-} from "./_test-fixtures";
+
+function signal(): AbortSignal {
+  return new AbortController().signal;
+}
+
+function makeStateStore(state: TuiState = makeTuiState()): StateStore {
+  return vi.mocked<StateStore>({
+    getState: vi.fn(() => state),
+    dispatch: vi.fn(),
+    subscribe: vi.fn(() => () => undefined),
+  });
+}
+
+function storeWithTeam(): StateStore {
+  return makeStateStore(makeTuiState({ teamId: "my-team" }));
+}
+
+function storeWithKanban(cards: ReadonlyArray<KanbanCard> = []): StateStore {
+  return makeStateStore(makeTuiState({ teamId: "my-team", kanbanBoard: cards }));
+}
+
+const commandsByName = new Map<string, typeof SLASH_COMMANDS[number]>();
+const aliasToCanonical = new Map<string, string>();
+for (const command of SLASH_COMMANDS) {
+  commandsByName.set(command.meta.name, command);
+  for (const alias of command.meta.aliases ?? []) {
+    aliasToCanonical.set(alias, command.meta.name);
+  }
+}
+
+const commandCatalog: CommandCatalog = {
+  metadata: SLASH_COMMANDS.map((command) => command.meta),
+  commandMeta(name: string): CommandMeta | null {
+    const canonical = aliasToCanonical.get(name) ?? name;
+    return commandsByName.get(canonical)?.meta ?? null;
+  },
+};
+
+function makeCommandResolver(platform: JiePlatform): CommandResolver {
+  return {
+    resolve: vi.fn(),
+    complete: vi.fn((state: TuiState, name: string, argumentText: string) => {
+      const canonical = aliasToCanonical.get(name) ?? name;
+      const command = commandsByName.get(canonical);
+      if (command === undefined) return null;
+      return command.complete(argumentText, { state, platform });
+    }),
+  };
+}
 
 function slashSource(platform: JiePlatform, stateStore: StateStore): SlashCommandSource {
   return new SlashCommandSource(commandCatalog, makeCommandResolver(platform), stateStore);
@@ -18,7 +60,7 @@ function slashSource(platform: JiePlatform, stateStore: StateStore): SlashComman
 
 describe("SlashCommandSource — slash commands", () => {
   test("/query filters jie slash commands", async () => {
-    const suggestions = await slashSource(nullPlatform(), makeStateStore())
+    const suggestions = await slashSource(makePlatform().platform, makeStateStore())
       .getSuggestions(["/he"], 0, 3, { signal: signal() });
     expect(suggestions!.prefix).toBe("/he");
     expect(suggestions!.items.map((item) => item.value)).toContain("help");
@@ -26,13 +68,13 @@ describe("SlashCommandSource — slash commands", () => {
 
 
   test("plain text yields no suggestions", async () => {
-    const suggestions = await slashSource(nullPlatform(), makeStateStore())
+    const suggestions = await slashSource(makePlatform().platform, makeStateStore())
       .getSuggestions(["hello"], 0, 5, { signal: signal() });
     expect(suggestions).toBeNull();
   });
 
   test("bare '/' lists every command with its argument hint and description", async () => {
-    const suggestions = await slashSource(nullPlatform(), makeStateStore())
+    const suggestions = await slashSource(makePlatform().platform, makeStateStore())
       .getSuggestions(["/"], 0, 1, { signal: signal() });
     expect(suggestions!.items).toHaveLength(16);
     const team = suggestions!.items.find((item) => item.value === "team");
@@ -44,7 +86,8 @@ describe("SlashCommandSource — slash commands", () => {
 
 describe("SlashCommandSource — unambiguous-command drill-down", () => {
   function drillPlatform(): JiePlatform {
-    return makePlatform(vi.fn(async (cmd: { name: string }) => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async (cmd: { readonly name: string }) => {
       if (cmd.name === "getTeamInfo") {
         return { defaultTeam: "alpha", installed: [{ id: "alpha", agentCount: 2 }, { id: "beta", agentCount: 1 }] };
       }
@@ -59,7 +102,8 @@ describe("SlashCommandSource — unambiguous-command drill-down", () => {
       }
       if (cmd.name === "getModelFilters") return [];
       return null;
-    }));
+    });
+    return platform;
   }
 
   test("'/resum' drills down to resume's session rows labeled 'resume <id>'", async () => {
@@ -112,7 +156,8 @@ describe("SlashCommandSource — unambiguous-command drill-down", () => {
 
 describe("SlashCommandSource — /team arguments", () => {
   function teamPlatform(): JiePlatform {
-    return makePlatform(vi.fn(async (cmd: { name: string }) => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async (cmd: { readonly name: string }) => {
       if (cmd.name === "getTeamInfo") {
         return {
           defaultTeam: "alpha",
@@ -120,7 +165,8 @@ describe("SlashCommandSource — /team arguments", () => {
         };
       }
       return null;
-    }));
+    });
+    return platform;
   }
 
   test("suggests installed teams after '/team ' with the default marked", async () => {
@@ -149,7 +195,8 @@ describe("SlashCommandSource — /team arguments", () => {
 
 describe("SlashCommandSource — /resume arguments", () => {
   function sessionPlatform(): JiePlatform {
-    return makePlatform(vi.fn(async (cmd: { name: string }) => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async (cmd: { readonly name: string }) => {
       if (cmd.name === "listSessions") {
         return [
           { sessionId: "alpha-1", messageCount: 3, lastActivity: "2026-07-22T00:00:00.000Z" },
@@ -157,7 +204,8 @@ describe("SlashCommandSource — /resume arguments", () => {
         ];
       }
       return null;
-    }));
+    });
+    return platform;
   }
 
   test("suggests sessions after '/resume ' with message count and age", async () => {
@@ -169,7 +217,8 @@ describe("SlashCommandSource — /resume arguments", () => {
   });
 
   function namedSessionPlatform(): JiePlatform {
-    return makePlatform(vi.fn(async (cmd: { name: string }) => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async (cmd: { readonly name: string }) => {
       if (cmd.name === "listSessions") {
         return [
           { sessionId: "01HZX-ULID", name: "refactor pass", messageCount: 3, lastActivity: "2026-07-22T00:00:00.000Z" },
@@ -177,7 +226,8 @@ describe("SlashCommandSource — /resume arguments", () => {
         ];
       }
       return null;
-    }));
+    });
+    return platform;
   }
 
   test("filters sessions by the typed argument prefix", async () => {
@@ -208,8 +258,8 @@ describe("SlashCommandSource — /resume arguments", () => {
   });
 
   test("yields no suggestions when no team is loaded", async () => {
-    const execute = vi.fn(async () => null);
-    const suggestions = await slashSource(makePlatform(execute), makeStateStore())
+    const { platform, execute } = makePlatform();
+    const suggestions = await slashSource(platform, makeStateStore())
       .getSuggestions(["/resume "], 0, 8, { signal: signal() });
     expect(suggestions).toBeNull();
     expect(execute).not.toHaveBeenCalled();
@@ -218,19 +268,19 @@ describe("SlashCommandSource — /resume arguments", () => {
 
 describe("SlashCommandSource — /effort arguments", () => {
   test("suggests the five effort levels after '/effort '", async () => {
-    const suggestions = await slashSource(nullPlatform(), makeStateStore())
+    const suggestions = await slashSource(makePlatform().platform, makeStateStore())
       .getSuggestions(["/effort "], 0, 8, { signal: signal() });
     expect(suggestions!.items.map((item) => item.value)).toEqual(["off", "low", "medium", "high", "max"]);
   });
 
   test("filters effort levels by the typed prefix", async () => {
-    const suggestions = await slashSource(nullPlatform(), makeStateStore())
+    const suggestions = await slashSource(makePlatform().platform, makeStateStore())
       .getSuggestions(["/effort h"], 0, 9, { signal: signal() });
     expect(suggestions!.items.map((item) => item.value)).toEqual(["high"]);
   });
 
   test("a fully typed effort level yields no suggestions so Enter submits directly", async () => {
-    const suggestions = await slashSource(nullPlatform(), makeStateStore())
+    const suggestions = await slashSource(makePlatform().platform, makeStateStore())
       .getSuggestions(["/effort high"], 0, 12, { signal: signal() });
     expect(suggestions).toBeNull();
   });
@@ -247,7 +297,8 @@ describe("SlashCommandSource — /model arguments", () => {
     models: ReadonlyArray<{ provider: string; id: string; name: string; available: boolean }>,
     filters: ReadonlyArray<string> = [],
   ): JiePlatform {
-    return makePlatform(vi.fn(async (cmd: { name: string }) => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async (cmd: { readonly name: string }) => {
       if (cmd.name === "listFilteredModels") {
         const available = models.filter((model) => model.available);
         const target = (model: { provider: string; id: string }) => `${model.provider}/${model.id}`.toLowerCase();
@@ -255,7 +306,8 @@ describe("SlashCommandSource — /model arguments", () => {
         return { models: matched, filteredOut: available.length - matched.length };
       }
       return null;
-    }));
+    });
+    return platform;
   }
 
   test("suggests registry models as provider/modelId with the model name as description", async () => {
@@ -341,10 +393,12 @@ describe("SlashCommandSource — /model arguments", () => {
 
 describe("SlashCommandSource — /model-filter arguments", () => {
   function filterPlatform(filters: ReadonlyArray<string>): JiePlatform {
-    return makePlatform(vi.fn(async (cmd: { name: string }) => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async (cmd: { readonly name: string }) => {
       if (cmd.name === "getModelFilters") return filters;
       return null;
-    }));
+    });
+    return platform;
   }
 
   test("suggests the add, remove and list actions after the command", async () => {
@@ -434,10 +488,12 @@ describe("SlashCommandSource — /login arguments", () => {
   ];
 
   function providerPlatform(providers: ReadonlyArray<{ id: string; description?: string }>): JiePlatform {
-    return makePlatform(vi.fn(async (cmd: { name: string }) => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async (cmd: { readonly name: string }) => {
       if (cmd.name === "listProviders") return providers;
       return null;
-    }));
+    });
+    return platform;
   }
 
   test("suggests providers with their descriptions after '/login '", async () => {
@@ -471,12 +527,14 @@ describe("SlashCommandSource — /login arguments", () => {
 
 describe("SlashCommandSource — /logout arguments", () => {
   function logoutPlatform(): JiePlatform {
-    return makePlatform(vi.fn(async (cmd: { name: string }) => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async (cmd: { readonly name: string }) => {
       if (cmd.name === "listProviders") {
         return [{ id: "anthropic", description: "ANTHROPIC_API_KEY" }, { id: "openai" }];
       }
       return null;
-    }));
+    });
+    return platform;
   }
 
   test("suggests the logout-all star first, then the providers", async () => {
@@ -504,7 +562,7 @@ describe("SlashCommandSource — /kanban arguments", () => {
   ];
 
   test("drills down to subcommands from an unambiguous command prefix", async () => {
-    const suggestions = await slashSource(nullPlatform(), storeWithKanban(BOARD))
+    const suggestions = await slashSource(makePlatform().platform, storeWithKanban(BOARD))
       .getSuggestions(["/kanb"], 0, 5, { signal: signal() });
     expect(suggestions!.prefix).toBe("/kanb");
     expect(suggestions!.items.map((item) => item.value)).toEqual(["kanban add", "kanban remove", "kanban complete", "kanban review", "kanban handoff"]);
@@ -513,7 +571,7 @@ describe("SlashCommandSource — /kanban arguments", () => {
   });
 
   test("suggests subcommands after '/kanban ' with their argument hints", async () => {
-    const suggestions = await slashSource(nullPlatform(), storeWithKanban(BOARD))
+    const suggestions = await slashSource(makePlatform().platform, storeWithKanban(BOARD))
       .getSuggestions(["/kanban "], 0, 8, { signal: signal() });
     expect(suggestions!.items).toEqual([
       { value: "add", label: "add", description: "[--title <title>] <description>" },
@@ -525,19 +583,19 @@ describe("SlashCommandSource — /kanban arguments", () => {
   });
 
   test("filters subcommands by the typed prefix", async () => {
-    const suggestions = await slashSource(nullPlatform(), storeWithKanban(BOARD))
+    const suggestions = await slashSource(makePlatform().platform, storeWithKanban(BOARD))
       .getSuggestions(["/kanban r"], 0, 9, { signal: signal() });
     expect(suggestions!.items.map((item) => item.value)).toEqual(["remove", "review"]);
   });
 
   test("a fully typed add yields no suggestions so the user can type the description", async () => {
-    const suggestions = await slashSource(nullPlatform(), storeWithKanban(BOARD))
+    const suggestions = await slashSource(makePlatform().platform, storeWithKanban(BOARD))
       .getSuggestions(["/kanban add"], 0, 11, { signal: signal() });
     expect(suggestions).toBeNull();
   });
 
   test("suggests card ids after '/kanban remove '", async () => {
-    const suggestions = await slashSource(nullPlatform(), storeWithKanban(BOARD))
+    const suggestions = await slashSource(makePlatform().platform, storeWithKanban(BOARD))
       .getSuggestions(["/kanban remove "], 0, 15, { signal: signal() });
     expect(suggestions!.items.map((item) => item.value)).toEqual(["remove #1", "remove #2", "remove #3"]);
     expect(suggestions!.items[0]!.label).toBe("#1");
@@ -545,31 +603,31 @@ describe("SlashCommandSource — /kanban arguments", () => {
   });
 
   test("suggests card ids after '/kanban complete ' excluding already-completed cards", async () => {
-    const suggestions = await slashSource(nullPlatform(), storeWithKanban(BOARD))
+    const suggestions = await slashSource(makePlatform().platform, storeWithKanban(BOARD))
       .getSuggestions(["/kanban complete "], 0, 17, { signal: signal() });
     expect(suggestions!.items.map((item) => item.value)).toEqual(["complete #1", "complete #2"]);
   });
 
   test("suggests card ids after '/kanban review '", async () => {
-    const suggestions = await slashSource(nullPlatform(), storeWithKanban(BOARD))
+    const suggestions = await slashSource(makePlatform().platform, storeWithKanban(BOARD))
       .getSuggestions(["/kanban review "], 0, 15, { signal: signal() });
     expect(suggestions!.items.map((item) => item.value)).toEqual(["review #1", "review #2", "review #3"]);
   });
 
   test("filters card ids by the typed prefix", async () => {
-    const suggestions = await slashSource(nullPlatform(), storeWithKanban(BOARD))
+    const suggestions = await slashSource(makePlatform().platform, storeWithKanban(BOARD))
       .getSuggestions(["/kanban remove #"], 0, 16, { signal: signal() });
     expect(suggestions!.items.map((item) => item.value)).toEqual(["remove #1", "remove #2", "remove #3"]);
   });
 
   test("yields no suggestions when the subcommand is unknown", async () => {
-    const suggestions = await slashSource(nullPlatform(), storeWithKanban(BOARD))
+    const suggestions = await slashSource(makePlatform().platform, storeWithKanban(BOARD))
       .getSuggestions(["/kanban bogus"], 0, 13, { signal: signal() });
     expect(suggestions).toBeNull();
   });
 
   test("yields no card ids for remove when the board is empty", async () => {
-    const suggestions = await slashSource(nullPlatform(), storeWithKanban())
+    const suggestions = await slashSource(makePlatform().platform, storeWithKanban())
       .getSuggestions(["/kanban remove "], 0, 15, { signal: signal() });
     expect(suggestions).toBeNull();
   });

@@ -25,9 +25,9 @@ describe("parseToolSpec", () => {
   });
 
   test("whitespace around args is stripped", () => {
-    expect(parseToolSpec("write_file( **/CONTEXT.md )")).toEqual({
+    expect(parseToolSpec("write_file( **/MODULE.md )")).toEqual({
       name: "write_file",
-      args: ["**/CONTEXT.md"],
+      args: ["**/MODULE.md"],
     });
   });
 

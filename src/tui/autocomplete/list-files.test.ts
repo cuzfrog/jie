@@ -299,3 +299,98 @@ describe("scanFiles", () => {
     }
   });
 });
+
+describe("scanFiles onlyIgnored", () => {
+  test("returns only gitignored files", () => {
+    const dir = setup();
+    try {
+      writeFileSync(join(dir, ".gitignore"), "ignored.ts\n");
+      writeFileSync(join(dir, "ignored.ts"), "x");
+      writeFileSync(join(dir, "kept.ts"), "x");
+      const rels = scanFiles(dir, { onlyIgnored: true }).map((f) => f.relPath);
+      expect(rels).toContain("ignored.ts");
+      expect(rels).not.toContain("kept.ts");
+    } finally {
+      teardown(dir);
+    }
+  });
+
+  test("includes gitignored dotfiles", () => {
+    const dir = setup();
+    try {
+      writeFileSync(join(dir, ".gitignore"), ".env\n");
+      writeFileSync(join(dir, ".env"), "x");
+      writeFileSync(join(dir, "kept.ts"), "x");
+      const rels = scanFiles(dir, { onlyIgnored: true }).map((f) => f.relPath);
+      expect(rels).toContain(".env");
+      expect(rels).not.toContain("kept.ts");
+    } finally {
+      teardown(dir);
+    }
+  });
+
+  test("excludes dotfiles not in .gitignore", () => {
+    const dir = setup();
+    try {
+      writeFileSync(join(dir, ".hidden"), "x");
+      writeFileSync(join(dir, ".gitignore"), "");
+      const rels = scanFiles(dir, { onlyIgnored: true }).map((f) => f.relPath);
+      expect(rels).not.toContain(".hidden");
+    } finally {
+      teardown(dir);
+    }
+  });
+
+  test("traverses ignored directories to find their files", () => {
+    const dir = setup();
+    try {
+      mkdirSync(join(dir, "ignoredDir"));
+      writeFileSync(join(dir, "ignoredDir", "x.ts"), "x");
+      writeFileSync(join(dir, ".gitignore"), "ignoredDir/\n");
+      const rels = scanFiles(dir, { onlyIgnored: true }).map((f) => f.relPath);
+      expect(rels).toContain("ignoredDir/x.ts");
+    } finally {
+      teardown(dir);
+    }
+  });
+
+  test("skips common large directories in onlyIgnored mode", () => {
+    const dir = setup();
+    try {
+      mkdirSync(join(dir, "__pycache__"));
+      writeFileSync(join(dir, "__pycache__", "foo.pyc"), "x");
+      writeFileSync(join(dir, ".gitignore"), "__pycache__/\n");
+      const rels = scanFiles(dir, { onlyIgnored: true }).map((f) => f.relPath);
+      expect(rels.some((r) => r.startsWith("__pycache__/"))).toBe(false);
+    } finally {
+      teardown(dir);
+    }
+  });
+
+  test("skips node_modules in onlyIgnored mode", () => {
+    const dir = setup();
+    try {
+      writeFileSync(join(dir, "node_modules", "foo.ts"), "x");
+      writeFileSync(join(dir, ".gitignore"), "node_modules/\n");
+      const rels = scanFiles(dir, { onlyIgnored: true }).map((f) => f.relPath);
+      expect(rels.some((r) => r.startsWith("node_modules/"))).toBe(false);
+    } finally {
+      teardown(dir);
+    }
+  });
+
+  test("respects negation inside an ignored parent", () => {
+    const dir = setup();
+    try {
+      mkdirSync(join(dir, "ignoredDir"));
+      writeFileSync(join(dir, "ignoredDir", "keep.ts"), "x");
+      writeFileSync(join(dir, "ignoredDir", "drop.ts"), "x");
+      writeFileSync(join(dir, ".gitignore"), "ignoredDir/\n!ignoredDir/keep.ts\n");
+      const rels = scanFiles(dir, { onlyIgnored: true }).map((f) => f.relPath);
+      expect(rels).not.toContain("ignoredDir/keep.ts");
+      expect(rels).toContain("ignoredDir/drop.ts");
+    } finally {
+      teardown(dir);
+    }
+  });
+});

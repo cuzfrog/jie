@@ -1,9 +1,14 @@
 import { FileMentionSource } from "./file-mention-source";
-import { CWD, signal } from "./_test-fixtures";
 import type { ScannedFile } from "./list-files";
 
-function files(...paths: string[]): (_rootDir: string) => ReadonlyArray<ScannedFile> {
-  return (_rootDir) => paths.map((relPath) => ({ absPath: `${CWD}/${relPath}`, relPath }));
+const CWD = "/proj";
+
+function signal(): AbortSignal {
+  return new AbortController().signal;
+}
+
+function files(...paths: string[]): (_rootDir: string, _options?: { onlyIgnored?: boolean }) => ReadonlyArray<ScannedFile> {
+  return (_rootDir, _options) => paths.map((relPath) => ({ absPath: `${CWD}/${relPath}`, relPath }));
 }
 
 describe("FileMentionSource", () => {
@@ -76,12 +81,54 @@ describe("FileMentionSource", () => {
   });
 
   test("caps suggestions at MAX_SUGGESTIONS", async () => {
-    const suggestions = await new FileMentionSource(CWD, files(...Array.from({ length: 30 }, (_, i) => `${i}.ts`))).getSuggestions(
-      ["@"],
+    const suggestions = await new FileMentionSource(
+      CWD,
+      files(...Array.from({ length: 30 }, (_, i) => `${i}.ts`)),
+    ).getSuggestions(["@"], 0, 1, { signal: signal() });
+    expect(suggestions!.items.length).toBe(20);
+  });
+
+  test("@@query uses ignored-only scan and keeps @@ in values", async () => {
+    const scan = vi.fn(files("src/main.ts", ".env"));
+    const suggestions = await new FileMentionSource(CWD, scan).getSuggestions(
+      ["@@mai"],
       0,
-      1,
+      5,
       { signal: signal() },
     );
-    expect(suggestions!.items.length).toBe(20);
+    expect(scan).toHaveBeenCalledWith(CWD, { onlyIgnored: true });
+    expect(suggestions).not.toBeNull();
+    expect(suggestions!.prefix).toBe("@@mai");
+    expect(suggestions!.items[0]).toEqual({ value: "@@src/main.ts", label: "src/main.ts" });
+  });
+
+  test("@@ with no match returns null", async () => {
+    const suggestions = await new FileMentionSource(CWD, files("src/main.ts", "src/helper.ts")).getSuggestions(
+      ["@@zzz"],
+      0,
+      5,
+      { signal: signal() },
+    );
+    expect(suggestions).toBeNull();
+  });
+
+  test("@@ mid-line after a space still triggers", async () => {
+    const suggestions = await new FileMentionSource(CWD, files("src/main.ts", "src/helper.ts")).getSuggestions(
+      ["look at @@hel"],
+      0,
+      13,
+      { signal: signal() },
+    );
+    expect(suggestions!.items[0]!.value).toBe("@@src/helper.ts");
+  });
+
+  test("empty @@ query returns files in input order", async () => {
+    const suggestions = await new FileMentionSource(CWD, files("a.ts", "b.ts", "c.ts")).getSuggestions(
+      ["@@"],
+      0,
+      2,
+      { signal: signal() },
+    );
+    expect(suggestions!.items.map((item) => item.label)).toEqual(["a.ts", "b.ts", "c.ts"]);
   });
 });

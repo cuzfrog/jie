@@ -1,8 +1,19 @@
 import type { SkillInfo } from "../../platform";
 import { makeAgentUiState, makeTuiState } from "../test";
-import type { StateStore } from "../state";
+import type { StateStore, TuiState } from "../state";
 import { SkillSource } from "./skill-source";
-import { makeStateStore, signal } from "./_test-fixtures";
+
+function signal(): AbortSignal {
+  return new AbortController().signal;
+}
+
+function makeStateStore(state: TuiState = makeTuiState()): StateStore {
+  return vi.mocked<StateStore>({
+    getState: vi.fn(() => state),
+    dispatch: vi.fn(),
+    subscribe: vi.fn(() => () => undefined),
+  });
+}
 
 describe("SkillSource", () => {
   function skillInfo(name: string, overrides: Partial<SkillInfo> = {}): SkillInfo {
