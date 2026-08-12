@@ -17,6 +17,6 @@ export class PathCompletionSource implements CompletionSource {
   ): Promise<JieSuggestions | null> {
     const suggestions = await this.combined.getSuggestions(lines, cursorLine, cursorCol, options);
     if (suggestions === null) return null;
-    return suggestions as JieSuggestions;
+    return suggestions;
   }
 }

@@ -1,802 +1,110 @@
-import { type JiePlatform, type KanbanCard, type SkillInfo } from "../../platform";
-import type { CommandCatalog, CommandResolver } from "../command";
-import { SLASH_COMMANDS } from "../command/definitions";
-import { type ScannedFile } from "../file-mention";
-import { type StateStore, type TuiState } from "../state";
-import { makeAgentUiState, makeTuiState } from "../test";
-import { FileMentionSource } from "./file-mention-source";
+import type { SkillInfo } from "../../platform";
+import type { CompletionSource, JieSuggestions } from "./completion-source";
 import { JieAutocompleteProviderImpl } from "./jie-autocomplete";
-import { PathCompletionSource } from "./path-completion-source";
-import { SkillSource } from "./skill-source";
-import { SlashCommandSource } from "./slash-command-source";
+import { makeAgentUiState, makeTuiState } from "../test";
+import {
+  CWD,
+  makeJieAutocompleteProvider,
+  makePlatform,
+  makeStateStore,
+  noScan,
+  nullPlatform,
+  scanFixture,
+  signal,
+  storeWithTeam,
+} from "./_test-fixtures";
 
-const CWD = "/proj";
-
-const SCANNED_FILES: ReadonlyArray<ScannedFile> = [
-  { absPath: "/proj/src/main.ts", relPath: "src/main.ts" },
-  { absPath: "/proj/src/helper.ts", relPath: "src/helper.ts" },
-];
-
-function scanFixture(): ReadonlyArray<ScannedFile> {
-  return SCANNED_FILES;
+function skillInfo(name: string, overrides: Partial<SkillInfo> = {}): SkillInfo {
+  return { name, description: `run ${name}`, argumentHint: null, ...overrides };
 }
 
-function noScan(): ReadonlyArray<ScannedFile> {
-  return [];
+function storeWithSkills(skills: ReadonlyArray<SkillInfo>) {
+  const agent = makeAgentUiState("my-team:general-1", { isLeader: true, skills });
+  return makeStateStore(makeTuiState({
+    teamId: "my-team",
+    leaderAgentId: agent.agentId,
+    focusedAgentId: agent.agentId,
+    agents: new Map([[agent.agentId, agent]]),
+  }));
 }
 
-function signal(): AbortSignal {
-  return new AbortController().signal;
-}
-
-function makePlatform(execute: ReturnType<typeof vi.fn>): JiePlatform {
-  return vi.mocked<JiePlatform>({
-    settings: { defaultTeam: undefined, defaultProvider: undefined, defaultModel: undefined },
-    subscribe: vi.fn(() => () => undefined),
-    prompt: vi.fn(),
-    interrupt: vi.fn(),
-    dequeuePrompt: vi.fn(),
-    requeuePrompt: vi.fn(),
-    teams: vi.fn(() => []),
-    execute,
-    shutdown: vi.fn(),
-  });
-}
-
-function nullPlatform(): JiePlatform {
-  return makePlatform(vi.fn(async () => null));
-}
-
-function makeStateStore(state: TuiState = makeTuiState()): StateStore {
-  return vi.mocked<StateStore>({
-    getState: vi.fn(() => state),
-    dispatch: vi.fn(),
-    subscribe: vi.fn(() => () => undefined),
-  });
-}
-
-function storeWithTeam(): StateStore {
-  return makeStateStore(makeTuiState({ teamId: "my-team" }));
-}
-
-function storeWithKanban(cards: ReadonlyArray<KanbanCard> = []): StateStore {
-  return makeStateStore(makeTuiState({ teamId: "my-team", kanbanBoard: cards }));
-}
-
-const commandCatalog = vi.mocked<CommandCatalog>({
-  metadata: SLASH_COMMANDS.map((command) => command.meta),
-  commandMeta: vi.fn((name) => {
-    const aliasToCanonical = new Map<string, string>();
-    for (const command of SLASH_COMMANDS) {
-      for (const alias of command.meta.aliases ?? []) {
-        aliasToCanonical.set(alias, command.meta.name);
-      }
+function drillPlatform() {
+  return makePlatform(vi.fn(async (cmd: { name: string }) => {
+    if (cmd.name === "listSessions") {
+      return [
+        { sessionId: "alpha-1", messageCount: 3, lastActivity: "2026-07-22T00:00:00.000Z" },
+        { sessionId: "beta-2", messageCount: 12, lastActivity: "2026-07-21T00:00:00.000Z" },
+      ];
     }
-    const canonical = aliasToCanonical.get(name) ?? name;
-    return SLASH_COMMANDS.find((command) => command.meta.name === canonical)?.meta ?? null;
-  }),
-});
-
-function makeCommandResolver(platform: JiePlatform): CommandResolver {
-  const aliasToCanonical = new Map<string, string>();
-  const commandsByName = new Map<string, (typeof SLASH_COMMANDS)[number]>();
-  for (const command of SLASH_COMMANDS) {
-    commandsByName.set(command.meta.name, command);
-    for (const alias of command.meta.aliases ?? []) {
-      aliasToCanonical.set(alias, command.meta.name);
-    }
-  }
-
-  return {
-    resolve: vi.fn(),
-    complete: vi.fn((_state, name, argumentText) => {
-      const canonical = aliasToCanonical.get(name) ?? name;
-      const command = commandsByName.get(canonical);
-      if (command === undefined) return null;
-      return command.complete(argumentText, { state: _state, platform });
-    }),
-  } as CommandResolver;
+    return null;
+  }));
 }
 
-function makeProvider(cwd: string, scan: (rootDir: string) => ReadonlyArray<ScannedFile>, platform: JiePlatform, stateStore: StateStore): JieAutocompleteProviderImpl {
-  return new JieAutocompleteProviderImpl(cwd, [
-    new FileMentionSource(cwd, scan),
-    new SlashCommandSource(commandCatalog, makeCommandResolver(platform), stateStore),
-    new SkillSource(stateStore),
-    new PathCompletionSource(cwd),
-  ]);
-}
-
-describe("createJieAutocompleteProvider — @-mentions", () => {
-  test("@query resolves matching project files with @-prefixed values", async () => {
-    const suggestions = await makeProvider(CWD, scanFixture, nullPlatform(), makeStateStore())
-      .getSuggestions(["@mai"], 0, 4, { signal: signal() });
-    expect(suggestions).not.toBeNull();
-    expect(suggestions!.prefix).toBe("@mai");
-    expect(suggestions!.items[0]).toEqual({ value: "@src/main.ts", label: "src/main.ts" });
-  });
-
-  test("@ with no match returns null", async () => {
-    const suggestions = await makeProvider(CWD, scanFixture, nullPlatform(), makeStateStore())
-      .getSuggestions(["@zzz"], 0, 4, { signal: signal() });
+describe("JieAutocompleteProviderImpl", () => {
+  test("plain text yields no suggestions", async () => {
+    const suggestions = await makeJieAutocompleteProvider("/tmp", noScan, nullPlatform(), makeStateStore())
+      .getSuggestions(["hello"], 0, 5, { signal: signal() });
     expect(suggestions).toBeNull();
   });
 
-  test("@ mid-line after a space still triggers", async () => {
-    const suggestions = await makeProvider(CWD, scanFixture, nullPlatform(), makeStateStore())
-      .getSuggestions(["look at @hel"], 0, 12, { signal: signal() });
-    expect(suggestions!.items[0]!.value).toBe("@src/helper.ts");
+  test("merges slash commands and skills for bare '/'", async () => {
+    const suggestions = await makeJieAutocompleteProvider("/tmp", noScan, nullPlatform(), storeWithSkills([skillInfo("say-hello")]))
+      .getSuggestions(["/"], 0, 1, { signal: signal() });
+    expect(suggestions).not.toBeNull();
+    expect(suggestions!.items).toHaveLength(17);
+    expect(suggestions!.items.at(-1)).toEqual({ value: "skill:say-hello", label: "skill:say-hello", description: "run say-hello" });
   });
 
-  test("applyCompletion replaces the @ token with the resolved path and a trailing space", () => {
-    const result = makeProvider(CWD, scanFixture, nullPlatform(), makeStateStore())
+  test("short-circuits on an exclusive source and skips later sources", async () => {
+    class ExclusiveSource implements CompletionSource {
+      readonly triggerCharacters = ["/"];
+      readonly exclusive = true;
+      getSuggestions(_lines: string[], _cursorLine: number, _cursorCol: number, _options: { signal: AbortSignal; force?: boolean }): Promise<JieSuggestions | null> {
+        return Promise.resolve({ items: [{ value: "exclusive", label: "exclusive" }], prefix: "/" });
+      }
+    }
+
+    class TrackingSource implements CompletionSource {
+      readonly triggerCharacters = ["/"];
+      called = false;
+      getSuggestions(_lines: string[], _cursorLine: number, _cursorCol: number, _options: { signal: AbortSignal; force?: boolean }): Promise<JieSuggestions | null> {
+        this.called = true;
+        return Promise.resolve({ items: [{ value: "track", label: "track" }], prefix: "/" });
+      }
+    }
+
+    const tracking = new TrackingSource();
+    const provider = new JieAutocompleteProviderImpl("/tmp", [new ExclusiveSource(), tracking]);
+    const suggestions = await provider.getSuggestions(["/"], 0, 1, { signal: signal() });
+    expect(suggestions!.items).toEqual([{ value: "exclusive", label: "exclusive" }]);
+    expect(tracking.called).toBe(false);
+  });
+
+  test("applyCompletion replaces an @-mention token with the resolved path and a trailing space", () => {
+    const result = makeJieAutocompleteProvider(CWD, scanFixture, nullPlatform(), makeStateStore())
       .applyCompletion(["@mai"], 0, 4, { value: "@src/main.ts", label: "src/main.ts" }, "@mai");
     expect(result.lines).toEqual(["@src/main.ts "]);
     expect(result.cursorCol).toBe(13);
   });
-});
 
-describe("createJieAutocompleteProvider — slash commands", () => {
-  test("/query filters jie slash commands", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, nullPlatform(), makeStateStore())
-      .getSuggestions(["/he"], 0, 3, { signal: signal() });
-    expect(suggestions!.prefix).toBe("/he");
-    expect(suggestions!.items.map((item) => item.value)).toContain("help");
-  });
-
-  test("slash completion appends the command name and a trailing space", () => {
-    const result = makeProvider("/tmp", noScan, nullPlatform(), makeStateStore())
+  test("applyCompletion appends a slash command and a trailing space", () => {
+    const result = makeJieAutocompleteProvider("/tmp", noScan, nullPlatform(), makeStateStore())
       .applyCompletion(["/he"], 0, 3, { value: "help", label: "help" }, "/he");
     expect(result.lines).toEqual(["/help "]);
     expect(result.cursorCol).toBe(6);
   });
 
-  test("plain text yields no suggestions", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, nullPlatform(), makeStateStore())
-      .getSuggestions(["hello"], 0, 5, { signal: signal() });
-    expect(suggestions).toBeNull();
-  });
-
-  test("bare '/' lists every command with its argument hint and description", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, nullPlatform(), makeStateStore())
-      .getSuggestions(["/"], 0, 1, { signal: signal() });
-    expect(suggestions!.items).toHaveLength(16);
-    const team = suggestions!.items.find((item) => item.value === "team");
-    expect(team!.description).toBe("<teamId> — switch the active team");
-    const help = suggestions!.items.find((item) => item.value === "help");
-    expect(help!.description).toBe("show this help");
-  });
-});
-
-describe("createJieAutocompleteProvider — skill invocations", () => {
-  function skillInfo(name: string, overrides: Partial<SkillInfo> = {}): SkillInfo {
-    return { name, description: `run ${name}`, argumentHint: null, ...overrides };
-  }
-
-  function storeWithSkills(skills: ReadonlyArray<SkillInfo>): StateStore {
-    const agent = makeAgentUiState("my-team:general-1", { isLeader: true, skills });
-    return makeStateStore(makeTuiState({
-      teamId: "my-team",
-      leaderAgentId: agent.agentId,
-      focusedAgentId: agent.agentId,
-      agents: new Map([[agent.agentId, agent]]),
-    }));
-  }
-
-  test("bare '/' appends the focused agent's skills after the commands", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, nullPlatform(), storeWithSkills([skillInfo("say-hello")]))
-      .getSuggestions(["/"], 0, 1, { signal: signal() });
-    expect(suggestions!.items).toHaveLength(17);
-    expect(suggestions!.items.at(-1)).toEqual({ value: "skill:say-hello", label: "skill:say-hello", description: "run say-hello" });
-  });
-
-  test("skill rows show the argument hint before the description", async () => {
-    const store = storeWithSkills([skillInfo("deploy", { argumentHint: "<env>", description: "deploys the app" })]);
-    const suggestions = await makeProvider("/tmp", noScan, nullPlatform(), store)
-      .getSuggestions(["/skill:"], 0, 7, { signal: signal() });
-    expect(suggestions!.items[0]!.description).toBe("<env> — deploys the app");
-  });
-
-  test("'/skill:' lists the focused agent's skills", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, nullPlatform(),
-      storeWithSkills([skillInfo("say-hello"), skillInfo("deploy")]))
-      .getSuggestions(["/skill:"], 0, 7, { signal: signal() });
-    expect(suggestions!.prefix).toBe("/skill:");
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["skill:say-hello", "skill:deploy"]);
-  });
-
-  test("'/skill:say' filters skills by the typed prefix", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, nullPlatform(),
-      storeWithSkills([skillInfo("say-hello"), skillInfo("deploy")]))
-      .getSuggestions(["/skill:say"], 0, 10, { signal: signal() });
-    expect(suggestions!.prefix).toBe("/skill:say");
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["skill:say-hello"]);
-  });
-
-  test("an agent without skills contributes no skill entries", async () => {
-    const bare = await makeProvider("/tmp", noScan, nullPlatform(), storeWithSkills([]))
-      .getSuggestions(["/"], 0, 1, { signal: signal() });
-    expect(bare!.items).toHaveLength(16);
-    const filtered = await makeProvider("/tmp", noScan, nullPlatform(), storeWithSkills([]))
-      .getSuggestions(["/skill:"], 0, 7, { signal: signal() });
-    expect(filtered).toBeNull();
-  });
-
-  test("no team loaded yields no skill entries", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, nullPlatform(), makeStateStore())
-      .getSuggestions(["/skill:"], 0, 7, { signal: signal() });
-    expect(suggestions).toBeNull();
-  });
-
-  test("skill completion inserts the invocation and a trailing space", () => {
-    const result = makeProvider("/tmp", noScan, nullPlatform(), storeWithSkills([skillInfo("say-hello")]))
+  test("applyCompletion inserts a skill invocation and a trailing space", () => {
+    const result = makeJieAutocompleteProvider("/tmp", noScan, nullPlatform(), storeWithSkills([skillInfo("say-hello")]))
       .applyCompletion(["/skill:say"], 0, 10, { value: "skill:say-hello", label: "skill:say-hello" }, "/skill:say");
     expect(result.lines).toEqual(["/skill:say-hello "]);
     expect(result.cursorCol).toBe(17);
   });
-});
 
-describe("createJieAutocompleteProvider — unambiguous-command drill-down", () => {
-  function drillPlatform(): JiePlatform {
-    return makePlatform(vi.fn(async (cmd: { name: string }) => {
-      if (cmd.name === "getTeamInfo") {
-        return { defaultTeam: "alpha", installed: [{ id: "alpha", agentCount: 2 }, { id: "beta", agentCount: 1 }] };
-      }
-      if (cmd.name === "listSessions") {
-        return [
-          { sessionId: "alpha-1", messageCount: 3, lastActivity: "2026-07-22T00:00:00.000Z" },
-          { sessionId: "beta-2", messageCount: 12, lastActivity: "2026-07-21T00:00:00.000Z" },
-        ];
-      }
-      if (cmd.name === "listFilteredModels") {
-        return { models: [{ provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", available: true }], filteredOut: 0 };
-      }
-      if (cmd.name === "getModelFilters") return [];
-      return null;
-    }));
-  }
-
-  test("'/resum' drills down to resume's session rows labeled 'resume <id>'", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, drillPlatform(), storeWithTeam())
-      .getSuggestions(["/resum"], 0, 6, { signal: signal() });
-    expect(suggestions!.prefix).toBe("/resum");
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["resume alpha-1", "resume beta-2"]);
-    expect(suggestions!.items[0]!.description).toMatch(/^3 msg · /);
-  });
-
-  test("'/tea' drills down to team rows with the default badge", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, drillPlatform(), makeStateStore())
-      .getSuggestions(["/tea"], 0, 4, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["team alpha", "team beta"]);
-    expect(suggestions!.items[0]!.description).toBe("(default)");
-  });
-
-  test("'/model-f' drills down to the add/remove/list actions", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, drillPlatform(), makeStateStore())
-      .getSuggestions(["/model-f"], 0, 8, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["model-filter add", "model-filter remove", "model-filter list"]);
-  });
-
-  test("'/eff' drills down to the effort-level rows", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, drillPlatform(), makeStateStore())
-      .getSuggestions(["/eff"], 0, 4, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value))
-      .toEqual(["effort off", "effort low", "effort medium", "effort high", "effort max"]);
-  });
-
-  test("a multi-match prefix keeps the plain command candidates", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, drillPlatform(), storeWithTeam())
-      .getSuggestions(["/re"], 0, 3, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value).sort()).toEqual(["reload", "rename", "resume"]);
-  });
-
-  test("falls back to the command candidate when argument completion is empty", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, drillPlatform(), makeStateStore())
-      .getSuggestions(["/resum"], 0, 6, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["resume"]);
-  });
-
-  test("a no-argument command keeps the plain command candidate", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, drillPlatform(), makeStateStore())
-      .getSuggestions(["/hel"], 0, 4, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["help"]);
-  });
-
-  test("drill-down completion commits '/command arg' with a trailing space", () => {
-    const result = makeProvider("/tmp", noScan, drillPlatform(), storeWithTeam())
+  test("applyCompletion commits a drill-down '/command arg' with a trailing space", () => {
+    const result = makeJieAutocompleteProvider("/tmp", noScan, drillPlatform(), storeWithTeam())
       .applyCompletion(["/resum"], 0, 6, { value: "resume alpha-1", label: "resume alpha-1" }, "/resum");
     expect(result.lines).toEqual(["/resume alpha-1 "]);
     expect(result.cursorCol).toBe(16);
-  });
-});
-
-describe("createJieAutocompleteProvider — /team arguments", () => {
-  function teamPlatform(): JiePlatform {
-    return makePlatform(vi.fn(async (cmd: { name: string }) => {
-      if (cmd.name === "getTeamInfo") {
-        return {
-          defaultTeam: "alpha",
-          installed: [{ id: "default-solo", agentCount: 1 }, { id: "alpha", agentCount: 3 }, { id: "beta", agentCount: 2 }],
-        };
-      }
-      return null;
-    }));
-  }
-
-  test("suggests installed teams after '/team ' with the default marked", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, teamPlatform(), makeStateStore())
-      .getSuggestions(["/team "], 0, 6, { signal: signal() });
-    expect(suggestions!.items).toEqual([
-      { value: "default-solo", label: "default-solo", description: "1 agent" },
-      { value: "alpha", label: "alpha", description: "(default)" },
-      { value: "beta", label: "beta", description: "2 agents" },
-    ]);
-  });
-
-  test("filters teams by the typed argument prefix", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, teamPlatform(), makeStateStore())
-      .getSuggestions(["/team al"], 0, 8, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["alpha"]);
-  });
-
-  test("a fully typed team id yields no suggestions so Enter submits directly", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, teamPlatform(), makeStateStore())
-      .getSuggestions(["/team alpha"], 0, 11, { signal: signal() });
-    expect(suggestions).toBeNull();
-  });
-
-  test("argument completion replaces only the argument token", () => {
-    const result = makeProvider("/tmp", noScan, teamPlatform(), makeStateStore())
-      .applyCompletion(["/team "], 0, 6, { value: "alpha", label: "alpha" }, "");
-    expect(result.lines).toEqual(["/team alpha"]);
-    expect(result.cursorCol).toBe(11);
-  });
-});
-
-describe("createJieAutocompleteProvider — /resume arguments", () => {
-  function sessionPlatform(): JiePlatform {
-    return makePlatform(vi.fn(async (cmd: { name: string }) => {
-      if (cmd.name === "listSessions") {
-        return [
-          { sessionId: "alpha-1", messageCount: 3, lastActivity: "2026-07-22T00:00:00.000Z" },
-          { sessionId: "beta-2", messageCount: 12, lastActivity: "2026-07-21T00:00:00.000Z" },
-        ];
-      }
-      return null;
-    }));
-  }
-
-  test("suggests sessions after '/resume ' with message count and age", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, sessionPlatform(), storeWithTeam())
-      .getSuggestions(["/resume "], 0, 8, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["alpha-1", "beta-2"]);
-    expect(suggestions!.items[0]!.description).toMatch(/^3 msg · /);
-    expect(suggestions!.items[1]!.description).toMatch(/^12 msg · /);
-  });
-
-  function namedSessionPlatform(): JiePlatform {
-    return makePlatform(vi.fn(async (cmd: { name: string }) => {
-      if (cmd.name === "listSessions") {
-        return [
-          { sessionId: "01HZX-ULID", name: "refactor pass", messageCount: 3, lastActivity: "2026-07-22T00:00:00.000Z" },
-          { sessionId: "beta-2", messageCount: 12, lastActivity: "2026-07-21T00:00:00.000Z" },
-        ];
-      }
-      return null;
-    }));
-  }
-
-  test("filters sessions by the typed argument prefix", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, sessionPlatform(), storeWithTeam())
-      .getSuggestions(["/resume be"], 0, 10, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["beta-2"]);
-  });
-
-  test("shows a renamed session's name as the label, keeping the sessionId as the committed value", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, namedSessionPlatform(), storeWithTeam())
-      .getSuggestions(["/resume "], 0, 8, { signal: signal() });
-    expect(suggestions!.items[0]!.label).toBe("refactor pass");
-    expect(suggestions!.items[0]!.value).toBe("01HZX-ULID");
-    expect(suggestions!.items[0]!.description).toMatch(/^3 msg · /);
-    expect(suggestions!.items[1]!.label).toBe("beta-2");
-  });
-
-  test("filters sessions by name prefix in addition to session id", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, namedSessionPlatform(), storeWithTeam())
-      .getSuggestions(["/resume ref"], 0, 11, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["01HZX-ULID"]);
-  });
-
-  test("a fully typed session id yields no suggestions so Enter submits directly", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, sessionPlatform(), storeWithTeam())
-      .getSuggestions(["/resume alpha-1"], 0, 15, { signal: signal() });
-    expect(suggestions).toBeNull();
-  });
-
-  test("yields no suggestions when no team is loaded", async () => {
-    const execute = vi.fn(async () => null);
-    const suggestions = await makeProvider("/tmp", noScan, makePlatform(execute), makeStateStore())
-      .getSuggestions(["/resume "], 0, 8, { signal: signal() });
-    expect(suggestions).toBeNull();
-    expect(execute).not.toHaveBeenCalled();
-  });
-});
-
-describe("createJieAutocompleteProvider — /effort arguments", () => {
-  test("suggests the five effort levels after '/effort '", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, nullPlatform(), makeStateStore())
-      .getSuggestions(["/effort "], 0, 8, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["off", "low", "medium", "high", "max"]);
-  });
-
-  test("filters effort levels by the typed prefix", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, nullPlatform(), makeStateStore())
-      .getSuggestions(["/effort h"], 0, 9, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["high"]);
-  });
-
-  test("a fully typed effort level yields no suggestions so Enter submits directly", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, nullPlatform(), makeStateStore())
-      .getSuggestions(["/effort high"], 0, 12, { signal: signal() });
-    expect(suggestions).toBeNull();
-  });
-});
-
-describe("createJieAutocompleteProvider — /model arguments", () => {
-  const MODELS: ReadonlyArray<{ provider: string; id: string; name: string; available: boolean }> = [
-    { provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", available: true },
-    { provider: "anthropic", id: "claude-opus-4-5", name: "Claude Opus 4.5", available: true },
-    { provider: "openai", id: "gpt-5", name: "GPT-5", available: true },
-  ];
-
-  function modelPlatform(
-    models: ReadonlyArray<{ provider: string; id: string; name: string; available: boolean }>,
-    filters: ReadonlyArray<string> = [],
-  ): JiePlatform {
-    return makePlatform(vi.fn(async (cmd: { name: string }) => {
-      if (cmd.name === "listFilteredModels") {
-        const available = models.filter((model) => model.available);
-        const target = (model: { provider: string; id: string }) => `${model.provider}/${model.id}`.toLowerCase();
-        const matched = filters.length === 0 ? available : available.filter((model) => filters.some((filter) => target(model).includes(filter.toLowerCase())));
-        return { models: matched, filteredOut: available.length - matched.length };
-      }
-      return null;
-    }));
-  }
-
-  test("suggests registry models as provider/modelId with the model name as description", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, modelPlatform(MODELS), makeStateStore())
-      .getSuggestions(["/model "], 0, 7, { signal: signal() });
-    expect(suggestions!.items).toEqual([
-      { value: "anthropic/claude-sonnet-4-5", label: "anthropic/claude-sonnet-4-5", description: "Claude Sonnet 4.5" },
-      { value: "anthropic/claude-opus-4-5", label: "anthropic/claude-opus-4-5", description: "Claude Opus 4.5" },
-      { value: "openai/gpt-5", label: "openai/gpt-5", description: "GPT-5" },
-    ]);
-  });
-
-  test("filters models by the provider segment", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, modelPlatform(MODELS), makeStateStore())
-      .getSuggestions(["/model anth"], 0, 11, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["anthropic/claude-sonnet-4-5", "anthropic/claude-opus-4-5"]);
-  });
-
-  test("filters models across the provider/modelId boundary", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, modelPlatform(MODELS), makeStateStore())
-      .getSuggestions(["/model anthropic/claude-o"], 0, 25, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["anthropic/claude-opus-4-5"]);
-  });
-
-  test("a fully typed provider/modelId yields no suggestions so Enter submits directly", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, modelPlatform(MODELS), makeStateStore())
-      .getSuggestions(["/model openai/gpt-5"], 0, 19, { signal: signal() });
-    expect(suggestions).toBeNull();
-  });
-
-  test("yields no suggestions when no model matches", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, modelPlatform(MODELS), makeStateStore())
-      .getSuggestions(["/model google/"], 0, 14, { signal: signal() });
-    expect(suggestions).toBeNull();
-  });
-
-  test("yields no suggestions when the registry lists no models", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, modelPlatform([]), makeStateStore())
-      .getSuggestions(["/model "], 0, 7, { signal: signal() });
-    expect(suggestions).toBeNull();
-  });
-
-  test("caps the suggestion list at twenty entries", async () => {
-    const many = Array.from({ length: 25 }, (_, index) => ({
-      provider: "anthropic", id: `model-${index}`, name: `Model ${index}`, available: true,
-    }));
-    const suggestions = await makeProvider("/tmp", noScan, modelPlatform(many), makeStateStore())
-      .getSuggestions(["/model "], 0, 7, { signal: signal() });
-    expect(suggestions!.items).toHaveLength(20);
-  });
-
-  test("hides models whose provider is not available", async () => {
-    const models = [
-      { provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", available: true },
-      { provider: "openai", id: "gpt-5", name: "GPT-5", available: false },
-    ];
-    const suggestions = await makeProvider("/tmp", noScan, modelPlatform(models), makeStateStore())
-      .getSuggestions(["/model "], 0, 7, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["anthropic/claude-sonnet-4-5"]);
-    expect(suggestions!.filteredOut).toBeUndefined();
-  });
-
-  test("applies model filters and reports how many models were filtered out", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, modelPlatform(MODELS, ["gpt"]), makeStateStore())
-      .getSuggestions(["/model "], 0, 7, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["openai/gpt-5"]);
-    expect(suggestions!.filteredOut).toBe(2);
-  });
-
-  test("filter patterns match case-insensitively anywhere in provider/modelId", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, modelPlatform(MODELS, ["CLAUDE"]), makeStateStore())
-      .getSuggestions(["/model "], 0, 7, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["anthropic/claude-sonnet-4-5", "anthropic/claude-opus-4-5"]);
-    expect(suggestions!.filteredOut).toBe(1);
-  });
-
-  test("omits filteredOut when no filter is set", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, modelPlatform(MODELS), makeStateStore())
-      .getSuggestions(["/model "], 0, 7, { signal: signal() });
-    expect(suggestions!.filteredOut).toBeUndefined();
-  });
-});
-
-describe("createJieAutocompleteProvider — /model-filter arguments", () => {
-  function filterPlatform(filters: ReadonlyArray<string>): JiePlatform {
-    return makePlatform(vi.fn(async (cmd: { name: string }) => {
-      if (cmd.name === "getModelFilters") return filters;
-      return null;
-    }));
-  }
-
-  test("suggests the add, remove and list actions after the command", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, filterPlatform([]), makeStateStore())
-      .getSuggestions(["/model-filter "], 0, 14, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["add", "remove", "list"]);
-  });
-
-  test("filters the actions by the typed prefix", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, filterPlatform([]), makeStateStore())
-      .getSuggestions(["/model-filter r"], 0, 15, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["remove"]);
-  });
-
-  test("the list action matches its own prefix", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, filterPlatform([]), makeStateStore())
-      .getSuggestions(["/model-filter l"], 0, 15, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["list"]);
-  });
-
-  test("a fully typed list yields no suggestions so Enter submits", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, filterPlatform([]), makeStateStore())
-      .getSuggestions(["/model-filter list"], 0, 18, { signal: signal() });
-    expect(suggestions).toBeNull();
-  });
-
-  test("a fully typed remove lists the stored patterns", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, filterPlatform(["qwen", "gpt"]), makeStateStore())
-      .getSuggestions(["/model-filter remove"], 0, 20, { signal: signal() });
-    expect(suggestions!.items).toEqual([
-      { value: "remove qwen", label: "qwen" },
-      { value: "remove gpt", label: "gpt" },
-    ]);
-  });
-
-  test("a fully typed remove yields no suggestions when no filter is stored", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, filterPlatform([]), makeStateStore())
-      .getSuggestions(["/model-filter remove"], 0, 20, { signal: signal() });
-    expect(suggestions).toBeNull();
-  });
-
-  test("a fully typed add yields no suggestions so Enter submits", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, filterPlatform(["qwen"]), makeStateStore())
-      .getSuggestions(["/model-filter add"], 0, 17, { signal: signal() });
-    expect(suggestions).toBeNull();
-  });
-
-  test("after remove, suggests the stored filter patterns", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, filterPlatform(["qwen", "gpt"]), makeStateStore())
-      .getSuggestions(["/model-filter remove "], 0, 21, { signal: signal() });
-    expect(suggestions!.items).toEqual([
-      { value: "remove qwen", label: "qwen" },
-      { value: "remove gpt", label: "gpt" },
-    ]);
-  });
-
-  test("filters the stored patterns by the typed prefix", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, filterPlatform(["qwen", "gpt"]), makeStateStore())
-      .getSuggestions(["/model-filter remove q"], 0, 22, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["remove qwen"]);
-  });
-
-  test("a fully typed stored pattern yields no suggestions so Enter submits", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, filterPlatform(["qwen"]), makeStateStore())
-      .getSuggestions(["/model-filter remove qwen"], 0, 25, { signal: signal() });
-    expect(suggestions).toBeNull();
-  });
-
-  test("add stays free-form and suggests no stored patterns", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, filterPlatform(["qwen"]), makeStateStore())
-      .getSuggestions(["/model-filter add "], 0, 18, { signal: signal() });
-    expect(suggestions).toBeNull();
-  });
-
-  test("yields no patterns when no filter is stored", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, filterPlatform([]), makeStateStore())
-      .getSuggestions(["/model-filter remove "], 0, 21, { signal: signal() });
-    expect(suggestions).toBeNull();
-  });
-});
-
-describe("createJieAutocompleteProvider — /login arguments", () => {
-  const PROVIDERS: ReadonlyArray<{ id: string; description?: string }> = [
-    { id: "my-local", description: "configured" },
-    { id: "anthropic", description: "ANTHROPIC_API_KEY" },
-    { id: "openai" },
-  ];
-
-  function providerPlatform(providers: ReadonlyArray<{ id: string; description?: string }>): JiePlatform {
-    return makePlatform(vi.fn(async (cmd: { name: string }) => {
-      if (cmd.name === "listProviders") return providers;
-      return null;
-    }));
-  }
-
-  test("suggests providers with their descriptions after '/login '", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, providerPlatform(PROVIDERS), makeStateStore())
-      .getSuggestions(["/login "], 0, 7, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["my-local", "anthropic", "openai"]);
-    expect(suggestions!.items[0]!.description).toBe("configured");
-    expect(suggestions!.items[1]!.description).toBe("ANTHROPIC_API_KEY");
-    expect(suggestions!.items[2]!.description).toBeUndefined();
-  });
-
-  test("filters providers by the typed prefix", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, providerPlatform(PROVIDERS), makeStateStore())
-      .getSuggestions(["/login an"], 0, 9, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["anthropic"]);
-  });
-
-  test("a fully typed provider yields no suggestions so Enter submits directly", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, providerPlatform(PROVIDERS), makeStateStore())
-      .getSuggestions(["/login anthropic"], 0, 16, { signal: signal() });
-    expect(suggestions).toBeNull();
-  });
-
-  test("yields no suggestions when the registry lists no providers", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, providerPlatform([]), makeStateStore())
-      .getSuggestions(["/login "], 0, 7, { signal: signal() });
-    expect(suggestions).toBeNull();
-  });
-
-  test("commits the bare provider id with no trailing space", () => {
-    const result = makeProvider("/tmp", noScan, providerPlatform(PROVIDERS), makeStateStore())
-      .applyCompletion(["/login "], 0, 7, { value: "anthropic", label: "anthropic" }, "");
-    expect(result.lines).toEqual(["/login anthropic"]);
-    expect(result.cursorCol).toBe(16);
-  });
-});
-
-describe("createJieAutocompleteProvider — /logout arguments", () => {
-  function logoutPlatform(): JiePlatform {
-    return makePlatform(vi.fn(async (cmd: { name: string }) => {
-      if (cmd.name === "listProviders") {
-        return [{ id: "anthropic", description: "ANTHROPIC_API_KEY" }, { id: "openai" }];
-      }
-      return null;
-    }));
-  }
-
-  test("suggests the logout-all star first, then the providers", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, logoutPlatform(), makeStateStore())
-      .getSuggestions(["/logout "], 0, 8, { signal: signal() });
-    expect(suggestions!.items).toEqual([
-      { value: "*", label: "*", description: "all providers" },
-      { value: "anthropic", label: "anthropic", description: "ANTHROPIC_API_KEY" },
-      { value: "openai", label: "openai" },
-    ]);
-  });
-
-  test("a fully typed star yields no suggestions so Enter submits directly", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, logoutPlatform(), makeStateStore())
-      .getSuggestions(["/logout *"], 0, 9, { signal: signal() });
-    expect(suggestions).toBeNull();
-  });
-});
-
-describe("createJieAutocompleteProvider — /kanban arguments", () => {
-  const BOARD: ReadonlyArray<KanbanCard> = [
-    { id: "#1", content: "write spec", status: "pending" },
-    { id: "#2", content: "implement tool", status: "in_progress" },
-    { id: "#3", content: "rename todo", status: "completed" },
-  ];
-
-  test("drills down to subcommands from an unambiguous command prefix", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, nullPlatform(), storeWithKanban(BOARD))
-      .getSuggestions(["/kanb"], 0, 5, { signal: signal() });
-    expect(suggestions!.prefix).toBe("/kanb");
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["kanban add", "kanban remove", "kanban complete", "kanban review", "kanban handoff"]);
-    expect(suggestions!.items[0]!.description).toBe("[--title <title>] <description>");
-    expect(suggestions!.items[1]!.description).toBe("<cardId>");
-  });
-
-  test("suggests subcommands after '/kanban ' with their argument hints", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, nullPlatform(), storeWithKanban(BOARD))
-      .getSuggestions(["/kanban "], 0, 8, { signal: signal() });
-    expect(suggestions!.items).toEqual([
-      { value: "add", label: "add", description: "[--title <title>] <description>" },
-      { value: "remove", label: "remove", description: "<cardId>" },
-      { value: "complete", label: "complete", description: "<cardId>" },
-      { value: "review", label: "review", description: "<cardId>" },
-      { value: "handoff", label: "handoff", description: "[<teamId>/]<cardId> <targetTeamId>" },
-    ]);
-  });
-
-  test("filters subcommands by the typed prefix", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, nullPlatform(), storeWithKanban(BOARD))
-      .getSuggestions(["/kanban r"], 0, 9, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["remove", "review"]);
-  });
-
-  test("a fully typed add yields no suggestions so the user can type the description", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, nullPlatform(), storeWithKanban(BOARD))
-      .getSuggestions(["/kanban add"], 0, 11, { signal: signal() });
-    expect(suggestions).toBeNull();
-  });
-
-  test("suggests card ids after '/kanban remove '", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, nullPlatform(), storeWithKanban(BOARD))
-      .getSuggestions(["/kanban remove "], 0, 15, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["remove #1", "remove #2", "remove #3"]);
-    expect(suggestions!.items[0]!.label).toBe("#1");
-    expect(suggestions!.items[0]!.description).toBe("write spec");
-  });
-
-  test("suggests card ids after '/kanban complete ' excluding already-completed cards", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, nullPlatform(), storeWithKanban(BOARD))
-      .getSuggestions(["/kanban complete "], 0, 17, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["complete #1", "complete #2"]);
-  });
-
-  test("suggests card ids after '/kanban review '", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, nullPlatform(), storeWithKanban(BOARD))
-      .getSuggestions(["/kanban review "], 0, 15, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["review #1", "review #2", "review #3"]);
-  });
-
-  test("filters card ids by the typed prefix", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, nullPlatform(), storeWithKanban(BOARD))
-      .getSuggestions(["/kanban remove #"], 0, 16, { signal: signal() });
-    expect(suggestions!.items.map((item) => item.value)).toEqual(["remove #1", "remove #2", "remove #3"]);
-  });
-
-  test("yields no suggestions when the subcommand is unknown", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, nullPlatform(), storeWithKanban(BOARD))
-      .getSuggestions(["/kanban bogus"], 0, 13, { signal: signal() });
-    expect(suggestions).toBeNull();
-  });
-
-  test("yields no card ids for remove when the board is empty", async () => {
-    const suggestions = await makeProvider("/tmp", noScan, nullPlatform(), storeWithKanban())
-      .getSuggestions(["/kanban remove "], 0, 15, { signal: signal() });
-    expect(suggestions).toBeNull();
-  });
-
-  test("commits a subcommand with a trailing space when using drill-down", () => {
-    const result = makeProvider("/tmp", noScan, nullPlatform(), storeWithKanban(BOARD))
-      .applyCompletion(["/kanb"], 0, 5, { value: "kanban add", label: "kanban add" }, "/kanb");
-    expect(result.lines).toEqual(["/kanban add "]);
-    expect(result.cursorCol).toBe(12);
-  });
-
-  test("commits a card id without adding a trailing space", () => {
-    const result = makeProvider("/tmp", noScan, nullPlatform(), storeWithKanban(BOARD))
-      .applyCompletion(["/kanban remove "], 0, 15, { value: "remove #1", label: "remove #1" }, "remove ");
-    expect(result.lines).toEqual(["/kanban remove #1"]);
-    expect(result.cursorCol).toBe(17);
   });
 });
