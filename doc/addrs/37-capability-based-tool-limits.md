@@ -17,7 +17,8 @@ Remove the lifecycle state machine entirely. Replace it with a generic, capabili
 A tool spec is `name` (bare, unrestricted) or `name(args...)` (restricted). Two built-in tools consume args from `ExecutionContext.toolArgs`:
 
 - **`notify(topics...)`** limits the topics a role may publish (`TOPIC_NOT_ALLOWED` on violation).
-- **`write_file(globs...)` / `edit_file(globs...)`** limit the paths a role may touch (`WRITE_PATH_DENIED`), replacing `write_gates`.
+- **`write_file(globs...)` / `edit_file(globs...)`** limit the paths a role may write (`WRITE_PATH_DENIED`), replacing `write_gates`.
+- **`read_file(globs...)` / `grep_file(globs...)`** limit the paths a role may read or search (`READ_PATH_DENIED`).
 
 The grammar is generic: the platform parses `name(args)` once at body construction into a `toolArgs: ReadonlyMap<string, ReadonlyArray<string>>` keyed by tool name; any tool may read its own args and constrain itself. No team-specific concepts enter the platform.
 

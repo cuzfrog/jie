@@ -1,8 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createReadFileTool } from "./read-file";
 import { makeEmptyContext } from "./_test-context";
+import type { ExecutionContext } from "./types";
 
 describe("read_file", () => {
   let workspace: string;
@@ -110,5 +111,77 @@ describe("read_file", () => {
     await expect(
       tool.execute({ path: "subdir" }, makeEmptyContext()),
     ).rejects.toMatchObject({ code: "IS_A_DIRECTORY" });
+  });
+});
+
+describe("read_file - per-role path limits", () => {
+  let workspace: string;
+
+  beforeEach(() => {
+    workspace = mkdtempSync(join(tmpdir(), "jie-read-limit-"));
+  });
+
+  afterEach(() => {
+    rmSync(workspace, { recursive: true, force: true });
+  });
+
+  function limitedContext(role: string, globs: ReadonlyArray<string>): ExecutionContext {
+    return {
+      ...makeEmptyContext(),
+      agentRole: role,
+      toolArgs: new Map([["read_file", globs]]),
+    };
+  }
+
+  test("denies a path outside the allowed globs", async () => {
+    mkdirSync(join(workspace, "docs"), { recursive: true });
+    writeFileSync(join(workspace, "docs", "notes.md"), "x");
+    const tool = createReadFileTool({ workspaceRoot: workspace });
+    await expect(
+      tool.execute({ path: "docs/notes.md" }, limitedContext("architect", ["**/MODULE.md"])),
+    ).rejects.toMatchObject({ code: "READ_PATH_DENIED" });
+  });
+
+  test("denies a path given as an absolute path too", async () => {
+    mkdirSync(join(workspace, "docs"), { recursive: true });
+    writeFileSync(join(workspace, "docs", "notes.md"), "x");
+    const tool = createReadFileTool({ workspaceRoot: workspace });
+    await expect(
+      tool.execute(
+        { path: join(workspace, "docs", "notes.md") },
+        limitedContext("architect", ["src/**"]),
+      ),
+    ).rejects.toMatchObject({ code: "READ_PATH_DENIED" });
+  });
+
+  test("allows a path matching an allowed glob", async () => {
+    mkdirSync(join(workspace, "docs"), { recursive: true });
+    writeFileSync(join(workspace, "docs", "MODULE.md"), "ctx");
+    const tool = createReadFileTool({ workspaceRoot: workspace });
+    const result = await tool.execute(
+      { path: "docs/MODULE.md" },
+      limitedContext("architect", ["**/MODULE.md"]),
+    );
+    expect(result.content).toBe("ctx");
+  });
+
+  test("no toolArgs restriction allows any path", async () => {
+    mkdirSync(join(workspace, "docs"), { recursive: true });
+    writeFileSync(join(workspace, "docs", "notes.md"), "free");
+    const tool = createReadFileTool({ workspaceRoot: workspace });
+    const result = await tool.execute({ path: "docs/notes.md" }, makeEmptyContext());
+    expect(result.content).toBe("free");
+  });
+
+  test("checks the resolved real path so a symlink cannot bypass the limit", async () => {
+    mkdirSync(join(workspace, "docs"));
+    writeFileSync(join(workspace, "docs", "MODULE.md"), "via-symlink");
+    symlinkSync(join(workspace, "docs"), join(workspace, "alias"));
+    const tool = createReadFileTool({ workspaceRoot: workspace });
+    const result = await tool.execute(
+      { path: "alias/MODULE.md" },
+      limitedContext("architect", ["docs/*"]),
+    );
+    expect(result.content).toBe("via-symlink");
   });
 });

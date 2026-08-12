@@ -12,7 +12,7 @@ const FILE_SCAN_CAP = 2000;
 const FILE_BYTE_CAP = 1024 * 1024;
 const LINE_TRUNC = 500;
 
-const GREP_FILE_DESCRIPTION = `Search file contents for a regex \`pattern\` under \`path\` (a file or directory, defaults to the workspace root). Matches are returned as \`path:line:content\` with 1-indexed line numbers, paths workspace-relative. \`include\` is a glob filtering which files to scan (e.g. \`*.ts\`), defaulting to all files; \`**\` crosses separators. \`ignoreCase\` makes the match case-insensitive. \`node_modules\` and \`.git\` are always pruned, symlinks are not followed, files over 1 MiB or not valid UTF-8 are skipped, and matching lines are truncated to 500 chars. Capped at 100 matches and 2000 files scanned; a footer reports truncation.`;
+const GREP_FILE_DESCRIPTION = `Search file contents for a regex \`pattern\` under \`path\` (a file or directory, defaults to the workspace root). Matches are returned as \`path:line:content\` with 1-indexed line numbers, paths workspace-relative. \`include\` is a glob filtering which files to scan (e.g. \`*.ts\`), defaulting to all files; \`**\` crosses separators. \`ignoreCase\` makes the match case-insensitive. A role may be restricted to a fixed set of searchable paths via its manifest \`grep_file(glob-a, glob-b)\` tool spec; for a single file outside that set the call is rejected with READ_PATH_DENIED, and for a directory only matching files are scanned. \`node_modules\` and \`.git\` are always pruned, symlinks are not followed, files over 1 MiB or not valid UTF-8 are skipped, and matching lines are truncated to 500 chars. Capped at 100 matches and 2000 files scanned; a footer reports truncation.`;
 
 export interface GrepFileDeps {
   workspaceRoot: string;
@@ -50,7 +50,7 @@ export function createGrepFileTool(dependencies: GrepFileDeps): Tool<GrepFileInp
     }),
     async execute(
       input: GrepFileInput,
-      _executionContext: ExecutionContext,
+      executionContext: ExecutionContext,
       signal?: AbortSignal,
     ): Promise<ToolResult> {
       let regex: RegExp;
@@ -76,13 +76,16 @@ export function createGrepFileTool(dependencies: GrepFileDeps): Tool<GrepFileInp
       const prefix = relativePath === "" ? "" : `${relativePath}/`;
       const matches: GrepMatch[] = [];
       let truncated = false;
+      const allowedGlobs = executionContext.toolArgs.get("grep_file");
 
       if (stat.isDirectory()) {
         let filesScanned = 0;
         for (const rel of walkFiles(realPath, signal)) {
           if (signal?.aborted) break;
           if (!includeGlob.match(rel)) continue;
-          scanFile(join(realPath, rel), prefix === "" ? rel : `${prefix}${rel}`, regex, matches, signal);
+          const displayPath = prefix === "" ? rel : `${prefix}${rel}`;
+          if (allowedGlobs !== undefined && !allowedGlobs.some((pattern) => new Bun.Glob(pattern).match(displayPath))) continue;
+          scanFile(join(realPath, rel), displayPath, regex, matches, signal);
           filesScanned++;
           if (matches.length >= MATCH_CAP) {
             truncated = true;
@@ -94,6 +97,11 @@ export function createGrepFileTool(dependencies: GrepFileDeps): Tool<GrepFileInp
           }
         }
       } else {
+        if (allowedGlobs !== undefined && !allowedGlobs.some((pattern) => new Bun.Glob(pattern).match(relativePath))) {
+          throw new JiePlatformError("READ_PATH_DENIED", {
+            detail: `path '${relativePath}' is not allowed for role '${executionContext.agentRole}'`,
+          });
+        }
         scanFile(realPath, relativePath, regex, matches, signal);
       }
 

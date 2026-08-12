@@ -1,8 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createGrepFileTool } from "./grep-file";
 import { makeEmptyContext } from "./_test-context";
+import type { ExecutionContext } from "./types";
 
 describe("grep_file", () => {
   let workspace: string;
@@ -120,5 +121,102 @@ describe("grep_file", () => {
     expect(result.details).toMatchObject({ kind: "grep", truncated: true });
     expect(result.content.split("\n").length).toBe(101);
     expect(result.content).toContain("refine your pattern");
+  });
+});
+
+describe("grep_file - per-role path limits", () => {
+  let workspace: string;
+
+  beforeEach(() => {
+    workspace = mkdtempSync(join(tmpdir(), "jie-grep-limit-"));
+  });
+
+  afterEach(() => {
+    rmSync(workspace, { recursive: true, force: true });
+  });
+
+  function limitedContext(role: string, globs: ReadonlyArray<string>): ExecutionContext {
+    return {
+      ...makeEmptyContext(),
+      agentRole: role,
+      toolArgs: new Map([["grep_file", globs]]),
+    };
+  }
+
+  test("denies a single disallowed file", async () => {
+    writeFileSync(join(workspace, "notes.md"), "foo");
+    const tool = createGrepFileTool({ workspaceRoot: workspace });
+    await expect(
+      tool.execute({ pattern: "foo", path: "notes.md" }, limitedContext("architect", ["**/MODULE.md"])),
+    ).rejects.toMatchObject({ code: "READ_PATH_DENIED" });
+  });
+
+  test("allows a single file matching an allowed glob", async () => {
+    writeFileSync(join(workspace, "MODULE.md"), "foo");
+    const tool = createGrepFileTool({ workspaceRoot: workspace });
+    const result = await tool.execute(
+      { pattern: "foo", path: "MODULE.md" },
+      limitedContext("architect", ["**/MODULE.md"]),
+    );
+    expect(result.content).toContain("MODULE.md:1:foo");
+  });
+
+  test("directory search only scans allowed files", async () => {
+    mkdirSync(join(workspace, "src"), { recursive: true });
+    writeFileSync(join(workspace, "src", "MODULE.md"), "foo");
+    writeFileSync(join(workspace, "src", "notes.md"), "foo");
+    const tool = createGrepFileTool({ workspaceRoot: workspace });
+    const result = await tool.execute(
+      { pattern: "foo", path: "src" },
+      limitedContext("architect", ["**/MODULE.md"]),
+    );
+    expect(result.content).toContain("src/MODULE.md:1:foo");
+    expect(result.content).not.toContain("src/notes.md");
+  });
+
+  test("directory search with no allowed files reports no matches", async () => {
+    mkdirSync(join(workspace, "src"), { recursive: true });
+    writeFileSync(join(workspace, "src", "a.ts"), "foo");
+    const tool = createGrepFileTool({ workspaceRoot: workspace });
+    const result = await tool.execute(
+      { pattern: "foo", path: "src" },
+      limitedContext("architect", ["**/MODULE.md"]),
+    );
+    expect(result.content).toBe("No matches for: foo");
+  });
+
+  test("directory search intersects include with manifest globs", async () => {
+    mkdirSync(join(workspace, "src"), { recursive: true });
+    writeFileSync(join(workspace, "src", "MODULE.md"), "foo");
+    writeFileSync(join(workspace, "src", "a.ts"), "foo");
+    writeFileSync(join(workspace, "src", "b.md"), "foo");
+    const tool = createGrepFileTool({ workspaceRoot: workspace });
+    const result = await tool.execute(
+      { pattern: "foo", path: "src", include: "*.md" },
+      limitedContext("architect", ["**/MODULE.md"]),
+    );
+    expect(result.content).toContain("src/MODULE.md:1:foo");
+    expect(result.content).not.toContain("src/b.md");
+    expect(result.content).not.toContain("src/a.ts");
+  });
+
+  test("no toolArgs restriction searches any path", async () => {
+    mkdirSync(join(workspace, "src"), { recursive: true });
+    writeFileSync(join(workspace, "src", "a.ts"), "foo");
+    const tool = createGrepFileTool({ workspaceRoot: workspace });
+    const result = await tool.execute({ pattern: "foo", path: "src" }, makeEmptyContext());
+    expect(result.content).toContain("src/a.ts:1:foo");
+  });
+
+  test("checks resolved real path so a symlink cannot bypass the limit", async () => {
+    mkdirSync(join(workspace, "docs"));
+    writeFileSync(join(workspace, "docs", "MODULE.md"), "foo");
+    symlinkSync(join(workspace, "docs"), join(workspace, "alias"));
+    const tool = createGrepFileTool({ workspaceRoot: workspace });
+    const result = await tool.execute(
+      { pattern: "foo", path: "alias/MODULE.md" },
+      limitedContext("architect", ["docs/*"]),
+    );
+    expect(result.content).toContain("docs/MODULE.md:1:foo");
   });
 });
