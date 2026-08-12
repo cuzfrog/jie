@@ -10,7 +10,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { Actions, TuiState, type StateStore } from "../../state";
 import { type JieAutocompleteProvider, type JieSuggestions } from "../../autocomplete";
-import { COMMAND_METADATA, resolveCommandName } from "../../command-metadata";
+import type { CommandCatalog } from "../../command";
 import { style } from "../themes";
 import type { PromptHistoryStore } from "./prompt-history";
 
@@ -55,18 +55,21 @@ export class JieEditor extends Editor {
   private programmaticChange = false;
   private kanbanEditId: string | null = null;
   private kanbanDraft: string | null = null;
+  private readonly commandCatalog: CommandCatalog;
 
   constructor(
-    tui: TUI,
+    screen: TUI,
     stateStore: StateStore,
     autocompleteProvider: JieAutocompleteProvider,
     promptHistoryStore: PromptHistoryStore,
+    commandRegistry: CommandCatalog,
     theme: EditorTheme = EDITOR_THEME,
   ) {
-    super(tui, theme);
+    super(screen, theme);
     this.stateStore = stateStore;
     this.promptHistoryStore = promptHistoryStore;
-    const tracking = new GhostTrackingProvider(autocompleteProvider, () => this.stateStore.getState().kanbanEdit !== null);
+    this.commandCatalog = commandRegistry;
+    const tracking = new GhostTrackingProvider(autocompleteProvider, () => this.stateStore.getState().kanban.edit !== null);
     tracking.onSuggestions = (suggestions): void => {
       this.popupFilteredOut = suggestions.filteredOut ?? null;
       this.resetGhost(suggestions.items, suggestions.prefix);
@@ -85,7 +88,7 @@ export class JieEditor extends Editor {
     };
     this.onSubmit = (text: string): void => {
       if (text.trim() === "") return;
-      if (this.stateStore.getState().kanbanEdit !== null) {
+      if (this.stateStore.getState().kanban.edit !== null) {
         this.saveKanbanEdit(text);
         return;
       }
@@ -93,13 +96,10 @@ export class JieEditor extends Editor {
       this.persistPrompt(text);
       this.stateStore.dispatch(Actions.submitEditorText(text));
     };
-    stateStore.subscribe(async (_action, afterState) => {
-      this.syncKanbanEdit(afterState.kanbanEdit);
-    });
   }
 
-  handleInput(data: string): void {
-    if (this.stateStore.getState().kanbanEdit !== null) {
+  override handleInput(data: string): void {
+    if (this.stateStore.getState().kanban.edit !== null) {
       this.handleKanbanEditInput(data);
       return;
     }
@@ -124,10 +124,10 @@ export class JieEditor extends Editor {
     this.syncCursorAtStart();
   }
 
-  render(width: number): string[] {
+  override render(width: number): string[] {
     let lines = super.render(width);
     const state = this.stateStore.getState();
-    const editingId = state.kanbanEdit;
+    const editingId = state.kanban.edit;
     const chipLabel = editingId !== null ? `editing ${editingId}` : state.sessionName;
     const chipBackground = editingId !== null ? CHIP_BACKGROUND_EDIT : (this.bashMode ? CHIP_BACKGROUND_WARNING : CHIP_BACKGROUND_BORDER);
     lines = spliceTopBorderChip(lines, chipLabel, width, this.borderColor, chipBackground);
@@ -145,7 +145,11 @@ export class JieEditor extends Editor {
     return next;
   }
 
-  addToHistory(text: string): void {
+  update(): boolean {
+    return this.syncKanbanEdit(this.stateStore.getState().kanban.edit);
+  }
+
+  override addToHistory(text: string): void {
     super.addToHistory(text);
     const trimmed = text.trim();
     if (trimmed === "" || this.historyMirror[0] === trimmed) return;
@@ -283,30 +287,31 @@ export class JieEditor extends Editor {
 
   private saveKanbanEdit(text: string): void {
     const state = this.stateStore.getState();
-    if (state.kanbanEdit === null) return;
-    this.stateStore.dispatch(Actions.saveKanbanEdit(state.kanbanEdit, text, state.kanbanEditField));
+    if (state.kanban.edit === null) return;
+    this.stateStore.dispatch(Actions.saveKanbanEdit(state.kanban.edit, text, state.kanban.editField));
   }
 
-  private syncKanbanEdit(afterStateKanbanEdit: string | null): void {
-    if (afterStateKanbanEdit === this.kanbanEditId) return;
+  private syncKanbanEdit(afterStateKanbanEdit: string | null): boolean {
+    if (afterStateKanbanEdit === this.kanbanEditId) return false;
     if (afterStateKanbanEdit === null) {
       this.endKanbanEdit();
       this.kanbanEditId = null;
-      return;
+      return true;
     }
     this.kanbanEditId = afterStateKanbanEdit;
     this.beginKanbanEdit(afterStateKanbanEdit);
+    return true;
   }
 
   private beginKanbanEdit(cardId: string): void {
     if (this.kanbanDraft === null) this.kanbanDraft = this.getText();
     const state = this.stateStore.getState();
-    const card = state.kanbanBoard.find((entry) => entry.id === cardId);
+    const card = state.kanban.board.find((entry) => entry.id === cardId);
     if (card === undefined) {
       this.applyText("");
       return;
     }
-    this.applyText(state.kanbanEditField === "description" ? (card.description ?? "") : card.content);
+    this.applyText(state.kanban.editField === "description" ? (card.description ?? "") : card.content);
   }
 
   private endKanbanEdit(): void {
@@ -327,7 +332,7 @@ export class JieEditor extends Editor {
 
   private resolveGhostSuffix(): string {
     if (this.ghost !== null && this.isShowingAutocomplete()) return ghostSuffix(this.ghost.prefix, this.ghost.items[this.ghost.index]);
-    return commandBoundaryHint(this.getText());
+    return commandBoundaryHint(this.getText(), this.commandCatalog);
   }
 }
 
@@ -419,11 +424,10 @@ function argumentHintOf(description: string | undefined): string {
   return head.startsWith("<") || head.startsWith("[") ? head : "";
 }
 
-function commandBoundaryHint(text: string): string {
+function commandBoundaryHint(text: string, catalog: CommandCatalog): string {
   const match = COMMAND_BOUNDARY_PATTERN.exec(text);
   if (match === null) return "";
-  const command = COMMAND_METADATA.find((entry) => entry.name === resolveCommandName(match[1]));
-  return command?.argumentHint ?? "";
+  return catalog.commandMeta(match[1])?.argumentHint ?? "";
 }
 
 function injectGhost(line: string, ghost: string, ghostWidth: number): string {

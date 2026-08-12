@@ -190,24 +190,24 @@ describe("kanban view cycle", () => {
   }
 
   test("starts hidden in initial state", () => {
-    expect(INITIAL_TUI_STATE.kanbanView).toBe("hidden");
+    expect(INITIAL_TUI_STATE.kanban.view).toBe("hidden");
   });
 
   test("cycles hidden to list, list to panel, and panel back to hidden", () => {
     const list = reduceUiAction(twoAgent(), Actions.cycleKanbanView());
-    expect(list.kanbanView).toBe("list");
+    expect(list.kanban.view).toBe("list");
     const panel = reduceUiAction(list, Actions.cycleKanbanView());
-    expect(panel.kanbanView).toBe("panel");
+    expect(panel.kanban.view).toBe("panel");
     const hidden = reduceUiAction(panel, Actions.cycleKanbanView());
-    expect(hidden.kanbanView).toBe("hidden");
+    expect(hidden.kanban.view).toBe("hidden");
   });
 
   test("moving the kanban edit field routes through the kanban reducer", () => {
     const panel = reduceUiAction(reduceUiAction(twoAgent(), Actions.cycleKanbanView()), Actions.cycleKanbanView());
     const expanded = reduceUiAction(panel, Actions.toggleKanbanExpand());
-    expect(expanded.kanbanEditField).toBe("content");
+    expect(expanded.kanban.editField).toBe("content");
     const moved = reduceUiAction(expanded, Actions.moveKanbanEditField("down"));
-    expect(moved.kanbanEditField).toBe("description");
+    expect(moved.kanban.editField).toBe("description");
   });
 
   test("leaving the panel clears edit and expand", () => {
@@ -215,9 +215,9 @@ describe("kanban view cycle", () => {
     const editing = reduceUiAction(panel, Actions.commitKanbanEdit("#1"));
     const expanded = reduceUiAction(editing, Actions.toggleKanbanExpand());
     const hidden = reduceUiAction(expanded, Actions.cycleKanbanView());
-    expect(hidden.kanbanView).toBe("hidden");
-    expect(hidden.kanbanEdit).toBeNull();
-    expect(hidden.kanbanExpanded).toBe(false);
+    expect(hidden.kanban.view).toBe("hidden");
+    expect(hidden.kanban.edit).toBeNull();
+    expect(hidden.kanban.expanded).toBe(false);
   });
 
   test("is a no-op when no agent is focused", () => {
@@ -230,7 +230,7 @@ describe("kanban view cycle", () => {
     const list = reduceUiAction(moved, Actions.cycleKanbanView());
     expect(list.teamPanelVisible).toBe(true);
     const panel = reduceUiAction(list, Actions.cycleKanbanView());
-    expect(panel.kanbanView).toBe("panel");
+    expect(panel.kanban.view).toBe("panel");
     expect(panel.teamPanelVisible).toBe(false);
     expect(panel.teamCursorAgentId).toBeNull();
     expect(panel.focusedAgentId).toBe("my-team:manager-1");
@@ -243,22 +243,22 @@ describe("kanban view cycle", () => {
     const team = reduceUiAction(expanded, Actions.toggleTeamPanel());
     expect(team.teamPanelVisible).toBe(true);
     expect(team.teamCursorAgentId).toBe("my-team:manager-1");
-    expect(team.kanbanView).toBe("hidden");
-    expect(team.kanbanEdit).toBeNull();
-    expect(team.kanbanExpanded).toBe(false);
+    expect(team.kanban.view).toBe("hidden");
+    expect(team.kanban.edit).toBeNull();
+    expect(team.kanban.expanded).toBe(false);
   });
 
   test("opening the team panel keeps the kanban list view", () => {
     const list = reduceUiAction(twoAgent(), Actions.cycleKanbanView());
     const team = reduceUiAction(list, Actions.toggleTeamPanel());
     expect(team.teamPanelVisible).toBe(true);
-    expect(team.kanbanView).toBe("list");
+    expect(team.kanban.view).toBe("list");
   });
 
   test("clearTuiState keeps the kanban view", () => {
     const list = reduceUiAction(twoAgent(), Actions.cycleKanbanView());
     const cleared = reduceUiAction(list, Actions.clearTuiState());
-    expect(cleared.kanbanView).toBe("list");
+    expect(cleared.kanban.view).toBe("list");
   });
 });
 
@@ -299,15 +299,31 @@ describe("commit team cursor", () => {
 });
 
 describe("transient", () => {
-  test("sets transientMessage text", () => {
+  test("sets transientMessage text and stamps the current time", () => {
+    const now = 12345;
+    const spy = vi.spyOn(Date, "now").mockReturnValue(now);
     const state = reduceUiAction(INITIAL_TUI_STATE, Actions.setTransientMessage("logged in to nvidia"));
     expect(state.transientMessage).toBe("logged in to nvidia");
+    expect(state.transientSetAt).toBe(now);
+    spy.mockRestore();
   });
 
-  test("clearTransientMessage nulls transientMessage", () => {
+  test("clearTransientMessage nulls transientMessage and transientSetAt", () => {
     const state0 = reduceUiAction(INITIAL_TUI_STATE, Actions.setTransientMessage("x"));
     const state1 = reduceUiAction(state0, Actions.clearTransientMessage());
     expect(state1.transientMessage).toBeNull();
+    expect(state1.transientSetAt).toBeNull();
+  });
+
+  test("re-setting the message refreshes the timestamp", () => {
+    const first = 1000;
+    const second = 2000;
+    const spy = vi.spyOn(Date, "now").mockReturnValue(first);
+    const state0 = reduceUiAction(INITIAL_TUI_STATE, Actions.setTransientMessage("x"));
+    spy.mockReturnValue(second);
+    const state1 = reduceUiAction(state0, Actions.setTransientMessage("y"));
+    expect(state1.transientSetAt).toBe(second);
+    spy.mockRestore();
   });
 });
 
@@ -345,6 +361,7 @@ describe("clear", () => {
     expect(cleared.leaderAgentId).toBeNull();
     expect(cleared.focusedAgentId).toBeNull();
     expect(cleared.transientMessage).toBeNull();
+    expect(cleared.transientSetAt).toBeNull();
     expect(cleared.errorBanner).toBeNull();
   });
 });
@@ -394,12 +411,12 @@ describe("showHelp", () => {
 
   test("showing the help panel hides an open team or kanban panel", () => {
     const withTeam = loadedTeam([{ role: "general", agent_key: "general-1", is_leader: true }]);
-    const withPanels = { ...withTeam, teamPanelVisible: true, teamCursorAgentId: "my-team:general-1" as AgentId, kanbanView: "panel" as const };
+    const withPanels = { ...withTeam, teamPanelVisible: true, teamCursorAgentId: "my-team:general-1" as AgentId, kanban: { ...withTeam.kanban, view: "panel" as const } };
     const state = reduceUiAction(withPanels, Actions.showHelp());
     expect(state.helpPanelVisible).toBe(true);
     expect(state.teamPanelVisible).toBe(false);
     expect(state.teamCursorAgentId).toBeNull();
-    expect(state.kanbanView).toBe("hidden");
+    expect(state.kanban.view).toBe("hidden");
   });
 
   test("clearTuiState hides the help panel", () => {

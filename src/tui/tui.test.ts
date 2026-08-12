@@ -1,14 +1,11 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
-import { _buildTerminalTitle, type Tui, type TuiStdout } from "./tui";
+import { type Tui } from "./tui";
 import { bootTui } from "./container";
 import { Actions, type StateStore } from "./state";
-import { makeTuiState } from "./test";
 import { withTTY } from "../../tests/support";
-import { StreamTerminalImpl } from "./stream-terminal";
-import { asValue } from "awilix";
-import { type Terminal } from "@earendil-works/pi-tui";
+
 import { Events, type JiePlatform, type EventType, type AnyEventEnvelope, type EventEnvelope, type Command, type CommandResult } from "../platform";
 
 class FakeStdin extends PassThrough {
@@ -16,22 +13,14 @@ class FakeStdin extends PassThrough {
   ref(): this { return this; }
   unref(): this { return this; }
   setRawMode(): this { return this; }
-  setEncoding(): this { return this; }
-  resume(): this { super.resume(); return this; }
-  pause(): this { super.pause(); return this; }
+  override setEncoding(): this { return this; }
+  override resume(): this { super.resume(); return this; }
+  override pause(): this { super.pause(); return this; }
 }
 
 class FakeStdout extends PassThrough {
   columns = 80;
   rows = 30;
-}
-
-class RecordingStreamTerminal extends StreamTerminalImpl {
-  readonly writeCalls: string[] = [];
-  write(data: string): void {
-    this.writeCalls.push(data);
-    super.write(data);
-  }
 }
 
 interface PromptCall {
@@ -102,17 +91,22 @@ function makePlatformHarness(executeResult: CommandResult<"kanbanEdit"> = { boar
 }
 
 interface TuiHarness {
+  readonly container: ReturnType<typeof bootTui>;
   readonly tui: Tui;
   readonly stateStore: StateStore;
   readonly stdin: FakeStdin;
   readonly stdout: FakeStdout;
   readonly platform: PlatformHarness;
-  readonly terminal?: RecordingStreamTerminal;
+  readonly stdoutData: string[];
 }
 
 function bootHarness(executeResult?: CommandResult<"kanbanEdit">, recordWrites = false, soundEnabled = true): TuiHarness {
   const stdin = new FakeStdin();
   const stdout = new FakeStdout();
+  const stdoutData: string[] = [];
+  if (recordWrites) {
+    stdout.on("data", (chunk: Buffer) => stdoutData.push(chunk.toString("utf8")));
+  }
   const platform = makePlatformHarness(executeResult, soundEnabled);
   const container = bootTui({ cwd: process.cwd() }, {
     platform: platform.platform,
@@ -120,44 +114,40 @@ function bootHarness(executeResult?: CommandResult<"kanbanEdit">, recordWrites =
     stdin,
     stdout,
   });
-  let terminal: RecordingStreamTerminal | undefined;
-  if (recordWrites) {
-    terminal = new RecordingStreamTerminal(stdin, stdout);
-    container.register({ terminalFactory: asValue((_: NodeJS.ReadableStream, __: TuiStdout): Terminal => terminal!) });
-  }
-  return { tui: container.cradle.tui, stateStore: container.cradle.stateStore, stdin, stdout, platform, terminal };
+  return { container, tui: container.cradle.tui, stateStore: container.cradle.stateStore, stdin, stdout, platform, stdoutData };
 }
 
 function makePlatform(): JiePlatform {
   return makePlatformHarness().platform;
 }
 
-describe("bootTui — start resolves on pendingQuit", () => {
-  test("dispatching requestQuit resolves start()", async () => {
+describe("bootTui — run resolves on pendingQuit", () => {
+  test("dispatching requestQuit resolves run()", async () => {
     withTTY(true, async () => {
-      const { tui, stateStore } = bootHarness();
-      const started = tui.start();
+      const { tui, stateStore, container } = bootHarness();
+      const started = tui.run();
       await new Promise((r) => setTimeout(r, 10));
       stateStore.dispatch(Actions.requestQuit());
       expect(stateStore.getState().pendingQuit).toBe(true);
       await Promise.race([
         started,
-        new Promise<never>((_resolve, reject) => setTimeout(() => reject(new Error("start did not resolve within 2s after requestQuit")), 2000)),
+        new Promise<never>((_resolve, reject) => setTimeout(() => reject(new Error("run did not resolve within 2s after requestQuit")), 2000)),
       ]);
-      tui.stop();
+      await container.dispose();
     });
   });
 
-  test("stop() resolves start() even without requestQuit", async () => {
+  test("dispose() resolves run() even without requestQuit", async () => {
     withTTY(true, async () => {
-      const { tui } = bootHarness();
-      const started = tui.start();
+      const { tui, container } = bootHarness();
+      const started = tui.run();
       await new Promise((r) => setTimeout(r, 10));
-      tui.stop();
+      const disposed = container.dispose();
       await Promise.race([
         started,
-        new Promise<never>((_resolve, reject) => setTimeout(() => reject(new Error("stop did not resolve within 2s")), 2000)),
+        new Promise<never>((_resolve, reject) => setTimeout(() => reject(new Error("dispose did not resolve within 2s")), 2000)),
       ]);
+      await disposed;
     });
   });
 });
@@ -172,11 +162,11 @@ describe("bootTui — surface contract", () => {
   test("returns a Tui handle with initial empty state", () => {
     withTTY(true, () => {
       const platform = makePlatform();
-      const cradle = bootTui({ cwd: process.cwd() }, { platform, homeJieDir: join(tmpdir(), "jie-tui-unit-home") }).cradle;
-      const s0 = cradle.stateStore.getState();
+      const container = bootTui({ cwd: process.cwd() }, { platform, homeJieDir: join(tmpdir(), "jie-tui-unit-home") });
+      const s0 = container.cradle.stateStore.getState();
       expect(s0.teamId).toBeNull();
       expect(s0.agents.size).toBe(0);
-      cradle.tui.stop();
+      void container.dispose();
     });
   });
 });
@@ -214,7 +204,7 @@ describe("bootTui — submit pipeline", () => {
     withTTY(true, () => {
       harness = bootHarness();
     });
-    const started = harness!.tui.start();
+    const started = harness!.tui.run();
     await waitFrames(30);
     harness!.platform.emit(TEAM_LOADED);
     await waitFrames(20);
@@ -223,7 +213,7 @@ describe("bootTui — submit pipeline", () => {
     harness!.stdin.write("\r");
     await waitFrames(30);
     expect(harness!.platform.promptCalls).toEqual([{ teamId: "my-team", agentKey: "general-1", text: "hi" }]);
-    harness!.tui.stop();
+    await harness!.container.dispose();
     await started;
   });
 
@@ -232,37 +222,37 @@ describe("bootTui — submit pipeline", () => {
     withTTY(true, () => {
       harness = bootHarness();
     });
-    const started = harness!.tui.start();
+    const started = harness!.tui.run();
     await waitFrames(30);
     harness!.platform.emit(TEAM_LOADED);
     await waitFrames(20);
     harness!.stdin.write("hi\r");
     await waitFrames(30);
     expect(harness!.platform.promptCalls).toEqual([{ teamId: "my-team", agentKey: "general-1", text: "hi" }]);
-    harness!.tui.stop();
+    await harness!.container.dispose();
     await started;
   });
 });
 
 describe("bootTui — dequeue pipeline", () => {
-  test("requestDequeue action forwards to platform.dequeuePrompt", () => {
+  test("requestDequeue action forwards to platform.dequeuePrompt", async () => {
     let harness: TuiHarness | null = null;
     withTTY(true, () => {
       harness = bootHarness();
     });
     harness!.stateStore.dispatch(Actions.requestDequeue("my-team", "general-1", "queued text"));
     expect(harness!.platform.dequeueCalls).toEqual([{ teamId: "my-team", agentKey: "general-1", prompt: "queued text" }]);
-    harness!.tui.stop();
+    await harness!.container.dispose();
   });
 
-  test("requestRequeue action forwards to platform.requeuePrompt", () => {
+  test("requestRequeue action forwards to platform.requeuePrompt", async () => {
     let harness: TuiHarness | null = null;
     withTTY(true, () => {
       harness = bootHarness();
     });
     harness!.stateStore.dispatch(Actions.requestRequeue("my-team", "general-1", "abandoned text"));
     expect(harness!.platform.requeueCalls).toEqual([{ teamId: "my-team", agentKey: "general-1", prompt: "abandoned text" }]);
-    harness!.tui.stop();
+    await harness!.container.dispose();
   });
 });
 
@@ -277,8 +267,8 @@ describe("bootTui — kanban edit pipeline", () => {
     harness!.stateStore.dispatch(Actions.saveKanbanEdit("#1", "edited content", "content"));
     await waitFrames(0);
     expect(harness!.platform.executeCalls.at(-1)).toEqual({ name: "kanbanEdit", teamId: "my-team", cardId: "#1", field: "content", text: "edited content" });
-    expect(harness!.stateStore.getState().kanbanBoard).toEqual(board);
-    harness!.tui.stop();
+    expect(harness!.stateStore.getState().kanban.board).toEqual(board);
+    await harness!.container.dispose();
   });
 });
 
@@ -288,7 +278,7 @@ describe("bootTui — event bus wiring", () => {
     withTTY(true, () => {
       harness = bootHarness();
     });
-    const started = harness!.tui.start();
+    const started = harness!.tui.run();
     await waitFrames(30);
     harness!.platform.emit(TEAM_LOADED);
     await waitFrames(20);
@@ -300,7 +290,7 @@ describe("bootTui — event bus wiring", () => {
     const agent = harness!.stateStore.getState().agents.get("my-team:general-1");
     expect(agent?.contextTokensUsed).toBe(4242);
     expect(agent?.lastReportedTotalTokens).toBe(4242);
-    harness!.tui.stop();
+    await harness!.container.dispose();
     await started;
   });
 });
@@ -315,13 +305,13 @@ describe("bootTui — working indicator", () => {
     harness!.stdout.on("data", (chunk: Buffer) => {
       frames.push(chunk.toString("utf8"));
     });
-    const started = harness!.tui.start();
+    const started = harness!.tui.run();
     await waitFrames(30);
     harness!.platform.emit(TEAM_LOADED);
     harness!.platform.emit(Events.agentTurnStart({ kind: "agent", teamId: "my-team", agentKey: "general-1" }, null));
     await waitFrames(60);
     expect(frames.join("")).toContain("Working");
-    harness!.tui.stop();
+    await harness!.container.dispose();
     await started;
   });
 });
@@ -332,7 +322,7 @@ describe("bootTui — global keys", () => {
     withTTY(true, () => {
       harness = bootHarness();
     });
-    const started = harness!.tui.start();
+    const started = harness!.tui.run();
     await waitFrames(30);
     harness!.stdin.write("\x14");
     await waitFrames(20);
@@ -343,7 +333,7 @@ describe("bootTui — global keys", () => {
     harness!.stdin.write("\x14");
     await waitFrames(20);
     expect(harness!.stateStore.getState().thinkingExpanded).toBe(false);
-    harness!.tui.stop();
+    await harness!.container.dispose();
     await started;
   });
 
@@ -352,7 +342,7 @@ describe("bootTui — global keys", () => {
     withTTY(true, () => {
       harness = bootHarness();
     });
-    const started = harness!.tui.start();
+    const started = harness!.tui.run();
     await waitFrames(30);
     harness!.platform.emit(TWO_AGENT_TEAM);
     await waitFrames(20);
@@ -373,7 +363,7 @@ describe("bootTui — global keys", () => {
     await waitFrames(20);
     expect(harness!.stateStore.getState().teamPanelVisible).toBe(false);
     expect(harness!.stateStore.getState().teamCursorAgentId).toBeNull();
-    harness!.tui.stop();
+    await harness!.container.dispose();
     await started;
   });
 
@@ -382,7 +372,7 @@ describe("bootTui — global keys", () => {
     withTTY(true, () => {
       harness = bootHarness();
     });
-    const started = harness!.tui.start();
+    const started = harness!.tui.run();
     await waitFrames(30);
     harness!.platform.emit(TWO_AGENT_TEAM);
     await waitFrames(20);
@@ -399,7 +389,7 @@ describe("bootTui — global keys", () => {
     harness!.stdin.write("\x1b[D");
     await waitFrames(20);
     expect(harness!.stateStore.getState().teamPanelVisible).toBe(true);
-    harness!.tui.stop();
+    await harness!.container.dispose();
     await started;
   });
 });
@@ -410,15 +400,15 @@ describe("bootTui — notification sound", () => {
     withTTY(true, () => {
       harness = bootHarness(undefined, true);
     });
-    const started = harness!.tui.start();
+    const started = harness!.tui.run();
     await waitFrames(30);
     harness!.platform.emit(TEAM_LOADED);
     await waitFrames(20);
     harness!.platform.emit(Events.agentIdle({ kind: "agent", teamId: "my-team", agentKey: "general-1" }, "stop"));
     await waitFrames(20);
     expect(harness!.platform.executeCalls.some((command) => command.name === "getNotificationSoundEnabled")).toBe(true);
-    expect(harness!.terminal!.writeCalls.some((data) => data === "\x07")).toBe(true);
-    harness!.tui.stop();
+    expect(harness!.stdoutData.some((data) => data === "\x07")).toBe(true);
+    await harness!.container.dispose();
     await started;
   });
 
@@ -427,14 +417,14 @@ describe("bootTui — notification sound", () => {
     withTTY(true, () => {
       harness = bootHarness(undefined, true, false);
     });
-    const started = harness!.tui.start();
+    const started = harness!.tui.run();
     await waitFrames(30);
     harness!.platform.emit(TEAM_LOADED);
     await waitFrames(20);
     harness!.platform.emit(Events.agentIdle({ kind: "agent", teamId: "my-team", agentKey: "general-1" }, "stop"));
     await waitFrames(20);
-    expect(harness!.terminal!.writeCalls.some((data) => data === "\x07")).toBe(false);
-    harness!.tui.stop();
+    expect(harness!.stdoutData.some((data) => data === "\x07")).toBe(false);
+    await harness!.container.dispose();
     await started;
   });
 
@@ -443,15 +433,15 @@ describe("bootTui — notification sound", () => {
     withTTY(true, () => {
       harness = bootHarness(undefined, true);
     });
-    const started = harness!.tui.start();
+    const started = harness!.tui.run();
     await waitFrames(30);
     harness!.platform.emit(TWO_AGENT_TEAM);
     await waitFrames(20);
     harness!.platform.emit(Events.agentIdle({ kind: "agent", teamId: "my-team", agentKey: "worker-1" }, "stop"));
     await waitFrames(20);
     expect(harness!.platform.executeCalls.some((command) => command.name === "getNotificationSoundEnabled")).toBe(false);
-    expect(harness!.terminal!.writeCalls.some((data) => data === "\x07")).toBe(false);
-    harness!.tui.stop();
+    expect(harness!.stdoutData.some((data) => data === "\x07")).toBe(false);
+    await harness!.container.dispose();
     await started;
   });
 
@@ -460,38 +450,17 @@ describe("bootTui — notification sound", () => {
     withTTY(true, () => {
       harness = bootHarness(undefined, true);
     });
-    const started = harness!.tui.start();
+    const started = harness!.tui.run();
     await waitFrames(30);
     harness!.platform.emit(TEAM_LOADED);
     await waitFrames(20);
     harness!.platform.emit(Events.agentIdle({ kind: "agent", teamId: "my-team", agentKey: "general-1" }, "toolUse"));
     await waitFrames(20);
-    expect(harness!.terminal!.writeCalls.some((data) => data === "\x07")).toBe(false);
-    harness!.tui.stop();
+    expect(harness!.stdoutData.some((data) => data === "\x07")).toBe(false);
+    await harness!.container.dispose();
     await started;
   });
 });
 
-describe("_buildTerminalTitle", () => {
-  test("idle title uses a static dot and omits cwd when unknown", () => {
-    const title = _buildTerminalTitle(makeTuiState({ cwd: null, agents: new Map() }), 0);
-    expect(title).toBe("●jie");
-  });
 
-  test("idle title appends the workspace directory", () => {
-    const title = _buildTerminalTitle(makeTuiState({ cwd: "/home/cuz/workspace/jie", agents: new Map() }), 0);
-    expect(title).toBe("●jie - /home/cuz/workspace/jie");
-  });
 
-  test("busy title animates through the spinner frames", () => {
-    const state = makeTuiState({
-      cwd: "/tmp",
-      agents: new Map([["t1:a1", { status: "busy" } as unknown as import("./state").AgentUiState]]),
-    });
-    expect(_buildTerminalTitle(state, 0)).toBe("◐jie - /tmp");
-    expect(_buildTerminalTitle(state, 1)).toBe("◓jie - /tmp");
-    expect(_buildTerminalTitle(state, 2)).toBe("◑jie - /tmp");
-    expect(_buildTerminalTitle(state, 3)).toBe("◒jie - /tmp");
-    expect(_buildTerminalTitle(state, 4)).toBe("◐jie - /tmp");
-  });
-});

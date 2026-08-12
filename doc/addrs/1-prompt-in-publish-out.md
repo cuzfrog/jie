@@ -10,12 +10,12 @@ Previous design had agents with no knowledge of the event bus, a leader-only `de
 
 ## Decision
 
-Agents communicate exclusively through topic-based pub/sub on the EventBus (canonical event model and topic list in `doc/specs/jie-platform/03-event-system.md`):
+Agents communicate exclusively through topic-based pub/sub on the EventBus:
 
-- **User prompts enter as one typed topic** (`user.prompt`, payload carries `teamId` + addressed `agentKey`); every body subscribes and filters on its own identity. No per-agent subjects, no leader-only ingress.
-- **`notify(topic, message)`** is the sole inter-agent channel: it publishes on a `custom.` topic and does not end the LLM's turn.
-- **Domain topic subscriptions** are declared in the agent's `.md` frontmatter `subscribe:` field.
-- **Pipeline order is encoded in the subscription graph** — each agent subscribes to the previous agent's topic.
+- User prompts: `user.prompt` topic; bodies filter by identity.
+- `notify` is the inter-agent channel (`custom.` topics).
+- Domain subscriptions declared in agent `.md` `subscribe:` field.
+- Pipeline order encoded in subscription graph.
 
 ## Consequences
 

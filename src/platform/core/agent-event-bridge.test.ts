@@ -348,4 +348,20 @@ describe("AgentEventBridge — persistence", () => {
     makeBridge().handleEvent({ type: "message_end", message });
     expect(message.details).toEqual({ kind: "bash", exitCode: 0 });
   });
+
+  test("message_end stamps thinkingDurationMs onto assistant thinking content from the stream", () => {
+    vi.useFakeTimers({ now: 0 });
+    try {
+      persisted.length = 0;
+      const bridge = makeBridge();
+      bridge.handleEvent({ type: "message_start", message: makeAssistantMessage({ content: [] }) });
+      bridge.handleEvent({ type: "message_update", message: makeAssistantMessage(), assistantMessageEvent: { type: "thinking_delta", contentIndex: 0, delta: "hmm", partial: makeAssistantMessage() } });
+      vi.advanceTimersByTime(250);
+      bridge.handleEvent({ type: "message_end", message: makeAssistantMessage({ content: [{ type: "thinking", thinking: "hmm" }] }) });
+      expect(persisted).toHaveLength(1);
+      expect(persisted[0]).toEqual(makeAssistantMessage({ content: [{ type: "thinking", thinking: "hmm", thinkingDurationMs: 250 }] }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

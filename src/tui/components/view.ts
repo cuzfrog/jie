@@ -1,80 +1,104 @@
-import { Container, Loader, matchesKey, type Component, type Editor, type TUI } from "@earendil-works/pi-tui";
-import { Actions, TuiState, type Action, type StateStore } from "../state";
-import type { ChatSync } from "../sync";
-import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, WORKING_LABEL, style } from "./themes";
-import { QueuedPrompts, StatusLine, WelcomeBanner } from "./elements";
-import { HelpPanel, KanbanPanel, TeamPanel } from "./panels";
+import { matchesKey, type Component, type Editor, type TUI, type TuiInputListenerResult } from "@earendil-works/pi-tui";
+import { Actions, type TuiState, type Action, type StateStore } from "../state";
+import type { ChatSync } from "./chat";
+import type { TuiRoot, TuiComponent } from "..";
 
-export interface TuiView {
-  stop(): void;
+export interface TuiView extends TuiRoot {
+  handleInput(data: string): TuiInputListenerResult;
+  dispose(): void;
 }
 
 const CTRL_T = "\x14";
 const CTRL_O = "\x0f";
 const CTRL_K = "\x0b";
-const CTRL_E = "\x05";
 const CONSUMED = { consume: true } as const;
-const INTERRUPTED_LABEL = "Interrupted";
-const TEAM_WORKING_LABEL = "Team working…";
-const TEAM_SPINNER_INTERVAL_MS = 1000;
-const NO_SPINNER_FRAMES: string[] = [];
 
 export class TuiViewImpl implements TuiView {
+  private readonly screen: TUI;
   private readonly stateStore: StateStore;
-  private readonly workingSlot: Container;
-  private readonly workingIndicator: Loader;
-  private readonly teamWorkingIndicator: Loader;
-  private readonly interruptedIndicator: Loader;
   private readonly chatSync: ChatSync;
-  private readonly unsubscribeActions: () => void;
-  private readonly unsubscribeKeys: () => void;
+  private readonly workingSpinner: TuiComponent;
+  private readonly editor: Editor & TuiComponent;
+  private readonly welcomeBanner: TuiComponent;
+  private readonly statusLine: TuiComponent;
+  private readonly queuedPrompts: TuiComponent;
+  private readonly teamPanel: TuiComponent;
+  private readonly kanbanPanel: TuiComponent;
+  private readonly helpPanel: TuiComponent;
+  private readonly kanbanList: TuiComponent;
+  private readonly footer: TuiComponent;
+  private focusedComponent: Component;
+  private readonly unsubscribeInput: () => void;
 
   constructor(
-    tui: TUI,
+    screen: TUI,
     stateStore: StateStore,
-    chatSyncFactory: (chatContainer: Container, requestRender: () => void) => ChatSync,
-    kanbanList: Component,
-    footer: Component,
-    jieEditorFactory: (tui: TUI) => Editor,
+    chatSync: ChatSync,
+    kanbanList: TuiComponent,
+    footer: TuiComponent,
+    editor: Editor & TuiComponent,
+    welcomeBanner: TuiComponent,
+    statusLine: TuiComponent,
+    queuedPrompts: TuiComponent,
+    teamPanel: TuiComponent,
+    kanbanPanel: TuiComponent,
+    helpPanel: TuiComponent,
+    workingSpinner: TuiComponent,
   ) {
+    this.screen = screen;
     this.stateStore = stateStore;
-    const chatContainer = new Container();
-    const editor = jieEditorFactory(tui);
-    this.workingSlot = new Container();
-    this.workingIndicator = new FlushLoader(tui, style("accent"), style("muted"), WORKING_LABEL, {
-      frames: [...SPINNER_FRAMES], intervalMs: SPINNER_INTERVAL_MS,
-    });
-    this.teamWorkingIndicator = new FlushLoader(tui, style("accent"), style("muted"), TEAM_WORKING_LABEL, {
-      frames: [...SPINNER_FRAMES], intervalMs: TEAM_SPINNER_INTERVAL_MS,
-    });
-    this.interruptedIndicator = new FlushLoader(tui, style("muted"), style("muted"), INTERRUPTED_LABEL, {
-      frames: NO_SPINNER_FRAMES,
-    });
-    tui.addChild(chatContainer);
-    tui.addChild(kanbanList);
-    tui.addChild(this.workingSlot);
-    tui.addChild(new WelcomeBanner(stateStore));
-    tui.addChild(new StatusLine(stateStore));
-    tui.addChild(new QueuedPrompts(stateStore));
-    tui.addChild(editor);
-    tui.addChild(footer);
-    tui.addChild(new TeamPanel(stateStore));
-    tui.addChild(new KanbanPanel(stateStore));
-    tui.addChild(new HelpPanel(stateStore));
-    tui.setFocus(editor);
-    this.unsubscribeKeys = tui.addInputListener((data) => {
-      const state = this.stateStore.getState();
-      const popupOpen = editor.isShowingAutocomplete();
-      const kanbanAction = resolveKanbanKey(data, state, popupOpen);
-      if (kanbanAction !== null) {
-        this.stateStore.dispatch(kanbanAction);
-        return CONSUMED;
-      }
-      const action = resolveGlobalKey(data, state, popupOpen);
-      if (action !== null) {
-        this.stateStore.dispatch(action);
-        return CONSUMED;
-      }
+    this.chatSync = chatSync;
+    this.workingSpinner = workingSpinner;
+    this.editor = editor;
+    this.welcomeBanner = welcomeBanner;
+    this.statusLine = statusLine;
+    this.queuedPrompts = queuedPrompts;
+    this.teamPanel = teamPanel;
+    this.kanbanPanel = kanbanPanel;
+    this.helpPanel = helpPanel;
+    this.kanbanList = kanbanList;
+    this.footer = footer;
+    this.focusedComponent = this.editor;
+    screen.addChild(this.chatSync);
+    screen.addChild(this.kanbanList);
+    screen.addChild(workingSpinner);
+    screen.addChild(this.welcomeBanner);
+    screen.addChild(this.statusLine);
+    screen.addChild(this.queuedPrompts);
+    screen.addChild(this.editor);
+    screen.addChild(this.footer);
+    screen.addChild(this.teamPanel);
+    screen.addChild(this.kanbanPanel);
+    screen.addChild(this.helpPanel);
+    screen.setFocus(this.editor);
+    this.unsubscribeInput = screen.addInputListener((data) => this.handleInput(data));
+  }
+
+  update(): boolean {
+    let dirty = this.workingSpinner.update();
+    dirty = this.editor.update() || dirty;
+    dirty = this.welcomeBanner.update() || dirty;
+    dirty = this.statusLine.update() || dirty;
+    dirty = this.queuedPrompts.update() || dirty;
+    dirty = this.teamPanel.update() || dirty;
+    dirty = this.kanbanPanel.update() || dirty;
+    dirty = this.helpPanel.update() || dirty;
+    dirty = this.kanbanList.update() || dirty;
+    dirty = this.footer.update() || dirty;
+    dirty = this.chatSync.update() || dirty;
+    this.reconcileFocus(this.stateStore.getState());
+    return dirty;
+  }
+
+  handleInput(data: string): TuiInputListenerResult {
+    const state = this.stateStore.getState();
+    const popupOpen = this.editor.isShowingAutocomplete();
+    const action = resolveGlobalKey(data, state, popupOpen);
+    if (action !== null) {
+      this.stateStore.dispatch(action);
+      return CONSUMED;
+    }
+    if (this.focusedComponent === this.editor) {
       if (matchesKey(data, "enter") && shouldCommitTeamCursor(state)) {
         this.stateStore.dispatch(Actions.commitTeamCursor());
         return CONSUMED;
@@ -84,59 +108,27 @@ export class TuiViewImpl implements TuiView {
         this.stateStore.dispatch(Actions.switchCycleAgent(direction));
         return CONSUMED;
       }
-      return undefined;
-    });
-    this.chatSync = chatSyncFactory(chatContainer, () => tui.requestRender());
-    this.unsubscribeActions = stateStore.subscribe(async (): Promise<void> => {
-      if (this.syncWorkingIndicator()) tui.requestRender();
-    });
+    }
+    return undefined;
   }
 
-  stop(): void {
-    this.workingIndicator.stop();
-    this.teamWorkingIndicator.stop();
-    this.chatSync.stop();
-    this.unsubscribeKeys();
-    this.unsubscribeActions();
+  dispose(): void {
+    this.unsubscribeInput();
   }
 
-  private syncWorkingIndicator(): boolean {
-    const state = this.stateStore.getState();
-    const kind = TuiState.workingKind(state);
-    const mode = kind === "none" && TuiState.isInterrupted(state) ? "interrupted" : kind;
-    return syncWorkingSlot(this.workingSlot, this.workingIndicator, this.teamWorkingIndicator, this.interruptedIndicator, mode);
-  }
-}
-
-class FlushLoader extends Loader {
-  render(width: number): string[] {
-    return super.render(width).map((line) => (line.startsWith(" ") ? line.slice(1) : line));
+  private reconcileFocus(state: TuiState): void {
+    const target = resolveFocusTarget(state) === "kanban" ? this.kanbanPanel : this.editor;
+    if (target === this.focusedComponent) return;
+    this.focusedComponent = target;
+    this.screen.setFocus(target);
   }
 }
 
 function resolveGlobalKey(data: string, state: TuiState, popupOpen: boolean): Action | null {
   if (data === CTRL_T) return Actions.toggleThinking();
   if (data === CTRL_O) return Actions.toggleToolCards();
-  if (data === CTRL_K && state.kanbanEdit === null) return Actions.cycleKanbanView();
-  if (matchesKey(data, "left") && state.editorCursorAtStart && state.kanbanView !== "panel" && !popupOpen) return Actions.toggleTeamPanel();
-  return null;
-}
-
-function resolveKanbanKey(data: string, state: TuiState, popupOpen: boolean): Action | null {
-  if (state.kanbanView !== "panel" || state.kanbanEdit !== null || popupOpen) return null;
-  if (matchesKey(data, "esc") && state.kanbanExpanded) return Actions.toggleKanbanExpand();
-  if (matchesKey(data, "tab")) return Actions.toggleKanbanExpand();
-  if (state.kanbanExpanded) {
-    if (matchesKey(data, "up")) return Actions.moveKanbanEditField("up");
-    if (matchesKey(data, "down")) return Actions.moveKanbanEditField("down");
-    if (data === CTRL_E && state.kanbanCursor !== null) return Actions.commitKanbanEdit(state.kanbanCursor, state.kanbanEditField);
-    return null;
-  }
-  if (matchesKey(data, "up")) return Actions.moveKanbanCursor("up");
-  if (matchesKey(data, "down")) return Actions.moveKanbanCursor("down");
-  if (matchesKey(data, "left")) return Actions.moveKanbanCursor("left");
-  if (matchesKey(data, "right")) return Actions.moveKanbanCursor("right");
-  if (data === CTRL_E && state.kanbanCursor !== null) return Actions.commitKanbanEdit(state.kanbanCursor);
+  if (data === CTRL_K && state.kanban.edit === null && state.kanban.board.length > 0) return Actions.cycleKanbanView();
+  if (matchesKey(data, "left") && state.editorCursorAtStart && state.kanban.view !== "panel" && !popupOpen) return Actions.toggleTeamPanel();
   return null;
 }
 
@@ -151,26 +143,13 @@ function shouldCommitTeamCursor(state: TuiState): boolean {
   return state.teamPanelVisible && state.teamCursorAgentId !== null && state.teamCursorAgentId !== state.focusedAgentId;
 }
 
-type WorkingSlotMode = ReturnType<typeof TuiState.workingKind> | "interrupted";
-
-function syncWorkingSlot(slot: Container, working: Loader, teamWorking: Loader, interrupted: Loader, mode: WorkingSlotMode): boolean {
-  const target = mode === "focused" ? working : mode === "team" ? teamWorking : mode === "interrupted" ? interrupted : null;
-  const current = slot.children[0] ?? null;
-  if (current === target) return false;
-  if (current === working) working.stop();
-  if (current === teamWorking) teamWorking.stop();
-  slot.clear();
-  if (target === null) return true;
-  slot.addChild(target);
-  if (mode === "focused" || mode === "team") target.start();
-  return true;
+function resolveFocusTarget(state: TuiState): "kanban" | "editor" {
+  return state.kanban.view === "panel" && state.kanban.edit === null ? "kanban" : "editor";
 }
 
 export {
-  FlushLoader as _FlushLoader,
   resolveGlobalKey as _resolveGlobalKey,
-  resolveKanbanKey as _resolveKanbanKey,
   resolveTeamCursorDirection as _resolveTeamCursorDirection,
   shouldCommitTeamCursor as _shouldCommitTeamCursor,
-  syncWorkingSlot as _syncWorkingSlot,
+  resolveFocusTarget as _resolveFocusTarget,
 };

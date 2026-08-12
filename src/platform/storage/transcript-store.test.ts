@@ -187,6 +187,19 @@ describe("SqliteTranscriptStore", () => {
     const content = (restored[0] as { content: Array<{ type: string; text: string }> }).content;
     expect(content[0]?.text).toBe("hello");
   });
+
+  test("restore round-trips thinkingDurationMs on assistant thinking content", async () => {
+    const m = makeTranscriptStore();
+    const message: AgentMessage = {
+      role: "assistant",
+      content: [{ type: "thinking", thinking: "hmm", thinkingDurationMs: 250 }],
+      timestamp: Date.now(),
+    } as AgentMessage;
+    m.persist(message, "agent-1", "s1", "t1");
+    const restored = await m.restore("agent-1", "s1", "t1");
+    const content = (restored[0] as { content: Array<{ type: string; thinkingDurationMs?: number }> }).content;
+    expect(content[0]?.thinkingDurationMs).toBe(250);
+  });
 });
 
 describe("SqliteTranscriptStore.listSessions", () => {

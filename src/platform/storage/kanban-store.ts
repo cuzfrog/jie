@@ -1,5 +1,6 @@
 import type { KanbanCard, KanbanCardWrite, KanbanStatus } from "../types";
-import type { Storage } from "./storage";
+import { expectNumber, expectString } from "./row-decode";
+import type { SqlBinding, Storage } from "./storage";
 
 const TEAM_SESSION = "";
 const RETENTION_DAYS = 30;
@@ -195,7 +196,7 @@ function retentionCutoff(): string {
   return date.toISOString();
 }
 
-function cardFromRow(row: ReadonlyArray<unknown>): KanbanCard {
+function cardFromRow(row: ReadonlyArray<SqlBinding>): KanbanCard {
   const [sessionId, id, content, status, scope, activeForm, description, completedAt, externalRef] = row;
   const scopeValue = expectScope(scope);
   return {
@@ -211,23 +212,12 @@ function cardFromRow(row: ReadonlyArray<unknown>): KanbanCard {
   };
 }
 
-function expectString(value: unknown): string {
-  if (typeof value !== "string") throw new Error(`expected string, got ${typeof value}`);
-  return value;
-}
-
-function expectNumber(value: unknown): number {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "bigint") return Number(value);
-  throw new Error(`expected number, got ${typeof value}`);
-}
-
-function expectStatus(value: unknown): KanbanStatus {
+function expectStatus(value: SqlBinding): KanbanStatus {
   if (value === "pending" || value === "in_progress" || value === "in_review" || value === "completed") return value;
   throw new Error(`expected kanban status, got ${typeof value}`);
 }
 
-function expectScope(value: unknown): "team" | "session" {
+function expectScope(value: SqlBinding): "team" | "session" {
   if (value === "team" || value === "session") return value;
   return "team";
 }

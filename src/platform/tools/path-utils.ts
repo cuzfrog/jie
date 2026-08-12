@@ -47,7 +47,8 @@ export function* walkFiles(
   const stack: string[] = [""];
   while (stack.length > 0) {
     if (signal?.aborted) return;
-    const dir = stack.pop() as string;
+    const dir = stack.pop();
+    if (dir === undefined) return;
     const absDir = dir === "" ? root : join(root, dir);
     let entries: Dirent[];
     try {

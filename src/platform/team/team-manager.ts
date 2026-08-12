@@ -7,7 +7,7 @@ import type { KanbanStore, SessionSummary, TranscriptStore } from "../storage";
 import { type ModelRegistry, type SettingsStore } from "../config";
 import type { SkillManager } from "../skills";
 import { type AgentSoul, type TeamBlueprint, type TeamBlueprintLocation, BUILTIN_DEFAULT_SOLO_TEAM_ID } from "./types";
-import { type TeamRegistry, createTeamRegistry } from "./registry";
+import { type TeamRegistry } from "./registry";
 import type { AgentHistory, AgentInfo, TeamInfo } from "../types";
 
 export interface TeamManager {
@@ -27,13 +27,11 @@ export interface TeamManager {
 }
 
 export class TeamManagerImpl implements TeamManager {
-  private readonly teamRegistry: TeamRegistry;
   private readonly loadedTeams = new Map<string, AgentBody[]>();
   private readonly sessionIds = new Map<string, string>();
 
   constructor(
-    homeJieDir: string,
-    projectJieDir: string | null,
+    private readonly teamRegistry: TeamRegistry,
     private readonly eventManager: EventManager,
     private readonly settingsStore: SettingsStore,
     private readonly modelRegistry: ModelRegistry,
@@ -42,9 +40,7 @@ export class TeamManagerImpl implements TeamManager {
     private readonly skillManager: SkillManager,
     private readonly agentBodyFactory: (params: AgentBodyParams) => AgentBody,
     private readonly resumeSessionId: string | undefined = undefined,
-  ) {
-    this.teamRegistry = createTeamRegistry({ homeJieDir, projectJieDir });
-  }
+  ) {}
 
   async load(teamId?: string): Promise<TeamInfo> {
     return this.loadImpl(teamId);

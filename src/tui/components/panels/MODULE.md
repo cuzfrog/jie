@@ -1,13 +1,18 @@
 ---
 no-new-exports:
   - index.ts
+  - module.ts
+  - help-panel.ts
+  - help-panel.test.ts
+  - kanban-panel.ts
+  - kanban-panel.test.ts
+  - panel.ts
+  - team-panel.ts
+  - team-panel.test.ts
+  - team-table.ts
+  - team-table.test.ts
 ---
 
 # Design principles
-- composite panels render a bordered frame with an optional hint line below it
-- panels extend the `Panel` base class (template method): override `isVisible`, `body`, and optionally `topBorder`/`hint`
-- rendering helpers stay file-private; a pure rendering function complex enough to warrant its own test may live in a sibling file (e.g. `team-table`)
-
-## File layout
-- one panel class per file, extending `Panel`
-- shared layout lives in `panel.ts`
+- Panels extend `Panel`: override `isVisible`, `body`, optionally `topBorder`/`hint`. Shared layout in `panel.ts`.
+- Panels that take keyboard input implement `Component.handleInput` and receive a key-fallback target; the view focuses a visible input-taking panel and the panel delegates unhandled keys to the fallback.

@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { createTeamInstaller } from "../../team-installer";
+import { createTeamInstaller } from "../../teams-installer";
 import { type Console } from "../../utils";
 import type { ParsedArgsMap } from "../cli-flags";
 

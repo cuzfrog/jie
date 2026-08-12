@@ -67,7 +67,7 @@ describe("StreamPublisherImpl", () => {
     publisher.beginStream();
     publisher.append("text", "y".repeat(64));
     const result = publisher.endStream();
-    expect(result).toEqual({ streamId: 2, totalChunks: 1 });
+    expect(result).toEqual({ streamId: 2, totalChunks: 1, thinkingDurations: [] });
     expect(chunkEnvelopes()[1]!.payload).toMatchObject({ stream_id: 2, seq: 0, text: "y".repeat(64) });
   });
 
@@ -77,7 +77,7 @@ describe("StreamPublisherImpl", () => {
     publisher.append("text", "x".repeat(64));
     publisher.append("text", "y".repeat(64));
     const result = publisher.endStream();
-    expect(result).toEqual({ streamId: 1, totalChunks: 2 });
+    expect(result).toEqual({ streamId: 1, totalChunks: 2, thinkingDurations: [] });
     const ends = endEnvelopes();
     expect(ends).toHaveLength(1);
     expect(ends[0]!.payload).toEqual({ stream_id: 1, total_chunks: 2, thinking_durations: [] });

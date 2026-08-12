@@ -32,19 +32,20 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
         interruptedAgentId: null,
         nextEntrySeq: 0,
         transientMessage: null,
+        transientSetAt: null,
         errorBanner: null,
         helpPanelVisible: false,
       };
     case ActionTypes.SET_TRANSIENT_MESSAGE:
-      return { ...state, transientMessage: action.payload.text };
+      return { ...state, transientMessage: action.payload.text, transientSetAt: Date.now() };
     case ActionTypes.CLEAR_TRANSIENT_MESSAGE:
-      return { ...state, transientMessage: null };
+      return { ...state, transientMessage: null, transientSetAt: null };
     case ActionTypes.SET_ERROR_MESSAGE:
       return { ...state, errorBanner: action.payload.text };
     case ActionTypes.CLEAR_ERROR_MESSAGE:
       return { ...state, errorBanner: null };
     case ActionTypes.CLEAR_BANNERS:
-      return { ...state, transientMessage: null, errorBanner: null };
+      return { ...state, transientMessage: null, transientSetAt: null, errorBanner: null };
     case ActionTypes.REQUEST_QUIT:
       if (state.pendingQuit) return state;
       return { ...state, pendingQuit: true };
@@ -89,16 +90,16 @@ function reduceTeamPanelToggle(state: TuiState): TuiState {
   if (roster.length === 0) return state;
   if (state.teamPanelVisible) return { ...state, teamPanelVisible: false, teamCursorAgentId: null };
   const cursor = state.teamCursorAgentId ?? state.focusedAgentId ?? roster[0]!.agentId;
-  const withoutOtherPanels: TuiState = state.kanbanView === "panel" || state.helpPanelVisible
-    ? { ...state, kanbanView: "hidden", kanbanEdit: null, kanbanExpanded: false, helpPanelVisible: false }
+  const withoutOtherPanels: TuiState = state.kanban.view === "panel" || state.helpPanelVisible
+    ? { ...state, kanban: { ...state.kanban, view: "hidden", edit: null, expanded: false }, helpPanelVisible: false }
     : state;
   return { ...withoutOtherPanels, teamPanelVisible: true, teamCursorAgentId: cursor };
 }
 
 function reduceHelpPanelToggle(state: TuiState): TuiState {
   if (state.helpPanelVisible) return { ...state, helpPanelVisible: false };
-  const withoutOtherPanels: TuiState = state.teamPanelVisible || state.kanbanView === "panel"
-    ? { ...state, teamPanelVisible: false, teamCursorAgentId: null, kanbanView: "hidden", kanbanEdit: null, kanbanExpanded: false }
+  const withoutOtherPanels: TuiState = state.teamPanelVisible || state.kanban.view === "panel"
+    ? { ...state, teamPanelVisible: false, teamCursorAgentId: null, kanban: { ...state.kanban, view: "hidden", edit: null, expanded: false } }
     : state;
   return { ...withoutOtherPanels, helpPanelVisible: true };
 }

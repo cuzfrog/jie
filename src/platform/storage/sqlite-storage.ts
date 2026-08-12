@@ -1,5 +1,5 @@
-import { Database, type SQLQueryBindings } from "bun:sqlite";
-import type { Storage } from "./storage";
+import { Database } from "bun:sqlite";
+import type { SqlBinding, Storage } from "./storage";
 import { initializeSchema } from "./init-db";
 
 export class SqliteStorage implements Storage {
@@ -12,40 +12,23 @@ export class SqliteStorage implements Storage {
     initializeSchema(this);
   }
 
-  exec(sql: string, params?: unknown[]): void {
+  exec(sql: string, params?: ReadonlyArray<SqlBinding>): void {
     if (params === undefined) {
       this.db.run(sql);
       return;
     }
-    this.db.run(sql, toSqlBindings(params));
+    this.db.run(sql, [...params]);
   }
 
-  query(sql: string, params?: unknown[]): unknown[][] {
+  query(sql: string, params?: ReadonlyArray<SqlBinding>): ReadonlyArray<ReadonlyArray<SqlBinding>> {
     if (params === undefined) {
       return this.db.query(sql).values();
     }
-    return this.db.query(sql).values(...toSqlBindings(params));
+    return this.db.query(sql).values(...params);
   }
 
   transaction<T>(body: (storage: Storage) => T): T {
     const transaction = this.db.transaction(() => body(this));
     return transaction();
   }
-}
-
-function toSqlBindings(values: unknown[]): SQLQueryBindings[] {
-  if (!values.every(isSqlBinding)) throw new Error("Unsupported SQL binding type");
-  return values;
-}
-
-function isSqlBinding(value: unknown): value is SQLQueryBindings {
-  return (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean" ||
-    typeof value === "bigint" ||
-    value instanceof Uint8Array ||
-    value instanceof Date
-  );
 }

@@ -1,0 +1,90 @@
+import { type StateStore, type TuiState } from "../state";
+import { makeAgentUiState, makeTuiState } from "../test";
+import type { Terminal } from "@earendil-works/pi-tui";
+import { TerminalTitleImpl, _buildTerminalTitle } from "./terminal-title";
+
+class StubTerminal implements Terminal {
+  columns = 80;
+  rows = 24;
+  setTitle = vi.fn();
+  setProgress = vi.fn();
+  start(): void {}
+  stop(): void {}
+  drainInput(): Promise<void> { return Promise.resolve(); }
+  write(): void {}
+  get kittyProtocolActive(): boolean { return false; }
+  moveBy(): void {}
+  hideCursor(): void {}
+  showCursor(): void {}
+  clearLine(): void {}
+  clearFromCursor(): void {}
+  clearScreen(): void {}
+}
+
+const state: TuiState = makeTuiState({});
+const stateStore = vi.mocked<StateStore>({
+  getState: vi.fn(() => state),
+  dispatch: vi.fn(),
+  subscribe: vi.fn(() => () => undefined),
+});
+
+describe("_buildTerminalTitle", () => {
+  test("uses the idle dot when the TUI is not busy", () => {
+    const state = makeTuiState({});
+    expect(_buildTerminalTitle(state, 0)).toBe(`${"●"}jie`);
+  });
+
+  test("uses a spinner frame when the TUI is busy", () => {
+    const state = makeTuiState({
+      agents: new Map([
+        ["my-team:general-1", makeAgentUiState("my-team:general-1", { isLeader: true, status: "busy" })],
+      ]),
+      focusedAgentId: "my-team:general-1",
+      leaderAgentId: "my-team:general-1",
+    });
+    expect(_buildTerminalTitle(state, 1)).toBe(`${"◓"}jie`);
+  });
+
+  test("appends cwd when present", () => {
+    expect(_buildTerminalTitle(makeTuiState({ cwd: "/tmp" }), 0)).toBe(`${"●"}jie - /tmp`);
+  });
+});
+
+describe("TerminalTitleImpl", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test("initialize writes the title immediately", () => {
+    const terminal = new StubTerminal();
+    const title = new TerminalTitleImpl(terminal, stateStore, 100);
+    title.initialize();
+    expect(terminal.setTitle).toHaveBeenCalledTimes(1);
+    title.dispose();
+  });
+
+  test("advances the spinner frame on each interval tick", () => {
+    const terminal = new StubTerminal();
+    const title = new TerminalTitleImpl(terminal, stateStore, 100);
+    title.initialize();
+    expect(terminal.setTitle).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(100);
+    expect(terminal.setTitle).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(100);
+    expect(terminal.setTitle).toHaveBeenCalledTimes(3);
+    title.dispose();
+  });
+
+  test("dispose cancels the interval", () => {
+    const terminal = new StubTerminal();
+    const title = new TerminalTitleImpl(terminal, stateStore, 100);
+    title.initialize();
+    title.dispose();
+    vi.advanceTimersByTime(200);
+    expect(terminal.setTitle).toHaveBeenCalledTimes(1);
+  });
+});

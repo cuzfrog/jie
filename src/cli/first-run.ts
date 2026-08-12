@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import * as readline from "node:readline/promises";
 import { join } from "node:path";
-import { createTeamInstaller } from "../team-installer";
+import { createTeamInstaller } from "../teams-installer";
 import type { Console } from "../utils";
 
 export interface FirstRunPorts {
@@ -15,8 +15,8 @@ export interface FirstRunPorts {
 }
 
 const SENTINEL_FILENAME = ".first-run-done";
-const DEFAULT_CODERS_ID = "default-team";
-const BUNDLED_TEAM_CONTENT_DIR = join(import.meta.dir, "../team-content");
+const DEFAULT_CODERS_ID = "default-dev-team";
+const BUNDLED_TEAM_CONTENT_DIR = join(import.meta.dir, "../teams");
 const MCP_CONFIG_FILE = "mcp.json";
 const CODE_LENS_SERVER_NAME = "code-lens";
 const CODE_LENS_SERVER = { transport: "stdio", command: "code-lens", args: [] } as const;

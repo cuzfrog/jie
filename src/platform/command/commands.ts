@@ -8,6 +8,18 @@ interface CommandDef<A, R = null> {
   result: R;
 }
 
+export interface ModelListRow {
+  readonly provider: string;
+  readonly id: string;
+  readonly name: string;
+  readonly available: boolean;
+}
+
+export interface FilteredModelList {
+  readonly models: ReadonlyArray<ModelListRow>;
+  readonly filteredOut: number;
+}
+
 interface CommandTypeMap {
   login: CommandDef<{ provider: string; apiKey: string }, null>;
   logout: CommandDef<{ provider: string }, null>;
@@ -16,15 +28,12 @@ interface CommandTypeMap {
   getDefaultModel: CommandDef<{}, ModelInfo | null>;
   setDefaultEffort: CommandDef<{ effort: EffortLevel }, null>;
   getDefaultEffort: CommandDef<{}, EffortLevel>;
-  listModels: CommandDef<{}, ReadonlyArray<{
-    readonly provider: string;
-    readonly id: string;
-    readonly name: string;
-    readonly available: boolean;
-  }>>;
+  listModels: CommandDef<{}, ReadonlyArray<ModelListRow>>;
+  listFilteredModels: CommandDef<{}, FilteredModelList>;
   listProviders: CommandDef<{}, ReadonlyArray<{ readonly id: string; readonly description?: string }>>;
   setModelFilters: CommandDef<{ filters: ReadonlyArray<string> }, null>;
   getModelFilters: CommandDef<{}, ReadonlyArray<string>>;
+  validateModelFilter: CommandDef<{ pattern: string; existingFilters: ReadonlyArray<string> }, string | null>;
   setDefaultTeam: CommandDef<{ teamId: string }, null>;
   team: CommandDef<{ teamId?: string }, TeamInfo>;
   reload: CommandDef<{}, ReadonlyArray<TeamInfo>>;

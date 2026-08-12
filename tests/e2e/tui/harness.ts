@@ -15,6 +15,7 @@ const POLL_INTERVAL_MS = 10;
 export interface TuiHarness {
   readonly dir: string;
   readonly tui: Tui;
+  readonly container: ReturnType<typeof bootTui>;
   readonly stateStore: TuiCradle["stateStore"];
   readonly platform: JiePlatform;
   readonly stdin: PassThrough;
@@ -88,12 +89,13 @@ export async function startTui(opts: StartTuiOptions = {}): Promise<TuiHarness> 
   });
   const tui = tuiContainer.cradle.tui;
   const stateStore = tuiContainer.cradle.stateStore;
-  const exited = tui.start();
-  return { dir, tui, stateStore, platform, stdin, stdout, exited, ownedDir: opts.cwd === undefined };
+  const exited = tui.run();
+  return { dir, tui, container: tuiContainer, stateStore, platform, stdin, stdout, exited, ownedDir: opts.cwd === undefined };
 }
 
 export async function stopTui(harness: TuiHarness): Promise<void> {
-  harness.tui.stop();
+  await harness.container.dispose();
+  await harness.exited;
   await harness.platform.execute({ name: "stop" });
   await harness.platform.shutdown();
   if (harness.ownedDir) rmSync(harness.dir, { recursive: true, force: true });

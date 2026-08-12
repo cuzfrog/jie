@@ -285,6 +285,73 @@ describe("CommandExecutorImpl", () => {
       const result = await executor.execute({ name: "getModelFilters" });
       expect(result).toEqual([]);
     });
+
+    test("listFilteredModels returns all available models with no filters", async () => {
+      modelRegistry.listProviders.mockReturnValueOnce([{ id: "anthropic", configured: false, envKeys: ["ANTHROPIC_API_KEY"] }]);
+      authStore.load.mockReturnValueOnce({ anthropic: { type: "api_key", key: "sk-test" } });
+      modelRegistry.listModels.mockReturnValueOnce([fakeModel("anthropic", "claude-sonnet-4-5", "Claude Sonnet 4.5")]);
+      const result = await executor.execute({ name: "listFilteredModels" });
+      expect(result).toEqual({
+        models: [{ provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", available: true }],
+        filteredOut: 0,
+      });
+    });
+
+    test("listFilteredModels applies stored filters and reports the filtered-out count", async () => {
+      settingsStore.load.mockReturnValueOnce({ ...DEFAULT_SETTINGS, modelFilters: ["gpt"] });
+      modelRegistry.listProviders.mockReturnValueOnce([
+        { id: "anthropic", configured: true, envKeys: [] },
+        { id: "openai", configured: true, envKeys: [] },
+      ]);
+      authStore.load.mockReturnValueOnce({});
+      modelRegistry.listModels.mockImplementation((provider) =>
+        provider === "anthropic" ? [fakeModel("anthropic", "claude-sonnet-4-5", "Claude Sonnet 4.5")]
+        : [fakeModel("openai", "gpt-5", "GPT-5")]);
+      const result = await executor.execute({ name: "listFilteredModels" });
+      expect(result).toEqual({
+        models: [{ provider: "openai", id: "gpt-5", name: "GPT-5", available: true }],
+        filteredOut: 1,
+      });
+    });
+
+    test("validateModelFilter returns null when the combined filters match an available model", async () => {
+      modelRegistry.listProviders.mockReturnValueOnce([{ id: "openai", configured: true, envKeys: [] }]);
+      authStore.load.mockReturnValueOnce({});
+      modelRegistry.listModels.mockReturnValueOnce([fakeModel("openai", "gpt-5", "GPT-5")]);
+      const result = await executor.execute({ name: "validateModelFilter", pattern: "gpt", existingFilters: [] });
+      expect(result).toBeNull();
+    });
+
+    test("validateModelFilter returns a rejection string when the pattern matches no available models", async () => {
+      modelRegistry.listProviders.mockReturnValueOnce([{ id: "openai", configured: true, envKeys: [] }]);
+      authStore.load.mockReturnValueOnce({});
+      modelRegistry.listModels.mockReturnValueOnce([fakeModel("openai", "gpt-5", "GPT-5")]);
+      const result = await executor.execute({ name: "validateModelFilter", pattern: "claude", existingFilters: [] });
+      expect(result).toBe("/model-filter: pattern 'claude' rejected — it matches none of the 1 available models");
+    });
+
+    test("validateModelFilter mentions existing filters in the rejection", async () => {
+      modelRegistry.listProviders.mockReturnValueOnce([{ id: "openai", configured: true, envKeys: [] }]);
+      authStore.load.mockReturnValueOnce({});
+      modelRegistry.listModels.mockReturnValueOnce([fakeModel("openai", "gpt-5", "GPT-5")]);
+      const result = await executor.execute({ name: "validateModelFilter", pattern: "claude", existingFilters: ["qwen"] });
+      expect(result).toBe("/model-filter: pattern 'claude' rejected — combined with existing filters (qwen) it matches none of the 1 available models");
+    });
+
+    test("validateModelFilter allows a duplicate pattern", async () => {
+      modelRegistry.listProviders.mockReturnValueOnce([{ id: "openai", configured: true, envKeys: [] }]);
+      authStore.load.mockReturnValueOnce({});
+      modelRegistry.listModels.mockReturnValueOnce([fakeModel("openai", "gpt-5", "GPT-5")]);
+      const result = await executor.execute({ name: "validateModelFilter", pattern: "gpt", existingFilters: ["gpt"] });
+      expect(result).toBeNull();
+    });
+
+    test("validateModelFilter allows any pattern when there are no available models", async () => {
+      modelRegistry.listProviders.mockReturnValueOnce([]);
+      modelRegistry.listModels.mockReturnValue([]);
+      const result = await executor.execute({ name: "validateModelFilter", pattern: "anything", existingFilters: [] });
+      expect(result).toBeNull();
+    });
   });
 
   describe("listProviders", () => {

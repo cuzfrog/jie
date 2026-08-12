@@ -1,279 +1,70 @@
 # CLI
 
-The `jie` binary is the single entry point for all user interaction. It runs as one OS process hosting all agents, the EventBus, and optionally the TUI.
+The `jie` binary is the single entry point for all user interaction: one OS process hosts the team harness, the EventBus, and the TUI. It is hand-rolled (`src/cli/cli-flags.ts`); it does not use a sub-command framework.
 
-## Flag Parsing Rules
+## Flag parsing invariants
 
-The hand-rolled parser (`src/cli/cli-flags.ts`) applies these rules to the `jie` / `jie -p` flag set (`--team`, `--timeout`, `--json`, `--api-key`, `--resume`, `--in-memory`):
+- A flag may not appear twice — duplicate is exit 1 (no "last wins").
+- Unrecognized flags/subcommands and unexpected positionals are exit 1.
+- Required-argument flags (`--team`, `--timeout`, `--api-key`, `--resume`) missing their arg are exit 1.
+- `--timeout` must be > 0 (default 300).
+- All flags are normalized into a record before any side effect runs. The critical consequence: `--api-key` writes `auth.json` after team resolution and before the LLM call regardless of its position, so `jie -p "..." --api-key <k>` and `jie --api-key <k> -p "..."` are identical (print mode never races against a just-written credential).
 
-- **Duplicate flag is an error.** If the same flag appears more than once on the command line (e.g. `jie -p "..." --team alpha --team beta`), the CLI exits 1 with `duplicate flag: --<flag>` and does not start. The "last one wins" shell convention is **not** used; the CLI surfaces the duplicate rather than silently picking one. The subcommand parsers (`login`, `logout`, `model`, `team`) do not dedupe; an unrecognized extra token is rejected with `unknown flag: <flag>`.
-- **Missing required argument is an error.** `--team`, `--timeout`, `--api-key`, and `--resume` each require an argument, else exit 1 with `missing argument for --<flag>`. `-p`/`--print` requires an instruction (`missing instruction for -p/--print`), and a second positional is rejected (`unexpected positional argument: <arg>`). Unknown flags/subcommands exit 1 with `unknown flag: <flag>` / `unknown subcommand: <name>`.
-- **`--timeout` must be > 0**, else exit 1 with `invalid --timeout value: <v> (must be > 0)`. Default is 300.
-- **Flag ordering is normalized before any side effect.** The CLI parses all flags into a normalized record before executing any side-effecting step. In print mode, `--api-key <key>` writes `auth.json` (via the platform's `setApiKey` command) after team resolution and before the LLM call, regardless of position on the command line. `jie -p "..." --api-key <key>` and `jie --api-key <key> -p "..."` behave identically. This is a hard rule — without it, `-p` would race against the just-written credential.
+## Config discovery
 
-## Config Discovery
+Walk up from CWD to `.jie/`, deep-merge `.jie/settings.json` over `~/.jie/settings.json`. Absence → the platform runs with empty settings (no interactive init). See `10-configuration.md`.
 
-All commands resolve configuration by walking up from CWD to find `.jie/`, then loading `.jie/settings.json` (if present) and deep-merging it with `~/.jie/settings.json`. If no settings file is found, the platform runs with empty settings — no interactive init flow. To customize provider, model, or team selection at the project level, create `.jie/settings.json` manually. See `10-configuration.md` and `12-installation.md`.
-
-## `jie`
-
-Launch the full team with interactive TUI.
+## `jie` (interactive TUI)
 
 ```
 jie [--team <id>] [--resume <id>] [--in-memory] [--no-install]
 ```
 
-`--in-memory` runs the platform on an in-memory store instead of the SQLite `~/.jie/storage.db` (for scripts and e2e; nothing persists).
+`--in-memory` runs on an in-memory store (nothing persists). `--no-install` skips the first-run welcome and leaves the sentinel unwritten, so a later run without the flag still prompts.
 
-`--no-install` skips the first-run team-install prompt (see "First-run auto-install" below) and does not write the sentinel, so a subsequent interactive run without the flag still prompts.
+**Ordering invariant.** The TUI is constructed and subscribes to `system.team.loaded` plus the `agent.*` topics **before** the team load is triggered, which publishes `system.team.loaded`. `tui.start()` therefore always observes `state.agents` already populated (see `tui-overview.md` "Bootstrap and dependencies"). Team resolution falls back `--team` → `defaultTeam` → first installed user team → built-in default-solo (`src/platform/team/default-solo/`); the platform always has a runnable team (`10-configuration.md` "Team Selection").
 
-**Behavior:**
-1. Walk up from CWD to find `.jie/`. Load `.jie/settings.json` if present; deep-merge with `~/.jie/settings.json`. If absent, the platform still proceeds — model resolution falls through at team load (`10-configuration.md` "Model Resolution").
-2. Validate `settings.json`. On error → exit 1.
-3. Resolve team:
-   - If `--team <id>` is given → use `<id>`; hard fail if not installed.
-   - Else read `defaultTeam` from merged settings → use it if installed; a stale value falls through (not an error).
-   - Else pick the first installed user team alphabetically across `.jie/teams/*` and `~/.jie/teams/*` (excluding the built-in).
-   - Else use the platform's built-in default-solo team (`src/platform/team/default-solo/`, see `default-solo-team.md`). The platform always has a runnable team.
-4. Open storage: SQLite at `~/.jie/storage.db`, or an in-memory store when `--in-memory` is given. On failure → exit 1.
-5. `bootPlatform` composes the container; resolving `cradle.platform` yields the handle without eagerly loading a team. The fallback chain above (`--team` → `defaultTeam` → first user team → built-in default-solo) is `TeamManager.resolveTeamId`, applied at load time; see `10-configuration.md` "Team Selection".
-6. (MCP server connection — not implemented today (ADR 4); this step is a no-op.)
-7. Construct the TUI **before** triggering the team load. Ordering is: (a) `bootTui({cwd}, { platform: handle, gitBranch, gitDirty }).cradle.tui` — resolving the TUI constructs it, and its constructor subscribes (via `handle.subscribe`) to `system.team.loaded`, `system.error`, and the agent topics (`agent.turn.start`, `agent.stream.chunk`, `agent.tool.call`, `agent.tool.result`, etc.). `gitBranch`/`gitDirty` come from a git snapshot the CLI reads at this point (`gitService.getSnapshot()` from the platform container's cradle) and feed the footer's identity strip (`ui/tui-layout.md`). (b) `await handle.execute({ name: "team", teamId: <resolved> })` — triggers `TeamManager.load(<resolved>)`, which publishes `system.team.loaded` to the now-attached TUI subscriber. `TuiDeps` additionally allows optional `stdin`/`stdout`/`stderr` streams (injection points used by tests); the TUI reads `platform.subscribe(...)`, `platform.prompt(...)`, `platform.interrupt(...)`, and the slash-command operations directly from the handle. The TUI's role stems and per-agent roster come from the `system.team.loaded` event (per ADR 25). Subsequent in-session team switches (the `/team <id>` slash command, its id completed in-flow by the editor's autocomplete) execute the platform's `team` command and apply the returned identity via `Actions.switchTeam` — a UI concern, no `system.team.switched` event (the platform does not own which team the TUI is watching).
-8. TUI is the main event loop — renders agent streams, tool calls, pipeline events. User prompts flow through `platform.prompt(teamId, agentKey, text)`, which constructs the `user.prompt` envelope per the wire-format contract in `02-protocol-stack.md` "Prompt Ingress" and `ui/tui-overview.md` "Role".
-9. Block until TUI exits or SIGINT. Graceful shutdown: `tui.stop()`, then `handle.execute({ name: "stop" })` halts all loaded teams.
+Exit codes: 0 normal, 1 config/team/agent error.
 
-**Exit codes:** 0 (normal exit), 1 (config error, team not found, agent load failure, `--resume <id>` validation failure, fallback team missing).
+### First-run auto-install (`src/cli/first-run.ts`)
 
-### First-run auto-install
+- Trigger: `args.kind === "tui"` only; print mode and subcommands skip it.
+- Prompt: `Install the default-dev-team team blueprint to ~/.jie/teams/? [Y/n]`, reached only on a TTY. A non-TTY run skips the welcome with no sentinel, so a later interactive run still prompts — no hang, no nag.
+- Sentinel: `~/.jie/.first-run-done` is written only after the prompt is decided (accept, decline, or install failure), so the prompt never recurs. `--no-install` opts out for this run without writing it.
+- Install failure: reported (`Failed to install default-dev-team: <reason>. Install later with: jie team add <source>.`) and the sentinel is still written so it does not recur.
+- Bundled MCP ensure: every non-`--no-install` TUI boot merges the bundled `code-lens` stdio server into `~/.jie/mcp.json` (a non-clobber merge; a malformed file is left untouched). This is not first-run-gated so existing users pick it up; it lets the `default-dev-team` architect's `mcp:*` tool specs resolve instead of throwing `TOOL_SPEC_UNRESOLVED`.
+- There is no `jie init`. First-run is the only install-onboarding path; later installs use `jie team add <source>`.
 
-On the first interactive (`jie`) run, before the platform boots, the CLI offers to install the bundled `default-team` team blueprint (shipped at `src/team-content/default-team/` inside the package, per ADR 36) into `~/.jie/teams/`, so a new user gets a working multi-coder team without a separate setup step.
-
-- **Trigger:** `args.kind === "tui"` only. Print mode (`-p`) and all other subcommands skip it (non-interactive or irrelevant).
-- **Prompt:** `Install the default-team team blueprint to ~/.jie/teams/? [Y/n]`. Reached only when stdin is a TTY. A non-TTY run (piped/CI) skips the whole welcome without writing the sentinel, so a later interactive run still prompts - no hang, no nag.
-- **Sentinel:** `~/.jie/.first-run-done` distinguishes "first run" from "user deleted the team". It is written only after an interactive prompt is decided - accepted, declined, or install failed - so the prompt never recurs on a TTY. A later `jie` run sees the sentinel and skips.
-- **`--no-install`:** opts out for this run and does not write the sentinel, so the next interactive run without the flag still prompts. This lets a user defer without a persistent "no".
-- **Install failure:** caught and reported (`Failed to install default-team: <reason>. Install later with: jie team add <source>.`); the sentinel is still written so the failure does not recur every run.
-- **Bundled MCP ensure:** on every non-`--no-install` TUI boot, before the sentinel check, the CLI also ensures `~/.jie/mcp.json` contains the bundled `code-lens` stdio server (`command: "code-lens"`), merging non-clobberingly with any existing servers and leaving a malformed file untouched. This runs every boot (not just first-run) so existing users pick it up; it lets the `default-team` architect's `mcp:code-lens:*` tool spec resolve instead of throwing `TOOL_SPEC_UNRESOLVED`.
-- **Implementation:** `src/cli/first-run.ts` (`runFirstRunWelcome` + `createFirstRunPorts`), wired into `RunDeps.runFirstRun` and called from `run()` before `connectPlatform`. The team install reuses `src/team-installer` with the bundled content dir as the source; the MCP ensure is the `ensureBundledMcp` port (pure merge in `mergeCodeLensEntry`).
-
-There is no `jie init` command. First-run is the only install-onboarding path; later installs use `jie team add <source>` (D4 `jie update` will refresh bundled teams).
-
----
-
-## `jie -p <instruction>`
-
-One-shot print mode. Start the team, process the instruction, print the leader's response, and exit. No TUI.
+## `jie -p <instruction>` (print mode)
 
 ```
-jie -p <instruction> [--team <id>] [--timeout <seconds>] [--json]
-                     [--api-key <key>] [--resume <id>] [--in-memory]
-jie --print <instruction> ...
+jie -p <instruction> [--team <id>] [--timeout <s>] [--json] [--api-key <k>] [--resume <id>] [--in-memory]
 ```
 
-### Arguments
+Publishes a `user.prompt` envelope (wire format: `02-protocol-stack.md` "Prompt Ingress", `03-event-system.md`) through `handle.prompt(teamId, leaderKey, instruction)`, prints each streamed chunk to stdout, and waits for "all agents idle" before exiting.
 
-| Flag | Default | Behavior |
-|---|---|---|
-| `<instruction>` | (required) | Free-form text sent to the leader agent. |
-| `-p`, `--print` | — | Enable print mode. |
-| `--team <id>` | (merged settings `defaultTeam`) | One-shot team override. Hard fail if `<id>` is not installed. |
-| `--timeout <s>` | 300 | Max seconds to wait for response. Must be > 0. |
-| `--json` | false | Output response as JSONL. |
-| `--api-key <key>` | — | Write the key for the resolved provider to `auth.json` before the LLM call (see `jie --api-key`). |
-| `--resume <id>` | — | Resume a previous session (see `jie --resume`). |
-| `--in-memory` | false | Run on an in-memory store instead of SQLite. |
+**The lazy idle gate.** `TeamInfo.agents` seeds every agent's local state to `'idle'`. This is required, not a convenience: the Event-Order Contract guarantees `agent.turn.start` precedes its `agent.idle` (`03-event-system.md`), so a gate initialized from a "never seen" state would open immediately and quit before the agent is observed busy. The gate must be seeded with `idle` and observed for at least one full `idle → busy → idle` cycle before it opens. It is a local state machine in the CLI — the platform does not own it.
 
-### Behavior
+- Subscriptions: `agent.stream.chunk` (filtered to the resolved team + leader key) for output, and `agent.turn.start`/`agent.idle` (per agent) for the gate.
+- **SIGINT:** the first Ctrl+C interrupts every agent (`handle.interrupt` per key; the `bash` tool aborts kill the child process group, SIGTERM→SIGKILL). The gate opens once agents settle; exit 130. A second Ctrl+C before settle exits 130 immediately.
+- **Exit:** gate opens → 0; `--timeout` fires → 3 (`"no response from team within {timeout}s"`); gate opens after a SIGINT → 130.
+- **Output:** default = concatenated chunks; `--json` = one `{ chunk, seq }` object per line.
 
-1. Walk up from CWD to find `.jie/`. Load `.jie/settings.json` if present; deep-merge with `~/.jie/settings.json`.
-2. Validate `settings.json`. Resolve team (applying `--team <id>` override if given). Open storage (SQLite at `~/.jie/storage.db`, or in-memory with `--in-memory`). MCP: not implemented today (ADR 4) — no-op. `bootPlatform` composes the container; `cradle.platform` yields the handle without loading a team.
-3. `await handle.execute({ name: "team", teamId: <resolved> })` triggers `TeamManager.load`, which returns the loaded `TeamInfo` and publishes `system.team.loaded`. Load failures (`NO_MODEL_ERROR`, `MODEL_UNRESOLVED` for an unresolvable leader model, `UNKNOWN_SESSION` from a bad `--resume`, manifest errors) throw `JiePlatformError` → the CLI prints `jie: <error>` to stderr and exits 1.
-4. Resolve the leader from the chosen `TeamInfo` (`team.leaderKey`). Subscribe to `agent.stream.chunk` events; filter for the resolved team and leader key. (The `agent.stream.end` event is published at the end of every LLM stream by the leader — the CLI does **not** subscribe to it; the local idle gate is the source of truth for "work done", not a stream-end check.)
-5. **Set up the local idle gate.** The CLI uses the `TeamInfo.agents` array to build the gate's initial state: each agent's state starts at `'idle'` (the default per the Event-Order Contract). The CLI subscribes to the `agent.turn.start` and `agent.idle` topics via `handle.subscribe`; on every event it updates the corresponding agent's state and evaluates the gate. The gate is a local state machine — it lives in CLI code, not on the platform.
-6. Publish the prompt via `handle.prompt(startup_team_id, leader_agent_key, "<instruction>")`. The handle fills the full `EventEnvelope`: `topic` is `user.prompt`; `payload` is `{ teamId: startup_team_id, agentKey: leader_agent_key, prompt: "<instruction>" }`; `sender` is `{ kind: "user" }` (the originating surface is not identified on the envelope); `version` is `1`; `timestamp` is the current ISO 8601 string. There is no shorthand or partial-publish path. The full wire-format contract is in `03-event-system.md` "Envelope and Topics" and `02-protocol-stack.md` "Prompt Ingress".
-7. Print each stream chunk from the leader to stdout as it arrives.
-8. **Install a SIGINT handler for the wait.** The first Ctrl+C interrupts every agent of the team (`handle.interrupt` per agent key), aborting the active runs — the bash tool kills its child process group on abort (SIGTERM, then SIGKILL after a brief grace), exactly like on timeout. The aborts settle the agents to idle (an interrupted agent whose queue still holds entries is re-busied briefly when its deferred queue drain restarts the head entry), the gate opens, and the process exits 130 after stopping the platform. A second Ctrl+C before the gate opens exits 130 immediately. The handler is removed when the wait ends.
-9. **Wait for the idle gate to open.** The gate opens when "for all agents, the state is `'idle'`". Because the gate is initialized with all agents in the `'idle'` state, the gate does **not** open until at least one agent has transitioned `'idle'` → `'busy'` → `'idle'` (every `'busy'` is preceded by a `'turn.start'` for the same agent, and every `'idle'` is preceded by a `'busy'` — see the Event-Order Contract in `03-event-system.md`). The CLI awaits the gate (or `--timeout`, whichever fires first). On gate open: print final newline, `handle.execute({ name: "stop" })`, exit 0 — or 130 when the run was interrupted by SIGINT. On timeout: stop, exit 3 with stderr message `"no response from team within {timeout}s"` (130 instead when the run was interrupted). `--timeout` is the upper bound on the wait (default 300s; must be > 0).
+## `jie --version` / `jie --help`
 
-The gate relies on the Event-Order Contract (`03-event-system.md` "Event-Order Contract"): `agent.turn.start` is always published before the corresponding `agent.idle` for the same turn, and the bus delivers events in publish order. Under this contract, the gate is a correct "all work done" detector — no body can transition from "no event seen" to `'idle'` without first being observed as `'busy'`. The platform does not own this gate; the CLI composes it from primitives.
+`--version` prints `jie <version>`; `--help` prints usage. Neither loads config.
 
-### Output Formats
+**Version source.** The monorepo has a zero build step, so there is no compile-time injection — the version is read at runtime by walking up from `import.meta.dirname` to the first `package.json` whose `name` is `"@cuzfrog/jie"`, falling back to a defensive constant if none is found. A direct `import ... with { type: "json" }` is avoided because the umbrella sits at a different relative depth in dev layouts than after a `bun install -g` flatten (`src/cli/version.ts`). This mirrors pi's `VERSION` pattern (`@earendil-works/pi-coding-agent/src/config.ts`).
 
-**Human-readable (default):** stream chunks printed as-is, concatenated.
+## Account + team subcommands
 
-**JSONL (`--json`):** one JSON object per line per stream chunk: `{ "chunk": string, "seq": number }`.
+All account/team/model commands write to `settings.json` / `auth.json` (scope + persistence rules: `10-configuration.md` "Persistent Files" and "Credentials Resolution"). In a running TUI, the slash-command counterparts do the same work in-session and additionally publish `user.model.update`, so live, non-model-pinned agents hot-swap immediately — whereas the CLI's one-shot invocations have no in-process subscribers.
 
-**Errors:** timeout → exit 3, config error → exit 1, team not found → exit 1, `--team <id>` not installed → exit 1, SIGINT → exit 130.
+- **`jie login [--provider <id> --api-key <key>]`** — writes `auth.json`. No flags: interactive (provider pick → OAuth or hidden key entry). With `--provider` + `--api-key`: headless single entry. Exit 0 on success or cancellation, 1 on a write error. Does not start the team.
+- **`jie logout [<provider> | *]`** — removes entries; bare or `*` clears all. Exit 0 (success or nothing to do), 1 on a read error.
+- **`jie model <provider>/<modelId>`** — sets `defaultProvider`/`defaultModel` (scope-aware: project keys, else global). The argument splits on the first `/` (model ids may contain `/`). Unknown `<provider>` → `unknown provider` exit 1; the model id is not pre-validated and surfaces at model resolution. Does not start the team.
+- **`jie team <id>` / `jie team`** — `defaultTeam` selection. `<id>` charset is enforced; it must be installed in `.jie/teams/<id>` or `~/.jie/teams/<id>`, else exit 1 listing where it was checked. No arg: prints `defaultTeam` and the installed team roster (alphabetical, deduped). A stale default falls through at load (not an error). In-session hot-swap is the `/team <id>` slash command.
+- **`jie --api-key <key>`** — writes the resolved provider's API key to `auth.json`. No format check: a wrong key fails at first LLM call with the provider's own error. Exactly one key per provider (overwrite). Equivalent to `jie login --provider <resolved> --api-key <key>`, inlined as a flag for scripts/CI. With only this flag → exit 0; otherwise continues to the remaining flags (the credential is read from `auth.json` via the standard resolution chain on the subsequent call).
+- **`jie --resume <session_id>`** — resumes a prior session; the platform validates that the session exists (`08-transcript.md`) → unknown → exit 1. The id is threaded to every body, which `restore()`s from `memory_turns`. Absent the flag the platform mints a fresh id. (In-TUI `/resume` is the same operation via the `resumeSession` command.)
 
----
-
-## `jie --version`
-
-```
-jie --version
-```
-
-Prints `jie <version>` to stdout, exits 0. Does not load config.
-
-### Version Source
-
-The CLI reads its version from the umbrella `@cuzfrog/jie` package's `package.json` at startup. Because the monorepo has zero build step (`monorepo-structure.md`), there is no compile-time injection — the value is fetched at runtime.
-
-**Resolution algorithm** (in `src/cli/version.ts`):
-
-1. Start at `import.meta.dirname` (the directory containing `src/cli/index.ts`).
-2. Walk up the parent chain. At each level, try to read `package.json`.
-3. Return the first `package.json` whose `name` equals `"@cuzfrog/jie"` — that's the umbrella.
-4. Use `pkg.version` as `VERSION`.
-5. If no matching package.json is found, fall back to `"0.0.0-dev"` (defensive — should not happen in normal installs).
-
-This mirrors pi's `getPackageDir()` / `VERSION` pattern (`@earendil-works/pi-coding-agent/src/config.ts`).
-
-**Why walk up rather than `import ... with { type: "json" }`:** A direct JSON import is resolved relative to the CLI file. In dev (monorepo layout), the umbrella is `../../package.json`. After `bun install -g` (Day 2 publish), bun flattens dependencies and the relative path breaks. The walk-up algorithm handles both layouts.
-
-## `jie --help`
-
-```
-jie --help
-```
-
-Prints the usage summary (`-p`/`--print` with `--team`/`--timeout`/`--json`/`--api-key`/`--resume`/`--in-memory`; `login`, `logout`, `model`, `team`; `--api-key`; `--resume`; the interactive TUI form; `--version`; `--help`), exits 0. Does not load config.
-
----
-
-## `jie login`
-
-Configure provider credentials. Writes to `~/.jie/auth.json` (mode `0600`).
-
-```
-jie login                                        # interactive: pick provider, then OAuth or paste API key
-jie login --provider <id> --api-key <key>        # headless: write a single API key entry
-```
-
-### Behavior
-
-- With no flags, the CLI lists known providers and prompts for one. For OAuth-capable providers (anthropic, openai-codex, github-copilot) the CLI launches a browser-based auth flow; for API-key providers it prompts for the key (input hidden).
-- With `--provider` and `--api-key`, the CLI writes the entry non-interactively. Useful for CI / scripted setup.
-- On success, prints `logged in to <provider>` to stdout and exits 0. On user cancellation, exits 0 with no write. On validation error, exits 1.
-- The command does not start the team, does not load `.jie/settings.json`, and does not touch `auth.json`.
-
-**Exit codes:** 0 (success or cancel), 1 (write error).
-
-## `jie logout [<provider>|*]`
-
-Clear provider credentials from `~/.jie/auth.json`. `*` clears every entry; no argument is the same as `*`.
-
-```
-jie logout                # clear all entries (same as `jie logout *`)
-jie logout anthropic      # clear only the anthropic entry
-```
-
-### Behavior
-
-- With no argument (or an explicit `*`), the CLI clears every entry — the platform's `logout` command receives provider `*`.
-- With a provider argument, the CLI removes that provider's entry and exits.
-- On success, prints `logged out of <provider>` (or `logged out of all providers`) and exits 0.
-- The command does not start the team. The next `jie` run after a logout may fail at LLM-call time if no other credential source covers the resolved provider.
-
-**Exit codes:** 0 (success or nothing-to-do), 1 (read error).
-
-## `jie model <provider>/<modelId>`
-
-Set the default model. Writes to the project `.jie/settings.json` when it defines `defaultProvider` or `defaultModel`, else to `~/.jie/settings.json` (`10-configuration.md`, "`settings.json`"). Applies to teams and sessions loaded thereafter; the command also publishes `user.model.update`, so in a running TUI session live agents that do not pin a model hot-swap immediately — the one-shot CLI run itself has no subscribers.
-
-```
-jie model anthropic/claude-sonnet-4-20250514
-jie model openai/gpt-4o
-```
-
-### Arguments
-
-| Flag | Default | Behavior |
-|---|---|---|
-| `<provider>/<modelId>` | (required) | Single string, slash-separated. Splits on the first `/`; the model id may itself contain `/` (e.g. `openrouter/anthropic/claude-sonnet-4`). |
-
-### Behavior
-
-1. Parse the argument: split on the first `/`. Both pieces must be non-empty.
-2. If `<provider>` is not registered (neither a pi-ai built-in nor declared in `models.json`), print `unknown provider: <value>` to stderr and exit 1 (`UNKNOWN_PROVIDER`). The model id itself is not validated; an unresolvable model surfaces at model-resolution time (`10-configuration.md`, "Model Resolution").
-3. Read the target settings file (scope rule above), set `defaultProvider` and `defaultModel`, preserve the other fields, write back.
-4. Print `default model set to <provider>/<modelId>` and exit 0.
-
-The command does not start the team and does not touch `auth.json`.
-
-**Exit codes:** 0 (success), 1 (malformed argument, unknown provider, write error).
-
-## `jie team`
-
-Manage the `defaultTeam` setting. Writes to settings.json.
-
-```
-jie team <id>          # set defaultTeam to <id> (scope-aware); takes effect on next `jie` invocation
-jie team               # print current defaultTeam and installed teams
-```
-
-### Arguments
-
-| Flag | Default | Behavior |
-|---|---|---|
-| `<id>` | (required) | Team id to select. Charset `[A-Za-z0-9_-]{1,32}`. |
-
-### Behavior — `jie team <id>`
-
-1. Validate `<id>` matches `[A-Za-z0-9_-]{1,32}`. On error → exit 1.
-2. Check if `.jie/teams/<id>/` exists (project-local, walking up from CWD to find `.jie/`). If yes → write `defaultTeam: <id>` to `.jie/settings.json` (creating it if absent; preserving other keys).
-3. Else check if `~/.jie/teams/<id>/` exists. If yes → write `defaultTeam: <id>` to `~/.jie/settings.json`.
-4. Else → exit 1: `team '<id>' is not installed; checked .jie/teams/<id>/ and ~/.jie/teams/<id>/`.
-5. Print `default team set to <id>` and exit 0.
-
-The command does not start the team. The change takes effect on next `jie` invocation. In a running TUI session, `/team <id>` (the TUI counterpart) hot-swaps the team in-session — see `10-configuration.md` "Team Swap".
-
-### Behavior — `jie team` (no arg)
-
-1. Read merged `settings.json`. Print `defaultTeam: <id>` (or `defaultTeam: <unset>`).
-2. Scan `.jie/teams/*` and `~/.jie/teams/*`; list installed team ids (deduped, alphabetical).
-3. Exit 0.
-
-There is no explicit unset command. A `defaultTeam` pointing at a removed blueprint is stale; at load the platform treats it as absent and falls back to the first installed user team, else the built-in default-solo team. To change the default, run `jie team <id>` with a valid id.
-
-**Exit codes:** 0 (success or no-op), 1 (invalid id, team not installed, write error).
-
-## `jie --api-key <key>`
-
-Write the API key for the resolved provider to `~/.jie/auth.json`. The flag does **not** match the key against the provider's expected format (no `sk-` / `sk-ant-` / etc. prefix assumption) — the user supplies whatever string they have. If the key is wrong, the LLM call fails at first use with whatever error the provider returns.
-
-```
-jie --api-key sk-ant-...            # set key for defaultProvider, then exit
-jie --api-key sk-... -p "fix bug"   # set key for defaultProvider, then run -p
-```
-
-This flag is the `jie login --provider <id> --api-key <key>` flow inlined as a top-level flag, intended for automated modes (CI / scripts) where interactive login is impractical. It writes `auth.json` and persists across runs — the entry is the same shape `jie login` writes. There is exactly one API key per provider (`auth.json` is provider-keyed); `--api-key` overwrites the entry for the resolved provider.
-
-### Behavior
-
-1. Read merged `settings.json`; resolve `defaultProvider`. If `defaultProvider` is unset or invalid (treated as absent per `10-configuration.md` Config Validation), exit 1: `no provider resolved; run 'jie model <provider>/<modelId>' first, or use 'jie login --provider <id> --api-key <key>' to set the key for a specific provider`.
-2. Read `~/.jie/auth.json` if it exists; otherwise start from `{}`.
-3. Set (or replace) the entry for `defaultProvider` with `{ type: 'api_key', key: <key> }`.
-4. Write `~/.jie/auth.json` with mode `0600`.
-5. Print `logged in to <provider>` to stdout.
-6. If `--api-key` is the only CLI flag, exit 0. Otherwise, continue with the remaining flags (e.g., `-p "..."`); the rest of this command's flow reads the just-written credential from `auth.json` via the standard chain (`10-configuration.md` Credentials Resolution Order).
-
-## `jie --resume <session_id>`
-
-Continue a previous session. The `session_id` is passed to every `AgentBody` at construction, overriding the default "mint a new `session_id`" behavior (`08-transcript.md`). The body calls `transcriptStore.restore(agent_key, session_id, team_id)` and resumes from the prior `memory_turns` rows for its `(team_id, agent_key)` pair.
-
-```
-jie --resume <session_id>        # resume a specific session
-```
-
-### Behavior
-
-The CLI does not run session-id SQL itself. It passes intent via `JiePlatformOptions` and the platform (`TeamManager`, via the `resumeSessionId` cradle value `bootPlatform` registers) does the work (per ADR 17):
-
-- **`--resume <session_id>`**: CLI sets `JiePlatformOptions.resumeSessionId = <id>`. The platform validates via `transcriptStore.hasSession(team_id, session_id)`. If `false` → exit 1: `unknown session_id: <value>`. If `true` → the platform records the value in its `Map<team_id, session_id>` and threads it to every body.
-- **No flag**: the platform mints a fresh `session_id` and records it in the platform's `Map<team_id, session_id>`.
-
-The TUI has an in-session equivalent: `/resume <sessionId>` resumes one session of the loaded team through the `resumeSession` platform command (same `hasSession` validation; a failure surfaces as the error banner, not an exit). The `sessionId` is completed in-flow by the editor's autocomplete — `/resume ` lists the team's sessions with message count and age (`tui-layout.md`, "Selection via editor autocomplete"). Opening `jie` without `--resume` starts a new session. The platform keeps each team's bodies running once started, so team-to-team conversation history persists mid-process across the team's lifetime.
-
-**Exit codes:** 0 (success); 1 (unknown session_id for `--resume`, `memory_turns` read error).
-
+**Exit codes:** account/team/model commands: 0 success, 1 malformed/unknown/write error. `--resume`: 0, 1 (unknown id). Print mode: 0/1/3/130.

@@ -8,7 +8,7 @@ export type BlockType = "text" | "thinking";
 export interface StreamPublisher {
   beginStream(): void;
   append(blockType: BlockType, delta: string): void;
-  endStream(): { readonly streamId: number; readonly totalChunks: number };
+  endStream(): { readonly streamId: number; readonly totalChunks: number; readonly thinkingDurations: readonly number[] };
 }
 
 export class StreamPublisherImpl implements StreamPublisher {
@@ -56,11 +56,11 @@ export class StreamPublisherImpl implements StreamPublisher {
     }
   }
 
-  endStream(): { streamId: number; totalChunks: number } {
+  endStream(): { readonly streamId: number; readonly totalChunks: number; readonly thinkingDurations: readonly number[] } {
     this.finalizeThinking();
     this.flush();
     this.events.publish(Events.agentStreamEnd(this.sender, this.streamId, this.totalChunks, this.thinkingDurations));
-    return { streamId: this.streamId, totalChunks: this.totalChunks };
+    return { streamId: this.streamId, totalChunks: this.totalChunks, thinkingDurations: this.thinkingDurations };
   }
 
   private finalizeThinking(): void {

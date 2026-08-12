@@ -55,19 +55,7 @@ Shutdown is a command, not a handle method: `execute({ name: "stop" })` calls `T
 
 ## Workspace Layout
 
-See `10-configuration.md` for the full schema and resolution rules.
-
-```
-~/.jie/                    # User-global state (homeJieDir)
-  settings.json            # Global settings
-  auth.json                # Credentials
-  storage.db               # SQLite transcript / artifact / memory store (mode 0600)
-  teams/<id>/              # User-global teams
-<project>/.jie/            # Project-local state (discovered walking up from CWD)
-  settings.json            # Project overrides, deep-merged over global
-  mcp.json                 # MCP server definitions (Day 2)
-  teams/<id>/              # Project-local teams
-```
+`~/.jie/` holds user-global state (settings, auth, storage.db, teams, skills); `<project>/.jie/` holds project state discovered by walking up from CWD. See `10-configuration.md` "Persistent Files" for the full file-by-file table and scope rules.
 
 ## Health and Restarts
 

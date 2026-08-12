@@ -4,15 +4,15 @@
 - Be positve. All difficulties will be address together with me.
 
 ## Documents
-- @doc/specs/monorepo-structure.md; read `00-overview.md` to understand the glossary.
+- @doc/specs/monorepo-structure.md; read `doc/specs/jie-platform/00-overview.md` to understand the glossary.
 - @doc/DEVELOPMENT.md
 - `doc/addrs/` (ADRs) — consequential decisions.
-- `doc/specs/` (specs) — package-level blueprints.
+- `doc/specs/` (specs) — directions.
 
 ## Document rules
-- Keep your writing short and concise but accurate enough to avoid guessing room.
-- Do not keep intermediate, transient history in md files under `specs/`, they are the up-to-date blueprint for the project.
-- Do not record what you've done if the information is not helpful to make subsequent decisions.
+- Be simple and consise. Code itself is doc, avoid doc if you can.
+- Do not keep intermediate, transient history.
+- Do not reference doc in the code. Anything under `src/` should be agnostic of `doc/`
 - No emojis in commits, issues, PR comments, or code
 - Do not use newline to break sentences, no newline in the same paragraph. Let IDE wrap text.
 
@@ -25,7 +25,7 @@
 
 ## Code Conventions
 - No `any`, `unknown` types, no unsafe `as`, code must be strongly typed. No `enum` keyword.
-- Prefer plain function over arrow functions.
+- Prefer plain function over arrow functions. No class static functions, use file level private functions.
 - Fields default to be `readonly` in public types. On an interface, use methods instead of field arrow functions, methods are natively readonly.
 - Public types, contract, methods, higher-level abstractions should be at the top of the files, private implementation details should be at the bottom. If a private function only is used in the same file, it should be below its callers. See below section `Single file layout`.
 - Inline oneline trivial functions.
@@ -33,6 +33,7 @@
 - Code identifiers (variables, parameters, class fields, function names) use camelCase. Names must be full words, no abbreviations beyond common ones (id, url, db, ts, cwd, pid, ctx, deps). Only serialized events/messages use snake_case. Module-level compile-time constants (e.g. `DEFAULT_COLS`, `MAX_RETRIES`) use SCREAMING_SNAKE_CASE.
 - Keep code in one line if the line is < 140 chars. Do not break into multiple lines if the line is < 140 chars. Ensure a newline at the end of the file.
 - Use `as const` for tuples and object-literals. Do not use `// @ts-expect-error` or `// @ts-ignore`, fix the type.
+- `override` must be added for functions that overrides functions in a supertype.
 
 ### Test
 - Favor TDD, update/add tests before implementing actual logic.
@@ -85,7 +86,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 ## Things to avoid
 - do not `find` from the root dir, it's slow and unnecessary. Use `pwd` to figure out where you are.
 - do not write test-only production code, testability should be achieved by adhering to above coding principles.
-- no comments in the code, decisions should be captured in `doc/specs/` or `doc/addrs/`.
+- no comments in the code, only non-obvious important decisions should be captured in `doc/specs/` or `doc/addrs/` (do not record obvious, common pattern, or trivial things, code itself should explain not the doc).
 - do not skip tests, problems must be resolved.
 - do not ignore tech debt you encountered, record them as Github issues so later other agents can analyze and fix.
 - avoid worktrees, for parallel development on different branches, use `git` to clone the repo to `/tmp/<id>/beep/` and work there, then raise PR.
@@ -98,7 +99,7 @@ Minimal visibility or public surface of a type or a module. This ensures loose c
 
 (Write temporary files to `./tmp/` only if you want me to reivew, otherwise write to `/tmp/<space>/`)
 
-## Backwards compatibility
+## Data backwards compatibility
 Since we are still in dev phase, ignore backwards compatibility. Simply discard old imcompatible data.
 
 ## File Edit Checklist

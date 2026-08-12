@@ -3,7 +3,7 @@ import type { AssistantMessage, StopReason } from "@earendil-works/pi-ai";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { HookIdentity, HookRunner } from "../hooks";
 import type { TranscriptStore } from "../storage";
-import { isDiffDetails } from "../tools/types";
+import { isDiffDetails } from "..";
 import type { PromptQueue } from "./prompt-queue";
 import { StreamPublisherImpl, type StreamPublisher } from "./streaming";
 
@@ -80,20 +80,22 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
         return;
       }
       case "message_end":
-        if (event.message.role === "assistant") {
-          this.stream.endStream();
-          if (event.message.usage !== undefined && event.message.usage.totalTokens > 0) {
+        let message = event.message;
+        if (message.role === "assistant") {
+          const { thinkingDurations } = this.stream.endStream();
+          message = withThinkingDurations(message, thinkingDurations);
+          if (message.usage !== undefined && message.usage.totalTokens > 0) {
             this.eventManager.publish(Events.agentUsage(this.sender, {
-              input: event.message.usage.input,
-              output: event.message.usage.output,
-              cacheRead: event.message.usage.cacheRead,
-              cacheWrite: event.message.usage.cacheWrite,
-              totalTokens: event.message.usage.totalTokens,
+              input: message.usage.input,
+              output: message.usage.output,
+              cacheRead: message.usage.cacheRead,
+              cacheWrite: message.usage.cacheWrite,
+              totalTokens: message.usage.totalTokens,
             }));
           }
         }
         this.transcriptStore.persist(
-          persistableMessage(event.message),
+          persistableMessage(message),
           this.hookIdentity.agentKey,
           this.hookIdentity.sessionId,
           this.hookIdentity.teamId,
@@ -129,6 +131,19 @@ function readFinalStopReason(event: Extract<PiAgentEvent, { type: "agent_end" }>
   const stopReason: StopReason = lastAssistant?.stopReason ?? "stop";
   const isError = stopReason === "error" || stopReason === "aborted";
   return { stopReason, isError, errorMessage: lastAssistant?.errorMessage ?? null };
+}
+
+function withThinkingDurations(message: AssistantMessage, thinkingDurations: readonly number[]): AssistantMessage {
+  let durationIndex = 0;
+  const content = message.content.map((part) => {
+    if (part.type !== "thinking") return part;
+    const thinkingDurationMs = durationIndex < thinkingDurations.length ? thinkingDurations[durationIndex] : undefined;
+    durationIndex += 1;
+    if (thinkingDurationMs === undefined) return part;
+    return { ...part, thinkingDurationMs };
+  });
+  if (content === message.content) return message;
+  return { ...message, content };
 }
 
 function persistableMessage(message: AgentMessage): AgentMessage {

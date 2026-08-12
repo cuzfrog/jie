@@ -1,6 +1,20 @@
 ---
-no-new-exports: []
+no-new-exports:
+  - index.ts
+  - module.ts
+  - completion-source.ts
+  - file-mention-source.ts
+  - file-mention-source.test.ts
+  - list-files.ts
+  - list-files.test.ts
+  - path-completion-source.ts
+  - path-completion-source.test.ts
+  - skill-source.ts
+  - skill-source.test.ts
+  - slash-command-source.ts
+  - slash-command-source.test.ts
+  - jie-autocomplete.ts
+  - jie-autocomplete.test.ts
 ---
 
-# Design principles
-- jie adapts pi's CombinedAutocompleteProvider: slash commands delegate verbatim; `@`-mentions resolve through jie's gitignore-aware scanner (no fd binary)
+- Adapts pi's CombinedAutocompleteProvider; `@`-mentions use gitignore-aware scanner.

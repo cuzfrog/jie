@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createTeamRegistry } from "./registry";
+import { TeamRegistryImpl } from "./registry";
 import { JiePlatformError } from "../jie-platform-errors";
 
 function writeTeam(rootDir: string, id: string, leader: string): void {
@@ -17,7 +17,7 @@ function writeTeam(rootDir: string, id: string, leader: string): void {
   );
 }
 
-describe("createTeamRegistry", () => {
+describe("TeamRegistryImpl", () => {
   let workspace: string;
   let homeJieDir: string;
   let projectJieDir: string | null;
@@ -35,14 +35,14 @@ describe("createTeamRegistry", () => {
 
   describe("parseTeamManifest", () => {
     test("parseTeamManifest('default-solo') returns the built-in default-solo team", () => {
-      const r = createTeamRegistry({ homeJieDir, projectJieDir });
+      const r = new TeamRegistryImpl(homeJieDir, projectJieDir);
       const team = r.parseTeamManifest("default-solo");
       expect(team.leaderRole).toBe("general");
       expect(team.roles).toHaveLength(1);
     });
 
     test("parseTeamManifest(undefined) returns the built-in default-solo team (fallback)", () => {
-      const r = createTeamRegistry({ homeJieDir, projectJieDir });
+      const r = new TeamRegistryImpl(homeJieDir, projectJieDir);
       const team = r.parseTeamManifest();
       expect(team.leaderRole).toBe("general");
     });
@@ -51,7 +51,7 @@ describe("createTeamRegistry", () => {
       const projJie = join(workspace, ".jie");
       const projectTeams = join(projJie, "teams");
       writeTeam(projectTeams, "dev", "project-leader");
-      const r = createTeamRegistry({ homeJieDir, projectJieDir: projJie });
+      const r = new TeamRegistryImpl(homeJieDir, projJie);
       const team = r.parseTeamManifest("dev");
       expect(team.leaderRole).toBe("project-leader");
     });
@@ -59,7 +59,7 @@ describe("createTeamRegistry", () => {
     test("parseTeamManifest loads from user scope when not in project scope", () => {
       const userTeams = join(homeJieDir, "teams");
       writeTeam(userTeams, "dev", "user-leader");
-      const r = createTeamRegistry({ homeJieDir, projectJieDir });
+      const r = new TeamRegistryImpl(homeJieDir, projectJieDir);
       const team = r.parseTeamManifest("dev");
       expect(team.leaderRole).toBe("user-leader");
     });
@@ -70,7 +70,7 @@ describe("createTeamRegistry", () => {
       const userTeams = join(homeJieDir, "teams");
       writeTeam(projectTeams, "shared", "project-leader");
       writeTeam(userTeams, "shared", "user-leader");
-      const r = createTeamRegistry({ homeJieDir, projectJieDir: projJie });
+      const r = new TeamRegistryImpl(homeJieDir, projJie);
       const team = r.parseTeamManifest("shared");
       expect(team.leaderRole).toBe("project-leader");
     });
@@ -78,24 +78,24 @@ describe("createTeamRegistry", () => {
     test("parseTeamManifest throws when a directory exists but has no TEAM.md", () => {
       const projJie = join(workspace, ".jie");
       mkdirSync(join(projJie, "teams", "broken"), { recursive: true });
-      const r = createTeamRegistry({ homeJieDir, projectJieDir: projJie });
+      const r = new TeamRegistryImpl(homeJieDir, projJie);
       expect(() => r.parseTeamManifest("broken")).toThrow(/team 'broken' not found/);
     });
 
     test("parseTeamManifest throws invalid_team_id for an invalid id", () => {
-      const r = createTeamRegistry({ homeJieDir, projectJieDir });
+      const r = new TeamRegistryImpl(homeJieDir, projectJieDir);
       expect(() => r.parseTeamManifest("bad id with spaces")).toThrow(JiePlatformError);
     });
 
     test("parseTeamManifest throws team_not_found when id is absent", () => {
-      const r = createTeamRegistry({ homeJieDir, projectJieDir });
+      const r = new TeamRegistryImpl(homeJieDir, projectJieDir);
       expect(() => r.parseTeamManifest("ghost")).toThrow(JiePlatformError);
     });
   });
 
   describe("listInstalled", () => {
     test("includes 'default-solo' when nothing is installed", () => {
-      const r = createTeamRegistry({ homeJieDir, projectJieDir });
+      const r = new TeamRegistryImpl(homeJieDir, projectJieDir);
       expect(r.listInstalled()).toEqual(["default-solo"]);
     });
 
@@ -107,7 +107,7 @@ describe("createTeamRegistry", () => {
       writeTeam(projectTeams, "shared", "alpha-shared-leader");
       writeTeam(userTeams, "beta", "beta-leader");
       writeTeam(userTeams, "shared", "user-shared-leader");
-      const r = createTeamRegistry({ homeJieDir, projectJieDir: projJie });
+      const r = new TeamRegistryImpl(homeJieDir, projJie);
       const list = r.listInstalled();
       expect(list).toEqual(["alpha", "beta", "default-solo", "shared"]);
     });
@@ -117,7 +117,7 @@ describe("createTeamRegistry", () => {
       const projectTeams = join(projJie, "teams");
       writeTeam(projectTeams, ".hidden", "hidden-leader");
       writeTeam(projectTeams, "visible", "visible-leader");
-      const r = createTeamRegistry({ homeJieDir, projectJieDir: projJie });
+      const r = new TeamRegistryImpl(homeJieDir, projJie);
       const list = r.listInstalled();
       expect(list).toContain("visible");
       expect(list.some((t) => t.startsWith("."))).toBe(false);
@@ -128,7 +128,7 @@ describe("createTeamRegistry", () => {
       const projectTeams = join(projJie, "teams");
       writeTeam(projectTeams, "complete", "complete-leader");
       mkdirSync(join(projectTeams, "incomplete"), { recursive: true });
-      const r = createTeamRegistry({ homeJieDir, projectJieDir: projJie });
+      const r = new TeamRegistryImpl(homeJieDir, projJie);
       const list = r.listInstalled();
       expect(list).toContain("complete");
       expect(list).not.toContain("incomplete");
@@ -175,12 +175,12 @@ describe("createTeamRegistry", () => {
       },
     ])("returns '$expected' for $name", ({ setup, teamId, expected }) => {
       const projJie = setup();
-      const r = createTeamRegistry({ homeJieDir, projectJieDir: projJie });
+      const r = new TeamRegistryImpl(homeJieDir, projJie);
       expect(r.locate(teamId)).toBe(expected);
     });
 
     test("returns null for an id not found anywhere", () => {
-      const r = createTeamRegistry({ homeJieDir, projectJieDir });
+      const r = new TeamRegistryImpl(homeJieDir, projectJieDir);
       expect(r.locate("ghost")).toBeNull();
     });
   });

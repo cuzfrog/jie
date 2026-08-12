@@ -2,6 +2,7 @@ import type { KanbanCard, KanbanStatus } from "../../platform";
 import { ActionTypes, type Action } from "./actions";
 import { TuiState, type KanbanEditField } from "./state";
 
+type KanbanState = TuiState["kanban"];
 type KanbanDirection = Extract<Action, { type: typeof ActionTypes.MOVE_KANBAN_CURSOR }>["payload"]["direction"];
 type EditFieldDirection = Extract<Action, { type: typeof ActionTypes.MOVE_KANBAN_EDIT_FIELD }>["payload"]["direction"];
 
@@ -10,22 +11,22 @@ const COLUMN_ORDER: ReadonlyArray<KanbanStatus> = ["pending", "in_progress", "in
 export function kanbanReducer(state: TuiState, action: Action): TuiState {
   switch (action.type) {
     case ActionTypes.SET_KANBAN_BOARD: {
-      const next = { ...state, kanbanBoard: action.payload.board };
-      return { ...next, kanbanCursor: clampCursor(TuiState.kanbanVisibleCards(next), state.kanbanCursor) };
+      const next = updateKanban(state, { board: action.payload.board });
+      return updateKanban(next, { cursor: clampCursor(TuiState.kanbanVisibleCards(next), state.kanban.cursor) });
     }
     case ActionTypes.MOVE_KANBAN_CURSOR:
-      return { ...state, kanbanCursor: moveCursor(TuiState.kanbanVisibleCards(state), state.kanbanCursor, action.payload.direction) };
+      return updateKanban(state, { cursor: moveCursor(TuiState.kanbanVisibleCards(state), state.kanban.cursor, action.payload.direction) });
     case ActionTypes.MOVE_KANBAN_EDIT_FIELD:
-      return { ...state, kanbanEditField: moveEditField(state.kanbanEditField, action.payload.direction) };
+      return updateKanban(state, { editField: moveEditField(state.kanban.editField, action.payload.direction) });
     case ActionTypes.CYCLE_KANBAN_VIEW:
       return reduceViewCycle(state);
     case ActionTypes.TOGGLE_KANBAN_EXPAND:
-      return { ...state, kanbanExpanded: !state.kanbanExpanded, kanbanEditField: !state.kanbanExpanded ? "content" : state.kanbanEditField };
+      return updateKanban(state, { expanded: !state.kanban.expanded, editField: !state.kanban.expanded ? "content" : state.kanban.editField });
     case ActionTypes.COMMIT_KANBAN_EDIT:
-      return { ...state, kanbanEdit: action.payload.cardId, kanbanEditField: action.payload.field };
+      return updateKanban(state, { edit: action.payload.cardId, editField: action.payload.field });
     case ActionTypes.CANCEL_KANBAN_EDIT:
     case ActionTypes.SAVE_KANBAN_EDIT:
-      return { ...state, kanbanEdit: null };
+      return updateKanban(state, { edit: null });
     default:
       return state;
   }
@@ -33,18 +34,20 @@ export function kanbanReducer(state: TuiState, action: Action): TuiState {
 
 function reduceViewCycle(state: TuiState): TuiState {
   if (state.focusedAgentId === null) return state;
-  if (state.kanbanView === "hidden") return { ...state, kanbanView: "list" };
-  if (state.kanbanView === "list") {
+  if (state.kanban.view === "hidden") return updateKanban(state, { view: "list" });
+  if (state.kanban.view === "list") {
     return {
-      ...state,
-      kanbanView: "panel",
+      ...updateKanban(state, { view: "panel", cursor: clampCursor(TuiState.kanbanVisibleCards(state), state.kanban.cursor) }),
       teamPanelVisible: false,
       helpPanelVisible: false,
       teamCursorAgentId: null,
-      kanbanCursor: clampCursor(TuiState.kanbanVisibleCards(state), state.kanbanCursor),
     };
   }
-  return { ...state, kanbanView: "hidden", kanbanEdit: null, kanbanExpanded: false };
+  return updateKanban(state, { view: "hidden", edit: null, expanded: false });
+}
+
+function updateKanban(state: TuiState, changes: Partial<KanbanState>): TuiState {
+  return { ...state, kanban: { ...state.kanban, ...changes } };
 }
 
 function moveCursor(cards: ReadonlyArray<KanbanCard>, currentId: string | null, direction: KanbanDirection): string | null {

@@ -24,7 +24,7 @@ export async function main(argv: string[], cwd: string = process.cwd(), console:
   try {
     return await run(parsed, cwd, homeDir, {
       bootPlatform: async (options) => (await bootPlatform(options)).cradle.platform,
-      bootTui: (options, deps) => bootTui(options, deps).cradle.tui,
+      bootTui: (options, deps) => bootTui(options, deps),
       runFirstRun: (homeJieDir, noInstall) => runFirstRunWelcome(createFirstRunPorts({ homeJieDir, console }), noInstall),
       console,
     });
@@ -34,9 +34,14 @@ export async function main(argv: string[], cwd: string = process.cwd(), console:
   }
 }
 
+interface TuiContainer {
+  readonly cradle: { readonly tui: Tui };
+  readonly dispose: () => Promise<void>;
+}
+
 interface RunDeps {
   readonly bootPlatform: (options: JiePlatformOptions) => Promise<JiePlatform>;
-  readonly bootTui: (options: CreateTUIOptions, deps: TuiDeps) => Tui;
+  readonly bootTui: (options: CreateTUIOptions, deps: TuiDeps) => TuiContainer;
   readonly runFirstRun: (homeJieDir: string, noInstall: boolean) => Promise<void>;
   readonly console: Console;
 }
@@ -77,15 +82,16 @@ async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps
     switch (args.kind) {
       case "tui": {
         const git = await handle.execute({ name: "getGitStatus" });
-        const tui = deps.bootTui(
+        const tuiContainer = deps.bootTui(
           { cwd },
           { platform: handle, homeJieDir, gitBranch: git.branch, gitDirty: git.dirty, version: VERSION },
         );
+        const tui = tuiContainer.cradle.tui;
         await handle.execute({ name: "team", teamId: args.team });
         try {
-          await tui.start();
+          await tui.run();
         } finally {
-          tui.stop();
+          await tuiContainer.dispose();
         }
         await handle.execute({ name: "stop" });
         return 0;

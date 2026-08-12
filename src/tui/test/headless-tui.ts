@@ -1,10 +1,9 @@
 import { PassThrough } from "node:stream";
 import { bootPlatform, type JiePlatform } from "../../platform";
-import { bootTui, type Tui } from "../";
+import { bootTui } from "../";
 import { VirtualTerminal } from "./virtual-terminal";
 
 export interface HeadlessTui {
-  readonly tui: Tui;
   readonly platform: JiePlatform;
   readonly dir: string;
   type(text: string): Promise<void>;
@@ -34,7 +33,7 @@ class HeadlessStdin extends PassThrough {
   ref(): this { return this; }
   unref(): this { return this; }
   setRawMode(): this { return this; }
-  setEncoding(): this { return this; }
+  override setEncoding(): this { return this; }
 }
 
 class HeadlessStdout extends PassThrough {
@@ -65,10 +64,10 @@ export async function startHeadlessTui(options: StartHeadlessOptions): Promise<H
   process.env.LC_ALL = UTF8_LOCALE;
   try {
     const platform = (await bootPlatform({ cwd: options.dir, homeJieDir: options.dir, projectJieDir: options.dir })).cradle.platform;
-    const tui = bootTui({ cwd: options.dir, rows }, { platform, homeJieDir: options.dir, stdin, stdout, stderr, gitBranch: options.gitBranch ?? "main" }).cradle.tui;
-    const started = tui.start();
+    const container = bootTui({ cwd: options.dir, rows }, { platform, homeJieDir: options.dir, stdin, stdout, stderr, gitBranch: options.gitBranch ?? "main" });
+    const tui = container.cradle.tui;
+    const started = tui.run();
     return {
-      tui,
       platform,
       dir: options.dir,
       async type(text: string): Promise<void> {
@@ -104,7 +103,7 @@ export async function startHeadlessTui(options: StartHeadlessOptions): Promise<H
         return stderrChunks.join("");
       },
       async stop(): Promise<void> {
-        tui.stop();
+        await container.dispose();
         await started;
       },
     };

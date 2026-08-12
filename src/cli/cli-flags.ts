@@ -1,3 +1,4 @@
+import { parseModelRef } from "../platform";
 
 export interface ParsedArgsMap {
   readonly print: {
@@ -183,16 +184,9 @@ function parseModel(args: string[]): ParsedArgs {
     return { kind: "error", message: "missing argument for model" };
   }
   const first = args[0]!;
-  const slash = first.indexOf("/");
-  if (slash === -1) {
-    return { kind: "error", message: `invalid model string: ${first}` };
-  }
-  const provider = first.slice(0, slash);
-  const modelId = first.slice(slash + 1);
-  if (provider === "" || modelId === "") {
-    return { kind: "error", message: `invalid model string: ${first}` };
-  }
-  return { kind: "model", provider, modelId };
+  const parsed = parseModelRef(first);
+  if (parsed === null) return { kind: "error", message: `invalid model string: ${first}` };
+  return { kind: "model", provider: parsed.provider, modelId: parsed.modelId };
 }
 
 function parseTeam(args: string[]): ParsedArgs {

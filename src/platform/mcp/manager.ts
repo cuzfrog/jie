@@ -1,10 +1,9 @@
 import { logger } from "../../utils";
 import type { ToolRegistry } from "../tools";
-import { loadMergedMcpConfig } from "./load-config";
 import type { McpConnection, McpConnectionDependencies } from "./stdio-connection";
 import type { SubprocessFactory } from "./subprocess";
 import { createMcpTool } from "./tool-adapter";
-import type { StdioMcpServerConfig } from "./types";
+import type { McpConfig, StdioMcpServerConfig } from "./types";
 
 const log = logger.getSubLogger({ name: "jie.platform.mcp" });
 
@@ -24,15 +23,13 @@ export class McpManagerImpl implements McpManager {
 
   constructor(
     private readonly toolRegistry: ToolRegistry,
-    private readonly homeJieDir: string,
-    private readonly projectJieDir: string | null,
+    private readonly mcpConfig: McpConfig,
     private readonly subprocessFactory: SubprocessFactory,
     private readonly mcpConnector: McpConnector,
   ) {}
 
   async connectAll(): Promise<void> {
-    const config = loadMergedMcpConfig(this.homeJieDir, this.projectJieDir);
-    for (const [name, serverConfig] of config.servers) {
+    for (const [name, serverConfig] of this.mcpConfig.servers) {
       if (serverConfig.transport === "http") {
         log.warn(`MCP server '${name}' uses the http transport, which is not supported in v1; skipping`);
         continue;

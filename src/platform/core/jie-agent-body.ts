@@ -3,7 +3,7 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import type { MemoryManager } from "../memory";
 import type { ArtifactStore, TranscriptStore } from "../storage";
-import { type ExecutionContext, parseToolSpec, type ToolRegistry } from "../tools";
+import { type ExecutionContext, parseToolSpec, type ToolRegistry, type ToolSpec } from "../tools";
 import type { Skill, SkillManager } from "../skills";
 import type { HookIdentity, HookRunner } from "../hooks";
 import { AgentEventBridgeImpl } from "./agent-event-bridge";
@@ -117,9 +117,9 @@ export class JieAgentBody implements AgentBody {
       promptQueue: this.promptQueue,
       onRunEnd: () => void this.agent.waitForIdle().then(() => this.promptQueue.settle()),
     });
+    const parsedTools = params.soul.tools.map(parseToolSpec);
     const toolArgs = new Map<string, ReadonlyArray<string>>();
-    for (const spec of params.soul.tools) {
-      const parsed = parseToolSpec(spec);
+    for (const parsed of parsedTools) {
       if (parsed.args.length > 0) toolArgs.set(parsed.name, parsed.args);
     }
     const executionContext: ExecutionContext = {
@@ -130,7 +130,7 @@ export class JieAgentBody implements AgentBody {
       artifactStore: deps.artifactStore,
       toolArgs,
     };
-    const adaptedTools = adaptAllTools(params.soul, deps.toolRegistry, executionContext);
+    const adaptedTools = adaptAllTools(parsedTools, params.soul.role, deps.toolRegistry, executionContext);
     const toolCallObserver = new ToolCallObserverImpl({
       eventManager: deps.eventManager,
       hookRunner: this.hookRunner,
@@ -143,9 +143,11 @@ export class JieAgentBody implements AgentBody {
       getApiKey: deps.getApiKey,
       streamFn: streamSimple,
       convertToLlm,
-      transformContext: async (messages: AgentMessage[]) => [
-        ...this.compactor.fitToWindow(messages, this.agent.state.model, resolveContextWindow(this.soul, this.agent.state.model)),
-      ],
+      transformContext: async (messages: AgentMessage[]) => {
+        const stripped = stripThinkingDurations(messages);
+        const contextWindow = resolveContextWindow(this.soul, this.agent.state.model);
+        return [...this.compactor.fitToWindow(stripped, this.agent.state.model, contextWindow)];
+      },
       steeringMode: "all",
       followUpMode: "all",
       toolExecution: "sequential",
@@ -359,19 +361,34 @@ export class JieAgentBody implements AgentBody {
 
 }
 
+function stripThinkingDurations(messages: AgentMessage[]): AgentMessage[] {
+  return messages.map((message) => {
+    if (message.role !== "assistant") return message;
+    let changed = false;
+    const content = message.content.map((part) => {
+      if (part.type !== "thinking" || part.thinkingDurationMs === undefined) return part;
+      changed = true;
+      const { thinkingDurationMs: _ignored, ...stripped } = part;
+      return stripped;
+    });
+    if (!changed) return message;
+    return { ...message, content };
+  });
+}
+
 function adaptAllTools(
-  soul: AgentBodyParams["soul"],
+  parsedTools: ReadonlyArray<ToolSpec>,
+  role: string,
   toolRegistry: ToolRegistry,
   executionContext: ExecutionContext,
 ): AgentTool[] {
   const out: AgentTool[] = [];
   const assigned = new Set<string>();
-  for (const toolSpec of soul.tools) {
-    const parsed = parseToolSpec(toolSpec);
+  for (const parsed of parsedTools) {
     const tools = toolRegistry.resolve(parsed.name);
     if (tools.length === 0) {
       throw new JiePlatformError("TOOL_SPEC_UNRESOLVED", {
-        detail: `agent '${soul.role}' (team '${executionContext.teamId}'): tool spec '${toolSpec}' resolved no tools`,
+        detail: `agent '${role}' (team '${executionContext.teamId}'): tool spec '${parsed.name}' resolved no tools`,
       });
     }
     for (const tool of tools) {

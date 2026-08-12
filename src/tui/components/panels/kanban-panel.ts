@@ -1,6 +1,7 @@
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { Actions, type Action, TuiState, type StateStore } from "../../state";
 import type { KanbanCard, KanbanStatus } from "../../../platform";
-import { TuiState, type StateStore } from "../../state";
+import { type TuiComponent } from "../..";
 import { Panel } from "./panel";
 import { style, type ColorName } from "../themes";
 
@@ -24,46 +25,77 @@ const HINTS = {
   expanded: "↑↓ select field · tab collapse · ctrl+e edit · ctrl+k close",
   editing: "enter/ctrl+s save · esc cancel",
 } as const;
+const CTRL_E = "\x05";
 
 const CHIP_BACKGROUND = "\x1b[100m";
 const CHIP_BACKGROUND_END = "\x1b[49m";
 
-export class KanbanPanel extends Panel {
-  constructor(stateStore: StateStore) {
+interface KeyFallback {
+  handleInput(data: string): void;
+  isShowingAutocomplete(): boolean;
+}
+
+export class KanbanPanel extends Panel implements TuiComponent {
+  private teamId: string | null = null;
+  private kanban: TuiState["kanban"] | null = null;
+  private readonly editor: KeyFallback;
+
+  constructor(stateStore: StateStore, editor: KeyFallback) {
     super(stateStore);
+    this.editor = editor;
   }
 
-  protected isVisible(state: TuiState): boolean {
-    return state.teamId !== null && state.kanbanView === "panel";
+  update(): boolean {
+    const state = this.stateStore.getState();
+    if (state.teamId === this.teamId && state.kanban === this.kanban) return false;
+    this.teamId = state.teamId;
+    this.kanban = state.kanban;
+    return true;
   }
 
-  protected body(state: TuiState, inner: number): string[] {
-    if (state.kanbanExpanded) return renderCardDetail(focusedCard(state), state.kanbanEditField, inner);
+  handleInput(data: string): void {
+    const state = this.stateStore.getState();
+    if (state.kanban.view === "panel" && state.kanban.edit === null && !this.editor.isShowingAutocomplete()) {
+      const action = resolveKanbanKey(data, state);
+      if (action !== null) {
+        this.stateStore.dispatch(action);
+        return;
+      }
+    }
+    this.editor.handleInput(data);
+  }
+
+  protected override isVisible(state: TuiState): boolean {
+    return state.teamId !== null && state.kanban.view === "panel";
+  }
+
+  protected override body(state: TuiState, inner: number): string[] {
+    if (state.kanban.expanded) return renderCardDetail(focusedCard(state), state.kanban.editField, inner);
     return renderKanbanBoard(state, TuiState.kanbanVisibleCards(state), inner);
   }
 
-  protected topBorder(state: TuiState, width: number): string | null {
-    if (!state.kanbanExpanded) return null;
+  protected override topBorder(state: TuiState, width: number): string | null {
+    if (!state.kanban.expanded) return null;
     const focused = focusedCard(state);
     return focused === null ? null : renderExpandedTopBorder(focused.id, width, style("borderMuted"));
   }
 
-  protected hint(state: TuiState, width: number): string | null {
+  protected override hint(state: TuiState, width: number): string | null {
     return renderHint(state, width);
   }
 }
 
 function focusedCard(state: TuiState): KanbanCard | null {
   const visible = TuiState.kanbanVisibleCards(state);
-  return state.kanbanCursor === null ? null : visible.find((card) => card.id === state.kanbanCursor) ?? null;
+  return state.kanban.cursor === null ? null : visible.find((card) => card.id === state.kanban.cursor) ?? null;
 }
 
 function renderKanbanBoard(state: TuiState, visible: ReadonlyArray<KanbanCard>, innerWidth: number): string[] {
   const columnWidth = Math.max(1, Math.floor((innerWidth - COLUMN_GAP.length * (KANBAN_COLUMNS.length - 1)) / KANBAN_COLUMNS.length));
   const columns = KANBAN_COLUMNS.map((column) => {
     const cards = visible.filter((card) => card.status === column.status);
-    const total = state.kanbanBoard.filter((card) => card.status === column.status).length;
-    return renderColumn(column, cards, total, state.kanbanCursor, columnWidth);
+    const total = state.kanban.board.filter((card) => card.status === column.status).length;
+    return renderColumn(column, cards, total, state.kanban.cursor, columnWidth);
   });
   const height = Math.max(...columns.map((column) => column.length));
   const rows: string[] = [];
@@ -115,10 +147,27 @@ function renderExpandedTopBorder(cardId: string, width: number, border: (text: s
 }
 
 function renderHint(state: TuiState, width: number): string {
-  const text = state.kanbanEdit !== null ? HINTS.editing : state.kanbanExpanded ? HINTS.expanded : HINTS.collapsed;
+  const text = state.kanban.edit !== null ? HINTS.editing : state.kanban.expanded ? HINTS.expanded : HINTS.collapsed;
   return truncateToWidth(style("dim")(text), width);
 }
 
 function fitToWidth(text: string, width: number): string {
   return truncateToWidth(text, width, "", true);
+}
+
+function resolveKanbanKey(data: string, state: TuiState): Action | null {
+  if (matchesKey(data, "esc") && state.kanban.expanded) return Actions.toggleKanbanExpand();
+  if (matchesKey(data, "tab")) return Actions.toggleKanbanExpand();
+  if (state.kanban.expanded) {
+    if (matchesKey(data, "up")) return Actions.moveKanbanEditField("up");
+    if (matchesKey(data, "down")) return Actions.moveKanbanEditField("down");
+    if (data === CTRL_E && state.kanban.cursor !== null) return Actions.commitKanbanEdit(state.kanban.cursor, state.kanban.editField);
+    return null;
+  }
+  if (matchesKey(data, "up")) return Actions.moveKanbanCursor("up");
+  if (matchesKey(data, "down")) return Actions.moveKanbanCursor("down");
+  if (matchesKey(data, "left")) return Actions.moveKanbanCursor("left");
+  if (matchesKey(data, "right")) return Actions.moveKanbanCursor("right");
+  if (data === CTRL_E && state.kanban.cursor !== null) return Actions.commitKanbanEdit(state.kanban.cursor);
+  return null;
 }

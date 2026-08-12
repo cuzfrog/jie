@@ -1,4 +1,5 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import { expectNumber, expectOptionalString, expectString } from "./row-decode";
 import type { Storage } from "./storage";
 
 export interface SessionSummary {
@@ -180,20 +181,4 @@ export class SqliteTranscriptStore implements TranscriptStore {
       [sessionId, name, updatedAt],
     );
   }
-}
-
-function expectString(value: unknown): string {
-  if (typeof value !== "string") throw new Error(`expected string, got ${typeof value}`);
-  return value;
-}
-
-function expectOptionalString(value: unknown): string | undefined {
-  if (value === null || value === undefined) return undefined;
-  return expectString(value);
-}
-
-function expectNumber(value: unknown): number {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "bigint") return Number(value);
-  throw new Error(`expected number, got ${typeof value}`);
 }

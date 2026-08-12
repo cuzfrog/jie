@@ -1,12 +1,26 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { UserMessage } from "@earendil-works/pi-ai";
 
+declare module "@earendil-works/pi-ai" {
+    interface ThinkingContent {
+        readonly thinkingDurationMs?: number;
+    }
+}
+
 export const EFFORT_LEVELS = ["off", "low", "medium", "high", "max"] as const;
 
 export type EffortLevel = (typeof EFFORT_LEVELS)[number];
 
 export function isEffortLevel(value: unknown): value is EffortLevel {
-    return typeof value === "string" && (EFFORT_LEVELS as readonly string[]).includes(value);
+    return typeof value === "string" && EFFORT_LEVELS.some((level) => level === value);
+}
+
+export function parseModelRef(value: string): { readonly provider: string; readonly modelId: string } | null {
+    const slash = value.indexOf("/");
+    if (slash === -1) return null;
+    const provider = value.slice(0, slash);
+    const modelId = value.slice(slash + 1);
+    return provider === "" || modelId === "" ? null : { provider, modelId };
 }
 
 export interface ModelInfo {

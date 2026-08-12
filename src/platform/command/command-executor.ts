@@ -36,9 +36,11 @@ export class CommandExecutorImpl implements CommandExecutor {
       setDefaultEffort: this.setDefaultEffort.bind(this),
       getDefaultEffort: this.getDefaultEffort.bind(this),
       listModels: this.listModels.bind(this),
+      listFilteredModels: this.listFilteredModels.bind(this),
       listProviders: this.listProviders.bind(this),
       setModelFilters: this.setModelFilters.bind(this),
       getModelFilters: this.getModelFilters.bind(this),
+      validateModelFilter: this.validateModelFilter.bind(this),
       setDefaultTeam: this.setDefaultTeam.bind(this),
       team: this.team.bind(this),
       reload: this.reload.bind(this),
@@ -132,6 +134,15 @@ export class CommandExecutorImpl implements CommandExecutor {
     });
   }
 
+  private listFilteredModels(): CommandResult<"listFilteredModels"> {
+    const filters = this.settingsStore.load().modelFilters ?? [];
+    const models = this.listModels().filter((model) => model.available);
+    if (filters.length === 0) return { models, filteredOut: 0 };
+    const target = (model: { readonly provider: string; readonly id: string }) => `${model.provider}/${model.id}`.toLowerCase();
+    const matched = models.filter((model) => filters.some((filter) => target(model).includes(filter.toLowerCase())));
+    return { models: matched, filteredOut: models.length - matched.length };
+  }
+
   private listProviders(): CommandResult<"listProviders"> {
     return this.modelRegistry.listProviders().map((provider) => {
       const description = provider.envKeys[0] ?? (provider.configured ? "configured" : undefined);
@@ -146,6 +157,19 @@ export class CommandExecutorImpl implements CommandExecutor {
 
   private getModelFilters(): CommandResult<"getModelFilters"> {
     return this.settingsStore.load().modelFilters ?? [];
+  }
+
+  private validateModelFilter(command: Command<"validateModelFilter">): CommandResult<"validateModelFilter"> {
+    const pattern = command.pattern;
+    const existingFilters = command.existingFilters;
+    if (existingFilters.includes(pattern)) return null;
+    const combined = [...existingFilters, pattern];
+    const models = this.listModels().filter((model) => model.available);
+    if (models.length === 0) return null;
+    const target = (model: { readonly provider: string; readonly id: string }) => `${model.provider}/${model.id}`.toLowerCase();
+    if (models.some((model) => combined.some((filter) => target(model).includes(filter.toLowerCase())))) return null;
+    const basis = existingFilters.length === 0 ? "it matches none" : `combined with existing filters (${existingFilters.join(", ")}) it matches none`;
+    return `/model-filter: pattern '${pattern}' rejected — ${basis} of the ${models.length} available models`;
   }
 
   private setDefaultTeam(command: Command<"setDefaultTeam">): CommandResult<"setDefaultTeam"> {
@@ -279,7 +303,7 @@ export class CommandExecutorImpl implements CommandExecutor {
 
   private resolveHandoffTarget(command: Command<"kanbanHandoff">): { sourceTeamId: string; cardId: string } {
     if (command.cardId.includes("/")) {
-      const [sourceTeamId, cardId] = command.cardId.split("/", 2) as [string, string];
+      const [sourceTeamId, cardId] = command.cardId.split("/", 2);
       return { sourceTeamId, cardId };
     }
     return { sourceTeamId: command.teamId, cardId: command.cardId };

@@ -171,6 +171,51 @@ describe("TeamPanel", () => {
   });
 });
 
+describe("TeamPanel.update", () => {
+  test("reports dirty when an agent changes", () => {
+    stateStore.getState.mockReturnValue(teamState({}, { [WORKER_ID]: { status: "idle" } }));
+    const panel = new TeamPanel(stateStore);
+    panel.update();
+    stateStore.getState.mockReturnValue(teamState({}, { [WORKER_ID]: { status: "busy" } }));
+    expect(panel.update()).toBe(true);
+  });
+
+  test("reports dirty when the panel visibility changes", () => {
+    const base = teamState({ teamPanelVisible: true, focusedAgentId: LEADER_ID });
+    stateStore.getState.mockReturnValue(base);
+    const panel = new TeamPanel(stateStore);
+    panel.update();
+    stateStore.getState.mockReturnValue(makeTuiState({ ...base, teamPanelVisible: false }));
+    expect(panel.update()).toBe(true);
+  });
+
+  test("reports dirty when the focused agent changes", () => {
+    const base = teamState({ focusedAgentId: LEADER_ID });
+    stateStore.getState.mockReturnValue(base);
+    const panel = new TeamPanel(stateStore);
+    panel.update();
+    stateStore.getState.mockReturnValue(makeTuiState({ ...base, focusedAgentId: WORKER_ID }));
+    expect(panel.update()).toBe(true);
+  });
+
+  test("reports clean when the watched slice is unchanged", () => {
+    const state = teamState({ focusedAgentId: LEADER_ID });
+    stateStore.getState.mockReturnValue(state);
+    const panel = new TeamPanel(stateStore);
+    expect(panel.update()).toBe(true);
+    expect(panel.update()).toBe(false);
+  });
+
+  test("reports clean when only an unwatched field changes", () => {
+    const base = teamState({ focusedAgentId: LEADER_ID });
+    stateStore.getState.mockReturnValue(base);
+    const panel = new TeamPanel(stateStore);
+    panel.update();
+    stateStore.getState.mockReturnValue(makeTuiState({ ...base, kanbanView: "list" }));
+    expect(panel.update()).toBe(false);
+  });
+});
+
 function teamState(overrides: Partial<TuiState> = {}, agentOverrides: Partial<Record<AgentId, Partial<AgentUiState>>> = {}): TuiState {
   const leader = makeAgentUiState(LEADER_ID, { isLeader: true, role: "general", ...agentOverrides[LEADER_ID] });
   const worker = makeAgentUiState(WORKER_ID, { role: "coder", ...agentOverrides[WORKER_ID] });

@@ -167,8 +167,7 @@ describe("teamLoadReducer", () => {
     ]));
     const withBoard: TuiState = {
       ...first,
-      kanbanBoard: [{ id: "#1", content: "carry-over", status: "in_progress" }],
-      kanbanCursor: "#1",
+      kanban: { ...first.kanban, board: [{ id: "#1", content: "carry-over", status: "in_progress" }], cursor: "#1" },
     };
     const switched = teamLoadReducer(withBoard, {
       id: "my-team-2",
@@ -179,8 +178,8 @@ describe("teamLoadReducer", () => {
       history: [],
       agents: [{ teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     });
-    expect(switched.kanbanBoard).toEqual([]);
-    expect(switched.kanbanCursor).toBeNull();
+    expect(switched.kanban.board).toEqual([]);
+    expect(switched.kanban.cursor).toBeNull();
   });
 
   test("team load replaces the board from TeamInfo.kanbanCards", () => {
@@ -189,8 +188,7 @@ describe("teamLoadReducer", () => {
     ]));
     const staleBoard: TuiState = {
       ...first,
-      kanbanBoard: [{ id: "#1", content: "stale", status: "pending" }],
-      kanbanCursor: "#1",
+      kanban: { ...first.kanban, board: [{ id: "#1", content: "stale", status: "pending" }], cursor: "#1" },
     };
     const second = teamLoadReducer(staleBoard, {
       ...team([
@@ -198,14 +196,14 @@ describe("teamLoadReducer", () => {
       ]),
       kanbanCards: [{ id: "#1", content: "still here", status: "pending" }],
     });
-    expect(second.kanbanBoard).toEqual([{ id: "#1", content: "still here", status: "pending" }]);
-    expect(second.kanbanCursor).toBe("#1");
+    expect(second.kanban.board).toEqual([{ id: "#1", content: "still here", status: "pending" }]);
+    expect(second.kanban.cursor).toBe("#1");
   });
 
   test("team switch clears kanban edit and expand; a same-team reload preserves them", () => {
     const agents = [{ role: "general", agentKey: "general-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }];
     const first = teamLoadReducer(INITIAL_TUI_STATE, team(agents));
-    const engaged: TuiState = { ...first, kanbanEdit: "#1", kanbanExpanded: true };
+    const engaged: TuiState = { ...first, kanban: { ...first.kanban, edit: "#1", expanded: true } };
     const switched = teamLoadReducer(engaged, {
       id: "my-team-2",
       leaderKey: "worker-1",
@@ -215,11 +213,11 @@ describe("teamLoadReducer", () => {
       history: [],
       agents: [{ teamId: "my-team-2", role: "worker", agentKey: "worker-1", isLeader: true, tools: [], subscribe: [], skills: [], model: null }],
     });
-    expect(switched.kanbanEdit).toBeNull();
-    expect(switched.kanbanExpanded).toBe(false);
+    expect(switched.kanban.edit).toBeNull();
+    expect(switched.kanban.expanded).toBe(false);
     const reloaded = teamLoadReducer(engaged, team(agents));
-    expect(reloaded.kanbanEdit).toBe("#1");
-    expect(reloaded.kanbanExpanded).toBe(true);
+    expect(reloaded.kanban.edit).toBe("#1");
+    expect(reloaded.kanban.expanded).toBe(true);
   });
 
   test("team load clears the interrupted marker", () => {

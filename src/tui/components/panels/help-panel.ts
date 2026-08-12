@@ -1,6 +1,7 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import { COMMAND_METADATA, type CommandMeta } from "../../command-metadata";
+import type { CommandCatalog, CommandMeta } from "../../command";
 import { type StateStore, type TuiState } from "../../state";
+import { type TuiComponent } from "../..";
 import { hintLines } from "../elements";
 import { Panel } from "./panel";
 import { style } from "../themes";
@@ -10,35 +11,46 @@ const COMMANDS_HEADING = "Commands";
 const SHORTCUTS_HEADING = "Shortcuts";
 const COLUMN_GAP = 4;
 
-export class HelpPanel extends Panel {
-  constructor(stateStore: StateStore) {
+export class HelpPanel extends Panel implements TuiComponent {
+  private helpPanelVisible = false;
+  private readonly commandCatalog: CommandCatalog;
+
+  constructor(stateStore: StateStore, commandRegistry: CommandCatalog) {
     super(stateStore);
+    this.commandCatalog = commandRegistry;
   }
 
-  protected isVisible(state: TuiState): boolean {
+  update(): boolean {
+    const visible = this.stateStore.getState().helpPanelVisible;
+    if (visible === this.helpPanelVisible) return false;
+    this.helpPanelVisible = visible;
+    return true;
+  }
+
+  protected override isVisible(state: TuiState): boolean {
     return state.helpPanelVisible;
   }
 
-  protected body(_state: TuiState, inner: number): string[] {
-    return helpLines(inner);
+  protected override body(_state: TuiState, inner: number): string[] {
+    return helpLines(inner, this.commandCatalog.metadata);
   }
 
-  protected hint(_state: TuiState, width: number): string | null {
+  protected override hint(_state: TuiState, width: number): string | null {
     return truncateToWidth(style("dim")(HINT), width);
   }
 }
 
-function helpLines(width: number): string[] {
+function helpLines(width: number, metadata: ReadonlyArray<CommandMeta>): string[] {
   const w = Math.max(1, width);
-  return joinSections([commandSection(w), shortcutsSection(w)], w);
+  return joinSections([commandSection(w, metadata), shortcutsSection(w)], w);
 }
 
 function joinSections(sections: ReadonlyArray<ReadonlyArray<string>>, width: number): string[] {
   return sections.flatMap((section, index) => (index === 0 ? [...section] : ["", ...section])).map((line) => truncateToWidth(line, width));
 }
 
-function commandSection(width: number): string[] {
-  const cells = COMMAND_METADATA.flatMap(commandCells);
+function commandSection(width: number, metadata: ReadonlyArray<CommandMeta>): string[] {
+  const cells = metadata.flatMap(commandCells);
   const half = Math.ceil(cells.length / 2);
   const left = cells.slice(0, half);
   const right = cells.slice(half);

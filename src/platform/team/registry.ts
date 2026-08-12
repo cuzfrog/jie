@@ -4,81 +4,80 @@ import { isValidTeamId, loadDefaultSoloTeam, loadTeamFromDir } from "./parser";
 import { JiePlatformError } from "../jie-platform-errors";
 import { BUILTIN_DEFAULT_SOLO_TEAM_ID, type TeamBlueprint, type TeamBlueprintLocation } from "./types";
 
-export interface TeamRegistryOptions {
-  readonly homeJieDir: string;
-  readonly projectJieDir: string | null;
-}
-
 export interface TeamRegistry {
   parseTeamManifest(teamId?: string): TeamBlueprint;
   listInstalled(): string[];
   locate(teamId: string): TeamBlueprintLocation;
 }
 
-export function createTeamRegistry(options: TeamRegistryOptions): TeamRegistry {
-  const { homeJieDir, projectJieDir } = options;
-  const userTeamsDir = join(homeJieDir, "teams");
+export class TeamRegistryImpl implements TeamRegistry {
+  private readonly userTeamsDir: string;
 
-  function projectTeamsDir(): string | null {
-    return projectJieDir === null ? null : join(projectJieDir, "teams");
+  constructor(
+    homeJieDir: string,
+    private readonly projectJieDir: string | null,
+  ) {
+    this.userTeamsDir = join(homeJieDir, "teams");
   }
 
-  function isDefaultSolo(id: string): boolean {
-    return id === BUILTIN_DEFAULT_SOLO_TEAM_ID;
+  parseTeamManifest(teamId?: string): TeamBlueprint {
+    if (teamId === undefined || teamId === BUILTIN_DEFAULT_SOLO_TEAM_ID) {
+      return loadDefaultSoloTeam();
+    }
+    if (!isValidTeamId(teamId)) {
+      throw new JiePlatformError("INVALID_TEAM_ID", { detail: `invalid team_id: ${teamId}` });
+    }
+    const projectDir = this.projectTeamsDir();
+    if (projectDir !== null && this.isProjectTeam(teamId)) {
+      return this.parseFromDir(join(projectDir, teamId));
+    }
+    if (this.isUserTeam(teamId)) {
+      return this.parseFromDir(join(this.userTeamsDir, teamId));
+    }
+    throw new JiePlatformError("TEAM_NOT_FOUND", { detail: `team '${teamId}' not found` });
   }
-  function isProjectTeam(id: string): boolean {
-    const dir = projectTeamsDir();
+
+  listInstalled(): string[] {
+    const ids = new Set<string>();
+    ids.add(BUILTIN_DEFAULT_SOLO_TEAM_ID);
+    for (const dir of [this.projectTeamsDir(), this.userTeamsDir]) {
+      if (dir === null) continue;
+      let entries: string[];
+      try {
+        entries = readdirSync(dir);
+      } catch {
+        continue;
+      }
+      for (const entry of entries) {
+        if (entry.startsWith(".")) continue;
+        if (existsSync(join(dir, entry, "TEAM.md"))) ids.add(entry);
+      }
+    }
+    return [...ids].sort();
+  }
+
+  locate(id: string): TeamBlueprintLocation {
+    if (id === BUILTIN_DEFAULT_SOLO_TEAM_ID) return "builtin";
+    if (this.isProjectTeam(id)) return "project";
+    if (this.isUserTeam(id)) return "user";
+    return null;
+  }
+
+  private projectTeamsDir(): string | null {
+    return this.projectJieDir === null ? null : join(this.projectJieDir, "teams");
+  }
+
+  private isProjectTeam(id: string): boolean {
+    const dir = this.projectTeamsDir();
     return dir !== null && existsSync(join(dir, id, "TEAM.md"));
   }
-  function isUserTeam(id: string): boolean {
-    return existsSync(join(userTeamsDir, id, "TEAM.md"));
+
+  private isUserTeam(id: string): boolean {
+    return existsSync(join(this.userTeamsDir, id, "TEAM.md"));
   }
 
-  function parseFromDir(dir: string): TeamBlueprint {
+  private parseFromDir(dir: string): TeamBlueprint {
     const blueprint = loadTeamFromDir(dir);
     return blueprint.roles.length === 0 ? loadDefaultSoloTeam() : blueprint;
   }
-
-  return {
-    parseTeamManifest(teamId) {
-      if (teamId === undefined || isDefaultSolo(teamId)) {
-        return loadDefaultSoloTeam();
-      }
-      if (!isValidTeamId(teamId)) {
-        throw new JiePlatformError("INVALID_TEAM_ID", { detail: `invalid team_id: ${teamId}` });
-      }
-      const projectDir = projectTeamsDir();
-      if (projectDir !== null && isProjectTeam(teamId)) {
-        return parseFromDir(join(projectDir, teamId));
-      }
-      if (isUserTeam(teamId)) {
-        return parseFromDir(join(userTeamsDir, teamId));
-      }
-      throw new JiePlatformError("TEAM_NOT_FOUND", { detail: `team '${teamId}' not found` });
-    },
-    listInstalled() {
-      const ids = new Set<string>();
-      ids.add(BUILTIN_DEFAULT_SOLO_TEAM_ID);
-      for (const dir of [projectTeamsDir(), userTeamsDir]) {
-        if (dir === null) continue;
-        let entries: string[];
-        try {
-          entries = readdirSync(dir);
-        } catch {
-          continue;
-        }
-        for (const entry of entries) {
-          if (entry.startsWith(".")) continue;
-          if (existsSync(join(dir, entry, "TEAM.md"))) ids.add(entry);
-        }
-      }
-      return [...ids].sort();
-    },
-    locate(id) {
-      if (isDefaultSolo(id)) return "builtin";
-      if (isProjectTeam(id)) return "project";
-      if (isUserTeam(id)) return "user";
-      return null;
-    },
-  };
 }

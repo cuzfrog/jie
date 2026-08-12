@@ -1,0 +1,15 @@
+---
+no-new-exports:
+  - index.ts
+  - module.ts
+  - command-handler.ts
+  - command-handler.test.ts
+  - command-resolver.ts
+  - command-resolver.test.ts
+  - command-registry.ts
+  - command-registry.test.ts
+  - slash-command.ts
+  - slash-command.test.ts
+  - positional-slash-command.ts
+  - positional-slash-command.test.ts
+---

@@ -12,26 +12,8 @@ Separately, the session-id lifecycle was inconsistent: the spec disagreed on who
 
 ## Decision
 
-### 1. `team_id` is a first-class column in `memory_turns`
-
-```sql
-CREATE TABLE IF NOT EXISTS memory_turns (
-  team_id    TEXT    NOT NULL,
-  session_id TEXT    NOT NULL,
-  agent_key  TEXT    NOT NULL,
-  seq        INTEGER NOT NULL,
-  role       TEXT    NOT NULL,
-  content    TEXT    NOT NULL,
-  compacted  INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT    NOT NULL,
-  PRIMARY KEY (team_id, agent_key, session_id, seq)
-);
-
-CREATE INDEX IF NOT EXISTS idx_memory_turns_team_session_created
-  ON memory_turns (team_id, session_id, created_at);
-```
-
-`agent_key` and `seq` stay in the primary key because memory belongs to an individual agent: each agent has its own `seq` counter within a session; the leader's seq 1 and the worker's seq 1 are independent rows. Two teams sharing an `agent_key` live in disjoint row sets — no collision to warn about, and users may reuse role names freely across teams.
+### `team_id` column
+First-class column (with index) namespacing memory by team; disjoint per-team rows.
 
 ### 2. `session_id` is per process × team; the platform mints, the body accepts
 
@@ -63,6 +45,4 @@ The CLI passes intent via `JiePlatformOptions.resumeSessionId`; `createJiePlatfo
 
 ## Consequences
 
-- `ExecutionContext` exposes `team_id`; tools that need team-scoped keys can use it.
-- `--resume` is team-scoped by the `hasSession` query; cross-team resume returns no rows and exits 1 (explicit cross-team resume is out of scope).
-- The cross-team collision section and startup WARN are gone from `08-transcript.md` (then `08-memory.md`); the 4-step restore sequence there is canonical and written against this model.
+- `ExecutionContext` exposes `team_id`. Cross-team resume out of scope.

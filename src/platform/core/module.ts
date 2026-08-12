@@ -9,11 +9,18 @@ import type { ArtifactStore, TranscriptStore } from "../storage";
 import type { ToolRegistry } from "../tools";
 import type { PlatformCradle } from "../container";
 import type { AgentBody, AgentBodyParams } from "./agent-body";
-import { CompactorImpl } from "./compaction";
+import { CompactorImpl, type Compactor } from "./compaction";
 import { JieAgentBody } from "./jie-agent-body";
 
 export function registerCoreModule(container: AwilixContainer<PlatformCradle>): void {
   container.register({
+    compactor: asFunction((transcriptStore: TranscriptStore, llmService: LlmService, settingsStore: SettingsStore) =>
+      new CompactorImpl({
+        transcriptStore,
+        llmService,
+        getSettings: () => settingsStore.load().compaction,
+      }),
+    ).singleton(),
     agentBodyFactory: asFunction((
       eventManager: EventManager,
       artifactStore: ArtifactStore,
@@ -24,32 +31,24 @@ export function registerCoreModule(container: AwilixContainer<PlatformCradle>): 
       hookRunner: HookRunner,
       cwd: string,
       modelRegistry: ModelRegistry,
-      settingsStore: SettingsStore,
-      llmService: LlmService,
       memoryManager: MemoryManager,
       logDir: string | null,
-    ) => {
-      const compactor = new CompactorImpl({
+      compactor: Compactor,
+    ) => (params: AgentBodyParams): AgentBody =>
+      new JieAgentBody(params, {
+        eventManager,
+        artifactStore,
         transcriptStore,
-        llmService,
-        getSettings: () => settingsStore.load().compaction,
-      });
-      return (params: AgentBodyParams): AgentBody =>
-        new JieAgentBody(params, {
-          eventManager,
-          artifactStore,
-          transcriptStore,
-          toolRegistry,
-          skillManager,
-          systemContextBlock: loadSystemContextBlock(),
-          hookRunner,
-          cwd,
-          getApiKey: (provider) => modelRegistry.getApiKey(provider),
-          resolveModel: (provider, modelId) => modelRegistry.resolve(provider, modelId),
-          compactor,
-          memoryManager,
-          logDir,
-        });
-    }).singleton(),
+        toolRegistry,
+        skillManager,
+        systemContextBlock: loadSystemContextBlock(),
+        hookRunner,
+        cwd,
+        getApiKey: (provider) => modelRegistry.getApiKey(provider),
+        resolveModel: (provider, modelId) => modelRegistry.resolve(provider, modelId),
+        compactor,
+        memoryManager,
+        logDir,
+      })).singleton(),
   });
 }

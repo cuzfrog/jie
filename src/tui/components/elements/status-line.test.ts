@@ -49,3 +49,31 @@ describe("StatusLine", () => {
     }
   });
 });
+
+describe("StatusLine.update", () => {
+  test("reports dirty when transientMessage changes", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ transientMessage: "hi" }));
+    expect(new StatusLine(stateStore).update()).toBe(true);
+  });
+
+  test("reports dirty when errorBanner changes", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ errorBanner: "boom" }));
+    expect(new StatusLine(stateStore).update()).toBe(true);
+  });
+
+  test("reports clean when the watched slice is unchanged", () => {
+    const state = makeTuiState({ transientMessage: "hi", errorBanner: "boom" });
+    stateStore.getState.mockReturnValue(state);
+    const statusLine = new StatusLine(stateStore);
+    expect(statusLine.update()).toBe(true);
+    expect(statusLine.update()).toBe(false);
+  });
+
+  test("reports clean when only an unwatched field changes", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ transientMessage: "hi" }));
+    const statusLine = new StatusLine(stateStore);
+    statusLine.update();
+    stateStore.getState.mockReturnValue(makeTuiState({ transientMessage: "hi", version: "9.9.9" }));
+    expect(statusLine.update()).toBe(false);
+  });
+});

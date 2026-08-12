@@ -1,7 +1,9 @@
 import { TuiMainScreen, visibleWidth, type Editor, type Terminal } from "@earendil-works/pi-tui";
 import { type KanbanCard } from "../../../platform";
 import { type JieAutocompleteProvider, type JieSuggestions } from "../../autocomplete";
-import { Actions, TuiState, type AgentId, type StateStore } from "../../state";
+import type { CommandCatalog } from "../../command";
+import { SLASH_COMMANDS } from "../../command/definitions";
+import { Actions, ActionTypes, TuiState, type AgentId, type StateStore } from "../../state";
 import { makeAgentUiState, makeTuiState } from "../../test";
 import { style } from "../themes";
 import { JieEditor } from "./jie-editor";
@@ -39,19 +41,35 @@ const promptHistoryStore = vi.mocked<PromptHistoryStore>({
   append: vi.fn(),
 });
 
+function makeCommandCatalog(): CommandCatalog {
+  const aliasToCanonical = new Map<string, string>();
+  for (const command of SLASH_COMMANDS) {
+    for (const alias of command.meta.aliases ?? []) {
+      aliasToCanonical.set(alias, command.meta.name);
+    }
+  }
+  return vi.mocked<CommandCatalog>({
+    metadata: SLASH_COMMANDS.map((command) => command.meta),
+    commandMeta: vi.fn((name) => {
+      const canonical = aliasToCanonical.get(name) ?? name;
+      return SLASH_COMMANDS.find((command) => command.meta.name === canonical)?.meta ?? null;
+    }),
+  });
+}
+
 beforeEach(() => {
   stateStore.getState.mockReturnValue(makeTuiState());
   promptHistoryStore.load.mockReturnValue([]);
 });
 
 interface EditorHarness {
-  readonly editor: Editor;
+  readonly editor: JieEditor;
   readonly submitted: string[];
 }
 
 function bootEditor(provider: JieAutocompleteProvider = autocompleteProvider): EditorHarness {
   const ui = new TuiMainScreen(new StubTerminal());
-  const editor = new JieEditor(ui, stateStore, provider, promptHistoryStore);
+  const editor = new JieEditor(ui, stateStore, provider, promptHistoryStore, makeCommandCatalog());
   const submitted: string[] = [];
   const submit = editor.onSubmit;
   editor.onSubmit = (text: string): void => {
@@ -271,14 +289,14 @@ describe("JieEditor — kanban card edit", () => {
     stateStore.getState.mockReturnValue(editingState("#1"));
     const { editor } = bootEditor();
     editor.handleInput("draft");
-    notifyKanbanState(editingState("#1"));
+    applyKanbanState(editor, editingState("#1"));
     expect(editor.getText()).toBe("write report");
   });
 
   test("typing during an edit extends the card content", () => {
     stateStore.getState.mockReturnValue(editingState("#1"));
     const { editor } = bootEditor();
-    notifyKanbanState(editingState("#1"));
+    applyKanbanState(editor, editingState("#1"));
     editor.handleInput("!");
     expect(editor.getText()).toBe("write report!");
   });
@@ -287,17 +305,17 @@ describe("JieEditor — kanban card edit", () => {
     stateStore.getState.mockReturnValue(editingState("#1"));
     const { editor } = bootEditor();
     editor.handleInput("draft");
-    notifyKanbanState(editingState("#1"));
+    applyKanbanState(editor, editingState("#1"));
     editor.handleInput("\r");
     expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.saveKanbanEdit("#1", "write report", "content"));
-    notifyKanbanState(editingState(null));
+    applyKanbanState(editor, editingState(null));
     expect(editor.getText()).toBe("draft");
   });
 
   test("ctrl+s saves the edit without submitting a prompt", () => {
     stateStore.getState.mockReturnValue(editingState("#1"));
     const { editor } = bootEditor();
-    notifyKanbanState(editingState("#1"));
+    applyKanbanState(editor, editingState("#1"));
     editor.handleInput("\x13");
     expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.saveKanbanEdit("#1", "write report", "content"));
     expect(stateStore.dispatch).not.toHaveBeenCalledWith(Actions.submitEditorText("write report"));
@@ -307,7 +325,7 @@ describe("JieEditor — kanban card edit", () => {
     stateStore.getState.mockReturnValue(editingState("#1", "description"));
     const { editor } = bootEditor();
     editor.handleInput("draft");
-    notifyKanbanState(editingState("#1", "description"));
+    applyKanbanState(editor, editingState("#1", "description"));
     expect(editor.getText()).toBe("cover Q3");
     editor.handleInput(" extended");
     editor.handleInput("\r");
@@ -318,17 +336,17 @@ describe("JieEditor — kanban card edit", () => {
     stateStore.getState.mockReturnValue(editingState("#1"));
     const { editor } = bootEditor();
     editor.handleInput("draft");
-    notifyKanbanState(editingState("#1"));
+    applyKanbanState(editor, editingState("#1"));
     editor.handleInput("\x1b");
     expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.cancelKanbanEdit());
-    notifyKanbanState(editingState(null));
+    applyKanbanState(editor, editingState(null));
     expect(editor.getText()).toBe("draft");
   });
 
   test("ctrl+c cancels the edit instead of quitting", () => {
     stateStore.getState.mockReturnValue(editingState("#1"));
     const { editor } = bootEditor();
-    notifyKanbanState(editingState("#1"));
+    applyKanbanState(editor, editingState("#1"));
     editor.handleInput("\x03");
     expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.cancelKanbanEdit());
     expect(stateStore.dispatch).not.toHaveBeenCalledWith(Actions.requestQuit());
@@ -337,7 +355,7 @@ describe("JieEditor — kanban card edit", () => {
   test("the top border shows an editing chip while the card is being edited", () => {
     stateStore.getState.mockReturnValue(editingState("#1"));
     const { editor } = bootEditor();
-    notifyKanbanState(editingState("#1"));
+    applyKanbanState(editor, editingState("#1"));
     const raw = editor.render(80)[0]!;
     expect(stripAnsi(raw).endsWith(" editing #1 ──")).toBe(true);
     expect(raw).toContain("\x1b[45m editing #1 \x1b[49m");
@@ -346,7 +364,7 @@ describe("JieEditor — kanban card edit", () => {
   test("autocomplete stays off while editing a card", async () => {
     stateStore.getState.mockReturnValue(editingState("#1"));
     const { editor } = bootEditor(fileGhostProvider());
-    notifyKanbanState(editingState("#1"));
+    applyKanbanState(editor, editingState("#1"));
     editor.handleInput("@");
     editor.handleInput("a");
     await sleep(30);
@@ -356,10 +374,10 @@ describe("JieEditor — kanban card edit", () => {
   test("up arrow moves the editor cursor instead of browsing while editing", () => {
     stateStore.getState.mockReturnValue(editingState("#1"));
     const { editor } = bootEditor();
-    notifyKanbanState(editingState("#1"));
+    applyKanbanState(editor, editingState("#1"));
     editor.handleInput("\x1b[A");
     expect(editor.getText()).toBe("write report");
-    const dequeueType = Actions.requestDequeue("", "", "").type;
+    const dequeueType = ActionTypes.REQUEST_DEQUEUE;
     const dequeues = stateStore.dispatch.mock.calls.map((call) => call[0]).filter((action) => action.type === dequeueType);
     expect(dequeues).toEqual([]);
   });
@@ -368,23 +386,44 @@ describe("JieEditor — kanban card edit", () => {
     const boardWithoutDesc: ReadonlyArray<KanbanCard> = [{ id: "#1", content: "write report", status: "pending" }];
     stateStore.getState.mockReturnValue(makeTuiState({ kanbanBoard: boardWithoutDesc, kanbanEdit: "#1", kanbanEditField: "description" }));
     const { editor } = bootEditor();
-    notifyKanbanState(makeTuiState({ kanbanBoard: boardWithoutDesc, kanbanEdit: "#1", kanbanEditField: "description" }));
+    applyKanbanState(editor, makeTuiState({ kanbanBoard: boardWithoutDesc, kanbanEdit: "#1", kanbanEditField: "description" }));
     expect(editor.getText()).toBe("");
   });
 
   test("pre-fills an empty string when the edited card is not on the board", () => {
     stateStore.getState.mockReturnValue(makeTuiState({ kanbanBoard: [], kanbanEdit: "#1", kanbanEditField: "content" }));
     const { editor } = bootEditor();
-    notifyKanbanState(makeTuiState({ kanbanBoard: [], kanbanEdit: "#1", kanbanEditField: "content" }));
+    applyKanbanState(editor, makeTuiState({ kanbanBoard: [], kanbanEdit: "#1", kanbanEditField: "content" }));
     expect(editor.getText()).toBe("");
   });
 });
 
-function notifyKanbanState(afterState: TuiState): void {
-  const calls = stateStore.subscribe.mock.calls;
-  const callback = calls[calls.length - 1]?.[0];
-  if (callback === undefined) throw new Error("editor subscription not captured");
-  void callback(Actions.cycleKanbanView(), afterState, afterState);
+describe("JieEditor.update", () => {
+  const BOARD: ReadonlyArray<KanbanCard> = [{ id: "#1", content: "write report", status: "pending" }];
+
+  test("reports dirty when a kanban edit begins", () => {
+    const { editor } = bootEditor();
+    stateStore.getState.mockReturnValue(makeTuiState({ kanbanBoard: BOARD, kanbanEdit: "#1" }));
+    expect(editor.update()).toBe(true);
+  });
+
+  test("reports dirty when a kanban edit ends", () => {
+    const { editor } = bootEditor();
+    applyKanbanState(editor, makeTuiState({ kanbanBoard: BOARD, kanbanEdit: "#1" }));
+    stateStore.getState.mockReturnValue(makeTuiState({ kanbanBoard: BOARD, kanbanEdit: null }));
+    expect(editor.update()).toBe(true);
+  });
+
+  test("reports clean when the kanban edit id is unchanged", () => {
+    const { editor } = bootEditor();
+    applyKanbanState(editor, makeTuiState({ kanbanBoard: BOARD, kanbanEdit: "#1" }));
+    expect(editor.update()).toBe(false);
+  });
+});
+
+function applyKanbanState(editor: JieEditor, afterState: TuiState): void {
+  stateStore.getState.mockReturnValue(afterState);
+  editor.update();
 }
 
 describe("JieEditor — prompt history", () => {
@@ -489,14 +528,14 @@ function wireQueueRoundTrip(initial: TuiState): void {
     const focused = TuiState.getFocusedAgent(current);
     if (focused === null) return;
     let queue = [...focused.queue];
-    if (action.type === Actions.requestDequeue("", "", "").type) {
+    if (action.type === ActionTypes.REQUEST_DEQUEUE) {
       for (let i = queue.length - 1; i >= 0; i--) {
         if (queue[i]!.source === "user" && queue[i]!.text === action.payload.prompt) {
           queue.splice(i, 1);
           break;
         }
       }
-    } else if (action.type === Actions.requestRequeue("", "", "").type) {
+    } else if (action.type === ActionTypes.REQUEST_REQUEUE) {
       queue = [...queue, { text: action.payload.prompt, source: "user" as const }];
     } else {
       return;
@@ -537,7 +576,7 @@ describe("JieEditor — queue browse", () => {
     editor.handleInput("\x1b[A");
     editor.handleInput("\x1b[A");
     expect(editor.getText()).toBe("first");
-    const dequeueType = Actions.requestDequeue("", "", "").type;
+    const dequeueType = ActionTypes.REQUEST_DEQUEUE;
     const dequeues = stateStore.dispatch.mock.calls.map((call) => call[0]).filter((action) => action.type === dequeueType);
     expect(dequeues).toEqual([
       Actions.requestDequeue("my-team", "general-1", "second"),
@@ -575,7 +614,7 @@ describe("JieEditor — queue browse", () => {
     expect(editor.getText()).toBe("queued");
     editor.handleInput("\x1b[B");
     expect(editor.getText()).toBe("");
-    expect(dispatchedActions(Actions.requestRequeue("", "", "").type)).toEqual([
+    expect(dispatchedActions(ActionTypes.REQUEST_REQUEUE)).toEqual([
       Actions.requestRequeue("my-team", "general-1", "queued"),
     ]);
   });
@@ -597,7 +636,7 @@ describe("JieEditor — queue browse", () => {
     editor.handleInput("\x1b[B");
     editor.handleInput("\x1b[B");
     expect(editor.getText()).toBe("");
-    expect(dispatchedActions(Actions.requestRequeue("", "", "").type)).toEqual([
+    expect(dispatchedActions(ActionTypes.REQUEST_REQUEUE)).toEqual([
       Actions.requestRequeue("my-team", "general-1", "first"),
       Actions.requestRequeue("my-team", "general-1", "second"),
     ]);
@@ -608,7 +647,7 @@ describe("JieEditor — queue browse", () => {
     wireQueueRoundTrip(stateWithQueue([userEntry("queued")]));
     editor.handleInput("\x1b[A");
     editor.handleInput("\r");
-    expect(dispatchedActions(Actions.requestRequeue("", "", "").type)).toEqual([]);
+    expect(dispatchedActions(ActionTypes.REQUEST_REQUEUE)).toEqual([]);
   });
 
   test("editing a dequeued prompt adopts it without requeue", () => {
@@ -618,7 +657,7 @@ describe("JieEditor — queue browse", () => {
     editor.handleInput("x");
     editor.handleInput("\x1b[B");
     expect(editor.getText()).toBe("queuedx");
-    expect(dispatchedActions(Actions.requestRequeue("", "", "").type)).toEqual([]);
+    expect(dispatchedActions(ActionTypes.REQUEST_REQUEUE)).toEqual([]);
   });
 
   test("ctrl+c discards a dequeued prompt without requeue", () => {
@@ -627,7 +666,7 @@ describe("JieEditor — queue browse", () => {
     editor.handleInput("\x1b[A");
     editor.handleInput("\x03");
     expect(editor.getText()).toBe("");
-    expect(dispatchedActions(Actions.requestRequeue("", "", "").type)).toEqual([]);
+    expect(dispatchedActions(ActionTypes.REQUEST_REQUEUE)).toEqual([]);
   });
 
   test("up with content and an empty queue saves the draft to history before walking it", () => {

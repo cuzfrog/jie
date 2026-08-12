@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { JiePlatformError, type JiePlatform, type TeamBlueprintLocation } from "../../platform";
-import { createTeamInstaller, type TeamProvenance } from "../../team-installer";
+import { createTeamInstaller, type TeamProvenance } from "../../teams-installer";
 import { type Console } from "../../utils";
 import type { ParsedArgsMap } from "../cli-flags";
 

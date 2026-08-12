@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ToolRegistry } from "../tools";
+import { loadMergedMcpConfig } from "./load-config";
 import { McpManagerImpl, type McpConnector } from "./manager";
 import type { McpConnection, McpToolDefinition } from "./stdio-connection";
 import type { SubprocessFactory } from "./subprocess";
@@ -40,7 +41,8 @@ describe("McpManagerImpl", () => {
 
   function makeManager(home: string, connector: McpConnector) {
     const registry = makeRegistry();
-    return { manager: new McpManagerImpl(registry, home, null, subprocessFactory, connector), registry };
+    const mcpConfig = loadMergedMcpConfig(home, null);
+    return { manager: new McpManagerImpl(registry, mcpConfig, subprocessFactory, connector), registry };
   }
 
   test("registers each advertised tool under mcp:<server>:<tool> with a sanitized tool name", async () => {
@@ -154,14 +156,5 @@ describe("McpManagerImpl", () => {
 
     await expect(manager.dispose()).resolves.toBeUndefined();
     expect(second.close).toHaveBeenCalledTimes(1);
-  });
-
-  test("propagates a hard INVALID_CONFIG failure from mcp.json", async () => {
-    const home = track(mkdtempSync(join(tmpdir(), "jie-home-")));
-    writeMcpJson(home, { broken: { transport: "carrier-pigeon" } });
-    const { manager } = makeManager(home, vi.fn<McpConnector>());
-    await expect(manager.connectAll()).rejects.toThrow(
-      expect.objectContaining({ code: "INVALID_CONFIG" }),
-    );
   });
 });
