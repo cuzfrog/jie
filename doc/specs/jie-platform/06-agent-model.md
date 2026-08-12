@@ -49,7 +49,7 @@ The blueprint lives at `.jie/teams/<team_id>/` (file layout, discovery, model re
 ```yaml
 tools:
   - notify(task.recorded, task.done)   # restricts publishable topics
-  - write_file(**/CONTEXT.md)          # restricts writable paths (glob); bare name = unrestricted
+  - write_file(**/MODULE.md)          # restricts writable paths (glob); bare name = unrestricted
 ```
 
 A spec is `name` (unrestricted) or `name(args...)` (restricted). The platform parses specs once at body construction into `ExecutionContext.toolArgs`, a map keyed by tool name; a tool that opts into limits reads its own args. Two built-ins consume args: `notify(topics...)` limits publishable topics (`TOPIC_NOT_ALLOWED`), and `write_file(globs...)` / `edit_file(globs...)` limit writable paths (`WRITE_PATH_DENIED`), checked against the workspace-relative path. Workflow ordering is not a platform concern: it emerges from each role's `subscribe` list, and task progress is tracked on the kanban board and via artifacts, not by platform state.

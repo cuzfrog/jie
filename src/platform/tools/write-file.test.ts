@@ -233,7 +233,7 @@ describe("write_file - per-role path limits", () => {
   test("denies a path outside the allowed globs and leaves no file", async () => {
     const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     await expect(
-      tool.execute({ path: "docs/notes.md", content: "x" }, limitedContext("architect", ["**/CONTEXT.md"])),
+      tool.execute({ path: "docs/notes.md", content: "x" }, limitedContext("architect", ["**/MODULE.md"])),
     ).rejects.toMatchObject({ code: "WRITE_PATH_DENIED" });
     expect(existsSync(join(workspace, "docs/notes.md"))).toBe(false);
   });
@@ -241,27 +241,27 @@ describe("write_file - per-role path limits", () => {
   test("denies a path given as an absolute path too", async () => {
     const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
     await expect(
-      tool.execute({ path: join(workspace, "docs", "CONTEXT.md"), content: "x" }, limitedContext("implementer", ["src/**"])),
+      tool.execute({ path: join(workspace, "docs", "MODULE.md"), content: "x" }, limitedContext("implementer", ["src/**"])),
     ).rejects.toMatchObject({ code: "WRITE_PATH_DENIED" });
   });
 
   test("allows a path matching an allowed glob", async () => {
     const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
-    await tool.execute({ path: "docs/CONTEXT.md", content: "ctx" }, limitedContext("architect", ["**/CONTEXT.md"]));
-    expect(readFileSync(join(workspace, "docs/CONTEXT.md"), "utf-8")).toBe("ctx");
+    await tool.execute({ path: "docs/MODULE.md", content: "ctx" }, limitedContext("architect", ["**/MODULE.md"]));
+    expect(readFileSync(join(workspace, "docs/MODULE.md"), "utf-8")).toBe("ctx");
   });
 
   test("no toolArgs restriction allows any path", async () => {
     const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
-    await tool.execute({ path: "docs/CONTEXT.md", content: "free" }, makeEmptyContext());
-    expect(readFileSync(join(workspace, "docs/CONTEXT.md"), "utf-8")).toBe("free");
+    await tool.execute({ path: "docs/MODULE.md", content: "free" }, makeEmptyContext());
+    expect(readFileSync(join(workspace, "docs/MODULE.md"), "utf-8")).toBe("free");
   });
 
   test("checks the resolved real path so a symlink cannot bypass the limit", async () => {
     mkdirSync(join(workspace, "docs"));
     symlinkSync(join(workspace, "docs"), join(workspace, "alias"));
     const tool = createWriteFileTool({ workspaceRoot: workspace, fileMutationQueue });
-    await tool.execute({ path: "alias/CONTEXT.md", content: "via-symlink" }, limitedContext("architect", ["docs/*"]));
-    expect(readFileSync(join(workspace, "docs/CONTEXT.md"), "utf-8")).toBe("via-symlink");
+    await tool.execute({ path: "alias/MODULE.md", content: "via-symlink" }, limitedContext("architect", ["docs/*"]));
+    expect(readFileSync(join(workspace, "docs/MODULE.md"), "utf-8")).toBe("via-symlink");
   });
 });
