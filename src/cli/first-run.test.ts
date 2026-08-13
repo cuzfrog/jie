@@ -99,11 +99,12 @@ describe("runFirstRunWelcome - decision logic", () => {
     expect(ports.markSentinel).toHaveBeenCalledTimes(1);
   });
 
-  test("confirm is asked with a question mentioning the team and shared agents", async () => {
+  test("confirm is asked with a question mentioning the teams and shared agents", async () => {
     const ports = makePorts();
     await runFirstRunWelcome(ports, false);
     const question = (ports.confirm as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] ?? "";
     expect(question).toContain("jie-dev-team");
+    expect(question).toContain("jie-assisted-developer");
     expect(question).toContain("shared agents");
   });
 });
@@ -129,6 +130,7 @@ describe("createFirstRunPorts - wiring", () => {
     });
     await runFirstRunWelcome(ports, false);
     expect(existsSync(join(homeJieDir, "teams", "jie-dev-team", "TEAM.md"))).toBe(true);
+    expect(existsSync(join(homeJieDir, "teams", "jie-assisted-developer", "TEAM.md"))).toBe(true);
     expect(existsSync(join(homeJieDir, "agents", "explorer.md"))).toBe(true);
     expect(existsSync(join(homeJieDir, "agents", "steward.md"))).toBe(true);
     expect(existsSync(join(homeJieDir, ".first-run-done"))).toBe(true);

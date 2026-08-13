@@ -332,6 +332,52 @@ describe("loadTeamFromDir — shipped jie-dev-team blueprint", () => {
   });
 });
 
+describe("loadTeamFromDir — shipped jie-assisted-developer blueprint", () => {
+  const assistedDevDir = join(import.meta.dir, "../../manifest/teams/jie-assisted-developer");
+
+  test("parses the shipped jie-assisted-developer with developer as leader and three roles", () => {
+    const blueprint = loadTeamFromDir(assistedDevDir);
+    expect(blueprint.leaderRole).toBe("developer");
+    expect(blueprint.roles.map((r) => r.role).sort()).toEqual(["architect", "developer", "peer"]);
+  });
+
+  test("developer subscribes to architect and peer responses", () => {
+    const blueprint = loadTeamFromDir(assistedDevDir);
+    const developer = blueprint.roles.find((r) => r.role === "developer");
+    expect(developer?.subscribe).toEqual(["task.architect_answered", "task.peer_reviewed"]);
+  });
+
+  test("developer notify spec covers consultation, review, and lifecycle topics", () => {
+    const blueprint = loadTeamFromDir(assistedDevDir);
+    const developer = blueprint.roles.find((r) => r.role === "developer");
+    expect(developer?.tools.some((spec) => spec === "notify(task.asked_architect, task.asked_peer, task.done, task.failed)")).toBe(true);
+  });
+
+  test("architect subscribes to consultation requests", () => {
+    const blueprint = loadTeamFromDir(assistedDevDir);
+    const architect = blueprint.roles.find((r) => r.role === "architect");
+    expect(architect?.subscribe).toEqual(["task.asked_architect"]);
+  });
+
+  test("peer subscribes to review requests", () => {
+    const blueprint = loadTeamFromDir(assistedDevDir);
+    const peer = blueprint.roles.find((r) => r.role === "peer");
+    expect(peer?.subscribe).toEqual(["task.asked_peer"]);
+  });
+
+  test("peer has no write_file or edit_file", () => {
+    const blueprint = loadTeamFromDir(assistedDevDir);
+    const peer = blueprint.roles.find((r) => r.role === "peer");
+    expect(peer?.tools.some((spec) => spec === "write_file" || spec.startsWith("write_file("))).toBe(false);
+    expect(peer?.tools.some((spec) => spec === "edit_file" || spec.startsWith("edit_file("))).toBe(false);
+  });
+
+  test("jie-assisted-developer carries no additional-agent refs", () => {
+    const blueprint = loadTeamFromDir(assistedDevDir);
+    expect(blueprint.additionalAgentRefs).toEqual([]);
+  });
+});
+
 describe("parseAgentManifest", () => {
   test("parses a shared-agent markdown into an AgentSoul", () => {
     const content = "---\ntools:\n  - bash\n  - read_file(**)\n---\nYou explore.";

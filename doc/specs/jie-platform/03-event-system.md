@@ -46,7 +46,7 @@ Each `AgentBody` subscribes to exactly:
 
 - `"user.prompt"` — filtered on `payload.agentKey === own agentKey`; this is the sole user prompt ingress (CLI `-p` and TUI both publish here via `handle.prompt(teamId, agentKey, text)`). There are no per-agent subjects and no leader-only ingress.
 - `"agent.interrupt"` — filtered on `teamId` + `agentKey`.
-- `"user.prompt.dequeue"` — filtered on `teamId` + `agentKey`; removes the queue's tail-most user entry matching the text and republishes `agent.prompt.queue.update` (even on a miss, resyncing stale observers). Peer notifications cannot be dequeued (`06-agent-model.md`).
+- `"user.prompt.dequeue"` — filtered on `teamId` + `agentKey`; removes the queue's tail-most user entry matching the text and republishes `agent.prompt.queue.update` (even on a miss, resyncing stale observers). Notifications from other agents cannot be dequeued (`06-agent-model.md`).
 - `"user.prompt.requeue"` — filtered on `teamId` + `agentKey`; restores the most recently dequeued user entry matching the text to the queue's tail, republishes `agent.prompt.queue.update`, and drains — an idle agent starts the restored prompt immediately (`06-agent-model.md`).
 - `"user.effort.update"` — unfiltered (broadcast); every body applies the effort to its agent and, when a model is assigned, republishes `agent.model.assigned` with the new effort (`06-agent-model.md`).
 - `"user.model.update"` — unfiltered (broadcast); every body whose soul does not pin a model resolves the reference and hot-swaps its agent's model, republishing `agent.model.assigned` (`06-agent-model.md`).

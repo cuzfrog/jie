@@ -15,7 +15,7 @@ export interface FirstRunPorts {
 }
 
 const SENTINEL_FILENAME = ".first-run-done";
-const DEFAULT_CODERS_ID = "jie-dev-team";
+const BUNDLED_TEAM_IDS = ["jie-dev-team", "jie-assisted-developer"] as const;
 const BUNDLED_MANIFEST_DIR = join(import.meta.dir, "../manifest");
 const MCP_CONFIG_FILE = "mcp.json";
 const CODE_LENS_SERVER_NAME = "code-lens";
@@ -26,7 +26,9 @@ export async function runFirstRunWelcome(ports: FirstRunPorts, noInstall: boolea
   ports.ensureBundledMcp();
   if (ports.isSentinelPresent()) return;
   if (!ports.isInteractive()) return;
-  const yes = await ports.confirm(`Install the ${DEFAULT_CODERS_ID} blueprint and shared agents to ~/.jie/? [Y/n]`);
+  const yes = await ports.confirm(
+    `Install the bundled team blueprints (${BUNDLED_TEAM_IDS.join(", ")}) and shared agents to ~/.jie/? [Y/n]`,
+  );
   if (yes) {
     try {
       const result = await ports.installBundledManifests();
@@ -37,7 +39,7 @@ export async function runFirstRunWelcome(ports: FirstRunPorts, noInstall: boolea
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       ports.console.error(
-        `Failed to install ${DEFAULT_CODERS_ID}: ${reason}. Install later with: jie team add <source>.`,
+        `Failed to install bundled team blueprints: ${reason}. Install later with: jie team add <source>.`,
       );
     }
   } else {
