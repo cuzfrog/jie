@@ -247,6 +247,35 @@ describe("loadMergedSettings", () => {
     expect(result.modelAliases).toEqual({ large: "openai/gpt-4o", small: "openai/gpt-4o-mini" });
   });
 
+  test("accepts modelAliases values with an effort suffix", () => {
+    const home = track(freshDir("jie-home-"));
+    writeJson(join(home, "settings.json"), { modelAliases: { large: "anthropic/claude-sonnet-4(low)", small: "openai/gpt-4o-mini(high)" } });
+    const result = loadMergedSettings(home, null);
+    expect(result.modelAliases).toEqual({ large: "anthropic/claude-sonnet-4(low)", small: "openai/gpt-4o-mini(high)" });
+  });
+
+  test("rejects modelAliases values with an invalid effort suffix", () => {
+    const home = track(freshDir("jie-home-"));
+    writeJson(join(home, "settings.json"), { modelAliases: { large: "anthropic/claude-sonnet-4(extreme)" } });
+    expect(() => loadMergedSettings(home, null)).toThrow(
+      expect.objectContaining({
+        code: "INVALID_CONFIG",
+        message: expect.stringMatching(/modelAliases\.large must be a .* string/),
+      }),
+    );
+  });
+
+  test("rejects modelAliases values with malformed parentheses", () => {
+    const home = track(freshDir("jie-home-"));
+    writeJson(join(home, "settings.json"), { modelAliases: { large: "anthropic/claude-sonnet-4(low)(high)" } });
+    expect(() => loadMergedSettings(home, null)).toThrow(
+      expect.objectContaining({
+        code: "INVALID_CONFIG",
+        message: expect.stringMatching(/modelAliases\.large must be a .* string/),
+      }),
+    );
+  });
+
   test("rejects an unparseable settings file with code INVALID_CONFIG naming the file", () => {
     const home = track(freshDir("jie-home-"));
     writeFileSync(join(home, "settings.json"), "{ not json", "utf-8");

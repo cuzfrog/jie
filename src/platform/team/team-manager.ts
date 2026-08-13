@@ -9,7 +9,7 @@ import type { SkillManager } from "../skills";
 import { type AgentSoul, type TeamBlueprint, type TeamBlueprintLocation, BUILTIN_DEFAULT_SOLO_TEAM_ID } from "./types";
 import { type AgentRegistry } from "./agent-registry";
 import { type TeamRegistry } from "./registry";
-import { isModelAlias, parseModelRef } from "../types";
+import { isModelAlias, parseModelRef, parseModelWithEffort, type EffortLevel } from "../types";
 import type { AgentHistory, AgentInfo, TeamInfo } from "../types";
 
 export interface TeamManager {
@@ -173,16 +173,15 @@ export class TeamManagerImpl implements TeamManager {
     const bodies: AgentBody[] = [];
     const blueprintKeys = new Set<string>();
     for (const soul of blueprint.roles) {
-      let resolvedModel: Model<Api>;
+      let resolved: { model: Model<Api>; effort: EffortLevel };
       try {
-        resolvedModel = this.resolveSoulModel(soul, settings);
+        resolved = this.resolveSoulModelAndEffort(soul, settings);
       } catch (error) {
         if (error instanceof JiePlatformError && error.code === "MODEL_UNRESOLVED" && soul.role !== blueprint.leaderRole) {
           continue;
         }
         throw error;
       }
-      const effort = soul.effort ?? settings.defaultEffort ?? "off";
       for (let replicaIndex = 1; replicaIndex <= soul.replicas; replicaIndex += 1) {
         const agentKey = `${soul.role}-${replicaIndex}`;
         blueprintKeys.add(agentKey);
@@ -193,8 +192,8 @@ export class TeamManagerImpl implements TeamManager {
           isLeader: soul.role === blueprint.leaderRole,
           isEphemeral: false,
           sessionId,
-          model: resolvedModel,
-          effort,
+          model: resolved.model,
+          effort: resolved.effort,
         };
         this.bodyParams.set(`${teamId}:${agentKey}`, params);
         bodies.push(this.agentBodyFactory(params));
@@ -261,8 +260,8 @@ export class TeamManagerImpl implements TeamManager {
     return ulid();
   }
 
-  private resolveSoulModel(soul: AgentSoul, settings: Settings): Model<Api> {
-    const modelRef = this.resolveModelRef(soul, settings);
+  private resolveSoulModelAndEffort(soul: AgentSoul, settings: Settings): { model: Model<Api>; effort: EffortLevel } {
+    const { modelRef, aliasEffort } = this.resolveAliasedModel(soul, settings);
     const parsed = parseModelRef(modelRef);
     if (parsed === null) {
       throw new JiePlatformError("NO_MODEL_ERROR", { detail: `no model configured for role '${soul.role}'` });
@@ -278,25 +277,34 @@ export class TeamManagerImpl implements TeamManager {
         detail: `model '${modelRef}' for role '${soul.role}' is not available; check the provider and model id`,
       });
     }
-    return model;
+    const effort = soul.effort ?? aliasEffort ?? settings.defaultEffort ?? "off";
+    return { model, effort };
   }
 
-  private resolveModelRef(soul: AgentSoul, settings: Settings): string {
+  private resolveAliasedModel(soul: AgentSoul, settings: Settings): { modelRef: string; aliasEffort: EffortLevel | undefined } {
     if (soul.model === "") {
       if (settings.defaultProvider !== undefined && settings.defaultModel !== undefined) {
-        return `${settings.defaultProvider}/${settings.defaultModel}`;
+        return { modelRef: `${settings.defaultProvider}/${settings.defaultModel}`, aliasEffort: undefined };
       }
-      return "";
+      return { modelRef: "", aliasEffort: undefined };
     }
     if (isModelAlias(soul.model)) {
-      const aliased = settings.modelAliases?.[soul.model];
-      if (aliased !== undefined) return aliased;
-      if (settings.defaultProvider !== undefined && settings.defaultModel !== undefined) {
-        return `${settings.defaultProvider}/${settings.defaultModel}`;
+      const raw = settings.modelAliases?.[soul.model];
+      if (raw !== undefined) {
+        const parsed = parseModelWithEffort(raw);
+        if (parsed === null) {
+          throw new JiePlatformError("MODEL_UNRESOLVED", {
+            detail: `model alias '${soul.model}' resolves to an invalid value '${raw}'`,
+          });
+        }
+        return { modelRef: parsed.model, aliasEffort: parsed.effort };
       }
-      return "";
+      if (settings.defaultProvider !== undefined && settings.defaultModel !== undefined) {
+        return { modelRef: `${settings.defaultProvider}/${settings.defaultModel}`, aliasEffort: undefined };
+      }
+      return { modelRef: "", aliasEffort: undefined };
     }
-    return soul.model;
+    return { modelRef: soul.model, aliasEffort: undefined };
   }
 
   private publishTeamLoaded(teamId: string, bodies: AgentBody[]): void {
@@ -322,8 +330,7 @@ export class TeamManagerImpl implements TeamManager {
     try {
       const soul = this.agentRegistry.resolve(agentRef);
       const settings = this.settingsStore.load();
-      const resolvedModel = this.resolveSoulModel(soul, settings);
-      const effort = soul.effort ?? settings.defaultEffort ?? "off";
+      const resolved = this.resolveSoulModelAndEffort(soul, settings);
       const params: AgentBodyParams = {
         agentKey: agentRef,
         teamId,
@@ -331,8 +338,8 @@ export class TeamManagerImpl implements TeamManager {
         isLeader: false,
         isEphemeral,
         sessionId,
-        model: resolvedModel,
-        effort,
+        model: resolved.model,
+        effort: resolved.effort,
       };
       this.bodyParams.set(`${teamId}:${agentRef}`, params);
       return this.agentBodyFactory(params);

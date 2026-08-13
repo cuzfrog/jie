@@ -31,6 +31,24 @@ export function parseModelRef(value: string): { readonly provider: string; reado
     return provider === "" || modelId === "" ? null : { provider, modelId };
 }
 
+const MODEL_EFFORT_SUFFIX_PATTERN = /^(.*?)\s*\(\s*([^()]*)\s*\)\s*$/;
+
+export function parseModelWithEffort(value: string): { readonly model: string; readonly effort: EffortLevel | undefined } | null {
+    const trimmed = value.trim();
+    if (trimmed === "") return { model: "", effort: undefined };
+    if (trimmed.includes("(") || trimmed.includes(")")) {
+        const match = trimmed.match(MODEL_EFFORT_SUFFIX_PATTERN);
+        if (match === null) return null;
+        const base = match[1]!.trim();
+        const effortToken = match[2]!.trim();
+        if (base === "" || base.includes("(") || base.includes(")")) return null;
+        if (effortToken === "") return null;
+        if (!isEffortLevel(effortToken)) return null;
+        return { model: base, effort: effortToken };
+    }
+    return { model: trimmed, effort: undefined };
+}
+
 export interface ModelInfo {
     readonly provider: string;
     readonly id: string;

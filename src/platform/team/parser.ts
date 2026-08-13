@@ -3,7 +3,7 @@ import { basename, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { BUILTIN_DEFAULT_SOLO_TEAM_ID, type AgentSoul, type TeamBlueprint } from "./types";
 import { JiePlatformError } from "../jie-platform-errors";
-import { EFFORT_LEVELS, isEffortLevel, isModelAlias, MODEL_ALIASES, parseModelRef, type EffortLevel } from "../types";
+import { isModelAlias, MODEL_ALIASES, parseModelRef, parseModelWithEffort, type EffortLevel } from "../types";
 import DEFAULT_SOLO_TEAM_MD from "./default-solo/TEAM.md" with { type: "text" };
 import DEFAULT_SOLO_GENERAL_MD from "./default-solo/general.md" with { type: "text" };
 
@@ -267,32 +267,13 @@ function validateAdditionalAgentRefs(refs: string[], roleStems: Set<string>, sou
   return refs;
 }
 
-const EFFORT_SUFFIX_PATTERN = /^(.*?)\s*\(\s*([^()]*)\s*\)\s*$/;
-
 function parseModelString(raw: string, file: string): { readonly model: string; readonly effort: EffortLevel | undefined } {
-  const value = raw.trim();
-  if (value === "") return { model: "", effort: undefined };
-  const match = value.match(EFFORT_SUFFIX_PATTERN);
-  if (match === null) {
-    validateModel(value, file);
-    return { model: value, effort: undefined };
-  }
-  const base = match[1]!.trim();
-  if (base === "") {
-    throw new JiePlatformError("INVALID_MODEL_STRING", { detail: `${file}: model effort suffix requires a non-empty model` });
-  }
-  const effortToken = match[2]!.trim();
-  if (effortToken === "") {
-    throw new JiePlatformError("INVALID_MODEL_STRING", { detail: `${file}: empty effort in model suffix` });
-  }
-  if (!isEffortLevel(effortToken)) {
-    throw new JiePlatformError("INVALID_MODEL_STRING", { detail: `${file}: invalid effort '${effortToken}' in model suffix (expected: ${EFFORT_LEVELS.join(", ")})` });
-  }
-  if (base.includes("(") || base.includes(")")) {
-    throw new JiePlatformError("INVALID_MODEL_STRING", { detail: `${file}: model string may not contain parentheses outside the effort suffix` });
-  }
-  validateModel(base, file);
-  return { model: base, effort: effortToken };
+    const parsed = parseModelWithEffort(raw);
+    if (parsed === null) {
+        throw new JiePlatformError("INVALID_MODEL_STRING", { detail: `${file}: invalid model string: ${raw}` });
+    }
+    if (parsed.model !== "") validateModel(parsed.model, file);
+    return parsed;
 }
 
 function validateModel(model: string, file: string): void {
