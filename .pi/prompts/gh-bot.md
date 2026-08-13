@@ -25,9 +25,6 @@ Use this skill when the user wants to commit changes, push a branch, and open a 
      git commit -m "$(cat <<'EOF'
      <type>([optional task_id]): <why this change>.
 
-     Generated with [Devin](https://devin.ai)
-
-     Co-Authored-By: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>
      EOF
      )"
      ```
@@ -50,7 +47,6 @@ Use this skill when the user wants to commit changes, push a branch, and open a 
    - [x] `bunx tsc --noEmit`
    - [x] `bun test src`
 
-   Generated with [Devin](https://devin.ai)
    EOF
    )"
    ```
