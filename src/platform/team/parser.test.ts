@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -341,28 +341,36 @@ describe("loadTeamFromDir — shipped jie-assisted-developer blueprint", () => {
     expect(blueprint.roles.map((r) => r.role).sort()).toEqual(["architect", "developer", "peer"]);
   });
 
-  test("developer subscribes to architect and peer responses", () => {
+  test("developer has a call_agent allowlist for architect, peer, explorer, and steward", () => {
     const blueprint = loadTeamFromDir(assistedDevDir);
     const developer = blueprint.roles.find((r) => r.role === "developer");
-    expect(developer?.subscribe).toEqual(["task.architect_answered", "task.peer_reviewed"]);
+    expect(developer?.tools.some((spec) => spec === "call_agent(architect, peer, explorer, steward)")).toBe(true);
   });
 
-  test("developer notify spec covers consultation, review, and lifecycle topics", () => {
+  test("developer has no subscriptions", () => {
     const blueprint = loadTeamFromDir(assistedDevDir);
     const developer = blueprint.roles.find((r) => r.role === "developer");
-    expect(developer?.tools.some((spec) => spec === "notify(task.asked_architect, task.asked_peer, task.done, task.failed)")).toBe(true);
+    expect(developer?.subscribe).toEqual([]);
   });
 
-  test("architect subscribes to consultation requests", () => {
+  test("architect has a call_agent allowlist for explorer and steward and a notify tool", () => {
     const blueprint = loadTeamFromDir(assistedDevDir);
     const architect = blueprint.roles.find((r) => r.role === "architect");
-    expect(architect?.subscribe).toEqual(["task.asked_architect"]);
+    expect(architect?.tools.some((spec) => spec === "call_agent(explorer, steward)")).toBe(true);
+    expect(architect?.tools.some((spec) => spec === "notify")).toBe(true);
   });
 
-  test("peer subscribes to review requests", () => {
+  test("architect has no subscriptions", () => {
+    const blueprint = loadTeamFromDir(assistedDevDir);
+    const architect = blueprint.roles.find((r) => r.role === "architect");
+    expect(architect?.subscribe).toEqual([]);
+  });
+
+  test("peer has a notify tool and no subscriptions", () => {
     const blueprint = loadTeamFromDir(assistedDevDir);
     const peer = blueprint.roles.find((r) => r.role === "peer");
-    expect(peer?.subscribe).toEqual(["task.asked_peer"]);
+    expect(peer?.tools.some((spec) => spec === "notify")).toBe(true);
+    expect(peer?.subscribe).toEqual([]);
   });
 
   test("peer has no write_file or edit_file", () => {
@@ -395,6 +403,29 @@ describe("parseAgentManifest", () => {
     expect(() => parseAgentManifest("steward", "no frontmatter", "steward.md")).toThrow(
       expect.objectContaining({ code: "INVALID_FRONTMATTER" }),
     );
+  });
+
+  test("shipped explorer agent carries notify for call_agent callbacks", () => {
+    const path = join(import.meta.dir, "../../manifest/agents/explorer.md");
+    const content = readFileSync(path, "utf-8");
+    const soul = parseAgentManifest("explorer", content, "explorer.md");
+    expect(soul.tools).toContain("notify");
+  });
+
+  test("shipped explorer agent is read-only", () => {
+    const path = join(import.meta.dir, "../../manifest/agents/explorer.md");
+    const content = readFileSync(path, "utf-8");
+    const soul = parseAgentManifest("explorer", content, "explorer.md");
+    for (const tool of soul.tools) {
+      expect(tool === "write_file" || tool.startsWith("write_file(") || tool === "edit_file" || tool.startsWith("edit_file(") || tool === "write_artifact" || tool === "bash").toBe(false);
+    }
+  });
+
+  test("shipped steward agent carries notify for call_agent callbacks", () => {
+    const path = join(import.meta.dir, "../../manifest/agents/steward.md");
+    const content = readFileSync(path, "utf-8");
+    const soul = parseAgentManifest("steward", content, "steward.md");
+    expect(soul.tools).toContain("notify");
   });
 });
 
