@@ -79,6 +79,67 @@ describe("call_agent tool", () => {
     expect(ctx.agentDispatcher.call).not.toHaveBeenCalled();
   });
 
+  test("allows a role to call its replica keys", async () => {
+    const ctx = makeCtx(new Map([["call_agent", ["reviewer"]]]));
+    vi.mocked(ctx.agentDispatcher.call).mockReturnValue(makeTicket());
+
+    const tool = createCallAgentTool();
+    await tool.execute({ agent: "reviewer-1", prompt: "review this" }, ctx);
+
+    expect(ctx.agentDispatcher.call).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: "reviewer-1" }),
+    );
+  });
+
+  test("allows a dashed role to call its replica keys", async () => {
+    const ctx = makeCtx(new Map([["call_agent", ["code-reviewer"]]]));
+    vi.mocked(ctx.agentDispatcher.call).mockReturnValue(makeTicket({ agentKey: "code-reviewer-1" }));
+
+    const tool = createCallAgentTool();
+    await tool.execute({ agent: "code-reviewer-1", prompt: "review this" }, ctx);
+
+    expect(ctx.agentDispatcher.call).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: "code-reviewer-1" }),
+    );
+  });
+
+  test("rejects a non-numeric replica suffix", async () => {
+    const ctx = makeCtx(new Map([["call_agent", ["reviewer"]]]));
+    vi.mocked(ctx.agentDispatcher.call).mockReturnValue(makeTicket());
+
+    const tool = createCallAgentTool();
+    await expect(tool.execute({ agent: "reviewer-foo", prompt: "explore" }, ctx)).rejects.toThrow(
+      expect.objectContaining({ code: "AGENT_NOT_ALLOWED" }),
+    );
+    expect(ctx.agentDispatcher.call).not.toHaveBeenCalled();
+  });
+
+  test("rejects a zero or leading-zero replica index", async () => {
+    const ctx = makeCtx(new Map([["call_agent", ["reviewer"]]]));
+    vi.mocked(ctx.agentDispatcher.call).mockReturnValue(makeTicket());
+
+    const tool = createCallAgentTool();
+    await expect(tool.execute({ agent: "reviewer-0", prompt: "explore" }, ctx)).rejects.toThrow(
+      expect.objectContaining({ code: "AGENT_NOT_ALLOWED" }),
+    );
+    await expect(tool.execute({ agent: "reviewer-01", prompt: "explore" }, ctx)).rejects.toThrow(
+      expect.objectContaining({ code: "AGENT_NOT_ALLOWED" }),
+    );
+    expect(ctx.agentDispatcher.call).not.toHaveBeenCalled();
+  });
+
+  test("allows an exact agent key", async () => {
+    const ctx = makeCtx(new Map([["call_agent", ["reviewer-1"]]]));
+    vi.mocked(ctx.agentDispatcher.call).mockReturnValue(makeTicket());
+
+    const tool = createCallAgentTool();
+    await tool.execute({ agent: "reviewer-1", prompt: "review this" }, ctx);
+
+    expect(ctx.agentDispatcher.call).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: "reviewer-1" }),
+    );
+  });
+
   test("passes reset to the dispatcher", async () => {
     const ctx = makeCtx();
     vi.mocked(ctx.agentDispatcher.call).mockReturnValue(makeTicket());
