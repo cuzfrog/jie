@@ -39,6 +39,14 @@ describe("parseFlags — logout", () => {
   test("logout (no provider)", () => {
     expect(parseFlags(["logout"])).toEqual({ kind: "logout", provider: undefined });
   });
+
+  test("logout rejects an extra argument", () => {
+    expect(parseFlags(["logout", "anthropic", "extra"])).toEqual({ kind: "error", message: "unexpected argument: extra" });
+  });
+
+  test("logout rejects an unknown flag after the subcommand", () => {
+    expect(parseFlags(["logout", "--debug"])).toEqual({ kind: "error", message: "unknown flag: --debug" });
+  });
 });
 
 describe("parseFlags — model", () => {

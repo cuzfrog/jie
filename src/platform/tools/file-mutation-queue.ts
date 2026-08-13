@@ -1,5 +1,6 @@
 import { realpath } from "node:fs/promises";
 import { resolve } from "node:path";
+import { isErrnoException } from "..";
 
 export interface FileMutationQueue {
   run<T>(path: string, operation: () => Promise<T>): Promise<T>;
@@ -48,6 +49,5 @@ async function mutationQueueKey(path: string): Promise<string> {
 }
 
 function isMissingPathError(error: unknown): boolean {
-  if (typeof error !== "object" || error === null || !("code" in error)) return false;
-  return error.code === "ENOENT" || error.code === "ENOTDIR";
+  return isErrnoException(error) && (error.code === "ENOENT" || error.code === "ENOTDIR");
 }

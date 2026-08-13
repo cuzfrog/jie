@@ -17,7 +17,7 @@ no-new-exports:
   - find-file.ts
   - grep-file.test.ts
   - grep-file.ts
-  - index.ts
+  # - index.ts  re-exports the module surface, including ToolResultDetails/KanbanDetails
   - ls.test.ts
   - ls.ts
   - memory-add.test.ts

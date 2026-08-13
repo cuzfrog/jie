@@ -1,5 +1,6 @@
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { isErrnoException } from "..";
 import type { AuthEntry, AuthJson } from "./types";
 
 export interface AuthStore {
@@ -42,7 +43,7 @@ function loadAuthJson(homeJieDir: string): AuthJson {
   try {
     text = readFileSync(path, "utf-8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+    if (isErrnoException(error) && error.code === "ENOENT") return {};
     throw error;
   }
   const parsed: AuthJson = JSON.parse(text);

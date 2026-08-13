@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { isErrnoException } from "..";
 import { loadMergedSettings } from "./load-settings";
 import type { Settings } from "./types";
 import { JiePlatformError } from "../jie-platform-errors";
@@ -79,7 +80,7 @@ function readSettingsFile(path: string): Settings {
   try {
     text = readFileSync(path, "utf-8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+    if (isErrnoException(error) && error.code === "ENOENT") return {};
     throw error;
   }
   try {
