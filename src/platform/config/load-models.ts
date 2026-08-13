@@ -88,10 +88,11 @@ function readModelsFile(path: string): RawModelsConfig | null {
   try {
     text = readFileSync(path, "utf-8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    if (error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    const message = error instanceof Error ? error.message : String(error);
     throw new JiePlatformError("INVALID_CONFIG", {
-      detail: `models.json at ${path}: ${(error as Error).message}`,
-      cause: error as Error,
+      detail: `models.json at ${path}: ${message}`,
+      cause: error instanceof Error ? error : new Error(message),
     });
   }
   try {
@@ -102,9 +103,10 @@ function readModelsFile(path: string): RawModelsConfig | null {
     return parsed as RawModelsConfig;
   } catch (error) {
     if (error instanceof JiePlatformError) throw error;
+    const message = error instanceof Error ? error.message : String(error);
     throw new JiePlatformError("INVALID_CONFIG", {
-      detail: `models.json at ${path}: ${(error as Error).message}`,
-      cause: error as Error,
+      detail: `models.json at ${path}: ${message}`,
+      cause: error instanceof Error ? error : new Error(message),
     });
   }
 }

@@ -276,6 +276,24 @@ describe("loadModelsConfig", () => {
     expect(model?.maxTokens).toBe(40960);
     expect((model?.compat as Record<string, unknown>).maxTokensField).toBe("max_completion_tokens");
   });
+
+  test("non-Error thrown while parsing models.json is surfaced with the stringified reason", () => {
+    mkdirSync(homeJieDir, { recursive: true });
+    writeFileSync(join(homeJieDir, "models.json"), "{}");
+    const parseSpy = vi.spyOn(JSON, "parse").mockImplementationOnce(() => {
+      throw "parse explosion";
+    });
+    try {
+      expect(() => loadModelsConfig(homeJieDir, projectJieDir)).toThrow(
+        expect.objectContaining({
+          code: "INVALID_CONFIG",
+          message: expect.stringContaining("parse explosion"),
+        }),
+      );
+    } finally {
+      parseSpy.mockRestore();
+    }
+  });
 });
 
 describe("resolveValue", () => {
