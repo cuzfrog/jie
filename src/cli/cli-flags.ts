@@ -265,6 +265,10 @@ function parseLogin(ctx: ParseContext): ParsedArgs {
 function parseLogout(ctx: ParseContext): ParsedArgs {
   const provider = ctx.args[ctx.index];
   if (provider !== undefined && provider.startsWith("-")) return error(`unknown flag: ${provider}`);
+  if (provider !== undefined) ctx.index += 1;
+  if (ctx.index < ctx.args.length) return error(`unexpected argument: ${ctx.args[ctx.index]}`);
+  const dupErr = errorIfDupes(ctx.dupes);
+  if (dupErr !== undefined) return dupErr;
   return { kind: "logout", provider };
 }
 

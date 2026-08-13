@@ -222,15 +222,16 @@ function decodeMessage(text: string, index: number): AgentMessage {
 function isAgentMessage(value: unknown): value is AgentMessage {
   if (typeof value !== "object" || value === null) return false;
   const record = value as Record<string, unknown>;
-  if (typeof record.role !== "string" || typeof record.timestamp !== "number") return false;
+  if (typeof record.role !== "string" || typeof record.timestamp !== "number" || !Number.isFinite(record.timestamp)) return false;
   switch (record.role) {
     case "user":
-      return typeof record.content === "string" || Array.isArray(record.content);
+      return isUserContent(record.content);
     case "assistant":
-      return Array.isArray(record.content);
+      return Array.isArray(record.content) && record.content.every(isAssistantContentBlock);
     case "toolResult":
       return (
         Array.isArray(record.content) &&
+        record.content.every(isUserContentBlock) &&
         typeof record.toolCallId === "string" &&
         typeof record.toolName === "string" &&
         typeof record.isError === "boolean"
@@ -239,7 +240,7 @@ function isAgentMessage(value: unknown): value is AgentMessage {
       return (
         typeof record.customType === "string" &&
         typeof record.display === "boolean" &&
-        (typeof record.content === "string" || Array.isArray(record.content))
+        isUserContent(record.content)
       );
     case "compactionSummary":
       return typeof record.summary === "string" && typeof record.tokensBefore === "number";
@@ -256,4 +257,48 @@ function isAgentMessage(value: unknown): value is AgentMessage {
     default:
       return false;
   }
+}
+
+function isUserContent(value: unknown): boolean {
+  return typeof value === "string" || (Array.isArray(value) && value.every(isUserContentBlock));
+}
+
+function isUserContentBlock(value: unknown): boolean {
+  return isTextContent(value) || isImageContent(value);
+}
+
+function isAssistantContentBlock(value: unknown): boolean {
+  return isTextContent(value) || isThinkingContent(value) || isToolCall(value);
+}
+
+function isTextContent(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Record<string, unknown>;
+  return record.type === "text" && typeof record.text === "string";
+}
+
+function isImageContent(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Record<string, unknown>;
+  return record.type === "image" && typeof record.data === "string" && typeof record.mimeType === "string";
+}
+
+function isThinkingContent(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Record<string, unknown>;
+  if (record.type !== "thinking" || typeof record.thinking !== "string") return false;
+  if (record.thinkingDurationMs !== undefined && typeof record.thinkingDurationMs !== "number") return false;
+  return true;
+}
+
+function isToolCall(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    record.type === "toolCall" &&
+    typeof record.id === "string" &&
+    typeof record.name === "string" &&
+    typeof record.arguments === "object" &&
+    record.arguments !== null
+  );
 }

@@ -333,6 +333,34 @@ describe("SqliteTranscriptStore.restore validation", () => {
     );
     await expect(store.restore("agent-1", "s1", "t1")).rejects.toThrow(/transcript row 0: invalid message shape/);
   });
+
+  test("throws when a user content array contains an invalid block", async () => {
+    const store = new SqliteTranscriptStore(
+      makeFakeStorage([["t1", "s1", "agent-1", 1, "user", JSON.stringify({ role: "user", content: [{ type: "image" }], timestamp: 0 }), 0, "2024-01-01T00:00:00Z"]]),
+    );
+    await expect(store.restore("agent-1", "s1", "t1")).rejects.toThrow(/transcript row 0: invalid message shape/);
+  });
+
+  test("throws when an assistant content array contains an invalid block", async () => {
+    const store = new SqliteTranscriptStore(
+      makeFakeStorage([["t1", "s1", "agent-1", 1, "assistant", JSON.stringify({ role: "assistant", content: [{ type: "text" }], timestamp: 0 }), 0, "2024-01-01T00:00:00Z"]]),
+    );
+    await expect(store.restore("agent-1", "s1", "t1")).rejects.toThrow(/transcript row 0: invalid message shape/);
+  });
+
+  test("throws when a toolResult content array contains a non-text/image block", async () => {
+    const store = new SqliteTranscriptStore(
+      makeFakeStorage([["t1", "s1", "agent-1", 1, "toolResult", JSON.stringify({ role: "toolResult", toolCallId: "1", toolName: "x", isError: false, content: [{ type: "toolCall", id: "1", name: "x", arguments: {} }], timestamp: 0 }), 0, "2024-01-01T00:00:00Z"]]),
+    );
+    await expect(store.restore("agent-1", "s1", "t1")).rejects.toThrow(/transcript row 0: invalid message shape/);
+  });
+
+  test("throws when the timestamp is not finite", async () => {
+    const store = new SqliteTranscriptStore(
+      makeFakeStorage([["t1", "s1", "agent-1", 1, "user", JSON.stringify({ role: "user", content: "hi", timestamp: NaN }), 0, "2024-01-01T00:00:00Z"]]),
+    );
+    await expect(store.restore("agent-1", "s1", "t1")).rejects.toThrow(/transcript row 0: invalid message shape/);
+  });
 });
 
 describe("SqliteTranscriptStore.listAgentKeys", () => {
