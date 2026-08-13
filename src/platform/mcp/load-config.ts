@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { isErrnoException } from "..";
 import { JiePlatformError } from "../jie-platform-errors";
 import type { JsonObject, JsonValue } from "./json";
 import type { McpConfig, McpServerAuth, McpServerConfig } from "./types";
@@ -37,7 +38,7 @@ function readOptionalFile(path: string): string | null {
   try {
     return readFileSync(path, "utf-8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    if (isErrnoException(error) && error.code === "ENOENT") return null;
     throw error;
   }
 }

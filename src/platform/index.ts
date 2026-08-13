@@ -1,3 +1,4 @@
+export { isErrnoException } from "./error";
 export { type JiePlatform, type JiePlatformOptions } from "./jie-platform";
 export { bootPlatform, type PlatformCradle } from "./container";
 export {
@@ -8,8 +9,8 @@ export {
 
 export type { TeamInfo, ModelInfo, AgentInfo, SkillInfo, AgentHistory, EffortLevel, UserIngressMessage } from "./types";
 export { EFFORT_LEVELS, isEffortLevel, parseModelRef, type KanbanCard, type KanbanStatus } from "./types";
-export type { TeamBlueprintLocation } from "./team/types";
-export { isDiffDetails, type KanbanDetails, type ToolResultDetails } from "./tools/types";
+export type { TeamBlueprintLocation } from "./team";
+export { isDiffDetails, type KanbanDetails, type ToolResultDetails } from "./tools";
 export type { AgentMessage } from "@earendil-works/pi-agent-core";
 
 export type { Settings } from "./config";

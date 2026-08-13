@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, statSync, writeFileSync, type Stats } from "node:fs";
 import { dirname } from "node:path";
 import { Type } from "typebox";
+import { isErrnoException } from "..";
 import type { ExecutionContext, Tool, ToolResult, WriteFileResultDetails } from "./types";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
 import type { FileMutationQueue } from "./file-mutation-queue";
@@ -66,9 +67,11 @@ async function applyWrite(input: WriteFileInput, realPath: string): Promise<Tool
   try {
     stat = statSync(realPath);
   } catch (error) {
-    const errno = error as NodeJS.ErrnoException;
-    if (errno.code !== "ENOENT") throw mapErrno(error, ERRNO_MAP);
-    stat = null;
+    if (isErrnoException(error) && error.code === "ENOENT") {
+      stat = null;
+    } else {
+      throw mapErrno(error, ERRNO_MAP);
+    }
   }
   if (stat !== null && stat.isDirectory()) {
     throw new JiePlatformError("IS_A_DIRECTORY", { detail: input.path });

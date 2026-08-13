@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import * as readline from "node:readline/promises";
 import { join } from "node:path";
+import { isErrnoException } from "../platform";
 import { createManifestInstaller, type InstallResult } from "../manifest/installer";
 import type { Console } from "../utils";
 
@@ -123,7 +124,7 @@ function readOptionalText(path: string): string | null {
   try {
     return readFileSync(path, "utf-8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    if (isErrnoException(error) && error.code === "ENOENT") return null;
     throw error;
   }
 }

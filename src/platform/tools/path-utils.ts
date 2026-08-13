@@ -1,5 +1,6 @@
 import { readdirSync, realpathSync, type Dirent } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { isErrnoException } from "..";
 import { JiePlatformError, type JiePlatformErrorCode } from "../jie-platform-errors";
 
 export const DEFAULT_IGNORE_DIRS = ["node_modules", ".git"] as const;
@@ -24,19 +25,15 @@ export function resolveWithinWorkspace(
 
 export function mapErrno(
   error: unknown,
-  errorMap: Record<string, string>,
+  errorMap: Record<string, JiePlatformErrorCode>,
 ): Error {
-  const errno = error as NodeJS.ErrnoException;
-  if (errno && typeof errno.code === "string") {
-    const code = errorMap[errno.code];
+  if (isErrnoException(error)) {
+    const code = errorMap[error.code];
     if (code !== undefined) {
-      return new JiePlatformError(
-        code as JiePlatformErrorCode,
-        { detail: errno.message, cause: errno },
-      );
+      return new JiePlatformError(code, { detail: error.message, cause: error });
     }
   }
-  return errno instanceof Error ? errno : new Error(String(error));
+  return error instanceof Error ? error : new Error(String(error));
 }
 
 export function* walkFiles(

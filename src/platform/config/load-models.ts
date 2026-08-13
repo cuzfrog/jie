@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getBuiltinModels, getBuiltinProviders, type BuiltinProvider } from "@earendil-works/pi-ai/providers/all";
 import type { Api, Model, OpenAICompletionsCompat, OpenAIResponsesCompat, AnthropicMessagesCompat } from "@earendil-works/pi-ai";
+import { isErrnoException } from "..";
 import { JiePlatformError } from "../jie-platform-errors";
 
 interface RawModelsConfig {
@@ -88,7 +89,7 @@ function readModelsFile(path: string): RawModelsConfig | null {
   try {
     text = readFileSync(path, "utf-8");
   } catch (error) {
-    if (error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    if (isErrnoException(error) && error.code === "ENOENT") return null;
     const message = error instanceof Error ? error.message : String(error);
     throw new JiePlatformError("INVALID_CONFIG", {
       detail: `models.json at ${path}: ${message}`,

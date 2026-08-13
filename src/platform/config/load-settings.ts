@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { isErrnoException } from "..";
 import type { Settings, RawSettings } from "./types";
 import { isEffortLevel, MODEL_ALIASES, parseModelRef, parseModelWithEffort, type ModelAlias } from "../types";
 import { JiePlatformError } from "../jie-platform-errors";
@@ -31,7 +32,7 @@ function readSettingsFile(path: string): RawSettings | null {
   try {
     text = readFileSync(path, "utf-8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    if (isErrnoException(error) && error.code === "ENOENT") return null;
     throw error;
   }
   try {
