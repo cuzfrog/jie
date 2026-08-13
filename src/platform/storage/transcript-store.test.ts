@@ -1,10 +1,21 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { SqliteStorage } from "./sqlite-storage";
-import type { Storage } from "./storage";
+import type { SqlBinding, Storage } from "./storage";
 import { SqliteTranscriptStore } from "./transcript-store";
 
 function makeTranscriptStore(): SqliteTranscriptStore {
   return new SqliteTranscriptStore(new SqliteStorage(":memory:"));
+}
+
+function makeFakeStorage(queryResult: SqlBinding[][]): Storage {
+  const base: Storage = {
+    exec: () => undefined,
+    query: () => queryResult,
+    transaction<T>(fn: (s: Storage) => T) {
+      return fn(base);
+    },
+  };
+  return base;
 }
 
 function userMessage(text: string): AgentMessage {
@@ -298,6 +309,29 @@ describe("SqliteTranscriptStore.sessionName", () => {
   test("returns null for an unknown session id", () => {
     const m = makeTranscriptStore();
     expect(m.sessionName("ghost")).toBeNull();
+  });
+});
+
+describe("SqliteTranscriptStore.restore validation", () => {
+  test("throws when a row contains malformed JSON", async () => {
+    const store = new SqliteTranscriptStore(
+      makeFakeStorage([["t1", "s1", "agent-1", 1, "user", "not-json", 0, "2024-01-01T00:00:00Z"]]),
+    );
+    await expect(store.restore("agent-1", "s1", "t1")).rejects.toThrow(/transcript row 0: invalid JSON/);
+  });
+
+  test("throws when a row is missing the role field", async () => {
+    const store = new SqliteTranscriptStore(
+      makeFakeStorage([["t1", "s1", "agent-1", 1, "user", JSON.stringify({ content: "hi", timestamp: 0 }), 0, "2024-01-01T00:00:00Z"]]),
+    );
+    await expect(store.restore("agent-1", "s1", "t1")).rejects.toThrow(/transcript row 0: invalid message shape/);
+  });
+
+  test("throws when a user row has invalid content type", async () => {
+    const store = new SqliteTranscriptStore(
+      makeFakeStorage([["t1", "s1", "agent-1", 1, "user", JSON.stringify({ role: "user", content: 123, timestamp: 0 }), 0, "2024-01-01T00:00:00Z"]]),
+    );
+    await expect(store.restore("agent-1", "s1", "t1")).rejects.toThrow(/transcript row 0: invalid message shape/);
   });
 });
 
