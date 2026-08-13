@@ -15,7 +15,7 @@ export interface FirstRunPorts {
 }
 
 const SENTINEL_FILENAME = ".first-run-done";
-const DEFAULT_CODERS_ID = "default-dev-team";
+const DEFAULT_CODERS_ID = "jie-dev-team";
 const BUNDLED_MANIFEST_DIR = join(import.meta.dir, "../manifest");
 const MCP_CONFIG_FILE = "mcp.json";
 const CODE_LENS_SERVER_NAME = "code-lens";

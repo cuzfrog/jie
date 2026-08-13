@@ -304,10 +304,10 @@ describe("loadTeamFromDir — typed error codes", () => {
   });
 });
 
-describe("loadTeamFromDir — shipped default-dev-team blueprint", () => {
-  const defaultCodersDir = join(import.meta.dir, "../../manifest/teams/default-dev-team");
+describe("loadTeamFromDir — shipped jie-dev-team blueprint", () => {
+  const defaultCodersDir = join(import.meta.dir, "../../manifest/teams/jie-dev-team");
 
-  test("parses the shipped default-dev-team with manager as leader and six roles", () => {
+  test("parses the shipped jie-dev-team with manager as leader and six roles", () => {
     const blueprint = loadTeamFromDir(defaultCodersDir);
     expect(blueprint.leaderRole).toBe("manager");
     expect(blueprint.roles.map((r) => r.role).sort()).toEqual([
@@ -326,7 +326,7 @@ describe("loadTeamFromDir — shipped default-dev-team blueprint", () => {
     expect(manager?.tools.some((spec) => spec.startsWith("notify("))).toBe(true);
   });
 
-  test("default-dev-team carries no additional-agent refs", () => {
+  test("jie-dev-team carries no additional-agent refs", () => {
     const blueprint = loadTeamFromDir(defaultCodersDir);
     expect(blueprint.additionalAgentRefs).toEqual([]);
   });

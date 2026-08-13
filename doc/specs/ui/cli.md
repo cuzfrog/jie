@@ -29,10 +29,10 @@ Exit codes: 0 normal, 1 config/team/agent error.
 ### First-run auto-install (`src/cli/first-run.ts`)
 
 - Trigger: `args.kind === "tui"` only; print mode and subcommands skip it.
-- Prompt: `Install the default-dev-team team blueprint to ~/.jie/teams/? [Y/n]`, reached only on a TTY. A non-TTY run skips the welcome with no sentinel, so a later interactive run still prompts — no hang, no nag.
+- Prompt: `Install the jie-dev-team team blueprint to ~/.jie/teams/? [Y/n]`, reached only on a TTY. A non-TTY run skips the welcome with no sentinel, so a later interactive run still prompts — no hang, no nag.
 - Sentinel: `~/.jie/.first-run-done` is written only after the prompt is decided (accept, decline, or install failure), so the prompt never recurs. `--no-install` opts out for this run without writing it.
-- Install failure: reported (`Failed to install default-dev-team: <reason>. Install later with: jie team add <source>.`) and the sentinel is still written so it does not recur.
-- Bundled MCP ensure: every non-`--no-install` TUI boot merges the bundled `code-lens` stdio server into `~/.jie/mcp.json` (a non-clobber merge; a malformed file is left untouched). This is not first-run-gated so existing users pick it up; it lets the `default-dev-team` architect's `mcp:*` tool specs resolve instead of throwing `TOOL_SPEC_UNRESOLVED`.
+- Install failure: reported (`Failed to install jie-dev-team: <reason>. Install later with: jie team add <source>.`) and the sentinel is still written so it does not recur.
+- Bundled MCP ensure: every non-`--no-install` TUI boot merges the bundled `code-lens` stdio server into `~/.jie/mcp.json` (a non-clobber merge; a malformed file is left untouched). This is not first-run-gated so existing users pick it up; it lets the `jie-dev-team` architect's `mcp:*` tool specs resolve instead of throwing `TOOL_SPEC_UNRESOLVED`.
 - There is no `jie init`. First-run is the only install-onboarding path; later installs use `jie team add <source>`.
 
 ## `jie -p <instruction>` (print mode)

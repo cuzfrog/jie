@@ -7,7 +7,7 @@ Team blueprints live in `src/teams/` as `<id>/TEAM.md` plus `<role>.md` files. T
 - An `explorer` agent that gathers information or runs lightweight experiments without editing source.
 - A `steward` agent that runs and waits on scripts, builds, or tests.
 
-These are generic enough to share across multiple teams, but they are not part of the `default-dev-team` delivery pipeline and should not be edited into every team copy.
+These are generic enough to share across multiple teams, but they are not part of the `jie-dev-team` delivery pipeline and should not be edited into every team copy.
 
 ## Decision
 
@@ -23,7 +23,7 @@ These are generic enough to share across multiple teams, but they are not part o
 
 6. The installer becomes a manifest installer (`createManifestInstaller`) that operates on a `.jie/` root. It scans `<root>/teams/<id>/TEAM.md` (preferred v2 layout) and the legacy `<root>/<id>/TEAM.md` layout, plus `<root>/agents/<id>.md` files. It copies teams to `<jieDir>/teams/<id>/` and agents to `<jieDir>/agents/<id>.md`, writing `.source.json` (teams) or `<id>.source.json` (agents) provenance. It is still CLI-side and never imported by the platform.
 
-7. First-run (`src/cli/first-run.ts`) points the installer at `src/manifest/` and installs both the `default-dev-team` blueprint and the `explorer`/`steward` shared agents into `~/.jie/`.
+7. First-run (`src/cli/first-run.ts`) points the installer at `src/manifest/` and installs both the `jie-dev-team` blueprint and the `explorer`/`steward` shared agents into `~/.jie/`.
 
 ## Consequences
 
