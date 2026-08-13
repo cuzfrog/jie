@@ -28,6 +28,8 @@ const JiePlatformErrorMessages = {
 
   COMMAND_TIMED_OUT: "Command exceeded the time limit",
 
+  CALL_AGENT_SELF: "Agent cannot call itself",
+  AGENT_NOT_ALLOWED: "Agent target is not allowed",
   NOTIFY_INVALID_TOPIC: "Invalid topic for notify",
   NOTIFY_PROMPT_TOO_LONG: "Notify prompt exceeds the maximum allowed size",
   TOPIC_NOT_ALLOWED: "Notify topic is not allowed for this role",

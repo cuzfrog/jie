@@ -4,6 +4,7 @@ import {
   type EventType,
 } from "../event";
 import type { ArtifactStore } from "../storage";
+import type { AgentDispatcher } from "../types";
 import type { ExecutionContext } from "./types";
 import { createNotifyTool } from "./notify";
 
@@ -17,6 +18,7 @@ function makeCtx(toolArgs: Map<string, ReadonlyArray<string>> = new Map()): Exec
     agentRole: "leader",
     artifactStore: stubArtifactStore(),
     toolArgs,
+    agentDispatcher: vi.mocked<AgentDispatcher>({ call: vi.fn() }),
   };
 }
 
@@ -105,6 +107,41 @@ describe("notify - topic validation", () => {
       code: "NOTIFY_INVALID_TOPIC",
       message: "Invalid topic for notify: contains_null_byte",
     });
+  });
+
+  test("rejects topic starting with `inbox.`", async () => {
+    const { events } = makeHarness();
+    const tool = createNotifyTool({ eventManager: events });
+    await expect(
+      tool.execute({ topic: "inbox.reviewer-1", prompt: "x" }, makeCtx()),
+    ).rejects.toMatchObject({
+      code: "NOTIFY_INVALID_TOPIC",
+      message: "Invalid topic for notify: starts_with_inbox_prefix",
+    });
+  });
+
+  test("rejects the agent's own callback topic", async () => {
+    const { events } = makeHarness();
+    const tool = createNotifyTool({ eventManager: events });
+    await expect(
+      tool.execute({ topic: "callback.leader-1", prompt: "x" }, makeCtx()),
+    ).rejects.toMatchObject({
+      code: "NOTIFY_INVALID_TOPIC",
+      message: "Invalid topic for notify: own_callback",
+    });
+  });
+
+  test("accepts another agent's callback topic and bypasses allowlist", async () => {
+    const { events, received } = makeHarness();
+    events.subscribe("custom.t1.callback.leader-1", (env) => {
+      received.push({ subject: env.topic, env });
+    });
+    const tool = createNotifyTool({ eventManager: events });
+    const callerCtx = makeCtx(new Map([["notify", ["task"]]]));
+    const senderCtx: ExecutionContext = { ...callerCtx, agentKey: "reviewer-1" };
+    await tool.execute({ topic: "callback.leader-1", prompt: "result" }, senderCtx);
+    expect(received).toHaveLength(1);
+    expect(received[0]!.env.payload.message).toBe("result");
   });
 
   test("rejects prompt longer than EVENT_TEXT_TRUNCATION_BYTES", async () => {

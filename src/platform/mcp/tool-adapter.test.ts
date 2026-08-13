@@ -17,6 +17,7 @@ const executionContext: ExecutionContext = {
   agentRole: "engineer",
   artifactStore,
   toolArgs: new Map(),
+  agentDispatcher: { call: vi.fn() } as import("../types").AgentDispatcher,
 };
 
 function fakeConnection() {

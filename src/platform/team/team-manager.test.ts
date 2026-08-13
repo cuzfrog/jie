@@ -47,6 +47,8 @@ const transcriptStore = vi.mocked<TranscriptStore>({
   restore: vi.fn(async () => []),
   hasSession: vi.fn(() => false),
   listSessions: vi.fn(() => []),
+  listAgentKeys: vi.fn(() => []),
+  remove: vi.fn(),
   sessionName: vi.fn(() => null),
   renameSession: vi.fn(),
 });
@@ -95,6 +97,7 @@ function makeFakeBody(params: AgentBodyParams, restored: ReadonlyArray<AgentMess
       subscribe: params.soul.subscribe,
       skills: params.soul.skills.map((name) => ({ name, description: "", argumentHint: null })),
       model: null,
+      ephemeral: params.isEphemeral ?? false,
     },
     restore: async () => restored,
     messages: () => [...restored],
@@ -108,7 +111,7 @@ function makeManager(homeJieDir: string, projectJieDir: string | null, resumeSes
   const agentBodyFactory = vi.fn((params: AgentBodyParams): AgentBody => makeFakeBody(params, restored));
   const agentRegistry = new AgentRegistryImpl(homeJieDir, projectJieDir);
   const teamRegistry = new TeamRegistryImpl(homeJieDir, projectJieDir, agentRegistry);
-  const manager = new TeamManagerImpl(teamRegistry, eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, agentBodyFactory, resumeSessionId);
+  const manager = new TeamManagerImpl(teamRegistry, agentRegistry, eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, agentBodyFactory, resumeSessionId);
   return { manager, agentBodyFactory };
 }
 
@@ -238,14 +241,14 @@ describe("TeamManagerImpl — full surface", () => {
 
     test("rejects and leaves the team unloaded when a body fails to start", async () => {
       const factory = vi.fn((params: AgentBodyParams): AgentBody => ({
-        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null },
+        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
         restore: async () => [],
         messages: () => [],
         start: async () => { throw new Error("start failure"); },
         compact: async () => {},
         stop: vi.fn(),
       }));
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       await expect(manager.load("default-solo")).rejects.toThrow("start failure");
       expect(teamLoadedEvents()).toHaveLength(0);
       expect(manager.listLoaded().size).toBe(0);
@@ -260,14 +263,14 @@ describe("TeamManagerImpl — full surface", () => {
       modelRegistry.resolve.mockImplementation((provider, modelId) => (modelId === "gone" ? undefined : makeModel(provider, modelId)));
       const started: string[] = [];
       const factory = vi.fn((params: AgentBodyParams): AgentBody => ({
-        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null },
+        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
         restore: async () => [],
         messages: () => [],
         start: async () => { started.push(params.agentKey); },
         compact: async () => {},
         stop: () => {},
       }));
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       await expect(manager.load("dev")).rejects.toMatchObject({ code: "MODEL_UNRESOLVED" });
       expect(started).toEqual([]);
       expect(manager.listLoaded().size).toBe(0);
@@ -430,14 +433,14 @@ describe("TeamManagerImpl — full surface", () => {
     test("cache hit carries the agents' live history and stays silent", async () => {
       const live: AgentMessage[] = [];
       const factory = (params: AgentBodyParams): AgentBody => ({
-        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null },
+        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
         restore: async () => [...live],
         messages: () => [...live],
         start: async () => {},
         compact: async () => {},
         stop: () => {},
       });
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       const first = await manager.load("default-solo");
       expect(first.history[0]?.messages).toEqual([]);
       live.push({ role: "user", content: "[user]: hello", timestamp: 1 }, assistantMessage("hi there", 2));
@@ -526,7 +529,7 @@ describe("TeamManagerImpl — full surface", () => {
       const factory = vi.fn((params: AgentBodyParams): AgentBody => {
         const created = generation;
         return {
-          identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null },
+          identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
           restore: async () => [],
           messages: () => [],
           start: async () => {},
@@ -534,7 +537,7 @@ describe("TeamManagerImpl — full surface", () => {
           stop: () => { stops.push(`gen${created}:${params.agentKey}`); },
         };
       });
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       await manager.load("default-solo");
       generation = 1;
       await manager.reload();
@@ -558,14 +561,14 @@ describe("TeamManagerImpl — full surface", () => {
       writeTeam(userTeams, "alpha", "general");
       const stops: string[] = [];
       const factory = vi.fn((params: AgentBodyParams): AgentBody => ({
-        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null },
+        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
         restore: async () => [],
         messages: () => [],
         start: async () => {},
         compact: async () => {},
         stop: () => { stops.push(params.agentKey); },
       }));
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       await manager.load("alpha");
       writeFileSync(join(userTeams, "alpha", "TEAM.md"), "leader: [unclosed");
       await expect(manager.reload()).rejects.toMatchObject({ code: "RELOAD_FAILED" });
@@ -579,7 +582,7 @@ describe("TeamManagerImpl — full surface", () => {
       const factory = vi.fn((params: AgentBodyParams): AgentBody => {
         const created = generation;
         return {
-          identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null },
+          identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
           restore: async () => [],
           messages: () => [],
           start: async () => { if (created > 0) throw new Error("start failure"); },
@@ -587,7 +590,7 @@ describe("TeamManagerImpl — full surface", () => {
           stop: () => { stops.push(`gen${created}:${params.agentKey}`); },
         };
       });
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       await manager.load("default-solo");
       generation = 1;
       eventManager.publish.mockClear();
@@ -600,14 +603,14 @@ describe("TeamManagerImpl — full surface", () => {
     test("keeps the running team intact when the leader model no longer resolves", async () => {
       const stops: string[] = [];
       const factory = vi.fn((params: AgentBodyParams): AgentBody => ({
-        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null },
+        identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
         restore: async () => [],
         messages: () => [],
         start: async () => {},
         compact: async () => {},
         stop: () => { stops.push(params.agentKey); },
       }));
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       await manager.load("default-solo");
       modelRegistry.resolve.mockReturnValue(undefined);
       await expect(manager.reload()).rejects.toMatchObject({ code: "RELOAD_FAILED" });
@@ -623,7 +626,7 @@ describe("TeamManagerImpl — full surface", () => {
       const factory = vi.fn((params: AgentBodyParams): AgentBody => {
         created.push(`${params.teamId}:${params.agentKey}`);
         return {
-          identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null },
+          identity: { teamId: params.teamId, role: params.soul.role, agentKey: params.agentKey, isLeader: params.isLeader, tools: [], subscribe: [], skills: [], model: null, ephemeral: false },
           restore: async () => [],
           messages: () => [],
           start: async () => {},
@@ -631,7 +634,7 @@ describe("TeamManagerImpl — full surface", () => {
           stop: () => {},
         };
       });
-      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
+      const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       await manager.load("alpha");
       await manager.load("beta");
       created.length = 0;

@@ -9,7 +9,6 @@ no-new-exports:
   - compaction.ts
   - jie-agent-body.test.ts
   - jie-agent-body.ts
-  - index.ts
   - model-controller.test.ts
   - model-controller.ts
   - module.ts

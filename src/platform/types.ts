@@ -53,6 +53,7 @@ export interface AgentInfo {
     readonly subscribe: ReadonlyArray<string>;
     readonly skills: ReadonlyArray<SkillInfo>;
     readonly model: ModelInfo | null;
+    readonly ephemeral?: boolean;
 }
 
 export interface AgentHistory {
@@ -118,6 +119,34 @@ export interface KanbanCardPatch {
     readonly externalRef?: string;
     readonly assignee?: string;
     readonly todos?: ReadonlyArray<KanbanTodoWrite>;
+}
+
+export interface CallAgentRequest {
+    readonly teamId: string;
+    readonly sessionId: string;
+    readonly callerAgentKey: string;
+    readonly agent: string;
+    readonly prompt: string;
+    readonly reset?: boolean;
+}
+
+export interface CallAgentTicket {
+    readonly agentKey: string;
+    readonly callbackTopic: string;
+    readonly callId: string;
+    readonly queued: boolean;
+}
+
+export interface CallAgentResultDetails {
+    readonly kind: "call-agent";
+    readonly agentKey: string;
+    readonly callbackTopic: string;
+    readonly callId: string;
+    readonly queued: boolean;
+}
+
+export interface AgentDispatcher {
+    call(request: CallAgentRequest): CallAgentTicket;
 }
 
 

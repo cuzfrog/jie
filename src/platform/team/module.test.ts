@@ -46,6 +46,8 @@ const transcriptStore = vi.mocked<TranscriptStore>({
   restore: vi.fn(),
   hasSession: vi.fn(() => false),
   listSessions: vi.fn(() => []),
+  listAgentKeys: vi.fn(() => []),
+  remove: vi.fn(),
   sessionName: vi.fn(() => null),
   renameSession: vi.fn(),
 });
@@ -113,6 +115,7 @@ function makeFakeBody(params: AgentBodyParams): AgentBody {
       subscribe: params.soul.subscribe,
       skills: params.soul.skills.map((name) => ({ name, description: "", argumentHint: null })),
       model: null,
+      ephemeral: params.isEphemeral ?? false,
     },
     restore: async () => [],
     messages: () => [],

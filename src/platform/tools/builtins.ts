@@ -9,6 +9,7 @@ import { createLsTool } from "./ls";
 import { createMemoryAddTool } from "./memory-add";
 import { createMemorySearchTool } from "./memory-search";
 import { createNotifyTool } from "./notify";
+import { createCallAgentTool } from "./call-agent";
 import { createReadArtifactTool } from "./read-artifact";
 import { createReadFileTool } from "./read-file";
 import { createKanbanClaimTool } from "./claim-kanban";
@@ -49,6 +50,7 @@ export function createBuiltinTools(
     { name: "memory_add", tool: createMemoryAddTool({ memoryManager, settingsStore }) },
     { name: "memory_search", tool: createMemorySearchTool({ memoryManager, settingsStore }) },
     { name: "notify", tool: createNotifyTool({ eventManager }) },
+    { name: "call_agent", tool: createCallAgentTool() },
     { name: "web_fetch", tool: createWebFetchTool() },
     { name: "web_search", tool: createWebSearchTool({ provider: createWebSearchProvider() }) },
   ];

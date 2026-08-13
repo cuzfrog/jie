@@ -11,6 +11,7 @@ import { FileAgentLoopLogger, type AgentLoopLogger } from "./agent-loop-logger";
 import { composeSystemPrompt } from "./system-prompt";
 import { Events, type AgentSender, type EventManager } from "../event";
 import type { AgentBody, AgentBodyParams } from "./agent-body";
+import type { AgentDispatcher } from "../types";
 import type { Compactor } from "./compaction";
 import { CompactionRunnerImpl, type CompactionRunner } from "./compaction-runner";
 import { ModelControllerImpl, type ModelController } from "./model-controller";
@@ -37,6 +38,7 @@ interface AgentBodyDeps {
   readonly compactor: Compactor;
   readonly memoryManager: MemoryManager;
   readonly logDir: string | null;
+  readonly agentDispatcher: AgentDispatcher;
 }
 
 export class JieAgentBody implements AgentBody {
@@ -44,6 +46,7 @@ export class JieAgentBody implements AgentBody {
   private readonly teamId: string;
   private readonly soul: AgentBodyParams["soul"];
   private readonly isLeader: boolean;
+  private readonly isEphemeral: boolean;
   private readonly sessionId: string;
   private readonly eventManager: EventManager;
   private readonly transcriptStore: TranscriptStore;
@@ -68,6 +71,7 @@ export class JieAgentBody implements AgentBody {
     this.agentKey = params.agentKey;
     this.teamId = params.teamId;
     this.soul = params.soul;
+    this.isEphemeral = params.isEphemeral ?? false;
     this.sessionId = params.sessionId;
     this.eventManager = deps.eventManager;
     this.transcriptStore = deps.transcriptStore;
@@ -129,6 +133,7 @@ export class JieAgentBody implements AgentBody {
       agentRole: params.soul.role,
       artifactStore: deps.artifactStore,
       toolArgs,
+      agentDispatcher: deps.agentDispatcher,
     };
     const adaptedTools = adaptAllTools(parsedTools, params.soul.role, deps.toolRegistry, executionContext);
     const toolCallObserver = new ToolCallObserverImpl({
@@ -201,6 +206,7 @@ export class JieAgentBody implements AgentBody {
       role: this.soul.role,
       agentKey: this.agentKey,
       isLeader: this.isLeader,
+      ephemeral: this.isEphemeral,
       tools: this.soul.tools,
       subscribe: this.soul.subscribe,
       skills: this.resolvedSkills.map((skill) => ({ name: skill.name, description: skill.description, argumentHint: skill.argumentHint })),
@@ -310,6 +316,14 @@ export class JieAgentBody implements AgentBody {
         }),
       );
     }
+    this.cleanups.push(
+      this.eventManager.subscribe(`custom.${this.teamId}.inbox.${this.agentKey}`, (env) => {
+        this.ingestCustom(`inbox.${this.agentKey}`, env.sender, env.payload);
+      }),
+      this.eventManager.subscribe(`custom.${this.teamId}.callback.${this.agentKey}`, (env) => {
+        this.ingestCustom(`callback.${this.agentKey}`, env.sender, env.payload);
+      }),
+    );
   }
 
   private async ingestUserPrompt(payload: { teamId: string; agentKey: string; prompt: string }): Promise<void> {
