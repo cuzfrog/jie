@@ -10,6 +10,7 @@ tools:
   - write_file(**/MODULE.md)
   - read_artifact
   - write_artifact
+  - memory_search
   - mcp:code-lens:*
 ---
 

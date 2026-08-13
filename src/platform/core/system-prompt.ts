@@ -3,14 +3,22 @@ import type { Skill } from "../skills";
 export interface ComposeSystemPromptInput {
   readonly rolePrompt: string;
   readonly contextBlock?: string;
+  readonly teamPrompt?: string;
   readonly memoryBlock?: string;
   readonly skills?: ReadonlyArray<Skill>;
 }
 
 export function composeSystemPrompt(input: ComposeSystemPromptInput): string {
   const skillsBlock = input.skills === undefined ? "" : formatSkillsBlock(input.skills);
-  const prefix = blockPrefix(input.contextBlock, input.memoryBlock);
-  return `${prefix}${input.rolePrompt}${skillsBlock}`;
+  const teamBlock = formatTeamBlock(input.teamPrompt);
+  const prefix = blockPrefix(input.contextBlock, teamBlock);
+  const memory = input.memoryBlock === undefined || input.memoryBlock === "" ? "" : `\n\n${input.memoryBlock}`;
+  return `${prefix}${input.rolePrompt}${skillsBlock}${memory}`;
+}
+
+function formatTeamBlock(teamPrompt: string | undefined): string {
+  if (teamPrompt === undefined || teamPrompt.trim() === "") return "";
+  return `<team_context>\n${teamPrompt.trimEnd()}\n</team_context>`;
 }
 
 function blockPrefix(...blocks: Array<string | undefined>): string {

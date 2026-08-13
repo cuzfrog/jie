@@ -91,6 +91,7 @@ export interface TeamInfo {
     readonly agents: ReadonlyArray<AgentInfo>;
     readonly history: ReadonlyArray<AgentHistory>;
     readonly kanbanCards: ReadonlyArray<KanbanCard>;
+    readonly description?: string;
 }
 
 export type KanbanStatus = "pending" | "in_progress" | "in_review" | "completed";

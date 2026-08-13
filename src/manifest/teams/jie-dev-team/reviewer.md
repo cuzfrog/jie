@@ -12,6 +12,7 @@ tools:
   - write_artifact
   - update_kanban
   - claim_kanban
+  - memory_search
 subscribe:
   - task.implemented
 ---

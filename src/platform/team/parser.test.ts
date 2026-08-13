@@ -31,6 +31,12 @@ describe("loadDefaultSoloTeam", () => {
     expect(soul.systemPrompt.length).toBeGreaterThan(0);
     expect(soul.model).toBe("");
   });
+
+  test("has no team prompt or description", () => {
+    const bp = loadDefaultSoloTeam();
+    expect(bp.teamPrompt).toBe("");
+    expect(bp.description).toBeUndefined();
+  });
 });
 
 describe("loadTeamFromDir", () => {
@@ -88,6 +94,46 @@ describe("loadTeamFromDir", () => {
     const bp = loadTeamFromDir(dir);
     expect(bp.roles.map((r) => r.role)).toEqual(["leader", "worker"]);
     expect(bp.leaderRole).toBe("leader");
+  });
+
+  test("TEAM.md body becomes the team prompt and description is parsed", () => {
+    writeFileSync(
+      join(dir, "TEAM.md"),
+      `---\nleader: leader\ndescription: a concise team\n---\nShared team context.\n`,
+    );
+    writeFileSync(
+      join(dir, "leader.md"),
+      `---\ntools:\n  - bash\n---\nleader body`,
+    );
+    const bp = loadTeamFromDir(dir);
+    expect(bp.teamPrompt).toBe("Shared team context.\n");
+    expect(bp.description).toBe("a concise team");
+  });
+
+  test("TEAM.md without body yields an empty team prompt and omitted description", () => {
+    writeFileSync(
+      join(dir, "TEAM.md"),
+      `---\nleader: leader\n---\n`,
+    );
+    writeFileSync(
+      join(dir, "leader.md"),
+      `---\ntools:\n  - bash\n---\nleader body`,
+    );
+    const bp = loadTeamFromDir(dir);
+    expect(bp.teamPrompt).toBe("");
+    expect(bp.description).toBeUndefined();
+  });
+
+  test("TEAM.md with non-string description is rejected", () => {
+    writeFileSync(
+      join(dir, "TEAM.md"),
+      `---\nleader: leader\ndescription: 42\n---\n`,
+    );
+    writeFileSync(
+      join(dir, "leader.md"),
+      `---\ntools:\n  - bash\n---\nleader body`,
+    );
+    expect(() => loadTeamFromDir(dir)).toThrow(expect.objectContaining({ code: "INVALID_FIELD_TYPE" }));
   });
 
   test("subscribe: with domain topic is accepted and stored", () => {

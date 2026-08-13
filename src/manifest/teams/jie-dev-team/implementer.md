@@ -14,6 +14,7 @@ tools:
   - write_kanban
   - update_kanban
   - claim_kanban
+  - memory_search
 subscribe:
   - task.planned
 ---

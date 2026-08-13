@@ -76,7 +76,7 @@ interface MemoryStore {
 
 ## Bootstrap
 
-In the body's restore phase (before `start`), the body asks `MemoryManager.bootstrap` for the formatted block and `composeSystemPrompt` places it between the context block and the role prose:
+In the body's restore phase (before `start`), the body asks `MemoryManager.bootstrap` for the formatted block and `composeSystemPrompt` places it after the role prose and available skills:
 
 ```
 <memory team="<team_id>">
@@ -90,7 +90,7 @@ In the body's restore phase (before `start`), the body asks `MemoryManager.boots
 
 ## Tools
 
-`memory_add` and `memory_search` builtins — opt-in per role via `tools:` frontmatter (not `isUtility`); the built-in default-solo team includes both.
+`memory_add` is a utility tool assigned to every agent; `memory_search` is opt-in per role via `tools:` frontmatter. The built-in default-solo team includes both.
 
 `memory_add` parameters:
 

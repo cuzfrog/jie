@@ -71,12 +71,16 @@ export function parseTeamFromManifests(
   let leaderRole: string | null = null;
   const roleStems = new Set(roles.map((r) => r.role));
   let additionalAgentRefs: string[] = [];
+  let teamPrompt = "";
+  let description: string | undefined;
 
   if (teamFile !== undefined) {
     const teamContent = teamFile[1];
-    const teamFrontmatter = parseTeamFile(teamContent, "TEAM.md");
-    additionalAgentRefs = validateAdditionalAgentRefs(teamFrontmatter.additionalAgentRefs, roleStems, sourceDir || teamId);
-    const leader = teamFrontmatter.leader;
+    const teamParse = parseTeamFile(teamContent, "TEAM.md");
+    additionalAgentRefs = validateAdditionalAgentRefs(teamParse.additionalAgentRefs, roleStems, sourceDir || teamId);
+    teamPrompt = teamParse.body;
+    if (teamParse.description !== null) description = teamParse.description;
+    const leader = teamParse.leader;
     if (leader === null) {
       if (agentFiles.length >= 2) {
         throw new JiePlatformError("LEADER_REQUIRED", {
@@ -136,7 +140,7 @@ export function parseTeamFromManifests(
     }
   }
 
-  return { id: teamId, roles, leaderRole, additionalAgentRefs };
+  return { id: teamId, roles, leaderRole, additionalAgentRefs, teamPrompt, description };
 }
 
 export function loadTeamFromDir(dirPath: string): TeamBlueprint {
@@ -172,12 +176,15 @@ interface RawFrontmatter {
   replica?: unknown;
   leader?: unknown;
   "additional-agents"?: unknown;
+  description?: unknown;
   target_context_window_size?: unknown;
 }
 
-interface TeamFrontmatter {
+interface TeamFileParseResult {
   leader: string | null;
   additionalAgentRefs: string[];
+  description: string | null;
+  body: string;
 }
 
 function splitFrontmatter(content: string): {
@@ -194,9 +201,9 @@ function splitFrontmatter(content: string): {
   }
   const yamlText = lines.slice(1, closingIndex).join("\n");
   const body = lines.slice(closingIndex + 1).join("\n").replace(/^\n/, "");
-  let frontmatter: RawFrontmatter | null;
+  let raw: unknown;
   try {
-    frontmatter = parseYaml(yamlText) as RawFrontmatter | null;
+    raw = parseYaml(yamlText);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new JiePlatformError("INVALID_FRONTMATTER", {
@@ -204,7 +211,15 @@ function splitFrontmatter(content: string): {
       cause: error instanceof Error ? error : new Error(message),
     });
   }
-  if (frontmatter === null) frontmatter = {};
+  if (raw === null) {
+    return { frontmatter: {}, body };
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new JiePlatformError("INVALID_FRONTMATTER", {
+      detail: "frontmatter must be an object",
+    });
+  }
+  const frontmatter = raw as RawFrontmatter;
   return { frontmatter, body };
 }
 
@@ -344,8 +359,8 @@ export function parseAgentManifest(
   };
 }
 
-function parseTeamFile(content: string, file: string): TeamFrontmatter {
-  const { frontmatter } = splitFrontmatter(content);
+function parseTeamFile(content: string, file: string): TeamFileParseResult {
+  const { frontmatter, body } = splitFrontmatter(content);
   if (frontmatter === null) {
     throw new JiePlatformError("INVALID_FRONTMATTER", {
       detail: `invalid frontmatter in ${file}: missing frontmatter block`,
@@ -354,5 +369,6 @@ function parseTeamFile(content: string, file: string): TeamFrontmatter {
   const leader = frontmatter.leader;
   const leaderRole = leader === undefined || leader === null || leader === "" ? null : asString(leader, "leader", file);
   const additionalAgentRefs = frontmatter["additional-agents"] === undefined ? [] : asStringList(frontmatter["additional-agents"], "additional-agents", file);
-  return { leader: leaderRole, additionalAgentRefs };
+  const description = frontmatter.description === undefined ? null : asString(frontmatter.description, "description", file);
+  return { leader: leaderRole, additionalAgentRefs, description, body };
 }

@@ -248,6 +248,7 @@ interface MakeBodyOverrides {
   effort?: EffortLevel;
   factory?: (opts: ConstructorParameters<typeof PiAgent>[0]) => PiAgent;
   systemContextBlock?: string;
+  teamPrompt?: string;
   compactor?: Compactor;
   getApiKey?: (provider: string) => string | undefined;
   logDir?: string | null;
@@ -332,6 +333,7 @@ function makeHarness(): Harness {
       sessionId: overrides.sessionId ?? "s1",
       model: overrides.model,
       effort: overrides.effort ?? "off",
+      teamPrompt: overrides.teamPrompt,
     };
     return new JieAgentBody(params, {
       eventManager: events,
@@ -905,15 +907,42 @@ describe("JieAgentBody — restore() snapshot phase", () => {
     body.stop();
   });
 
-  test("loads the team memory block into the system prompt between context and role prose", async () => {
+  test("loads the team memory block into the system prompt after the role prose", async () => {
     h.memoryManager.bootstrap.mockReturnValue(
       "<memory team=\"t1\">\n- [instruction] keep the build green\n</memory>",
     );
     const body = h.makeBody({ systemContextBlock: "CONTEXT" });
     await body.restore();
     expect(h.state.systemPrompt).toBe(
-      "CONTEXT\n\n<memory team=\"t1\">\n- [instruction] keep the build green\n</memory>\n\nyou are a general assistant",
+      "CONTEXT\n\nyou are a general assistant\n\n<memory team=\"t1\">\n- [instruction] keep the build green\n</memory>",
     );
+    body.stop();
+  });
+
+  test("composes the team prompt before the role prose", async () => {
+    const body = h.makeBody({ systemContextBlock: "CONTEXT", teamPrompt: "one task in flight" });
+    await body.restore();
+    expect(h.state.systemPrompt).toBe(
+      "CONTEXT\n\n<team_context>\none task in flight\n</team_context>\n\nyou are a general assistant",
+    );
+    body.stop();
+  });
+
+  test("omits the team context block when no team prompt is supplied", async () => {
+    const body = h.makeBody({ systemContextBlock: "CONTEXT" });
+    await body.restore();
+    expect(h.state.systemPrompt).toBe("CONTEXT\n\nyou are a general assistant");
+    body.stop();
+  });
+
+  test("orders context, team, role, and memory in the system prompt", async () => {
+    h.memoryManager.bootstrap.mockReturnValue("<memory team=\"t1\">- [fact] x</memory>");
+    const body = h.makeBody({ systemContextBlock: "CONTEXT", teamPrompt: "TEAM" });
+    await body.restore();
+    const prompt = h.state.systemPrompt;
+    expect(prompt.indexOf("CONTEXT")).toBeLessThan(prompt.indexOf("<team_context>"));
+    expect(prompt.indexOf("<team_context>")).toBeLessThan(prompt.indexOf("you are a general assistant"));
+    expect(prompt.indexOf("you are a general assistant")).toBeLessThan(prompt.indexOf("<memory"));
     body.stop();
   });
 

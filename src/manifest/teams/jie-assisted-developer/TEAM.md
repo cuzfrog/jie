@@ -1,5 +1,6 @@
 ---
 leader: developer
+description: one task in flight; the developer leads and dispatches architect, peer, and shared agents
 ---
 
-Assisted-developer team. The Developer (leader and sole doer) handles the full cycle and dispatches the Architect, the Peer, and the shared Explorer and Steward agents via `call_agent` as needed. The Architect may also call the Explorer and Steward. One task in flight per team.
+Assisted-developer team. One task in flight per team. The developer is the leader and sole doer; dispatch the architect for design, the peer for review, and the shared Explorer and Steward agents for research or chores as needed.

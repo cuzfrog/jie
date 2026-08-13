@@ -45,7 +45,7 @@ describe("TeamCommand", () => {
     const result = await command.complete("", context);
     expect(result).toEqual({
       items: [
-        { value: "alpha", label: "alpha", description: "(default)" },
+        { value: "alpha", label: "alpha", description: "1 agent (default)" },
         { value: "beta", label: "beta", description: "3 agents" },
       ],
     });
