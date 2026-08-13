@@ -36,4 +36,4 @@ bun run scripts/merge-pr.ts 42
 ## Failure handling
 
 - If checks fail, fix the issues on the same branch, push again, and rerun the script.
-- If the script exits with a `gh` authentication or network error, check that the GitHub App token is fresh (`./scripts/gh-bot.mjs`) and retry.
+- If the script exits with a `gh` authentication or network error, check that the GitHub App token is fresh (`./scripts/gh-bot.mjs`) and retry. `gh` is used to merge PRs, `gh-bot` cannot merge PRs.
