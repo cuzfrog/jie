@@ -354,6 +354,42 @@ describe("TeamManagerImpl — full surface", () => {
       expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("low");
     });
 
+    test("uses the effort suffix in a model alias when the soul has no effort", async () => {
+      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, modelAliases: { large: "openai/gpt-4o(low)" } });
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: large\ntools:\n  - bash\n---\nlead");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(modelRegistry.resolve).toHaveBeenCalledWith("openai", "gpt-4o");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("low");
+      expect(agentBodyFactory.mock.calls[0]![0]!.soul.effort).toBeUndefined();
+    });
+
+    test("the soul's pinned effort overrides an alias effort suffix", async () => {
+      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, modelAliases: { large: "openai/gpt-4o(high)" } });
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: large(low)\ntools:\n  - bash\n---\nlead");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("low");
+      expect(agentBodyFactory.mock.calls[0]![0]!.soul.effort).toBe("low");
+    });
+
+    test("uses defaultEffort when neither the soul nor the alias pin effort", async () => {
+      settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, defaultEffort: "medium", modelAliases: { large: "openai/gpt-4o" } });
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n");
+      writeFileSync(join(teamDir, "lead.md"), "---\nmodel: large\ntools:\n  - bash\n---\nlead");
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      await manager.load("dev");
+      expect(agentBodyFactory.mock.calls[0]![0]!.effort).toBe("medium");
+    });
+
     test("per-role effort is independent across souls", async () => {
       settingsStore.load.mockReturnValue({ ...DEFAULT_SETTINGS, defaultEffort: "high" });
       const teamDir = join(homeJieDir, "teams", "dev");

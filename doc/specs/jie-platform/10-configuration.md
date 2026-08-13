@@ -41,6 +41,7 @@ Two locations, **project overrides global with deep-merge** (nested objects merg
 | `defaultModel` | string | Model id within the provider. |
 | `defaultTeam` | string | Last user-selected team. Charset `[A-Za-z0-9_-]{1,32}`. |
 | `defaultEffort` | string | Default reasoning effort: one of `off` \| `low` \| `medium` \| `high` \| `max`. Absent means `off`. Applied at team load and live to running agents inheriting it. |
+| `modelAliases` | object | Maps `large` \| `medium` \| `small` to `<provider>/<modelId>` strings. Values may carry an optional effort suffix, e.g. `openai/gpt-4o(low)` (see "Model Aliases" and "Model Resolution" below). |
 | `language` | string | Default language for platform-generated LLM prompts (memory extraction templates): `"en"` or `"zh"`. Absent means `"en"`. Closed vocabulary — an out-of-vocabulary value is a hard fail. Memory content itself always keeps the source conversation's language (`11-memory.md`). |
 | `compaction` | object | Overrides for automatic context compaction — `enabled` (boolean), `reserveTokens` / `keepRecentTokens` (positive integers). Each absent field falls back to pi's defaults; read at each compaction trigger (`06-agent-model.md`, "Compaction"). |
 | `memory` | object | Long-term memory overrides (`11-memory.md`) — `enabled` (boolean, default true), `model` (`provider/modelId` string; extraction model, falls back to the agent's model), `bootstrapMaxEntries` / `bootstrapMaxChars` (positive integers, defaults 12 / 2000). Read at each extraction / bootstrap. |
@@ -56,6 +57,7 @@ export interface Settings {
   readonly defaultModel?: string;
   readonly defaultTeam?: string;
   readonly defaultEffort?: EffortLevel;
+  readonly modelAliases?: Partial<Record<"large" | "medium" | "small", string>>;
   readonly modelFilters?: ReadonlyArray<string>;
   readonly language?: "en" | "zh";
   readonly compaction?: {
@@ -73,6 +75,27 @@ export interface Settings {
 ```
 
 Each field may be absent (the user has not run `jie model` yet); the resolution chains below treat absent as "fall through to the next source". The platform never persists its own fields — the only writers are the `setDefaultProvider` / `setDefaultTeam` / `setDefaultEffort` / `setModelFilters` commands (CLI `jie model` / `jie team`, TUI `/model` / `/effort` / `/model-filter`). `setDefaultProvider` writes the `defaultProvider`/`defaultModel` pair to the project `settings.json` when it defines either of the two keys, else to the global file — the project file shadows the global one field-by-field, so a global write while the project defines either key would be partially or fully ineffective. `modelFilters` holds case-insensitive substring patterns that narrow the TUI's `/model` candidate list; it does not affect model resolution. `compaction`, `memory`, and `language` are likewise hand-edited — no command writes them; the compactor reads `compaction` at each trigger ("Compaction" in `06-agent-model.md`) and the memory module reads `memory`/`language` at each extraction/bootstrap (`11-memory.md`), so an edit applies at the next use without `/reload`.
+
+### Model Aliases
+
+`modelAliases` maps the built-in aliases `large`, `medium`, and `small` to `<provider>/<modelId>` strings. Each value may carry an optional effort suffix, e.g. `openai/gpt-4o(low)`. The suffix is stored as-is in the settings file and parsed at load time. Values must be well-formed `<provider>/<modelId>` with an optional `(<effort>)` suffix, where `<effort>` is one of `off`, `low`, `medium`, `high`, or `max`.
+
+### Model Resolution
+
+At team load, the effective model and effort for each role are resolved in this order:
+
+1. `soul.model` (a literal `<provider>/<modelId>` or an alias from `modelAliases`).
+2. If `soul.model` is an alias not present in `modelAliases`, or if `soul.model` is empty, fall through to `defaultProvider`/`defaultModel`.
+3. If no model is configured at any level, the load fails with `NO_MODEL_ERROR` (leader) or the non-leader role is skipped.
+
+Effort is resolved separately with this precedence:
+
+1. `soul.effort` (parsed from an optional `(<effort>)` suffix on the role's own `model` field). This pins effort, so live `/effort` updates do not affect the role.
+2. The effort suffix on the resolved `modelAliases` value (when the role is an alias and the alias value carries a suffix). This does *not* pin effort; it acts as a settings-level default.
+3. `settings.defaultEffort`.
+4. `"off"`.
+
+Because only `soul.effort` pins, a role that resolves its model through an aliased value with an effort suffix still reacts to live `/effort` changes when no soul-level effort is present.
 
 ## Team Selection
 

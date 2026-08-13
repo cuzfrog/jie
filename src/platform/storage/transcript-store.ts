@@ -138,7 +138,7 @@ export class SqliteTranscriptStore implements TranscriptStore {
        ORDER BY seq`,
       [teamId, agentKey, sessionId],
     );
-    return rows.map((row) => JSON.parse(expectString(row[5])) as AgentMessage);
+    return rows.map((row, index) => decodeMessage(expectString(row[5]), index));
   }
 
   hasSession(teamId: string, sessionId: string): boolean {
@@ -202,5 +202,58 @@ export class SqliteTranscriptStore implements TranscriptStore {
        ON CONFLICT(session_id) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at`,
       [sessionId, name, updatedAt],
     );
+  }
+}
+
+function decodeMessage(text: string, index: number): AgentMessage {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`transcript row ${index}: invalid JSON: ${reason}`);
+  }
+  if (!isAgentMessage(parsed)) {
+    throw new Error(`transcript row ${index}: invalid message shape`);
+  }
+  return parsed;
+}
+
+function isAgentMessage(value: unknown): value is AgentMessage {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Record<string, unknown>;
+  if (typeof record.role !== "string" || typeof record.timestamp !== "number") return false;
+  switch (record.role) {
+    case "user":
+      return typeof record.content === "string" || Array.isArray(record.content);
+    case "assistant":
+      return Array.isArray(record.content);
+    case "toolResult":
+      return (
+        Array.isArray(record.content) &&
+        typeof record.toolCallId === "string" &&
+        typeof record.toolName === "string" &&
+        typeof record.isError === "boolean"
+      );
+    case "custom":
+      return (
+        typeof record.customType === "string" &&
+        typeof record.display === "boolean" &&
+        (typeof record.content === "string" || Array.isArray(record.content))
+      );
+    case "compactionSummary":
+      return typeof record.summary === "string" && typeof record.tokensBefore === "number";
+    case "branchSummary":
+      return typeof record.summary === "string" && typeof record.fromId === "string";
+    case "bashExecution":
+      return (
+        typeof record.command === "string" &&
+        typeof record.output === "string" &&
+        typeof record.cancelled === "boolean" &&
+        typeof record.truncated === "boolean" &&
+        (record.exitCode === undefined || typeof record.exitCode === "number")
+      );
+    default:
+      return false;
   }
 }

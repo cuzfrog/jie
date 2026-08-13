@@ -161,6 +161,59 @@ describe("AgentDispatcherImpl", () => {
     expect(ticket.callbackTopic).toBe("callback.leader-1");
   });
 
+  test("selects the idle replica over a running replica", () => {
+    const h = makeHarness();
+    const r1 = makeFakeBody({
+      teamId: "t1", role: "worker", agentKey: "worker-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, ephemeral: false,
+    });
+    const r2 = makeFakeBody({
+      teamId: "t1", role: "worker", agentKey: "worker-2", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, ephemeral: false,
+    });
+    h.teamManager.bodies.mockReturnValue([r1, r2]);
+    h.teamRegistry.parseTeamManifest.mockReturnValue(makeBlueprint({
+      roles: [{ role: "worker", systemPrompt: "", tools: ["notify"], subscribe: [], skills: [], replicas: 2, model: "m" }],
+      leaderRole: "worker",
+    }));
+    h.eventManager.publish(Events.agentTurnStart({ kind: "agent", teamId: "t1", agentKey: "worker-2" }, "test"));
+
+    const ticket = h.dispatcher.call(makeRequest({ agent: "worker" }));
+
+    expect(ticket.agentKey).toBe("worker-1");
+    expect(ticket.queued).toBe(false);
+  });
+
+  test("selects the replica with the shorter queue when all are busy", async () => {
+    const h = makeHarness();
+    const r1 = makeFakeBody({
+      teamId: "t1", role: "worker", agentKey: "worker-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, ephemeral: false,
+    });
+    const r2 = makeFakeBody({
+      teamId: "t1", role: "worker", agentKey: "worker-2", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, ephemeral: false,
+    });
+    h.teamManager.bodies.mockReturnValue([r1, r2]);
+    h.teamRegistry.parseTeamManifest.mockReturnValue(makeBlueprint({
+      roles: [{ role: "worker", systemPrompt: "", tools: ["notify"], subscribe: [], skills: [], replicas: 2, model: "m" }],
+      leaderRole: "worker",
+    }));
+    h.eventManager.publish(Events.agentTurnStart({ kind: "agent", teamId: "t1", agentKey: "worker-1" }, "test"));
+    h.eventManager.publish(Events.agentTurnStart({ kind: "agent", teamId: "t1", agentKey: "worker-2" }, "test"));
+
+    const first = h.dispatcher.call(makeRequest({ agent: "worker", prompt: "first" }));
+    const second = h.dispatcher.call(makeRequest({ agent: "worker", prompt: "second" }));
+
+    expect(first.agentKey).toBe("worker-1");
+    expect(first.queued).toBe(true);
+    expect(second.agentKey).toBe("worker-2");
+    expect(second.queued).toBe(true);
+
+    h.eventManager.publish(Events.agentIdle({ kind: "agent", teamId: "t1", agentKey: "worker-2" }, "stop"));
+    await flush();
+
+    const customs = publishedEvents(h.eventManager).filter((e) => e.topic === "custom.t1.inbox.worker-2");
+    expect(customs).toHaveLength(1);
+    expect((customs[0]!.payload as { message: string }).message).toContain("second");
+  });
+
   test("spawns an ad-hoc shared agent when agent is not loaded but is installed", async () => {
     const h = makeHarness();
     const explorer = makeFakeBody({

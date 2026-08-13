@@ -72,9 +72,10 @@ export function createWebFetchTool(): Tool<WebFetchInput> {
           headers: { "User-Agent": USER_AGENT },
         });
       } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
         throw new JiePlatformError("REDIRECT_EXHAUSTED", {
-          detail: (error as Error).message,
-          cause: error as Error,
+          detail: message,
+          cause: error instanceof Error ? error : new Error(message),
         });
       }
 

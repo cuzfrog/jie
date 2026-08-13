@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Settings, RawSettings } from "./types";
-import { isEffortLevel, MODEL_ALIASES, parseModelRef, type ModelAlias } from "../types";
+import { isEffortLevel, MODEL_ALIASES, parseModelRef, parseModelWithEffort, type ModelAlias } from "../types";
 import { JiePlatformError } from "../jie-platform-errors";
 
 const TEAM_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
@@ -197,11 +197,15 @@ function validateModelAliases(value: unknown, source: string): NonNullable<Setti
     if (!MODEL_ALIASES.includes(key as ModelAlias)) {
       throw new JiePlatformError("INVALID_CONFIG", { detail: `${source}: unknown model alias '${key}'` });
     }
-    const modelRef = raw[key];
-    if (typeof modelRef !== "string" || parseModelRef(modelRef) === null) {
-      throw new JiePlatformError("INVALID_CONFIG", { detail: `${source}: modelAliases.${key} must be a <provider>/<modelId> string` });
+    const value = raw[key];
+    if (typeof value !== "string") {
+      throw new JiePlatformError("INVALID_CONFIG", { detail: `${source}: modelAliases.${key} must be a <provider>/<modelId> string with optional effort suffix` });
     }
-    result[key as ModelAlias] = modelRef;
+    const parsed = parseModelWithEffort(value);
+    if (parsed === null || parseModelRef(parsed.model) === null) {
+      throw new JiePlatformError("INVALID_CONFIG", { detail: `${source}: modelAliases.${key} must be a <provider>/<modelId> string with optional effort suffix` });
+    }
+    result[key as ModelAlias] = value;
   }
   return result;
 }

@@ -102,6 +102,18 @@ describe("web_fetch", () => {
     });
   });
 
+  test("non-Error fetch rejection is surfaced with the stringified reason", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    fetchSpy.mockRejectedValueOnce("network down");
+    const tool = createWebFetchTool();
+    await expect(
+      tool.execute({ url: "https://example.test/fail" }, makeEmptyContext()),
+    ).rejects.toMatchObject({
+      code: "REDIRECT_EXHAUSTED",
+      message: expect.stringContaining("network down"),
+    });
+  });
+
   test("redirect loop (>= 20) surfaces redirect_exhausted or final non-html error", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     fetchSpy.mockRejectedValueOnce(new Error("redirect loop exceeded"));

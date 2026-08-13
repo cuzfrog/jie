@@ -1,7 +1,7 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
-import { getBuiltinModels, getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";
+import { getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";
 import { findEnvKeys } from "@earendil-works/pi-ai/compat";
-import { isBuiltinProvider, loadModelsConfig, type ResolvedModelsConfig, type ResolvedProviderConfig } from "./load-models";
+import { builtinModelFor, builtinModelsFor, isBuiltinProvider, loadModelsConfig, type ResolvedModelsConfig, type ResolvedProviderConfig } from "./load-models";
 import type { AuthStore } from "./auth-store";
 import { JiePlatformError } from "../jie-platform-errors";
 
@@ -48,9 +48,9 @@ export class PiModelRegistry implements ModelRegistry {
   resolve(provider: string, modelId: string): Model<Api> | undefined {
     const customProvider = this.custom.providers.get(provider);
     if (isBuiltinProvider(provider)) {
-      const builtinModel = getBuiltinModels(provider).find((m) => m.id === modelId);
+      const builtinModel = builtinModelFor(provider, modelId);
       if (builtinModel === undefined) return undefined;
-      return applyProviderConfig(builtinModel as unknown as Model<Api>, customProvider);
+      return applyProviderConfig(builtinModel, customProvider);
     }
     const fromCustom = this.custom.models.find((m) => m.provider === provider && m.id === modelId);
     if (fromCustom !== undefined) return applyProviderConfig(fromCustom, customProvider);
@@ -65,7 +65,7 @@ export class PiModelRegistry implements ModelRegistry {
       }
       return [];
     }
-    const builtinModels = getBuiltinModels(provider);
+    const builtinModels = builtinModelsFor(provider);
     if (customProvider === undefined) return builtinModels;
     return builtinModels.map((m) => applyProviderConfig(m, customProvider));
   }

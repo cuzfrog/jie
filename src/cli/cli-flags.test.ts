@@ -596,3 +596,68 @@ describe("parseFlags - --no-install", () => {
     });
   });
 });
+
+describe("parseFlags — duplicate detection across parser zones", () => {
+  test("--debug leading and later in run is a duplicate", () => {
+    expect(parseFlags(["--debug", "-p", "go", "--debug"])).toEqual({
+      kind: "error",
+      message: "duplicate flag: --debug",
+    });
+  });
+
+  test("--debug around --in-memory is a duplicate", () => {
+    expect(parseFlags(["--debug", "--in-memory", "--debug"])).toEqual({
+      kind: "error",
+      message: "duplicate flag: --debug",
+    });
+  });
+
+  test("--no-install around --in-memory is a duplicate", () => {
+    expect(parseFlags(["--no-install", "--in-memory", "--no-install"])).toEqual({
+      kind: "error",
+      message: "duplicate flag: --no-install",
+    });
+  });
+
+  test("--in-memory in two parser zones is a duplicate", () => {
+    expect(parseFlags(["--in-memory", "-p", "go", "--in-memory"])).toEqual({
+      kind: "error",
+      message: "duplicate flag: --in-memory",
+    });
+  });
+
+  test("duplicate --api-key is rejected", () => {
+    expect(parseFlags(["--api-key", "k1", "-p", "go", "--api-key", "k2"])).toEqual({
+      kind: "error",
+      message: "duplicate flag: --api-key",
+    });
+  });
+
+  test("duplicate --provider in login is rejected", () => {
+    expect(parseFlags(["login", "--provider", "a", "--provider", "b"])).toEqual({
+      kind: "error",
+      message: "duplicate flag: --provider",
+    });
+  });
+
+  test("duplicate --project in team add is rejected", () => {
+    expect(parseFlags(["team", "add", "src", "--project", "--project"])).toEqual({
+      kind: "error",
+      message: "duplicate flag: --project",
+    });
+  });
+
+  test("duplicate --force in team add is rejected", () => {
+    expect(parseFlags(["team", "add", "src", "--force", "--force"])).toEqual({
+      kind: "error",
+      message: "duplicate flag: --force",
+    });
+  });
+
+  test("duplicate --project in team remove is rejected", () => {
+    expect(parseFlags(["team", "remove", "dev", "--project", "--project"])).toEqual({
+      kind: "error",
+      message: "duplicate flag: --project",
+    });
+  });
+});
