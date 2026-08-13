@@ -1,5 +1,6 @@
 import { Value } from "typebox/value";
 import type { ArtifactStore } from "../storage";
+import type { AgentDispatcher } from "../types";
 import type { ExecutionContext } from "../tools";
 import { createMcpTool } from "./tool-adapter";
 import type { McpConnection, McpToolDefinition } from "./stdio-connection";
@@ -17,7 +18,7 @@ const executionContext: ExecutionContext = {
   agentRole: "engineer",
   artifactStore,
   toolArgs: new Map(),
-  agentDispatcher: { call: vi.fn() } as import("../types").AgentDispatcher,
+  agentDispatcher: vi.mocked<AgentDispatcher>({ call: vi.fn() }),
 };
 
 function fakeConnection() {

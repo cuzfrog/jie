@@ -15,6 +15,6 @@ export function makeEmptyContext(): ExecutionContext {
     agentRole: "general",
     artifactStore,
     toolArgs: new Map(),
-    agentDispatcher: { call: vi.fn() } as AgentDispatcher,
+    agentDispatcher: vi.mocked<AgentDispatcher>({ call: vi.fn() }),
   };
 }

@@ -151,10 +151,15 @@ export class AgentDispatcherImpl implements AgentDispatcher {
         if (body === null) return;
         if (!this.canDispatchNow(agentKey, body)) return;
         const call = queue.shift()!;
-        if (call.reset) {
-          await this.teamManager.resetAgent(teamId, agentKey);
+        try {
+          if (call.reset) {
+            await this.teamManager.resetAgent(teamId, agentKey);
+          }
+          this.dispatchCall(call, agentKey);
+        } catch (error) {
+          this.publishFailure(agentKey, { ...call, notified: false }, error instanceof Error ? error.message : String(error));
+          return;
         }
-        this.dispatchCall(call, agentKey);
       }
     } finally {
       this.processing.delete(agentKey);
@@ -169,8 +174,8 @@ export class AgentDispatcherImpl implements AgentDispatcher {
     } catch (error) {
       const queue = this.pending.get(agentKey);
       if (queue !== undefined) {
-        const failed = queue.shift();
-        if (failed !== undefined) {
+        this.pending.delete(agentKey);
+        for (const failed of queue) {
           this.publishFailure(agentKey, { ...failed, notified: false }, error instanceof Error ? error.message : String(error));
         }
       }

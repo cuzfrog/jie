@@ -294,4 +294,59 @@ describe("AgentDispatcherImpl", () => {
     expect(customs).toHaveLength(1);
     expect((customs[0]!.payload as { message: string }).message).toContain("does not have the notify tool");
   });
+
+  test("publishes a failure when reset fails", async () => {
+    const h = makeHarness();
+    const reviewer = makeFakeBody({
+      teamId: "t1", role: "reviewer", agentKey: "reviewer-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, ephemeral: false,
+    });
+    h.teamManager.bodies.mockReturnValue([reviewer]);
+    h.teamManager.resetAgent.mockRejectedValue(new Error("reset failed"));
+
+    h.dispatcher.call(makeRequest({ reset: true }));
+    await flush();
+
+    const customs = publishedEvents(h.eventManager).filter((e) => e.topic === "custom.t1.callback.leader-1");
+    expect(customs).toHaveLength(1);
+    expect((customs[0]!.payload as { message: string }).message).toContain("reset failed");
+  });
+
+  test("fails all queued calls when ad-hoc spawn fails", async () => {
+    const h = makeHarness();
+    h.teamManager.bodies.mockReturnValue([]);
+    h.teamRegistry.parseTeamManifest.mockReturnValue(makeBlueprint());
+    h.agentRegistry.locate.mockReturnValue("project");
+    h.teamManager.spawnAdHoc.mockRejectedValue(new Error("spawn failed"));
+
+    const first = h.dispatcher.call(makeRequest({ prompt: "first" }));
+    const second = h.dispatcher.call(makeRequest({ prompt: "second" }));
+
+    expect(first.queued).toBe(true);
+    expect(second.queued).toBe(true);
+
+    await flush();
+
+    const customs = publishedEvents(h.eventManager).filter((e) => e.topic === "custom.t1.callback.leader-1");
+    expect(customs).toHaveLength(2);
+    expect((customs[0]!.payload as { message: string }).message).toContain("spawn failed");
+    expect((customs[1]!.payload as { message: string }).message).toContain("spawn failed");
+  });
+
+  test("publishes a failure when event publish fails during dispatch", async () => {
+    const h = makeHarness();
+    const reviewer = makeFakeBody({
+      teamId: "t1", role: "reviewer", agentKey: "reviewer-1", isLeader: false, tools: ["notify"], subscribe: [], skills: [], model: null, ephemeral: false,
+    });
+    h.teamManager.bodies.mockReturnValue([reviewer]);
+    h.eventManager.publish.mockImplementationOnce(() => {
+      throw new Error("publish failed");
+    });
+
+    h.dispatcher.call(makeRequest());
+    await flush();
+
+    const customs = publishedEvents(h.eventManager).filter((e) => e.topic === "custom.t1.callback.leader-1");
+    expect(customs).toHaveLength(1);
+    expect((customs[0]!.payload as { message: string }).message).toContain("publish failed");
+  });
 });

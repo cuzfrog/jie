@@ -1,6 +1,8 @@
 ---
 no-new-exports:
   - _test-context.ts
+  - call-agent.test.ts
+  - call-agent.ts
   - bash.test.ts
   - bash.ts
   - builtins.test.ts

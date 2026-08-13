@@ -14,7 +14,7 @@ function makeCtx(toolArgs: Map<string, ReadonlyArray<string>> = new Map()): Exec
       list: async () => [],
     },
     toolArgs,
-    agentDispatcher: { call: vi.fn() } as AgentDispatcher,
+    agentDispatcher: vi.mocked<AgentDispatcher>({ call: vi.fn() }),
   };
 }
 
