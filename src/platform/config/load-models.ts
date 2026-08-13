@@ -164,7 +164,7 @@ function resolveConfig(raw: RawModelsConfig): ResolvedModelsConfig {
     for (const [k, v] of Object.entries(rawCfg.headers ?? {})) {
       headers[k] = resolveValue(v, `provider '${providerId}' headers.${k}`);
     }
-    const compat = (rawCfg.compat ?? {}) as ResolvedProviderConfig["compat"];
+    const compat = rawCfg.compat ?? {};
     const apiKey = resolveValue(rawCfg.apiKey ?? "", `provider '${providerId}' apiKey`);
     const baseUrl = resolveValue(rawCfg.baseUrl, `provider '${providerId}' baseUrl`);
 
@@ -197,12 +197,12 @@ function resolveConfig(raw: RawModelsConfig): ResolvedModelsConfig {
 
 function resolveApi(providerId: string, declared: string | undefined): Api {
   if (declared !== undefined && declared !== "") {
-    if (!KNOWN_APIS.has(declared as Api)) {
+    if (!KNOWN_APIS.has(declared)) {
       throw new JiePlatformError("INVALID_CONFIG", {
         detail: `models.json: provider '${providerId}': unknown api '${declared}'`,
       });
     }
-    return declared as Api;
+    return declared;
   }
 
   if (isBuiltinProvider(providerId)) {
@@ -227,7 +227,7 @@ function buildModel(
       detail: `models.json: provider '${providerId}': model.id is required`,
     });
   }
-  const mergedCompat = { ...providerCompat, ...(raw.compat ?? {}) } as ResolvedProviderConfig["compat"];
+  const mergedCompat = { ...providerCompat, ...(raw.compat ?? {}) };
   const cost = {
     input: raw.cost?.input ?? 0,
     output: raw.cost?.output ?? 0,
@@ -247,12 +247,12 @@ function buildModel(
     maxTokens: raw.maxTokens ?? 16384,
   };
   if (Object.keys(providerHeaders).length > 0) result.headers = providerHeaders;
-  if (Object.keys(mergedCompat).length > 0) result.compat = mergedCompat as Model<Api>["compat"];
+  if (Object.keys(mergedCompat).length > 0) result.compat = mergedCompat;
   return result;
 }
 
 export function builtinModelsFor(provider: BuiltinProvider): Model<Api>[] {
-  return getBuiltinModels(provider) as unknown as Model<Api>[];
+  return getBuiltinModels(provider);
 }
 
 export function builtinModelFor(provider: BuiltinProvider, modelId: string): Model<Api> | undefined {
