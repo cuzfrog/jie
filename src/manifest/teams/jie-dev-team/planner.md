@@ -10,6 +10,7 @@ tools:
   - write_artifact
   - write_kanban
   - update_kanban
+  - memory_search
 subscribe:
   - task.designed
   - task.review_failed

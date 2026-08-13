@@ -14,6 +14,7 @@ function makeBlueprint(overrides: Partial<TeamBlueprint> = {}): TeamBlueprint {
     roles: [],
     leaderRole: null,
     additionalAgentRefs: [],
+    teamPrompt: "",
     ...overrides,
   };
 }
@@ -44,6 +45,7 @@ function makeTeamManager(): ReturnType<typeof vi.mocked<TeamManager>> {
     resumeSession: vi.fn(),
     listInstalled: vi.fn(() => []),
     agentCount: vi.fn(() => 0),
+    getTeamDescription: vi.fn(() => undefined),
     listLoaded: vi.fn(() => new Map()),
     locate: vi.fn(() => null),
     agents: vi.fn(() => []),

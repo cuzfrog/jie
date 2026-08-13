@@ -38,14 +38,14 @@ The blueprint lives at `.jie/teams/<team_id>/` (file layout, discovery, model re
 
 ```
 .jie/teams/myteam/
-  TEAM.md              # YAML frontmatter: leader
+  TEAM.md              # YAML frontmatter: leader, optional description; prose body is shared team context
   leader.md            # one .md per role — the filename stem is the role identifier
   worker_a.md
 ```
 
-`TEAM.md` declares `leader: <role>`. Every other `.md` file is an agent definition: YAML frontmatter declares the mechanical surface, the prose body becomes `AgentSoul.systemPrompt`.
+`TEAM.md` declares `leader: <role>` and an optional `description: <short summary for team selection UI>`. Every other `.md` file is an agent definition: YAML frontmatter declares the mechanical surface, the prose body becomes `AgentSoul.systemPrompt`.
 
-`TEAM.md` declares only `leader: <role>`; the platform enforces no team-specific workflow. Per-role capability limits live in each role's `tools` list as tool specs (ADR 37):
+The prose body of `TEAM.md` becomes the team's shared context, injected into every role's system prompt before the role prose. The full system prompt order is: workspace context files (`AGENTS.md` / `CLAUDE.md`) → team context (`TEAM.md` body) → role prose → available skills → memory block. `TEAM.md` declares only `leader` and `description` frontmatter; the platform enforces no team-specific workflow. Per-role capability limits live in each role's `tools` list as tool specs (ADR 37):
 
 ```yaml
 tools:
@@ -141,7 +141,8 @@ Registered at platform startup by the `InMemoryToolRegistry` constructor (a crad
 | `write_kanban` | live kanban board (utility — implicitly assigned to every agent) |
 | `notify` | publish to the team event bus (see "notify and the Subscription Model") |
 | `web_search` / `web_fetch` | web access |
-| `memory_add` / `memory_search` | team long-term memory write/search (opt-in via `tools:`, `11-memory.md`) |
+| `memory_add` | team long-term memory write (utility; `11-memory.md`) |
+| `memory_search` | team long-term memory search (opt-in per role via `tools:`, `11-memory.md`) |
 
 ### Built-in tool contracts
 
@@ -154,7 +155,7 @@ Design notes (rationale that is not obvious from the signatures):
 - **read_file / write_file / edit_file** return a one-line ack in `content`; the diff lives only in `details` (a TUI-only payload, dropped at persist unless `kind: "diff"`). `write_file` returns just the byte summary since the model just wrote the content and a file-sized diff back would waste tokens (`edit_file` returns just an ack too — it confirms a targeted change via `replacementsCount`, not a diff). Full rationale: ADR 9.
 - **Artifact store** is not team-scoped by the platform (two teams sharing a key collide) and artifact content never travels in events — only keys. `read_artifact` of a missing key is a normal result, not an error.
 - **write_kanban** replaces the team's board (full desired state); cards merge by `content` so `#1`/`#2` ids stay stable across rewrites; duplicate `content` is rejected (`kanban_write_invalid`).
-- **memory_search** is opt-in via `tools:`; `memory_add` is opt-in too. Extraction runs after a successful compaction commit (fire-and-forget, single-flight per body).
+- **memory_search** is opt-in per role via `tools:`. `memory_add` is a utility tool assigned to every agent. Extraction runs after a successful compaction commit (fire-and-forget, single-flight per body).
 - **web_search / web_fetch**: `web_search` delegates to a pluggable provider (default DuckDuckGo HTML; no API key); non-2xx HTTP is returned with a body, never a typed error — the LLM branches on status.
 
 ## notify and the Subscription Model

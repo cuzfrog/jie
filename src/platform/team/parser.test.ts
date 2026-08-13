@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -30,6 +30,12 @@ describe("loadDefaultSoloTeam", () => {
     const soul = bp.roles[0]!;
     expect(soul.systemPrompt.length).toBeGreaterThan(0);
     expect(soul.model).toBe("");
+  });
+
+  test("has no team prompt or description", () => {
+    const bp = loadDefaultSoloTeam();
+    expect(bp.teamPrompt).toBe("");
+    expect(bp.description).toBeUndefined();
   });
 });
 
@@ -88,6 +94,46 @@ describe("loadTeamFromDir", () => {
     const bp = loadTeamFromDir(dir);
     expect(bp.roles.map((r) => r.role)).toEqual(["leader", "worker"]);
     expect(bp.leaderRole).toBe("leader");
+  });
+
+  test("TEAM.md body becomes the team prompt and description is parsed", () => {
+    writeFileSync(
+      join(dir, "TEAM.md"),
+      `---\nleader: leader\ndescription: a concise team\n---\nShared team context.\n`,
+    );
+    writeFileSync(
+      join(dir, "leader.md"),
+      `---\ntools:\n  - bash\n---\nleader body`,
+    );
+    const bp = loadTeamFromDir(dir);
+    expect(bp.teamPrompt).toBe("Shared team context.\n");
+    expect(bp.description).toBe("a concise team");
+  });
+
+  test("TEAM.md without body yields an empty team prompt and omitted description", () => {
+    writeFileSync(
+      join(dir, "TEAM.md"),
+      `---\nleader: leader\n---\n`,
+    );
+    writeFileSync(
+      join(dir, "leader.md"),
+      `---\ntools:\n  - bash\n---\nleader body`,
+    );
+    const bp = loadTeamFromDir(dir);
+    expect(bp.teamPrompt).toBe("");
+    expect(bp.description).toBeUndefined();
+  });
+
+  test("TEAM.md with non-string description is rejected", () => {
+    writeFileSync(
+      join(dir, "TEAM.md"),
+      `---\nleader: leader\ndescription: 42\n---\n`,
+    );
+    writeFileSync(
+      join(dir, "leader.md"),
+      `---\ntools:\n  - bash\n---\nleader body`,
+    );
+    expect(() => loadTeamFromDir(dir)).toThrow(expect.objectContaining({ code: "INVALID_FIELD_TYPE" }));
   });
 
   test("subscribe: with domain topic is accepted and stored", () => {
@@ -304,10 +350,10 @@ describe("loadTeamFromDir — typed error codes", () => {
   });
 });
 
-describe("loadTeamFromDir — shipped default-dev-team blueprint", () => {
-  const defaultCodersDir = join(import.meta.dir, "../../manifest/teams/default-dev-team");
+describe("loadTeamFromDir — shipped jie-dev-team blueprint", () => {
+  const defaultCodersDir = join(import.meta.dir, "../../manifest/teams/jie-dev-team");
 
-  test("parses the shipped default-dev-team with manager as leader and six roles", () => {
+  test("parses the shipped jie-dev-team with manager as leader and six roles", () => {
     const blueprint = loadTeamFromDir(defaultCodersDir);
     expect(blueprint.leaderRole).toBe("manager");
     expect(blueprint.roles.map((r) => r.role).sort()).toEqual([
@@ -326,8 +372,62 @@ describe("loadTeamFromDir — shipped default-dev-team blueprint", () => {
     expect(manager?.tools.some((spec) => spec.startsWith("notify("))).toBe(true);
   });
 
-  test("default-dev-team carries no additional-agent refs", () => {
+  test("jie-dev-team carries no additional-agent refs", () => {
     const blueprint = loadTeamFromDir(defaultCodersDir);
+    expect(blueprint.additionalAgentRefs).toEqual([]);
+  });
+});
+
+describe("loadTeamFromDir — shipped jie-assisted-developer blueprint", () => {
+  const assistedDevDir = join(import.meta.dir, "../../manifest/teams/jie-assisted-developer");
+
+  test("parses the shipped jie-assisted-developer with developer as leader and three roles", () => {
+    const blueprint = loadTeamFromDir(assistedDevDir);
+    expect(blueprint.leaderRole).toBe("developer");
+    expect(blueprint.roles.map((r) => r.role).sort()).toEqual(["architect", "developer", "peer"]);
+  });
+
+  test("developer has a call_agent allowlist for architect, peer, explorer, and steward", () => {
+    const blueprint = loadTeamFromDir(assistedDevDir);
+    const developer = blueprint.roles.find((r) => r.role === "developer");
+    expect(developer?.tools.some((spec) => spec === "call_agent(architect, peer, explorer, steward)")).toBe(true);
+  });
+
+  test("developer has no subscriptions", () => {
+    const blueprint = loadTeamFromDir(assistedDevDir);
+    const developer = blueprint.roles.find((r) => r.role === "developer");
+    expect(developer?.subscribe).toEqual([]);
+  });
+
+  test("architect has a call_agent allowlist for explorer and steward and a notify tool", () => {
+    const blueprint = loadTeamFromDir(assistedDevDir);
+    const architect = blueprint.roles.find((r) => r.role === "architect");
+    expect(architect?.tools.some((spec) => spec === "call_agent(explorer, steward)")).toBe(true);
+    expect(architect?.tools.some((spec) => spec === "notify")).toBe(true);
+  });
+
+  test("architect has no subscriptions", () => {
+    const blueprint = loadTeamFromDir(assistedDevDir);
+    const architect = blueprint.roles.find((r) => r.role === "architect");
+    expect(architect?.subscribe).toEqual([]);
+  });
+
+  test("peer has a notify tool and no subscriptions", () => {
+    const blueprint = loadTeamFromDir(assistedDevDir);
+    const peer = blueprint.roles.find((r) => r.role === "peer");
+    expect(peer?.tools.some((spec) => spec === "notify")).toBe(true);
+    expect(peer?.subscribe).toEqual([]);
+  });
+
+  test("peer has no write_file or edit_file", () => {
+    const blueprint = loadTeamFromDir(assistedDevDir);
+    const peer = blueprint.roles.find((r) => r.role === "peer");
+    expect(peer?.tools.some((spec) => spec === "write_file" || spec.startsWith("write_file("))).toBe(false);
+    expect(peer?.tools.some((spec) => spec === "edit_file" || spec.startsWith("edit_file("))).toBe(false);
+  });
+
+  test("jie-assisted-developer carries no additional-agent refs", () => {
+    const blueprint = loadTeamFromDir(assistedDevDir);
     expect(blueprint.additionalAgentRefs).toEqual([]);
   });
 });
@@ -349,6 +449,29 @@ describe("parseAgentManifest", () => {
     expect(() => parseAgentManifest("steward", "no frontmatter", "steward.md")).toThrow(
       expect.objectContaining({ code: "INVALID_FRONTMATTER" }),
     );
+  });
+
+  test("shipped explorer agent carries notify for call_agent callbacks", () => {
+    const path = join(import.meta.dir, "../../manifest/agents/explorer.md");
+    const content = readFileSync(path, "utf-8");
+    const soul = parseAgentManifest("explorer", content, "explorer.md");
+    expect(soul.tools).toContain("notify");
+  });
+
+  test("shipped explorer agent is read-only", () => {
+    const path = join(import.meta.dir, "../../manifest/agents/explorer.md");
+    const content = readFileSync(path, "utf-8");
+    const soul = parseAgentManifest("explorer", content, "explorer.md");
+    for (const tool of soul.tools) {
+      expect(tool === "write_file" || tool.startsWith("write_file(") || tool === "edit_file" || tool.startsWith("edit_file(") || tool === "write_artifact" || tool === "bash").toBe(false);
+    }
+  });
+
+  test("shipped steward agent carries notify for call_agent callbacks", () => {
+    const path = join(import.meta.dir, "../../manifest/agents/steward.md");
+    const content = readFileSync(path, "utf-8");
+    const soul = parseAgentManifest("steward", content, "steward.md");
+    expect(soul.tools).toContain("notify");
   });
 });
 

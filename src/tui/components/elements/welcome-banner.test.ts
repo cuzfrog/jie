@@ -23,7 +23,7 @@ describe("WelcomeBanner", () => {
   test("renders the installed teams once the platform reported them, loaded team first", () => {
     stateStore.getState.mockReturnValue(stateWithInstalledTeams());
     const text = new WelcomeBanner(stateStore).render(80).map(stripAnsi).join("\n");
-    expect(text).toContain("Teams: solo(1) · my-team(2)");
+    expect(text).toContain("Teams: solo(1 agent) · my-team(2 agents)");
   });
 
   test("omits the teams line when no team is installed", () => {

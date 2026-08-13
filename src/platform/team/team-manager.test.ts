@@ -190,6 +190,21 @@ describe("TeamManagerImpl — full surface", () => {
       expect(params.isLeader).toBe(true);
     });
 
+    test("forwards the team prompt and exposes the description", async () => {
+      const teamDir = join(homeJieDir, "teams", "dev");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(
+        join(teamDir, "TEAM.md"),
+        `---\nleader: manager\ndescription: a test team\n---\nShared team context.\n`,
+      );
+      writeFileSync(join(teamDir, "manager.md"), `---\ntools:\n  - bash\n---\nmanager`);
+      const { manager, agentBodyFactory } = makeManager(homeJieDir, null);
+      const info = await manager.load("dev");
+      const params = agentBodyFactory.mock.calls[0]![0]!;
+      expect(params.teamPrompt).toBe("Shared team context.\n");
+      expect(info.description).toBe("a test team");
+    });
+
     test("uses defaultTeam from settings when no teamId is given", async () => {
       const userTeams = join(homeJieDir, "teams");
       writeTeam(userTeams, "dev", "leader");
@@ -720,6 +735,23 @@ describe("TeamManagerImpl — full surface", () => {
     test("locate returns null for an unknown team", () => {
       const { manager } = makeManager(homeJieDir, null);
       expect(manager.locate("ghost")).toBeNull();
+    });
+
+    test("getTeamDescription returns the TEAM.md description for an installed team", () => {
+      const userTeams = join(homeJieDir, "teams");
+      const teamDir = join(userTeams, "alpha");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: general\ndescription: the alpha team\n---\n");
+      writeFileSync(join(teamDir, "general.md"), "---\ntools:\n  - bash\n---\n");
+      const { manager } = makeManager(homeJieDir, null);
+      expect(manager.getTeamDescription("alpha")).toBe("the alpha team");
+    });
+
+    test("getTeamDescription returns undefined for a team without a description", () => {
+      const userTeams = join(homeJieDir, "teams");
+      writeTeam(userTeams, "alpha", "general");
+      const { manager } = makeManager(homeJieDir, null);
+      expect(manager.getTeamDescription("alpha")).toBeUndefined();
     });
 
     test("agentCount counts the roles declared by an installed team", () => {

@@ -42,6 +42,7 @@ const teamManager = vi.mocked<TeamManager>({
   renameSession: vi.fn(),
   listInstalled: vi.fn(),
   agentCount: vi.fn(),
+  getTeamDescription: vi.fn(),
   listLoaded: vi.fn(),
   locate: vi.fn(),
   agents: vi.fn(),
@@ -492,12 +493,13 @@ describe("CommandExecutorImpl", () => {
       teamManager.listInstalled.mockReturnValue(["default-solo", "alpha", "beta"]);
       teamManager.agentCount.mockImplementation((teamId: string) => (teamId === "alpha" ? 3 : 1));
       teamManager.locate.mockImplementation((teamId: string) => (teamId === "default-solo" ? "builtin" : "user"));
+      teamManager.getTeamDescription.mockImplementation((teamId: string) => (teamId === "alpha" ? "alpha team" : undefined));
       const result = await executor.execute({ name: "getTeamInfo" });
       expect(result).toEqual({
         defaultTeam: "alpha",
         installed: [
           { id: "default-solo", agentCount: 1, location: "builtin" },
-          { id: "alpha", agentCount: 3, location: "user" },
+          { id: "alpha", agentCount: 3, location: "user", description: "alpha team" },
           { id: "beta", agentCount: 1, location: "user" },
         ],
       });
@@ -508,6 +510,7 @@ describe("CommandExecutorImpl", () => {
       teamManager.listInstalled.mockReturnValue(["default-solo"]);
       teamManager.agentCount.mockReturnValue(2);
       teamManager.locate.mockReturnValue("builtin");
+      teamManager.getTeamDescription.mockReturnValue(undefined);
       const result = await executor.execute({ name: "getTeamInfo" });
       expect(result).toEqual({ defaultTeam: null, installed: [{ id: "default-solo", agentCount: 2, location: "builtin" }] });
     });

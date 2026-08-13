@@ -120,7 +120,7 @@ describe("SlashCommandSource — unambiguous-command drill-down", () => {
     const suggestions = await slashSource(drillPlatform(), makeStateStore())
       .getSuggestions(["/tea"], 0, 4, { signal: signal() });
     expect(suggestions!.items.map((item) => item.value)).toEqual(["team alpha", "team beta"]);
-    expect(suggestions!.items[0]!.description).toBe("(default)");
+    expect(suggestions!.items[0]!.description).toBe("2 agents (default)");
   });
 
   test("'/model-f' drills down to the add/remove/list actions", async () => {
@@ -176,7 +176,7 @@ describe("SlashCommandSource — /team arguments", () => {
       .getSuggestions(["/team "], 0, 6, { signal: signal() });
     expect(suggestions!.items).toEqual([
       { value: "default-solo", label: "default-solo", description: "1 agent" },
-      { value: "alpha", label: "alpha", description: "(default)" },
+      { value: "alpha", label: "alpha", description: "3 agents (default)" },
       { value: "beta", label: "beta", description: "2 agents" },
     ]);
   });

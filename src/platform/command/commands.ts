@@ -43,7 +43,7 @@ interface CommandTypeMap {
   renameSession: CommandDef<{ teamId: string; sessionName: string }, null>;
   getTeamInfo: CommandDef<{}, {
     defaultTeam: string | null;
-    installed: ReadonlyArray<{ readonly id: string; readonly agentCount: number; readonly location: TeamBlueprintLocation }>;
+    installed: ReadonlyArray<{ readonly id: string; readonly agentCount: number; readonly location: TeamBlueprintLocation; readonly description?: string }>;
   }>;
   getGitStatus: CommandDef<{}, GitSnapshot>;
   stop: CommandDef<{}, null>;

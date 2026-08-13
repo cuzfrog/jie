@@ -54,6 +54,7 @@ export class JieAgentBody implements AgentBody {
   private readonly hookIdentity: HookIdentity;
   private readonly compactor: Compactor;
   private readonly systemContextBlock: string;
+  private readonly teamPrompt: string;
   private readonly memoryManager: MemoryManager;
   private readonly agent: Agent;
   private readonly sender: AgentSender;
@@ -78,6 +79,7 @@ export class JieAgentBody implements AgentBody {
     this.hookRunner = deps.hookRunner;
     this.compactor = deps.compactor;
     this.systemContextBlock = deps.systemContextBlock;
+    this.teamPrompt = params.teamPrompt ?? "";
     this.memoryManager = deps.memoryManager;
     this.hookIdentity = {
       sessionId: this.sessionId,
@@ -164,6 +166,7 @@ export class JieAgentBody implements AgentBody {
     this.agent.state.systemPrompt = composeSystemPrompt({
       rolePrompt: params.soul.systemPrompt,
       contextBlock: deps.systemContextBlock,
+      teamPrompt: this.teamPrompt,
       skills: this.resolvedSkills,
     });
     this.isLeader = params.isLeader;
@@ -239,6 +242,7 @@ export class JieAgentBody implements AgentBody {
     this.agent.state.systemPrompt = composeSystemPrompt({
       rolePrompt: this.soul.systemPrompt,
       contextBlock: this.systemContextBlock,
+      teamPrompt: this.teamPrompt,
       memoryBlock,
       skills: this.resolvedSkills,
     });

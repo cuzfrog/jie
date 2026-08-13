@@ -16,11 +16,16 @@ export class TeamCommand extends PositionalSlashCommand {
 
   protected override async completeArgument(argumentText: string, context: SlashContext): Promise<SlashCompletion | null> {
     const info = await context.platform.execute({ name: "getTeamInfo" });
-    const items = info.installed.map((team) => ({
-      value: team.id,
-      label: team.id,
-      description: team.id === info.defaultTeam ? "(default)" : team.agentCount === 1 ? "1 agent" : `${team.agentCount} agents`,
-    }));
+    const items = info.installed.map((team) => {
+      const defaultTag = team.id === info.defaultTeam ? " (default)" : "";
+      const fallback = team.agentCount === 1 ? "1 agent" : `${team.agentCount} agents`;
+      const base = team.description ?? fallback;
+      return {
+        value: team.id,
+        label: team.id,
+        description: `${base}${defaultTag}`,
+      };
+    });
     return completeItems(items, argumentText.trim());
   }
 }

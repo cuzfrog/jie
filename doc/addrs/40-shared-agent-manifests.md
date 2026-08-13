@@ -1,36 +1,24 @@
-# ADR 40: Shared Agent Manifests and the `src/manifest/` Consolidation
+# ADR 40: Shared Agent Manifests and Manifest Consolidation
 
 ## Context
 
-Team blueprints live in `src/teams/` as `<id>/TEAM.md` plus `<role>.md` files. The installer `src/teams-installer/` copies them into `.jie/teams/` or `~/.jie/teams/`. The platform reads the installed copies and is otherwise agnostic of the bundled content (ADR 11, ADR 24). Two recurring support needs are not served by the existing pipeline:
-
-- An `explorer` agent that gathers information or runs lightweight experiments without editing source.
-- A `steward` agent that runs and waits on scripts, builds, or tests.
-
-These are generic enough to share across multiple teams, but they are not part of the `default-dev-team` delivery pipeline and should not be edited into every team copy.
+Teams live in `src/manifest/teams/` as `<id>/TEAM.md` + `<role>.md`; the CLI-side installer copies them into `.jie/teams/` and `~/.jie/teams/`, where the platform reads them and is otherwise agnostic of bundled content (ADR 11, ADR 24). Reusable single-agent manifests (for tasks like exploration and chores) don't fit a per-team copy; they should be authored once and referenced by any team rather than edited into every team copy.
 
 ## Decision
 
-1. Consolidate bundled content under `src/manifest/`: `src/manifest/teams/` (moved from `src/teams/`), `src/manifest/agents/` (new), and `src/manifest/installer/` (moved from `src/teams-installer/`). `src/manifest/` is itself a valid installer source root.
+1. Shared agents are single flat files `agents/<id>.md` whose filename stem is the agent id and role — no `id`/`role` frontmatter field. They reuse the existing `AgentSoul` schema rather than introducing a parallel one.
 
-2. A shared agent is a single flat file `<id>.md` in `src/manifest/agents/` (or `.jie/agents/`, `~/.jie/agents/` at runtime). The filename stem is the agent id and role; no `id:` or `role:` frontmatter field. The frontmatter reuses the existing `AgentSoul` schema (`tools`, `model?`, `subscribe?`, `skills?`, `target_context_window_size?`).
+2. A team references shared agents from `TEAM.md` via `additional-agents:` (list of stems). Stems are validated statically at parse time (format, no duplicates, no collision with local role stems); resolution is deferred to team load through the existing `AgentRegistry` (project `.jie/agents/` overrides user `~/.jie/agents/`) and the resulting `AgentSoul`s are merged into `TeamBlueprint.roles`. `TeamBlueprint` records the merged refs in `additionalAgentRefs`.
 
-3. A team references shared agents from `TEAM.md` via `additional-agents:` (list of stems). The platform parser validates the list statically (valid stems, no duplicates, no collision with local role stems); the `TeamRegistry` resolves each ref through a new `AgentRegistry` at load time and merges the resulting `AgentSoul`s into `TeamBlueprint.roles`.
+3. A shared agent cannot be a team leader: `leader:` must name a local role (`LEADER_UNKNOWN` / `LEADER_MISMATCH` otherwise). Because resolution is load-time, a missing shared agent surfaces as `AGENT_NOT_FOUND` at team load — the installer never parses team files and stays parse-free.
 
-4. `TeamBlueprint` gains `additionalAgentRefs: ReadonlyArray<string>` to record which roles were merged in. `TeamBlueprint.roles` is the merged, sorted list of local and shared roles; consumers such as `TeamManager.constructTeam`, `agentCount`, and the TUI roster work unchanged.
-
-5. The `leader:` field in `TEAM.md` must name a **local** role. A shared agent cannot be a team leader (`LEADER_UNKNOWN`).
-
-6. The installer becomes a manifest installer (`createManifestInstaller`) that operates on a `.jie/` root. It scans `<root>/teams/<id>/TEAM.md` (preferred v2 layout) and the legacy `<root>/<id>/TEAM.md` layout, plus `<root>/agents/<id>.md` files. It copies teams to `<jieDir>/teams/<id>/` and agents to `<jieDir>/agents/<id>.md`, writing `.source.json` (teams) or `<id>.source.json` (agents) provenance. It is still CLI-side and never imported by the platform.
-
-7. First-run (`src/cli/first-run.ts`) points the installer at `src/manifest/` and installs both the `default-dev-team` blueprint and the `explorer`/`steward` shared agents into `~/.jie/`.
+4. Consolidation under `src/manifest/` gives the installer one source root to scan (v2 `agents/<id>.md` and `teams/<id>/TEAM.md`, plus the legacy root-level `<id>/TEAM.md` layout). First run points the installer at `src/manifest/` and installs bundled team blueprints and shared agents into `~/.jie/`.
 
 ## Consequences
 
-- Team manifests can pull in reusable agents without duplicating their files; adding a shared agent to a team is a one-line `additional-agents:` edit.
-- The platform remains agnostic of the bundled content; it only reads installed files from `.jie/` and `~/.jie/`.
-- The installer keeps its parse-free boundary: unresolved `additional-agents:` refs surface at team-load time as `AGENT_NOT_FOUND`.
-- The `src/manifest/` move is a breaking internal layout change. Existing npm/git packages with the legacy root-level `<id>/TEAM.md` layout still install without modification.
+- Adding a reusable agent to a team is a one-line `additional-agents:` edit; authoring is a single flat file.
+- The platform reads only installed `.jie/` files and stays agnostic of bundled content; the `AgentRegistry` serves both team-merge and ad-hoc dispatch.
+- The `src/manifest/` move is a breaking internal layout; external packages with the legacy root-level `<id>/TEAM.md` layout still install unchanged.
 
 ## Status
 

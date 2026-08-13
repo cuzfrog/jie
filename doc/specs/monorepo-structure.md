@@ -28,7 +28,7 @@ src/
   tui/             # Terminal UI (pi-tui-based inline renderer): chat column, editor, footer, slash commands; bootTui(options, deps)
   utils/           # Process-level infra shared by all modules: diagnostic logger (tslog), Console output abstraction
   manifest/         # Runtime-agnostic manifest content and the CLI-side installer
-    teams/             # Shipped team blueprints (the `default-dev-team` six-role delivery pipeline) - pure content, no code (doc/specs/jie-team/)
+    teams/             # Shipped team blueprints - pure content, no code (doc/specs/jie-team/)
     agents/            # Shared single-agent manifests (`<id>.md`) that any team may reference via `additional-agents:`
     installer/         # Manifest install/remove: npm/git/file sources -> `teams/<id>/` and `agents/<id>.md`; CLI-side, never imported by platform or manifest content (ADR 35, ADR 40)
   code-lens/       # Standalone MCP server (bin: code-lens): code-architecture facts from SCIP indexes (doc/specs/code-lens/)
@@ -51,7 +51,7 @@ manifest/teams + manifest/agents             (blueprint data only - pure content
 code-lens   -> utils                           (standalone MCP server; protobufjs for SCIP decoding - runs as a child process, never imported)
 ```
 
-**Agnosticism rule (ADR 11, amended by ADR 40).** `platform` has zero dependency on `manifest` - no `import` in any form, including types. The platform reads team and shared-agent blueprints from filesystem paths (`.jie/teams/<id>/`, `~/.jie/teams/<id>/`, `.jie/agents/<id>.md`, `~/.jie/agents/<id>.md`) plus its built-in `default-solo` fallback; a team is data, not code. The bundled `default-dev-team` blueprint at `src/manifest/teams/default-dev-team/` and the bundled `explorer`/`steward` shared agents at `src/manifest/agents/` are reached only after first-run auto-install (D1) copies them to `~/.jie/`.
+**Agnosticism rule (ADR 11, amended by ADR 40).** `platform` has zero dependency on `manifest` - no `import` in any form, including types. The platform reads team and shared-agent blueprints from filesystem paths (`.jie/teams/<id>/`, `~/.jie/teams/<id>/`, `.jie/agents/<id>.md`, `~/.jie/agents/<id>.md`) plus its built-in `default-solo` fallback; a team is data, not code. The bundled team blueprints at `src/manifest/teams/` and the bundled shared agents at `src/manifest/agents/` are reached only after first-run auto-install (D1) copies them to `~/.jie/`.
 
 ## Build System
 `bun` (>= 1.3.14) runs TypeScript natively; no build step. `package.json` at root: `"files": ["src"]`, `"bin": {"jie": "src/cli/index.ts", "code-lens": "src/code-lens/main.ts"}`.

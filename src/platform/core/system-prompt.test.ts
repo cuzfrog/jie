@@ -57,14 +57,14 @@ describe("composeSystemPrompt", () => {
     expect(output.indexOf("ROLE")).toBeLessThan(output.indexOf("<available_skills>"));
   });
 
-  test("places the memory block between the context block and the role prose", () => {
+  test("places the memory block after the role prose", () => {
     const output = composeSystemPrompt({
       rolePrompt: "ROLE",
       contextBlock: "CONTEXT",
       memoryBlock: "<memory team=\"t1\">- [instruction] keep the build green</memory>",
     });
     expect(output).toBe(
-      "CONTEXT\n\n<memory team=\"t1\">- [instruction] keep the build green</memory>\n\nROLE",
+      "CONTEXT\n\nROLE\n\n<memory team=\"t1\">- [instruction] keep the build green</memory>",
     );
   });
 
@@ -72,11 +72,48 @@ describe("composeSystemPrompt", () => {
     expect(composeSystemPrompt({ rolePrompt: "ROLE", contextBlock: "CONTEXT", memoryBlock: "" })).toBe("CONTEXT\n\nROLE");
   });
 
-  test("a memory block without a context block still precedes the role prose", () => {
+  test("places the memory block after skills when both are present", () => {
+    const output = composeSystemPrompt({
+      rolePrompt: "ROLE",
+      contextBlock: "CONTEXT",
+      memoryBlock: "<memory team=\"t1\">- [fact] sqlite over postgres</memory>",
+      skills: [skill("deploy", "ENTRY")],
+    });
+    expect(output).toContain("ROLE");
+    expect(output).toContain("<available_skills>");
+    expect(output.indexOf("<available_skills>")).toBeLessThan(output.indexOf("<memory"));
+  });
+
+  test("a memory block without a context block still follows the role prose", () => {
     const output = composeSystemPrompt({
       rolePrompt: "ROLE",
       memoryBlock: "<memory team=\"t1\">- [fact] sqlite over postgres</memory>",
     });
-    expect(output).toBe("<memory team=\"t1\">- [fact] sqlite over postgres</memory>\n\nROLE");
+    expect(output).toBe("ROLE\n\n<memory team=\"t1\">- [fact] sqlite over postgres</memory>");
+  });
+
+  test("formats the team prompt as a team_context block before the role prose", () => {
+    const output = composeSystemPrompt({
+      rolePrompt: "ROLE",
+      contextBlock: "CONTEXT",
+      teamPrompt: "one task in flight",
+    });
+    expect(output).toBe(
+      "CONTEXT\n\n<team_context>\none task in flight\n</team_context>\n\nROLE",
+    );
+  });
+
+  test("orders context, team, role, skills, and memory", () => {
+    const output = composeSystemPrompt({
+      rolePrompt: "ROLE",
+      contextBlock: "CONTEXT",
+      teamPrompt: "TEAM",
+      skills: [skill("deploy", "ENTRY")],
+      memoryBlock: "<memory team=\"t1\">- [fact] x</memory>",
+    });
+    expect(output.indexOf("CONTEXT")).toBeLessThan(output.indexOf("<team_context>"));
+    expect(output.indexOf("<team_context>")).toBeLessThan(output.indexOf("ROLE"));
+    expect(output.indexOf("ROLE")).toBeLessThan(output.indexOf("<available_skills>"));
+    expect(output.indexOf("</available_skills>")).toBeLessThan(output.indexOf("<memory"));
   });
 });

@@ -5,6 +5,7 @@ tools:
   - read_artifact
   - write_kanban
   - update_kanban
+  - memory_search
 subscribe:
   - task.review_passed
   - task.failed

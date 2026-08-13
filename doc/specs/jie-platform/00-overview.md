@@ -17,7 +17,7 @@ The Jie Platform is an orchestration framework for building multi-agent systems.
 | **Body** | Concrete `AgentBody`: soul + event-manager + artifact-store + transcript-store + `sessionId`; runs the event loop and is the only bus publisher. | `06-agent-model.md` |
 | **Event Bus** | In-process pub/sub (`InProcessEventBus`); NATS plugs in behind the same interface if single-machine is outgrown (ADR 5). | `03-event-system.md` |
 | **Event Type / Topic** | Dotted event id (`agent.stream.chunk`, `user.prompt`); platform topics use `topic === type`, client topics use `custom.${teamId}.${topic}`. Identity is in the envelope, not the subject. | `03-event-system.md` |
-| **TeamInfo** | Boot roster published in `system.team.loaded`: `{ id, leaderKey, agents: AgentInfo[] }`. The TUI's agent-discovery primitive. | `types.ts` |
+| **TeamInfo** | Boot roster published in `system.team.loaded`: `{ id, leaderKey, agents: AgentInfo[], description? }`. The TUI's agent-discovery primitive. | `types.ts` |
 | **Leader Agent** | The team's default addressee (TUI focus, `jie -p` target), reached through `user.prompt` filtered on its `agentKey` — no leader-only ingress topic, no special tools. | `06-agent-model.md` |
 | **Tool** | Typed function with a JSON schema. Built-ins: `bash`, `read_file`, `write_file`, `edit_file`, `ls`, `find_file`, `grep_file`, `read_artifact`, `write_artifact`, `find_artifact`, `write_kanban`, `memory_add`, `memory_search`, `notify`, `web_search`, `web_fetch`, plus unimplemented MCP tools (ADR 4). | `06-agent-model.md` |
 | **Tool Registry** | Resolves a soul's tool-spec strings to `Tool` instances at load time; bare names are built-ins, `mcp:<server>:<tool>`/`mcp:<server>:*` currently resolve to zero tools. | `06-agent-model.md` |

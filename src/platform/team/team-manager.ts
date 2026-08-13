@@ -18,6 +18,7 @@ export interface TeamManager {
   resumeSession(teamId: string, sessionId: string): Promise<TeamInfo>;
   listInstalled(): string[];
   agentCount(teamId: string): number;
+  getTeamDescription(teamId: string): string | undefined;
   listLoaded(): ReadonlyMap<string, TeamInfo>;
   locate(teamId: string): TeamBlueprintLocation;
   agents(teamId: string): ReadonlyArray<AgentInfo>;
@@ -33,6 +34,7 @@ export interface TeamManager {
 
 export class TeamManagerImpl implements TeamManager {
   private readonly loadedTeams = new Map<string, AgentBody[]>();
+  private readonly loadedBlueprints = new Map<string, TeamBlueprint>();
   private readonly sessionIds = new Map<string, string>();
   private readonly bodyParams = new Map<string, AgentBodyParams>();
 
@@ -86,6 +88,16 @@ export class TeamManagerImpl implements TeamManager {
 
   agentCount(teamId: string): number {
     return this.teamRegistry.parseTeamManifest(teamId).roles.reduce((sum, soul) => sum + soul.replicas, 0);
+  }
+
+  getTeamDescription(teamId: string): string | undefined {
+    const loaded = this.loadedBlueprints.get(teamId);
+    if (loaded !== undefined) return loaded.description;
+    try {
+      return this.teamRegistry.parseTeamManifest(teamId).description;
+    } catch {
+      return undefined;
+    }
   }
 
   listLoaded(): ReadonlyMap<string, TeamInfo> {
@@ -155,6 +167,7 @@ export class TeamManagerImpl implements TeamManager {
     if (existing !== undefined && overrideSessionId !== undefined) {
       for (const body of existing) body.stop();
       this.loadedTeams.delete(requested);
+      this.loadedBlueprints.delete(requested);
       this.sessionIds.delete(requested);
     }
     const sessionId = this.resolveSessionId(requested, overrideSessionId);
@@ -169,6 +182,7 @@ export class TeamManagerImpl implements TeamManager {
 
   private async constructTeam(teamId: string, sessionId: string): Promise<AgentBody[]> {
     const blueprint: TeamBlueprint = this.teamRegistry.parseTeamManifest(teamId);
+    this.loadedBlueprints.set(teamId, blueprint);
     const settings = this.settingsStore.load();
     const bodies: AgentBody[] = [];
     const blueprintKeys = new Set<string>();
@@ -194,6 +208,7 @@ export class TeamManagerImpl implements TeamManager {
           sessionId,
           model: resolved.model,
           effort: resolved.effort,
+          teamPrompt: blueprint.teamPrompt,
         };
         this.bodyParams.set(`${teamId}:${agentKey}`, params);
         bodies.push(this.agentBodyFactory(params));
@@ -323,7 +338,17 @@ export class TeamManagerImpl implements TeamManager {
     const sessionId = this.sessionIds.get(id) ?? null;
     const sessionName = sessionId === null ? null : this.transcriptStore.sessionName(sessionId);
     const kanbanCards = sessionId === null ? [] : this.kanbanStore.load(id, sessionId);
-    return { id, leaderKey: leader.agentKey, sessionName, currentSessionId: sessionId, agents: identities, history, kanbanCards };
+    const blueprint = this.loadedBlueprints.get(id);
+    return {
+      id,
+      leaderKey: leader.agentKey,
+      sessionName,
+      currentSessionId: sessionId,
+      agents: identities,
+      history,
+      kanbanCards,
+      description: blueprint?.description,
+    };
   }
 
   private async buildAdHoc(teamId: string, sessionId: string, agentRef: string, isEphemeral: boolean): Promise<AgentBody | null> {
@@ -331,6 +356,8 @@ export class TeamManagerImpl implements TeamManager {
       const soul = this.agentRegistry.resolve(agentRef);
       const settings = this.settingsStore.load();
       const resolved = this.resolveSoulModelAndEffort(soul, settings);
+      const blueprint = this.loadedBlueprints.get(teamId);
+      const teamPrompt = blueprint === undefined ? "" : blueprint.teamPrompt;
       const params: AgentBodyParams = {
         agentKey: agentRef,
         teamId,
@@ -340,6 +367,7 @@ export class TeamManagerImpl implements TeamManager {
         sessionId,
         model: resolved.model,
         effort: resolved.effort,
+        teamPrompt,
       };
       this.bodyParams.set(`${teamId}:${agentRef}`, params);
       return this.agentBodyFactory(params);
