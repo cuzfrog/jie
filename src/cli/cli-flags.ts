@@ -36,344 +36,188 @@ export interface ParsedArgsMap {
 }
 export type ParsedArgs = ParsedArgsMap[keyof ParsedArgsMap];
 
-const PRINT_FLAGS = new Set(["-p", "--print"]);
+type ParseContext = {
+  readonly args: readonly string[];
+  index: number;
+  seen: Set<string>;
+  dupes: Set<string>;
+  debug: boolean;
+  noInstall: boolean;
+  inMemory: boolean;
+};
 
 export function parseFlags(argv: string[]): ParsedArgs {
-  const dupes = new Set<string>();
-  const seen = new Map<string, string>();
-
-  let debug = false;
-  let noInstall = false;
-  const rest = argv.slice();
-  if (rest.length === 0) return { kind: "tui", inMemory: false, debug, noInstall };
-  let first = rest[0]!;
-  while (first === "--debug" || first === "--no-install") {
-    if (first === "--debug") {
-      if (debug) dupes.add("--debug");
-      debug = true;
-    } else {
-      if (noInstall) dupes.add("--no-install");
-      noInstall = true;
-    }
-    rest.shift();
-    if (rest.length === 0) {
-      const dupErr = errorIfDupes(dupes);
-      if (dupErr !== undefined) return dupErr;
-      return { kind: "tui", inMemory: false, debug, noInstall };
-    }
-    first = rest[0]!;
-  }
-  const dupErr = errorIfDupes(dupes);
+  const ctx: ParseContext = { args: argv, index: 0, seen: new Set(), dupes: new Set(), debug: false, noInstall: false, inMemory: false };
+  consumeLeadingGlobalFlags(ctx);
+  const dupErr = errorIfDupes(ctx.dupes);
   if (dupErr !== undefined) return dupErr;
 
+  if (ctx.index >= ctx.args.length) {
+    return { kind: "tui", inMemory: ctx.inMemory, debug: ctx.debug, noInstall: ctx.noInstall };
+  }
+
+  const first = ctx.args[ctx.index]!;
   if (first === "--version") return { kind: "version" };
   if (first === "--help" || first === "-h") return { kind: "help" };
+  if (first === "login") { ctx.index += 1; return parseLogin(ctx); }
+  if (first === "logout") { ctx.index += 1; return parseLogout(ctx); }
+  if (first === "model") { ctx.index += 1; return parseModel(ctx); }
+  if (first === "team") { ctx.index += 1; return parseTeam(ctx); }
+
   if (first === "--in-memory") {
-    seen.set("--in-memory", "");
-    const tail = rest.slice(1);
-    let j = 0;
-    while (j < tail.length && (tail[j] === "--debug" || tail[j] === "--no-install")) {
-      const f = tail[j]!;
-      if (f === "--debug") {
-        if (seen.has("--debug")) dupes.add("--debug");
-        seen.set("--debug", "");
-        debug = true;
-      } else {
-        if (seen.has("--no-install")) dupes.add("--no-install");
-        seen.set("--no-install", "");
-        noInstall = true;
-      }
-      j += 1;
-    }
-    const remaining = tail.slice(j);
-    if (remaining.length === 0) {
-      const dupErr = errorIfDupes(dupes);
-      if (dupErr !== undefined) return dupErr;
-      return { kind: "tui", inMemory: true, debug, noInstall };
-    }
-    const head = remaining[0]!;
-    if (head === "-p" || head === "--print" || head === "--in-memory") {
-      return parsePrint(remaining, dupes, seen, head, true, debug, noInstall);
-    }
-    if (head === "--api-key" || head === "--resume" || head === "--team") {
-      if (remaining.length < 2) {
-        return { kind: "error", message: `missing argument for ${head}` };
-      }
-      return parsePrint(remaining.slice(1), dupes, seen, head, true, debug, noInstall);
-    }
-    if (head.startsWith("-")) {
-      return { kind: "error", message: `unknown flag: ${head}` };
-    }
-    return { kind: "tui", team: head, inMemory: true, debug, noInstall };
+    recordFlag(ctx, "--in-memory");
+    ctx.inMemory = true;
+    ctx.index += 1;
+    return parseRun(ctx);
   }
-  if (first === "login") return parseLogin(rest.slice(1), dupes, seen);
-  if (first === "logout") return parseLogout(rest.slice(1), dupes, seen);
-  if (first === "model") return parseModel(rest.slice(1));
-  if (first === "team") return parseTeam(rest.slice(1));
+  if (first.startsWith("-")) return parseRun(ctx);
 
-  if (first === "--api-key") {
-    const v = rest[1];
-    if (v === undefined) return { kind: "error", message: "missing argument for --api-key" };
-    if (rest.length > 2) {
-
-      return parsePrint(rest.slice(1), dupes, seen, first, false, debug, noInstall);
-    }
-    return { kind: "apiKey", apiKey: v };
-  }
-  if (PRINT_FLAGS.has(first)) {
-    return parsePrint(rest.slice(1), dupes, seen, first, false, debug, noInstall);
-  }
-  if (first === "--resume") {
-    return parsePrint(rest.slice(1), dupes, seen, first, false, debug, noInstall);
-  }
-  if (first === "--team") {
-    return parsePrint(rest.slice(1), dupes, seen, first, false, debug, noInstall);
-  }
-  if (first.startsWith("-")) {
-    return { kind: "error", message: `unknown flag: ${first}` };
-  }
-  return { kind: "error", message: `unknown subcommand: ${first}` };
+  return error(`unknown subcommand: ${first}`);
 }
 
-function errorIfDupes(
-  dupes: Set<string>,
-): { kind: "error"; message: string } | undefined {
+function consumeLeadingGlobalFlags(ctx: ParseContext): void {
+  while (ctx.index < ctx.args.length) {
+    const a = ctx.args[ctx.index]!;
+    if (a === "--debug") {
+      recordFlag(ctx, "--debug");
+      ctx.debug = true;
+      ctx.index += 1;
+      continue;
+    }
+    if (a === "--no-install") {
+      recordFlag(ctx, "--no-install");
+      ctx.noInstall = true;
+      ctx.index += 1;
+      continue;
+    }
+    break;
+  }
+}
+
+function recordFlag(ctx: ParseContext, name: string): void {
+  if (ctx.seen.has(name)) ctx.dupes.add(name);
+  ctx.seen.add(name);
+}
+
+function errorIfDupes(dupes: Set<string>): ParsedArgs | undefined {
   if (dupes.size === 0) return undefined;
   const first = [...dupes][0]!;
   return { kind: "error", message: `duplicate flag: ${first}` };
 }
 
-function parseLogin(
-  args: string[],
-  dupes: Set<string>,
-  _seen: Map<string, string>,
-): ParsedArgs {
-  let provider: string | undefined;
-  let apiKey: string | undefined;
-  for (let i = 0; i < args.length; i += 1) {
-    const a = args[i]!;
-    if (a === "--provider") {
-      provider = args[i + 1];
-      i += 1;
-    } else if (a === "--api-key") {
-      apiKey = args[i + 1];
-      i += 1;
-    } else {
-      return { kind: "error", message: `unknown flag: ${a}` };
-    }
+function error(message: string): ParsedArgs {
+  return { kind: "error", message };
+}
+
+function parseRun(ctx: ParseContext): ParsedArgs {
+  const first = ctx.args[ctx.index];
+  if (first === "--json" || first === "--timeout") {
+    return error(`unknown flag: ${first}`);
   }
-  const dupErr = errorIfDupes(dupes);
-  if (dupErr !== undefined) return dupErr;
-  return { kind: "login", provider, apiKey };
-}
 
-function parseLogout(
-  args: string[],
-  _dupes: Set<string>,
-  _seen: Map<string, string>,
-): ParsedArgs {
-  const provider = args[0];
-  if (provider !== undefined && provider.startsWith("-")) {
-    return { kind: "error", message: `unknown flag: ${provider}` };
-  }
-  return { kind: "logout", provider };
-}
-
-function parseModel(args: string[]): ParsedArgs {
-  if (args.length === 0) {
-    return { kind: "error", message: "missing argument for model" };
-  }
-  const first = args[0]!;
-  const parsed = parseModelRef(first);
-  if (parsed === null) return { kind: "error", message: `invalid model string: ${first}` };
-  return { kind: "model", provider: parsed.provider, modelId: parsed.modelId };
-}
-
-function parseTeam(args: string[]): ParsedArgs {
-  if (args.length === 0) return { kind: "team", action: "info" };
-  const first = args[0]!;
-  if (first === "add") return parseTeamAdd(args.slice(1));
-  if (first === "list") return parseTeamList(args.slice(1));
-  if (first === "remove") return parseTeamRemove(args.slice(1));
-  if (first.startsWith("-")) return { kind: "error", message: `unknown flag: ${first}` };
-  return { kind: "team", action: "setDefault", teamId: first };
-}
-
-function parseTeamAdd(args: string[]): ParsedArgs {
-  let project = false;
-  let force = false;
-  let source: string | undefined;
-  for (let i = 0; i < args.length; i += 1) {
-    const a = args[i]!;
-    if (a === "--project") {
-      project = true;
-      continue;
-    }
-    if (a === "--force") {
-      force = true;
-      continue;
-    }
-    if (a.startsWith("-")) return { kind: "error", message: `unknown flag: ${a}` };
-    if (source !== undefined) return { kind: "error", message: `unexpected argument: ${a}` };
-    source = a;
-  }
-  if (source === undefined) return { kind: "error", message: "missing source for 'jie team add'" };
-  return { kind: "team", action: "add", source, project, force };
-}
-
-function parseTeamList(args: string[]): ParsedArgs {
-  if (args.length > 0) return { kind: "error", message: `unexpected argument: ${args[0]}` };
-  return { kind: "team", action: "list" };
-}
-
-function parseTeamRemove(args: string[]): ParsedArgs {
-  let project = false;
-  let teamId: string | undefined;
-  for (let i = 0; i < args.length; i += 1) {
-    const a = args[i]!;
-    if (a === "--project") {
-      project = true;
-      continue;
-    }
-    if (a.startsWith("-")) return { kind: "error", message: `unknown flag: ${a}` };
-    if (teamId !== undefined) return { kind: "error", message: `unexpected argument: ${a}` };
-    teamId = a;
-  }
-  if (teamId === undefined) return { kind: "error", message: "missing team id for 'jie team remove'" };
-  return { kind: "team", action: "remove", teamId, project };
-}
-
-function parsePrint(
-  args: string[],
-  dupes: Set<string>,
-  seen: Map<string, string>,
-  firstFlag: string,
-  inMemory = false,
-  debug = false,
-  noInstall = false,
-): ParsedArgs {
   let team: string | undefined;
+  let resume: string | undefined;
+  let apiKey: string | undefined;
   let timeout: number | undefined;
   let json = false;
-  let apiKey: string | undefined;
-  let resume: string | undefined;
   let instruction: string | undefined;
-  let i = 0;
-  if (firstFlag === "-p" || firstFlag === "--print" || firstFlag === "--api-key") {
-    if (firstFlag === "--api-key") {
-      if (args[i] === undefined) {
-        return { kind: "error", message: "missing argument for --api-key" };
-      }
-      apiKey = args[i]!;
-      i += 1;
-    } else {
+  let printRequested = false;
 
-      seen.set(firstFlag, "");
-    }
-  } else if (firstFlag === "--resume") {
-    if (args[i] === undefined) {
-      return { kind: "error", message: "missing argument for --resume" };
-    }
-    resume = args[i]!;
-    i += 1;
-    seen.set("--resume", resume);
-  } else if (firstFlag === "--team") {
-    if (args[i] === undefined) {
-      return { kind: "error", message: "missing argument for --team" };
-    }
-    team = args[i]!;
-    i += 1;
-    seen.set("--team", team);
-  }
-  for (; i < args.length; i += 1) {
-    const a = args[i]!;
+  while (ctx.index < ctx.args.length) {
+    const a = ctx.args[ctx.index]!;
     if (a === "-p" || a === "--print") {
-      seen.set(a, "");
+      recordFlag(ctx, a);
+      printRequested = true;
+      ctx.index += 1;
       continue;
     }
     if (a === "--in-memory") {
-      if (seen.has("--in-memory")) dupes.add("--in-memory");
-      seen.set("--in-memory", "");
-      inMemory = true;
-      continue;
-    }
-    if (a === "--team") {
-      const v = args[i + 1];
-      if (v === undefined) return { kind: "error", message: "missing argument for --team" };
-      if (seen.has("--team")) dupes.add("--team");
-      seen.set("--team", v);
-      team = v;
-      i += 1;
-      continue;
-    }
-    if (a === "--timeout") {
-      const v = args[i + 1];
-      if (v === undefined) return { kind: "error", message: "missing argument for --timeout" };
-      if (seen.has("--timeout")) dupes.add("--timeout");
-      const n = Number(v);
-      if (!Number.isFinite(n) || n <= 0) {
-        return { kind: "error", message: `invalid --timeout value: ${v} (must be > 0)` };
-      }
-      seen.set("--timeout", String(n));
-      timeout = n;
-      i += 1;
-      continue;
-    }
-    if (a === "--json") {
-      if (seen.has("--json")) dupes.add("--json");
-      seen.set("--json", "");
-      json = true;
-      continue;
-    }
-    if (a === "--api-key") {
-      const v = args[i + 1];
-      if (v === undefined) return { kind: "error", message: "missing argument for --api-key" };
-      if (seen.has("--api-key")) dupes.add("--api-key");
-      seen.set("--api-key", v);
-      apiKey = v;
-      i += 1;
-      continue;
-    }
-    if (a === "--resume") {
-      const v = args[i + 1];
-      if (v === undefined) return { kind: "error", message: "missing argument for --resume" };
-      if (seen.has("--resume")) dupes.add("--resume");
-      seen.set("--resume", v);
-      resume = v;
-      i += 1;
+      recordFlag(ctx, "--in-memory");
+      ctx.inMemory = true;
+      ctx.index += 1;
       continue;
     }
     if (a === "--debug") {
-      if (seen.has("--debug")) dupes.add("--debug");
-      seen.set("--debug", "");
-      debug = true;
+      recordFlag(ctx, "--debug");
+      ctx.debug = true;
+      ctx.index += 1;
       continue;
     }
     if (a === "--no-install") {
-      if (seen.has("--no-install")) dupes.add("--no-install");
-      seen.set("--no-install", "");
-      noInstall = true;
+      recordFlag(ctx, "--no-install");
+      ctx.noInstall = true;
+      ctx.index += 1;
       continue;
     }
-    if (a.startsWith("-")) {
-      return { kind: "error", message: `unknown flag: ${a}` };
+    if (a === "--json") {
+      recordFlag(ctx, "--json");
+      json = true;
+      ctx.index += 1;
+      continue;
     }
-    if (instruction === undefined) {
+    if (a === "--team") {
+      recordFlag(ctx, "--team");
+      ctx.index += 1;
+      const v = ctx.args[ctx.index];
+      if (v === undefined) return error("missing argument for --team");
+      team = v;
+      ctx.index += 1;
+      continue;
+    }
+    if (a === "--resume") {
+      recordFlag(ctx, "--resume");
+      ctx.index += 1;
+      const v = ctx.args[ctx.index];
+      if (v === undefined) return error("missing argument for --resume");
+      resume = v;
+      ctx.index += 1;
+      continue;
+    }
+    if (a === "--api-key") {
+      recordFlag(ctx, "--api-key");
+      ctx.index += 1;
+      const v = ctx.args[ctx.index];
+      if (v === undefined) return error("missing argument for --api-key");
+      apiKey = v;
+      ctx.index += 1;
+      continue;
+    }
+    if (a === "--timeout") {
+      recordFlag(ctx, "--timeout");
+      ctx.index += 1;
+      const v = ctx.args[ctx.index];
+      if (v === undefined) return error("missing argument for --timeout");
+      const n = Number(v);
+      if (!Number.isFinite(n) || n <= 0) return error(`invalid --timeout value: ${v} (must be > 0)`);
+      timeout = n;
+      ctx.index += 1;
+      continue;
+    }
+    if (a.startsWith("-")) return error(`unknown flag: ${a}`);
+
+    if (instruction !== undefined) return error(`unexpected positional argument: ${a}`);
+    if (printRequested || team !== undefined || resume !== undefined) {
       instruction = a;
     } else {
-      return { kind: "error", message: `unexpected positional argument: ${a}` };
+      team = a;
     }
+    ctx.index += 1;
   }
-  const dupErr = errorIfDupes(dupes);
+
+  const dupErr = errorIfDupes(ctx.dupes);
   if (dupErr !== undefined) return dupErr;
+
   if (instruction === undefined) {
-    const printRequested = seen.has("-p") || seen.has("--print");
-    const printOnlyFlags = apiKey !== undefined || timeout !== undefined || json;
-    if (!printRequested && !printOnlyFlags && (team !== undefined || resume !== undefined)) {
-      return { kind: "tui", team, resume, inMemory, debug, noInstall };
+    const printOnly = apiKey !== undefined || timeout !== undefined || json;
+    if (!printRequested && !printOnly && (team !== undefined || resume !== undefined || ctx.inMemory)) {
+      return { kind: "tui", team, resume, inMemory: ctx.inMemory, debug: ctx.debug, noInstall: ctx.noInstall };
     }
-    return { kind: "error", message: "missing instruction for -p/--print" };
+    if (apiKey !== undefined && !printRequested && !json && timeout === undefined && team === undefined && resume === undefined && !ctx.inMemory) {
+      return { kind: "apiKey", apiKey };
+    }
+    return error("missing instruction for -p/--print");
   }
+
   return {
     kind: "print",
     instruction,
@@ -382,7 +226,118 @@ function parsePrint(
     json,
     apiKey,
     resume,
-    inMemory,
-    debug,
+    inMemory: ctx.inMemory,
+    debug: ctx.debug,
   };
+}
+
+function parseLogin(ctx: ParseContext): ParsedArgs {
+  let provider: string | undefined;
+  let apiKey: string | undefined;
+  while (ctx.index < ctx.args.length) {
+    const a = ctx.args[ctx.index]!;
+    if (a === "--provider") {
+      recordFlag(ctx, "--provider");
+      ctx.index += 1;
+      const v = ctx.args[ctx.index];
+      if (v === undefined) return error("missing argument for --provider");
+      provider = v;
+      ctx.index += 1;
+      continue;
+    }
+    if (a === "--api-key") {
+      recordFlag(ctx, "--api-key");
+      ctx.index += 1;
+      const v = ctx.args[ctx.index];
+      if (v === undefined) return error("missing argument for --api-key");
+      apiKey = v;
+      ctx.index += 1;
+      continue;
+    }
+    if (a.startsWith("-")) return error(`unknown flag: ${a}`);
+    return error(`unexpected argument: ${a}`);
+  }
+  const dupErr = errorIfDupes(ctx.dupes);
+  if (dupErr !== undefined) return dupErr;
+  return { kind: "login", provider, apiKey };
+}
+
+function parseLogout(ctx: ParseContext): ParsedArgs {
+  const provider = ctx.args[ctx.index];
+  if (provider !== undefined && provider.startsWith("-")) return error(`unknown flag: ${provider}`);
+  return { kind: "logout", provider };
+}
+
+function parseModel(ctx: ParseContext): ParsedArgs {
+  if (ctx.index >= ctx.args.length) return error("missing argument for model");
+  const raw = ctx.args[ctx.index]!;
+  const parsed = parseModelRef(raw);
+  if (parsed === null) return error(`invalid model string: ${raw}`);
+  return { kind: "model", provider: parsed.provider, modelId: parsed.modelId };
+}
+
+function parseTeam(ctx: ParseContext): ParsedArgs {
+  if (ctx.index >= ctx.args.length) return { kind: "team", action: "info" };
+  const first = ctx.args[ctx.index]!;
+  if (first === "add") { ctx.index += 1; return parseTeamAdd(ctx); }
+  if (first === "list") { ctx.index += 1; return parseTeamList(ctx); }
+  if (first === "remove") { ctx.index += 1; return parseTeamRemove(ctx); }
+  if (first.startsWith("-")) return error(`unknown flag: ${first}`);
+  return { kind: "team", action: "setDefault", teamId: first };
+}
+
+function parseTeamAdd(ctx: ParseContext): ParsedArgs {
+  let project = false;
+  let force = false;
+  let source: string | undefined;
+  while (ctx.index < ctx.args.length) {
+    const a = ctx.args[ctx.index]!;
+    if (a === "--project") {
+      recordFlag(ctx, "--project");
+      project = true;
+      ctx.index += 1;
+      continue;
+    }
+    if (a === "--force") {
+      recordFlag(ctx, "--force");
+      force = true;
+      ctx.index += 1;
+      continue;
+    }
+    if (a.startsWith("-")) return error(`unknown flag: ${a}`);
+    if (source !== undefined) return error(`unexpected argument: ${a}`);
+    source = a;
+    ctx.index += 1;
+  }
+  const dupErr = errorIfDupes(ctx.dupes);
+  if (dupErr !== undefined) return dupErr;
+  if (source === undefined) return error("missing source for 'jie team add'");
+  return { kind: "team", action: "add", source, project, force };
+}
+
+function parseTeamList(ctx: ParseContext): ParsedArgs {
+  if (ctx.index < ctx.args.length) return error(`unexpected argument: ${ctx.args[ctx.index]}`);
+  return { kind: "team", action: "list" };
+}
+
+function parseTeamRemove(ctx: ParseContext): ParsedArgs {
+  let project = false;
+  let teamId: string | undefined;
+  while (ctx.index < ctx.args.length) {
+    const a = ctx.args[ctx.index]!;
+    if (a === "--project") {
+      recordFlag(ctx, "--project");
+      project = true;
+      ctx.index += 1;
+      continue;
+    }
+    if (a.startsWith("-")) return error(`unknown flag: ${a}`);
+    if (teamId !== undefined) return error(`unexpected argument: ${a}`);
+    teamId = a;
+    ctx.index += 1;
+  }
+  const dupErr = errorIfDupes(ctx.dupes);
+  if (dupErr !== undefined) return dupErr;
+  if (teamId === undefined) return error("missing team id for 'jie team remove'");
+  return { kind: "team", action: "remove", teamId, project };
 }
