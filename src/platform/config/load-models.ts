@@ -205,7 +205,7 @@ function resolveApi(providerId: string, declared: string | undefined): Api {
   }
 
   if (isBuiltinProvider(providerId)) {
-    const builtinModels = getBuiltinModels(providerId);
+    const builtinModels = builtinModelsFor(providerId);
     if (builtinModels.length > 0) return builtinModels[0].api;
   }
   throw new JiePlatformError("INVALID_CONFIG", {
@@ -248,6 +248,14 @@ function buildModel(
   if (Object.keys(providerHeaders).length > 0) result.headers = providerHeaders;
   if (Object.keys(mergedCompat).length > 0) result.compat = mergedCompat as Model<Api>["compat"];
   return result;
+}
+
+export function builtinModelsFor(provider: BuiltinProvider): Model<Api>[] {
+  return getBuiltinModels(provider) as unknown as Model<Api>[];
+}
+
+export function builtinModelFor(provider: BuiltinProvider, modelId: string): Model<Api> | undefined {
+  return builtinModelsFor(provider).find((m) => m.id === modelId);
 }
 
 function resolveValue(value: string, _path: string): string {
