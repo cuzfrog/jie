@@ -300,3 +300,37 @@ describe("SqliteTranscriptStore.sessionName", () => {
     expect(m.sessionName("ghost")).toBeNull();
   });
 });
+
+describe("SqliteTranscriptStore.listAgentKeys", () => {
+  test("returns the distinct agent keys for a team/session", () => {
+    const m = makeTranscriptStore();
+    m.persist(userMessage("a"), "agent-1", "s1", "t1");
+    m.persist(userMessage("b"), "agent-2", "s1", "t1");
+    m.persist(userMessage("c"), "agent-1", "s2", "t1");
+    m.persist(userMessage("d"), "agent-3", "s1", "t2");
+    expect(m.listAgentKeys("t1", "s1")).toEqual(["agent-1", "agent-2"]);
+  });
+
+  test("returns an empty array when no rows exist", () => {
+    const m = makeTranscriptStore();
+    expect(m.listAgentKeys("t1", "s1")).toEqual([]);
+  });
+});
+
+describe("SqliteTranscriptStore.remove", () => {
+  test("removes all rows for the agent/session/team", async () => {
+    const m = makeTranscriptStore();
+    m.persist(userMessage("a"), "agent-1", "s1", "t1");
+    m.persist(userMessage("b"), "agent-1", "s1", "t1");
+    m.persist(userMessage("c"), "agent-2", "s1", "t1");
+    m.remove("agent-1", "s1", "t1");
+    expect(m.listAgentKeys("t1", "s1")).toEqual(["agent-2"]);
+    expect(await m.restore("agent-1", "s1", "t1")).toEqual([]);
+  });
+
+  test("is no-op for an unknown agent/session/team", () => {
+    const m = makeTranscriptStore();
+    m.remove("agent-1", "s1", "t1");
+    expect(m.listAgentKeys("t1", "s1")).toEqual([]);
+  });
+});

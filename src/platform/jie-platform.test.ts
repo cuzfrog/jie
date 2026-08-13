@@ -35,10 +35,13 @@ const teamManager = vi.mocked<TeamManager>({
   listLoaded: vi.fn(),
   locate: vi.fn(),
   agents: vi.fn(),
+  bodies: vi.fn(),
   listSessions: vi.fn(),
   currentSessionId: vi.fn(),
   compact: vi.fn(),
   stop: vi.fn(),
+  spawnAdHoc: vi.fn(),
+  resetAgent: vi.fn(),
 });
 
 const mcpManager = vi.mocked<McpManager>({

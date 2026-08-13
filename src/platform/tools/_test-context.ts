@@ -1,4 +1,5 @@
 import type { ArtifactStore } from "../storage";
+import type { AgentDispatcher } from "../types";
 import type { ExecutionContext } from "./types";
 
 export function makeEmptyContext(): ExecutionContext {
@@ -14,5 +15,6 @@ export function makeEmptyContext(): ExecutionContext {
     agentRole: "general",
     artifactStore,
     toolArgs: new Map(),
+    agentDispatcher: vi.mocked<AgentDispatcher>({ call: vi.fn() }),
   };
 }

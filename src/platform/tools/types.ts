@@ -1,6 +1,6 @@
 import type { TSchema } from "typebox";
 import type { ArtifactStore } from "../storage";
-import type { KanbanCard } from "../types";
+import type { AgentDispatcher, CallAgentResultDetails, KanbanCard } from "../types";
 
 export interface EditResultDetails {
     readonly kind: "diff";
@@ -97,7 +97,8 @@ export type ToolResultDetails =
     | GrepFileResultDetails
     | FindArtifactResultDetails
     | NotifyResultDetails
-    | WebFetchResultDetails;
+    | WebFetchResultDetails
+    | CallAgentResultDetails;
 
 export function isDiffDetails(details: ToolResultDetails | null | undefined): details is EditResultDetails | WriteFileResultDetails {
     return typeof details === "object" && details !== null && "kind" in details && details.kind === "diff"
@@ -111,6 +112,7 @@ export interface ExecutionContext {
   readonly agentRole: string;
   readonly artifactStore: ArtifactStore;
   readonly toolArgs: ReadonlyMap<string, ReadonlyArray<string>>;
+  readonly agentDispatcher: AgentDispatcher;
 }
 
 export interface ToolResult {

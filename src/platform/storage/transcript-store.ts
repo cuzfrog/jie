@@ -35,6 +35,10 @@ export interface TranscriptStore {
 
   listSessions(teamId: string): ReadonlyArray<SessionSummary>;
 
+  listAgentKeys(teamId: string, sessionId: string): ReadonlyArray<string>;
+
+  remove(agentKey: string, sessionId: string, teamId: string): void;
+
   sessionName(sessionId: string): string | null;
 
   renameSession(sessionId: string, name: string): void;
@@ -162,6 +166,24 @@ export class SqliteTranscriptStore implements TranscriptStore {
       lastActivity: expectString(row[2]),
       name: expectOptionalString(row[3]),
     }));
+  }
+
+  listAgentKeys(teamId: string, sessionId: string): ReadonlyArray<string> {
+    const rows = this.storage.query(
+      `SELECT DISTINCT agent_key FROM memory_turns
+       WHERE team_id = ? AND session_id = ?
+       ORDER BY agent_key`,
+      [teamId, sessionId],
+    );
+    return rows.map((row) => expectString(row[0]));
+  }
+
+  remove(agentKey: string, sessionId: string, teamId: string): void {
+    this.storage.exec(
+      `DELETE FROM memory_turns
+       WHERE team_id = ? AND session_id = ? AND agent_key = ?`,
+      [teamId, sessionId, agentKey],
+    );
   }
 
   sessionName(sessionId: string): string | null {

@@ -34,10 +34,11 @@ function makeBuiltins() {
 }
 
 describe("createBuiltinTools", () => {
-  test("returns all 18 built-ins with stable registration names", () => {
+  test("returns all 19 built-ins with stable registration names", () => {
     const names = makeBuiltins().map((b) => b.name).sort();
     expect(names).toEqual([
       "bash",
+      "call_agent",
       "claim_kanban",
       "edit_file",
       "find_artifact",

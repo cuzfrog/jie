@@ -21,7 +21,7 @@ import type { ExecutionContext, Tool, ToolRegistry, ToolResult } from "../tools"
 import type { Skill, SkillManager } from "../skills";
 import type { HookRunner } from "../hooks";
 import type { AgentSoul } from "../team";
-import type { EffortLevel, UserIngressMessage } from "../types";
+import type { AgentDispatcher, EffortLevel, UserIngressMessage } from "../types";
 
 async function flush(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -229,6 +229,8 @@ function makeFakeTranscriptStore(): {
     restore,
     hasSession: vi.fn(() => false),
     listSessions: vi.fn(() => []),
+    listAgentKeys: vi.fn(() => []),
+    remove: vi.fn(),
     sessionName: vi.fn(() => null),
     renameSession: vi.fn(),
   });
@@ -240,6 +242,7 @@ interface MakeBodyOverrides {
   teamId?: string;
   soul?: AgentSoul;
   isLeader?: boolean;
+  isEphemeral?: boolean;
   sessionId?: string;
   model?: Model<Api>;
   effort?: EffortLevel;
@@ -269,6 +272,7 @@ interface Harness {
   fireEvent: (event: PiAgentEvent) => void;
   makeBody: (overrides?: MakeBodyOverrides) => JieAgentBody;
   settleIdle: () => void;
+  agentDispatcher: ReturnType<typeof vi.mocked<AgentDispatcher>>;
 }
 
 function makeFakeEventManager(): EventManager {
@@ -315,6 +319,7 @@ function makeHarness(): Harness {
     list: vi.fn(),
   });
   const memoryManager = vi.mocked<MemoryManager>({ add: vi.fn(), search: vi.fn(), bootstrap: vi.fn(() => ""), distill: vi.fn(async () => {}) });
+  const agentDispatcher = vi.mocked<AgentDispatcher>({ call: vi.fn() });
   const subscribeSubject = <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void): (() => void) =>
     events.subscribe(topic, (env) => cb(env));
   const makeBody: Harness["makeBody"] = (overrides = {}) => {
@@ -323,6 +328,7 @@ function makeHarness(): Harness {
       teamId: overrides.teamId ?? "t1",
       soul: overrides.soul ?? makeSoul(),
       isLeader: overrides.isLeader ?? false,
+      isEphemeral: overrides.isEphemeral ?? false,
       sessionId: overrides.sessionId ?? "s1",
       model: overrides.model,
       effort: overrides.effort ?? "off",
@@ -342,6 +348,7 @@ function makeHarness(): Harness {
       compactor: overrides.compactor ?? noopCompactor,
       memoryManager,
       logDir: overrides.logDir ?? null,
+      agentDispatcher,
     });
   };
   const fireEvent = (event: PiAgentEvent): void => {
@@ -360,6 +367,7 @@ function makeHarness(): Harness {
     skillManager,
     hookRunner,
     memoryManager,
+    agentDispatcher,
     persisted,
     restore,
     cap,
@@ -416,6 +424,7 @@ describe("JieAgentBody — identity", () => {
       role: "general",
       agentKey: "leader-1",
       isLeader: true,
+      ephemeral: false,
       tools: ["notify", "read_file"],
       subscribe: ["task.recorded"],
       skills: [],
@@ -743,6 +752,40 @@ describe("JieAgentBody — start() subscriptions", () => {
     ));
     await flush();
     expect(h.prompt.mock.calls.length).toBe(1);
+    b2.stop();
+  });
+
+  test("subscribes to and dispatches inbox.{agentKey} for call_agent", async () => {
+    body.stop();
+    const b2 = h.makeBody({ agentKey: "reviewer-1", soul: makeSoul() });
+    await b2.start();
+    h.events.publish(Events.custom(
+      { kind: "agent", teamId: "t1", agentKey: "leader-1" },
+      "t1.inbox.reviewer-1",
+      "call_id: 1\ncallback: callback.leader-1\n\nreview",
+    ));
+    await flush();
+    expect(h.prompt.mock.calls.length).toBe(1);
+    const msg = h.prompt.mock.calls[0]![0] as { content: string };
+    expect(msg.content).toContain("leader-1 on 'inbox.reviewer-1'");
+    expect(msg.content).toContain("review");
+    b2.stop();
+  });
+
+  test("subscribes to and dispatches callback.{agentKey}", async () => {
+    body.stop();
+    const b2 = h.makeBody({ agentKey: "leader-1", soul: makeSoul() });
+    await b2.start();
+    h.events.publish(Events.custom(
+      { kind: "agent", teamId: "t1", agentKey: "reviewer-1" },
+      "t1.callback.leader-1",
+      "call_id: 1\n\nresult",
+    ));
+    await flush();
+    expect(h.prompt.mock.calls.length).toBe(1);
+    const msg = h.prompt.mock.calls[0]![0] as { content: string };
+    expect(msg.content).toContain("reviewer-1 on 'callback.leader-1'");
+    expect(msg.content).toContain("result");
     b2.stop();
   });
 });

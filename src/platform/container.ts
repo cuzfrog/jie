@@ -4,7 +4,7 @@ import { asValue, createContainer, InjectionMode, type AwilixContainer } from "a
 import { registerCommandModule, type CommandExecutor } from "./command";
 import { registerConfigModule, type AuthStore, type ModelRegistry, type SettingsStore } from "./config";
 import { registerContextModule } from "./context";
-import { registerCoreModule, type AgentBody, type AgentBodyParams } from "./core";
+import { registerCoreModule, type AgentBody, type AgentBodyParams, type Compactor } from "./core";
 import { registerEventModule, type EventManager } from "./event";
 import { registerHooksModule, type HookRunner } from "./hooks";
 import type { JiePlatform, JiePlatformOptions } from "./jie-platform";
@@ -16,6 +16,7 @@ import { registerServicesModule, type GitService } from "./services";
 import { registerSkillsModule, type SkillManager } from "./skills";
 import { registerStorageModule, type ArtifactStore, type KanbanStore, type Storage, type TranscriptStore } from "./storage";
 import { registerTeamModule, type AgentRegistry, type TeamManager } from "./team";
+import type { AgentDispatcher } from "./types";
 import { registerToolsModule, type ToolRegistry } from "./tools";
 
 export interface PlatformCradle {
@@ -38,6 +39,7 @@ export interface PlatformCradle {
   readonly llmService: LlmService;
   readonly memoryManager: MemoryManager;
   readonly gitService: GitService;
+  readonly compactor: Compactor;
   readonly toolRegistry: ToolRegistry;
   readonly skillManager: SkillManager;
   readonly loadSystemContextBlock: () => string;
@@ -45,6 +47,7 @@ export interface PlatformCradle {
   readonly agentBodyFactory: (params: AgentBodyParams) => AgentBody;
   readonly agentRegistry: AgentRegistry;
   readonly teamManager: TeamManager;
+  readonly agentDispatcher: AgentDispatcher;
   readonly commandExecutor: CommandExecutor;
   readonly mcpConnector: McpConnector;
   readonly mcpManager: McpManager;
@@ -83,6 +86,7 @@ export async function bootPlatform(options: JiePlatformOptions): Promise<AwilixC
   registerTeamModule(container);
   registerCommandModule(container);
   registerPlatformModule(container);
+  container.resolve("agentDispatcher");
   await container.resolve("mcpManager").connectAll();
   return container;
 }

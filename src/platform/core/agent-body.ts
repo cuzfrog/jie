@@ -17,6 +17,7 @@ export interface AgentBodyParams {
     readonly targetContextWindowSize?: number;
   };
   readonly isLeader: boolean;
+  readonly isEphemeral?: boolean;
   readonly sessionId: string;
   readonly model: Model<Api> | undefined;
   readonly effort: EffortLevel;

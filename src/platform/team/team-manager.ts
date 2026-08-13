@@ -7,6 +7,7 @@ import type { KanbanStore, SessionSummary, TranscriptStore } from "../storage";
 import { type ModelRegistry, type Settings, type SettingsStore } from "../config";
 import type { SkillManager } from "../skills";
 import { type AgentSoul, type TeamBlueprint, type TeamBlueprintLocation, BUILTIN_DEFAULT_SOLO_TEAM_ID } from "./types";
+import { type AgentRegistry } from "./agent-registry";
 import { type TeamRegistry } from "./registry";
 import { isModelAlias, parseModelRef } from "../types";
 import type { AgentHistory, AgentInfo, TeamInfo } from "../types";
@@ -20,19 +21,24 @@ export interface TeamManager {
   listLoaded(): ReadonlyMap<string, TeamInfo>;
   locate(teamId: string): TeamBlueprintLocation;
   agents(teamId: string): ReadonlyArray<AgentInfo>;
+  bodies(teamId: string): ReadonlyArray<AgentBody>;
   listSessions(teamId: string): ReadonlyArray<SessionSummary>;
   renameSession(teamId: string, name: string): void;
   currentSessionId(teamId: string): string | null;
   compact(teamId: string, agentKey: string): Promise<void>;
   stop(): void;
+  spawnAdHoc(teamId: string, agentRef: string): Promise<AgentBody>;
+  resetAgent(teamId: string, agentKey: string): Promise<AgentBody>;
 }
 
 export class TeamManagerImpl implements TeamManager {
   private readonly loadedTeams = new Map<string, AgentBody[]>();
   private readonly sessionIds = new Map<string, string>();
+  private readonly bodyParams = new Map<string, AgentBodyParams>();
 
   constructor(
     private readonly teamRegistry: TeamRegistry,
+    private readonly agentRegistry: AgentRegistry,
     private readonly eventManager: EventManager,
     private readonly settingsStore: SettingsStore,
     private readonly modelRegistry: ModelRegistry,
@@ -98,6 +104,10 @@ export class TeamManagerImpl implements TeamManager {
     return (this.loadedTeams.get(teamId) ?? []).map((b) => b.identity);
   }
 
+  bodies(teamId: string): ReadonlyArray<AgentBody> {
+    return this.loadedTeams.get(teamId) ?? [];
+  }
+
   listSessions(teamId: string): ReadonlyArray<SessionSummary> {
     return this.transcriptStore.listSessions(teamId);
   }
@@ -161,6 +171,7 @@ export class TeamManagerImpl implements TeamManager {
     const blueprint: TeamBlueprint = this.teamRegistry.parseTeamManifest(teamId);
     const settings = this.settingsStore.load();
     const bodies: AgentBody[] = [];
+    const blueprintKeys = new Set<string>();
     for (const soul of blueprint.roles) {
       let resolvedModel: Model<Api>;
       try {
@@ -173,20 +184,29 @@ export class TeamManagerImpl implements TeamManager {
       }
       const effort = soul.effort ?? settings.defaultEffort ?? "off";
       for (let replicaIndex = 1; replicaIndex <= soul.replicas; replicaIndex += 1) {
-        const body = this.agentBodyFactory({
-          agentKey: `${soul.role}-${replicaIndex}`,
+        const agentKey = `${soul.role}-${replicaIndex}`;
+        blueprintKeys.add(agentKey);
+        const params: AgentBodyParams = {
+          agentKey,
           teamId,
           soul,
           isLeader: soul.role === blueprint.leaderRole,
+          isEphemeral: false,
           sessionId,
           model: resolvedModel,
           effort,
-        });
-        bodies.push(body);
+        };
+        this.bodyParams.set(`${teamId}:${agentKey}`, params);
+        bodies.push(this.agentBodyFactory(params));
       }
     }
     if (!bodies.some((body) => body.identity.isLeader)) {
       throw new JiePlatformError("NO_LEADER", { detail: `team '${teamId}' has no agent marked as leader` });
+    }
+    for (const agentKey of this.transcriptStore.listAgentKeys(teamId, sessionId)) {
+      if (blueprintKeys.has(agentKey)) continue;
+      const body = await this.buildAdHoc(teamId, sessionId, agentKey, true);
+      if (body !== null) bodies.push(body);
     }
     for (const body of bodies) {
       await body.restore();
@@ -296,5 +316,83 @@ export class TeamManagerImpl implements TeamManager {
     const sessionName = sessionId === null ? null : this.transcriptStore.sessionName(sessionId);
     const kanbanCards = sessionId === null ? [] : this.kanbanStore.load(id, sessionId);
     return { id, leaderKey: leader.agentKey, sessionName, currentSessionId: sessionId, agents: identities, history, kanbanCards };
+  }
+
+  private async buildAdHoc(teamId: string, sessionId: string, agentRef: string, isEphemeral: boolean): Promise<AgentBody | null> {
+    try {
+      const soul = this.agentRegistry.resolve(agentRef);
+      const settings = this.settingsStore.load();
+      const resolvedModel = this.resolveSoulModel(soul, settings);
+      const effort = soul.effort ?? settings.defaultEffort ?? "off";
+      const params: AgentBodyParams = {
+        agentKey: agentRef,
+        teamId,
+        soul,
+        isLeader: false,
+        isEphemeral,
+        sessionId,
+        model: resolvedModel,
+        effort,
+      };
+      this.bodyParams.set(`${teamId}:${agentRef}`, params);
+      return this.agentBodyFactory(params);
+    } catch (error) {
+      if (error instanceof JiePlatformError && (error.code === "AGENT_NOT_FOUND" || error.code === "INVALID_AGENT_REF")) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  async spawnAdHoc(teamId: string, agentRef: string): Promise<AgentBody> {
+    const loaded = this.loadedTeams.get(teamId);
+    if (loaded === undefined) {
+      throw new JiePlatformError("NO_TEAM", { detail: `team '${teamId}' is not loaded` });
+    }
+    const existing = loaded.find((b) => b.identity.agentKey === agentRef);
+    if (existing !== undefined) return existing;
+    const sessionId = this.currentSessionId(teamId);
+    if (sessionId === null) {
+      throw new JiePlatformError("NO_TEAM", { detail: `team '${teamId}' has no active session` });
+    }
+    const body = await this.buildAdHoc(teamId, sessionId, agentRef, true);
+    if (body === null) {
+      throw new JiePlatformError("AGENT_NOT_FOUND", { detail: `agent '${agentRef}' not found` });
+    }
+    await body.restore();
+    await body.start();
+    loaded.push(body);
+    this.loadedTeams.set(teamId, loaded);
+    this.publishTeamLoaded(teamId, loaded);
+    return body;
+  }
+
+  async resetAgent(teamId: string, agentKey: string): Promise<AgentBody> {
+    const sessionId = this.currentSessionId(teamId);
+    if (sessionId === null) {
+      throw new JiePlatformError("NO_TEAM", { detail: `team '${teamId}' has no active session` });
+    }
+    const loaded = this.loadedTeams.get(teamId);
+    if (loaded === undefined) {
+      throw new JiePlatformError("NO_TEAM", { detail: `team '${teamId}' is not loaded` });
+    }
+    const index = loaded.findIndex((b) => b.identity.agentKey === agentKey);
+    if (index === -1) {
+      throw new JiePlatformError("AGENT_NOT_FOUND", { detail: `agent '${agentKey}' is not loaded in team '${teamId}'` });
+    }
+    const params = this.bodyParams.get(`${teamId}:${agentKey}`);
+    if (params === undefined) {
+      throw new JiePlatformError("AGENT_NOT_FOUND", { detail: `agent '${agentKey}' has no stored parameters in team '${teamId}'` });
+    }
+    const oldBody = loaded[index];
+    oldBody.stop();
+    this.transcriptStore.remove(agentKey, sessionId, teamId);
+    const newBody = this.agentBodyFactory({ ...params, sessionId, isEphemeral: params.isEphemeral });
+    await newBody.restore();
+    await newBody.start();
+    loaded[index] = newBody;
+    this.loadedTeams.set(teamId, loaded);
+    this.publishTeamLoaded(teamId, loaded);
+    return newBody;
   }
 }

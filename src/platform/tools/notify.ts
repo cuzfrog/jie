@@ -36,16 +36,19 @@ export function createNotifyTool(dependencies: NotifyDeps): Tool<NotifyInput> {
       input: NotifyInput,
       executionContext: ExecutionContext,
     ): Promise<ToolResult> {
-      const reason = validateTopic(input.topic, executionContext.teamId);
+      const reason = validateTopic(input.topic, executionContext.teamId, executionContext.agentKey);
       if (reason !== null) {
         throw new JiePlatformError("NOTIFY_INVALID_TOPIC", { detail: reason });
       }
 
-      const allowed = executionContext.toolArgs.get("notify");
-      if (allowed !== undefined && !allowed.includes(input.topic)) {
-        throw new JiePlatformError("TOPIC_NOT_ALLOWED", {
-          detail: `topic '${input.topic}' is not allowed for role '${executionContext.agentRole}'`,
-        });
+      const isCallback = input.topic.startsWith("callback.");
+      if (!isCallback) {
+        const allowed = executionContext.toolArgs.get("notify");
+        if (allowed !== undefined && !allowed.includes(input.topic)) {
+          throw new JiePlatformError("TOPIC_NOT_ALLOWED", {
+            detail: `topic '${input.topic}' is not allowed for role '${executionContext.agentRole}'`,
+          });
+        }
       }
 
       if (input.prompt.length > EVENT_TEXT_TRUNCATION_BYTES) {
@@ -71,15 +74,20 @@ type TopicValidationReason =
   | "empty"
   | "starts_with_agent_prefix"
   | "starts_with_team_prefix"
+  | "starts_with_inbox_prefix"
+  | "own_callback"
   | "contains_null_byte";
 
 function validateTopic(
   topic: string,
   teamId: string,
+  agentKey: string,
 ): TopicValidationReason | null {
   if (topic === "") return "empty";
   if (topic.startsWith("agent.")) return "starts_with_agent_prefix";
   if (topic.startsWith(`${teamId}.`)) return "starts_with_team_prefix";
+  if (topic.startsWith("inbox.")) return "starts_with_inbox_prefix";
+  if (topic === `callback.${agentKey}`) return "own_callback";
   for (let i = 0; i < topic.length; i += 1) {
     const code = topic.charCodeAt(i);
     if (code === 0 || (code < 0x20 && code !== 0x09)) {

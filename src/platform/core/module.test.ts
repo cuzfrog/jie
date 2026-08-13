@@ -12,6 +12,7 @@ import type { AgentSoul } from "../team";
 import type { SkillManager } from "../skills";
 import type { Tool, ToolRegistry } from "../tools";
 import type { AgentBodyParams } from "./agent-body";
+import type { AgentDispatcher } from "../types";
 import { registerCoreModule } from "./module";
 
 const eventManager = vi.mocked<EventManager>({
@@ -31,6 +32,8 @@ const transcriptStore = vi.mocked<TranscriptStore>({
   restore: vi.fn(),
   hasSession: vi.fn(),
   listSessions: vi.fn(),
+  listAgentKeys: vi.fn(() => []),
+  remove: vi.fn(),
   sessionName: vi.fn(() => null),
   renameSession: vi.fn(),
 });
@@ -102,6 +105,7 @@ function bootedContainer(): AwilixContainer<PlatformCradle> {
     memoryManager: asValue(memoryManager),
     debug: asValue(false),
     logDir: asValue(null),
+    agentDispatcher: asValue(vi.mocked<AgentDispatcher>({ call: vi.fn() })),
   });
   registerCoreModule(container);
   return container;
@@ -141,6 +145,7 @@ function makeParams(overrides: Partial<AgentBodyParams> = {}): AgentBodyParams {
     teamId: "t1",
     soul: makeSoul(),
     isLeader: false,
+    isEphemeral: false,
     sessionId: "s1",
     model: undefined,
     effort: "off",
@@ -157,6 +162,7 @@ describe("registerCoreModule", () => {
       role: "general",
       agentKey: "leader-1",
       isLeader: true,
+      ephemeral: false,
       tools: [],
       subscribe: [],
       skills: [],

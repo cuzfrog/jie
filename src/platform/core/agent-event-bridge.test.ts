@@ -38,6 +38,8 @@ const transcriptStore = vi.mocked<TranscriptStore>({
   restore: vi.fn(async () => []),
   hasSession: vi.fn(() => false),
   listSessions: vi.fn(() => []),
+  listAgentKeys: vi.fn(() => []),
+  remove: vi.fn(),
   sessionName: vi.fn(() => null),
   renameSession: vi.fn(),
 });
