@@ -7,7 +7,10 @@ import { mapErrno, resolveWithinWorkspace, walkFiles } from "./path-utils";
 const DEFAULT_PATH = ".";
 const MATCH_CAP = 100;
 
-const FIND_FILE_DESCRIPTION = `Find files whose path matches a glob \`pattern\`, recursively, under \`path\` (defaults to the workspace root). The pattern is matched against the path relative to \`path\`: \`*\` matches within one segment, \`**\` crosses separators (e.g. \`**/*.test.ts\` finds nested test files, \`src/**/module.ts\` under src). Results are returned workspace-relative so they are directly usable in read_file. \`node_modules\` and \`.git\` are always pruned; symlinks are not followed. Capped at 100 matches; a footer reports truncation. Use ls for a single directory listing.`;
+const FIND_FILE_DESCRIPTION = `Find files matching a glob \`pattern\` recursively under \`path\` (defaults to the
+workspace root). \`*\` matches within one path segment, \`**\` crosses separators.
+Results are workspace-relative. \`node_modules\` and \`.git\` are pruned; symlinks
+are not followed. Capped at 100 matches. Use ls for a single directory listing.`;
 
 export interface FindFileDeps {
   workspaceRoot: string;

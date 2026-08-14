@@ -21,7 +21,6 @@ export interface AgentBodyParams {
   readonly sessionId: string;
   readonly model: Model<Api> | undefined;
   readonly effort: EffortLevel;
-  readonly teamPrompt?: string;
 }
 
 export interface AgentBody {

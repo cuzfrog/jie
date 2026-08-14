@@ -12,7 +12,7 @@ Platform-level configuration surface: how Jie discovers and loads settings, cred
 | `~/.jie/models.json` | Global provider definitions | Plain JSON | Custom providers: base URLs, APIs, keys, model catalogs |
 | `.jie/models.json` | Project provider overrides | Plain JSON | Same shape; a project entry replaces the global entry of the same provider name |
 | `~/.jie/mcp.json`, `.jie/mcp.json` | MCP server definitions | Plain JSON | Platform connects stdio servers at startup; project overrides per name (ADR 4) |
-| `.jie/teams/<id>/TEAM.md` | Team wiring | Plain text | YAML frontmatter (`leader:`, optional `description:`) + prose body that becomes the shared team context (`06-agent-model.md` "Team Blueprint") |
+| `.jie/teams/<id>/TEAM.md` | Team wiring | Plain text | YAML frontmatter (`leader:`, optional `description:`) + prose body (ignored) (`06-agent-model.md` "Team Blueprint") |
 | `.jie/teams/<id>/<role>.md` | Agent definition | Plain text | YAML frontmatter (`model?` with optional `(effort)` suffix, `tools`, `subscribe?`, `skills?`) + prose body (system prompt) |
 | `~/.jie/agents/<id>.md` | Shared agent (global) | Plain text | Same shape as a role `.md`; a team may list it under `additional-agents:` |
 | `.jie/agents/<id>.md` | Shared agent (project) | Plain text | Same shape; overrides a global shared agent of the same id |
@@ -132,7 +132,7 @@ A team blueprint may reference shared single-agent manifests via the `additional
 
 `TEAM.md` parsing rules:
 - `description:` is an optional short string shown in team-selection UI; non-string values are rejected (`INVALID_FIELD_TYPE`).
-- The prose body after the frontmatter becomes the team's shared context (`teamPrompt`), injected into every role's system prompt.
+- The prose body after the frontmatter is ignored; only `leader` and `description` frontmatter are used.
 - `additional-agents:` is a list of strings; absent, non-list, non-string, or invalid stems fail the team load (`INVALID_FIELD_TYPE` or `INVALID_AGENT_REF`).
 - A ref may not duplicate another ref in the same list (`DUPLICATE_AGENT_REF`).
 - A ref may not collide with a local role filename stem (`DUPLICATE_ROLE`); a team that wants a customized copy should place the file under a different stem in its own directory.
@@ -276,8 +276,8 @@ Hard caps and charsets; not user-configurable. Each row points at the doc that a
 
 | Limit | Value | Where applied | Doc |
 |---|---|---|---|
-| Artifact key charset | `[A-Za-z0-9_./-]{1,256}` | `write_artifact`, `read_artifact`; `list` prefix is escaped, not validated | `04-storage.md` |
-| Artifact content cap | **5 MiB** | `write_artifact` | `04-storage.md` |
+| Artifact key charset | `[A-Za-z0-9_./-]{1,256}` | `artifact` `write`; `list` pattern is a glob, not validated | `04-storage.md` |
+| Artifact content cap | **5 MiB** | `artifact` `write` | `04-storage.md` |
 | `web_fetch` body cap | **5 MiB** (truncated, `truncated: true`) | `web_fetch` | `06-agent-model.md` |
 | `write_file` content cap | **5 MiB** | `write_file` | `06-agent-model.md` |
 | `bash` stdout / stderr cap | **32 KiB** per stream (independent truncation) | `bash` | `06-agent-model.md` |

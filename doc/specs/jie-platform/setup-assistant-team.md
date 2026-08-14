@@ -9,7 +9,7 @@ The platform's built-in setup-assistant team lives at `src/platform/team/setup-a
 ```
 team/setup-assistant/
   TEAM.md      # frontmatter: leader: general, description: Jie setup and help
-  general.md   # role: general, tools: [bash, read_file, write_file, edit, memory_search]
+  general.md   # role: general, tools: [bash, read_file, write_file, edit_file, memory]
 ```
 
 These two files are the **last-resort fallback** in the team selection chain — used only when no user-installed team is selected (no `--team` flag, no `defaultTeam` in settings, and no user team manifests available at the standard paths). The parser's `loadSetupAssistantTeam()` reads them via `import` attributes (bun 1.3+) at module-load time:
@@ -35,7 +35,7 @@ The parser is the same one used for user teams; the only difference is where the
 || Roles | 1 (`general`). The role id is the filename stem (`general.md` → role `general`). |
 || Leader | `general-1` (the only agent; user prompts reach it via the `user.prompt` topic. No `subscribe:` in frontmatter, so no domain topics.) The agent key is `<role>-1`. |
 || Domain topics | None (no subscription graph; the leader is the only agent) |
-|| Tools | `bash`, `read_file`, `write_file`, `edit_file`, `memory_add`, `memory_search` |
+|| Tools | `bash`, `read_file`, `write_file`, `edit_file`, `memory` |
 || Model | Inherited from merged settings — see "Model" below |
 || System prompt | A setup and help prompt — see "Built-in System Prompt" below |
 
@@ -67,7 +67,7 @@ Users who want a different model globally run `jie model <provider>/<modelId>` (
 
 ## Behavior
 
-The leader processes a single user prompt per turn. There are no domain topics, so no inter-agent coordination happens. The leader's tools (`bash`, `read_file`, `write_file`, `edit_file`, `memory_add`, `memory_search`) are available for direct work in the workspace — no artifact store is exposed because there are no peers to coordinate with.
+The leader processes a single user prompt per turn. There are no domain topics, so no inter-agent coordination happens. The leader's tools (`bash`, `read_file`, `write_file`, `edit_file`, `memory`) are available for direct work in the workspace — no artifact store is exposed because there are no peers to coordinate with.
 
 ## Why a Built-in Fallback
 

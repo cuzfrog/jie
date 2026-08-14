@@ -11,7 +11,7 @@ const MAX_HEADER_LENGTH = 80;
 const MAX_LABEL_LENGTH = 80;
 const MAX_DESCRIPTION_LENGTH = 200;
 
-const ASK_USER_QUESTIONS_DESCRIPTION = `ask_user_questions({ questions }): Ask the user one or more multiple-choice questions and return their answers. Use this when you need a decision, clarification, or preference that cannot be inferred from the code. Each question has a 'question' text, a short 'header' label, 'options' array of { label, description }, and 'multiSelect' boolean. The user navigates with ↑/↓, selects with enter (single) or space (multi), and may type a custom 'Other' answer. Returns a human-readable summary of the answers (or a message if the user cancelled). Does NOT end the turn.`;
+const ASK_USER_QUESTIONS_DESCRIPTION = `Ask the user one or more multiple-choice questions when you need a decision, clarification, or preference that cannot be inferred. Each question: 'question' text, short 'header', 'options' array of { label, description }, and 'multiSelect'. Returns a summary of the answers. Does NOT end the turn.`;
 
 export interface AskUserQuestionsDeps {
   questionBroker: QuestionBroker;

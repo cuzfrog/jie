@@ -78,6 +78,25 @@ describe("AssistantMessage — thinking blocks", () => {
     expect(lines[0]).toBe("\x1b[90mThinking...\x1b[39m");
     expect(lines[1]).toBe("\x1b[90mpondering\x1b[39m");
   });
+
+  test("redacted thinking with empty text still contributes its duration to the summary", () => {
+    const message = new AssistantMessage(turn({ blocks: [{ kind: "thinking", text: "", durationMs: 1000 }] }), stateStore);
+    expect(message.render(80)).toEqual(["\x1b[90mThought for 1s\x1b[39m"]);
+  });
+
+  test("redacted thinking with empty text does not render an individual block when expanded", () => {
+    stateStore.getState.mockReturnValue(makeTuiState({ thinkingExpanded: true }));
+    const message = new AssistantMessage(turn({
+      blocks: [
+        { kind: "thinking", text: "", durationMs: 1000 },
+        { kind: "text", text: "answer" },
+      ],
+    }), stateStore);
+    expect(message.render(80).map((line) => line.trimEnd())).toEqual([
+      "\x1b[36m● \x1b[39manswer",
+      "\x1b[90mThought for 1s\x1b[39m",
+    ]);
+  });
 });
 
 describe("AssistantMessage — tool cards", () => {

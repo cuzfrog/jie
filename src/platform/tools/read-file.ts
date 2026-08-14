@@ -8,12 +8,9 @@ const DEFAULT_LINE_CAP = 2000;
 const DEFAULT_BYTE_CAP = 50 * 1024;
 const TRUNCATION_MARKER = "[Truncated: showing %S of %L lines (50 KiB limit)]";
 
-const READ_FILE_DESCRIPTION = `Read the contents of a file at \`path\` (relative to workspace root, or absolute
-within workspace). For text files, output is truncated to 2000 lines or 50 KiB
-(whichever is hit first). Use offset/limit for large files. When you need the
-full file, continue with offset until complete. A role may be restricted to a
-fixed set of readable paths via its manifest \`read_file(glob-a, glob-b)\` tool
-spec; a path outside that set is rejected with READ_PATH_DENIED.`;
+const READ_FILE_DESCRIPTION = `Read a text file (path relative to the workspace root). Output is truncated to
+2000 lines or 50 KiB; use offset/limit (1-indexed lines) to page through large
+files.`;
 
 export interface ReadFileDeps {
   workspaceRoot: string;

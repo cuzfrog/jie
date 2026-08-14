@@ -1,6 +1,8 @@
 ---
 no-new-exports:
   - _test-context.ts
+  - artifact.test.ts
+  - artifact.ts
   - call-agent.test.ts
   - call-agent.ts
   - bash.test.ts
@@ -11,8 +13,6 @@ no-new-exports:
   - edit_file.ts
   - file-mutation-queue.test.ts
   - file-mutation-queue.ts
-  - find-artifact.test.ts
-  - find-artifact.ts
   - find-file.test.ts
   - find-file.ts
   - grep-file.test.ts
@@ -20,18 +20,14 @@ no-new-exports:
   # - index.ts  re-exports the module surface, including ToolResultDetails/KanbanDetails
   - ls.test.ts
   - ls.ts
-  - memory-add.test.ts
-  - memory-add.ts
-  - memory-search.test.ts
-  - memory-search.ts
+  - memory.test.ts
+  - memory.ts
   - module.test.ts
   - module.ts
   - notify.test.ts
   - notify.ts
   - path-utils.test.ts
   - path-utils.ts
-  - read-artifact.test.ts
-  - read-artifact.ts
   - read-file.test.ts
   - read-file.ts
   - tool-registry.test.ts
@@ -47,8 +43,6 @@ no-new-exports:
   - web-fetch.ts
   - web-search.test.ts
   - web-search.ts
-  - write-artifact.test.ts
-  - write-artifact.ts
   - write-file.test.ts
   - write-file.ts
   - write-kanban.test.ts

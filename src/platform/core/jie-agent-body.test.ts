@@ -250,7 +250,6 @@ interface MakeBodyOverrides {
   effort?: EffortLevel;
   factory?: (opts: ConstructorParameters<typeof PiAgent>[0]) => PiAgent;
   systemContextBlock?: string;
-  teamPrompt?: string;
   compactor?: Compactor;
   getApiKey?: (provider: string) => string | undefined;
   logDir?: string | null;
@@ -336,7 +335,6 @@ function makeHarness(): Harness {
       sessionId: overrides.sessionId ?? "s1",
       model: overrides.model,
       effort: overrides.effort ?? "off",
-      teamPrompt: overrides.teamPrompt,
     };
     return new JieAgentBody(params, {
       eventManager: events,
@@ -394,7 +392,7 @@ describe("JieAgentBody — system prompt composition", () => {
     deploySkill.promptEntry.mockReturnValue("SKILL-ENTRY-deploy");
   });
 
-  test("resolved skills are appended to the role prompt", () => {
+  test("resolved skills are included after the context block", () => {
     const h = makeHarness();
     h.skillManager.resolve.mockReturnValue([deploySkill]);
     h.makeBody({ soul: makeSoul({ skills: ["deploy"] }) });
@@ -403,16 +401,23 @@ describe("JieAgentBody — system prompt composition", () => {
     expect(h.state.systemPrompt).toContain("SKILL-ENTRY-deploy");
   });
 
-  test("no skills leaves the role prompt verbatim", () => {
+  test("composes role prompt, available tools, guidelines, and cwd with no optional sections", () => {
     const h = makeHarness();
     h.makeBody({ soul: makeSoul() });
-    expect(h.state.systemPrompt).toBe("you are a general assistant");
+    const expected =
+      "you are a general assistant\n\n" +
+      "Available tools:\n(none)\n\n" +
+      "Guidelines:\n- Be concise in your responses\n- Show file paths clearly when working with files\n\n" +
+      "Current working directory: /work";
+    expect(h.state.systemPrompt).toBe(expected);
   });
 
-  test("the shared context block is prepended before the role prompt", () => {
+  test("places the shared context block after the guidelines", () => {
     const h = makeHarness();
     h.makeBody({ systemContextBlock: "<context_files>X</context_files>" });
-    expect(h.state.systemPrompt).toBe("<context_files>X</context_files>\n\nyou are a general assistant");
+    const prompt = h.state.systemPrompt;
+    expect(prompt.indexOf("Guidelines:")).toBeLessThan(prompt.indexOf("<context_files>"));
+    expect(prompt.endsWith("Current working directory: /work")).toBe(true);
   });
 });
 
@@ -916,7 +921,13 @@ describe("JieAgentBody — restore() snapshot phase", () => {
     });
     const body = h.makeBody({ systemContextBlock: "CONTEXT" });
     await body.restore();
-    expect(h.state.systemPrompt).toBe("CONTEXT\n\nyou are a general assistant");
+    const expected =
+      "you are a general assistant\n\n" +
+      "Available tools:\n(none)\n\n" +
+      "Guidelines:\n- Be concise in your responses\n- Show file paths clearly when working with files\n\n" +
+      "CONTEXT\n\n" +
+      "Current working directory: /work";
+    expect(h.state.systemPrompt).toBe(expected);
     body.stop();
   });
 
@@ -926,36 +937,38 @@ describe("JieAgentBody — restore() snapshot phase", () => {
     );
     const body = h.makeBody({ systemContextBlock: "CONTEXT" });
     await body.restore();
-    expect(h.state.systemPrompt).toBe(
-      "CONTEXT\n\nyou are a general assistant\n\n<memory team=\"t1\">\n- [instruction] keep the build green\n</memory>",
-    );
+    const expected =
+      "you are a general assistant\n\n" +
+      "Available tools:\n(none)\n\n" +
+      "Guidelines:\n- Be concise in your responses\n- Show file paths clearly when working with files\n\n" +
+      "CONTEXT\n\n" +
+      "<memory team=\"t1\">\n- [instruction] keep the build green\n</memory>\n\n" +
+      "Current working directory: /work";
+    expect(h.state.systemPrompt).toBe(expected);
     body.stop();
   });
 
-  test("composes the team prompt before the role prose", async () => {
-    const body = h.makeBody({ systemContextBlock: "CONTEXT", teamPrompt: "one task in flight" });
-    await body.restore();
-    expect(h.state.systemPrompt).toBe(
-      "CONTEXT\n\n<team_context>\none task in flight\n</team_context>\n\nyou are a general assistant",
-    );
-    body.stop();
-  });
-
-  test("omits the team context block when no team prompt is supplied", async () => {
-    const body = h.makeBody({ systemContextBlock: "CONTEXT" });
-    await body.restore();
-    expect(h.state.systemPrompt).toBe("CONTEXT\n\nyou are a general assistant");
-    body.stop();
-  });
-
-  test("orders context, team, role, and memory in the system prompt", async () => {
-    h.memoryManager.bootstrap.mockReturnValue("<memory team=\"t1\">- [fact] x</memory>");
-    const body = h.makeBody({ systemContextBlock: "CONTEXT", teamPrompt: "TEAM" });
+  test("composes the available tools and guidelines from the agent's adapted tools", async () => {
+    h.toolRegistry.resolve.mockReturnValue([makeNoopTool()]);
+    const body = h.makeBody({ soul: makeSoul({ tools: ["noop"] }) });
     await body.restore();
     const prompt = h.state.systemPrompt;
-    expect(prompt.indexOf("CONTEXT")).toBeLessThan(prompt.indexOf("<team_context>"));
-    expect(prompt.indexOf("<team_context>")).toBeLessThan(prompt.indexOf("you are a general assistant"));
-    expect(prompt.indexOf("you are a general assistant")).toBeLessThan(prompt.indexOf("<memory"));
+    expect(prompt).toContain("Available tools:\n- noop: no-op");
+    expect(prompt).toContain("Guidelines:\n- Be concise in your responses");
+    expect(prompt).toContain("Current working directory: /work");
+    body.stop();
+  });
+
+  test("orders role, available tools, guidelines, context, memory, and cwd", async () => {
+    h.memoryManager.bootstrap.mockReturnValue("<memory team=\"t1\">- [fact] x</memory>");
+    const body = h.makeBody({ systemContextBlock: "CONTEXT" });
+    await body.restore();
+    const prompt = h.state.systemPrompt;
+    expect(prompt.indexOf("you are a general assistant")).toBeLessThan(prompt.indexOf("Available tools:"));
+    expect(prompt.indexOf("Available tools:")).toBeLessThan(prompt.indexOf("Guidelines:"));
+    expect(prompt.indexOf("Guidelines:")).toBeLessThan(prompt.indexOf("CONTEXT"));
+    expect(prompt.indexOf("CONTEXT")).toBeLessThan(prompt.indexOf("<memory"));
+    expect(prompt.indexOf("<memory")).toBeLessThan(prompt.indexOf("Current working directory:"));
     body.stop();
   });
 
@@ -1191,7 +1204,7 @@ describe("JieAgentBody — skill invocation expansion", () => {
     h.state.isStreaming = true;
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "/skill:deploy now"));
     await flush();
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "/skill:deploy now", source: "user" }]);
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "/skill:deploy now", source: "user", chained: false }]);
     h.fireEvent({ type: "agent_end", messages: [] });
     h.settleIdle();
     await flush();
@@ -1450,8 +1463,8 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "second queued"));
     await flush();
     expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([
-      { text: "first queued", source: "user" },
-      { text: "second queued", source: "user" },
+      { text: "first queued", source: "user", chained: false },
+      { text: "second queued", source: "user", chained: false },
     ]);
     h.state.isStreaming = false;
     h.fireEvent({
@@ -1460,7 +1473,10 @@ describe("JieAgentBody — turn.start prompt payload", () => {
       toolResults: [],
     });
     expect(h.followUp.mock.calls.length).toBe(1);
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "second queued", source: "user" }]);
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([
+      { text: "first queued", source: "user", chained: true },
+      { text: "second queued", source: "user", chained: false },
+    ]);
     h.fireEvent({ type: "turn_start" });
     h.fireEvent({ type: "message_start", message: h.followUp.mock.calls[0]![0] as AgentMessage });
     expect(turnStart[turnStart.length - 1]!.payload).toBe("first queued");
@@ -1594,7 +1610,7 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     h.state.isStreaming = true;
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
     await flush();
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "hello", source: "user" }]);
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "hello", source: "user", chained: false }]);
     body.stop();
   });
 
@@ -1677,8 +1693,8 @@ describe("JieAgentBody — user.prompt.requeue", () => {
     h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "second"));
     h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "second"));
     expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([
-      { text: "first", source: "user" },
-      { text: "second", source: "user" },
+      { text: "first", source: "user", chained: false },
+      { text: "second", source: "user", chained: false },
     ]);
     body.stop();
   });
@@ -1695,7 +1711,7 @@ describe("JieAgentBody — user.prompt.requeue", () => {
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
     await flush();
     h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "first"));
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "first", source: "user" }]);
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "first", source: "user", chained: false }]);
     body.stop();
   });
 

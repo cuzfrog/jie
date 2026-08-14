@@ -5,7 +5,7 @@ import { QueuedPrompts } from "./queued-prompts";
 
 const stateStore = vi.mocked<StateStore>({ getState: vi.fn(), dispatch: vi.fn(), subscribe: vi.fn(() => () => undefined) });
 
-function stateWithQueue(queue: ReadonlyArray<{ text: string; source: "user" | "peer" }>) {
+function stateWithQueue(queue: ReadonlyArray<{ text: string; source: "user" | "peer"; chained: boolean }>) {
   const agent = makeAgentUiState("my-team:general-1", { queue });
   return makeTuiState({
     teamId: "my-team",
@@ -14,8 +14,8 @@ function stateWithQueue(queue: ReadonlyArray<{ text: string; source: "user" | "p
   });
 }
 
-function userEntry(text: string): { text: string; source: "user" | "peer" } {
-  return { text, source: "user" };
+function userEntry(text: string, chained = false): { text: string; source: "user" | "peer"; chained: boolean } {
+  return { text, source: "user", chained };
 }
 
 describe("QueuedPrompts", () => {
@@ -31,7 +31,7 @@ describe("QueuedPrompts", () => {
   test("renders peer notifications verbatim alongside user prompts", () => {
     stateStore.getState.mockReturnValue(stateWithQueue([
       userEntry("hello"),
-      { text: "[qa-1 on 'task.recorded']: report", source: "peer" },
+      { text: "[qa-1 on 'task.recorded']: report", source: "peer", chained: false },
     ]));
     const component = new QueuedPrompts(stateStore);
     expect(component.render(80)).toEqual([

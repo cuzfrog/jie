@@ -3,15 +3,11 @@ import { JiePlatformError } from "../jie-platform-errors";
 import type { CallAgentResultDetails } from "../types";
 import type { ExecutionContext, Tool, ToolResult } from "./types";
 
-const CALL_AGENT_DESCRIPTION = `call_agent({ agent, prompt, reset? }): Ask another agent to perform work
-asynchronously and return the result on the caller's callback inbox. The platform picks an idle replica
-when a role has multiple, queues if all replicas are busy, and creates or reuses ad-hoc shared agents.
-The resolved agent key is returned immediately so follow-up calls can target the same replica. The callee
-should reply with notify({ topic: callback.<caller_agent_key>, prompt: "call_id=<call_id> ..." }). Large
-prompts/results are capped at 4KB; use artifacts for bigger data. A role may be restricted to a fixed set of
-callable agents via its manifest \`call_agent(role-a, role-b)\` tool spec; each argument is a role or an exact
-agent key, and a role argument also permits its \`{role}-{N}\` replicas. Calls outside the allowed set are
-rejected with \`AGENT_NOT_ALLOWED\`.`;
+const CALL_AGENT_DESCRIPTION = `Ask another agent to perform work asynchronously; the result arrives later on
+your callback inbox. The platform picks an idle replica or queues, and returns
+the resolved agent key immediately. The callee replies via
+notify({ topic: "callback.<your_agent_key>", prompt: "call_id=<call_id> ..." }).
+Prompts are capped at 4KB; use artifacts for bigger data.`;
 
 interface CallAgentInput {
   agent: string;

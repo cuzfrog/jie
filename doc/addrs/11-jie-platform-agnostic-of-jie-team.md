@@ -6,7 +6,7 @@ Accepted. Subsumes ADR 3 (Declarative Blueprints). The install-mechanism clauses
 
 ## Context
 
-Team blueprints are declarative `.md` files — no code between platform and team: a `TEAM.md` (frontmatter: leader role; optional `description:` frontmatter and a prose body that becomes shared team context) plus one `.md` per role (frontmatter `model`, `tools`, `notify`; prose body = system prompt). Custom teams require no code changes — a new directory of `.md` files. That answered *what format* a blueprint is in, but left open *which package owns what*.
+Team blueprints are declarative `.md` files — no code between platform and team: a `TEAM.md` (frontmatter: leader role; optional `description:` frontmatter; prose body is ignored) plus one `.md` per role (frontmatter `model`, `tools`, `notify`; prose body = system prompt). Custom teams require no code changes — a new directory of `.md` files. That answered *what format* a blueprint is in, but left open *which package owns what*.
 
 Previously jie-team mixed content, runtime, and install; platform depended on it.
 

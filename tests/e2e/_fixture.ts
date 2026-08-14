@@ -61,7 +61,7 @@ export function seedTeam(jieDir: string, teamId: string, leaderRole: string, rol
   mkdirSync(teamsDir, { recursive: true });
   writeFileSync(
     join(teamsDir, "TEAM.md"),
-    `---\nleader: ${leaderRole}\n---\nYou are the leader of ${teamId}.\n`,
+    `---\nleader: ${leaderRole}\n---\n`,
   );
   for (const role of roles) {
     const tools = role.tools ?? [];

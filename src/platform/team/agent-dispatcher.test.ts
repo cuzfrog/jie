@@ -14,7 +14,6 @@ function makeBlueprint(overrides: Partial<TeamBlueprint> = {}): TeamBlueprint {
     roles: [],
     leaderRole: null,
     additionalAgentRefs: [],
-    teamPrompt: "",
     ...overrides,
   };
 }

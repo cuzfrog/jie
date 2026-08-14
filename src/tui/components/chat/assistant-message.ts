@@ -40,20 +40,20 @@ export class AssistantMessage implements Component {
     let liveBlockIndex: number | null = null;
     for (let i = 0; i < turn.blocks.length; i += 1) {
       const block = turn.blocks[i]!;
-      if (block.text === "") continue;
       if (block.kind === "thinking") {
-        if (thinkingExpanded) {
+        if (thinkingExpanded && block.text !== "") {
           lines.push(...this.thinkingAt(thinkingOrdinal, block).render(w));
           thinkingOrdinal += 1;
           continue;
         }
         if (block.durationMs !== undefined) {
           aggregatedThinkingMs = (aggregatedThinkingMs ?? 0) + block.durationMs;
-        } else {
+        } else if (block.text !== "") {
           liveBlockIndex = i;
         }
         continue;
       }
+      if (block.text === "") continue;
       const rendered = this.markdownAt(textOrdinal, block.text).render(prefixed ? w : Math.max(1, w - PREFIX_WIDTH));
       textOrdinal += 1;
       if (!prefixed && rendered.length > 0) {

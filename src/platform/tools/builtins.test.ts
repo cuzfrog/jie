@@ -36,27 +36,23 @@ function makeBuiltins() {
 }
 
 describe("createBuiltinTools", () => {
-  test("returns all 20 built-ins with stable registration names", () => {
+  test("returns all 16 built-ins with stable registration names", () => {
     const names = makeBuiltins().map((b) => b.name).sort();
     expect(names).toEqual([
+      "artifact",
       "ask_user_questions",
       "bash",
       "call_agent",
-      "claim_kanban",
       "edit_file",
-      "find_artifact",
       "find_file",
       "grep_file",
       "ls",
-      "memory_add",
-      "memory_search",
+      "memory",
       "notify",
-      "read_artifact",
       "read_file",
       "update_kanban",
       "web_fetch",
       "web_search",
-      "write_artifact",
       "write_file",
       "write_kanban",
     ]);

@@ -18,10 +18,10 @@ describe("loadSetupAssistantTeam", () => {
     expect(bp.roles[0]?.role).toBe("general");
   });
 
-  test("the general soul has tools [bash, read_file, write_file, edit_file, memory_add, memory_search] and empty subscribe", () => {
+  test("the general soul has tools [bash, read_file, write_file, edit_file, memory] and empty subscribe", () => {
     const bp = loadSetupAssistantTeam();
     const soul = bp.roles[0]!;
-    expect(soul.tools).toEqual(["bash", "read_file", "write_file", "edit_file", "memory_add", "memory_search"]);
+    expect(soul.tools).toEqual(["bash", "read_file", "write_file", "edit_file", "memory"]);
     expect(soul.subscribe).toEqual([]);
   });
 
@@ -32,9 +32,8 @@ describe("loadSetupAssistantTeam", () => {
     expect(soul.model).toBe("");
   });
 
-  test("has no team prompt and a setup-assistant description", () => {
+  test("has a setup-assistant description", () => {
     const bp = loadSetupAssistantTeam();
-    expect(bp.teamPrompt).toBe("");
     expect(bp.description).toBe("Jie setup and help");
   });
 });
@@ -96,7 +95,7 @@ describe("loadTeamFromDir", () => {
     expect(bp.leaderRole).toBe("leader");
   });
 
-  test("TEAM.md body becomes the team prompt and description is parsed", () => {
+  test("TEAM.md body is ignored and description is parsed", () => {
     writeFileSync(
       join(dir, "TEAM.md"),
       `---\nleader: leader\ndescription: a concise team\n---\nShared team context.\n`,
@@ -106,11 +105,10 @@ describe("loadTeamFromDir", () => {
       `---\ntools:\n  - bash\n---\nleader body`,
     );
     const bp = loadTeamFromDir(dir);
-    expect(bp.teamPrompt).toBe("Shared team context.\n");
     expect(bp.description).toBe("a concise team");
   });
 
-  test("TEAM.md without body yields an empty team prompt and omitted description", () => {
+  test("TEAM.md without description omits the description", () => {
     writeFileSync(
       join(dir, "TEAM.md"),
       `---\nleader: leader\n---\n`,
@@ -120,7 +118,6 @@ describe("loadTeamFromDir", () => {
       `---\ntools:\n  - bash\n---\nleader body`,
     );
     const bp = loadTeamFromDir(dir);
-    expect(bp.teamPrompt).toBe("");
     expect(bp.description).toBeUndefined();
   });
 
@@ -463,7 +460,8 @@ describe("parseAgentManifest", () => {
     const content = readFileSync(path, "utf-8");
     const soul = parseAgentManifest("explorer", content, "explorer.md");
     for (const tool of soul.tools) {
-      expect(tool === "write_file" || tool.startsWith("write_file(") || tool === "edit_file" || tool.startsWith("edit_file(") || tool === "write_artifact" || tool === "bash").toBe(false);
+      const artifactAllowsWrite = tool === "artifact" || (tool.startsWith("artifact(") && tool.includes("write"));
+      expect(tool === "write_file" || tool.startsWith("write_file(") || tool === "edit_file" || tool.startsWith("edit_file(") || artifactAllowsWrite || tool === "bash").toBe(false);
     }
   });
 

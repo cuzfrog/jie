@@ -55,9 +55,10 @@ describe("Scenario 6 — queued prompts from agent", () => {
     expect(notifyCards.length).toBe(5);
     expect(notifyCards.every((c) => c.kind === "toolResult" && c.error === null)).toBe(true);
 
-    // Overlapping queued prompts chain into one agent run via followUp, which
-    // ends in a single agent.idle; queue-non-empty above proves the worker is
-    // mid-batch, so idle here means the whole batch drained.
+    // Queued prompts are chained into the worker's followUp queue one per
+    // turn_end, but they remain visible in the TUI queue snapshot until the
+    // corresponding user turn starts. waitForAgentQueueNonEmpty above proves
+    // the worker has pending prompts; idle here means the whole batch drained.
     await waitForAgentIdle(harness, "my-team:worker-1", 3000);
 
     // agent.idle does not rotate currentTurn into history (tui-state.md); the

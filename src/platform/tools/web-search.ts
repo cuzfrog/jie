@@ -2,12 +2,8 @@ import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types";
 import { JiePlatformError } from "../jie-platform-errors";
 
-const WEB_SEARCH_DESCRIPTION = `web_search(query, max_results?): Run a web search and return up to max_results
-results (default 5; max 20 — values above 20 are silently clamped). Each
-result is { title, url, snippet }. The default backend scrapes DuckDuckGo
-HTML (no API key required). Transient failures (HTTP 429, 5xx, network
-errors, no results) surface as \`web_search_failed: <message>\`; the LLM is
-not given a stack trace.`;
+const WEB_SEARCH_DESCRIPTION = `Run a web search; returns up to \`max_results\` results (default 5, max 20) as
+{ title, url, snippet }.`;
 
 export interface WebSearchResult {
   title: string;

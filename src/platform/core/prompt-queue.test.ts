@@ -32,7 +32,7 @@ function queueUpdates(): QueueUpdateEnvelope[] {
     .filter((env): env is QueueUpdateEnvelope => env.topic === "agent.prompt.queue.update");
 }
 
-function lastSnapshot(): ReadonlyArray<{ text: string; source: "user" | "peer" }> {
+function lastSnapshot(): ReadonlyArray<{ text: string; source: "user" | "peer"; chained: boolean }> {
   const updates = queueUpdates();
   return updates[updates.length - 1]!.payload.prompts;
 }
@@ -71,11 +71,11 @@ describe("PromptQueue — ingress", () => {
     dispatcher.isStreaming.mockReturnValue(true);
     const queue = makeQueue();
     queue.ingestUserPrompt("hello", "hello");
-    expect(lastSnapshot()).toEqual([{ text: "hello", source: "user" }]);
+    expect(lastSnapshot()).toEqual([{ text: "hello", source: "user", chained: false }]);
     queue.ingestPeerNotification("task.recorded", "leader-1", "do X");
     expect(lastSnapshot()).toEqual([
-      { text: "hello", source: "user" },
-      { text: "[leader-1 on 'task.recorded']: do X", source: "peer" },
+      { text: "hello", source: "user", chained: false },
+      { text: "[leader-1 on 'task.recorded']: do X", source: "peer", chained: false },
     ]);
   });
 });
@@ -135,7 +135,7 @@ describe("PromptQueue — dispatch", () => {
 });
 
 describe("PromptQueue — follow-up drain", () => {
-  test("drainForFollowUp feeds the head entry to followUp, preserving its displayText", () => {
+  test("drainForFollowUp feeds the head entry to followUp and keeps it visible as chained", () => {
     dispatcher.isStreaming.mockReturnValue(true);
     const queue = makeQueue();
     queue.ingestUserPrompt("first", "first");
@@ -143,7 +143,7 @@ describe("PromptQueue — follow-up drain", () => {
     expect(dispatcher.followUp).toHaveBeenCalledTimes(1);
     const message = dispatcher.followUp.mock.calls[0]![0];
     expect(message).toMatchObject({ role: "user", content: "first", displayText: "first" });
-    expect(lastSnapshot()).toEqual([]);
+    expect(lastSnapshot()).toEqual([{ text: "first", source: "user", chained: true }]);
   });
 
   test("drainForFollowUp on an errored turn leaves the entry queued for a later prompt dispatch", async () => {
@@ -152,7 +152,7 @@ describe("PromptQueue — follow-up drain", () => {
     queue.ingestUserPrompt("first", "first");
     queue.drainForFollowUp(true);
     expect(dispatcher.followUp).not.toHaveBeenCalled();
-    expect(lastSnapshot()).toEqual([{ text: "first", source: "user" }]);
+    expect(lastSnapshot()).toEqual([{ text: "first", source: "user", chained: false }]);
     dispatcher.isStreaming.mockReturnValue(false);
     await queue.settle();
     expect(dispatcher.prompt).toHaveBeenCalledTimes(1);
@@ -164,6 +164,42 @@ describe("PromptQueue — follow-up drain", () => {
     queue.drainForFollowUp(true);
     expect(queueUpdates().length).toBe(countBefore + 1);
   });
+
+  test("multiple drains stack chained entries ahead of the remaining queue", () => {
+    dispatcher.isStreaming.mockReturnValue(true);
+    const queue = makeQueue();
+    queue.ingestUserPrompt("first", "first");
+    queue.ingestUserPrompt("second", "second");
+    queue.drainForFollowUp(false);
+    queue.drainForFollowUp(false);
+    expect(lastSnapshot()).toEqual([
+      { text: "first", source: "user", chained: true },
+      { text: "second", source: "user", chained: true },
+    ]);
+  });
+
+  test("consumeChained removes the matching message from the chained list and republishes", () => {
+    dispatcher.isStreaming.mockReturnValue(true);
+    const queue = makeQueue();
+    queue.ingestUserPrompt("first", "first");
+    queue.drainForFollowUp(false);
+    const message = dispatcher.followUp.mock.calls[0]![0];
+    const countBefore = queueUpdates().length;
+    queue.consumeChained(message);
+    expect(lastSnapshot()).toEqual([]);
+    expect(queueUpdates().length).toBe(countBefore + 1);
+  });
+
+  test("consumeChained with an unknown message is a silent no-op", () => {
+    dispatcher.isStreaming.mockReturnValue(true);
+    const queue = makeQueue();
+    queue.ingestUserPrompt("first", "first");
+    queue.drainForFollowUp(false);
+    const countBefore = queueUpdates().length;
+    queue.consumeChained({ role: "user", content: "other", timestamp: 0 });
+    expect(lastSnapshot()).toEqual([{ text: "first", source: "user", chained: true }]);
+    expect(queueUpdates().length).toBe(countBefore);
+  });
 });
 
 describe("PromptQueue — dequeue", () => {
@@ -173,7 +209,7 @@ describe("PromptQueue — dequeue", () => {
     queue.ingestUserPrompt("first", "first");
     queue.ingestUserPrompt("second", "second");
     queue.dequeue("second");
-    expect(lastSnapshot()).toEqual([{ text: "first", source: "user" }]);
+    expect(lastSnapshot()).toEqual([{ text: "first", source: "user", chained: false }]);
   });
 
   test("with duplicated texts, removes the tail-most match only", () => {
@@ -182,7 +218,7 @@ describe("PromptQueue — dequeue", () => {
     queue.ingestUserPrompt("same", "same");
     queue.ingestUserPrompt("same", "same");
     queue.dequeue("same");
-    expect(lastSnapshot()).toEqual([{ text: "same", source: "user" }]);
+    expect(lastSnapshot()).toEqual([{ text: "same", source: "user", chained: false }]);
   });
 
   test("dequeuing a user prompt leaves peer notifications queued", () => {
@@ -191,7 +227,7 @@ describe("PromptQueue — dequeue", () => {
     queue.ingestUserPrompt("hello", "hello");
     queue.ingestPeerNotification("task.recorded", "leader-1", "do X");
     queue.dequeue("hello");
-    expect(lastSnapshot()).toEqual([{ text: "[leader-1 on 'task.recorded']: do X", source: "peer" }]);
+    expect(lastSnapshot()).toEqual([{ text: "[leader-1 on 'task.recorded']: do X", source: "peer", chained: false }]);
   });
 
   test("no match: nothing is removed and the snapshot is republished so a stale observer resyncs", () => {
@@ -201,7 +237,7 @@ describe("PromptQueue — dequeue", () => {
     const countBefore = queueUpdates().length;
     queue.dequeue("already consumed");
     expect(queueUpdates().length).toBe(countBefore + 1);
-    expect(lastSnapshot()).toEqual([{ text: "first", source: "user" }]);
+    expect(lastSnapshot()).toEqual([{ text: "first", source: "user", chained: false }]);
   });
 
   test("dequeued entries park and cap: past the cap the oldest parked prompt is evicted", () => {
@@ -216,7 +252,7 @@ describe("PromptQueue — dequeue", () => {
     queue.requeue("p0");
     expect(lastSnapshot()).toEqual([]);
     queue.requeue("p1");
-    expect(lastSnapshot()).toEqual([{ text: "p1", source: "user" }]);
+    expect(lastSnapshot()).toEqual([{ text: "p1", source: "user", chained: false }]);
   });
 });
 
@@ -229,8 +265,8 @@ describe("PromptQueue — requeue", () => {
     queue.dequeue("second");
     queue.requeue("second");
     expect(lastSnapshot()).toEqual([
-      { text: "first", source: "user" },
-      { text: "second", source: "user" },
+      { text: "first", source: "user", chained: false },
+      { text: "second", source: "user", chained: false },
     ]);
   });
 
@@ -264,7 +300,7 @@ describe("PromptQueue — requeue", () => {
     const countBefore = queueUpdates().length;
     queue.requeue("never dequeued");
     expect(queueUpdates().length).toBe(countBefore + 1);
-    expect(lastSnapshot()).toEqual([{ text: "first", source: "user" }]);
+    expect(lastSnapshot()).toEqual([{ text: "first", source: "user", chained: false }]);
   });
 
   test("a resubmitted dequeued prompt is consumed and not restored a second time", () => {

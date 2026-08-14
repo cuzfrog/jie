@@ -90,9 +90,9 @@ In the body's restore phase (before `start`), the body asks `MemoryManager.boots
 
 ## Tools
 
-`memory_add` and `memory_search` are opt-in per role via `tools:` frontmatter. The built-in setup-assistant team includes both.
+`memory` is a single tool with an `op` discriminator, opt-in per role via `tools:` frontmatter (`memory` for both ops, or `memory(add)` / `memory(search)` to restrict). The built-in setup-assistant team includes it.
 
-`memory_add` parameters:
+`op="add"` parameters:
 
 | Parameter | Meaning |
 |---|---|
@@ -101,9 +101,9 @@ In the body's restore phase (before `start`), the body asks `MemoryManager.boots
 | `priority` | Optional 0-100 (default 50); `instruction` is always stored at 100. |
 | `scene` | Optional one-line context (default `manual`). |
 
-`memory_add` is scoped by `ExecutionContext.teamId` and `ExecutionContext.sessionId`. It stores a new memory or reinforces an existing one with the same `content` and `type`, and returns a summary line.
+`op="add"` is scoped by `ExecutionContext.teamId` and `ExecutionContext.sessionId`. It stores a new memory or reinforces an existing one with the same `content` and `type`, and returns a summary line.
 
-`memory_search` parameters:
+`op="search"` parameters:
 
 | Parameter | Meaning |
 |---|---|

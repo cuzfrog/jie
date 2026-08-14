@@ -75,4 +75,33 @@ describe("update_kanban", () => {
     await tool.execute({ content: "build feature", assignee: "implementer-1" }, makeEmptyContext());
     expect(kanbanStore.update).toHaveBeenCalledWith("test-team", "test-session", "build feature", { assignee: "implementer-1" });
   });
+
+  test("claim mode claims the card and returns the board", async () => {
+    const claimed = { id: "#1", content: "build", status: "in_progress", assignee: "general-1" } as KanbanCard;
+    kanbanStore.claim.mockReturnValue(claimed);
+    kanbanStore.load.mockReturnValue([claimed]);
+    const tool = createKanbanUpdateTool({ kanbanStore });
+    const result = await tool.execute({ content: "build", claim: true }, makeEmptyContext());
+    expect(kanbanStore.claim).toHaveBeenCalledWith("test-team", "test-session", "build", "general-1", undefined);
+    expect(kanbanStore.update).not.toHaveBeenCalled();
+    expect(result.content).toContain("Claimed kanban card");
+    expect(result.details).toEqual({ kind: "kanban", cards: [claimed] });
+  });
+
+  test("claim mode passes expected_status through", async () => {
+    kanbanStore.claim.mockReturnValue({ id: "#1", content: "build", status: "in_progress" } as KanbanCard);
+    kanbanStore.load.mockReturnValue([]);
+    const tool = createKanbanUpdateTool({ kanbanStore });
+    await tool.execute({ content: "build", claim: true, expected_status: "pending" }, makeEmptyContext());
+    expect(kanbanStore.claim).toHaveBeenCalledWith("test-team", "test-session", "build", "general-1", "pending");
+  });
+
+  test("claim mode reports a non-claimable card instead of throwing", async () => {
+    kanbanStore.claim.mockReturnValue(null);
+    kanbanStore.load.mockReturnValue([]);
+    const tool = createKanbanUpdateTool({ kanbanStore });
+    const result = await tool.execute({ content: "build", claim: true }, makeEmptyContext());
+    expect(result.content).toContain("not claimable");
+    expect(result.details).toEqual({ kind: "kanban", cards: [] });
+  });
 });

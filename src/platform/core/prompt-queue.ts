@@ -19,6 +19,7 @@ export interface PromptQueue {
   dispatchNext(): Promise<void>;
   settle(): Promise<void>;
   drainForFollowUp(isError: boolean): void;
+  consumeChained(message: AgentMessage): void;
   publishQueueUpdate(): void;
   isEmpty(): boolean;
   stop(): void;
@@ -44,6 +45,7 @@ export class PromptQueueImpl implements PromptQueue {
   private dispatching = false;
   private stopped = false;
   private readonly queue: QueuedPrompt[] = [];
+  private readonly chained: QueuedPrompt[] = [];
   private readonly dequeuedPrompts: QueuedPrompt[] = [];
 
   constructor(deps: PromptQueueDeps) {
@@ -113,16 +115,28 @@ export class PromptQueueImpl implements PromptQueue {
   drainForFollowUp(isError: boolean): void {
     if (!isError && this.queue.length > 0) {
       const next = this.queue.shift()!;
+      this.chained.push(next);
       this.dispatcher.followUp(next.message);
     }
     this.publishQueueUpdate();
   }
 
+  consumeChained(message: AgentMessage): void {
+    const index = this.chained.findIndex((entry) => entry.message === message);
+    if (index !== -1) {
+      this.chained.splice(index, 1);
+      this.publishQueueUpdate();
+    }
+  }
+
   publishQueueUpdate(): void {
-    const prompts = this.queue.map((entry) => entry.userText !== null
-      ? { text: entry.userText, source: "user" as const }
-      : { text: userPromptText(entry.message), source: "peer" as const });
-    this.eventManager.publish(Events.agentPromptQueueUpdate(this.sender, prompts));
+    const chainedPrompts = this.chained.map((entry) => entry.userText !== null
+      ? { text: entry.userText, source: "user" as const, chained: true as const }
+      : { text: userPromptText(entry.message), source: "peer" as const, chained: true as const });
+    const queuedPrompts = this.queue.map((entry) => entry.userText !== null
+      ? { text: entry.userText, source: "user" as const, chained: false as const }
+      : { text: userPromptText(entry.message), source: "peer" as const, chained: false as const });
+    this.eventManager.publish(Events.agentPromptQueueUpdate(this.sender, [...chainedPrompts, ...queuedPrompts]));
   }
 
   isEmpty(): boolean {

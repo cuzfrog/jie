@@ -10,17 +10,10 @@ const TIMEOUT_MS = 300_000;
 const KILL_GRACE_MS = 5_000;
 const DRAIN_TIMEOUT_MS = 500;
 
-const BASH_DESCRIPTION = `Execute a shell command in \`/bin/sh\` (POSIX) within the workspace root. The
-command runs with a 300s timeout (SIGTERM, then SIGKILL after a brief grace).
-stdout and stderr are each independently truncated to 32 KiB. Output is
-formatted as \`exit_code: <N>\` followed by \`--- stdout ---\` and \`--- stderr ---\`
-sections (empty sections are omitted). Non-zero exit codes are reported in
-the text, not as a typed error — read the \`exit_code\` line. The \`workdir\`
-argument, if provided, is resolved relative to the workspace root and must
-stay inside it (workspace containment; \`workdir_escape\` on violation). Use
-this for arbitrary shell work (running scripts, invoking CLI tools,
-inspecting the filesystem, etc.); use \`read_file\` / \`write_file\` for simple
-text I/O.`;
+const BASH_DESCRIPTION = `Run a shell command (/bin/sh) in the workspace root, 300s timeout. Output is
+\`exit_code: <N>\` followed by stdout/stderr sections, each truncated to 32 KiB;
+non-zero exits are reported in the text, not as an error. \`workdir\`, if given,
+must stay inside the workspace.`;
 
 export interface BashDeps {
   workspaceRoot: string;

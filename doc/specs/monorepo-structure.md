@@ -20,7 +20,7 @@ src/
     storage/           # Storage + SqliteStorage, schema bootstrap, ArtifactStore, TranscriptStore (04-storage.md, 08-transcript.md)
     team/              # Blueprint parser, team registry (discovery, ADR 24), TeamManager, built-in setup-assistant/ team
     tools/             # Built-in tools: notify, bash, read_file, write_file, edit, write_kanban,
-                       # web_search, web_fetch, write_artifact, read_artifact, memory_search + ToolRegistry
+                       # web_search, web_fetch, artifact, memory + ToolRegistry
     container.ts       # Composition root: bootPlatform(options): AwilixContainer<PlatformCradle>
     jie-platform.ts    # JiePlatform handle interface + implementation (registered in module.ts)
     jie-platform-errors.ts

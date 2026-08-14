@@ -71,14 +71,12 @@ export function parseTeamFromManifests(
   let leaderRole: string | null = null;
   const roleStems = new Set(roles.map((r) => r.role));
   let additionalAgentRefs: string[] = [];
-  let teamPrompt = "";
   let description: string | undefined;
 
   if (teamFile !== undefined) {
     const teamContent = teamFile[1];
     const teamParse = parseTeamFile(teamContent, "TEAM.md");
     additionalAgentRefs = validateAdditionalAgentRefs(teamParse.additionalAgentRefs, roleStems, sourceDir || teamId);
-    teamPrompt = teamParse.body;
     if (teamParse.description !== null) description = teamParse.description;
     const leader = teamParse.leader;
     if (leader === null) {
@@ -140,7 +138,7 @@ export function parseTeamFromManifests(
     }
   }
 
-  return { id: teamId, roles, leaderRole, additionalAgentRefs, teamPrompt, description };
+  return { id: teamId, roles, leaderRole, additionalAgentRefs, description };
 }
 
 export function loadTeamFromDir(dirPath: string): TeamBlueprint {
@@ -184,7 +182,6 @@ interface TeamFileParseResult {
   leader: string | null;
   additionalAgentRefs: string[];
   description: string | null;
-  body: string;
 }
 
 function splitFrontmatter(content: string): {
@@ -360,7 +357,7 @@ export function parseAgentManifest(
 }
 
 function parseTeamFile(content: string, file: string): TeamFileParseResult {
-  const { frontmatter, body } = splitFrontmatter(content);
+  const { frontmatter } = splitFrontmatter(content);
   if (frontmatter === null) {
     throw new JiePlatformError("INVALID_FRONTMATTER", {
       detail: `invalid frontmatter in ${file}: missing frontmatter block`,
@@ -370,5 +367,5 @@ function parseTeamFile(content: string, file: string): TeamFileParseResult {
   const leaderRole = leader === undefined || leader === null || leader === "" ? null : asString(leader, "leader", file);
   const additionalAgentRefs = frontmatter["additional-agents"] === undefined ? [] : asStringList(frontmatter["additional-agents"], "additional-agents", file);
   const description = frontmatter.description === undefined ? null : asString(frontmatter.description, "description", file);
-  return { leader: leaderRole, additionalAgentRefs, description, body };
+  return { leader: leaderRole, additionalAgentRefs, description };
 }

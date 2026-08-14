@@ -2,10 +2,10 @@
 model: small
 tools:
   - notify(task.recorded, task.done)
-  - read_artifact
+  - artifact
   - write_kanban
   - update_kanban
-  - memory_search
+  - memory(search)
 subscribe:
   - task.review_passed
   - task.failed

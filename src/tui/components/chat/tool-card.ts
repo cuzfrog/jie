@@ -54,22 +54,20 @@ function extractDiff(details: MessageCard["details"]): string | null {
   return details.diff === null || details.diff === "" ? null : details.diff;
 }
 
-const ARG_KEYS = new Map<string, string>([
-  ["bash", "command"],
-  ["read_file", "path"],
-  ["write_file", "path"],
-  ["edit_file", "path"],
-  ["ls", "path"],
-  ["find_file", "pattern"],
-  ["grep_file", "pattern"],
-  ["read_artifact", "key"],
-  ["write_artifact", "key"],
-  ["find_artifact", "pattern"],
-  ["web_search", "query"],
-  ["web_fetch", "url"],
-  ["memory_search", "query"],
-  ["update_kanban", "content"],
-  ["notify", "topic"],
+const ARG_KEYS = new Map<string, ReadonlyArray<string>>([
+  ["bash", ["command"]],
+  ["read_file", ["path"]],
+  ["write_file", ["path"]],
+  ["edit_file", ["path"]],
+  ["ls", ["path"]],
+  ["find_file", ["pattern"]],
+  ["grep_file", ["pattern"]],
+  ["artifact", ["key", "pattern"]],
+  ["web_search", ["query"]],
+  ["web_fetch", ["url"]],
+  ["memory", ["query", "content"]],
+  ["update_kanban", ["content"]],
+  ["notify", ["topic"]],
 ]);
 
 function renderHeader(card: MessageCard, isError: boolean, width: number): string {
@@ -83,16 +81,19 @@ function renderHeader(card: MessageCard, isError: boolean, width: number): strin
 }
 
 function formatToolArg(name: string, input: string | undefined, inputTruncated: boolean | undefined): string {
-  const key = ARG_KEYS.get(name);
-  if (key === undefined || input === undefined || input === "") return "";
+  const keys = ARG_KEYS.get(name);
+  if (keys === undefined || input === undefined || input === "") return "";
   try {
     const parsed: unknown = JSON.parse(input);
     if (!isRecord(parsed)) return "";
-    const value = parsed[key];
-    if (typeof value !== "string") return "";
-    const firstLine = value.split("\n")[0] ?? "";
-    if (firstLine === "") return "";
-    return inputTruncated === true ? `${firstLine}…` : firstLine;
+    for (const key of keys) {
+      const value = parsed[key];
+      if (typeof value !== "string") continue;
+      const firstLine = value.split("\n")[0] ?? "";
+      if (firstLine === "") continue;
+      return inputTruncated === true ? `${firstLine}…` : firstLine;
+    }
+    return "";
   } catch {
     return "";
   }

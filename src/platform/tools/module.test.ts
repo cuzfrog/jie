@@ -57,28 +57,24 @@ function bootedContainer(): AwilixContainer<PlatformCradle> {
 }
 
 describe("registerToolsModule", () => {
-  test("toolRegistry resolves with the 20 built-ins installed", () => {
+  test("toolRegistry resolves with the 16 built-ins installed", () => {
     const container = bootedContainer();
     const names = container.cradle.toolRegistry.list().map((t) => t.name).sort();
     expect(names).toEqual([
+      "artifact",
       "ask_user_questions",
       "bash",
       "call_agent",
-      "claim_kanban",
       "edit_file",
-      "find_artifact",
       "find_file",
       "grep_file",
       "ls",
-      "memory_add",
-      "memory_search",
+      "memory",
       "notify",
-      "read_artifact",
       "read_file",
       "update_kanban",
       "web_fetch",
       "web_search",
-      "write_artifact",
       "write_file",
       "write_kanban",
     ]);
