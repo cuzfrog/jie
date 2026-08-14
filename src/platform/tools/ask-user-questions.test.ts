@@ -49,7 +49,7 @@ function makeCtx(): ExecutionContext {
 
 interface FakeBroker {
   broker: QuestionBroker;
-  answered: Array<{ requestId: string; cancelled: boolean; answers: QuestionResult["answers"] }>;
+  answered: Array<{ requestId: string; teamId: string; agentKey: string; cancelled: boolean; answers: QuestionResult["answers"] }>;
 }
 
 function makeFakeBroker(): FakeBroker {
@@ -61,8 +61,8 @@ function makeFakeBroker(): FakeBroker {
         if (signal?.aborted) throw new JiePlatformError("QUESTION_CANCELLED", { detail: "aborted" });
         pending.set("req-1", resolve);
       }),
-      answer: (requestId, result) => {
-        answered.push({ requestId, cancelled: result.cancelled, answers: result.answers });
+      answer: (requestId, teamId, agentKey, result) => {
+        answered.push({ requestId, teamId, agentKey, cancelled: result.cancelled, answers: result.answers });
         const resolve = pending.get(requestId);
         if (resolve !== undefined) resolve({ requestId, ...result });
       },
@@ -76,7 +76,7 @@ describe("ask_user_questions", () => {
     const fake = makeFakeBroker();
     const tool = createAskUserQuestionsTool({ questionBroker: fake.broker });
     const promise = tool.execute({ questions: BASE_QUESTIONS }, makeCtx());
-    fake.broker.answer("req-1", { cancelled: false, answers: [{ header: "Approach", selected: ["A"], other: null }] });
+    fake.broker.answer("req-1", "t1", "a1", { cancelled: false, answers: [{ header: "Approach", selected: ["A"], other: null }] });
     const result = await promise;
     expect(result.content).toBe("The user answered:\n- Approach: A");
   });
@@ -85,7 +85,7 @@ describe("ask_user_questions", () => {
     const fake = makeFakeBroker();
     const tool = createAskUserQuestionsTool({ questionBroker: fake.broker });
     const promise = tool.execute({ questions: BASE_QUESTIONS }, makeCtx());
-    fake.broker.answer("req-1", { cancelled: true, answers: null });
+    fake.broker.answer("req-1", "t1", "a1", { cancelled: true, answers: null });
     const result = await promise;
     expect(result.content).toBe("The user declined to answer.");
   });
@@ -111,6 +111,27 @@ describe("ask_user_questions", () => {
     await expect(tool.execute({ questions: [
       { question: "q1", header: "Same", options: [{ label: "a", description: "d" }], multiSelect: false },
       { question: "q2", header: "Same", options: [{ label: "b", description: "d" }], multiSelect: false },
+    ] }, makeCtx())).rejects.toMatchObject({ code: "QUESTION_INVALID" });
+  });
+
+  test("rejects an empty option description", async () => {
+    const tool = createAskUserQuestionsTool({ questionBroker: makeFakeBroker().broker });
+    await expect(tool.execute({ questions: [
+      { question: "q1", header: "H1", options: [{ label: "a", description: "" }], multiSelect: false },
+    ] }, makeCtx())).rejects.toMatchObject({ code: "QUESTION_INVALID" });
+  });
+
+  test("rejects duplicate option labels", async () => {
+    const tool = createAskUserQuestionsTool({ questionBroker: makeFakeBroker().broker });
+    await expect(tool.execute({ questions: [
+      { question: "q1", header: "H1", options: [{ label: "same", description: "d1" }, { label: "same", description: "d2" }], multiSelect: false },
+    ] }, makeCtx())).rejects.toMatchObject({ code: "QUESTION_INVALID" });
+  });
+
+  test("rejects an option description that is too long", async () => {
+    const tool = createAskUserQuestionsTool({ questionBroker: makeFakeBroker().broker });
+    await expect(tool.execute({ questions: [
+      { question: "q1", header: "H1", options: [{ label: "a", description: "x".repeat(201) }], multiSelect: false },
     ] }, makeCtx())).rejects.toMatchObject({ code: "QUESTION_INVALID" });
   });
 });

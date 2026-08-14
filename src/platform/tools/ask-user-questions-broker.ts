@@ -16,10 +16,12 @@ export interface QuestionResult {
 
 export interface QuestionBroker {
   ask(request: QuestionRequest, signal?: AbortSignal): Promise<QuestionResult>;
-  answer(requestId: string, result: Omit<QuestionResult, "requestId">): void;
+  answer(requestId: string, teamId: string, agentKey: string, result: Omit<QuestionResult, "requestId">): void;
 }
 
 interface PendingRequest {
+  readonly teamId: string;
+  readonly agentKey: string;
   resolve(value: QuestionResult): void;
   reject(error: unknown): void;
 }
@@ -38,7 +40,7 @@ export class InProcessQuestionBroker implements QuestionBroker {
     this.eventManager.publish(envelope);
 
     return new Promise<QuestionResult>((resolve, reject) => {
-      this.pending.set(requestId, { resolve, reject });
+      this.pending.set(requestId, { teamId: request.teamId, agentKey: request.agentKey, resolve, reject });
       if (signal === undefined) return;
       if (signal.aborted) {
         this.reject(requestId, "QUESTION_CANCELLED", signal.reason === undefined ? "aborted" : String(signal.reason));
@@ -50,10 +52,13 @@ export class InProcessQuestionBroker implements QuestionBroker {
     });
   }
 
-  answer(requestId: string, result: Omit<QuestionResult, "requestId">): void {
+  answer(requestId: string, teamId: string, agentKey: string, result: Omit<QuestionResult, "requestId">): void {
     const pending = this.pending.get(requestId);
     if (pending === undefined) {
       throw new JiePlatformError("QUESTION_NOT_FOUND", { detail: `no pending question with requestId '${requestId}'` });
+    }
+    if (pending.teamId !== teamId || pending.agentKey !== agentKey) {
+      throw new JiePlatformError("QUESTION_UNAUTHORIZED", { detail: `request '${requestId}' was asked by a different team or agent` });
     }
     this.pending.delete(requestId);
     pending.resolve({ requestId, ...result });

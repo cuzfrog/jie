@@ -72,6 +72,7 @@ function validateQuestions(questions: ReadonlyArray<QuestionItem>): void {
 function validateOption(questionIndex: number, optionIndex: number, opt: QuestionOption, labels: Set<string>): void {
   if (opt.label.length === 0) throw new JiePlatformError("QUESTION_INVALID", { detail: `question ${questionIndex} option ${optionIndex} label is empty` });
   if (opt.label.length > MAX_LABEL_LENGTH) throw new JiePlatformError("QUESTION_INVALID", { detail: `question ${questionIndex} option ${optionIndex} label too long` });
+  if (opt.description.length === 0) throw new JiePlatformError("QUESTION_INVALID", { detail: `question ${questionIndex} option ${optionIndex} description is empty` });
   if (opt.description.length > MAX_DESCRIPTION_LENGTH) throw new JiePlatformError("QUESTION_INVALID", { detail: `question ${questionIndex} option ${optionIndex} description too long` });
   if (labels.has(opt.label)) throw new JiePlatformError("QUESTION_INVALID", { detail: `question ${questionIndex} duplicate label: ${opt.label}` });
   labels.add(opt.label);

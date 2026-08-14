@@ -4,7 +4,7 @@ import { type AnyEventEnvelope, type JiePlatform, type QuestionAnswer } from "..
 import { logger } from "../../utils";
 import type { CommandHandler } from "../command";
 import { Actions, ActionTypes } from "./actions";
-import type { KanbanEditField } from "./state";
+import type { KanbanEditField, TuiState } from "./state";
 import type { StateStore } from "./state-store";
 
 const log = logger.getSubLogger({ name: "jie.tui.effect-handler" });
@@ -36,7 +36,7 @@ export class EffectHandlerImpl implements EffectHandler {
         void this.maybePlaySound(env);
       }
     });
-    this.unsubscribeActions = stateStore.subscribe(async (action, afterState) => {
+    this.unsubscribeActions = stateStore.subscribe(async (action, afterState, beforeState) => {
       switch (action.type) {
         case ActionTypes.SUBMIT_EDITOR_TEXT:
           commandHandler.handle(action.payload.text);
@@ -60,10 +60,10 @@ export class EffectHandlerImpl implements EffectHandler {
           this.toggleKanbanTodo(afterState.teamId, action.payload.cardId, action.payload.todo);
           return;
         case ActionTypes.SUBMIT_QUESTION_ANSWERS:
-          this.answerUserQuestion(action.payload.requestId, false, action.payload.answers);
+          this.answerUserQuestion(beforeState, action.payload.requestId, false, action.payload.answers);
           return;
         case ActionTypes.CANCEL_QUESTION:
-          this.answerUserQuestion(action.payload.requestId, true);
+          this.answerUserQuestion(beforeState, action.payload.requestId, true);
           return;
         default:
           return;
@@ -96,8 +96,15 @@ export class EffectHandlerImpl implements EffectHandler {
       });
   }
 
-  private answerUserQuestion(requestId: string, cancelled: boolean, answers?: ReadonlyArray<QuestionAnswer>): void {
-    void this.platform.execute({ name: "answerUserQuestion", requestId, cancelled, answers })
+  private answerUserQuestion(beforeState: TuiState, requestId: string, cancelled: boolean, answers?: ReadonlyArray<QuestionAnswer>): void {
+    const question = beforeState.question;
+    if (question === null || question.requestId !== requestId) return;
+    const teamId = beforeState.teamId;
+    if (teamId === null) return;
+    const parts = question.agentId.split(":");
+    if (parts.length !== 2 || parts[0] !== teamId) return;
+    const agentKey = parts[1];
+    void this.platform.execute({ name: "answerUserQuestion", teamId, agentKey, requestId, cancelled, answers })
       .then(() => undefined, (error: unknown) => {
         this.stateStore.dispatch(Actions.setErrorMessage(`answer question failed: ${error instanceof Error ? error.message : String(error)}`));
       });

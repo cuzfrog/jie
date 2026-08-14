@@ -17,7 +17,7 @@ const SAMPLE_QUESTIONS: ReadonlyArray<QuestionItem> = [
 function makeFakeEventManager(): EventManager {
   const subscribers = new Map<string, Array<(env: EventEnvelope<EventType>) => void>>();
   return {
-    publish: (env: EventEnvelope<EventType>) => {
+    publish: (env) => {
       for (const callback of subscribers.get(env.topic) ?? []) callback(env);
     },
     subscribe: (topic: string, callback: (env: EventEnvelope<EventType>) => void) => {
@@ -35,7 +35,7 @@ function makeBroker(generateId: () => string = () => "req-1"): { broker: InProce
   const events = makeFakeEventManager();
   const published: EventEnvelope<"agent.question.ask">[] = [];
   events.subscribe("agent.question.ask", (env) => {
-    if (env.type === "agent.question.ask") published.push(env as EventEnvelope<"agent.question.ask">);
+    if (env.type === "agent.question.ask") published.push(env);
   });
   return { broker: new InProcessQuestionBroker(events, generateId), events, published };
 }
@@ -49,14 +49,14 @@ describe("InProcessQuestionBroker", () => {
     expect(env.type).toBe("agent.question.ask");
     expect(env.payload).toMatchObject({ requestId: "req-1", questions: SAMPLE_QUESTIONS });
     expect(env.sender).toEqual({ kind: "agent", teamId: "t1", agentKey: "a1" });
-    broker.answer("req-1", { cancelled: false, answers: [{ header: "Approach", selected: ["A"], other: null }] });
+    broker.answer("req-1", "t1", "a1", { cancelled: false, answers: [{ header: "Approach", selected: ["A"], other: null }] });
     await expect(promise).resolves.toBeInstanceOf(Object);
   });
 
   test("answer resolves the pending promise with requestId and answers", async () => {
     const { broker } = makeBroker();
     const promise = broker.ask({ teamId: "t1", agentKey: "a1", questions: SAMPLE_QUESTIONS });
-    broker.answer("req-1", {
+    broker.answer("req-1", "t1", "a1", {
       cancelled: false,
       answers: [{ header: "Approach", selected: ["A"], other: null }],
     });
@@ -68,7 +68,24 @@ describe("InProcessQuestionBroker", () => {
 
   test("answer for an unknown requestId throws QUESTION_NOT_FOUND", () => {
     const { broker } = makeBroker();
-    expect(() => broker.answer("missing", { cancelled: true, answers: null })).toThrow(expect.objectContaining({ code: "QUESTION_NOT_FOUND" }));
+    expect(() => broker.answer("missing", "t1", "a1", { cancelled: true, answers: null })).toThrow(expect.objectContaining({ code: "QUESTION_NOT_FOUND" }));
+  });
+
+  test("answer for a request asked by a different team or agent throws QUESTION_UNAUTHORIZED", () => {
+    const { broker } = makeBroker();
+    const promise = broker.ask({ teamId: "t1", agentKey: "a1", questions: SAMPLE_QUESTIONS });
+    expect(() => broker.answer("req-1", "t2", "a1", { cancelled: true, answers: null })).toThrow(expect.objectContaining({ code: "QUESTION_UNAUTHORIZED" }));
+    expect(() => broker.answer("req-1", "t1", "a2", { cancelled: true, answers: null })).toThrow(expect.objectContaining({ code: "QUESTION_UNAUTHORIZED" }));
+    void promise;
+  });
+
+  test("answer for an already-aborted request throws QUESTION_NOT_FOUND", async () => {
+    const { broker } = makeBroker();
+    const controller = new AbortController();
+    const promise = broker.ask({ teamId: "t1", agentKey: "a1", questions: SAMPLE_QUESTIONS }, controller.signal);
+    controller.abort();
+    await expect(promise).rejects.toMatchObject({ code: "QUESTION_CANCELLED" });
+    expect(() => broker.answer("req-1", "t1", "a1", { cancelled: false, answers: null })).toThrow(expect.objectContaining({ code: "QUESTION_NOT_FOUND" }));
   });
 
   test("ask rejects when the abort signal is already aborted", async () => {
@@ -91,8 +108,8 @@ describe("InProcessQuestionBroker", () => {
     const { broker, published } = makeBroker(() => `req-${++counter}`);
     const p1 = broker.ask({ teamId: "t1", agentKey: "a1", questions: SAMPLE_QUESTIONS });
     const p2 = broker.ask({ teamId: "t1", agentKey: "a1", questions: SAMPLE_QUESTIONS });
-    broker.answer("req-1", { cancelled: false, answers: [{ header: "Approach", selected: ["A"], other: null }] });
-    broker.answer("req-2", { cancelled: false, answers: [{ header: "Approach", selected: ["B"], other: null }] });
+    broker.answer("req-1", "t1", "a1", { cancelled: false, answers: [{ header: "Approach", selected: ["A"], other: null }] });
+    broker.answer("req-2", "t1", "a1", { cancelled: false, answers: [{ header: "Approach", selected: ["B"], other: null }] });
     const [r1, r2] = await Promise.all([p1, p2]);
     expect(r1.requestId).toBe("req-1");
     expect(r2.requestId).toBe("req-2");

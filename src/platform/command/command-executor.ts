@@ -381,7 +381,7 @@ export class CommandExecutorImpl implements CommandExecutor {
   }
 
   private answerUserQuestion(command: Command<"answerUserQuestion">): CommandResult<"answerUserQuestion"> {
-    this.questionBroker.answer(command.requestId, {
+    this.questionBroker.answer(command.requestId, command.teamId, command.agentKey, {
       cancelled: command.cancelled,
       answers: command.cancelled ? null : (command.answers ?? null),
     });

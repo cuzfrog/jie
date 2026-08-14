@@ -920,13 +920,13 @@ describe("CommandExecutorImpl", () => {
   describe("answerUserQuestion", () => {
     test("calls questionBroker.answer with answers when not cancelled", async () => {
       const answers = [{ header: "Approach", selected: ["A"], other: null }];
-      await executor.execute({ name: "answerUserQuestion", requestId: "req-1", cancelled: false, answers });
-      expect(questionBroker.answer).toHaveBeenCalledWith("req-1", { cancelled: false, answers });
+      await executor.execute({ name: "answerUserQuestion", teamId: "my-team", agentKey: "general-1", requestId: "req-1", cancelled: false, answers });
+      expect(questionBroker.answer).toHaveBeenCalledWith("req-1", "my-team", "general-1", { cancelled: false, answers });
     });
 
     test("calls questionBroker.answer with null answers when cancelled", async () => {
-      await executor.execute({ name: "answerUserQuestion", requestId: "req-1", cancelled: true });
-      expect(questionBroker.answer).toHaveBeenCalledWith("req-1", { cancelled: true, answers: null });
+      await executor.execute({ name: "answerUserQuestion", teamId: "my-team", agentKey: "general-1", requestId: "req-1", cancelled: true });
+      expect(questionBroker.answer).toHaveBeenCalledWith("req-1", "my-team", "general-1", { cancelled: true, answers: null });
     });
   });
 });

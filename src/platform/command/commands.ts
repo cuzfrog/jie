@@ -57,7 +57,7 @@ interface CommandTypeMap {
   kanbanHandoff: CommandDef<{ teamId: string; cardId: string; targetTeamId: string }, KanbanBoardResult & { card: KanbanCard }>;
   kanbanToggleTodo: CommandDef<{ teamId: string; cardId: string; todo: string }, KanbanBoardResult>;
   compact: CommandDef<{ teamId: string; agentKey: string }, null>;
-  answerUserQuestion: CommandDef<{ requestId: string; cancelled: boolean; answers?: ReadonlyArray<QuestionAnswer> }, null>;
+  answerUserQuestion: CommandDef<{ teamId: string; agentKey: string; requestId: string; cancelled: boolean; answers?: ReadonlyArray<QuestionAnswer> }, null>;
 }
 
 interface KanbanBoardResult {
