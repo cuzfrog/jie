@@ -508,6 +508,14 @@ describe("JieAgentBody — tool resolution", () => {
   });
 });
 
+describe("JieAgentBody — agent configuration", () => {
+  test("follow-up mode is one-at-a-time so each queued prompt gets its own turn", () => {
+    const h = makeHarness();
+    h.makeBody();
+    expect(h.cap.capturedOptions?.followUpMode).toBe("one-at-a-time");
+  });
+});
+
 describe("JieAgentBody — execution context toolArgs wiring", () => {
   function makeCapturingTool(received: Array<ExecutionContext["toolArgs"]>): Tool {
     return {
@@ -1451,6 +1459,35 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     h.fireEvent({ type: "turn_start" });
     h.fireEvent({ type: "message_start", message: h.followUp.mock.calls[0]![0] as AgentMessage });
     expect(turnStart[turnStart.length - 1]!.payload).toBe("first queued");
+    body.stop();
+  });
+
+  test("two queued prompts released across two turn_ends each get their own turn.start payload", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    h.subscribeSubject("agent.turn.start", (env) => turnStart.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first queued"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "second queued"));
+    await flush();
+    h.fireEvent({
+      type: "turn_end",
+      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
+      toolResults: [],
+    });
+    expect(h.followUp.mock.calls.length).toBe(1);
+    h.fireEvent({ type: "turn_start" });
+    h.fireEvent({ type: "message_start", message: h.followUp.mock.calls[0]![0] as AgentMessage });
+    h.fireEvent({
+      type: "turn_end",
+      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
+      toolResults: [],
+    });
+    expect(h.followUp.mock.calls.length).toBe(2);
+    h.fireEvent({ type: "turn_start" });
+    h.fireEvent({ type: "message_start", message: h.followUp.mock.calls[1]![0] as AgentMessage });
+    expect(turnStart.map((env) => env.payload)).toEqual(["first queued", "second queued"]);
     body.stop();
   });
 

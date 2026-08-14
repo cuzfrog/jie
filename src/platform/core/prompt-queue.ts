@@ -19,9 +19,6 @@ export interface PromptQueue {
   dispatchNext(): Promise<void>;
   settle(): Promise<void>;
   drainForFollowUp(isError: boolean): void;
-  takeTurnStartLabel(message: AgentMessage | null): string | null;
-  dropFollowUpLabel(message: AgentMessage): void;
-  clearPendingLabel(): void;
   publishQueueUpdate(): void;
   isEmpty(): boolean;
   stop(): void;
@@ -46,10 +43,8 @@ export class PromptQueueImpl implements PromptQueue {
   private readonly beforeDispatch: () => Promise<void>;
   private dispatching = false;
   private stopped = false;
-  private pendingTurnPrompt: string | null = null;
   private readonly queue: QueuedPrompt[] = [];
   private readonly dequeuedPrompts: QueuedPrompt[] = [];
-  private readonly followUpLabels: Map<AgentMessage, string | null> = new Map();
 
   constructor(deps: PromptQueueDeps) {
     this.dispatcher = deps.dispatcher;
@@ -118,28 +113,9 @@ export class PromptQueueImpl implements PromptQueue {
   drainForFollowUp(isError: boolean): void {
     if (!isError && this.queue.length > 0) {
       const next = this.queue.shift()!;
-      this.followUpLabels.set(next.message, next.userText);
       this.dispatcher.followUp(next.message);
     }
     this.publishQueueUpdate();
-  }
-
-  takeTurnStartLabel(message: AgentMessage | null): string | null {
-    let label = this.pendingTurnPrompt;
-    this.pendingTurnPrompt = null;
-    if (message !== null) {
-      const supplied = this.followUpLabels.get(message);
-      if (supplied !== undefined) label = supplied;
-    }
-    return label;
-  }
-
-  dropFollowUpLabel(message: AgentMessage): void {
-    this.followUpLabels.delete(message);
-  }
-
-  clearPendingLabel(): void {
-    this.pendingTurnPrompt = null;
   }
 
   publishQueueUpdate(): void {
@@ -166,7 +142,6 @@ export class PromptQueueImpl implements PromptQueue {
   private dispatchHead(): void {
     if (this.dispatching || this.stopped || this.dispatcher.isStreaming() || this.queue.length === 0) return;
     const next = this.queue.shift()!;
-    this.pendingTurnPrompt = next.userText;
     this.publishQueueUpdate();
     this.dispatcher.prompt(next.message);
   }

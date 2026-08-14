@@ -156,7 +156,7 @@ export class JieAgentBody implements AgentBody {
         return [...this.compactor.fitToWindow(stripped, this.agent.state.model, contextWindow)];
       },
       steeringMode: "all",
-      followUpMode: "all",
+      followUpMode: "one-at-a-time",
       toolExecution: "sequential",
       prepareNextTurnWithContext: (context) => this.compactBetweenTurns(context),
       beforeToolCall: (context) => toolCallObserver.beforeToolCall(context),

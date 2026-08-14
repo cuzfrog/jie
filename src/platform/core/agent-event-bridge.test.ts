@@ -20,9 +20,6 @@ const promptQueue = vi.mocked<PromptQueue>({
   dispatchNext: vi.fn(async () => {}),
   settle: vi.fn(async () => {}),
   drainForFollowUp: vi.fn(),
-  takeTurnStartLabel: vi.fn(() => null),
-  dropFollowUpLabel: vi.fn(),
-  clearPendingLabel: vi.fn(),
   publishQueueUpdate: vi.fn(),
   isEmpty: vi.fn(() => true),
   stop: vi.fn(),
@@ -114,29 +111,27 @@ describe("AgentEventBridge — turn-start deferral", () => {
     expect(envelopes("agent.turn.start")).toHaveLength(1);
   });
 
-  test("the flush consumes the queue's turn-start label", () => {
-    promptQueue.takeTurnStartLabel.mockReturnValue("hello");
+  test("the flush derives the turn-start payload from the user message's displayText", () => {
     const bridge = makeBridge();
+    const userMessage = { role: "user", content: "[user]: hello", displayText: "hello", timestamp: 0 } as AgentMessage;
     bridge.handleEvent({ type: "turn_start" });
-    bridge.handleEvent({ type: "message_start", message: { role: "user", content: "hi", timestamp: 0 } });
+    bridge.handleEvent({ type: "message_start", message: userMessage });
     expect(envelopes("agent.turn.start")[0]!.payload).toBe("hello");
   });
 
-  test("message_start passes the user message to takeTurnStartLabel", () => {
+  test("a user message without displayText produces a null turn.start payload", () => {
     const bridge = makeBridge();
-    const userMessage: AgentMessage = { role: "user", content: "hi", timestamp: 0 };
     bridge.handleEvent({ type: "turn_start" });
-    bridge.handleEvent({ type: "message_start", message: userMessage });
-    expect(promptQueue.takeTurnStartLabel).toHaveBeenCalledWith(userMessage);
+    bridge.handleEvent({ type: "message_start", message: { role: "user", content: "hi", timestamp: 0 } });
+    expect(envelopes("agent.turn.start")[0]!.payload).toBeNull();
   });
 
-  test("a non-user flushing event publishes agent.turn.continue without consuming the label", () => {
+  test("a non-user flushing event publishes agent.turn.continue", () => {
     const bridge = makeBridge();
     bridge.handleEvent({ type: "turn_start" });
     bridge.handleEvent({ type: "message_start", message: makeAssistantMessage() });
     expect(envelopes("agent.turn.continue")).toHaveLength(1);
     expect(envelopes("agent.turn.start")).toHaveLength(0);
-    expect(promptQueue.takeTurnStartLabel).not.toHaveBeenCalled();
   });
 
   test("the deferred turn event precedes the turn's own stream events", () => {
@@ -188,10 +183,9 @@ describe("AgentEventBridge — run lifecycle", () => {
     expect(errors[0]!.payload).toEqual({ error: "boom" });
   });
 
-  test("agent_end fires the Stop hook, clears the pending label, republishes the queue, and ends the run", () => {
+  test("agent_end fires the Stop hook, republishes the queue, and ends the run", () => {
     makeBridge().handleEvent({ type: "agent_end", messages: [] });
     expect(hookRunner.stop).toHaveBeenCalledWith({ identity: hookIdentity });
-    expect(promptQueue.clearPendingLabel).toHaveBeenCalledTimes(1);
     expect(promptQueue.publishQueueUpdate).toHaveBeenCalledTimes(1);
     expect(onRunEnd).toHaveBeenCalledTimes(1);
   });
@@ -220,15 +214,6 @@ describe("AgentEventBridge — streaming", () => {
       bridge.handleEvent({ type: "message_end", message: makeAssistantMessage() });
     }
     expect(envelopes("agent.stream.end").map((env) => env.payload.stream_id)).toEqual([1, 2]);
-  });
-
-  test("message_start with a user message drops its follow-up label", () => {
-    const bridge = makeBridge();
-    const userMessage: AgentMessage = { role: "user", content: "hi", timestamp: 0 };
-    bridge.handleEvent({ type: "message_start", message: userMessage });
-    expect(promptQueue.dropFollowUpLabel).toHaveBeenCalledWith(userMessage);
-    bridge.handleEvent({ type: "message_start", message: makeAssistantMessage() });
-    expect(promptQueue.dropFollowUpLabel).toHaveBeenCalledTimes(1);
   });
 
   test("message_update text_delta buffers text and flushes it on message_end", () => {

@@ -135,16 +135,15 @@ describe("PromptQueue — dispatch", () => {
 });
 
 describe("PromptQueue — follow-up drain", () => {
-  test("drainForFollowUp feeds the head entry to followUp and labels it for its turn", () => {
+  test("drainForFollowUp feeds the head entry to followUp, preserving its displayText", () => {
     dispatcher.isStreaming.mockReturnValue(true);
     const queue = makeQueue();
     queue.ingestUserPrompt("first", "first");
     queue.drainForFollowUp(false);
     expect(dispatcher.followUp).toHaveBeenCalledTimes(1);
     const message = dispatcher.followUp.mock.calls[0]![0];
-    expect(message).toMatchObject({ role: "user", content: "[user]: first" });
+    expect(message).toMatchObject({ role: "user", content: "[user]: first", displayText: "first" });
     expect(lastSnapshot()).toEqual([]);
-    expect(queue.takeTurnStartLabel(message)).toBe("first");
   });
 
   test("drainForFollowUp on an errored turn leaves the entry queued for a later prompt dispatch", async () => {
@@ -164,44 +163,6 @@ describe("PromptQueue — follow-up drain", () => {
     const countBefore = queueUpdates().length;
     queue.drainForFollowUp(true);
     expect(queueUpdates().length).toBe(countBefore + 1);
-  });
-});
-
-describe("PromptQueue — turn-start labels", () => {
-  test("takeTurnStartLabel consumes the pending prompt label once", async () => {
-    const queue = makeQueue();
-    queue.ingestUserPrompt("hello", "hello");
-    await flush();
-    expect(queue.takeTurnStartLabel(null)).toBe("hello");
-    expect(queue.takeTurnStartLabel(null)).toBeNull();
-  });
-
-  test("a follow-up label wins over the pending label for the follow-up message", () => {
-    dispatcher.isStreaming.mockReturnValue(true);
-    const queue = makeQueue();
-    queue.ingestUserPrompt("queued", "queued");
-    queue.drainForFollowUp(false);
-    const message = dispatcher.followUp.mock.calls[0]![0];
-    expect(queue.takeTurnStartLabel(message)).toBe("queued");
-    expect(queue.takeTurnStartLabel(null)).toBeNull();
-  });
-
-  test("dropFollowUpLabel removes a label before a flush consumes it", () => {
-    dispatcher.isStreaming.mockReturnValue(true);
-    const queue = makeQueue();
-    queue.ingestUserPrompt("queued", "queued");
-    queue.drainForFollowUp(false);
-    const message = dispatcher.followUp.mock.calls[0]![0];
-    queue.dropFollowUpLabel(message);
-    expect(queue.takeTurnStartLabel(message)).toBeNull();
-  });
-
-  test("clearPendingLabel discards the pending label", async () => {
-    const queue = makeQueue();
-    queue.ingestUserPrompt("hello", "hello");
-    await flush();
-    queue.clearPendingLabel();
-    expect(queue.takeTurnStartLabel(null)).toBeNull();
   });
 });
 
