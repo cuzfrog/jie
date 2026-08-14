@@ -4,6 +4,7 @@ import { EffortCommand } from "./effort-command";
 import { ExitCommand } from "./exit-command";
 import { HelpCommand } from "./help-command";
 import { KanbanCommand } from "./kanban-command";
+import { SettingCommand } from "./setting-command";
 import { LoginCommand } from "./login-command";
 import { LogoutCommand } from "./logout-command";
 import { ModelAliasCommand } from "./model-alias-command";
@@ -33,4 +34,5 @@ export const SLASH_COMMANDS: ReadonlyArray<SlashCommandDefinition> = [
   new RenameCommand(),
   new KanbanCommand(),
   new NotificationCommand(),
+  new SettingCommand(),
 ] as const;

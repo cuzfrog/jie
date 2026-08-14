@@ -105,6 +105,29 @@ describe("CommandHandlerImpl", () => {
   });
 });
 
+describe("CommandHandlerImpl — /setting", () => {
+  test("/setting diff-block-expand on dispatches setToolCardsExpanded(true)", () => {
+    const { platform } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/setting diff-block-expand on");
+    expect(dispatch).toHaveBeenCalledWith(Actions.setToolCardsExpanded(true));
+  });
+
+  test("/setting thinking-block-expand off dispatches setThinkingExpanded(false)", () => {
+    const { platform } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/setting thinking-block-expand off");
+    expect(dispatch).toHaveBeenCalledWith(Actions.setThinkingExpanded(false));
+  });
+
+  test("/setting with an unknown key sets an error message", () => {
+    const { platform } = makePlatform();
+    const { handler, dispatch } = makeHandler(platform);
+    handler.handle("/setting unknown on");
+    expect(dispatch).toHaveBeenCalledWith(Actions.setErrorMessage(expect.stringContaining("/setting")));
+  });
+});
+
 describe("CommandHandlerImpl — prompt routing", () => {
   test("plain prompt routes to the focused agent", () => {
     const { platform, prompt } = makePlatform();
