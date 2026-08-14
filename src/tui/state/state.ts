@@ -147,6 +147,16 @@ function hasChatContent(state: TuiState): boolean {
   return false;
 }
 
+function isIdleAttentionNeeded(state: TuiState): boolean {
+  const agent = getFocusedAgent(state);
+  if (agent === null) return false;
+  return agent.status === "idle" && isAttentionStopReason(agent.lastStopReason);
+}
+
+function isAttentionStopReason(reason: StopReason | null): boolean {
+  return reason === "stop" || reason === "error" || reason === "length";
+}
+
 function anyAgentThinking(state: TuiState): boolean {
   for (const agent of state.agents.values()) {
     const turn = agent.currentTurn;
@@ -190,6 +200,7 @@ export const TuiState = {
   shouldShowErrorBanner,
   hasChatContent,
   anyAgentThinking,
+  isIdleAttentionNeeded,
   kanbanVisibleCards,
   closeOtherPanels,
 } as const;

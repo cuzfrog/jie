@@ -48,6 +48,29 @@ describe("_buildTerminalTitle", () => {
   test("appends cwd when present", () => {
     expect(_buildTerminalTitle(makeTuiState({ cwd: "/tmp" }), 0)).toBe(`${"●"}jie - /tmp`);
   });
+
+  test("uses a bell when the focused agent is idle after a ringable stop", () => {
+    const state = makeTuiState({
+      agents: new Map([
+        ["my-team:general-1", makeAgentUiState("my-team:general-1", { isLeader: true, status: "idle", lastStopReason: "stop" })],
+      ]),
+      focusedAgentId: "my-team:general-1",
+      leaderAgentId: "my-team:general-1",
+    });
+    expect(_buildTerminalTitle(state, 0)).toBe(`${"🔔"}jie`);
+  });
+
+  test("keeps the bell even when another agent is busy", () => {
+    const state = makeTuiState({
+      agents: new Map([
+        ["my-team:general-1", makeAgentUiState("my-team:general-1", { isLeader: true, status: "idle", lastStopReason: "stop" })],
+        ["my-team:worker-1", makeAgentUiState("my-team:worker-1", { status: "busy" })],
+      ]),
+      focusedAgentId: "my-team:general-1",
+      leaderAgentId: "my-team:general-1",
+    });
+    expect(_buildTerminalTitle(state, 1)).toBe(`${"🔔"}jie`);
+  });
 });
 
 describe("TerminalTitleImpl", () => {

@@ -171,6 +171,40 @@ describe("TuiState.hasChatContent", () => {
   });
 });
 
+describe("TuiState.isIdleAttentionNeeded", () => {
+  const sender = { kind: "agent", teamId: "demo", agentKey: "general-1" } as const;
+
+  test("returns false when no team is loaded", () => {
+    const store = new StateStoreImpl();
+    expect(TuiState.isIdleAttentionNeeded(store.getState())).toBe(false);
+  });
+
+  test("returns true when the focused agent idles after stop", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart(sender, null)));
+    store.dispatch(Actions.receiveEvent(Events.agentIdle(sender, "stop")));
+    expect(TuiState.isIdleAttentionNeeded(store.getState())).toBe(true);
+  });
+
+  test("returns false for non-ringable stop reasons", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart(sender, null)));
+    store.dispatch(Actions.receiveEvent(Events.agentIdle(sender, "toolUse")));
+    expect(TuiState.isIdleAttentionNeeded(store.getState())).toBe(false);
+  });
+
+  test("returns false once the focused agent starts a new turn", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart(sender, null)));
+    store.dispatch(Actions.receiveEvent(Events.agentIdle(sender, "stop")));
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart(sender, "again")));
+    expect(TuiState.isIdleAttentionNeeded(store.getState())).toBe(false);
+  });
+});
+
 describe("TuiState.anyAgentThinking", () => {
   const sender = { kind: "agent", teamId: "demo", agentKey: "general-1" } as const;
 
