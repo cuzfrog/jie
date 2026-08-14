@@ -108,6 +108,29 @@ describe("hydrateHistory", () => {
     ]);
   });
 
+  test("redacted thinking with a duration produces an empty-text block carrying that duration", () => {
+    const message: AgentMessage = {
+      role: "assistant",
+      content: [{ type: "thinking", thinking: "", thinkingDurationMs: 1000 }, { type: "text", text: "ans" }],
+      api: "openai", provider: "openai", model: "m", usage: usage(), stopReason: "stop", timestamp: 0,
+    };
+    const result = hydrateHistory([user("q"), message], 0);
+    expect(result.currentTurn?.blocks).toEqual([
+      { kind: "thinking", text: "", durationMs: 1000 },
+      { kind: "text", text: "ans" },
+    ]);
+  });
+
+  test("redacted thinking without a recorded duration is dropped", () => {
+    const message: AgentMessage = {
+      role: "assistant",
+      content: [{ type: "thinking", thinking: "", redacted: true }, { type: "text", text: "ans" }],
+      api: "openai", provider: "openai", model: "m", usage: usage(), stopReason: "stop", timestamp: 0,
+    };
+    const result = hydrateHistory([user("q"), message], 0);
+    expect(result.currentTurn?.blocks).toEqual([{ kind: "text", text: "ans" }]);
+  });
+
   test("adjacent thinking parts merge and sum their durations", () => {
     const message: AgentMessage = {
       role: "assistant",

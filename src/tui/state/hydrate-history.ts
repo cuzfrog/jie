@@ -54,8 +54,10 @@ function userPromptText(message: UserIngressMessage): string {
 function appendAssistant(turn: MessageTurn, message: AssistantMessage): void {
   for (const part of message.content) {
     if (part.type === "text") appendBlock(turn, "text", part.text);
-    else if (part.type === "thinking") appendBlock(turn, "thinking", part.thinking, part.thinkingDurationMs ?? 0);
-    else if (part.type === "toolCall") {
+    else if (part.type === "thinking") {
+      if (part.thinking === "" && part.thinkingDurationMs === undefined) continue;
+      appendBlock(turn, "thinking", part.thinking, part.thinkingDurationMs ?? 0);
+    } else if (part.type === "toolCall") {
       const input = JSON.stringify(part.arguments);
       const { text, truncated } = truncateString(input);
       turn.cards.push({ kind: "toolCall", callId: part.id, name: part.name, input: text, inputTruncated: truncated });
