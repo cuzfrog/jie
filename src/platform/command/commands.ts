@@ -44,6 +44,7 @@ interface CommandTypeMap {
   getTeamInfo: CommandDef<{}, {
     defaultTeam: string | null;
     installed: ReadonlyArray<{ readonly id: string; readonly agentCount: number; readonly location: TeamBlueprintLocation; readonly description?: string }>;
+    sharedAgents: ReadonlyArray<{ readonly id: string; readonly location: "project" | "user" | null }>;
   }>;
   getGitStatus: CommandDef<{}, GitSnapshot>;
   stop: CommandDef<{}, null>;

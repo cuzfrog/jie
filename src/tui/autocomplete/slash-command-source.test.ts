@@ -91,7 +91,7 @@ describe("SlashCommandSource — unambiguous-command drill-down", () => {
     const { platform, execute } = makePlatform();
     execute.mockImplementation(async (cmd: { readonly name: string }) => {
       if (cmd.name === "getTeamInfo") {
-        return { defaultTeam: "alpha", installed: [{ id: "alpha", agentCount: 2 }, { id: "beta", agentCount: 1 }] };
+        return { defaultTeam: "alpha", installed: [{ id: "alpha", agentCount: 2 }, { id: "beta", agentCount: 1 }], sharedAgents: [] };
       }
       if (cmd.name === "listSessions") {
         return [
@@ -164,6 +164,7 @@ describe("SlashCommandSource — /team arguments", () => {
         return {
           defaultTeam: "alpha",
           installed: [{ id: "default-solo", agentCount: 1 }, { id: "alpha", agentCount: 3 }, { id: "beta", agentCount: 2 }],
+          sharedAgents: [],
         };
       }
       return null;

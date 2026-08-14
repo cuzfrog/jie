@@ -7,7 +7,7 @@ import type { LlmService } from "../llm";
 import type { GitService } from "../services";
 import type { KanbanStore } from "../storage";
 import type { QuestionBroker } from "../tools";
-import type { TeamManager } from "../team";
+import type { AgentRegistry, TeamManager } from "../team";
 import type { Command, CommandName, CommandResult } from "./commands";
 
 export interface CommandExecutor {
@@ -24,6 +24,7 @@ export class CommandExecutorImpl implements CommandExecutor {
     private readonly settingsStore: SettingsStore,
     private readonly modelRegistry: ModelRegistry,
     private readonly teamManager: TeamManager,
+    private readonly agentRegistry: AgentRegistry,
     private readonly gitService: GitService,
     private readonly eventManager: EventManager,
     private readonly kanbanStore: KanbanStore,
@@ -230,6 +231,10 @@ export class CommandExecutorImpl implements CommandExecutor {
         agentCount: this.teamManager.agentCount(id),
         location: this.teamManager.locate(id),
         description: this.teamManager.getTeamDescription(id),
+      })),
+      sharedAgents: this.agentRegistry.listInstalled().map((id) => ({
+        id,
+        location: this.agentRegistry.locate(id),
       })),
     };
   }
