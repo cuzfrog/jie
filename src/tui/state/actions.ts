@@ -1,5 +1,5 @@
-import type { AnyEventEnvelope, CommandResult, KanbanCard, TeamInfo } from "../../platform";
-import type { KanbanEditField } from "./state";
+import type { AnyEventEnvelope, CommandResult, KanbanCard, QuestionAnswer, QuestionItem, TeamInfo } from "../../platform";
+import type { AgentId, KanbanEditField } from "./state";
 
 type InstalledTeams = CommandResult<"getTeamInfo">["installed"];
 
@@ -38,6 +38,16 @@ export const ActionTypes = {
   CANCEL_KANBAN_EDIT: "[ui] cancel kanban card edit",
   SAVE_KANBAN_EDIT: "[ui] save kanban card edit",
   TOGGLE_KANBAN_TODO: "[ui] toggle kanban todo",
+  SHOW_QUESTIONS: "[ui] show question panel",
+  MOVE_QUESTION_CURSOR: "[ui] move question cursor",
+  SELECT_QUESTION_OPTION_AND_ADVANCE: "[ui] select question option and advance",
+  TOGGLE_QUESTION_OPTION: "[ui] toggle question option",
+  START_QUESTION_OTHER_EDIT: "[ui] start question other edit",
+  STOP_QUESTION_OTHER_EDIT: "[ui] stop question other edit",
+  CONFIRM_QUESTION_OTHER: "[ui] confirm question other",
+  NEXT_QUESTION: "[ui] next question",
+  SUBMIT_QUESTION_ANSWERS: "[ui] submit question answers",
+  CANCEL_QUESTION: "[ui] cancel question",
 } as const;
 
 type ActionType = (typeof ActionTypes)[keyof typeof ActionTypes];
@@ -98,6 +108,19 @@ export const Actions = {
 	cancelKanbanEdit: () => createAction(ActionTypes.CANCEL_KANBAN_EDIT),
 	saveKanbanEdit: (cardId: string, text: string, field: KanbanEditField = "content") => createAction(ActionTypes.SAVE_KANBAN_EDIT, { cardId, field, text }),
 	toggleKanbanTodo: (cardId: string, todo: string) => createAction(ActionTypes.TOGGLE_KANBAN_TODO, { cardId, todo }),
+	showQuestions: (requestId: string, agentId: AgentId, questions: ReadonlyArray<QuestionItem>) =>
+		createAction(ActionTypes.SHOW_QUESTIONS, { requestId, agentId, questions }),
+	moveQuestionCursor: (direction: "up" | "down") => createAction(ActionTypes.MOVE_QUESTION_CURSOR, { direction }),
+	selectQuestionOptionAndAdvance: (optionIndex: number) =>
+		createAction(ActionTypes.SELECT_QUESTION_OPTION_AND_ADVANCE, { optionIndex }),
+	toggleQuestionOption: (optionIndex: number) => createAction(ActionTypes.TOGGLE_QUESTION_OPTION, { optionIndex }),
+	startQuestionOtherEdit: () => createAction(ActionTypes.START_QUESTION_OTHER_EDIT),
+	stopQuestionOtherEdit: () => createAction(ActionTypes.STOP_QUESTION_OTHER_EDIT),
+	confirmQuestionOther: (text: string) => createAction(ActionTypes.CONFIRM_QUESTION_OTHER, { text }),
+	nextQuestion: () => createAction(ActionTypes.NEXT_QUESTION),
+	submitQuestionAnswers: (requestId: string, answers: ReadonlyArray<QuestionAnswer>) =>
+		createAction(ActionTypes.SUBMIT_QUESTION_ANSWERS, { requestId, answers }),
+	cancelQuestion: (requestId: string) => createAction(ActionTypes.CANCEL_QUESTION, { requestId }),
 } as const;
 
 export type Action = ReturnType<typeof Actions[keyof typeof Actions]>;

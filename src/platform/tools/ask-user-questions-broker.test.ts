@@ -1,6 +1,4 @@
 import type { EventEnvelope, EventManager, EventType } from "../event";
-import { Events } from "../event";
-import { JiePlatformError } from "../jie-platform-errors";
 import type { QuestionItem } from "../types";
 import { InProcessQuestionBroker } from "./ask-user-questions-broker";
 
@@ -33,10 +31,12 @@ function makeFakeEventManager(): EventManager {
   };
 }
 
-function makeBroker(generateId: () => string = () => "req-1"): { broker: InProcessQuestionBroker; events: EventManager; published: EventEnvelope<EventType>[] } {
+function makeBroker(generateId: () => string = () => "req-1"): { broker: InProcessQuestionBroker; events: EventManager; published: EventEnvelope<"agent.question.ask">[] } {
   const events = makeFakeEventManager();
-  const published: EventEnvelope<EventType>[] = [];
-  events.subscribe("agent.question.ask", (env) => published.push(env));
+  const published: EventEnvelope<"agent.question.ask">[] = [];
+  events.subscribe("agent.question.ask", (env) => {
+    if (env.type === "agent.question.ask") published.push(env as EventEnvelope<"agent.question.ask">);
+  });
   return { broker: new InProcessQuestionBroker(events, generateId), events, published };
 }
 
@@ -45,9 +45,10 @@ describe("InProcessQuestionBroker", () => {
     const { broker, published } = makeBroker();
     const promise = broker.ask({ teamId: "t1", agentKey: "a1", questions: SAMPLE_QUESTIONS });
     expect(published).toHaveLength(1);
-    expect(published[0].type).toBe("agent.question.ask");
-    expect(published[0].payload).toMatchObject({ requestId: "req-1", questions: SAMPLE_QUESTIONS });
-    expect(published[0].sender).toEqual({ kind: "agent", teamId: "t1", agentKey: "a1" });
+    const [env] = published;
+    expect(env.type).toBe("agent.question.ask");
+    expect(env.payload).toMatchObject({ requestId: "req-1", questions: SAMPLE_QUESTIONS });
+    expect(env.sender).toEqual({ kind: "agent", teamId: "t1", agentKey: "a1" });
     broker.answer("req-1", { cancelled: false, answers: [{ header: "Approach", selected: ["A"], other: null }] });
     await expect(promise).resolves.toBeInstanceOf(Object);
   });

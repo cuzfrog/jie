@@ -1,4 +1,5 @@
-import type { AgentDispatcher, ArtifactStore, QuestionItem } from "../types";
+import type { AgentDispatcher, QuestionItem } from "../types";
+import type { ArtifactStore } from "../storage";
 import { JiePlatformError } from "../jie-platform-errors";
 import type { ExecutionContext } from "./types";
 import { createAskUserQuestionsTool } from "./ask-user-questions";
@@ -56,7 +57,7 @@ function makeFakeBroker(): FakeBroker {
   const answered: FakeBroker["answered"] = [];
   return {
     broker: {
-      ask: (request, signal?) => new Promise<QuestionResult>((resolve) => {
+      ask: (_request, signal?) => new Promise<QuestionResult>((resolve) => {
         if (signal?.aborted) throw new JiePlatformError("QUESTION_CANCELLED", { detail: "aborted" });
         pending.set("req-1", resolve);
       }),

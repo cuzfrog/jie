@@ -1,6 +1,6 @@
 import { Type } from "typebox";
 import { JiePlatformError } from "../jie-platform-errors";
-import type { QuestionAnswer, QuestionItem, QuestionOption } from "../types";
+import type { QuestionItem, QuestionOption } from "../types";
 import type { ExecutionContext, Tool, ToolResult } from "./types";
 import type { QuestionBroker, QuestionResult } from "./ask-user-questions-broker";
 

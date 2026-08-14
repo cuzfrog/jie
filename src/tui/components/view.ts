@@ -1,4 +1,4 @@
-import { matchesKey, type Component, type Editor, type TUI, type TuiInputListenerResult } from "@earendil-works/pi-tui";
+import { matchesKey, type Component, type Editor, type Focusable, type TUI, type TuiInputListenerResult } from "@earendil-works/pi-tui";
 import { Actions, type TuiState, type Action, type StateStore } from "../state";
 import type { ChatSync } from "./chat";
 import type { TuiRoot, TuiComponent } from "..";
@@ -25,6 +25,7 @@ export class TuiViewImpl implements TuiView {
   private readonly teamPanel: TuiComponent;
   private readonly kanbanPanel: TuiComponent;
   private readonly helpPanel: TuiComponent;
+  private readonly questionPanel: TuiComponent & Focusable;
   private readonly kanbanList: TuiComponent;
   private readonly footer: TuiComponent;
   private focusedComponent: Component;
@@ -43,6 +44,7 @@ export class TuiViewImpl implements TuiView {
     teamPanel: TuiComponent,
     kanbanPanel: TuiComponent,
     helpPanel: TuiComponent,
+    questionPanel: TuiComponent & Focusable,
     workingSpinner: TuiComponent,
   ) {
     this.screen = screen;
@@ -56,6 +58,7 @@ export class TuiViewImpl implements TuiView {
     this.teamPanel = teamPanel;
     this.kanbanPanel = kanbanPanel;
     this.helpPanel = helpPanel;
+    this.questionPanel = questionPanel;
     this.kanbanList = kanbanList;
     this.footer = footer;
     this.focusedComponent = this.editor;
@@ -70,6 +73,7 @@ export class TuiViewImpl implements TuiView {
     screen.addChild(this.teamPanel);
     screen.addChild(this.kanbanPanel);
     screen.addChild(this.helpPanel);
+    screen.addChild(this.questionPanel);
     screen.setFocus(this.editor);
     this.unsubscribeInput = screen.addInputListener((data) => this.handleInput(data));
   }
@@ -83,6 +87,7 @@ export class TuiViewImpl implements TuiView {
     dirty = this.teamPanel.update() || dirty;
     dirty = this.kanbanPanel.update() || dirty;
     dirty = this.helpPanel.update() || dirty;
+    dirty = this.questionPanel.update() || dirty;
     dirty = this.kanbanList.update() || dirty;
     dirty = this.footer.update() || dirty;
     dirty = this.chatSync.update() || dirty;
@@ -117,7 +122,8 @@ export class TuiViewImpl implements TuiView {
   }
 
   private reconcileFocus(state: TuiState): void {
-    const target = resolveFocusTarget(state) === "kanban" ? this.kanbanPanel : this.editor;
+    const targetName = resolveFocusTarget(state);
+    const target = targetName === "question" ? this.questionPanel : targetName === "kanban" ? this.kanbanPanel : this.editor;
     if (target === this.focusedComponent) return;
     this.focusedComponent = target;
     this.screen.setFocus(target);
@@ -125,6 +131,7 @@ export class TuiViewImpl implements TuiView {
 }
 
 function resolveGlobalKey(data: string, state: TuiState, popupOpen: boolean): Action | null {
+  if (state.question !== null) return null;
   if (data === CTRL_T) return Actions.toggleThinking();
   if (data === CTRL_O) return Actions.toggleToolCards();
   if (data === CTRL_K && state.kanban.edit === null && state.kanban.board.length > 0) return Actions.cycleKanbanView();
@@ -143,7 +150,8 @@ function shouldCommitTeamCursor(state: TuiState): boolean {
   return state.teamPanelVisible && state.teamCursorAgentId !== null && state.teamCursorAgentId !== state.focusedAgentId;
 }
 
-function resolveFocusTarget(state: TuiState): "kanban" | "editor" {
+function resolveFocusTarget(state: TuiState): "question" | "kanban" | "editor" {
+  if (state.question !== null) return "question";
   return state.kanban.view === "panel" && state.kanban.edit === null ? "kanban" : "editor";
 }
 

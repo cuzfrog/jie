@@ -1,5 +1,5 @@
 import type { StopReason } from "@earendil-works/pi-ai";
-import type { CommandResult, EffortLevel, KanbanCard, KanbanStatus, ModelInfo, SkillInfo, ToolResultDetails } from "../../platform";
+import type { CommandResult, EffortLevel, KanbanCard, KanbanStatus, ModelInfo, QuestionItem, SkillInfo, ToolResultDetails } from "../../platform";
 
 export type AgentStatus = "idle" | "busy";
 export { type EffortLevel };
@@ -59,6 +59,17 @@ export interface AgentUiState {
 
 export type KanbanEditField = "content" | "description" | { readonly todoIndex: number };
 
+interface QuestionState {
+  readonly requestId: string;
+  readonly agentId: AgentId;
+  readonly questions: ReadonlyArray<QuestionItem>;
+  readonly questionIndex: number;
+  readonly optionCursor: number;
+  readonly selections: ReadonlyArray<ReadonlyArray<number>>;
+  readonly otherText: ReadonlyArray<string | null>;
+  readonly editingOther: boolean;
+}
+
 interface KanbanState {
   readonly view: "hidden" | "list" | "panel";
   readonly board: ReadonlyArray<KanbanCard>;
@@ -90,6 +101,7 @@ export interface TuiState {
   readonly teamPanelVisible: boolean;
   readonly helpPanelVisible: boolean;
   readonly kanban: KanbanState;
+  readonly question: QuestionState | null;
   readonly pendingQuit: boolean;
   readonly editorText: string;
   readonly editorCursorAtStart: boolean;
@@ -158,6 +170,17 @@ function kanbanVisibleCards(state: TuiState): ReadonlyArray<KanbanCard> {
   });
 }
 
+function closeOtherPanels(state: TuiState): TuiState {
+  if (!state.teamPanelVisible && !state.helpPanelVisible && state.kanban.view === "hidden") return state;
+  return {
+    ...state,
+    teamPanelVisible: false,
+    helpPanelVisible: false,
+    teamCursorAgentId: null,
+    kanban: { ...state.kanban, view: "hidden", expanded: false, edit: null, editField: "content" },
+  };
+}
+
 export const TuiState = {
   getFocusedAgent,
   rosterOrder,
@@ -168,4 +191,5 @@ export const TuiState = {
   hasChatContent,
   anyAgentThinking,
   kanbanVisibleCards,
+  closeOtherPanels,
 } as const;

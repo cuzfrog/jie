@@ -1,6 +1,6 @@
 import type { StopReason } from "@earendil-works/pi-ai";
 import type { Terminal } from "@earendil-works/pi-tui";
-import { type AnyEventEnvelope, type JiePlatform } from "../../platform";
+import { type AnyEventEnvelope, type JiePlatform, type QuestionAnswer } from "../../platform";
 import { logger } from "../../utils";
 import type { CommandHandler } from "../command";
 import { Actions, ActionTypes } from "./actions";
@@ -59,6 +59,12 @@ export class EffectHandlerImpl implements EffectHandler {
         case ActionTypes.TOGGLE_KANBAN_TODO:
           this.toggleKanbanTodo(afterState.teamId, action.payload.cardId, action.payload.todo);
           return;
+        case ActionTypes.SUBMIT_QUESTION_ANSWERS:
+          this.answerUserQuestion(action.payload.requestId, false, action.payload.answers);
+          return;
+        case ActionTypes.CANCEL_QUESTION:
+          this.answerUserQuestion(action.payload.requestId, true);
+          return;
         default:
           return;
       }
@@ -87,6 +93,13 @@ export class EffectHandlerImpl implements EffectHandler {
         this.stateStore.dispatch(Actions.setKanbanBoard(result.board));
       }, (error: unknown) => {
         this.stateStore.dispatch(Actions.setErrorMessage(`kanban edit failed: ${error instanceof Error ? error.message : String(error)}`));
+      });
+  }
+
+  private answerUserQuestion(requestId: string, cancelled: boolean, answers?: ReadonlyArray<QuestionAnswer>): void {
+    void this.platform.execute({ name: "answerUserQuestion", requestId, cancelled, answers })
+      .then(() => undefined, (error: unknown) => {
+        this.stateStore.dispatch(Actions.setErrorMessage(`answer question failed: ${error instanceof Error ? error.message : String(error)}`));
       });
   }
 
@@ -119,6 +132,7 @@ function subscribeToBus(platform: JiePlatform, onEvent: (event: AnyEventEnvelope
     platform.subscribe("agent.stream.end", onEvent),
     platform.subscribe("agent.tool.call", onEvent),
     platform.subscribe("agent.tool.result", onEvent),
+    platform.subscribe("agent.question.ask", onEvent),
     platform.subscribe("agent.usage", onEvent),
     platform.subscribe("agent.compacted", onEvent),
     platform.subscribe("agent.compaction.start", onEvent),

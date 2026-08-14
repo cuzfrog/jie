@@ -8,6 +8,7 @@ import {
   type EventEnvelope,
   type EventType,
   type JiePlatform,
+  type QuestionAnswer,
   type TeamInfo,
 } from "../../platform";
 import { Actions } from "./actions";
@@ -294,5 +295,37 @@ describe("EffectHandlerImpl — notification sound", () => {
     handler!(Events.agentIdle({ kind: "agent", teamId: "my-team", agentKey: "general-1" }, TOOL_USE_REASON));
     await runAsync();
     expect(terminal.writeCalls).not.toContain("\x07");
+  });
+});
+
+describe("EffectHandlerImpl — question answer", () => {
+  test("SUBMIT_QUESTION_ANSWERS executes answerUserQuestion with the answers", async () => {
+    const state = new StateStoreImpl();
+    const platform = makePlatform();
+    makeEffectHarness(platform, state);
+    const answers: QuestionAnswer[] = [{ header: "Approach", selected: ["A"], other: null }];
+    state.dispatch(Actions.submitQuestionAnswers("req-1", answers));
+    await runAsync();
+    expect(platform.executeCalls.at(-1)).toEqual({ name: "answerUserQuestion", requestId: "req-1", cancelled: false, answers });
+  });
+
+  test("CANCEL_QUESTION executes answerUserQuestion as cancelled", async () => {
+    const state = new StateStoreImpl();
+    const platform = makePlatform();
+    makeEffectHarness(platform, state);
+    state.dispatch(Actions.cancelQuestion("req-1"));
+    await runAsync();
+    expect(platform.executeCalls.at(-1)).toEqual({ name: "answerUserQuestion", requestId: "req-1", cancelled: true });
+  });
+
+  test("surfaces answer errors as an error banner", async () => {
+    const state = new StateStoreImpl();
+    const platform = makePlatform();
+    const { execute } = platform;
+    execute.mockRejectedValueOnce(new Error("no pending question"));
+    makeEffectHarness(platform, state);
+    state.dispatch(Actions.cancelQuestion("req-1"));
+    await runAsync();
+    expect(state.getState().errorBanner).toBe("answer question failed: no pending question");
   });
 });

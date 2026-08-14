@@ -2,6 +2,7 @@ import { ActionTypes, type Action } from "./actions";
 import { teamLoadReducer } from "./team-load-reducer";
 import { TuiState } from "./state";
 import { kanbanReducer } from "./kanban-reducer";
+import { reduceQuestionAction } from "./question-reducer";
 
 export function reduceUiAction(state: TuiState, action: Action): TuiState {
   switch (action.type) {
@@ -82,7 +83,7 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
     case ActionTypes.TOGGLE_KANBAN_TODO:
       return kanbanReducer(state, action);
     default:
-      return state;
+      return reduceQuestionAction(state, action);
   }
 }
 

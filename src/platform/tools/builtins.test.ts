@@ -2,6 +2,7 @@ import type { SettingsStore } from "../config";
 import type { EventManager } from "../event";
 import type { MemoryManager } from "../memory";
 import type { ArtifactStore, KanbanStore } from "../storage";
+import type { QuestionBroker } from "./";
 import { createBuiltinTools } from "./builtins";
 
 const eventManager = vi.mocked<EventManager>({ publish: vi.fn(), subscribe: vi.fn() });
@@ -28,15 +29,17 @@ const kanbanStore = vi.mocked<KanbanStore>({
   update: vi.fn(),
   claim: vi.fn(),
 });
+const questionBroker = vi.mocked<QuestionBroker>({ ask: vi.fn(), answer: vi.fn() });
 
 function makeBuiltins() {
-  return createBuiltinTools("/tmp", eventManager, artifactStore, memoryManager, settingsStore, kanbanStore);
+  return createBuiltinTools("/tmp", eventManager, artifactStore, memoryManager, settingsStore, kanbanStore, questionBroker);
 }
 
 describe("createBuiltinTools", () => {
-  test("returns all 19 built-ins with stable registration names", () => {
+  test("returns all 20 built-ins with stable registration names", () => {
     const names = makeBuiltins().map((b) => b.name).sort();
     expect(names).toEqual([
+      "ask_user_questions",
       "bash",
       "call_agent",
       "claim_kanban",
