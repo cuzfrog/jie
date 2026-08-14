@@ -48,7 +48,7 @@ interface RunDeps {
 
 async function run(args: ParsedArgs, cwd: string, homeDir: string, deps: RunDeps): Promise<number> {
   const homeJieDir = join(homeDir, ".jie");
-  const projectJieDir = findProjectJieDir(cwd);
+  const projectJieDir = findProjectJieDir(cwd, homeJieDir);
   switch (args.kind) {
     case "help":
       printHelp(deps.console);
@@ -174,11 +174,11 @@ function resolveHomeDir(): string {
   return homeFromEnv !== undefined && homeFromEnv !== "" ? homeFromEnv : homedir();
 }
 
-function findProjectJieDir(cwd: string): string | null {
+function findProjectJieDir(cwd: string, homeJieDir: string): string | null {
   let current = cwd;
   for (;;) {
     const candidate = join(current, ".jie");
-    if (existsSync(candidate)) return candidate;
+    if (candidate !== homeJieDir && existsSync(candidate)) return candidate;
     const parent = dirname(current);
     if (parent === current) return null;
     current = parent;

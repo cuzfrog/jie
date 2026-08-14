@@ -1,3 +1,5 @@
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   Events,
@@ -438,5 +440,39 @@ describe("_run — dispatch to command handlers", () => {
     expect(exit).toBe(0);
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "setDefaultTeam", teamId: "default-solo" });
     expect(captured.consoleMock.print).toHaveBeenCalledWith("default team set to 'default-solo'");
+  });
+});
+
+describe("_run — project .jie discovery", () => {
+  test("does not treat the global ~/.jie as a project .jie when running from $HOME", async () => {
+    const home = mkdtempSync(join(tmpdir(), "jie-home-"));
+    const homeJie = join(home, ".jie");
+    mkdirSync(homeJie, { recursive: true });
+    const capturedOptions: JiePlatformOptions[] = [];
+    const platform = makeFakePlatform();
+    platform.execute.mockImplementation(async (cmd) => {
+      if ((cmd as { readonly name: string }).name === "getTeamInfo") return { defaultTeam: null, installed: [] };
+      return null;
+    });
+    const bootPlatform = vi.fn(async (options: JiePlatformOptions): Promise<JiePlatform> => {
+      capturedOptions.push(options);
+      return platform;
+    });
+    const consoleMock = makeConsoleMock();
+
+    try {
+      const exit = await _run(
+        { kind: "team", action: "list" },
+        home,
+        home,
+        { bootPlatform, bootTui: vi.fn(), runFirstRun: vi.fn(), console: consoleMock },
+      );
+
+      expect(exit).toBe(0);
+      expect(capturedOptions).toHaveLength(1);
+      expect(capturedOptions[0]!.projectJieDir).toBeNull();
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 });
