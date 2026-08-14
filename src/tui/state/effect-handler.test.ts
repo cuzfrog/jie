@@ -297,6 +297,43 @@ describe("EffectHandlerImpl — notification sound", () => {
     await runAsync();
     expect(terminal.writeCalls).not.toContain("\x07");
   });
+
+  test("agent.question.ask for the focused agent rings the terminal", async () => {
+    const state = new StateStoreImpl();
+    const platform = makePlatform({ board: [] }, true);
+    const team = makeTeamInfo("my-team", "general-1");
+    state.dispatch(Actions.switchTeam(team));
+    const { terminal } = makeEffectHarness(platform, state);
+    const handler = platform.handlers.get("agent.question.ask");
+    handler!(Events.agentQuestionAsk({ kind: "agent", teamId: "my-team", agentKey: "general-1" }, "req-1", QUESTIONS));
+    await runAsync();
+    expect(platform.executeCalls.some((command) => command.name === "getNotificationSoundEnabled")).toBe(true);
+    expect(terminal.writeCalls).toContain("\x07");
+  });
+
+  test("agent.question.ask for another team does not ring the terminal", async () => {
+    const state = new StateStoreImpl();
+    const platform = makePlatform({ board: [] }, true);
+    const team = makeTeamInfo("my-team", "general-1");
+    state.dispatch(Actions.switchTeam(team));
+    const { terminal } = makeEffectHarness(platform, state);
+    const handler = platform.handlers.get("agent.question.ask");
+    handler!(Events.agentQuestionAsk({ kind: "agent", teamId: "other-team", agentKey: "general-1" }, "req-1", QUESTIONS));
+    await runAsync();
+    expect(terminal.writeCalls).not.toContain("\x07");
+  });
+
+  test("agent.question.ask with sound disabled does not ring the terminal", async () => {
+    const state = new StateStoreImpl();
+    const platform = makePlatform({ board: [] }, false);
+    const team = makeTeamInfo("my-team", "general-1");
+    state.dispatch(Actions.switchTeam(team));
+    const { terminal } = makeEffectHarness(platform, state);
+    const handler = platform.handlers.get("agent.question.ask");
+    handler!(Events.agentQuestionAsk({ kind: "agent", teamId: "my-team", agentKey: "general-1" }, "req-1", QUESTIONS));
+    await runAsync();
+    expect(terminal.writeCalls).not.toContain("\x07");
+  });
 });
 
 const QUESTIONS: QuestionItem[] = [{

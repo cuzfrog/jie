@@ -4,6 +4,7 @@ import { TuiState, type StateStore } from "../state";
 const TITLE_FRAME_MS = 800;
 const IDLE_DOT = "●";
 const IDLE_BELL = "🔔";
+const IDLE_HAND = "✋";
 const SPINNER = ["◐", "◓", "◑", "◒"] as const;
 
 export interface TerminalTitle {
@@ -44,7 +45,7 @@ export class TerminalTitleImpl implements TerminalTitle {
 }
 
 function buildTerminalTitle(state: TuiState, dotFrame: number): string {
-  const icon = TuiState.isIdleAttentionNeeded(state) ? IDLE_BELL : TuiState.isBusy(state) ? SPINNER[dotFrame % SPINNER.length] : IDLE_DOT;
+  const icon = TuiState.isUserInputNeeded(state) ? IDLE_HAND : TuiState.isIdleAttentionNeeded(state) ? IDLE_BELL : TuiState.isBusy(state) ? SPINNER[dotFrame % SPINNER.length] : IDLE_DOT;
   const suffix = state.cwd === null ? "" : ` - ${state.cwd}`;
   return `${icon}jie${suffix}`;
 }

@@ -1,7 +1,10 @@
+import type { QuestionItem } from "../../platform";
 import { type StateStore, type TuiState } from "../state";
 import { makeAgentUiState, makeTuiState } from "../test";
 import type { Terminal } from "@earendil-works/pi-tui";
 import { TerminalTitleImpl, _buildTerminalTitle } from "./terminal-title";
+
+const QUESTIONS: QuestionItem[] = [];
 
 class StubTerminal implements Terminal {
   columns = 80;
@@ -70,6 +73,48 @@ describe("_buildTerminalTitle", () => {
       leaderAgentId: "my-team:general-1",
     });
     expect(_buildTerminalTitle(state, 1)).toBe(`${"🔔"}jie`);
+  });
+
+  test("uses a hand when a question is pending", () => {
+    const state = makeTuiState({
+      agents: new Map([
+        ["my-team:general-1", makeAgentUiState("my-team:general-1", { isLeader: true, status: "busy" })],
+      ]),
+      focusedAgentId: "my-team:general-1",
+      leaderAgentId: "my-team:general-1",
+      question: {
+        requestId: "req-1",
+        agentId: "my-team:general-1",
+        questions: QUESTIONS,
+        questionIndex: 0,
+        optionCursor: 0,
+        selections: [],
+        otherText: [],
+        editingOther: false,
+      },
+    });
+    expect(_buildTerminalTitle(state, 0)).toBe(`${"✋"}jie`);
+  });
+
+  test("keeps the hand even when the focused agent is idle after a ringable stop", () => {
+    const state = makeTuiState({
+      agents: new Map([
+        ["my-team:general-1", makeAgentUiState("my-team:general-1", { isLeader: true, status: "idle", lastStopReason: "stop" })],
+      ]),
+      focusedAgentId: "my-team:general-1",
+      leaderAgentId: "my-team:general-1",
+      question: {
+        requestId: "req-1",
+        agentId: "my-team:general-1",
+        questions: QUESTIONS,
+        questionIndex: 0,
+        optionCursor: 0,
+        selections: [],
+        otherText: [],
+        editingOther: false,
+      },
+    });
+    expect(_buildTerminalTitle(state, 0)).toBe(`${"✋"}jie`);
   });
 });
 

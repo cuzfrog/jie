@@ -205,6 +205,39 @@ describe("TuiState.isIdleAttentionNeeded", () => {
   });
 });
 
+describe("TuiState.isUserInputNeeded", () => {
+  const sender = { kind: "agent", teamId: "demo", agentKey: "general-1" } as const;
+
+  test("returns false when no question is pending", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    expect(TuiState.isUserInputNeeded(store.getState())).toBe(false);
+  });
+
+  test("returns true when the focused agent is asked a question", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    store.dispatch(Actions.receiveEvent(Events.agentQuestionAsk(sender, "req-1", [])));
+    expect(TuiState.isUserInputNeeded(store.getState())).toBe(true);
+  });
+
+  test("returns true when a non-focused agent is asked a question", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    const other = { kind: "agent", teamId: "demo", agentKey: "helper-1" } as const;
+    store.dispatch(Actions.receiveEvent(Events.agentQuestionAsk(other, "req-1", [])));
+    expect(TuiState.isUserInputNeeded(store.getState())).toBe(true);
+  });
+
+  test("returns false once the question is answered", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    store.dispatch(Actions.receiveEvent(Events.agentQuestionAsk(sender, "req-1", [])));
+    store.dispatch(Actions.submitQuestionAnswers("req-1", []));
+    expect(TuiState.isUserInputNeeded(store.getState())).toBe(false);
+  });
+});
+
 describe("TuiState.anyAgentThinking", () => {
   const sender = { kind: "agent", teamId: "demo", agentKey: "general-1" } as const;
 

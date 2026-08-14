@@ -157,6 +157,10 @@ function isAttentionStopReason(reason: StopReason | null): boolean {
   return reason === "stop" || reason === "error" || reason === "length";
 }
 
+function isUserInputNeeded(state: TuiState): boolean {
+  return state.question !== null;
+}
+
 function anyAgentThinking(state: TuiState): boolean {
   for (const agent of state.agents.values()) {
     const turn = agent.currentTurn;
@@ -201,6 +205,7 @@ export const TuiState = {
   hasChatContent,
   anyAgentThinking,
   isIdleAttentionNeeded,
+  isUserInputNeeded,
   kanbanVisibleCards,
   closeOtherPanels,
 } as const;
