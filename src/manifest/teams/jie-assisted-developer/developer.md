@@ -9,10 +9,8 @@ tools:
   - ls
   - find_file
   - grep_file
-  - read_artifact
-  - write_artifact
-  - memory_add
-  - memory_search
+  - artifact
+  - memory
   - ask_user_questions
 ---
 

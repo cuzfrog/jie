@@ -18,10 +18,10 @@ describe("loadSetupAssistantTeam", () => {
     expect(bp.roles[0]?.role).toBe("general");
   });
 
-  test("the general soul has tools [bash, read_file, write_file, edit_file, memory_add, memory_search] and empty subscribe", () => {
+  test("the general soul has tools [bash, read_file, write_file, edit_file, memory] and empty subscribe", () => {
     const bp = loadSetupAssistantTeam();
     const soul = bp.roles[0]!;
-    expect(soul.tools).toEqual(["bash", "read_file", "write_file", "edit_file", "memory_add", "memory_search"]);
+    expect(soul.tools).toEqual(["bash", "read_file", "write_file", "edit_file", "memory"]);
     expect(soul.subscribe).toEqual([]);
   });
 
@@ -463,7 +463,8 @@ describe("parseAgentManifest", () => {
     const content = readFileSync(path, "utf-8");
     const soul = parseAgentManifest("explorer", content, "explorer.md");
     for (const tool of soul.tools) {
-      expect(tool === "write_file" || tool.startsWith("write_file(") || tool === "edit_file" || tool.startsWith("edit_file(") || tool === "write_artifact" || tool === "bash").toBe(false);
+      const artifactAllowsWrite = tool === "artifact" || (tool.startsWith("artifact(") && tool.includes("write"));
+      expect(tool === "write_file" || tool.startsWith("write_file(") || tool === "edit_file" || tool.startsWith("edit_file(") || artifactAllowsWrite || tool === "bash").toBe(false);
     }
   });
 

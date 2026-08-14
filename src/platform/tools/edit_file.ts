@@ -6,17 +6,11 @@ import type { FileMutationQueue } from "./file-mutation-queue";
 import { mapErrno, resolveWithinWorkspace } from "./path-utils";
 import { renderUnifiedDiff } from "./unified-diff";
 
-const EDIT_DESCRIPTION = `Search-and-replace inside a text file. Reads \`path\` (relative to workspace root, or
-absolute within workspace) and applies every entry of \`edits\`: each \`{old_string, new_string}\`
-pair is matched against the original file content — not against the result of earlier entries —
-and must occur exactly once unless \`replace_all\` is true; entries must not overlap each other's
-matches. Any violation fails the whole call with NO_MATCH, AMBIGUOUS_MATCH, or OVERLAPPING_EDITS
-and leaves the file untouched. On success returns a one-line ack; the unified-diff preview lives
-only in \`details.diff\` for the UI — it is not part of the model-visible result. For edits larger
-than 5000 lines the diff is omitted and \`details.diff\` is null (use \`write_file\` for wholesale
-rewrites). Text only; UTF-8. A role may be restricted to a fixed set of editable paths via
-its manifest \`edit_file(glob-a, glob-b)\` tool spec; a path outside that set is rejected
-with WRITE_PATH_DENIED.`;
+const EDIT_DESCRIPTION = `Apply search-and-replace edits to a text file (path relative to the workspace
+root). Each \`old_string\` is matched against the original content and must occur
+exactly once unless \`replace_all\`; entries must not overlap. Any violation fails
+the whole call and leaves the file untouched. Use \`write_file\` for wholesale
+rewrites.`;
 
 interface EditDeps {
   workspaceRoot: string;

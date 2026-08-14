@@ -9,14 +9,14 @@ Use this pattern when work is pre-defined as claimable units (kanban cards) and 
 ### How it works
 
 1. All replicas subscribe to the same topic.
-2. When triggered, each replica attempts to claim a card with `claim_kanban(content, expected_status?)`.
+2. When triggered, each replica attempts to claim a card with `update_kanban(content, claim: true, expected_status?)`.
 3. `KanbanStore.claim()` atomically checks that the card exists, is unassigned or already assigned to the calling agent, and (optionally) matches the expected status.
 4. The first successful claimant sets the `assignee` to its `agentKey` and moves a `pending` card to `in_progress`.
 5. Losers receive a "not claimable" result and do nothing.
 
 ### Contract
 
-- `claim_kanban` must be listed in a role's `tools:` to be available; it is included in the jie-dev-team implementer and reviewer manifests.
+- `update_kanban` must be listed in a role's `tools:` to be available; it is included in the jie-dev-team implementer and reviewer manifests.
 - Claims are atomic at the storage layer.
 - A replica can re-claim its own card (idempotent).
 - A claim fails when the card is assigned to a different agent or the expected status does not match.
@@ -50,7 +50,7 @@ Ties are broken by the original order in the `bodies` array, which is determinis
 
 ## Choosing Between Patterns
 
-| Factor | Fan-out (`claim_kanban`) | Dispatch (`call_agent`) |
+| Factor | Fan-out (`update_kanban` claim) | Dispatch (`call_agent`) |
 |---|---|---|
 | Work unit | Pre-defined kanban card | Arbitrary prompt |
 | Coordination | Agent-side (atomic claim) | Platform-side (least-busy selection) |

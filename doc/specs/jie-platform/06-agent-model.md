@@ -137,12 +137,12 @@ Registered at platform startup by the `InMemoryToolRegistry` constructor (a crad
 | `write_file` | text-file writes (overwrite), per-role path allowlist via globs |
 | `edit_file` | search-and-replace inside a file, with diff preview; serialized per path |
 | `ls` / `find_file` / `grep_file` | workspace file discovery: list, glob-find, content grep |
-| `read_artifact` / `write_artifact` / `find_artifact` | key-value work-product store |
+| `artifact` | key-value work-product store (`op`: `read` / `write` / `list`) |
 | `write_kanban` | live kanban board |
+| `update_kanban` | patch or claim one kanban card |
 | `notify` | publish to the team event bus (see "notify and the Subscription Model") |
 | `web_search` / `web_fetch` | web access |
-| `memory_add` | team long-term memory write (`11-memory.md`) |
-| `memory_search` | team long-term memory search (opt-in per role via `tools:`, `11-memory.md`) |
+| `memory` | team long-term memory (`op`: `add` / `search`; opt-in per role via `tools:`, `11-memory.md`) |
 
 ### Built-in tool contracts
 
@@ -153,9 +153,9 @@ Shared conventions: file paths resolve against the workspace root and must stay 
 Design notes (rationale that is not obvious from the signatures):
 - **bash** never throws on non-zero exit — throwing would discard stdout/stderr, which is what the LLM asked for; the `content` carries `exit_code` + stdout/stderr and `details: { exitCode, truncated }`; the detached shell is killed as a process group so SIGTERM/SIGKILL reach backgrounded descendants.
 - **read_file / write_file / edit_file** return a one-line ack in `content`; the diff lives only in `details` (a TUI-only payload, dropped at persist unless `kind: "diff"`). `write_file` returns just the byte summary since the model just wrote the content and a file-sized diff back would waste tokens (`edit_file` returns just an ack too — it confirms a targeted change via `replacementsCount`, not a diff). Full rationale: ADR 9.
-- **Artifact store** is not team-scoped by the platform (two teams sharing a key collide) and artifact content never travels in events — only keys. `read_artifact` of a missing key is a normal result, not an error.
+- **Artifact store** is not team-scoped by the platform (two teams sharing a key collide) and artifact content never travels in events — only keys. An `artifact` read of a missing key is a normal result, not an error. A role may restrict ops via `artifact(read, list)` tool-spec args.
 - **write_kanban** replaces the team's board (full desired state); cards merge by `content` so `#1`/`#2` ids stay stable across rewrites; duplicate `content` is rejected (`kanban_write_invalid`).
-- **memory_search** and **memory_add** are opt-in per role via `tools:`. Extraction runs after a successful compaction commit (fire-and-forget, single-flight per body).
+- **memory** is opt-in per role via `tools:` (`memory(search)` grants search only). Extraction runs after a successful compaction commit (fire-and-forget, single-flight per body).
 - **web_search / web_fetch**: `web_search` delegates to a pluggable provider (default DuckDuckGo HTML; no API key); non-2xx HTTP is returned with a body, never a typed error — the LLM branches on status.
 
 ## notify and the Subscription Model

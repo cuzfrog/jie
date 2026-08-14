@@ -276,8 +276,8 @@ Hard caps and charsets; not user-configurable. Each row points at the doc that a
 
 | Limit | Value | Where applied | Doc |
 |---|---|---|---|
-| Artifact key charset | `[A-Za-z0-9_./-]{1,256}` | `write_artifact`, `read_artifact`; `list` prefix is escaped, not validated | `04-storage.md` |
-| Artifact content cap | **5 MiB** | `write_artifact` | `04-storage.md` |
+| Artifact key charset | `[A-Za-z0-9_./-]{1,256}` | `artifact` `write`; `list` pattern is a glob, not validated | `04-storage.md` |
+| Artifact content cap | **5 MiB** | `artifact` `write` | `04-storage.md` |
 | `web_fetch` body cap | **5 MiB** (truncated, `truncated: true`) | `web_fetch` | `06-agent-model.md` |
 | `write_file` content cap | **5 MiB** | `write_file` | `06-agent-model.md` |
 | `bash` stdout / stderr cap | **32 KiB** per stream (independent truncation) | `bash` | `06-agent-model.md` |

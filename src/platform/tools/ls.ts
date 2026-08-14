@@ -7,7 +7,10 @@ import { mapErrno, resolveWithinWorkspace } from "./path-utils";
 const DEFAULT_PATH = ".";
 const ENTRY_CAP = 500;
 
-const LS_DESCRIPTION = `List the direct children of a directory at \`path\` (relative to workspace root, or absolute within workspace); defaults to the workspace root. Directories are suffixed with \`/\`, symlinks with \`@\`, files are plain. Entries are sorted directories first, then symlinks, then files. Output is capped at 500 entries; a footer reports the total and truncation. Non-recursive - use find_file to search the tree recursively.`;
+const LS_DESCRIPTION = `List the direct children of a directory (path relative to the workspace root;
+defaults to it). Directories are suffixed \`/\`, symlinks \`@\`; sorted directories,
+links, files. Capped at 500 entries. Non-recursive - use find_file to search
+the tree recursively.`;
 
 export interface LsDeps {
   workspaceRoot: string;

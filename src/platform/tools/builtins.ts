@@ -1,23 +1,19 @@
 import type { BuiltinTool } from "./tool-registry";
+import { createArtifactTool } from "./artifact";
 import { createBashTool } from "./bash";
 import { createEditTool } from "./edit_file";
 import { createFileMutationQueue } from "./file-mutation-queue";
-import { createFindArtifactTool } from "./find-artifact";
 import { createFindFileTool } from "./find-file";
 import { createGrepFileTool } from "./grep-file";
 import { createLsTool } from "./ls";
-import { createMemoryAddTool } from "./memory-add";
-import { createMemorySearchTool } from "./memory-search";
+import { createMemoryTool } from "./memory";
 import { createNotifyTool } from "./notify";
 import { createCallAgentTool } from "./call-agent";
-import { createReadArtifactTool } from "./read-artifact";
 import { createReadFileTool } from "./read-file";
-import { createKanbanClaimTool } from "./claim-kanban";
 import { createKanbanUpdateTool } from "./update-kanban";
 import { createKanbanWriteTool } from "./write-kanban";
 import { createWebFetchTool } from "./web-fetch";
 import { createWebSearchProvider, createWebSearchTool } from "./web-search";
-import { createWriteArtifactTool } from "./write-artifact";
 import { createWriteFileTool } from "./write-file";
 import type { SettingsStore } from "../config";
 import type { EventManager } from "../event";
@@ -44,14 +40,10 @@ export function createBuiltinTools(
     { name: "ls", tool: createLsTool({ workspaceRoot: cwd }) },
     { name: "find_file", tool: createFindFileTool({ workspaceRoot: cwd }) },
     { name: "grep_file", tool: createGrepFileTool({ workspaceRoot: cwd }) },
-    { name: "read_artifact", tool: createReadArtifactTool({ artifactStore }) },
-    { name: "write_artifact", tool: createWriteArtifactTool({ artifactStore }) },
-    { name: "find_artifact", tool: createFindArtifactTool({ artifactStore }) },
+    { name: "artifact", tool: createArtifactTool({ artifactStore }) },
     { name: "write_kanban", tool: createKanbanWriteTool({ kanbanStore }) },
     { name: "update_kanban", tool: createKanbanUpdateTool({ kanbanStore }) },
-    { name: "claim_kanban", tool: createKanbanClaimTool({ kanbanStore }) },
-    { name: "memory_add", tool: createMemoryAddTool({ memoryManager, settingsStore }) },
-    { name: "memory_search", tool: createMemorySearchTool({ memoryManager, settingsStore }) },
+    { name: "memory", tool: createMemoryTool({ memoryManager, settingsStore }) },
     { name: "notify", tool: createNotifyTool({ eventManager }) },
     { name: "ask_user_questions", tool: createAskUserQuestionsTool({ questionBroker }) },
     { name: "call_agent", tool: createCallAgentTool() },

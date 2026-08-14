@@ -3,18 +3,10 @@ import { Type } from "typebox";
 import type { Tool, ToolResult } from "./types";
 import { JiePlatformError } from "../jie-platform-errors";
 
-const WEB_FETCH_DESCRIPTION = `web_fetch(url): Fetch a URL and return its text content. Supports http/https
-only (file://, ftp://, data:// are rejected). Follows up to 20 redirects.
-Response body is capped at 5 MiB (truncated flag set if clipped). HTML
-responses are parsed with \`node-html-parser\` (script/style/nav/header/footer
-removed, entities decoded); other text-like types (text/plain, application/
-json, application/xml, application/javascript, application/x-www-form-url-
-encoded) are returned verbatim. Binary types (image/*, application/pdf,
-application/zip, application/octet-stream, etc.) return \`unsupported_content_
-type: <type>\`. The final HTTP status (after redirects) is in \`status\` — all
-status classes are returned with the body, including 4xx/5xx (the LLM
-branches on \`status\`; the platform does not surface non-2xx as an error).
-Inherits the tool's 120s timeout.`;
+const WEB_FETCH_DESCRIPTION = `Fetch a URL (http/https only) and return its text content, following redirects.
+HTML is reduced to plain text; other text-like types are returned verbatim;
+binary types are rejected. Body capped at 5 MiB. 4xx/5xx responses return the
+body as a normal result.`;
 
 const USER_AGENT = "JieBot/0.1 (+https://github.com/cuzfrog/jie)";
 const BODY_CAP = 5 * 1024 * 1024;

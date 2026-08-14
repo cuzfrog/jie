@@ -6,11 +6,10 @@ tools:
   - ls
   - find_file
   - grep_file
-  - read_artifact
-  - write_artifact
+  - artifact
   - write_kanban
   - update_kanban
-  - memory_search
+  - memory(search)
 subscribe:
   - task.designed
   - task.review_failed

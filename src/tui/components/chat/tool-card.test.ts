@@ -37,15 +37,24 @@ describe("ToolCard", () => {
     expect(header).toContain("src/foo.ts");
   });
 
-  test("shows the artifact key for write_artifact", () => {
+  test("shows the artifact key for artifact write", () => {
     const view = new ToolCard(card({
-      name: "write_artifact",
-      input: JSON.stringify({ key: "task-1/review", content: "x" }),
+      name: "artifact",
+      input: JSON.stringify({ op: "write", key: "task-1/review", content: "x" }),
       durationMs: 5,
     }), stateStore);
     const header = view.render(80)[0]!;
-    expect(header).toContain("write_artifact");
+    expect(header).toContain("artifact");
     expect(header).toContain("task-1/review");
+  });
+
+  test("shows the pattern for artifact list", () => {
+    const view = new ToolCard(card({
+      name: "artifact",
+      input: JSON.stringify({ op: "list", pattern: "tasks/*" }),
+    }), stateStore);
+    const header = view.render(80)[0]!;
+    expect(header).toContain("tasks/*");
   });
 
   test("shows the first line of a bash command", () => {

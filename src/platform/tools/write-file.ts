@@ -10,13 +10,8 @@ import { renderUnifiedDiff } from "./unified-diff";
 
 const CONTENT_CAP = 5 * 1024 * 1024;
 
-const WRITE_FILE_DESCRIPTION = `Write \`content\` to \`path\` (relative to workspace root, or absolute within workspace).
-Overwrites the file if it exists. Creates parent directories as needed. Text only;
-content is written verbatim as UTF-8 bytes. The platform enforces workspace containment
-(path_escape on violation) but does NOT check module boundaries — for that, the team
-blueprint's role system prompt / descriptor contract applies on top. A role may be
-restricted to a fixed set of writable paths via its manifest \`write_file(glob-a, glob-b)\`
-tool spec; a path outside that set is rejected with WRITE_PATH_DENIED.`;
+const WRITE_FILE_DESCRIPTION = `Write content to a file (path relative to the workspace root), overwriting if it
+exists; creates parent directories. UTF-8 text.`;
 
 export interface WriteFileDeps {
   workspaceRoot: string;

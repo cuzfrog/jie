@@ -12,12 +12,11 @@ const FILE_SCAN_CAP = 2000;
 const FILE_BYTE_CAP = 1024 * 1024;
 const LINE_TRUNC = 500;
 
-const GREP_FILE_DESCRIPTION = `Search file contents for a regex \`pattern\` under \`path\` (file or directory, defaults to workspace root).
-Matches are returned as \`path:line:content\` with 1-indexed workspace-relative paths.
-\`include\` filters files by glob (e.g. \`*.ts\`, default all files); \`ignoreCase\` enables case-insensitive matching.
-Respects per-role path allowlists from the manifest; prunes \`node_modules\` and \`.git\`.
-Skips symlinks, non-UTF-8 files, and files over 1 MiB.
-Capped at 100 matches and 2000 files; matching lines are truncated to 500 chars. A footer reports truncation.`;
+const GREP_FILE_DESCRIPTION = `Search file contents for a regex \`pattern\` under \`path\` (file or directory,
+defaults to the workspace root). Matches are \`path:line:content\` with 1-indexed
+workspace-relative paths. \`include\` filters files by glob; \`ignoreCase\` enables
+case-insensitive matching. Skips non-UTF-8 files and files over 1 MiB; prunes
+\`node_modules\` and \`.git\`. Capped at 100 matches and 2000 files.`;
 
 export interface GrepFileDeps {
   workspaceRoot: string;

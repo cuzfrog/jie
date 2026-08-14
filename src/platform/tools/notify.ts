@@ -3,16 +3,10 @@ import { EVENT_TEXT_TRUNCATION_BYTES, Events, type AgentSender, type EventManage
 import type { ExecutionContext, Tool, ToolResult } from "./types";
 import { JiePlatformError } from "../jie-platform-errors";
 
-const NOTIFY_DESCRIPTION = `notify({ topic, prompt }): Publish a message to the team-scoped event
-bus on \`{team_id}.{topic}\`. The receiving agent (any agent whose \`subscribe:\`
-field lists this topic) will see the message as a synthetic user-style entry:
-\`[{source_agent_key} on '{topic}']: {prompt}\`. Topic names must not start
-with \`agent.\` (platform events; observer-only) or with \`{team_id}.\` (the
-platform manages the prefix); empty topics and control characters are
-rejected. A role may be restricted to a fixed set of publishable topics via
-its manifest \`notify(topic-a, topic-b)\` tool spec; topics outside that set
-are rejected. \`notify\` is the SOLE means of inter-agent communication. Does
-NOT end the turn.`;
+const NOTIFY_DESCRIPTION = `Publish a message to the team event bus on \`{team_id}.{topic}\`. Subscribed
+agents receive it as \`[{source_agent_key} on '{topic}']: {prompt}\`. Topics must
+not start with \`agent.\`, \`inbox.\`, or the team id. \`notify\` is the sole means of
+inter-agent communication. Does NOT end the turn.`;
 
 export interface NotifyDeps {
   eventManager: EventManager;

@@ -7,9 +7,8 @@ tools:
   - find_file
   - grep_file(**/MODULE.md)
   - write_file(**/MODULE.md)
-  - read_artifact
-  - write_artifact
-  - memory_search
+  - artifact
+  - memory(search)
   - mcp:code-lens:*
 subscribe:
   - task.researched

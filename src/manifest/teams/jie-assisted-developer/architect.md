@@ -6,9 +6,8 @@ tools:
   - ls
   - find_file
   - grep_file
-  - read_artifact
-  - write_artifact
-  - memory_search
+  - artifact
+  - memory(search)
   - mcp:code-lens:*
 ---
 
