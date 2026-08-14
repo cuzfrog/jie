@@ -76,6 +76,9 @@ const JiePlatformErrorMessages = {
   NO_TEAM: "No team is defined",
   NO_LEADER: "Team has no leader",
   AGENT_NOT_FOUND: "Agent not found",
+  QUESTION_NOT_FOUND: "No pending question found for the request",
+  QUESTION_INVALID: "Question definition is invalid",
+  QUESTION_CANCELLED: "Question was cancelled before it was answered",
 } as const;
 
 export type JiePlatformErrorCode = keyof typeof JiePlatformErrorMessages;

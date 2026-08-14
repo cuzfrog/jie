@@ -7,7 +7,7 @@ export {
     type JiePlatformErrorOptions,
 } from "./jie-platform-errors";
 
-export type { TeamInfo, ModelInfo, AgentInfo, SkillInfo, AgentHistory, EffortLevel, UserIngressMessage } from "./types";
+export type { TeamInfo, ModelInfo, AgentInfo, SkillInfo, AgentHistory, EffortLevel, UserIngressMessage, QuestionOption, QuestionItem, QuestionAnswer } from "./types";
 export { EFFORT_LEVELS, isEffortLevel, parseModelRef, type KanbanCard, type KanbanStatus } from "./types";
 export type { TeamBlueprintLocation } from "./team";
 export { isDiffDetails, type KanbanDetails, type ToolResultDetails } from "./tools";

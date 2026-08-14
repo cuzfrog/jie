@@ -23,6 +23,8 @@ import type { SettingsStore } from "../config";
 import type { EventManager } from "../event";
 import type { MemoryManager } from "../memory";
 import type { ArtifactStore, KanbanStore } from "../storage";
+import { createAskUserQuestionsTool } from "./ask-user-questions";
+import type { QuestionBroker } from "./ask-user-questions-broker";
 
 export function createBuiltinTools(
   cwd: string,
@@ -31,6 +33,7 @@ export function createBuiltinTools(
   memoryManager: MemoryManager,
   settingsStore: SettingsStore,
   kanbanStore: KanbanStore,
+  questionBroker: QuestionBroker,
 ): BuiltinTool[] {
   const fileMutationQueue = createFileMutationQueue();
   return [
@@ -50,6 +53,7 @@ export function createBuiltinTools(
     { name: "memory_add", tool: createMemoryAddTool({ memoryManager, settingsStore }) },
     { name: "memory_search", tool: createMemorySearchTool({ memoryManager, settingsStore }) },
     { name: "notify", tool: createNotifyTool({ eventManager }) },
+    { name: "ask_user_questions", tool: createAskUserQuestionsTool({ questionBroker }) },
     { name: "call_agent", tool: createCallAgentTool() },
     { name: "web_fetch", tool: createWebFetchTool() },
     { name: "web_search", tool: createWebSearchTool({ provider: createWebSearchProvider() }) },

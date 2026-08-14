@@ -6,6 +6,7 @@ import { JiePlatformError } from "../jie-platform-errors";
 import type { LlmService } from "../llm";
 import type { GitService } from "../services";
 import type { KanbanStore } from "../storage";
+import type { QuestionBroker } from "../tools";
 import type { TeamManager } from "../team";
 import type { Command, CommandName, CommandResult } from "./commands";
 
@@ -27,6 +28,7 @@ export class CommandExecutorImpl implements CommandExecutor {
     private readonly eventManager: EventManager,
     private readonly kanbanStore: KanbanStore,
     private readonly llmService: LlmService,
+    private readonly questionBroker: QuestionBroker,
   ) {
     this.handlers = {
       login: this.login.bind(this),
@@ -62,6 +64,7 @@ export class CommandExecutorImpl implements CommandExecutor {
       kanbanEdit: this.kanbanEdit.bind(this),
       kanbanHandoff: this.kanbanHandoff.bind(this),
       kanbanToggleTodo: this.kanbanToggleTodo.bind(this),
+      answerUserQuestion: this.answerUserQuestion.bind(this),
     };
   }
 
@@ -375,6 +378,14 @@ export class CommandExecutorImpl implements CommandExecutor {
     } catch {
       return description;
     }
+  }
+
+  private answerUserQuestion(command: Command<"answerUserQuestion">): CommandResult<"answerUserQuestion"> {
+    this.questionBroker.answer(command.requestId, {
+      cancelled: command.cancelled,
+      answers: command.cancelled ? null : (command.answers ?? null),
+    });
+    return null;
   }
 
   private resolveLlmModel(): Model<Api> | null {
