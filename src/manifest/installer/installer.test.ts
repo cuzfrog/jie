@@ -170,6 +170,36 @@ describe("createManifestInstaller", () => {
 
       expect(result.teams).toEqual(["legacy"]);
     });
+
+    test("invokes the validator for every team and agent before copying", async () => {
+      const source = freshDir("jie-src-");
+      writeTeam(source, "alpha", { "TEAM.md": "---\nleader: lead\n---\n", "lead.md": "ok" });
+      writeAgent(source, "explorer", "ok");
+      const jieDir = freshDir("jie-home-");
+      const validateTeamDir = vi.fn(() => ({ additionalAgentRefs: [] }));
+      const validateAgentFile = vi.fn();
+      const installer = createManifestInstaller(deps, { validateTeamDir, validateAgentFile });
+
+      await installer.install(source, jieDir);
+
+      expect(validateTeamDir).toHaveBeenCalledWith(join(source, "alpha"));
+      expect(validateAgentFile).toHaveBeenCalledWith(join(source, "agents", "explorer.md"));
+    });
+
+    test("aborts before copying when a validator reports an unresolved additional-agent ref", async () => {
+      const source = freshDir("jie-src-");
+      const teamDir = join(source, "alpha");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n", "utf-8");
+      const jieDir = freshDir("jie-home-");
+      const validateTeamDir = vi.fn(() => ({ additionalAgentRefs: ["ghost"] }));
+      const installer = createManifestInstaller(deps, { validateTeamDir, validateAgentFile: vi.fn() });
+
+      await expect(installer.install(source, jieDir)).rejects.toThrow(
+        /team 'alpha' references missing shared agent 'ghost'/,
+      );
+      expect(existsSync(join(jieDir, "teams", "alpha"))).toBe(false);
+    });
   });
 
   describe("install from an npm source", () => {

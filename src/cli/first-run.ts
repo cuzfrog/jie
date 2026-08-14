@@ -3,6 +3,7 @@ import * as readline from "node:readline/promises";
 import { join } from "node:path";
 import { isErrnoException } from "../platform";
 import { createManifestInstaller, type InstallResult } from "../manifest/installer";
+import { createManifestValidator } from "./manifest-validator";
 import type { Console } from "../utils";
 
 export interface FirstRunPorts {
@@ -70,7 +71,7 @@ export function createFirstRunPorts({
       mkdirSync(homeJieDir, { recursive: true, mode: 0o755 });
       writeFileSync(sentinelPath, "");
     },
-    installBundledManifests: () => createManifestInstaller().install(BUNDLED_MANIFEST_DIR, homeJieDir),
+    installBundledManifests: () => createManifestInstaller(undefined, createManifestValidator()).install(BUNDLED_MANIFEST_DIR, homeJieDir),
     ensureBundledMcp: () => ensureBundledMcpConfig(homeJieDir),
   };
 }
