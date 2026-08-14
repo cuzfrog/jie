@@ -9,7 +9,6 @@ no-new-exports:
   - panel.ts
   - team-panel.ts
   - team-panel.test.ts
-  - team-table.ts
   - team-table.test.ts
 ---
 

@@ -1,12 +1,13 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { TuiState, type AgentUiState, type StateStore } from "../../state";
 import { type TuiComponent } from "../..";
+import { formatModelSegment, type TokenUsage } from "../elements";
 import { style } from "../themes";
-import { contextPercentColor, formatContextPercent, formatModelSegment } from "../elements";
 import { formatQueueIndicator } from "./queue-indicator";
 
 export class Footer implements TuiComponent {
   private readonly stateStore: StateStore;
+  private readonly tokenUsage: TokenUsage;
   private focused: AgentUiState | null = null;
   private gitBranch: string | null = null;
   private gitDirty = false;
@@ -17,8 +18,9 @@ export class Footer implements TuiComponent {
   private kanbanView: TuiState["kanban"]["view"] = "hidden";
   private editorCursorAtStart = false;
 
-  constructor(stateStore: StateStore) {
+  constructor(stateStore: StateStore, tokenUsage: TokenUsage) {
     this.stateStore = stateStore;
+    this.tokenUsage = tokenUsage;
   }
 
   update(): boolean {
@@ -56,7 +58,7 @@ export class Footer implements TuiComponent {
     const teamAgent = style("muted")(`${state.teamId ?? "no-team"}:${focused === null ? "—" : focused.agentKey}`);
     const identityLine = rightAligned(identity, teamAgent, w);
     if (state.helpPanelVisible || (state.teamId !== null && (state.teamPanelVisible || state.kanban.view === "panel"))) return [identityLine];
-    const stats: string[] = [style(contextSegmentColor(focused))(contextSegmentText(focused))];
+    const stats: string[] = [this.tokenUsage.format(focused)];
     const queue = formatQueueIndicator(focused === null ? null : focused.queue);
     if (queue !== null) stats.push(style("warning")(queue));
     if (focused !== null && focused.compactionInProgress) stats.push(style("warning")("Compacting..."));
@@ -74,16 +76,6 @@ function footerHelpInfo(state: TuiState): string {
     return `${style("accent")("←")}${style("muted")(" to toggle team panel")}`;
   }
   return `${style("accent")("/help")}${style("muted")(" to show commands and shortcuts")}`;
-}
-
-function contextSegmentText(focused: AgentUiState | null): string {
-  if (focused === null || focused.model === null) return "—";
-  return formatContextPercent(focused.contextTokensUsed, focused.model.contextWindow);
-}
-
-function contextSegmentColor(focused: AgentUiState | null): "muted" | "warning" | "error" {
-  if (focused === null || focused.model === null) return "muted";
-  return contextPercentColor(focused.contextTokensUsed, focused.model.contextWindow);
 }
 
 const MIN_GAP = 2;

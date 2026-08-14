@@ -497,6 +497,20 @@ describe("reduceUsage", () => {
     expect(after).not.toBe(before);
   });
 
+  test("agent.usage stores upload and download token counts", () => {
+    const state = loadedState();
+    const state2 = reduce(state, Events.agentUsage(AGENT_SENDER, {
+      input: 100,
+      output: 50,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 1234,
+    }));
+    const agent = state2.agents.get("my-team:general-1");
+    expect(agent?.uploadTokens).toBe(100);
+    expect(agent?.downloadTokens).toBe(50);
+  });
+
   test("rejects usage events from a foreign team", () => {
     const state = loadedState();
     const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };

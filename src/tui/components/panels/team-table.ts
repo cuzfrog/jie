@@ -1,6 +1,6 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { AgentId, AgentUiState } from "../../state";
-import { contextPercentColor, formatContextPercent, formatModelSegment } from "../elements";
+import { formatModelSegment, type TokenUsage } from "../elements";
 import { SPINNER_FRAMES, SPINNER_INTERVAL_MS, style } from "../themes";
 
 export type TeamTableColumn = "agent" | "ctx" | "tools" | "subscribe" | "model";
@@ -11,44 +11,52 @@ export interface TeamTableOptions {
   readonly droppable?: ReadonlyArray<TeamTableColumn>;
 }
 
-export function renderTeamTable(
-  agents: ReadonlyArray<AgentUiState>,
-  columns: ReadonlyArray<TeamTableColumn>,
-  width: number,
-  options: TeamTableOptions,
-): string[] {
-  const w = Math.max(1, width);
-  const allRows = [headerCells(columns), ...agents.map((agent) => rowCells(agent, columns, options.pointed, options.focused))];
-  const visible = visibleColumns(allRows, columns, w, options.droppable ?? []);
-  const widths = columnWidths(allRows, visible);
-  return allRows.map((cells) => layoutRow(cells, visible, widths, w));
-}
+export class TeamTable {
+  private readonly tokenUsage: TokenUsage;
 
-function headerCells(columns: ReadonlyArray<TeamTableColumn>): string[] {
-  return columns.map((column) => style("dim")(column));
-}
+  constructor(tokenUsage: TokenUsage) {
+    this.tokenUsage = tokenUsage;
+  }
 
-function rowCells(
-  agent: AgentUiState,
-  columns: ReadonlyArray<TeamTableColumn>,
-  pointed: AgentId | null,
-  focused: AgentId | null,
-): string[] {
-  return columns.map((column) => cell(column, agent, pointed, focused));
-}
+  render(
+    agents: ReadonlyArray<AgentUiState>,
+    columns: ReadonlyArray<TeamTableColumn>,
+    width: number,
+    options: TeamTableOptions,
+  ): string[] {
+    const w = Math.max(1, width);
+    const allRows = [this.headerCells(columns), ...agents.map((agent) => this.rowCells(agent, columns, options.pointed, options.focused))];
+    const visible = visibleColumns(allRows, columns, w, options.droppable ?? []);
+    const widths = columnWidths(allRows, visible);
+    return allRows.map((cells) => layoutRow(cells, visible, widths, w));
+  }
 
-function cell(column: TeamTableColumn, agent: AgentUiState, pointed: AgentId | null, focused: AgentId | null): string {
-  switch (column) {
-    case "agent":
-      return identityCell(agent, pointed, focused);
-    case "ctx":
-      return contextCell(agent);
-    case "tools":
-      return listCell(agent.tools);
-    case "subscribe":
-      return listCell(agent.subscribe);
-    case "model":
-      return modelCell(agent);
+  private headerCells(columns: ReadonlyArray<TeamTableColumn>): string[] {
+    return columns.map((column) => style("dim")(column));
+  }
+
+  private rowCells(
+    agent: AgentUiState,
+    columns: ReadonlyArray<TeamTableColumn>,
+    pointed: AgentId | null,
+    focused: AgentId | null,
+  ): string[] {
+    return columns.map((column) => this.cell(column, agent, pointed, focused));
+  }
+
+  private cell(column: TeamTableColumn, agent: AgentUiState, pointed: AgentId | null, focused: AgentId | null): string {
+    switch (column) {
+      case "agent":
+        return identityCell(agent, pointed, focused);
+      case "ctx":
+        return this.tokenUsage.format(agent);
+      case "tools":
+        return listCell(agent.tools);
+      case "subscribe":
+        return listCell(agent.subscribe);
+      case "model":
+        return modelCell(agent);
+    }
   }
 }
 
@@ -70,11 +78,6 @@ function statusGlyph(agent: AgentUiState): string {
 
 function spinnerFrame(): string {
   return SPINNER_FRAMES[Math.floor(Date.now() / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length];
-}
-
-function contextCell(agent: AgentUiState): string {
-  const window = agent.model?.contextWindow ?? null;
-  return style(contextPercentColor(agent.contextTokensUsed, window))(formatContextPercent(agent.contextTokensUsed, window));
 }
 
 function listCell(values: ReadonlyArray<string>): string {
