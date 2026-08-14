@@ -1,5 +1,6 @@
 import { createManifestInstaller } from "../../manifest/installer";
 import { type Console } from "../../utils";
+import { createManifestValidator } from "../manifest-validator";
 import type { ParsedArgsMap } from "../cli-flags";
 
 export async function runTeamInstall(
@@ -14,7 +15,7 @@ export async function runTeamInstall(
     console.error("no project .jie directory found; run from within a project or omit --project");
     return 1;
   }
-  const installer = createManifestInstaller();
+  const installer = createManifestInstaller(undefined, createManifestValidator());
   try {
     if (args.action === "add") {
       const result = await installer.install(args.source, jieDir, { force: args.force });

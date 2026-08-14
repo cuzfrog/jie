@@ -20,6 +20,12 @@ describe("WelcomeBanner", () => {
     expect(text).toContain("native multi-agent coding");
   });
 
+  test("renders the installed teams with agent counts, ignoring descriptions", () => {
+    stateStore.getState.mockReturnValue(stateWithInstalledTeamsWithDescription());
+    const text = new WelcomeBanner(stateStore).render(80).map(stripAnsi).join("\n");
+    expect(text).toContain("Teams: solo(1 agent) · my-team(2 agents)");
+  });
+
   test("renders the installed teams once the platform reported them, loaded team first", () => {
     stateStore.getState.mockReturnValue(stateWithInstalledTeams());
     const text = new WelcomeBanner(stateStore).render(80).map(stripAnsi).join("\n");
@@ -152,6 +158,16 @@ function stateWithInstalledTeams(): TuiState {
     installedTeams: [
       { id: "my-team", agentCount: 2, location: "user" },
       { id: "solo", agentCount: 1, location: "builtin" },
+    ],
+  });
+}
+
+function stateWithInstalledTeamsWithDescription(): TuiState {
+  return makeTuiState({
+    teamId: "solo",
+    installedTeams: [
+      { id: "my-team", agentCount: 2, location: "user", description: "my team" },
+      { id: "solo", agentCount: 1, location: "builtin", description: "solo runner" },
     ],
   });
 }

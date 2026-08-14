@@ -60,6 +60,12 @@ export function reduceUiAction(state: TuiState, action: Action): TuiState {
     case ActionTypes.SUBMIT_EDITOR_TEXT:
       if (state.interruptedAgentId === null) return state;
       return { ...state, interruptedAgentId: null };
+    case ActionTypes.TERMINAL_FOCUS_GAINED:
+      if (state.terminalFocused) return state;
+      return { ...state, terminalFocused: true };
+    case ActionTypes.TERMINAL_FOCUS_LOST:
+      if (!state.terminalFocused) return state;
+      return { ...state, terminalFocused: false };
     case ActionTypes.REQUEST_INTERRUPT:
       return state;
     case ActionTypes.SET_ENVIRONMENT:

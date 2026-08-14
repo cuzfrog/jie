@@ -14,11 +14,6 @@ function card(content: string, status: KanbanCard["status"], assignee?: string):
 }
 
 describe("claim_kanban", () => {
-  test("is a utility tool", () => {
-    const tool = createKanbanClaimTool({ kanbanStore: makeKanbanStore([]) });
-    expect(tool.isUtility).toBe(true);
-  });
-
   test("successful claim reports the card and returns the board", async () => {
     const store = makeKanbanStore([card("build", "pending")]);
     const tool = createKanbanClaimTool({ kanbanStore: store });

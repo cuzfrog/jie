@@ -4,7 +4,7 @@ The TUI's acceptance surface. Each scenario corresponds to one e2e test file —
 
 ## Scenario 1: simple agent
 
-1. Run `jie` under a fresh directory without any team definitions. A TUI opens on the built-in default-solo team.
+1. Run `jie` under a fresh directory without any team definitions. A TUI opens on the built-in setup-assistant team.
 2. Prompt `Tell me a story`. The response streams into the conversation area.
 3. Press `Ctrl+D` (editor empty). The process exits 0.
 
@@ -14,7 +14,7 @@ The TUI's acceptance surface. Each scenario corresponds to one e2e test file —
 
 1. Under a directory with a team at `.jie/teams/my-team/` — `manager` (leader) and `worker`, both with the `bash` tool. A TUI opens.
 2. Prompt the `manager`: `Read file1.txt and write its content to my-answer.txt`. The manager drives the `bash` tool to completion — at least one `bash` tool-result card with no error.
-3. Prompt the `manager`: `Update your kanban board with one in-progress card`. The manager calls `write_kanban` (implicitly available as a utility tool) and the board lands in `state.kanbanBoard`. `Ctrl+K` shows the kanban list below the chat, and the next `Ctrl+K` opens the kanban panel; while the panel view is shown, `←` moves the board cursor rather than toggling the team panel; `Ctrl+K` again hides both views; `←` then shows the team panel — the kanban panel view and the team panel share the bottom slot and never render together (`tui-kanban-panel.md`).
+3. Prompt the `manager`: `Update your kanban board with one in-progress card`. The manager calls `write_kanban` (listed in the role's `tools:`) and the board lands in `state.kanbanBoard`. `Ctrl+K` shows the kanban list below the chat, and the next `Ctrl+K` opens the kanban panel; while the panel view is shown, `←` moves the board cursor rather than toggling the team panel; `Ctrl+K` again hides both views; `←` then shows the team panel — the kanban panel view and the team panel share the bottom slot and never render together (`tui-kanban-panel.md`).
 4. Call out the team panel (`←` with the editor cursor at the buffer start), move the cursor to the `worker` (`↓`) — the focused agent does not change until `Enter` commits the cursor; commit back to the `manager` (`↑`, `Enter`). Each agent's conversation continues independently, and the footer line-1 right segment tracks the focused agent only on commit. A further `←` hides the panel.
 5. Press `Ctrl+D` (editor empty). The process exits 0.
 

@@ -4,6 +4,7 @@ import { Events, type AgentSender, type EventManager } from "../event";
 import type { HookIdentity, HookRunner } from "../hooks";
 import type { TranscriptStore } from "../storage";
 import { isDiffDetails } from "..";
+import type { UserIngressMessage } from "../types";
 import type { PromptQueue } from "./prompt-queue";
 import { StreamPublisherImpl, type StreamPublisher } from "./streaming";
 
@@ -61,13 +62,11 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
           this.eventManager.publish(Events.systemError({ kind: "system" }, final.errorMessage));
         }
         void this.hookRunner.stop({ identity: this.hookIdentity });
-        this.promptQueue.clearPendingLabel();
         this.promptQueue.publishQueueUpdate();
         this.onRunEnd();
         return;
       }
       case "message_start":
-        if (event.message.role === "user") this.promptQueue.dropFollowUpLabel(event.message);
         this.stream.beginStream();
         return;
       case "message_update": {
@@ -114,8 +113,17 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
       this.eventManager.publish(Events.agentTurnContinue(this.sender));
       return;
     }
-    this.eventManager.publish(Events.agentTurnStart(this.sender, this.promptQueue.takeTurnStartLabel(message)));
+    this.eventManager.publish(Events.agentTurnStart(this.sender, userDisplayText(message)));
   }
+}
+
+function userDisplayText(message: AgentMessage): string | null {
+  if (!isUserIngressMessage(message)) return null;
+  return message.displayText ?? null;
+}
+
+function isUserIngressMessage(message: AgentMessage): message is UserIngressMessage {
+  return message.role === "user" && "displayText" in message;
 }
 
 function readFinalStopReason(event: Extract<PiAgentEvent, { type: "agent_end" }> | Extract<PiAgentEvent, { type: "turn_end" }>): { stopReason: StopReason; isError: boolean; errorMessage: string | null } {

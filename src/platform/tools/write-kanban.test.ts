@@ -30,11 +30,6 @@ function withIds(cards: ReadonlyArray<KanbanCardWrite>): KanbanCard[] {
 }
 
 describe("write_kanban", () => {
-  test("is a utility tool, implicitly available to every agent", () => {
-    const tool = createKanbanWriteTool({ kanbanStore });
-    expect(tool.isUtility).toBe(true);
-  });
-
   test("replaces the board in the store scoped to the execution context", async () => {
     const cards: KanbanCardWrite[] = [{ content: "write tests", status: "in_progress", active_form: "Writing tests" }];
     kanbanStore.replace.mockReturnValue(withIds(cards));

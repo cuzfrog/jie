@@ -22,7 +22,7 @@ jie [--team <id>] [--resume <id>] [--in-memory] [--no-install]
 
 `--in-memory` runs on an in-memory store (nothing persists). `--no-install` skips the first-run welcome and leaves the sentinel unwritten, so a later run without the flag still prompts.
 
-**Ordering invariant.** The TUI is constructed and subscribes to `system.team.loaded` plus the `agent.*` topics **before** the team load is triggered, which publishes `system.team.loaded`. `tui.start()` therefore always observes `state.agents` already populated (see `tui-overview.md` "Bootstrap and dependencies"). Team resolution falls back `--team` → `defaultTeam` → first installed user team → built-in default-solo (`src/platform/team/default-solo/`); the platform always has a runnable team (`10-configuration.md` "Team Selection").
+**Ordering invariant.** The TUI is constructed and subscribes to `system.team.loaded` plus the `agent.*` topics **before** the team load is triggered, which publishes `system.team.loaded`. `tui.start()` therefore always observes `state.agents` already populated (see `tui-overview.md` "Bootstrap and dependencies"). Team resolution falls back `--team` → `defaultTeam` → first installed user team → built-in setup-assistant (`src/platform/team/setup-assistant/`); the platform always has a runnable team (`10-configuration.md` "Team Selection").
 
 Exit codes: 0 normal, 1 config/team/agent error.
 

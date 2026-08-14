@@ -155,6 +155,7 @@ interface FakeAgentCapture {
     abort: ReturnType<typeof vi.fn>;
     continue: ReturnType<typeof vi.fn>;
     waitForIdle: ReturnType<typeof vi.fn>;
+    hasQueuedMessages: ReturnType<typeof vi.fn>;
   };
   readonly agentListener: ((event: PiAgentEvent) => void) | undefined;
   readonly capturedOptions: ConstructorParameters<typeof PiAgent>[0] | undefined;
@@ -193,6 +194,7 @@ function makeFakeAgentFactory(): FakeAgentCapture {
       }
       return idlePromise;
     }),
+    hasQueuedMessages: vi.fn(() => false),
   };
   const stub = fake as unknown as PiAgent;
   return {
@@ -269,6 +271,7 @@ interface Harness {
   followUp: ReturnType<typeof vi.fn>;
   abort: ReturnType<typeof vi.fn>;
   continue: ReturnType<typeof vi.fn>;
+  hasQueuedMessages: ReturnType<typeof vi.fn>;
   subscribeSubject: <T extends EventType>(topic: T, cb: (env: EventEnvelope<T>) => void) => () => void;
   fireEvent: (event: PiAgentEvent) => void;
   makeBody: (overrides?: MakeBodyOverrides) => JieAgentBody;
@@ -378,6 +381,7 @@ function makeHarness(): Harness {
     followUp: cap.fake.followUp,
     abort: cap.fake.abort,
     continue: cap.fake.continue,
+    hasQueuedMessages: cap.fake.hasQueuedMessages,
     subscribeSubject,
     fireEvent,
     makeBody,
@@ -505,6 +509,15 @@ describe("JieAgentBody — tool resolution", () => {
     h.makeBody({ factory: cap.factory });
     const names = (cap.fake.state.tools as Array<{ name: string }>).map((t) => t.name);
     expect(names).toEqual(["write_kanban"]);
+  });
+});
+
+describe("JieAgentBody — agent configuration", () => {
+  test("follow-up and steering modes are one-at-a-time so each queued prompt gets its own turn", () => {
+    const h = makeHarness();
+    h.makeBody();
+    expect(h.cap.capturedOptions?.followUpMode).toBe("one-at-a-time");
+    expect(h.cap.capturedOptions?.steeringMode).toBe("one-at-a-time");
   });
 });
 
@@ -1454,6 +1467,35 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     body.stop();
   });
 
+  test("two queued prompts released across two turn_ends each get their own turn.start payload", async () => {
+    const body = h.makeBody();
+    await body.start();
+    const turnStart: EventEnvelope<"agent.turn.start">[] = [];
+    h.subscribeSubject("agent.turn.start", (env) => turnStart.push(env));
+    h.state.isStreaming = true;
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first queued"));
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "second queued"));
+    await flush();
+    h.fireEvent({
+      type: "turn_end",
+      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
+      toolResults: [],
+    });
+    expect(h.followUp.mock.calls.length).toBe(1);
+    h.fireEvent({ type: "turn_start" });
+    h.fireEvent({ type: "message_start", message: h.followUp.mock.calls[0]![0] as AgentMessage });
+    h.fireEvent({
+      type: "turn_end",
+      message: { role: "assistant", content: [] } as unknown as AssistantMessage,
+      toolResults: [],
+    });
+    expect(h.followUp.mock.calls.length).toBe(2);
+    h.fireEvent({ type: "turn_start" });
+    h.fireEvent({ type: "message_start", message: h.followUp.mock.calls[1]![0] as AgentMessage });
+    expect(turnStart.map((env) => env.payload)).toEqual(["first queued", "second queued"]);
+    body.stop();
+  });
+
   test("agent_end draining the queue hands the prompt to the next turn_start", async () => {
     const body = h.makeBody();
     await body.start();
@@ -1553,6 +1595,28 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
     await flush();
     expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "hello", source: "user" }]);
+    body.stop();
+  });
+
+  test("agent queues left after a run are continued before the prompt queue drains again", async () => {
+    const body = h.makeBody();
+    await body.start();
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
+    await flush();
+    const firstMessage = h.prompt.mock.calls[0]![0] as AgentMessage;
+    h.state.isStreaming = true;
+    h.hasQueuedMessages.mockReturnValue(true);
+    h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "second"));
+    await flush();
+    h.fireEvent({ type: "turn_start" });
+    h.fireEvent({ type: "message_start", message: firstMessage });
+    h.fireEvent({ type: "message_end", message: makeAssistantMessage({ stopReason: "toolUse" }) });
+    h.fireEvent({ type: "turn_end", message: makeAssistantMessage({ stopReason: "toolUse" }), toolResults: [] });
+    expect(h.followUp.mock.calls.length).toBe(1);
+    h.fireEvent({ type: "agent_end", messages: [makeAssistantMessage({ stopReason: "aborted" })] });
+    h.settleIdle();
+    await flush();
+    expect(h.continue).toHaveBeenCalledTimes(1);
     body.stop();
   });
 });

@@ -5,7 +5,7 @@ import { parseNpmSpec, parseManifestSource, type ManifestSource } from "./source
 
 const TEAM_ID_PATTERN = /^[A-Za-z0-9_-]{1,32}$/;
 const AGENT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
-const RESERVED_TEAM_IDS = new Set(["add", "list", "remove", "default-solo"]);
+const RESERVED_TEAM_IDS = new Set(["add", "list", "remove", "default-solo", "setup-assistant"]);
 const NPM_REGISTRY = "https://registry.npmjs.org";
 
 export interface ManifestProvenance {
@@ -41,13 +41,25 @@ interface TeamSourceEntry {
   readonly sourceDir: string;
 }
 
+interface ValidatedTeam {
+  readonly additionalAgentRefs: ReadonlyArray<string>;
+}
+
+interface ManifestValidator {
+  validateTeamDir(sourceDir: string): ValidatedTeam;
+  validateAgentFile(path: string): void;
+}
+
 export interface ManifestInstaller {
   install(spec: string, jieDir: string, options?: InstallOptions): Promise<InstallResult>;
   remove(teamId: string, jieDir: string): void;
   readProvenance(teamId: string, jieDir: string): ManifestProvenance | null;
 }
 
-export function createManifestInstaller(deps: InstallerDeps = defaultInstallerDeps): ManifestInstaller {
+export function createManifestInstaller(
+  deps: InstallerDeps = defaultInstallerDeps,
+  validator?: ManifestValidator,
+): ManifestInstaller {
   return {
     async install(spec, jieDir, options = {}) {
       const source = parseManifestSource(spec);
@@ -59,9 +71,19 @@ export function createManifestInstaller(deps: InstallerDeps = defaultInstallerDe
         if (teamEntries.length === 0 && agentIds.length === 0) {
           throw new Error(`no team or agent manifests found in '${spec}' (expected one or more <id>/TEAM.md directories or agents/<id>.md files)`);
         }
-        const teams: string[] = [];
+        const validatedTeams: { entry: TeamSourceEntry; additionalAgentRefs: ReadonlyArray<string> }[] = [];
         for (const entry of teamEntries) {
           validateTeamId(entry.id);
+          const validated = validator === undefined ? { additionalAgentRefs: [] as string[] } : validator.validateTeamDir(entry.sourceDir);
+          validatedTeams.push({ entry, additionalAgentRefs: validated.additionalAgentRefs });
+        }
+        for (const id of agentIds) {
+          validateAgentId(id);
+          if (validator !== undefined) validator.validateAgentFile(join(resolvedDir, "agents", `${id}.md`));
+        }
+        validateAdditionalAgentRefs(validatedTeams, agentIds, jieDir);
+        const teams: string[] = [];
+        for (const { entry } of validatedTeams) {
           const destDir = join(jieDir, "teams", entry.id);
           if (existsSync(destDir) && !options.force) {
             throw new Error(`team '${entry.id}' already installed at ${destDir} (use --force to overwrite)`);
@@ -73,7 +95,6 @@ export function createManifestInstaller(deps: InstallerDeps = defaultInstallerDe
         }
         const agents: string[] = [];
         for (const id of agentIds) {
-          validateAgentId(id);
           const agentsDir = join(jieDir, "agents");
           const destFile = join(agentsDir, `${id}.md`);
           if (existsSync(destFile) && !options.force) {
@@ -318,6 +339,21 @@ function validateTeamId(id: string): void {
 
 function validateAgentId(id: string): void {
   if (!AGENT_ID_PATTERN.test(id)) throw new Error(`invalid agent id: ${id}`);
+}
+
+function validateAdditionalAgentRefs(
+  teams: ReadonlyArray<{ readonly entry: TeamSourceEntry; readonly additionalAgentRefs: ReadonlyArray<string> }>,
+  sourceAgentIds: ReadonlyArray<string>,
+  jieDir: string,
+): void {
+  const sourceAgents = new Set(sourceAgentIds);
+  for (const { entry, additionalAgentRefs } of teams) {
+    for (const ref of additionalAgentRefs) {
+      if (sourceAgents.has(ref)) continue;
+      if (existsSync(join(jieDir, "agents", `${ref}.md`))) continue;
+      throw new Error(`team '${entry.id}' references missing shared agent '${ref}'`);
+    }
+  }
 }
 
 function runGitSync(args: readonly string[], cwd: string): GitResult {

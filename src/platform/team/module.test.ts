@@ -146,17 +146,17 @@ describe("registerTeamModule", () => {
 
   test("listInstalled flows through the registry built from the cradle dirs", () => {
     const container = bootedContainer(homeJieDir, null);
-    expect(container.cradle.teamManager.listInstalled()).toContain("default-solo");
+    expect(container.cradle.teamManager.listInstalled()).toContain("setup-assistant");
   });
 
-  test("load() builds the builtin default-solo team through the cradle agentBodyFactory", async () => {
+  test("load() builds the builtin setup-assistant team through the cradle agentBodyFactory", async () => {
     const container = bootedContainer(homeJieDir, null);
     const team = await container.cradle.teamManager.load();
-    expect(team.id).toBe("default-solo");
+    expect(team.id).toBe("setup-assistant");
     expect(team.leaderKey).toBe("general-1");
     expect(agentBodyFactory).toHaveBeenCalledTimes(1);
     expect(agentBodyFactory).toHaveBeenCalledWith(
-      expect.objectContaining({ agentKey: "general-1", teamId: "default-solo", isLeader: true }));
+      expect.objectContaining({ agentKey: "general-1", teamId: "setup-assistant", isLeader: true }));
     container.cradle.teamManager.stop();
   });
 });

@@ -105,6 +105,7 @@ export interface TuiState {
   readonly pendingQuit: boolean;
   readonly editorText: string;
   readonly editorCursorAtStart: boolean;
+  readonly terminalFocused: boolean;
 }
 
 function getFocusedAgent(state: TuiState): AgentUiState | null {
@@ -145,6 +146,20 @@ function hasChatContent(state: TuiState): boolean {
     if (agent.history.length > 0 || agent.currentTurn !== null) return true;
   }
   return false;
+}
+
+function isIdleAttentionNeeded(state: TuiState): boolean {
+  const agent = getFocusedAgent(state);
+  if (agent === null) return false;
+  return agent.status === "idle" && isAttentionStopReason(agent.lastStopReason);
+}
+
+function isAttentionStopReason(reason: StopReason | null): boolean {
+  return reason === "stop" || reason === "error" || reason === "length";
+}
+
+function isUserInputNeeded(state: TuiState): boolean {
+  return state.question !== null;
 }
 
 function anyAgentThinking(state: TuiState): boolean {
@@ -190,6 +205,8 @@ export const TuiState = {
   shouldShowErrorBanner,
   hasChatContent,
   anyAgentThinking,
+  isIdleAttentionNeeded,
+  isUserInputNeeded,
   kanbanVisibleCards,
   closeOtherPanels,
 } as const;

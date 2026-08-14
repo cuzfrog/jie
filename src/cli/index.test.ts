@@ -1,3 +1,5 @@
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   Events,
@@ -84,7 +86,7 @@ function dispatch(command: Command<CommandName>): CommandResult<CommandName> | n
     case "getDefaultModel":
       return { provider: "anthropic", id: "claude-sonnet-4-5", effort: "off", contextWindow: null };
     case "team": {
-      const teamId = command.teamId ?? "default-solo";
+      const teamId = command.teamId ?? "setup-assistant";
       const team: TeamInfo = {
         id: teamId,
         leaderKey: "general-1",
@@ -321,14 +323,14 @@ describe("_run — print + apiKey", () => {
     const exit = await captured.run({
       kind: "print",
       instruction: "hello",
-      team: "default-solo",
+      team: "setup-assistant",
       timeout: 0.05,
       json: false,
       inMemory: false,
       debug: false,
     });
     expect(exit).toBe(3);
-    expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: "default-solo" });
+    expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "team", teamId: "setup-assistant" });
     expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "stop" });
     expect(captured.fakePlatform.shutdown).toHaveBeenCalledTimes(1);
   });
@@ -339,7 +341,7 @@ describe("_run — print + apiKey", () => {
     const runPromise = captured.run({
       kind: "print",
       instruction: "hello",
-      team: "default-solo",
+      team: "setup-assistant",
       timeout: 0,
       json: false,
       inMemory: false,
@@ -347,7 +349,7 @@ describe("_run — print + apiKey", () => {
     });
     while (!platform.subscribeCalls.includes("agent.idle")) await Bun.sleep(1);
     expect(platform.shutdown).not.toHaveBeenCalled();
-    platform.emit("agent.idle", Events.agentIdle({ kind: "agent", teamId: "default-solo", agentKey: "general-1" }, "stop"));
+    platform.emit("agent.idle", Events.agentIdle({ kind: "agent", teamId: "setup-assistant", agentKey: "general-1" }, "stop"));
     const exit = await runPromise;
     expect(exit).toBe(0);
     expect(platform.execute).toHaveBeenCalledWith({ name: "stop" });
@@ -434,9 +436,43 @@ describe("_run — dispatch to command handlers", () => {
   test("team with id dispatches to runTeam which calls setDefaultTeam", async () => {
     const platform = makeFakePlatform();
     const captured = captureRun(platform);
-    const exit = await captured.run({ kind: "team", action: "setDefault", teamId: "default-solo" });
+    const exit = await captured.run({ kind: "team", action: "setDefault", teamId: "setup-assistant" });
     expect(exit).toBe(0);
-    expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "setDefaultTeam", teamId: "default-solo" });
-    expect(captured.consoleMock.print).toHaveBeenCalledWith("default team set to 'default-solo'");
+    expect(captured.fakePlatform.execute).toHaveBeenCalledWith({ name: "setDefaultTeam", teamId: "setup-assistant" });
+    expect(captured.consoleMock.print).toHaveBeenCalledWith("default team set to 'setup-assistant'");
+  });
+});
+
+describe("_run — project .jie discovery", () => {
+  test("does not treat the global ~/.jie as a project .jie when running from $HOME", async () => {
+    const home = mkdtempSync(join(tmpdir(), "jie-home-"));
+    const homeJie = join(home, ".jie");
+    mkdirSync(homeJie, { recursive: true });
+    const capturedOptions: JiePlatformOptions[] = [];
+    const platform = makeFakePlatform();
+    platform.execute.mockImplementation(async (cmd) => {
+      if ((cmd as { readonly name: string }).name === "getTeamInfo") return { defaultTeam: null, installed: [], sharedAgents: [] };
+      return null;
+    });
+    const bootPlatform = vi.fn(async (options: JiePlatformOptions): Promise<JiePlatform> => {
+      capturedOptions.push(options);
+      return platform;
+    });
+    const consoleMock = makeConsoleMock();
+
+    try {
+      const exit = await _run(
+        { kind: "team", action: "list" },
+        home,
+        home,
+        { bootPlatform, bootTui: vi.fn(), runFirstRun: vi.fn(), console: consoleMock },
+      );
+
+      expect(exit).toBe(0);
+      expect(capturedOptions).toHaveLength(1);
+      expect(capturedOptions[0]!.projectJieDir).toBeNull();
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 });

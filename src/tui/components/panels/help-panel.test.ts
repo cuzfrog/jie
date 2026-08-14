@@ -113,7 +113,7 @@ describe("HelpPanel.update", () => {
 
 describe("_helpLines", () => {
   test("renders Commands and Shortcuts without the mark or identity", () => {
-    const text = _helpLines(80, makeCommandCatalog().metadata).map(stripAnsi).join("\n");
+    const text = _helpLines(80, makeCommandCatalog().metadata, null).map(stripAnsi).join("\n");
     expect(text).toContain("Commands");
     expect(text).toContain("Shortcuts");
     expect(text).not.toContain("█");
@@ -124,10 +124,20 @@ describe("_helpLines", () => {
 
   test("every line fits the given width", () => {
     for (const width of [13, 40, 60, 80, 139]) {
-      for (const line of _helpLines(width, makeCommandCatalog().metadata)) {
+      for (const line of _helpLines(width, makeCommandCatalog().metadata, null)) {
         expect(visibleWidth(line)).toBeLessThanOrEqual(width);
       }
     }
+  });
+
+  test("shows a setup hint when other teams are installed", () => {
+    const installed = [
+      { id: "setup-assistant", agentCount: 1, location: "builtin" as const },
+      { id: "alpha", agentCount: 2, location: "user" as const },
+    ];
+    const text = _helpLines(80, makeCommandCatalog().metadata, installed).map(stripAnsi).join("\n");
+    expect(text).toContain("Setup & help");
+    expect(text).toContain("/team setup-assistant");
   });
 });
 

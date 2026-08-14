@@ -22,4 +22,4 @@ export interface TeamBlueprint {
 }
 export type TeamBlueprintLocation = "builtin" | "project" | "user" | null;
 
-export const BUILTIN_DEFAULT_SOLO_TEAM_ID = "default-solo";
+export const BUILTIN_SETUP_ASSISTANT_TEAM_ID = "setup-assistant";

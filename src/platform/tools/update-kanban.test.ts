@@ -17,11 +17,6 @@ const kanbanStore = vi.mocked<KanbanStore>({
 });
 
 describe("update_kanban", () => {
-  test("is a utility tool", () => {
-    const tool = createKanbanUpdateTool({ kanbanStore });
-    expect(tool.isUtility).toBe(true);
-  });
-
   test("patches a card and returns the full board", async () => {
     kanbanStore.update.mockReturnValue({
       id: "#1",

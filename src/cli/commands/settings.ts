@@ -80,6 +80,13 @@ async function runTeamList(
     const agents = team.agentCount === 1 ? "1 agent" : `${team.agentCount} agents`;
     console.print(`${marker} ${team.id.padEnd(width)}  [${team.location ?? "?"}]  ${agents}${source}`);
   }
+  if (info.sharedAgents.length > 0) {
+    const agentWidth = Math.max(...info.sharedAgents.map((agent) => agent.id.length));
+    console.print("Shared agents:");
+    for (const agent of info.sharedAgents) {
+      console.print(`  ${agent.id.padEnd(agentWidth)}  [${agent.location ?? "?"}]`);
+    }
+  }
   return 0;
 }
 

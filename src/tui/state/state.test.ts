@@ -171,6 +171,73 @@ describe("TuiState.hasChatContent", () => {
   });
 });
 
+describe("TuiState.isIdleAttentionNeeded", () => {
+  const sender = { kind: "agent", teamId: "demo", agentKey: "general-1" } as const;
+
+  test("returns false when no team is loaded", () => {
+    const store = new StateStoreImpl();
+    expect(TuiState.isIdleAttentionNeeded(store.getState())).toBe(false);
+  });
+
+  test("returns true when the focused agent idles after stop", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart(sender, null)));
+    store.dispatch(Actions.receiveEvent(Events.agentIdle(sender, "stop")));
+    expect(TuiState.isIdleAttentionNeeded(store.getState())).toBe(true);
+  });
+
+  test("returns false for non-ringable stop reasons", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart(sender, null)));
+    store.dispatch(Actions.receiveEvent(Events.agentIdle(sender, "toolUse")));
+    expect(TuiState.isIdleAttentionNeeded(store.getState())).toBe(false);
+  });
+
+  test("returns false once the focused agent starts a new turn", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart(sender, null)));
+    store.dispatch(Actions.receiveEvent(Events.agentIdle(sender, "stop")));
+    store.dispatch(Actions.receiveEvent(Events.agentTurnStart(sender, "again")));
+    expect(TuiState.isIdleAttentionNeeded(store.getState())).toBe(false);
+  });
+});
+
+describe("TuiState.isUserInputNeeded", () => {
+  const sender = { kind: "agent", teamId: "demo", agentKey: "general-1" } as const;
+
+  test("returns false when no question is pending", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    expect(TuiState.isUserInputNeeded(store.getState())).toBe(false);
+  });
+
+  test("returns true when the focused agent is asked a question", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    store.dispatch(Actions.receiveEvent(Events.agentQuestionAsk(sender, "req-1", [])));
+    expect(TuiState.isUserInputNeeded(store.getState())).toBe(true);
+  });
+
+  test("returns true when a non-focused agent is asked a question", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    const other = { kind: "agent", teamId: "demo", agentKey: "helper-1" } as const;
+    store.dispatch(Actions.receiveEvent(Events.agentQuestionAsk(other, "req-1", [])));
+    expect(TuiState.isUserInputNeeded(store.getState())).toBe(true);
+  });
+
+  test("returns false once the question is answered", () => {
+    const store = new StateStoreImpl();
+    loadDemoTeam(store);
+    store.dispatch(Actions.receiveEvent(Events.agentQuestionAsk(sender, "req-1", [])));
+    store.dispatch(Actions.submitQuestionAnswers("req-1", []));
+    expect(TuiState.isUserInputNeeded(store.getState())).toBe(false);
+  });
+});
+
 describe("TuiState.anyAgentThinking", () => {
   const sender = { kind: "agent", teamId: "demo", agentKey: "general-1" } as const;
 

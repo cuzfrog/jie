@@ -16,7 +16,7 @@ Use this pattern when work is pre-defined as claimable units (kanban cards) and 
 
 ### Contract
 
-- `claim_kanban` is a utility tool, implicitly available to every agent.
+- `claim_kanban` must be listed in a role's `tools:` to be available; it is included in the jie-dev-team implementer and reviewer manifests.
 - Claims are atomic at the storage layer.
 - A replica can re-claim its own card (idempotent).
 - A claim fails when the card is assigned to a different agent or the expected status does not match.

@@ -1,6 +1,6 @@
 import { JiePlatformError, type Command, type CommandName, type CommandResult, type JiePlatform, type Settings, type TeamInfo } from "../../platform";
 import { type Console } from "../../utils";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runModel, runTeam } from "./settings";
@@ -120,23 +120,25 @@ describe("runTeam", () => {
     execute.mockImplementationOnce(async () => ({
       defaultTeam: "dev",
       installed: [
-        { id: "default-solo", agentCount: 1, location: "builtin" },
+        { id: "setup-assistant", agentCount: 1, location: "builtin" },
         { id: "alpha", agentCount: 2, location: "user" },
         { id: "beta", agentCount: 3, location: "project" },
       ],
+      sharedAgents: [],
     }));
     const consoleMock = makeConsoleMock();
     const code = await runTeam({ kind: "team", action: "info" }, platform, homeJieDir, null, consoleMock);
     expect(code).toBe(0);
     expect(consoleMock.print).toHaveBeenCalledWith("defaultTeam: dev");
-    expect(consoleMock.print).toHaveBeenCalledWith("installed: default-solo, alpha, beta");
+    expect(consoleMock.print).toHaveBeenCalledWith("installed: setup-assistant, alpha, beta");
   });
 
   test("prints defaultTeam: unset when none is set", async () => {
     const { platform, execute } = makePlatform();
     execute.mockImplementationOnce(async () => ({
       defaultTeam: null,
-      installed: [{ id: "default-solo", agentCount: 1, location: "builtin" }],
+      installed: [{ id: "setup-assistant", agentCount: 1, location: "builtin" }],
+      sharedAgents: [],
     }));
     const consoleMock = makeConsoleMock();
     const code = await runTeam({ kind: "team", action: "info" }, platform, homeJieDir, null, consoleMock);
@@ -149,6 +151,7 @@ describe("runTeam", () => {
     const teamDir = join(source, "alpha");
     mkdirSync(teamDir, { recursive: true });
     writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n", "utf-8");
+    writeFileSync(join(teamDir, "lead.md"), "---\ntools:\n  - bash\n---\n", "utf-8");
     const homeJie = freshDir("jie-list-home-");
     await runTeamInstall({ kind: "team", action: "add", source, project: false, force: false }, homeJie, null, makeConsoleMock());
 
@@ -156,16 +159,19 @@ describe("runTeam", () => {
     execute.mockImplementationOnce(async () => ({
       defaultTeam: "alpha",
       installed: [
-        { id: "default-solo", agentCount: 1, location: "builtin" },
+        { id: "setup-assistant", agentCount: 1, location: "builtin" },
         { id: "alpha", agentCount: 2, location: "user" },
       ],
+      sharedAgents: [{ id: "explorer", location: "user" }],
     }));
     const consoleMock = makeConsoleMock();
     const code = await runTeam({ kind: "team", action: "list" }, platform, homeJie, null, consoleMock);
     expect(code).toBe(0);
     expect(consoleMock.print).toHaveBeenCalledWith("Teams:");
     expect(consoleMock.print).toHaveBeenCalledWith(expect.stringMatching(/^\* alpha\s+\[user\]\s+2 agents\s+\(file: .*\)$/));
-    expect(consoleMock.print).toHaveBeenCalledWith(expect.stringMatching(/^  default-solo\s+\[builtin\]\s+1 agent$/));
+    expect(consoleMock.print).toHaveBeenCalledWith(expect.stringMatching(/^  setup-assistant\s+\[builtin\]\s+1 agent$/));
+    expect(consoleMock.print).toHaveBeenCalledWith("Shared agents:");
+    expect(consoleMock.print).toHaveBeenCalledWith("  explorer  [user]");
   });
 });
 
@@ -175,6 +181,7 @@ describe("runTeamInstall", () => {
     const teamDir = join(source, "dev");
     mkdirSync(teamDir, { recursive: true });
     writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n", "utf-8");
+    writeFileSync(join(teamDir, "lead.md"), "---\ntools:\n  - bash\n---\n", "utf-8");
     const homeJie = freshDir("jie-home-");
     const consoleMock = makeConsoleMock();
 
@@ -202,11 +209,32 @@ describe("runTeamInstall", () => {
     expect(consoleMock.error).toHaveBeenCalledWith("no project .jie directory found; run from within a project or omit --project");
   });
 
+  test("add rejects an invalid team manifest and reports the error", async () => {
+    const source = freshDir("jie-invalid-src-");
+    const teamDir = join(source, "dev");
+    mkdirSync(teamDir, { recursive: true });
+    writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n", "utf-8");
+    const homeJie = freshDir("jie-home-");
+    const consoleMock = makeConsoleMock();
+
+    const code = await runTeamInstall(
+      { kind: "team", action: "add", source, project: false, force: false },
+      homeJie,
+      null,
+      consoleMock,
+    );
+
+    expect(code).toBe(1);
+    expect(consoleMock.error).toHaveBeenCalledWith(expect.stringContaining("'lead'"));
+    expect(existsSync(join(homeJie, "teams", "dev"))).toBe(false);
+  });
+
   test("remove deletes an installed team from the global teams dir", async () => {
     const source = freshDir("jie-rm-src-");
     const teamDir = join(source, "dev");
     mkdirSync(teamDir, { recursive: true });
     writeFileSync(join(teamDir, "TEAM.md"), "---\nleader: lead\n---\n", "utf-8");
+    writeFileSync(join(teamDir, "lead.md"), "---\ntools:\n  - bash\n---\n", "utf-8");
     const homeJie = freshDir("jie-home-");
     await runTeamInstall(
       { kind: "team", action: "add", source, project: false, force: false },

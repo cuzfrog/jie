@@ -448,3 +448,25 @@ describe("interrupted marker", () => {
   });
 });
 
+describe("terminal focus", () => {
+  test("terminalFocusGained sets terminalFocused to true", () => {
+    const state = reduceUiAction(INITIAL_TUI_STATE, Actions.terminalFocusGained());
+    expect(state.terminalFocused).toBe(true);
+  });
+
+  test("terminalFocusGained is a no-op when already focused", () => {
+    const focused = { ...INITIAL_TUI_STATE, terminalFocused: true };
+    expect(reduceUiAction(focused, Actions.terminalFocusGained())).toBe(focused);
+  });
+
+  test("terminalFocusLost sets terminalFocused to false", () => {
+    const focused = { ...INITIAL_TUI_STATE, terminalFocused: true };
+    const state = reduceUiAction(focused, Actions.terminalFocusLost());
+    expect(state.terminalFocused).toBe(false);
+  });
+
+  test("terminalFocusLost is a no-op when already unfocused", () => {
+    expect(reduceUiAction(INITIAL_TUI_STATE, Actions.terminalFocusLost())).toBe(INITIAL_TUI_STATE);
+  });
+});
+

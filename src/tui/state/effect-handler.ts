@@ -32,7 +32,7 @@ export class EffectHandlerImpl implements EffectHandler {
     this.terminal = terminal;
     this.unsubscribeBus = subscribeToBus(platform, (env) => {
       this.stateStore.dispatch(Actions.receiveEvent(env));
-      if (env.type === "agent.idle") {
+      if (env.type === "agent.idle" || env.type === "agent.question.ask") {
         void this.maybePlaySound(env);
       }
     });
@@ -111,12 +111,20 @@ export class EffectHandlerImpl implements EffectHandler {
   }
 
   private async maybePlaySound(env: AnyEventEnvelope): Promise<void> {
-    if (env.type !== "agent.idle" || env.sender.kind !== "agent") return;
+    if (env.sender.kind !== "agent") return;
     const state = this.stateStore.getState();
-    const activeId = state.focusedAgentId ?? state.leaderAgentId;
-    if (activeId === null) return;
-    if (`${env.sender.teamId}:${env.sender.agentKey}` !== activeId) return;
-    if (!_shouldRingOnIdle(env.payload)) return;
+    if (env.type === "agent.idle") {
+      const activeId = state.focusedAgentId ?? state.leaderAgentId;
+      if (activeId === null) return;
+      if (`${env.sender.teamId}:${env.sender.agentKey}` !== activeId) return;
+      if (!_shouldRingOnIdle(env.payload)) return;
+    } else if (env.type === "agent.question.ask") {
+      const question = state.question;
+      if (question === null) return;
+      if (question.agentId !== `${env.sender.teamId}:${env.sender.agentKey}`) return;
+    } else {
+      return;
+    }
     try {
       const enabled = await this.platform.execute({ name: "getNotificationSoundEnabled" });
       if (enabled) this.terminal.write("\x07");

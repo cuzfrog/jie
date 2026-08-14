@@ -65,6 +65,7 @@ export function makeTuiState(
     pendingQuit: false,
     editorText: "",
     editorCursorAtStart: true,
+    terminalFocused: false,
     ...topLevel,
   };
 }

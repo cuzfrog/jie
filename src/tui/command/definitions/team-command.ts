@@ -18,8 +18,9 @@ export class TeamCommand extends PositionalSlashCommand {
     const info = await context.platform.execute({ name: "getTeamInfo" });
     const items = info.installed.map((team) => {
       const defaultTag = team.id === info.defaultTeam ? " (default)" : "";
-      const fallback = team.agentCount === 1 ? "1 agent" : `${team.agentCount} agents`;
-      const base = team.description ?? fallback;
+      const count = team.agentCount === 1 ? "1 agent" : `${team.agentCount} agents`;
+      const description = team.description ? ` · ${team.description}` : "";
+      const base = `${count}${description}`;
       return {
         value: team.id,
         label: team.id,

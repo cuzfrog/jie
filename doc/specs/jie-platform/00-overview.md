@@ -35,7 +35,7 @@ The Jie Platform is an orchestration framework for building multi-agent systems.
 | **Agent Idle** | A body publishes `agent.idle` on every pi-agent `agent_end`; a body that has never started a turn is idle by default — no startup event. The boot "this agent exists" signal is `system.team.loaded`. | `03-event-system.md` |
 | **Streaming** | LLM output batched into `agent.stream.chunk` at 64 chars / 200 ms; `agent.stream.end` carries per-thinking-segment durations. | `03-event-system.md` |
 | **Team Blueprint** | A team's `TEAM.md` (leader) + one `<role>.md` per role. The platform parses and runs it; the team layer provides it. | `06-agent-model.md` |
-| **Built-in Default-Solo Team** | Last-resort single `general` agent shipped as embedded `.md` files; user copies at the standard paths override it. | `default-solo-team.md` |
+| **Built-in Setup-Assistant Team** | Last-resort single `general` agent shipped as embedded `.md` files; user copies at the standard paths override it. | `setup-assistant-team.md` |
 
 ## Process Topology (quick reference)
 

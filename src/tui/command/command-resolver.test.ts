@@ -441,7 +441,7 @@ describe("CommandResolverImpl", () => {
     ] as const;
     const resolver = makeResolver(makeFakePlatform(async (command) => {
       if (command.name === "getTeamInfo") {
-        return { defaultTeam: "alpha", installed };
+        return { defaultTeam: "alpha", installed, sharedAgents: [] };
       }
       return null;
     }));

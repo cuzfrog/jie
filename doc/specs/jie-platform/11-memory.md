@@ -90,7 +90,7 @@ In the body's restore phase (before `start`), the body asks `MemoryManager.boots
 
 ## Tools
 
-`memory_add` is a utility tool assigned to every agent; `memory_search` is opt-in per role via `tools:` frontmatter. The built-in default-solo team includes both.
+`memory_add` and `memory_search` are opt-in per role via `tools:` frontmatter. The built-in setup-assistant team includes both.
 
 `memory_add` parameters:
 

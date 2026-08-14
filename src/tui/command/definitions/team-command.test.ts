@@ -51,6 +51,24 @@ describe("TeamCommand", () => {
     });
   });
 
+  test("complete includes the agent count and description", async () => {
+    const { platform, execute } = makePlatform();
+    execute.mockImplementation(async (cmd: { readonly name: string }) => {
+      if (cmd.name === "getTeamInfo") {
+        return {
+          defaultTeam: null,
+          installed: [{ id: "alpha", agentCount: 2, location: "user" as const, description: "Alpha team" }],
+        };
+      }
+      return null;
+    });
+    const context = { state: makeTuiState(), platform };
+    const result = await command.complete("", context);
+    expect(result).toEqual({
+      items: [{ value: "alpha", label: "alpha", description: "2 agents · Alpha team" }],
+    });
+  });
+
   test("complete marks a single-agent team with a singular label", async () => {
     const { platform, execute } = makePlatform();
     execute.mockImplementation(async (cmd: { readonly name: string }) => {

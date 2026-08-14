@@ -4,22 +4,15 @@ import { JiePlatformError } from "../jie-platform-errors";
 import type { KanbanStore } from "../storage";
 import type { KanbanCard, KanbanCardWrite } from "../types";
 
-const KANBAN_WRITE_DESCRIPTION = `Update the live kanban board. \`cards\` is the full board (it replaces, not
-merges with, whatever the team has now). Each card is \`{ content, status, scope?, externalRef?, active_form?, description?, assignee?, todos? }\`;
-\`status\` is one of \`pending\`, \`in_progress\`, \`in_review\`, \`completed\` — the four board columns.
-\`scope\` is \`team\` or \`session\` (default \`team\`). \`externalRef\` is an optional external tracker
-reference in the form \`G#<n>\` (GitHub) or \`J#<n>\` (Jira).
-\`todos\` is an optional ordered checklist \`[{ text, done? }]\`. Omitting \`todos\` keeps the card's existing checklist;
-providing \`todos\` replaces it. Matching \`text\` inherits the prior \`done\` state when \`done\` is omitted. \`todos: []\` clears the checklist.
-Use this tool to create, remove, or restructure cards. For changing one existing card (status, todos, description), use \`update_kanban\` instead — it is cheaper and cannot accidentally alter other cards.
-Contract:
-- no duplicate \`content\` strings;
-- no empty \`content\`;
-- no empty \`text\` inside \`todos\`;
-- no duplicate \`text\` inside the same card's \`todos\`.
-The returned \`details\` carries the board under \`kind: "kanban"\` so the TUI can render
-the board from the same payload. Cards already on the board keep their ids; new cards get
-platform-assigned ids (e.g. \`#1\`).`;
+const KANBAN_WRITE_DESCRIPTION = `Replace the team kanban board with the full desired state.
+Cards merge by \`content\` so existing ids stay stable; use this to create, remove, or rename cards.
+For one-card edits, use \`update_kanban\`.
+Card fields: \`content\`, \`status\` (\`pending\`/\`in_progress\`/\`in_review\`/\`completed\`),
+\`scope\` (\`team\` or \`session\`, default \`team\`), \`externalRef\`, \`active_form\`, \`description\`, \`assignee\`,
+\`todos: [{ text, done? }]\`. Omit \`todos\` to keep the existing checklist, \`[]\` clears it;
+matching \`text\` inherits the prior \`done\` state.
+Contract: no duplicate or empty \`content\`; no empty or duplicate \`text\` in the same card's \`todos\`.
+Returns the full board in \`details.kind: "kanban"\`.`;
 
 interface KanbanWriteInput {
   cards: ReadonlyArray<KanbanCardWrite>;
@@ -31,11 +24,10 @@ export function createKanbanWriteTool(options: { kanbanStore: KanbanStore }): To
     name: "write_kanban",
     description: KANBAN_WRITE_DESCRIPTION,
     label: "Update Kanban",
-    isUtility: true,
     parameters: Type.Object({
       cards: Type.Array(
         Type.Object({
-          content: Type.String(),
+          content: Type.String({ minLength: 1 }),
           status: Type.Union([
             Type.Literal("pending"),
             Type.Literal("in_progress"),
@@ -50,7 +42,7 @@ export function createKanbanWriteTool(options: { kanbanStore: KanbanStore }): To
           todos: Type.Optional(
             Type.Array(
               Type.Object({
-                text: Type.String(),
+                text: Type.String({ minLength: 1 }),
                 done: Type.Optional(Type.Boolean()),
               }),
             ),

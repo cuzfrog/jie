@@ -5,7 +5,7 @@ import { JiePlatformError } from "../jie-platform-errors";
 import { type LlmService } from "../llm";
 import { type GitService, type GitSnapshot } from "../services";
 import { type KanbanStore } from "../storage";
-import { type TeamManager } from "../team";
+import { type AgentRegistry, type TeamManager } from "../team";
 import { type KanbanCard, type TeamInfo } from "../types";
 import type { QuestionBroker } from "../tools";
 import { CommandExecutorImpl } from "./command-executor";
@@ -54,6 +54,12 @@ const teamManager = vi.mocked<TeamManager>({
   stop: vi.fn(),
   spawnAdHoc: vi.fn(),
   resetAgent: vi.fn(),
+});
+
+const agentRegistry = vi.mocked<AgentRegistry>({
+  resolve: vi.fn(),
+  listInstalled: vi.fn(),
+  locate: vi.fn(),
 });
 
 const gitService = vi.mocked<GitService>({
@@ -110,13 +116,14 @@ function fakeModel(provider: "anthropic" | "openai", id: string, name: string): 
 let executor: CommandExecutorImpl;
 
 beforeEach(() => {
-  executor = new CommandExecutorImpl(authStore, settingsStore, modelRegistry, teamManager, gitService, eventManager, kanbanStore, llmService, questionBroker);
+  executor = new CommandExecutorImpl(authStore, settingsStore, modelRegistry, teamManager, agentRegistry, gitService, eventManager, kanbanStore, llmService, questionBroker);
   settingsStore.load.mockReturnValue(DEFAULT_SETTINGS);
   authStore.load.mockReturnValue({});
   gitService.getSnapshot.mockReturnValue(EMPTY_GIT_SNAPSHOT);
   modelRegistry.providers.mockReturnValue(["anthropic", "my-local"]);
   teamManager.currentSessionId.mockReturnValue("session-1");
   kanbanStore.load.mockReturnValue([]);
+  agentRegistry.listInstalled.mockReturnValue([]);
 });
 
 describe("CommandExecutorImpl", () => {
@@ -473,7 +480,7 @@ describe("CommandExecutorImpl", () => {
   describe("reload", () => {
     test("delegates to teamManager.reload and returns the reloaded teams", async () => {
       const identities: TeamInfo[] = [
-        { id: "default-solo", leaderKey: "general-1", sessionName: null, currentSessionId: null, agents: [], history: [], kanbanCards: [] },
+        { id: "setup-assistant", leaderKey: "general-1", sessionName: null, currentSessionId: null, agents: [], history: [], kanbanCards: [] },
         { id: "alpha", leaderKey: "general-1", sessionName: null, currentSessionId: null, agents: [], history: [], kanbanCards: [] },
       ];
       teamManager.reload.mockResolvedValue(identities);
@@ -496,29 +503,53 @@ describe("CommandExecutorImpl", () => {
   describe("getTeamInfo", () => {
     test("returns defaultTeam from settings and the installed list from teamManager", async () => {
       settingsStore.load.mockReturnValueOnce({ defaultProvider: "anthropic", defaultModel: "m", defaultTeam: "alpha" });
-      teamManager.listInstalled.mockReturnValue(["default-solo", "alpha", "beta"]);
+      teamManager.listInstalled.mockReturnValue(["setup-assistant", "alpha", "beta"]);
       teamManager.agentCount.mockImplementation((teamId: string) => (teamId === "alpha" ? 3 : 1));
-      teamManager.locate.mockImplementation((teamId: string) => (teamId === "default-solo" ? "builtin" : "user"));
+      teamManager.locate.mockImplementation((teamId: string) => (teamId === "setup-assistant" ? "builtin" : "user"));
       teamManager.getTeamDescription.mockImplementation((teamId: string) => (teamId === "alpha" ? "alpha team" : undefined));
       const result = await executor.execute({ name: "getTeamInfo" });
       expect(result).toEqual({
         defaultTeam: "alpha",
         installed: [
-          { id: "default-solo", agentCount: 1, location: "builtin" },
+          { id: "setup-assistant", agentCount: 1, location: "builtin" },
           { id: "alpha", agentCount: 3, location: "user", description: "alpha team" },
           { id: "beta", agentCount: 1, location: "user" },
+        ],
+        sharedAgents: [],
+      });
+    });
+
+    test("also lists installed shared agents from the agentRegistry", async () => {
+      settingsStore.load.mockReturnValueOnce({ defaultProvider: "anthropic", defaultModel: "m" });
+      teamManager.listInstalled.mockReturnValue(["setup-assistant"]);
+      teamManager.agentCount.mockReturnValue(1);
+      teamManager.locate.mockReturnValue("builtin");
+      teamManager.getTeamDescription.mockReturnValue(undefined);
+      agentRegistry.listInstalled.mockReturnValue(["explorer", "steward"]);
+      agentRegistry.locate.mockImplementation((agentId: string) => (agentId === "steward" ? "project" : "user"));
+      const result = await executor.execute({ name: "getTeamInfo" });
+      expect(result).toEqual({
+        defaultTeam: null,
+        installed: [{ id: "setup-assistant", agentCount: 1, location: "builtin" }],
+        sharedAgents: [
+          { id: "explorer", location: "user" },
+          { id: "steward", location: "project" },
         ],
       });
     });
 
     test("returns defaultTeam: null when settings has no defaultTeam", async () => {
       settingsStore.load.mockReturnValueOnce({ defaultProvider: "anthropic", defaultModel: "m" });
-      teamManager.listInstalled.mockReturnValue(["default-solo"]);
+      teamManager.listInstalled.mockReturnValue(["setup-assistant"]);
       teamManager.agentCount.mockReturnValue(2);
       teamManager.locate.mockReturnValue("builtin");
       teamManager.getTeamDescription.mockReturnValue(undefined);
       const result = await executor.execute({ name: "getTeamInfo" });
-      expect(result).toEqual({ defaultTeam: null, installed: [{ id: "default-solo", agentCount: 2, location: "builtin" }] });
+      expect(result).toEqual({
+        defaultTeam: null,
+        installed: [{ id: "setup-assistant", agentCount: 2, location: "builtin" }],
+        sharedAgents: [],
+      });
     });
   });
 

@@ -276,4 +276,16 @@ describe("TuiViewImpl", () => {
     expect(view.handleInput("\x1b[A")).toBeUndefined();
     expect(stateStore.dispatch).not.toHaveBeenCalledWith(Actions.moveKanbanCursor("up"));
   });
+
+  test("handleInput dispatches terminal focus gained on focus-in", () => {
+    const { view, stateStore } = bootView(makeTuiState());
+    expect(view.handleInput("\x1b[I")).toEqual({ consume: true });
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.terminalFocusGained());
+  });
+
+  test("handleInput dispatches terminal focus lost on focus-out", () => {
+    const { view, stateStore } = bootView(makeTuiState());
+    expect(view.handleInput("\x1b[O")).toEqual({ consume: true });
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.terminalFocusLost());
+  });
 });

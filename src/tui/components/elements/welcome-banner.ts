@@ -68,7 +68,7 @@ function teamsLine(state: TuiStateType): string | null {
   const rest = installed.filter((team) => team.id !== state.teamId);
   const ordered: InstalledTeams = current === undefined ? installed : [current, ...rest];
   const list = ordered.map((team) => {
-    const detail = team.description ?? `${team.agentCount} agent${team.agentCount === 1 ? "" : "s"}`;
+    const detail = `${team.agentCount} agent${team.agentCount === 1 ? "" : "s"}`;
     return `${team.id}(${detail})`;
   }).join(TEAMS_SEPARATOR);
   return `${style("accent")("Teams: ")}${style("muted")(list)}`;
