@@ -6,15 +6,12 @@ import type { Tool, ToolResult } from "./types";
 
 const log = logger.getSubLogger({ name: "jie.platform.memory" });
 
-const MEMORY_ADD_DESCRIPTION = `Add a memory to the team's long-term memory. Memories survive sessions and are
-recalled at session start and via memory_search. Use this to record facts, decisions,
-methods, or standing instructions the user wants to keep.
-
-Parameters:
-- content: a self-contained statement with no pronouns needing the current conversation.
-- type: one of fact, decision, method, instruction.
-- priority: 0-100 (default 50). instruction is always stored at priority 100.
-- scene: an optional one-line context; defaults to "manual".`;
+const MEMORY_ADD_DESCRIPTION = `Store a memory in the team's long-term memory.
+\`content\` is a self-contained statement with no conversation-dependent pronouns.
+\`type\` is \`fact\`, \`decision\`, \`method\`, or \`instruction\`.
+\`priority\` is 0-100 (default 50); \`instruction\` is always stored at 100.
+\`scene\` defaults to \`manual\`.
+Returns the number of new memories stored, or a reinforcement message when an identical one exists.`;
 
 interface MemoryAddInput {
   content: string;

@@ -12,7 +12,12 @@ const FILE_SCAN_CAP = 2000;
 const FILE_BYTE_CAP = 1024 * 1024;
 const LINE_TRUNC = 500;
 
-const GREP_FILE_DESCRIPTION = `Search file contents for a regex \`pattern\` under \`path\` (a file or directory, defaults to the workspace root). Matches are returned as \`path:line:content\` with 1-indexed line numbers, paths workspace-relative. \`include\` is a glob filtering which files to scan (e.g. \`*.ts\`), defaulting to all files; \`**\` crosses separators. \`ignoreCase\` makes the match case-insensitive. A role may be restricted to a fixed set of searchable paths via its manifest \`grep_file(glob-a, glob-b)\` tool spec; for a single file outside that set the call is rejected with READ_PATH_DENIED, and for a directory only matching files are scanned. \`node_modules\` and \`.git\` are always pruned, symlinks are not followed, files over 1 MiB or not valid UTF-8 are skipped, and matching lines are truncated to 500 chars. Capped at 100 matches and 2000 files scanned; a footer reports truncation.`;
+const GREP_FILE_DESCRIPTION = `Search file contents for a regex \`pattern\` under \`path\` (file or directory, defaults to workspace root).
+Matches are returned as \`path:line:content\` with 1-indexed workspace-relative paths.
+\`include\` filters files by glob (e.g. \`*.ts\`, default all files); \`ignoreCase\` enables case-insensitive matching.
+Respects per-role path allowlists from the manifest; prunes \`node_modules\` and \`.git\`.
+Skips symlinks, non-UTF-8 files, and files over 1 MiB.
+Capped at 100 matches and 2000 files; matching lines are truncated to 500 chars. A footer reports truncation.`;
 
 export interface GrepFileDeps {
   workspaceRoot: string;

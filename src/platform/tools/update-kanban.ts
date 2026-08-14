@@ -4,12 +4,10 @@ import { JiePlatformError } from "../jie-platform-errors";
 import type { KanbanStore } from "../storage";
 import type { KanbanCardPatch } from "../types";
 
-const KANBAN_UPDATE_DESCRIPTION = `Patch one existing kanban card. Prefer this for any change to a single card;
-do not resend the whole board. The card is identified by its \`content\` string.
-Mutable fields: \`status\`, \`todos\`, \`description\`, \`active_form\`, \`externalRef\`, \`assignee\`.
-Omitted fields keep their existing values. Empty string \`""\` clears \`description\`, \`active_form\`, \`externalRef\`, or \`assignee\`.
-\`todos\` is \`[{ text, done? }]\` — providing it replaces the checklist, matching \`text\` inherits prior \`done\`, and \`[]\` clears it.
-To create or remove cards, or to rename the content, use \`write_kanban\` instead.`;
+const KANBAN_UPDATE_DESCRIPTION = `Patch one existing kanban card by \`content\`.
+Omitted fields keep existing values; empty \`""\` clears \`description\`, \`active_form\`, \`externalRef\`, or \`assignee\`.
+\`todos: [{ text, done? }]\` replaces the checklist; matching \`text\` inherits prior \`done\`; \`[]\` clears it.
+Use \`write_kanban\` to create, remove, or rename cards. Returns the full board.`;
 
 interface KanbanUpdateInput {
   content: string;
@@ -28,14 +26,14 @@ export function createKanbanUpdateTool(options: { kanbanStore: KanbanStore }): T
     description: KANBAN_UPDATE_DESCRIPTION,
     label: "Update Kanban Card",
     parameters: Type.Object({
-      content: Type.String(),
+      content: Type.String({ minLength: 1 }),
       status: Type.Optional(
         Type.Union([Type.Literal("pending"), Type.Literal("in_progress"), Type.Literal("in_review"), Type.Literal("completed")]),
       ),
       todos: Type.Optional(
         Type.Array(
           Type.Object({
-            text: Type.String(),
+            text: Type.String({ minLength: 1 }),
             done: Type.Optional(Type.Boolean()),
           }),
         ),

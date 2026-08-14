@@ -4,10 +4,10 @@ import { JiePlatformError } from "../jie-platform-errors";
 import type { KanbanStore } from "../storage";
 import type { KanbanStatus } from "../types";
 
-const CLAIM_KANBAN_DESCRIPTION = `Attempt to claim one kanban card by its content. Only succeeds if the card is unassigned, already assigned to your agent key, or matches the optional expected status. Use this to coordinate work with sibling replicas; losers get a clear "not claimable" result and should do nothing.
-If the card is currently \`pending\`, a successful claim also moves it to \`in_progress\` and sets the assignee to your agent key.
-If \`expected_status\` is provided and the card is not in that status, the claim fails.
-The returned details carry the board under \`kind: "kanban"\`.`;
+const CLAIM_KANBAN_DESCRIPTION = `Attempt to claim a kanban card by \`content\`.
+Succeeds if the card is unassigned, already assigned to your agent key, or matches \`expected_status\`.
+A \`pending\` card moves to \`in_progress\` and is assigned to your agent key on success.
+Returns whether the card was claimable and the full board.`;
 
 interface ClaimKanbanInput {
   content: string;
@@ -21,7 +21,7 @@ export function createKanbanClaimTool(options: { kanbanStore: KanbanStore }): To
     description: CLAIM_KANBAN_DESCRIPTION,
     label: "Claim Kanban Card",
     parameters: Type.Object({
-      content: Type.String(),
+      content: Type.String({ minLength: 1 }),
       expected_status: Type.Optional(Type.Union([
         Type.Literal("pending"),
         Type.Literal("in_progress"),
