@@ -11,6 +11,8 @@ export interface TuiView extends TuiRoot {
 const CTRL_T = "\x14";
 const CTRL_O = "\x0f";
 const CTRL_K = "\x0b";
+const FOCUS_IN = "\x1b[I";
+const FOCUS_OUT = "\x1b[O";
 const CONSUMED = { consume: true } as const;
 
 export class TuiViewImpl implements TuiView {
@@ -96,6 +98,11 @@ export class TuiViewImpl implements TuiView {
   }
 
   handleInput(data: string): TuiInputListenerResult {
+    const focusAction = resolveFocusSequence(data);
+    if (focusAction !== null) {
+      this.stateStore.dispatch(focusAction);
+      return CONSUMED;
+    }
     const state = this.stateStore.getState();
     const popupOpen = this.editor.isShowingAutocomplete();
     const action = resolveGlobalKey(data, state, popupOpen);
@@ -153,6 +160,12 @@ function shouldCommitTeamCursor(state: TuiState): boolean {
 function resolveFocusTarget(state: TuiState): "question" | "kanban" | "editor" {
   if (state.question !== null) return "question";
   return state.kanban.view === "panel" && state.kanban.edit === null ? "kanban" : "editor";
+}
+
+function resolveFocusSequence(data: string): Action | null {
+  if (data === FOCUS_IN) return Actions.terminalFocusGained();
+  if (data === FOCUS_OUT) return Actions.terminalFocusLost();
+  return null;
 }
 
 export {

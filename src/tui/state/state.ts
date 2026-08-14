@@ -105,6 +105,7 @@ export interface TuiState {
   readonly pendingQuit: boolean;
   readonly editorText: string;
   readonly editorCursorAtStart: boolean;
+  readonly terminalFocused: boolean;
 }
 
 function getFocusedAgent(state: TuiState): AgentUiState | null {

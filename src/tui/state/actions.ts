@@ -28,6 +28,8 @@ export const ActionTypes = {
   REQUEST_INTERRUPT: "[ui] request interrupt focused agent",
   REQUEST_DEQUEUE: "[ui] request dequeue queued prompt",
   REQUEST_REQUEUE: "[ui] request requeue abandoned dequeued prompt",
+  TERMINAL_FOCUS_GAINED: "[ui] terminal focus gained",
+  TERMINAL_FOCUS_LOST: "[ui] terminal focus lost",
   SET_ENVIRONMENT: "[ui] set environment",
   SHOW_HELP: "[ui] toggle help panel",
   SET_KANBAN_BOARD: "[ui] set kanban board",
@@ -61,6 +63,8 @@ const toggleThinking = createAction(ActionTypes.TOGGLE_THINKING);
 const toggleToolCards = createAction(ActionTypes.TOGGLE_TOOL_CARDS);
 const toggleTeamPanel = createAction(ActionTypes.TOGGLE_TEAM_PANEL);
 const cycleKanbanView = createAction(ActionTypes.CYCLE_KANBAN_VIEW);
+const terminalFocusGained = createAction(ActionTypes.TERMINAL_FOCUS_GAINED);
+const terminalFocusLost = createAction(ActionTypes.TERMINAL_FOCUS_LOST);
 const commitTeamCursor = createAction(ActionTypes.COMMIT_TEAM_CURSOR);
 const clearTuiState = createAction(ActionTypes.CLEAR_TUI_STATE);
 const clearTransientMessage = createAction(ActionTypes.CLEAR_TRANSIENT_MESSAGE);
@@ -79,6 +83,8 @@ export const Actions = {
 	switchCycleAgent: (direction: 1 | -1) => createAction(ActionTypes.SWITCH_CYCLE_AGENT, { direction }),
 	toggleTeamPanel: () => toggleTeamPanel,
 	cycleKanbanView: () => cycleKanbanView,
+	terminalFocusGained: () => terminalFocusGained,
+	terminalFocusLost: () => terminalFocusLost,
 	commitTeamCursor: () => commitTeamCursor,
 	clearTuiState: () => clearTuiState,
 	setTransientMessage: (text: string) => createAction(ActionTypes.SET_TRANSIENT_MESSAGE, { text }),
