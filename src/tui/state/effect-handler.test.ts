@@ -8,6 +8,8 @@ import {
   type EventEnvelope,
   type EventType,
   type JiePlatform,
+  type QuestionAnswer,
+  type QuestionItem,
   type TeamInfo,
 } from "../../platform";
 import { Actions } from "./actions";
@@ -294,5 +296,53 @@ describe("EffectHandlerImpl — notification sound", () => {
     handler!(Events.agentIdle({ kind: "agent", teamId: "my-team", agentKey: "general-1" }, TOOL_USE_REASON));
     await runAsync();
     expect(terminal.writeCalls).not.toContain("\x07");
+  });
+});
+
+const QUESTIONS: QuestionItem[] = [{
+  question: "Which approach?",
+  header: "Approach",
+  options: [{ label: "A", description: "approach a" }],
+  multiSelect: false,
+}];
+
+function loadTeamWithQuestion(state: StateStoreImpl): void {
+  const team = makeTeamInfo("my-team", "general-1");
+  state.dispatch(Actions.switchTeam(team));
+  state.dispatch(Actions.showQuestions("req-1", "my-team:general-1", QUESTIONS));
+}
+
+describe("EffectHandlerImpl — question answer", () => {
+  test("SUBMIT_QUESTION_ANSWERS executes answerUserQuestion with the answers", async () => {
+    const state = new StateStoreImpl();
+    const platform = makePlatform();
+    makeEffectHarness(platform, state);
+    loadTeamWithQuestion(state);
+    const answers: QuestionAnswer[] = [{ header: "Approach", selected: ["A"], other: null }];
+    state.dispatch(Actions.submitQuestionAnswers("req-1", answers));
+    await runAsync();
+    expect(platform.executeCalls.at(-1)).toEqual({ name: "answerUserQuestion", teamId: "my-team", agentKey: "general-1", requestId: "req-1", cancelled: false, answers });
+  });
+
+  test("CANCEL_QUESTION executes answerUserQuestion as cancelled", async () => {
+    const state = new StateStoreImpl();
+    const platform = makePlatform();
+    makeEffectHarness(platform, state);
+    loadTeamWithQuestion(state);
+    state.dispatch(Actions.cancelQuestion("req-1"));
+    await runAsync();
+    expect(platform.executeCalls.at(-1)).toEqual({ name: "answerUserQuestion", teamId: "my-team", agentKey: "general-1", requestId: "req-1", cancelled: true });
+  });
+
+  test("surfaces answer errors as an error banner", async () => {
+    const state = new StateStoreImpl();
+    const platform = makePlatform();
+    const { execute } = platform;
+    execute.mockRejectedValueOnce(new Error("no pending question"));
+    makeEffectHarness(platform, state);
+    loadTeamWithQuestion(state);
+    state.dispatch(Actions.cancelQuestion("req-1"));
+    await runAsync();
+    expect(state.getState().errorBanner).toBe("answer question failed: no pending question");
   });
 });

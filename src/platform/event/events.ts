@@ -1,6 +1,6 @@
 import type { StopReason } from "@earendil-works/pi-ai";
-import type { TeamInfo } from "../types";
-import type { ToolResultDetails } from "../tools/types";
+import type { QuestionItem, TeamInfo } from "../types";
+import type { ToolResultDetails } from "../tools";
 
 type EventDef<S extends Sender, P = null> = { sender: S; payload: P };
 type EventDefinitions = {
@@ -42,6 +42,7 @@ type EventDefinitions = {
   "user.model.update": EventDef<UserSender, { provider: string; modelId: string }>;
   "system.team.loaded": EventDef<SystemSender, TeamInfo>;
   "agent.interrupt": EventDef<Sender, { teamId: string; agentKey: string }>;
+  "agent.question.ask": EventDef<AgentSender, { requestId: string; questions: ReadonlyArray<QuestionItem> }>;
   "system.error": EventDef<SystemSender, { error: string }>;
   [topic: `custom.${string}`]: EventDef<AgentSender, { message: string, truncated: boolean }>;
 }
@@ -77,6 +78,8 @@ export const Events = {
     createEvent("agent.idle", sender, stopReason),
   agentToolCall,
   agentToolResult,
+  agentQuestionAsk: (sender: AgentSender, requestId: string, questions: ReadonlyArray<QuestionItem>): EventEnvelope<"agent.question.ask"> =>
+    createEvent("agent.question.ask", sender, { requestId, questions }),
   agentStreamChunk: (sender: AgentSender, stream_id: number, seq: number, block_type: "text" | "thinking", text: string): EventEnvelope<"agent.stream.chunk"> =>
     createEvent("agent.stream.chunk", sender, { stream_id, seq, block_type, text }),
   agentStreamEnd: (sender: AgentSender, stream_id: number, total_chunks: number, thinking_durations: ReadonlyArray<number>): EventEnvelope<"agent.stream.end"> =>

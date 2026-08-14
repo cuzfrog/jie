@@ -4,6 +4,7 @@ import { teamLoadReducer } from "./team-load-reducer";
 import { estimateContextTokens } from "./context-tokens";
 import { Actions } from "./actions";
 import { kanbanReducer } from "./kanban-reducer";
+import { reduceQuestionAction } from "./question-reducer";
 
 export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
   switch (event.type) {
@@ -22,6 +23,7 @@ export function reduce(state: TuiState, event: AnyEventEnvelope): TuiState {
     case "agent.stream.end": return reduceStreamEnd(state, event);
     case "agent.tool.call": return reduceToolCall(state, event);
     case "agent.tool.result": return reduceToolResult(state, event);
+    case "agent.question.ask": return reduceQuestionAsk(state, event);
     default: return state;
   }
 }
@@ -220,11 +222,21 @@ function reduceToolCall(state: TuiState, event: AnyEventEnvelope): TuiState {
   return withAgent(state, agentId, next);
 }
 
+function reduceQuestionAsk(state: TuiState, event: AnyEventEnvelope): TuiState {
+  const resolved = resolveAgent(state, event);
+  if (resolved === null) return state;
+  if (event.type !== "agent.question.ask") return state;
+  return reduceQuestionAction(state, Actions.showQuestions(event.payload.requestId, resolved.agentId, event.payload.questions));
+}
+
 function reduceToolResult(state: TuiState, event: AnyEventEnvelope): TuiState {
   const resolved = resolveAgent(state, event);
   if (resolved === null) return state;
   if (event.type !== "agent.tool.result") return state;
   const { agentId, agent } = resolved;
+  const question = state.question !== null && state.question.agentId === agentId && event.payload.name === "ask_user_questions"
+    ? null
+    : state.question;
   const { tool_call_id, name, output, output_truncated, duration_ms, error, details } = event.payload;
   const boardState = details !== null && "kind" in details && details.kind === "kanban"
     ? kanbanReducer(state, Actions.setKanbanBoard(details.cards))
@@ -249,7 +261,7 @@ function reduceToolResult(state: TuiState, event: AnyEventEnvelope): TuiState {
   const nextTurn = { ...agent.currentTurn, cards };
   const contextTokensUsed = estimateContextTokens(agent.history, nextTurn);
   const next: AgentUiState = { ...agent, currentTurn: nextTurn, contextTokensUsed };
-  return withAgent(boardState, agentId, next);
+  return withAgent(boardState, agentId, next, { question });
 }
 
 function resolveAgent(

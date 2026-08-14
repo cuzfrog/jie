@@ -34,6 +34,7 @@ const INITIAL_TUI_STATE: TuiState = Object.freeze({
     edit: null,
     editField: "content",
   } as const),
+  question: null,
   pendingQuit: false,
   editorText: "",
   editorCursorAtStart: true,

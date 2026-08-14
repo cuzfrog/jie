@@ -1,10 +1,24 @@
-import { type Editor, type TUI } from "@earendil-works/pi-tui";
+import { type Editor, type Focusable, type TUI } from "@earendil-works/pi-tui";
 import { Actions } from "../state";
 import { type StateStore, type TuiState } from "../state";
 import { makeTuiState } from "../test";
 import type { TuiComponent } from "..";
 import type { ChatSync } from "./chat";
 import { TuiViewImpl, _resolveFocusTarget, _resolveGlobalKey, _resolveTeamCursorDirection, _shouldCommitTeamCursor } from "./view";
+import type { QuestionItem } from "../../platform";
+
+function makeActiveQuestion(): NonNullable<TuiState["question"]> {
+  return {
+    requestId: "req-1",
+    agentId: "t1:a1",
+    questions: [] as ReadonlyArray<QuestionItem>,
+    questionIndex: 0,
+    optionCursor: 0,
+    selections: [] as ReadonlyArray<ReadonlyArray<number>>,
+    otherText: [] as ReadonlyArray<string | null>,
+    editingOther: false,
+  };
+}
 
 describe("resolveGlobalKey", () => {
   test("ctrl+t maps to toggleThinking", () => {
@@ -67,6 +81,13 @@ describe("resolveGlobalKey", () => {
     const state = makeTuiState({ editorCursorAtStart: true });
     expect(_resolveGlobalKey("a", state, false)).toBeNull();
     expect(_resolveGlobalKey("\r", state, false)).toBeNull();
+  });
+
+  test("global keys are ignored while a question is active", () => {
+    const state = makeTuiState({ question: makeActiveQuestion() });
+    expect(_resolveGlobalKey("\x14", state, false)).toBeNull();
+    expect(_resolveGlobalKey("\x0f", state, false)).toBeNull();
+    expect(_resolveGlobalKey("\x1b[D", makeTuiState({ question: makeActiveQuestion(), editorCursorAtStart: true }), false)).toBeNull();
   });
 });
 
@@ -135,6 +156,16 @@ describe("resolveFocusTarget", () => {
   test("editor while editing a kanban card", () => {
     expect(_resolveFocusTarget(makeTuiState({ kanbanView: "panel", kanbanEdit: "#1" }))).toBe("editor");
   });
+
+  test("question when a question is active", () => {
+    const question = makeActiveQuestion();
+    expect(_resolveFocusTarget(makeTuiState({ question }))).toBe("question");
+  });
+
+  test("question takes priority over a visible kanban panel", () => {
+    const question = makeActiveQuestion();
+    expect(_resolveFocusTarget(makeTuiState({ kanbanView: "panel", question }))).toBe("question");
+  });
 });
 
 describe("TuiViewImpl", () => {
@@ -150,6 +181,10 @@ describe("TuiViewImpl", () => {
     return stubComponent() as unknown as ChatSync;
   }
 
+  function stubQuestionPanel(): TuiComponent & Focusable {
+    return { ...stubComponent(), focused: false };
+  }
+
   function stubScreen() {
     return { addChild: vi.fn(), setFocus: vi.fn(), getFocusedComponent: vi.fn(), addInputListener: vi.fn(() => vi.fn()) };
   }
@@ -163,6 +198,7 @@ describe("TuiViewImpl", () => {
     const stateStore = makeStateStore(state);
     const editor = stubEditor(popupOpen);
     const kanbanPanel = stubComponent();
+    const questionPanel = stubQuestionPanel();
     const view = new TuiViewImpl(
       screen as unknown as TUI,
       stateStore,
@@ -176,9 +212,10 @@ describe("TuiViewImpl", () => {
       stubComponent(),
       kanbanPanel,
       stubComponent(),
+      questionPanel,
       stubComponent(),
     );
-    return { screen, stateStore, editor, kanbanPanel, view };
+    return { screen, stateStore, editor, kanbanPanel, questionPanel, view };
   }
 
   test("constructor focuses the editor", () => {
@@ -190,6 +227,12 @@ describe("TuiViewImpl", () => {
     const { screen, view, kanbanPanel } = bootView(makeTuiState({ kanbanView: "panel" }));
     view.update();
     expect(screen.setFocus).toHaveBeenLastCalledWith(kanbanPanel);
+  });
+
+  test("update focuses the question panel when a question is active", () => {
+    const { screen, view, questionPanel } = bootView(makeTuiState({ question: makeActiveQuestion() }));
+    view.update();
+    expect(screen.setFocus).toHaveBeenLastCalledWith(questionPanel);
   });
 
   test("update returns focus to the editor when editing a kanban card", () => {

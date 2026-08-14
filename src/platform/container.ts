@@ -17,7 +17,7 @@ import { registerSkillsModule, type SkillManager } from "./skills";
 import { registerStorageModule, type ArtifactStore, type KanbanStore, type Storage, type TranscriptStore } from "./storage";
 import { registerTeamModule, type AgentRegistry, type TeamManager } from "./team";
 import type { AgentDispatcher } from "./types";
-import { registerToolsModule, type ToolRegistry } from "./tools";
+import { registerToolsModule, type QuestionBroker, type ToolRegistry } from "./tools";
 
 export interface PlatformCradle {
   readonly homeJieDir: string;
@@ -42,6 +42,7 @@ export interface PlatformCradle {
   readonly compactor: Compactor;
   readonly toolRegistry: ToolRegistry;
   readonly skillManager: SkillManager;
+  readonly questionBroker: QuestionBroker;
   readonly loadSystemContextBlock: () => string;
   readonly hookRunner: HookRunner;
   readonly agentBodyFactory: (params: AgentBodyParams) => AgentBody;

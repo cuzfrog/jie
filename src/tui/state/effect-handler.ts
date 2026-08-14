@@ -1,10 +1,10 @@
 import type { StopReason } from "@earendil-works/pi-ai";
 import type { Terminal } from "@earendil-works/pi-tui";
-import { type AnyEventEnvelope, type JiePlatform } from "../../platform";
+import { type AnyEventEnvelope, type JiePlatform, type QuestionAnswer } from "../../platform";
 import { logger } from "../../utils";
 import type { CommandHandler } from "../command";
 import { Actions, ActionTypes } from "./actions";
-import type { KanbanEditField } from "./state";
+import type { KanbanEditField, TuiState } from "./state";
 import type { StateStore } from "./state-store";
 
 const log = logger.getSubLogger({ name: "jie.tui.effect-handler" });
@@ -36,7 +36,7 @@ export class EffectHandlerImpl implements EffectHandler {
         void this.maybePlaySound(env);
       }
     });
-    this.unsubscribeActions = stateStore.subscribe(async (action, afterState) => {
+    this.unsubscribeActions = stateStore.subscribe(async (action, afterState, beforeState) => {
       switch (action.type) {
         case ActionTypes.SUBMIT_EDITOR_TEXT:
           commandHandler.handle(action.payload.text);
@@ -58,6 +58,12 @@ export class EffectHandlerImpl implements EffectHandler {
           return;
         case ActionTypes.TOGGLE_KANBAN_TODO:
           this.toggleKanbanTodo(afterState.teamId, action.payload.cardId, action.payload.todo);
+          return;
+        case ActionTypes.SUBMIT_QUESTION_ANSWERS:
+          this.answerUserQuestion(beforeState, action.payload.requestId, false, action.payload.answers);
+          return;
+        case ActionTypes.CANCEL_QUESTION:
+          this.answerUserQuestion(beforeState, action.payload.requestId, true);
           return;
         default:
           return;
@@ -90,6 +96,20 @@ export class EffectHandlerImpl implements EffectHandler {
       });
   }
 
+  private answerUserQuestion(beforeState: TuiState, requestId: string, cancelled: boolean, answers?: ReadonlyArray<QuestionAnswer>): void {
+    const question = beforeState.question;
+    if (question === null || question.requestId !== requestId) return;
+    const teamId = beforeState.teamId;
+    if (teamId === null) return;
+    const parts = question.agentId.split(":");
+    if (parts.length !== 2 || parts[0] !== teamId) return;
+    const agentKey = parts[1];
+    void this.platform.execute({ name: "answerUserQuestion", teamId, agentKey, requestId, cancelled, answers })
+      .then(() => undefined, (error: unknown) => {
+        this.stateStore.dispatch(Actions.setErrorMessage(`answer question failed: ${error instanceof Error ? error.message : String(error)}`));
+      });
+  }
+
   private async maybePlaySound(env: AnyEventEnvelope): Promise<void> {
     if (env.type !== "agent.idle" || env.sender.kind !== "agent") return;
     const state = this.stateStore.getState();
@@ -119,6 +139,7 @@ function subscribeToBus(platform: JiePlatform, onEvent: (event: AnyEventEnvelope
     platform.subscribe("agent.stream.end", onEvent),
     platform.subscribe("agent.tool.call", onEvent),
     platform.subscribe("agent.tool.result", onEvent),
+    platform.subscribe("agent.question.ask", onEvent),
     platform.subscribe("agent.usage", onEvent),
     platform.subscribe("agent.compacted", onEvent),
     platform.subscribe("agent.compaction.start", onEvent),

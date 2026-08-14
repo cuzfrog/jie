@@ -140,6 +140,24 @@ export interface KanbanCardPatch {
     readonly todos?: ReadonlyArray<KanbanTodoWrite>;
 }
 
+export interface QuestionOption {
+    readonly label: string;
+    readonly description: string;
+}
+
+export interface QuestionItem {
+    readonly question: string;
+    readonly header: string;
+    readonly options: ReadonlyArray<QuestionOption>;
+    readonly multiSelect: boolean;
+}
+
+export interface QuestionAnswer {
+    readonly header: string;
+    readonly selected: ReadonlyArray<string>;
+    readonly other: string | null;
+}
+
 export interface CallAgentRequest {
     readonly teamId: string;
     readonly sessionId: string;

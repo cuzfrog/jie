@@ -1,4 +1,4 @@
-import { Events, type AgentSender, type SystemSender, type ToolResultDetails, type UserSender } from "../../platform";
+import { Events, type AgentSender, type QuestionItem, type SystemSender, type ToolResultDetails, type UserSender } from "../../platform";
 import type { TuiState } from "./state";
 import { StateStoreImpl } from "./state-store";
 import { reduce } from "./event-reducer";
@@ -891,6 +891,41 @@ describe("reduceToolCall + reduceToolResult", () => {
     const state2 = reduce(state, Events.agentToolResult(foreign, "c1", "write_kanban", "ok", 5, null, { kind: "kanban", cards: [{ id: "#1", content: "x", status: "in_progress" }] }));
     expect(state2).toBe(state);
     expect(state2.kanban.board).toEqual([]);
+  });
+});
+
+describe("reduceQuestionAsk", () => {
+  const QUESTIONS: QuestionItem[] = [
+    {
+      question: "Which approach?",
+      header: "Approach",
+      options: [{ label: "A", description: "approach a" }],
+      multiSelect: false,
+    },
+  ];
+
+  test("opens the question state for the focused team", () => {
+    const state = reduce(loadedState(), Events.agentQuestionAsk(AGENT_SENDER, "req-1", QUESTIONS));
+    expect(state.question).not.toBeNull();
+    expect(state.question!.requestId).toBe("req-1");
+    expect(state.question!.agentId).toBe("my-team:general-1");
+    expect(state.question!.questions).toEqual(QUESTIONS);
+    expect(state.question!.questionIndex).toBe(0);
+    expect(state.question!.optionCursor).toBe(0);
+  });
+
+  test("questions from a foreign team are ignored", () => {
+    const state = loadedState();
+    const foreign: AgentSender = { kind: "agent", teamId: "other-team", agentKey: "general-1" };
+    const state2 = reduce(state, Events.agentQuestionAsk(foreign, "req-1", QUESTIONS));
+    expect(state2).toBe(state);
+    expect(state2.question).toBeNull();
+  });
+
+  test("questions are ignored when no team is loaded", () => {
+    const state = reduce(INITIAL_TUI_STATE, Events.agentQuestionAsk(AGENT_SENDER, "req-1", QUESTIONS));
+    expect(state).toBe(INITIAL_TUI_STATE);
+    expect(state.question).toBeNull();
   });
 });
 

@@ -61,6 +61,7 @@ export function makeTuiState(
     teamPanelVisible: false,
     helpPanelVisible: false,
     kanban,
+    question: null,
     pendingQuit: false,
     editorText: "",
     editorCursorAtStart: true,

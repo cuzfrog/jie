@@ -7,6 +7,7 @@ import { type GitService, type GitSnapshot } from "../services";
 import { type KanbanStore } from "../storage";
 import { type TeamManager } from "../team";
 import { type KanbanCard, type TeamInfo } from "../types";
+import type { QuestionBroker } from "../tools";
 import { CommandExecutorImpl } from "./command-executor";
 
 const authStore = vi.mocked<AuthStore>({
@@ -79,6 +80,11 @@ const kanbanStore = vi.mocked<KanbanStore>({
 
 const llmService = vi.mocked<LlmService>({ complete: vi.fn() });
 
+const questionBroker = vi.mocked<QuestionBroker>({
+  ask: vi.fn(),
+  answer: vi.fn(),
+});
+
 const DEFAULT_SETTINGS: Settings = {
   defaultProvider: "anthropic",
   defaultModel: "claude-sonnet-4-5",
@@ -104,7 +110,7 @@ function fakeModel(provider: "anthropic" | "openai", id: string, name: string): 
 let executor: CommandExecutorImpl;
 
 beforeEach(() => {
-  executor = new CommandExecutorImpl(authStore, settingsStore, modelRegistry, teamManager, gitService, eventManager, kanbanStore, llmService);
+  executor = new CommandExecutorImpl(authStore, settingsStore, modelRegistry, teamManager, gitService, eventManager, kanbanStore, llmService, questionBroker);
   settingsStore.load.mockReturnValue(DEFAULT_SETTINGS);
   authStore.load.mockReturnValue({});
   gitService.getSnapshot.mockReturnValue(EMPTY_GIT_SNAPSHOT);
@@ -908,6 +914,19 @@ describe("CommandExecutorImpl", () => {
       }
       expect(teamManager.stop).toHaveBeenCalled();
       expect(authStore.setProvider).toHaveBeenCalled();
+    });
+  });
+
+  describe("answerUserQuestion", () => {
+    test("calls questionBroker.answer with answers when not cancelled", async () => {
+      const answers = [{ header: "Approach", selected: ["A"], other: null }];
+      await executor.execute({ name: "answerUserQuestion", teamId: "my-team", agentKey: "general-1", requestId: "req-1", cancelled: false, answers });
+      expect(questionBroker.answer).toHaveBeenCalledWith("req-1", "my-team", "general-1", { cancelled: false, answers });
+    });
+
+    test("calls questionBroker.answer with null answers when cancelled", async () => {
+      await executor.execute({ name: "answerUserQuestion", teamId: "my-team", agentKey: "general-1", requestId: "req-1", cancelled: true });
+      expect(questionBroker.answer).toHaveBeenCalledWith("req-1", "my-team", "general-1", { cancelled: true, answers: null });
     });
   });
 });
