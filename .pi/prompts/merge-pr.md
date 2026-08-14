@@ -1,16 +1,26 @@
 # Merge a Pull Request after CI is Green
 
-Use this skill to finalize an already-open PR by watching its GitHub checks and merging it once they pass.
+Use this skill to finalize a PR by watching its GitHub checks and merging it once they pass. If no PR exists for the current branch, create one first and then merge it.
 
 ## Preconditions
 
 - The repository has a `.github/workflows/test.yml` CI pipeline.
-- The PR was opened with the branch pushed to `origin` and is visible to `gh`.
+- The current branch is a `dev_*` or `fix_*` branch and has already been pushed to `origin`.
 - The `scripts/merge-pr.ts` script is the canonical merge helper.
+- Tests and type-checking pass before opening a new PR.
 
 ## Steps
 
-1. Identify the PR number. If unknown, use `./scripts/gh-bot.mjs pr list` and pick the right one.
+1. Identify the PR number for the current branch.
+   - Run `./scripts/gh-bot.mjs pr list` to list open PRs.
+   - If a PR is already open for the current branch, use its number.
+   - If no PR is open, create one from the current branch:
+     - Ensure the latest changes are committed and pushed to `origin`.
+     - Use the `gh-bot` skill or run:
+       ```
+       ./scripts/gh-bot.mjs pr create --base main --title "<semantic title>" --body "<summary and test plan>"
+       ```
+     - Note the new PR number.
 2. Run the merge watcher with the PR number:
    ```
    bun run scripts/merge-pr.ts <pr-number>
