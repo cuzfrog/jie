@@ -38,14 +38,14 @@ The blueprint lives at `.jie/teams/<team_id>/` (file layout, discovery, model re
 
 ```
 .jie/teams/myteam/
-  TEAM.md              # YAML frontmatter: leader, optional description; prose body is shared team context
+  TEAM.md              # YAML frontmatter: leader, optional description; prose body is ignored
   leader.md            # one .md per role — the filename stem is the role identifier
   worker_a.md
 ```
 
 `TEAM.md` declares `leader: <role>` and an optional `description: <short summary for team selection UI>`. Every other `.md` file is an agent definition: YAML frontmatter declares the mechanical surface, the prose body becomes `AgentSoul.systemPrompt`.
 
-The prose body of `TEAM.md` becomes the team's shared context, injected into every role's system prompt before the role prose. The full system prompt order is: workspace context files (`AGENTS.md` / `CLAUDE.md`) → team context (`TEAM.md` body) → role prose → available skills → memory block. `TEAM.md` declares only `leader` and `description` frontmatter; the platform enforces no team-specific workflow. Per-role capability limits live in each role's `tools` list as tool specs (ADR 37):
+The prose body of `TEAM.md` is ignored; `TEAM.md` declares only `leader` and `description` frontmatter. The full system prompt order is: role prose → available tools → guidelines → workspace context files (`AGENTS.md` / `CLAUDE.md`) → available skills → memory block → current working directory. Per-role capability limits live in each role's `tools` list as tool specs (ADR 37):
 
 ```yaml
 tools:

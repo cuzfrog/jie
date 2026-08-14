@@ -9,111 +9,154 @@ function skill(name: string, entry: string): Skill {
   };
 }
 
+function tool(name: string, description: string): { readonly name: string; readonly description: string } {
+  return { name, description };
+}
+
+const CWD = "/work";
+const CWD_LINE = `Current working directory: ${CWD}`;
+const BASH_GUIDE = "- Use bash for file operations like ls, rg, find";
+
+function available(tools: string): string {
+  return `Available tools:\n${tools}`;
+}
+
+function guidelines(...bullets: string[]): string {
+  return `Guidelines:\n${bullets.map((b) => `- ${b}`).join("\n")}`;
+}
+
+const DEFAULT_GUIDELINES = guidelines("Be concise in your responses", "Show file paths clearly when working with files");
+
 describe("composeSystemPrompt", () => {
-  test("role prompt alone is returned verbatim", () => {
-    expect(composeSystemPrompt({ rolePrompt: "You are a worker." })).toBe("You are a worker.");
+  test("role prompt is first and is followed by Available tools, Guidelines, and cwd", () => {
+    const output = composeSystemPrompt({ rolePrompt: "You are a worker.", cwd: CWD });
+    expect(output).toBe(`You are a worker.\n\n${available("(none)")}\n\n${DEFAULT_GUIDELINES}\n\n${CWD_LINE}`);
   });
 
-  test("no skills leaves the role prompt unchanged", () => {
-    expect(composeSystemPrompt({ rolePrompt: "You are a worker.", skills: [] })).toBe("You are a worker.");
+  test("renders each tool as a name and a one-line snippet", () => {
+    const output = composeSystemPrompt({
+      rolePrompt: "ROLE",
+      cwd: CWD,
+      tools: [tool("bash", "Run a shell command. Output is truncated."), tool("read_file", "Read a file. More detail.")],
+    });
+    expect(output).toContain("Available tools:\n- bash: Run a shell command.\n- read_file: Read a file.");
   });
 
-  test("appends the skills block after the role prompt", () => {
-    const output = composeSystemPrompt({ rolePrompt: "You are a worker.", skills: [skill("deploy", "ENTRY-deploy")] });
-    expect(output.startsWith("You are a worker.")).toBe(true);
-    expect(output).toContain("<available_skills>");
-    expect(output).toContain("ENTRY-deploy");
-    expect(output).toContain("</available_skills>");
+  test("snippets stop at the first newline if there is no sentence break", () => {
+    const output = composeSystemPrompt({
+      rolePrompt: "ROLE",
+      cwd: CWD,
+      tools: [tool("bash", "Run a shell command\nMore text on the next line.")],
+    });
+    expect(output).toContain("- bash: Run a shell command");
+    expect(output).not.toContain("More text");
   });
 
-  test("the skills block carries the progressive-disclosure header", () => {
-    const output = composeSystemPrompt({ rolePrompt: "ROLE", skills: [skill("deploy", "ENTRY")] });
-    expect(output).toContain("The following skills provide specialized instructions for specific tasks.");
-    expect(output).toContain("read_file");
+  test("uses the whole description when there is no sentence break or newline", () => {
+    const output = composeSystemPrompt({
+      rolePrompt: "ROLE",
+      cwd: CWD,
+      tools: [tool("noop", "Do nothing at all")],
+    });
+    expect(output).toContain("- noop: Do nothing at all");
+  });
+
+  test("adds the bash file-ops guideline only when bash is the sole file-exploration tool", () => {
+    const onlyBash = composeSystemPrompt({
+      rolePrompt: "ROLE",
+      cwd: CWD,
+      tools: [tool("bash", "Run a shell command.")],
+    });
+    expect(onlyBash).toContain(BASH_GUIDE);
+
+    const withLs = composeSystemPrompt({
+      rolePrompt: "ROLE",
+      cwd: CWD,
+      tools: [tool("bash", "Run a shell command."), tool("ls", "List files.")],
+    });
+    expect(withLs).not.toContain(BASH_GUIDE);
+
+    const withGrep = composeSystemPrompt({
+      rolePrompt: "ROLE",
+      cwd: CWD,
+      tools: [tool("bash", "Run a shell command."), tool("grep_file", "Search files.")],
+    });
+    expect(withGrep).not.toContain(BASH_GUIDE);
+
+    const withFind = composeSystemPrompt({
+      rolePrompt: "ROLE",
+      cwd: CWD,
+      tools: [tool("bash", "Run a shell command."), tool("find_file", "Find files.")],
+    });
+    expect(withFind).not.toContain(BASH_GUIDE);
+  });
+
+  test("places the context block after the guidelines", () => {
+    const output = composeSystemPrompt({
+      rolePrompt: "ROLE",
+      cwd: CWD,
+      contextBlock: "<context_files>X</context_files>",
+    });
+    const guideIndex = output.indexOf("Guidelines:");
+    const contextIndex = output.indexOf("<context_files>");
+    expect(guideIndex).toBeLessThan(contextIndex);
+  });
+
+  test("places the skills block after the context block", () => {
+    const output = composeSystemPrompt({
+      rolePrompt: "ROLE",
+      cwd: CWD,
+      contextBlock: "<context_files>X</context_files>",
+      skills: [skill("deploy", "ENTRY-deploy")],
+    });
+    expect(output.indexOf("<context_files>")).toBeLessThan(output.indexOf("<available_skills>"));
+    expect(output.indexOf("<available_skills>")).toBeLessThan(output.indexOf("</available_skills>"));
+  });
+
+  test("places the memory block after the skills block", () => {
+    const output = composeSystemPrompt({
+      rolePrompt: "ROLE",
+      cwd: CWD,
+      skills: [skill("deploy", "ENTRY")],
+      memoryBlock: "<memory team=\"t1\">- [instruction] keep the build green</memory>",
+    });
+    expect(output.indexOf("</available_skills>")).toBeLessThan(output.indexOf("<memory"));
+  });
+
+  test("places the cwd line after every other section", () => {
+    const output = composeSystemPrompt({
+      rolePrompt: "ROLE",
+      cwd: CWD,
+      contextBlock: "<context_files>X</context_files>",
+      skills: [skill("deploy", "ENTRY")],
+      memoryBlock: "<memory>x</memory>",
+    });
+    expect(output.endsWith(CWD_LINE)).toBe(true);
+  });
+
+  test("an empty context block is omitted", () => {
+    const output = composeSystemPrompt({ rolePrompt: "ROLE", cwd: CWD, contextBlock: "" });
+    expect(output).not.toContain("<context_files>");
+    expect(output.endsWith(CWD_LINE)).toBe(true);
+  });
+
+  test("an empty memory block is omitted", () => {
+    const output = composeSystemPrompt({ rolePrompt: "ROLE", cwd: CWD, memoryBlock: "" });
+    expect(output).not.toContain("<memory");
+  });
+
+  test("normalizes Windows path separators in cwd", () => {
+    const output = composeSystemPrompt({ rolePrompt: "ROLE", cwd: "C:\\project" });
+    expect(output).toContain("Current working directory: C:/project");
   });
 
   test("dedupes skills by name, first occurrence wins", () => {
-    const output = composeSystemPrompt({ rolePrompt: "ROLE", skills: [skill("deploy", "ENTRY-first"), skill("deploy", "ENTRY-second")] });
+    const output = composeSystemPrompt({
+      rolePrompt: "ROLE",
+      cwd: CWD,
+      skills: [skill("deploy", "ENTRY-first"), skill("deploy", "ENTRY-second")],
+    });
     expect(output.match(/ENTRY-first/g)).toHaveLength(1);
     expect(output).not.toContain("ENTRY-second");
-  });
-
-  test("prepends the context block before the role prompt", () => {
-    const output = composeSystemPrompt({ rolePrompt: "You are a worker.", contextBlock: "<context_files></context_files>" });
-    expect(output).toBe("<context_files></context_files>\n\nYou are a worker.");
-  });
-
-  test("an empty context block leaves the role prompt unchanged", () => {
-    expect(composeSystemPrompt({ rolePrompt: "You are a worker.", contextBlock: "" })).toBe("You are a worker.");
-  });
-
-  test("orders context, then role prose, then skills", () => {
-    const output = composeSystemPrompt({
-      rolePrompt: "ROLE",
-      contextBlock: "CONTEXT",
-      skills: [skill("deploy", "ENTRY")],
-    });
-    expect(output.indexOf("CONTEXT")).toBeLessThan(output.indexOf("ROLE"));
-    expect(output.indexOf("ROLE")).toBeLessThan(output.indexOf("<available_skills>"));
-  });
-
-  test("places the memory block after the role prose", () => {
-    const output = composeSystemPrompt({
-      rolePrompt: "ROLE",
-      contextBlock: "CONTEXT",
-      memoryBlock: "<memory team=\"t1\">- [instruction] keep the build green</memory>",
-    });
-    expect(output).toBe(
-      "CONTEXT\n\nROLE\n\n<memory team=\"t1\">- [instruction] keep the build green</memory>",
-    );
-  });
-
-  test("an empty memory block leaves the rest unchanged", () => {
-    expect(composeSystemPrompt({ rolePrompt: "ROLE", contextBlock: "CONTEXT", memoryBlock: "" })).toBe("CONTEXT\n\nROLE");
-  });
-
-  test("places the memory block after skills when both are present", () => {
-    const output = composeSystemPrompt({
-      rolePrompt: "ROLE",
-      contextBlock: "CONTEXT",
-      memoryBlock: "<memory team=\"t1\">- [fact] sqlite over postgres</memory>",
-      skills: [skill("deploy", "ENTRY")],
-    });
-    expect(output).toContain("ROLE");
-    expect(output).toContain("<available_skills>");
-    expect(output.indexOf("<available_skills>")).toBeLessThan(output.indexOf("<memory"));
-  });
-
-  test("a memory block without a context block still follows the role prose", () => {
-    const output = composeSystemPrompt({
-      rolePrompt: "ROLE",
-      memoryBlock: "<memory team=\"t1\">- [fact] sqlite over postgres</memory>",
-    });
-    expect(output).toBe("ROLE\n\n<memory team=\"t1\">- [fact] sqlite over postgres</memory>");
-  });
-
-  test("formats the team prompt as a team_context block before the role prose", () => {
-    const output = composeSystemPrompt({
-      rolePrompt: "ROLE",
-      contextBlock: "CONTEXT",
-      teamPrompt: "one task in flight",
-    });
-    expect(output).toBe(
-      "CONTEXT\n\n<team_context>\none task in flight\n</team_context>\n\nROLE",
-    );
-  });
-
-  test("orders context, team, role, skills, and memory", () => {
-    const output = composeSystemPrompt({
-      rolePrompt: "ROLE",
-      contextBlock: "CONTEXT",
-      teamPrompt: "TEAM",
-      skills: [skill("deploy", "ENTRY")],
-      memoryBlock: "<memory team=\"t1\">- [fact] x</memory>",
-    });
-    expect(output.indexOf("CONTEXT")).toBeLessThan(output.indexOf("<team_context>"));
-    expect(output.indexOf("<team_context>")).toBeLessThan(output.indexOf("ROLE"));
-    expect(output.indexOf("ROLE")).toBeLessThan(output.indexOf("<available_skills>"));
-    expect(output.indexOf("</available_skills>")).toBeLessThan(output.indexOf("<memory"));
   });
 });

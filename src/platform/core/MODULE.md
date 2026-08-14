@@ -26,4 +26,4 @@ no-new-exports:
 ---
 
 ## Contracts
-Body components: one interface + `*Impl` per file; impls constructed inside `jie-agent-body.ts` (not cradle-registered). `composeSystemPrompt` assembles context → memory → role prose → skills (deduped, progressive disclosure). Pure; no I/O.
+Body components: one interface + `*Impl` per file; impls constructed inside `jie-agent-body.ts` (not cradle-registered). `composeSystemPrompt` assembles role prose → available tools → guidelines → context → skills → memory → cwd (deduped, progressive disclosure). Pure; no I/O.

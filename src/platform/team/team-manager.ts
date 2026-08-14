@@ -208,7 +208,6 @@ export class TeamManagerImpl implements TeamManager {
           sessionId,
           model: resolved.model,
           effort: resolved.effort,
-          teamPrompt: blueprint.teamPrompt,
         };
         this.bodyParams.set(`${teamId}:${agentKey}`, params);
         bodies.push(this.agentBodyFactory(params));
@@ -356,8 +355,6 @@ export class TeamManagerImpl implements TeamManager {
       const soul = this.agentRegistry.resolve(agentRef);
       const settings = this.settingsStore.load();
       const resolved = this.resolveSoulModelAndEffort(soul, settings);
-      const blueprint = this.loadedBlueprints.get(teamId);
-      const teamPrompt = blueprint === undefined ? "" : blueprint.teamPrompt;
       const params: AgentBodyParams = {
         agentKey: agentRef,
         teamId,
@@ -367,7 +364,6 @@ export class TeamManagerImpl implements TeamManager {
         sessionId,
         model: resolved.model,
         effort: resolved.effort,
-        teamPrompt,
       };
       this.bodyParams.set(`${teamId}:${agentRef}`, params);
       return this.agentBodyFactory(params);

@@ -32,9 +32,8 @@ describe("loadSetupAssistantTeam", () => {
     expect(soul.model).toBe("");
   });
 
-  test("has no team prompt and a setup-assistant description", () => {
+  test("has a setup-assistant description", () => {
     const bp = loadSetupAssistantTeam();
-    expect(bp.teamPrompt).toBe("");
     expect(bp.description).toBe("Jie setup and help");
   });
 });
@@ -96,7 +95,7 @@ describe("loadTeamFromDir", () => {
     expect(bp.leaderRole).toBe("leader");
   });
 
-  test("TEAM.md body becomes the team prompt and description is parsed", () => {
+  test("TEAM.md body is ignored and description is parsed", () => {
     writeFileSync(
       join(dir, "TEAM.md"),
       `---\nleader: leader\ndescription: a concise team\n---\nShared team context.\n`,
@@ -106,11 +105,10 @@ describe("loadTeamFromDir", () => {
       `---\ntools:\n  - bash\n---\nleader body`,
     );
     const bp = loadTeamFromDir(dir);
-    expect(bp.teamPrompt).toBe("Shared team context.\n");
     expect(bp.description).toBe("a concise team");
   });
 
-  test("TEAM.md without body yields an empty team prompt and omitted description", () => {
+  test("TEAM.md without description omits the description", () => {
     writeFileSync(
       join(dir, "TEAM.md"),
       `---\nleader: leader\n---\n`,
@@ -120,7 +118,6 @@ describe("loadTeamFromDir", () => {
       `---\ntools:\n  - bash\n---\nleader body`,
     );
     const bp = loadTeamFromDir(dir);
-    expect(bp.teamPrompt).toBe("");
     expect(bp.description).toBeUndefined();
   });
 
