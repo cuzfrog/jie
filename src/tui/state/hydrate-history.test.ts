@@ -3,10 +3,10 @@ import type { Usage } from "@earendil-works/pi-ai";
 import { hydrateHistory } from "./hydrate-history";
 
 function user(prompt: string): AgentMessage {
-  return { role: "user", content: `[user]: ${prompt}`, timestamp: 0 };
+  return { role: "user", content: prompt, timestamp: 0 };
 }
 function userWithDisplay(displayText: string, expandedContent: string): AgentMessage {
-  const message: UserIngressMessage = { role: "user", content: `[user]: ${expandedContent}`, timestamp: 0, displayText };
+  const message: UserIngressMessage = { role: "user", content: expandedContent, timestamp: 0, displayText };
   return message;
 }
 function assistantText(text: string): AgentMessage {
@@ -61,7 +61,7 @@ describe("hydrateHistory", () => {
     expect(result.nextSeq).toBe(1);
   });
 
-  test("strips the [user]: ingress prefix from the user prompt", () => {
+  test("uses bare content as the user prompt", () => {
     const result = hydrateHistory([user("tell me a joke"), assistantText("ok")], 0);
     expect(result.currentTurn?.userPrompt).toBe("tell me a joke");
   });

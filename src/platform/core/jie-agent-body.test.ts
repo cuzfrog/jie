@@ -644,7 +644,7 @@ describe("JieAgentBody — lifecycle hooks", () => {
     await flush();
     expect(h.prompt.mock.calls.length).toBe(1);
     const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
-    expect((synthetic as { content: unknown }).content).toBe("[user]: hello\n\nextra");
+    expect((synthetic as { content: unknown }).content).toBe("hello\n\nextra");
     body.stop();
   });
 });
@@ -1044,7 +1044,7 @@ describe("JieAgentBody — skill invocation expansion", () => {
     await flush();
     expect(deploySkill.expandInvocation).toHaveBeenCalledWith("now");
     const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
-    expect((synthetic as { content: unknown }).content).toBe("[user]: EXPANDED");
+    expect((synthetic as { content: unknown }).content).toBe("EXPANDED");
     body.stop();
   });
 
@@ -1079,7 +1079,7 @@ describe("JieAgentBody — skill invocation expansion", () => {
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "/skill:deploy now"));
     await flush();
     const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
-    expect((synthetic as { content: unknown }).content).toBe("[user]: /skill:deploy now");
+    expect((synthetic as { content: unknown }).content).toBe("/skill:deploy now");
     body.stop();
   });
 
@@ -1105,7 +1105,7 @@ describe("JieAgentBody — skill invocation expansion", () => {
     await flush();
     expect(deploySkill.expandInvocation).not.toHaveBeenCalled();
     const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
-    expect((synthetic as { content: unknown }).content).toBe("[user]: /skill:dep now");
+    expect((synthetic as { content: unknown }).content).toBe("/skill:dep now");
     body.stop();
   });
 
@@ -1116,7 +1116,7 @@ describe("JieAgentBody — skill invocation expansion", () => {
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "/skill: now"));
     await flush();
     const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
-    expect((synthetic as { content: unknown }).content).toBe("[user]: /skill: now");
+    expect((synthetic as { content: unknown }).content).toBe("/skill: now");
     body.stop();
   });
 
@@ -1130,7 +1130,7 @@ describe("JieAgentBody — skill invocation expansion", () => {
     expect(deploySkill.expandInvocation).not.toHaveBeenCalled();
     expect(backupSkill.expandInvocation).toHaveBeenCalledWith("now");
     const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
-    expect((synthetic as { content: unknown }).content).toBe("[user]: BACKUP-EXPANDED");
+    expect((synthetic as { content: unknown }).content).toBe("BACKUP-EXPANDED");
     body.stop();
   });
 
@@ -1142,7 +1142,7 @@ describe("JieAgentBody — skill invocation expansion", () => {
     await flush();
     expect(deploySkill.expandInvocation).toHaveBeenCalledWith("now");
     const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
-    expect((synthetic as { content: unknown }).content).toBe("[user]: EXPANDED");
+    expect((synthetic as { content: unknown }).content).toBe("EXPANDED");
     body.stop();
   });
 
@@ -1154,7 +1154,7 @@ describe("JieAgentBody — skill invocation expansion", () => {
     await flush();
     expect(deploySkill.expandInvocation).toHaveBeenCalledWith("now");
     const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
-    expect((synthetic as { content: unknown }).content).toBe("[user]: EXPANDED");
+    expect((synthetic as { content: unknown }).content).toBe("EXPANDED");
     body.stop();
   });
 
@@ -1166,7 +1166,7 @@ describe("JieAgentBody — skill invocation expansion", () => {
     await flush();
     expect(deploySkill.expandInvocation).not.toHaveBeenCalled();
     const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
-    expect((synthetic as { content: unknown }).content).toBe("[user]: please /skill:deploy now");
+    expect((synthetic as { content: unknown }).content).toBe("please /skill:deploy now");
     body.stop();
   });
 
@@ -1178,7 +1178,7 @@ describe("JieAgentBody — skill invocation expansion", () => {
     await flush();
     expect(deploySkill.expandInvocation).not.toHaveBeenCalled();
     const synthetic = h.prompt.mock.calls[0]![0] as AgentMessage;
-    expect((synthetic as { content: unknown }).content).toBe("[user]: /skill:");
+    expect((synthetic as { content: unknown }).content).toBe("/skill:");
     body.stop();
   });
 
@@ -1196,7 +1196,7 @@ describe("JieAgentBody — skill invocation expansion", () => {
     h.settleIdle();
     await flush();
     const drained = h.prompt.mock.calls[0]![0] as AgentMessage;
-    expect((drained as { content: unknown }).content).toBe("[user]: EXPANDED");
+    expect((drained as { content: unknown }).content).toBe("EXPANDED");
     body.stop();
   });
 });
@@ -1235,7 +1235,7 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     await flush();
     expect(h.followUp.mock.calls.length).toBe(0);
     expect(h.prompt.mock.calls.length).toBe(1);
-    expect(h.prompt.mock.calls[0]![0]).toMatchObject({ role: "user", content: "[user]: queued msg" });
+    expect(h.prompt.mock.calls[0]![0]).toMatchObject({ role: "user", content: "queued msg" });
     body.stop();
   });
 
@@ -1259,7 +1259,7 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     h.settleIdle();
     await flush();
     expect(h.prompt.mock.calls.length).toBe(1);
-    expect(h.prompt.mock.calls[0]![0]).toMatchObject({ role: "user", content: "[user]: racing prompt" });
+    expect(h.prompt.mock.calls[0]![0]).toMatchObject({ role: "user", content: "racing prompt" });
     body.stop();
   });
 
@@ -1297,8 +1297,8 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     h.state.isStreaming = false;
     await flush();
     expect(h.prompt.mock.calls.length).toBe(2);
-    expect(h.prompt.mock.calls[0]![0]).toMatchObject({ content: "[user]: first" });
-    expect(h.prompt.mock.calls[1]![0]).toMatchObject({ content: "[user]: second" });
+    expect(h.prompt.mock.calls[0]![0]).toMatchObject({ content: "first" });
+    expect(h.prompt.mock.calls[1]![0]).toMatchObject({ content: "second" });
     body.stop();
   });
 
@@ -1345,7 +1345,7 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     h.settleIdle();
     await flush();
     expect(h.prompt.mock.calls.length).toBe(1);
-    expect(h.prompt.mock.calls[0]![0]).toMatchObject({ role: "user", content: "[user]: queued msg" });
+    expect(h.prompt.mock.calls[0]![0]).toMatchObject({ role: "user", content: "queued msg" });
     body.stop();
   });
 
@@ -1365,11 +1365,11 @@ describe("JieAgentBody — pi-agent event bridging", () => {
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "fresh"));
     await flush();
     expect(h.prompt.mock.calls.length).toBe(1);
-    expect(h.prompt.mock.calls[0]![0]).toMatchObject({ content: "[user]: leftover" });
+    expect(h.prompt.mock.calls[0]![0]).toMatchObject({ content: "leftover" });
     h.settleIdle();
     await flush();
     expect(h.prompt.mock.calls.length).toBe(2);
-    expect(h.prompt.mock.calls[1]![0]).toMatchObject({ content: "[user]: fresh" });
+    expect(h.prompt.mock.calls[1]![0]).toMatchObject({ content: "fresh" });
     body.stop();
   });
 });

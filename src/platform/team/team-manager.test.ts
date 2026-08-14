@@ -461,7 +461,7 @@ describe("TeamManagerImpl — full surface", () => {
 
     test("system.team.loaded and the returned identity both carry restored history", async () => {
       transcriptStore.hasSession.mockReturnValue(true);
-      const seeded: ReadonlyArray<AgentMessage> = [{ role: "user", content: "[user]: hello", timestamp: 1 }, assistantMessage("hi there", 2)];
+      const seeded: ReadonlyArray<AgentMessage> = [{ role: "user", content: "hello", timestamp: 1 }, assistantMessage("hi there", 2)];
       const { manager } = makeManager(homeJieDir, null, undefined, seeded);
       const identity = await manager.resumeSession("setup-assistant", "01-seeded");
       const payload = teamLoadedEvents().find((e) => e.payload.id === "setup-assistant")?.payload;
@@ -474,7 +474,7 @@ describe("TeamManagerImpl — full surface", () => {
 
     test("resumeSession reloads an already-loaded team and re-publishes history (picker flow, not a cache hit)", async () => {
       transcriptStore.hasSession.mockReturnValue(true);
-      const seeded: ReadonlyArray<AgentMessage> = [{ role: "user", content: "[user]: hello", timestamp: 1 }, assistantMessage("hi there", 2)];
+      const seeded: ReadonlyArray<AgentMessage> = [{ role: "user", content: "hello", timestamp: 1 }, assistantMessage("hi there", 2)];
       const { manager } = makeManager(homeJieDir, null, undefined, seeded);
       await manager.load("setup-assistant");
       eventManager.publish.mockClear();
@@ -503,7 +503,7 @@ describe("TeamManagerImpl — full surface", () => {
       const manager = new TeamManagerImpl(new TeamRegistryImpl(homeJieDir, null, new AgentRegistryImpl(homeJieDir, null)), new AgentRegistryImpl(homeJieDir, null), eventManager, settingsStore, modelRegistry, transcriptStore, kanbanStore, skillManager, factory);
       const first = await manager.load("setup-assistant");
       expect(first.history[0]?.messages).toEqual([]);
-      live.push({ role: "user", content: "[user]: hello", timestamp: 1 }, assistantMessage("hi there", 2));
+      live.push({ role: "user", content: "hello", timestamp: 1 }, assistantMessage("hi there", 2));
       const cached = await manager.load("setup-assistant");
       expect(teamLoadedEvents().filter((e) => e.payload.id === "setup-assistant")).toHaveLength(1);
       expect(cached.history[0]?.messages).toHaveLength(2);

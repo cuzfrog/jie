@@ -113,7 +113,7 @@ describe("AgentEventBridge — turn-start deferral", () => {
 
   test("the flush derives the turn-start payload from the user message's displayText", () => {
     const bridge = makeBridge();
-    const userMessage = { role: "user", content: "[user]: hello", displayText: "hello", timestamp: 0 } as AgentMessage;
+    const userMessage = { role: "user", content: "hello", displayText: "hello", timestamp: 0 } as AgentMessage;
     bridge.handleEvent({ type: "turn_start" });
     bridge.handleEvent({ type: "message_start", message: userMessage });
     expect(envelopes("agent.turn.start")[0]!.payload).toBe("hello");
