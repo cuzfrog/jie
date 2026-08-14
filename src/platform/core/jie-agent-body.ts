@@ -121,7 +121,14 @@ export class JieAgentBody implements AgentBody {
       hookIdentity: this.hookIdentity,
       sender: this.sender,
       promptQueue: this.promptQueue,
-      onRunEnd: () => void this.agent.waitForIdle().then(() => this.promptQueue.settle()),
+      onRunEnd: () => void this.agent.waitForIdle().then(async () => {
+        if (this.stopped) return;
+        if (this.agent.hasQueuedMessages()) {
+          await this.agent.continue();
+        } else {
+          await this.promptQueue.settle();
+        }
+      }),
     });
     const parsedTools = params.soul.tools.map(parseToolSpec);
     const toolArgs = new Map<string, ReadonlyArray<string>>();
@@ -155,7 +162,7 @@ export class JieAgentBody implements AgentBody {
         const contextWindow = resolveContextWindow(this.soul, this.agent.state.model);
         return [...this.compactor.fitToWindow(stripped, this.agent.state.model, contextWindow)];
       },
-      steeringMode: "all",
+      steeringMode: "one-at-a-time",
       followUpMode: "one-at-a-time",
       toolExecution: "sequential",
       prepareNextTurnWithContext: (context) => this.compactBetweenTurns(context),
@@ -267,8 +274,14 @@ export class JieAgentBody implements AgentBody {
       }
     }
 
-    while (!this.stopped && !this.promptQueue.isEmpty()) {
-      await this.promptQueue.dispatchNext();
+    while (!this.stopped) {
+      if (this.agent.hasQueuedMessages()) {
+        await this.agent.continue();
+      } else if (!this.promptQueue.isEmpty()) {
+        await this.promptQueue.dispatchNext();
+      } else {
+        break;
+      }
       await this.agent.waitForIdle();
     }
   }
