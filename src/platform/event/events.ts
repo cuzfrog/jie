@@ -30,7 +30,7 @@ type EventDefinitions = {
   }>;
   "agent.stream.end": EventDef<AgentSender, { stream_id: number; total_chunks: number; thinking_durations: ReadonlyArray<number> }>;
   "agent.usage": EventDef<AgentSender, { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number }>;
-  "agent.prompt.queue.update": EventDef<AgentSender, { prompts: Array<{ text: string; source: "user" | "peer" }> }>;
+  "agent.prompt.queue.update": EventDef<AgentSender, { prompts: Array<{ text: string; source: "user" | "peer"; chained: boolean }> }>;
   "agent.model.assigned": EventDef<AgentSender, { provider: string; model: string; effort: "off" | "low" | "medium" | "high" | "max"; contextWindow: number | null }>;
   "agent.compacted": EventDef<AgentSender, { summary: string; tokens_before: number; summarized_prompts: number }>;
   "agent.compaction.start": EventDef<AgentSender, null>;
@@ -86,7 +86,7 @@ export const Events = {
     createEvent("agent.stream.end", sender, { stream_id, total_chunks, thinking_durations }),
   agentUsage: (sender: AgentSender, usage: { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number }): EventEnvelope<"agent.usage"> =>
     createEvent("agent.usage", sender, usage),
-  agentPromptQueueUpdate: (sender: AgentSender, prompts: Array<{ text: string; source: "user" | "peer" }>): EventEnvelope<"agent.prompt.queue.update"> =>
+  agentPromptQueueUpdate: (sender: AgentSender, prompts: Array<{ text: string; source: "user" | "peer"; chained: boolean }>): EventEnvelope<"agent.prompt.queue.update"> =>
     createEvent("agent.prompt.queue.update", sender, { prompts }),
   agentModelAssigned: (sender: AgentSender, provider: string, model: string, effort: "off" | "low" | "medium" | "high" | "max", contextWindow: number | null): EventEnvelope<"agent.model.assigned"> =>
     createEvent("agent.model.assigned", sender, { provider, model, effort, contextWindow }),

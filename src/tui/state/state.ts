@@ -47,7 +47,7 @@ export interface AgentUiState {
   readonly skills: ReadonlyArray<SkillInfo>;
   readonly status: AgentStatus;
   readonly model: ModelReference | null;
-  readonly queue: ReadonlyArray<{ readonly text: string; readonly source: "user" | "peer" }>;
+  readonly queue: ReadonlyArray<{ readonly text: string; readonly source: "user" | "peer"; readonly chained: boolean }>;
   readonly history: MessageTurn[];
   readonly currentTurn: MessageTurn | null;
   readonly compactionMarker: { readonly seq: number; readonly summary: string; readonly tokensBefore: number } | null;

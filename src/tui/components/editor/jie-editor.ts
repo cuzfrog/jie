@@ -50,7 +50,7 @@ export class JieEditor extends Editor {
   private popupFilteredOut: number | null = null;
   private readonly historyMirror: string[] = [];
   private browse: QueueBrowse | null = null;
-  private lastSeenQueue: ReadonlyArray<{ readonly text: string; readonly source: "user" | "peer" }> | null = null;
+  private lastSeenQueue: ReadonlyArray<{ readonly text: string; readonly source: "user" | "peer"; readonly chained: boolean }> | null = null;
   private pendingDequeues = 0;
   private programmaticChange = false;
   private kanbanEditId: string | null = null;
@@ -204,7 +204,7 @@ export class JieEditor extends Editor {
 
   private startBrowse(): boolean {
     const focused = TuiState.getFocusedAgent(this.stateStore.getState());
-    const hasQueuedUserPrompt = focused !== null && focused.queue.some((entry) => entry.source === "user");
+    const hasQueuedUserPrompt = focused !== null && focused.queue.some((entry) => entry.source === "user" && !entry.chained);
     if (!hasQueuedUserPrompt && this.historyMirror.length === 0) return false;
     const draft = this.getText();
     const trimmed = draft.trim();
@@ -224,7 +224,7 @@ export class JieEditor extends Editor {
       let skipped = 0;
       for (let i = focused.queue.length - 1; i >= 0; i--) {
         const entry = focused.queue[i]!;
-        if (entry.source !== "user") continue;
+        if (entry.source !== "user" || entry.chained) continue;
         if (skipped < this.pendingDequeues) {
           skipped += 1;
           continue;

@@ -113,6 +113,7 @@ export class AgentEventBridgeImpl implements AgentEventBridge {
       this.eventManager.publish(Events.agentTurnContinue(this.sender));
       return;
     }
+    this.promptQueue.consumeChained(message);
     this.eventManager.publish(Events.agentTurnStart(this.sender, userDisplayText(message)));
   }
 }

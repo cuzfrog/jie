@@ -20,6 +20,7 @@ const promptQueue = vi.mocked<PromptQueue>({
   dispatchNext: vi.fn(async () => {}),
   settle: vi.fn(async () => {}),
   drainForFollowUp: vi.fn(),
+  consumeChained: vi.fn(),
   publishQueueUpdate: vi.fn(),
   isEmpty: vi.fn(() => true),
   stop: vi.fn(),
@@ -132,6 +133,17 @@ describe("AgentEventBridge — turn-start deferral", () => {
     bridge.handleEvent({ type: "message_start", message: makeAssistantMessage() });
     expect(envelopes("agent.turn.continue")).toHaveLength(1);
     expect(envelopes("agent.turn.start")).toHaveLength(0);
+    expect(promptQueue.consumeChained).not.toHaveBeenCalled();
+  });
+
+  test("a user flushing event consumes the chained prompt before publishing agent.turn.start", () => {
+    const bridge = makeBridge();
+    const userMessage: AgentMessage = { role: "user", content: "hi", timestamp: 0 };
+    bridge.handleEvent({ type: "turn_start" });
+    bridge.handleEvent({ type: "message_start", message: userMessage });
+    expect(promptQueue.consumeChained).toHaveBeenCalledTimes(1);
+    expect(promptQueue.consumeChained).toHaveBeenCalledWith(userMessage);
+    expect(envelopes("agent.turn.start")).toHaveLength(1);
   });
 
   test("the deferred turn event precedes the turn's own stream events", () => {

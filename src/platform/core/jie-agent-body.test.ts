@@ -1191,7 +1191,7 @@ describe("JieAgentBody — skill invocation expansion", () => {
     h.state.isStreaming = true;
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "/skill:deploy now"));
     await flush();
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "/skill:deploy now", source: "user" }]);
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "/skill:deploy now", source: "user", chained: false }]);
     h.fireEvent({ type: "agent_end", messages: [] });
     h.settleIdle();
     await flush();
@@ -1450,8 +1450,8 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "second queued"));
     await flush();
     expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([
-      { text: "first queued", source: "user" },
-      { text: "second queued", source: "user" },
+      { text: "first queued", source: "user", chained: false },
+      { text: "second queued", source: "user", chained: false },
     ]);
     h.state.isStreaming = false;
     h.fireEvent({
@@ -1460,7 +1460,10 @@ describe("JieAgentBody — turn.start prompt payload", () => {
       toolResults: [],
     });
     expect(h.followUp.mock.calls.length).toBe(1);
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "second queued", source: "user" }]);
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([
+      { text: "first queued", source: "user", chained: true },
+      { text: "second queued", source: "user", chained: false },
+    ]);
     h.fireEvent({ type: "turn_start" });
     h.fireEvent({ type: "message_start", message: h.followUp.mock.calls[0]![0] as AgentMessage });
     expect(turnStart[turnStart.length - 1]!.payload).toBe("first queued");
@@ -1594,7 +1597,7 @@ describe("JieAgentBody — turn.start prompt payload", () => {
     h.state.isStreaming = true;
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "hello"));
     await flush();
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "hello", source: "user" }]);
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "hello", source: "user", chained: false }]);
     body.stop();
   });
 
@@ -1677,8 +1680,8 @@ describe("JieAgentBody — user.prompt.requeue", () => {
     h.events.publish(Events.userPromptDequeue({ kind: "user" }, "t1", "general-1", "second"));
     h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "second"));
     expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([
-      { text: "first", source: "user" },
-      { text: "second", source: "user" },
+      { text: "first", source: "user", chained: false },
+      { text: "second", source: "user", chained: false },
     ]);
     body.stop();
   });
@@ -1695,7 +1698,7 @@ describe("JieAgentBody — user.prompt.requeue", () => {
     h.events.publish(Events.userPrompt({ kind: "user" }, "t1", "general-1", "first"));
     await flush();
     h.events.publish(Events.userPromptRequeue({ kind: "user" }, "t1", "general-1", "first"));
-    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "first", source: "user" }]);
+    expect(queueUpdates[queueUpdates.length - 1]!.payload.prompts).toEqual([{ text: "first", source: "user", chained: false }]);
     body.stop();
   });
 

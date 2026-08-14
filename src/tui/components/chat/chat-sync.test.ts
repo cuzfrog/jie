@@ -242,14 +242,14 @@ describe("ChatSyncImpl", () => {
     const agent = makeAgentUiState(AGENT_ID, {
       isLeader: true,
       currentTurn: turn,
-      queue: [{ text: "a", source: "user" }],
+      queue: [{ text: "a", source: "user", chained: false }],
       history: sharedHistory,
     });
     expect(update(teamState([agent], AGENT_ID))).toBe(true);
     const updated = makeAgentUiState(AGENT_ID, {
       isLeader: true,
       currentTurn: turn,
-      queue: [{ text: "b", source: "user" }],
+      queue: [{ text: "b", source: "user", chained: false }],
       history: sharedHistory,
     });
     expect(update(teamState([updated], AGENT_ID))).toBe(false);

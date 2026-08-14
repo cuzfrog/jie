@@ -504,15 +504,15 @@ function stateWithTeam(status: "idle" | "busy"): TuiState {
   });
 }
 
-function userEntry(text: string): { text: string; source: "user" | "peer" } {
-  return { text, source: "user" };
+function userEntry(text: string, chained = false): { text: string; source: "user" | "peer"; chained: boolean } {
+  return { text, source: "user", chained };
 }
 
-function peerEntry(text: string): { text: string; source: "user" | "peer" } {
-  return { text, source: "peer" };
+function peerEntry(text: string, chained = false): { text: string; source: "user" | "peer"; chained: boolean } {
+  return { text, source: "peer", chained };
 }
 
-function stateWithQueue(queue: ReadonlyArray<{ text: string; source: "user" | "peer" }>): TuiState {
+function stateWithQueue(queue: ReadonlyArray<{ text: string; source: "user" | "peer"; chained: boolean }>): TuiState {
   return makeTuiState({
     teamId: "my-team",
     leaderAgentId: LEADER_ID,
@@ -530,13 +530,13 @@ function wireQueueRoundTrip(initial: TuiState): void {
     let queue = [...focused.queue];
     if (action.type === ActionTypes.REQUEST_DEQUEUE) {
       for (let i = queue.length - 1; i >= 0; i--) {
-        if (queue[i]!.source === "user" && queue[i]!.text === action.payload.prompt) {
+        if (queue[i]!.source === "user" && !queue[i]!.chained && queue[i]!.text === action.payload.prompt) {
           queue.splice(i, 1);
           break;
         }
       }
     } else if (action.type === ActionTypes.REQUEST_REQUEUE) {
-      queue = [...queue, { text: action.payload.prompt, source: "user" as const }];
+      queue = [...queue, { text: action.payload.prompt, source: "user" as const, chained: false as const }];
     } else {
       return;
     }
@@ -553,6 +553,16 @@ function dispatchedActions(type: string): ReadonlyArray<PromptRequestAction> {
 }
 
 describe("JieEditor — queue browse", () => {
+  test("up skips chained user prompts and does not dispatch requestDequeue for them", () => {
+    const { editor } = bootEditor();
+    wireQueueRoundTrip(stateWithQueue([userEntry("first", true), userEntry("second")]));
+    editor.handleInput("\x1b[A");
+    expect(editor.getText()).toBe("second");
+    expect(stateStore.dispatch).toHaveBeenCalledWith(Actions.requestDequeue("my-team", "general-1", "second"));
+    const dequeueCount = stateStore.dispatch.mock.calls.filter((call) => call[0].type === ActionTypes.REQUEST_DEQUEUE).length;
+    expect(dequeueCount).toBe(1);
+  });
+
   test("up with an empty editor pulls the most recently queued user prompt", () => {
     const { editor } = bootEditor();
     wireQueueRoundTrip(stateWithQueue([userEntry("first"), userEntry("second")]));
