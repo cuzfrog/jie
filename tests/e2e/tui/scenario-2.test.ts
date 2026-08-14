@@ -25,7 +25,7 @@ describe("Scenario 2 — pass work in a team", () => {
     harness = await startTui();
     writeFileSync(join(harness.dir, "file1.txt"), "Hello world");
     seedTeam(harness.dir, "my-team", "manager", [
-      { role: "manager", systemPrompt: "You delegate work to the worker.", tools: ["bash"] },
+      { role: "manager", systemPrompt: "You delegate work to the worker.", tools: ["bash", "write_kanban"] },
       { role: "worker", systemPrompt: "You execute tasks delegated by the manager.", tools: ["bash"] },
     ]);
   });
