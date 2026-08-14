@@ -27,7 +27,6 @@ export function createKanbanUpdateTool(options: { kanbanStore: KanbanStore }): T
     name: "update_kanban",
     description: KANBAN_UPDATE_DESCRIPTION,
     label: "Update Kanban Card",
-    isUtility: true,
     parameters: Type.Object({
       content: Type.String(),
       status: Type.Optional(

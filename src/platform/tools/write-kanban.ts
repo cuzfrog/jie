@@ -31,7 +31,6 @@ export function createKanbanWriteTool(options: { kanbanStore: KanbanStore }): To
     name: "write_kanban",
     description: KANBAN_WRITE_DESCRIPTION,
     label: "Update Kanban",
-    isUtility: true,
     parameters: Type.Object({
       cards: Type.Array(
         Type.Object({

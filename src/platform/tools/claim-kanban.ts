@@ -20,7 +20,6 @@ export function createKanbanClaimTool(options: { kanbanStore: KanbanStore }): To
     name: "claim_kanban",
     description: CLAIM_KANBAN_DESCRIPTION,
     label: "Claim Kanban Card",
-    isUtility: true,
     parameters: Type.Object({
       content: Type.String(),
       expected_status: Type.Optional(Type.Union([

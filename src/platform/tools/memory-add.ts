@@ -28,7 +28,6 @@ export function createMemoryAddTool(deps: { memoryManager: MemoryManager; settin
     name: "memory_add",
     description: MEMORY_ADD_DESCRIPTION,
     label: "Add Memory",
-    isUtility: true,
     parameters: Type.Object({
       content: Type.String({ minLength: 1 }),
       type: Type.Union([
